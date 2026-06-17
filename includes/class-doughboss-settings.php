@@ -52,8 +52,9 @@ class DoughBoss_Settings {
 	public static function defaults() {
 		return array(
 			'currency_symbol' => '$',
-			'currency_code'   => 'USD',
-			'tax_rate'        => 0,
+			'currency_code'   => 'AUD',
+			'tax_rate'        => 10,
+			'gst_inclusive'   => 1,
 			'delivery_fee'    => 0,
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
@@ -61,6 +62,15 @@ class DoughBoss_Settings {
 			'sizes'           => array(),
 			'toppings'        => array(),
 		);
+	}
+
+	/**
+	 * Whether prices already include tax (GST-inclusive, the Australian norm).
+	 *
+	 * @return bool
+	 */
+	public static function gst_inclusive() {
+		return (bool) self::get( 'gst_inclusive', 1 );
 	}
 
 	/**

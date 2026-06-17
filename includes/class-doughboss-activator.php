@@ -128,8 +128,9 @@ class DoughBoss_Activator {
 
 		$defaults = array(
 			'currency_symbol' => '$',
-			'currency_code'   => 'USD',
-			'tax_rate'        => 0,
+			'currency_code'   => 'AUD',
+			'tax_rate'        => 10,
+			'gst_inclusive'   => 1,
 			'delivery_fee'    => 5.00,
 			'enable_pickup'   => 1,
 			'enable_delivery' => 1,

@@ -126,6 +126,7 @@ class DoughBoss_Admin {
 		$clean['currency_symbol'] = isset( $input['currency_symbol'] ) ? sanitize_text_field( $input['currency_symbol'] ) : '$';
 		$clean['currency_code']   = isset( $input['currency_code'] ) ? sanitize_text_field( $input['currency_code'] ) : 'USD';
 		$clean['tax_rate']        = isset( $input['tax_rate'] ) ? max( 0, (float) $input['tax_rate'] ) : 0;
+		$clean['gst_inclusive']   = empty( $input['gst_inclusive'] ) ? 0 : 1;
 		$clean['delivery_fee']    = isset( $input['delivery_fee'] ) ? max( 0, (float) $input['delivery_fee'] ) : 0;
 		$clean['enable_pickup']   = empty( $input['enable_pickup'] ) ? 0 : 1;
 		$clean['enable_delivery'] = empty( $input['enable_delivery'] ) ? 0 : 1;
@@ -654,8 +655,14 @@ JS;
 						<td><input type="text" id="db-currency-code" class="small-text" name="<?php echo esc_attr( $opt ); ?>[currency_code]" value="<?php echo esc_attr( $settings['currency_code'] ); ?>" /></td>
 					</tr>
 					<tr>
-						<th><label for="db-tax-rate"><?php esc_html_e( 'Tax rate (%)', 'doughboss' ); ?></label></th>
-						<td><input type="number" step="0.01" min="0" id="db-tax-rate" class="small-text" name="<?php echo esc_attr( $opt ); ?>[tax_rate]" value="<?php echo esc_attr( $settings['tax_rate'] ); ?>" /></td>
+						<th><label for="db-tax-rate"><?php esc_html_e( 'Tax / GST rate (%)', 'doughboss' ); ?></label></th>
+						<td><input type="number" step="0.01" min="0" id="db-tax-rate" class="small-text" name="<?php echo esc_attr( $opt ); ?>[tax_rate]" value="<?php echo esc_attr( $settings['tax_rate'] ); ?>" />
+							<span class="description"><?php esc_html_e( 'Australian GST is 10%.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-gst-inclusive"><?php esc_html_e( 'Prices include GST', 'doughboss' ); ?></label></th>
+						<td><input type="checkbox" id="db-gst-inclusive" name="<?php echo esc_attr( $opt ); ?>[gst_inclusive]" value="1" <?php checked( ! empty( $settings['gst_inclusive'] ), true ); ?> />
+							<span class="description"><?php esc_html_e( 'Tick for Australia: menu prices already include GST (tax is shown as a component, not added on top).', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
 						<th><label for="db-delivery-fee"><?php esc_html_e( 'Delivery fee', 'doughboss' ); ?></label></th>

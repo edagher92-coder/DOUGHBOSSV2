@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.2.0
+Stable tag: 2.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,14 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.3.0 =
+* New: **Australian money** — defaults to AUD and supports **GST-inclusive
+  pricing** (tax shown as a component of the price, e.g. total / 11 at 10%,
+  rather than added on top). A “Prices include GST” setting controls it.
+* Storefront shows GST as “(includes GST $X)” under the total when inclusive.
+* On upgrade, a demo US (USD, no tax) config is localised to AUD + 10% GST
+  without overwriting a store that was deliberately configured.
 
 = 2.2.0 =
 * New: **multi-shop foundation** — a Shops / Locations admin screen (add/edit

@@ -263,7 +263,7 @@
 			root.appendChild(typeWrap);
 
 			// Totals.
-			root.appendChild(totalsBlock(cart.totals));
+			root.appendChild(totalsBlock(cart.totals, cfg));
 
 			// Checkout.
 			root.appendChild(checkoutForm(cfg, orderType));
@@ -315,11 +315,14 @@
 		]);
 	}
 
-	function totalsBlock(totals) {
+	function totalsBlock(totals, cfg) {
+		var inclusive = totals.tax_inclusive || (cfg && cfg.gst_inclusive);
+
 		var rows = [
 			[I18N.subtotal || 'Subtotal', totals.subtotal]
 		];
-		if (totals.tax > 0) { rows.push([I18N.tax || 'Tax', totals.tax]); }
+		// Only add tax as its own line when it's charged on top of prices.
+		if (!inclusive && totals.tax > 0) { rows.push([I18N.tax || 'Tax', totals.tax]); }
 		if (totals.delivery_fee > 0) { rows.push([I18N.delivery || 'Delivery', totals.delivery_fee]); }
 
 		var block = el('div', { class: 'db-totals' });
@@ -331,6 +334,9 @@
 		block.appendChild(el('div', { class: 'db-total-row db-total-row--grand' }, [
 			el('span', { text: I18N.total || 'Total' }), el('span', { text: money(totals.total) })
 		]));
+		if (inclusive && totals.tax > 0) {
+			block.appendChild(el('div', { class: 'db-total-note', text: '(' + (I18N.inclGst || 'includes GST') + ' ' + money(totals.tax) + ')' }));
+		}
 		return block;
 	}
 

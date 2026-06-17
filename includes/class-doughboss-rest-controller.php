@@ -284,8 +284,9 @@ class DoughBoss_REST_Controller {
 		return rest_ensure_response(
 			array(
 				'currency_symbol' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
-				'currency_code'   => DoughBoss_Settings::get( 'currency_code', 'USD' ),
+				'currency_code'   => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
 				'tax_rate'        => (float) DoughBoss_Settings::get( 'tax_rate', 0 ),
+				'gst_inclusive'   => DoughBoss_Settings::gst_inclusive(),
 				'delivery_fee'    => (float) DoughBoss_Settings::get( 'delivery_fee', 0 ),
 				'enable_pickup'   => (bool) DoughBoss_Settings::get( 'enable_pickup', 1 ),
 				'enable_delivery' => (bool) DoughBoss_Settings::get( 'enable_delivery', 0 ),

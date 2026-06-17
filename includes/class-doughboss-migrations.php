@@ -44,6 +44,9 @@ class DoughBoss_Migrations {
 		if ( version_compare( $installed, '1.2.0', '<' ) ) {
 			self::upgrade_to_1_2_0();
 		}
+		if ( version_compare( $installed, '1.3.0', '<' ) ) {
+			self::upgrade_to_1_3_0();
+		}
 
 		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 	}
@@ -73,5 +76,37 @@ class DoughBoss_Migrations {
 	private static function upgrade_to_1_2_0() {
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-locations.php';
 		DoughBoss_Locations::ensure_default();
+	}
+
+	/**
+	 * 1.3.0 — localise the demo US config to Australia (AUD + GST-inclusive),
+	 * only touching values that still look like the original demo defaults so a
+	 * deliberately-configured store is never overwritten.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_3_0() {
+		$settings = get_option( DoughBoss_Settings::OPTION_KEY );
+		if ( ! is_array( $settings ) ) {
+			return;
+		}
+
+		$changed = false;
+		if ( isset( $settings['currency_code'] ) && 'USD' === $settings['currency_code'] ) {
+			$settings['currency_code'] = 'AUD';
+			$changed                   = true;
+			// Demo tax was 0; default Australian GST to 10% inclusive.
+			if ( empty( $settings['tax_rate'] ) ) {
+				$settings['tax_rate'] = 10;
+			}
+		}
+		if ( ! isset( $settings['gst_inclusive'] ) ) {
+			$settings['gst_inclusive'] = 1;
+			$changed                   = true;
+		}
+
+		if ( $changed ) {
+			update_option( DoughBoss_Settings::OPTION_KEY, $settings );
+		}
 	}
 }

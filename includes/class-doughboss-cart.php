@@ -256,16 +256,27 @@ class DoughBoss_Cart {
 		}
 
 		$subtotal     = round( $subtotal, 2 );
-		$tax          = round( $subtotal * DoughBoss_Settings::tax_fraction(), 2 );
+		$rate         = (float) DoughBoss_Settings::get( 'tax_rate', 0 );
 		$delivery_fee = ( 'delivery' === $order_type ) ? round( (float) DoughBoss_Settings::get( 'delivery_fee', 0 ), 2 ) : 0.0;
-		$total        = round( $subtotal + $tax + $delivery_fee, 2 );
+
+		if ( DoughBoss_Settings::gst_inclusive() ) {
+			// Prices already include GST: the total is just subtotal + delivery,
+			// and tax is the GST component of that total (e.g. total / 11 @ 10%).
+			$total = round( $subtotal + $delivery_fee, 2 );
+			$tax   = $rate > 0 ? round( $total * ( $rate / ( 100 + $rate ) ), 2 ) : 0.0;
+		} else {
+			// Tax-exclusive: add tax on top of the subtotal.
+			$tax   = round( $subtotal * ( $rate / 100 ), 2 );
+			$total = round( $subtotal + $tax + $delivery_fee, 2 );
+		}
 
 		return array(
-			'subtotal'     => $subtotal,
-			'tax'          => $tax,
-			'delivery_fee' => $delivery_fee,
-			'total'        => $total,
-			'item_count'   => $item_count,
+			'subtotal'      => $subtotal,
+			'tax'           => $tax,
+			'tax_inclusive' => DoughBoss_Settings::gst_inclusive(),
+			'delivery_fee'  => $delivery_fee,
+			'total'         => $total,
+			'item_count'    => $item_count,
 		);
 	}
 
