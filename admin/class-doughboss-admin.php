@@ -26,6 +26,8 @@ class DoughBoss_Admin {
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
+		add_action( 'admin_post_doughboss_save_location', array( $this, 'handle_save_location' ) );
+		add_action( 'admin_post_doughboss_delete_location', array( $this, 'handle_delete_location' ) );
 	}
 
 	/**
@@ -61,6 +63,15 @@ class DoughBoss_Admin {
 			$this->cap(),
 			'doughboss',
 			array( $this, 'render_orders_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
+			__( 'Shops / Locations', 'doughboss' ),
+			__( 'Shops', 'doughboss' ),
+			$this->cap(),
+			'doughboss-locations',
+			array( $this, 'render_locations_page' )
 		);
 
 		add_submenu_page(
@@ -212,14 +223,28 @@ class DoughBoss_Admin {
 				'doughboss-orderboard',
 				'DoughBossBoard',
 				array(
-					'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
-					'nonce'    => wp_create_nonce( 'wp_rest' ),
-					'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
-					'pollMs'   => 7000,
-					'statuses' => DoughBoss_Order::statuses(),
+					'restUrl'   => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
+					'nonce'     => wp_create_nonce( 'wp_rest' ),
+					'currency'  => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+					'pollMs'    => 7000,
+					'statuses'  => DoughBoss_Order::statuses(),
+					'locations' => $this->board_locations(),
 				)
 			);
 		}
+	}
+
+	/**
+	 * Compact list of shops for the board's shop filter.
+	 *
+	 * @return array<int,array{id:int,name:string}>
+	 */
+	private function board_locations() {
+		$out = array();
+		foreach ( DoughBoss_Locations::all() as $loc ) {
+			$out[] = array( 'id' => (int) $loc->id, 'name' => $loc->name );
+		}
+		return $out;
 	}
 
 	/**
@@ -416,6 +441,176 @@ JS;
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Render the Shops / Locations management screen (list + add/edit form).
+	 *
+	 * @return void
+	 */
+	public function render_locations_page() {
+		if ( ! current_user_can( $this->cap() ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$edit_id = isset( $_GET['edit'] ) ? absint( $_GET['edit'] ) : 0;
+		$editing = $edit_id ? DoughBoss_Locations::get( $edit_id ) : null;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$msg     = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
+
+		$f = function ( $key, $default = '' ) use ( $editing ) {
+			return $editing && isset( $editing->$key ) ? $editing->$key : $default;
+		};
+		?>
+		<div class="wrap doughboss-locations">
+			<h1><?php esc_html_e( 'Shops / Locations', 'doughboss' ); ?></h1>
+			<?php if ( 'saved' === $msg ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop saved.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'deleted' === $msg ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop deleted.', 'doughboss' ); ?></p></div>
+			<?php endif; ?>
+
+			<table class="wp-list-table widefat fixed striped" style="margin-bottom:1.5rem;">
+				<thead><tr>
+					<th><?php esc_html_e( 'Shop', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Suburb', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Active', 'doughboss' ); ?></th>
+					<th></th>
+				</tr></thead>
+				<tbody>
+					<?php $rows = DoughBoss_Locations::all(); ?>
+					<?php if ( ! $rows ) : ?>
+						<tr><td colspan="5"><?php esc_html_e( 'No shops yet. Add your first one below.', 'doughboss' ); ?></td></tr>
+					<?php else : ?>
+						<?php foreach ( $rows as $loc ) : ?>
+							<tr>
+								<td><strong><?php echo esc_html( $loc->name ); ?></strong><br /><small><?php echo esc_html( $loc->phone ); ?></small></td>
+								<td><?php echo esc_html( $loc->suburb ); ?></td>
+								<td>
+									<?php
+									$ful = array();
+									if ( $loc->pickup_enabled ) {
+										$ful[] = __( 'Pickup', 'doughboss' );
+									}
+									if ( $loc->delivery_enabled ) {
+										$ful[] = __( 'Delivery', 'doughboss' );
+									}
+									echo esc_html( $ful ? implode( ' + ', $ful ) : '—' );
+									?>
+								</td>
+								<td><?php echo $loc->is_active ? '✓' : '—'; ?></td>
+								<td>
+									<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'doughboss-locations', 'edit' => $loc->id ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Edit', 'doughboss' ); ?></a> |
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_delete_location&id=' . $loc->id ), 'doughboss_delete_location_' . $loc->id ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this shop?', 'doughboss' ) ); ?>');" style="color:#b32d2e;"><?php esc_html_e( 'Delete', 'doughboss' ); ?></a>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+			<h2><?php echo $editing ? esc_html__( 'Edit shop', 'doughboss' ) : esc_html__( 'Add a shop', 'doughboss' ); ?></h2>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="doughboss_save_location" />
+				<input type="hidden" name="id" value="<?php echo esc_attr( (int) $f( 'id', 0 ) ); ?>" />
+				<?php wp_nonce_field( 'doughboss_save_location' ); ?>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-loc-name"><?php esc_html_e( 'Name', 'doughboss' ); ?></label></th>
+						<td><input name="name" id="db-loc-name" type="text" class="regular-text" required value="<?php echo esc_attr( $f( 'name' ) ); ?>" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-suburb"><?php esc_html_e( 'Suburb', 'doughboss' ); ?></label></th>
+						<td><input name="suburb" id="db-loc-suburb" type="text" class="regular-text" value="<?php echo esc_attr( $f( 'suburb' ) ); ?>" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-address"><?php esc_html_e( 'Address', 'doughboss' ); ?></label></th>
+						<td><textarea name="address" id="db-loc-address" class="large-text" rows="2"><?php echo esc_textarea( $f( 'address' ) ); ?></textarea></td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-phone"><?php esc_html_e( 'Phone', 'doughboss' ); ?></label></th>
+						<td><input name="phone" id="db-loc-phone" type="text" class="regular-text" value="<?php echo esc_attr( $f( 'phone' ) ); ?>" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-postcodes"><?php esc_html_e( 'Delivery postcodes', 'doughboss' ); ?></label></th>
+						<td><input name="postcodes" id="db-loc-postcodes" type="text" class="regular-text" value="<?php echo esc_attr( $f( 'postcodes' ) ); ?>" /><p class="description"><?php esc_html_e( 'Comma-separated, used to route delivery orders to this shop.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-prep"><?php esc_html_e( 'Default prep time (min)', 'doughboss' ); ?></label></th>
+						<td><input name="prep_time_default" id="db-loc-prep" type="number" min="0" class="small-text" value="<?php echo esc_attr( $f( 'prep_time_default', 20 ) ); ?>" /></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
+						<td>
+							<label><input type="checkbox" name="pickup_enabled" value="1" <?php checked( $editing ? $editing->pickup_enabled : 1, 1 ); ?> /> <?php esc_html_e( 'Pickup', 'doughboss' ); ?></label><br />
+							<label><input type="checkbox" name="delivery_enabled" value="1" <?php checked( $editing ? $editing->delivery_enabled : 0, 1 ); ?> /> <?php esc_html_e( 'Delivery', 'doughboss' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Active', 'doughboss' ); ?></th>
+						<td><label><input type="checkbox" name="is_active" value="1" <?php checked( $editing ? $editing->is_active : 1, 1 ); ?> /> <?php esc_html_e( 'Accept orders for this shop', 'doughboss' ); ?></label></td>
+					</tr>
+				</table>
+				<?php submit_button( $editing ? __( 'Update shop', 'doughboss' ) : __( 'Add shop', 'doughboss' ) ); ?>
+			</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Handle the add/edit shop form submission.
+	 *
+	 * @return void
+	 */
+	public function handle_save_location() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_save_location' );
+
+		$id   = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
+		$data = array(
+			'name'              => isset( $_POST['name'] ) ? wp_unslash( $_POST['name'] ) : '',
+			'suburb'            => isset( $_POST['suburb'] ) ? wp_unslash( $_POST['suburb'] ) : '',
+			'address'           => isset( $_POST['address'] ) ? wp_unslash( $_POST['address'] ) : '',
+			'phone'             => isset( $_POST['phone'] ) ? wp_unslash( $_POST['phone'] ) : '',
+			'postcodes'         => isset( $_POST['postcodes'] ) ? wp_unslash( $_POST['postcodes'] ) : '',
+			'prep_time_default' => isset( $_POST['prep_time_default'] ) ? (int) $_POST['prep_time_default'] : 20,
+			'pickup_enabled'    => isset( $_POST['pickup_enabled'] ) ? 1 : 0,
+			'delivery_enabled'  => isset( $_POST['delivery_enabled'] ) ? 1 : 0,
+			'is_active'         => isset( $_POST['is_active'] ) ? 1 : 0,
+		);
+
+		if ( $id ) {
+			DoughBoss_Locations::update( $id, $data );
+		} else {
+			DoughBoss_Locations::create( $data );
+		}
+
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'msg' => 'saved' ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Handle deleting a shop.
+	 *
+	 * @return void
+	 */
+	public function handle_delete_location() {
+		$id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_delete_location_' . $id );
+
+		if ( $id ) {
+			DoughBoss_Locations::delete( $id );
+		}
+
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'msg' => 'deleted' ), admin_url( 'admin.php' ) ) );
+		exit;
 	}
 
 	/**

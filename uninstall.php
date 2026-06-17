@@ -17,11 +17,13 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 global $wpdb;
 
 // Drop custom tables.
-$orders_table = $wpdb->prefix . 'doughboss_orders';
-$items_table  = $wpdb->prefix . 'doughboss_order_items';
+$orders_table    = $wpdb->prefix . 'doughboss_orders';
+$items_table     = $wpdb->prefix . 'doughboss_order_items';
+$locations_table = $wpdb->prefix . 'doughboss_locations';
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 $wpdb->query( "DROP TABLE IF EXISTS {$items_table}" );
 $wpdb->query( "DROP TABLE IF EXISTS {$orders_table}" );
+$wpdb->query( "DROP TABLE IF EXISTS {$locations_table}" );
 // phpcs:enable
 
 // Delete menu items and their meta.

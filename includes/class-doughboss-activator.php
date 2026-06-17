@@ -48,10 +48,12 @@ class DoughBoss_Activator {
 		$charset_collate = $wpdb->get_charset_collate();
 		$orders          = $wpdb->prefix . 'doughboss_orders';
 		$order_items     = $wpdb->prefix . 'doughboss_order_items';
+		$locations       = $wpdb->prefix . 'doughboss_locations';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			order_number varchar(32) NOT NULL,
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			status varchar(20) NOT NULL DEFAULT 'pending',
 			order_type varchar(20) NOT NULL DEFAULT 'pickup',
 			customer_name varchar(191) NOT NULL DEFAULT '',
@@ -73,7 +75,8 @@ class DoughBoss_Activator {
 			PRIMARY KEY  (id),
 			UNIQUE KEY order_number (order_number),
 			KEY status (status),
-			KEY customer_email (customer_email)
+			KEY customer_email (customer_email),
+			KEY location_id (location_id)
 		) {$charset_collate};";
 
 		$sql_items = "CREATE TABLE {$order_items} (
@@ -90,8 +93,27 @@ class DoughBoss_Activator {
 			KEY order_id (order_id)
 		) {$charset_collate};";
 
+		$sql_locations = "CREATE TABLE {$locations} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			name varchar(191) NOT NULL DEFAULT '',
+			slug varchar(191) NOT NULL DEFAULT '',
+			suburb varchar(191) NOT NULL DEFAULT '',
+			address text NULL,
+			phone varchar(40) NOT NULL DEFAULT '',
+			postcodes text NULL,
+			prep_time_default int(11) NOT NULL DEFAULT 20,
+			pickup_enabled tinyint(1) NOT NULL DEFAULT 1,
+			delivery_enabled tinyint(1) NOT NULL DEFAULT 0,
+			is_active tinyint(1) NOT NULL DEFAULT 1,
+			sort_order int(11) NOT NULL DEFAULT 0,
+			PRIMARY KEY  (id),
+			KEY slug (slug),
+			KEY is_active (is_active)
+		) {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
+		dbDelta( $sql_locations );
 	}
 
 	/**

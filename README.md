@@ -68,6 +68,7 @@ server for every cart/checkout operation.
 | ------ | ------------------------------ | -------------------------------- |
 | GET    | `/config`                      | Sizes, toppings, currency, fees  |
 | GET    | `/menu`                        | Published menu items             |
+| GET    | `/locations`                   | Active shops (multi-location)    |
 | GET    | `/cart`                        | Current cart                     |
 | POST   | `/cart/add`                    | Add a menu item / custom pizza   |
 | POST   | `/cart/update`                 | Change a line quantity           |
@@ -92,6 +93,7 @@ includes/
   class-doughboss-activator.php   DB schema, defaults, capabilities
   class-doughboss-deactivator.php
   class-doughboss-migrations.php  Versioned schema/upgrade runner
+  class-doughboss-locations.php   Shop locations (multi-shop) data model
   class-doughboss-settings.php    Typed settings access
   class-doughboss-post-types.php  Menu Items CPT + taxonomy + meta box
   class-doughboss-cart.php        Cookie/transient guest cart

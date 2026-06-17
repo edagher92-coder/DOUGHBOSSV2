@@ -25,6 +25,12 @@
 	var boardEl = document.getElementById('db-board');
 	var statusEl = document.querySelector('.db-board-status');
 	var soundBtn = document.querySelector('.db-sound-toggle');
+	var actionsEl = document.querySelector('.db-board-actions');
+
+	var LOCATIONS = cfg.locations || [];
+	var locationsById = {};
+	LOCATIONS.forEach(function (l) { locationsById[l.id] = l.name; });
+	var currentLocation = 0; // 0 = all shops
 
 	var localAck = {};      // Optimistically-acknowledged order IDs.
 	var audio = { ctx: null, on: false, timer: null };
@@ -175,9 +181,11 @@
 
 	function card(o) {
 		var isNew = o.status === 'pending';
+		var showShop = LOCATIONS.length > 1 && !currentLocation && o.location_id && locationsById[o.location_id];
 		var head = el('div', { class: 'db-card-head' }, [
 			el('span', { class: 'db-card-number', text: o.order_number }),
 			el('span', { class: 'db-card-type db-type-' + o.order_type, text: o.order_type === 'delivery' ? 'Delivery' : 'Pickup' }),
+			showShop ? el('span', { class: 'db-card-shop', text: locationsById[o.location_id] }) : null,
 			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
 		]);
 
@@ -278,7 +286,8 @@
 	/* --------------------------------------------------------------- Cycle */
 
 	function load() {
-		return api('/admin/orders', 'GET').then(function (res) {
+		var path = '/admin/orders' + (currentLocation ? '?location_id=' + currentLocation : '');
+		return api(path, 'GET').then(function (res) {
 			if (res && res.data) { render(res.data); }
 		}).catch(function () {
 			if (statusEl) { statusEl.textContent = 'Connection problem — retrying…'; }
@@ -294,6 +303,21 @@
 	if (soundBtn) {
 		soundBtn.addEventListener('click', enableSound);
 	}
+
+	// Shop filter — only shown when more than one shop exists.
+	if (actionsEl && LOCATIONS.length > 1) {
+		var sel = el('select', { class: 'db-shop-select', 'aria-label': 'Filter by shop' }, []);
+		sel.appendChild(el('option', { value: '0', text: 'All shops' }));
+		LOCATIONS.forEach(function (l) {
+			sel.appendChild(el('option', { value: String(l.id), text: l.name }));
+		});
+		sel.addEventListener('change', function () {
+			currentLocation = parseInt(sel.value, 10) || 0;
+			load();
+		});
+		actionsEl.insertBefore(sel, actionsEl.firstChild);
+	}
+
 	// Refresh "x ago" labels even between polls.
 	setInterval(function () { if (lastOrders.length) { render(lastOrders); } }, 30000);
 

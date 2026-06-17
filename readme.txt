@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,16 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.2.0 =
+* New: **multi-shop foundation** — a Shops / Locations admin screen (add/edit
+  shops with suburb, address, phone, delivery postcodes, prep time and
+  pickup/delivery options).
+* Orders now carry a `location_id`; the Live Order Board has a **per-shop
+  filter** so each shop's kitchen tablet sees only its own orders.
+* New REST endpoint `GET /locations`; `GET /admin/orders` and `/checkout`
+  accept a `location_id`. A default shop is created on upgrade so existing
+  single-shop sites keep working unchanged.
 
 = 2.1.0 =
 * New: real-time **Live Order Board** (kitchen display) — active orders in

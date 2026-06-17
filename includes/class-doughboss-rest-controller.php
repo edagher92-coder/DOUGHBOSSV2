@@ -72,6 +72,16 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/locations',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_locations' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/cart',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -284,6 +294,19 @@ class DoughBoss_REST_Controller {
 				'toppings'        => DoughBoss_Settings::toppings(),
 			)
 		);
+	}
+
+	/**
+	 * GET /locations — active shops for the storefront shop picker.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function get_locations() {
+		$out = array();
+		foreach ( DoughBoss_Locations::all( true ) as $loc ) {
+			$out[] = DoughBoss_Locations::public_view( $loc );
+		}
+		return rest_ensure_response( $out );
 	}
 
 	/**
@@ -529,12 +552,20 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_invalid', implode( ' ', $errors ), array( 'status' => 400 ) );
 		}
 
+		// Resolve which shop the order is for. When shops are configured, accept
+		// a valid one or fall back to the default; single-shop sites use 0.
+		$location_id = absint( $request->get_param( 'location_id' ) );
+		if ( DoughBoss_Locations::count() > 0 && ! DoughBoss_Locations::is_valid( $location_id ) ) {
+			$location_id = DoughBoss_Locations::default_id();
+		}
+
 		$totals = $this->cart->totals( $order_type );
 		$lines  = $this->cart->get_lines();
 
 		$order_id = DoughBoss_Order::create(
 			array(
 				'order_type'     => $order_type,
+				'location_id'    => $location_id,
 				'customer_name'  => $name,
 				'customer_email' => $email,
 				'customer_phone' => $phone,
@@ -626,10 +657,11 @@ class DoughBoss_REST_Controller {
 	 *
 	 * @return WP_REST_Response
 	 */
-	public function admin_orders() {
+	public function admin_orders( WP_REST_Request $request ) {
+		$location_id = absint( $request->get_param( 'location_id' ) );
 		return rest_ensure_response(
 			array(
-				'data'        => DoughBoss_Order::active_orders( 100 ),
+				'data'        => DoughBoss_Order::active_orders( 100, $location_id ),
 				'server_time' => current_time( 'mysql', true ),
 			)
 		);

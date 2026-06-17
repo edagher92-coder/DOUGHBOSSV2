@@ -41,6 +41,9 @@ class DoughBoss_Migrations {
 		if ( version_compare( $installed, '1.1.0', '<' ) ) {
 			self::upgrade_to_1_1_0();
 		}
+		if ( version_compare( $installed, '1.2.0', '<' ) ) {
+			self::upgrade_to_1_2_0();
+		}
 
 		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 	}
@@ -56,5 +59,19 @@ class DoughBoss_Migrations {
 	 */
 	private static function upgrade_to_1_1_0() {
 		DoughBoss_Activator::add_capabilities();
+	}
+
+	/**
+	 * 1.2.0 — multi-shop foundation: locations table + a default shop so the
+	 * existing single-shop flow keeps working unchanged.
+	 *
+	 * The locations table and orders.location_id column are added by dbDelta
+	 * via create_tables(); this step seeds the first location.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_2_0() {
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-locations.php';
+		DoughBoss_Locations::ensure_default();
 	}
 }

@@ -104,6 +104,7 @@ class DoughBoss_Order {
 				$orders,
 				array(
 					'order_number'  => self::generate_order_number(),
+					'location_id'   => isset( $data['location_id'] ) ? (int) $data['location_id'] : 0,
 					'status'        => 'pending',
 					'order_type'    => $data['order_type'],
 					'customer_name' => $data['customer_name'],
@@ -119,7 +120,7 @@ class DoughBoss_Order {
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
@@ -178,28 +179,42 @@ class DoughBoss_Order {
 	 * Active orders for the live kitchen board (excludes completed/cancelled),
 	 * oldest first, each with its line items.
 	 *
-	 * @param int $limit Maximum rows to return.
+	 * @param int $limit       Maximum rows to return.
+	 * @param int $location_id Optional shop filter (0 = all shops).
 	 * @return array[]
 	 */
-	public static function active_orders( $limit = 100 ) {
+	public static function active_orders( $limit = 100, $location_id = 0 ) {
 		global $wpdb;
-		$table = self::orders_table();
-		$limit = max( 1, min( 200, (int) $limit ) );
-		$statuses = self::statuses();
+		$table       = self::orders_table();
+		$limit       = max( 1, min( 200, (int) $limit ) );
+		$location_id = absint( $location_id );
+		$statuses    = self::statuses();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) ORDER BY created_at ASC LIMIT %d",
-				$limit
-			)
-		);
+		if ( $location_id ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) AND location_id = %d ORDER BY created_at ASC LIMIT %d",
+					$location_id,
+					$limit
+				)
+			);
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) ORDER BY created_at ASC LIMIT %d",
+					$limit
+				)
+			);
+		}
 
 		$out = array();
 		foreach ( (array) $rows as $order ) {
 			$out[] = array(
 				'id'             => (int) $order->id,
 				'order_number'   => $order->order_number,
+				'location_id'    => (int) $order->location_id,
 				'status'         => $order->status,
 				'status_label'   => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
 				'order_type'     => $order->order_type,
