@@ -2,180 +2,201 @@
 <html lang="en-AU">
 <head>
 <meta charset="utf-8">
-<title>DoughBoss — Technical Plan (Dev)</title>
+<title>DoughBoss Digital OS — Developer Implementation Brief</title>
 <style>
-  @page { size: A4; margin: 16mm; }
-  body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2328; font-size: 10.5pt; line-height: 1.45; }
-  h1 { color: #0b5; font-size: 18pt; margin: 0 0 4pt; }
-  h1.brand { color: #b8341d; }
-  h2 { color: #14532d; font-size: 13pt; border-bottom: 2px solid #1d7a3e; padding-bottom: 3pt; margin-top: 20pt; }
-  h3 { color: #222; font-size: 11.5pt; margin-top: 12pt; }
+  @page {
+    size: A4; margin: 15mm 15mm 18mm;
+    @bottom-center { content: "DoughBoss Digital OS — Developer Brief   ·   page " counter(page) " of " counter(pages); font-size: 8pt; color: #999; }
+  }
+  @page :first { @bottom-center { content: ""; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2328; font-size: 10.3pt; line-height: 1.45; margin: 0; }
+  h1 { color: #14532d; }
+  h2 { color: #14532d; font-size: 13pt; border-bottom: 2px solid #1d7a3e; padding-bottom: 3pt; margin: 18pt 0 7pt; }
+  h3 { color: #222; font-size: 11pt; margin: 11pt 0 3pt; }
   p { margin: 5pt 0; }
-  code, .mono { font-family: "Courier New", monospace; font-size: 9.5pt; background: #f3f4f6; padding: 0 3px; border-radius: 3px; }
-  pre { background: #0f172a; color: #e2e8f0; padding: 8pt 10pt; border-radius: 6px; font-family: "Courier New", monospace; font-size: 8.8pt; line-height: 1.4; white-space: pre-wrap; }
-  table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 9.3pt; }
-  th, td { border: 1px solid #cbd5e1; padding: 4pt 6pt; text-align: left; vertical-align: top; }
-  th { background: #dcfce7; color: #14532d; }
-  .cover { text-align: center; padding: 36pt 0 20pt; border-bottom: 4px solid #1d7a3e; margin-bottom: 16pt; }
-  .cover .badge { display: inline-block; background: #14532d; color: #fff; padding: 6pt 16pt; border-radius: 20pt; font-weight: bold; letter-spacing: 1px; }
-  .cover h1 { font-size: 26pt; margin-top: 14pt; }
-  .cover .sub { font-size: 13pt; color: #555; }
-  .meta { color: #666; font-size: 9.5pt; }
-  ul { margin: 5pt 0 5pt 16pt; }
+  ul, ol { margin: 5pt 0 5pt 16pt; }
   li { margin: 2.5pt 0; }
-  .p0 { color: #b91c1c; font-weight: bold; }
-  .p1 { color: #b45309; font-weight: bold; }
-  .p2 { color: #1d4ed8; font-weight: bold; }
-  .done { background:#1d7a3e; color:#fff; font-size:8pt; padding:1pt 6pt; border-radius:4px; }
+  code { font-family: "Courier New", monospace; font-size: 9pt; background: #eef2f0; padding: 0 3px; border-radius: 3px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 8pt 10pt; border-radius: 6px; font-family: "Courier New", monospace; font-size: 8.6pt; line-height: 1.4; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 9.2pt; }
+  th, td { border: 1px solid #cbd5e1; padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #dcfce7; color: #14532d; font-weight: 700; }
+  .cover { background: #14532d; color: #fff; margin: -15mm -15mm 14pt; padding: 50pt 15mm 32pt; text-align: center; }
+  .cover .badge { display: inline-block; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.5); padding: 5pt 16pt; border-radius: 20pt; font-weight: 700; letter-spacing: 2px; font-size: 9.5pt; }
+  .cover h1 { color: #fff; font-size: 24pt; margin: 14pt 0 4pt; }
+  .cover .sub { font-size: 12.5pt; opacity: 0.95; }
+  .cover .meta { margin-top: 12pt; font-size: 9pt; opacity: 0.9; }
+  .done { background:#1d7a3e; color:#fff; font-size:7.5pt; padding:1pt 6pt; border-radius:4px; }
+  .p0 { color: #b91c1c; font-weight: bold; } .p1 { color: #b45309; font-weight: bold; } .p2 { color: #1d4ed8; font-weight: bold; }
   .small { font-size: 9pt; color: #555; }
   .pagebreak { page-break-before: always; }
+  .note { background:#eef3fb; border-left:4px solid #2563eb; padding:7pt 10pt; border-radius:4px; }
   .sev { font-size: 8pt; padding: 1pt 5pt; border-radius: 4px; color:#fff; }
-  .crit { background:#b91c1c; } .high { background:#c2410c; } .med { background:#a16207; } .low { background:#475569; }
+  .crit { background:#b91c1c; } .high { background:#c2410c; } .med { background:#a16207; }
 </style>
 </head>
 <body>
 
 <div class="cover">
-  <span class="badge">ENGINEERING</span>
-  <h1 class="brand">DoughBoss — Technical Plan</h1>
-  <div class="sub">Real-time ordering platform: architecture, backlog, schema &amp; build</div>
-  <p class="meta">Prepared for the dev team &middot; 17 June 2026 &middot; Based on an 11-agent code &amp; live-site audit</p>
+  <span class="badge">ENGINEERING &middot; DIGITAL OS</span>
+  <h1>Developer Implementation Brief</h1>
+  <div class="sub">Staged WordPress build: ordering, payments, store screens, analytics &amp; scale</div>
+  <div class="meta">For the technical team &middot; 17 June 2026 &middot; Merges the client reference brief with an 11-agent code &amp; live-site audit &middot; Backup completed</div>
 </div>
 
-<h2>1. Current state (live screening)</h2>
+<h2>1. Objective &amp; MVP definition</h2>
+<p>Build a <strong>staged DoughBoss Digital OS inside the existing WordPress site</strong> without destabilising the live business. The MVP must prove, before any loyalty / full delivery / app-PWA / printer-automation / franchise tooling:</p>
+<ul>
+  <li>Direct online ordering (pickup + optional delivery)</li>
+  <li><strong>Store-specific menu &amp; availability</strong> (per-shop price &amp; sold-out) — core, from day one</li>
+  <li>Online payments (Stripe, AUD)</li>
+  <li>A live <strong>staff order screen</strong> per shop</li>
+  <li><strong>Conversion tracking</strong> (treated as MVP, not a later add-on)</li>
+</ul>
+
+<h2>2. Current technical snapshot &amp; known issues</h2>
 <table>
-  <tr><th>Area</th><th>Finding</th></tr>
-  <tr><td>Stack</td><td>WP 7.0, PHP 8.2.31, child theme <code>doughboss-child</code> (parent <code>doughboss</code>). Plugin DoughBoss active, REST healthy.</td></tr>
-  <tr><td>Launch state</td><td>0 menu items, 0 orders, <strong>no page contains the <code>[doughboss…]</code> shortcodes</strong> — storefront not surfaced.</td></tr>
-  <tr><td>Localisation</td><td>currency=USD (should be AUD); tax_rate=0 (AU GST 10% inclusive); no timezone; admin_email = dev agency.</td></tr>
-  <tr><td>Perf</td><td>Homepage loads jQuery 3.5.1 from Google CDN (render-blocking).</td></tr>
-  <tr><td>Data model</td><td>Custom tables <code>wp_doughboss_orders</code> / <code>_order_items</code>; 8-status lifecycle; no shop/location dimension; no payment fields.</td></tr>
+  <tr><th>Area</th><th>Observation</th></tr>
+  <tr><td>Platform</td><td>WordPress 7.0, PHP 8.2.31; Dough Boss child theme (classic); shops: Bankstown, Revesby, Roselands.</td></tr>
+  <tr><td>Plugin</td><td>DoughBoss plugin (was v2.0.0; <strong>now v2.1.0</strong> after this engagement) with REST routes for config/menu/cart/checkout/lookup/admin status.</td></tr>
+  <tr><td>Content</td><td>43 menu-item posts + 3 location posts + 9 pages + 6 CF7 forms + 66 images (legacy/Toolset content — <strong>not yet wired into the ordering plugin's own item type</strong>).</td></tr>
+  <tr><td class="p0">Known bug</td><td>Menu taxonomy query uses <code>field=slug</code> but passes the category <em>name</em> → <strong>Flat Bread 11" renders empty</strong> despite having items.</td></tr>
+  <tr><td class="p0">Config</td><td>Ordering API returns <strong>USD</strong>, generic sizes/toppings, empty menu endpoint — treat as unfinished/demo.</td></tr>
+  <tr><td>Marketing</td><td>No SEO plugin; basic <code>&lt;head&gt;</code>; <strong>66/66 images missing alt text</strong>; no confirmed GA4/Meta/TikTok stack.</td></tr>
 </table>
 
-<h2>2. Target architecture</h2>
-<p>WordPress remains the system of record and REST surface. Layer an <strong>event-driven realtime path</strong> on the existing <code>doughboss_order_*</code> action hooks: on order creation, fan out to managed pub/sub <strong>plus</strong> server-side side-effects (SMS, print) that fire independent of any screen. The Kitchen Display is an installable PWA on a locked shop tablet. Introduce provider interfaces (<code>PaymentGateway</code>, <code>Notifier</code>, <code>OrderRepository</code>, <code>FulfilmentChannel</code>) behind a PSR-4 namespace + DI container so Stripe / Ably / PrintNode / Twilio are swappable and testable. A <code>shop_id</code> dimension and a versioned migration runner are the foundation.</p>
+<h2>3. Delivery principles</h2>
+<ul>
+  <li><strong>No live edits without backup + staging + owner approval;</strong> keep the public site live throughout.</li>
+  <li><strong>Separate display data from pricing/order logic</strong> — no price in product titles; structured <code>base_price</code> + per-store override.</li>
+  <li><strong>Store-specific ordering from day one</strong>, even with one store live.</li>
+  <li>Stripe hosted/Elements to minimise PCI; <strong>server is the source of truth for totals</strong> (never trust the browser).</li>
+  <li>Log every order state change; non-dev admin controls for availability / prep-time / sold-out.</li>
+  <li>Track events client- and server-side; minimise sensitive data; respect consent.</li>
+</ul>
 
-<h2>3. Prioritised backlog</h2>
+<h2>4. Target architecture</h2>
+<p>WordPress stays CMS/admin and system-of-record. Ordering logic lives in a dedicated plugin (see §5). The customer ordering app is mobile-first JS embedded in WP; the <strong>staff screen is a separate protected per-store route, polling every 5–10s for the MVP</strong>, with a managed push upgrade (Ably/Pusher) and customer live-tracking as a fast-follow — not a launch blocker. Stripe PaymentIntent + webhook. Custom tables for orders/items/status-logs/payments; CPTs only for marketing/menu editing. Conversion events fire client-side (via GTM) and server-side (Purchase/Lead on confirmation, off the order hooks).</p>
+
+<h2>5. Plugin structure &amp; refactor-vs-extend decision</h2>
+<p class="note"><strong>Decision:</strong> <strong>extend the existing DoughBoss plugin</strong> (already refactored to v2.1.0 with the order board, migration runner and transactional writes) rather than start a parallel <code>doughboss-ordering</code> plugin — lower risk, already delivering. Adopt the reference's module layout <em>within</em> it, and map the reference's <code>db-order/v1</code> route names to our <code>doughboss/v1</code> namespace (Appendix B).</p>
+<pre>includes/  Database/migrations · PostTypes · Rest/Public · Rest/Admin
+           Payments/StripeService · Orders/OrderService
+           Notifications/NotificationService · Marketing/EventService
+public/    customer-app (menu/builder/cart/checkout) · staff order board
+admin/     orders, order board, settings, (manager dashboard later)</pre>
+<p>Introduce provider interfaces (<code>PaymentGateway</code>, <code>Notifier</code>, <code>OrderRepository</code>, <code>FulfilmentChannel</code>) + PSR-4 namespace/DI as logic grows.</p>
+
+<h2 class="pagebreak">6. Data model (MVP)</h2>
+<p>Custom tables under the plugin. <span class="done">v2.1.0</span> already added <code>eta_minutes, seen_at, acknowledged_at, accepted_at</code> + a status-history-ready structure and a migration runner.</p>
 <table>
-  <tr><th>Pri</th><th>Item</th><th>Effort</th></tr>
-  <tr><td class="p0">P0</td><td>Transaction-wrap order+items create with checked inserts + rollback <span class="done">DONE v2.1.0</span></td><td>S</td></tr>
-  <tr><td class="p0">P0</td><td>Versioned migration runner; DB schema bump <span class="done">DONE v2.1.0</span></td><td>M</td></tr>
-  <tr><td class="p0">P0</td><td>Idempotency-Key on <code>/checkout</code> <span class="done">DONE v2.1.0</span> (storefront JS to send key — follow-up)</td><td>S</td></tr>
-  <tr><td class="p0">P0</td><td>Longer order numbers + insert-retry on collision <span class="done">DONE v2.1.0</span></td><td>S</td></tr>
-  <tr><td class="p0">P0</td><td>Reconfigure AUD + GST-inclusive math (<code>tax = total/11</code>)</td><td>S</td></tr>
-  <tr><td class="p0">P0</td><td>Rate-limit + harden public <code>track_order</code> (drop <code>__return_true</code>, signed token)</td><td>S</td></tr>
-  <tr><td class="p1">P1</td><td>Live order board / KDS feed + screen <span class="done">DONE v2.1.0 (polling MVP)</span></td><td>M</td></tr>
-  <tr><td class="p1">P1</td><td>Managed realtime transport (Ably/Pusher) + customer live tracking</td><td>M</td></tr>
-  <tr><td class="p1">P1</td><td>Stripe PaymentIntents (AUD, GST, SAQ-A) + webhook auto-confirm</td><td>L</td></tr>
-  <tr><td class="p1">P1</td><td>Store-hours / scheduling enforcement</td><td>L</td></tr>
-  <tr><td class="p1">P1</td><td>A11y: focus styles, replace alert() with aria-live, contrast</td><td>M</td></tr>
-  <tr><td class="p2">P2</td><td>Multi-shop schema + delivery-zone routing + per-shop menus</td><td>L</td></tr>
-  <tr><td class="p2">P2</td><td>PrintNode receipt printing + Twilio SMS</td><td>L</td></tr>
-  <tr><td class="p2">P2</td><td>Indexes, cached COUNT, fix admin N+1, status-history + sales rollups</td><td>M</td></tr>
-  <tr><td class="p2">P2</td><td>Composer + PHPUnit + phpcs + CI; namespaces/DI; provider interfaces</td><td>M</td></tr>
+  <tr><th>Table</th><th>Key fields</th></tr>
+  <tr><td><code>db_locations</code></td><td>name, hours_json, pickup/delivery_enabled, prep_time_default, is_open</td></tr>
+  <tr><td><code>db_menu_categories</code></td><td>name, sort</td></tr>
+  <tr><td><code>db_menu_items</code></td><td>category_id, name, base_price, dietary_flags</td></tr>
+  <tr><td class="p0"><code>db_item_location</code></td><td>item_id, location_id, <strong>price_override, sold_out</strong> (store-specific availability — P0)</td></tr>
+  <tr><td><code>db_modifier_groups</code> / <code>db_modifiers</code></td><td>min_select, max_select / price_delta</td></tr>
+  <tr><td><code>db_orders</code> / <code>db_order_items</code></td><td>+ shop_id, eta, payment fields / name_snapshot, modifiers_json (immutable price snapshot)</td></tr>
+  <tr><td><code>db_order_status_log</code></td><td>order_id, from, to, user_id, ts (audit trail)</td></tr>
+  <tr><td><code>db_payments</code></td><td>payment_intent_id, raw_event_id, state</td></tr>
+  <tr><td><code>db_customers</code></td><td>contact, <strong>marketing_opt_in</strong></td></tr>
+  <tr><td><code>db_coupons</code></td><td>code, type, value (MVP offers)</td></tr>
 </table>
 
-<h2 class="pagebreak">4. Real-time orders &rarr; shop</h2>
-<p><strong>Decision of record.</strong> Transport: <strong>Ably primary + 5s REST poll fallback</strong> (shared hosting can't hold WS/SSE; <code>since=</code> cursor + <code>acknowledged_at</code> make replays idempotent). Surface: <strong>installable PWA on a locked tablet</strong> (not wp-admin). Staff auth: <strong>per-device Application Passwords / short JWT scoped to a <code>kds_operator</code> role</strong> (<code>manage_doughboss_kds</code>, never <code>manage_options</code>); Ably tokens minted per shop. Alerting: <strong>looping Web Audio chime + full-screen banner until acknowledged + Web Push + server-side Twilio SMS</strong>. Printing: <strong>PrintNode fired server-side</strong>. Routing: <strong><code>shop_id</code>; delivery by postcode/suburb, pickup = chosen shop</strong>.</p>
-<h3>Sequence</h3>
-<pre>customer checkout → POST /checkout → DoughBoss_Order::create() (status=pending)
-  → doughboss_order_created fires
-  → listener resolves shop, publishes order.new to shop:{id} (Ably) + enqueues SMS + print job
-  → KDS card appears, chime loops + banner until staff Acknowledge
-  → staff Accept + ETA → POST /kds/order/{id}/accept → status=confirmed, eta stored
-  → doughboss_order_status_changed → republish order.update
-  → customer tracker (subscribed to order:{number}) updates live
-  → fallback: KDS polls /admin/orders every 5s; tracker polls /order/{number} every 10s</pre>
-
-<h2>5. Data model &amp; schema changes</h2>
-<p><strong>Migration runner is the prerequisite for all of these.</strong></p>
-<ul>
-  <li><code>orders</code> new columns: <span class="done">eta_minutes, seen_at, acknowledged_at, accepted_at (v2.1.0)</span>; then <code>shop_id</code>, <code>payment_status</code>, <code>payment_intent_id</code>, <code>payment_method</code>, <code>paid_at</code>, <code>ready_at</code>; change <code>currency</code> default → AUD.</li>
-  <li><code>order_items</code>: add <code>shop_id</code>.</li>
-  <li>New tables: <code>wp_doughboss_shops</code>, <code>wp_doughboss_order_status_history</code>, <code>wp_doughboss_shop_hours</code>, <code>wp_doughboss_delivery_zones</code>, <code>wp_doughboss_shop_items</code>, <code>wp_doughboss_sales_daily</code>.</li>
-  <li>New REST: <span class="done"><code>GET /admin/orders</code>, <code>POST /admin/order/{id}/ack</code>, <code>POST /admin/order/{id}/accept</code> (v2.1.0)</span>; then <code>POST /doughboss/v1/stripe/webhook</code>, <code>/kds/*</code>.</li>
-  <li>New hooks: <span class="done"><code>doughboss_order_accepted</code> (v2.1.0)</span>, <code>doughboss_order_eta_set</code>, <code>doughboss_order_paid</code>; existing <code>doughboss_order_created</code>/<code>_status_changed</code> drive a single <code>Realtime::publish()</code> fan-out.</li>
-</ul>
-
-<h2>6. Payments &amp; AU tax</h2>
-<ul>
-  <li>Stripe <strong>PaymentIntents + Payment Element</strong> → PCI <strong>SAQ-A</strong> (no card data on server); Apple/Google Pay/Link automatic.</li>
-  <li>Flow: order created <code>pending_payment</code> → server PaymentIntent (<code>currency: aud</code>, <strong>idempotency key = order_number</strong>, <code>metadata.order_id</code>) → client confirm → <strong>signature-verified webhook is the sole source of "paid"</strong>; email only on paid.</li>
-  <li>AU tax: set <strong>AUD</strong>, GST <strong>inclusive</strong> (<code>tax = round(total/11, 2)</code>, not <code>subtotal*0.10</code>); Tax Invoice with ABN + GST line (≥ A$82.50). Optional pay-on-pickup; capped card surcharge.</li>
-  <li>On <code>doughboss_order_paid</code> → push tax invoice to Xero/Zoho. Stripe Radar + 3DS automatic.</li>
-</ul>
-
-<h2 class="pagebreak">7. Security findings (key)</h2>
+<h2>7. REST endpoints (<code>doughboss/v1</code>)</h2>
 <table>
-  <tr><th>Sev</th><th>Finding</th><th>Fix</th></tr>
-  <tr><td><span class="sev high">HIGH</span></td><td><code>track_order</code> <code>__return_true</code>, unthrottled; short order numbers → enumeration/PII harvest</td><td>Rate-limit, signed tracking token, longer numbers <span class="small">(numbers widened in v2.1.0)</span></td></tr>
-  <tr><td><span class="sev med">MED</span></td><td>Cart token taken verbatim from cookie (poisoning / transient exhaustion)</td><td>HMAC-sign + rotate on checkout; cap transients/IP</td></tr>
-  <tr><td><span class="sev med">MED</span></td><td>Nonce-only gate on checkout (scriptable) before payments</td><td>Throttle/honeypot; re-validate prices server-side (already done)</td></tr>
-  <tr><td><span class="sev low">LOW</span></td><td>Two <code>innerHTML</code> sinks in storefront JS; uninstall not multisite-aware</td><td>Use <code>textContent</code>; <code>get_sites()</code> loop <span class="small">(board JS uses textContent)</span></td></tr>
-</table>
-<p class="small">Note: server-side pricing, prepared SQL, whitelisted ORDER BY and capability-gated admin screens are already correct.</p>
-
-<h2>8. Frontend / UX / a11y</h2>
-<ul>
-  <li><span class="sev crit">CRIT</span> No focus indicators; errors via <code>alert()</code>; loaders not announced — WCAG blockers. Add <code>:focus-visible</code>, aria-live errors, <code>role=status</code>.</li>
-  <li><span class="sev high">HIGH</span> Colour contrast fails AA (muted text, white-on-accent); no sticky cart/upsell.</li>
-  <li><span class="sev med">MED</span> Menu images via CSS background (no alt/lazy/srcset); raw price formatting → use <code>Intl.NumberFormat('en-AU', {currency:'AUD'})</code>.</li>
-  <li>Move jQuery off Google CDN (render-block) — dequeue in child theme.</li>
-</ul>
-
-<h2>9. Scalability &amp; multi-shop</h2>
-<ul>
-  <li>Single-tenant today: global settings + global menu + location-less orders. Add <code>doughboss_locations</code> + per-shop config + <code>location_id</code> on orders.</li>
-  <li>Indexing: <code>KEY(shop_id,status,created_at)</code>, <code>KEY(created_at)</code>; fulltext or filter-first search; cache <code>COUNT(*)</code>; fix admin <code>get_items()</code> N+1.</li>
-  <li>Caching: exclude storefront/tracking from page cache; cache <code>/menu</code> + <code>/config</code> per location; short <code>Cache-Control</code> on tracking.</li>
-  <li>Reporting: <code>order_status_history</code> + nightly <code>sales_daily</code> rollup → sales/AOV/item-mix/peak; CSV + Xero/Zoho export.</li>
-</ul>
-
-<h2>10. Growth instrumentation</h2>
-<ul>
-  <li>Dual tracking: browser pixels (Meta/TikTok/GA4) <strong>+ server-side Meta CAPI / TikTok Events API fired from the order hooks</strong>; dedup by <code>event_id = order_id</code>; hashed email/phone.</li>
-  <li>First-party Custom Audiences + Lookalikes from owned order data — the marketing moat.</li>
-  <li>AU Privacy Act: consent banner (no pre-tick) gating browser pixels.</li>
-  <li>Tooling map: order hooks→CAPI/Events; Zapier→audience sync/posting/review-requests; WPVibe→schema/meta/pages; Canva+Adobe→creative; deep-research→keywords; GA4→measurement.</li>
-</ul>
-
-<h2 class="pagebreak">11. Phase 1 delivered — v2.1.0</h2>
-<p>Shipped on branch <code>claude/funny-goodall-gsoog4</code> (PR #2), installable via <strong>Plugins → Add New → Upload Plugin → Replace current</strong>.</p>
-<ul>
-  <li><strong>Live Order Board</strong> (<code>admin/class-doughboss-admin.php</code> + <code>public/js/doughboss-orderboard.js</code> + <code>.css</code>): standalone screen polling <code>GET /admin/orders</code> every 7s; New / Preparing / Ready lanes; looping Web Audio chime + visual alert until <strong>Acknowledge</strong>; one-tap Accept (ETA chips) + status advance; tablet-friendly, focus-visible, <code>textContent</code> rendering.</li>
-  <li><strong>Kitchen role</strong>: <code>doughboss_kitchen</code> role + <code>manage_doughboss_kds</code> cap (no full admin login on a device).</li>
-  <li><strong>Pipeline hardening</strong>: transactional <code>create()</code> with rollback; order-number widening + retry; <code>/checkout</code> <code>Idempotency-Key</code>; versioned migration runner (DB 1.1.0; additive columns via dbDelta).</li>
-  <li><strong>New endpoints</strong>: <code>GET /admin/orders</code>, <code>POST /admin/order/{id}/ack</code>, <code>POST /admin/order/{id}/accept</code>. Orders gain ETA + seen/acknowledged/accepted timestamps; <code>doughboss_order_accepted</code> hook.</li>
-</ul>
-<h3>How to test</h3>
-<pre>1. Upload zip / install branch → activate (migration auto-adds columns + role).
-2. Open "Order Board" → click "Enable sound alerts".
-3. Place a test order from the storefront.
-4. Card appears within ~7s with a chime → Accept (ETA) → advance status.
-5. Optional: create a DoughBoss Kitchen user → confirm board-only access.</pre>
-
-<h2>12. Risks &amp; mitigations</h2>
-<table>
-  <tr><th>Risk</th><th>Mitigation</th></tr>
-  <tr><td>Non-transactional writes corrupt revenue/reports</td><td>Transaction + checked inserts + rollback <span class="done">DONE</span></td></tr>
-  <tr><td>Tablet asleep/offline drops live orders</td><td>Server-side SMS + print independent of screen; chime loops; <code>since=</code> reconcile</td></tr>
-  <tr><td>Shared-host realtime instability</td><td>Managed pub/sub off-box + always-on poll fallback + idempotent <code>order.new</code></td></tr>
-  <tr><td>Payment/order desync, double-charge</td><td>Idempotency key = order_number; webhook sole "paid" source; email only on paid</td></tr>
-  <tr><td>Auth leakage / order enumeration</td><td>Low-priv <code>kds_operator</code>; per-shop scoped tokens; rate-limited + signed tracking</td></tr>
+  <tr><th>Endpoint</th><th>Purpose</th><th>Status</th></tr>
+  <tr><td><code>GET /config</code></td><td>currency (→ AUD), fees</td><td>fix USD→AUD</td></tr>
+  <tr><td><code>GET /locations</code></td><td>shops + hours + open state</td><td>new</td></tr>
+  <tr><td><code>GET /menu?location_id=</code></td><td>per-store menu + availability</td><td>new (replaces demo)</td></tr>
+  <tr><td><code>POST /cart/validate</code></td><td>server-authoritative totals + price snapshot</td><td>harden</td></tr>
+  <tr><td><code>POST /checkout (session)</code></td><td>PaymentIntent; Idempotency-Key</td><td><span class="done">idempotency v2.1.0</span></td></tr>
+  <tr><td><code>POST /webhooks/stripe</code></td><td>payment source of truth</td><td>new</td></tr>
+  <tr><td><code>GET /order/{number}</code></td><td>customer tracking (email/phone token)</td><td>harden + token</td></tr>
+  <tr><td><code>GET /admin/orders</code></td><td>staff order-board feed</td><td><span class="done">v2.1.0</span></td></tr>
+  <tr><td><code>POST /admin/order/{id}/ack · /accept · /status</code></td><td>acknowledge · accept+ETA · advance</td><td><span class="done">v2.1.0</span></td></tr>
+  <tr><td><code>GET /admin/reports/daily</code></td><td>daily sales/exports</td><td>P1</td></tr>
 </table>
 
-<h2>Appendix — REST endpoints</h2>
+<h2>8. Payments</h2>
+<ul>
+  <li>Stripe <strong>test mode first</strong> — no live until every store passes test orders. Server-created PaymentIntent (AUD); <strong>never trust browser totals</strong>; immutable per-item price snapshot.</li>
+  <li><strong>Webhook is the source of truth.</strong> Payment states: <code>pending / paid / failed / refunded / partially_refunded</code>. Email only on paid.</li>
+  <li><strong>Refund / cancel behind manager capability</strong>, logged. PCI minimised (Elements/Checkout, SAQ-A). Review AU card-surcharging rules before launch.</li>
+  <li>Fees: 1.7% + A$0.30 domestic / 3.5% + A$0.30 international (re-confirm before launch).</li>
+</ul>
+
+<h2>9. Staff order screen (KDS)</h2>
+<p><span class="done">v2.1.0 shipped</span> the polling board with New/Preparing/Ready lanes, looping audible alert until <strong>Acknowledge</strong>, one-tap Accept(+ETA)/status, large touch targets, and a low-privilege <code>doughboss_kitchen</code> role. Reference additions to fold in:</p>
+<ul>
+  <li>Auth via staff login / <strong>per-store device token</strong> — no public screens; scope each device to its store.</li>
+  <li>Card shows name / phone / pickup time / items / modifiers / notes / payment status.</li>
+  <li><strong>Fail-safe backup email + optional SMS to the manager</strong> if an order isn't acknowledged; tablet kept awake/powered.</li>
+  <li><strong>Lost-connection recovery</strong> (reconcile via <code>since=</code> cursor on reconnect); <strong>min 20 test orders per store</strong> before go-live.</li>
+</ul>
+
+<h2 class="pagebreak">10. Analytics &amp; conversion tracking (MVP)</h2>
+<ul>
+  <li><strong>GTM as the central client-side layer</strong>; <strong>server-side Purchase/Lead off the order hooks</strong> for reliability (hybrid). Dedup by <code>event_id = order_id</code>.</li>
+  <li>GA4 + <strong>Meta Pixel</strong> + <strong>TikTok Pixel</strong> event map: <code>ViewContent / menu_view / item_view / AddToCart / InitiateCheckout / Purchase / Lead</code>; <strong>verify each fires once with correct values</strong>.</li>
+  <li>Meta <strong>CAPI = Phase 2</strong>; Search Console + sitemap; consent-gated (AU Privacy Act).</li>
+</ul>
+
+<h2>11. SEO / Local SEO</h2>
+<ul>
+  <li>Install an SEO plugin (AIOSEO/RankMath/Yoast) non-destructively: metadata, schema, redirects, sitemap.</li>
+  <li><strong>Fix 66/66 missing image alt text;</strong> per-store <code>LocalBusiness/Restaurant</code> schema + suburb pages (Bankstown/Revesby/Roselands); update privacy policy.</li>
+</ul>
+
+<h2>12. Security / privacy / compliance</h2>
+<ul>
+  <li>Sanitise input / escape output; capability checks; nonces / app-auth on protected routes; <strong>rate-limit checkout &amp; order-tracking endpoints</strong>.</li>
+  <li>No raw card data; minimal PII; log staff actions; HTTPS / no mixed content; <strong>confirm restorable backup before live payments</strong>.</li>
+</ul>
+
+<h2>13. QA test plan</h2>
+<p>Test groups: menu rendering (incl. the taxonomy bug), cart/pricing (<strong>browser cannot alter total</strong>), payments (success/fail/abandoned/<strong>duplicate webhook</strong>/refund), staff screen (incl. <strong>lost-connection recovery</strong>), location logic (<strong>closed store can't receive</strong>), emails/notifications, marketing events (fire once, correct values), mobile devices, business-hours load, content/SEO.</p>
+
+<h2>14. Reporting &amp; exports</h2>
+<p>MVP = admin list tables + <strong>daily CSV exports</strong> (<code>/admin/reports/daily</code>); manager dashboard (orders, revenue, top items, cancellations, per-store, lead reporting) post-MVP; accounting export (Xero/Zoho) later.</p>
+
+<h2>15. Acceptance criteria / launch gates</h2>
+<ul>
+  <li>Backup + restore verified known-good; owner signs off item names/descriptions/prices/availability.</li>
+  <li>Stripe test passes; <strong>each store completes ≥20 test orders</strong>; refund/cancel documented.</li>
+  <li>Privacy/terms updated; conversion events verified in GA4/Meta/TikTok.</li>
+  <li><strong>Soft-launch ONE store before all-store rollout.</strong></li>
+</ul>
+
+<h2 class="pagebreak">16. Merged backlog (✅ = shipped in v2.1.0)</h2>
 <table>
-  <tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr>
-  <tr><td>GET</td><td>/config, /menu</td><td>Storefront config + items (public)</td></tr>
-  <tr><td>GET/POST</td><td>/cart, /cart/add|update|remove|clear</td><td>Guest cart (nonce)</td></tr>
-  <tr><td>POST</td><td>/checkout</td><td>Create order (nonce; Idempotency-Key)</td></tr>
-  <tr><td>GET</td><td>/order/{number}?email=</td><td>Customer tracking</td></tr>
-  <tr><td>POST</td><td>/admin/order/{id}/status</td><td>Staff status (cap)</td></tr>
-  <tr><td>GET</td><td>/admin/orders</td><td>Order board feed (cap) <span class="done">NEW</span></td></tr>
-  <tr><td>POST</td><td>/admin/order/{id}/ack</td><td>Acknowledge (cap) <span class="done">NEW</span></td></tr>
-  <tr><td>POST</td><td>/admin/order/{id}/accept</td><td>Accept + ETA (cap) <span class="done">NEW</span></td></tr>
+  <tr><th>Pri</th><th>Item</th></tr>
+  <tr><td class="p0">P0</td><td>✅ Live order board (polling) · ✅ kitchen role · ✅ transactional order create + rollback · ✅ idempotent checkout · ✅ migration runner · ✅ <code>/admin/orders</code>,<code>/ack</code>,<code>/accept</code></td></tr>
+  <tr><td class="p0">P0</td><td><strong>Staging env + documented rollback</strong>; backup-restore verification gate</td></tr>
+  <tr><td class="p0">P0</td><td>Fix menu taxonomy bug (Flat Bread 11"); <strong>normalise menu (prices out of titles)</strong>; AUD/config cleanup (remove demo USD data)</td></tr>
+  <tr><td class="p0">P0</td><td><strong>Store-specific availability</strong> (<code>db_item_location</code> price_override/sold_out) + per-store menu API</td></tr>
+  <tr><td class="p0">P0</td><td>Server-authoritative cart totals + immutable price snapshot; rate-limit checkout/tracking</td></tr>
+  <tr><td class="p0">P0</td><td>Stripe PaymentIntent test-mode + webhook (source of truth); closed-store/hours guard</td></tr>
+  <tr><td class="p0">P0</td><td>Staff screen: store device token, manager email/SMS fail-safe, lost-connection recovery</td></tr>
+  <tr><td class="p0">P0</td><td>GA4 + Pixel core event map (fire-once verified); privacy-policy update; 20 test orders/store + single-store soft launch</td></tr>
+  <tr><td class="p1">P1</td><td>Ably/Pusher realtime upgrade + customer live tracking; refund/partial-refund + cancel (manager cap)</td></tr>
+  <tr><td class="p1">P1</td><td><code>/admin/reports/daily</code> + CSV exports; SEO plugin + Search Console + Local SEO pages + alt-text fix</td></tr>
+  <tr><td class="p1">P1</td><td>Meta CAPI + TikTok server events; coupons (MVP); PrintNode thermal print; multi-shop routing; consent management</td></tr>
+  <tr><td class="p2">P2</td><td>Loyalty/wallet; gift cards; advanced coupons/bundles; full PWA install/offline; delivery dispatch + tracking; franchise portal + multi-entity reporting; server-side AI reporting</td></tr>
 </table>
+
+<h2>17. Deferred (post-MVP)</h2>
+<p class="small">Thermal auto-print · delivery dispatch/tracking · loyalty/wallet · gift cards · PWA install/offline · advanced coupons/bundles · franchisee portal &amp; multi-entity reporting · warehouse + AI reporting.</p>
+
+<h2>18. Estimate &amp; team</h2>
+<p>Phase 1 ≈ <strong>169–344 hours</strong> across 9 workstreams (Ordering API 35–70 · Customer UI 30–60 · Staff screen 24–50 · payments, data model, SEO/analytics, QA, etc.). Team model: <strong>10 specialist agents + 2 managers</strong> (Tech + Growth/Ops), already used to produce this brief.</p>
+
+<h2>Appendix A — what shipped in v2.1.0</h2>
+<p class="small">Real-time Live Order Board (polling KDS) · <code>doughboss_kitchen</code> role + <code>manage_doughboss_kds</code> · transactional <code>create()</code> + rollback · order-number widening + retry · <code>/checkout</code> Idempotency-Key · versioned migration runner (DB 1.1.0) · new endpoints <code>/admin/orders</code>, <code>/admin/order/{id}/ack</code>, <code>/admin/order/{id}/accept</code> · ETA + seen/acknowledged/accepted timestamps · <code>doughboss_order_accepted</code> hook. Branch <code>claude/funny-goodall-gsoog4</code>, PR #2.</p>
+
+<h2>Appendix B — route mapping (reference → ours)</h2>
+<p class="small"><code>db-order/v1/config|locations|menu|cart/validate|checkout/session|webhooks/stripe|orders/{n}|staff/orders|staff/orders/{id}/status|admin/reports/daily</code> &nbsp;↔&nbsp; <code>doughboss/v1/config|locations|menu|cart/validate|checkout|webhooks/stripe|order/{n}|admin/orders|admin/order/{id}/status|admin/reports/daily</code>.</p>
 
 </body>
 </html>
