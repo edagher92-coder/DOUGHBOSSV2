@@ -24,6 +24,7 @@ class DoughBoss_Assets {
 		'doughboss_builder',
 		'doughboss_cart',
 		'doughboss_order_tracking',
+		'doughboss_shop_picker',
 	);
 
 	/**
@@ -104,6 +105,8 @@ class DoughBoss_Assets {
 					'total'        => __( 'Total', 'doughboss' ),
 					'placeOrder'   => __( 'Place order', 'doughboss' ),
 					'placing'      => __( 'Placing order…', 'doughboss' ),
+					'soldOut'      => __( 'Sold out', 'doughboss' ),
+					'chooseShop'   => __( 'Choose your shop', 'doughboss' ),
 					'genericError' => __( 'Something went wrong. Please try again.', 'doughboss' ),
 				),
 			)

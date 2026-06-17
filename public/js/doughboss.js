@@ -15,6 +15,7 @@
 	var DATA = window.DoughBossData;
 	var I18N = DATA.i18n || {};
 	var configCache = null;
+	var locationsCache = null;
 
 	/* ------------------------------------------------------------------ */
 	/* Helpers                                                            */
@@ -34,7 +35,7 @@
 				node.textContent = attrs[key];
 			} else if (key === 'html') {
 				node.innerHTML = attrs[key];
-			} else if (key.indexOf('data-') === 0) {
+			} else if (key.indexOf('data-') === 0 || key.indexOf('aria-') === 0) {
 				node.setAttribute(key, attrs[key]);
 			} else {
 				node[key] = attrs[key];
@@ -84,6 +85,103 @@
 	}
 
 	/* ------------------------------------------------------------------ */
+	/* Shops (multi-location)                                             */
+	/* ------------------------------------------------------------------ */
+
+	function getLocations() {
+		if (locationsCache) {
+			return Promise.resolve(locationsCache);
+		}
+		return request('/locations').then(function (locs) {
+			locationsCache = Array.isArray(locs) ? locs : [];
+			return locationsCache;
+		});
+	}
+
+	function locById(locs, id) {
+		for (var i = 0; i < locs.length; i++) {
+			if (Number(locs[i].id) === Number(id)) { return locs[i]; }
+		}
+		return null;
+	}
+
+	function storedLocationId() {
+		try {
+			return Number(window.localStorage.getItem('doughboss_location')) || 0;
+		} catch (e) {
+			return 0;
+		}
+	}
+
+	function setLocation(id, silent) {
+		try {
+			window.localStorage.setItem('doughboss_location', String(id));
+		} catch (e) { /* private mode — selection just isn't persisted */ }
+		if (!silent) {
+			document.dispatchEvent(new CustomEvent('doughboss:shop-changed', { detail: { id: Number(id) } }));
+		}
+	}
+
+	// The currently chosen shop: a remembered valid choice, else the first shop.
+	function currentLocationId(locs) {
+		var saved = storedLocationId();
+		if (saved && locById(locs, saved)) { return saved; }
+		return locs.length ? Number(locs[0].id) : 0;
+	}
+
+	function shopSelect(locs, current, onChange) {
+		var sel = el('select', { class: 'db-shop-select', 'aria-label': I18N.chooseShop || 'Choose your shop' });
+		locs.forEach(function (loc) {
+			var label = loc.suburb ? (loc.name + ' — ' + loc.suburb) : loc.name;
+			var opt = el('option', { value: String(loc.id), text: label });
+			if (Number(loc.id) === Number(current)) { opt.selected = true; }
+			sel.appendChild(opt);
+		});
+		sel.addEventListener('change', function () { onChange(Number(sel.value)); });
+		return sel;
+	}
+
+	function shopContact(loc) {
+		var info = el('div', { class: 'db-shop-info' });
+		if (loc && loc.address) { info.appendChild(el('div', { class: 'db-shop-addr', text: loc.address })); }
+		if (loc && loc.phone) { info.appendChild(el('div', { class: 'db-shop-phone', text: loc.phone })); }
+		return info;
+	}
+
+	function renderShopPicker(root) {
+		getLocations().then(function (locs) {
+			root.innerHTML = '';
+			if (!locs.length) { root.style.display = 'none'; return; }
+
+			// Single shop: remember it silently and just show its details.
+			if (locs.length === 1) {
+				setLocation(locs[0].id, true);
+				root.appendChild(el('div', { class: 'db-shop' }, [
+					el('strong', { class: 'db-shop-name', text: locs[0].name }),
+					shopContact(locs[0])
+				]));
+				return;
+			}
+
+			var current = currentLocationId(locs);
+			setLocation(current, true);
+			var infoWrap = el('div', { class: 'db-shop-info-wrap' }, [shopContact(locById(locs, current))]);
+
+			var select = shopSelect(locs, current, function (id) {
+				setLocation(id);
+				infoWrap.innerHTML = '';
+				infoWrap.appendChild(shopContact(locById(locs, id)));
+			});
+
+			root.appendChild(el('div', { class: 'db-shop' }, [
+				el('label', { class: 'db-shop-heading', text: I18N.chooseShop || 'Choose your shop' }),
+				select,
+				infoWrap
+			]));
+		}).catch(function () { root.style.display = 'none'; });
+	}
+
+	/* ------------------------------------------------------------------ */
 	/* Menu                                                               */
 	/* ------------------------------------------------------------------ */
 
@@ -115,30 +213,40 @@
 	}
 
 	function menuCard(item) {
+		var soldOut = item.available === false;
+
 		var media = item.image
 			? el('div', { class: 'db-card-img', style: 'background-image:url(' + item.image + ')' })
 			: el('div', { class: 'db-card-img db-card-img--placeholder' });
+		if (soldOut) {
+			media.appendChild(el('span', { class: 'db-soldout-badge', text: I18N.soldOut || 'Sold out' }));
+		}
 
-		var btn = el('button', { class: 'db-btn', text: I18N.addToCart || 'Add to cart' });
-		btn.addEventListener('click', function () {
-			btn.disabled = true;
-			request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, quantity: 1 } })
-				.then(function () {
-					btn.textContent = I18N.added || 'Added!';
-					notifyCartChanged();
-					setTimeout(function () { btn.textContent = I18N.addToCart || 'Add to cart'; btn.disabled = false; }, 1200);
-				})
-				.catch(function (err) { alert(err.message); btn.disabled = false; });
-		});
+		var action;
+		if (soldOut) {
+			action = el('button', { class: 'db-btn', text: I18N.soldOut || 'Sold out', disabled: true });
+		} else {
+			action = el('button', { class: 'db-btn', text: I18N.addToCart || 'Add to cart' });
+			action.addEventListener('click', function () {
+				action.disabled = true;
+				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, quantity: 1 } })
+					.then(function () {
+						action.textContent = I18N.added || 'Added!';
+						notifyCartChanged();
+						setTimeout(function () { action.textContent = I18N.addToCart || 'Add to cart'; action.disabled = false; }, 1200);
+					})
+					.catch(function (err) { alert(err.message); action.disabled = false; });
+			});
+		}
 
-		return el('div', { class: 'db-card' }, [
+		return el('div', { class: soldOut ? 'db-card db-card--soldout' : 'db-card' }, [
 			media,
 			el('div', { class: 'db-card-body' }, [
 				el('h4', { text: item.name }),
 				item.description ? el('p', { class: 'db-card-desc', text: item.description }) : null,
 				el('div', { class: 'db-card-foot' }, [
 					el('span', { class: 'db-price', text: money(item.price) }),
-					btn
+					action
 				])
 			])
 		]);
@@ -231,17 +339,18 @@
 
 	function renderCart(root) {
 		var orderType = 'pickup';
+		var locationId = 0;
 
 		function load() {
-			Promise.all([getConfig(), request('/cart?order_type=' + orderType)]).then(function (results) {
-				draw(results[0], results[1]);
+			Promise.all([getConfig(), request('/cart?order_type=' + orderType), getLocations()]).then(function (results) {
+				draw(results[0], results[1], results[2]);
 			}).catch(function (err) {
 				root.innerHTML = '';
 				root.appendChild(el('p', { class: 'db-error', text: err.message }));
 			});
 		}
 
-		function draw(cfg, cart) {
+		function draw(cfg, cart, locs) {
 			root.innerHTML = '';
 
 			if (!cart.items.length) {
@@ -249,12 +358,28 @@
 				return;
 			}
 
+			if (!locationId) { locationId = currentLocationId(locs); }
+
 			// Line items.
 			var list = el('div', { class: 'db-cart-lines' });
 			cart.items.forEach(function (line) {
 				list.appendChild(cartLine(line, load));
 			});
 			root.appendChild(list);
+
+			// Shop selector — routes the order to the right kitchen board. Only
+			// shown when more than one shop exists; otherwise the single shop is
+			// remembered silently.
+			if (locs.length > 1) {
+				setLocation(locationId, true);
+				root.appendChild(el('div', { class: 'db-cart-shop' }, [
+					el('span', { class: 'db-cart-shop-label', text: I18N.chooseShop || 'Choose your shop' }),
+					shopSelect(locs, locationId, function (id) { locationId = id; setLocation(id); })
+				]));
+			} else if (locs.length === 1) {
+				locationId = Number(locs[0].id);
+				setLocation(locationId, true);
+			}
 
 			// Fulfilment selector.
 			var typeWrap = el('div', { class: 'db-fulfilment' });
@@ -266,7 +391,7 @@
 			root.appendChild(totalsBlock(cart.totals, cfg));
 
 			// Checkout.
-			root.appendChild(checkoutForm(cfg, orderType));
+			root.appendChild(checkoutForm(cfg, orderType, function () { return locationId; }));
 		}
 
 		function onType(value) {
@@ -340,7 +465,7 @@
 		return block;
 	}
 
-	function checkoutForm(cfg, orderType) {
+	function checkoutForm(cfg, orderType, getLocationId) {
 		var form = el('form', { class: 'db-checkout' });
 		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
 
@@ -368,6 +493,7 @@
 
 			var payload = {
 				order_type: orderType,
+				location_id: getLocationId ? getLocationId() : storedLocationId(),
 				customer_name: name.querySelector('input,textarea').value,
 				customer_email: email.querySelector('input,textarea').value,
 				customer_phone: phone.querySelector('input,textarea').value,
@@ -441,6 +567,7 @@
 	/* ------------------------------------------------------------------ */
 
 	function boot() {
+		document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
 		document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
 		document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
 		document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);

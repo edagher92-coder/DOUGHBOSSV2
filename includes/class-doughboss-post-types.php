@@ -17,8 +17,9 @@ class DoughBoss_Post_Types {
 	const POST_TYPE = 'doughboss_item';
 	const TAXONOMY  = 'doughboss_category';
 
-	const META_PRICE = '_doughboss_price';
-	const META_TYPE  = '_doughboss_item_type';
+	const META_PRICE     = '_doughboss_price';
+	const META_TYPE      = '_doughboss_item_type';
+	const META_AVAILABLE = '_doughboss_available';
 
 	/**
 	 * Hook registration into WordPress.
@@ -29,6 +30,23 @@ class DoughBoss_Post_Types {
 		add_action( 'init', array( __CLASS__, 'register' ) );
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_meta' ), 10, 2 );
+
+		// Menu Items list table: price + availability columns and a one-tap toggle.
+		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', array( $this, 'admin_columns' ) );
+		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', array( $this, 'render_admin_column' ), 10, 2 );
+		add_filter( 'post_row_actions', array( $this, 'row_actions' ), 10, 2 );
+		add_action( 'admin_post_doughboss_toggle_availability', array( $this, 'handle_toggle_availability' ) );
+	}
+
+	/**
+	 * Whether a menu item is available to order (default true; only an explicit
+	 * "0" means sold out).
+	 *
+	 * @param int $post_id Item ID.
+	 * @return bool
+	 */
+	public static function is_available( $post_id ) {
+		return '0' !== (string) get_post_meta( $post_id, self::META_AVAILABLE, true );
 	}
 
 	/**
@@ -115,6 +133,21 @@ class DoughBoss_Post_Types {
 				},
 			)
 		);
+
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_AVAILABLE,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'default'           => '1',
+				'sanitize_callback' => 'sanitize_key',
+				'auth_callback'     => function () {
+					return current_user_can( 'edit_posts' );
+				},
+			)
+		);
 	}
 
 	/**
@@ -153,9 +186,10 @@ class DoughBoss_Post_Types {
 	public function render_meta_box( $post ) {
 		wp_nonce_field( 'doughboss_save_item', 'doughboss_item_nonce' );
 
-		$price = get_post_meta( $post->ID, self::META_PRICE, true );
-		$type  = get_post_meta( $post->ID, self::META_TYPE, true );
-		$type  = $type ? $type : 'standard';
+		$price     = get_post_meta( $post->ID, self::META_PRICE, true );
+		$type      = get_post_meta( $post->ID, self::META_TYPE, true );
+		$type      = $type ? $type : 'standard';
+		$available = self::is_available( $post->ID );
 		?>
 		<p>
 			<label for="doughboss_price"><strong><?php esc_html_e( 'Price', 'doughboss' ); ?></strong></label><br />
@@ -170,6 +204,13 @@ class DoughBoss_Post_Types {
 				<option value="side" <?php selected( $type, 'side' ); ?>><?php esc_html_e( 'Side', 'doughboss' ); ?></option>
 				<option value="drink" <?php selected( $type, 'drink' ); ?>><?php esc_html_e( 'Drink', 'doughboss' ); ?></option>
 			</select>
+		</p>
+		<p style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;">
+			<label for="doughboss_available">
+				<input type="checkbox" id="doughboss_available" name="doughboss_available" value="1" <?php checked( $available ); ?> />
+				<strong><?php esc_html_e( 'Available for ordering', 'doughboss' ); ?></strong>
+			</label><br />
+			<span class="description"><?php esc_html_e( 'Uncheck to mark this item sold out — it stays on the menu but can\'t be added to a cart.', 'doughboss' ); ?></span>
 		</p>
 		<?php
 	}
@@ -204,5 +245,90 @@ class DoughBoss_Post_Types {
 			$type = sanitize_key( wp_unslash( $_POST['doughboss_item_type'] ) );
 			update_post_meta( $post_id, self::META_TYPE, $type );
 		}
+
+		// The meta box always renders the availability checkbox, so its absence
+		// from the POST means the box was unticked (sold out).
+		update_post_meta( $post_id, self::META_AVAILABLE, empty( $_POST['doughboss_available'] ) ? '0' : '1' );
+	}
+
+	/**
+	 * Add Price + Availability columns to the Menu Items list table.
+	 *
+	 * @param array $columns Existing columns.
+	 * @return array
+	 */
+	public function admin_columns( $columns ) {
+		$out = array();
+		foreach ( $columns as $key => $label ) {
+			if ( 'date' === $key ) {
+				$out['doughboss_price']        = __( 'Price', 'doughboss' );
+				$out['doughboss_availability'] = __( 'Availability', 'doughboss' );
+			}
+			$out[ $key ] = $label;
+		}
+		return $out;
+	}
+
+	/**
+	 * Render the custom list-table columns.
+	 *
+	 * @param string $column  Column key.
+	 * @param int    $post_id Post ID.
+	 * @return void
+	 */
+	public function render_admin_column( $column, $post_id ) {
+		if ( 'doughboss_price' === $column ) {
+			$price = (float) get_post_meta( $post_id, self::META_PRICE, true );
+			echo esc_html( DoughBoss_Settings::format_price( $price ) );
+		} elseif ( 'doughboss_availability' === $column ) {
+			if ( self::is_available( $post_id ) ) {
+				echo '<span style="display:inline-block;padding:2px 9px;border-radius:11px;font-size:11px;font-weight:600;background:#e7f6e7;color:#1a7f37;">' . esc_html__( 'Available', 'doughboss' ) . '</span>';
+			} else {
+				echo '<span style="display:inline-block;padding:2px 9px;border-radius:11px;font-size:11px;font-weight:600;background:#fdecea;color:#b3261e;">' . esc_html__( 'Sold out', 'doughboss' ) . '</span>';
+			}
+		}
+	}
+
+	/**
+	 * Add a one-tap "Mark sold out / Mark available" row action.
+	 *
+	 * @param array   $actions Row actions.
+	 * @param WP_Post $post    Post.
+	 * @return array
+	 */
+	public function row_actions( $actions, $post ) {
+		if ( self::POST_TYPE !== $post->post_type || ! current_user_can( 'edit_post', $post->ID ) ) {
+			return $actions;
+		}
+		$url   = wp_nonce_url(
+			admin_url( 'admin-post.php?action=doughboss_toggle_availability&post=' . $post->ID ),
+			'doughboss_toggle_' . $post->ID
+		);
+		$label = self::is_available( $post->ID ) ? __( 'Mark sold out', 'doughboss' ) : __( 'Mark available', 'doughboss' );
+
+		$actions['doughboss_toggle'] = '<a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a>';
+		return $actions;
+	}
+
+	/**
+	 * Handle the availability toggle from the list-table row action.
+	 *
+	 * @return void
+	 */
+	public function handle_toggle_availability() {
+		$post_id = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
+		if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_toggle_' . $post_id );
+
+		update_post_meta( $post_id, self::META_AVAILABLE, self::is_available( $post_id ) ? '0' : '1' );
+
+		$redirect = wp_get_referer();
+		if ( ! $redirect ) {
+			$redirect = admin_url( 'edit.php?post_type=' . self::POST_TYPE );
+		}
+		wp_safe_redirect( $redirect );
+		exit;
 	}
 }

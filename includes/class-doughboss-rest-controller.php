@@ -338,6 +338,7 @@ class DoughBoss_REST_Controller {
 				'type'        => get_post_meta( $post->ID, DoughBoss_Post_Types::META_TYPE, true ),
 				'image'       => $thumb ? $thumb : '',
 				'category'    => $category,
+				'available'   => DoughBoss_Post_Types::is_available( $post->ID ),
 			);
 		}
 
@@ -403,6 +404,11 @@ class DoughBoss_REST_Controller {
 
 		if ( ! $post || DoughBoss_Post_Types::POST_TYPE !== $post->post_type || 'publish' !== $post->post_status ) {
 			return new WP_Error( 'doughboss_no_item', __( 'That item is not available.', 'doughboss' ), array( 'status' => 404 ) );
+		}
+
+		if ( ! DoughBoss_Post_Types::is_available( $item_id ) ) {
+			/* translators: %s: menu item name. */
+			return new WP_Error( 'doughboss_sold_out', sprintf( __( 'Sorry, %s is sold out right now.', 'doughboss' ), get_the_title( $post ) ), array( 'status' => 409 ) );
 		}
 
 		$price = (float) get_post_meta( $item_id, DoughBoss_Post_Types::META_PRICE, true );

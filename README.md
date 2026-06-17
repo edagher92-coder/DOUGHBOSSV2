@@ -12,6 +12,9 @@ customer order tracking, all driven by shortcodes and a small REST API.
 
 - **Menu Items** custom post type (`doughboss_item`) with a category taxonomy,
   per-item price and type (pizza / side / drink / standard), and featured image.
+- **Per-item availability** — mark an item *sold out* from the editor or a
+  one-tap row action; it stays on the menu (greyed, badged) but can't be ordered,
+  enforced server-side.
 - **Custom pizza builder** — configurable sizes and toppings with live pricing.
 - **Cart & checkout** — cookie-based guest cart, pickup or delivery, configurable
   tax rate and delivery fee. Prices are always computed server-side.
@@ -53,6 +56,7 @@ Copy the repository contents into `wp-content/plugins/doughboss/` and activate
 | `[doughboss_builder]`       | The custom pizza builder         |
 | `[doughboss_cart]`          | The cart and checkout            |
 | `[doughboss_order_tracking]`| The order status lookup form     |
+| `[doughboss_shop_picker]`   | Shop selector (multi-shop sites) |
 
 A typical setup: an **Order Online** page containing `[doughboss_builder]` and
 `[doughboss_menu]` plus `[doughboss_cart]` (or a dedicated Cart page), and a

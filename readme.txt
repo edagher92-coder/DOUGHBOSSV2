@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.3.1
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,7 @@ Everything is rendered through shortcodes and a small REST API; no theme changes
 * `[doughboss_builder]` — the custom pizza builder.
 * `[doughboss_cart]` — the cart and checkout.
 * `[doughboss_order_tracking]` — the order status lookup form.
+* `[doughboss_shop_picker]` — choose which shop to order from (multi-shop sites).
 
 == Installation ==
 
@@ -50,6 +51,17 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.4.0 =
+* New: **per-item availability** — mark any menu item “sold out” from the item
+  editor or with a one-tap row action on the Menu Items list. Sold-out items
+  stay on the menu greyed out with a badge, the Add button is disabled, and the
+  server rejects adding them to a cart (so a stale tab can’t order one).
+* New: **storefront shop picker** — a `[doughboss_shop_picker]` shortcode and a
+  selector in the cart let customers choose which shop they’re ordering from on
+  multi-shop sites; the choice is remembered and routes the order to that
+  shop’s kitchen board. Single-shop sites are unaffected (nothing extra shown).
+* The Menu Items list now shows Price and Availability columns.
 
 = 2.3.1 =
 * Order board now shows a persistent “Sound is OFF” warning and auto-resumes the

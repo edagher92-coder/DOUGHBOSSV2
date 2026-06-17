@@ -27,6 +27,24 @@ class DoughBoss_Shortcodes {
 		add_shortcode( 'doughboss_builder', array( $this, 'builder' ) );
 		add_shortcode( 'doughboss_cart', array( $this, 'cart' ) );
 		add_shortcode( 'doughboss_order_tracking', array( $this, 'order_tracking' ) );
+		add_shortcode( 'doughboss_shop_picker', array( $this, 'shop_picker' ) );
+	}
+
+	/**
+	 * [doughboss_shop_picker] — lets the customer choose which shop they're
+	 * ordering from. The choice is remembered and used to route the order to
+	 * that shop's kitchen board. Renders nothing for single-shop sites.
+	 *
+	 * @return string
+	 */
+	public function shop_picker() {
+		ob_start();
+		?>
+		<div class="db-app db-shop-picker" data-doughboss-shop>
+			<div class="db-loading"><?php esc_html_e( 'Loading shops…', 'doughboss' ); ?></div>
+		</div>
+		<?php
+		return ob_get_clean();
 	}
 
 	/**

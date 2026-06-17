@@ -91,6 +91,7 @@
 }
 
 .db-card-img {
+	position: relative;
 	height: 140px;
 	background-size: cover;
 	background-position: center;
@@ -333,4 +334,76 @@
 .db-item-list {
 	margin: 0.5rem 0;
 	padding-left: 1.1rem;
+}
+
+/* Sold out --------------------------------------------------------- */
+.db-card--soldout {
+	opacity: 0.72;
+}
+
+.db-card--soldout .db-card-img {
+	filter: grayscale(0.85);
+}
+
+.db-soldout-badge {
+	position: absolute;
+	top: 0.5rem;
+	left: 0.5rem;
+	background: #2b2b2b;
+	color: #fff;
+	border-radius: 4px;
+	padding: 0.2rem 0.55rem;
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+/* Shop picker ------------------------------------------------------ */
+.db-shop {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	border: 1px solid var(--db-border);
+	border-radius: 10px;
+	padding: 0.9rem 1rem;
+	background: #fff;
+	max-width: 420px;
+}
+
+.db-shop-heading {
+	font-size: 0.85rem;
+	font-weight: 700;
+}
+
+.db-shop-name {
+	font-size: 1.05rem;
+}
+
+.db-shop-select,
+.db-cart-shop .db-shop-select {
+	padding: 0.55rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+	font: inherit;
+	background: #fff;
+}
+
+.db-shop-info {
+	color: var(--db-muted);
+	font-size: 0.85rem;
+	line-height: 1.4;
+}
+
+.db-cart-shop {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	margin: 1rem 0 0;
+}
+
+.db-cart-shop-label {
+	font-size: 0.85rem;
+	font-weight: 600;
 }
