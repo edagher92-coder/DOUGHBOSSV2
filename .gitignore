@@ -1,0 +1,17 @@
+# Build output
+/dist/
+*.zip
+
+# Dependencies
+/node_modules/
+/vendor/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Logs
+*.log
