@@ -116,7 +116,7 @@ class DoughBoss_Order {
 					'tax'           => $data['tax'],
 					'delivery_fee'  => $data['delivery_fee'],
 					'total'         => $data['total'],
-					'currency'      => DoughBoss_Settings::get( 'currency_code', 'USD' ),
+					'currency'      => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),

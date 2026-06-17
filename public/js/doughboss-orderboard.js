@@ -251,6 +251,14 @@
 		lastOrders = orders;
 		boardEl.textContent = '';
 
+		// Persistent warning if sound isn't enabled — a reloaded tablet must
+		// never sit silent through new orders.
+		if (!audio.on) {
+			boardEl.appendChild(el('div', { class: 'db-sound-warn' }, [
+				'🔇 Sound is OFF — tap “Enable sound alerts” (top right) so you don’t miss new orders.'
+			]));
+		}
+
 		var unacked = orders.filter(function (o) {
 			return o.status === 'pending' && !o.acknowledged && !localAck[o.id];
 		});
@@ -303,6 +311,14 @@
 	if (soundBtn) {
 		soundBtn.addEventListener('click', enableSound);
 	}
+
+	// If the tablet sleeps/refocuses, the audio context can suspend — resume it
+	// so the chime keeps working without a fresh tap.
+	document.addEventListener('visibilitychange', function () {
+		if (!document.hidden && audio.on && audio.ctx && audio.ctx.state === 'suspended') {
+			audio.ctx.resume();
+		}
+	});
 
 	// Shop filter — only shown when more than one shop exists.
 	if (actionsEl && LOCATIONS.length > 1) {

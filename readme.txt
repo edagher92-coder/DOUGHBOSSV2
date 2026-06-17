@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.3.0
+Stable tag: 2.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,12 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.3.1 =
+* Order board now shows a persistent “Sound is OFF” warning and auto-resumes the
+  alert audio when the tablet refocuses — a reloaded kitchen tablet can no
+  longer sit silently through new orders.
+* Default order currency fallback corrected to AUD.
 
 = 2.3.0 =
 * New: **Australian money** — defaults to AUD and supports **GST-inclusive

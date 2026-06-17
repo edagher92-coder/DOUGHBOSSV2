@@ -65,7 +65,7 @@ class DoughBoss_Activator {
 			tax decimal(10,2) NOT NULL DEFAULT 0.00,
 			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
 			total decimal(10,2) NOT NULL DEFAULT 0.00,
-			currency varchar(10) NOT NULL DEFAULT 'USD',
+			currency varchar(10) NOT NULL DEFAULT 'AUD',
 			eta_minutes int(11) NOT NULL DEFAULT 0,
 			seen_at datetime NULL DEFAULT NULL,
 			acknowledged_at datetime NULL DEFAULT NULL,

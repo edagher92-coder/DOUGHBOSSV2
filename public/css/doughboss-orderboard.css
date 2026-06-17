@@ -49,6 +49,15 @@
 	font-style: italic;
 }
 
+.db-sound-warn {
+	background: #b45309;
+	color: #fff;
+	font-weight: 700;
+	padding: 0.6rem 1rem;
+	border-radius: 8px;
+	margin-bottom: 0.75rem;
+}
+
 /* --- New-order alert ------------------------------------------------- */
 
 .db-banner {
