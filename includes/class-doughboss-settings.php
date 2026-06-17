@@ -61,6 +61,13 @@ class DoughBoss_Settings {
 			'ordering_open'   => 1,
 			'sizes'           => array(),
 			'toppings'        => array(),
+			// Payments (Stripe) — off by default; keys added later.
+			'payments_enabled' => 0,
+			'stripe_mode'      => 'test',
+			'stripe_test_pk'   => '',
+			'stripe_test_sk'   => '',
+			'stripe_live_pk'   => '',
+			'stripe_live_sk'   => '',
 		);
 	}
 
@@ -150,5 +157,51 @@ class DoughBoss_Settings {
 	public static function format_price( $amount ) {
 		$symbol = self::get( 'currency_symbol', '$' );
 		return $symbol . number_format( (float) $amount, 2 );
+	}
+
+	/**
+	 * Whether online card payments are switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function payments_enabled() {
+		return (bool) self::get( 'payments_enabled', 0 );
+	}
+
+	/**
+	 * Active Stripe mode: 'test' or 'live'.
+	 *
+	 * @return string
+	 */
+	public static function stripe_mode() {
+		return 'live' === self::get( 'stripe_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Stripe publishable key for the active mode.
+	 *
+	 * @return string
+	 */
+	public static function stripe_publishable_key() {
+		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_pk' : 'stripe_test_pk', '' );
+	}
+
+	/**
+	 * Stripe secret key for the active mode.
+	 *
+	 * @return string
+	 */
+	public static function stripe_secret_key() {
+		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_sk' : 'stripe_test_sk', '' );
+	}
+
+	/**
+	 * Whether Stripe is both enabled and fully configured for the active mode
+	 * (so the storefront should actually collect card payment).
+	 *
+	 * @return bool
+	 */
+	public static function stripe_ready() {
+		return self::payments_enabled() && '' !== self::stripe_publishable_key() && '' !== self::stripe_secret_key();
 	}
 }
