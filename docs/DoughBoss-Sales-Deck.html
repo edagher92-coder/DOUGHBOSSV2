@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dough Boss — Online &amp; Catering Ordering System</title>
+<style>
+	@page { size: A4 landscape; margin: 0; }
+	* { box-sizing: border-box; }
+	html, body { margin: 0; padding: 0; }
+	body {
+		font-family: "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", sans-serif;
+		color: #1c2230;
+		-weasy-hyphens: none;
+	}
+
+	/* ---- Design tokens ---- */
+	:root {
+		--red: #d6452b;
+		--red-dark: #b8381f;
+		--ink: #161b27;
+		--slate: #5b6472;
+		--line: #e7e1d8;
+		--cream: #faf7f2;
+		--green: #157f4f;
+		--blue: #2563eb;
+		--gold: #e0a13c;
+	}
+
+	.slide {
+		position: relative;
+		width: 297mm;
+		height: 209.6mm;
+		overflow: hidden;
+		page-break-after: always;
+		background: var(--cream);
+		padding: 13mm 15mm;
+	}
+	.slide:last-child { page-break-after: auto; }
+
+	.kicker {
+		font-size: 11px;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		font-weight: 800;
+		color: var(--red);
+		margin: 0 0 6px;
+	}
+	h1 { font-size: 30px; margin: 0 0 6px; color: var(--ink); letter-spacing: -0.4px; }
+	h2 { font-size: 23px; margin: 0 0 4px; color: var(--ink); letter-spacing: -0.3px; }
+	.lead { font-size: 13px; color: var(--slate); margin: 0; line-height: 1.5; }
+	.caption {
+		font-size: 13.5px; color: var(--ink); font-weight: 600; line-height: 1.45;
+		margin: 12px 0 0; padding-left: 12px; border-left: 3px solid var(--red);
+	}
+	.pagenum { position: absolute; right: 15mm; bottom: 9mm; font-size: 10px; color: #b7b0a5; font-weight: 700; letter-spacing: 0.04em; }
+	.brandmark { position: absolute; left: 15mm; bottom: 9mm; font-size: 10px; color: #b7b0a5; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+	.mocknote { position: absolute; right: 15mm; bottom: 9mm; font-size: 8.5px; color: #c2bbb0; }
+
+	/* ---- Wordmark ---- */
+	.wordmark { display: inline-flex; align-items: center; gap: 9px; }
+	.wm-badge { width: 30px; height: 30px; border-radius: 8px; background: var(--red); color: #fff; font-weight: 900; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+	.wm-text { font-weight: 900; font-size: 17px; letter-spacing: -0.3px; color: var(--ink); }
+
+	/* ---- Device: browser ---- */
+	.browser { border-radius: 13px; background: #fff; box-shadow: 0 26px 60px rgba(22,27,39,0.16); overflow: hidden; border: 1px solid #e9e3da; }
+	.browser-bar { display: flex; align-items: center; gap: 7px; padding: 9px 14px; background: #f1ece5; border-bottom: 1px solid #e7e1d8; }
+	.dot { width: 11px; height: 11px; border-radius: 50%; }
+	.url { flex: 1; background: #fff; border: 1px solid #e4ded5; border-radius: 20px; padding: 5px 12px; font-size: 10px; color: #8a8377; text-align: center; }
+
+	/* ---- Device: iPad ---- */
+	.ipad { background: #14181f; border-radius: 26px; padding: 16px 20px; box-shadow: 0 32px 70px rgba(0,0,0,0.38); }
+	.ipad-cam { width: 7px; height: 7px; border-radius: 50%; background: #2b3340; margin: 0 auto 9px; }
+	.ipad-screen { border-radius: 7px; overflow: hidden; }
+
+	/* ---- Device: phone ---- */
+	.phone { width: 74mm; background: #14181f; border-radius: 30px; padding: 11px; box-shadow: 0 26px 56px rgba(0,0,0,0.30); }
+	.phone-notch { width: 38%; height: 13px; background: #14181f; border-radius: 0 0 12px 12px; margin: 0 auto 0; position: relative; top: -11px; }
+	.phone-screen { background: #fff; border-radius: 21px; overflow: hidden; margin-top: -11px; }
+
+	/* ---- Storefront menu ---- */
+	.sf-hero { background: linear-gradient(120deg, #2a1410, #4a1d12); color: #fff; padding: 14px 16px; }
+	.sf-hero h3 { margin: 0; font-size: 16px; font-weight: 800; }
+	.sf-hero p { margin: 3px 0 0; font-size: 10px; color: #f4d9cf; }
+	.sf-hero .cta { display: inline-block; margin-top: 8px; background: var(--red); color: #fff; font-size: 9px; font-weight: 800; padding: 5px 11px; border-radius: 6px; }
+	.sf-hero .cta.ghost { background: transparent; border: 1px solid #d98e7e; margin-left: 6px; }
+	.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }
+	.mcard { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: #fff; }
+	.mcard .pic { height: 42px; }
+	.mcard .body { padding: 7px 8px; }
+	.mcard h4 { margin: 0; font-size: 11px; color: var(--ink); }
+	.mcard .desc { margin: 2px 0 6px; font-size: 8.5px; color: var(--slate); line-height: 1.3; }
+	.mcard .foot { display: flex; align-items: center; justify-content: space-between; }
+	.mcard .price { font-weight: 800; font-size: 11px; }
+	.addbtn { background: var(--red); color: #fff; font-size: 8.5px; font-weight: 800; padding: 4px 9px; border-radius: 5px; }
+	.mcard.out { opacity: 0.85; }
+	.mcard.out .pic { filter: grayscale(1); }
+	.soldout { background: #1c2230; color: #fff; font-size: 7.5px; font-weight: 800; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 3px; }
+	.addbtn.dis { background: #cfc8bd; color: #fff; }
+
+	/* ---- Builder panel ---- */
+	.builder { background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 12px; }
+	.builder h4 { margin: 0 0 8px; font-size: 13px; }
+	.opt { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 10px; margin-bottom: 5px; }
+	.opt .nm { flex: 1; }
+	.opt .pr { color: var(--slate); font-size: 9.5px; }
+	.opt.sel { border-color: var(--red); background: #fdf3f0; }
+	.radio { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #c7c0b5; }
+	.radio.on { border-color: var(--red); background: var(--red); }
+	.chk { width: 12px; height: 12px; border-radius: 3px; border: 2px solid #c7c0b5; }
+	.chk.on { border-color: var(--red); background: var(--red); }
+	.builder-total { display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed var(--line); margin-top: 9px; padding-top: 9px; }
+	.builder-total .big { font-size: 21px; font-weight: 900; color: var(--red-dark); }
+
+	/* ---- Generic tables ---- */
+	table.dt { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+	table.dt th { text-align: left; color: var(--slate); font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+	table.dt td { padding: 7px 8px; border-bottom: 1px solid #f1ece4; }
+	table.dt td.num, table.dt th.num { text-align: right; }
+	.pill { display: inline-block; font-size: 8.5px; font-weight: 800; padding: 2px 8px; border-radius: 11px; }
+	.pill.paid { background: #e7f6ee; color: var(--green); }
+	.pill.ref { background: #fdecea; color: #b3261e; }
+	.pill.on { background: #e7f6ee; color: var(--green); }
+
+	/* ---- Catering ---- */
+	.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+	.pkg { border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; background: #fff; }
+	.pkg.sel { border: 2px solid var(--red); background: #fdf4f1; }
+	.pkg .nm { font-size: 12px; font-weight: 800; }
+	.pkg .serves { font-size: 9px; color: var(--slate); margin: 1px 0 6px; }
+	.pkg .inc { font-size: 9px; color: var(--ink); line-height: 1.35; }
+	.pkg .pr { font-size: 17px; font-weight: 900; color: var(--ink); margin-top: 6px; }
+	.summary { background: #161b27; color: #fff; border-radius: 10px; padding: 12px 13px; }
+	.summary .row { display: flex; justify-content: space-between; font-size: 10.5px; padding: 4px 0; border-bottom: 1px solid #2a3140; }
+	.summary .row.dep { font-weight: 800; }
+	.summary .dep .v { color: #ffd9a8; }
+	.summary .pay { margin-top: 9px; background: var(--red); text-align: center; padding: 8px; border-radius: 7px; font-weight: 800; font-size: 12px; }
+
+	/* ---- Phone content ---- */
+	.p-head { background: var(--red); color: #fff; padding: 9px 12px; font-weight: 800; font-size: 11px; }
+	.p-body { padding: 10px 12px; }
+	.line { display: flex; justify-content: space-between; font-size: 10px; padding: 4px 0; border-bottom: 1px solid #f1ece4; }
+	.p-tot { display: flex; justify-content: space-between; font-weight: 900; font-size: 13px; margin-top: 6px; }
+	.cardfield { border: 1px solid var(--line); border-radius: 7px; padding: 8px; font-size: 11px; color: #555; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+	.lock { font-size: 8px; color: var(--green); font-weight: 800; }
+	.paybtn { background: var(--red); color: #fff; text-align: center; padding: 9px; border-radius: 7px; font-weight: 800; font-size: 12px; margin-top: 8px; }
+	.stepper { padding: 4px 0; }
+	.step { display: flex; gap: 9px; align-items: flex-start; padding: 7px 0; }
+	.sdot { width: 15px; height: 15px; border-radius: 50%; flex: 0 0 auto; margin-top: 1px; }
+	.sdot.done { background: var(--green); }
+	.sdot.active { background: var(--red); }
+	.sdot.todo { background: #d9d2c7; }
+	.step .t { font-size: 10.5px; font-weight: 700; color: var(--ink); }
+	.step .t small { display: block; font-weight: 500; color: var(--slate); font-size: 9px; }
+	.step.active .t { color: var(--red-dark); }
+
+	/* ---- KDS board ---- */
+	.kds { background: #0f1626; padding: 12px 13px; color: #e8edf6; }
+	.kds-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+	.kds-brand { font-weight: 900; font-size: 13px; color: #fff; }
+	.kds-brand small { color: #7e8aa0; font-weight: 600; font-size: 9px; display: block; }
+	.kds-clock { font-size: 11px; color: #9aa6bd; font-weight: 700; }
+	.alert { background: var(--red); border-radius: 9px; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; box-shadow: 0 0 0 3px rgba(214,69,43,0.30); }
+	.alert .msg { font-weight: 800; font-size: 12px; color: #fff; }
+	.alert .acts { display: flex; gap: 7px; }
+	.kbtn { background: #fff; color: var(--ink); font-weight: 800; font-size: 10px; padding: 6px 12px; border-radius: 6px; }
+	.kbtn.ghost { background: rgba(255,255,255,0.14); color: #fff; }
+	.lanes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+	.lane-h { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 2px; color: #9aa6bd; display: flex; justify-content: space-between; }
+	.kcard { background: #182133; border-radius: 9px; padding: 9px 10px; margin-bottom: 8px; border-left: 4px solid #38507c; }
+	.kcard.new { border-left-color: var(--red); }
+	.kcard.prep { border-left-color: var(--gold); }
+	.kcard.ready { border-left-color: #29c46a; }
+	.kcard .knum { font-weight: 800; font-size: 10.5px; color: #fff; display: flex; justify-content: space-between; }
+	.kcard .kcust { font-size: 9.5px; color: #aeb9cf; margin: 2px 0 5px; }
+	.kcard .kitems { font-size: 9.5px; color: #d7deeb; line-height: 1.35; }
+	.kcard .kfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+	.kcard .ktime { font-size: 8.5px; color: #8492ab; font-weight: 700; }
+	.kmini { background: #29c46a; color: #06210f; font-size: 8.5px; font-weight: 800; padding: 3px 8px; border-radius: 5px; }
+	.kmini.amber { background: var(--gold); color: #2a1c05; }
+
+	/* ---- KPI tiles ---- */
+	.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+	.kpi { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; }
+	.kpi .v { font-size: 22px; font-weight: 900; color: var(--ink); letter-spacing: -0.5px; }
+	.kpi .v.good { color: var(--green); }
+	.kpi .l { font-size: 9.5px; color: var(--slate); margin-top: 2px; line-height: 1.3; }
+	.bars .bar-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 10px; }
+	.bars .bar-row .nm { width: 95px; color: var(--ink); }
+	.bars .track { flex: 1; height: 9px; background: #efe9e0; border-radius: 6px; overflow: hidden; }
+	.bars .fill { height: 9px; background: var(--red); border-radius: 6px; }
+	.bars .vv { width: 34px; text-align: right; color: var(--slate); font-weight: 700; }
+
+	/* ---- Feature cards ---- */
+	.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+	.feat { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
+	.feat .ic { width: 30px; height: 30px; border-radius: 8px; background: #fdf3f0; color: var(--red); font-weight: 900; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+	.feat h4 { margin: 0 0 3px; font-size: 13px; color: var(--ink); }
+	.feat p { margin: 0; font-size: 10px; color: var(--slate); line-height: 1.4; }
+
+	/* ---- Objections ---- */
+	.obj { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+	.obj .q { font-size: 12px; font-weight: 800; color: var(--ink); }
+	.obj .a { font-size: 10.5px; color: var(--slate); line-height: 1.45; margin-top: 2px; }
+	.obj .item { border-bottom: 1px solid var(--line); padding-bottom: 9px; }
+
+	/* ---- Pillars / steps ---- */
+	.pillars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+	.pillar { background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 14px 15px; }
+	.pillar h4 { margin: 0 0 4px; font-size: 14px; color: var(--ink); }
+	.pillar p { margin: 0; font-size: 11px; color: var(--slate); line-height: 1.45; }
+	.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+	.stepc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
+	.stepc .n { width: 24px; height: 24px; border-radius: 50%; background: var(--red); color: #fff; font-weight: 900; font-size: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 7px; }
+	.stepc h4 { margin: 0 0 3px; font-size: 12px; }
+	.stepc p { margin: 0; font-size: 10px; color: var(--slate); line-height: 1.4; }
+	.need { background: #161b27; color: #fff; border-radius: 11px; padding: 14px 16px; }
+	.need h4 { margin: 0 0 8px; font-size: 13px; color: #fff; }
+	.need ul { margin: 0; padding-left: 16px; }
+	.need li { font-size: 10.5px; line-height: 1.6; color: #d8dde6; }
+	.throughline { font-size: 17px; font-weight: 900; color: var(--ink); text-align: center; letter-spacing: -0.3px; }
+
+	.hero-stats { display: flex; gap: 14px; margin-top: 22px; }
+	.hstat { background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; padding: 16px 18px; flex: 1; }
+	.hstat .v { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+	.hstat .l { font-size: 11px; color: #f3d7cd; margin-top: 3px; }
+	.flex { display: flex; }
+	.between { justify-content: space-between; }
+	.center { align-items: center; }
+</style>
+</head>
+<body>
+
+<!-- ===================== 1 · COVER ===================== -->
+<div class="slide" style="background: radial-gradient(120% 120% at 0% 0%, #3a1610 0%, #1d0d0a 55%, #140a08 100%); padding: 0;">
+	<div style="position:absolute; inset:0; padding:20mm 18mm; color:#fff; display:flex; flex-direction:column; justify-content:space-between;">
+		<div class="wordmark">
+			<div class="wm-badge">DB</div>
+			<div class="wm-text" style="color:#fff;">DOUGH BOSS</div>
+		</div>
+		<div>
+			<p class="kicker" style="color:#f0a58f;">Online &amp; Catering Ordering System · A Proposal Preview</p>
+			<h1 style="color:#fff; font-size:46px; line-height:1.04; max-width:200mm;">Your Shop.<br/>Your Customers.<br/>Your System.</h1>
+			<p class="lead" style="color:#f3d7cd; font-size:15px; max-width:175mm; margin-top:10px;">A complete online and catering ordering platform built for Dough Boss — so every order, and every customer, stays yours. Across Bankstown, Revesby &amp; Roselands.</p>
+			<div class="hero-stats">
+				<div class="hstat"><div class="v">$0</div><div class="l">commission — keep what the apps take</div></div>
+				<div class="hstat"><div class="v">100%</div><div class="l">your customers — their details, your list</div></div>
+				<div class="hstat"><div class="v">~2 wks</div><div class="l">to go live across all three shops</div></div>
+			</div>
+		</div>
+		<div class="flex between center" style="font-size:11px; color:#caa99f;">
+			<span>Prepared for the Owner · June 2026</span>
+			<span style="font-weight:800; color:#f0a58f;">Keep every customer. Keep every dollar the apps would&rsquo;ve taken.</span>
+		</div>
+	</div>
+</div>
+
+<!-- ===================== 2 · WHY THIS WINS ===================== -->
+<div class="slide">
+	<p class="kicker">The case in one screen</p>
+	<h1>Why this wins</h1>
+	<p class="lead" style="max-width:210mm;">The apps rent you your own customers and skim 7&ndash;35% of every sale. This flips it: your storefront, your catering, your kitchen flow — running on tools and accounts you own.</p>
+	<div class="pillars" style="margin-top:16px;">
+		<div class="pillar"><h4>You own the relationship</h4><p>Every customer name, number and order history sits in your system — not a delivery app&rsquo;s. That list is the asset that makes future marketing cheap.</p></div>
+		<div class="pillar"><h4>The maths is on your side</h4><p>A flat weekly fee plus a small share beats 7&ndash;35% commission the moment volume picks up — and it&rsquo;s capped, so it can never reach app territory.</p></div>
+		<div class="pillar"><h4>Built for how you actually run</h4><p>Storefront, catering and the kitchen board are designed around three shops with order routing — not a generic template bolted on.</p></div>
+		<div class="pillar"><h4>Live fast, low risk</h4><p>Standard, proven tools on your existing site and your own Stripe account. Up and running in about two weeks — and you can run it alongside the apps at first.</p></div>
+	</div>
+	<p class="throughline" style="margin-top:18px;">&ldquo;Keep every customer. Keep every dollar the apps would&rsquo;ve taken.&rdquo;</p>
+	<div class="brandmark">Dough Boss</div>
+	<div class="pagenum">02</div>
+</div>
+
+<!-- ===================== 3 · STOREFRONT ===================== -->
+<div class="slide">
+	<p class="kicker">Screen 01 · Order online</p>
+	<h1>Your branded storefront</h1>
+	<div class="flex" style="gap:12px; margin-top:10px;">
+		<div style="flex:1.35;">
+			<div class="browser">
+				<div class="browser-bar">
+					<span class="dot" style="background:#ff5f57;"></span><span class="dot" style="background:#febc2e;"></span><span class="dot" style="background:#28c840;"></span>
+					<span class="url">doughboss.com.au/order</span>
+				</div>
+				<div class="sf-hero">
+					<h3>Dough Boss — Real Wood-Fired Pizza, Made Fresh Daily</h3>
+					<p>Order direct. No app fees. Pickup or delivery from Bankstown, Revesby &amp; Roselands.</p>
+					<span class="cta">Order Now</span><span class="cta ghost">Catering</span>
+				</div>
+				<div class="menu-grid">
+					<div class="mcard"><div class="pic" style="background:linear-gradient(135deg,#e8a13c,#d6452b);"></div><div class="body"><h4>Margherita</h4><div class="desc">San Marzano, fresh mozzarella, basil</div><div class="foot"><span class="price">$16.90</span><span class="addbtn">Add</span></div></div></div>
+					<div class="mcard"><div class="pic" style="background:linear-gradient(135deg,#d6452b,#a32f1c);"></div><div class="body"><h4>Pepperoni</h4><div class="desc">Double pepperoni, mozzarella, oregano</div><div class="foot"><span class="price">$18.90</span><span class="addbtn">Add</span></div></div></div>
+					<div class="mcard"><div class="pic" style="background:linear-gradient(135deg,#caa24a,#9c6b2f);"></div><div class="body"><h4>Truffle Mushroom</h4><div class="desc">Field mushrooms, truffle oil, parmesan</div><div class="foot"><span class="price">$24.90</span><span class="addbtn">Add</span></div></div></div>
+					<div class="mcard out"><div class="pic" style="background:linear-gradient(135deg,#9a9488,#73706a);"></div><div class="body"><h4>Wagyu &amp; Onion <span class="soldout">SOLD OUT</span></h4><div class="desc">Wagyu beef, onion jam, rocket</div><div class="foot"><span class="price">$26.90</span><span class="addbtn dis">Sold out</span></div></div></div>
+				</div>
+			</div>
+			<p class="caption">Your menu, your branding — customers order direct, no middleman skimming every sale.</p>
+		</div>
+		<div style="flex:1;">
+			<div class="builder">
+				<h4>Build your pizza</h4>
+				<div class="opt"><span class="radio"></span><span class="nm">Small 9&Prime;</span><span class="pr">$13.90</span></div>
+				<div class="opt sel"><span class="radio on"></span><span class="nm">Large 13&Prime;</span><span class="pr">$21.90</span></div>
+				<div class="opt"><span class="chk on"></span><span class="nm">Grilled chicken</span><span class="pr">+$3.50</span></div>
+				<div class="opt"><span class="chk on"></span><span class="nm">Mushrooms</span><span class="pr">+$2.00</span></div>
+				<div class="opt"><span class="chk on"></span><span class="nm">Bocconcini</span><span class="pr">+$3.00</span></div>
+				<div class="opt"><span class="chk"></span><span class="nm">Kalamata olives</span><span class="pr">+$2.00</span></div>
+				<div class="builder-total"><span style="font-size:11px; color:var(--slate); font-weight:700;">Large + 3 toppings</span><span class="big">$30.40</span></div>
+			</div>
+			<p style="font-size:10px; color:var(--slate); margin-top:10px; line-height:1.5;">Live pricing as toppings are added. Every price is recomputed on the server, so the total is always correct — and always in AUD with GST shown.</p>
+		</div>
+	</div>
+	<div class="brandmark">Dough Boss</div>
+	<div class="mocknote">Mockup with illustrative data</div>
+</div>
+
+<!-- ===================== 4 · CATERING ===================== -->
+<div class="slide">
+	<p class="kicker">Screen 02 · Catering — the high-margin engine</p>
+	<h1>Catering orders, locked in online</h1>
+	<div class="flex" style="gap:12px; margin-top:10px;">
+		<div style="flex:1.4;">
+			<div class="browser">
+				<div class="browser-bar">
+					<span class="dot" style="background:#ff5f57;"></span><span class="dot" style="background:#febc2e;"></span><span class="dot" style="background:#28c840;"></span>
+					<span class="url">doughboss.com.au/catering</span>
+				</div>
+				<div style="padding:12px;">
+					<div class="cat-grid">
+						<div class="pkg"><div class="nm">Office Lunch</div><div class="serves">Serves 10&ndash;12</div><div class="inc">6 large pizzas, 2 garlic breads</div><div class="pr">$129</div></div>
+						<div class="pkg sel"><div class="nm">Party Pack &nbsp;<span class="pill on">Selected</span></div><div class="serves">Serves 18&ndash;20</div><div class="inc">10 large pizzas, 4 sides, 2 drinks</div><div class="pr">$229</div></div>
+						<div class="pkg"><div class="nm">Big Footy Feast</div><div class="serves">Serves 30&ndash;35</div><div class="inc">16 large pizzas, 6 sides, 4 drinks</div><div class="pr">$379</div></div>
+						<div class="pkg"><div class="nm">Grazing (Build-your-own)</div><div class="serves">Serves 40+ · ~$11/head</div><div class="inc">Custom platters to suit the event</div><div class="pr">from $449</div></div>
+					</div>
+				</div>
+			</div>
+			<p class="caption">Big platters, big margins — quote and lock in catering orders without a single phone tag.</p>
+		</div>
+		<div style="flex:1;">
+			<div class="summary">
+				<div style="font-weight:800; font-size:12px; margin-bottom:6px;">Party Pack — order summary</div>
+				<div class="row"><span>Subtotal (GST incl.)</span><span>$229.00</span></div>
+				<div class="row"><span>Fulfilment</span><span>Delivery +$15 · within 8 km</span></div>
+				<div class="row"><span>Fulfilled by</span><span>Dough Boss Revesby</span></div>
+				<div class="row"><span>Requested</span><span>Fri 19 Jun · 12:30pm</span></div>
+				<div class="row dep"><span>Deposit due now (30%)</span><span class="v">$68.70</span></div>
+				<div class="row" style="border:0;"><span>Balance on pickup/delivery</span><span>$160.30</span></div>
+				<div class="pay">Pay $68.70 deposit &amp; confirm</div>
+				<p style="font-size:8.5px; color:#9aa6bd; margin:8px 0 0;">Minimum 24 hrs notice · deposit secured by Stripe · routes straight to the Revesby kitchen board.</p>
+			</div>
+		</div>
+	</div>
+	<div class="brandmark">Dough Boss</div>
+	<div class="mocknote">Mockup with illustrative data</div>
+</div>
+
+<!-- ===================== 5 · CUSTOMER PHONE ===================== -->
+<div class="slide">
+	<p class="kicker">Screen 03 · The customer&rsquo;s phone</p>
+	<h1>Order &amp; pay in seconds — then watch it cook</h1>
+	<div class="flex" style="gap:24px; margin-top:8px; align-items:flex-start;">
+		<div class="phone">
+			<div class="phone-notch"></div>
+			<div class="phone-screen">
+				<div class="p-head">Your order · Bankstown</div>
+				<div class="p-body">
+					<div class="line"><span>1× Large Pepperoni</span><span>$21.90</span></div>
+					<div class="line"><span>1× Garlic Bread (4pc)</span><span>$7.90</span></div>
+					<div class="line"><span>1× Coke 1.25L</span><span>$4.50</span></div>
+					<div class="p-tot"><span>Total</span><span>$34.30</span></div>
+					<div style="font-size:8.5px; color:var(--slate); margin-top:2px;">incl. GST $3.12 · Pickup (free)</div>
+					<div class="cardfield"><span>4242&nbsp; 4242&nbsp; &bull;&bull;&bull;&bull;&nbsp; &bull;&bull;&bull;&bull;</span><span style="color:#888;">12/27 · &bull;&bull;&bull;</span></div>
+					<div class="lock" style="margin-top:5px;">&#10003; Secured by Stripe</div>
+					<div class="paybtn">Pay $34.30</div>
+					<div style="font-size:9px; color:var(--slate); text-align:center; margin-top:6px;">Pickup from Bankstown — ready in ~25 min</div>
+				</div>
+			</div>
+		</div>
+		<div class="phone">
+			<div class="phone-notch"></div>
+			<div class="phone-screen">
+				<div class="p-head" style="background:#161b27;">Track order · DB-260617-B7T2</div>
+				<div class="p-body">
+					<div class="stepper">
+						<div class="step"><span class="sdot done"></span><div class="t">Order received<small>6:18pm</small></div></div>
+						<div class="step"><span class="sdot done"></span><div class="t">Accepted by kitchen<small>6:21pm · ETA 20 min</small></div></div>
+						<div class="step active"><span class="sdot active"></span><div class="t">In the oven — ready ~6:45pm<small>We&rsquo;ll text you when it&rsquo;s ready</small></div></div>
+						<div class="step"><span class="sdot todo"></span><div class="t" style="color:#9a9488;">Ready for pickup</div></div>
+					</div>
+					<div style="border-top:1px solid #f1ece4; margin-top:6px; padding-top:7px; font-size:9px; color:var(--slate);">Dough Boss Bankstown · 0466 xxx xxx</div>
+				</div>
+			</div>
+		</div>
+		<div style="flex:1; padding-top:6px;">
+			<p class="caption" style="border-left-color:var(--red); font-size:14px;">Customers watch their order in real time, from kitchen to doorstep, on their own phone.</p>
+			<ul style="font-size:11px; color:var(--slate); line-height:1.7; margin-top:14px; padding-left:16px;">
+				<li><strong style="color:var(--ink);">Card payment built in</strong> — money settles to your Stripe account.</li>
+				<li><strong style="color:var(--ink);">Live status</strong> cuts &ldquo;is my order ready?&rdquo; phone calls.</li>
+				<li><strong style="color:var(--ink);">Their details are captured</strong> — the start of a list you own.</li>
+				<li><strong style="color:var(--ink);">Works on any phone</strong> — no app to download.</li>
+			</ul>
+		</div>
+	</div>
+	<div class="brandmark">Dough Boss</div>
+	<div class="mocknote">Mockup with illustrative data</div>
+</div>
+
+<!-- ===================== 6 · KITCHEN iPad KDS ===================== -->
+<div class="slide" style="background:#e9e4db;">
+	<p class="kicker">Screen 04 · The kitchen iPad — the heart of the system</p>
+	<h1>Every order lands on the kitchen screen instantly</h1>
+	<div class="ipad" style="margin-top:8px;">
+		<div class="ipad-cam"></div>
+		<div class="ipad-screen">
+			<div class="kds">
+				<div class="kds-top">
+					<div class="kds-brand">Dough Boss — Live Order Board <small>Bankstown · Kitchen tablet</small></div>
+					<div class="kds-clock">Fri 17 Jun · 6:34pm · 4 active</div>
+				</div>
+				<div class="alert">
+					<div class="msg">&#9679; NEW ORDER — DB-260617-A4K9 · 2 items · $48.50 · Pickup</div>
+					<div class="acts"><span class="kbtn">Accept</span><span class="kbtn ghost">ETA 20m &#9662;</span></div>
+				</div>
+				<div class="lanes">
+					<div>
+						<div class="lane-h"><span>New</span><span>1</span></div>
+						<div class="kcard new">
+							<div class="knum"><span>DB-…A4K9</span><span>$48.50</span></div>
+							<div class="kcust">Sam · Pickup</div>
+							<div class="kitems">1 Lg Margherita<br/>1 Lg Aussie BBQ<br/>1 Garlic Bread (4pc)</div>
+							<div class="kfoot"><span class="ktime">waiting 0:12</span><span class="kmini" style="background:#fff; color:#b3261e;">TAP TO ACCEPT</span></div>
+						</div>
+					</div>
+					<div>
+						<div class="lane-h"><span>Preparing</span><span>2</span></div>
+						<div class="kcard prep">
+							<div class="knum"><span>DB-…X3M1</span><span>$41.20</span></div>
+							<div class="kcust">Aisha · Delivery</div>
+							<div class="kitems">2 Lg Pepperoni, wedges, 2 Coke</div>
+							<div class="kfoot"><span class="ktime">8:40 · ETA 6:50pm</span><span class="kmini amber">IN OVEN</span></div>
+						</div>
+						<div class="kcard prep">
+							<div class="knum"><span>DB-…K9P7</span><span>$41.80</span></div>
+							<div class="kcust">Tony · Pickup</div>
+							<div class="kitems">1 Truffle Mushroom, 1 Margherita</div>
+							<div class="kfoot"><span class="ktime">5:05</span><span class="kmini amber">PREP</span></div>
+						</div>
+					</div>
+					<div>
+						<div class="lane-h"><span>Ready</span><span>1</span></div>
+						<div class="kcard ready">
+							<div class="knum"><span>DB-…R2N5</span><span>$72.60</span></div>
+							<div class="kcust">Mel · Pickup</div>
+							<div class="kitems">3 Lg Pepperoni, 2 Garlic Bread</div>
+							<div class="kfoot"><span class="ktime">ready 0:30</span><span class="kmini">READY &#10003;</span></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<p class="caption" style="margin-top:10px;">Orders land on the kitchen screen instantly — with an audible alert that loops until a staff member taps Accept. Clear, ordered, impossible to miss.</p>
+	<div class="brandmark">Dough Boss</div>
+	<div class="mocknote">Mockup with illustrative data</div>
+</div>
+
+<!-- ===================== 7 · STRIPE BACKEND ===================== -->
+<div class="slide">
+	<p class="kicker">Screen 05 · The owner&rsquo;s money — in your own Stripe</p>
+	<h1>Payments &amp; takings, all in your account</h1>
+	<div class="flex" style="gap:12px; margin-top:10px;">
+		<div style="flex:1.5;">
+			<div class="browser">
+				<div class="browser-bar">
+					<span class="dot" style="background:#ff5f57;"></span><span class="dot" style="background:#febc2e;"></span><span class="dot" style="background:#28c840;"></span>
+					<span class="url">dashboard.stripe.com · Dough Boss Pty Ltd</span>
+				</div>
+				<div style="padding:12px 13px;">
+					<div class="flex" style="gap:10px; margin-bottom:10px;">
+						<div class="kpi" style="flex:1;"><div class="v good">$1,847.30</div><div class="l">Today · 52 orders</div></div>
+						<div class="kpi" style="flex:1;"><div class="v">$11,920.85</div><div class="l">This week · 327 orders</div></div>
+						<div class="kpi" style="flex:1;"><div class="v">$36.45</div><div class="l">Average order value</div></div>
+					</div>
+					<table class="dt">
+						<tr><th>Time</th><th>Order</th><th>Customer</th><th class="num">Amount</th><th>Status</th><th>Card</th></tr>
+						<tr><td>6:21pm</td><td>DB-…A4K9</td><td>Sam P.</td><td class="num">$48.50</td><td><span class="pill paid">Paid</span></td><td>Visa</td></tr>
+						<tr><td>6:18pm</td><td>DB-…B7T2</td><td>Layla M.</td><td class="num">$34.30</td><td><span class="pill paid">Paid</span></td><td>Mastercard</td></tr>
+						<tr><td>5:55pm</td><td>DB-…X3M1</td><td>Aisha K.</td><td class="num">$41.20</td><td><span class="pill paid">Paid</span></td><td>Amex</td></tr>
+						<tr><td>1:10pm</td><td>DB-…W8Q4</td><td>David N. <span style="color:var(--slate); font-size:9px;">(catering deposit)</span></td><td class="num">$68.70</td><td><span class="pill paid">Paid</span></td><td>Visa</td></tr>
+						<tr><td>Yest.</td><td>DB-…J1L0</td><td>Chris R.</td><td class="num">$22.40</td><td><span class="pill ref">Refunded</span></td><td>Visa</td></tr>
+					</table>
+				</div>
+			</div>
+			<p class="caption">Payments hit your own Stripe account daily — you hold the money from day one.</p>
+		</div>
+		<div style="flex:1;">
+			<div class="builder">
+				<h4>DoughBoss · Payment settings</h4>
+				<div class="opt between" style="cursor:default;"><span class="nm">Card payments</span><span class="pill on">ON</span></div>
+				<div class="opt sel" style="justify-content:space-between;"><span class="nm">Mode</span><span class="pr" style="font-weight:800; color:var(--ink);">Test &nbsp;|&nbsp; <span style="color:var(--green);">&#9679; Live</span></span></div>
+				<div class="opt between"><span class="nm">Publishable key</span><span class="pr">pk_live_&bull;&bull;&bull;&bull;4Tq9</span></div>
+				<div class="opt between"><span class="nm">Secret key</span><span class="pr">sk_live_&bull;&bull;&bull;&bull;91Hd</span></div>
+				<div class="opt between"><span class="nm">Webhook</span><span class="pr" style="color:var(--green); font-weight:700;">Connected &#10003;</span></div>
+				<div class="opt between"><span class="nm">Currency</span><span class="pr">AUD · auto receipt</span></div>
+			</div>
+			<p style="font-size:9.5px; color:var(--slate); margin-top:10px; line-height:1.5;">We build it switched <strong>off and in test mode</strong>, prove it with test cards, then flip to live with your keys. Your money never touches us — Stripe pays you directly, minus only Stripe&rsquo;s ~1.7% + 30c.</p>
+		</div>
+	</div>
+	<div class="brandmark">Dough Boss</div>
+	<div class="mocknote">Mockup with illustrative data</div>
+</div>
+
+<!-- ===================== 8 · OWNER DASHBOARD ===================== -->
+<div class="slide">
+	<p class="kicker">Screen 06 · One view across three shops</p>
+	<h1>Your sales dashboard</h1>
+	<div class="browser" style="margin-top:10px;">
+		<div class="browser-bar">
+			<span class="dot" style="background:#ff5f57;"></span><span class="dot" style="background:#febc2e;"></span><span class="dot" style="background:#28c840;"></span>
+			<span class="url">doughboss.com.au/wp-admin · Dough Boss Dashboard</span>
+		</div>
+		<div style="padding:13px;">
+			<div class="kpis">
+				<div class="kpi"><div class="v">327</div><div class="l">Orders this week</div></div>
+				<div class="kpi"><div class="v">$11,920</div><div class="l">Revenue this week</div></div>
+				<div class="kpi"><div class="v good">~$3,040</div><div class="l">Commission kept vs apps (~25.5%)</div></div>
+				<div class="kpi"><div class="v">42%</div><div class="l">Repeat customers · 89 loyalty members</div></div>
+			</div>
+			<div class="flex" style="gap:16px; margin-top:13px;">
+				<div style="flex:1;">
+					<div style="font-size:11px; font-weight:800; color:var(--ink); margin-bottom:7px;">Top items this week</div>
+					<div class="bars">
+						<div class="bar-row"><span class="nm">Pepperoni</span><span class="track"><span class="fill" style="width:100%;"></span></span><span class="vv">211</span></div>
+						<div class="bar-row"><span class="nm">Margherita</span><span class="track"><span class="fill" style="width:78%;"></span></span><span class="vv">164</span></div>
+						<div class="bar-row"><span class="nm">Garlic Bread</span><span class="track"><span class="fill" style="width:75%;"></span></span><span class="vv">158</span></div>
+						<div class="bar-row"><span class="nm">Aussie BBQ</span><span class="track"><span class="fill" style="width:46%;"></span></span><span class="vv">97</span></div>
+						<div class="bar-row"><span class="nm">Truffle Mushroom</span><span class="track"><span class="fill" style="width:29%;"></span></span><span class="vv">61</span></div>
+					</div>
+				</div>
+				<div style="flex:1;">
+					<div style="font-size:11px; font-weight:800; color:var(--ink); margin-bottom:7px;">Revenue by shop</div>
+					<div class="bars">
+						<div class="bar-row"><span class="nm">Bankstown</span><span class="track"><span class="fill" style="width:100%; background:#157f4f;"></span></span><span class="vv">$4.9k</span></div>
+						<div class="bar-row"><span class="nm">Revesby</span><span class="track"><span class="fill" style="width:85%; background:#157f4f;"></span></span><span class="vv">$4.2k</span></div>
+						<div class="bar-row"><span class="nm">Roselands</span><span class="track"><span class="fill" style="width:58%; background:#157f4f;"></span></span><span class="vv">$2.8k</span></div>
+					</div>
+					<div style="font-size:9.5px; color:var(--slate); margin-top:10px; line-height:1.5;">Busiest window <strong>Fri 6&ndash;8pm</strong>. Every order, customer and dollar — visible in one place, live.</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<p class="caption">See sales, top items and customers across all three shops, live, in one place.</p>
+	<p class="throughline" style="margin-top:10px; font-size:14px;">&ldquo;Keep every customer. Keep every dollar the apps would&rsquo;ve taken.&rdquo;</p>
+	<div class="brandmark">Dough Boss</div>
+	<div class="mocknote">Mockup with illustrative data</div>
+</div>
+
+<!-- ===================== 9 · FEATURE ROADMAP ===================== -->
+<div class="slide">
+	<p class="kicker">Built in — and ready to grow</p>
+	<h1>What it does now, and what we can add</h1>
+	<p class="lead" style="max-width:215mm;">The storefront, catering, kitchen board, payments and dashboard above are the core build. Each of these slots straight in as you grow — no rebuild, no new platform.</p>
+	<div class="feat-grid" style="margin-top:14px;">
+		<div class="feat"><div class="ic">&#9733;</div><h4>Loyalty rewards</h4><p>&ldquo;10th pizza free&rdquo;, tracked automatically — drives repeat orders without discounting your margin.</p></div>
+		<div class="feat"><div class="ic">&#9200;</div><h4>Scheduled &amp; recurring catering</h4><p>Lock in weekly office accounts and footy-season bookings in advance, deposit paid up front.</p></div>
+		<div class="feat"><div class="ic">&#9993;</div><h4>SMS notifications</h4><p>Auto &ldquo;order ready&rdquo; / &ldquo;out for delivery&rdquo; texts — fewer phone calls, fewer no-shows.</p></div>
+		<div class="feat"><div class="ic">&#128424;</div><h4>Auto-printed kitchen dockets</h4><p>Orders print straight to the kitchen printer as a backup to the screen — nothing re-keyed.</p></div>
+		<div class="feat"><div class="ic">&#9633;</div><h4>QR table ordering</h4><p>Dine-in guests scan, order and pay from the table — faster turns, less counter pressure.</p></div>
+		<div class="feat"><div class="ic">&#9734;</div><h4>Google review booster</h4><p>Auto-texts a review link 30 min after pickup — grows ratings and your &ldquo;pizza near me&rdquo; ranking.</p></div>
+	</div>
+	<div class="brandmark">Dough Boss</div>
+	<div class="pagenum">09</div>
+</div>
+
+<!-- ===================== 10 · OBJECTIONS ===================== -->
+<div class="slide">
+	<p class="kicker">Straight answers</p>
+	<h1>The questions you&rsquo;re right to ask</h1>
+	<div class="obj" style="margin-top:16px;">
+		<div class="item"><div class="q">&ldquo;It&rsquo;s a lot to pay each week.&rdquo;</div><div class="a">At $800/week plus 5% (capped at 15%), you typically pay well under what Uber Eats and Menulog take at 7&ndash;35%. Past a modest order volume, the system pays for itself — and the cap means it can never reach app rates.</div></div>
+		<div class="item"><div class="q">&ldquo;Will my staff actually use it?&rdquo;</div><div class="a">The kitchen sees one clear iPad board — simpler than juggling app tablets. We train your team on-site and stay on hand through the first busy weeks.</div></div>
+		<div class="item"><div class="q">&ldquo;Who handles the hosting and tech?&rdquo;</div><div class="a">It runs on your existing WordPress site with standard, proven tools. We set it up, maintain it, and you&rsquo;ve got a friend on the phone — not a call centre.</div></div>
+		<div class="item"><div class="q">&ldquo;Switching off the apps sounds risky.&rdquo;</div><div class="a">You don&rsquo;t switch anything off on day one. Run this alongside the apps, watch the direct orders grow, then wind the apps back on your terms.</div></div>
+		<div class="item" style="border:0;"><div class="q">&ldquo;Is it really mine, or am I renting?&rdquo;</div><div class="a">It&rsquo;s yours — your domain, your Stripe account, your customer data, your menu. The weekly fee is for running and supporting it, not for permission to use your own shop.</div></div>
+		<div class="item" style="border:0;"><div class="q">&ldquo;What does it cost to start?&rdquo;</div><div class="a">Setup is roughly $4,000&ndash;5,000 at cost to build and launch across the three shops. Then $800/week + 5% (capped 15%) to run, maintain and market it — Stripe&rsquo;s ~1.7% + 30c per card is separate and goes to Stripe.</div></div>
+	</div>
+	<div class="brandmark">Dough Boss</div>
+	<div class="pagenum">10</div>
+</div>
+
+<!-- ===================== 11 · CLOSING ===================== -->
+<div class="slide" style="background: radial-gradient(120% 120% at 100% 0%, #2a1410 0%, #1a0c09 60%, #140a08 100%); color:#fff; padding:16mm 15mm;">
+	<p class="kicker" style="color:#f0a58f;">What happens next</p>
+	<h1 style="color:#fff; font-size:34px;">Three steps to go live</h1>
+	<div class="steps" style="margin-top:14px;">
+		<div class="stepc" style="background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.16);"><div class="n">1</div><h4 style="color:#fff;">Set up · Week 1</h4><p style="color:#e7d6cf;">We load your menu, branding and shop details, and connect your Stripe and WordPress.</p></div>
+		<div class="stepc" style="background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.16);"><div class="n">2</div><h4 style="color:#fff;">Test · Week 2</h4><p style="color:#e7d6cf;">We run real orders through storefront, catering and the kitchen board with your team.</p></div>
+		<div class="stepc" style="background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.16);"><div class="n">3</div><h4 style="color:#fff;">Go live</h4><p style="color:#e7d6cf;">We switch it on across all three shops and stay close through the first busy weekends.</p></div>
+	</div>
+	<div class="flex" style="gap:14px; margin-top:16px; align-items:stretch;">
+		<div class="need" style="flex:1.1;">
+			<h4>What we need from you to start</h4>
+			<ul>
+				<li>Your full <strong>menu</strong> — items, sizes, prices</li>
+				<li><strong>Shop details</strong> — addresses, hours, contact per location</li>
+				<li>Your <strong>ABN</strong> (for GST tax invoices)</li>
+				<li><strong>WordPress access</strong> to doughboss.com.au</li>
+				<li>A <strong>Stripe account</strong> in the business name (we&rsquo;ll help set it up)</li>
+				<li>One <strong>brand decision</strong> — Dough Boss or Bite Pizzas</li>
+			</ul>
+		</div>
+		<div style="flex:1; display:flex; flex-direction:column; justify-content:center; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.16); border-radius:11px; padding:16px 18px;">
+			<div style="font-size:12px; color:#f0a58f; font-weight:800; letter-spacing:0.04em; text-transform:uppercase;">The whole pitch in one line</div>
+			<div style="font-size:22px; font-weight:900; color:#fff; line-height:1.2; margin-top:8px;">Keep every customer.<br/>Keep every dollar the<br/>apps would&rsquo;ve taken.</div>
+			<div style="font-size:11px; color:#e7d6cf; margin-top:12px;">Setup ~$4&ndash;5k at cost · $800/wk + 5% to run (capped 15%) — a fraction of app fees.</div>
+		</div>
+	</div>
+	<div class="flex between center" style="margin-top:16px; font-size:11px; color:#caa99f;">
+		<span class="wordmark"><span class="wm-badge">DB</span><span class="wm-text" style="color:#fff;">DOUGH BOSS</span></span>
+		<span>Let&rsquo;s switch it on.</span>
+	</div>
+</div>
+
+</body>
+</html>
