@@ -18,6 +18,10 @@ customer order tracking, all driven by shortcodes and a small REST API.
 - **Order tracking** — customers look up an order by number + email.
 - **Admin** — an Orders screen with live status changes and a Settings page for
   sizes, toppings, currency, tax and fulfilment options.
+- **Live Order Board** — a real-time kitchen display that shows new orders the
+  moment they arrive (audible + visual alert until acknowledged), with one-tap
+  Accept/ETA and status changes. Runs on a shop tablet via a low-privilege
+  **DoughBoss Kitchen** role.
 - Confirmation emails to the customer and store on each order.
 
 ## Requirements
@@ -72,6 +76,12 @@ server for every cart/checkout operation.
 | POST   | `/checkout`                    | Create an order                  |
 | GET    | `/order/{number}?email=`       | Track an order                   |
 | POST   | `/admin/order/{id}/status`     | Staff status update (capability) |
+| GET    | `/admin/orders`                | Active orders feed for the board |
+| POST   | `/admin/order/{id}/ack`        | Acknowledge a new order          |
+| POST   | `/admin/order/{id}/accept`     | Accept an order + set ETA        |
+
+`POST /checkout` accepts an optional `Idempotency-Key` header so a retried
+submit returns the original order instead of creating a duplicate.
 
 ## Project layout
 
@@ -81,6 +91,7 @@ includes/
   class-doughboss.php          Core loader / DI
   class-doughboss-activator.php   DB schema, defaults, capabilities
   class-doughboss-deactivator.php
+  class-doughboss-migrations.php  Versioned schema/upgrade runner
   class-doughboss-settings.php    Typed settings access
   class-doughboss-post-types.php  Menu Items CPT + taxonomy + meta box
   class-doughboss-cart.php        Cookie/transient guest cart
@@ -93,13 +104,19 @@ admin/
 public/
   css/doughboss.css               Storefront styles
   css/doughboss-admin.css         Admin styles
+  css/doughboss-orderboard.css    Live order board (kitchen display) styles
   js/doughboss.js                 Storefront app (vanilla JS)
+  js/doughboss-orderboard.js      Live order board app (polling KDS)
 uninstall.php                  Full data removal on delete
 ```
 
 ## Roadmap
 
+- ✅ **Real-time Live Order Board** (kitchen display) — _shipped in 2.1.0_.
 - Online payments (Stripe).
+- Push/managed real-time transport (Ably/Pusher) + customer live tracking.
+- Receipt printing (PrintNode) and SMS alerts (Twilio).
+- Multi-shop locations with order routing and per-shop menus.
 - Scheduled pickup / delivery time slots.
 - Per-item topping support for specialty pizzas.
 - Email template customization.

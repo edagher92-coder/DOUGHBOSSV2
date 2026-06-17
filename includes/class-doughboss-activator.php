@@ -35,9 +35,12 @@ class DoughBoss_Activator {
 	/**
 	 * Create the orders and order-items tables.
 	 *
+	 * Public so the migration runner can re-run it (dbDelta is additive and
+	 * adds any new columns to existing installs).
+	 *
 	 * @return void
 	 */
-	private static function create_tables() {
+	public static function create_tables() {
 		global $wpdb;
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -61,6 +64,10 @@ class DoughBoss_Activator {
 			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
 			total decimal(10,2) NOT NULL DEFAULT 0.00,
 			currency varchar(10) NOT NULL DEFAULT 'USD',
+			eta_minutes int(11) NOT NULL DEFAULT 0,
+			seen_at datetime NULL DEFAULT NULL,
+			acknowledged_at datetime NULL DEFAULT NULL,
+			accepted_at datetime NULL DEFAULT NULL,
 			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
 			updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
 			PRIMARY KEY  (id),
@@ -155,14 +162,35 @@ class DoughBoss_Activator {
 	}
 
 	/**
-	 * Give administrators the capability that gates DoughBoss management.
+	 * Give administrators the management capabilities and ensure a low-privilege
+	 * kitchen role exists for staff who only need the live order board.
+	 *
+	 * Public and idempotent so the migration runner can call it on upgrade.
 	 *
 	 * @return void
 	 */
-	private static function add_capabilities() {
-		$role = get_role( 'administrator' );
-		if ( $role && ! $role->has_cap( 'manage_doughboss' ) ) {
-			$role->add_cap( 'manage_doughboss' );
+	public static function add_capabilities() {
+		$admin = get_role( 'administrator' );
+		if ( $admin ) {
+			if ( ! $admin->has_cap( 'manage_doughboss' ) ) {
+				$admin->add_cap( 'manage_doughboss' );
+			}
+			if ( ! $admin->has_cap( 'manage_doughboss_kds' ) ) {
+				$admin->add_cap( 'manage_doughboss_kds' );
+			}
+		}
+
+		// Kitchen staff role: just enough to open the order board on a shop
+		// tablet — never a full admin login on a device in the kitchen.
+		if ( ! get_role( 'doughboss_kitchen' ) ) {
+			add_role(
+				'doughboss_kitchen',
+				__( 'DoughBoss Kitchen', 'doughboss' ),
+				array(
+					'read'                 => true,
+					'manage_doughboss_kds' => true,
+				)
+			);
 		}
 	}
 }

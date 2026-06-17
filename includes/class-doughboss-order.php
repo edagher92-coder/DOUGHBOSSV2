@@ -62,7 +62,7 @@ class DoughBoss_Order {
 		$table = self::orders_table();
 
 		do {
-			$number = 'DB-' . gmdate( 'ymd' ) . '-' . strtoupper( wp_generate_password( 4, false, false ) );
+			$number = 'DB-' . gmdate( 'ymd' ) . '-' . strtoupper( wp_generate_password( 6, false, false ) );
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE order_number = %s", $number ) );
 		} while ( $exists );
@@ -85,42 +85,61 @@ class DoughBoss_Order {
 		}
 
 		$now    = current_time( 'mysql', true );
-		$number = self::generate_order_number();
+		$orders = self::orders_table();
+		$items  = self::items_table();
 
+		// Wrap the order row and its items in a single transaction so a partial
+		// failure can never leave an order whose stored total doesn't match the
+		// line items actually saved. (Requires InnoDB; a no-op on MyISAM.)
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$inserted = $wpdb->insert(
-			self::orders_table(),
-			array(
-				'order_number'  => $number,
-				'status'        => 'pending',
-				'order_type'    => $data['order_type'],
-				'customer_name' => $data['customer_name'],
-				'customer_email'=> $data['customer_email'],
-				'customer_phone'=> $data['customer_phone'],
-				'address'       => $data['address'],
-				'notes'         => $data['notes'],
-				'subtotal'      => $data['subtotal'],
-				'tax'           => $data['tax'],
-				'delivery_fee'  => $data['delivery_fee'],
-				'total'         => $data['total'],
-				'currency'      => DoughBoss_Settings::get( 'currency_code', 'USD' ),
-				'created_at'    => $now,
-				'updated_at'    => $now,
-			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s' )
-		);
+		$wpdb->query( 'START TRANSACTION' );
 
-		if ( false === $inserted ) {
+		// Insert the order, retrying on the (rare) order-number collision that
+		// the UNIQUE key would otherwise reject under concurrent checkouts.
+		$order_id = 0;
+		$attempts = 0;
+		do {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$inserted = $wpdb->insert(
+				$orders,
+				array(
+					'order_number'  => self::generate_order_number(),
+					'status'        => 'pending',
+					'order_type'    => $data['order_type'],
+					'customer_name' => $data['customer_name'],
+					'customer_email'=> $data['customer_email'],
+					'customer_phone'=> $data['customer_phone'],
+					'address'       => $data['address'],
+					'notes'         => $data['notes'],
+					'subtotal'      => $data['subtotal'],
+					'tax'           => $data['tax'],
+					'delivery_fee'  => $data['delivery_fee'],
+					'total'         => $data['total'],
+					'currency'      => DoughBoss_Settings::get( 'currency_code', 'USD' ),
+					'created_at'    => $now,
+					'updated_at'    => $now,
+				),
+				array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s' )
+			);
+
+			if ( false !== $inserted ) {
+				$order_id = (int) $wpdb->insert_id;
+				break;
+			}
+			++$attempts;
+		} while ( $attempts < 5 );
+
+		if ( ! $order_id ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$wpdb->query( 'ROLLBACK' );
 			return new WP_Error( 'doughboss_db_error', __( 'Could not save your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
 		}
-
-		$order_id = (int) $wpdb->insert_id;
 
 		foreach ( $lines as $line ) {
 			$toppings = isset( $line['toppings'] ) ? wp_json_encode( array_values( $line['toppings'] ) ) : '';
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-			$wpdb->insert(
-				self::items_table(),
+			$line_ok = $wpdb->insert(
+				$items,
 				array(
 					'order_id'   => $order_id,
 					'item_id'    => (int) $line['item_id'],
@@ -133,7 +152,16 @@ class DoughBoss_Order {
 				),
 				array( '%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f' )
 			);
+
+			if ( false === $line_ok ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$wpdb->query( 'ROLLBACK' );
+				return new WP_Error( 'doughboss_db_error', __( 'Could not save your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+			}
 		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->query( 'COMMIT' );
 
 		/**
 		 * Fires after an order has been created and all items stored.
@@ -144,6 +172,117 @@ class DoughBoss_Order {
 		do_action( 'doughboss_order_created', $order_id, $data );
 
 		return $order_id;
+	}
+
+	/**
+	 * Active orders for the live kitchen board (excludes completed/cancelled),
+	 * oldest first, each with its line items.
+	 *
+	 * @param int $limit Maximum rows to return.
+	 * @return array[]
+	 */
+	public static function active_orders( $limit = 100 ) {
+		global $wpdb;
+		$table = self::orders_table();
+		$limit = max( 1, min( 200, (int) $limit ) );
+		$statuses = self::statuses();
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) ORDER BY created_at ASC LIMIT %d",
+				$limit
+			)
+		);
+
+		$out = array();
+		foreach ( (array) $rows as $order ) {
+			$out[] = array(
+				'id'             => (int) $order->id,
+				'order_number'   => $order->order_number,
+				'status'         => $order->status,
+				'status_label'   => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+				'order_type'     => $order->order_type,
+				'customer_name'  => $order->customer_name,
+				'customer_phone' => $order->customer_phone,
+				'address'        => $order->address,
+				'notes'          => $order->notes,
+				'total'          => (float) $order->total,
+				'eta_minutes'    => (int) $order->eta_minutes,
+				'acknowledged'   => ! empty( $order->acknowledged_at ),
+				'accepted'       => ! empty( $order->accepted_at ),
+				'created_at'     => $order->created_at,
+				'items'          => self::get_items( (int) $order->id ),
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Mark an order as acknowledged by staff (silences the new-order alert).
+	 *
+	 * @param int $order_id Order ID.
+	 * @return bool
+	 */
+	public static function acknowledge( $order_id ) {
+		global $wpdb;
+		$order_id = absint( $order_id );
+		if ( ! $order_id ) {
+			return false;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$updated = $wpdb->update(
+			self::orders_table(),
+			array(
+				'acknowledged_at' => current_time( 'mysql', true ),
+				'seen_at'         => current_time( 'mysql', true ),
+			),
+			array( 'id' => $order_id ),
+			array( '%s', '%s' ),
+			array( '%d' )
+		);
+
+		return false !== $updated;
+	}
+
+	/**
+	 * Accept an order, moving it to "confirmed" and recording an ETA.
+	 *
+	 * @param int $order_id    Order ID.
+	 * @param int $eta_minutes Estimated minutes until ready (0 = none given).
+	 * @return bool
+	 */
+	public static function accept( $order_id, $eta_minutes = 0 ) {
+		global $wpdb;
+		$order_id = absint( $order_id );
+		if ( ! $order_id ) {
+			return false;
+		}
+
+		$now = current_time( 'mysql', true );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$updated = $wpdb->update(
+			self::orders_table(),
+			array(
+				'status'          => 'confirmed',
+				'accepted_at'     => $now,
+				'acknowledged_at' => $now,
+				'eta_minutes'     => max( 0, (int) $eta_minutes ),
+				'updated_at'      => $now,
+			),
+			array( 'id' => $order_id ),
+			array( '%s', '%s', '%s', '%d', '%s' ),
+			array( '%d' )
+		);
+
+		if ( false !== $updated ) {
+			do_action( 'doughboss_order_accepted', $order_id, max( 0, (int) $eta_minutes ) );
+			do_action( 'doughboss_order_status_changed', $order_id, 'confirmed' );
+			return true;
+		}
+		return false;
 	}
 
 	/**
@@ -310,6 +449,7 @@ class DoughBoss_Order {
 			'order_type'   => $order->order_type,
 			'total'        => (float) $order->total,
 			'currency'     => $order->currency,
+			'eta_minutes'  => isset( $order->eta_minutes ) ? (int) $order->eta_minutes : 0,
 			'created_at'   => $order->created_at,
 			'items'        => self::get_items( $order->id ),
 		);

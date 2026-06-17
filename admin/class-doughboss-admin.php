@@ -71,6 +71,19 @@ class DoughBoss_Admin {
 			'doughboss-settings',
 			array( $this, 'render_settings_page' )
 		);
+
+		// Standalone, tablet-friendly live order board. Registered with the
+		// kitchen capability so a low-privilege "DoughBoss Kitchen" user can
+		// reach it without a full admin login on a shop device.
+		add_menu_page(
+			__( 'Order Board', 'doughboss' ),
+			__( 'Order Board', 'doughboss' ),
+			'manage_doughboss_kds',
+			'doughboss-board',
+			array( $this, 'render_board_page' ),
+			'dashicons-screenoptions',
+			27
+		);
 	}
 
 	/**
@@ -178,6 +191,35 @@ class DoughBoss_Admin {
 			)
 		);
 		wp_add_inline_script( 'doughboss-admin', $this->inline_admin_js() );
+
+		// The live order board ships its own (larger) app + styles, loaded only
+		// on its screen.
+		if ( false !== strpos( $hook, 'doughboss-board' ) ) {
+			wp_enqueue_style(
+				'doughboss-orderboard',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-orderboard.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-orderboard',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-orderboard.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+			wp_localize_script(
+				'doughboss-orderboard',
+				'DoughBossBoard',
+				array(
+					'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
+					'nonce'    => wp_create_nonce( 'wp_rest' ),
+					'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+					'pollMs'   => 7000,
+					'statuses' => DoughBoss_Order::statuses(),
+				)
+			);
+		}
 	}
 
 	/**
@@ -345,6 +387,33 @@ JS;
 					?>
 				</div></div>
 			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the live Order Board screen. The board app (JS) fills #db-board.
+	 *
+	 * @return void
+	 */
+	public function render_board_page() {
+		if ( ! current_user_can( 'manage_doughboss_kds' ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+		?>
+		<div class="wrap doughboss-board-wrap">
+			<div class="db-board-bar">
+				<h1><?php esc_html_e( 'Live Order Board', 'doughboss' ); ?></h1>
+				<div class="db-board-actions">
+					<span class="db-board-status" role="status" aria-live="polite"></span>
+					<button type="button" class="button db-sound-toggle" aria-pressed="false">
+						<?php esc_html_e( '🔔 Enable sound alerts', 'doughboss' ); ?>
+					</button>
+				</div>
+			</div>
+			<div id="db-board" class="db-board" aria-live="polite">
+				<p class="db-board-loading"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
+			</div>
 		</div>
 		<?php
 	}

@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,21 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.1.0 =
+* New: real-time **Live Order Board** (kitchen display) — active orders in
+  New / Preparing / Ready lanes, an audible + visual alert on new orders until
+  acknowledged, and one-tap Accept (with ETA) and status changes.
+* New: low-privilege **DoughBoss Kitchen** role + `manage_doughboss_kds`
+  capability so a shop tablet can run the board without a full admin login.
+* New: REST endpoints `GET /admin/orders`, `POST /admin/order/{id}/ack`,
+  `POST /admin/order/{id}/accept`; orders now carry an ETA and
+  seen/acknowledged/accepted timestamps.
+* Reliability: order + line items are now written in a single database
+  transaction (no more partial orders), order numbers are longer with
+  collision-retry, and `/checkout` honours an `Idempotency-Key` to stop
+  duplicate orders from double-submits.
+* Internal: versioned database migration runner.
 
 = 2.0.0 =
 * Initial public build: menu CPT, pizza builder, cart/checkout, order tracking,

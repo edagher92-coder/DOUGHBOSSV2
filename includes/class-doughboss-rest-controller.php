@@ -198,6 +198,45 @@ class DoughBoss_REST_Controller {
 				),
 			)
 		);
+
+		// Live kitchen order board: incremental feed of active orders.
+		register_rest_route(
+			$ns,
+			'/admin/orders',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_orders' ),
+				'permission_callback' => array( $this, 'verify_admin' ),
+			)
+		);
+
+		// Acknowledge a new order (silences the board alert).
+		register_rest_route(
+			$ns,
+			'/admin/order/(?P<id>\d+)/ack',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_acknowledge' ),
+				'permission_callback' => array( $this, 'verify_admin' ),
+			)
+		);
+
+		// Accept an order and set an ETA.
+		register_rest_route(
+			$ns,
+			'/admin/order/(?P<id>\d+)/accept',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_accept' ),
+				'permission_callback' => array( $this, 'verify_admin' ),
+				'args'                => array(
+					'eta' => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
 	}
 
 	/**
@@ -220,7 +259,7 @@ class DoughBoss_REST_Controller {
 	 * @return bool|WP_Error
 	 */
 	public function verify_admin() {
-		if ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) {
+		if ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_doughboss_kds' ) || current_user_can( 'manage_options' ) ) {
 			return true;
 		}
 		return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
@@ -437,6 +476,17 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function checkout( WP_REST_Request $request ) {
+		// Idempotency: if the client supplies a key and we've already processed
+		// it, return the original result instead of creating a duplicate order.
+		// Checked first so a replay still succeeds after the cart was cleared.
+		$idem = $this->idempotency_key( $request );
+		if ( '' !== $idem ) {
+			$cached = get_transient( 'doughboss_idem_' . $idem );
+			if ( is_array( $cached ) ) {
+				return rest_ensure_response( $cached );
+			}
+		}
+
 		if ( ! DoughBoss_Settings::ordering_open() ) {
 			return new WP_Error( 'doughboss_closed', __( 'Online ordering is currently closed.', 'doughboss' ), array( 'status' => 503 ) );
 		}
@@ -506,14 +556,33 @@ class DoughBoss_REST_Controller {
 		$this->cart->clear();
 		$this->send_confirmation( $order );
 
-		return rest_ensure_response(
-			array(
-				'success'      => true,
-				'order_number' => $order->order_number,
-				'total'        => (float) $order->total,
-				'message'      => __( 'Thanks! Your order has been received.', 'doughboss' ),
-			)
+		$payload = array(
+			'success'      => true,
+			'order_number' => $order->order_number,
+			'total'        => (float) $order->total,
+			'message'      => __( 'Thanks! Your order has been received.', 'doughboss' ),
 		);
+
+		if ( '' !== $idem ) {
+			set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
+		}
+
+		return rest_ensure_response( $payload );
+	}
+
+	/**
+	 * Read and normalise the checkout idempotency key (header or param).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return string Hashed key, or '' when none supplied.
+	 */
+	private function idempotency_key( WP_REST_Request $request ) {
+		$key = $request->get_header( 'Idempotency-Key' );
+		if ( ! $key ) {
+			$key = $request->get_param( 'idempotency_key' );
+		}
+		$key = is_string( $key ) ? trim( $key ) : '';
+		return '' !== $key ? md5( $key ) : '';
 	}
 
 	/**
@@ -550,6 +619,48 @@ class DoughBoss_REST_Controller {
 		}
 
 		return rest_ensure_response( array( 'success' => true, 'status' => $status ) );
+	}
+
+	/**
+	 * GET /admin/orders — active orders for the live kitchen board.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function admin_orders() {
+		return rest_ensure_response(
+			array(
+				'data'        => DoughBoss_Order::active_orders( 100 ),
+				'server_time' => current_time( 'mysql', true ),
+			)
+		);
+	}
+
+	/**
+	 * POST /admin/order/{id}/ack — acknowledge a new order (silence the alert).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function admin_acknowledge( WP_REST_Request $request ) {
+		DoughBoss_Order::acknowledge( absint( $request->get_param( 'id' ) ) );
+		return rest_ensure_response( array( 'success' => true ) );
+	}
+
+	/**
+	 * POST /admin/order/{id}/accept — accept the order and set an ETA.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_accept( WP_REST_Request $request ) {
+		$order_id = absint( $request->get_param( 'id' ) );
+		$eta      = absint( $request->get_param( 'eta' ) );
+
+		if ( ! DoughBoss_Order::accept( $order_id, $eta ) ) {
+			return new WP_Error( 'doughboss_accept', __( 'Could not accept that order.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		return rest_ensure_response( array( 'success' => true, 'status' => 'confirmed', 'eta' => $eta ) );
 	}
 
 	/**

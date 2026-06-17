@@ -68,6 +68,7 @@ final class DoughBoss {
 		$dir = DOUGHBOSS_PLUGIN_DIR . 'includes/';
 
 		require_once $dir . 'class-doughboss-settings.php';
+		require_once $dir . 'class-doughboss-migrations.php';
 		require_once $dir . 'class-doughboss-post-types.php';
 		require_once $dir . 'class-doughboss-cart.php';
 		require_once $dir . 'class-doughboss-order.php';
@@ -89,11 +90,7 @@ final class DoughBoss {
 	 * @return void
 	 */
 	private function maybe_upgrade_db() {
-		if ( get_option( 'doughboss_db_version' ) === DOUGHBOSS_DB_VERSION ) {
-			return;
-		}
-		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-activator.php';
-		DoughBoss_Activator::activate();
+		DoughBoss_Migrations::run();
 	}
 
 	/**

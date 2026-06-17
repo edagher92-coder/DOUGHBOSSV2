@@ -1,0 +1,238 @@
+/**
+ * DoughBoss — Live Order Board (Kitchen Display) styles.
+ * Designed for a wall-mounted tablet: large touch targets, high contrast,
+ * three status lanes that stack on narrow screens.
+ */
+
+.doughboss-board-wrap {
+	margin-right: 20px;
+}
+
+.db-board-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin: 0.5rem 0 1rem;
+}
+
+.db-board-bar h1 {
+	margin: 0;
+	font-size: 1.6rem;
+}
+
+.db-board-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.db-board-status {
+	color: #555;
+	font-size: 0.85rem;
+}
+
+.db-sound-toggle {
+	min-height: 40px;
+}
+
+.db-sound-toggle.is-on {
+	background: #1d7a3e;
+	border-color: #176231;
+	color: #fff;
+}
+
+.db-board-loading,
+.db-lane-empty {
+	color: #888;
+	font-style: italic;
+}
+
+/* --- New-order alert ------------------------------------------------- */
+
+.db-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	background: #d6452b;
+	color: #fff;
+	font-size: 1.2rem;
+	font-weight: 700;
+	padding: 0.75rem 1rem;
+	border-radius: 8px;
+	margin-bottom: 1rem;
+}
+
+.db-banner .button {
+	min-height: 44px;
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+body.db-alerting .db-board-bar h1::after {
+	content: " ● LIVE";
+	color: #d6452b;
+	animation: db-flash 1s steps(1) infinite;
+}
+
+@keyframes db-flash {
+	50% { opacity: 0; }
+}
+
+/* --- Lanes ----------------------------------------------------------- */
+
+.db-lanes {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1rem;
+	align-items: start;
+}
+
+@media (max-width: 1100px) {
+	.db-lanes { grid-template-columns: 1fr; }
+}
+
+.db-lane {
+	background: #f1f1f1;
+	border-radius: 10px;
+	padding: 0.75rem;
+	min-height: 120px;
+}
+
+.db-lane-title {
+	margin: 0.2rem 0 0.75rem;
+	font-size: 1.1rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.db-lane-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.6rem;
+	height: 1.6rem;
+	padding: 0 0.4rem;
+	border-radius: 1rem;
+	background: #2271b1;
+	color: #fff;
+	font-size: 0.85rem;
+}
+
+.db-lane-new .db-lane-count { background: #d6452b; }
+.db-lane-ready .db-lane-count { background: #1d7a3e; }
+
+/* --- Cards ----------------------------------------------------------- */
+
+.db-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-left: 6px solid #2271b1;
+	border-radius: 8px;
+	padding: 0.75rem;
+	margin-bottom: 0.75rem;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.db-card-pending { border-left-color: #d6452b; }
+.db-card-ready,
+.db-card-out_for_delivery { border-left-color: #1d7a3e; }
+
+.db-card-fresh {
+	animation: db-card-pop 1.2s ease-in-out infinite;
+}
+
+@keyframes db-card-pop {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(214, 69, 43, 0.5); }
+	50% { box-shadow: 0 0 0 4px rgba(214, 69, 43, 0.25); }
+}
+
+.db-card-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.db-card-number {
+	font-weight: 700;
+	font-size: 1.05rem;
+}
+
+.db-card-type {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+	background: #e7e7e7;
+	color: #333;
+}
+
+.db-type-delivery { background: #fde6c4; color: #7a4b00; }
+
+.db-card-time {
+	margin-left: auto;
+	color: #666;
+	font-size: 0.8rem;
+}
+
+.db-card-status {
+	display: inline-block;
+	margin: 0.35rem 0;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: #2271b1;
+}
+
+.db-card-contact { font-size: 0.9rem; margin-bottom: 0.4rem; }
+
+.db-card-items {
+	list-style: none;
+	margin: 0 0 0.5rem;
+	padding: 0.5rem;
+	background: #fafafa;
+	border-radius: 6px;
+}
+
+.db-card-item { padding: 0.15rem 0; }
+.db-card-item-name { font-weight: 600; }
+.db-card-item-toppings { display: block; font-size: 0.8rem; color: #555; }
+
+.db-card-meta { font-size: 0.85rem; color: #444; margin-bottom: 0.5rem; }
+.db-card-meta > div { margin: 0.15rem 0; }
+.db-card-total { font-weight: 700; color: #111; }
+.db-card-eta { color: #1d7a3e; font-weight: 600; }
+.db-card-addr { color: #7a4b00; }
+
+/* --- Actions --------------------------------------------------------- */
+
+.db-card-actions { margin-top: 0.5rem; }
+.db-accept-label { font-size: 0.8rem; color: #555; margin-bottom: 0.25rem; }
+
+.db-eta-row,
+.db-card-actions-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-bottom: 0.4rem;
+}
+
+.db-card-actions .button {
+	min-height: 44px;
+	font-size: 0.95rem;
+	display: inline-flex;
+	align-items: center;
+}
+
+.db-eta { min-width: 52px; justify-content: center; }
+.db-cancel { color: #b32d2e; margin-left: auto; }
+
+/* Visible keyboard focus for accessibility. */
+.doughboss-board-wrap .button:focus-visible {
+	outline: 3px solid #2271b1;
+	outline-offset: 1px;
+}

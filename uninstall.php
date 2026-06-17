@@ -41,11 +41,20 @@ foreach ( $item_ids as $item_id ) {
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
 
-// Remove the custom capability.
+// Remove the custom capabilities and the kitchen role.
 $role = get_role( 'administrator' );
 if ( $role ) {
 	$role->remove_cap( 'manage_doughboss' );
+	$role->remove_cap( 'manage_doughboss_kds' );
 }
+remove_role( 'doughboss_kitchen' );
+
+// Clean up checkout idempotency transients.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->query(
+	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_idem_%' OR option_name LIKE '_transient_timeout_doughboss_idem_%'"
+);
+// phpcs:enable
 
 // Clean up cart transients.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery
