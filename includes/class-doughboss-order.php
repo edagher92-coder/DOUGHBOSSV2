@@ -117,10 +117,13 @@ class DoughBoss_Order {
 					'delivery_fee'  => $data['delivery_fee'],
 					'total'         => $data['total'],
 					'currency'      => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
+					'payment_status'    => isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid',
+					'payment_method'    => isset( $data['payment_method'] ) ? $data['payment_method'] : '',
+					'payment_intent_id' => isset( $data['payment_intent_id'] ) ? $data['payment_intent_id'] : '',
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
@@ -223,6 +226,7 @@ class DoughBoss_Order {
 				'address'        => $order->address,
 				'notes'          => $order->notes,
 				'total'          => (float) $order->total,
+				'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
 				'eta_minutes'    => (int) $order->eta_minutes,
 				'acknowledged'   => ! empty( $order->acknowledged_at ),
 				'accepted'       => ! empty( $order->accepted_at ),
@@ -324,6 +328,27 @@ class DoughBoss_Order {
 		$table = self::orders_table();
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE order_number = %s", $number ) );
+	}
+
+	/**
+	 * Whether a Stripe PaymentIntent has already been recorded against an order.
+	 *
+	 * Used to stop a single succeeded payment being replayed across multiple
+	 * checkouts (one paid PaymentIntent → at most one order).
+	 *
+	 * @param string $payment_intent_id Stripe PaymentIntent id.
+	 * @return bool
+	 */
+	public static function payment_intent_used( $payment_intent_id ) {
+		global $wpdb;
+		$payment_intent_id = sanitize_text_field( $payment_intent_id );
+		if ( '' === $payment_intent_id ) {
+			return false;
+		}
+		$table = self::orders_table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$found = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE payment_intent_id = %s LIMIT 1", $payment_intent_id ) );
+		return ! empty( $found );
 	}
 
 	/**
@@ -464,6 +489,7 @@ class DoughBoss_Order {
 			'order_type'   => $order->order_type,
 			'total'        => (float) $order->total,
 			'currency'     => $order->currency,
+			'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
 			'eta_minutes'  => isset( $order->eta_minutes ) ? (int) $order->eta_minutes : 0,
 			'created_at'   => $order->created_at,
 			'items'        => self::get_items( $order->id ),

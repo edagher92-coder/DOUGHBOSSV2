@@ -79,10 +79,19 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION
 		);
 
+		// Load Stripe.js (from Stripe's CDN, as they require) only when card
+		// payments are switched on and configured. Our script then depends on it.
+		$deps         = array();
+		$payments_on  = DoughBoss_Stripe::ready();
+		if ( $payments_on ) {
+			wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
+			$deps[] = 'stripe-js';
+		}
+
 		wp_enqueue_script(
 			'doughboss',
 			DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss.js',
-			array(),
+			$deps,
 			DOUGHBOSS_VERSION,
 			true
 		);
@@ -94,6 +103,10 @@ class DoughBoss_Assets {
 				'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+				'payments' => array(
+					'enabled' => $payments_on,
+					'pk'      => $payments_on ? DoughBoss_Stripe::publishable_key() : '',
+				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),
 					'added'        => __( 'Added!', 'doughboss' ),
@@ -108,6 +121,10 @@ class DoughBoss_Assets {
 					'soldOut'      => __( 'Sold out', 'doughboss' ),
 					'chooseShop'   => __( 'Choose your shop', 'doughboss' ),
 					'genericError' => __( 'Something went wrong. Please try again.', 'doughboss' ),
+					'pay'          => __( 'Pay', 'doughboss' ),
+					'cardDetails'  => __( 'Card details', 'doughboss' ),
+					'payProcessing'=> __( 'Processing payment…', 'doughboss' ),
+					'cardError'    => __( 'Please check your card details and try again.', 'doughboss' ),
 				),
 			)
 		);

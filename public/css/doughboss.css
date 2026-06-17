@@ -282,6 +282,25 @@
 	min-height: 1rem;
 }
 
+/* Card payment (Stripe) --------------------------------------------- */
+.db-cardfield {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.db-field-label {
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.db-card-element {
+	padding: 0.7rem 0.75rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+	background: #fff;
+}
+
 .db-confirm {
 	border: 2px solid var(--db-accent);
 	border-radius: 10px;

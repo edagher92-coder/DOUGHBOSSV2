@@ -169,6 +169,22 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/payment-intent',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'create_payment_intent' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'order_type' => array(
+						'default'           => 'pickup',
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/checkout',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -293,6 +309,58 @@ class DoughBoss_REST_Controller {
 				'ordering_open'   => DoughBoss_Settings::ordering_open(),
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
+				'payments_enabled' => DoughBoss_Stripe::ready(),
+				'stripe_pk'        => DoughBoss_Stripe::ready() ? DoughBoss_Stripe::publishable_key() : '',
+			)
+		);
+	}
+
+	/**
+	 * POST /payment-intent — create a Stripe PaymentIntent for the current cart.
+	 *
+	 * Returns the client secret the browser needs to confirm the card payment.
+	 * The amount is computed server-side from the cart; it is re-verified against
+	 * the PaymentIntent again at checkout, so a tampered client cannot underpay.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function create_payment_intent( WP_REST_Request $request ) {
+		if ( ! DoughBoss_Stripe::ready() ) {
+			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		if ( $this->cart->is_empty() ) {
+			return new WP_Error( 'doughboss_empty', __( 'Your cart is empty.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
+		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+
+		$totals   = $this->cart->totals( $order_type );
+		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+		$amount   = DoughBoss_Stripe::to_minor_units( $totals['total'] );
+
+		$intent = DoughBoss_Stripe::create_payment_intent(
+			$amount,
+			$currency,
+			array(
+				'order_type' => $order_type,
+				'site'       => home_url(),
+			)
+		);
+
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+
+		return rest_ensure_response(
+			array(
+				'client_secret'   => $intent['client_secret'],
+				'payment_intent'  => $intent['id'],
+				'publishable_key' => DoughBoss_Stripe::publishable_key(),
+				'amount'          => $intent['amount'],
+				'currency'        => $intent['currency'],
 			)
 		);
 	}
@@ -569,6 +637,23 @@ class DoughBoss_REST_Controller {
 		$totals = $this->cart->totals( $order_type );
 		$lines  = $this->cart->get_lines();
 
+		// When Stripe is configured, the order is only accepted once a matching
+		// PaymentIntent has actually succeeded. The amount/currency are verified
+		// against this order's server-computed total, and each PaymentIntent can
+		// be used for at most one order.
+		$payment_status    = 'unpaid';
+		$payment_method    = '';
+		$payment_intent_id = '';
+		if ( DoughBoss_Stripe::ready() ) {
+			$verified = $this->verify_payment( $request, $totals['total'] );
+			if ( is_wp_error( $verified ) ) {
+				return $verified;
+			}
+			$payment_status    = 'paid';
+			$payment_method    = 'stripe';
+			$payment_intent_id = $verified;
+		}
+
 		$order_id = DoughBoss_Order::create(
 			array(
 				'order_type'     => $order_type,
@@ -582,6 +667,9 @@ class DoughBoss_REST_Controller {
 				'tax'            => $totals['tax'],
 				'delivery_fee'   => $totals['delivery_fee'],
 				'total'          => $totals['total'],
+				'payment_status'    => $payment_status,
+				'payment_method'    => $payment_method,
+				'payment_intent_id' => $payment_intent_id,
 			),
 			$lines
 		);
@@ -621,6 +709,45 @@ class DoughBoss_REST_Controller {
 		}
 		$key = is_string( $key ) ? trim( $key ) : '';
 		return '' !== $key ? md5( $key ) : '';
+	}
+
+	/**
+	 * Verify a Stripe PaymentIntent before an order is trusted as paid.
+	 *
+	 * Confirms the intent succeeded, that its amount and currency match this
+	 * order's server-computed total, and that it has not already been used for
+	 * another order. Returns the PaymentIntent id on success.
+	 *
+	 * @param WP_REST_Request $request        Request.
+	 * @param float           $expected_total Server-computed order total.
+	 * @return string|WP_Error PaymentIntent id, or an error.
+	 */
+	private function verify_payment( WP_REST_Request $request, $expected_total ) {
+		$pi_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
+		if ( '' === $pi_id ) {
+			return new WP_Error( 'doughboss_pay_required', __( 'Payment is required to place this order.', 'doughboss' ), array( 'status' => 402 ) );
+		}
+
+		if ( DoughBoss_Order::payment_intent_used( $pi_id ) ) {
+			return new WP_Error( 'doughboss_pay_used', __( 'This payment has already been used for an order.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		$intent = DoughBoss_Stripe::retrieve_payment_intent( $pi_id );
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+
+		$expected = DoughBoss_Stripe::to_minor_units( $expected_total );
+		$currency = strtolower( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) );
+		$status   = isset( $intent['status'] ) ? $intent['status'] : '';
+		$amount   = isset( $intent['amount'] ) ? (int) $intent['amount'] : 0;
+		$cur      = isset( $intent['currency'] ) ? strtolower( $intent['currency'] ) : '';
+
+		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency ) {
+			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your card payment. If you were charged it will be reversed automatically.', 'doughboss' ), array( 'status' => 402 ) );
+		}
+
+		return $pi_id;
 	}
 
 	/**

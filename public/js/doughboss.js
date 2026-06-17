@@ -14,8 +14,13 @@
 
 	var DATA = window.DoughBossData;
 	var I18N = DATA.i18n || {};
+	var PAY = DATA.payments || { enabled: false, pk: '' };
 	var configCache = null;
 	var locationsCache = null;
+
+	// Build a single Stripe instance when card payments are enabled and Stripe.js
+	// has loaded. Stays null otherwise, and the checkout falls back to no payment.
+	var stripe = (PAY.enabled && PAY.pk && typeof window.Stripe === 'function') ? window.Stripe(PAY.pk) : null;
 
 	/* ------------------------------------------------------------------ */
 	/* Helpers                                                            */
@@ -54,6 +59,9 @@
 		var headers = { 'Content-Type': 'application/json' };
 		if (options.method && options.method !== 'GET') {
 			headers['X-WP-Nonce'] = DATA.nonce;
+		}
+		if (options.headers) {
+			Object.keys(options.headers).forEach(function (k) { headers[k] = options.headers[k]; });
 		}
 		return fetch(DATA.restUrl + path, {
 			method: options.method || 'GET',
@@ -391,7 +399,7 @@
 			root.appendChild(totalsBlock(cart.totals, cfg));
 
 			// Checkout.
-			root.appendChild(checkoutForm(cfg, orderType, function () { return locationId; }));
+			root.appendChild(checkoutForm(cfg, orderType, function () { return locationId; }, cart.totals));
 		}
 
 		function onType(value) {
@@ -465,7 +473,7 @@
 		return block;
 	}
 
-	function checkoutForm(cfg, orderType, getLocationId) {
+	function checkoutForm(cfg, orderType, getLocationId, totals) {
 		var form = el('form', { class: 'db-checkout' });
 		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
 
@@ -477,17 +485,55 @@
 
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
-		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: I18N.placeOrder || 'Place order' });
+		// When Stripe is active, mount a card field and label the button "Pay $X".
+		var grandTotal = totals && typeof totals.total !== 'undefined' ? totals.total : 0;
+		var payLabel = stripe ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
+		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
 
 		form.appendChild(el('h3', { text: 'Checkout' }));
 		[name, email, phone, address, notes].forEach(function (f) { form.appendChild(f); });
+
+		var card = null;
+		if (stripe) {
+			var cardMount = el('div', { class: 'db-card-element' });
+			form.appendChild(el('div', { class: 'db-cardfield' }, [
+				el('span', { class: 'db-field-label', text: I18N.cardDetails || 'Card details' }),
+				cardMount
+			]));
+			var elements = stripe.elements();
+			card = elements.create('card', { hidePostalCode: true });
+			// Mount once the form is in the DOM (it is appended synchronously by draw()).
+			setTimeout(function () { try { card.mount(cardMount); } catch (e) {} }, 0);
+		}
+
 		form.appendChild(submit);
 		form.appendChild(msg);
+
+		function fail(err) {
+			msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
+			msg.className = 'db-checkout-msg db-error';
+			submit.disabled = false;
+			submit.textContent = payLabel;
+		}
+
+		function placeOrder(payload) {
+			// A fresh idempotency key per attempt: a dropped response can be retried
+			// without creating a duplicate order.
+			var idem = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + Math.random());
+			return request('/checkout', { method: 'POST', body: payload, headers: { 'Idempotency-Key': idem } }).then(function (res) {
+				form.parentNode.innerHTML = '';
+				form.parentNode.appendChild(el('div', { class: 'db-confirm' }, [
+					el('h3', { text: res.message }),
+					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
+					el('p', { text: (stripe ? 'Paid: ' : 'Total: ') + money(res.total) })
+				]));
+				notifyCartChanged();
+			});
+		}
 
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
 			submit.disabled = true;
-			submit.textContent = I18N.placing || 'Placing order…';
 			msg.textContent = '';
 			msg.className = 'db-checkout-msg';
 
@@ -501,20 +547,29 @@
 				notes: notes.querySelector('input,textarea').value
 			};
 
-			request('/checkout', { method: 'POST', body: payload }).then(function (res) {
-				form.parentNode.innerHTML = '';
-				form.parentNode.appendChild(el('div', { class: 'db-confirm' }, [
-					el('h3', { text: '🍕 ' + res.message }),
-					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
-					el('p', { text: 'Total charged: ' + money(res.total) })
-				]));
-				notifyCartChanged();
-			}).catch(function (err) {
-				msg.textContent = err.message;
-				msg.className = 'db-checkout-msg db-error';
-				submit.disabled = false;
-				submit.textContent = I18N.placeOrder || 'Place order';
-			});
+			if (stripe && card) {
+				// 1) create a PaymentIntent for the current cart, 2) confirm the card
+				// payment, 3) place the order with the confirmed PaymentIntent id —
+				// which the server re-verifies before accepting the order as paid.
+				submit.textContent = I18N.payProcessing || 'Processing payment…';
+				request('/payment-intent', { method: 'POST', body: { order_type: orderType } }).then(function (pi) {
+					return stripe.confirmCardPayment(pi.client_secret, {
+						payment_method: {
+							card: card,
+							billing_details: { name: payload.customer_name, email: payload.customer_email }
+						}
+					}).then(function (result) {
+						if (result.error) {
+							throw new Error(result.error.message || (I18N.cardError || 'Card error'));
+						}
+						payload.payment_intent_id = result.paymentIntent.id;
+						return placeOrder(payload);
+					});
+				}).catch(fail);
+			} else {
+				submit.textContent = I18N.placing || 'Placing order…';
+				placeOrder(payload).catch(fail);
+			}
 		});
 
 		return form;

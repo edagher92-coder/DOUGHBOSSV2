@@ -9,8 +9,8 @@ owner Orders + Settings admin, and an **in-progress** Stripe card-payment layer
 (scaffolded, off by default). It is a plugin you install into WordPress — there
 is no separate service to "connect". `docs/` holds the product/owner/dev PDFs.
 
-- **Plugin version:** `2.4.0` (`DOUGHBOSS_VERSION`)
-- **DB schema version:** `1.3.0` (`DOUGHBOSS_DB_VERSION` / option `doughboss_db_version`)
+- **Plugin version:** `2.5.0` (`DOUGHBOSS_VERSION`)
+- **DB schema version:** `1.4.0` (`DOUGHBOSS_DB_VERSION` / option `doughboss_db_version`)
 - **Requires:** WordPress 6.0+, PHP 7.4+ · **Text domain:** `doughboss` · **License:** GPL-2.0-or-later
 - **REST namespace:** `doughboss/v1` (`DOUGHBOSS_REST_NAMESPACE`)
 
@@ -25,7 +25,7 @@ is no separate service to "connect". `docs/` holds the product/owner/dev PDFs.
 - `includes/class-doughboss-post-types.php` — `doughboss_item` CPT + `doughboss_category` taxonomy + price/type/availability meta, meta box, list-table columns + sold-out toggle.
 - `includes/class-doughboss-cart.php` — cookie-token + transient guest cart, server-side pricing/totals (GST-inclusive math), qty/line caps.
 - `includes/class-doughboss-order.php` — orders/items data model; transactional create with order-number collision retry; statuses, board/active queries, admin `query()`.
-- `includes/class-doughboss-stripe.php` — **dependency-free** Stripe PaymentIntents client over `wp_remote_*` (create/retrieve). Loaded but **NOT yet wired** into REST/checkout/front-end (inert, off by default).
+- `includes/class-doughboss-stripe.php` — **dependency-free** Stripe PaymentIntents client over `wp_remote_*` (create/retrieve). Wired into `/payment-intent` + checkout verification + the front-end card field; **off by default** until `stripe_ready()` (payments on + keys set).
 - `includes/class-doughboss-rest-controller.php` — all `doughboss/v1` routes: config, menu, locations, cart/*, checkout, order tracking, admin board/status/ack/accept.
 - `includes/class-doughboss-shortcodes.php` — 5 shortcode containers hydrated by JS: `[doughboss_menu]`, `[doughboss_builder]`, `[doughboss_cart]`, `[doughboss_order_tracking]`, `[doughboss_shop_picker]`.
 - `includes/class-doughboss-assets.php` — conditional storefront enqueue (only on pages with a shortcode, or `doughboss_load_assets` filter); localizes `DoughBossData` (restUrl, `wp_rest` nonce, i18n).
@@ -86,17 +86,13 @@ The walkthrough uses `@page { size: A4 landscape; margin: 0; }`; the proposal/pl
 
 ## Current state & roadmap
 - **Shipped:** menu CPT + builder, cart/checkout, order tracking, admin Orders/Settings, multi-shop locations + routing, Live Order Board (KDS), AUD/GST, per-item availability + shop picker (2.4.0).
-- **In progress — Stripe wiring (the main open task).** The pieces exist (`DoughBoss_Stripe` client + `DoughBoss_Settings` payment helpers, off by default) but are **not connected**. Remaining work:
-  1. REST endpoint to create a PaymentIntent (gate on `DoughBoss_Stripe::ready()`),
-  2. checkout enforcement — verify the PaymentIntent server-side (amount/status) before trusting an order as paid (a `payments`/status field/table is not yet modelled),
-  3. front-end card field (Stripe Elements) in the cart, using the publishable key only.
-  Keep test mode first; server stays source of truth for totals; never expose the secret key.
-- **Roadmap (not yet implemented):** webhook as payment source-of-truth, push transport (Ably/Pusher) + live customer tracking, receipt printing/SMS, scheduled time slots, per-item toppings, catering packages with deposits (mentioned in product docs; **no catering/deposit code exists in the repo yet**).
+- **Stripe card payments — wired (2.5.0), off by default.** `POST /payment-intent` creates an intent for the cart total; `confirmCardPayment` runs client-side with a Stripe Elements card field; `/checkout` re-verifies the PaymentIntent server-side (status `succeeded` + amount + currency must match the server total) and blocks PI replay (`DoughBoss_Order::payment_intent_used`). Orders store `payment_status`/`payment_method`/`payment_intent_id`. Server stays source of truth for totals; secret key never leaves the server; Stripe.js loads only when configured.
+- **Roadmap (not yet implemented):** Stripe **webhook** as the authoritative payment source-of-truth (current flow verifies via API on checkout), refunds surfaced in the order board, push transport (Ably/Pusher) + live customer tracking, receipt printing/SMS, scheduled time slots, per-item toppings, catering packages with deposits (mentioned in product docs; **no catering/deposit code exists in the repo yet**).
 - **Docs deliverable:** product/owner/dev PDFs live in `docs/` (`Owner-Report.md`, `DoughBoss-*.html` → `.pdf`, walkthrough PNGs). Skills/tooling review: `docs/Skills-and-Tooling-Review.md`.
 
 ## Gotchas
 - The "catering packages with deposits" feature is described in product docs but **has zero code** in the repo — don't assume it exists.
-- `DoughBoss_Stripe` is `require`d in the loader but unreferenced by checkout/REST/front-end — it is intentionally inert until `payments_enabled` + keys are set. Do not assume payments flow yet.
+- Stripe is **off unless `DoughBoss_Stripe::ready()`** (payments enabled AND publishable+secret keys set for the active test/live mode). When off, `/checkout` behaves exactly as before (no payment required); when on, an order with no verified PaymentIntent is rejected (402).
 - `php` may not be on `$PATH`; the verifier falls back to `/usr/bin/php`.
 - Read-only public REST routes (`/config`, `/menu`, `/locations`, `/order/{n}`) use `__return_true` **by design** — don't "fix" them with nonces; order tracking is gated by matching email instead (and returns the same error for not-found vs. mismatch to avoid leaking order existence).
 - `dbDelta` is additive only — schema changes go through `create_tables()` (for columns) **plus** a version-gated migration step (for caps/data) **plus** bumping `DOUGHBOSS_DB_VERSION`.

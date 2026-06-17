@@ -3,7 +3,7 @@
  * Plugin Name:       DoughBoss
  * Plugin URI:        https://github.com/edagher92-coder/doughbossv2
  * Description:        Pizza & food ordering for WordPress — menu management, a custom pizza builder, online ordering, and order tracking.
- * Version:           2.4.0
+ * Version:           2.5.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            DoughBoss
@@ -23,12 +23,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Current plugin version.
  */
-define( 'DOUGHBOSS_VERSION', '2.4.0' );
+define( 'DOUGHBOSS_VERSION', '2.5.0' );
 
 /**
  * Database schema version. Bump when the schema in the activator changes.
  */
-define( 'DOUGHBOSS_DB_VERSION', '1.3.0' );
+define( 'DOUGHBOSS_DB_VERSION', '1.4.0' );
 
 define( 'DOUGHBOSS_PLUGIN_FILE', __FILE__ );
 define( 'DOUGHBOSS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );

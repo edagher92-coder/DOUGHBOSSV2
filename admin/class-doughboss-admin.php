@@ -132,6 +132,15 @@ class DoughBoss_Admin {
 		$clean['enable_delivery'] = empty( $input['enable_delivery'] ) ? 0 : 1;
 		$clean['ordering_open']   = empty( $input['ordering_open'] ) ? 0 : 1;
 
+		// Payments (Stripe). Keys are stored for the active mode; secret keys are
+		// only ever used in server-side calls and are never sent to the browser.
+		$clean['payments_enabled'] = empty( $input['payments_enabled'] ) ? 0 : 1;
+		$clean['stripe_mode']      = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
+		$clean['stripe_test_pk']   = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
+		$clean['stripe_test_sk']   = isset( $input['stripe_test_sk'] ) ? sanitize_text_field( $input['stripe_test_sk'] ) : '';
+		$clean['stripe_live_pk']   = isset( $input['stripe_live_pk'] ) ? sanitize_text_field( $input['stripe_live_pk'] ) : '';
+		$clean['stripe_live_sk']   = isset( $input['stripe_live_sk'] ) ? sanitize_text_field( $input['stripe_live_sk'] ) : '';
+
 		$clean['sizes']    = $this->sanitize_rows( isset( $input['sizes'] ) ? $input['sizes'] : array() );
 		$clean['toppings'] = $this->sanitize_rows( isset( $input['toppings'] ) ? $input['toppings'] : array() );
 
@@ -678,7 +687,52 @@ JS;
 				<p class="description"><?php esc_html_e( 'Each topping and the price added when selected in the builder.', 'doughboss' ); ?></p>
 				<?php $this->render_repeater( 'toppings', $settings['toppings'], $opt ); ?>
 
-				<?php submit_button(); ?>
+				<h2><?php esc_html_e( 'Payments (Stripe)', 'doughboss' ); ?></h2>
+					<p class="description">
+						<?php esc_html_e( 'Optional. Take card payments at checkout via Stripe. Off by default — start in Test mode with your test keys, then switch to Live. Card payments apply only once payments are on AND keys are set for the active mode.', 'doughboss' ); ?>
+						<?php
+						if ( ! class_exists( 'DoughBoss_Stripe' ) || ! DoughBoss_Stripe::ready() ) {
+							echo ' <strong>' . esc_html__( 'Status: card payments are OFF.', 'doughboss' ) . '</strong>';
+						} else {
+							/* translators: %s: Stripe mode (Test or Live). */
+							echo ' <strong style="color:#1f8a54;">' . esc_html( sprintf( __( 'Status: card payments are ON (%s mode).', 'doughboss' ), DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' ) ) ) . '</strong>';
+						}
+						?>
+					</p>
+					<?php $mode = isset( $settings['stripe_mode'] ) && 'live' === $settings['stripe_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th><label for="db-payments-enabled"><?php esc_html_e( 'Accept card payments', 'doughboss' ); ?></label></th>
+							<td><input type="checkbox" id="db-payments-enabled" name="<?php echo esc_attr( $opt ); ?>[payments_enabled]" value="1" <?php checked( ! empty( $settings['payments_enabled'] ), true ); ?> />
+								<span class="description"><?php esc_html_e( 'When on (and keys are set for the active mode), customers pay by card before the order is placed.', 'doughboss' ); ?></span></td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[stripe_mode]" value="test" <?php checked( 'test' === $mode, true ); ?> /> <?php esc_html_e( 'Test', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[stripe_mode]" value="live" <?php checked( 'live' === $mode, true ); ?> /> <?php esc_html_e( 'Live', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="db-stripe-test-pk"><?php esc_html_e( 'Test publishable key', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-stripe-test-pk" class="regular-text" autocomplete="off" placeholder="pk_test_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_pk]" value="<?php echo esc_attr( isset( $settings['stripe_test_pk'] ) ? $settings['stripe_test_pk'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-stripe-test-sk"><?php esc_html_e( 'Test secret key', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-stripe-test-sk" class="regular-text" autocomplete="off" placeholder="sk_test_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_sk]" value="<?php echo esc_attr( isset( $settings['stripe_test_sk'] ) ? $settings['stripe_test_sk'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-stripe-live-pk"><?php esc_html_e( 'Live publishable key', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-stripe-live-pk" class="regular-text" autocomplete="off" placeholder="pk_live_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_pk]" value="<?php echo esc_attr( isset( $settings['stripe_live_pk'] ) ? $settings['stripe_live_pk'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-stripe-live-sk"><?php esc_html_e( 'Live secret key', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-stripe-live-sk" class="regular-text" autocomplete="off" placeholder="sk_live_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_sk]" value="<?php echo esc_attr( isset( $settings['stripe_live_sk'] ) ? $settings['stripe_live_sk'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Find your keys in the Stripe Dashboard → Developers → API keys. Secret keys are used only on the server.', 'doughboss' ); ?></p></td>
+						</tr>
+					</table>
+
+					<?php submit_button(); ?>
 			</form>
 		</div>
 		<?php

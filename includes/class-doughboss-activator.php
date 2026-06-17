@@ -66,6 +66,9 @@ class DoughBoss_Activator {
 			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
 			total decimal(10,2) NOT NULL DEFAULT 0.00,
 			currency varchar(10) NOT NULL DEFAULT 'AUD',
+			payment_status varchar(20) NOT NULL DEFAULT 'unpaid',
+			payment_method varchar(20) NOT NULL DEFAULT '',
+			payment_intent_id varchar(64) NOT NULL DEFAULT '',
 			eta_minutes int(11) NOT NULL DEFAULT 0,
 			seen_at datetime NULL DEFAULT NULL,
 			acknowledged_at datetime NULL DEFAULT NULL,
@@ -76,7 +79,8 @@ class DoughBoss_Activator {
 			UNIQUE KEY order_number (order_number),
 			KEY status (status),
 			KEY customer_email (customer_email),
-			KEY location_id (location_id)
+			KEY location_id (location_id),
+			KEY payment_intent_id (payment_intent_id)
 		) {$charset_collate};";
 
 		$sql_items = "CREATE TABLE {$order_items} (

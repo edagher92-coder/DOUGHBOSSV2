@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.4.0
+Stable tag: 2.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,6 +51,18 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.5.0 =
+* New: **card payments via Stripe** (optional, off by default). Enable it under
+  DoughBoss → Settings → Payments and add your keys; start in **Test** mode with
+  test keys, then switch to **Live**. When on, customers pay by card at checkout
+  before the order is placed.
+* Security: payments are verified **server-side** — the order is only accepted as
+  paid once Stripe confirms a PaymentIntent that matches the order’s
+  server-computed amount and currency, and each PaymentIntent can be used for at
+  most one order. Secret keys never leave the server; Stripe.js loads only when
+  payments are configured. Orders now record payment status, method and intent.
+* No change for sites that don’t enable payments: checkout works exactly as before.
 
 = 2.4.0 =
 * New: **per-item availability** — mark any menu item “sold out” from the item

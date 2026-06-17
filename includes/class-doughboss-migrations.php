@@ -47,6 +47,9 @@ class DoughBoss_Migrations {
 		if ( version_compare( $installed, '1.3.0', '<' ) ) {
 			self::upgrade_to_1_3_0();
 		}
+		if ( version_compare( $installed, '1.4.0', '<' ) ) {
+			self::upgrade_to_1_4_0();
+		}
 
 		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 	}
@@ -108,5 +111,19 @@ class DoughBoss_Migrations {
 		if ( $changed ) {
 			update_option( DoughBoss_Settings::OPTION_KEY, $settings );
 		}
+	}
+
+	/**
+	 * 1.4.0 — optional Stripe card payments.
+	 *
+	 * The orders.payment_status / payment_method / payment_intent_id columns are
+	 * added by dbDelta via create_tables(); existing orders default to 'unpaid'.
+	 * Payments stay off until an operator enables them and saves keys, so there
+	 * is no data to backfill here.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_4_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
 	}
 }
