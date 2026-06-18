@@ -116,5 +116,7 @@ A Google Gemini API key is available and the endpoint (`generativelanguage.googl
   - **Images** — `imagen-4.0-fast-generate-001` for bulk/iteration (used for the prototype menu shots); `imagen-4.0-generate-001` / `imagen-4.0-ultra-generate-001` for hero/quality; `gemini-2.5-flash-image` for edits/compositing.
 - **Access patterns:**
   - REST: `POST https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent` with header `X-goog-api-key: $GEMINI_API_KEY` (Imagen uses `:predict` with `{"instances":[{"prompt":...}],"parameters":{"sampleCount":1,"aspectRatio":"1:1"}}`).
-  - SDK: `from google import genai; client = genai.Client(api_key=os.environ["GEMINI_API_KEY"]); client.models.generate_content(model="gemini-2.5-pro", contents="…")`.
+  - Google SDK: `from google import genai; client = genai.Client(api_key=os.environ["GEMINI_API_KEY"]); client.models.generate_content(model="gemini-2.5-pro", contents="…")`.
+  - OpenAI-compatible (reuse existing OpenAI code, change only baseURL + model): base URL `https://generativelanguage.googleapis.com/v1beta/openai/`, `apiKey`/`api_key` = `GEMINI_API_KEY`, then `chat.completions.create({ model: "gemini-2.5-pro", messages: [...] })`.
 - Resize/recompress generated images (Pillow → JPEG ~480px q80) before embedding so deliverables stay small and self-contained.
+- **Efficiency:** use `scripts/gemini.py` (prompt-hash cache + model tiering, `--dry-run`); reuse cached assets on rebuilds — the interactive prototype reuses 8 cached images = **0 new calls**. Full prompt library, Claude×Gemini routing and the caching method: `docs/Gemini-Claude-Playbook.md`.
