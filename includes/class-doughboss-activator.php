@@ -26,7 +26,9 @@ class DoughBoss_Activator {
 
 		// Register post types so rewrite rules exist, then flush them.
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-post-types.php';
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-catering-package.php';
 		DoughBoss_Post_Types::register();
+		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
 		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
@@ -49,6 +51,7 @@ class DoughBoss_Activator {
 		$orders          = $wpdb->prefix . 'doughboss_orders';
 		$order_items     = $wpdb->prefix . 'doughboss_order_items';
 		$locations       = $wpdb->prefix . 'doughboss_locations';
+		$catering        = $wpdb->prefix . 'doughboss_catering_enquiries';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -115,9 +118,48 @@ class DoughBoss_Activator {
 			KEY is_active (is_active)
 		) {$charset_collate};";
 
+		$sql_catering = "CREATE TABLE {$catering} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			enquiry_number varchar(32) NOT NULL,
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			package_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			status varchar(20) NOT NULL DEFAULT 'new',
+			customer_name varchar(191) NOT NULL DEFAULT '',
+			customer_email varchar(191) NOT NULL DEFAULT '',
+			customer_phone varchar(40) NOT NULL DEFAULT '',
+			event_date date NULL DEFAULT NULL,
+			event_time varchar(20) NOT NULL DEFAULT '',
+			guest_count int(11) NOT NULL DEFAULT 0,
+			order_type varchar(20) NOT NULL DEFAULT 'pickup',
+			address text NULL,
+			dietary text NULL,
+			notes text NULL,
+			subtotal decimal(10,2) NOT NULL DEFAULT 0.00,
+			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
+			quote_total decimal(10,2) NOT NULL DEFAULT 0.00,
+			deposit_amount decimal(10,2) NOT NULL DEFAULT 0.00,
+			balance_amount decimal(10,2) NOT NULL DEFAULT 0.00,
+			currency varchar(10) NOT NULL DEFAULT 'AUD',
+			deposit_intent_id varchar(64) NOT NULL DEFAULT '',
+			balance_intent_id varchar(64) NOT NULL DEFAULT '',
+			deposit_paid_at datetime NULL DEFAULT NULL,
+			balance_paid_at datetime NULL DEFAULT NULL,
+			quoted_at datetime NULL DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			UNIQUE KEY enquiry_number (enquiry_number),
+			KEY status (status),
+			KEY location_id (location_id),
+			KEY customer_email (customer_email),
+			KEY event_date (event_date),
+			KEY deposit_intent_id (deposit_intent_id)
+		) {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
 		dbDelta( $sql_locations );
+		dbDelta( $sql_catering );
 	}
 
 	/**

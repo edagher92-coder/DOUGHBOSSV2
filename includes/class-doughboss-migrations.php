@@ -50,6 +50,9 @@ class DoughBoss_Migrations {
 		if ( version_compare( $installed, '1.4.0', '<' ) ) {
 			self::upgrade_to_1_4_0();
 		}
+		if ( version_compare( $installed, '1.5.0', '<' ) ) {
+			self::upgrade_to_1_5_0();
+		}
 
 		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 	}
@@ -124,6 +127,19 @@ class DoughBoss_Migrations {
 	 * @return void
 	 */
 	private static function upgrade_to_1_4_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.5.0 — catering: enquiries table + the catering-package post type.
+	 *
+	 * The {prefix}doughboss_catering_enquiries table is created by dbDelta via
+	 * create_tables(); catering management reuses the existing manage_doughboss
+	 * capability, so there are no new roles/caps to add and no data to backfill.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_5_0() {
 		// Schema handled by create_tables(); nothing else to migrate.
 	}
 }

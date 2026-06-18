@@ -73,6 +73,8 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-post-types.php';
 		require_once $dir . 'class-doughboss-cart.php';
 		require_once $dir . 'class-doughboss-order.php';
+		require_once $dir . 'class-doughboss-catering-package.php';
+		require_once $dir . 'class-doughboss-catering.php';
 		require_once $dir . 'class-doughboss-stripe.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
@@ -104,6 +106,7 @@ final class DoughBoss {
 		$this->cart = new DoughBoss_Cart();
 
 		( new DoughBoss_Post_Types() )->init();
+		( new DoughBoss_Catering_Package() )->init();
 		( new DoughBoss_Shortcodes() )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();

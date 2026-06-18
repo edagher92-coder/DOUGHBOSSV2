@@ -28,7 +28,7 @@ define( 'DOUGHBOSS_VERSION', '2.5.0' );
 /**
  * Database schema version. Bump when the schema in the activator changes.
  */
-define( 'DOUGHBOSS_DB_VERSION', '1.4.0' );
+define( 'DOUGHBOSS_DB_VERSION', '1.5.0' );
 
 define( 'DOUGHBOSS_PLUGIN_FILE', __FILE__ );
 define( 'DOUGHBOSS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
