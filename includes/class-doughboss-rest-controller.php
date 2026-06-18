@@ -263,6 +263,120 @@ class DoughBoss_REST_Controller {
 				),
 			)
 		);
+
+		// Catering — published packages for the catering page (public).
+		register_rest_route(
+			$ns,
+			'/catering/packages',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_catering_packages' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		// Catering — indicative quote for a package + headcount (public, read-only).
+		register_rest_route(
+			$ns,
+			'/catering/quote',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_catering_quote' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'package_id'  => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+					'guest_count' => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+					'order_type'  => array(
+						'default'           => 'pickup',
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
+			)
+		);
+
+		// Catering — submit an enquiry (lead capture). Nonce-gated like cart routes.
+		register_rest_route(
+			$ns,
+			'/catering/enquiry',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'create_catering_enquiry' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'customer_name'  => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'customer_email' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_email',
+					),
+					'customer_phone' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'package_id'     => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+					'guest_count'    => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+					'order_type'     => array(
+						'default'           => 'pickup',
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'event_date'     => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'event_time'     => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'address'        => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_textarea_field',
+					),
+					'dietary'        => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_textarea_field',
+					),
+					'notes'          => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_textarea_field',
+					),
+					'location_id'    => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		// Catering — staff status update for an enquiry.
+		register_rest_route(
+			$ns,
+			'/admin/catering/(?P<id>\d+)/status',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_update_catering_status' ),
+				'permission_callback' => array( $this, 'verify_admin' ),
+				'args'                => array(
+					'status' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
+			)
+		);
 	}
 
 	/**
@@ -827,6 +941,173 @@ class DoughBoss_REST_Controller {
 		}
 
 		return rest_ensure_response( array( 'success' => true, 'status' => 'confirmed', 'eta' => $eta ) );
+	}
+
+	/**
+	 * GET /catering/packages — published catering packages for the catering page.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function get_catering_packages() {
+		$posts = get_posts(
+			array(
+				'post_type'   => DoughBoss_Catering_Package::POST_TYPE,
+				'post_status' => 'publish',
+				'numberposts' => 50,
+				'orderby'     => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
+			)
+		);
+
+		$out = array();
+		foreach ( $posts as $post ) {
+			$id    = $post->ID;
+			$thumb = get_the_post_thumbnail_url( $id, 'large' );
+			$out[] = array(
+				'id'          => $id,
+				'name'        => get_the_title( $post ),
+				'description' => wp_strip_all_tags( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
+				'serves_min'  => (int) get_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MIN, true ),
+				'serves_max'  => (int) get_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MAX, true ),
+				'price'       => (float) get_post_meta( $id, DoughBoss_Catering_Package::META_BASE_PRICE, true ),
+				'per_head'    => (float) get_post_meta( $id, DoughBoss_Catering_Package::META_PER_HEAD, true ),
+				'deposit_pct' => DoughBoss_Catering_Package::deposit_pct( $id ),
+				'lead_days'   => DoughBoss_Catering_Package::lead_days( $id ),
+				'includes'    => (string) get_post_meta( $id, DoughBoss_Catering_Package::META_INCLUDES, true ),
+				'image'       => $thumb ? $thumb : '',
+			);
+		}
+
+		return rest_ensure_response( $out );
+	}
+
+	/**
+	 * GET /catering/quote — indicative, server-computed quote for a package.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_catering_quote( WP_REST_Request $request ) {
+		$quote = DoughBoss_Catering::quote(
+			absint( $request->get_param( 'package_id' ) ),
+			absint( $request->get_param( 'guest_count' ) ),
+			sanitize_key( $request->get_param( 'order_type' ) )
+		);
+		return rest_ensure_response( $quote );
+	}
+
+	/**
+	 * POST /catering/enquiry — capture a catering enquiry and route it to a shop.
+	 *
+	 * Pricing is recomputed server-side; the delivery fee and final total are
+	 * confirmed by staff at the quote stage (status: new → quoted), after which
+	 * the deposit is collected.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function create_catering_enquiry( WP_REST_Request $request ) {
+		// Route the enquiry to a shop: a valid selected location, else the default.
+		$location_id = absint( $request->get_param( 'location_id' ) );
+		if ( DoughBoss_Locations::count() > 0 && ! DoughBoss_Locations::is_valid( $location_id ) ) {
+			$location_id = DoughBoss_Locations::default_id();
+		}
+
+		$id = DoughBoss_Catering::create(
+			array(
+				'customer_name'  => $request->get_param( 'customer_name' ),
+				'customer_email' => $request->get_param( 'customer_email' ),
+				'customer_phone' => $request->get_param( 'customer_phone' ),
+				'package_id'     => $request->get_param( 'package_id' ),
+				'guest_count'    => $request->get_param( 'guest_count' ),
+				'order_type'     => $request->get_param( 'order_type' ),
+				'event_date'     => $request->get_param( 'event_date' ),
+				'event_time'     => $request->get_param( 'event_time' ),
+				'address'        => $request->get_param( 'address' ),
+				'dietary'        => $request->get_param( 'dietary' ),
+				'notes'          => $request->get_param( 'notes' ),
+				'location_id'    => $location_id,
+			)
+		);
+
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+
+		$enquiry = DoughBoss_Catering::get( $id );
+		$this->send_catering_notification( $enquiry );
+
+		return rest_ensure_response(
+			array(
+				'success'        => true,
+				'enquiry_number' => $enquiry['enquiry_number'],
+				'deposit'        => (float) $enquiry['deposit_amount'],
+				'total'          => (float) $enquiry['quote_total'],
+				'message'        => __( "Thanks! Your catering enquiry is in — we'll confirm the details and send your deposit link shortly.", 'doughboss' ),
+			)
+		);
+	}
+
+	/**
+	 * POST /admin/catering/{id}/status — staff lifecycle update for an enquiry.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_update_catering_status( WP_REST_Request $request ) {
+		$id     = absint( $request->get_param( 'id' ) );
+		$status = sanitize_key( $request->get_param( 'status' ) );
+
+		if ( ! DoughBoss_Catering::update_status( $id, $status ) ) {
+			return new WP_Error( 'doughboss_catering_status', __( 'Could not update that enquiry.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		return rest_ensure_response(
+			array(
+				'success' => true,
+				'status'  => $status,
+			)
+		);
+	}
+
+	/**
+	 * Email the customer their catering enquiry summary, and notify the shop.
+	 *
+	 * @param array<string,mixed> $enquiry Stored enquiry row.
+	 * @return void
+	 */
+	private function send_catering_notification( $enquiry ) {
+		if ( ! is_array( $enquiry ) ) {
+			return;
+		}
+
+		$blog = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
+		/* translators: 1: site name, 2: enquiry number. */
+		$subject = sprintf( __( '[%1$s] Catering enquiry %2$s received', 'doughboss' ), $blog, $enquiry['enquiry_number'] );
+
+		$package = (int) $enquiry['package_id'] ? get_the_title( (int) $enquiry['package_id'] ) : __( 'Custom', 'doughboss' );
+
+		$body = sprintf(
+			/* translators: 1: name, 2: enquiry number, 3: package, 4: guests, 5: event date, 6: deposit. */
+			__( "Hi %1\$s,\n\nThanks for your catering enquiry %2\$s.\n\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nIndicative deposit: %6\$s\n\nWe'll confirm the details and send your deposit link shortly.\n", 'doughboss' ),
+			$enquiry['customer_name'],
+			$enquiry['enquiry_number'],
+			$package,
+			(int) $enquiry['guest_count'],
+			'' !== $enquiry['event_date'] ? $enquiry['event_date'] : __( 'to be confirmed', 'doughboss' ),
+			DoughBoss_Settings::format_price( $enquiry['deposit_amount'] )
+		);
+
+		if ( is_email( $enquiry['customer_email'] ) ) {
+			wp_mail( $enquiry['customer_email'], $subject, $body );
+		}
+
+		$admin_email = get_option( 'admin_email' );
+		if ( is_email( $admin_email ) ) {
+			wp_mail( $admin_email, $subject, $body );
+		}
 	}
 
 	/**

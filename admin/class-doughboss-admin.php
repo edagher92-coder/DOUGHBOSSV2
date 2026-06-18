@@ -67,6 +67,15 @@ class DoughBoss_Admin {
 
 		add_submenu_page(
 			'doughboss',
+			__( 'Catering Enquiries', 'doughboss' ),
+			__( 'Catering', 'doughboss' ),
+			$this->cap(),
+			'doughboss-catering',
+			array( $this, 'render_catering_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
 			__( 'Shops / Locations', 'doughboss' ),
 			__( 'Shops', 'doughboss' ),
 			$this->cap(),
@@ -267,10 +276,15 @@ class DoughBoss_Admin {
 (function () {
 	document.addEventListener('change', function (e) {
 		var sel = e.target;
-		if (!sel.matches('.db-status-select')) { return; }
-		var id = sel.getAttribute('data-order');
+		var isOrder = sel.matches('.db-status-select');
+		var isCatering = sel.matches('.db-catering-status');
+		if (!isOrder && !isCatering) { return; }
+		var id = sel.getAttribute(isOrder ? 'data-order' : 'data-enquiry');
+		var endpoint = isOrder
+			? DoughBossAdmin.restUrl + '/admin/order/' + id + '/status'
+			: DoughBossAdmin.restUrl + '/admin/catering/' + id + '/status';
 		sel.disabled = true;
-		fetch(DoughBossAdmin.restUrl + '/admin/order/' + id + '/status', {
+		fetch(endpoint, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
 			body: JSON.stringify({ status: sel.value })
@@ -278,7 +292,7 @@ class DoughBoss_Admin {
 			sel.disabled = false;
 			var row = sel.closest('tr');
 			if (row) { row.style.transition = 'background .6s'; row.style.background = '#eaffea'; setTimeout(function(){ row.style.background=''; }, 800); }
-		}).catch(function () { sel.disabled = false; alert('Could not update order status.'); });
+		}).catch(function () { sel.disabled = false; alert('Could not update status.'); });
 	});
 
 	document.addEventListener('click', function (e) {
@@ -393,6 +407,130 @@ JS;
 									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>">
 										<?php foreach ( $statuses as $key => $label ) : ?>
 											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $order->status, $key ); ?>>
+												<?php echo esc_html( $label ); ?>
+											</option>
+										<?php endforeach; ?>
+									</select>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+			<?php if ( $total_pages > 1 ) : ?>
+				<div class="tablenav"><div class="tablenav-pages">
+					<?php
+					echo wp_kses_post(
+						paginate_links(
+							array(
+								'base'      => add_query_arg( 'paged', '%#%' ),
+								'format'    => '',
+								'current'   => $paged,
+								'total'     => $total_pages,
+								'prev_text' => '‹',
+								'next_text' => '›',
+							)
+						)
+					);
+					?>
+				</div></div>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the Catering Enquiries management page.
+	 *
+	 * @return void
+	 */
+	public function render_catering_page() {
+		if ( ! current_user_can( $this->cap() ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+
+		$paged  = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$status = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+		$per_page = 20;
+		$result   = DoughBoss_Catering::query(
+			array(
+				'status'   => $status,
+				'search'   => $search,
+				'per_page' => $per_page,
+				'page'     => $paged,
+			)
+		);
+
+		$statuses    = DoughBoss_Catering::statuses();
+		$total_pages = (int) ceil( $result['total'] / $per_page );
+		?>
+		<div class="wrap doughboss-orders">
+			<h1><?php esc_html_e( 'Catering Enquiries', 'doughboss' ); ?></h1>
+
+			<form method="get" class="db-orders-filter">
+				<input type="hidden" name="page" value="doughboss-catering" />
+				<select name="status">
+					<option value=""><?php esc_html_e( 'All statuses', 'doughboss' ); ?></option>
+					<?php foreach ( $statuses as $key => $label ) : ?>
+						<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $status, $key ); ?>>
+							<?php echo esc_html( $label ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+				<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php esc_attr_e( 'Search enquiries…', 'doughboss' ); ?>" />
+				<button class="button"><?php esc_html_e( 'Filter', 'doughboss' ); ?></button>
+			</form>
+
+			<table class="wp-list-table widefat fixed striped">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Enquiry #', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Customer', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Event', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Package', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Guests', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Quote / Deposit', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Received', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Status', 'doughboss' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( empty( $result['items'] ) ) : ?>
+						<tr><td colspan="8"><?php esc_html_e( 'No catering enquiries yet.', 'doughboss' ); ?></td></tr>
+					<?php else : ?>
+						<?php foreach ( $result['items'] as $row ) : ?>
+							<?php
+							$package = (int) $row['package_id'] ? get_the_title( (int) $row['package_id'] ) : __( 'Custom', 'doughboss' );
+							$event   = '';
+							if ( ! empty( $row['event_date'] ) ) {
+								$event = mysql2date( 'M j, Y', $row['event_date'] );
+								if ( ! empty( $row['event_time'] ) ) {
+									$event .= ' · ' . $row['event_time'];
+								}
+							}
+							?>
+							<tr>
+								<td><strong><?php echo esc_html( $row['enquiry_number'] ); ?></strong><br /><small><?php echo esc_html( ucfirst( $row['order_type'] ) ); ?></small></td>
+								<td>
+									<?php echo esc_html( $row['customer_name'] ); ?><br />
+									<small><?php echo esc_html( $row['customer_email'] ); ?></small><br />
+									<small><?php echo esc_html( $row['customer_phone'] ); ?></small>
+								</td>
+								<td><?php echo $event ? esc_html( $event ) : '—'; ?></td>
+								<td><?php echo esc_html( $package ? $package : '—' ); ?></td>
+								<td><?php echo esc_html( (int) $row['guest_count'] ? (string) (int) $row['guest_count'] : '—' ); ?></td>
+								<td>
+									<?php echo esc_html( DoughBoss_Settings::format_price( $row['quote_total'] ) ); ?><br />
+									<small><?php echo esc_html( DoughBoss_Settings::format_price( $row['deposit_amount'] ) ); ?> <?php esc_html_e( 'deposit', 'doughboss' ); ?></small>
+								</td>
+								<td><?php echo esc_html( mysql2date( 'M j, g:i a', $row['created_at'] ) ); ?></td>
+								<td>
+									<select class="db-catering-status" data-enquiry="<?php echo esc_attr( $row['id'] ); ?>">
+										<?php foreach ( $statuses as $key => $label ) : ?>
+											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $row['status'], $key ); ?>>
 												<?php echo esc_html( $label ); ?>
 											</option>
 										<?php endforeach; ?>

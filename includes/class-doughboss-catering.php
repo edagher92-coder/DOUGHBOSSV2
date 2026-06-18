@@ -138,7 +138,7 @@ class DoughBoss_Catering {
 		$mail = isset( $data['customer_email'] ) ? sanitize_email( $data['customer_email'] ) : '';
 
 		if ( '' === $name || ! is_email( $mail ) ) {
-			return new WP_Error( 'doughboss_catering_invalid', __( 'A name and a valid email are required.', 'doughboss' ) );
+			return new WP_Error( 'doughboss_catering_invalid', __( 'A name and a valid email are required.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
 		$package_id  = isset( $data['package_id'] ) ? absint( $data['package_id'] ) : 0;
@@ -204,7 +204,7 @@ class DoughBoss_Catering {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$ok = $wpdb->insert( self::table(), $row, $formats );
 		if ( ! $ok ) {
-			return new WP_Error( 'doughboss_catering_db', __( 'Could not save the enquiry. Please try again.', 'doughboss' ) );
+			return new WP_Error( 'doughboss_catering_db', __( 'Could not save the enquiry. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
 		}
 
 		$id = (int) $wpdb->insert_id;
@@ -284,6 +284,64 @@ class DoughBoss_Catering {
 		}
 
 		return false !== $ok;
+	}
+
+	/**
+	 * Query enquiries for the admin list table (filter + search + paginate).
+	 *
+	 * @param array<string,mixed> $args status, search, per_page, page.
+	 * @return array{items:array<int,array<string,mixed>>,total:int}
+	 */
+	public static function query( array $args = array() ) {
+		global $wpdb;
+
+		$args = wp_parse_args(
+			$args,
+			array(
+				'status'   => '',
+				'search'   => '',
+				'per_page' => 20,
+				'page'     => 1,
+			)
+		);
+
+		$where  = array( '1=1' );
+		$params = array();
+
+		if ( '' !== $args['status'] && self::is_valid_status( $args['status'] ) ) {
+			$where[]  = 'status = %s';
+			$params[] = $args['status'];
+		}
+
+		if ( '' !== $args['search'] ) {
+			$like     = '%' . $wpdb->esc_like( $args['search'] ) . '%';
+			$where[]  = '( customer_name LIKE %s OR customer_email LIKE %s OR enquiry_number LIKE %s )';
+			$params[] = $like;
+			$params[] = $like;
+			$params[] = $like;
+		}
+
+		$where_sql = implode( ' AND ', $where );
+		$per_page  = max( 1, (int) $args['per_page'] );
+		$offset    = ( max( 1, (int) $args['page'] ) - 1 ) * $per_page;
+		$table     = self::table();
+
+		if ( $params ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}", $params ) );
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}" );
+		}
+
+		$list_params = array_merge( $params, array( $per_page, $offset ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$items = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY created_at DESC LIMIT %d OFFSET %d", $list_params ), ARRAY_A );
+
+		return array(
+			'items' => $items ? $items : array(),
+			'total' => $total,
+		);
 	}
 
 	/**
