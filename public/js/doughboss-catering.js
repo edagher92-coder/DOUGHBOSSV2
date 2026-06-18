@@ -120,6 +120,7 @@
 
 		var form = el('<form class="dbc-form" novalidate></form>');
 		form.innerHTML =
+			'<input class="dbc-hp" type="text" name="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
 			'<div class="dbc-selected" aria-live="polite">' +
 				(pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No package selected — a custom quote will be prepared.') +
 			'</div>' +
@@ -243,7 +244,8 @@
 			event_time: (fd.get('event_time') || '').toString(),
 			address: (fd.get('address') || '').toString(),
 			dietary: (fd.get('dietary') || '').toString(),
-			notes: (fd.get('notes') || '').toString()
+			notes: (fd.get('notes') || '').toString(),
+			hp: (fd.get('hp') || '').toString()
 		}).then(function (res) {
 			if (!res.ok || !res.data || !res.data.success) {
 				var msg = res.data && res.data.message ? res.data.message : 'Something went wrong. Please try again.';

@@ -54,6 +54,14 @@
 		return node;
 	}
 
+	// Non-blocking, screen-reader-announced error toast (replaces alert()).
+	function dbToast(message) {
+		var t = el('div', { class: 'db-toast', text: String(message || (I18N.genericError || 'Something went wrong.')) });
+		t.setAttribute('role', 'alert');
+		document.body.appendChild(t);
+		setTimeout(function () { if (t.parentNode) { t.parentNode.removeChild(t); } }, 4200);
+	}
+
 	function request(path, options) {
 		options = options || {};
 		var headers = { 'Content-Type': 'application/json' };
@@ -243,7 +251,7 @@
 						notifyCartChanged();
 						setTimeout(function () { action.textContent = I18N.addToCart || 'Add to cart'; action.disabled = false; }, 1200);
 					})
-					.catch(function (err) { alert(err.message); action.disabled = false; });
+					.catch(function (err) { dbToast(err.message); action.disabled = false; });
 			});
 		}
 
@@ -322,7 +330,7 @@
 					addBtn.textContent = I18N.added || 'Added!';
 					notifyCartChanged();
 					setTimeout(function () { addBtn.textContent = I18N.addToCart || 'Add to cart'; addBtn.disabled = false; }, 1200);
-				}).catch(function (err) { alert(err.message); addBtn.disabled = false; });
+				}).catch(function (err) { dbToast(err.message); addBtn.disabled = false; });
 			});
 
 			root.appendChild(el('div', { class: 'db-builder-inner' }, [
@@ -428,13 +436,13 @@
 		var qty = el('input', { type: 'number', min: '0', value: line.quantity, class: 'db-qty' });
 		qty.addEventListener('change', function () {
 			request('/cart/update', { method: 'POST', body: { key: line.key, quantity: Number(qty.value) } })
-				.then(function () { notifyCartChanged(); }).catch(function (err) { alert(err.message); });
+				.then(function () { notifyCartChanged(); }).catch(function (err) { dbToast(err.message); });
 		});
 
 		var remove = el('button', { class: 'db-link', text: I18N.remove || 'Remove' });
 		remove.addEventListener('click', function () {
 			request('/cart/remove', { method: 'POST', body: { key: line.key } })
-				.then(function () { notifyCartChanged(); }).catch(function (err) { alert(err.message); });
+				.then(function () { notifyCartChanged(); }).catch(function (err) { dbToast(err.message); });
 		});
 
 		return el('div', { class: 'db-cart-line' }, [

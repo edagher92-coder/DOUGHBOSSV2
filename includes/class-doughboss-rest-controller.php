@@ -357,6 +357,10 @@ class DoughBoss_REST_Controller {
 						'default'           => 0,
 						'sanitize_callback' => 'absint',
 					),
+					'hp'             => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 				),
 			)
 		);
@@ -470,6 +474,25 @@ class DoughBoss_REST_Controller {
 			return true;
 		}
 		return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
+	}
+
+	/**
+	 * Simple per-IP transient rate limiter for mutation endpoints.
+	 *
+	 * @param string $bucket Logical bucket name (e.g. 'checkout').
+	 * @param int    $max    Max requests allowed within the window.
+	 * @param int    $window Window length in seconds.
+	 * @return bool True when the caller is over the limit.
+	 */
+	private function rate_limited( $bucket, $max, $window ) {
+		$ip   = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$key  = 'doughboss_rl_' . $bucket . '_' . md5( $ip );
+		$hits = (int) get_transient( $key );
+		if ( $hits >= $max ) {
+			return true;
+		}
+		set_transient( $key, $hits + 1, $window );
+		return false;
 	}
 
 	/**
@@ -764,6 +787,10 @@ class DoughBoss_REST_Controller {
 			if ( is_array( $cached ) ) {
 				return rest_ensure_response( $cached );
 			}
+		}
+
+		if ( $this->rate_limited( 'checkout', 8, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
 		}
 
 		if ( ! DoughBoss_Settings::ordering_open() ) {
@@ -1076,6 +1103,21 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function create_catering_enquiry( WP_REST_Request $request ) {
+		if ( $this->rate_limited( 'catering', 5, HOUR_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please try again later.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+
+		// Honeypot: bots fill the hidden field; accept silently without saving.
+		if ( '' !== trim( (string) $request->get_param( 'hp' ) ) ) {
+			return rest_ensure_response(
+				array(
+					'success'        => true,
+					'enquiry_number' => '',
+					'message'        => __( "Thanks! We'll be in touch shortly.", 'doughboss' ),
+				)
+			);
+		}
+
 		// Route the enquiry to a shop: a valid selected location, else the default.
 		$location_id = absint( $request->get_param( 'location_id' ) );
 		if ( DoughBoss_Locations::count() > 0 && ! DoughBoss_Locations::is_valid( $location_id ) ) {

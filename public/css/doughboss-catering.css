@@ -23,6 +23,16 @@
 	box-sizing: border-box;
 }
 
+/* Honeypot — hidden from people, catches bots (audit anti-spam). */
+.db-catering .dbc-hp {
+	position: absolute !important;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
 .db-catering .dbc-head {
 	margin: 0 0 18px;
 }
