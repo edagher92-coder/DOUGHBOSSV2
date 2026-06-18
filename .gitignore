@@ -15,3 +15,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Generated scratch (regenerable Gemini image intermediates; the prototype
+# HTML embeds the final images inline, so these are not needed at runtime)
+/docs/proto-img/

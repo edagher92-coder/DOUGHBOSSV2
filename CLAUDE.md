@@ -105,3 +105,16 @@ The walkthrough uses `@page { size: A4 landscape; margin: 0; }`; the proposal/pl
 - A live WordPress site exists at **doughboss.com.au**, reachable via the WPVibe MCP server (read theme/files, run WP-CLI, `site_info`, pull real menu/brand data). Use it to deploy to a draft theme and smoke-test — never push to production without an explicit go-ahead and a fresh backup (UpdraftPlus is installed).
 - Direct outbound network is restricted to an allowlist (e.g. `fonts.gstatic.com`, PyPI). `doughboss.com.au` assets must be pulled through the WPVibe server, not curled.
 - See `docs/Skills-and-Tooling-Review.md` for the evaluated skills and MCP integrations (Stripe, WPVibe, accounting, etc.) and the prioritised roadmap.
+
+## External AI (Google Gemini) — model policy
+A Google Gemini API key is available and the endpoint (`generativelanguage.googleapis.com`) is reachable from this environment. **Keep the key in the `GEMINI_API_KEY` environment variable — never hard-code or commit it.** Used for generating assets/content for the docs & prototypes (e.g. the menu photography in `docs/DoughBoss-Interactive-Prototype.html`), not by the plugin at runtime.
+
+- **Match the model to the task's difficulty and the result quality needed** (don't default to one):
+  - **Pro** (`gemini-2.5-pro` / `gemini-pro-latest`) — hard/complex reasoning, long-context synthesis, architecture/code, final client-facing copy. Higher quality, slower, pricier. Use when the result must be polished or the problem is non-trivial.
+  - **Flash** (`gemini-2.5-flash` / `gemini-flash-latest`) — fast/iterative/bulk and moderate tasks, quick drafts. Default workhorse when speed matters and the task isn't hard.
+  - **Flash-Lite** (`gemini-2.5-flash-lite`) — cheapest, high-volume/trivial.
+  - **Images** — `imagen-4.0-fast-generate-001` for bulk/iteration (used for the prototype menu shots); `imagen-4.0-generate-001` / `imagen-4.0-ultra-generate-001` for hero/quality; `gemini-2.5-flash-image` for edits/compositing.
+- **Access patterns:**
+  - REST: `POST https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent` with header `X-goog-api-key: $GEMINI_API_KEY` (Imagen uses `:predict` with `{"instances":[{"prompt":...}],"parameters":{"sampleCount":1,"aspectRatio":"1:1"}}`).
+  - SDK: `from google import genai; client = genai.Client(api_key=os.environ["GEMINI_API_KEY"]); client.models.generate_content(model="gemini-2.5-pro", contents="…")`.
+- Resize/recompress generated images (Pillow → JPEG ~480px q80) before embedding so deliverables stay small and self-contained.
