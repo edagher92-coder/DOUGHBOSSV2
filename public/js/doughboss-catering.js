@@ -24,7 +24,8 @@
 		selectedId: 0,
 		guests: 0,
 		orderType: 'pickup',
-		quote: null
+		quote: null,
+		email: ''
 	};
 
 	function money(n) {
@@ -224,6 +225,7 @@
 			errBox.textContent = 'Please add your name and a valid email.';
 			return;
 		}
+		state.email = email;
 
 		var btn = form.querySelector('.dbc-submit');
 		btn.disabled = true;
@@ -259,14 +261,95 @@
 	});
 
 	function showSuccess(data) {
+		var pay = (window.DoughBossData && window.DoughBossData.payments) || {};
+		var canPay = pay.enabled && pay.pk && window.Stripe && data.deposit > 0;
+
+		root.innerHTML = '';
+		var box = el('<div class="dbc-success" role="status"></div>');
+		box.innerHTML =
+			'<div class="dbc-success-check">✓</div>' +
+			'<h2 class="dbc-h2">Enquiry received</h2>' +
+			'<p class="dbc-success-num">Reference: <strong>' + esc(data.enquiry_number) + '</strong></p>';
+		root.appendChild(box);
+
+		if (canPay) {
+			box.appendChild(el('<p>Secure your date with a deposit of <strong>' + money(data.deposit) + '</strong>.</p>'));
+			var panel = el(
+				'<div class="dbc-pay">' +
+					'<label class="dbc-pay-label">Card details</label>' +
+					'<div class="dbc-card-element"></div>' +
+					'<div class="dbc-error" role="alert" aria-live="assertive"></div>' +
+					'<button type="button" class="dbc-submit dbc-pay-btn">Pay ' + money(data.deposit) + ' deposit</button>' +
+					'<p class="dbc-sub dbc-pay-secure">Secured by Stripe · balance payable later.</p>' +
+				'</div>'
+			);
+			box.appendChild(panel);
+			mountPayment(panel, data);
+		} else {
+			box.appendChild(el('<p class="dbc-sub">' + esc(data.message || 'We\'ll be in touch shortly to confirm your quote and deposit link.') + '</p>'));
+		}
+
+		if (root.scrollIntoView) { root.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+	}
+
+	function mountPayment(panel, data) {
+		var pay = window.DoughBossData.payments;
+		var errBox = panel.querySelector('.dbc-error');
+		var stripe, card;
+		try {
+			stripe = window.Stripe(pay.pk);
+			card = stripe.elements().create('card');
+			card.mount(panel.querySelector('.dbc-card-element'));
+		} catch (e) {
+			errBox.textContent = 'Card payments are unavailable right now.';
+			return;
+		}
+
+		panel.querySelector('.dbc-pay-btn').addEventListener('click', function () {
+			var btn = this;
+			errBox.textContent = '';
+			btn.disabled = true;
+			var prev = btn.textContent;
+			btn.textContent = 'Processing…';
+
+			post('/catering/payment-intent', {
+				enquiry_number: data.enquiry_number,
+				email: state.email,
+				leg: 'deposit'
+			}).then(function (res) {
+				if (!res.ok || !res.data || !res.data.client_secret) {
+					throw new Error((res.data && res.data.message) || 'Could not start the payment.');
+				}
+				return stripe.confirmCardPayment(res.data.client_secret, { payment_method: { card: card } }).then(function (result) {
+					if (result.error) { throw new Error(result.error.message || 'Your card was declined.'); }
+					return post('/catering/confirm-payment', {
+						enquiry_number: data.enquiry_number,
+						email: state.email,
+						leg: 'deposit',
+						payment_intent_id: result.paymentIntent.id
+					});
+				});
+			}).then(function (conf) {
+				if (!conf.ok || !conf.data || !conf.data.success) {
+					throw new Error((conf.data && conf.data.message) || 'We could not confirm your payment.');
+				}
+				showPaid(conf.data, data);
+			}).catch(function (err) {
+				errBox.textContent = err.message || 'Something went wrong. Please try again.';
+				btn.disabled = false;
+				btn.textContent = prev;
+			});
+		});
+	}
+
+	function showPaid(conf, data) {
 		root.innerHTML = '';
 		root.appendChild(el(
 			'<div class="dbc-success" role="status">' +
 				'<div class="dbc-success-check">✓</div>' +
-				'<h2 class="dbc-h2">Enquiry received</h2>' +
+				'<h2 class="dbc-h2">Deposit received</h2>' +
 				'<p class="dbc-success-num">Reference: <strong>' + esc(data.enquiry_number) + '</strong></p>' +
-				(data.deposit ? '<p>Indicative deposit to secure your date: <strong>' + money(data.deposit) + '</strong></p>' : '') +
-				'<p class="dbc-sub">' + esc(data.message || 'We\'ll be in touch shortly to confirm your quote and deposit link.') + '</p>' +
+				'<p class="dbc-sub">' + esc(conf.message || 'Your date is secured. We\'ll be in touch with the details.') + '</p>' +
 			'</div>'
 		));
 		if (root.scrollIntoView) { root.scrollIntoView({ behavior: 'smooth', block: 'start' }); }

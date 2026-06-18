@@ -288,6 +288,39 @@
 	font-size: 17px;
 }
 
+/* Deposit payment panel */
+.db-catering .dbc-pay {
+	max-width: 420px;
+	margin: 18px auto 0;
+	text-align: left;
+}
+
+.db-catering .dbc-pay-label {
+	display: block;
+	font-size: 13px;
+	font-weight: 700;
+	margin-bottom: 5px;
+}
+
+.db-catering .dbc-card-element {
+	padding: 13px 14px;
+	border: 1px solid var(--dbc-line);
+	border-radius: 8px;
+	background: #fff;
+	margin-bottom: 12px;
+}
+
+.db-catering .dbc-pay .dbc-submit {
+	width: 100%;
+	text-align: center;
+}
+
+.db-catering .dbc-pay-secure {
+	text-align: center;
+	font-size: 12px;
+	margin: 10px 0 0;
+}
+
 @media (max-width: 540px) {
 	.db-catering .dbc-submit {
 		align-self: stretch;
