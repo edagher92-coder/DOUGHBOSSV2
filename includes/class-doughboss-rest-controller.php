@@ -611,6 +611,7 @@ class DoughBoss_REST_Controller {
 				'image'       => $thumb ? $thumb : '',
 				'category'    => $category,
 				'available'   => DoughBoss_Post_Types::is_available( $post->ID ),
+				'dietary'     => DoughBoss_Post_Types::dietary( $post->ID ),
 			);
 		}
 

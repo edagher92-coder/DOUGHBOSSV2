@@ -20,6 +20,7 @@ class DoughBoss_Post_Types {
 	const META_PRICE     = '_doughboss_price';
 	const META_TYPE      = '_doughboss_item_type';
 	const META_AVAILABLE = '_doughboss_available';
+	const META_DIETARY   = '_doughboss_dietary';
 
 	/**
 	 * Hook registration into WordPress.
@@ -47,6 +48,31 @@ class DoughBoss_Post_Types {
 	 */
 	public static function is_available( $post_id ) {
 		return '0' !== (string) get_post_meta( $post_id, self::META_AVAILABLE, true );
+	}
+
+	/**
+	 * Dietary flags an item can carry (slug => label).
+	 *
+	 * @return array<string,string>
+	 */
+	public static function dietary_options() {
+		return array(
+			'vegetarian'  => __( 'Vegetarian', 'doughboss' ),
+			'vegan'       => __( 'Vegan', 'doughboss' ),
+			'gluten_free' => __( 'Gluten-free', 'doughboss' ),
+			'halal'       => __( 'Halal', 'doughboss' ),
+		);
+	}
+
+	/**
+	 * The dietary flags set on an item.
+	 *
+	 * @param int $post_id Item ID.
+	 * @return string[]
+	 */
+	public static function dietary( $post_id ) {
+		$flags = get_post_meta( $post_id, self::META_DIETARY, true );
+		return is_array( $flags ) ? array_values( $flags ) : array();
 	}
 
 	/**
@@ -148,6 +174,24 @@ class DoughBoss_Post_Types {
 				},
 			)
 		);
+
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_DIETARY,
+			array(
+				'type'          => 'array',
+				'single'        => true,
+				'show_in_rest'  => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'string' ),
+					),
+				),
+				'auth_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+			)
+		);
 	}
 
 	/**
@@ -212,6 +256,18 @@ class DoughBoss_Post_Types {
 			</label><br />
 			<span class="description"><?php esc_html_e( 'Uncheck to mark this item sold out — it stays on the menu but can\'t be added to a cart.', 'doughboss' ); ?></span>
 		</p>
+		<p style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;">
+			<strong><?php esc_html_e( 'Dietary', 'doughboss' ); ?></strong><br />
+			<?php
+			$dietary = self::dietary( $post->ID );
+			foreach ( self::dietary_options() as $diet_key => $diet_label ) :
+				?>
+				<label style="display:inline-block;margin:4px 12px 0 0;">
+					<input type="checkbox" name="doughboss_dietary[]" value="<?php echo esc_attr( $diet_key ); ?>" <?php checked( in_array( $diet_key, $dietary, true ) ); ?> />
+					<?php echo esc_html( $diet_label ); ?>
+				</label>
+			<?php endforeach; ?>
+		</p>
 		<?php
 	}
 
@@ -249,6 +305,10 @@ class DoughBoss_Post_Types {
 		// The meta box always renders the availability checkbox, so its absence
 		// from the POST means the box was unticked (sold out).
 		update_post_meta( $post_id, self::META_AVAILABLE, empty( $_POST['doughboss_available'] ) ? '0' : '1' );
+
+		$allowed = array_keys( self::dietary_options() );
+		$flags   = isset( $_POST['doughboss_dietary'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['doughboss_dietary'] ) ) : array();
+		update_post_meta( $post_id, self::META_DIETARY, array_values( array_intersect( $flags, $allowed ) ) );
 	}
 
 	/**
