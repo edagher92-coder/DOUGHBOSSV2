@@ -22,3 +22,7 @@ Thumbs.db
 
 # Gemini prompt-hash cache (regenerable; commit only if cross-machine reuse is wanted)
 /.cache/
+
+# Python bytecode
+__pycache__/
+*.pyc
