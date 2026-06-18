@@ -28,6 +28,24 @@ class DoughBoss_Shortcodes {
 		add_shortcode( 'doughboss_cart', array( $this, 'cart' ) );
 		add_shortcode( 'doughboss_order_tracking', array( $this, 'order_tracking' ) );
 		add_shortcode( 'doughboss_shop_picker', array( $this, 'shop_picker' ) );
+		add_shortcode( 'doughboss_catering', array( $this, 'catering' ) );
+	}
+
+	/**
+	 * [doughboss_catering] — renders the catering packages, quote builder and
+	 * enquiry form. Hydrated by doughboss-catering.js against the
+	 * /catering/* REST routes.
+	 *
+	 * @return string
+	 */
+	public function catering() {
+		ob_start();
+		?>
+		<div class="db-app db-catering" data-doughboss-catering>
+			<div class="db-loading"><?php esc_html_e( 'Loading catering…', 'doughboss' ); ?></div>
+		</div>
+		<?php
+		return ob_get_clean();
 	}
 
 	/**

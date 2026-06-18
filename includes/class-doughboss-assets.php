@@ -25,6 +25,7 @@ class DoughBoss_Assets {
 		'doughboss_cart',
 		'doughboss_order_tracking',
 		'doughboss_shop_picker',
+		'doughboss_catering',
 	);
 
 	/**
@@ -60,6 +61,22 @@ class DoughBoss_Assets {
 		 * @param bool $load Whether to load.
 		 */
 		return (bool) apply_filters( 'doughboss_load_assets', false );
+	}
+
+	/**
+	 * Whether the current singular post contains a given shortcode.
+	 *
+	 * @param string $shortcode Shortcode tag.
+	 * @return bool
+	 */
+	private function current_post_has( $shortcode ) {
+		if ( is_singular() ) {
+			$post = get_post();
+			if ( $post instanceof WP_Post && has_shortcode( $post->post_content, $shortcode ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -128,5 +145,23 @@ class DoughBoss_Assets {
 				),
 			)
 		);
+
+		// Catering page: ship its own self-contained app + styles, loaded only
+		// when the catering shortcode is on the page (it reuses DoughBossData).
+		if ( $this->current_post_has( 'doughboss_catering' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-catering',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-catering.css',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-catering',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-catering.js',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
 	}
 }
