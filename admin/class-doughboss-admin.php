@@ -149,6 +149,8 @@ class DoughBoss_Admin {
 		$clean['stripe_test_sk']   = isset( $input['stripe_test_sk'] ) ? sanitize_text_field( $input['stripe_test_sk'] ) : '';
 		$clean['stripe_live_pk']   = isset( $input['stripe_live_pk'] ) ? sanitize_text_field( $input['stripe_live_pk'] ) : '';
 		$clean['stripe_live_sk']   = isset( $input['stripe_live_sk'] ) ? sanitize_text_field( $input['stripe_live_sk'] ) : '';
+		$clean['stripe_test_whsec'] = isset( $input['stripe_test_whsec'] ) ? sanitize_text_field( $input['stripe_test_whsec'] ) : '';
+		$clean['stripe_live_whsec'] = isset( $input['stripe_live_whsec'] ) ? sanitize_text_field( $input['stripe_live_whsec'] ) : '';
 
 		$clean['sizes']    = $this->sanitize_rows( isset( $input['sizes'] ) ? $input['sizes'] : array() );
 		$clean['toppings'] = $this->sanitize_rows( isset( $input['toppings'] ) ? $input['toppings'] : array() );
@@ -867,6 +869,19 @@ JS;
 							<th><label for="db-stripe-live-sk"><?php esc_html_e( 'Live secret key', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-stripe-live-sk" class="regular-text" autocomplete="off" placeholder="sk_live_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_sk]" value="<?php echo esc_attr( isset( $settings['stripe_live_sk'] ) ? $settings['stripe_live_sk'] : '' ); ?>" />
 								<p class="description"><?php esc_html_e( 'Find your keys in the Stripe Dashboard → Developers → API keys. Secret keys are used only on the server.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-stripe-test-whsec"><?php esc_html_e( 'Test webhook secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-stripe-test-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_whsec]" value="<?php echo esc_attr( isset( $settings['stripe_test_whsec'] ) ? $settings['stripe_test_whsec'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-stripe-live-whsec"><?php esc_html_e( 'Live webhook secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-stripe-live-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_whsec]" value="<?php echo esc_attr( isset( $settings['stripe_live_whsec'] ) ? $settings['stripe_live_whsec'] : '' ); ?>" />
+								<p class="description">
+									<?php esc_html_e( 'Stripe Dashboard → Developers → Webhooks. Add an endpoint pointing to:', 'doughboss' ); ?>
+									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/stripe-webhook' ) ); ?></code>
+									<?php esc_html_e( 'and subscribe to payment_intent.succeeded. Then paste its signing secret here.', 'doughboss' ); ?>
+								</p></td>
 						</tr>
 					</table>
 

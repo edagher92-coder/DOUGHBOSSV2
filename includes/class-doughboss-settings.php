@@ -68,6 +68,8 @@ class DoughBoss_Settings {
 			'stripe_test_sk'   => '',
 			'stripe_live_pk'   => '',
 			'stripe_live_sk'   => '',
+			'stripe_test_whsec' => '',
+			'stripe_live_whsec' => '',
 		);
 	}
 
@@ -193,6 +195,15 @@ class DoughBoss_Settings {
 	 */
 	public static function stripe_secret_key() {
 		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_sk' : 'stripe_test_sk', '' );
+	}
+
+	/**
+	 * Stripe webhook signing secret for the active mode (server-side only).
+	 *
+	 * @return string
+	 */
+	public static function stripe_webhook_secret() {
+		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_whsec' : 'stripe_test_whsec', '' );
 	}
 
 	/**

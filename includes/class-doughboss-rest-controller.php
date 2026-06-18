@@ -377,6 +377,73 @@ class DoughBoss_REST_Controller {
 				),
 			)
 		);
+
+		// Catering — create a PaymentIntent for a deposit or balance leg. Gated by
+		// a valid REST nonce AND the enquiry number + email matching.
+		register_rest_route(
+			$ns,
+			'/catering/payment-intent',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'catering_payment_intent' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'enquiry_number' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'email'          => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_email',
+					),
+					'leg'            => array(
+						'default'           => 'deposit',
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
+			)
+		);
+
+		// Catering — verify a deposit/balance payment server-side and record it.
+		register_rest_route(
+			$ns,
+			'/catering/confirm-payment',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'catering_confirm_payment' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'enquiry_number'    => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'email'             => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_email',
+					),
+					'leg'               => array(
+						'default'           => 'deposit',
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'payment_intent_id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Catering — Stripe webhook (authoritative payment source-of-truth).
+		// Public route, gated by the Stripe-Signature HMAC, not a nonce.
+		register_rest_route(
+			$ns,
+			'/catering/stripe-webhook',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'catering_stripe_webhook' ),
+				'permission_callback' => '__return_true',
+			)
+		);
 	}
 
 	/**
@@ -1070,6 +1137,201 @@ class DoughBoss_REST_Controller {
 				'status'  => $status,
 			)
 		);
+	}
+
+	/**
+	 * POST /catering/payment-intent — start a deposit or balance card payment.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function catering_payment_intent( WP_REST_Request $request ) {
+		if ( ! DoughBoss_Stripe::ready() ) {
+			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$enquiry = $this->resolve_catering_enquiry( $request );
+		if ( is_wp_error( $enquiry ) ) {
+			return $enquiry;
+		}
+
+		$leg    = self::catering_leg( $request->get_param( 'leg' ) );
+		$amount = DoughBoss_Catering::leg_amount( $enquiry, $leg );
+
+		if ( DoughBoss_Catering::is_paid( $enquiry, $leg ) ) {
+			return new WP_Error( 'doughboss_pay_done', __( 'That payment has already been made.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( DoughBoss_Catering::LEG_BALANCE === $leg && ! DoughBoss_Catering::is_paid( $enquiry, DoughBoss_Catering::LEG_DEPOSIT ) ) {
+			return new WP_Error( 'doughboss_pay_seq', __( 'The deposit must be paid before the balance.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( $amount <= 0 ) {
+			return new WP_Error( 'doughboss_pay_amount', __( "There's nothing to pay yet — we'll confirm your quote first.", 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+		$intent   = DoughBoss_Stripe::create_payment_intent(
+			DoughBoss_Stripe::to_minor_units( $amount ),
+			$currency,
+			array(
+				'context'        => 'catering',
+				'enquiry_id'     => (int) $enquiry['id'],
+				'enquiry_number' => $enquiry['enquiry_number'],
+				'leg'            => $leg,
+				'site'           => home_url(),
+			)
+		);
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+
+		DoughBoss_Catering::set_intent( (int) $enquiry['id'], $leg, $intent['id'] );
+
+		return rest_ensure_response(
+			array(
+				'client_secret'   => $intent['client_secret'],
+				'payment_intent'  => $intent['id'],
+				'publishable_key' => DoughBoss_Stripe::publishable_key(),
+				'amount'          => $intent['amount'],
+				'currency'        => $intent['currency'],
+				'leg'             => $leg,
+			)
+		);
+	}
+
+	/**
+	 * POST /catering/confirm-payment — verify a card payment and record the leg.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function catering_confirm_payment( WP_REST_Request $request ) {
+		if ( ! DoughBoss_Stripe::ready() ) {
+			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$enquiry = $this->resolve_catering_enquiry( $request );
+		if ( is_wp_error( $enquiry ) ) {
+			return $enquiry;
+		}
+
+		$leg = self::catering_leg( $request->get_param( 'leg' ) );
+
+		// Already recorded (e.g. the webhook beat us here): treat as success.
+		if ( DoughBoss_Catering::is_paid( $enquiry, $leg ) ) {
+			return rest_ensure_response(
+				array(
+					'success' => true,
+					'leg'     => $leg,
+					'status'  => $enquiry['status'],
+				)
+			);
+		}
+
+		$pi_id  = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
+		$stored = DoughBoss_Catering::LEG_BALANCE === $leg ? $enquiry['balance_intent_id'] : $enquiry['deposit_intent_id'];
+		if ( '' === $pi_id || $pi_id !== $stored ) {
+			return new WP_Error( 'doughboss_pay_mismatch', __( 'We could not match that payment.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$intent = DoughBoss_Stripe::retrieve_payment_intent( $pi_id );
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+
+		$expected = DoughBoss_Stripe::to_minor_units( DoughBoss_Catering::leg_amount( $enquiry, $leg ) );
+		$currency = strtolower( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) );
+		$status   = isset( $intent['status'] ) ? $intent['status'] : '';
+		$amount   = isset( $intent['amount'] ) ? (int) $intent['amount'] : 0;
+		$cur      = isset( $intent['currency'] ) ? strtolower( $intent['currency'] ) : '';
+
+		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency ) {
+			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your payment. If you were charged it will be reversed automatically.', 'doughboss' ), array( 'status' => 402 ) );
+		}
+
+		DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );
+		$fresh = DoughBoss_Catering::get( (int) $enquiry['id'] );
+
+		return rest_ensure_response(
+			array(
+				'success' => true,
+				'leg'     => $leg,
+				'status'  => $fresh ? $fresh['status'] : '',
+				'message' => DoughBoss_Catering::LEG_BALANCE === $leg
+					? __( 'Paid in full — thank you! Your booking is confirmed.', 'doughboss' )
+					: __( "Deposit received — your date is secured. We'll be in touch with the details.", 'doughboss' ),
+			)
+		);
+	}
+
+	/**
+	 * POST /catering/stripe-webhook — authoritative payment confirmation.
+	 *
+	 * Verifies the Stripe signature, then on payment_intent.succeeded marks the
+	 * matching catering enquiry's deposit/balance leg paid (idempotently). This
+	 * covers the asynchronous balance leg and any client that never returns.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function catering_stripe_webhook( WP_REST_Request $request ) {
+		$payload = $request->get_body();
+		$sig     = $request->get_header( 'stripe_signature' );
+
+		if ( ! DoughBoss_Stripe::verify_webhook_signature( $payload, $sig ) ) {
+			return new WP_Error( 'doughboss_wh_sig', __( 'Invalid signature.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$event = json_decode( $payload, true );
+		if ( ! is_array( $event ) || empty( $event['type'] ) ) {
+			return rest_ensure_response( array( 'received' => true ) );
+		}
+
+		if ( 'payment_intent.succeeded' === $event['type'] ) {
+			$obj  = isset( $event['data']['object'] ) && is_array( $event['data']['object'] ) ? $event['data']['object'] : array();
+			$meta = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
+
+			if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
+				$leg     = self::catering_leg( isset( $meta['leg'] ) ? $meta['leg'] : 'deposit' );
+				$enquiry = ! empty( $obj['id'] ) ? DoughBoss_Catering::find_by_intent( $obj['id'] ) : null;
+				if ( ! $enquiry && ! empty( $meta['enquiry_id'] ) ) {
+					$enquiry = DoughBoss_Catering::get( (int) $meta['enquiry_id'] );
+				}
+				if ( $enquiry ) {
+					DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );
+				}
+			}
+		}
+
+		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * Resolve a catering enquiry from a request, requiring the number + email to
+	 * match. Returns the same not-found error for a mismatch to avoid leaking
+	 * which enquiries exist.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return array<string,mixed>|WP_Error
+	 */
+	private function resolve_catering_enquiry( WP_REST_Request $request ) {
+		$number  = sanitize_text_field( $request->get_param( 'enquiry_number' ) );
+		$email   = sanitize_email( $request->get_param( 'email' ) );
+		$enquiry = DoughBoss_Catering::get_by_number( $number );
+
+		if ( ! $enquiry || strtolower( $enquiry['customer_email'] ) !== strtolower( $email ) ) {
+			return new WP_Error( 'doughboss_not_found', __( 'No matching enquiry found. Check your reference and email.', 'doughboss' ), array( 'status' => 404 ) );
+		}
+		return $enquiry;
+	}
+
+	/**
+	 * Normalise a payment-leg string to a known value.
+	 *
+	 * @param string $leg Raw leg.
+	 * @return string 'deposit' or 'balance'.
+	 */
+	private static function catering_leg( $leg ) {
+		return DoughBoss_Catering::LEG_BALANCE === $leg ? DoughBoss_Catering::LEG_BALANCE : DoughBoss_Catering::LEG_DEPOSIT;
 	}
 
 	/**

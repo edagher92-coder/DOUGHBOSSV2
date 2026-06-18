@@ -125,6 +125,81 @@ class DoughBoss_Stripe {
 	}
 
 	/**
+	 * Refund a PaymentIntent, in full or in part.
+	 *
+	 * @param string   $payment_intent_id PaymentIntent id.
+	 * @param int|null $amount_minor      Amount in cents, or null for a full refund.
+	 * @return array|WP_Error
+	 */
+	public static function create_refund( $payment_intent_id, $amount_minor = null ) {
+		$payment_intent_id = sanitize_text_field( $payment_intent_id );
+		if ( '' === $payment_intent_id || 0 !== strpos( $payment_intent_id, 'pi_' ) ) {
+			return new WP_Error( 'doughboss_pay_id', __( 'Invalid payment reference.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$body = array( 'payment_intent' => $payment_intent_id );
+		if ( null !== $amount_minor ) {
+			$body['amount'] = max( 1, (int) $amount_minor );
+		}
+
+		return self::request( 'POST', '/refunds', $body );
+	}
+
+	/**
+	 * Webhook signing secret for the active mode (server-side only).
+	 *
+	 * @return string
+	 */
+	public static function webhook_secret() {
+		return DoughBoss_Settings::stripe_webhook_secret();
+	}
+
+	/**
+	 * Verify a Stripe webhook signature (the `Stripe-Signature` header) against
+	 * the configured signing secret, with the same scheme Stripe's SDK uses.
+	 *
+	 * @param string $payload    Raw request body, exactly as received.
+	 * @param string $sig_header The Stripe-Signature header value.
+	 * @param int    $tolerance  Max age in seconds (0 to skip the timestamp check).
+	 * @return bool
+	 */
+	public static function verify_webhook_signature( $payload, $sig_header, $tolerance = 300 ) {
+		$secret = self::webhook_secret();
+		if ( '' === $secret || '' === (string) $sig_header ) {
+			return false;
+		}
+
+		$timestamp = '';
+		$signatures = array();
+		foreach ( explode( ',', (string) $sig_header ) as $part ) {
+			$pair = explode( '=', trim( $part ), 2 );
+			if ( 2 !== count( $pair ) ) {
+				continue;
+			}
+			if ( 't' === $pair[0] ) {
+				$timestamp = $pair[1];
+			} elseif ( 'v1' === $pair[0] ) {
+				$signatures[] = $pair[1];
+			}
+		}
+
+		if ( '' === $timestamp || empty( $signatures ) ) {
+			return false;
+		}
+		if ( $tolerance > 0 && abs( time() - (int) $timestamp ) > $tolerance ) {
+			return false;
+		}
+
+		$expected = hash_hmac( 'sha256', $timestamp . '.' . $payload, $secret );
+		foreach ( $signatures as $signature ) {
+			if ( hash_equals( $expected, $signature ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Perform an authenticated request to the Stripe API.
 	 *
 	 * @param string $method HTTP method.

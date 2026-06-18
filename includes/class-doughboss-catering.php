@@ -29,6 +29,9 @@ class DoughBoss_Catering {
 	const STATUS_FULFILLED   = 'fulfilled';
 	const STATUS_LOST        = 'lost';
 
+	const LEG_DEPOSIT = 'deposit';
+	const LEG_BALANCE = 'balance';
+
 	/**
 	 * The enquiries table name for the current site.
 	 *
@@ -284,6 +287,122 @@ class DoughBoss_Catering {
 		}
 
 		return false !== $ok;
+	}
+
+	/**
+	 * The payable amount (major units) for a payment leg of an enquiry.
+	 *
+	 * @param array<string,mixed> $enquiry Enquiry row.
+	 * @param string              $leg     'deposit' or 'balance'.
+	 * @return float
+	 */
+	public static function leg_amount( $enquiry, $leg ) {
+		if ( ! is_array( $enquiry ) ) {
+			return 0.0;
+		}
+		return self::LEG_BALANCE === $leg ? (float) $enquiry['balance_amount'] : (float) $enquiry['deposit_amount'];
+	}
+
+	/**
+	 * Whether a payment leg has already been paid.
+	 *
+	 * @param array<string,mixed> $enquiry Enquiry row.
+	 * @param string              $leg     'deposit' or 'balance'.
+	 * @return bool
+	 */
+	public static function is_paid( $enquiry, $leg ) {
+		if ( ! is_array( $enquiry ) ) {
+			return false;
+		}
+		$col = self::LEG_BALANCE === $leg ? 'balance_paid_at' : 'deposit_paid_at';
+		return ! empty( $enquiry[ $col ] ) && '0000-00-00 00:00:00' !== $enquiry[ $col ];
+	}
+
+	/**
+	 * Store the PaymentIntent id for a payment leg.
+	 *
+	 * @param int    $id        Enquiry ID.
+	 * @param string $leg       'deposit' or 'balance'.
+	 * @param string $intent_id Stripe PaymentIntent id.
+	 * @return bool
+	 */
+	public static function set_intent( $id, $leg, $intent_id ) {
+		global $wpdb;
+		$column = self::LEG_BALANCE === $leg ? 'balance_intent_id' : 'deposit_intent_id';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$ok = $wpdb->update(
+			self::table(),
+			array(
+				$column      => sanitize_text_field( $intent_id ),
+				'updated_at' => current_time( 'mysql' ),
+			),
+			array( 'id' => absint( $id ) ),
+			array( '%s', '%s' ),
+			array( '%d' )
+		);
+		return false !== $ok;
+	}
+
+	/**
+	 * Mark a payment leg paid and advance the lifecycle status. Idempotent:
+	 * re-marking an already-paid leg is a no-op success (safe for webhooks).
+	 *
+	 * @param int    $id  Enquiry ID.
+	 * @param string $leg 'deposit' or 'balance'.
+	 * @return bool
+	 */
+	public static function mark_paid( $id, $leg ) {
+		$id      = absint( $id );
+		$enquiry = self::get( $id );
+		if ( ! $enquiry ) {
+			return false;
+		}
+		if ( self::is_paid( $enquiry, $leg ) ) {
+			return true;
+		}
+
+		global $wpdb;
+		$now    = current_time( 'mysql' );
+		$is_bal = self::LEG_BALANCE === $leg;
+		$status = $is_bal ? self::STATUS_PAID : self::STATUS_DEPOSIT;
+		$data   = array(
+			'status'                                   => $status,
+			( $is_bal ? 'balance_paid_at' : 'deposit_paid_at' ) => $now,
+			'updated_at'                               => $now,
+		);
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$ok = $wpdb->update( self::table(), $data, array( 'id' => $id ), array( '%s', '%s', '%s' ), array( '%d' ) );
+		if ( false === $ok ) {
+			return false;
+		}
+
+		/**
+		 * Fires when a catering payment leg is recorded as paid.
+		 *
+		 * @param int    $id  Enquiry ID.
+		 * @param string $leg 'deposit' or 'balance'.
+		 */
+		do_action( 'doughboss_catering_payment', $id, $leg );
+		do_action( 'doughboss_catering_status_changed', $id, $status );
+		return true;
+	}
+
+	/**
+	 * Find an enquiry by either of its stored PaymentIntent ids (webhook lookup).
+	 *
+	 * @param string $intent_id Stripe PaymentIntent id.
+	 * @return array<string,mixed>|null
+	 */
+	public static function find_by_intent( $intent_id ) {
+		global $wpdb;
+		$intent_id = sanitize_text_field( $intent_id );
+		if ( '' === $intent_id ) {
+			return null;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE deposit_intent_id = %s OR balance_intent_id = %s', $intent_id, $intent_id ), ARRAY_A );
+		return $row ? $row : null;
 	}
 
 	/**
