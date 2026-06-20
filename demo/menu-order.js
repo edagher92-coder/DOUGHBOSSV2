@@ -54,25 +54,28 @@
 	var fab = document.createElement('button');
 	fab.type = 'button';
 	fab.className = 'cart-fab';
-	fab.hidden = true;
 	fab.setAttribute('aria-haspopup', 'dialog');
+	fab.setAttribute('aria-expanded', 'false');
+	fab.setAttribute('aria-hidden', 'true');
 	document.body.appendChild(fab);
 
 	function bag() { return '<svg class="cf-bag" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8a3 3 0 016 0"/></svg>'; }
 
 	function renderFab(bump) {
 		var c = count();
-		if (c <= 0) { fab.hidden = true; return; }
-		fab.hidden = false;
-		fab.innerHTML = bag() + '<span class="cf-meta"><b>' + c + (c === 1 ? ' item' : ' items') + '</b><span>' + money(total()) + '</span></span><span class="cf-go">View order</span>';
-		fab.setAttribute('aria-label', 'View your order: ' + c + (c === 1 ? ' item' : ' items') + ', ' + money(total()));
+		document.body.classList.toggle('cart-on', c > 0);
+		if (c <= 0) { fab.classList.remove('is-shown'); fab.setAttribute('aria-hidden', 'true'); return; }
+		fab.classList.add('is-shown');
+		fab.setAttribute('aria-hidden', 'false');
+		fab.innerHTML = '<span class="cf-left">' + bag() + 'View order <span class="cf-ct">&middot; ' + c + (c === 1 ? ' item' : ' items') + '</span></span>' +
+			'<span class="cf-right"><b class="cf-tot">' + money(total()) + '</b><span class="cf-arrow" aria-hidden="true">&rarr;</span></span>';
+		fab.setAttribute('aria-label', 'View your order: ' + c + (c === 1 ? ' item' : ' items') + ', total ' + money(total()));
 		if (bump && !reduce) { fab.classList.remove('cart-bump'); void fab.offsetWidth; fab.classList.add('cart-bump'); }
 	}
 
 	/* --- slide-in drawer --- */
 	var overlay = document.createElement('div');
 	overlay.className = 'cart-overlay';
-	overlay.hidden = true;
 	document.body.appendChild(overlay);
 
 	var drawer = document.createElement('div');
@@ -80,19 +83,21 @@
 	drawer.setAttribute('role', 'dialog');
 	drawer.setAttribute('aria-modal', 'true');
 	drawer.setAttribute('aria-label', 'Your order');
-	drawer.hidden = true;
 	document.body.appendChild(drawer);
 
 	function openDrawer() {
+		if (count() <= 0) { return; }
 		lastFocus = document.activeElement;
 		drawerOpen = true; checkoutMode = false;
-		overlay.hidden = false; drawer.hidden = false;
+		overlay.classList.add('is-open'); drawer.classList.add('is-open');
+		fab.setAttribute('aria-expanded', 'true');
 		renderDrawer();
 		var x = drawer.querySelector('.cd-close'); if (x) { x.focus(); }
 	}
 	function closeDrawer() {
 		drawerOpen = false; checkoutMode = false;
-		overlay.hidden = true; drawer.hidden = true;
+		overlay.classList.remove('is-open'); drawer.classList.remove('is-open');
+		fab.setAttribute('aria-expanded', 'false');
 		if (lastFocus && lastFocus.focus && lastFocus.offsetParent !== null) { lastFocus.focus(); }
 	}
 	function focusables() {
