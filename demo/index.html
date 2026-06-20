@@ -18,7 +18,6 @@
 		<a class="brand" href="#home">DOUGH<span>BOSS</span></a>
 		<nav class="links" aria-label="Primary">
 			<a class="nl" href="#menu">Menu</a>
-			<a class="nl" href="#order">Order</a>
 			<a class="nl" href="#catering">Catering</a>
 			<a class="nl" href="#locations">Locations</a>
 			<a class="nl" href="#kitchen">Kitchen</a>
@@ -38,8 +37,8 @@
 			<h1 class="disp">Fresh from the<br><em>stone oven.</em></h1>
 			<p class="lead">Lebanese manoush, a new Bites menu, fresh dips and sweets &mdash; wholesome, halal, made to order. Pickup or delivery from any shop.</p>
 			<div class="cta-row">
-				<a class="btn btn-ember" href="#order">Start your order
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+				<button type="button" class="btn btn-ember" data-cat="cat-manoush">Start your order
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
 				<a class="btn btn-light" href="#catering">Catering quote</a>
 			</div>
 		</div></div>
@@ -51,7 +50,6 @@
 			<button type="button" class="mn-jump" data-cat="cat-dips">Dips</button>
 			<button type="button" class="mn-jump" data-cat="cat-sweets">Sweets</button>
 			<button type="button" class="mn-jump" data-cat="cat-drinks">Drinks</button>
-			<a class="mn-jump mn-jump-go" href="#order">Order &rarr;</a>
 		</nav>
 		<div class="mn-legend">
 			<span class="mn-leg"><b class="mn-badge t-vg">VG</b> Vegan</span>
@@ -119,7 +117,7 @@
 		<h2 class="disp">Order it your way</h2>
 		<p>Pickup or delivery from Bankstown, Revesby or Roselands &mdash; or let us cater the whole spread.</p>
 		<div class="cta-row" style="justify-content:center;">
-			<a class="btn btn-dark" href="#order">Start an order</a>
+			<button type="button" class="btn btn-dark" data-cat="cat-manoush">Start an order</button>
 			<a class="btn btn-light" href="#catering">Catering packages</a>
 		</div>
 	</section>
@@ -198,23 +196,6 @@
 		<p>Tell us the date and the headcount — we'll send your quote and a deposit link to lock it in.</p>
 		<a class="btn btn-dark" href="#catering">Get my quote</a>
 	</section>
-</section>
-
-<!-- ============ ORDER ============ -->
-<section class="view" id="view-order">
-	<section class="hero compact grain">
-		<div class="hero-bg" style="background-image:url('https://images.unsplash.com/photo-1777315387809-aa5ad5ef51aa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=900');"></div>
-		<div class="hero-main"><div class="wrap">
-			<p class="eyebrow">Order online</p>
-			<h1 class="disp">Manoush &amp; Bites,<br><em>to your door.</em></h1>
-			<p class="lead">Stone-baked fresh to order — pickup or delivery from your nearest shop. Commission-free.</p>
-		</div></div>
-	</section>
-	<section class="app-slot light"><div class="wrap">
-		<div class="head"><p class="eyebrow">The menu</p><h2 class="disp">Build your order</h2></div>
-		<div id="db-order-demo"></div>
-		<p class="app-note app-note-dark">Demo · in production this routes to the kitchen board and takes card payment.</p>
-	</div></section>
 </section>
 
 <!-- ============ CATERING ============ -->
@@ -306,7 +287,7 @@
 
 <footer class="foot">
 	<div class="ph">Bankstown · Revesby · Roselands</div>
-	<div class="flinks"><a href="#menu">Menu</a>· <a href="#order">Order</a>· <a href="#catering">Catering</a>· <a href="#locations">Locations</a>· <a href="#kitchen">Kitchen</a>· <a href="#home">Home</a></div>
+	<div class="flinks"><a href="#menu">Menu</a>· <a href="#catering">Catering</a>· <a href="#locations">Locations</a>· <a href="#kitchen">Kitchen</a>· <a href="#home">Home</a></div>
 	<div>Concept demo · Dough Boss — commission-free manoush &amp; catering</div>
 </footer>
 
@@ -331,7 +312,7 @@
 	}
 	window.addEventListener('hashchange',show);
 	document.addEventListener('click',function(e){
-		var b=e.target.closest('.mn-jump[data-cat]');
+		var b=e.target.closest('[data-cat]');
 		if(!b){return;}
 		var el=document.getElementById(b.getAttribute('data-cat'));
 		if(!el){return;}
@@ -342,7 +323,7 @@
 }());
 </script>
 <script src="catering-demo.js"></script>
-<script src="order-demo.js"></script>
+<script src="menu-order.js"></script>
 <script src="kitchen-demo.js"></script>
 </body>
 </html>
