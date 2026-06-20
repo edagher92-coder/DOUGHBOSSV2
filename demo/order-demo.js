@@ -7,13 +7,14 @@
 		{ cat: 'Manoush', items: [
 			{ n: 'Zaatar', p: 7, d: ['vegan'] }, { n: 'Cheese', p: 9, d: ['vegetarian'] },
 			{ n: 'Zaatar & Cheese', p: 10, d: ['vegetarian'] }, { n: 'Lahm bi Ajin', p: 11, d: ['halal'] },
-			{ n: 'Spinach Fatayer', p: 8, d: ['vegan'] }
+			{ n: 'Sujuk & Cheese', p: 12, d: ['halal'] }, { n: 'Spinach Fatayer', p: 8, d: ['vegan'] }
 		] },
 		{ cat: 'Bites', items: [
 			{ n: 'Falafel (6)', p: 8, d: ['vegan'] }, { n: 'Cheese Sambousek', p: 7, d: ['vegetarian'] },
-			{ n: 'Kibbeh (4)', p: 10, d: ['halal'] }, { n: 'Chicken Wings', p: 12, d: ['halal'] }, { n: 'Chips', p: 6, d: ['vegan'] }
+			{ n: 'Kibbeh (4)', p: 10, d: ['halal'] }, { n: 'Chicken Wings', p: 12, d: ['halal'] }, { n: 'Chips', p: 6, d: ['vegan', 'gluten_free'] }
 		] },
-		{ cat: 'Dips', items: [ { n: 'Hummus', p: 6, d: ['vegan'] }, { n: 'Labneh', p: 6, d: ['vegetarian'] }, { n: 'Garlic', p: 5, d: ['vegan'] } ] },
+		{ cat: 'Dips', items: [ { n: 'Hummus', p: 6, d: ['vegan', 'gluten_free'] }, { n: 'Labneh', p: 6, d: ['vegetarian', 'gluten_free'] }, { n: 'Garlic Toum', p: 5, d: ['vegan', 'gluten_free'] } ] },
+		{ cat: 'Sweets', items: [ { n: 'Nutella Manoush', p: 9, d: ['vegetarian'] }, { n: 'Knafeh', p: 10, d: ['vegetarian'] }, { n: 'Baklava (3)', p: 7, d: ['vegetarian'] } ] },
 		{ cat: 'Drinks', items: [ { n: 'Soft Drink', p: 3.5, d: [] }, { n: 'Water', p: 2, d: [] }, { n: 'Ayran', p: 4, d: ['vegetarian'] }, { n: 'Lebanese Coffee', p: 4, d: [] } ] }
 	];
 	var DIET = { vegetarian: 'V', vegan: 'VG', halal: 'H', gluten_free: 'GF' };

@@ -48,5 +48,5 @@
 	});
 	newOrder(); newOrder(); orders[1].status = 'preparing'; newOrder(); orders[2].status = 'ready';
 	render();
-	setInterval(function () { if (mount.querySelector('.dbk-board')) { render(); } }, 30000);
+	setInterval(function () { var v = document.getElementById('view-kitchen'); if (v && v.classList.contains('active') && mount.querySelector('.dbk-board')) { render(); } }, 30000);
 }());
