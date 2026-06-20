@@ -25,7 +25,7 @@
 		var price = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
 		var act = document.createElement('div');
 		act.className = 'mn-it-act';
-		el.appendChild(act);
+		(el.querySelector('.mn-it-body') || el).appendChild(act);
 		controls[name] = { el: act, name: name, price: price };
 		paintItem(name);
 	});
