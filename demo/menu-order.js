@@ -3,7 +3,7 @@
 	'use strict';
 	var menuView = document.getElementById('view-menu');
 	if (!menuView) { return; }
-	var SHOPS = ['Bankstown', 'Revesby', 'Roselands'];
+	var SHOPS = ['Bankstown', 'Roselands Centro', 'Revesby'];
 	var cart = {};       // name -> { name, price, qty }
 	var controls = {};   // name -> { el, name, price }
 	var drawerOpen = false, checkoutMode = false, lastFocus = null;
