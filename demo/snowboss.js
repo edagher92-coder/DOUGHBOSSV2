@@ -96,7 +96,44 @@
 		});
 	});
 
-	/* ---------- claim submit (Formspree) ---------- */
+	/* ---------- voucher code ---------- */
+	function genCode() {
+		var chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // skip ambiguous 0/O/1/I/L
+		var s = '';
+		for (var i = 0; i < 6; i++) {
+			s += chars.charAt(Math.floor(Math.random() * chars.length));
+		}
+		return 'SNOW-' + s;
+	}
+
+	function reveal() {
+		var gate = form.closest('.sb-gate') || document;
+		form.hidden = true;
+		gate.querySelectorAll('.sb-follows, .sb-step').forEach(function (el) {
+			el.hidden = true;
+		});
+		if (thanks) { thanks.hidden = false; }
+	}
+
+	/* copy the issued code to the clipboard */
+	var copyBtn = document.getElementById('sb-copy');
+	if (copyBtn) {
+		copyBtn.addEventListener('click', function () {
+			var codeEl = document.getElementById('sb-code');
+			var text = codeEl ? codeEl.textContent : '';
+			function done() {
+				copyBtn.textContent = 'Copied ✓';
+				setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1600);
+			}
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(text).then(done, done);
+			} else {
+				done();
+			}
+		});
+	}
+
+	/* ---------- claim submit ---------- */
 	form.addEventListener('submit', function (e) {
 		e.preventDefault();
 		if (errEl) { errEl.textContent = ''; }
@@ -112,38 +149,25 @@
 			return;
 		}
 
+		// issue the voucher code and show it on the ticket
+		var code = genCode();
+		var codeEl = document.getElementById('sb-code');
+		if (codeEl) { codeEl.textContent = code; }
+
 		if (claim) {
 			claim.disabled = true;
-			claim.textContent = 'Sending…';
+			claim.textContent = 'Issuing…';
 		}
 
+		// lead-capture is best-effort — the voucher always issues in the demo
+		var fd = new FormData(form);
+		fd.append('code', code);
 		fetch(form.action, {
 			method: 'POST',
-			body: new FormData(form),
+			body: fd,
 			headers: { 'Accept': 'application/json' }
-		}).then(function (res) {
-			if (res.ok) {
-				var gate = form.closest('.sb-gate') || document;
-				form.hidden = true;
-				gate.querySelectorAll('.sb-follows, .sb-step').forEach(function (el) {
-					el.hidden = true;
-				});
-				if (thanks) { thanks.hidden = false; }
-			} else {
-				return res.json().then(function (d) {
-					throw new Error((d && d.error) || 'Something went wrong.');
-				});
-			}
-		}).catch(function (err) {
-			if (errEl) {
-				errEl.textContent = (err && err.message) ||
-					'Could not submit right now — please try again.';
-			}
-			if (claim) {
-				claim.disabled = false;
-				claim.textContent = 'Claim voucher';
-			}
-		});
+		}).catch(function () { /* ignore network errors in the demo */ })
+			.then(reveal);
 	});
 
 	refresh();
