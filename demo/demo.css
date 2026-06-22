@@ -313,6 +313,10 @@ body.cart-on{padding-bottom:114px;}
 .foot .flinks{margin-bottom:8px;}
 .foot .flinks a{color:#cfc9bf;margin:0 8px;cursor:pointer;}
 .foot .flinks a:hover{color:#fff;}
+.foot .fsocial{margin-bottom:10px;}
+.foot .fsocial a{display:inline-flex;align-items:center;gap:7px;color:#cfc9bf;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:15px;}
+.foot .fsocial a:hover{color:#fff;}
+.foot .fsocial svg{opacity:.85;}
 
 /* catering quote builder */
 .dbq{color:#0d0d0d;display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;}
