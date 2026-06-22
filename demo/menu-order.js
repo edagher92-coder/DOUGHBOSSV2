@@ -7,12 +7,15 @@
 	var cart = {};       // name -> { name, price, qty }
 	var controls = {};   // name -> { el, name, price }
 	var drawerOpen = false, checkoutMode = false, lastFocus = null;
+	var voucher = null;   // { code, amount } once a valid code is applied
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	function money(n) { return '$' + Number(n).toFixed(2); }
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 	function count() { var c = 0; for (var k in cart) { c += cart[k].qty; } return c; }
 	function total() { var t = 0; for (var k in cart) { t += cart[k].price * cart[k].qty; } return t; }
+	function discount() { return voucher ? Math.min(voucher.amount, total()) : 0; }
+	function netTotal() { return Math.max(0, total() - discount()); }
 
 	/* --- enhance each menu item with an Add / stepper control --- */
 	Array.prototype.forEach.call(menuView.querySelectorAll('.mn-item'), function (el) {
@@ -126,18 +129,41 @@
 		if (!count()) { return; }
 		checkoutMode = true;
 		var shopOpts = SHOPS.map(function (s) { return '<option>' + s + '</option>'; }).join('');
+		var vouchHtml = voucher
+			? '<div class="cd-von"><span class="cd-vcode">&#127915; ' + esc(voucher.code) + ' applied</span><button type="button" class="cd-vremove">Remove</button></div>'
+			: '<div class="cd-vrow"><input type="text" class="cd-vinput" placeholder="Voucher code (try a SNOW-… code)" aria-label="Voucher code" autocapitalize="characters"><button type="button" class="cd-vapply">Apply</button></div>';
+		var totsHtml = (voucher
+			? '<div class="cd-tline"><span>Subtotal</span><span>' + money(total()) + '</span></div>' +
+				'<div class="cd-tline cd-tdisc"><span>Voucher ' + esc(voucher.code) + '</span><span>&minus;' + money(discount()) + '</span></div>'
+			: '') +
+			'<div class="cd-tot"><span>Total</span><strong>' + money(netTotal()) + '</strong></div>';
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+			'<div class="cd-vouch">' + vouchHtml + '<p class="cd-verr" role="alert"></p></div>' +
 			'<form class="cd-form" novalidate>' +
 			'<label class="cd-f"><span>Name</span><input name="name" type="text" autocomplete="name" required></label>' +
 			'<label class="cd-f"><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required></label>' +
 			'<fieldset class="cd-f"><span>Fulfilment</span><label class="cd-rad"><input type="radio" name="ful" value="pickup" checked> Pickup</label><label class="cd-rad"><input type="radio" name="ful" value="delivery"> Delivery</label></fieldset>' +
 			'<label class="cd-f"><span>Shop</span><select name="shop">' + shopOpts + '</select></label>' +
-			'<div class="cd-tot"><span>Total</span><strong>' + money(total()) + '</strong></div>' +
+			'<div class="cd-tots">' + totsHtml + '</div>' +
 			'<div class="cd-err" role="alert"></div>' +
 			'<button type="submit" class="vb-btn vb-btn-ember">Place order</button>' +
 			'<button type="button" class="vb-btn vb-btn-dark cd-back">Back to order</button>' +
 			'</form>';
 		var f = drawer.querySelector('input[name="name"]'); if (f) { f.focus(); }
+	}
+
+	function applyVoucher() {
+		var input = drawer.querySelector('.cd-vinput');
+		var verr = drawer.querySelector('.cd-verr');
+		if (verr) { verr.textContent = ''; }
+		var code = input ? input.value.trim().toUpperCase() : '';
+		if (!/^SNOW-[A-Z0-9]{6}$/.test(code)) {
+			if (verr) { verr.textContent = 'Enter a valid voucher code, e.g. SNOW-7K2D9Q.'; }
+			if (input) { input.focus(); }
+			return;
+		}
+		voucher = { code: code, amount: 5 };   // $5 off — the Dough Boss side of the student voucher
+		renderCheckout();
 	}
 
 	function placeOrder(form) {
@@ -147,10 +173,12 @@
 		var err = form.querySelector('.cd-err');
 		if (!name || !phone) { err.textContent = 'Please add your name and phone.'; return; }
 		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
-		var amt = money(total());
+		var amt = money(netTotal());
+		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
 		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-done" role="status"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Order <strong>' + esc(ref) + '</strong> &middot; ' + amt + '</p><p class="cd-note">Demo &mdash; in production this goes straight to the kitchen board and takes card payment.</p></div>';
+			'<div class="cd-done" role="status"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p><p class="cd-note">Demo &mdash; in production this goes straight to the kitchen board and takes card payment.</p></div>';
 		cart = {};
+		voucher = null;
 		for (var n in controls) { paintItem(n); }
 		renderFab(false);
 	}
@@ -167,6 +195,8 @@
 		if (e.target.closest('.cd-close')) { closeDrawer(); return; }
 		if (e.target.closest('.cd-checkout')) { renderCheckout(); return; }
 		if (e.target.closest('.cd-back')) { renderDrawer(); return; }
+		if (e.target.closest('.cd-vapply')) { applyVoucher(); return; }
+		if (e.target.closest('.cd-vremove')) { voucher = null; renderCheckout(); return; }
 		var inc = e.target.closest('[data-inc]'); if (inc) { add(inc.getAttribute('data-inc'), 1); return; }
 		var dec = e.target.closest('[data-dec]'); if (dec) { add(dec.getAttribute('data-dec'), -1); return; }
 	});
