@@ -1,6 +1,6 @@
 # DoughBoss × POSPal — Integration Plan (Orders · Catering · Vouchers)
 
-**Status:** Draft v2 — for team review
+**Status:** Draft v3 — security + architecture + web-dev review folded in (§15); M1 connector built & merged.
 **Author:** DoughBoss dev
 **Spans three domains over one POSPal connector:** (1) **online & in-app orders** → POSPal, (2) **catering** orders/deposits → POSPal, (3) **vouchers** (discount coupons). Shared foundation in §2–§6, §9–§11, §14; domain specifics in §7 (vouchers), §8A (orders), §8B (catering), §8C (product mapping).
 **Scope decisions (locked):** **discount-coupon** model (not stored-value). POSPal Open Platform access is currently the **Revesby store only** (account `aus_nsw1740`, area28 host `area28-win.pospal.cn:443`). **v1 pilots at Revesby**, with the connector built **multi-store-ready** so Bankstown & Roselands plug in once their POSPal access is provisioned. Credentials (host, appId, appKey) are supplied out-of-band and stored in settings/env — **never committed to the repo**.
@@ -86,7 +86,7 @@ Why not let POSPal own the whole thing? Because the same voucher must also work 
 
 ## 5. Data model (new tables)
 
-Created via `create_tables()` (dbDelta) **plus** a version-gated migration step, **plus** a `DOUGHBOSS_DB_VERSION` bump (next increment — reconcile with the catering branch's `1.5.0`, so likely `1.6.0`).
+Created via `create_tables()` (dbDelta) **plus** a version-gated migration step, **plus** a `DOUGHBOSS_DB_VERSION` bump to **`1.6.0`** (confirmed: catering already shipped at `1.5.0` in this tree — add an `upgrade_to_1_6_0()` step after the existing 1.5.0 branch). **Also add order columns** (§15): `pospal_order_no`, `pospal_push_status`, `pospal_pushed_at` on `{prefix}doughboss_orders` (and the catering enquiries table) for idempotent order push.
 
 ### `{prefix}doughboss_vouchers`
 | column | type | notes |
@@ -262,6 +262,34 @@ Orders and catering need each line item mapped to a POSPal product.
 - **Revesby-only access today** — in-store redemption is limited to Revesby until Bankstown/Roselands POSPal is provisioned; the Bankstown-themed Snow Boss voucher must pilot at Revesby or wait for Bankstown access (see top-of-doc constraint).
 
 ---
+
+## 15. Review findings folded in (v3)
+
+A three-specialist read (security · architecture · web-dev) of v2 against the live plugin. Net: architecture is sound and convention-aligned; the items below are the must-get-right details, now **binding on the build**. **Factual correction:** the plugin **already ships** the Stripe webhook (`/catering/stripe-webhook` + `verify_webhook_signature`) and the full catering deposit/balance system (`doughboss_catering_enquiries`) — reuse them, don't reinvent. CLAUDE.md's "webhook not yet implemented" note is stale.
+
+### P0 — correctness / data-integrity (binding)
+- **Sign the exact bytes sent.** Build the JSON body once, sign that string, POST that same string — never an array body (WP re-encodes arrays → signature mismatch). *(Done in M1.)*
+- **DB version = `1.6.0`.** Voucher tables in `create_tables()` (additive dbDelta) + an `upgrade_to_1_6_0()` step after the 1.5.0 branch; bump `DOUGHBOSS_DB_VERSION`.
+- **Atomic single-use redeem.** Not read-then-write: conditional `UPDATE doughboss_vouchers SET status='redeemed' WHERE id=%d AND status='issued'`, treat `rows_affected===1` as the winner; back it with `UNIQUE(idempotency_key)` on the redemptions table (insert-first).
+- **Order-push idempotency.** `pospal_order_no` + `pospal_push_status` + `pospal_pushed_at` on `doughboss_orders` (and catering); gate the push on a NULL `pospal_order_no`; send our `order_number` as POSPal's dedup key so a timed-out retry can't double-create a ticket.
+- **Catering money is one-way.** Stripe/plugin owns deposit/balance (existing `class-doughboss-catering.php`); POSPal receives a fulfilment order for kitchen/ops only and must never write money state back — a POSPal-side price edit is a report-only flag.
+
+### P1 — important (binding)
+- **Decouple order push from checkout.** `/checkout` records order + Stripe payment as today; push to POSPal **asynchronously on the existing `doughboss_order_created` action** (cron/async, `pospal_push_status` drives retries). A POSPal outage or quota exhaustion must never block a paid order.
+- **Encode the 300/day budget.** Per-event budget (issue ≈2, online-redeem ≈1, order-push ≈1, status ≈1–2/cycle, product-sync ≈⌈catalog/page⌉). Add an in-code **daily call counter + circuit-breaker**; **skip polling entirely when nothing is outstanding**; long-TTL cached product sync; **retry only idempotent reads, never writes.** Secure a **paid quota before O2 (order push) goes live** — hard prerequisite.
+- **High-entropy voucher codes.** ≥8 chars from an unambiguous alphabet via `random_bytes`/`wp_generate_password` (not `rand()`).
+- **Rate-limit + opaque responses.** Apply the existing `rate_limited()` to `/voucher/validate` (~10/10min) and `/voucher/redeem` (~5/hr); return an identical generic response for invalid/expired/not-found/already-used; keep `/voucher/validate` **purely local** (no POSPal call) so it can't burn quota.
+- **Least privilege.** `verify_admin()` also grants the kitchen (`manage_doughboss_kds`) role — use it only for in-store `/voucher/redeem`; add a `verify_manage()` (owner `manage_doughboss` only) for `/voucher/issue`, revoke and `/admin/vouchers`. A till tablet must not issue value.
+- **Callback (only if POSPal offers one).** POSPal signs with MD5(appKey+body) — **no built-in replay protection**, so the Stripe verifier can't be reused: add `verify_callback()` (`hash_equals` over the raw `get_body()`), read the header as `data_signature`, route `permission_callback => __return_true`, enforce a `time-stamp` freshness window, dedupe on `pospal_ticket_no` (UNIQUE). If POSPal is poll-only (§11.2), **don't ship the route.**
+- **Settings sanitizer trap.** `DoughBoss_Admin::sanitize_settings()` rebuilds `$clean` from a whitelist and **drops unknown keys** — the per-store POSPal config (`pospal_stores[location_id]{host,appId,appKey,enabled,coupon_map}`) must be explicitly sanitized there or it's wiped on every save. Key shop scope by **`location_id`** (not free-text), consistent with `doughboss_orders`/`DoughBoss_Locations`.
+- **Secret handling.** `appKey` read **env-first** (`DOUGHBOSS_POSPAL_APPKEY`) *(done)*; if ever stored in DB, a non-autoloaded option; admin field **write-only** (preserve prior value when posted blank; never echo). Connector logs status+endpoint only — never body/PII/key *(done)*.
+- **Product mapping.** Store `_doughboss_pospal_uid` / `_doughboss_pospal_barcode` as `doughboss_item` meta; an order with any **unmapped line is blocked/flagged** (not partial-pushed); push DoughBoss prices (= what was paid via Stripe), treat POSPal price drift as report-only.
+- **KDS "customer mirror" = the existing `/order/{number}` tracking page** fed by synced POSPal status — not the staff `verify_admin` board. Decide separately whether to retire the staff board per connected store.
+- **Sequencing.** Run **M4 (reconciliation) immediately after M3**, or gate online redeem behind a "POSPal coupon revoked OK" — otherwise an in-store redeem is invisible to the online lock during rollout.
+- **PII minimisation + consent.** Send only what's needed to grant/redeem (phone as member key; avoid email/notes); capture consent at issuance that the phone is shared with the POS; document retention/erasure for the voucher/redemption tables.
+
+### Done in M1 (merged)
+`includes/class-doughboss-pospal.php` — exact-byte signing, ms `time-stamp`, default `sslverify`, gzip-safe response, status-only logging; `pospal_*` settings (env-first `appKey`, `pospal_ready()` gate); loader wiring. `php -l` clean (19/19).
 
 ### Sources
 - POSPal Open Platform — Coupon API (查询可用优惠券规则): `https://www.pospal.cn/openplatform/apis/couponapi/3.%20查询可用优惠券规则.html`

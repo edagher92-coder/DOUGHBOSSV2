@@ -141,12 +141,13 @@ class DoughBoss_POSPal {
 			array(
 				'method'  => 'POST',
 				'timeout' => 25,
+				// Let WP manage Accept-Encoding so it auto-decompresses the reply;
+				// a gzip fallback below covers servers that gzip regardless.
 				'headers' => array(
-					'User-Agent'      => 'openApi',
-					'Content-Type'    => 'application/json; charset=utf-8',
-					'accept-encoding' => 'gzip,deflate',
-					'time-stamp'      => self::timestamp_ms(),
-					'data-signature'  => self::sign( $raw_body ),
+					'User-Agent'     => 'openApi',
+					'Content-Type'   => 'application/json; charset=utf-8',
+					'time-stamp'     => self::timestamp_ms(),
+					'data-signature' => self::sign( $raw_body ),
 				),
 				'body'    => $raw_body,
 			)
@@ -157,7 +158,15 @@ class DoughBoss_POSPal {
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		$raw  = wp_remote_retrieve_body( $response );
+		// Fallback: decode gzip if the host returned it without WP inflating it.
+		if ( '' !== $raw && 0 === strpos( $raw, "\x1f\x8b" ) && function_exists( 'gzdecode' ) ) {
+			$decoded = gzdecode( $raw );
+			if ( false !== $decoded ) {
+				$raw = $decoded;
+			}
+		}
+		$data = json_decode( $raw, true );
 
 		if ( $code >= 200 && $code < 300 && is_array( $data ) && isset( $data['status'] ) && 'success' === $data['status'] ) {
 			return isset( $data['data'] ) ? $data['data'] : array();
