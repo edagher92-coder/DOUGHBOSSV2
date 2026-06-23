@@ -70,6 +70,13 @@ class DoughBoss_Settings {
 			'stripe_live_sk'   => '',
 			'stripe_test_whsec' => '',
 			'stripe_live_whsec' => '',
+			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
+			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
+			// this option is only a fallback and is best left blank where env is set.
+			'pospal_enabled'    => 0,
+			'pospal_host'       => '',
+			'pospal_app_id'     => '',
+			'pospal_app_key'    => '',
 		);
 	}
 
@@ -214,5 +221,61 @@ class DoughBoss_Settings {
 	 */
 	public static function stripe_ready() {
 		return self::payments_enabled() && '' !== self::stripe_publishable_key() && '' !== self::stripe_secret_key();
+	}
+
+	/**
+	 * Whether the POSPal POS integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_enabled() {
+		return (bool) self::get( 'pospal_enabled', 0 );
+	}
+
+	/**
+	 * POSPal area host, trailing slash removed (e.g. https://area28-win.pospal.cn:443).
+	 *
+	 * @return string
+	 */
+	public static function pospal_host() {
+		return untrailingslashit( (string) self::get( 'pospal_host', '' ) );
+	}
+
+	/**
+	 * POSPal public application id.
+	 *
+	 * @return string
+	 */
+	public static function pospal_app_id() {
+		return (string) self::get( 'pospal_app_id', '' );
+	}
+
+	/**
+	 * POSPal secret application key. Read env-first — the constant
+	 * DOUGHBOSS_POSPAL_APPKEY or the matching environment variable take
+	 * precedence over the stored option, so the secret can be kept out of the
+	 * database (and therefore out of backups). Only ever used server-side to
+	 * sign requests; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function pospal_app_key() {
+		if ( defined( 'DOUGHBOSS_POSPAL_APPKEY' ) && '' !== (string) DOUGHBOSS_POSPAL_APPKEY ) {
+			return (string) DOUGHBOSS_POSPAL_APPKEY;
+		}
+		$env = getenv( 'DOUGHBOSS_POSPAL_APPKEY' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'pospal_app_key', '' );
+	}
+
+	/**
+	 * Whether POSPal is both enabled and fully configured (host + appId + appKey).
+	 *
+	 * @return bool
+	 */
+	public static function pospal_ready() {
+		return self::pospal_enabled() && '' !== self::pospal_host() && '' !== self::pospal_app_id() && '' !== self::pospal_app_key();
 	}
 }
