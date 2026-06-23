@@ -1,16 +1,27 @@
-# DoughBoss × POSPal — Voucher / Discount-Coupon Integration Plan
+# DoughBoss × POSPal — Integration Plan (Orders · Catering · Vouchers)
 
-**Status:** Draft v1 — for team review
+**Status:** Draft v2 — for team review
 **Author:** DoughBoss dev
-**Scope decisions (locked):** single POSPal account for all three shops (Bankstown, Roselands Centro, Revesby); **discount-coupon** model (not stored-value).
+**Spans three domains over one POSPal connector:** (1) **online & in-app orders** → POSPal, (2) **catering** orders/deposits → POSPal, (3) **vouchers** (discount coupons). Shared foundation in §2–§6, §9–§11, §14; domain specifics in §7 (vouchers), §8A (orders), §8B (catering), §8C (product mapping).
+**Scope decisions (locked):** **discount-coupon** model (not stored-value). POSPal Open Platform access is currently the **Revesby store only** (account `aus_nsw1740`, area28 host `area28-win.pospal.cn:443`). **v1 pilots at Revesby**, with the connector built **multi-store-ready** so Bankstown & Roselands plug in once their POSPal access is provisioned. Credentials (host, appId, appKey) are supplied out-of-band and stored in settings/env — **never committed to the repo**.
+
+> ⚠️ **Two constraints from the account:**
+> 1. **Rate limit — 300 API calls/day on the free tier.** This is the single biggest design driver: a naive 5-minute reconciliation poll (~288/day) would nearly exhaust the quota on its own. The design must be **event-driven first** and poll only when work is actually outstanding (see §7B/§14). **With orders + catering now in scope**, real order volume + product sync + status polling will blow past 300/day quickly — **budget a paid quota upgrade from POSPal sales before orders go live.** The voucher-only pilot can run within the free tier.
+> 2. **Revesby ≠ Bankstown.** The Snow Boss `$5+$10` student voucher is themed for the **Bankstown** flagship, but only **Revesby** has POSPal access today. Either pilot the voucher in-store at **Revesby**, or provision **Bankstown** POSPal access before the Bankstown launch (online redemption works regardless).
 
 ---
 
 ## 1. Goal
 
-Let a voucher issued by DoughBoss (e.g. the Snow Boss `$5 + $10` student launch voucher, online promos, or a manually-issued code) **appear and redeem natively on the in-store POSPal till**, and also redeem in the online cart — with **one source of truth** so a code can never be spent twice across channels, and so discounts (and, later, surcharges) are fully audited.
+Use the shops' **POSPal POS as the operational hub** and connect it to the DoughBoss site so three things flow through one integration:
 
-Non-goal for v1: stored-value/gift-card balances, loyalty points accrual, full menu sync. These are noted as future extensions.
+1. **Orders** — online & in-app orders push into POSPal as online orders (网单) so they hit the till/kitchen, with status synced back to order tracking + the Live Order Board.
+2. **Catering** — confirmed catering orders (with Stripe deposit/balance) create POSPal fulfilment orders.
+3. **Vouchers** — discount coupons issued by DoughBoss appear and redeem natively at the POSPal till **and** in the online cart, with one cross-channel single-use lock.
+
+**One source of truth:** the DoughBoss plugin owns issuance, money (Stripe), and audit; POSPal owns in-store execution (till, kitchen, native coupon redemption). Everything is keyed so nothing double-counts.
+
+Non-goals for v1: stored-value/gift-card balances and loyalty-points accrual (future). Product/menu mapping **is** in scope now — orders need it (§8C).
 
 ---
 
@@ -159,6 +170,32 @@ The `type=surcharge` value is reserved now so the same tables/endpoints later su
 
 ---
 
+## 8A. Orders integration (online & in-app → POSPal)
+
+POSPal natively supports **online orders (网单)** via `orderOpenApi` (push an externally-created order; later `queryOrderByNo` for status), so the till and kitchen treat web orders like any other.
+
+**Flow:**
+1. Customer orders on the site (the cart we built) → plugin writes the existing `doughboss_orders` row → payment via **Stripe** (existing).
+2. Connector pushes the order to POSPal as an online order: line items mapped to POSPal products (§8C), totals, customer, pickup/delivery, **marked prepaid**. Idempotent by our order number (no duplicate tickets on retry).
+3. Store the returned POSPal `orderNo` on the order row.
+4. **Status sync** (quota-aware — §rate-limit): `queryOrderByNo`/callback updates the plugin's order tracking + **Live Order Board**.
+
+**KDS decision (flag for owner):** with orders flowing into POSPal, the store likely runs ops on POSPal's till/kitchen. The plugin's Live Order Board then becomes either (a) a **customer-facing mirror** of POSPal status, or (b) retired for connected stores. Recommend (a) so online customers keep live tracking. Decide per store.
+
+## 8B. Catering integration
+
+Catering is larger, scheduled, deposit-based. It reuses the catering enquiry/quote system (`doughboss_catering_*`) and pushes to POSPal for fulfilment.
+
+**Flow:** enquiry → quote → **Stripe deposit** → on confirmation create a (future-dated) POSPal order for the event → **balance** on/before the day → push final order to POSPal for fulfilment. Money (deposit/balance) is tracked in-plugin (source of truth); POSPal gets the fulfilment order near the event date to conserve API quota. Lower real-time urgency than walk-in orders.
+
+## 8C. Product & menu mapping (shared prerequisite for §8A/§8B)
+
+Orders and catering need each line item mapped to a POSPal product.
+
+- **Recommended:** treat **POSPal as the master product/price list** for in-store. Pull products via `productOpenApi` (`queryProductPages` / `queryProductByBarcodes` / `queryProductByUid`) and store `productUid`/`barcode` on each DoughBoss menu item (CPT meta). Add an admin **mapping screen** (auto-match by name/barcode, manual override).
+- **Pricing:** POS is the price source of truth in-store; reconcile online prices to POSPal product prices to avoid drift (warn on mismatch).
+- **Refresh:** sync products on a schedule + manual "resync" button (cache to respect the rate limit).
+
 ## 9. Security
 
 - **Secrets:** `appId`, `appKey`, `area-host` stored via `DoughBoss_Settings` (the single options array) — `appKey` write-only in the admin field, **never** echoed back or committed. Prefer setting via server env where possible.
@@ -171,7 +208,7 @@ The `type=surcharge` value is reserved now so the same tables/endpoints later su
 
 ## 10. Admin & settings
 
-- **Settings → Payments/Integrations:** POSPal `appId`, `appKey`, `area-host`, enable toggle, "test connection" (calls `queryCouponPromotions`), and a mapping field (which POSPal coupon rule represents `$5 off` / `$10 off`).
+- **Settings → Payments/Integrations:** **per-store** POSPal config — `host`, `appId`, `appKey` keyed by shop (Revesby configured now; Bankstown/Roselands rows added later), each with an enable toggle, a "test connection" (calls `queryCouponPromotions`), and a mapping field (which POSPal coupon rule represents `$5 off` / `$10 off`). A voucher's `shop_scope` selects which store's credentials the connector uses.
 - **Orders → Vouchers:** list with status, channel, shop, amount, ticket no; manual issue/revoke; CSV export for reconciliation.
 - Off by default until configured + enabled (mirrors the Stripe `ready()` gate): no POSPal calls happen unless `appId`+`appKey`+`area-host` are set and the toggle is on.
 
@@ -184,7 +221,9 @@ The `type=surcharge` value is reserved now so the same tables/endpoints later su
 3. **Coupon rule setup** — confirm whether the `$5`/`$10` discounts are pre-created as POSPal coupon *rules* in the back office and we grant instances, vs. created via API.
 4. **`area-host`** — the exact host for this account (region/data-centre).
 5. **Sandbox/test** — does POSPal provide a test app, or do we test against a low-value live coupon?
-6. **Member identity** — confirm phone is the agreed member key across all three shops.
+6. **Member identity** — confirm phone is the agreed member key (Revesby now; same assumption for the other stores later).
+7. **Other stores** — confirm whether Bankstown & Roselands will be **separate POSPal accounts/areas** (own host + appId/appKey) or stores under one account, so the per-store settings model is right.
+8. **Egress** — the connector runs on the live WP host (has outbound to `area28-win.pospal.cn`); the dev sandbox is allow-listed and blocks it, so live-host testing (or adding the host to dev egress) is required to exercise calls.
 
 ---
 
@@ -195,7 +234,13 @@ The `type=surcharge` value is reserved now so the same tables/endpoints later su
 - **M2 — Data model + REST:** tables, migration, DB-version bump, `validate`/`redeem`/`issue` endpoints, single-use lock. Wire the **online cart** redemption (port the demo's `SNOW-` flow to the real endpoints).
 - **M3 — POSPal issue:** ensure-member + grant-coupon on issue; store refs; convert the Snow Boss claim to call `/voucher/issue`.
 - **M4 — Reconciliation:** cron poll (or callback) → mark redeemed + audit; cross-channel revoke.
-- **M5 — Admin UI + reporting + owner docs;** soft launch with the student voucher at **Bankstown**, then roll to all three.
+- **M5 — Admin UI + reporting + owner docs;** soft launch at **Revesby** (the only connected store), then add Bankstown & Roselands once their POSPal access is provisioned.
+
+**Orders & catering track (can run in parallel after M1):**
+- **O1 — Product mapping:** pull POSPal products (`productOpenApi`) → map to the DoughBoss menu (store `productUid`/barcode) + admin mapping UI (§8C).
+- **O2 — Order push:** push online orders to POSPal as online orders (`orderOpenApi`), idempotent by order number, marked prepaid (Stripe); store `orderNo`.
+- **O3 — Status sync:** query/callback order status → order tracking + Live Order Board (quota-aware polling; resolve the KDS-mirror decision in §8A).
+- **C1 — Catering push:** on catering confirmation, create the POSPal fulfilment order (deposit/balance tracked in-plugin); sync near event date.
 
 ---
 
@@ -213,6 +258,8 @@ The `type=surcharge` value is reserved now so the same tables/endpoints later su
 - **Doc/language** — POSPal docs are Chinese; method names per §11 must be confirmed before M3.
 - **Account/plan** — Open Platform access + `appId/appKey` must be enabled on the POSPal account (may need a plan/developer approval).
 - **No webhook** would mean redemption visibility lags by the poll interval (acceptable for vouchers; document for the owner).
+- **300 calls/day rate limit (free tier)** — reconciliation must be economical: poll only when vouchers are outstanding, batch ticket queries, and prefer a push callback if POSPal offers one; otherwise budget the quota (issue ≈ 2 calls, online-redeem ≈ 1, poll ≈ N) and plan a paid quota upgrade before scaling beyond the Revesby pilot.
+- **Revesby-only access today** — in-store redemption is limited to Revesby until Bankstown/Roselands POSPal is provisioned; the Bankstown-themed Snow Boss voucher must pilot at Revesby or wait for Bankstown access (see top-of-doc constraint).
 
 ---
 
