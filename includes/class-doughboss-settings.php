@@ -95,7 +95,20 @@ class DoughBoss_Settings {
 			'pospal_host'       => '',
 			'pospal_app_id'     => '',
 			'pospal_app_key'    => '',
+			// Standalone staff console (separate origin, e.g. GitHub Pages) allowed
+			// to call the doughboss/v1 routes cross-origin via Application Password.
+			'app_origin'        => 'https://edagher92-coder.github.io',
 		);
+	}
+
+	/**
+	 * Allowed origin for the standalone staff console (CORS). Empty disables
+	 * cross-origin access. Filterable via 'doughboss_app_origin'.
+	 *
+	 * @return string
+	 */
+	public static function app_origin() {
+		return untrailingslashit( (string) apply_filters( 'doughboss_app_origin', self::get( 'app_origin', '' ) ) );
 	}
 
 	/**

@@ -40,6 +40,43 @@ class DoughBoss_REST_Controller {
 	 */
 	public function init() {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+		// Allow the standalone staff console (separate origin) to call our routes.
+		add_action( 'rest_api_init', array( $this, 'enable_cors' ), 15 );
+	}
+
+	/**
+	 * Swap WordPress's permissive default CORS handling for a scoped one: only
+	 * the configured console origin, only this plugin's namespace.
+	 *
+	 * @return void
+	 */
+	public function enable_cors() {
+		remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
+		add_filter( 'rest_pre_serve_request', array( $this, 'send_cors_headers' ), 10, 4 );
+	}
+
+	/**
+	 * Send CORS headers for the staff console origin on doughboss/v1 routes
+	 * (Application Password auth). Scoped — never site-wide wildcard.
+	 *
+	 * @param bool             $served  Whether the request has been served.
+	 * @param WP_HTTP_Response $result  Result to send.
+	 * @param WP_REST_Request  $request Request.
+	 * @param WP_REST_Server   $server  Server instance.
+	 * @return bool
+	 */
+	public function send_cors_headers( $served, $result, $request, $server ) {
+		unset( $result, $server );
+		$origin  = get_http_origin();
+		$allowed = DoughBoss_Settings::app_origin();
+		$route   = (string) $request->get_route();
+		if ( $origin && $allowed && $origin === $allowed && 0 === strpos( $route, '/' . DOUGHBOSS_REST_NAMESPACE ) ) {
+			header( 'Access-Control-Allow-Origin: ' . $allowed );
+			header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
+			header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce' );
+			header( 'Vary: Origin' );
+		}
+		return $served;
 	}
 
 	/**
@@ -301,6 +338,48 @@ class DoughBoss_REST_Controller {
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'pospal_test' ),
 				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/auth/me',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'auth_me' ),
+				'permission_callback' => array( $this, 'verify_staff' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/admin/vouchers',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_vouchers' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'limit' => array(
+						'default'           => 100,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/voucher/void',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_void_voucher' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
 			)
 		);
 
@@ -653,6 +732,20 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Permission check for the staff console's login probe: any DoughBoss staff
+	 * role (redeem, board, or management). Returns 401 so the console can prompt
+	 * for valid credentials.
+	 *
+	 * @return bool|WP_Error
+	 */
+	public function verify_staff() {
+		if ( current_user_can( 'redeem_doughboss_vouchers' ) || current_user_can( 'manage_doughboss_kds' ) || current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+		return new WP_Error( 'doughboss_unauthorized', __( 'Sign in with a DoughBoss staff account.', 'doughboss' ), array( 'status' => 401 ) );
+	}
+
+	/**
 	 * Mask a customer phone for the shared till feed — show only the last 3
 	 * digits so staff can still match a customer without exposing the full
 	 * number on a counter-facing screen.
@@ -951,6 +1044,79 @@ class DoughBoss_REST_Controller {
 				'ok'      => true,
 				'message' => __( 'POSPal reachable and the signature was accepted.', 'doughboss' ),
 				'rules'   => $result,
+			)
+		);
+	}
+
+	/**
+	 * GET /auth/me — who the console is signed in as, and which screens they may
+	 * use. Lets the standalone app verify credentials and show the right tabs.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function auth_me() {
+		$user = wp_get_current_user();
+		return rest_ensure_response(
+			array(
+				'name'       => $user ? $user->display_name : '',
+				'can_redeem' => current_user_can( 'redeem_doughboss_vouchers' ) || current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
+				'can_manage' => current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
+				'can_board'  => current_user_can( 'manage_doughboss_kds' ) || current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
+				'currency'   => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+			)
+		);
+	}
+
+	/**
+	 * GET /admin/vouchers — list recent vouchers with redemption state for the
+	 * console's Vouchers screen (owner only).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function admin_vouchers( WP_REST_Request $request ) {
+		$limit = (int) $request->get_param( 'limit' );
+		$rows  = DoughBoss_Voucher::query( $limit > 0 ? $limit : 100 );
+		$out   = array();
+		foreach ( $rows as $r ) {
+			$out[] = array(
+				'id'          => (int) $r->id,
+				'code'        => $r->code,
+				'type'        => $r->type,
+				'value'       => (float) $r->value,
+				'status'      => $r->status,
+				'campaign'    => $r->campaign,
+				'phone'       => $r->customer_phone,
+				'email'       => $r->customer_email,
+				'redeemed_at' => isset( $r->redeemed_at ) ? $r->redeemed_at : null,
+				'amount'      => isset( $r->amount_applied ) ? (float) $r->amount_applied : 0,
+				'channel'     => isset( $r->redeemed_channel ) ? $r->redeemed_channel : '',
+				'created_at'  => $r->created_at,
+			);
+		}
+		return rest_ensure_response(
+			array(
+				'vouchers'  => $out,
+				'campaigns' => DoughBoss_Voucher::campaigns(),
+			)
+		);
+	}
+
+	/**
+	 * POST /voucher/void — void an issued voucher by id (owner only).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_void_voucher( WP_REST_Request $request ) {
+		$id = absint( $request->get_param( 'id' ) );
+		if ( ! DoughBoss_Voucher::void( $id ) ) {
+			return new WP_Error( 'doughboss_void', __( 'Could not void — not found or already used.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return rest_ensure_response(
+			array(
+				'voided' => true,
+				'id'     => $id,
 			)
 		);
 	}
