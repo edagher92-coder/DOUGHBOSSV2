@@ -700,8 +700,8 @@ class DoughBoss_REST_Controller {
 
 	/**
 	 * POST /voucher/claim — claim a voucher from a daily-capped campaign (e.g.
-	 * the Snow Boss student $5 / $10). Public (nonce) + rate-limited; enforces
-	 * the per-day cap server-side.
+	 * the combined Dough Boss × Snow Boss "$5 + $10" student voucher). Public
+	 * (nonce) + rate-limited; enforces the per-day cap server-side.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error

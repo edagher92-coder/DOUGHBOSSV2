@@ -302,32 +302,34 @@ class DoughBoss_Voucher {
 	}
 
 	/**
-	 * Default campaigns — the Snow Boss student launch: a $5 and a $10 voucher,
-	 * each capped at 100 claims per day and released fresh every day.
+	 * Default campaigns — the Dough Boss × Snow Boss student launch: a single
+	 * combined "$5 + $10" voucher ($15 total value — $10 at Dough Boss + $5 at
+	 * Snow Boss), capped at 100 claims per day and released fresh every day.
+	 *
+	 * The brand split is carried in `meta.breakdown` so the in-store leg (M3)
+	 * can grant the matching POSPal coupon(s) per brand, while online it applies
+	 * as one $15 discount. Owners can override via the 'voucher_campaigns'
+	 * setting.
 	 *
 	 * @return array[]
 	 */
 	public static function default_campaigns() {
 		return array(
-			'snow5'  => array(
-				'slug'      => 'snow5',
-				'label'     => '$5 off a manoush combo',
+			'student' => array(
+				'slug'      => 'student',
+				'label'     => '$5 + $10 Student Voucher (Dough Boss × Snow Boss)',
 				'type'      => 'amount',
-				'value'     => 5.00,
-				'prefix'    => 'SNOW',
+				'value'     => 15.00,
+				'prefix'    => 'STUDENT',
 				'daily_cap' => 100,
 				'scope'     => 'both',
 				'active'    => 1,
-			),
-			'snow10' => array(
-				'slug'      => 'snow10',
-				'label'     => '$10 off your first Snow Boss dessert',
-				'type'      => 'amount',
-				'value'     => 10.00,
-				'prefix'    => 'SNOW',
-				'daily_cap' => 100,
-				'scope'     => 'both',
-				'active'    => 1,
+				'meta'      => array(
+					'breakdown' => array(
+						'doughboss' => 10.00,
+						'snowboss'  => 5.00,
+					),
+				),
 			),
 		);
 	}
@@ -377,9 +379,12 @@ class DoughBoss_Voucher {
 					'scope'      => isset( $campaign['scope'] ) ? $campaign['scope'] : 'both',
 					'single_use' => 1,
 					'campaign'   => $slug,
-					'meta'       => array(
-						'campaign' => $slug,
-						'label'    => isset( $campaign['label'] ) ? $campaign['label'] : '',
+					'meta'       => array_merge(
+						array(
+							'campaign' => $slug,
+							'label'    => isset( $campaign['label'] ) ? $campaign['label'] : '',
+						),
+						( isset( $campaign['meta'] ) && is_array( $campaign['meta'] ) ) ? $campaign['meta'] : array()
 					),
 				),
 				$args

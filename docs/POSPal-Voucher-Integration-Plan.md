@@ -144,14 +144,14 @@ Read/preview is intentionally light-auth like the other public storefront routes
 ## 7. End-to-end flows (discount-coupon model)
 
 ### A. Issue
-1. **Trigger** — Snow Boss student claim (replaces today's Formspree-only flow), an online promo, or admin "issue voucher".
-2. Plugin inserts a `doughboss_vouchers` row (`status=issued`, `code=SNOW-XXXXXX`, `type=amount`, `value=5.00`, `customer_phone`).
-3. Connector → POSPal: `customerOpenApi/queryByTel`; if no member, `customerOpenApi/add` (create member by phone). Then **grant the `$5` coupon** to that member via `promotionOpenApi` (method per §11). Store `pospal_customer_uid` + `pospal_coupon_ref` on the row.
+1. **Trigger** — student claim of the combined **"$5 + $10" voucher** (one code, `$15` total: `$10` Dough Boss + `$5` Snow Boss; replaces today's Formspree-only flow), an online promo, or admin "issue voucher".
+2. Plugin inserts one `doughboss_vouchers` row (`status=issued`, `code=STUDENT-XXXXXXXX`, `type=amount`, `value=15.00`, `campaign=student`, `meta.breakdown={doughboss:10, snowboss:5}`, `customer_phone`). Single code, single cross-channel use.
+3. Connector → POSPal: `customerOpenApi/queryByTel`; if no member, `customerOpenApi/add` (create member by phone). Then **grant the matching coupon(s)** to that member via `promotionOpenApi` — per the `meta.breakdown`, the `$10` Dough Boss + `$5` Snow Boss coupon rules (method per §11). Store `pospal_customer_uid` + `pospal_coupon_ref` on the row.
 4. Email the code + instruction: *"Show this code, or give your phone number at the till."*
 
 ### B. Redeem in-store (the headline behaviour)
 1. Customer gives **phone number** at the POSPal till.
-2. Cashier opens the member → the `$5` coupon **appears natively** → applies it → POSPal records the discount on the ticket (核销).
+2. Cashier opens the member → the granted coupon(s) **appear natively** → applies them → POSPal records the discount on the ticket (核销).
 3. **Reconciliation:** a WP-cron job (every ~2–5 min) calls `orderOpenApi`/coupon-usage to find tickets that consumed the coupon (or the `/pospal/redemption-callback` fires) → plugin sets `status=redeemed`, writes a `doughboss_voucher_redemptions` row (shop, ticket no, amount, time).
 
 ### C. Redeem online (cart / future online orders)
