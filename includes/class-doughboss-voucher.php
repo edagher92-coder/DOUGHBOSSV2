@@ -359,6 +359,34 @@ class DoughBoss_Voucher {
 	}
 
 	/**
+	 * Undo a just-made redemption when the order it was for failed to save:
+	 * delete the redemption row and flip the voucher back to issued, so a retry
+	 * can redeem it cleanly instead of the customer losing the voucher.
+	 *
+	 * @param string $idempotency_key Redemption idempotency key.
+	 * @return void
+	 */
+	public static function revert_redemption( $idempotency_key ) {
+		global $wpdb;
+		$key = substr( sanitize_text_field( (string) $idempotency_key ), 0, 64 );
+		if ( '' === $key ) {
+			return;
+		}
+		$redemptions = self::redemptions_table();
+		$voucher_id  = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT voucher_id FROM {$redemptions} WHERE idempotency_key = %s", $key )
+		);
+		if ( ! $voucher_id ) {
+			return;
+		}
+		$wpdb->delete( $redemptions, array( 'idempotency_key' => $key ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$table = self::table();
+		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "UPDATE {$table} SET status = %s, updated_at = %s WHERE id = %d AND status = %s", 'issued', current_time( 'mysql' ), $voucher_id, 'redeemed' )
+		);
+	}
+
+	/**
 	 * Defined claim campaigns. Owner-editable via the 'voucher_campaigns'
 	 * setting; falls back to the defaults below.
 	 *

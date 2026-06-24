@@ -1652,8 +1652,10 @@ class DoughBoss_REST_Controller {
 		// idempotent (a retry replays the same result), so the single-use voucher
 		// is consumed exactly once even if order creation is retried. If it can no
 		// longer be redeemed and nothing was paid, reject so the customer can
-		// review; if Stripe already took the discounted amount, honour it rather
-		// than overcharging.
+		// review. (When Stripe is on, verify_payment above already rejects a
+		// price mismatch; the paid branch below only survives the razor-thin race
+		// where the code is consumed between pricing and redeem — there we keep
+		// the discount the customer already paid rather than failing a paid order.)
 		$discount     = isset( $totals['discount'] ) ? (float) $totals['discount'] : 0.0;
 		$voucher_code = isset( $totals['voucher_code'] ) ? (string) $totals['voucher_code'] : '';
 		$voucher_idem = '';
@@ -1696,6 +1698,12 @@ class DoughBoss_REST_Controller {
 		);
 
 		if ( is_wp_error( $order_id ) ) {
+			// The voucher was already redeemed above; undo it so the customer
+			// keeps it (and a retry can redeem it again) rather than losing it to
+			// a failed order insert.
+			if ( '' !== $voucher_idem ) {
+				DoughBoss_Voucher::revert_redemption( $voucher_idem );
+			}
 			return $order_id;
 		}
 
