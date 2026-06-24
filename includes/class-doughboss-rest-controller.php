@@ -159,6 +159,52 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/voucher/validate',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'voucher_validate' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'code' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/voucher/redeem',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'voucher_redeem' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'code'            => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'idempotency_key' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/voucher/issue',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'voucher_issue' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/cart/clear',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -477,6 +523,20 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Permission check: require the owner management capability only (not the
+	 * lower kitchen/KDS cap). Used for issuing/managing vouchers so a till
+	 * device can never create value.
+	 *
+	 * @return bool|WP_Error
+	 */
+	public function verify_manage() {
+		if ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+		return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
+	}
+
+	/**
 	 * Simple per-IP transient rate limiter for mutation endpoints.
 	 *
 	 * @param string $bucket Logical bucket name (e.g. 'checkout').
@@ -493,6 +553,125 @@ class DoughBoss_REST_Controller {
 		}
 		set_transient( $key, $hits + 1, $window );
 		return false;
+	}
+
+	/**
+	 * Server-computed cart subtotal used for voucher maths. Never trusts a
+	 * browser-reported amount.
+	 *
+	 * @return float
+	 */
+	private function cart_subtotal() {
+		$totals = $this->cart->totals();
+		if ( isset( $totals['subtotal'] ) ) {
+			return (float) $totals['subtotal'];
+		}
+		if ( isset( $totals['total'] ) ) {
+			return (float) $totals['total'];
+		}
+		return 0.0;
+	}
+
+	/**
+	 * POST /voucher/validate — preview a voucher's discount against the current
+	 * cart. Purely local (no POSPal call); stays opaque about why a code fails.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function voucher_validate( WP_REST_Request $request ) {
+		if ( $this->rate_limited( 'voucher_validate', 12, 600 ) ) {
+			return new WP_Error( 'doughboss_rate', __( 'Too many attempts. Please wait a moment.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+		$subtotal = $this->cart_subtotal();
+		$row      = DoughBoss_Voucher::find_by_code( (string) $request->get_param( 'code' ) );
+		$eval     = DoughBoss_Voucher::evaluate( $row, $subtotal, 'online' );
+
+		if ( ! $row || ! $eval['valid'] ) {
+			$message = ( $row && 'min_spend' === $eval['reason'] )
+				? __( 'Your order doesn’t meet this voucher’s minimum spend.', 'doughboss' )
+				: __( 'This voucher code isn’t valid.', 'doughboss' );
+			return rest_ensure_response(
+				array(
+					'valid'   => false,
+					'message' => $message,
+				)
+			);
+		}
+
+		return rest_ensure_response(
+			array(
+				'valid'   => true,
+				'amount'  => $eval['amount'],
+				'message' => sprintf(
+					/* translators: %s: formatted discount amount. */
+					__( '%s off applied.', 'doughboss' ),
+					DoughBoss_Settings::format_price( $eval['amount'] )
+				),
+			)
+		);
+	}
+
+	/**
+	 * POST /voucher/redeem — atomically redeem a voucher against the current
+	 * cart and return the applied discount.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function voucher_redeem( WP_REST_Request $request ) {
+		if ( $this->rate_limited( 'voucher_redeem', 6, 3600 ) ) {
+			return new WP_Error( 'doughboss_rate', __( 'Too many attempts. Please wait a moment.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+		$result = DoughBoss_Voucher::redeem(
+			(string) $request->get_param( 'code' ),
+			$this->cart_subtotal(),
+			'online',
+			array( 'idempotency_key' => (string) $request->get_param( 'idempotency_key' ) )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response(
+			array(
+				'redeemed' => true,
+				'code'     => $result['code'],
+				'amount'   => $result['amount'],
+			)
+		);
+	}
+
+	/**
+	 * POST /voucher/issue — create a voucher (owner/admin only).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function voucher_issue( WP_REST_Request $request ) {
+		$result = DoughBoss_Voucher::issue(
+			array(
+				'type'           => $request->get_param( 'type' ),
+				'value'          => $request->get_param( 'value' ),
+				'prefix'         => $request->get_param( 'prefix' ),
+				'min_spend'      => $request->get_param( 'min_spend' ),
+				'scope'          => $request->get_param( 'scope' ),
+				'location_id'    => $request->get_param( 'location_id' ),
+				'customer_phone' => $request->get_param( 'customer_phone' ),
+				'customer_email' => $request->get_param( 'customer_email' ),
+				'valid_from'     => $request->get_param( 'valid_from' ),
+				'valid_to'       => $request->get_param( 'valid_to' ),
+			)
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response(
+			array(
+				'issued' => true,
+				'id'     => $result['id'],
+				'code'   => $result['code'],
+			)
+		);
 	}
 
 	/**

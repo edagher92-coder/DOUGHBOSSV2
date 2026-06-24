@@ -52,6 +52,8 @@ class DoughBoss_Activator {
 		$order_items     = $wpdb->prefix . 'doughboss_order_items';
 		$locations       = $wpdb->prefix . 'doughboss_locations';
 		$catering        = $wpdb->prefix . 'doughboss_catering_enquiries';
+		$vouchers        = $wpdb->prefix . 'doughboss_vouchers';
+		$redemptions     = $wpdb->prefix . 'doughboss_voucher_redemptions';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -156,10 +158,53 @@ class DoughBoss_Activator {
 			KEY deposit_intent_id (deposit_intent_id)
 		) {$charset_collate};";
 
+		$sql_vouchers = "CREATE TABLE {$vouchers} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			code varchar(32) NOT NULL,
+			type varchar(20) NOT NULL DEFAULT 'amount',
+			value decimal(10,2) NOT NULL DEFAULT 0.00,
+			currency varchar(10) NOT NULL DEFAULT 'AUD',
+			min_spend decimal(10,2) NOT NULL DEFAULT 0.00,
+			scope varchar(20) NOT NULL DEFAULT 'both',
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			single_use tinyint(1) NOT NULL DEFAULT 1,
+			status varchar(20) NOT NULL DEFAULT 'issued',
+			customer_phone varchar(40) NOT NULL DEFAULT '',
+			customer_email varchar(191) NOT NULL DEFAULT '',
+			pospal_customer_uid varchar(64) NOT NULL DEFAULT '',
+			pospal_coupon_ref varchar(64) NOT NULL DEFAULT '',
+			valid_from datetime NULL DEFAULT NULL,
+			valid_to datetime NULL DEFAULT NULL,
+			meta text NULL,
+			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			UNIQUE KEY code (code),
+			KEY status (status),
+			KEY customer_phone (customer_phone)
+		) {$charset_collate};";
+
+		$sql_redemptions = "CREATE TABLE {$redemptions} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			voucher_id bigint(20) unsigned NOT NULL,
+			channel varchar(20) NOT NULL DEFAULT 'online',
+			pospal_ticket_no varchar(64) NOT NULL DEFAULT '',
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			amount_applied decimal(10,2) NOT NULL DEFAULT 0.00,
+			idempotency_key varchar(64) NOT NULL DEFAULT '',
+			redeemed_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			UNIQUE KEY idempotency_key (idempotency_key),
+			KEY voucher_id (voucher_id),
+			KEY pospal_ticket_no (pospal_ticket_no)
+		) {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
 		dbDelta( $sql_locations );
 		dbDelta( $sql_catering );
+		dbDelta( $sql_vouchers );
+		dbDelta( $sql_redemptions );
 	}
 
 	/**

@@ -53,6 +53,9 @@ class DoughBoss_Migrations {
 		if ( version_compare( $installed, '1.5.0', '<' ) ) {
 			self::upgrade_to_1_5_0();
 		}
+		if ( version_compare( $installed, '1.6.0', '<' ) ) {
+			self::upgrade_to_1_6_0();
+		}
 
 		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 	}
@@ -141,5 +144,24 @@ class DoughBoss_Migrations {
 	 */
 	private static function upgrade_to_1_5_0() {
 		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.6.0 — vouchers / discount coupons.
+	 *
+	 * The {prefix}doughboss_vouchers and {prefix}doughboss_voucher_redemptions
+	 * tables are created by dbDelta via create_tables(). This step adds a
+	 * dedicated redemption capability so a till device can redeem vouchers
+	 * without holding broader management rights.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_6_0() {
+		foreach ( array( 'administrator', 'doughboss_kitchen' ) as $role_name ) {
+			$role = get_role( $role_name );
+			if ( $role && ! $role->has_cap( 'redeem_doughboss_vouchers' ) ) {
+				$role->add_cap( 'redeem_doughboss_vouchers' );
+			}
+		}
 	}
 }
