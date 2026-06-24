@@ -24,8 +24,13 @@
 
 	var POLL_MS = 10000;
 	var pollTimer = null;
+	var clearTimer = null;
 	var feedCache = [];
 	var els = {};
+	// Reuse one key per code until it succeeds so a retry after a dropped
+	// connection replays the same redeem rather than risking a double.
+	var idemCode = '';
+	var idemKey = '';
 
 	function money( n ) {
 		return currency + ( Math.round( ( Number( n ) || 0 ) * 100 ) / 100 ).toFixed( 2 );
@@ -94,7 +99,7 @@
 		els.total.setAttribute( 'type', 'number' );
 		els.total.setAttribute( 'min', '0' );
 		els.total.setAttribute( 'step', '0.01' );
-		els.total.setAttribute( 'placeholder', 'Order total (optional)' );
+		els.total.setAttribute( 'placeholder', 'Order total (only for % / min-spend)' );
 		els.total.setAttribute( 'aria-label', 'Order total' );
 		els.btn = make( 'button', 'db-scan__btn', 'Redeem' );
 		els.btn.setAttribute( 'type', 'button' );
@@ -148,6 +153,12 @@
 				submitScan();
 			}
 		} );
+		els.total.addEventListener( 'keydown', function ( e ) {
+			if ( 'Enter' === e.key ) {
+				e.preventDefault();
+				submitScan();
+			}
+		} );
 		els.search.addEventListener( 'input', renderFeed );
 		focusInput();
 	}
@@ -159,8 +170,9 @@
 		} catch ( e ) {}
 	}
 
-	function showResult( ok, title, sub, amount ) {
-		els.result.className = 'db-scan__result ' + ( ok ? 'is-ok' : 'is-bad' );
+	function showResult( kind, title, sub, amount ) {
+		clearTimeout( clearTimer );
+		els.result.className = 'db-scan__result is-' + kind;
 		els.result.innerHTML = '';
 		els.result.appendChild( make( 'p', 'db-scan__result-title', title ) );
 		if ( amount !== undefined && amount !== null ) {
@@ -169,11 +181,14 @@
 		if ( sub ) {
 			els.result.appendChild( make( 'p', 'db-scan__result-sub', sub ) );
 		}
+		try { els.result.scrollIntoView( { block: 'nearest' } ); } catch ( e ) {}
 	}
 
 	function submitScan() {
 		var code = ( els.input.value || '' ).trim();
+		els.total.classList.remove( 'is-required' );
 		if ( ! code ) {
+			showResult( 'neutral', 'Scan or type a voucher code' );
 			focusInput();
 			return;
 		}
@@ -181,18 +196,26 @@
 		if ( isNaN( subtotal ) || subtotal < 0 ) {
 			subtotal = 0;
 		}
+		if ( code !== idemCode || ! idemKey ) {
+			idemCode = code;
+			idemKey  = 'scan-' + Date.now() + '-' + Math.random().toString( 36 ).slice( 2, 8 );
+		}
 		els.btn.disabled = true;
+		showResult( 'neutral', 'Checking…' );
 
 		api( '/voucher/scan', 'POST', {
 			code: code,
 			subtotal: subtotal,
-			idempotency_key: 'scan-' + Date.now() + '-' + Math.random().toString( 36 ).slice( 2, 8 )
+			idempotency_key: idemKey
 		} ).then( function ( r ) {
 			els.btn.disabled = false;
 			if ( r.ok && r.data && r.data.redeemed ) {
-				showResult( true, 'Redeemed ✓', r.data.code, r.data.amount );
+				showResult( 'ok', 'Redeemed ✓', r.data.code, r.data.amount );
 				els.input.value = '';
 				els.total.value = '';
+				idemCode = '';
+				idemKey = '';
+				clearTimer = setTimeout( function () { els.result.className = 'db-scan__result'; focusInput(); }, 7000 );
 				refresh();
 			} else {
 				var msg = ( r.data && r.data.message ) ? r.data.message : 'Could not redeem this voucher.';
@@ -205,8 +228,9 @@
 				} else if ( 'doughboss_need_total' === code2 ) {
 					title = 'Enter order total';
 				}
-				showResult( false, title, msg );
+				showResult( 'bad', title, msg );
 				if ( 'doughboss_need_total' === code2 ) {
+					els.total.classList.add( 'is-required' );
 					try { els.total.focus(); } catch ( e ) {}
 					return;
 				}
@@ -214,7 +238,7 @@
 			focusInput();
 		} ).catch( function () {
 			els.btn.disabled = false;
-			showResult( false, 'Network error', 'Please try again.' );
+			showResult( 'bad', 'Network error', 'Please try again.' );
 			focusInput();
 		} );
 	}

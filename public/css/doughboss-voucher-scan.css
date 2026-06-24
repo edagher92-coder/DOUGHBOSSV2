@@ -170,8 +170,10 @@
 	display: none;
 }
 
-.db-scan__result.is-ok  { display: block; background: var(--db-ok-bg);  border: 1px solid #bfe6cf; }
-.db-scan__result.is-bad { display: block; background: var(--db-bad-bg); border: 1px solid #f1c5be; }
+.db-scan__result.is-ok      { display: block; background: var(--db-ok-bg);  border: 1px solid #bfe6cf; }
+.db-scan__result.is-bad     { display: block; background: var(--db-bad-bg); border: 1px solid #f1c5be; }
+.db-scan__result.is-neutral { display: block; background: #f3f4f6; border: 1px solid var(--db-line); }
+.db-scan__total.is-required { border-color: var(--db-live); background: var(--db-live-bg); }
 
 .db-scan__result-title {
 	font-size: 19px;
