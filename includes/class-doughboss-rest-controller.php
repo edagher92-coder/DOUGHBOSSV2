@@ -268,6 +268,44 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/pospal/connect',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'pospal_connect' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'enabled' => array(
+						'default'           => true,
+						'sanitize_callback' => 'rest_sanitize_boolean',
+					),
+					'host'    => array(
+						'required'          => true,
+						'sanitize_callback' => 'esc_url_raw',
+					),
+					'app_id'  => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'app_key' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/pospal/test',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'pospal_test' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/cart/clear',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -850,6 +888,69 @@ class DoughBoss_REST_Controller {
 					'voided'   => DoughBoss_Voucher::count_status( 'voided' ),
 				),
 				'currency'  => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+			)
+		);
+	}
+
+	/**
+	 * POST /pospal/connect — owner action: save the POSPal connection (host,
+	 * App ID, App Key, enabled) then immediately run the read-only handshake and
+	 * report the account's coupon rules. The secret App Key is stored as a
+	 * fallback (env-first is preferred) and is never echoed back in the response.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function pospal_connect( WP_REST_Request $request ) {
+		$partial = array(
+			'pospal_enabled' => $request->get_param( 'enabled' ) ? 1 : 0,
+			'pospal_host'    => (string) $request->get_param( 'host' ),
+			'pospal_app_id'  => (string) $request->get_param( 'app_id' ),
+		);
+		$app_key = (string) $request->get_param( 'app_key' );
+		if ( '' !== $app_key ) {
+			$partial['pospal_app_key'] = $app_key;
+		}
+		DoughBoss_Settings::update( $partial );
+
+		return $this->pospal_test( $request );
+	}
+
+	/**
+	 * GET /pospal/test — owner action: read-only POSPal handshake. Confirms the
+	 * host + appId/appKey signing are accepted and lists the account's coupon
+	 * promotion rules, without changing anything in POSPal.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function pospal_test( WP_REST_Request $request ) {
+		unset( $request );
+		if ( ! DoughBoss_POSPal::ready() ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => false,
+					'ok'      => false,
+					'message' => __( 'POSPal is not fully configured — enable it and set the host, App ID and App Key.', 'doughboss' ),
+				)
+			);
+		}
+		$result = DoughBoss_POSPal::test_connection();
+		if ( is_wp_error( $result ) ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => true,
+					'ok'      => false,
+					'message' => $result->get_error_message(),
+				)
+			);
+		}
+		return rest_ensure_response(
+			array(
+				'ready'   => true,
+				'ok'      => true,
+				'message' => __( 'POSPal reachable and the signature was accepted.', 'doughboss' ),
+				'rules'   => $result,
 			)
 		);
 	}

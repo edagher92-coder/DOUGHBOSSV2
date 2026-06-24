@@ -187,6 +187,13 @@ class DoughBoss_Admin {
 		$clean['stripe_test_whsec'] = isset( $input['stripe_test_whsec'] ) ? sanitize_text_field( $input['stripe_test_whsec'] ) : '';
 		$clean['stripe_live_whsec'] = isset( $input['stripe_live_whsec'] ) ? sanitize_text_field( $input['stripe_live_whsec'] ) : '';
 
+		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
+		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback.
+		$clean['pospal_enabled'] = empty( $input['pospal_enabled'] ) ? 0 : 1;
+		$clean['pospal_host']    = isset( $input['pospal_host'] ) ? esc_url_raw( trim( (string) $input['pospal_host'] ) ) : '';
+		$clean['pospal_app_id']  = isset( $input['pospal_app_id'] ) ? sanitize_text_field( $input['pospal_app_id'] ) : '';
+		$clean['pospal_app_key'] = isset( $input['pospal_app_key'] ) ? sanitize_text_field( $input['pospal_app_key'] ) : '';
+
 		$clean['sizes']    = $this->sanitize_rows( isset( $input['sizes'] ) ? $input['sizes'] : array() );
 		$clean['toppings'] = $this->sanitize_rows( isset( $input['toppings'] ) ? $input['toppings'] : array() );
 
@@ -1175,6 +1182,37 @@ JS;
 									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/stripe-webhook' ) ); ?></code>
 									<?php esc_html_e( 'and subscribe to payment_intent.succeeded. Then paste its signing secret here.', 'doughboss' ); ?>
 								</p></td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e( 'POSPal POS (in-store coupons)', 'doughboss' ); ?></h2>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Connect the Revesby POSPal till so issued vouchers can be mirrored as member coupons and reconciled. Off by default. Enter the area host, App ID and App Key from your POSPal Open Platform account, save, then test the connection.', 'doughboss' ); ?>
+						<?php
+						if ( class_exists( 'DoughBoss_POSPal' ) && DoughBoss_POSPal::ready() ) {
+							echo ' <strong style="color:#1f8a54;">' . esc_html__( 'Status: POSPal is configured and enabled.', 'doughboss' ) . '</strong>';
+						} else {
+							echo ' <strong style="color:#a15c00;">' . esc_html__( 'Status: not connected yet.', 'doughboss' ) . '</strong>';
+						}
+						?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Enable POSPal', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[pospal_enabled]" value="1" <?php checked( ! empty( $settings['pospal_enabled'] ), true ); ?> /> <?php esc_html_e( 'Connect this site to POSPal', 'doughboss' ); ?></label></td>
+						</tr>
+						<tr>
+							<th><label for="db-pospal-host"><?php esc_html_e( 'Area host', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-pospal-host" class="regular-text" autocomplete="off" placeholder="https://area28-win.pospal.cn:443" name="<?php echo esc_attr( $opt ); ?>[pospal_host]" value="<?php echo esc_attr( isset( $settings['pospal_host'] ) ? $settings['pospal_host'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-pospal-app-id"><?php esc_html_e( 'App ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-pospal-app-id" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal_app_id]" value="<?php echo esc_attr( isset( $settings['pospal_app_id'] ) ? $settings['pospal_app_id'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-pospal-app-key"><?php esc_html_e( 'App Key', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-pospal-app-key" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal_app_key]" value="<?php echo esc_attr( isset( $settings['pospal_app_key'] ) ? $settings['pospal_app_key'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'The secret key is used only to sign server-side calls. For best security set it as the DOUGHBOSS_POSPAL_APPKEY environment variable instead of here; this field is a fallback.', 'doughboss' ); ?></p></td>
 						</tr>
 					</table>
 

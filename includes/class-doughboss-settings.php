@@ -45,6 +45,24 @@ class DoughBoss_Settings {
 	}
 
 	/**
+	 * Merge a partial array of settings into the stored option (preserving the
+	 * keys not supplied) and persist. Used by programmatic config writers such
+	 * as the POSPal connect endpoint.
+	 *
+	 * @param array $partial Keys to set/overwrite.
+	 * @return array The merged settings now stored.
+	 */
+	public static function update( array $partial ) {
+		$current = get_option( self::OPTION_KEY, array() );
+		if ( ! is_array( $current ) ) {
+			$current = array();
+		}
+		$merged = array_merge( $current, $partial );
+		update_option( self::OPTION_KEY, $merged );
+		return $merged;
+	}
+
+	/**
 	 * Default settings used when nothing is stored yet.
 	 *
 	 * @return array
