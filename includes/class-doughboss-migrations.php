@@ -31,33 +31,52 @@ class DoughBoss_Migrations {
 			return;
 		}
 
+		// run() fires on every request until the version is written; a short lock
+		// stops concurrent visitors from racing on dbDelta and cap seeding.
+		if ( get_transient( 'doughboss_migrating' ) ) {
+			return;
+		}
+		set_transient( 'doughboss_migrating', 1, 5 * MINUTE_IN_SECONDS );
+
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-activator.php';
 
-		// dbDelta is additive: re-running the table definitions adds any new
-		// columns to existing installs without touching existing data.
-		DoughBoss_Activator::create_tables();
+		// A failing step must never white-screen the site or replay every prior
+		// step for each visitor: wrap the whole run, and checkpoint the stored
+		// version after each step so progress is durable.
+		try {
+			// dbDelta is additive: re-running the table definitions adds any new
+			// columns to existing installs without touching existing data.
+			DoughBoss_Activator::create_tables();
 
-		// Ordered, version-gated steps for changes dbDelta can't make.
-		if ( version_compare( $installed, '1.1.0', '<' ) ) {
-			self::upgrade_to_1_1_0();
-		}
-		if ( version_compare( $installed, '1.2.0', '<' ) ) {
-			self::upgrade_to_1_2_0();
-		}
-		if ( version_compare( $installed, '1.3.0', '<' ) ) {
-			self::upgrade_to_1_3_0();
-		}
-		if ( version_compare( $installed, '1.4.0', '<' ) ) {
-			self::upgrade_to_1_4_0();
-		}
-		if ( version_compare( $installed, '1.5.0', '<' ) ) {
-			self::upgrade_to_1_5_0();
-		}
-		if ( version_compare( $installed, '1.6.0', '<' ) ) {
-			self::upgrade_to_1_6_0();
+			// Self-heal roles/capabilities on every upgrade (covers new caps and
+			// fresh installs where the version-gated steps below are skipped).
+			DoughBoss_Activator::add_capabilities();
+
+			$steps = array(
+				'1.1.0' => 'upgrade_to_1_1_0',
+				'1.2.0' => 'upgrade_to_1_2_0',
+				'1.3.0' => 'upgrade_to_1_3_0',
+				'1.4.0' => 'upgrade_to_1_4_0',
+				'1.5.0' => 'upgrade_to_1_5_0',
+				'1.6.0' => 'upgrade_to_1_6_0',
+			);
+			foreach ( $steps as $version => $method ) {
+				if ( version_compare( $installed, $version, '<' ) ) {
+					self::$method();
+					update_option( 'doughboss_db_version', $version );
+				}
+			}
+
+			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
+		} catch ( Throwable $e ) {
+			// Leave the version at the last successful checkpoint and let the site
+			// keep serving; the next request retries the remaining steps.
+			if ( function_exists( 'error_log' ) ) {
+				error_log( 'DoughBoss migration halted: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
 		}
 
-		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
+		delete_transient( 'doughboss_migrating' );
 	}
 
 	/**
