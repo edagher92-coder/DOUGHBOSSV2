@@ -241,7 +241,12 @@ class DoughBoss_REST_Controller {
 					),
 					'subtotal'        => array(
 						'default'           => 0,
-						'sanitize_callback' => 'floatval',
+						// Wrap the cast: WordPress passes 3 args to sanitize
+						// callbacks and the built-in floatval() accepts exactly 1
+						// (fatal ArgumentCountError on PHP 8).
+						'sanitize_callback' => static function ( $value ) {
+							return (float) $value;
+						},
 					),
 					'idempotency_key' => array(
 						'default'           => '',
