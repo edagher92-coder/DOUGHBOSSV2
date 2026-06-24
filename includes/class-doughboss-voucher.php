@@ -234,6 +234,23 @@ class DoughBoss_Voucher {
 		// Same opaque error whether not-found or ineligible — no enumeration.
 		$generic = new WP_Error( 'doughboss_voucher_invalid', __( 'This voucher code isn’t valid.', 'doughboss' ), array( 'status' => 422 ) );
 
+		$idem = isset( $extra['idempotency_key'] ) && '' !== $extra['idempotency_key']
+			? substr( sanitize_text_field( $extra['idempotency_key'] ), 0, 64 )
+			: '';
+
+		// Idempotent replay: a retried request carrying the same key returns the
+		// already-recorded result without consuming a second voucher — so a
+		// lost-response retry never surfaces a false "already used".
+		if ( '' !== $idem ) {
+			$prior = self::redemption_by_key( $idem );
+			if ( $prior ) {
+				return array(
+					'code'   => $prior->code,
+					'amount' => (float) $prior->amount_applied,
+				);
+			}
+		}
+
 		$eval = self::evaluate( $row, $subtotal, $channel );
 		if ( ! $row || ! $eval['valid'] ) {
 			if ( $row && 'min_spend' === $eval['reason'] ) {
@@ -253,11 +270,11 @@ class DoughBoss_Voucher {
 			return new WP_Error( 'doughboss_voucher_used', __( 'This voucher has already been used.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
-		$idem = isset( $extra['idempotency_key'] ) && '' !== $extra['idempotency_key']
-			? substr( sanitize_text_field( $extra['idempotency_key'] ), 0, 64 )
-			: md5( $row->id . '|' . $channel . '|' . $now . '|' . wp_rand() );
+		if ( '' === $idem ) {
+			$idem = md5( $row->id . '|' . $channel . '|' . $now . '|' . wp_rand() );
+		}
 
-		$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			self::redemptions_table(),
 			array(
 				'voucher_id'       => (int) $row->id,
@@ -270,6 +287,15 @@ class DoughBoss_Voucher {
 			),
 			array( '%d', '%s', '%s', '%d', '%f', '%s', '%s' )
 		);
+
+		// The audit row is mandatory. If it didn't write, undo the status flip so
+		// the voucher is never silently consumed without a record.
+		if ( ! $inserted ) {
+			$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "UPDATE {$table} SET status = %s, updated_at = %s WHERE id = %d AND status = %s", 'issued', current_time( 'mysql' ), $row->id, 'redeemed' )
+			);
+			return new WP_Error( 'doughboss_voucher_audit', __( 'Could not record the redemption. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
 
 		/**
 		 * Fires after a voucher is redeemed (e.g. to revoke the mirrored POSPal
@@ -284,6 +310,27 @@ class DoughBoss_Voucher {
 		return array(
 			'code'   => $row->code,
 			'amount' => $eval['amount'],
+		);
+	}
+
+	/**
+	 * Look up a recorded redemption by its idempotency key, for idempotent
+	 * replay. Returns an object with the voucher `code` and `amount_applied`,
+	 * or null when the key has not been used.
+	 *
+	 * @param string $idempotency_key Idempotency key.
+	 * @return object|null
+	 */
+	public static function redemption_by_key( $idempotency_key ) {
+		global $wpdb;
+		$key = substr( sanitize_text_field( (string) $idempotency_key ), 0, 64 );
+		if ( '' === $key ) {
+			return null;
+		}
+		$redemptions = self::redemptions_table();
+		$vouchers    = self::table();
+		return $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT r.amount_applied, v.code FROM {$redemptions} r INNER JOIN {$vouchers} v ON v.id = r.voucher_id WHERE r.idempotency_key = %s", $key )
 		);
 	}
 
