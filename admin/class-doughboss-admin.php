@@ -42,6 +42,17 @@ class DoughBoss_Admin {
 	}
 
 	/**
+	 * Capability for the in-store scan dashboard. Prefers the dedicated redeem
+	 * cap (so a low-privilege kitchen tablet can reach the scanner) and falls
+	 * back to manage_options so owners always see it.
+	 *
+	 * @return string
+	 */
+	private function scan_cap() {
+		return current_user_can( 'redeem_doughboss_vouchers' ) ? 'redeem_doughboss_vouchers' : 'manage_options';
+	}
+
+	/**
 	 * Register the top-level menu and sub-pages. The Menu Items CPT and its
 	 * category taxonomy attach automatically via `show_in_menu`.
 	 *
@@ -114,6 +125,19 @@ class DoughBoss_Admin {
 			array( $this, 'render_board_page' ),
 			'dashicons-screenoptions',
 			27
+		);
+
+		// Standalone, tablet-friendly voucher scanner for staff/till. Uses the
+		// dedicated redeem capability so a "DoughBoss Kitchen" device can scan &
+		// redeem without owner privileges (and without being able to issue value).
+		add_menu_page(
+			__( 'Voucher Scan', 'doughboss' ),
+			__( 'Voucher Scan', 'doughboss' ),
+			$this->scan_cap(),
+			'doughboss-scan',
+			array( $this, 'render_scan_page' ),
+			'dashicons-tickets-alt',
+			28
 		);
 	}
 
@@ -234,6 +258,33 @@ class DoughBoss_Admin {
 			)
 		);
 		wp_add_inline_script( 'doughboss-admin', $this->inline_admin_js() );
+
+		// The voucher scanner ships its own modern dashboard app + styles, loaded
+		// only on its screen.
+		if ( false !== strpos( $hook, 'doughboss-scan' ) ) {
+			wp_enqueue_style(
+				'doughboss-voucher-scan',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-voucher-scan.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-voucher-scan',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-voucher-scan.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+			wp_localize_script(
+				'doughboss-voucher-scan',
+				'DoughBossScan',
+				array(
+					'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
+					'nonce'    => wp_create_nonce( 'wp_rest' ),
+					'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+				)
+			);
+		}
 
 		// The live order board ships its own (larger) app + styles, loaded only
 		// on its screen.
@@ -777,6 +828,25 @@ JS;
 	/**
 	 * Render the Vouchers management screen: daily-campaign tracking, a create
 	 * form, and a recent-vouchers list with redemption status + void.
+	 *
+	 * @return void
+	 */
+	public function render_scan_page() {
+		if ( ! current_user_can( $this->scan_cap() ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+		?>
+		<div class="wrap db-scan-wrap">
+			<div id="doughboss-scan-app" class="db-scan" aria-live="polite">
+				<noscript><?php esc_html_e( 'The voucher scanner needs JavaScript enabled.', 'doughboss' ); ?></noscript>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the owner Vouchers management screen (create, void, campaign
+	 * tracker, full list).
 	 *
 	 * @return void
 	 */

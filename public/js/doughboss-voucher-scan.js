@@ -1,0 +1,352 @@
+/**
+ * DoughBoss — staff Voucher Scan dashboard.
+ *
+ * Hydrates #doughboss-scan-app: a big scan/redeem box plus a live tracker
+ * (today's campaign release meters, status tiles and the recent voucher feed).
+ * Talks to doughboss/v1/voucher/scan (atomic in-store redeem) and
+ * /voucher/activity (live state). Designed so a barcode scanner that types the
+ * code and presses Enter "just works", and so the voucher dies on first scan.
+ *
+ * No build step — plain DOM, enqueued with the plugin version.
+ */
+( function () {
+	'use strict';
+
+	var cfg = window.DoughBossScan || {};
+	var restUrl = ( cfg.restUrl || '' ).replace( /\/$/, '' );
+	var nonce = cfg.nonce || '';
+	var currency = cfg.currency || '$';
+
+	var root = document.getElementById( 'doughboss-scan-app' );
+	if ( ! root ) {
+		return;
+	}
+
+	var POLL_MS = 10000;
+	var pollTimer = null;
+	var feedCache = [];
+	var els = {};
+
+	function money( n ) {
+		return currency + ( Math.round( ( Number( n ) || 0 ) * 100 ) / 100 ).toFixed( 2 );
+	}
+
+	function make( tag, cls, text ) {
+		var node = document.createElement( tag );
+		if ( cls ) {
+			node.className = cls;
+		}
+		if ( text !== undefined && text !== null ) {
+			node.textContent = String( text );
+		}
+		return node;
+	}
+
+	function api( path, method, body ) {
+		return fetch( restUrl + path, {
+			method: method,
+			credentials: 'same-origin',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-WP-Nonce': nonce
+			},
+			body: body ? JSON.stringify( body ) : undefined
+		} ).then( function ( res ) {
+			return res.json().then( function ( data ) {
+				return { ok: res.ok, status: res.status, data: data };
+			} );
+		} );
+	}
+
+	/* ---------- shell ---------- */
+
+	function buildShell() {
+		root.innerHTML = '';
+
+		var head = make( 'div', 'db-scan__head' );
+		var headL = make( 'div' );
+		headL.appendChild( make( 'h1', null, 'Voucher Scan' ) );
+		headL.appendChild( make( 'p', null, 'Scan or type a voucher code to redeem it at the till. Each code works once.' ) );
+		var live = make( 'span', 'db-scan__live' );
+		live.appendChild( make( 'span', 'db-scan__dot' ) );
+		els.liveText = make( 'span', null, 'Live' );
+		live.appendChild( els.liveText );
+		head.appendChild( headL );
+		head.appendChild( live );
+		root.appendChild( head );
+
+		var grid = make( 'div', 'db-scan__grid' );
+
+		/* left: scan card */
+		var scanCard = make( 'div', 'db-card' );
+		scanCard.appendChild( make( 'h2', null, 'Redeem a voucher' ) );
+
+		els.input = make( 'input', 'db-scan__input' );
+		els.input.setAttribute( 'type', 'text' );
+		els.input.setAttribute( 'placeholder', 'SNOW-XXXXXXXX' );
+		els.input.setAttribute( 'autocomplete', 'off' );
+		els.input.setAttribute( 'spellcheck', 'false' );
+		els.input.setAttribute( 'aria-label', 'Voucher code' );
+		scanCard.appendChild( els.input );
+
+		var row = make( 'div', 'db-scan__row' );
+		els.total = make( 'input', 'db-scan__total' );
+		els.total.setAttribute( 'type', 'number' );
+		els.total.setAttribute( 'min', '0' );
+		els.total.setAttribute( 'step', '0.01' );
+		els.total.setAttribute( 'placeholder', 'Order total (optional)' );
+		els.total.setAttribute( 'aria-label', 'Order total' );
+		els.btn = make( 'button', 'db-scan__btn', 'Redeem' );
+		els.btn.setAttribute( 'type', 'button' );
+		row.appendChild( els.total );
+		row.appendChild( els.btn );
+		scanCard.appendChild( row );
+
+		scanCard.appendChild( make( 'p', 'db-scan__hint', 'Tip: a barcode scanner can type the code and press Enter. Enter the order total to cap a discount to the order value.' ) );
+
+		els.result = make( 'div', 'db-scan__result' );
+		scanCard.appendChild( els.result );
+
+		grid.appendChild( scanCard );
+
+		/* right: tracker */
+		var trackCol = make( 'div' );
+
+		els.tiles = make( 'div', 'db-tiles' );
+		trackCol.appendChild( els.tiles );
+
+		var campCard = make( 'div', 'db-card' );
+		campCard.style.marginBottom = '18px';
+		campCard.appendChild( make( 'h2', null, "Today's release" ) );
+		els.meters = make( 'div' );
+		campCard.appendChild( els.meters );
+		trackCol.appendChild( campCard );
+
+		var feedCard = make( 'div', 'db-card' );
+		feedCard.appendChild( make( 'h2', null, 'Recent vouchers' ) );
+		els.search = make( 'input', 'db-feed__search' );
+		els.search.setAttribute( 'type', 'search' );
+		els.search.setAttribute( 'placeholder', 'Filter by code, status or phone…' );
+		feedCard.appendChild( els.search );
+		els.feed = make( 'ul', 'db-feed' );
+		feedCard.appendChild( els.feed );
+		trackCol.appendChild( feedCard );
+
+		grid.appendChild( trackCol );
+		root.appendChild( grid );
+
+		bind();
+	}
+
+	/* ---------- interactions ---------- */
+
+	function bind() {
+		els.btn.addEventListener( 'click', submitScan );
+		els.input.addEventListener( 'keydown', function ( e ) {
+			if ( 'Enter' === e.key ) {
+				e.preventDefault();
+				submitScan();
+			}
+		} );
+		els.search.addEventListener( 'input', renderFeed );
+		focusInput();
+	}
+
+	function focusInput() {
+		try {
+			els.input.focus();
+			els.input.select();
+		} catch ( e ) {}
+	}
+
+	function showResult( ok, title, sub, amount ) {
+		els.result.className = 'db-scan__result ' + ( ok ? 'is-ok' : 'is-bad' );
+		els.result.innerHTML = '';
+		els.result.appendChild( make( 'p', 'db-scan__result-title', title ) );
+		if ( amount !== undefined && amount !== null ) {
+			els.result.appendChild( make( 'p', 'db-scan__result-amt', money( amount ) ) );
+		}
+		if ( sub ) {
+			els.result.appendChild( make( 'p', 'db-scan__result-sub', sub ) );
+		}
+	}
+
+	function submitScan() {
+		var code = ( els.input.value || '' ).trim();
+		if ( ! code ) {
+			focusInput();
+			return;
+		}
+		var subtotal = parseFloat( els.total.value );
+		if ( isNaN( subtotal ) || subtotal < 0 ) {
+			subtotal = 0;
+		}
+		els.btn.disabled = true;
+
+		api( '/voucher/scan', 'POST', {
+			code: code,
+			subtotal: subtotal,
+			idempotency_key: 'scan-' + Date.now() + '-' + Math.random().toString( 36 ).slice( 2, 8 )
+		} ).then( function ( r ) {
+			els.btn.disabled = false;
+			if ( r.ok && r.data && r.data.redeemed ) {
+				showResult( true, 'Redeemed ✓', r.data.code, r.data.amount );
+				els.input.value = '';
+				els.total.value = '';
+				refresh();
+			} else {
+				var msg = ( r.data && r.data.message ) ? r.data.message : 'Could not redeem this voucher.';
+				var title = 'Declined';
+				if ( r.data && 'doughboss_voucher_used' === r.data.code ) {
+					title = 'Already used';
+				} else if ( r.data && 'doughboss_voucher_min' === r.data.code ) {
+					title = 'Minimum spend not met';
+				}
+				showResult( false, title, msg );
+			}
+			focusInput();
+		} ).catch( function () {
+			els.btn.disabled = false;
+			showResult( false, 'Network error', 'Please try again.' );
+			focusInput();
+		} );
+	}
+
+	/* ---------- live tracker ---------- */
+
+	function refresh() {
+		return api( '/voucher/activity', 'GET' ).then( function ( r ) {
+			if ( ! r.ok || ! r.data ) {
+				if ( els.liveText ) {
+					els.liveText.textContent = 'Reconnecting…';
+				}
+				return;
+			}
+			if ( els.liveText ) {
+				els.liveText.textContent = 'Live';
+			}
+			if ( r.data.currency ) {
+				currency = r.data.currency;
+			}
+			renderTiles( r.data.totals || {} );
+			renderMeters( r.data.campaigns || [] );
+			feedCache = r.data.recent || [];
+			renderFeed();
+		} ).catch( function () {} );
+	}
+
+	function renderTiles( totals ) {
+		els.tiles.innerHTML = '';
+		var defs = [
+			{ k: 'issued', l: 'Live (issued)', cls: 'db-tile--live' },
+			{ k: 'redeemed', l: 'Redeemed', cls: 'db-tile--ok' },
+			{ k: 'voided', l: 'Voided', cls: '' }
+		];
+		defs.forEach( function ( d ) {
+			var t = make( 'div', 'db-tile ' + d.cls );
+			t.appendChild( make( 'div', 'db-tile__n', totals[ d.k ] || 0 ) );
+			t.appendChild( make( 'div', 'db-tile__l', d.l ) );
+			els.tiles.appendChild( t );
+		} );
+	}
+
+	function renderMeters( campaigns ) {
+		els.meters.innerHTML = '';
+		if ( ! campaigns.length ) {
+			els.meters.appendChild( make( 'div', 'db-empty', 'No campaigns configured.' ) );
+			return;
+		}
+		campaigns.forEach( function ( c ) {
+			var meter = make( 'div', 'db-meter' );
+			var top = make( 'div', 'db-meter__top' );
+			var name = make( 'div', 'db-meter__name' );
+			name.appendChild( document.createTextNode(
+				( 'percent' === c.type ? c.value + '% ' : money( c.value ) + ' ' )
+			) );
+			var sm = make( 'small', null, c.label + ( c.shared ? ' · shared pool' : '' ) );
+			name.appendChild( sm );
+			top.appendChild( name );
+
+			var cap = Number( c.cap ) || 0;
+			var used = Number( c.pool_used ) || 0;
+			var countText = make( 'div', 'db-meter__count' );
+			if ( cap > 0 ) {
+				var b = make( 'b', null, used );
+				countText.appendChild( b );
+				countText.appendChild( document.createTextNode( ' / ' + cap + ' claimed' ) );
+			} else {
+				countText.appendChild( make( 'b', null, used ) );
+				countText.appendChild( document.createTextNode( ' claimed' ) );
+			}
+			top.appendChild( countText );
+			meter.appendChild( top );
+
+			var bar = make( 'div', 'db-bar' );
+			var pct = cap > 0 ? Math.min( 100, Math.round( ( used / cap ) * 100 ) ) : 0;
+			var fill = make( 'div', 'db-bar__fill' + ( cap > 0 && used >= cap ? ' is-full' : '' ) );
+			fill.style.width = pct + '%';
+			bar.appendChild( fill );
+			meter.appendChild( bar );
+
+			els.meters.appendChild( meter );
+		} );
+	}
+
+	function renderFeed() {
+		var q = ( els.search.value || '' ).trim().toLowerCase();
+		els.feed.innerHTML = '';
+		var rows = feedCache.filter( function ( v ) {
+			if ( ! q ) {
+				return true;
+			}
+			return ( ( v.code || '' ) + ' ' + ( v.status || '' ) + ' ' + ( v.phone || '' ) + ' ' + ( v.campaign || '' ) ).toLowerCase().indexOf( q ) > -1;
+		} );
+		if ( ! rows.length ) {
+			els.feed.appendChild( make( 'li', null, '' ) ).appendChild( make( 'div', 'db-empty', 'No vouchers yet.' ) );
+			return;
+		}
+		rows.forEach( function ( v ) {
+			var li = document.createElement( 'li' );
+
+			var meta = make( 'div', 'db-feed__meta' );
+			meta.appendChild( make( 'span', 'db-feed__code', v.code ) );
+			var sub = make( 'div', 'db-feed__sub' );
+			var bits = [];
+			if ( v.campaign ) {
+				bits.push( v.campaign );
+			}
+			if ( v.phone ) {
+				bits.push( v.phone );
+			}
+			if ( 'redeemed' === v.status && v.redeemed_at ) {
+				bits.push( ( v.channel || 'redeemed' ) + ' · ' + v.redeemed_at );
+			} else if ( v.created_at ) {
+				bits.push( 'issued ' + v.created_at );
+			}
+			sub.textContent = bits.join( ' · ' );
+			meta.appendChild( sub );
+
+			var badge = make( 'span', 'db-badge db-badge--' + ( v.status || 'issued' ), v.status || 'issued' );
+			var val = make( 'span', 'db-feed__val', ( 'percent' === v.type ? v.value + '%' : money( v.value ) ) );
+
+			li.appendChild( badge );
+			li.appendChild( meta );
+			li.appendChild( val );
+			els.feed.appendChild( li );
+		} );
+	}
+
+	/* ---------- boot ---------- */
+
+	buildShell();
+	refresh();
+	pollTimer = setInterval( refresh, POLL_MS );
+	document.addEventListener( 'visibilitychange', function () {
+		if ( document.hidden ) {
+			clearInterval( pollTimer );
+		} else {
+			refresh();
+			pollTimer = setInterval( refresh, POLL_MS );
+		}
+	} );
+} )();

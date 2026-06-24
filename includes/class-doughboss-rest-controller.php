@@ -229,6 +229,40 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/voucher/scan',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'voucher_scan' ),
+				'permission_callback' => array( $this, 'verify_redeem' ),
+				'args'                => array(
+					'code'            => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'subtotal'        => array(
+						'default'           => 0,
+						'sanitize_callback' => 'floatval',
+					),
+					'idempotency_key' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/voucher/activity',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'voucher_activity' ),
+				'permission_callback' => array( $this, 'verify_redeem' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/cart/clear',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -561,6 +595,21 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Permission check for the in-store voucher scan dashboard: the dedicated
+	 * redeem capability (granted to the owner and the kitchen role on shop
+	 * tablets) or full management. A till device can redeem but never issue
+	 * value — issuing stays behind verify_manage().
+	 *
+	 * @return bool|WP_Error
+	 */
+	public function verify_redeem() {
+		if ( current_user_can( 'redeem_doughboss_vouchers' ) || current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+		return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
+	}
+
+	/**
 	 * Simple per-IP transient rate limiter for mutation endpoints.
 	 *
 	 * @param string $bucket Logical bucket name (e.g. 'checkout').
@@ -661,6 +710,109 @@ class DoughBoss_REST_Controller {
 				'redeemed' => true,
 				'code'     => $result['code'],
 				'amount'   => $result['amount'],
+			)
+		);
+	}
+
+	/**
+	 * POST /voucher/scan — in-store staff redeem (atomic single-use).
+	 *
+	 * Unlike the online /voucher/redeem (which reads the guest cart), this takes
+	 * the code a staff member scans or keys at the till plus the order subtotal,
+	 * and commits against the 'instore' channel. The same atomic lock means the
+	 * voucher dies on the first scan and can no longer be used online.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function voucher_scan( WP_REST_Request $request ) {
+		if ( $this->rate_limited( 'voucher_scan', 240, 600 ) ) {
+			return new WP_Error( 'doughboss_rate', __( 'Too many scans. Please wait a moment.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+		$subtotal = (float) $request->get_param( 'subtotal' );
+		// A busy till may not key the order total; for amount vouchers, let the
+		// full value apply by lifting the subtotal cap when none is given.
+		if ( $subtotal <= 0 ) {
+			$subtotal = 1000000.0;
+		}
+		$result = DoughBoss_Voucher::redeem(
+			(string) $request->get_param( 'code' ),
+			$subtotal,
+			'instore',
+			array( 'idempotency_key' => (string) $request->get_param( 'idempotency_key' ) )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response(
+			array(
+				'redeemed' => true,
+				'code'     => $result['code'],
+				'amount'   => $result['amount'],
+				'message'  => sprintf(
+					/* translators: %s: formatted discount amount. */
+					__( '%s applied — voucher redeemed.', 'doughboss' ),
+					DoughBoss_Settings::format_price( $result['amount'] )
+				),
+			)
+		);
+	}
+
+	/**
+	 * GET /voucher/activity — live dashboard payload for staff: today's campaign
+	 * release counts (with shared-pool usage), status tiles and the most recent
+	 * vouchers with their redemption state.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function voucher_activity( WP_REST_Request $request ) {
+		unset( $request );
+		$campaigns = array();
+		foreach ( DoughBoss_Voucher::campaigns() as $c ) {
+			$cap         = (int) ( isset( $c['daily_cap'] ) ? $c['daily_cap'] : 0 );
+			$used        = DoughBoss_Voucher::claimed_today_for( $c );
+			$campaigns[] = array(
+				'slug'      => isset( $c['slug'] ) ? $c['slug'] : '',
+				'label'     => isset( $c['label'] ) ? $c['label'] : '',
+				'value'     => isset( $c['value'] ) ? (float) $c['value'] : 0,
+				'type'      => isset( $c['type'] ) ? $c['type'] : 'amount',
+				'cap'       => $cap,
+				'claimed'   => DoughBoss_Voucher::claimed_today( isset( $c['slug'] ) ? $c['slug'] : '' ),
+				'pool_used' => $used,
+				'remaining' => $cap > 0 ? max( 0, $cap - $used ) : -1,
+				'shared'    => ! empty( $c['cap_group'] ),
+				'active'    => ! empty( $c['active'] ),
+			);
+		}
+
+		$recent = array();
+		foreach ( DoughBoss_Voucher::query( 30 ) as $r ) {
+			$recent[] = array(
+				'id'          => (int) $r->id,
+				'code'        => $r->code,
+				'value'       => (float) $r->value,
+				'type'        => $r->type,
+				'status'      => $r->status,
+				'campaign'    => $r->campaign,
+				'phone'       => $r->customer_phone,
+				'redeemed_at' => isset( $r->redeemed_at ) ? $r->redeemed_at : null,
+				'channel'     => isset( $r->redeemed_channel ) ? $r->redeemed_channel : '',
+				'amount'      => isset( $r->amount_applied ) ? (float) $r->amount_applied : 0,
+				'created_at'  => $r->created_at,
+			);
+		}
+
+		return rest_ensure_response(
+			array(
+				'campaigns' => $campaigns,
+				'recent'    => $recent,
+				'totals'    => array(
+					'issued'   => DoughBoss_Voucher::count_status( 'issued' ),
+					'redeemed' => DoughBoss_Voucher::count_status( 'redeemed' ),
+					'voided'   => DoughBoss_Voucher::count_status( 'voided' ),
+				),
+				'currency'  => DoughBoss_Settings::get( 'currency_symbol', '$' ),
 			)
 		);
 	}

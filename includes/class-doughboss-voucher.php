@@ -464,6 +464,20 @@ class DoughBoss_Voucher {
 	}
 
 	/**
+	 * Count vouchers in a given status (for the staff dashboard tiles).
+	 *
+	 * @param string $status issued|redeemed|voided.
+	 * @return int
+	 */
+	public static function count_status( $status ) {
+		global $wpdb;
+		$table = self::table();
+		return (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", sanitize_key( $status ) )
+		);
+	}
+
+	/**
 	 * Void an unredeemed voucher.
 	 *
 	 * @param int $id Voucher id.
