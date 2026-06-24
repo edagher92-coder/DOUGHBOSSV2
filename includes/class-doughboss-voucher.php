@@ -386,4 +386,45 @@ class DoughBoss_Voucher {
 			)
 		);
 	}
+
+	/**
+	 * Recent vouchers with their redemption summary (newest first), for admin.
+	 *
+	 * @param int $limit Max rows.
+	 * @return array Row objects.
+	 */
+	public static function query( $limit = 100 ) {
+		global $wpdb;
+		$table       = self::table();
+		$redemptions = self::redemptions_table();
+		$limit       = max( 1, min( 500, (int) $limit ) );
+		return $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare(
+				"SELECT v.*, r.redeemed_at, r.amount_applied, r.channel AS redeemed_channel
+				FROM {$table} v
+				LEFT JOIN {$redemptions} r ON r.voucher_id = v.id
+				ORDER BY v.id DESC
+				LIMIT %d",
+				$limit
+			)
+		);
+	}
+
+	/**
+	 * Void an unredeemed voucher.
+	 *
+	 * @param int $id Voucher id.
+	 * @return bool
+	 */
+	public static function void( $id ) {
+		global $wpdb;
+		$id = absint( $id );
+		if ( ! $id ) {
+			return false;
+		}
+		$table = self::table();
+		return (bool) $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "UPDATE {$table} SET status = %s, updated_at = %s WHERE id = %d AND status = %s", 'voided', current_time( 'mysql' ), $id, 'issued' )
+		);
+	}
 }

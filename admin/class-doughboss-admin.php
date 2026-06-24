@@ -28,6 +28,8 @@ class DoughBoss_Admin {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 		add_action( 'admin_post_doughboss_save_location', array( $this, 'handle_save_location' ) );
 		add_action( 'admin_post_doughboss_delete_location', array( $this, 'handle_delete_location' ) );
+		add_action( 'admin_post_doughboss_issue_voucher', array( $this, 'handle_issue_voucher' ) );
+		add_action( 'admin_post_doughboss_void_voucher', array( $this, 'handle_void_voucher' ) );
 	}
 
 	/**
@@ -81,6 +83,15 @@ class DoughBoss_Admin {
 			$this->cap(),
 			'doughboss-locations',
 			array( $this, 'render_locations_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
+			__( 'Vouchers', 'doughboss' ),
+			__( 'Vouchers', 'doughboss' ),
+			$this->cap(),
+			'doughboss-vouchers',
+			array( $this, 'render_vouchers_page' )
 		);
 
 		add_submenu_page(
@@ -760,6 +771,194 @@ JS;
 		}
 
 		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'msg' => 'deleted' ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Render the Vouchers management screen: daily-campaign tracking, a create
+	 * form, and a recent-vouchers list with redemption status + void.
+	 *
+	 * @return void
+	 */
+	public function render_vouchers_page() {
+		if ( ! current_user_can( $this->cap() ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$msg       = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$new_code  = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
+		$campaigns = DoughBoss_Voucher::campaigns();
+		$vouchers  = DoughBoss_Voucher::query( 100 );
+		?>
+		<div class="wrap doughboss-vouchers">
+			<h1><?php esc_html_e( 'Vouchers', 'doughboss' ); ?></h1>
+			<?php if ( 'issued' === $msg ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php echo esc_html__( 'Voucher created:', 'doughboss' ); ?> <code><?php echo esc_html( $new_code ); ?></code></p></div>
+			<?php elseif ( 'voided' === $msg ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Voucher voided.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'error' === $msg ) : ?>
+				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Could not create the voucher — check the value and try again.', 'doughboss' ); ?></p></div>
+			<?php endif; ?>
+
+			<h2><?php esc_html_e( 'Daily campaigns', 'doughboss' ); ?></h2>
+			<table class="wp-list-table widefat fixed striped" style="margin-bottom:1.5rem;max-width:820px;">
+				<thead><tr>
+					<th><?php esc_html_e( 'Campaign', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Value', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Daily cap', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Claimed today', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Remaining', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Active', 'doughboss' ); ?></th>
+				</tr></thead>
+				<tbody>
+				<?php foreach ( $campaigns as $c ) : ?>
+					<?php
+					$cap       = (int) ( isset( $c['daily_cap'] ) ? $c['daily_cap'] : 0 );
+					$claimed   = DoughBoss_Voucher::claimed_today( $c['slug'] );
+					$remaining = $cap > 0 ? (string) max( 0, $cap - $claimed ) : '∞';
+					?>
+					<tr>
+						<td><strong><?php echo esc_html( $c['label'] ); ?></strong><br /><small><?php echo esc_html( $c['slug'] ); ?></small></td>
+						<td><?php echo esc_html( 'percent' === $c['type'] ? $c['value'] . '%' : DoughBoss_Settings::format_price( $c['value'] ) ); ?></td>
+						<td><?php echo esc_html( $cap > 0 ? (string) $cap : '∞' ); ?></td>
+						<td><?php echo esc_html( (string) $claimed ); ?></td>
+						<td><?php echo esc_html( $remaining ); ?></td>
+						<td><?php echo empty( $c['active'] ) ? '—' : '✓'; ?></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+
+			<h2><?php esc_html_e( 'Create a voucher', 'doughboss' ); ?></h2>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="doughboss_issue_voucher" />
+				<?php wp_nonce_field( 'doughboss_issue_voucher' ); ?>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-v-type"><?php esc_html_e( 'Type', 'doughboss' ); ?></label></th>
+						<td><select name="type" id="db-v-type">
+							<option value="amount"><?php esc_html_e( 'Amount off ($)', 'doughboss' ); ?></option>
+							<option value="percent"><?php esc_html_e( 'Percent off (%)', 'doughboss' ); ?></option>
+						</select></td>
+					</tr>
+					<tr>
+						<th><label for="db-v-value"><?php esc_html_e( 'Value', 'doughboss' ); ?></label></th>
+						<td><input name="value" id="db-v-value" type="number" step="0.01" min="0" class="small-text" required /></td>
+					</tr>
+					<tr>
+						<th><label for="db-v-prefix"><?php esc_html_e( 'Code prefix', 'doughboss' ); ?></label></th>
+						<td><input name="prefix" id="db-v-prefix" type="text" class="regular-text" value="SNOW" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-v-min"><?php esc_html_e( 'Minimum spend', 'doughboss' ); ?></label></th>
+						<td><input name="min_spend" id="db-v-min" type="number" step="0.01" min="0" class="small-text" value="0" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-v-scope"><?php esc_html_e( 'Where', 'doughboss' ); ?></label></th>
+						<td><select name="scope" id="db-v-scope">
+							<option value="both"><?php esc_html_e( 'Online & in-store', 'doughboss' ); ?></option>
+							<option value="online"><?php esc_html_e( 'Online only', 'doughboss' ); ?></option>
+							<option value="instore"><?php esc_html_e( 'In-store only', 'doughboss' ); ?></option>
+						</select></td>
+					</tr>
+					<tr>
+						<th><label for="db-v-to"><?php esc_html_e( 'Valid until', 'doughboss' ); ?></label></th>
+						<td><input name="valid_to" id="db-v-to" type="date" /></td>
+					</tr>
+				</table>
+				<?php submit_button( __( 'Create voucher', 'doughboss' ) ); ?>
+			</form>
+
+			<h2><?php esc_html_e( 'Recent vouchers', 'doughboss' ); ?></h2>
+			<table class="wp-list-table widefat fixed striped">
+				<thead><tr>
+					<th><?php esc_html_e( 'Code', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Discount', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Campaign', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Status', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Customer', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Created', 'doughboss' ); ?></th>
+					<th><?php esc_html_e( 'Redeemed', 'doughboss' ); ?></th>
+					<th></th>
+				</tr></thead>
+				<tbody>
+				<?php if ( ! $vouchers ) : ?>
+					<tr><td colspan="8"><?php esc_html_e( 'No vouchers yet. Create one above, or they appear here as customers claim them.', 'doughboss' ); ?></td></tr>
+				<?php else : ?>
+					<?php foreach ( $vouchers as $v ) : ?>
+						<tr>
+							<td><code><?php echo esc_html( $v->code ); ?></code></td>
+							<td><?php echo esc_html( 'percent' === $v->type ? $v->value . '%' : DoughBoss_Settings::format_price( $v->value ) ); ?></td>
+							<td><?php echo esc_html( $v->campaign ? $v->campaign : '—' ); ?></td>
+							<td><?php echo esc_html( ucfirst( $v->status ) ); ?></td>
+							<td><?php echo esc_html( $v->customer_phone ? $v->customer_phone : ( $v->customer_email ? $v->customer_email : '—' ) ); ?></td>
+							<td><?php echo esc_html( mysql2date( 'j M, g:ia', $v->created_at ) ); ?></td>
+							<td><?php echo $v->redeemed_at ? esc_html( mysql2date( 'j M, g:ia', $v->redeemed_at ) . ' · ' . $v->redeemed_channel ) : '—'; ?></td>
+							<td>
+								<?php if ( 'issued' === $v->status ) : ?>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_void_voucher&id=' . $v->id ), 'doughboss_void_voucher_' . $v->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Void this voucher?', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Void', 'doughboss' ); ?></a>
+								<?php else : ?>
+									—
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				<?php endif; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Handle the create-voucher form submission.
+	 *
+	 * @return void
+	 */
+	public function handle_issue_voucher() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_issue_voucher' );
+
+		$result = DoughBoss_Voucher::issue(
+			array(
+				'type'      => isset( $_POST['type'] ) ? sanitize_key( wp_unslash( $_POST['type'] ) ) : 'amount',
+				'value'     => isset( $_POST['value'] ) ? (float) wp_unslash( $_POST['value'] ) : 0,
+				'prefix'    => isset( $_POST['prefix'] ) ? sanitize_text_field( wp_unslash( $_POST['prefix'] ) ) : 'DB',
+				'min_spend' => isset( $_POST['min_spend'] ) ? (float) wp_unslash( $_POST['min_spend'] ) : 0,
+				'scope'     => isset( $_POST['scope'] ) ? sanitize_key( wp_unslash( $_POST['scope'] ) ) : 'both',
+				'valid_to'  => ( isset( $_POST['valid_to'] ) && '' !== $_POST['valid_to'] ) ? sanitize_text_field( wp_unslash( $_POST['valid_to'] ) ) . ' 23:59:59' : '',
+			)
+		);
+
+		$args = array( 'page' => 'doughboss-vouchers' );
+		if ( is_wp_error( $result ) ) {
+			$args['msg'] = 'error';
+		} else {
+			$args['msg']  = 'issued';
+			$args['code'] = $result['code'];
+		}
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Handle voiding an unredeemed voucher.
+	 *
+	 * @return void
+	 */
+	public function handle_void_voucher() {
+		$id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_void_voucher_' . $id );
+		if ( $id ) {
+			DoughBoss_Voucher::void( $id );
+		}
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-vouchers', 'msg' => 'voided' ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
