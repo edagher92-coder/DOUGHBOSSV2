@@ -294,19 +294,27 @@ class DoughBoss_Activator {
 			if ( ! $admin->has_cap( 'manage_doughboss_kds' ) ) {
 				$admin->add_cap( 'manage_doughboss_kds' );
 			}
+			if ( ! $admin->has_cap( 'redeem_doughboss_vouchers' ) ) {
+				$admin->add_cap( 'redeem_doughboss_vouchers' );
+			}
 		}
 
-		// Kitchen staff role: just enough to open the order board on a shop
-		// tablet — never a full admin login on a device in the kitchen.
-		if ( ! get_role( 'doughboss_kitchen' ) ) {
+		// Kitchen staff role: just enough to open the order board and scan
+		// vouchers on a shop tablet — never a full admin login on a device in
+		// the kitchen.
+		$kitchen = get_role( 'doughboss_kitchen' );
+		if ( ! $kitchen ) {
 			add_role(
 				'doughboss_kitchen',
 				__( 'DoughBoss Kitchen', 'doughboss' ),
 				array(
-					'read'                 => true,
-					'manage_doughboss_kds' => true,
+					'read'                      => true,
+					'manage_doughboss_kds'      => true,
+					'redeem_doughboss_vouchers' => true,
 				)
 			);
+		} elseif ( ! $kitchen->has_cap( 'redeem_doughboss_vouchers' ) ) {
+			$kitchen->add_cap( 'redeem_doughboss_vouchers' );
 		}
 	}
 }

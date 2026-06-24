@@ -196,13 +196,20 @@
 				refresh();
 			} else {
 				var msg = ( r.data && r.data.message ) ? r.data.message : 'Could not redeem this voucher.';
+				var code2 = r.data && r.data.code;
 				var title = 'Declined';
-				if ( r.data && 'doughboss_voucher_used' === r.data.code ) {
+				if ( 'doughboss_voucher_used' === code2 ) {
 					title = 'Already used';
-				} else if ( r.data && 'doughboss_voucher_min' === r.data.code ) {
+				} else if ( 'doughboss_voucher_min' === code2 ) {
 					title = 'Minimum spend not met';
+				} else if ( 'doughboss_need_total' === code2 ) {
+					title = 'Enter order total';
 				}
 				showResult( false, title, msg );
+				if ( 'doughboss_need_total' === code2 ) {
+					try { els.total.focus(); } catch ( e ) {}
+					return;
+				}
 			}
 			focusInput();
 		} ).catch( function () {
@@ -338,15 +345,27 @@
 
 	/* ---------- boot ---------- */
 
+	function startPoll() {
+		stopPoll();
+		pollTimer = setInterval( refresh, POLL_MS );
+	}
+
+	function stopPoll() {
+		if ( pollTimer ) {
+			clearInterval( pollTimer );
+			pollTimer = null;
+		}
+	}
+
 	buildShell();
 	refresh();
-	pollTimer = setInterval( refresh, POLL_MS );
+	startPoll();
 	document.addEventListener( 'visibilitychange', function () {
 		if ( document.hidden ) {
-			clearInterval( pollTimer );
+			stopPoll();
 		} else {
 			refresh();
-			pollTimer = setInterval( refresh, POLL_MS );
+			startPoll();
 		}
 	} );
 } )();

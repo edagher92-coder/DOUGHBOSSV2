@@ -610,6 +610,23 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Mask a customer phone for the shared till feed — show only the last 3
+	 * digits so staff can still match a customer without exposing the full
+	 * number on a counter-facing screen.
+	 *
+	 * @param string $phone Raw phone.
+	 * @return string
+	 */
+	private function mask_phone( $phone ) {
+		$phone = trim( (string) $phone );
+		$len   = strlen( $phone );
+		if ( $len <= 3 ) {
+			return $phone;
+		}
+		return str_repeat( '•', $len - 3 ) . substr( $phone, -3 );
+	}
+
+	/**
 	 * Simple per-IP transient rate limiter for mutation endpoints.
 	 *
 	 * @param string $bucket Logical bucket name (e.g. 'checkout').
@@ -729,14 +746,29 @@ class DoughBoss_REST_Controller {
 		if ( $this->rate_limited( 'voucher_scan', 240, 600 ) ) {
 			return new WP_Error( 'doughboss_rate', __( 'Too many scans. Please wait a moment.', 'doughboss' ), array( 'status' => 429 ) );
 		}
+		$code     = (string) $request->get_param( 'code' );
 		$subtotal = (float) $request->get_param( 'subtotal' );
-		// A busy till may not key the order total; for amount vouchers, let the
-		// full value apply by lifting the subtotal cap when none is given.
+
+		// A busy till may not key the order total. A flat amount voucher with no
+		// minimum spend can safely apply its full value without one; but a
+		// percent voucher (which needs the total to compute) or any voucher with
+		// a minimum spend requires the real total — never fabricate one, since a
+		// made-up subtotal would mis-price a percent discount and silently skip
+		// the minimum-spend check.
 		if ( $subtotal <= 0 ) {
-			$subtotal = 1000000.0;
+			$row = DoughBoss_Voucher::find_by_code( $code );
+			if ( $row ) {
+				if ( 'percent' === $row->type || (float) $row->min_spend > 0 ) {
+					return new WP_Error( 'doughboss_need_total', __( 'Enter the order total to redeem this voucher.', 'doughboss' ), array( 'status' => 400 ) );
+				}
+				$subtotal = (float) $row->value;
+			}
+			// Unknown code: leave subtotal at 0 so redeem() returns the same
+			// opaque "not valid" error without revealing the code doesn't exist.
 		}
+
 		$result = DoughBoss_Voucher::redeem(
-			(string) $request->get_param( 'code' ),
+			$code,
 			$subtotal,
 			'instore',
 			array( 'idempotency_key' => (string) $request->get_param( 'idempotency_key' ) )
@@ -795,7 +827,7 @@ class DoughBoss_REST_Controller {
 				'type'        => $r->type,
 				'status'      => $r->status,
 				'campaign'    => $r->campaign,
-				'phone'       => $r->customer_phone,
+				'phone'       => $this->mask_phone( $r->customer_phone ),
 				'redeemed_at' => isset( $r->redeemed_at ) ? $r->redeemed_at : null,
 				'channel'     => isset( $r->redeemed_channel ) ? $r->redeemed_channel : '',
 				'amount'      => isset( $r->amount_applied ) ? (float) $r->amount_applied : 0,
