@@ -490,6 +490,8 @@ class DoughBoss_Order {
 			'status_label' => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
 			'order_type'   => $order->order_type,
 			'total'        => (float) $order->total,
+			'discount'     => isset( $order->discount ) ? (float) $order->discount : 0,
+			'voucher_code' => isset( $order->voucher_code ) ? $order->voucher_code : '',
 			'currency'     => $order->currency,
 			'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
 			'eta_minutes'  => isset( $order->eta_minutes ) ? (int) $order->eta_minutes : 0,

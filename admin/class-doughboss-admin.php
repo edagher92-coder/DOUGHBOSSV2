@@ -472,7 +472,21 @@ JS;
 										<?php endforeach; ?>
 									</ul>
 								</td>
-								<td><?php echo esc_html( DoughBoss_Settings::format_price( $order->total ) ); ?></td>
+								<td>
+									<?php echo esc_html( DoughBoss_Settings::format_price( $order->total ) ); ?>
+									<?php if ( isset( $order->discount ) && (float) $order->discount > 0 ) : ?>
+										<br /><small style="color:#1f8a54;">
+										<?php
+										printf(
+											/* translators: 1: discount amount, 2: voucher code. */
+											esc_html__( '−%1$s voucher %2$s', 'doughboss' ),
+											esc_html( DoughBoss_Settings::format_price( (float) $order->discount ) ),
+											esc_html( $order->voucher_code )
+										);
+										?>
+										</small>
+									<?php endif; ?>
+								</td>
 								<td><?php echo esc_html( mysql2date( 'M j, g:i a', $order->created_at ) ); ?></td>
 								<td>
 									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>">

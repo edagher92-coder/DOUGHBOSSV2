@@ -2253,6 +2253,14 @@ class DoughBoss_REST_Controller {
 		foreach ( DoughBoss_Order::get_items( $order->id ) as $item ) {
 			$lines[] = sprintf( '%d x %s — %s', $item['quantity'], $item['name'], DoughBoss_Settings::format_price( $item['line_total'] ) );
 		}
+		if ( isset( $order->discount ) && (float) $order->discount > 0 ) {
+			$lines[] = sprintf(
+				/* translators: 1: voucher code (may be blank), 2: discount amount. */
+				__( 'Voucher %1$s: -%2$s', 'doughboss' ),
+				'' !== (string) $order->voucher_code ? $order->voucher_code : '',
+				DoughBoss_Settings::format_price( (float) $order->discount )
+			);
+		}
 
 		$body = sprintf(
 			/* translators: 1: customer name, 2: order number, 3: items list, 4: total. */
