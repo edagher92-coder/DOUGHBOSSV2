@@ -26,6 +26,7 @@ class DoughBoss_Assets {
 		'doughboss_order_tracking',
 		'doughboss_shop_picker',
 		'doughboss_catering',
+		'doughboss_voucher_claim',
 	);
 
 	/**
@@ -142,6 +143,10 @@ class DoughBoss_Assets {
 					'cardDetails'  => __( 'Card details', 'doughboss' ),
 					'payProcessing'=> __( 'Processing payment…', 'doughboss' ),
 					'cardError'    => __( 'Please check your card details and try again.', 'doughboss' ),
+					'vClaiming'    => __( 'Getting your code…', 'doughboss' ),
+					'vYourCode'    => __( 'Your code', 'doughboss' ),
+					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),
+					'vNeedPhone'   => __( 'Please enter your mobile number.', 'doughboss' ),
 				),
 			)
 		);
@@ -158,6 +163,24 @@ class DoughBoss_Assets {
 			wp_enqueue_script(
 				'doughboss-catering',
 				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-catering.js',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
+		// Voucher claim widget: its own small app + styles, loaded only when the
+		// claim shortcode is on the page (reuses DoughBossData from the main app).
+		if ( $this->current_post_has( 'doughboss_voucher_claim' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-voucher',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-voucher.css',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-voucher',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-voucher.js',
 				array( 'doughboss' ),
 				DOUGHBOSS_VERSION,
 				true
