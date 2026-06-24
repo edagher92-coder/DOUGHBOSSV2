@@ -195,6 +195,30 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/voucher/claim',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'voucher_claim' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'campaign'       => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'customer_phone' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'customer_email' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_email',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/voucher/issue',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -670,6 +694,36 @@ class DoughBoss_REST_Controller {
 				'issued' => true,
 				'id'     => $result['id'],
 				'code'   => $result['code'],
+			)
+		);
+	}
+
+	/**
+	 * POST /voucher/claim — claim a voucher from a daily-capped campaign (e.g.
+	 * the Snow Boss student $5 / $10). Public (nonce) + rate-limited; enforces
+	 * the per-day cap server-side.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function voucher_claim( WP_REST_Request $request ) {
+		if ( $this->rate_limited( 'voucher_claim', 8, 600 ) ) {
+			return new WP_Error( 'doughboss_rate', __( 'Too many attempts. Please wait a moment.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+		$result = DoughBoss_Voucher::claim(
+			(string) $request->get_param( 'campaign' ),
+			array(
+				'customer_phone' => $request->get_param( 'customer_phone' ),
+				'customer_email' => $request->get_param( 'customer_email' ),
+			)
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response(
+			array(
+				'claimed' => true,
+				'code'    => $result['code'],
 			)
 		);
 	}

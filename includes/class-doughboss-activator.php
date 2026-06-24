@@ -171,6 +171,7 @@ class DoughBoss_Activator {
 			status varchar(20) NOT NULL DEFAULT 'issued',
 			customer_phone varchar(40) NOT NULL DEFAULT '',
 			customer_email varchar(191) NOT NULL DEFAULT '',
+			campaign varchar(40) NOT NULL DEFAULT '',
 			pospal_customer_uid varchar(64) NOT NULL DEFAULT '',
 			pospal_coupon_ref varchar(64) NOT NULL DEFAULT '',
 			valid_from datetime NULL DEFAULT NULL,
@@ -181,7 +182,8 @@ class DoughBoss_Activator {
 			PRIMARY KEY  (id),
 			UNIQUE KEY code (code),
 			KEY status (status),
-			KEY customer_phone (customer_phone)
+			KEY customer_phone (customer_phone),
+			KEY campaign (campaign)
 		) {$charset_collate};";
 
 		$sql_redemptions = "CREATE TABLE {$redemptions} (

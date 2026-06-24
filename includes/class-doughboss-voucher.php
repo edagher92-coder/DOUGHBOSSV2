@@ -129,13 +129,14 @@ class DoughBoss_Voucher {
 			'status'         => 'issued',
 			'customer_phone' => isset( $args['customer_phone'] ) ? substr( sanitize_text_field( $args['customer_phone'] ), 0, 40 ) : '',
 			'customer_email' => isset( $args['customer_email'] ) ? sanitize_email( $args['customer_email'] ) : '',
+			'campaign'       => isset( $args['campaign'] ) ? substr( sanitize_key( $args['campaign'] ), 0, 40 ) : '',
 			'valid_from'     => ! empty( $args['valid_from'] ) ? sanitize_text_field( $args['valid_from'] ) : null,
 			'valid_to'       => ! empty( $args['valid_to'] ) ? sanitize_text_field( $args['valid_to'] ) : null,
 			'meta'           => ! empty( $args['meta'] ) ? wp_json_encode( $args['meta'] ) : null,
 			'created_at'     => $now,
 			'updated_at'     => $now,
 		);
-		$formats = array( '%s', '%s', '%f', '%s', '%f', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' );
+		$formats = array( '%s', '%s', '%f', '%s', '%f', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' );
 
 		$ok = $wpdb->insert( $table, $data, $formats ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		if ( ! $ok ) {
@@ -283,6 +284,106 @@ class DoughBoss_Voucher {
 		return array(
 			'code'   => $row->code,
 			'amount' => $eval['amount'],
+		);
+	}
+
+	/**
+	 * Defined claim campaigns. Owner-editable via the 'voucher_campaigns'
+	 * setting; falls back to the defaults below.
+	 *
+	 * @return array[] Keyed by slug.
+	 */
+	public static function campaigns() {
+		$stored = DoughBoss_Settings::get( 'voucher_campaigns', null );
+		if ( is_array( $stored ) && ! empty( $stored ) ) {
+			return $stored;
+		}
+		return self::default_campaigns();
+	}
+
+	/**
+	 * Default campaigns — the Snow Boss student launch: a $5 and a $10 voucher,
+	 * each capped at 100 claims per day and released fresh every day.
+	 *
+	 * @return array[]
+	 */
+	public static function default_campaigns() {
+		return array(
+			'snow5'  => array(
+				'slug'      => 'snow5',
+				'label'     => '$5 off a manoush combo',
+				'type'      => 'amount',
+				'value'     => 5.00,
+				'prefix'    => 'SNOW',
+				'daily_cap' => 100,
+				'scope'     => 'both',
+				'active'    => 1,
+			),
+			'snow10' => array(
+				'slug'      => 'snow10',
+				'label'     => '$10 off your first Snow Boss dessert',
+				'type'      => 'amount',
+				'value'     => 10.00,
+				'prefix'    => 'SNOW',
+				'daily_cap' => 100,
+				'scope'     => 'both',
+				'active'    => 1,
+			),
+		);
+	}
+
+	/**
+	 * How many vouchers a campaign has issued so far today (site-local time).
+	 *
+	 * @param string $slug Campaign slug.
+	 * @return int
+	 */
+	public static function claimed_today( $slug ) {
+		global $wpdb;
+		$table = self::table();
+		$start = current_time( 'Y-m-d' ) . ' 00:00:00';
+		return (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE campaign = %s AND created_at >= %s", sanitize_key( $slug ), $start )
+		);
+	}
+
+	/**
+	 * Claim a voucher from a daily-capped campaign. Enforces the per-day cap
+	 * (released fresh each day) and issues an individual voucher on success.
+	 *
+	 * @param string $slug Campaign slug.
+	 * @param array  $args Extra issue args (customer_phone, customer_email).
+	 * @return array|WP_Error array{ id, code } or error.
+	 */
+	public static function claim( $slug, array $args = array() ) {
+		$slug      = sanitize_key( $slug );
+		$campaigns = self::campaigns();
+		if ( empty( $campaigns[ $slug ] ) || empty( $campaigns[ $slug ]['active'] ) ) {
+			return new WP_Error( 'doughboss_campaign', __( 'This offer isn’t available.', 'doughboss' ), array( 'status' => 404 ) );
+		}
+
+		$campaign = $campaigns[ $slug ];
+		$cap      = (int) ( isset( $campaign['daily_cap'] ) ? $campaign['daily_cap'] : 0 );
+		if ( $cap > 0 && self::claimed_today( $slug ) >= $cap ) {
+			return new WP_Error( 'doughboss_campaign_full', __( 'Today’s vouchers have all been claimed — check back tomorrow.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		return self::issue(
+			array_merge(
+				array(
+					'type'       => isset( $campaign['type'] ) ? $campaign['type'] : 'amount',
+					'value'      => isset( $campaign['value'] ) ? $campaign['value'] : 0,
+					'prefix'     => isset( $campaign['prefix'] ) ? $campaign['prefix'] : 'DB',
+					'scope'      => isset( $campaign['scope'] ) ? $campaign['scope'] : 'both',
+					'single_use' => 1,
+					'campaign'   => $slug,
+					'meta'       => array(
+						'campaign' => $slug,
+						'label'    => isset( $campaign['label'] ) ? $campaign['label'] : '',
+					),
+				),
+				$args
+			)
 		);
 	}
 }
