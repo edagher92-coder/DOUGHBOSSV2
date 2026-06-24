@@ -453,6 +453,7 @@ class DoughBoss_Voucher {
 	 * @return array|WP_Error array{ id, code } or error.
 	 */
 	public static function claim( $slug, array $args = array() ) {
+		global $wpdb;
 		$slug      = sanitize_key( $slug );
 		$campaigns = self::campaigns();
 		if ( empty( $campaigns[ $slug ] ) || empty( $campaigns[ $slug ]['active'] ) ) {
@@ -461,11 +462,22 @@ class DoughBoss_Voucher {
 
 		$campaign = $campaigns[ $slug ];
 		$cap      = (int) ( isset( $campaign['daily_cap'] ) ? $campaign['daily_cap'] : 0 );
+
+		// Serialize the count -> issue for this campaign's daily pool so two
+		// concurrent claims can't both pass the cap check and over-issue. A named
+		// DB lock keyed by the shared cap_group (or the slug when ungrouped); if
+		// the lock can't be taken we still enforce the cap, just unserialized.
+		$lock = substr( 'dbv_' . ( ! empty( $campaign['cap_group'] ) ? 'g_' . sanitize_key( $campaign['cap_group'] ) : 's_' . $slug ), 0, 64 );
+		$got  = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $lock, 5 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
 		if ( $cap > 0 && self::claimed_today_for( $campaign ) >= $cap ) {
+			if ( 1 === $got ) {
+				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
 			return new WP_Error( 'doughboss_campaign_full', __( 'Today’s vouchers have all been claimed — check back tomorrow.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
-		return self::issue(
+		$result = self::issue(
 			array_merge(
 				array(
 					'type'       => isset( $campaign['type'] ) ? $campaign['type'] : 'amount',
@@ -485,6 +497,12 @@ class DoughBoss_Voucher {
 				$args
 			)
 		);
+
+		if ( 1 === $got ) {
+			$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		}
+
+		return $result;
 	}
 
 	/**
