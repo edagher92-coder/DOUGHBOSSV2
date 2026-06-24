@@ -18,9 +18,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Cart {
 
-	const COOKIE      = 'doughboss_cart';
-	const PREFIX      = 'doughboss_cart_';
-	const TTL         = DAY_IN_SECONDS;
+	const COOKIE         = 'doughboss_cart';
+	const PREFIX         = 'doughboss_cart_';
+	const VOUCHER_PREFIX = 'doughboss_cart_voucher_';
+	const TTL            = DAY_IN_SECONDS;
 	const MAX_QTY     = 50;
 	const MAX_LINES   = 50;
 
@@ -106,6 +107,41 @@ class DoughBoss_Cart {
 	 */
 	private function write( array $lines ) {
 		set_transient( $this->transient_key(), $lines, self::TTL );
+	}
+
+	/**
+	 * Transient key for the voucher code held against the current cart.
+	 *
+	 * @return string
+	 */
+	private function voucher_key() {
+		return self::VOUCHER_PREFIX . $this->get_token();
+	}
+
+	/**
+	 * The voucher code currently held on the cart (preview only — redemption
+	 * happens at checkout).
+	 *
+	 * @return string
+	 */
+	public function get_voucher_code() {
+		$code = get_transient( $this->voucher_key() );
+		return is_string( $code ) ? $code : '';
+	}
+
+	/**
+	 * Hold (or, with an empty string, drop) a voucher code on the cart.
+	 *
+	 * @param string $code Voucher code.
+	 * @return void
+	 */
+	public function set_voucher_code( $code ) {
+		$code = strtoupper( trim( (string) $code ) );
+		if ( '' === $code ) {
+			delete_transient( $this->voucher_key() );
+			return;
+		}
+		set_transient( $this->voucher_key(), $code, self::TTL );
 	}
 
 	/**
@@ -218,6 +254,7 @@ class DoughBoss_Cart {
 	 */
 	public function clear() {
 		delete_transient( $this->transient_key() );
+		delete_transient( $this->voucher_key() );
 	}
 
 	/**
@@ -259,19 +296,37 @@ class DoughBoss_Cart {
 		$rate         = (float) DoughBoss_Settings::get( 'tax_rate', 0 );
 		$delivery_fee = ( 'delivery' === $order_type ) ? round( (float) DoughBoss_Settings::get( 'delivery_fee', 0 ), 2 ) : 0.0;
 
+		// A held voucher reduces the goods (subtotal) before tax/total are
+		// computed — always recomputed server-side from the cart, never trusted
+		// from the browser. An invalid/used code simply contributes no discount.
+		$discount     = 0.0;
+		$voucher_code = $this->get_voucher_code();
+		if ( '' !== $voucher_code && class_exists( 'DoughBoss_Voucher' ) ) {
+			$row  = DoughBoss_Voucher::find_by_code( $voucher_code );
+			$eval = DoughBoss_Voucher::evaluate( $row, $subtotal, 'online' );
+			if ( ! empty( $eval['valid'] ) ) {
+				$discount = round( (float) $eval['amount'], 2 );
+			} else {
+				$voucher_code = '';
+			}
+		}
+		$taxable = max( 0, round( $subtotal - $discount, 2 ) );
+
 		if ( DoughBoss_Settings::gst_inclusive() ) {
-			// Prices already include GST: the total is just subtotal + delivery,
-			// and tax is the GST component of that total (e.g. total / 11 @ 10%).
-			$total = round( $subtotal + $delivery_fee, 2 );
+			// Prices already include GST: the total is just (discounted) goods +
+			// delivery, and tax is the GST component of that total (e.g. /11 @ 10%).
+			$total = round( $taxable + $delivery_fee, 2 );
 			$tax   = $rate > 0 ? round( $total * ( $rate / ( 100 + $rate ) ), 2 ) : 0.0;
 		} else {
-			// Tax-exclusive: add tax on top of the subtotal.
-			$tax   = round( $subtotal * ( $rate / 100 ), 2 );
-			$total = round( $subtotal + $tax + $delivery_fee, 2 );
+			// Tax-exclusive: add tax on top of the (discounted) goods.
+			$tax   = round( $taxable * ( $rate / 100 ), 2 );
+			$total = round( $taxable + $tax + $delivery_fee, 2 );
 		}
 
 		return array(
 			'subtotal'      => $subtotal,
+			'discount'      => $discount,
+			'voucher_code'  => $voucher_code,
 			'tax'           => $tax,
 			'tax_inclusive' => DoughBoss_Settings::gst_inclusive(),
 			'delivery_fee'  => $delivery_fee,

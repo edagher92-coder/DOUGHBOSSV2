@@ -395,6 +395,42 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/cart/apply-voucher',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'cart_apply_voucher' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'code'       => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'order_type' => array(
+						'default'           => 'pickup',
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/cart/remove-voucher',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'cart_remove_voucher' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'order_type' => array(
+						'default'           => 'pickup',
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/payment-intent',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1463,6 +1499,65 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * POST /cart/apply-voucher — hold a voucher code on the cart and preview the
+	 * discount. Preview only: nothing is redeemed until checkout, so an
+	 * abandoned cart never burns the customer's single-use voucher.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function cart_apply_voucher( WP_REST_Request $request ) {
+		if ( $this->rate_limited( 'voucher_apply', 15, 600 ) ) {
+			return new WP_Error( 'doughboss_rate', __( 'Too many attempts. Please wait a moment.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+		$order_type = ( 'delivery' === $request->get_param( 'order_type' ) ) ? 'delivery' : 'pickup';
+		$code       = strtoupper( trim( (string) $request->get_param( 'code' ) ) );
+		if ( '' === $code ) {
+			return new WP_Error( 'doughboss_voucher_invalid', __( 'This voucher code isn’t valid.', 'doughboss' ), array( 'status' => 422 ) );
+		}
+
+		$totals = $this->cart->totals( $order_type );
+		$row    = DoughBoss_Voucher::find_by_code( $code );
+		$eval   = DoughBoss_Voucher::evaluate( $row, $totals['subtotal'], 'online' );
+		if ( empty( $eval['valid'] ) ) {
+			if ( $row && 'min_spend' === $eval['reason'] ) {
+				return new WP_Error( 'doughboss_voucher_min', __( 'Your order doesn’t meet this voucher’s minimum spend.', 'doughboss' ), array( 'status' => 422 ) );
+			}
+			return new WP_Error( 'doughboss_voucher_invalid', __( 'This voucher code isn’t valid.', 'doughboss' ), array( 'status' => 422 ) );
+		}
+
+		$this->cart->set_voucher_code( $code );
+		return rest_ensure_response(
+			array(
+				'applied' => true,
+				'cart'    => $this->cart->to_array( $order_type ),
+				'message' => sprintf(
+					/* translators: %s: formatted discount amount. */
+					__( '%s off applied.', 'doughboss' ),
+					DoughBoss_Settings::format_price( $eval['amount'] )
+				),
+			)
+		);
+	}
+
+	/**
+	 * POST /cart/remove-voucher — drop the held voucher code from the cart.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function cart_remove_voucher( WP_REST_Request $request ) {
+		$order_type = ( 'delivery' === $request->get_param( 'order_type' ) ) ? 'delivery' : 'pickup';
+		$this->cart->set_voucher_code( '' );
+		return rest_ensure_response(
+			array(
+				'applied' => false,
+				'cart'    => $this->cart->to_array( $order_type ),
+			)
+		);
+	}
+
+	/**
 	 * POST /checkout — validate, create the order, clear the cart.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -1553,6 +1648,31 @@ class DoughBoss_REST_Controller {
 			$payment_intent_id = $verified;
 		}
 
+		// Redeem a held voucher before the order row is written. The redeem is
+		// idempotent (a retry replays the same result), so the single-use voucher
+		// is consumed exactly once even if order creation is retried. If it can no
+		// longer be redeemed and nothing was paid, reject so the customer can
+		// review; if Stripe already took the discounted amount, honour it rather
+		// than overcharging.
+		$discount     = isset( $totals['discount'] ) ? (float) $totals['discount'] : 0.0;
+		$voucher_code = isset( $totals['voucher_code'] ) ? (string) $totals['voucher_code'] : '';
+		$voucher_idem = '';
+		if ( '' !== $voucher_code && $discount > 0 ) {
+			$voucher_idem = 'order_' . ( '' !== $idem ? $idem : md5( $this->cart->get_token() . '|' . $voucher_code ) );
+			$redeem       = DoughBoss_Voucher::redeem( $voucher_code, $totals['subtotal'], 'online', array( 'idempotency_key' => $voucher_idem ) );
+			if ( is_wp_error( $redeem ) ) {
+				if ( 'unpaid' === $payment_status ) {
+					$this->cart->set_voucher_code( '' );
+					return $redeem;
+				}
+			} else {
+				$discount = (float) $redeem['amount'];
+			}
+		} else {
+			$discount     = 0.0;
+			$voucher_code = '';
+		}
+
 		$order_id = DoughBoss_Order::create(
 			array(
 				'order_type'     => $order_type,
@@ -1566,6 +1686,8 @@ class DoughBoss_REST_Controller {
 				'tax'            => $totals['tax'],
 				'delivery_fee'   => $totals['delivery_fee'],
 				'total'          => $totals['total'],
+				'discount'       => $discount,
+				'voucher_code'   => $voucher_code,
 				'payment_status'    => $payment_status,
 				'payment_method'    => $payment_method,
 				'payment_intent_id' => $payment_intent_id,
@@ -1578,6 +1700,9 @@ class DoughBoss_REST_Controller {
 		}
 
 		$order = DoughBoss_Order::get( $order_id );
+		if ( '' !== $voucher_idem ) {
+			DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
+		}
 		$this->cart->clear();
 		$this->send_confirmation( $order );
 

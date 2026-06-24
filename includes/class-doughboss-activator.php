@@ -70,6 +70,8 @@ class DoughBoss_Activator {
 			tax decimal(10,2) NOT NULL DEFAULT 0.00,
 			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
 			total decimal(10,2) NOT NULL DEFAULT 0.00,
+			discount decimal(10,2) NOT NULL DEFAULT 0.00,
+			voucher_code varchar(40) NOT NULL DEFAULT '',
 			currency varchar(10) NOT NULL DEFAULT 'AUD',
 			payment_status varchar(20) NOT NULL DEFAULT 'unpaid',
 			payment_method varchar(20) NOT NULL DEFAULT '',
@@ -189,6 +191,7 @@ class DoughBoss_Activator {
 		$sql_redemptions = "CREATE TABLE {$redemptions} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			voucher_id bigint(20) unsigned NOT NULL,
+			order_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			channel varchar(20) NOT NULL DEFAULT 'online',
 			pospal_ticket_no varchar(64) NOT NULL DEFAULT '',
 			location_id bigint(20) unsigned NOT NULL DEFAULT 0,

@@ -59,6 +59,7 @@ class DoughBoss_Migrations {
 				'1.4.0' => 'upgrade_to_1_4_0',
 				'1.5.0' => 'upgrade_to_1_5_0',
 				'1.6.0' => 'upgrade_to_1_6_0',
+				'1.7.0' => 'upgrade_to_1_7_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -182,5 +183,19 @@ class DoughBoss_Migrations {
 				$role->add_cap( 'redeem_doughboss_vouchers' );
 			}
 		}
+	}
+
+	/**
+	 * 1.7.0 — voucher discounts on orders.
+	 *
+	 * The orders.discount / orders.voucher_code columns and the
+	 * voucher_redemptions.order_id column are added by dbDelta via
+	 * create_tables(); existing orders default to no discount, so there is
+	 * nothing to backfill.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_7_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
 	}
 }

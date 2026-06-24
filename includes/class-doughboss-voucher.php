@@ -335,6 +335,30 @@ class DoughBoss_Voucher {
 	}
 
 	/**
+	 * Attach an order id to a redemption row, linking an online redemption to the
+	 * order it discounted. Best-effort.
+	 *
+	 * @param string $idempotency_key Redemption idempotency key.
+	 * @param int    $order_id        Order id.
+	 * @return void
+	 */
+	public static function link_redemption_to_order( $idempotency_key, $order_id ) {
+		global $wpdb;
+		$key = substr( sanitize_text_field( (string) $idempotency_key ), 0, 64 );
+		$oid = absint( $order_id );
+		if ( '' === $key || ! $oid ) {
+			return;
+		}
+		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			self::redemptions_table(),
+			array( 'order_id' => $oid ),
+			array( 'idempotency_key' => $key ),
+			array( '%d' ),
+			array( '%s' )
+		);
+	}
+
+	/**
 	 * Defined claim campaigns. Owner-editable via the 'voucher_campaigns'
 	 * setting; falls back to the defaults below.
 	 *

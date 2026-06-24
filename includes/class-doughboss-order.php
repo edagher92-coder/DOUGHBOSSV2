@@ -116,6 +116,8 @@ class DoughBoss_Order {
 					'tax'           => $data['tax'],
 					'delivery_fee'  => $data['delivery_fee'],
 					'total'         => $data['total'],
+					'discount'      => isset( $data['discount'] ) ? $data['discount'] : 0,
+					'voucher_code'  => isset( $data['voucher_code'] ) ? $data['voucher_code'] : '',
 					'currency'      => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
 					'payment_status'    => isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid',
 					'payment_method'    => isset( $data['payment_method'] ) ? $data['payment_method'] : '',
@@ -123,7 +125,7 @@ class DoughBoss_Order {
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
