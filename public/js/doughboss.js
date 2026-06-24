@@ -406,6 +406,9 @@
 			// Totals.
 			root.appendChild(totalsBlock(cart.totals, cfg));
 
+			// Voucher code (apply/remove — preview only; redeemed at checkout).
+			root.appendChild(voucherBox(cart.totals, orderType, load));
+
 			// Checkout.
 			root.appendChild(checkoutForm(cfg, orderType, function () { return locationId; }, cart.totals));
 		}
@@ -472,6 +475,12 @@
 				el('span', { text: row[0] }), el('span', { text: money(row[1]) })
 			]));
 		});
+		if (totals.discount > 0) {
+			block.appendChild(el('div', { class: 'db-total-row db-total-row--discount' }, [
+				el('span', { text: (I18N.discount || 'Discount') + (totals.voucher_code ? ' (' + totals.voucher_code + ')' : '') }),
+				el('span', { text: '−' + money(totals.discount) })
+			]));
+		}
 		block.appendChild(el('div', { class: 'db-total-row db-total-row--grand' }, [
 			el('span', { text: I18N.total || 'Total' }), el('span', { text: money(totals.total) })
 		]));
@@ -479,6 +488,43 @@
 			block.appendChild(el('div', { class: 'db-total-note', text: '(' + (I18N.inclGst || 'includes GST') + ' ' + money(totals.tax) + ')' }));
 		}
 		return block;
+	}
+
+	function voucherBox(totals, orderType, reload) {
+		var wrap = el('div', { class: 'db-voucher' });
+		var msg = el('div', { class: 'db-voucher-msg', 'aria-live': 'polite' });
+
+		if (totals.voucher_code) {
+			var remove = el('button', { class: 'db-link', type: 'button', text: I18N.remove || 'Remove' });
+			remove.addEventListener('click', function () {
+				remove.disabled = true;
+				request('/cart/remove-voucher', { method: 'POST', body: { order_type: orderType } })
+					.then(function () { reload(); })
+					.catch(function (err) { remove.disabled = false; msg.textContent = err.message; });
+			});
+			wrap.appendChild(el('div', { class: 'db-voucher-applied' }, [
+				el('span', { text: (I18N.voucherApplied || 'Voucher applied') + ': ' + totals.voucher_code }),
+				remove
+			]));
+		} else {
+			var input = el('input', { type: 'text', class: 'db-voucher-input', placeholder: I18N.voucherPlaceholder || 'Voucher code' });
+			var apply = el('button', { class: 'db-btn db-btn--sm', type: 'button', text: I18N.apply || 'Apply' });
+			function doApply() {
+				var code = (input.value || '').trim();
+				if (!code) { return; }
+				apply.disabled = true;
+				msg.textContent = '';
+				request('/cart/apply-voucher', { method: 'POST', body: { code: code, order_type: orderType } })
+					.then(function () { reload(); })
+					.catch(function (err) { apply.disabled = false; msg.textContent = err.message; });
+			}
+			apply.addEventListener('click', doApply);
+			input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doApply(); } });
+			wrap.appendChild(el('div', { class: 'db-voucher-row' }, [input, apply]));
+		}
+
+		wrap.appendChild(msg);
+		return wrap;
 	}
 
 	function checkoutForm(cfg, orderType, getLocationId, totals) {

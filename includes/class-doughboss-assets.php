@@ -147,6 +147,10 @@ class DoughBoss_Assets {
 					'vYourCode'    => __( 'Your code', 'doughboss' ),
 					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),
 					'vNeedPhone'   => __( 'Please enter your mobile number.', 'doughboss' ),
+					'discount'     => __( 'Discount', 'doughboss' ),
+					'apply'        => __( 'Apply', 'doughboss' ),
+					'voucherApplied'     => __( 'Voucher applied', 'doughboss' ),
+					'voucherPlaceholder' => __( 'Voucher code', 'doughboss' ),
 				),
 			)
 		);
