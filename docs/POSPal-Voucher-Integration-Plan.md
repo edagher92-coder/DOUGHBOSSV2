@@ -144,9 +144,9 @@ Read/preview is intentionally light-auth like the other public storefront routes
 ## 7. End-to-end flows (discount-coupon model)
 
 ### A. Issue
-1. **Trigger** — student claim of the combined **"$5 + $10" voucher** (one code, `$15` total: `$10` Dough Boss + `$5` Snow Boss; replaces today's Formspree-only flow), an online promo, or admin "issue voucher".
-2. Plugin inserts one `doughboss_vouchers` row (`status=issued`, `code=STUDENT-XXXXXXXX`, `type=amount`, `value=15.00`, `campaign=student`, `meta.breakdown={doughboss:10, snowboss:5}`, `customer_phone`). Single code, single cross-channel use.
-3. Connector → POSPal: `customerOpenApi/queryByTel`; if no member, `customerOpenApi/add` (create member by phone). Then **grant the matching coupon(s)** to that member via `promotionOpenApi` — per the `meta.breakdown`, the `$10` Dough Boss + `$5` Snow Boss coupon rules (method per §11). Store `pospal_customer_uid` + `pospal_coupon_ref` on the row.
+1. **Trigger** — student claim of either the **$5** or the **$10** student voucher (two separate codes/campaigns — `snow5`, `snow10` — sharing **one daily pool of 100** via `cap_group=student`; replaces today's Formspree-only flow), an online promo, or admin "issue voucher".
+2. Plugin inserts one `doughboss_vouchers` row (`status=issued`, `code=SNOW-XXXXXXXX`, `type=amount`, `value=5.00` or `10.00`, `campaign=snow5|snow10`, `customer_phone`). Single code, single cross-channel use.
+3. Connector → POSPal: `customerOpenApi/queryByTel`; if no member, `customerOpenApi/add` (create member by phone). Then **grant the matching coupon** to that member via `promotionOpenApi` — the `$5` (snow5) or `$10` (snow10) POSPal coupon rule (method per §11). Store `pospal_customer_uid` + `pospal_coupon_ref` on the row.
 4. Email the code + instruction: *"Show this code, or give your phone number at the till."*
 
 ### B. Redeem in-store (the headline behaviour)

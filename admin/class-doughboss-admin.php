@@ -815,18 +815,42 @@ JS;
 				<?php foreach ( $campaigns as $c ) : ?>
 					<?php
 					$cap       = (int) ( isset( $c['daily_cap'] ) ? $c['daily_cap'] : 0 );
+					$shared    = ! empty( $c['cap_group'] );
 					$claimed   = DoughBoss_Voucher::claimed_today( $c['slug'] );
-					$remaining = $cap > 0 ? (string) max( 0, $cap - $claimed ) : '∞';
+					$pool_used = DoughBoss_Voucher::claimed_today_for( $c );
+					$remaining = $cap > 0 ? (string) max( 0, $cap - $pool_used ) : '∞';
+					$cap_label = $cap > 0 ? (string) $cap . ( $shared ? ' ' . __( '(shared)', 'doughboss' ) : '' ) : '∞';
 					?>
 					<tr>
 						<td><strong><?php echo esc_html( $c['label'] ); ?></strong><br /><small><?php echo esc_html( $c['slug'] ); ?></small></td>
 						<td><?php echo esc_html( 'percent' === $c['type'] ? $c['value'] . '%' : DoughBoss_Settings::format_price( $c['value'] ) ); ?></td>
-						<td><?php echo esc_html( $cap > 0 ? (string) $cap : '∞' ); ?></td>
+						<td><?php echo esc_html( $cap_label ); ?></td>
 						<td><?php echo esc_html( (string) $claimed ); ?></td>
 						<td><?php echo esc_html( $remaining ); ?></td>
 						<td><?php echo empty( $c['active'] ) ? '—' : '✓'; ?></td>
 					</tr>
 				<?php endforeach; ?>
+				<?php
+				// When campaigns share a daily pool, show the combined total so the
+				// "Remaining" columns (which all show the same shared figure) read clearly.
+				$groups = array();
+				foreach ( $campaigns as $c ) {
+					if ( ! empty( $c['cap_group'] ) ) {
+						$groups[ $c['cap_group'] ] = (int) ( isset( $c['daily_cap'] ) ? $c['daily_cap'] : 0 );
+					}
+				}
+				foreach ( $groups as $g => $g_cap ) {
+					$g_used = DoughBoss_Voucher::claimed_today_for( array( 'cap_group' => $g ) );
+					?>
+					<tr style="background:#f6f7f7;">
+						<td colspan="3"><em><?php printf( esc_html__( 'Shared daily pool (%s)', 'doughboss' ), esc_html( $g ) ); ?></em></td>
+						<td><?php echo esc_html( (string) $g_used ); ?></td>
+						<td><?php echo esc_html( $g_cap > 0 ? (string) max( 0, $g_cap - $g_used ) : '∞' ); ?></td>
+						<td>—</td>
+					</tr>
+					<?php
+				}
+				?>
 				</tbody>
 			</table>
 

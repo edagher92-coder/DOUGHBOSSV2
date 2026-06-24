@@ -302,34 +302,39 @@ class DoughBoss_Voucher {
 	}
 
 	/**
-	 * Default campaigns — the Dough Boss × Snow Boss student launch: a single
-	 * combined "$5 + $10" voucher ($15 total value — $10 at Dough Boss + $5 at
-	 * Snow Boss), capped at 100 claims per day and released fresh every day.
+	 * Default campaigns — the Dough Boss × Snow Boss student launch: two separate
+	 * vouchers, a $5 and a $10, that share ONE daily pool of 100 claims across
+	 * both combined (not 100 each) and release fresh every day.
 	 *
-	 * The brand split is carried in `meta.breakdown` so the in-store leg (M3)
-	 * can grant the matching POSPal coupon(s) per brand, while online it applies
-	 * as one $15 discount. Owners can override via the 'voucher_campaigns'
-	 * setting.
+	 * The shared cap is expressed with `cap_group` — every campaign carrying the
+	 * same group counts against the same `daily_cap`. Owners can override the
+	 * whole set via the 'voucher_campaigns' setting.
 	 *
 	 * @return array[]
 	 */
 	public static function default_campaigns() {
 		return array(
-			'student' => array(
-				'slug'      => 'student',
-				'label'     => '$5 + $10 Student Voucher (Dough Boss × Snow Boss)',
+			'snow5'  => array(
+				'slug'      => 'snow5',
+				'label'     => '$5 Student Voucher (Dough Boss × Snow Boss)',
 				'type'      => 'amount',
-				'value'     => 15.00,
-				'prefix'    => 'STUDENT',
+				'value'     => 5.00,
+				'prefix'    => 'SNOW',
 				'daily_cap' => 100,
+				'cap_group' => 'student',
 				'scope'     => 'both',
 				'active'    => 1,
-				'meta'      => array(
-					'breakdown' => array(
-						'doughboss' => 10.00,
-						'snowboss'  => 5.00,
-					),
-				),
+			),
+			'snow10' => array(
+				'slug'      => 'snow10',
+				'label'     => '$10 Student Voucher (Dough Boss × Snow Boss)',
+				'type'      => 'amount',
+				'value'     => 10.00,
+				'prefix'    => 'SNOW',
+				'daily_cap' => 100,
+				'cap_group' => 'student',
+				'scope'     => 'both',
+				'active'    => 1,
 			),
 		);
 	}
@@ -341,12 +346,55 @@ class DoughBoss_Voucher {
 	 * @return int
 	 */
 	public static function claimed_today( $slug ) {
+		return self::claimed_today_slugs( array( $slug ) );
+	}
+
+	/**
+	 * How many vouchers were issued today (site-local) across one or more
+	 * campaign slugs — the primitive behind both per-campaign and shared-pool
+	 * (cap_group) counts.
+	 *
+	 * @param string[] $slugs Campaign slugs.
+	 * @return int
+	 */
+	public static function claimed_today_slugs( array $slugs ) {
 		global $wpdb;
-		$table = self::table();
-		$start = current_time( 'Y-m-d' ) . ' 00:00:00';
+		$slugs = array_values( array_unique( array_filter( array_map( 'sanitize_key', $slugs ) ) ) );
+		if ( empty( $slugs ) ) {
+			return 0;
+		}
+		$table        = self::table();
+		$start        = current_time( 'Y-m-d' ) . ' 00:00:00';
+		$placeholders = implode( ',', array_fill( 0, count( $slugs ), '%s' ) );
+		$params       = $slugs;
+		$params[]     = $start;
 		return (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE campaign = %s AND created_at >= %s", sanitize_key( $slug ), $start )
+			$wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE campaign IN ({$placeholders}) AND created_at >= %s", $params )
 		);
+	}
+
+	/**
+	 * Claims counted today against a campaign's daily cap. When the campaign
+	 * declares a `cap_group`, the count is pooled across every campaign sharing
+	 * that group (e.g. the $5 and $10 student vouchers share one pool of 100);
+	 * otherwise it is just this campaign's own claims.
+	 *
+	 * @param array $campaign Campaign definition.
+	 * @return int
+	 */
+	public static function claimed_today_for( array $campaign ) {
+		$group = isset( $campaign['cap_group'] ) ? sanitize_key( $campaign['cap_group'] ) : '';
+		if ( '' === $group ) {
+			return self::claimed_today_slugs( array( isset( $campaign['slug'] ) ? $campaign['slug'] : '' ) );
+		}
+		$slugs = array();
+		foreach ( self::campaigns() as $c ) {
+			$g = isset( $c['cap_group'] ) ? sanitize_key( $c['cap_group'] ) : '';
+			if ( $g === $group && ! empty( $c['slug'] ) ) {
+				$slugs[] = $c['slug'];
+			}
+		}
+		return self::claimed_today_slugs( $slugs );
 	}
 
 	/**
@@ -366,7 +414,7 @@ class DoughBoss_Voucher {
 
 		$campaign = $campaigns[ $slug ];
 		$cap      = (int) ( isset( $campaign['daily_cap'] ) ? $campaign['daily_cap'] : 0 );
-		if ( $cap > 0 && self::claimed_today( $slug ) >= $cap ) {
+		if ( $cap > 0 && self::claimed_today_for( $campaign ) >= $cap ) {
 			return new WP_Error( 'doughboss_campaign_full', __( 'Today’s vouchers have all been claimed — check back tomorrow.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
