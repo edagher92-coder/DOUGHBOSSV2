@@ -214,15 +214,19 @@ class DoughBoss_Coupon_Code {
 			return true;
 		}
 
-		// The new format is groups of equal length, every character within the
-		// alphabet. If any part fails those shape rules, this isn't a new-format
-		// code (it may be a legacy/prefixed code) — defer to the DB.
-		$expected_len = strlen( $parts[0] );
+		// generate() emits exactly two check-bearing body parts; an optional brand/
+		// campaign prefix (e.g. SNOW110025) precedes them, carries NO check char, and
+		// may legitimately contain O / 0 / 1. So only ever validate the LAST TWO parts
+		// (the body), with re-based indices 0,1 — never the prefix.
+		$body = array_slice( $parts, -2 );
+
+		// The body groups must be equal length and entirely within the alphabet, else
+		// this isn't the new format (e.g. a legacy code) — defer to the DB.
+		$expected_len = strlen( $body[0] );
 		if ( $expected_len < 2 ) {
 			return true;
 		}
-
-		foreach ( $parts as $part ) {
+		foreach ( $body as $part ) {
 			if ( strlen( $part ) !== $expected_len ) {
 				return true; // Uneven groups -> not new-format.
 			}
@@ -231,11 +235,12 @@ class DoughBoss_Coupon_Code {
 			}
 		}
 
-		// Looks like a new-format code: every part's check char must recompute.
-		foreach ( $parts as $p => $part ) {
+		// Body looks like the new format: each part's check char must recompute
+		// against its re-based index (0 for the first body part, 1 for the second).
+		foreach ( $body as $i => $part ) {
 			$data  = substr( $part, 0, -1 );
 			$check = substr( $part, -1 );
-			if ( self::check_char( $data, $p ) !== $check ) {
+			if ( self::check_char( $data, $i ) !== $check ) {
 				return false;
 			}
 		}
