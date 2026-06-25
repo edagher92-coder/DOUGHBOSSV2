@@ -440,6 +440,26 @@ class DoughBoss_Admin {
 			var tbody = tr.parentNode;
 			if (tbody.querySelectorAll('tr').length > 1) { tr.remove(); }
 			else { tr.querySelectorAll('input').forEach(function (i) { i.value = ''; }); }
+			return;
+		}
+
+		var testBtn = e.target.closest('#db-mercure-test');
+		if (testBtn) {
+			e.preventDefault();
+			var out = document.getElementById('db-mercure-test-result');
+			testBtn.disabled = true;
+			if (out) { out.textContent = '…'; out.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/mercure/test', {
+				headers: { 'X-WP-Nonce': DoughBossAdmin.nonce }
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				testBtn.disabled = false;
+				if (!out) { return; }
+				out.textContent = (d && d.message) ? d.message : 'Done.';
+				out.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e';
+			}).catch(function () {
+				testBtn.disabled = false;
+				if (out) { out.textContent = 'Request failed.'; out.style.color = '#b32d2e'; }
+			});
 		}
 	});
 }());
@@ -1317,6 +1337,14 @@ JS;
 						<tr>
 							<th><label for="db-mercure-topic"><?php esc_html_e( 'Topic prefix', 'doughboss' ); ?></label></th>
 							<td><input type="text" id="db-mercure-topic" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mercure_topic_prefix]" value="<?php echo esc_attr( isset( $settings['mercure_topic_prefix'] ) ? $settings['mercure_topic_prefix'] : 'doughboss' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Connection', 'doughboss' ); ?></th>
+							<td>
+								<button type="button" class="button" id="db-mercure-test"><?php esc_html_e( 'Test connection', 'doughboss' ); ?></button>
+								<span id="db-mercure-test-result" class="description" style="margin-left:8px;"></span>
+								<p class="description"><?php esc_html_e( 'Sends a test publish to the hub and reports whether the JWT was accepted. Save your changes first — the test uses the stored hub URL and publish JWT.', 'doughboss' ); ?></p>
+							</td>
 						</tr>
 					</table>
 
