@@ -343,6 +343,16 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/pospal/verify-coupons',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'pospal_verify_coupons' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/mercure/test',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1090,6 +1100,52 @@ class DoughBoss_REST_Controller {
 				'ok'      => true,
 				'message' => __( 'POSPal reachable and the signature was accepted.', 'doughboss' ),
 				'rules'   => $result,
+			)
+		);
+	}
+
+	/**
+	 * GET /pospal/verify-coupons — owner action: read-only check that the connection
+	 * works and that the configured $5 / $10 coupon-rule UIDs each match a real rule
+	 * in the POSPal account. No side effects (no member or coupon is created).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function pospal_verify_coupons( WP_REST_Request $request ) {
+		unset( $request );
+		$result = DoughBoss_POSPal::verify_coupon_rules();
+		if ( is_wp_error( $result ) ) {
+			return rest_ensure_response(
+				array(
+					'ok'      => false,
+					'message' => $result->get_error_message(),
+				)
+			);
+		}
+
+		$parts = array();
+		if ( '' !== $result['uid5'] ) {
+			$parts[] = $result['found5'] ? __( '$5 UID matches a rule ✓', 'doughboss' ) : __( '$5 UID NOT found in rules', 'doughboss' );
+		}
+		if ( '' !== $result['uid10'] ) {
+			$parts[] = $result['found10'] ? __( '$10 UID matches a rule ✓', 'doughboss' ) : __( '$10 UID NOT found in rules', 'doughboss' );
+		}
+		if ( empty( $parts ) ) {
+			$parts[] = __( 'No coupon UIDs set yet.', 'doughboss' );
+		}
+
+		$all_ok = ( '' === $result['uid5'] || $result['found5'] )
+			&& ( '' === $result['uid10'] || $result['found10'] )
+			&& ( '' !== $result['uid5'] || '' !== $result['uid10'] );
+
+		/* translators: %d: number of coupon rules returned by POSPal. */
+		$prefix = sprintf( _n( 'Connected — %d coupon rule found. ', 'Connected — %d coupon rules found. ', (int) $result['rules_count'], 'doughboss' ), (int) $result['rules_count'] );
+
+		return rest_ensure_response(
+			array(
+				'ok'      => (bool) $all_ok,
+				'message' => $prefix . implode( ' · ', $parts ),
 			)
 		);
 	}
