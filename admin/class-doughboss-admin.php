@@ -513,6 +513,30 @@ class DoughBoss_Admin {
 			});
 		}
 
+		var pbBtn = e.target.closest('#db-pospal-probe');
+		if (pbBtn) {
+			e.preventDefault();
+			var pbOut = document.getElementById('db-pospal-test-result');
+			var pbPhone = document.getElementById('db-pospal-test-phone');
+			var pbVal = document.getElementById('db-pospal-test-value');
+			pbBtn.disabled = true;
+			if (pbOut) { pbOut.textContent = 'Probing…'; pbOut.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/pospal/probe-grant', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
+				body: JSON.stringify({ phone: pbPhone ? pbPhone.value : '', value: pbVal ? pbVal.value : '5' })
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				pbBtn.disabled = false;
+				if (pbOut) {
+					pbOut.textContent = (d && d.message) ? d.message : 'Done.';
+					pbOut.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e';
+				}
+			}).catch(function () {
+				pbBtn.disabled = false;
+				if (pbOut) { pbOut.textContent = 'Request failed.'; pbOut.style.color = '#b32d2e'; }
+			});
+		}
+
 		var trBtn = e.target.closest('#db-pospal-test-revoke');
 		if (trBtn) {
 			e.preventDefault();
@@ -1399,6 +1423,7 @@ JS;
 									<option value="10"><?php esc_html_e( '$10 coupon', 'doughboss' ); ?></option>
 								</select>
 								<button type="button" class="button" id="db-pospal-test-grant"><?php esc_html_e( 'Send test coupon', 'doughboss' ); ?></button>
+								<button type="button" class="button" id="db-pospal-probe"><?php esc_html_e( 'Probe methods', 'doughboss' ); ?></button>
 								<button type="button" class="button" id="db-pospal-test-revoke" style="display:none;"><?php esc_html_e( 'Revoke test', 'doughboss' ); ?></button>
 								<p id="db-pospal-test-result" class="description" style="margin-top:8px; white-space:pre-wrap; word-break:break-word;"></p>
 								<p class="description"><?php esc_html_e( 'Writes a test member + grants the mapped coupon in POSPal and shows the raw response — use a throwaway phone, then Revoke. This is how the exact coupon-grant method is confirmed.', 'doughboss' ); ?></p>

@@ -393,6 +393,26 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/pospal/probe-grant',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'pospal_probe_grant' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'phone' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'value' => array(
+						'default'           => 5,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/mercure/test',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1315,6 +1335,100 @@ class DoughBoss_REST_Controller {
 				'ok'       => true,
 				'message'  => __( 'Revoke call returned OK.', 'doughboss' ),
 				'response' => $res,
+			)
+		);
+	}
+
+	/**
+	 * POST /pospal/probe-grant — owner diagnostic: try a list of candidate POSPal
+	 * coupon-grant methods against the live account and report which is NOT a 404
+	 * (i.e. exists). The assumed `addCustomerPassProduct` 404s (it's the membership-
+	 * pass method, not the coupon one); this finds the real coupon method without the
+	 * region-blocked docs. A 404 attempt has no side effect; the first non-404 may
+	 * create a coupon — revoke via /pospal/test-revoke. Capability-gated.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function pospal_probe_grant( WP_REST_Request $request ) {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) $request->get_param( 'phone' ) );
+		$value = (int) $request->get_param( 'value' );
+		if ( '' === $phone ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Enter a test phone number first.', 'doughboss' ) ) );
+		}
+		if ( ! DoughBoss_POSPal::ready() ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Configure + enable POSPal first.', 'doughboss' ) ) );
+		}
+		$rule_uid = DoughBoss_Settings::pospal_coupon_uid_for( $value );
+		if ( '' === $rule_uid ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'No coupon UID is mapped for that value — set it above and save.', 'doughboss' ) ) );
+		}
+
+		$member = DoughBoss_POSPal::ensure_member( $phone, 'DoughBoss Test' );
+		if ( is_wp_error( $member ) ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => $this->pospal_error_detail( 'ensure_member', $member ) ) );
+		}
+
+		// Candidate coupon-grant methods. A 404 means the method does not exist; the
+		// first non-404 exists (and its response then reveals the body fields).
+		$candidates = array(
+			array( 'promotionOpenApi', 'addCustomerPromotionCoupon' ),
+			array( 'promotionOpenApi', 'addCustomerCoupon' ),
+			array( 'promotionOpenApi', 'addMemberCoupon' ),
+			array( 'promotionOpenApi', 'addMemberPromotionCoupon' ),
+			array( 'promotionOpenApi', 'issueCustomerCoupon' ),
+			array( 'promotionOpenApi', 'issueCoupon' ),
+			array( 'promotionOpenApi', 'sendCustomerCoupon' ),
+			array( 'promotionOpenApi', 'addCustomerCouponByPromotion' ),
+			array( 'couponOpenApi', 'addCustomerCoupon' ),
+			array( 'couponOpenApi', 'addMemberCoupon' ),
+			array( 'couponOpenApi', 'issueCoupon' ),
+		);
+
+		$body = array(
+			'customerUid'  => $member,
+			'promotionUid' => $rule_uid,
+			'quantity'     => 1,
+		);
+
+		$results = array();
+		$hit     = null;
+		foreach ( $candidates as $c ) {
+			$resp = DoughBoss_POSPal::call( $c[0], $c[1], $body );
+			if ( is_wp_error( $resp ) ) {
+				$d    = (array) $resp->get_error_data();
+				$code = isset( $d['http_code'] ) ? (int) $d['http_code'] : 0;
+				$note = $resp->get_error_message();
+			} else {
+				$code = 200;
+				$note = 'SUCCESS';
+			}
+			$row       = array(
+				'endpoint' => $c[0] . '/' . $c[1],
+				'http'     => $code,
+				'note'     => substr( (string) $note, 0, 100 ),
+			);
+			$results[] = $row;
+			if ( 404 !== $code ) {
+				$hit = $row;
+				break;
+			}
+		}
+
+		$lines = array();
+		foreach ( $results as $r ) {
+			$lines[] = $r['endpoint'] . ' -> HTTP ' . $r['http'] . ( '' !== $r['note'] ? ' (' . $r['note'] . ')' : '' );
+		}
+
+		return rest_ensure_response(
+			array(
+				'ok'         => (bool) $hit,
+				'member_uid' => $member,
+				'hit'        => $hit,
+				'message'    => ( $hit
+					? 'Method exists: ' . $hit['endpoint'] . ' — HTTP ' . $hit['http'] . '. ' . $hit['note']
+					: 'All candidates returned 404 — send me this list and I will expand it.' )
+					. "\n" . implode( "\n", $lines ),
 			)
 		);
 	}
