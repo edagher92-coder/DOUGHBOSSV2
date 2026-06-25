@@ -1191,6 +1191,34 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Build a one-line diagnostic for a failed POSPal test call: stage, endpoint,
+	 * HTTP code and a short raw-body snippet, so a method-not-found (404) is
+	 * distinguishable from a parameter error at a glance.
+	 *
+	 * @param string   $stage Human label for the call that failed.
+	 * @param WP_Error $err   Error from the POSPal client.
+	 * @return string
+	 */
+	private function pospal_error_detail( $stage, $err ) {
+		$data     = (array) $err->get_error_data();
+		$http     = isset( $data['http_code'] ) ? (int) $data['http_code'] : 0;
+		$endpoint = isset( $data['endpoint'] ) ? (string) $data['endpoint'] : '';
+		$body     = isset( $data['body'] ) ? trim( (string) $data['body'] ) : '';
+		$out      = $stage;
+		if ( '' !== $endpoint ) {
+			$out .= ' → ' . $endpoint;
+		}
+		$out .= ': ' . $err->get_error_message();
+		if ( $http ) {
+			$out .= ' (HTTP ' . $http . ')';
+		}
+		if ( '' !== $body ) {
+			$out .= ' · raw: ' . substr( $body, 0, 240 );
+		}
+		return $out;
+	}
+
+	/**
 	 * POST /pospal/test-grant — owner diagnostic: ensure a (test) member by phone and
 	 * grant the coupon mapped to the given dollar value, returning POSPal's RAW
 	 * response. This is how the exact coupon-grant method is confirmed: a real grant
@@ -1218,9 +1246,10 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $member ) ) {
 			return rest_ensure_response(
 				array(
-					'ok'      => false,
-					'stage'   => 'ensure_member',
-					'message' => $member->get_error_message(),
+					'ok'       => false,
+					'stage'    => 'ensure_member',
+					'message'  => $this->pospal_error_detail( 'ensure_member (member lookup/create)', $member ),
+					'response' => $member->get_error_data(),
 				)
 			);
 		}
@@ -1232,7 +1261,8 @@ class DoughBoss_REST_Controller {
 					'ok'         => false,
 					'stage'      => 'grant_coupon',
 					'member_uid' => $member,
-					'message'    => $grant->get_error_message(),
+					'message'    => $this->pospal_error_detail( 'grant_coupon', $grant ),
+					'response'   => $grant->get_error_data(),
 				)
 			);
 		}
