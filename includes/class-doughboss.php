@@ -77,7 +77,9 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-catering.php';
 		require_once $dir . 'class-doughboss-stripe.php';
 		require_once $dir . 'class-doughboss-pospal.php';
+		require_once $dir . 'class-doughboss-coupon-code.php';
 		require_once $dir . 'class-doughboss-voucher.php';
+		require_once $dir . 'class-doughboss-pospal-sync.php';
 		require_once $dir . 'class-doughboss-cli.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
@@ -113,6 +115,10 @@ final class DoughBoss {
 		( new DoughBoss_Shortcodes() )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
+
+		// POSPal voucher mirror (grant on claim, revoke on redeem). Static hooks;
+		// fully dormant until POSPal + a coupon-rule UID are configured.
+		DoughBoss_POSPal_Sync::init();
 
 		if ( is_admin() ) {
 			( new DoughBoss_Admin() )->init();

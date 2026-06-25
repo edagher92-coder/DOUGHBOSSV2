@@ -17,6 +17,7 @@
 	var state = load();
 	var pollTimer = null;
 	var clearTimer = null;
+	var camScanner = null;
 
 	/* ---------- storage ---------- */
 	function load() {
@@ -38,7 +39,17 @@
 		var c = state.currency || '$';
 		return c + ( Math.round( ( Number( n ) || 0 ) * 100 ) / 100 ).toFixed( 2 );
 	}
-	function stopPoll() { if ( pollTimer ) { clearInterval( pollTimer ); pollTimer = null; } }
+	function stopPoll() { if ( pollTimer ) { clearInterval( pollTimer ); pollTimer = null; } stopCamScan(); }
+
+	/* ---------- camera QR scan (html5-qrcode) ---------- */
+	function stopCamScan() {
+		if ( ! camScanner ) { return; }
+		var sc = camScanner;
+		camScanner = null;
+		try {
+			sc.stop().then( function () { try { sc.clear(); } catch ( e ) {} } ).catch( function () {} );
+		} catch ( e ) {}
+	}
 	function toast( msg ) {
 		var t = el( 'div', 'toast show', msg );
 		document.body.appendChild( t );
@@ -186,6 +197,21 @@
 		s.input.placeholder = 'SNOW-XXXXXXXX';
 		s.input.setAttribute( 'autocomplete', 'off' );
 		c1.appendChild( s.input );
+
+		// Camera QR scan (html5-qrcode, loaded via CDN in index.html). Hidden if the lib is unavailable.
+		s.camBtn = el( 'button', 'btn--ghost scan__cam', 'Scan with camera' );
+		s.camBtn.setAttribute( 'type', 'button' );
+		s.camWrap = el( 'div', 'scan__cam-wrap' );
+		s.camView = el( 'div', 'scan__cam-view' );
+		s.camView.id = 'db-cam-' + Date.now();
+		s.camStop = el( 'button', 'btn--ghost scan__cam-stop', 'Stop' );
+		s.camStop.setAttribute( 'type', 'button' );
+		s.camWrap.appendChild( s.camView );
+		s.camWrap.appendChild( s.camStop );
+		c1.appendChild( s.camBtn );
+		c1.appendChild( s.camWrap );
+		if ( ! window.Html5Qrcode ) { s.camBtn.style.display = 'none'; }
+
 		var row = el( 'div', 'scan__row' );
 		s.total = el( 'input', 'scan__total' );
 		s.total.type = 'number'; s.total.min = '0'; s.total.step = '0.01';
@@ -253,6 +279,41 @@
 		s.btn.addEventListener( 'click', submit );
 		s.input.addEventListener( 'keydown', function ( e ) { if ( 'Enter' === e.key ) { e.preventDefault(); submit(); } } );
 		s.total.addEventListener( 'keydown', function ( e ) { if ( 'Enter' === e.key ) { e.preventDefault(); submit(); } } );
+
+		function startCamScan() {
+			if ( ! window.Html5Qrcode || camScanner ) { return; }
+			s.camWrap.classList.add( 'is-on' );
+			s.camBtn.disabled = true;
+			showResult( 'neutral', 'Starting camera…' );
+			var scanner = new window.Html5Qrcode( s.camView.id, { verbose: false } );
+			camScanner = scanner;
+			scanner.start(
+				{ facingMode: 'environment' },
+				{ fps: 10, qrbox: 240 },
+				function ( decoded ) {
+					// Reuse the existing redeem flow: fill the code input and submit.
+					s.input.value = ( decoded || '' ).trim();
+					stopCamScan();
+					s.camWrap.classList.remove( 'is-on' );
+					s.camBtn.disabled = false;
+					submit();
+				},
+				function () { /* per-frame decode misses — ignore */ }
+			).catch( function ( err ) {
+				camScanner = null;
+				s.camWrap.classList.remove( 'is-on' );
+				s.camBtn.disabled = false;
+				showResult( 'bad', 'Camera unavailable', ( err && err.message ) ? err.message : 'Allow camera access and try again.' );
+			} );
+		}
+		function endCamScan() {
+			stopCamScan();
+			s.camWrap.classList.remove( 'is-on' );
+			s.camBtn.disabled = false;
+			focusCode();
+		}
+		s.camBtn.addEventListener( 'click', startCamScan );
+		s.camStop.addEventListener( 'click', endCamScan );
 
 		function activity() {
 			return api( '/voucher/activity', 'GET' ).then( function ( r ) {

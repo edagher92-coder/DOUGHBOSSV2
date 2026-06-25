@@ -161,6 +161,66 @@
 	color: var(--db-muted);
 }
 
+/* Camera QR scan */
+.db-scan__cam {
+	appearance: none;
+	width: 100%;
+	margin-top: 12px;
+	border: 1px solid var(--db-line);
+	border-radius: 10px;
+	background: var(--db-paper);
+	color: var(--db-ink);
+	font-size: 14px;
+	font-weight: 600;
+	padding: 11px 16px;
+	cursor: pointer;
+}
+
+.db-scan__cam:active { transform: translateY(1px); }
+.db-scan__cam:disabled { opacity: .5; cursor: default; }
+
+.db-scan__cam-wrap { display: none; margin-top: 12px; }
+.db-scan__cam-wrap.is-on { display: block; }
+
+.db-scan__cam-view {
+	width: 100%;
+	max-width: 320px;
+	aspect-ratio: 1 / 1;
+	margin: 0 auto;
+	background: #000;
+	border: 1px solid var(--db-line);
+	border-radius: 12px;
+	overflow: hidden;
+}
+
+.db-scan__cam-view video,
+.db-scan__cam-view img,
+.db-scan__cam-view canvas {
+	width: 100% !important;
+	height: 100% !important;
+	object-fit: cover;
+	display: block;
+	border-radius: 12px;
+}
+
+.db-scan__cam-stop {
+	appearance: none;
+	display: block;
+	width: 100%;
+	max-width: 320px;
+	margin: 10px auto 0;
+	border: 1px solid var(--db-line);
+	border-radius: 10px;
+	background: var(--db-paper);
+	color: var(--db-ink);
+	font-size: 14px;
+	font-weight: 600;
+	padding: 10px 16px;
+	cursor: pointer;
+}
+
+.db-scan__cam-stop:active { transform: translateY(1px); }
+
 /* Result banner */
 .db-scan__result {
 	margin-top: 16px;

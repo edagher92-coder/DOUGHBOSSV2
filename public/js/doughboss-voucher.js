@@ -82,6 +82,34 @@
 		} );
 	}
 
+	/**
+	 * Build a scannable QR <img> encoding the voucher code, using the
+	 * `qrcode-generator` UMD lib loaded from the CDN (global `qrcode`).
+	 * Returns null if the global is missing or generation fails, so the
+	 * caller can degrade gracefully and still show the code text.
+	 */
+	function buildQr( code ) {
+		var factory = window.qrcode;
+		if ( 'function' !== typeof factory ) {
+			return null;
+		}
+		try {
+			// typeNumber 0 = auto-size; 'M' = medium error correction.
+			var qr = factory( 0, 'M' );
+			qr.addData( String( code ) );
+			qr.make();
+			var img = document.createElement( 'img' );
+			img.className = 'db-vc-qr';
+			img.alt = ( i18n.vYourCode || 'Your code' ) + ': ' + code;
+			// createDataURL( cellSize, margin ) → a self-contained data: URI;
+			// the only inserted value is on an image src, so no markup is injected.
+			img.src = qr.createDataURL( 6, 8 );
+			return img;
+		} catch ( e ) {
+			return null;
+		}
+	}
+
 	function renderCode( code ) {
 		result.className = 'db-vc-result is-ok';
 		result.innerHTML = '';
@@ -96,6 +124,10 @@
 		info.textContent = i18n.vUseInfo || 'Show this code at the till, or paste it at checkout. One use only.';
 		result.appendChild( label );
 		result.appendChild( c );
+		var qr = buildQr( code );
+		if ( qr ) {
+			result.appendChild( qr );
+		}
 		result.appendChild( info );
 		if ( form ) {
 			form.hidden = true;

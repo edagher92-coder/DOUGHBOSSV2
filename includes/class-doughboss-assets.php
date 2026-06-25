@@ -182,10 +182,22 @@ class DoughBoss_Assets {
 				array( 'doughboss' ),
 				DOUGHBOSS_VERSION
 			);
+			// Load the QR generator (from jsDelivr's CDN, as a runtime dependency,
+			// exactly like Stripe.js above): full https URL, no local file, version
+			// null, in footer. Exposes the global `qrcode`. Our voucher script then
+			// depends on it so it loads first; the script degrades gracefully if the
+			// CDN is unreachable and the global is missing.
+			wp_enqueue_script(
+				'doughboss-qrcode',
+				'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+				array(),
+				null,
+				true
+			);
 			wp_enqueue_script(
 				'doughboss-voucher',
 				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-voucher.js',
-				array( 'doughboss' ),
+				array( 'doughboss', 'doughboss-qrcode' ),
 				DOUGHBOSS_VERSION,
 				true
 			);

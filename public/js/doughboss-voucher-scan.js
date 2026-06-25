@@ -32,6 +32,11 @@
 	var idemCode = '';
 	var idemKey = '';
 
+	// Camera QR scan (html5-qrcode, lazy-loaded from CDN on first use).
+	var CAM_CDN = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+	var camScanner = null;
+	var camLibPromise = null;
+
 	function money( n ) {
 		return currency + ( Math.round( ( Number( n ) || 0 ) * 100 ) / 100 ).toFixed( 2 );
 	}
@@ -93,6 +98,20 @@
 		els.input.setAttribute( 'spellcheck', 'false' );
 		els.input.setAttribute( 'aria-label', 'Voucher code' );
 		scanCard.appendChild( els.input );
+
+		// Camera QR scan. html5-qrcode is loaded lazily from the CDN on first click
+		// (the dashboard does not enqueue it), so no PHP enqueue change is needed.
+		els.camBtn = make( 'button', 'db-scan__cam', 'Scan with camera' );
+		els.camBtn.setAttribute( 'type', 'button' );
+		els.camWrap = make( 'div', 'db-scan__cam-wrap' );
+		els.camView = make( 'div', 'db-scan__cam-view' );
+		els.camView.id = 'db-scan-cam-' + Date.now();
+		els.camStop = make( 'button', 'db-scan__cam-stop', 'Stop' );
+		els.camStop.setAttribute( 'type', 'button' );
+		els.camWrap.appendChild( els.camView );
+		els.camWrap.appendChild( els.camStop );
+		scanCard.appendChild( els.camBtn );
+		scanCard.appendChild( els.camWrap );
 
 		var row = make( 'div', 'db-scan__row' );
 		els.total = make( 'input', 'db-scan__total' );
@@ -160,6 +179,87 @@
 			}
 		} );
 		els.search.addEventListener( 'input', renderFeed );
+		els.camBtn.addEventListener( 'click', startCamScan );
+		els.camStop.addEventListener( 'click', endCamScan );
+		focusInput();
+	}
+
+	/* ---------- camera QR scan ---------- */
+
+	// Inject the html5-qrcode UMD script once; resolve when window.Html5Qrcode is ready.
+	function loadCamLib() {
+		if ( window.Html5Qrcode ) {
+			return Promise.resolve( true );
+		}
+		if ( camLibPromise ) {
+			return camLibPromise;
+		}
+		camLibPromise = new Promise( function ( resolve, reject ) {
+			var s = document.createElement( 'script' );
+			s.src = CAM_CDN;
+			s.async = true;
+			s.onload = function () {
+				if ( window.Html5Qrcode ) {
+					resolve( true );
+				} else {
+					reject( new Error( 'Scanner library failed to initialise.' ) );
+				}
+			};
+			s.onerror = function () {
+				camLibPromise = null;
+				reject( new Error( 'Could not load the scanner library.' ) );
+			};
+			document.head.appendChild( s );
+		} );
+		return camLibPromise;
+	}
+
+	function stopCamScan() {
+		if ( ! camScanner ) {
+			return;
+		}
+		var sc = camScanner;
+		camScanner = null;
+		try {
+			sc.stop().then( function () { try { sc.clear(); } catch ( e ) {} } ).catch( function () {} );
+		} catch ( e ) {}
+	}
+
+	function startCamScan() {
+		if ( camScanner ) {
+			return;
+		}
+		els.camBtn.disabled = true;
+		showResult( 'neutral', 'Starting camera…' );
+		loadCamLib().then( function () {
+			els.camWrap.classList.add( 'is-on' );
+			var scanner = new window.Html5Qrcode( els.camView.id, { verbose: false } );
+			camScanner = scanner;
+			return scanner.start(
+				{ facingMode: 'environment' },
+				{ fps: 10, qrbox: 240 },
+				function ( decoded ) {
+					// Reuse the existing redeem flow: fill the input and submit.
+					els.input.value = ( decoded || '' ).trim();
+					stopCamScan();
+					els.camWrap.classList.remove( 'is-on' );
+					els.camBtn.disabled = false;
+					submitScan();
+				},
+				function () { /* per-frame decode misses — ignore */ }
+			);
+		} ).catch( function ( err ) {
+			camScanner = null;
+			els.camWrap.classList.remove( 'is-on' );
+			els.camBtn.disabled = false;
+			showResult( 'bad', 'Camera unavailable', ( err && err.message ) ? err.message : 'Allow camera access and try again.' );
+		} );
+	}
+
+	function endCamScan() {
+		stopCamScan();
+		els.camWrap.classList.remove( 'is-on' );
+		els.camBtn.disabled = false;
 		focusInput();
 	}
 
@@ -387,6 +487,7 @@
 	document.addEventListener( 'visibilitychange', function () {
 		if ( document.hidden ) {
 			stopPoll();
+			endCamScan();
 		} else {
 			refresh();
 			startPoll();

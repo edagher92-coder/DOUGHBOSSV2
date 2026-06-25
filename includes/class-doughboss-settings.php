@@ -95,6 +95,11 @@ class DoughBoss_Settings {
 			'pospal_host'       => '',
 			'pospal_app_id'     => '',
 			'pospal_app_key'    => '',
+			// POSPal coupon-rule mapping: which POSPal coupon (优惠券) rule UID
+			// represents the $5 / $10 student vouchers. Blank = grant disabled for
+			// that value (the GRANT leg is dormant until at least one is set).
+			'pospal_coupon_uid_5'  => '',
+			'pospal_coupon_uid_10' => '',
 			// Standalone staff console (separate origin, e.g. GitHub Pages) allowed
 			// to call the doughboss/v1 routes cross-origin via Application Password.
 			'app_origin'        => 'https://edagher92-coder.github.io',
@@ -308,5 +313,56 @@ class DoughBoss_Settings {
 	 */
 	public static function pospal_ready() {
 		return self::pospal_enabled() && '' !== self::pospal_host() && '' !== self::pospal_app_id() && '' !== self::pospal_app_key();
+	}
+
+	/**
+	 * POSPal coupon-rule UID mapped to the $5 voucher (blank when unmapped).
+	 *
+	 * @return string
+	 */
+	public static function pospal_coupon_uid_5() {
+		return (string) self::get( 'pospal_coupon_uid_5', '' );
+	}
+
+	/**
+	 * POSPal coupon-rule UID mapped to the $10 voucher (blank when unmapped).
+	 *
+	 * @return string
+	 */
+	public static function pospal_coupon_uid_10() {
+		return (string) self::get( 'pospal_coupon_uid_10', '' );
+	}
+
+	/**
+	 * Map a dollar voucher value to the configured POSPal coupon-rule UID.
+	 *
+	 * Only the pilot's $5 and $10 student vouchers are mapped today; any other
+	 * value returns '' (no rule), which the grant flow treats as "skip — nothing
+	 * to grant in POSPal".
+	 *
+	 * @param int|float|string $value Voucher dollar value (e.g. 5, 10, '5.00').
+	 * @return string The mapped coupon-rule UID, or '' when none is configured.
+	 */
+	public static function pospal_coupon_uid_for( $value ) {
+		$dollars = (int) round( (float) $value );
+		switch ( $dollars ) {
+			case 5:
+				return self::pospal_coupon_uid_5();
+			case 10:
+				return self::pospal_coupon_uid_10();
+			default:
+				return '';
+		}
+	}
+
+	/**
+	 * Whether the POSPal coupon-GRANT leg should run: POSPal is fully configured
+	 * AND at least one coupon-rule UID is mapped. When false the whole grant/revoke
+	 * sync stays dormant and voucher claims behave exactly as before.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_grant_enabled() {
+		return self::pospal_ready() && ( '' !== self::pospal_coupon_uid_5() || '' !== self::pospal_coupon_uid_10() );
 	}
 }

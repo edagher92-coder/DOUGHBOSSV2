@@ -53,27 +53,28 @@ class DoughBoss_Voucher {
 	/**
 	 * Generate a high-entropy voucher code, e.g. SNOW-7K2D9QXM.
 	 *
+	 * The random body is built by DoughBoss_Coupon_Code::generate() so new codes
+	 * carry deterministic check characters (one per part) and can be typo-/guess-
+	 * rejected before a DB lookup. The legacy prefix behaviour is preserved: the
+	 * campaign prefix is still prepended as 'PREFIX-...'.
+	 *
 	 * @param string $prefix Short uppercase prefix (campaign), e.g. 'SNOW'.
-	 * @param int    $length Number of random characters (default 8).
+	 * @param int    $length Number of random characters (default 8). Used to size
+	 *                       the check-character body (kept to two parts).
 	 * @return string
 	 */
 	public static function generate_code( $prefix = 'DB', $length = 8 ) {
 		$prefix = strtoupper( preg_replace( '/[^A-Za-z0-9]/', '', (string) $prefix ) );
 		$length = max( 6, (int) $length );
-		$alpha  = self::ALPHABET;
-		$n      = strlen( $alpha );
 
-		try {
-			$bytes = random_bytes( $length );
-		} catch ( Exception $e ) {
-			$bytes = wp_generate_password( $length, false, false );
-		}
+		// Split the requested length across two check-bearing parts (e.g. length
+		// 8 -> two 4-char groups 'K7QF-3MR9'). Each part's last char is a check.
+		$parts    = 2;
+		$part_len = max( 2, (int) ceil( $length / $parts ) );
 
-		$code = '';
-		for ( $i = 0; $i < $length; $i++ ) {
-			$code .= $alpha[ ord( $bytes[ $i ] ) % $n ];
-		}
-		return ( '' !== $prefix ? $prefix . '-' : '' ) . $code;
+		$body = DoughBoss_Coupon_Code::generate( $parts, $part_len );
+
+		return ( '' !== $prefix ? $prefix . '-' : '' ) . $body;
 	}
 
 	/**
@@ -152,12 +153,17 @@ class DoughBoss_Voucher {
 	/**
 	 * Fetch a voucher row by code (case-insensitive; codes are stored upper-case).
 	 *
+	 * The input is first run through DoughBoss_Coupon_Code::normalize() so a
+	 * lower-cased, space-padded or mis-hyphenated entry of an otherwise valid code
+	 * still resolves to the stored canonical form.
+	 *
 	 * @param string $code Voucher code.
 	 * @return object|null
 	 */
 	public static function find_by_code( $code ) {
 		global $wpdb;
-		$code  = strtoupper( trim( (string) $code ) );
+		$code = DoughBoss_Coupon_Code::normalize( $code );
+		$code = strtoupper( trim( (string) $code ) );
 		if ( '' === $code ) {
 			return null;
 		}
@@ -230,9 +236,18 @@ class DoughBoss_Voucher {
 	public static function redeem( $code, $subtotal, $channel = 'online', array $extra = array() ) {
 		global $wpdb;
 
-		$row = self::find_by_code( $code );
 		// Same opaque error whether not-found or ineligible — no enumeration.
 		$generic = new WP_Error( 'doughboss_voucher_invalid', __( 'This voucher code isn’t valid.', 'doughboss' ), array( 'status' => 422 ) );
+
+		// Fast-reject a code that IS in the new check-character format but whose
+		// check char doesn't recompute — a typo or guess — before touching the DB.
+		// validate() returns true for legacy / unknown-format codes, so a legacy
+		// code is never rejected here and always falls through to the DB lookup.
+		if ( ! DoughBoss_Coupon_Code::validate( $code ) ) {
+			return $generic;
+		}
+
+		$row = self::find_by_code( $code );
 
 		$idem = isset( $extra['idempotency_key'] ) && '' !== $extra['idempotency_key']
 			? substr( sanitize_text_field( $extra['idempotency_key'] ), 0, 64 )
@@ -552,6 +567,20 @@ class DoughBoss_Voucher {
 
 		if ( 1 === $got ) {
 			$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		}
+
+		// On a successful issue ($result is the {id,code} array, not a WP_Error),
+		// announce the claim so other components (e.g. POSPal sync) can mirror it.
+		if ( ! is_wp_error( $result ) && is_array( $result ) && isset( $result['id'], $result['code'] ) ) {
+			/**
+			 * Fires after a campaign voucher is successfully claimed/issued.
+			 *
+			 * @param int    $id   New voucher id.
+			 * @param string $code New voucher code.
+			 * @param string $slug Campaign slug.
+			 * @param array  $args Extra issue args passed to claim().
+			 */
+			do_action( 'doughboss_voucher_claimed', (int) $result['id'], $result['code'], $slug, $args );
 		}
 
 		return $result;
