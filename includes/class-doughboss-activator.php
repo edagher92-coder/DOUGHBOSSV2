@@ -229,7 +229,7 @@ class DoughBoss_Activator {
 			'gst_inclusive'   => 1,
 			'delivery_fee'    => 5.00,
 			'enable_pickup'   => 1,
-			'enable_delivery' => 1,
+			'enable_delivery' => 0,
 			'ordering_open'   => 1,
 			'sizes'           => array(
 				array(
