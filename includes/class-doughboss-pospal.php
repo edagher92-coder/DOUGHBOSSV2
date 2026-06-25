@@ -454,6 +454,19 @@ class DoughBoss_POSPal {
 			error_log( 'DoughBoss POSPal error: HTTP ' . $code . ' on ' . $module . '/' . $method ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
-		return new WP_Error( 'doughboss_pospal_api', $message, array( 'status' => 502 ) );
+		// Attach diagnostics (HTTP code, endpoint, a short raw-body snippet) so the
+		// admin test-grant can surface exactly what POSPal said — e.g. a method-not-
+		// found 404 vs a JSON parameter error. Live callers ignore this data; only
+		// the code + endpoint are ever logged (never the appKey, never member PII).
+		return new WP_Error(
+			'doughboss_pospal_api',
+			$message,
+			array(
+				'status'    => 502,
+				'http_code' => $code,
+				'endpoint'  => $module . '/' . $method,
+				'body'      => substr( (string) $raw, 0, 600 ),
+			)
+		);
 	}
 }
