@@ -482,6 +482,54 @@ class DoughBoss_Admin {
 				if (pvOut) { pvOut.textContent = 'Request failed.'; pvOut.style.color = '#b32d2e'; }
 			});
 		}
+
+		var tgBtn = e.target.closest('#db-pospal-test-grant');
+		if (tgBtn) {
+			e.preventDefault();
+			var tgOut = document.getElementById('db-pospal-test-result');
+			var phoneEl = document.getElementById('db-pospal-test-phone');
+			var valEl = document.getElementById('db-pospal-test-value');
+			tgBtn.disabled = true;
+			if (tgOut) { tgOut.textContent = '…'; tgOut.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/pospal/test-grant', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
+				body: JSON.stringify({ phone: phoneEl ? phoneEl.value : '', value: valEl ? valEl.value : '5' })
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				tgBtn.disabled = false;
+				if (tgOut) {
+					tgOut.textContent = (d && d.message ? d.message : 'Done.') + (d && d.response ? '\n' + JSON.stringify(d.response) : '');
+					tgOut.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e';
+				}
+				var rev = document.getElementById('db-pospal-test-revoke');
+				if (rev && d && d.ok && d.member_uid && d.coupon_ref) {
+					rev.style.display = '';
+					rev.setAttribute('data-uid', d.member_uid);
+					rev.setAttribute('data-ref', d.coupon_ref);
+				}
+			}).catch(function () {
+				tgBtn.disabled = false;
+				if (tgOut) { tgOut.textContent = 'Request failed.'; tgOut.style.color = '#b32d2e'; }
+			});
+		}
+
+		var trBtn = e.target.closest('#db-pospal-test-revoke');
+		if (trBtn) {
+			e.preventDefault();
+			var trOut = document.getElementById('db-pospal-test-result');
+			trBtn.disabled = true;
+			fetch(DoughBossAdmin.restUrl + '/pospal/test-revoke', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
+				body: JSON.stringify({ customer_uid: trBtn.getAttribute('data-uid'), coupon_ref: trBtn.getAttribute('data-ref') })
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				trBtn.disabled = false;
+				if (trOut) { trOut.textContent = (d && d.message) ? d.message : 'Done.'; trOut.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e'; }
+			}).catch(function () {
+				trBtn.disabled = false;
+				if (trOut) { trOut.textContent = 'Request failed.'; trOut.style.color = '#b32d2e'; }
+			});
+		}
 	});
 }());
 JS;
@@ -1340,6 +1388,20 @@ JS;
 								<button type="button" class="button" id="db-pospal-verify"><?php esc_html_e( 'Verify coupon setup', 'doughboss' ); ?></button>
 								<span id="db-pospal-verify-result" class="description" style="margin-left:8px;"></span>
 								<p class="description"><?php esc_html_e( 'Read-only: checks the POSPal connection and that each UID above matches a real coupon rule. Save your changes first.', 'doughboss' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Test grant', 'doughboss' ); ?></th>
+							<td>
+								<input type="text" id="db-pospal-test-phone" class="regular-text" inputmode="tel" autocomplete="off" style="max-width:240px;" placeholder="<?php esc_attr_e( 'Throwaway test phone, e.g. 0400000000', 'doughboss' ); ?>" />
+								<select id="db-pospal-test-value">
+									<option value="5"><?php esc_html_e( '$5 coupon', 'doughboss' ); ?></option>
+									<option value="10"><?php esc_html_e( '$10 coupon', 'doughboss' ); ?></option>
+								</select>
+								<button type="button" class="button" id="db-pospal-test-grant"><?php esc_html_e( 'Send test coupon', 'doughboss' ); ?></button>
+								<button type="button" class="button" id="db-pospal-test-revoke" style="display:none;"><?php esc_html_e( 'Revoke test', 'doughboss' ); ?></button>
+								<p id="db-pospal-test-result" class="description" style="margin-top:8px; white-space:pre-wrap; word-break:break-word;"></p>
+								<p class="description"><?php esc_html_e( 'Writes a test member + grants the mapped coupon in POSPal and shows the raw response — use a throwaway phone, then Revoke. This is how the exact coupon-grant method is confirmed.', 'doughboss' ); ?></p>
 							</td>
 						</tr>
 					</table>
