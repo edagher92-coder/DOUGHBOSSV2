@@ -1274,7 +1274,11 @@ class DoughBoss_REST_Controller {
 			);
 		}
 
-		$grant = DoughBoss_POSPal::grant_coupon( $member, $rule_uid );
+		// A throwaway, unique coupon code for the test (POSPal requires the code be
+		// globally unique per store). The real flow uses the voucher's own code.
+		$code = 'DBTEST' . strtoupper( wp_generate_password( 12, false, false ) );
+
+		$grant = DoughBoss_POSPal::grant_coupon( $member, $rule_uid, $code );
 		if ( is_wp_error( $grant ) ) {
 			return rest_ensure_response(
 				array(
@@ -1287,27 +1291,13 @@ class DoughBoss_REST_Controller {
 			);
 		}
 
-		// Derive a revoke reference the same way the live sync does.
-		$ref = '';
-		if ( is_array( $grant ) ) {
-			foreach ( array( 'customerPassProductUid', 'passProductUid', 'uid', 'id' ) as $k ) {
-				if ( isset( $grant[ $k ] ) && '' !== (string) $grant[ $k ] ) {
-					$ref = (string) $grant[ $k ];
-					break;
-				}
-			}
-		}
-		if ( '' === $ref ) {
-			$ref = $rule_uid;
-		}
-
 		return rest_ensure_response(
 			array(
 				'ok'         => true,
 				'stage'      => 'grant_coupon',
 				'member_uid' => $member,
-				'coupon_ref' => $ref,
-				'message'    => __( 'Grant accepted by POSPal.', 'doughboss' ),
+				'coupon_ref' => $code,
+				'message'    => __( 'Grant accepted by POSPal — coupon code created and attached to the test member.', 'doughboss' ),
 				'response'   => $grant,
 			)
 		);
