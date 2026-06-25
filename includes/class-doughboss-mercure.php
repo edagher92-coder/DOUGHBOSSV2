@@ -226,7 +226,17 @@ class DoughBoss_Mercure {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			return $response;
+			// Don't forward the raw transport message to the browser: a cURL error
+			// string can echo the host (and any credentials embedded in the URL).
+			// Return a generic, URL-free message; log only the error CODE server-side
+			// as a breadcrumb, mirroring publish()'s "status/code only" pattern.
+			if ( function_exists( 'error_log' ) ) {
+				error_log( 'DoughBoss Mercure test: transport failure (' . $response->get_error_code() . ')' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
+			return new WP_Error(
+				'doughboss_mercure_unreachable',
+				__( 'Could not reach the Mercure hub. Check the hub URL is correct and the hub is running and reachable from this server.', 'doughboss' )
+			);
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
