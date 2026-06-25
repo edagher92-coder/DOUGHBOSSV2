@@ -100,7 +100,11 @@ class DoughBoss_POSPal_Sync {
 			return;
 		}
 
-		$granted = DoughBoss_POSPal::grant_coupon( $customer_uid, $rule_uid );
+		// The coupon code we create IS the voucher's own code, so the same code works
+		// at the WP scanner and the POSPal till — and it is the reference the revoke
+		// (核销) leg uses on redemption.
+		$code    = isset( $row->code ) ? (string) $row->code : '';
+		$granted = DoughBoss_POSPal::grant_coupon( $customer_uid, $rule_uid, $code );
 		if ( is_wp_error( $granted ) ) {
 			self::log( 'grant: grant_coupon failed (' . $granted->get_error_code() . ') for voucher #' . $voucher_id );
 			// Still record the member uid we resolved, so a later retry can reuse it.
@@ -108,13 +112,11 @@ class DoughBoss_POSPal_Sync {
 			return;
 		}
 
-		$coupon_ref = self::coupon_ref_from( $granted, $rule_uid );
-
 		self::update_voucher(
 			$voucher_id,
 			array(
 				'pospal_customer_uid' => $customer_uid,
-				'pospal_coupon_ref'   => $coupon_ref,
+				'pospal_coupon_ref'   => $code,
 			)
 		);
 		self::log( 'grant: ok for voucher #' . $voucher_id );
@@ -158,26 +160,6 @@ class DoughBoss_POSPal_Sync {
 		self::log( 'revoke: ok for voucher #' . $vid );
 	}
 
-	/**
-	 * Derive a stable coupon reference from POSPal's grant response, falling back
-	 * to the rule UID when the response shape doesn't carry an instance id. The
-	 * stored ref is what the revoke leg passes back to POSPal.
-	 *
-	 * @param mixed  $granted  Decoded POSPal grant response.
-	 * @param string $rule_uid The coupon-rule UID that was granted.
-	 * @return string
-	 */
-	private static function coupon_ref_from( $granted, $rule_uid ) {
-		if ( is_array( $granted ) ) {
-			foreach ( array( 'customerPassProductUid', 'passProductUid', 'uid', 'id' ) as $key ) {
-				if ( isset( $granted[ $key ] ) && '' !== (string) $granted[ $key ] ) {
-					return substr( (string) $granted[ $key ], 0, 64 );
-				}
-			}
-		}
-		// Fall back to the rule UID so the row still records what was granted.
-		return substr( (string) $rule_uid, 0, 64 );
-	}
 
 	/**
 	 * Fetch a voucher row by id.

@@ -32,6 +32,15 @@ class DoughBoss_POSPal {
 	const API_PREFIX = '/pospal-api2/openapi/v1/';
 
 	/**
+	 * Legacy openapi paths for the coupon-code (优惠券号 / 核销码) endpoints. The coupon
+	 * GRANT and USE methods live under this older `/pospal-api/api/auth/openapi/` path,
+	 * not the pospal-api2 module path the query methods use. Confirmed from the live
+	 * POSPal coupon API docs (addCouponcode / promotioncouponcode/use).
+	 */
+	const PATH_ADD_COUPONCODE = '/pospal-api/api/auth/openapi/promotion/addCouponcode/';
+	const PATH_USE_COUPONCODE = '/pospal-api/api/auth/openapi/promotioncouponcode/use/';
+
+	/**
 	 * Whether POSPal is switched on AND fully configured. The single gate the
 	 * rest of the plugin checks before making any call.
 	 *
@@ -234,125 +243,126 @@ class DoughBoss_POSPal {
 	}
 
 	/**
-	 * Grant (issue) a coupon to a member.
+	 * Coerce a POSPal Long id (given as a numeric string) to an int so it JSON-encodes
+	 * unquoted, as POSPal's Long fields (promotionCouponUid, customerUid) expect.
+	 * Pure-digit ids up to 64-bit are preserved exactly; anything non-numeric is left
+	 * as a string so nothing is silently mangled.
 	 *
-	 * Endpoint (assumed): promotionOpenApi/addCustomerPassProduct. POSPal's coupon
-	 * (优惠券) docs gate the exact grant-to-member method behind authenticated
-	 * developer access; `addCustomerPassProduct` is the documented name for issuing
-	 * a "pass product"/coupon instance to a member, taking the member `customerUid`
-	 * and the coupon rule's `passProductUid`. **This name MUST be confirmed against
-	 * the live 优惠券 docs before go-live** — it is isolated here so only this one
-	 * method changes if the real name differs. The grant is dormant until POSPal is
-	 * configured *and* a coupon rule UID is mapped in settings, so shipping this
-	 * with the placeholder name is safe.
-	 *
-	 * @param string $customer_uid    POSPal member uid (from ensure_member()).
-	 * @param string $coupon_rule_uid The coupon rule's passProductUid (mapped in settings).
-	 * @param int    $qty             How many to grant (default 1).
-	 * @return array|WP_Error The granted-coupon payload (used to derive a ref) or error.
+	 * @param string $value Numeric id string.
+	 * @return int|string
 	 */
-	public static function grant_coupon( $customer_uid, $coupon_rule_uid, $qty = 1 ) {
-		$customer_uid    = sanitize_text_field( (string) $customer_uid );
-		$coupon_rule_uid = sanitize_text_field( (string) $coupon_rule_uid );
-		$qty             = max( 1, (int) $qty );
-		if ( '' === $customer_uid || '' === $coupon_rule_uid ) {
-			return new WP_Error( 'doughboss_pospal_grant', __( 'A member and a coupon rule are required.', 'doughboss' ), array( 'status' => 400 ) );
-		}
-
-		/**
-		 * Filter the exact POSPal call used to GRANT a coupon to a member. The coupon
-		 * (优惠券) grant method could not be confirmed against the region-blocked docs,
-		 * so the whole call — module, method and body field names — is filterable. The
-		 * real shape can be set (e.g. in wp-config.php or a mu-plugin) the moment a live
-		 * response reveals it, with NO plugin redeploy. Default below is a best guess.
-		 *
-		 * @param array  $spec            { module, method, body } of the grant call.
-		 * @param string $customer_uid    Member uid.
-		 * @param string $coupon_rule_uid Coupon rule uid.
-		 * @param int    $qty             Quantity.
-		 */
-		$spec = apply_filters(
-			'doughboss_pospal_grant_call',
-			array(
-				'module' => 'promotionOpenApi',
-				'method' => 'addCustomerPassProduct',
-				'body'   => array(
-					'customerUid'    => $customer_uid,
-					'passProductUid' => $coupon_rule_uid,
-					'quantity'       => $qty,
-				),
-			),
-			$customer_uid,
-			$coupon_rule_uid,
-			$qty
-		);
-
-		return self::call( (string) $spec['module'], (string) $spec['method'], (array) $spec['body'] );
+	private static function numeric( $value ) {
+		$value = (string) $value;
+		return ( '' !== $value && ctype_digit( $value ) ) ? (int) $value : $value;
 	}
 
 	/**
-	 * Best-effort revoke/void of a coupon previously granted to a member, so a
-	 * voucher redeemed online can't also be used in-store.
+	 * Normalise a coupon code for POSPal: trim and cap at POSPal's 50-char limit. The
+	 * voucher's own code is used as the POSPal code, so the same code resolves at the
+	 * WP scanner and the POSPal till.
 	 *
-	 * Endpoint (assumed): promotionOpenApi/useCustomerPassProduct — POSPal's coupon
-	 * model has no clean "delete a granted coupon" call; the documented way to take
-	 * a coupon out of circulation is to mark it **used** (核销), which is what the
-	 * in-store till does on redemption. We reuse that here as the revoke primitive:
-	 * marking the member's coupon used removes it from their available coupons.
-	 *
-	 * The exact method (`useCustomerPassProduct`) and the reference field
-	 * (`passProductUid` vs a per-instance `customerPassProductUid`) **MUST be
-	 * confirmed against the live docs**. If no usable endpoint exists, this stays a
-	 * safe no-op: it logs intent and returns success without touching POSPal.
-	 *
-	 * @param string $customer_uid POSPal member uid.
-	 * @param string $coupon_ref   The granted coupon reference stored at grant time.
-	 * @return array|WP_Error
+	 * @param string $raw Raw code.
+	 * @return string
 	 */
-	public static function revoke_coupon( $customer_uid, $coupon_ref ) {
+	private static function coupon_code( $raw ) {
+		return substr( sanitize_text_field( (string) $raw ), 0, 50 );
+	}
+
+	/**
+	 * Grant a coupon to a member by creating a coupon code (核销码) attached to that
+	 * member, via POSPal's promotion/addCouponcode endpoint.
+	 *
+	 * Confirmed from the live coupon API docs: the rule is referenced by
+	 * `promotionCouponUid`, the member by `customerUid`, and each grant creates one
+	 * unique `code` (≤50 chars, globally unique per store) — we pass the voucher's own
+	 * code so the SAME code works at the WP scanner and the POSPal till. Uses the older
+	 * /pospal-api/api/auth/openapi/ path (PATH_ADD_COUPONCODE), not the pospal-api2
+	 * module path. The body is filterable via 'doughboss_pospal_grant_body'.
+	 *
+	 * @param string $customer_uid    POSPal member uid (from ensure_member()).
+	 * @param string $coupon_rule_uid The coupon rule's promotionCouponUid (from settings).
+	 * @param string $code            The coupon code to create (the voucher code).
+	 * @return array|WP_Error The POSPal response, or an error.
+	 */
+	public static function grant_coupon( $customer_uid, $coupon_rule_uid, $code ) {
 		$customer_uid = sanitize_text_field( (string) $customer_uid );
-		$coupon_ref   = sanitize_text_field( (string) $coupon_ref );
-		if ( '' === $customer_uid || '' === $coupon_ref ) {
-			return new WP_Error( 'doughboss_pospal_revoke', __( 'A member and a coupon reference are required.', 'doughboss' ), array( 'status' => 400 ) );
+		$rule_uid     = sanitize_text_field( (string) $coupon_rule_uid );
+		$code         = self::coupon_code( $code );
+		if ( '' === $customer_uid || '' === $rule_uid || '' === $code ) {
+			return new WP_Error( 'doughboss_pospal_grant', __( 'A member, coupon rule and code are required.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
 		/**
-		 * Allow the revoke leg to be turned into a no-op (logs intent only) while the
-		 * exact POSPal endpoint is being confirmed, without changing call sites.
+		 * Filter the addCouponcode request body before it is signed and sent. POSPal
+		 * expects promotionCouponUid + customerUid as numeric (Long) and code as a
+		 * string; adjust here if your account's field shape differs.
+		 *
+		 * @param array  $body         Request body.
+		 * @param string $customer_uid Member uid.
+		 * @param string $rule_uid     Coupon-rule uid (promotionCouponUid).
+		 * @param string $code         Coupon code being created.
+		 */
+		$body = apply_filters(
+			'doughboss_pospal_grant_body',
+			array(
+				'promotionCouponUid' => self::numeric( $rule_uid ),
+				'code'               => $code,
+				'customerUid'        => self::numeric( $customer_uid ),
+			),
+			$customer_uid,
+			$rule_uid,
+			$code
+		);
+
+		return self::call( 'promotion', 'addCouponcode', (array) $body, self::PATH_ADD_COUPONCODE );
+	}
+
+	/**
+	 * Mark a member's coupon code used (核销) so a voucher redeemed online can't also
+	 * be used in-store. Uses POSPal's promotioncouponcode/use endpoint with the same
+	 * `code` created at grant time (the voucher code). Confirmed from the live docs.
+	 * A 'doughboss_pospal_revoke_noop' filter can disable it; the body is filterable
+	 * via 'doughboss_pospal_revoke_body'.
+	 *
+	 * @param string $customer_uid POSPal member uid (optional for the call).
+	 * @param string $code         The coupon code created at grant (the voucher code).
+	 * @return array|WP_Error
+	 */
+	public static function revoke_coupon( $customer_uid, $code ) {
+		$customer_uid = sanitize_text_field( (string) $customer_uid );
+		$code         = self::coupon_code( $code );
+		if ( '' === $code ) {
+			return new WP_Error( 'doughboss_pospal_revoke', __( 'A coupon code is required.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		/**
+		 * Allow the revoke/use leg to be turned into a no-op (logs intent only), e.g.
+		 * if a site prefers POSPal coupons to expire naturally rather than be voided.
 		 *
 		 * @param bool $noop Whether to skip the POSPal call. Default false.
 		 */
 		if ( apply_filters( 'doughboss_pospal_revoke_noop', false ) ) {
 			if ( function_exists( 'error_log' ) ) {
-				error_log( 'DoughBoss POSPal: revoke_coupon no-op (endpoint unconfirmed) for a member coupon.' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'DoughBoss POSPal: revoke_coupon no-op (disabled by filter).' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			}
 			return array( 'noop' => true );
 		}
 
-		/**
-		 * Filter the exact POSPal call used to REVOKE/use a granted coupon. Same
-		 * rationale as the grant filter: the method is unconfirmed, so module/method/
-		 * body are correctable without a redeploy once the real shape is known.
-		 *
-		 * @param array  $spec         { module, method, body } of the revoke call.
-		 * @param string $customer_uid Member uid.
-		 * @param string $coupon_ref   Stored granted-coupon reference.
-		 */
-		$spec = apply_filters(
-			'doughboss_pospal_revoke_call',
-			array(
-				'module' => 'promotionOpenApi',
-				'method' => 'useCustomerPassProduct',
-				'body'   => array(
-					'customerUid'    => $customer_uid,
-					'passProductUid' => $coupon_ref,
-				),
-			),
-			$customer_uid,
-			$coupon_ref
-		);
+		$body = array( 'code' => $code );
+		if ( '' !== $customer_uid ) {
+			$body['customerUid'] = self::numeric( $customer_uid );
+		}
 
-		return self::call( (string) $spec['module'], (string) $spec['method'], (array) $spec['body'] );
+		/**
+		 * Filter the promotioncouponcode/use request body before it is signed/sent.
+		 *
+		 * @param array  $body         Request body ({ code, customerUid? }).
+		 * @param string $customer_uid Member uid.
+		 * @param string $code         Coupon code being used/voided.
+		 */
+		$body = apply_filters( 'doughboss_pospal_revoke_body', $body, $customer_uid, $code );
+
+		return self::call( 'promotioncouponcode', 'use', (array) $body, self::PATH_USE_COUPONCODE );
 	}
 
 	/**
@@ -389,7 +399,7 @@ class DoughBoss_POSPal {
 	 * @param array  $payload Request fields ('appId' is added automatically).
 	 * @return array|WP_Error Decoded `data` payload on success, or an error.
 	 */
-	public static function call( $module, $method, array $payload = array() ) {
+	public static function call( $module, $method, array $payload = array(), $override_path = '' ) {
 		if ( ! self::ready() ) {
 			return new WP_Error( 'doughboss_pospal_config', __( 'POSPal is not configured.', 'doughboss' ), array( 'status' => 503 ) );
 		}
@@ -407,6 +417,11 @@ class DoughBoss_POSPal {
 		}
 
 		$url = self::host() . self::API_PREFIX . $module . '/' . $method;
+		// Some endpoints (the coupon GRANT/USE methods) live under a different,
+		// older openapi path; callers pass it explicitly to bypass the module prefix.
+		if ( '' !== (string) $override_path ) {
+			$url = self::host() . (string) $override_path;
+		}
 
 		$response = wp_remote_post(
 			$url,
