@@ -1125,11 +1125,17 @@ class DoughBoss_REST_Controller {
 				)
 			);
 		}
+		// A passing test only proves connectivity; live publishing still requires
+		// the Enable Mercure toggle (mercure_ready() also checks it). Say so when it
+		// is off, so "test passed" is never misread as "real-time is live".
+		$message = DoughBoss_Settings::mercure_enabled()
+			? __( 'Hub reachable and the publish JWT was accepted. Real-time is live.', 'doughboss' )
+			: __( 'Hub reachable and the publish JWT was accepted. Tick “Enable Mercure” and save to use it live.', 'doughboss' );
 		return rest_ensure_response(
 			array(
 				'ready'   => true,
 				'ok'      => true,
-				'message' => __( 'Hub reachable and the publish JWT was accepted.', 'doughboss' ),
+				'message' => $message,
 			)
 		);
 	}
