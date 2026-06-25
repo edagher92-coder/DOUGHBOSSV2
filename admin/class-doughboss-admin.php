@@ -193,6 +193,8 @@ class DoughBoss_Admin {
 		$clean['pospal_host']    = isset( $input['pospal_host'] ) ? esc_url_raw( trim( (string) $input['pospal_host'] ) ) : '';
 		$clean['pospal_app_id']  = isset( $input['pospal_app_id'] ) ? sanitize_text_field( $input['pospal_app_id'] ) : '';
 		$clean['pospal_app_key'] = isset( $input['pospal_app_key'] ) ? sanitize_text_field( $input['pospal_app_key'] ) : '';
+		$clean['pospal_coupon_uid_5']  = isset( $input['pospal_coupon_uid_5'] ) ? sanitize_text_field( $input['pospal_coupon_uid_5'] ) : '';
+		$clean['pospal_coupon_uid_10'] = isset( $input['pospal_coupon_uid_10'] ) ? sanitize_text_field( $input['pospal_coupon_uid_10'] ) : '';
 
 		// Phase 2 — real-time & notifications. Off by default; fully dormant until
 		// configured. Secret fields (publish JWT, ntfy token, ClickSend API key,
@@ -459,6 +461,25 @@ class DoughBoss_Admin {
 			}).catch(function () {
 				testBtn.disabled = false;
 				if (out) { out.textContent = 'Request failed.'; out.style.color = '#b32d2e'; }
+			});
+		}
+
+		var pvBtn = e.target.closest('#db-pospal-verify');
+		if (pvBtn) {
+			e.preventDefault();
+			var pvOut = document.getElementById('db-pospal-verify-result');
+			pvBtn.disabled = true;
+			if (pvOut) { pvOut.textContent = '…'; pvOut.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/pospal/verify-coupons', {
+				headers: { 'X-WP-Nonce': DoughBossAdmin.nonce }
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				pvBtn.disabled = false;
+				if (!pvOut) { return; }
+				pvOut.textContent = (d && d.message) ? d.message : 'Done.';
+				pvOut.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e';
+			}).catch(function () {
+				pvBtn.disabled = false;
+				if (pvOut) { pvOut.textContent = 'Request failed.'; pvOut.style.color = '#b32d2e'; }
 			});
 		}
 	});
@@ -1303,6 +1324,23 @@ JS;
 							<th><label for="db-pospal-app-key"><?php esc_html_e( 'App Key', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-pospal-app-key" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal_app_key]" value="<?php echo esc_attr( isset( $settings['pospal_app_key'] ) ? $settings['pospal_app_key'] : '' ); ?>" />
 								<p class="description"><?php esc_html_e( 'The secret key is used only to sign server-side calls. For best security set it as the DOUGHBOSS_POSPAL_APPKEY environment variable instead of here; this field is a fallback.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-pospal-uid5"><?php esc_html_e( '$5 coupon rule UID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-pospal-uid5" class="regular-text" autocomplete="off" inputmode="numeric" placeholder="e.g. 1782386149561969589" name="<?php echo esc_attr( $opt ); ?>[pospal_coupon_uid_5]" value="<?php echo esc_attr( isset( $settings['pospal_coupon_uid_5'] ) ? $settings['pospal_coupon_uid_5'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-pospal-uid10"><?php esc_html_e( '$10 coupon rule UID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-pospal-uid10" class="regular-text" autocomplete="off" inputmode="numeric" placeholder="e.g. 1782388334407537808" name="<?php echo esc_attr( $opt ); ?>[pospal_coupon_uid_10]" value="<?php echo esc_attr( isset( $settings['pospal_coupon_uid_10'] ) ? $settings['pospal_coupon_uid_10'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'The POSPal coupon-rule UID for each student voucher value (copied from your POSPal coupon list). Granting stays off until at least one is set.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Verify coupons', 'doughboss' ); ?></th>
+							<td>
+								<button type="button" class="button" id="db-pospal-verify"><?php esc_html_e( 'Verify coupon setup', 'doughboss' ); ?></button>
+								<span id="db-pospal-verify-result" class="description" style="margin-left:8px;"></span>
+								<p class="description"><?php esc_html_e( 'Read-only: checks the POSPal connection and that each UID above matches a real coupon rule. Save your changes first.', 'doughboss' ); ?></p>
+							</td>
 						</tr>
 					</table>
 

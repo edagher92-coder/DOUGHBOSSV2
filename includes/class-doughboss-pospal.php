@@ -107,6 +107,35 @@ class DoughBoss_POSPal {
 	}
 
 	/**
+	 * Read-only validation for the admin "Verify coupon setup" action: confirm the
+	 * connection works and that the configured $5 / $10 coupon-rule UIDs each match a
+	 * real rule in the account. No side effects — it only queries the rule list and
+	 * searches the response for the configured UIDs (field-name agnostic).
+	 *
+	 * @return array|WP_Error { rules_count:int, uid5, uid10, found5:bool, found10:bool }
+	 *                        or a WP_Error when POSPal is off or the query fails.
+	 */
+	public static function verify_coupon_rules() {
+		if ( ! self::ready() ) {
+			return new WP_Error( 'doughboss_pospal_off', __( 'POSPal is not configured — enable it and set the host, App ID and App Key.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$rules = self::query_coupon_promotions();
+		if ( is_wp_error( $rules ) ) {
+			return $rules;
+		}
+		$blob  = (string) wp_json_encode( $rules );
+		$uid5  = DoughBoss_Settings::pospal_coupon_uid_5();
+		$uid10 = DoughBoss_Settings::pospal_coupon_uid_10();
+		return array(
+			'rules_count' => is_array( $rules ) ? count( $rules ) : 0,
+			'uid5'        => $uid5,
+			'uid10'       => $uid10,
+			'found5'      => '' !== $uid5 && false !== strpos( $blob, $uid5 ),
+			'found10'     => '' !== $uid10 && false !== strpos( $blob, $uid10 ),
+		);
+	}
+
+	/**
 	 * Look up a POSPal member by phone number.
 	 *
 	 * Endpoint: customerOpenApi/queryByTel. Confirmed against the ledccn/ledc-pospal
@@ -230,15 +259,35 @@ class DoughBoss_POSPal {
 			return new WP_Error( 'doughboss_pospal_grant', __( 'A member and a coupon rule are required.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		return self::call(
-			'promotionOpenApi',
-			'addCustomerPassProduct',
+		/**
+		 * Filter the exact POSPal call used to GRANT a coupon to a member. The coupon
+		 * (优惠券) grant method could not be confirmed against the region-blocked docs,
+		 * so the whole call — module, method and body field names — is filterable. The
+		 * real shape can be set (e.g. in wp-config.php or a mu-plugin) the moment a live
+		 * response reveals it, with NO plugin redeploy. Default below is a best guess.
+		 *
+		 * @param array  $spec            { module, method, body } of the grant call.
+		 * @param string $customer_uid    Member uid.
+		 * @param string $coupon_rule_uid Coupon rule uid.
+		 * @param int    $qty             Quantity.
+		 */
+		$spec = apply_filters(
+			'doughboss_pospal_grant_call',
 			array(
-				'customerUid'    => $customer_uid,
-				'passProductUid' => $coupon_rule_uid,
-				'quantity'       => $qty,
-			)
+				'module' => 'promotionOpenApi',
+				'method' => 'addCustomerPassProduct',
+				'body'   => array(
+					'customerUid'    => $customer_uid,
+					'passProductUid' => $coupon_rule_uid,
+					'quantity'       => $qty,
+				),
+			),
+			$customer_uid,
+			$coupon_rule_uid,
+			$qty
 		);
+
+		return self::call( (string) $spec['module'], (string) $spec['method'], (array) $spec['body'] );
 	}
 
 	/**
@@ -280,14 +329,30 @@ class DoughBoss_POSPal {
 			return array( 'noop' => true );
 		}
 
-		return self::call(
-			'promotionOpenApi',
-			'useCustomerPassProduct',
+		/**
+		 * Filter the exact POSPal call used to REVOKE/use a granted coupon. Same
+		 * rationale as the grant filter: the method is unconfirmed, so module/method/
+		 * body are correctable without a redeploy once the real shape is known.
+		 *
+		 * @param array  $spec         { module, method, body } of the revoke call.
+		 * @param string $customer_uid Member uid.
+		 * @param string $coupon_ref   Stored granted-coupon reference.
+		 */
+		$spec = apply_filters(
+			'doughboss_pospal_revoke_call',
 			array(
-				'customerUid'    => $customer_uid,
-				'passProductUid' => $coupon_ref,
-			)
+				'module' => 'promotionOpenApi',
+				'method' => 'useCustomerPassProduct',
+				'body'   => array(
+					'customerUid'    => $customer_uid,
+					'passProductUid' => $coupon_ref,
+				),
+			),
+			$customer_uid,
+			$coupon_ref
 		);
+
+		return self::call( (string) $spec['module'], (string) $spec['method'], (array) $spec['body'] );
 	}
 
 	/**
