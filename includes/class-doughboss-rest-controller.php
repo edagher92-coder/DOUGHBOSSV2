@@ -343,6 +343,16 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/mercure/test',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'mercure_test' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/auth/me',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1080,6 +1090,46 @@ class DoughBoss_REST_Controller {
 				'ok'      => true,
 				'message' => __( 'POSPal reachable and the signature was accepted.', 'doughboss' ),
 				'rules'   => $result,
+			)
+		);
+	}
+
+	/**
+	 * GET /mercure/test — owner action: a blocking test publish to the Mercure
+	 * hub. Confirms the hub is reachable and the publish JWT is accepted, turning
+	 * the otherwise fire-and-forget publish path into something diagnosable. Uses
+	 * the stored hub URL + JWT (server-side); never returns the credential.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function mercure_test( WP_REST_Request $request ) {
+		unset( $request );
+		$configured = '' !== DoughBoss_Settings::mercure_hub_url() && '' !== DoughBoss_Settings::mercure_publish_jwt();
+		if ( ! $configured ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => false,
+					'ok'      => false,
+					'message' => __( 'Mercure is not configured — set the hub URL and publish JWT, then save before testing.', 'doughboss' ),
+				)
+			);
+		}
+		$result = DoughBoss_Mercure::test();
+		if ( is_wp_error( $result ) ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => true,
+					'ok'      => false,
+					'message' => $result->get_error_message(),
+				)
+			);
+		}
+		return rest_ensure_response(
+			array(
+				'ready'   => true,
+				'ok'      => true,
+				'message' => __( 'Hub reachable and the publish JWT was accepted.', 'doughboss' ),
 			)
 		);
 	}

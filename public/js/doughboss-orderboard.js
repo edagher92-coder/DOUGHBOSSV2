@@ -347,6 +347,9 @@
 		};
 
 		sse.onmessage = function () {
+			// A message means the channel is alive — re-affirm health so a recovery
+			// after a transient error slows the poll again even before onopen refires.
+			sseHealthy = true;
 			// Authoritative re-fetch — never render from the SSE payload itself.
 			load();
 		};

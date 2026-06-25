@@ -179,4 +179,71 @@ class DoughBoss_Mercure {
 			'subscribe_jwt' => DoughBoss_Settings::mercure_subscribe_jwt(),
 		);
 	}
+
+	/**
+	 * Diagnostic: a BLOCKING test publish to the hub that surfaces the HTTP
+	 * status, used by the owner "Test connection" action. Unlike publish() (which
+	 * is fire-and-forget so it can never block an order), this waits for the hub's
+	 * response, so a rejected publish JWT or an unreachable hub becomes a clear,
+	 * actionable error instead of failing silently. The JWT is sent only in the
+	 * Authorization header and is never returned or logged.
+	 *
+	 * @return array|WP_Error array{ status:int } on a 2xx publish, or a WP_Error
+	 *                        describing the transport failure / rejected status.
+	 */
+	public static function test() {
+		$url = DoughBoss_Settings::mercure_hub_url();
+		$jwt = DoughBoss_Settings::mercure_publish_jwt();
+		if ( '' === $url || '' === $jwt ) {
+			return new WP_Error(
+				'doughboss_mercure_unconfigured',
+				__( 'Set the Mercure hub URL and publish JWT first.', 'doughboss' )
+			);
+		}
+
+		$payload = wp_json_encode(
+			array(
+				'type'   => 'test',
+				'action' => 'ping',
+			)
+		);
+
+		$response = wp_remote_post(
+			$url,
+			array(
+				'timeout'  => 8,
+				// Diagnostic: we DO want to wait for the status here.
+				'blocking' => true,
+				'headers'  => array(
+					'Authorization' => 'Bearer ' . $jwt,
+					'Content-Type'  => 'application/x-www-form-urlencoded',
+				),
+				'body'     => array(
+					'topic' => self::topic(),
+					'data'  => ( false === $payload ) ? '{}' : $payload,
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			// Mercure returns 401 for a bad/expired publish JWT, 403 for a topic the
+			// token may not publish, etc. Surface the status so a silent misconfig
+			// becomes visible. Never echo the JWT or any credential.
+			return new WP_Error(
+				'doughboss_mercure_http',
+				sprintf(
+					/* translators: %d: HTTP status code returned by the Mercure hub. */
+					__( 'The hub rejected the publish (HTTP %d). Check the hub URL, and that the publish JWT is valid and allowed to publish this topic.', 'doughboss' ),
+					$code
+				)
+			);
+		}
+
+		return array( 'status' => $code );
+	}
 }
