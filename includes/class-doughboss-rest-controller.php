@@ -353,6 +353,46 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/pospal/test-grant',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'pospal_test_grant' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'phone' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'value' => array(
+						'default'           => 5,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/pospal/test-revoke',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'pospal_test_revoke' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'customer_uid' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'coupon_ref'   => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/mercure/test',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1146,6 +1186,105 @@ class DoughBoss_REST_Controller {
 			array(
 				'ok'      => (bool) $all_ok,
 				'message' => $prefix . implode( ' · ', $parts ),
+			)
+		);
+	}
+
+	/**
+	 * POST /pospal/test-grant — owner diagnostic: ensure a (test) member by phone and
+	 * grant the coupon mapped to the given dollar value, returning POSPal's RAW
+	 * response. This is how the exact coupon-grant method is confirmed: a real grant
+	 * surfaces either success or POSPal's own error message. Use a throwaway phone,
+	 * then call /pospal/test-revoke. Capability-gated (verify_manage).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function pospal_test_grant( WP_REST_Request $request ) {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) $request->get_param( 'phone' ) );
+		$value = (int) $request->get_param( 'value' );
+		if ( '' === $phone ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Enter a test phone number first.', 'doughboss' ) ) );
+		}
+		if ( ! DoughBoss_POSPal::ready() ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Enable + configure POSPal (host, App ID, App Key) first.', 'doughboss' ) ) );
+		}
+		$rule_uid = DoughBoss_Settings::pospal_coupon_uid_for( $value );
+		if ( '' === $rule_uid ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'No coupon UID is mapped for that value — set it above and save.', 'doughboss' ) ) );
+		}
+
+		$member = DoughBoss_POSPal::ensure_member( $phone, 'DoughBoss Test' );
+		if ( is_wp_error( $member ) ) {
+			return rest_ensure_response(
+				array(
+					'ok'      => false,
+					'stage'   => 'ensure_member',
+					'message' => $member->get_error_message(),
+				)
+			);
+		}
+
+		$grant = DoughBoss_POSPal::grant_coupon( $member, $rule_uid );
+		if ( is_wp_error( $grant ) ) {
+			return rest_ensure_response(
+				array(
+					'ok'         => false,
+					'stage'      => 'grant_coupon',
+					'member_uid' => $member,
+					'message'    => $grant->get_error_message(),
+				)
+			);
+		}
+
+		// Derive a revoke reference the same way the live sync does.
+		$ref = '';
+		if ( is_array( $grant ) ) {
+			foreach ( array( 'customerPassProductUid', 'passProductUid', 'uid', 'id' ) as $k ) {
+				if ( isset( $grant[ $k ] ) && '' !== (string) $grant[ $k ] ) {
+					$ref = (string) $grant[ $k ];
+					break;
+				}
+			}
+		}
+		if ( '' === $ref ) {
+			$ref = $rule_uid;
+		}
+
+		return rest_ensure_response(
+			array(
+				'ok'         => true,
+				'stage'      => 'grant_coupon',
+				'member_uid' => $member,
+				'coupon_ref' => $ref,
+				'message'    => __( 'Grant accepted by POSPal.', 'doughboss' ),
+				'response'   => $grant,
+			)
+		);
+	}
+
+	/**
+	 * POST /pospal/test-revoke — owner diagnostic: revoke a coupon granted by a prior
+	 * test-grant so the test member is left clean. Capability-gated (verify_manage).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function pospal_test_revoke( WP_REST_Request $request ) {
+		$uid = sanitize_text_field( (string) $request->get_param( 'customer_uid' ) );
+		$ref = sanitize_text_field( (string) $request->get_param( 'coupon_ref' ) );
+		if ( '' === $uid || '' === $ref ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Run a test grant first.', 'doughboss' ) ) );
+		}
+		$res = DoughBoss_POSPal::revoke_coupon( $uid, $ref );
+		if ( is_wp_error( $res ) ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => $res->get_error_message() ) );
+		}
+		return rest_ensure_response(
+			array(
+				'ok'       => true,
+				'message'  => __( 'Revoke call returned OK.', 'doughboss' ),
+				'response' => $res,
 			)
 		);
 	}
