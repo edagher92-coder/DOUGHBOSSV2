@@ -153,22 +153,40 @@ class DoughBoss_Voucher {
 	/**
 	 * Fetch a voucher row by code (case-insensitive; codes are stored upper-case).
 	 *
-	 * The input is first run through DoughBoss_Coupon_Code::normalize() so a
-	 * lower-cased, space-padded or mis-hyphenated entry of an otherwise valid code
-	 * still resolves to the stored canonical form.
+	 * Resolves by the EXACT (upper-cased, trimmed, space-stripped) code first, so a
+	 * stored code keeps matching even when its brand prefix / numeric segment
+	 * contains O / 0 / 1. Only if that misses is the input folded through
+	 * DoughBoss_Coupon_Code::normalize() as a typo-recovery retry.
 	 *
 	 * @param string $code Voucher code.
 	 * @return object|null
 	 */
 	public static function find_by_code( $code ) {
 		global $wpdb;
-		$code = DoughBoss_Coupon_Code::normalize( $code );
-		$code = strtoupper( trim( (string) $code ) );
-		if ( '' === $code ) {
+		$table = self::table();
+
+		// 1) EXACT match on the lightly-cleaned input (upper-cased, trimmed, internal
+		//    whitespace removed) — NO character folding. A stored code carries a brand
+		//    prefix and numeric campaign segment (e.g. SNOW110025) that legitimately
+		//    contain O / 0 / 1, which the typo-folding normalize() would rewrite. So a
+		//    correctly entered code must resolve by its exact stored form first.
+		$exact = preg_replace( '/\s+/', '', strtoupper( trim( (string) $code ) ) );
+		if ( '' !== $exact ) {
+			$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE code = %s", $exact ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( $row ) {
+				return $row;
+			}
+		}
+
+		// 2) Typo-recovery fallback: fold ambiguous characters (O/0 -> Q, I/L/1 -> 7)
+		//    and retry. Runs only when the exact lookup missed and folding actually
+		//    changes the string, so it never blocks an exact match and adds no query
+		//    for clean codes.
+		$folded = strtoupper( trim( (string) DoughBoss_Coupon_Code::normalize( $code ) ) );
+		if ( '' === $folded || $folded === $exact ) {
 			return null;
 		}
-		$table = self::table();
-		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE code = %s", $code ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE code = %s", $folded ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
 
 	/**
