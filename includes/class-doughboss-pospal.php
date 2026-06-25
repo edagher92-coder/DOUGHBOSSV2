@@ -78,6 +78,29 @@ class DoughBoss_POSPal {
 	}
 
 	/**
+	 * Resolve the credentials a call() should sign with. An explicit per-store set
+	 * (host/app_id/app_key) is used as-is for multi-store grants; otherwise the
+	 * default/legacy single-store settings are used, preserving prior behaviour.
+	 *
+	 * @param array|null $creds Optional { host, app_id, app_key }.
+	 * @return array { host, app_id, app_key }.
+	 */
+	private static function resolve_creds( $creds ) {
+		if ( is_array( $creds ) && isset( $creds['host'], $creds['app_id'], $creds['app_key'] ) ) {
+			return array(
+				'host'    => untrailingslashit( (string) $creds['host'] ),
+				'app_id'  => (string) $creds['app_id'],
+				'app_key' => (string) $creds['app_key'],
+			);
+		}
+		return array(
+			'host'    => self::host(),
+			'app_id'  => self::app_id(),
+			'app_key' => self::app_key(),
+		);
+	}
+
+	/**
 	 * Current time in milliseconds, as POSPal expects for the time-stamp header.
 	 *
 	 * @return string
@@ -111,8 +134,8 @@ class DoughBoss_POSPal {
 	 *
 	 * @return array|WP_Error
 	 */
-	public static function query_coupon_promotions() {
-		return self::call( 'promotionOpenApi', 'queryCouponPromotions' );
+	public static function query_coupon_promotions( $creds = null ) {
+		return self::call( 'promotionOpenApi', 'queryCouponPromotions', array(), '', $creds );
 	}
 
 	/**
@@ -124,17 +147,21 @@ class DoughBoss_POSPal {
 	 * @return array|WP_Error { rules_count:int, uid5, uid10, found5:bool, found10:bool }
 	 *                        or a WP_Error when POSPal is off or the query fails.
 	 */
-	public static function verify_coupon_rules() {
-		if ( ! self::ready() ) {
-			return new WP_Error( 'doughboss_pospal_off', __( 'POSPal is not configured — enable it and set the host, App ID and App Key.', 'doughboss' ), array( 'status' => 400 ) );
+	public static function verify_coupon_rules( $creds = null, $uid5 = null, $uid10 = null ) {
+		// Default to the legacy single-store coupon UIDs when no store context given.
+		if ( null === $uid5 ) {
+			$uid5 = DoughBoss_Settings::pospal_coupon_uid_5();
 		}
-		$rules = self::query_coupon_promotions();
+		if ( null === $uid10 ) {
+			$uid10 = DoughBoss_Settings::pospal_coupon_uid_10();
+		}
+		$rules = self::query_coupon_promotions( $creds );
 		if ( is_wp_error( $rules ) ) {
 			return $rules;
 		}
 		$blob  = (string) wp_json_encode( $rules );
-		$uid5  = DoughBoss_Settings::pospal_coupon_uid_5();
-		$uid10 = DoughBoss_Settings::pospal_coupon_uid_10();
+		$uid5  = (string) $uid5;
+		$uid10 = (string) $uid10;
 		return array(
 			'rules_count' => is_array( $rules ) ? count( $rules ) : 0,
 			'uid5'        => $uid5,
@@ -158,7 +185,7 @@ class DoughBoss_POSPal {
 	 * @return array|WP_Error Member record(s) on success — POSPal returns a list of
 	 *                        matching customers, each carrying a `customerUid`.
 	 */
-	public static function member_by_tel( $phone ) {
+	public static function member_by_tel( $phone, $creds = null ) {
 		$phone = preg_replace( '/[^0-9+]/', '', (string) $phone );
 		if ( '' === $phone ) {
 			return new WP_Error( 'doughboss_pospal_member', __( 'A phone number is required.', 'doughboss' ), array( 'status' => 400 ) );
@@ -169,7 +196,9 @@ class DoughBoss_POSPal {
 			'queryByTel',
 			array(
 				'customerTel' => $phone,
-			)
+			),
+			'',
+			$creds
 		);
 	}
 
@@ -186,7 +215,7 @@ class DoughBoss_POSPal {
 	 * @param string $name  Optional member display name.
 	 * @return array|WP_Error Created member payload (incl. `customerUid`) or error.
 	 */
-	public static function add_member( $phone, $name = '' ) {
+	public static function add_member( $phone, $name = '', $creds = null ) {
 		$phone = preg_replace( '/[^0-9+]/', '', (string) $phone );
 		if ( '' === $phone ) {
 			return new WP_Error( 'doughboss_pospal_member', __( 'A phone number is required.', 'doughboss' ), array( 'status' => 400 ) );
@@ -207,7 +236,9 @@ class DoughBoss_POSPal {
 			'add',
 			array(
 				'customerInfo' => $customer_info,
-			)
+			),
+			'',
+			$creds
 		);
 	}
 
@@ -222,8 +253,8 @@ class DoughBoss_POSPal {
 	 * @param string $name  Optional member display name (used only on create).
 	 * @return string|WP_Error The POSPal `customerUid`, or an error.
 	 */
-	public static function ensure_member( $phone, $name = '' ) {
-		$existing = self::member_by_tel( $phone );
+	public static function ensure_member( $phone, $name = '', $creds = null ) {
+		$existing = self::member_by_tel( $phone, $creds );
 		if ( ! is_wp_error( $existing ) ) {
 			$uid = self::extract_customer_uid( $existing );
 			if ( '' !== $uid ) {
@@ -231,7 +262,7 @@ class DoughBoss_POSPal {
 			}
 		}
 
-		$created = self::add_member( $phone, $name );
+		$created = self::add_member( $phone, $name, $creds );
 		if ( is_wp_error( $created ) ) {
 			return $created;
 		}
@@ -284,7 +315,7 @@ class DoughBoss_POSPal {
 	 * @param string $code            The coupon code to create (the voucher code).
 	 * @return array|WP_Error The POSPal response, or an error.
 	 */
-	public static function grant_coupon( $customer_uid, $coupon_rule_uid, $code ) {
+	public static function grant_coupon( $customer_uid, $coupon_rule_uid, $code, $creds = null ) {
 		$customer_uid = sanitize_text_field( (string) $customer_uid );
 		$rule_uid     = sanitize_text_field( (string) $coupon_rule_uid );
 		$code         = self::coupon_code( $code );
@@ -314,7 +345,7 @@ class DoughBoss_POSPal {
 			$code
 		);
 
-		return self::call( 'promotion', 'addCouponcode', (array) $body, self::PATH_ADD_COUPONCODE );
+		return self::call( 'promotion', 'addCouponcode', (array) $body, self::PATH_ADD_COUPONCODE, $creds );
 	}
 
 	/**
@@ -328,7 +359,7 @@ class DoughBoss_POSPal {
 	 * @param string $code         The coupon code created at grant (the voucher code).
 	 * @return array|WP_Error
 	 */
-	public static function revoke_coupon( $customer_uid, $code ) {
+	public static function revoke_coupon( $customer_uid, $code, $creds = null ) {
 		$customer_uid = sanitize_text_field( (string) $customer_uid );
 		$code         = self::coupon_code( $code );
 		if ( '' === $code ) {
@@ -362,7 +393,7 @@ class DoughBoss_POSPal {
 		 */
 		$body = apply_filters( 'doughboss_pospal_revoke_body', $body, $customer_uid, $code );
 
-		return self::call( 'promotioncouponcode', 'use', (array) $body, self::PATH_USE_COUPONCODE );
+		return self::call( 'promotioncouponcode', 'use', (array) $body, self::PATH_USE_COUPONCODE, $creds );
 	}
 
 	/**
@@ -399,8 +430,11 @@ class DoughBoss_POSPal {
 	 * @param array  $payload Request fields ('appId' is added automatically).
 	 * @return array|WP_Error Decoded `data` payload on success, or an error.
 	 */
-	public static function call( $module, $method, array $payload = array(), $override_path = '' ) {
-		if ( ! self::ready() ) {
+	public static function call( $module, $method, array $payload = array(), $override_path = '', $creds = null ) {
+		// Resolve which store's credentials to use: an explicit per-store set (multi-
+		// store), or the default/legacy single-store settings when none is passed.
+		$creds = self::resolve_creds( $creds );
+		if ( ! DoughBoss_Settings::pospal_enabled() || '' === $creds['host'] || '' === $creds['app_id'] || '' === $creds['app_key'] ) {
 			return new WP_Error( 'doughboss_pospal_config', __( 'POSPal is not configured.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 
@@ -410,17 +444,17 @@ class DoughBoss_POSPal {
 			return new WP_Error( 'doughboss_pospal_request', __( 'Invalid POSPal request.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$payload['appId'] = self::app_id();
+		$payload['appId'] = $creds['app_id'];
 		$raw_body         = wp_json_encode( $payload );
 		if ( false === $raw_body ) {
 			return new WP_Error( 'doughboss_pospal_encode', __( 'Could not encode the POSPal request.', 'doughboss' ), array( 'status' => 500 ) );
 		}
 
-		$url = self::host() . self::API_PREFIX . $module . '/' . $method;
+		$url = $creds['host'] . self::API_PREFIX . $module . '/' . $method;
 		// Some endpoints (the coupon GRANT/USE methods) live under a different,
 		// older openapi path; callers pass it explicitly to bypass the module prefix.
 		if ( '' !== (string) $override_path ) {
-			$url = self::host() . (string) $override_path;
+			$url = $creds['host'] . (string) $override_path;
 		}
 
 		$response = wp_remote_post(
@@ -434,7 +468,7 @@ class DoughBoss_POSPal {
 					'User-Agent'     => 'openApi',
 					'Content-Type'   => 'application/json; charset=utf-8',
 					'time-stamp'     => self::timestamp_ms(),
-					'data-signature' => self::sign( $raw_body ),
+					'data-signature' => strtoupper( md5( $creds['app_key'] . $raw_body ) ),
 				),
 				'body'    => $raw_body,
 			)

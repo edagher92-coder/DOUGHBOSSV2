@@ -1173,8 +1173,17 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function pospal_verify_coupons( WP_REST_Request $request ) {
-		unset( $request );
-		$result = DoughBoss_POSPal::verify_coupon_rules();
+		$store = DoughBoss_Settings::pospal_store( max( 1, (int) $request->get_param( 'store' ) ) );
+		if ( '' === $store['host'] || '' === $store['app_id'] || '' === $store['app_key'] ) {
+			/* translators: %s: store label. */
+			return rest_ensure_response( array( 'ok' => false, 'message' => sprintf( __( '%s is not configured — set its host, App ID and App Key, then save.', 'doughboss' ), $store['label'] ) ) );
+		}
+		$creds  = array(
+			'host'    => $store['host'],
+			'app_id'  => $store['app_id'],
+			'app_key' => $store['app_key'],
+		);
+		$result = DoughBoss_POSPal::verify_coupon_rules( $creds, $store['uid5'], $store['uid10'] );
 		if ( is_wp_error( $result ) ) {
 			return rest_ensure_response(
 				array(
@@ -1251,18 +1260,26 @@ class DoughBoss_REST_Controller {
 	public function pospal_test_grant( WP_REST_Request $request ) {
 		$phone = preg_replace( '/[^0-9+]/', '', (string) $request->get_param( 'phone' ) );
 		$value = (int) $request->get_param( 'value' );
+		$store = DoughBoss_Settings::pospal_store( max( 1, (int) $request->get_param( 'store' ) ) );
 		if ( '' === $phone ) {
 			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Enter a test phone number first.', 'doughboss' ) ) );
 		}
-		if ( ! DoughBoss_POSPal::ready() ) {
-			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Enable + configure POSPal (host, App ID, App Key) first.', 'doughboss' ) ) );
+		if ( ! DoughBoss_Settings::pospal_enabled() || '' === $store['host'] || '' === $store['app_id'] || '' === $store['app_key'] ) {
+			/* translators: %s: store label. */
+			return rest_ensure_response( array( 'ok' => false, 'message' => sprintf( __( 'Enable POSPal and configure %s (host, App ID, App Key) first.', 'doughboss' ), $store['label'] ) ) );
 		}
-		$rule_uid = DoughBoss_Settings::pospal_coupon_uid_for( $value );
+		$rule_uid = ( 5 === $value ) ? $store['uid5'] : ( ( 10 === $value ) ? $store['uid10'] : '' );
 		if ( '' === $rule_uid ) {
-			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'No coupon UID is mapped for that value — set it above and save.', 'doughboss' ) ) );
+			/* translators: %s: store label. */
+			return rest_ensure_response( array( 'ok' => false, 'message' => sprintf( __( 'No coupon UID is mapped for that value at %s — set it and save.', 'doughboss' ), $store['label'] ) ) );
 		}
+		$creds = array(
+			'host'    => $store['host'],
+			'app_id'  => $store['app_id'],
+			'app_key' => $store['app_key'],
+		);
 
-		$member = DoughBoss_POSPal::ensure_member( $phone, 'DoughBoss Test' );
+		$member = DoughBoss_POSPal::ensure_member( $phone, 'DoughBoss Test', $creds );
 		if ( is_wp_error( $member ) ) {
 			return rest_ensure_response(
 				array(
@@ -1278,7 +1295,7 @@ class DoughBoss_REST_Controller {
 		// globally unique per store). The real flow uses the voucher's own code.
 		$code = 'DBTEST' . strtoupper( wp_generate_password( 12, false, false ) );
 
-		$grant = DoughBoss_POSPal::grant_coupon( $member, $rule_uid, $code );
+		$grant = DoughBoss_POSPal::grant_coupon( $member, $rule_uid, $code, $creds );
 		if ( is_wp_error( $grant ) ) {
 			return rest_ensure_response(
 				array(
@@ -1311,12 +1328,18 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function pospal_test_revoke( WP_REST_Request $request ) {
-		$uid = sanitize_text_field( (string) $request->get_param( 'customer_uid' ) );
-		$ref = sanitize_text_field( (string) $request->get_param( 'coupon_ref' ) );
-		if ( '' === $uid || '' === $ref ) {
+		$uid   = sanitize_text_field( (string) $request->get_param( 'customer_uid' ) );
+		$ref   = sanitize_text_field( (string) $request->get_param( 'coupon_ref' ) );
+		$store = DoughBoss_Settings::pospal_store( max( 1, (int) $request->get_param( 'store' ) ) );
+		if ( '' === $ref ) {
 			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'Run a test grant first.', 'doughboss' ) ) );
 		}
-		$res = DoughBoss_POSPal::revoke_coupon( $uid, $ref );
+		$creds = array(
+			'host'    => $store['host'],
+			'app_id'  => $store['app_id'],
+			'app_key' => $store['app_key'],
+		);
+		$res = DoughBoss_POSPal::revoke_coupon( $uid, $ref, $creds );
 		if ( is_wp_error( $res ) ) {
 			return rest_ensure_response( array( 'ok' => false, 'message' => $res->get_error_message() ) );
 		}

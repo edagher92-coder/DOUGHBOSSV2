@@ -195,6 +195,15 @@ class DoughBoss_Admin {
 		$clean['pospal_app_key'] = isset( $input['pospal_app_key'] ) ? sanitize_text_field( $input['pospal_app_key'] ) : '';
 		$clean['pospal_coupon_uid_5']  = isset( $input['pospal_coupon_uid_5'] ) ? sanitize_text_field( $input['pospal_coupon_uid_5'] ) : '';
 		$clean['pospal_coupon_uid_10'] = isset( $input['pospal_coupon_uid_10'] ) ? sanitize_text_field( $input['pospal_coupon_uid_10'] ) : '';
+		// Additional POSPal stores (multi-store): store 2 + store 3.
+		foreach ( array( 2, 3 ) as $sn ) {
+			$clean[ 'pospal' . $sn . '_label' ]         = isset( $input[ 'pospal' . $sn . '_label' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_label' ] ) : '';
+			$clean[ 'pospal' . $sn . '_host' ]          = isset( $input[ 'pospal' . $sn . '_host' ] ) ? esc_url_raw( trim( (string) $input[ 'pospal' . $sn . '_host' ] ) ) : '';
+			$clean[ 'pospal' . $sn . '_app_id' ]        = isset( $input[ 'pospal' . $sn . '_app_id' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_app_id' ] ) : '';
+			$clean[ 'pospal' . $sn . '_app_key' ]       = isset( $input[ 'pospal' . $sn . '_app_key' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_app_key' ] ) : '';
+			$clean[ 'pospal' . $sn . '_coupon_uid_5' ]  = isset( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) : '';
+			$clean[ 'pospal' . $sn . '_coupon_uid_10' ] = isset( $input[ 'pospal' . $sn . '_coupon_uid_10' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_coupon_uid_10' ] ) : '';
+		}
 
 		// Phase 2 — real-time & notifications. Off by default; fully dormant until
 		// configured. Secret fields (publish JWT, ntfy token, ClickSend API key,
@@ -470,7 +479,7 @@ class DoughBoss_Admin {
 			var pvOut = document.getElementById('db-pospal-verify-result');
 			pvBtn.disabled = true;
 			if (pvOut) { pvOut.textContent = '…'; pvOut.style.color = ''; }
-			fetch(DoughBossAdmin.restUrl + '/pospal/verify-coupons', {
+			fetch(DoughBossAdmin.restUrl + '/pospal/verify-coupons?store=' + encodeURIComponent((document.getElementById('db-pospal-store') || {}).value || '1'), {
 				headers: { 'X-WP-Nonce': DoughBossAdmin.nonce }
 			}).then(function (r) { return r.json(); }).then(function (d) {
 				pvBtn.disabled = false;
@@ -494,7 +503,7 @@ class DoughBoss_Admin {
 			fetch(DoughBossAdmin.restUrl + '/pospal/test-grant', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
-				body: JSON.stringify({ phone: phoneEl ? phoneEl.value : '', value: valEl ? valEl.value : '5' })
+				body: JSON.stringify({ phone: phoneEl ? phoneEl.value : '', value: valEl ? valEl.value : '5', store: (document.getElementById('db-pospal-store') || {}).value || '1' })
 			}).then(function (r) { return r.json(); }).then(function (d) {
 				tgBtn.disabled = false;
 				if (tgOut) {
@@ -524,7 +533,7 @@ class DoughBoss_Admin {
 			fetch(DoughBossAdmin.restUrl + '/pospal/probe-grant', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
-				body: JSON.stringify({ phone: pbPhone ? pbPhone.value : '', value: pbVal ? pbVal.value : '5' })
+				body: JSON.stringify({ phone: pbPhone ? pbPhone.value : '', value: pbVal ? pbVal.value : '5', store: (document.getElementById('db-pospal-store') || {}).value || '1' })
 			}).then(function (r) { return r.json(); }).then(function (d) {
 				pbBtn.disabled = false;
 				if (pbOut) {
@@ -545,7 +554,7 @@ class DoughBoss_Admin {
 			fetch(DoughBossAdmin.restUrl + '/pospal/test-revoke', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
-				body: JSON.stringify({ customer_uid: trBtn.getAttribute('data-uid'), coupon_ref: trBtn.getAttribute('data-ref') })
+				body: JSON.stringify({ customer_uid: trBtn.getAttribute('data-uid'), coupon_ref: trBtn.getAttribute('data-ref'), store: (document.getElementById('db-pospal-store') || {}).value || '1' })
 			}).then(function (r) { return r.json(); }).then(function (d) {
 				trBtn.disabled = false;
 				if (trOut) { trOut.textContent = (d && d.message) ? d.message : 'Done.'; trOut.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e'; }
@@ -1409,9 +1418,14 @@ JS;
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Verify coupons', 'doughboss' ); ?></th>
 							<td>
+								<select id="db-pospal-store" style="margin-right:6px;">
+									<option value="1"><?php esc_html_e( 'Store 1', 'doughboss' ); ?></option>
+									<option value="2"><?php esc_html_e( 'Store 2', 'doughboss' ); ?></option>
+									<option value="3"><?php esc_html_e( 'Store 3', 'doughboss' ); ?></option>
+								</select>
 								<button type="button" class="button" id="db-pospal-verify"><?php esc_html_e( 'Verify coupon setup', 'doughboss' ); ?></button>
 								<span id="db-pospal-verify-result" class="description" style="margin-left:8px;"></span>
-								<p class="description"><?php esc_html_e( 'Read-only: checks the POSPal connection and that each UID above matches a real coupon rule. Save your changes first.', 'doughboss' ); ?></p>
+								<p class="description"><?php esc_html_e( 'Read-only: checks the selected store\'s POSPal connection and that its UIDs match real coupon rules. This store dropdown also applies to the Test grant below. Save your changes first.', 'doughboss' ); ?></p>
 							</td>
 						</tr>
 						<tr>
@@ -1430,6 +1444,51 @@ JS;
 							</td>
 						</tr>
 					</table>
+
+					<h3><?php esc_html_e( 'Additional stores (multi-store)', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Optional. Add Bankstown and Roselands here — each is a separate POSPal account with its own host, App ID, App Key and $5/$10 coupon-rule UIDs. A claimed voucher is granted to EVERY configured store. Leave a store blank to skip it. After saving, use the store dropdown above (Store 2 / Store 3) to Verify and Test each one.', 'doughboss' ); ?>
+					</p>
+					<?php foreach ( array( 2, 3 ) as $sn ) : ?>
+						<h4>
+							<?php
+							/* translators: %d: store number. */
+							printf( esc_html__( 'Store %d', 'doughboss' ), (int) $sn );
+							?>
+						</h4>
+						<table class="form-table" role="presentation">
+							<tr>
+								<th><?php esc_html_e( 'Label', 'doughboss' ); ?></th>
+								<td><input type="text" class="regular-text" autocomplete="off" placeholder="<?php echo esc_attr( 2 === $sn ? 'Bankstown' : 'Roselands' ); ?>" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_label]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_label' ] ) ? $settings[ 'pospal' . $sn . '_label' ] : '' ); ?>" /></td>
+							</tr>
+							<tr>
+								<th><?php esc_html_e( 'Area host', 'doughboss' ); ?></th>
+								<td><input type="text" class="regular-text" autocomplete="off" placeholder="https://areaXX-win.pospal.cn:443" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_host]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_host' ] ) ? $settings[ 'pospal' . $sn . '_host' ] : '' ); ?>" /></td>
+							</tr>
+							<tr>
+								<th><?php esc_html_e( 'App ID', 'doughboss' ); ?></th>
+								<td><input type="text" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_app_id]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_app_id' ] ) ? $settings[ 'pospal' . $sn . '_app_id' ] : '' ); ?>" /></td>
+							</tr>
+							<tr>
+								<th><?php esc_html_e( 'App Key', 'doughboss' ); ?></th>
+								<td><input type="password" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_app_key]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_app_key' ] ) ? $settings[ 'pospal' . $sn . '_app_key' ] : '' ); ?>" />
+									<p class="description">
+										<?php
+										/* translators: %d: store number. */
+										printf( esc_html__( 'For best security set the DOUGHBOSS_POSPAL_APPKEY_%d environment variable instead; this field is a fallback.', 'doughboss' ), (int) $sn );
+										?>
+									</p></td>
+							</tr>
+							<tr>
+								<th><?php esc_html_e( '$5 coupon rule UID', 'doughboss' ); ?></th>
+								<td><input type="text" class="regular-text" autocomplete="off" inputmode="numeric" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_coupon_uid_5]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_coupon_uid_5' ] ) ? $settings[ 'pospal' . $sn . '_coupon_uid_5' ] : '' ); ?>" /></td>
+							</tr>
+							<tr>
+								<th><?php esc_html_e( '$10 coupon rule UID', 'doughboss' ); ?></th>
+								<td><input type="text" class="regular-text" autocomplete="off" inputmode="numeric" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_coupon_uid_10]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_coupon_uid_10' ] ) ? $settings[ 'pospal' . $sn . '_coupon_uid_10' ] : '' ); ?>" /></td>
+							</tr>
+						</table>
+					<?php endforeach; ?>
 
 					<h2><?php esc_html_e( 'Real-time &amp; Notifications', 'doughboss' ); ?></h2>
 					<p class="description" style="max-width:760px;">

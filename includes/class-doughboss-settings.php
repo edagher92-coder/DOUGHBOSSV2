@@ -100,6 +100,22 @@ class DoughBoss_Settings {
 			// that value (the GRANT leg is dormant until at least one is set).
 			'pospal_coupon_uid_5'  => '',
 			'pospal_coupon_uid_10' => '',
+			// Additional POSPal stores (multi-store). Store 2 + store 3 each carry their
+			// own host / App ID / App Key (env-first DOUGHBOSS_POSPAL_APPKEY_2/_3) and
+			// $5/$10 coupon-rule UIDs. Blank = that store is skipped; store 1 is the
+			// legacy single-store fields above.
+			'pospal2_label'         => '',
+			'pospal2_host'          => '',
+			'pospal2_app_id'        => '',
+			'pospal2_app_key'       => '',
+			'pospal2_coupon_uid_5'  => '',
+			'pospal2_coupon_uid_10' => '',
+			'pospal3_label'         => '',
+			'pospal3_host'          => '',
+			'pospal3_app_id'        => '',
+			'pospal3_app_key'       => '',
+			'pospal3_coupon_uid_5'  => '',
+			'pospal3_coupon_uid_10' => '',
 			// Standalone staff console (separate origin, e.g. GitHub Pages) allowed
 			// to call the doughboss/v1 routes cross-origin via Application Password.
 			'app_origin'        => 'https://edagher92-coder.github.io',
@@ -393,7 +409,114 @@ class DoughBoss_Settings {
 	 * @return bool
 	 */
 	public static function pospal_grant_enabled() {
-		return self::pospal_ready() && ( '' !== self::pospal_coupon_uid_5() || '' !== self::pospal_coupon_uid_10() );
+		if ( ! self::pospal_enabled() ) {
+			return false;
+		}
+		foreach ( self::pospal_stores() as $store ) {
+			if ( '' !== $store['uid5'] || '' !== $store['uid10'] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Env-first App Key for an additional POSPal store (store 2, 3, …). Mirrors
+	 * pospal_app_key(): a DOUGHBOSS_POSPAL_APPKEY_<n> constant or env var overrides
+	 * the stored option so secrets can be kept out of the database.
+	 *
+	 * @param int $n Store number (2, 3, …).
+	 * @return string
+	 */
+	public static function pospal_store_key( $n ) {
+		$n     = (int) $n;
+		$const = 'DOUGHBOSS_POSPAL_APPKEY_' . $n;
+		if ( defined( $const ) && '' !== (string) constant( $const ) ) {
+			return (string) constant( $const );
+		}
+		$env = getenv( $const );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'pospal' . $n . '_app_key', '' );
+	}
+
+	/**
+	 * The configured POSPal stores for multi-store grants. Store 1 is the legacy
+	 * single-store fields (kept first for backward-compat); stores 2 and 3 come from
+	 * the pospal2_* / pospal3_* settings. Only fully-configured stores (host + App ID
+	 * + App Key all set) are returned, so an empty store is skipped and nothing breaks.
+	 *
+	 * @return array[] List of { label, host, app_id, app_key, uid5, uid10 }.
+	 */
+	public static function pospal_stores() {
+		$raw = array(
+			array(
+				'label'   => (string) self::get( 'pospal_label', '' ),
+				'host'    => self::pospal_host(),
+				'app_id'  => self::pospal_app_id(),
+				'app_key' => self::pospal_app_key(),
+				'uid5'    => self::pospal_coupon_uid_5(),
+				'uid10'   => self::pospal_coupon_uid_10(),
+				'default' => __( 'Store 1', 'doughboss' ),
+			),
+		);
+		foreach ( array( 2, 3 ) as $n ) {
+			$raw[] = array(
+				'label'   => (string) self::get( 'pospal' . $n . '_label', '' ),
+				'host'    => untrailingslashit( (string) self::get( 'pospal' . $n . '_host', '' ) ),
+				'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
+				'app_key' => self::pospal_store_key( $n ),
+				'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
+				'uid10'   => (string) self::get( 'pospal' . $n . '_coupon_uid_10', '' ),
+				/* translators: %d: store number. */
+				'default' => sprintf( __( 'Store %d', 'doughboss' ), $n ),
+			);
+		}
+
+		$stores = array();
+		foreach ( $raw as $s ) {
+			if ( '' === $s['host'] || '' === $s['app_id'] || '' === $s['app_key'] ) {
+				continue; // Skip incompletely-configured stores.
+			}
+			$s['label'] = '' !== $s['label'] ? $s['label'] : $s['default'];
+			unset( $s['default'] );
+			$stores[] = $s;
+		}
+		return $stores;
+	}
+
+	/**
+	 * A single POSPal store's config by number (1 = legacy/primary, 2, 3) regardless
+	 * of whether it is fully configured — used by the per-store admin Verify/Test
+	 * tools so an incomplete store reports clearly instead of falling back silently.
+	 *
+	 * @param int $n Store number.
+	 * @return array { label, host, app_id, app_key, uid5, uid10 }.
+	 */
+	public static function pospal_store( $n ) {
+		$n = max( 1, (int) $n );
+		if ( 1 === $n ) {
+			$label1 = (string) self::get( 'pospal_label', '' );
+			return array(
+				'label'   => '' !== $label1 ? $label1 : __( 'Store 1', 'doughboss' ),
+				'host'    => self::pospal_host(),
+				'app_id'  => self::pospal_app_id(),
+				'app_key' => self::pospal_app_key(),
+				'uid5'    => self::pospal_coupon_uid_5(),
+				'uid10'   => self::pospal_coupon_uid_10(),
+			);
+		}
+		$label = (string) self::get( 'pospal' . $n . '_label', '' );
+		return array(
+			/* translators: %d: store number. */
+			'label'   => '' !== $label ? $label : sprintf( __( 'Store %d', 'doughboss' ), $n ),
+			'host'    => untrailingslashit( (string) self::get( 'pospal' . $n . '_host', '' ) ),
+			'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
+			'app_key' => self::pospal_store_key( $n ),
+			'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
+			'uid10'   => (string) self::get( 'pospal' . $n . '_coupon_uid_10', '' ),
+		);
 	}
 
 	/**

@@ -6,6 +6,12 @@
 	<meta name="theme-color" content="#111111" />
 	<title>DoughBoss Console</title>
 	<meta name="robots" content="noindex" />
+	<!-- PWA: installable (add-to-home-screen) via manifest + icons. No service worker by design. -->
+	<link rel="manifest" href="./manifest.webmanifest" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+	<meta name="apple-mobile-web-app-title" content="DoughBoss" />
+	<link rel="apple-touch-icon" href="./icon-192.png" />
 	<link rel="stylesheet" href="app.css" />
 </head>
 <body>

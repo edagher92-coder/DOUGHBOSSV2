@@ -88,38 +88,56 @@ class DoughBoss_POSPal_Sync {
 			return;
 		}
 
-		$rule_uid = DoughBoss_Settings::pospal_coupon_uid_for( isset( $row->value ) ? $row->value : 0 );
-		if ( '' === $rule_uid ) {
-			// This voucher value isn't mapped to a POSPal coupon rule — skip quietly.
-			return;
-		}
-
-		$customer_uid = DoughBoss_POSPal::ensure_member( $phone );
-		if ( is_wp_error( $customer_uid ) ) {
-			self::log( 'grant: ensure_member failed (' . $customer_uid->get_error_code() . ') for voucher #' . $voucher_id );
-			return;
-		}
-
 		// The coupon code we create IS the voucher's own code, so the same code works
-		// at the WP scanner and the POSPal till — and it is the reference the revoke
+		// at the WP scanner and every POSPal till — and it is the reference the revoke
 		// (核销) leg uses on redemption.
-		$code    = isset( $row->code ) ? (string) $row->code : '';
-		$granted = DoughBoss_POSPal::grant_coupon( $customer_uid, $rule_uid, $code );
-		if ( is_wp_error( $granted ) ) {
-			self::log( 'grant: grant_coupon failed (' . $granted->get_error_code() . ') for voucher #' . $voucher_id );
-			// Still record the member uid we resolved, so a later retry can reuse it.
-			self::update_voucher( $voucher_id, array( 'pospal_customer_uid' => $customer_uid ) );
+		$code = isset( $row->code ) ? (string) $row->code : '';
+		if ( '' === $code ) {
 			return;
 		}
+		$dollars = (int) round( (float) ( isset( $row->value ) ? $row->value : 0 ) );
 
-		self::update_voucher(
-			$voucher_id,
-			array(
-				'pospal_customer_uid' => $customer_uid,
-				'pospal_coupon_ref'   => $code,
-			)
-		);
-		self::log( 'grant: ok for voucher #' . $voucher_id );
+		// Grant the coupon into EVERY configured store, so a voucher claimed online is
+		// waiting at whichever till the student visits. Each store is independent and
+		// best-effort — one store failing never blocks the claim or the other stores.
+		$any_ok   = false;
+		$last_uid = '';
+		foreach ( DoughBoss_Settings::pospal_stores() as $store ) {
+			$store_uid = ( 5 === $dollars ) ? $store['uid5'] : ( ( 10 === $dollars ) ? $store['uid10'] : '' );
+			if ( '' === $store_uid ) {
+				continue; // This store has no coupon mapped for this value.
+			}
+			$creds  = array(
+				'host'    => $store['host'],
+				'app_id'  => $store['app_id'],
+				'app_key' => $store['app_key'],
+			);
+			$member = DoughBoss_POSPal::ensure_member( $phone, '', $creds );
+			if ( is_wp_error( $member ) ) {
+				self::log( 'grant: ensure_member failed (' . $member->get_error_code() . ') at ' . $store['label'] . ' for voucher #' . $voucher_id );
+				continue;
+			}
+			$granted = DoughBoss_POSPal::grant_coupon( $member, $store_uid, $code, $creds );
+			if ( is_wp_error( $granted ) ) {
+				self::log( 'grant: grant_coupon failed (' . $granted->get_error_code() . ') at ' . $store['label'] . ' for voucher #' . $voucher_id );
+				continue;
+			}
+			$any_ok   = true;
+			$last_uid = $member;
+			self::log( 'grant: ok at ' . $store['label'] . ' for voucher #' . $voucher_id );
+		}
+
+		if ( $any_ok ) {
+			// Store the voucher code as the revoke reference; revoke loops all stores by
+			// code on redemption (customerUid is optional for the use/核销 call).
+			self::update_voucher(
+				$voucher_id,
+				array(
+					'pospal_customer_uid' => $last_uid,
+					'pospal_coupon_ref'   => $code,
+				)
+			);
+		}
 	}
 
 	/**
@@ -143,21 +161,29 @@ class DoughBoss_POSPal_Sync {
 			return;
 		}
 
-		$customer_uid = isset( $row->pospal_customer_uid ) ? (string) $row->pospal_customer_uid : '';
-		$coupon_ref   = isset( $row->pospal_coupon_ref ) ? (string) $row->pospal_coupon_ref : '';
-		if ( '' === $customer_uid || '' === $coupon_ref ) {
+		$coupon_ref = isset( $row->pospal_coupon_ref ) ? (string) $row->pospal_coupon_ref : '';
+		if ( '' === $coupon_ref ) {
 			// Nothing was mirrored into POSPal for this voucher — nothing to revoke.
 			return;
 		}
 
-		$result = DoughBoss_POSPal::revoke_coupon( $customer_uid, $coupon_ref );
-		if ( is_wp_error( $result ) ) {
-			$vid = isset( $row->id ) ? absint( $row->id ) : 0;
-			self::log( 'revoke: revoke_coupon failed (' . $result->get_error_code() . ') for voucher #' . $vid );
-			return;
-		}
+		// Mark the coupon used (核销) in EVERY configured store so it can't be reused at
+		// any till. The use call only needs the code (customerUid optional), so we revoke
+		// by code across all stores; best-effort — one store failing never blocks redeem.
 		$vid = isset( $row->id ) ? absint( $row->id ) : 0;
-		self::log( 'revoke: ok for voucher #' . $vid );
+		foreach ( DoughBoss_Settings::pospal_stores() as $store ) {
+			$creds  = array(
+				'host'    => $store['host'],
+				'app_id'  => $store['app_id'],
+				'app_key' => $store['app_key'],
+			);
+			$result = DoughBoss_POSPal::revoke_coupon( '', $coupon_ref, $creds );
+			if ( is_wp_error( $result ) ) {
+				self::log( 'revoke: failed (' . $result->get_error_code() . ') at ' . $store['label'] . ' for voucher #' . $vid );
+				continue;
+			}
+			self::log( 'revoke: ok at ' . $store['label'] . ' for voucher #' . $vid );
+		}
 	}
 
 
