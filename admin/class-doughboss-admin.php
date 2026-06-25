@@ -194,10 +194,63 @@ class DoughBoss_Admin {
 		$clean['pospal_app_id']  = isset( $input['pospal_app_id'] ) ? sanitize_text_field( $input['pospal_app_id'] ) : '';
 		$clean['pospal_app_key'] = isset( $input['pospal_app_key'] ) ? sanitize_text_field( $input['pospal_app_key'] ) : '';
 
+		// Phase 2 — real-time & notifications. Off by default; fully dormant until
+		// configured. Secret fields (publish JWT, ntfy token, ClickSend API key,
+		// printer token) render blank in the form, so a blank submission PRESERVES
+		// the previously stored value rather than wiping it (see keep_secret()).
+		$existing = DoughBoss_Settings::all();
+
+		// Mercure real-time push.
+		$clean['mercure_enabled']       = empty( $input['mercure_enabled'] ) ? 0 : 1;
+		$clean['mercure_hub_url']       = isset( $input['mercure_hub_url'] ) ? esc_url_raw( trim( (string) $input['mercure_hub_url'] ) ) : '';
+		$clean['mercure_publish_jwt']   = $this->keep_secret( $input, $existing, 'mercure_publish_jwt' );
+		$clean['mercure_subscribe_jwt'] = isset( $input['mercure_subscribe_jwt'] ) ? sanitize_text_field( $input['mercure_subscribe_jwt'] ) : '';
+		$clean['mercure_topic_prefix']  = isset( $input['mercure_topic_prefix'] ) ? sanitize_text_field( $input['mercure_topic_prefix'] ) : 'doughboss';
+
+		// ntfy push notifications.
+		$clean['ntfy_enabled']  = empty( $input['ntfy_enabled'] ) ? 0 : 1;
+		$clean['ntfy_server']   = isset( $input['ntfy_server'] ) ? esc_url_raw( trim( (string) $input['ntfy_server'] ) ) : 'https://ntfy.sh';
+		$clean['ntfy_topic']    = isset( $input['ntfy_topic'] ) ? sanitize_text_field( $input['ntfy_topic'] ) : '';
+		$clean['ntfy_token']    = $this->keep_secret( $input, $existing, 'ntfy_token' );
+		$clean['ntfy_priority'] = ( isset( $input['ntfy_priority'] ) && in_array( $input['ntfy_priority'], array( 'high', 'default', 'low' ), true ) ) ? $input['ntfy_priority'] : 'high';
+
+		// SMS (ClickSend).
+		$clean['sms_enabled']          = empty( $input['sms_enabled'] ) ? 0 : 1;
+		$clean['clicksend_username']   = isset( $input['clicksend_username'] ) ? sanitize_text_field( $input['clicksend_username'] ) : '';
+		$clean['clicksend_api_key']    = $this->keep_secret( $input, $existing, 'clicksend_api_key' );
+		$clean['sms_from']             = isset( $input['sms_from'] ) ? sanitize_text_field( $input['sms_from'] ) : '';
+		$clean['sms_on_ready']         = empty( $input['sms_on_ready'] ) ? 0 : 1;
+		$clean['sms_on_voucher_claim'] = empty( $input['sms_on_voucher_claim'] ) ? 0 : 1;
+
+		// Receipt printer (CloudPRNT / ePOS).
+		$clean['printer_enabled']  = empty( $input['printer_enabled'] ) ? 0 : 1;
+		$clean['printer_protocol'] = ( isset( $input['printer_protocol'] ) && 'epos' === $input['printer_protocol'] ) ? 'epos' : 'cloudprnt';
+		$clean['printer_token']    = $this->keep_secret( $input, $existing, 'printer_token' );
+		$clean['printer_width']    = isset( $input['printer_width'] ) ? max( 1, absint( $input['printer_width'] ) ) : 48;
+
 		$clean['sizes']    = $this->sanitize_rows( isset( $input['sizes'] ) ? $input['sizes'] : array() );
 		$clean['toppings'] = $this->sanitize_rows( isset( $input['toppings'] ) ? $input['toppings'] : array() );
 
 		return $clean;
+	}
+
+	/**
+	 * Keep-current handling for a write-only secret field. Phase 2 secret inputs
+	 * render blank (never echoing the stored secret back to the browser), so an
+	 * empty submission means "leave unchanged" — we preserve the previously stored
+	 * value rather than overwriting it with ''. A non-empty submission replaces it.
+	 *
+	 * @param array  $input    Raw submitted settings.
+	 * @param array  $existing Currently stored settings (merged over defaults).
+	 * @param string $key      Secret setting key.
+	 * @return string
+	 */
+	private function keep_secret( $input, $existing, $key ) {
+		$submitted = isset( $input[ $key ] ) ? trim( (string) $input[ $key ] ) : '';
+		if ( '' === $submitted ) {
+			return isset( $existing[ $key ] ) ? (string) $existing[ $key ] : '';
+		}
+		return sanitize_text_field( $submitted );
 	}
 
 	/**
@@ -319,6 +372,9 @@ class DoughBoss_Admin {
 					'pollMs'    => 7000,
 					'statuses'  => DoughBoss_Order::statuses(),
 					'locations' => $this->board_locations(),
+					// Mercure real-time config (public hub URL + topic only; never the
+					// publish JWT). Empty/disabled => the board stays on its poll.
+					'mercure'   => DoughBoss_Mercure::js_config(),
 				)
 			);
 		}
@@ -1227,6 +1283,138 @@ JS;
 							<th><label for="db-pospal-app-key"><?php esc_html_e( 'App Key', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-pospal-app-key" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal_app_key]" value="<?php echo esc_attr( isset( $settings['pospal_app_key'] ) ? $settings['pospal_app_key'] : '' ); ?>" />
 								<p class="description"><?php esc_html_e( 'The secret key is used only to sign server-side calls. For best security set it as the DOUGHBOSS_POSPAL_APPKEY environment variable instead of here; this field is a fallback.', 'doughboss' ); ?></p></td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e( 'Real-time &amp; Notifications', 'doughboss' ); ?></h2>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Optional push, SMS and printing channels. Each group is off by default and stays fully dormant until you enable it and supply its settings. Secret fields (the JWT, token and API key below) are write-only: they show blank and are kept as-is unless you type a new value.', 'doughboss' ); ?>
+					</p>
+
+					<h3><?php esc_html_e( 'Mercure (real-time order board)', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Stream live order updates over a Mercure hub instead of polling. For best security set the publish JWT as the DOUGHBOSS_MERCURE_PUBLISH_JWT environment variable; the field below is a fallback.', 'doughboss' ); ?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Enable Mercure', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[mercure_enabled]" value="1" <?php checked( ! empty( $settings['mercure_enabled'] ), true ); ?> /> <?php esc_html_e( 'Publish real-time updates to a Mercure hub', 'doughboss' ); ?></label></td>
+						</tr>
+						<tr>
+							<th><label for="db-mercure-hub"><?php esc_html_e( 'Hub URL', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-mercure-hub" class="regular-text" autocomplete="off" placeholder="https://hub.example.com/.well-known/mercure" name="<?php echo esc_attr( $opt ); ?>[mercure_hub_url]" value="<?php echo esc_attr( isset( $settings['mercure_hub_url'] ) ? $settings['mercure_hub_url'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-mercure-pub-jwt"><?php esc_html_e( 'Publish JWT', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-mercure-pub-jwt" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mercure_publish_jwt]" value="" />
+								<p class="description"><?php esc_html_e( 'Server-side publisher credential. Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mercure-sub-jwt"><?php esc_html_e( 'Subscribe JWT', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-mercure-sub-jwt" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mercure_subscribe_jwt]" value="" />
+								<p class="description"><?php esc_html_e( 'Optional subscriber token handed to the order board. Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mercure-topic"><?php esc_html_e( 'Topic prefix', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-mercure-topic" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mercure_topic_prefix]" value="<?php echo esc_attr( isset( $settings['mercure_topic_prefix'] ) ? $settings['mercure_topic_prefix'] : 'doughboss' ); ?>" /></td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'ntfy (staff push alerts)', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Push a notification to staff phones via ntfy when a new order arrives. For best security set the token as the DOUGHBOSS_NTFY_TOKEN environment variable; the field below is a fallback.', 'doughboss' ); ?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Enable ntfy', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[ntfy_enabled]" value="1" <?php checked( ! empty( $settings['ntfy_enabled'] ), true ); ?> /> <?php esc_html_e( 'Send push notifications via ntfy', 'doughboss' ); ?></label></td>
+						</tr>
+						<tr>
+							<th><label for="db-ntfy-server"><?php esc_html_e( 'Server', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-ntfy-server" class="regular-text" autocomplete="off" placeholder="https://ntfy.sh" name="<?php echo esc_attr( $opt ); ?>[ntfy_server]" value="<?php echo esc_attr( isset( $settings['ntfy_server'] ) ? $settings['ntfy_server'] : 'https://ntfy.sh' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-ntfy-topic"><?php esc_html_e( 'Topic', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-ntfy-topic" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[ntfy_topic]" value="<?php echo esc_attr( isset( $settings['ntfy_topic'] ) ? $settings['ntfy_topic'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-ntfy-token"><?php esc_html_e( 'Access token', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-ntfy-token" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[ntfy_token]" value="" />
+								<p class="description"><?php esc_html_e( 'Only needed for protected topics. Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-ntfy-priority"><?php esc_html_e( 'Priority', 'doughboss' ); ?></label></th>
+							<td>
+								<?php $ntfy_priority = isset( $settings['ntfy_priority'] ) ? $settings['ntfy_priority'] : 'high'; ?>
+								<select id="db-ntfy-priority" name="<?php echo esc_attr( $opt ); ?>[ntfy_priority]">
+									<option value="high" <?php selected( 'high', $ntfy_priority ); ?>><?php esc_html_e( 'High', 'doughboss' ); ?></option>
+									<option value="default" <?php selected( 'default', $ntfy_priority ); ?>><?php esc_html_e( 'Default', 'doughboss' ); ?></option>
+									<option value="low" <?php selected( 'low', $ntfy_priority ); ?>><?php esc_html_e( 'Low', 'doughboss' ); ?></option>
+								</select>
+							</td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'SMS (ClickSend)', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Text customers when their order is ready (and optionally their voucher code on claim) via ClickSend. For best security set the API key as the DOUGHBOSS_CLICKSEND_API_KEY environment variable; the field below is a fallback.', 'doughboss' ); ?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Enable SMS', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[sms_enabled]" value="1" <?php checked( ! empty( $settings['sms_enabled'] ), true ); ?> /> <?php esc_html_e( 'Send SMS via ClickSend', 'doughboss' ); ?></label></td>
+						</tr>
+						<tr>
+							<th><label for="db-clicksend-username"><?php esc_html_e( 'Username', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-clicksend-username" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[clicksend_username]" value="<?php echo esc_attr( isset( $settings['clicksend_username'] ) ? $settings['clicksend_username'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-clicksend-api-key"><?php esc_html_e( 'API key', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-clicksend-api-key" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[clicksend_api_key]" value="" />
+								<p class="description"><?php esc_html_e( 'Server-side credential. Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-sms-from"><?php esc_html_e( 'From (sender ID)', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-sms-from" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[sms_from]" value="<?php echo esc_attr( isset( $settings['sms_from'] ) ? $settings['sms_from'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'A registered alphanumeric sender ID or number. Leave blank to use the ClickSend default.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'When to text', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[sms_on_ready]" value="1" <?php checked( ! empty( $settings['sms_on_ready'] ), true ); ?> /> <?php esc_html_e( 'SMS the customer when their order is ready', 'doughboss' ); ?></label><br />
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[sms_on_voucher_claim]" value="1" <?php checked( ! empty( $settings['sms_on_voucher_claim'] ), true ); ?> /> <?php esc_html_e( 'SMS the voucher code to the customer when a voucher is claimed', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Receipt printer', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Print kitchen/customer dockets to a network receipt printer. For best security set the shared token as the DOUGHBOSS_PRINTER_TOKEN environment variable; the field below is a fallback.', 'doughboss' ); ?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Enable printing', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[printer_enabled]" value="1" <?php checked( ! empty( $settings['printer_enabled'] ), true ); ?> /> <?php esc_html_e( 'Print receipts for new orders', 'doughboss' ); ?></label></td>
+						</tr>
+						<tr>
+							<th><label for="db-printer-protocol"><?php esc_html_e( 'Protocol', 'doughboss' ); ?></label></th>
+							<td>
+								<?php $printer_protocol = isset( $settings['printer_protocol'] ) && 'epos' === $settings['printer_protocol'] ? 'epos' : 'cloudprnt'; ?>
+								<select id="db-printer-protocol" name="<?php echo esc_attr( $opt ); ?>[printer_protocol]">
+									<option value="cloudprnt" <?php selected( 'cloudprnt', $printer_protocol ); ?>><?php esc_html_e( 'Star CloudPRNT', 'doughboss' ); ?></option>
+									<option value="epos" <?php selected( 'epos', $printer_protocol ); ?>><?php esc_html_e( 'Epson ePOS', 'doughboss' ); ?></option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="db-printer-token"><?php esc_html_e( 'Shared token', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-printer-token" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[printer_token]" value="" />
+								<p class="description"><?php esc_html_e( 'Used to authenticate the printer/poll exchange. Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-printer-width"><?php esc_html_e( 'Receipt width (chars)', 'doughboss' ); ?></label></th>
+							<td><input type="number" min="1" step="1" id="db-printer-width" class="small-text" name="<?php echo esc_attr( $opt ); ?>[printer_width]" value="<?php echo esc_attr( isset( $settings['printer_width'] ) ? $settings['printer_width'] : 48 ); ?>" />
+								<p class="description"><?php esc_html_e( 'Characters per line: 48 for an 80mm roll, 32 for 58mm.', 'doughboss' ); ?></p></td>
 						</tr>
 					</table>
 

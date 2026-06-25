@@ -103,6 +103,36 @@ class DoughBoss_Settings {
 			// Standalone staff console (separate origin, e.g. GitHub Pages) allowed
 			// to call the doughboss/v1 routes cross-origin via Application Password.
 			'app_origin'        => 'https://edagher92-coder.github.io',
+			// Real-time push (Mercure hub) — off by default. The publish JWT is a
+			// secret, read env-first (DOUGHBOSS_MERCURE_PUBLISH_JWT); this option is
+			// only a fallback and is best left blank where env is set.
+			'mercure_enabled'       => 0,
+			'mercure_hub_url'       => '',
+			'mercure_publish_jwt'   => '',
+			'mercure_subscribe_jwt' => '',
+			'mercure_topic_prefix'  => 'doughboss',
+			// ntfy push notifications — off by default. The bearer token is a secret,
+			// read env-first (DOUGHBOSS_NTFY_TOKEN); this option is only a fallback.
+			'ntfy_enabled'  => 0,
+			'ntfy_server'   => 'https://ntfy.sh',
+			'ntfy_topic'    => '',
+			'ntfy_token'    => '',
+			'ntfy_priority' => 'high',
+			// SMS (ClickSend) — off by default. The API key is a secret, read
+			// env-first (DOUGHBOSS_CLICKSEND_API_KEY); this option is only a fallback.
+			'sms_enabled'           => 0,
+			'clicksend_username'    => '',
+			'clicksend_api_key'     => '',
+			'sms_from'              => '',
+			'sms_on_ready'          => 1,
+			'sms_on_voucher_claim'  => 0,
+			// Receipt printer (CloudPRNT / ePOS) — off by default. The shared token
+			// is a secret, read env-first (DOUGHBOSS_PRINTER_TOKEN); this option is
+			// only a fallback.
+			'printer_enabled'  => 0,
+			'printer_protocol' => 'cloudprnt',
+			'printer_token'    => '',
+			'printer_width'    => 48,
 		);
 	}
 
@@ -364,5 +394,270 @@ class DoughBoss_Settings {
 	 */
 	public static function pospal_grant_enabled() {
 		return self::pospal_ready() && ( '' !== self::pospal_coupon_uid_5() || '' !== self::pospal_coupon_uid_10() );
+	}
+
+	/**
+	 * Whether the Mercure real-time push integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function mercure_enabled() {
+		return (bool) self::get( 'mercure_enabled', 0 );
+	}
+
+	/**
+	 * Mercure hub URL, trailing slash removed (e.g. https://hub.example.com/.well-known/mercure).
+	 *
+	 * @return string
+	 */
+	public static function mercure_hub_url() {
+		return untrailingslashit( (string) self::get( 'mercure_hub_url', '' ) );
+	}
+
+	/**
+	 * Mercure publisher JWT. Read env-first — the constant
+	 * DOUGHBOSS_MERCURE_PUBLISH_JWT or the matching environment variable take
+	 * precedence over the stored option, so the secret can be kept out of the
+	 * database (and therefore out of backups). Only ever used server-side to
+	 * authenticate publishes to the hub; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function mercure_publish_jwt() {
+		if ( defined( 'DOUGHBOSS_MERCURE_PUBLISH_JWT' ) && '' !== (string) DOUGHBOSS_MERCURE_PUBLISH_JWT ) {
+			return (string) DOUGHBOSS_MERCURE_PUBLISH_JWT;
+		}
+		$env = getenv( 'DOUGHBOSS_MERCURE_PUBLISH_JWT' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'mercure_publish_jwt', '' );
+	}
+
+	/**
+	 * Mercure subscriber JWT, handed to browser clients so they may subscribe to
+	 * topics. Not a publish credential, so it is read from the stored option.
+	 *
+	 * @return string
+	 */
+	public static function mercure_subscribe_jwt() {
+		return (string) self::get( 'mercure_subscribe_jwt', '' );
+	}
+
+	/**
+	 * Prefix used when composing Mercure topic URIs/names.
+	 *
+	 * @return string
+	 */
+	public static function mercure_topic_prefix() {
+		return (string) self::get( 'mercure_topic_prefix', 'doughboss' );
+	}
+
+	/**
+	 * Whether Mercure is both enabled and the minimum config (hub URL + publish
+	 * JWT) is present, so the server should actually publish real-time updates.
+	 *
+	 * @return bool
+	 */
+	public static function mercure_ready() {
+		return self::mercure_enabled() && '' !== self::mercure_hub_url() && '' !== self::mercure_publish_jwt();
+	}
+
+	/**
+	 * Whether the ntfy push-notification integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function ntfy_enabled() {
+		return (bool) self::get( 'ntfy_enabled', 0 );
+	}
+
+	/**
+	 * ntfy server base URL, trailing slash removed (default https://ntfy.sh).
+	 *
+	 * @return string
+	 */
+	public static function ntfy_server() {
+		$server = untrailingslashit( (string) self::get( 'ntfy_server', 'https://ntfy.sh' ) );
+		return '' !== $server ? $server : 'https://ntfy.sh';
+	}
+
+	/**
+	 * ntfy topic to publish to (blank when unconfigured).
+	 *
+	 * @return string
+	 */
+	public static function ntfy_topic() {
+		return (string) self::get( 'ntfy_topic', '' );
+	}
+
+	/**
+	 * ntfy bearer token. Read env-first — the constant DOUGHBOSS_NTFY_TOKEN or the
+	 * matching environment variable take precedence over the stored option, so the
+	 * secret can be kept out of the database (and therefore out of backups). Only
+	 * ever used server-side to authenticate publishes; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function ntfy_token() {
+		if ( defined( 'DOUGHBOSS_NTFY_TOKEN' ) && '' !== (string) DOUGHBOSS_NTFY_TOKEN ) {
+			return (string) DOUGHBOSS_NTFY_TOKEN;
+		}
+		$env = getenv( 'DOUGHBOSS_NTFY_TOKEN' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'ntfy_token', '' );
+	}
+
+	/**
+	 * ntfy message priority (default 'high').
+	 *
+	 * @return string
+	 */
+	public static function ntfy_priority() {
+		return (string) self::get( 'ntfy_priority', 'high' );
+	}
+
+	/**
+	 * Whether ntfy is both enabled and a topic is configured, so the server should
+	 * actually publish notifications.
+	 *
+	 * @return bool
+	 */
+	public static function ntfy_ready() {
+		return self::ntfy_enabled() && '' !== self::ntfy_topic();
+	}
+
+	/**
+	 * Whether the SMS (ClickSend) integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function sms_enabled() {
+		return (bool) self::get( 'sms_enabled', 0 );
+	}
+
+	/**
+	 * ClickSend account username.
+	 *
+	 * @return string
+	 */
+	public static function clicksend_username() {
+		return (string) self::get( 'clicksend_username', '' );
+	}
+
+	/**
+	 * ClickSend API key. Read env-first — the constant DOUGHBOSS_CLICKSEND_API_KEY
+	 * or the matching environment variable take precedence over the stored option,
+	 * so the secret can be kept out of the database (and therefore out of backups).
+	 * Only ever used server-side to authenticate the API; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function clicksend_api_key() {
+		if ( defined( 'DOUGHBOSS_CLICKSEND_API_KEY' ) && '' !== (string) DOUGHBOSS_CLICKSEND_API_KEY ) {
+			return (string) DOUGHBOSS_CLICKSEND_API_KEY;
+		}
+		$env = getenv( 'DOUGHBOSS_CLICKSEND_API_KEY' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'clicksend_api_key', '' );
+	}
+
+	/**
+	 * The sender ID / from-number used for outbound SMS.
+	 *
+	 * @return string
+	 */
+	public static function sms_from() {
+		return (string) self::get( 'sms_from', '' );
+	}
+
+	/**
+	 * Whether to text the customer when their order is marked ready (default on).
+	 *
+	 * @return bool
+	 */
+	public static function sms_on_ready() {
+		return (bool) self::get( 'sms_on_ready', 1 );
+	}
+
+	/**
+	 * Whether to text the voucher code to the customer when a voucher is claimed
+	 * (default off).
+	 *
+	 * @return bool
+	 */
+	public static function sms_on_voucher_claim() {
+		return (bool) self::get( 'sms_on_voucher_claim', 0 );
+	}
+
+	/**
+	 * Whether SMS is both enabled and fully configured (username + API key), so
+	 * the server should actually send messages.
+	 *
+	 * @return bool
+	 */
+	public static function sms_ready() {
+		return self::sms_enabled() && '' !== self::clicksend_username() && '' !== self::clicksend_api_key();
+	}
+
+	/**
+	 * Whether the receipt-printer integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function printer_enabled() {
+		return (bool) self::get( 'printer_enabled', 0 );
+	}
+
+	/**
+	 * Receipt printer protocol: 'cloudprnt' or 'epos' (default 'cloudprnt').
+	 *
+	 * @return string
+	 */
+	public static function printer_protocol() {
+		return 'epos' === self::get( 'printer_protocol', 'cloudprnt' ) ? 'epos' : 'cloudprnt';
+	}
+
+	/**
+	 * Receipt printer shared token. Read env-first — the constant
+	 * DOUGHBOSS_PRINTER_TOKEN or the matching environment variable take precedence
+	 * over the stored option, so the secret can be kept out of the database (and
+	 * therefore out of backups). Used to authenticate the printer/poll exchange;
+	 * never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function printer_token() {
+		if ( defined( 'DOUGHBOSS_PRINTER_TOKEN' ) && '' !== (string) DOUGHBOSS_PRINTER_TOKEN ) {
+			return (string) DOUGHBOSS_PRINTER_TOKEN;
+		}
+		$env = getenv( 'DOUGHBOSS_PRINTER_TOKEN' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'printer_token', '' );
+	}
+
+	/**
+	 * Receipt width in characters (default 48 for an 80mm roll).
+	 *
+	 * @return int
+	 */
+	public static function printer_width() {
+		return (int) self::get( 'printer_width', 48 );
+	}
+
+	/**
+	 * Whether the printer is both enabled and a shared token is set, so the server
+	 * should actually emit receipts.
+	 *
+	 * @return bool
+	 */
+	public static function printer_ready() {
+		return self::printer_enabled() && '' !== self::printer_token();
 	}
 }

@@ -18,6 +18,7 @@
 	var pollTimer = null;
 	var clearTimer = null;
 	var camScanner = null;
+	var eventSource = null; // Mercure SSE, when the site advertises it on /config.
 
 	/* ---------- storage ---------- */
 	function load() {
@@ -39,7 +40,17 @@
 		var c = state.currency || '$';
 		return c + ( Math.round( ( Number( n ) || 0 ) * 100 ) / 100 ).toFixed( 2 );
 	}
-	function stopPoll() { if ( pollTimer ) { clearInterval( pollTimer ); pollTimer = null; } stopCamScan(); }
+	function stopPoll() {
+		if ( pollTimer ) { clearInterval( pollTimer ); pollTimer = null; }
+		closeSse();
+		stopCamScan();
+	}
+	function closeSse() {
+		if ( eventSource ) {
+			try { eventSource.close(); } catch ( e ) {}
+			eventSource = null;
+		}
+	}
 
 	/* ---------- camera QR scan (html5-qrcode) ---------- */
 	function stopCamScan() {
@@ -71,6 +82,49 @@
 				return { ok: res.ok, status: res.status, data: data };
 			} ).catch( function () { return { ok: res.ok, status: res.status, data: null }; } );
 		} );
+	}
+
+	/* ---------- realtime (Mercure SSE, optional) ---------- */
+
+	// Fetch the public /config once and cache its (optional) mercure block. The
+	// orchestrator adds { enabled, url, topic } to /config when Mercure is on.
+	// Defensive: any failure leaves state.mercure unset and the board falls back
+	// to polling, exactly as today.
+	function ensureConfig( done ) {
+		if ( state.mercure !== undefined ) { done(); return; }
+		fetch( state.site + '/wp-json/' + NS + '/config' )
+			.then( function ( res ) { return res.json(); } )
+			.then( function ( data ) {
+				state.mercure = ( data && data.mercure ) ? data.mercure : null;
+			} )
+			.catch( function () { state.mercure = null; } )
+			.then( function () { save(); done(); } );
+	}
+
+	// Open an EventSource against the configured Mercure hub and call onMessage on
+	// every notification. The poll the caller already started stays running as the
+	// fallback. Returns true if an EventSource was opened.
+	function connectSse( onMessage ) {
+		var m = state.mercure;
+		if ( ! m || ! m.enabled || ! m.url || typeof window.EventSource === 'undefined' ) {
+			return false;
+		}
+		var url = m.url + '?topic=' + encodeURIComponent( m.topic );
+		// The board topic is publicly readable; EventSource can't send headers, so
+		// only append the (URL) authorization param if a subscribe JWT is provided.
+		if ( m.subscribe_jwt ) {
+			url += '&authorization=' + encodeURIComponent( m.subscribe_jwt );
+		}
+		try {
+			eventSource = new EventSource( url );
+		} catch ( e ) {
+			return false;
+		}
+		// Re-fetch authoritative board data — the SSE payload is only a signal.
+		eventSource.onmessage = function () { onMessage(); };
+		// On error the browser auto-reconnects; the poll keeps the board fresh.
+		eventSource.onerror = function () {};
+		return true;
 	}
 
 	/* ---------- login ---------- */
@@ -506,6 +560,11 @@
 		}
 		refresh();
 		pollTimer = setInterval( refresh, 8000 );
+
+		// Layer instant SSE updates on top of the poll when the site advertises
+		// Mercure. Defensive: if unsupported or absent, the poll above is the only
+		// path and behaviour is exactly as before.
+		ensureConfig( function () { connectSse( refresh ); } );
 	}
 
 	/* ---------- boot ---------- */

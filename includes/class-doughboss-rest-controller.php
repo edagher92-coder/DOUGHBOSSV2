@@ -1241,6 +1241,14 @@ class DoughBoss_REST_Controller {
 				'toppings'        => DoughBoss_Settings::toppings(),
 				'payments_enabled' => DoughBoss_Stripe::ready(),
 				'stripe_pk'        => DoughBoss_Stripe::ready() ? DoughBoss_Stripe::publishable_key() : '',
+				// Mercure real-time config for the standalone Console (no secrets —
+				// only the public hub URL + topic; the publish JWT never leaves the
+				// server, and the board topic is publicly readable).
+				'mercure'          => array(
+					'enabled' => DoughBoss_Settings::mercure_ready(),
+					'url'     => DoughBoss_Settings::mercure_hub_url(),
+					'topic'   => DoughBoss_Mercure::topic(),
+				),
 			)
 		);
 	}

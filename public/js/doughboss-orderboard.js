@@ -36,6 +36,15 @@
 	var audio = { ctx: null, on: false, timer: null };
 	var pollTimer = null;
 
+	// Mercure SSE transport (optional). When connected and healthy, the ~7s poll
+	// is slowed to a long safety net; on any SSE error we fall straight back to
+	// the normal poll cadence. The poll is NEVER disabled entirely.
+	var mercure = cfg.mercure || null;
+	var sse = null;
+	var sseHealthy = false;
+	var POLL_FAST = cfg.pollMs || 7000;
+	var POLL_SAFETY = 60000;
+
 	/* ----------------------------------------------------------------- DOM */
 
 	function el(tag, props, children) {
@@ -304,8 +313,49 @@
 
 	function loop() {
 		load().then(function () {
-			pollTimer = setTimeout(loop, cfg.pollMs || 7000);
+			pollTimer = setTimeout(loop, sseHealthy ? POLL_SAFETY : POLL_FAST);
 		});
+	}
+
+	/* ----------------------------------------------------- Mercure SSE */
+
+	// Open an EventSource to the Mercure hub. On any message, re-pull the
+	// authoritative board (the SSE payload is only a "refresh" signal, never
+	// trusted data). On error, fall back to the normal poll cadence. The poll
+	// always keeps running as the fallback path.
+	function connectSse() {
+		if (!mercure || !mercure.enabled || !mercure.url || typeof window.EventSource === 'undefined') {
+			return;
+		}
+
+		var url = mercure.url + '?topic=' + encodeURIComponent(mercure.topic);
+		// The board topic is publicly readable, so normally no token is needed on
+		// subscribe. EventSource cannot send Authorization headers; only fall back
+		// to the (URL) authorization param when a subscribe JWT is actually set.
+		if (mercure.subscribe_jwt) {
+			url += '&authorization=' + encodeURIComponent(mercure.subscribe_jwt);
+		}
+
+		try {
+			sse = new EventSource(url);
+		} catch (e) {
+			return;
+		}
+
+		sse.onopen = function () {
+			sseHealthy = true;
+		};
+
+		sse.onmessage = function () {
+			// Authoritative re-fetch — never render from the SSE payload itself.
+			load();
+		};
+
+		sse.onerror = function () {
+			// Drop back to fast polling; the browser auto-reconnects the SSE, and
+			// onopen will slow the poll again once it recovers.
+			sseHealthy = false;
+		};
 	}
 
 	if (soundBtn) {
@@ -336,6 +386,10 @@
 
 	// Refresh "x ago" labels even between polls.
 	setInterval(function () { if (lastOrders.length) { render(lastOrders); } }, 30000);
+
+	// Open the real-time SSE channel when configured; the poll below stays as the
+	// always-on fallback regardless.
+	connectSse();
 
 	loop();
 }());
