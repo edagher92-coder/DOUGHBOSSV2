@@ -81,6 +81,9 @@ class DoughBoss_Settings {
 			// back to the WordPress admin email (see orders_email()). Defaults to the
 			// Dough Boss orders inbox so the shop is notified out of the box.
 			'orders_email'    => 'orders@doughboss.com.au',
+			// Keep logged-in sessions for this many days (0 = WordPress default).
+			// Set high (e.g. 3650) so shop tablets stay signed in; off by default.
+			'staff_session_days' => 0,
 			'sizes'           => array(),
 			'toppings'        => array(),
 			// Payments (Stripe) — off by default; keys added later.

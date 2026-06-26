@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.12.0
+Stable tag: 2.12.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,6 +51,14 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.12.1 =
+* New: **one-click "Import standard menu"** button (DoughBoss → Settings → Menu) —
+  creates the full board menu (Manoush, Pizza, Pies, Wraps, Desserts, Drinks; 27
+  items with prices, categories and dietary flags) with no WP-CLI needed. Safe to
+  re-run; shared seeder used by both the button and `wp doughboss seed-menu`.
+* New: **Staff session (days)** setting — keep logged-in users signed in for a set
+  number of days (e.g. 3650) so shop tablets never time out. 0 = WordPress default.
 
 = 2.12.0 =
 * New: **Order notification email** setting (DoughBoss → Settings → Store) — new

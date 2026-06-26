@@ -71,6 +71,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-migrations.php';
 		require_once $dir . 'class-doughboss-locations.php';
 		require_once $dir . 'class-doughboss-post-types.php';
+		require_once $dir . 'class-doughboss-menu-seeder.php';
 		require_once $dir . 'class-doughboss-cart.php';
 		require_once $dir . 'class-doughboss-order.php';
 		require_once $dir . 'class-doughboss-catering-package.php';
@@ -128,6 +129,20 @@ final class DoughBoss {
 		// POSPal order push (mirror placed online orders onto the till). Off by
 		// default; dormant until "push orders" is on AND a product map exists.
 		DoughBoss_POSPal_Orders::init();
+
+		// Optional long login session: keep logged-in users signed in for the
+		// configured number of days (0 = WordPress default). Off by default — set
+		// "Staff session" in Settings to e.g. 3650 so shop tablets never log out.
+		add_filter(
+			'auth_cookie_expiration',
+			static function ( $length, $user_id, $remember ) {
+				unset( $user_id, $remember );
+				$days = (int) DoughBoss_Settings::get( 'staff_session_days', 0 );
+				return $days > 0 ? $days * DAY_IN_SECONDS : $length;
+			},
+			20,
+			3
+		);
 
 		// Phase 2 real-time + notification connectors. Each self-gates on its own
 		// *_ready() check and stays fully dormant until configured in Settings.

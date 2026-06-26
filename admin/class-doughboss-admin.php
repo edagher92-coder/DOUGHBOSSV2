@@ -30,6 +30,7 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_delete_location', array( $this, 'handle_delete_location' ) );
 		add_action( 'admin_post_doughboss_issue_voucher', array( $this, 'handle_issue_voucher' ) );
 		add_action( 'admin_post_doughboss_void_voucher', array( $this, 'handle_void_voucher' ) );
+		add_action( 'admin_post_doughboss_seed_menu', array( $this, 'handle_seed_menu' ) );
 	}
 
 	/**
@@ -220,6 +221,7 @@ class DoughBoss_Admin {
 		} else {
 			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
 		}
+		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? max( 0, absint( $input['staff_session_days'] ) ) : 0;
 
 		// POSPal order push (mirror online orders to the till). The product map is
 		// managed via WP-CLI (`wp doughboss pospal-map`), not this form, so it is
@@ -1275,6 +1277,32 @@ JS;
 	}
 
 	/**
+	 * Admin-post handler: import the standard menu (one click) via the seeder.
+	 *
+	 * @return void
+	 */
+	public function handle_seed_menu() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_seed_menu' );
+		$r   = DoughBoss_Menu_Seeder::seed( false );
+		$msg = sprintf(
+			/* translators: 1: created count, 2: updated count, 3: categories count. */
+			__( 'Menu imported: %1$d created, %2$d updated, %3$d categories.', 'doughboss' ),
+			(int) $r['created'],
+			(int) $r['updated'],
+			(int) $r['categories']
+		);
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( add_query_arg( 'doughboss_seeded', rawurlencode( $msg ), $base ) );
+		exit;
+	}
+
+	/**
 	 * Render the Settings page.
 	 *
 	 * @return void
@@ -1288,6 +1316,25 @@ JS;
 		?>
 		<div class="wrap doughboss-settings">
 			<h1><?php esc_html_e( 'DoughBoss Settings', 'doughboss' ); ?></h1>
+			<?php
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
+			if ( isset( $_GET['doughboss_seeded'] ) ) {
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sanitize_text_field( wp_unslash( $_GET['doughboss_seeded'] ) ) ) . '</p></div>'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			}
+			$db_item_count = (int) wp_count_posts( DoughBoss_Post_Types::POST_TYPE )->publish;
+			?>
+			<div class="card" style="max-width:680px;padding:6px 18px 14px;margin:14px 0 22px;">
+				<h2><?php esc_html_e( 'Menu', 'doughboss' ); ?></h2>
+				<p class="description"><?php
+					/* translators: %d: number of published menu items. */
+					echo esc_html( sprintf( __( 'There are currently %d published menu item(s). Import the standard Dough Boss menu — Manoush, Pizza, Pies, Wraps, Desserts, Drinks (27 items, with prices, categories and dietary flags). Safe to re-run: matching items are updated, never duplicated.', 'doughboss' ), $db_item_count ) );
+				?></p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="doughboss_seed_menu" />
+					<?php wp_nonce_field( 'doughboss_seed_menu' ); ?>
+					<button type="submit" class="button button-primary"><?php esc_html_e( 'Import standard menu', 'doughboss' ); ?></button>
+				</form>
+			</div>
 			<form method="post" action="options.php">
 				<?php settings_fields( self::SETTINGS_GROUP ); ?>
 				<?php $opt = DoughBoss_Settings::OPTION_KEY; ?>
@@ -1332,6 +1379,11 @@ JS;
 						<th><label for="db-orders-email"><?php esc_html_e( 'Order notification email', 'doughboss' ); ?></label></th>
 						<td><input type="email" id="db-orders-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[orders_email]" value="<?php echo esc_attr( isset( $settings['orders_email'] ) ? $settings['orders_email'] : '' ); ?>" />
 							<span class="description"><?php esc_html_e( 'Where new order and catering enquiry emails are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-staff-session"><?php esc_html_e( 'Staff session (days)', 'doughboss' ); ?></label></th>
+						<td><input type="number" min="0" step="1" id="db-staff-session" class="small-text" name="<?php echo esc_attr( $opt ); ?>[staff_session_days]" value="<?php echo esc_attr( isset( $settings['staff_session_days'] ) ? $settings['staff_session_days'] : 0 ); ?>" />
+							<span class="description"><?php esc_html_e( 'Keep logged-in users signed in for this many days (0 = WordPress default ~2 days). Set high, e.g. 3650, so shop tablets stay signed in and never time out.', 'doughboss' ); ?></span></td>
 					</tr>
 				</table>
 
