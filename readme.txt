@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.5.0
+Stable tag: 2.12.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,6 +51,19 @@ on pickup/delivery" workflows.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.12.0 =
+* New: **Order notification email** setting (DoughBoss → Settings → Store) — new
+  order and catering-enquiry emails go to this shop inbox (defaults to the Dough
+  Boss orders inbox; blank falls back to the site admin email). Filterable via
+  `doughboss_orders_email`.
+* New: **`wp doughboss seed-menu`** WP-CLI command — populate the menu (items,
+  prices, categories, dietary flags) from the in-store boards in one idempotent
+  step (`--dry-run` supported). Matches items by title, so re-running updates
+  rather than duplicates.
+* Fix: saving Settings no longer drops the order-notification email.
+* The marketing/demo site was rebuilt around the current menu (Manoush, Pizza,
+  Pies, Wraps, Desserts, Drinks) with a Mediterranean brand refresh.
 
 = 2.5.0 =
 * New: **card payments via Stripe** (optional, off by default). Enable it under

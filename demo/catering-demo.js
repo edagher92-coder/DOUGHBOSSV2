@@ -5,13 +5,13 @@
 	if (!mount) { return; }
 	var ORDERS_EMAIL = 'orders@doughboss.com.au';
 	var PACKAGES = [
-		{ id: 'lunch', name: 'The Lunch Run', serves: '8–10', max: 10, price: 165, desc: 'Manoush, dips & pizza' },
+		{ id: 'lunch', name: 'The Lunch Run', serves: '8–10', max: 10, price: 165, desc: 'Manoush & pizza selection' },
 		{ id: 'party', name: 'The Party Box', serves: '15–20', max: 20, price: 320, desc: 'Manoush, pizza & sides', pop: true },
 		{ id: 'footy', name: 'The Footy Feed', serves: '25–30', max: 30, price: 520, desc: 'Manoush & pizza platters' },
-		{ id: 'big', name: 'The Big Event', serves: '40–50', max: 50, price: 850, desc: 'Full mezze spread' },
+		{ id: 'big', name: 'The Big Event', serves: '40–50', max: 50, price: 850, desc: 'Full Mediterranean spread' },
 		{ id: 'custom', name: 'Custom', serves: '10+', max: 0, price: 0, perHead: 19, desc: '$19 per head, min 10' }
 	];
-	var SHOPS = ['Bankstown', 'Revesby', 'Roselands'];
+	var SHOPS = ['Bankstown', 'Roselands Centro', 'Revesby'];
 	var state = { pkg: 'party', guests: 18, date: '', type: 'pickup', shop: 'Bankstown', name: '', email: '', phone: '' };
 	function money(n) { return '$' + (Math.round(Number(n) * 100) / 100).toFixed(2); }
 	function pkgById(id) { for (var i = 0; i < PACKAGES.length; i++) { if (PACKAGES[i].id === id) { return PACKAGES[i]; } } return PACKAGES[1]; }
@@ -19,7 +19,10 @@
 	function quote() {
 		var p = pkgById(state.pkg);
 		var g = Math.max(0, parseInt(state.guests, 10) || 0);
-		var subtotal = p.id === 'custom' ? Math.max(150, g * p.perHead) : p.price;
+		// Custom is "$19 per head, min 10" — enforce the 10-guest floor so the quote
+		// matches the advertised minimum.
+		if (p.id === 'custom') { g = Math.max(10, g); }
+		var subtotal = p.id === 'custom' ? g * p.perHead : p.price;
 		var delivery = state.type === 'delivery' ? 25 : 0;
 		var total = subtotal + delivery;
 		var deposit = Math.round(total * 0.30 * 100) / 100;
@@ -54,6 +57,7 @@
 						'<label class="dbq-f"><span>Phone</span><input type="tel" name="phone" value="' + esc(state.phone) + '"></label>' +
 					'</div>' +
 					'<div class="dbq-err" role="alert" aria-live="assertive"></div>' +
+					'<p class="dbq-privacy">We use your name, email and phone only to prepare your quote and contact you about it.</p>' +
 				'</div>' +
 				'<aside class="dbq-sum" aria-live="polite"></aside></div>';
 		paintSummary();

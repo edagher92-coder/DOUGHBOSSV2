@@ -211,6 +211,16 @@ class DoughBoss_Admin {
 		// the previously stored value rather than wiping it (see keep_secret()).
 		$existing = DoughBoss_Settings::all();
 
+		// Shop inbox for order + catering notifications. When the field is present,
+		// take a valid email or blank (blank => orders_email() falls back to the WP
+		// admin email). When absent, PRESERVE the stored value / default so a routine
+		// Save never silently reverts notifications away from the orders inbox.
+		if ( isset( $input['orders_email'] ) ) {
+			$clean['orders_email'] = is_email( $input['orders_email'] ) ? sanitize_email( $input['orders_email'] ) : '';
+		} else {
+			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
+		}
+
 		// Mercure real-time push.
 		$clean['mercure_enabled']       = empty( $input['mercure_enabled'] ) ? 0 : 1;
 		$clean['mercure_hub_url']       = isset( $input['mercure_hub_url'] ) ? esc_url_raw( trim( (string) $input['mercure_hub_url'] ) ) : '';
@@ -1308,6 +1318,11 @@ JS;
 					<tr>
 						<th><label for="db-delivery-fee"><?php esc_html_e( 'Delivery fee', 'doughboss' ); ?></label></th>
 						<td><input type="number" step="0.01" min="0" id="db-delivery-fee" class="small-text" name="<?php echo esc_attr( $opt ); ?>[delivery_fee]" value="<?php echo esc_attr( $settings['delivery_fee'] ); ?>" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-orders-email"><?php esc_html_e( 'Order notification email', 'doughboss' ); ?></label></th>
+						<td><input type="email" id="db-orders-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[orders_email]" value="<?php echo esc_attr( isset( $settings['orders_email'] ) ? $settings['orders_email'] : '' ); ?>" />
+							<span class="description"><?php esc_html_e( 'Where new order and catering enquiry emails are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
 					</tr>
 				</table>
 

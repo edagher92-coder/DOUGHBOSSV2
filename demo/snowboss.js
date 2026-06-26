@@ -70,7 +70,7 @@
 			} else {
 				var need = [];
 				if (!followed.doughboss) { need.push('<b>@doughboss</b>'); }
-				if (!followed.snowboss) { need.push('<b>@snowboss</b>'); }
+				if (!followed.snowboss) { need.push('<b>@snowbosssyd</b>'); }
 				lockMsg.innerHTML =
 					'<span class="sb-lock" aria-hidden="true">🔒</span> ' +
 					'Follow ' + need.join(' and ') + ' to unlock.';
@@ -82,7 +82,10 @@
 		}
 	}
 
-	form.querySelectorAll('.sb-follow').forEach(function (btn) {
+	// The follow buttons live in .sb-follows, a SIBLING of the form (not inside it),
+	// so scope the query to the gate container, not the form.
+	var gate = form.closest('.sb-gate') || document;
+	gate.querySelectorAll('.sb-follow').forEach(function (btn) {
 		btn.addEventListener('click', function () {
 			// The link still opens Instagram in a new tab (target="_blank");
 			// tapping it also marks the brand as followed.

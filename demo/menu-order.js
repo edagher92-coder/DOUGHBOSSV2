@@ -16,6 +16,7 @@
 	function total() { var t = 0; for (var k in cart) { t += cart[k].price * cart[k].qty; } return t; }
 	function discount() { return voucher ? Math.min(voucher.amount, total()) : 0; }
 	function netTotal() { return Math.max(0, total() - discount()); }
+	function onMenuView() { var k = (location.hash || '#about').replace('#', ''); return k === 'menu' || k === 'order'; }
 
 	/* --- enhance each menu item with an Add / stepper control --- */
 	Array.prototype.forEach.call(menuView.querySelectorAll('.mn-item'), function (el) {
@@ -66,8 +67,8 @@
 
 	function renderFab(bump) {
 		var c = count();
-		document.body.classList.toggle('cart-on', c > 0);
-		if (c <= 0) { fab.classList.remove('is-shown'); fab.setAttribute('aria-hidden', 'true'); return; }
+		document.body.classList.toggle('cart-on', c > 0 && onMenuView());
+		if (c <= 0 || !onMenuView()) { fab.classList.remove('is-shown'); fab.setAttribute('aria-hidden', 'true'); return; }
 		fab.classList.add('is-shown');
 		fab.setAttribute('aria-hidden', 'false');
 		fab.innerHTML = '<span class="cf-left">' + bag() + 'View order <span class="cf-ct">&middot; ' + c + (c === 1 ? ' item' : ' items') + '</span></span>' +
@@ -148,6 +149,7 @@
 			'<div class="cd-err" role="alert"></div>' +
 			'<button type="submit" class="vb-btn vb-btn-ember">Place order</button>' +
 			'<button type="button" class="vb-btn vb-btn-dark cd-back">Back to order</button>' +
+			'<p class="cd-privacy">We use your name and phone only to process your order. Card payment is handled by Stripe in production.</p>' +
 			'</form>';
 		var f = drawer.querySelector('input[name="name"]'); if (f) { f.focus(); }
 	}
@@ -210,6 +212,20 @@
 			var first = f[0], last = f[f.length - 1];
 			if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
 			else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+		}
+	});
+
+	/* The cart FAB/drawer/overlay live on document.body, so hide them when the menu
+	   view isn't active (the router dispatches db:view on every route change). */
+	window.addEventListener('db:view', function (e) {
+		var menu = (e && e.detail) ? (e.detail === 'menu' || e.detail === 'order') : onMenuView();
+		if (!menu) {
+			if (drawerOpen) { closeDrawer(); }
+			fab.classList.remove('is-shown');
+			fab.setAttribute('aria-hidden', 'true');
+			document.body.classList.remove('cart-on');
+		} else {
+			renderFab(false);
 		}
 	});
 }());

@@ -1,7 +1,7 @@
 /**
- * Dough Boss — static demo (Variant B, Lebanese manoush + Bites).
- * Self-contained: Google-hosted fonts, Unsplash imagery, client-side apps.
- * Single-page with hash routing (#home/#order/#catering/#locations/#kitchen).
+ * Dough Boss — static demo (Mediterranean menu: manoush, pizza, pies, wraps).
+ * Self-contained: Google-hosted fonts, doughboss.com.au imagery, client-side apps.
+ * Single-page with hash routing (#about/#menu/#catering/#locations/#snow/#kitchen).
  */
 /* Fonts are loaded via <link rel="preconnect"> + stylesheet in index.html <head> for faster first paint. */
 
@@ -235,7 +235,15 @@ a{text-decoration:none;color:inherit;}
 .mn-xsell b{color:#fff;font-weight:700;}
 .mn-xsell span{color:var(--ember2);font-family:'Bebas Neue',sans-serif;font-size:18px;}
 .app-note-dark{color:#6f6a60;}
-@media(max-width:880px){.mn-jumpbar{position:static;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}.mn-jumpbar::-webkit-scrollbar{display:none;}.mn-jump{flex:0 0 auto;}.mn-jump-go{margin-left:6px;}}
+/* Point-of-collection privacy notices beside the forms (catering / checkout / voucher). */
+.dbq-privacy,.cd-privacy{font-size:11.5px;line-height:1.5;color:#8a857c;margin-top:10px;}
+.sb-privacy{font-size:11.5px;line-height:1.5;color:#b9b3a8;margin-top:10px;}
+.sb-privacy a,.dbq-privacy a,.cd-privacy a{color:inherit;text-decoration:underline;}
+/* Keep the category jump-bar sticky on mobile (where a long menu most needs it) and add a
+   horizontal-scroll fade cue, matching the primary nav. */
+@media(max-width:880px){.mn-jumpbar{top:56px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent);}.mn-jumpbar::-webkit-scrollbar{display:none;}.mn-jump{flex:0 0 auto;}.mn-jump-go{margin-left:6px;}}
+/* Touch devices: bring the small steppers/pills up toward the 44px tap-target guidance. */
+@media(pointer:coarse){.mn-jump{padding:11px 18px;}.mn-add{height:42px;}.mn-step button{width:40px;height:40px;}.cd-qty button{width:36px;height:36px;}.dbo-qty button{width:34px;height:34px;}}
 @media(max-width:760px){.mn-list{grid-template-columns:1fr;gap:0;}.mn-item{padding:15px 0;}}
 
 /* browse-and-order: per-item controls */
@@ -433,7 +441,7 @@ body.cart-on{padding-bottom:114px;}
 /* ============================================================
    SNOW BOSS — dual-brand view (deep navy + ice-blue + amber)
    ============================================================ */
-.snow-theme{--navy:#0a0807;--navy2:#141110;--navy3:#201d19;--ice:#ffffff;--amber:#ffffff;
+.snow-theme{--navy:#0a0807;--navy2:#141110;--navy3:#201d19;--ice:#ffffff;--amber:#ffffff;--ember2:#ececec;
 	position:relative;background:var(--navy);color:#f0eee9;overflow:hidden;}
 .snow-theme .eyebrow.sb-eyebrow{color:var(--ice);}
 .snow-theme .disp em{font-style:normal;color:var(--amber);}

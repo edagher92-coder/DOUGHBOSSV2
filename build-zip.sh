@@ -24,6 +24,13 @@ cp -r "${ROOT}/includes" "${STAGE}/"
 cp -r "${ROOT}/admin" "${STAGE}/"
 cp -r "${ROOT}/public" "${STAGE}/"
 
+# Menu seeder wrapper (the canonical seeder ships as `wp doughboss seed-menu` in
+# includes/; this also lets owners run `wp eval-file scripts/seed-menu.php`).
+if [ -f "${ROOT}/scripts/seed-menu.php" ]; then
+	mkdir -p "${STAGE}/scripts"
+	cp "${ROOT}/scripts/seed-menu.php" "${STAGE}/scripts/"
+fi
+
 # Languages dir is optional; include it if present.
 if [ -d "${ROOT}/languages" ]; then
 	cp -r "${ROOT}/languages" "${STAGE}/"

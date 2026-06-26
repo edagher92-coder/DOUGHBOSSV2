@@ -4,11 +4,11 @@
 	var mount = document.getElementById('db-kitchen-demo');
 	if (!mount) { return; }
 	var SAMPLES = [
-		{ name: 'Layla', type: 'Pickup', shop: 'Bankstown', items: ['2× Zaatar', '1× Cheese', '1× Hummus'] },
-		{ name: 'Sam', type: 'Delivery', shop: 'Revesby', items: ['1× Lahm bi Ajin', '6× Falafel', '2× Soft Drink'] },
-		{ name: 'Mariam', type: 'Pickup', shop: 'Roselands', items: ['3× Zaatar & Cheese', '1× Labneh'] },
-		{ name: 'Office order', type: 'Delivery', shop: 'Bankstown', items: ['10× Mixed Manoush', '4× Hummus', 'Catering — Lunch Run'] },
-		{ name: 'Joe', type: 'Pickup', shop: 'Revesby', items: ['1× Kibbeh', '1× Chips', '1× Ayran'] }
+		{ name: 'Layla', type: 'Pickup', shop: 'Bankstown', items: ['2× Zaatar', '1× Cheese', '1× Soft Drinks 600ml'] },
+		{ name: 'Sam', type: 'Delivery', shop: 'Revesby', items: ['1× All Meat', '1× Garlic Prawns', '2× Spring Water'] },
+		{ name: 'Mariam', type: 'Pickup', shop: 'Roselands Centro', items: ['3× Zaatar & Cheese', '1× Choco Banana'] },
+		{ name: 'Office order', type: 'Delivery', shop: 'Bankstown', items: ['6× Mixed Manoush', '2× Veggie Plus', 'Catering — Lunch Run'] },
+		{ name: 'Joe', type: 'Pickup', shop: 'Revesby', items: ['1× Chicken Delight', '1× BBQ Chicken', '1× Juice'] }
 	];
 	var LANES = [ ['new', 'New'], ['preparing', 'Preparing'], ['ready', 'Ready'] ];
 	var seq = 1043;
