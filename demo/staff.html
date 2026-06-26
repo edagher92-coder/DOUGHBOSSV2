@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="image" href="https://images.unsplash.com/photo-1620567845971-d4d280176e68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1600" fetchpriority="high">
+<link rel="preload" as="image" href="https://images.unsplash.com/photo-1620567845971-d4d280176e68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1280" fetchpriority="high">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
 :root{--gold:#d98a3d;--ink:#0a0807;}
@@ -15,10 +15,11 @@
 html,body{height:100%;}
 body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;background:var(--ink);-webkit-font-smoothing:antialiased;}
 .disp{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;line-height:.96;}
+.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
 
 /* cinematic scene */
 .scene{position:relative;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:48px 18px 64px;}
-.scene-img{position:absolute;inset:-4%;background:#1a140f url('https://images.unsplash.com/photo-1620567845971-d4d280176e68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1600') center 38%/cover no-repeat;transform:scale(1.04);animation:kb 28s ease-in-out infinite alternate;will-change:transform;}
+.scene-img{position:absolute;inset:-4%;background:#1a140f url('https://images.unsplash.com/photo-1620567845971-d4d280176e68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1280') center 38%/cover no-repeat;transform:scale(1.04);animation:kb 28s ease-in-out infinite alternate;will-change:transform;}
 .scene-tint{position:absolute;inset:0;background:
    radial-gradient(120% 90% at 50% 18%, rgba(10,8,7,.18), rgba(10,8,7,.78) 78%),
    linear-gradient(180deg, rgba(10,8,7,.55) 0%, rgba(10,8,7,.40) 38%, rgba(10,8,7,.88) 100%);}
@@ -44,7 +45,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .fld label{font-family:'Bebas Neue',sans-serif;letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:#cfc9bd;}
 .fld input{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:12px 14px;font:inherit;font-size:15px;}
 .fld input:focus{outline:2px solid var(--gold);border-color:var(--gold);}
-.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#fff;background:var(--gold);box-shadow:0 12px 30px rgba(217,138,61,.32);transition:filter .15s,transform .1s;}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#241405;background:var(--gold);box-shadow:0 12px 30px rgba(217,138,61,.32);transition:filter .15s,transform .1s;}
 .btn:hover{filter:brightness(1.07);}
 .btn:active{transform:scale(.98);}
 .err{color:#ffb38a;font-size:13px;min-height:1em;margin:4px 0 0;}
@@ -78,6 +79,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
   <div class="flour" id="flour" aria-hidden="true"></div>
 
   <div class="stage">
+    <h1 class="vh">Dough Boss &mdash; Staff &amp; Kitchen sign-in</h1>
     <div class="brand">DOUGH<span>BOSS</span></div>
     <div class="eyebrow">Kitchen &amp; Staff</div>
     <p class="tagline">Fresh from the stone oven &middot; since 2013</p>
