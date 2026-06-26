@@ -11,7 +11,7 @@
 	<link rel="dns-prefetch" href="https://doughboss.com.au">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
 	<link rel="preload" as="image" href="https://doughboss.com.au/wp-content/uploads/Zaatar-768x432.jpg" fetchpriority="high">
-	<link rel="stylesheet" href="demo.css?v=20260626a">
+	<link rel="stylesheet" href="demo.css?v=20260626b">
 </head>
 <body>
 
@@ -272,10 +272,16 @@
 		</div></div>
 	</section>
 	<section class="app-slot light"><div class="wrap">
-		<div class="head"><p class="eyebrow">Live Order Board</p><h2 class="disp">Kitchen display</h2></div>
-		<p class="app-note app-note-dark" style="margin-top:0;margin-bottom:18px;">This is what the team sees after sign-in. <a href="staff.html">Open the cinematic staff sign-in →</a></p>
-		<div id="db-kitchen-demo"></div>
-		<p class="app-note app-note-dark">Demo · the real board polls every ~7s on a shop tablet, with sound alerts and per-shop routing.</p>
+		<div class="head"><p class="eyebrow">Staff only</p><h2 class="disp">Orders are behind sign-in</h2></div>
+		<div class="kitchen-lock">
+			<div class="kl-ico" aria-hidden="true">
+				<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="11" width="17" height="10" rx="2"/><path d="M7.5 11V8a4.5 4.5 0 0 1 9 0v3"/><circle cx="12" cy="16" r="1.4"/></svg>
+			</div>
+			<p class="kl-lead">The Live Order Board and the full orders platform are for staff. Nothing is shown here until you sign in &mdash; then you get incoming, today, upcoming, catering and history in one simple screen.</p>
+			<a class="btn btn-ember" href="staff.html">Staff &amp; kitchen sign-in
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+			<p class="app-note app-note-dark">Once signed in it stays signed in (no timeout) on the shop tablet, with sound alerts and per-shop routing.</p>
+		</div>
 	</div></section>
 </section>
 
@@ -437,9 +443,8 @@
 	show();
 }());
 </script>
-<script src="catering-demo.js?v=20260626a"></script>
-<script src="menu-order.js?v=20260626a"></script>
-<script src="kitchen-demo.js?v=20260626a"></script>
-<script src="snowboss.js?v=20260626a"></script>
+<script src="catering-demo.js?v=20260626b"></script>
+<script src="menu-order.js?v=20260626b"></script>
+<script src="snowboss.js?v=20260626b"></script>
 </body>
 </html>

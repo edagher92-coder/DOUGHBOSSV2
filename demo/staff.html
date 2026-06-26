@@ -7,7 +7,6 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="image" href="https://images.unsplash.com/photo-1620567845971-d4d280176e68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1280" fetchpriority="high">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
 :root{--gold:#d98a3d;--ink:#0a0807;}
@@ -18,34 +17,49 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
 
 /* cinematic scene */
-.scene{position:relative;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:48px 18px 64px;}
-.scene-img{position:absolute;inset:-4%;background:#1a140f url('https://images.unsplash.com/photo-1620567845971-d4d280176e68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1280') center 38%/cover no-repeat;transform:scale(1.04);animation:kb 28s ease-in-out infinite alternate;will-change:transform;}
-.scene-tint{position:absolute;inset:0;background:
-   radial-gradient(120% 90% at 50% 18%, rgba(10,8,7,.18), rgba(10,8,7,.78) 78%),
-   linear-gradient(180deg, rgba(10,8,7,.55) 0%, rgba(10,8,7,.40) 38%, rgba(10,8,7,.88) 100%);}
-.scene-grain{position:absolute;inset:0;opacity:.05;pointer-events:none;
+.scene{position:relative;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:44px 18px 60px;}
+.scene-art{position:absolute;inset:0;width:100%;height:100%;z-index:0;animation:breathe 16s ease-in-out infinite alternate;will-change:transform;}
+.scene-art svg{position:absolute;inset:0;width:100%;height:100%;}
+.scene-tint{position:absolute;inset:0;z-index:1;background:
+   radial-gradient(120% 95% at 50% 16%, rgba(10,8,7,.10), rgba(10,8,7,.72) 80%),
+   linear-gradient(180deg, rgba(10,8,7,.42) 0%, rgba(10,8,7,.30) 40%, rgba(10,8,7,.86) 100%);}
+.scene-grain{position:absolute;inset:0;z-index:1;opacity:.05;pointer-events:none;
    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
-.flour{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+.flour{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;}
 .fleck{position:absolute;top:-14px;border-radius:50%;background:#f6efe2;opacity:.6;filter:blur(.4px);animation:fall linear infinite;}
-@keyframes kb{from{transform:scale(1.04) translate(0,0);}to{transform:scale(1.14) translate(-1.5%,-2%);}}
+@keyframes breathe{from{transform:scale(1.02);}to{transform:scale(1.08);}}
 @keyframes fall{0%{transform:translateY(0) translateX(0);opacity:0;}10%{opacity:.7;}100%{transform:translateY(108svh) translateX(22px);opacity:0;}}
+
+/* the rolling-dough animation (all self-contained SVG) */
+.arms{transform-box:fill-box;transform-origin:left center;animation:roll 2.6s ease-in-out infinite alternate;will-change:transform;}
+.torso{transform-box:fill-box;transform-origin:bottom center;animation:lean 2.6s ease-in-out infinite alternate;will-change:transform;}
+.dough{transform-box:fill-box;transform-origin:center;animation:squash 2.6s ease-in-out infinite alternate;will-change:transform;}
+.bokeh{transform-box:fill-box;transform-origin:center;animation:drift 11s ease-in-out infinite alternate;}
+.bokeh.b2{animation-duration:15s;animation-direction:alternate-reverse;}
+.puff{opacity:0;transform-box:fill-box;transform-origin:center;animation:puff 3s ease-out infinite;}
+.puff.p2{animation-delay:1s;} .puff.p3{animation-delay:2.1s;}
+@keyframes roll{from{transform:translateX(-16px) translateY(2px);}to{transform:translateX(15px) translateY(0);}}
+@keyframes lean{from{transform:rotate(-1.4deg);}to{transform:rotate(1.8deg);}}
+@keyframes squash{from{transform:scaleX(1) scaleY(1.04);}to{transform:scaleX(1.2) scaleY(.94);}}
+@keyframes drift{from{transform:translateY(0);}to{transform:translateY(-16px);}}
+@keyframes puff{0%{opacity:0;transform:translateY(0) scale(.5);}20%{opacity:.55;}100%{opacity:0;transform:translateY(-50px) scale(1.5);}}
 
 /* foreground */
 .stage{position:relative;z-index:2;width:100%;max-width:440px;text-align:center;}
-.brand{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:clamp(40px,9vw,64px);color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.5);}
+.brand{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:clamp(40px,9vw,64px);color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.55);}
 .brand span{color:var(--gold);}
 .eyebrow{font-family:'Bebas Neue',sans-serif;letter-spacing:.32em;text-transform:uppercase;font-size:14px;color:var(--gold);margin-top:6px;}
-.tagline{color:#e7ddcd;font-size:14.5px;margin:6px 0 26px;text-shadow:0 2px 14px rgba(0,0,0,.6);}
+.tagline{color:#e7ddcd;font-size:14.5px;margin:6px 0 24px;text-shadow:0 2px 14px rgba(0,0,0,.65);}
 
 /* login card */
-.card{background:rgba(18,15,12,.62);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:26px 24px;box-shadow:0 24px 60px rgba(0,0,0,.5);text-align:left;}
+.card{background:rgba(18,15,12,.64);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:26px 24px;box-shadow:0 24px 60px rgba(0,0,0,.55);text-align:left;}
 .card h2{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:24px;margin:0 0 4px;color:#fff;}
 .card .hint{font-size:12.5px;color:#b8b1a4;margin:0 0 18px;}
 .fld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
 .fld label{font-family:'Bebas Neue',sans-serif;letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:#cfc9bd;}
 .fld input{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:12px 14px;font:inherit;font-size:15px;}
 .fld input:focus{outline:2px solid var(--gold);border-color:var(--gold);}
-.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#241405;background:var(--gold);box-shadow:0 12px 30px rgba(217,138,61,.32);transition:filter .15s,transform .1s;}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#241405;background:var(--gold);box-shadow:0 12px 30px rgba(217,138,61,.32);transition:filter .15s,transform .1s;text-decoration:none;}
 .btn:hover{filter:brightness(1.07);}
 .btn:active{transform:scale(.98);}
 .err{color:#ffb38a;font-size:13px;min-height:1em;margin:4px 0 0;}
@@ -64,16 +78,116 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .backend b{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:17px;display:block;}
 .backend small{color:#b8b1a4;font-size:12px;}
 .backend .arr{color:var(--gold);font-size:20px;}
-.foot{position:relative;z-index:2;margin-top:26px;font-size:11.5px;color:#a89f90;text-align:center;}
+.foot{position:relative;z-index:2;margin-top:24px;font-size:11.5px;color:#a89f90;text-align:center;}
 .foot a{color:#cbbfaf;}
-.credit{position:absolute;right:10px;bottom:8px;z-index:2;font-size:10px;color:rgba(255,255,255,.45);}
-.credit a{color:rgba(255,255,255,.6);}
-@media(prefers-reduced-motion:reduce){.scene-img{animation:none;}.fleck{display:none;}}
+@media(prefers-reduced-motion:reduce){
+	.scene-art,.arms,.torso,.dough,.bokeh{animation:none;}
+	.puff,.fleck{display:none;}
+}
 </style>
 </head>
 <body>
 <main class="scene">
-  <div class="scene-img" aria-hidden="true"></div>
+  <!-- Self-contained cinematic scene: a teta (grandmother) rolling dough by the
+       stone oven. Fully drawn in SVG + CSS so it always renders, stays light,
+       and needs no external image or video. -->
+  <div class="scene-art" aria-hidden="true">
+    <svg viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice" role="img">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#241407"/>
+          <stop offset="0.5" stop-color="#1c1109"/>
+          <stop offset="1" stop-color="#100a06"/>
+        </linearGradient>
+        <radialGradient id="oven" cx="0.78" cy="0.28" r="0.55">
+          <stop offset="0" stop-color="#ff9b3d" stop-opacity="0.55"/>
+          <stop offset="0.45" stop-color="#d9701f" stop-opacity="0.22"/>
+          <stop offset="1" stop-color="#d9701f" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="table" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#5a3a20"/>
+          <stop offset="0.12" stop-color="#46291599"/>
+          <stop offset="1" stop-color="#2c190c"/>
+        </linearGradient>
+        <radialGradient id="dough" cx="0.4" cy="0.32" r="0.8">
+          <stop offset="0" stop-color="#f7eccf"/>
+          <stop offset="1" stop-color="#e2cda3"/>
+        </radialGradient>
+        <filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+        <filter id="soft2"><feGaussianBlur stdDeviation="3"/></filter>
+      </defs>
+
+      <!-- backdrop + oven glow -->
+      <rect width="600" height="460" fill="url(#sky)"/>
+      <rect width="600" height="460" fill="url(#oven)"/>
+
+      <!-- oven mouth, warm, top-right -->
+      <g opacity="0.85">
+        <ellipse cx="500" cy="150" rx="78" ry="62" fill="#0c0805"/>
+        <ellipse cx="500" cy="150" rx="60" ry="46" fill="#7a3a12"/>
+        <ellipse cx="500" cy="158" rx="44" ry="30" fill="#e07a1e"/>
+        <ellipse cx="500" cy="166" rx="30" ry="18" fill="#ffb24d"/>
+      </g>
+
+      <!-- hanging-bulb bokeh -->
+      <circle class="bokeh" cx="120" cy="90" r="34" fill="#ffcf8a" opacity="0.10" filter="url(#soft)"/>
+      <circle class="bokeh b2" cx="300" cy="60" r="22" fill="#ffd79a" opacity="0.08" filter="url(#soft)"/>
+
+      <!-- flour puffs rising off the dough -->
+      <g>
+        <circle class="puff" cx="300" cy="350" r="9" fill="#f4ead2" filter="url(#soft2)"/>
+        <circle class="puff p2" cx="330" cy="352" r="7" fill="#f4ead2" filter="url(#soft2)"/>
+        <circle class="puff p3" cx="360" cy="350" r="8" fill="#f4ead2" filter="url(#soft2)"/>
+      </g>
+
+      <!-- work table -->
+      <rect x="150" y="362" width="450" height="60" fill="url(#table)"/>
+      <rect x="150" y="362" width="450" height="4" fill="#6b4424" opacity="0.7"/>
+
+      <!-- dough on the table -->
+      <ellipse class="dough" cx="332" cy="356" rx="50" ry="13" fill="url(#dough)"/>
+      <ellipse cx="332" cy="354" rx="34" ry="7" fill="#fff4dd" opacity="0.5"/>
+
+      <!-- the teta (grandmother), side profile, facing the dough -->
+      <g class="torso">
+        <!-- stool -->
+        <rect x="150" y="356" width="14" height="60" rx="4" fill="#15100a"/>
+        <!-- skirt / lower body -->
+        <path d="M132 360 q-14 -70 36 -96 q40 -18 58 16 q14 26 2 70 q-8 28 -48 28 q-40 0 -48 -18 z" fill="#160d06"/>
+        <!-- apron highlight -->
+        <path d="M150 300 q26 -16 52 4 q6 36 -6 64 q-26 12 -48 -2 q-6 -34 2 -66 z" fill="#241710" opacity="0.85"/>
+        <!-- hunched back + shoulder -->
+        <path d="M150 286 q-18 -54 24 -86 q22 -16 44 -8 q-30 6 -40 34 q-10 28 -2 64 z" fill="#120b06"/>
+        <!-- head -->
+        <circle cx="206" cy="196" r="27" fill="#1a1009"/>
+        <!-- headscarf (mandeel) draping down the back -->
+        <path d="M182 188 q22 -34 56 -16 q14 10 12 30 q-2 16 -14 22 q4 -26 -14 -38 q-22 -14 -40 2 z" fill="#2a1a10"/>
+        <path d="M196 214 q22 6 34 -4 q4 30 -10 58 q-18 8 -34 -2 q2 -28 10 -52 z" fill="#221409"/>
+        <!-- warm rim light on head + back, toward the oven -->
+        <path d="M228 186 q10 12 6 30" stroke="#e9923c" stroke-width="2.4" fill="none" opacity="0.6" stroke-linecap="round"/>
+        <path d="M196 172 q22 -10 38 6" stroke="#e9923c" stroke-width="2.2" fill="none" opacity="0.45" stroke-linecap="round"/>
+
+        <!-- arms + rolling pin (the rolling motion) -->
+        <g class="arms">
+          <!-- far arm -->
+          <path d="M210 250 q44 6 92 70" stroke="#160d06" stroke-width="20" fill="none" stroke-linecap="round"/>
+          <!-- near arm -->
+          <path d="M206 258 q40 18 78 64" stroke="#1d120a" stroke-width="22" fill="none" stroke-linecap="round"/>
+          <!-- rolling pin -->
+          <rect x="286" y="330" width="92" height="18" rx="9" fill="#caa06a"/>
+          <rect x="286" y="330" width="92" height="6" rx="3" fill="#e8caa0" opacity="0.8"/>
+          <rect x="276" y="334" width="14" height="10" rx="5" fill="#8a6a40"/>
+          <rect x="374" y="334" width="14" height="10" rx="5" fill="#8a6a40"/>
+          <!-- hands -->
+          <circle cx="296" cy="339" r="10" fill="#1d120a"/>
+          <circle cx="368" cy="339" r="10" fill="#1d120a"/>
+        </g>
+      </g>
+
+      <!-- soft floor shadow -->
+      <ellipse cx="300" cy="430" rx="220" ry="20" fill="#000" opacity="0.35" filter="url(#soft)"/>
+    </svg>
+  </div>
   <div class="scene-tint" aria-hidden="true"></div>
   <div class="scene-grain" aria-hidden="true"></div>
   <div class="flour" id="flour" aria-hidden="true"></div>
@@ -86,26 +200,25 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
     <div class="card">
       <h2>Staff sign-in</h2>
-      <p class="hint">Sign in once to open the Live Order Board for your shop &mdash; it stays signed in.</p>
+      <p class="hint">Sign in once to open the orders platform for your shop &mdash; it stays signed in, no timeout.</p>
       <div class="signed" id="signed" hidden></div>
       <form id="staff-form" novalidate>
         <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" value="Doughboss2026" required></div>
         <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required></div>
         <label class="stay"><input type="checkbox" id="stay" checked> Keep me signed in (no timeout)</label>
-        <button type="submit" class="btn">Open the kitchen board</button>
+        <button type="submit" class="btn">Open orders &amp; kitchen</button>
         <p class="err" id="su-err" role="alert"></p>
       </form>
 
       <div class="divider">OWNER &amp; BACKEND</div>
-      <a class="backend" href="index.html#kitchen">
-        <span><b>Owner / Manager</b><small>Orders, menu, settings &amp; reports</small></span>
+      <a class="backend" href="backend.html">
+        <span><b>Owner / Manager</b><small>All orders — live, today, upcoming, catering &amp; history</small></span>
         <span class="arr" aria-hidden="true">&rarr;</span>
       </a>
     </div>
   </div>
 
-  <div class="foot">Demo &middot; in production this authenticates staff to the Live Order Board and owners to the WordPress admin. &middot; <a href="index.html">Main site</a></div>
-  <div class="credit">Photo: <a href="https://unsplash.com/@ivrn?utm_source=doughboss&utm_medium=referral" target="_blank" rel="noopener">Ivan Rohovchenko</a> / Unsplash</div>
+  <div class="foot">Demo &middot; in production this authenticates staff to the orders platform and owners to the full WordPress admin. &middot; <a href="index.html">Main site</a></div>
 </main>
 
 <script>
@@ -137,7 +250,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     form.style.display='none';
     signed.hidden=false;
     signed.innerHTML='<p class="signed-t">&#10003; Signed in as <b>'+esc(name)+'</b><br><small>Staying signed in &mdash; no timeout.</small></p>'+
-      '<a class="btn" href="index.html#kitchen">Open the kitchen board</a>'+
+      '<a class="btn" href="backend.html">Open orders &amp; kitchen</a>'+
       '<button type="button" class="signout" id="signout">Sign out</button>';
     var so=document.getElementById('signout');
     if(so){ so.addEventListener('click', function(){ try{localStorage.removeItem(KEY);}catch(_){} window.location.reload(); }); }
@@ -151,8 +264,9 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     err.textContent='';
     var stay=document.getElementById('stay');
     if(!stay || stay.checked){ try{ localStorage.setItem(KEY, u); }catch(_){} }
+    else { try{ localStorage.setItem(KEY, u); }catch(_){} }
     var btn=form.querySelector('.btn'); btn.textContent='Signing in…'; btn.disabled=true;
-    setTimeout(function(){ window.location.href='index.html#kitchen'; }, 650);
+    setTimeout(function(){ window.location.href='backend.html'; }, 650);
   });
 }());
 </script>

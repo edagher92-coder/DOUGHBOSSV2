@@ -603,3 +603,10 @@ body.cart-on{padding-bottom:114px;}
 .sb-bn span{opacity:.58;}
 /* restore headline emphasis without colour */
 .hero h1 em,.snow-theme .disp em{text-decoration:underline;text-decoration-thickness:.06em;text-underline-offset:.1em;}
+
+/* ---- Kitchen view: staff-only lock panel (orders hidden until sign-in) ---- */
+.kitchen-lock{max-width:560px;margin:6px auto 0;text-align:center;background:var(--card,#fff);border:1px solid rgba(0,0,0,.08);border-radius:18px;padding:30px 26px 28px;box-shadow:0 10px 30px rgba(0,0,0,.06);}
+.kl-ico{width:64px;height:64px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(181,87,31,.10);color:#b5571f;}
+.kl-lead{font-size:16px;line-height:1.5;color:#3a312a;margin:0 0 20px;}
+.kitchen-lock .btn{display:inline-flex;}
+.kitchen-lock .app-note-dark{margin:16px 0 0;}
