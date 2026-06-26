@@ -57,7 +57,7 @@
 						'<label class="dbq-f"><span>Phone</span><input type="tel" name="phone" value="' + esc(state.phone) + '"></label>' +
 					'</div>' +
 					'<div class="dbq-err" role="alert" aria-live="assertive"></div>' +
-					'<p class="dbq-privacy">We use your name, email and phone only to prepare your quote and contact you about it.</p>' +
+					'<p class="dbq-privacy">We use your name, email and phone only to prepare your quote and contact you about it. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
 				'</div>' +
 				'<aside class="dbq-sum" aria-live="polite"></aside></div>';
 		paintSummary();

@@ -149,7 +149,7 @@
 			'<div class="cd-err" role="alert"></div>' +
 			'<button type="submit" class="vb-btn vb-btn-ember">Place order</button>' +
 			'<button type="button" class="vb-btn vb-btn-dark cd-back">Back to order</button>' +
-			'<p class="cd-privacy">We use your name and phone only to process your order. Card payment is handled by Stripe in production.</p>' +
+			'<p class="cd-privacy">We use your name and phone only to process your order. Card payment is handled by Stripe in production. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
 			'</form>';
 		var f = drawer.querySelector('input[name="name"]'); if (f) { f.focus(); }
 	}
