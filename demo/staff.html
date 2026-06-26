@@ -48,6 +48,14 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .btn:hover{filter:brightness(1.07);}
 .btn:active{transform:scale(.98);}
 .err{color:#ffb38a;font-size:13px;min-height:1em;margin:4px 0 0;}
+.stay{display:flex;align-items:center;gap:8px;font-size:13px;color:#cfc9bd;margin:2px 0 16px;cursor:pointer;}
+.stay input{width:16px;height:16px;accent-color:var(--gold);}
+.signed{text-align:center;}
+.signed-t{color:#e7ddcd;font-size:15px;margin:0 0 14px;}
+.signed-t small{color:#b8b1a4;}
+.signed .btn{margin-bottom:10px;}
+.signout{width:100%;background:transparent;border:1px solid rgba(255,255,255,.18);color:#cfc9bd;border-radius:11px;padding:11px;font:inherit;font-size:14px;cursor:pointer;}
+.signout:hover{background:rgba(255,255,255,.06);}
 .divider{display:flex;align-items:center;gap:12px;color:#8d877c;font-size:12px;letter-spacing:.08em;margin:20px 0 16px;}
 .divider::before,.divider::after{content:"";height:1px;flex:1;background:rgba(255,255,255,.14);}
 .backend{display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:13px 15px;text-decoration:none;color:#f3efe8;transition:background .15s;}
@@ -76,10 +84,12 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
     <div class="card">
       <h2>Staff sign-in</h2>
-      <p class="hint">Sign in to open the Live Order Board for your shop.</p>
+      <p class="hint">Sign in once to open the Live Order Board for your shop &mdash; it stays signed in.</p>
+      <div class="signed" id="signed" hidden></div>
       <form id="staff-form" novalidate>
-        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="e.g. revesby-kds" required></div>
+        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" value="Doughboss2026" required></div>
         <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required></div>
+        <label class="stay"><input type="checkbox" id="stay" checked> Keep me signed in (no timeout)</label>
         <button type="submit" class="btn">Open the kitchen board</button>
         <p class="err" id="su-err" role="alert"></p>
       </form>
@@ -114,12 +124,31 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     }
     field.appendChild(frag);
   }
-  var form = document.getElementById('staff-form'), err = document.getElementById('su-err');
+  var KEY='db_staff';
+  var form = document.getElementById('staff-form'), err = document.getElementById('su-err'),
+      signed = document.getElementById('signed');
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+  // Persistent session: localStorage has no expiry, so a signed-in staffer stays
+  // signed in indefinitely (no timeout) until they explicitly sign out.
+  function showSigned(name){
+    form.style.display='none';
+    signed.hidden=false;
+    signed.innerHTML='<p class="signed-t">&#10003; Signed in as <b>'+esc(name)+'</b><br><small>Staying signed in &mdash; no timeout.</small></p>'+
+      '<a class="btn" href="index.html#kitchen">Open the kitchen board</a>'+
+      '<button type="button" class="signout" id="signout">Sign out</button>';
+    var so=document.getElementById('signout');
+    if(so){ so.addEventListener('click', function(){ try{localStorage.removeItem(KEY);}catch(_){} window.location.reload(); }); }
+  }
+  try{ var existing=localStorage.getItem(KEY); if(existing){ showSigned(existing); } }catch(_){}
+
   form.addEventListener('submit', function(e){
     e.preventDefault();
     var u=document.getElementById('su').value.trim(), p=document.getElementById('sp').value.trim();
     if(!u||!p){ err.textContent='Enter your staff ID and passcode.'; return; }
     err.textContent='';
+    var stay=document.getElementById('stay');
+    if(!stay || stay.checked){ try{ localStorage.setItem(KEY, u); }catch(_){} }
     var btn=form.querySelector('.btn'); btn.textContent='Signing in…'; btn.disabled=true;
     setTimeout(function(){ window.location.href='index.html#kitchen'; }, 650);
   });
