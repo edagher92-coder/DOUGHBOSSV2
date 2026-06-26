@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dough Boss — Owner / Manager</title>
+<meta name="robots" content="noindex">
+<!-- Gate: nothing here shows until a staff/owner session exists. -->
+<script>
+(function () {
+	try { if (!localStorage.getItem('db_staff')) { location.replace('staff.html'); } }
+	catch (e) { location.replace('staff.html'); }
+}());
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+	--gold:#b5571f;--amber:#d98a3d;--ink:#1a120c;--bg:#f6f1e9;--card:#ffffff;
+	--line:#e9e1d3;--text:#241b14;--muted:#8a8073;--muted2:#a89f90;
+	--new:#c0392b;--prep:#2f6db0;--ready:#2e7d4f;--done:#7a8472;--cancel:#b06a6a;--cater:#9b6a1f;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{font-family:'Barlow',system-ui,Arial,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:16px;}
+.disp{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;line-height:.96;}
+.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}
+button{font:inherit;cursor:pointer;}
+a{color:inherit;}
+
+/* top bar */
+.top{background:var(--ink);color:#f3efe8;position:sticky;top:0;z-index:30;}
+.top-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:11px 16px;}
+.bm{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:26px;color:#fff;text-decoration:none;white-space:nowrap;}
+.bm span{color:var(--amber);}
+.bm small{display:block;font-family:'Barlow';letter-spacing:.2em;text-transform:uppercase;font-size:9px;color:var(--muted2);margin-top:-3px;}
+.sp{flex:1;}
+.store select{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:9px;padding:8px 11px;font-size:14px;}
+.store select:focus{outline:2px solid var(--amber);}
+.who{font-size:13.5px;color:#d7cdbe;display:flex;align-items:center;gap:7px;}
+.who b{color:#fff;}
+.dot{width:8px;height:8px;border-radius:50%;background:#34c759;animation:pulse 2s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,199,89,.55);}70%{box-shadow:0 0 0 7px rgba(52,199,89,0);}100%{box-shadow:0 0 0 0 rgba(52,199,89,0);}}
+.out{background:transparent;border:1.5px solid rgba(255,255,255,.26);color:#f3efe8;border-radius:9px;padding:8px 13px;font-size:13.5px;font-weight:600;}
+.out:hover{background:rgba(255,255,255,.1);}
+
+/* tabs */
+.tabs{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:54px;z-index:20;}
+.tabs-in{max-width:1180px;margin:0 auto;display:flex;gap:2px;padding:0 10px;overflow-x:auto;}
+.tab{background:transparent;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:14px 16px 12px;font-size:14.5px;font-weight:700;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab[aria-selected="true"]{color:var(--gold);border-bottom-color:var(--gold);}
+.tab .pill{background:#f0eadf;color:var(--muted);border-radius:999px;font-size:11px;font-weight:800;padding:1px 7px;margin-left:5px;}
+.tab[aria-selected="true"] .pill{background:var(--gold);color:#fff;}
+
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 80px;}
+.panel{display:none;}
+.panel.on{display:block;animation:fade .2s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+.ph{font-family:'Bebas Neue',sans-serif;letter-spacing:.02em;font-size:32px;margin:4px 0 2px;}
+.psub{color:var(--muted);font-size:14.5px;margin:0 0 18px;}
+.h{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+
+/* KPI tiles */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:2px 0 18px;}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:16px 17px;}
+.kpi .l{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+.kpi .v{font-family:'Bebas Neue',sans-serif;font-size:40px;line-height:1;margin:8px 0 3px;}
+.kpi .s{font-size:12.5px;color:var(--muted);}
+.kpi .s b{color:var(--ready);}
+.kpi.dark{background:linear-gradient(155deg,#241b14,#3c2a1b);border-color:#241b14;color:#fff;}
+.kpi.dark .l{color:#d7cbba;} .kpi.dark .s{color:#c9bdac;} .kpi.dark .v{color:var(--amber);}
+.kpi.alert{position:relative;}
+.kpi.alert::after{content:"";position:absolute;top:13px;right:13px;width:9px;height:9px;border-radius:50%;background:var(--new);box-shadow:0 0 0 4px rgba(192,57,43,.16);}
+
+/* grid blocks */
+.cols2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px;}
+.block{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:16px 18px;}
+.block h3{margin:0 0 13px;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+.bar{height:16px;border-radius:9px;overflow:hidden;display:flex;background:#efe9de;}
+.bar i{display:block;height:100%;}
+.bar i.on{background:var(--gold);} .bar i.ca{background:var(--cater);}
+.legend{display:flex;gap:20px;margin-top:11px;font-size:13.5px;color:var(--muted);}
+.legend b{color:var(--text);}
+.cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;}
+/* week trend */
+.trend{display:flex;align-items:flex-end;gap:8px;height:96px;margin-top:6px;}
+.trend .d{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.trend .bar2{width:100%;background:linear-gradient(180deg,var(--amber),var(--gold));border-radius:6px 6px 3px 3px;min-height:4px;}
+.trend .dl{font-size:11px;color:var(--muted);}
+/* per-store rows */
+.srow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px;}
+.srow:first-of-type{border-top:0;}
+.srow .nm{font-weight:700;min-width:96px;}
+.srow .tk{flex:1;height:8px;border-radius:6px;background:#efe9de;overflow:hidden;}
+.srow .tk i{display:block;height:100%;background:var(--gold);}
+.srow .vv{font-variant-numeric:tabular-nums;color:var(--muted);min-width:96px;text-align:right;}
+
+/* board */
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.lane{background:#efe7d9;border-radius:15px;padding:12px;min-height:90px;}
+.lane-h{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.03em;display:flex;align-items:center;gap:8px;margin:3px 5px 11px;color:#5b5347;}
+.lane-h .cd{width:10px;height:10px;border-radius:50%;}
+.l-new .cd{background:var(--new);} .l-prep .cd{background:var(--prep);} .l-ready .cd{background:var(--ready);}
+.lane-h .n{margin-left:auto;background:#fff;border-radius:999px;font-size:12px;padding:1px 8px;color:var(--muted);}
+.card2{background:#fff;border:1px solid var(--line);border-top:4px solid var(--muted);border-radius:12px;padding:12px 13px;margin-bottom:10px;}
+.card2.new{border-top-color:var(--new);} .card2.preparing{border-top-color:var(--prep);} .card2.ready{border-top-color:var(--ready);}
+.c-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.c-top b{font-family:'Bebas Neue',sans-serif;font-size:18px;}
+.c-top .age{font-size:12px;color:var(--muted);}
+.c-meta{font-size:12.5px;color:var(--muted);margin:2px 0 7px;}
+.c-items{list-style:none;margin:0 0 9px;padding:0;font-size:13.5px;}
+.c-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.c-tot{font-family:'Bebas Neue',sans-serif;font-size:19px;}
+.adv{background:var(--gold);color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;}
+.adv:hover{filter:brightness(1.06);}
+
+/* tables */
+.tbl{background:var(--card);border:1px solid var(--line);border-radius:15px;overflow:hidden;}
+.tr{display:grid;grid-template-columns:96px 1.5fr 100px 120px 120px;gap:12px;align-items:center;padding:13px 16px;border-top:1px solid var(--line);font-size:13.5px;}
+.tr:first-child{border-top:0;}
+.tr.head{background:#faf7f1;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;}
+.tr .ref{font-weight:700;}
+.tr .who2 b{display:block;} .tr .who2 small{color:var(--muted);}
+.tr .when{color:var(--muted);font-size:12.5px;}
+.tr .amt{font-weight:800;text-align:right;font-variant-numeric:tabular-nums;}
+.badge{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;text-transform:capitalize;}
+.b-new{background:#fbe7e4;color:var(--new);} .b-preparing{background:#e4eefa;color:var(--prep);} .b-ready{background:#e2f3e9;color:var(--ready);}
+.b-completed{background:#eceee9;color:var(--done);} .b-cancelled{background:#f3e7e7;color:var(--cancel);} .b-confirmed,.b-enquiry{background:#f6ecd9;color:var(--cater);}
+.ct{font-size:10.5px;font-weight:800;color:var(--muted);} .ct.ca{color:var(--cater);}
+.filterbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+.filterbar button{background:#fff;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:700;}
+.filterbar button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+/* catering pipeline */
+.pipe{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+.catc{background:var(--card);border:1px solid var(--line);border-radius:15px;border-left:5px solid var(--cater);padding:15px 16px;}
+.catc h4{margin:0;font-size:16px;}
+.catc .cw{font-size:12.5px;color:var(--muted);margin-top:2px;}
+.catc .cr{display:flex;flex-wrap:wrap;gap:5px 16px;margin:10px 0;font-size:13px;color:var(--muted);}
+.catc .cr b{color:var(--text);}
+.catc ul{list-style:none;margin:0 0 10px;padding:0;font-size:13px;}
+.catc .cf{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px;gap:8px;}
+.catc .dep{font-size:12.5px;color:var(--muted);} .catc .dep b{color:var(--ready);}
+.mini{background:var(--gold);color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;}
+.subh{font-family:'Bebas Neue',sans-serif;font-size:21px;letter-spacing:.02em;color:#5b5347;margin:22px 0 11px;}
+.subh:first-of-type{margin-top:2px;}
+.empty{grid-column:1/-1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px;text-align:center;color:var(--muted);}
+
+@media(max-width:900px){
+	.kpis{grid-template-columns:repeat(2,1fr);}
+	.cols2{grid-template-columns:1fr;}
+	.board{grid-template-columns:1fr;}
+	.pipe{grid-template-columns:1fr;}
+	.tr{grid-template-columns:80px 1.4fr 96px;}
+	.tr .when,.tr .ctcell{display:none;}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+	<div class="top-in">
+		<a class="bm" href="#">DOUGH<span>BOSS</span><small>Owner / Manager</small></a>
+		<div class="sp"></div>
+		<div class="store">
+			<label class="vh" for="store">Store</label>
+			<select id="store"><option value="all">All stores</option><option value="Revesby">Revesby</option><option value="Bankstown">Bankstown</option><option value="Roselands">Roselands</option></select>
+		</div>
+		<span class="who"><span class="dot" aria-hidden="true"></span> <span>Hi <b id="who">Manager</b></span></span>
+		<button type="button" class="out" id="signout">Sign out</button>
+	</div>
+</header>
+
+<nav class="tabs" aria-label="Owner sections">
+	<div class="tabs-in" role="tablist">
+		<button class="tab" role="tab" data-panel="dashboard" aria-selected="true">Dashboard</button>
+		<button class="tab" role="tab" data-panel="live">Live orders <span class="pill" id="c-live">0</span></button>
+		<button class="tab" role="tab" data-panel="catering">Catering <span class="pill" id="c-cat">0</span></button>
+		<button class="tab" role="tab" data-panel="orders">All orders <span class="pill" id="c-ord">0</span></button>
+	</div>
+</nav>
+
+<main class="wrap">
+
+	<!-- DASHBOARD -->
+	<section class="panel on" id="p-dashboard" role="tabpanel" aria-label="Dashboard">
+		<div class="h"><div><h1 class="ph">Today at a glance</h1><p class="psub" id="dsub">Live across all three stores</p></div></div>
+		<div class="kpis" id="kpis"></div>
+		<div class="cols2">
+			<div class="block">
+				<h3>Revenue — last 7 days (incl. GST)</h3>
+				<div class="trend" id="trend"></div>
+			</div>
+			<div class="block">
+				<h3>Today by channel</h3>
+				<div class="bar" id="chanbar"><i class="on" style="width:60%"></i><i class="ca" style="width:40%"></i></div>
+				<div class="legend">
+					<span><span class="cdot" style="background:var(--gold)"></span>Online <b id="lg-on">0</b></span>
+					<span><span class="cdot" style="background:var(--cater)"></span>Catering <b id="lg-ca">0</b></span>
+				</div>
+				<h3 style="margin-top:18px">Today by store</h3>
+				<div id="stores-break"></div>
+			</div>
+		</div>
+		<div class="block">
+			<h3>Needs your attention</h3>
+			<div id="attention"></div>
+		</div>
+	</section>
+
+	<!-- LIVE -->
+	<section class="panel" id="p-live" role="tabpanel" aria-label="Live orders" hidden>
+		<h1 class="ph">Live orders</h1>
+		<p class="psub">Oversight of the kitchen — New → Cooking → Ready. Tap to move an order along.</p>
+		<div class="board" id="board"></div>
+	</section>
+
+	<!-- CATERING -->
+	<section class="panel" id="p-catering" role="tabpanel" aria-label="Catering" hidden>
+		<h1 class="ph">Catering pipeline</h1>
+		<p class="psub">Enquiry → quote → booked → deposit. All catering runs through Revesby.</p>
+		<h2 class="subh">New enquiries — action needed</h2>
+		<div class="pipe" id="cat-enq"></div>
+		<h2 class="subh">Booked events</h2>
+		<div class="pipe" id="cat-booked"></div>
+	</section>
+
+	<!-- ALL ORDERS -->
+	<section class="panel" id="p-orders" role="tabpanel" aria-label="All orders" hidden>
+		<div class="h"><div><h1 class="ph">All orders</h1><p class="psub">Every order — today, upcoming and past, online and catering.</p></div></div>
+		<div class="filterbar" id="filter">
+			<button data-f="all" aria-pressed="true">All</button>
+			<button data-f="today">Today</button>
+			<button data-f="upcoming">Upcoming</button>
+			<button data-f="past">Past</button>
+			<button data-f="online">Online</button>
+			<button data-f="catering">Catering</button>
+		</div>
+		<div class="tbl" id="tbl"></div>
+	</section>
+
+</main>
+
+<script>
+(function () {
+	'use strict';
+	var who = 'Manager';
+	try { who = localStorage.getItem('db_staff') || 'Manager'; } catch (e) {}
+	document.getElementById('who').textContent = who;
+	document.getElementById('signout').addEventListener('click', function () {
+		try { localStorage.removeItem('db_staff'); } catch (e) {}
+		location.replace('staff.html');
+	});
+
+	function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+	function money(n){return '$' + n.toFixed(2);}
+	function money0(n){return '$' + Math.round(n).toLocaleString();}
+	var now = new Date();
+	function at(o,h,m){var d=new Date(now);d.setDate(d.getDate()+o);d.setHours(h,m||0,0,0);return d;}
+	function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+	function ago(d){var m=Math.round((now-d)/60000);if(m<1)return 'just now';if(m<60)return m+'m ago';var h=Math.round(m/60);if(h<24)return h+'h ago';return Math.round(h/24)+'d ago';}
+	var DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+	function clock(d){var h=d.getHours(),ap=h<12?'am':'pm',hr=h%12||12,mn=('0'+d.getMinutes()).slice(-2);return hr+':'+mn+ap;}
+	function dayLabel(d){if(sameDay(d,now))return 'Today '+clock(d);var t=new Date(now);t.setDate(t.getDate()+1);if(sameDay(d,t))return 'Tomorrow '+clock(d);return DOW[d.getDay()]+' '+d.getDate()+' '+MON[d.getMonth()]+', '+clock(d);}
+	function liEls(a){return a.map(function(i){return '<li>'+esc(i)+'</li>';}).join('');}
+	function ctag(o){return o.channel==='catering'?'<span class="ct ca">CATERING</span>':'<span class="ct">ONLINE</span>';}
+
+	var seq=1042; function ref(){seq+=1;return 'DB-'+seq;}
+	var ORDERS=[
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft drink'],total:27.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Delivery',items:['1× All Meat','1× Garlic Prawns','2× Spring water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-6))},
+		{ref:ref(),channel:'online',store:'Roselands',who:'Mariam H.',type:'Pickup',items:['3× Zaatar & Cheese','1× Choc banana'],total:33.50,status:'preparing',placed:at(0,now.getHours()-1,12)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Joe T.',type:'Pickup',items:['1× Chicken Delight','1× BBQ Chicken','1× Juice'],total:29.00,status:'preparing',placed:at(0,now.getHours()-1,38)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Nadia A.',type:'Delivery',items:['2× Veggie Plus','1× Fattoush','1× Ayran'],total:36.50,status:'ready',placed:at(0,now.getHours()-1,5)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Omar S.',type:'Pickup',items:['2× Lahm bi ajeen','1× Lentil soup'],total:24.00,status:'completed',placed:at(0,9,14)},
+		{ref:ref(),channel:'online',store:'Roselands',who:'Priya R.',type:'Delivery',items:['1× Margherita','1× Garlic bread'],total:28.50,status:'completed',placed:at(0,11,2)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Hassan D.',type:'Pickup',items:['4× Mixed manoush','2× Soft drinks'],total:46.00,status:'confirmed',placed:at(0,Math.max(0,now.getHours()-2),0),scheduled:at(0,Math.min(21,now.getHours()+3),30)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Office — Lvl 3',type:'Delivery',items:['6× Assorted manoush','3× Salads','6× Drinks'],total:92.00,status:'confirmed',placed:at(-1,16,40),scheduled:at(1,12,0)},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Al-Noor School',type:'Catering',items:['Lunch run — 60 pax','Mixed manoush platters ×6','Fruit & juice'],total:540.00,deposit:150,status:'confirmed',placed:at(-3,10,0),scheduled:at(2,11,30),pax:60,pkg:'School Lunch Run'},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Mansour Wedding',type:'Catering',items:['Grazing + hot manoush — 120 pax','Dessert table (Snow Boss)','Service staff ×2'],total:1980.00,deposit:500,status:'confirmed',placed:at(-6,13,0),scheduled:at(9,17,0),pax:120,pkg:'Premium Event'},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Westfield Corporate',type:'Catering',items:['Corporate breakfast — ~40 pax','Manoush + coffee cart'],total:0,deposit:0,status:'enquiry',placed:at(0,Math.max(0,now.getHours()-3),20),pax:40,pkg:'Corporate Breakfast'},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Hbeishi Family',type:'Catering',items:['Engagement — ~80 pax','Mixed platters + dessert'],total:0,deposit:0,status:'enquiry',placed:at(-1,19,5),pax:80,pkg:'Event (TBC)'},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Karim B.',type:'Pickup',items:['2× Zaatar','1× Cheese & tomato'],total:22.00,status:'completed',placed:at(-1,12,30)},
+		{ref:ref(),channel:'online',store:'Roselands',who:'Sophie L.',type:'Delivery',items:['1× All Meat','1× Veggie Plus'],total:31.00,status:'completed',placed:at(-1,18,12)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Daniel P.',type:'Pickup',items:['1× Chicken Delight'],total:14.00,status:'cancelled',placed:at(-2,13,47)},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Bankstown Sports Club',type:'Catering',items:['Function — 90 pax','Mixed manoush + salads'],total:1260.00,deposit:350,status:'completed',placed:at(-12,10,0),scheduled:at(-4,18,0),pax:90,pkg:'Function'},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Yusra M.',type:'Delivery',items:['2× Margherita','1× Garlic bread','1× Soft drink'],total:39.50,status:'completed',placed:at(-2,19,22)}
+	];
+	// representative completed history for the 7-day trend
+	var DAYREV=[820,1140,990,1370,1210,1580,0];
+
+	var store='all';
+	function inStore(o){return store==='all'||o.store===store;}
+	function live(){return ORDERS.filter(function(o){return inStore(o)&&o.channel==='online'&&(o.status==='new'||o.status==='preparing'||o.status==='ready');});}
+	function today(){return ORDERS.filter(function(o){return inStore(o)&&(sameDay(o.placed,now)||(o.scheduled&&sameDay(o.scheduled,now)));});}
+	function catEnq(){return ORDERS.filter(function(o){return inStore(o)&&o.channel==='catering'&&o.status==='enquiry';});}
+	function catBooked(){return ORDERS.filter(function(o){return inStore(o)&&o.channel==='catering'&&o.status==='confirmed'&&o.scheduled&&o.scheduled>now;}).sort(function(a,b){return a.scheduled-b.scheduled;});}
+
+	function badge(s){return '<span class="badge b-'+s+'">'+s+'</span>';}
+
+	/* ---- dashboard ---- */
+	function renderDashboard(){
+		var td=today();
+		var on=td.filter(function(o){return o.channel==='online';});
+		var ca=td.filter(function(o){return o.channel==='catering';});
+		var revToday=td.reduce(function(s,o){return s+(o.total||0);},0);
+		var gst=revToday/11;
+		var liveN=live().length;
+		var bookedN=catBooked().length;
+		document.getElementById('dsub').textContent=store==='all'?'Live across all three stores':'Live — '+store;
+		document.getElementById('kpis').innerHTML=
+			tile('Orders today',td.length,on.length+' online · '+ca.length+' catering',false,false)+
+			tile('Revenue today',money0(revToday),'incl. GST '+money(gst),true,false)+
+			tile('Live now',liveN,'in the kitchen',false,liveN>0)+
+			tile('Catering booked',bookedN,'upcoming events',false,catEnq().length>0);
+
+		// channel bar
+		var tot=td.length||1,op=Math.round(on.length/tot*100);
+		var cb=document.getElementById('chanbar');cb.children[0].style.width=op+'%';cb.children[1].style.width=(100-op)+'%';
+		document.getElementById('lg-on').textContent=on.length;document.getElementById('lg-ca').textContent=ca.length;
+
+		// week trend
+		var max=Math.max.apply(null,DAYREV.concat([1]));
+		var labels=[];for(var i=6;i>=0;i--){var d=new Date(now);d.setDate(d.getDate()-i);labels.push(DOW[d.getDay()]);}
+		var todayRev=Math.max(revToday,0);var series=DAYREV.slice(0,6).concat([todayRev]);
+		var mx=Math.max.apply(null,series.concat([1]));
+		document.getElementById('trend').innerHTML=series.map(function(v,i){
+			var h=Math.round(v/mx*84)+4;var lab=i===6?'Today':labels[i];
+			return '<div class="d"><div class="bar2" style="height:'+h+'px" title="'+money0(v)+'"></div><div class="dl">'+lab+'</div></div>';
+		}).join('');
+
+		// per-store breakdown today
+		var stores=['Revesby','Bankstown','Roselands'];
+		var byStore=stores.map(function(s){var o=ORDERS.filter(function(x){return x.store===s&&(sameDay(x.placed,now)||(x.scheduled&&sameDay(x.scheduled,now)));});return {s:s,n:o.length,rev:o.reduce(function(a,b){return a+(b.total||0);},0)};});
+		var mxr=Math.max.apply(null,byStore.map(function(x){return x.rev;}).concat([1]));
+		document.getElementById('stores-break').innerHTML=byStore.map(function(x){
+			return '<div class="srow"><span class="nm">'+x.s+'</span><span class="tk"><i style="width:'+Math.round(x.rev/mxr*100)+'%"></i></span><span class="vv">'+x.n+' · '+money0(x.rev)+'</span></div>';
+		}).join('');
+
+		// attention
+		var items=[];
+		catEnq().forEach(function(o){items.push({ic:'🎉',t:'New catering enquiry — '+esc(o.who)+' ('+o.pax+' pax)',a:'Send a quote',cls:'cater'});});
+		live().filter(function(o){return o.status==='new'&&ago(o.placed).indexOf('m')>-1;}).forEach(function(o){items.push({ic:'🔔',t:'New online order #'+esc(o.ref)+' at '+esc(o.store)+' waiting to be accepted',a:'Open board',cls:'new'});});
+		var ready=live().filter(function(o){return o.status==='ready';});
+		if(ready.length)items.push({ic:'✅',t:ready.length+' order'+(ready.length>1?'s':'')+' ready for pickup/handover',a:'Open board',cls:'ready'});
+		document.getElementById('attention').innerHTML=items.length?items.map(function(x){
+			return '<div class="srow"><span style="font-size:18px">'+x.ic+'</span><span style="flex:1">'+x.t+'</span><button class="mini" data-go="'+(x.cls==='cater'?'catering':'live')+'">'+x.a+'</button></div>';
+		}).join(''):'<p style="color:var(--muted);margin:4px 0;">All clear — nothing needs you right now.</p>';
+	}
+	function tile(l,v,s,dark,alert){return '<div class="kpi'+(dark?' dark':'')+(alert?' alert':'')+'"><div class="l">'+l+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>';}
+
+	/* ---- live board ---- */
+	function renderBoard(){
+		var lanes=[['new','New','l-new'],['preparing','Cooking','l-prep'],['ready','Ready','l-ready']];
+		var ords=live();
+		document.getElementById('board').innerHTML=lanes.map(function(l){
+			var list=ords.filter(function(o){return o.status===l[0];});
+			var body=list.map(function(o){
+				var btn=o.status==='new'?'Accept':(o.status==='preparing'?'Mark ready':'Complete');
+				return '<div class="card2 '+o.status+'"><div class="c-top"><b>#'+esc(o.ref)+'</b><span class="age">'+ago(o.placed)+'</span></div><div class="c-meta">'+esc(o.who)+' · '+esc(o.type)+' · '+esc(o.store)+'</div><ul class="c-items">'+liEls(o.items)+'</ul><div class="c-foot"><span class="c-tot">'+money(o.total)+'</span><button class="adv" data-ref="'+esc(o.ref)+'">'+btn+'</button></div></div>';
+			}).join('')||'<p style="color:#9a9081;font-size:13px;margin:6px;">Nothing here</p>';
+			return '<div class="lane"><div class="lane-h"><span class="cd"></span>'+l[1]+'<span class="n">'+list.length+'</span></div>'+body+'</div>';
+		}).join('');
+	}
+
+	/* ---- catering ---- */
+	function catCard(o){
+		return '<div class="catc"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><h4>'+esc(o.who)+'</h4><div class="cw">'+(o.scheduled?dayLabel(o.scheduled):'enquired '+ago(o.placed))+'</div></div>'+badge(o.status)+'</div>'+
+			'<div class="cr"><span><b>'+(o.pax||'—')+'</b> pax</span><span>'+esc(o.pkg||'Catering')+'</span><span>'+esc(o.store)+'</span></div>'+
+			'<ul>'+liEls(o.items)+'</ul>'+
+			'<div class="cf"><span class="dep">'+(o.total?'Quote '+money(o.total)+' · deposit <b>'+money(o.deposit||0)+'</b>':'Awaiting quote')+'</span><button class="mini">'+(o.total?'View':'Send quote')+'</button></div></div>';
+	}
+	function renderCatering(){
+		var enq=catEnq(),bk=catBooked();
+		document.getElementById('cat-enq').innerHTML=enq.length?enq.map(catCard).join(''):'<p class="empty">No open enquiries.</p>';
+		document.getElementById('cat-booked').innerHTML=bk.length?bk.map(catCard).join(''):'<p class="empty">No upcoming events.</p>';
+	}
+
+	/* ---- all orders ---- */
+	var filt='all';
+	function renderOrders(){
+		var list=ORDERS.filter(inStore).filter(function(o){
+			if(filt==='today')return sameDay(o.placed,now)||(o.scheduled&&sameDay(o.scheduled,now));
+			if(filt==='upcoming')return o.scheduled&&o.scheduled>now&&!sameDay(o.scheduled,now)&&o.status!=='cancelled';
+			if(filt==='past')return (o.status==='completed'||o.status==='cancelled');
+			if(filt==='online')return o.channel==='online';
+			if(filt==='catering')return o.channel==='catering';
+			return true;
+		}).sort(function(a,b){return (b.scheduled||b.placed)-(a.scheduled||a.placed);});
+		var head='<div class="tr head"><span>Ref</span><span>Customer / items</span><span class="ctcell">Channel</span><span>When</span><span style="text-align:right">Status · total</span></div>';
+		document.getElementById('tbl').innerHTML=head+(list.length?list.map(function(o){
+			var when=o.scheduled?dayLabel(o.scheduled):(sameDay(o.placed,now)?'Today '+clock(o.placed):dayLabel(o.placed));
+			return '<div class="tr"><span class="ref">#'+esc(o.ref)+'</span><span class="who2"><b>'+esc(o.who)+'</b><small>'+esc(o.type)+' · '+esc(o.store)+' — '+esc(o.items.join(', '))+'</small></span><span class="ctcell">'+ctag(o)+'</span><span class="when">'+when+'</span><span class="amt">'+badge(o.status)+'<br>'+(o.total?money(o.total):'—')+'</span></div>';
+		}).join(''):'<p class="empty">Nothing in this filter.</p>');
+	}
+
+	function counts(){
+		document.getElementById('c-live').textContent=live().length;
+		document.getElementById('c-cat').textContent=catEnq().length+catBooked().length;
+		document.getElementById('c-ord').textContent=ORDERS.filter(inStore).length;
+	}
+	function renderAll(){counts();renderDashboard();renderBoard();renderCatering();renderOrders();}
+
+	/* tabs */
+	var tabs=Array.prototype.slice.call(document.querySelectorAll('.tab'));
+	function show(name){
+		tabs.forEach(function(x){x.setAttribute('aria-selected',x.getAttribute('data-panel')===name?'true':'false');});
+		document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('on');p.hidden=true;});
+		var p=document.getElementById('p-'+name);p.classList.add('on');p.hidden=false;window.scrollTo({top:0,behavior:'smooth'});
+	}
+	tabs.forEach(function(t){t.addEventListener('click',function(){show(t.getAttribute('data-panel'));});});
+
+	document.getElementById('store').addEventListener('change',function(){store=this.value;renderAll();});
+	document.getElementById('filter').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;Array.prototype.slice.call(this.children).forEach(function(x){x.setAttribute('aria-pressed','false');});b.setAttribute('aria-pressed','true');filt=b.getAttribute('data-f');renderOrders();});
+	document.getElementById('board').addEventListener('click',function(e){var b=e.target.closest('[data-ref]');if(!b)return;var r=b.getAttribute('data-ref');for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].ref===r){var s=ORDERS[i].status;ORDERS[i].status=s==='new'?'preparing':(s==='preparing'?'ready':'completed');break;}}renderAll();});
+	document.getElementById('attention').addEventListener('click',function(e){var b=e.target.closest('[data-go]');if(b)show(b.getAttribute('data-go'));});
+
+	renderAll();
+}());
+</script>
+</body>
+</html>

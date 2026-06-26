@@ -210,9 +210,9 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
         <p class="err" id="su-err" role="alert"></p>
       </form>
 
-      <div class="divider">OWNER &amp; BACKEND</div>
-      <a class="backend" href="backend.html">
-        <span><b>Owner / Manager</b><small>All orders — live, today, upcoming, catering &amp; history</small></span>
+      <div class="divider">OWNER &amp; MANAGER</div>
+      <a class="backend" id="owner-link" href="owner.html">
+        <span><b>Owner / Manager dashboard</b><small>Sales &amp; revenue, stores, catering pipeline &amp; all orders</small></span>
         <span class="arr" aria-hidden="true">&rarr;</span>
       </a>
     </div>
@@ -268,6 +268,16 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     var btn=form.querySelector('.btn'); btn.textContent='Signing in…'; btn.disabled=true;
     setTimeout(function(){ window.location.href='backend.html'; }, 650);
   });
+
+  // Owner / manager entry: seed the session (so the gate passes) then open the dashboard.
+  var ownerLink = document.getElementById('owner-link');
+  if (ownerLink) {
+    ownerLink.addEventListener('click', function(){
+      var el = document.getElementById('su');
+      var u = el && el.value && el.value.trim() ? el.value.trim() : 'Manager';
+      try { localStorage.setItem(KEY, u); } catch(_){}
+    });
+  }
 }());
 </script>
 </body>
