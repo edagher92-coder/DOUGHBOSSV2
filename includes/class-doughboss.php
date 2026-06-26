@@ -80,6 +80,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-coupon-code.php';
 		require_once $dir . 'class-doughboss-voucher.php';
 		require_once $dir . 'class-doughboss-pospal-sync.php';
+		require_once $dir . 'class-doughboss-pospal-orders.php';
 		require_once $dir . 'class-doughboss-mercure.php';
 		require_once $dir . 'class-doughboss-ntfy.php';
 		require_once $dir . 'class-doughboss-sms.php';
@@ -123,6 +124,10 @@ final class DoughBoss {
 		// POSPal voucher mirror (grant on claim, revoke on redeem). Static hooks;
 		// fully dormant until POSPal + a coupon-rule UID are configured.
 		DoughBoss_POSPal_Sync::init();
+
+		// POSPal order push (mirror placed online orders onto the till). Off by
+		// default; dormant until "push orders" is on AND a product map exists.
+		DoughBoss_POSPal_Orders::init();
 
 		// Phase 2 real-time + notification connectors. Each self-gates on its own
 		// *_ready() check and stays fully dormant until configured in Settings.

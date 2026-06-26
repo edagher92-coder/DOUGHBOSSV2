@@ -385,6 +385,215 @@ class DoughBoss_CLI {
 		}
 		WP_CLI::success( ( $dry ? '[DRY RUN] ' : '' ) . "Done. Categories created: {$cats}; items created: {$created}; updated: {$updated}." );
 	}
+
+	/**
+	 * Per-store creds for the order/product commands. Store 1 = null (the legacy
+	 * default the connector already uses); 2/3 = explicit creds.
+	 *
+	 * @param int $n Store number.
+	 * @return array|null
+	 */
+	private static function pospal_store_creds( $n ) {
+		$n = max( 1, (int) $n );
+		if ( 1 === $n ) {
+			return null;
+		}
+		$s = DoughBoss_Settings::pospal_store( $n );
+		return array(
+			'host'    => $s['host'],
+			'app_id'  => $s['app_id'],
+			'app_key' => $s['app_key'],
+		);
+	}
+
+	/**
+	 * Fetch ALL products for a store, paginating queryProductPages.
+	 *
+	 * @param array|null $creds Store creds.
+	 * @return array|WP_Error List of product rows or error.
+	 */
+	private static function pospal_all_products( $creds ) {
+		$all    = array();
+		$params = array();
+		$guard  = 0;
+		do {
+			$data = DoughBoss_POSPal::query_products( $creds, $params );
+			if ( is_wp_error( $data ) ) {
+				return $data;
+			}
+			$result = ( is_array( $data ) && isset( $data['result'] ) && is_array( $data['result'] ) ) ? $data['result'] : array();
+			$all    = array_merge( $all, $result );
+			$pbp    = ( is_array( $data ) && isset( $data['postBackParameter'] ) ) ? $data['postBackParameter'] : null;
+			$params = $pbp ? array( 'postBackParameter' => $pbp ) : array();
+			++$guard;
+		} while ( ! empty( $result ) && $pbp && $guard < 50 );
+		return $all;
+	}
+
+	/**
+	 * List a store's POSPal products (uid + name) — the source for the product map.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--store=<n>]
+	 * : Store number (1 = primary/legacy, default 1).
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp doughboss pospal-products
+	 *     wp doughboss pospal-products --store=2
+	 *
+	 * @param array $args       Positional args (unused).
+	 * @param array $assoc_args Flags.
+	 * @return void
+	 */
+	public static function pospal_products( $args, $assoc_args ) {
+		unset( $args );
+		$store    = isset( $assoc_args['store'] ) ? (int) $assoc_args['store'] : 1;
+		$products = self::pospal_all_products( self::pospal_store_creds( $store ) );
+		if ( is_wp_error( $products ) ) {
+			WP_CLI::error( 'POSPal products failed: ' . $products->get_error_message() );
+		}
+		if ( empty( $products ) ) {
+			WP_CLI::log( 'No products returned.' );
+			return;
+		}
+		$rows = array();
+		foreach ( $products as $p ) {
+			$rows[] = array(
+				'uid'       => isset( $p['uid'] ) ? (string) $p['uid'] : '',
+				'name'      => isset( $p['name'] ) ? (string) $p['name'] : '',
+				'sellPrice' => isset( $p['sellPrice'] ) ? (string) $p['sellPrice'] : '',
+			);
+		}
+		WP_CLI\Utils\format_items( 'table', $rows, array( 'uid', 'name', 'sellPrice' ) );
+		WP_CLI::log( count( $rows ) . ' products.' );
+	}
+
+	/**
+	 * Build the menu-item -> POSPal product uid map by matching names, and save it to
+	 * settings (pospal_product_map). Required before order push will work.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--store=<n>]
+	 * : Store number (default 1).
+	 *
+	 * [--dry-run]
+	 * : Show matches/misses; write nothing.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp doughboss pospal-map --dry-run
+	 *     wp doughboss pospal-map
+	 *
+	 * @param array $args       Positional args (unused).
+	 * @param array $assoc_args Flags.
+	 * @return void
+	 */
+	public static function pospal_map( $args, $assoc_args ) {
+		unset( $args );
+		$store    = isset( $assoc_args['store'] ) ? (int) $assoc_args['store'] : 1;
+		$dry      = ! empty( $assoc_args['dry-run'] );
+		$products = self::pospal_all_products( self::pospal_store_creds( $store ) );
+		if ( is_wp_error( $products ) ) {
+			WP_CLI::error( 'POSPal products failed: ' . $products->get_error_message() );
+		}
+
+		$by_name = array();
+		foreach ( $products as $p ) {
+			if ( empty( $p['name'] ) || ! isset( $p['uid'] ) ) {
+				continue;
+			}
+			$by_name[ DoughBoss_POSPal_Orders::norm( $p['name'] ) ] = $p['uid'];
+		}
+
+		$items = get_posts(
+			array(
+				'post_type'        => DoughBoss_Post_Types::POST_TYPE,
+				'post_status'      => 'publish',
+				'posts_per_page'   => -1,
+				'suppress_filters' => false,
+			)
+		);
+		$map    = array();
+		$missed = array();
+		foreach ( $items as $post ) {
+			$key = DoughBoss_POSPal_Orders::norm( $post->post_title );
+			if ( '' !== $key && isset( $by_name[ $key ] ) ) {
+				$map[ $key ] = $by_name[ $key ];
+				WP_CLI::log( sprintf( '  ok  %-24s -> %s', $post->post_title, (string) $by_name[ $key ] ) );
+			} else {
+				$missed[] = $post->post_title;
+				WP_CLI::log( sprintf( '  --  %-24s (no POSPal product match)', $post->post_title ) );
+			}
+		}
+
+		if ( $dry ) {
+			WP_CLI::success( sprintf( '[DRY RUN] %d mapped, %d unmatched. Nothing saved.', count( $map ), count( $missed ) ) );
+			return;
+		}
+		DoughBoss_Settings::update( array( 'pospal_product_map' => $map ) );
+		WP_CLI::success( sprintf( '%d items mapped, %d unmatched. Saved.', count( $map ), count( $missed ) ) );
+		if ( ! empty( $missed ) ) {
+			WP_CLI::warning( 'Unmatched (rename to match POSPal, or map manually): ' . implode( '; ', $missed ) );
+		}
+	}
+
+	/**
+	 * Test-push an existing order to POSPal (use --dry-run to inspect the body first).
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : Order id.
+	 *
+	 * [--store=<n>]
+	 * : Store number (default 1).
+	 *
+	 * [--dry-run]
+	 * : Print the body + any unmapped items; send nothing.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp doughboss pospal-push-order 42 --dry-run
+	 *     wp doughboss pospal-push-order 42
+	 *
+	 * @param array $args       Positional args.
+	 * @param array $assoc_args Flags.
+	 * @return void
+	 */
+	public static function pospal_push_order( $args, $assoc_args ) {
+		$id = isset( $args[0] ) ? (int) $args[0] : 0;
+		if ( ! $id ) {
+			WP_CLI::error( 'Usage: wp doughboss pospal-push-order <ORDER_ID> [--store=] [--dry-run]' );
+		}
+		$order = DoughBoss_Order::get( $id );
+		if ( ! $order ) {
+			WP_CLI::error( 'Order not found: ' . $id );
+		}
+		$items = DoughBoss_Order::get_items( $id );
+		$build = DoughBoss_POSPal_Orders::build_body( $order, $items );
+
+		if ( ! empty( $assoc_args['dry-run'] ) ) {
+			WP_CLI::log( wp_json_encode( $build['body'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) );
+			if ( ! empty( $build['unmapped'] ) ) {
+				WP_CLI::warning( 'Unmapped items (push would be skipped live): ' . implode( '; ', $build['unmapped'] ) );
+			}
+			WP_CLI::success( '[DRY RUN] Body shown above; nothing sent.' );
+			return;
+		}
+		if ( ! empty( $build['unmapped'] ) ) {
+			WP_CLI::error( 'Refusing to push with unmapped items: ' . implode( '; ', $build['unmapped'] ) . '. Run pospal-map first.' );
+		}
+		$store  = isset( $assoc_args['store'] ) ? (int) $assoc_args['store'] : 1;
+		$result = DoughBoss_POSPal::push_order( $build['body'], self::pospal_store_creds( $store ) );
+		if ( is_wp_error( $result ) ) {
+			WP_CLI::error( 'Push failed: ' . $result->get_error_message() );
+		}
+		$no = ( is_array( $result ) && isset( $result['orderNo'] ) ) ? (string) $result['orderNo'] : '(no orderNo returned)';
+		WP_CLI::success( 'Pushed. POSPal orderNo: ' . $no );
+	}
 }
 
 WP_CLI::add_command( 'doughboss pospal-test', array( 'DoughBoss_CLI', 'pospal_test' ) );
@@ -394,3 +603,6 @@ WP_CLI::add_command( 'doughboss voucher-list', array( 'DoughBoss_CLI', 'voucher_
 WP_CLI::add_command( 'doughboss voucher-redeem', array( 'DoughBoss_CLI', 'voucher_redeem' ) );
 WP_CLI::add_command( 'doughboss voucher-void', array( 'DoughBoss_CLI', 'voucher_void' ) );
 WP_CLI::add_command( 'doughboss seed-menu', array( 'DoughBoss_CLI', 'seed_menu' ) );
+WP_CLI::add_command( 'doughboss pospal-products', array( 'DoughBoss_CLI', 'pospal_products' ) );
+WP_CLI::add_command( 'doughboss pospal-map', array( 'DoughBoss_CLI', 'pospal_map' ) );
+WP_CLI::add_command( 'doughboss pospal-push-order', array( 'DoughBoss_CLI', 'pospal_push_order' ) );

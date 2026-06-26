@@ -41,6 +41,19 @@ class DoughBoss_POSPal {
 	const PATH_USE_COUPONCODE = '/pospal-api/api/auth/openapi/promotioncouponcode/use/';
 
 	/**
+	 * Order Push + Product endpoints (pospal-api2 openapi v1). These modules are
+	 * camelCase (orderOpenApi / productOpenApi); call() lower-cases the $module via
+	 * sanitize_key(), so these are passed as explicit $override_path values, exactly
+	 * like the coupon paths above. Confirmed from the POSPal Order Push API docs
+	 * (orderOpenApi/addOnLineOrder, productOpenApi/queryProductPages, etc.).
+	 */
+	const PATH_ADD_ONLINE_ORDER  = '/pospal-api2/openapi/v1/orderOpenApi/addOnLineOrder';
+	const PATH_QUERY_PRODUCTS    = '/pospal-api2/openapi/v1/productOpenApi/queryProductPages';
+	const PATH_QUERY_ORDER_BY_NO = '/pospal-api2/openapi/v1/orderOpenApi/queryOrderByNo';
+	const PATH_COMPLETE_ORDER    = '/pospal-api2/openapi/v1/orderOpenApi/completeOrder';
+	const PATH_CANCEL_ORDER      = '/pospal-api2/openapi/v1/orderOpenApi/cancleOrder';
+
+	/**
 	 * Whether POSPal is switched on AND fully configured. The single gate the
 	 * rest of the plugin checks before making any call.
 	 *
@@ -285,6 +298,97 @@ class DoughBoss_POSPal {
 	private static function numeric( $value ) {
 		$value = (string) $value;
 		return ( '' !== $value && ctype_digit( $value ) ) ? (int) $value : $value;
+	}
+
+	/**
+	 * Public access to the Long-as-unquoted-number coercion, for callers building
+	 * an order body (POSPal product uids are 19-digit Java Longs that must be JSON
+	 * numbers, never strings, or POSPal reports "product not found" / precision loss).
+	 *
+	 * @param mixed $value Numeric-string or int uid.
+	 * @return int|string
+	 */
+	public static function long_id( $value ) {
+		return self::numeric( $value );
+	}
+
+	/**
+	 * One page of the store's products (uid, name, sellPrice, …). Caller paginates by
+	 * echoing back the returned `postBackParameter`. Read-only.
+	 *
+	 * @param array|null $creds  Optional per-store creds.
+	 * @param array      $params Optional query params (categoryUid, needAllIncludeDel,
+	 *                           updatedDateTimeFrom/To, postBackParameter).
+	 * @return array|WP_Error Data array { result[], postBackParameter, pageSize } or error.
+	 */
+	public static function query_products( $creds = null, array $params = array() ) {
+		return self::call( 'product', 'queryProductPages', $params, self::PATH_QUERY_PRODUCTS, $creds );
+	}
+
+	/**
+	 * Push a paid/placed online order into POSPal so it lands on the till. The body
+	 * must already be built per the Order Push API (orderSource, payMethod, items
+	 * with numeric productUid, totalAmount, …); appId is added by call(). Off-by-
+	 * default orchestration lives in DoughBoss_POSPal_Orders.
+	 *
+	 * @param array      $body  Fully-built addOnLineOrder body (minus appId).
+	 * @param array|null $creds Optional per-store creds.
+	 * @return array|WP_Error Data { orderNo, orderCreateDateTime, … } or error.
+	 */
+	public static function push_order( array $body, $creds = null ) {
+		/**
+		 * Filter the POSPal order body just before it is sent (final escape hatch to
+		 * tweak field mapping without editing the plugin).
+		 *
+		 * @param array $body  The addOnLineOrder body (without appId).
+		 * @param array|null $creds Per-store creds (or null for the default store).
+		 */
+		$body = (array) apply_filters( 'doughboss_pospal_order_body', $body, $creds );
+		return self::call( 'order', 'addOnLineOrder', $body, self::PATH_ADD_ONLINE_ORDER, $creds );
+	}
+
+	/**
+	 * Look up a pushed order by its POSPal order number (for verification/dedupe).
+	 *
+	 * @param string     $order_no POSPal orderNo.
+	 * @param array|null $creds    Optional per-store creds.
+	 * @return array|WP_Error
+	 */
+	public static function query_order_by_no( $order_no, $creds = null ) {
+		return self::call( 'order', 'queryOrderByNo', array( 'orderNo' => (string) $order_no ), self::PATH_QUERY_ORDER_BY_NO, $creds );
+	}
+
+	/**
+	 * Complete a pushed order; shouldAddTicket=true materialises it as a sales ticket
+	 * on the till. Not auto-called by the sync (kept for explicit fulfilment flows).
+	 *
+	 * @param string     $order_no         POSPal orderNo.
+	 * @param bool       $should_add_ticket Whether to generate the cashier ticket.
+	 * @param array|null $creds            Optional per-store creds.
+	 * @return array|WP_Error
+	 */
+	public static function complete_order( $order_no, $should_add_ticket = true, $creds = null ) {
+		return self::call(
+			'order',
+			'completeOrder',
+			array(
+				'orderNo'        => (string) $order_no,
+				'shouldAddTicket' => (bool) $should_add_ticket,
+			),
+			self::PATH_COMPLETE_ORDER,
+			$creds
+		);
+	}
+
+	/**
+	 * Cancel a pushed order (note POSPal's documented spelling "cancleOrder").
+	 *
+	 * @param string     $order_no POSPal orderNo.
+	 * @param array|null $creds    Optional per-store creds.
+	 * @return array|WP_Error
+	 */
+	public static function cancel_order( $order_no, $creds = null ) {
+		return self::call( 'order', 'cancleOrder', array( 'orderNo' => (string) $order_no ), self::PATH_CANCEL_ORDER, $creds );
 	}
 
 	/**

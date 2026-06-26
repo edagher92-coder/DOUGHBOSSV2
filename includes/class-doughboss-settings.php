@@ -120,6 +120,15 @@ class DoughBoss_Settings {
 			'pospal3_app_key'       => '',
 			'pospal3_coupon_uid_5'  => '',
 			'pospal3_coupon_uid_10' => '',
+			// POSPal order push (mirror online orders onto the till) — off by default.
+			// Orders only push once a product map is built (pospal_product_map, via
+			// `wp doughboss pospal-map`). pay_method/pay_online describe how a Stripe-
+			// paid order is represented on the POS.
+			'pospal_push_orders'          => 0,
+			'pospal_order_pay_method'     => 'Cash',
+			'pospal_order_pay_method_code' => '',
+			'pospal_order_pay_online'     => 0,
+			'pospal_product_map'          => array(),
 			// Standalone staff console (separate origin, e.g. GitHub Pages) allowed
 			// to call the doughboss/v1 routes cross-origin via Application Password.
 			'app_origin'        => 'https://edagher92-coder.github.io',
@@ -437,6 +446,63 @@ class DoughBoss_Settings {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether mirroring online orders onto the POSPal till is switched on.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_push_orders() {
+		return (bool) self::get( 'pospal_push_orders', 0 );
+	}
+
+	/**
+	 * Whether the order-push leg is live: POSPal on AND order push on.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_push_enabled() {
+		return self::pospal_enabled() && self::pospal_push_orders();
+	}
+
+	/**
+	 * Pay method recorded on pushed POS orders (Cash / Wxpay / Alipay / a custom name).
+	 *
+	 * @return string
+	 */
+	public static function pospal_order_pay_method() {
+		$m = trim( (string) self::get( 'pospal_order_pay_method', 'Cash' ) );
+		return '' !== $m ? $m : 'Cash';
+	}
+
+	/**
+	 * Custom pay-method code (originalCode), required when pay method is a custom one.
+	 *
+	 * @return string
+	 */
+	public static function pospal_order_pay_method_code() {
+		return trim( (string) self::get( 'pospal_order_pay_method_code', '' ) );
+	}
+
+	/**
+	 * Whether a Stripe-paid order should be marked paid online (payOnLine=1) on the POS.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_order_pay_online() {
+		return (bool) self::get( 'pospal_order_pay_online', 0 );
+	}
+
+	/**
+	 * Map of normalised menu-item name => POSPal product uid, used to translate order
+	 * lines into POSPal products. Built with `wp doughboss pospal-map`.
+	 *
+	 * @return array<string,int|string>
+	 */
+	public static function pospal_product_map() {
+		$map = self::get( 'pospal_product_map', array() );
+		return is_array( $map ) ? $map : array();
 	}
 
 	/**

@@ -221,6 +221,15 @@ class DoughBoss_Admin {
 			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
 		}
 
+		// POSPal order push (mirror online orders to the till). The product map is
+		// managed via WP-CLI (`wp doughboss pospal-map`), not this form, so it is
+		// preserved rather than rebuilt on save.
+		$clean['pospal_push_orders']           = empty( $input['pospal_push_orders'] ) ? 0 : 1;
+		$clean['pospal_order_pay_method']      = isset( $input['pospal_order_pay_method'] ) ? sanitize_text_field( $input['pospal_order_pay_method'] ) : 'Cash';
+		$clean['pospal_order_pay_method_code'] = isset( $input['pospal_order_pay_method_code'] ) ? sanitize_text_field( $input['pospal_order_pay_method_code'] ) : '';
+		$clean['pospal_order_pay_online']      = empty( $input['pospal_order_pay_online'] ) ? 0 : 1;
+		$clean['pospal_product_map']           = ( isset( $existing['pospal_product_map'] ) && is_array( $existing['pospal_product_map'] ) ) ? $existing['pospal_product_map'] : array();
+
 		// Mercure real-time push.
 		$clean['mercure_enabled']       = empty( $input['mercure_enabled'] ) ? 0 : 1;
 		$clean['mercure_hub_url']       = isset( $input['mercure_hub_url'] ) ? esc_url_raw( trim( (string) $input['mercure_hub_url'] ) ) : '';
