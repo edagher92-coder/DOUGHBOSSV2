@@ -3,10 +3,11 @@
 	'use strict';
 	var mount = document.getElementById('db-catering-demo');
 	if (!mount) { return; }
+	var ORDERS_EMAIL = 'orders@doughboss.com.au';
 	var PACKAGES = [
-		{ id: 'lunch', name: 'The Lunch Run', serves: '8–10', max: 10, price: 165, desc: 'Manoush + dips + Bites' },
-		{ id: 'party', name: 'The Party Box', serves: '15–20', max: 20, price: 320, desc: 'Manoush + Bites + sides', pop: true },
-		{ id: 'footy', name: 'The Footy Feed', serves: '25–30', max: 30, price: 520, desc: 'Manoush & Bites platters' },
+		{ id: 'lunch', name: 'The Lunch Run', serves: '8–10', max: 10, price: 165, desc: 'Manoush, dips & pizza' },
+		{ id: 'party', name: 'The Party Box', serves: '15–20', max: 20, price: 320, desc: 'Manoush, pizza & sides', pop: true },
+		{ id: 'footy', name: 'The Footy Feed', serves: '25–30', max: 30, price: 520, desc: 'Manoush & pizza platters' },
 		{ id: 'big', name: 'The Big Event', serves: '40–50', max: 50, price: 850, desc: 'Full mezze spread' },
 		{ id: 'custom', name: 'Custom', serves: '10+', max: 0, price: 0, perHead: 19, desc: '$19 per head, min 10' }
 	];
@@ -83,12 +84,26 @@
 			return;
 		}
 		var q = quote();
+		var p = pkgById(state.pkg);
 		var ref = 'CAT-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+		var subject = 'Catering booking ' + ref + ' — ' + p.name;
+		var bodyLines = [
+			'Catering booking request', 'Reference: ' + ref, '',
+			'Package: ' + p.name + ' (serves ' + p.serves + ')',
+			'Guests: ' + state.guests,
+			'Event date: ' + (state.date || 'to be confirmed'),
+			'Fulfilment: ' + state.type, 'Shop: ' + state.shop, '',
+			'Name: ' + state.name, 'Email: ' + state.email, 'Phone: ' + state.phone, '',
+			'Total: ' + money(q.total), 'Deposit (30%): ' + money(q.deposit), 'Balance: ' + money(q.balance)
+		];
+		var mailto = 'mailto:' + ORDERS_EMAIL + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(bodyLines.join('\n'));
 		mount.innerHTML =
 			'<div class="dbq-done" role="status"><div class="dbq-check">✓</div><h3>Booking request received</h3>' +
 			'<p class="dbq-ref">Reference <strong>' + esc(ref) + '</strong></p>' +
 			'<p>Deposit to secure your date: <strong>' + money(q.deposit) + '</strong> · balance ' + money(q.balance) + ' due 48h before.</p>' +
-			'<p class="dbq-demo">Demo — in production this takes a real card deposit via Stripe and emails your quote instantly.</p></div>';
+			'<p>We\'ll send your quote to <strong>' + esc(state.email) + '</strong> and confirm shortly.</p>' +
+			'<a class="vb-btn vb-btn-ember dbq-mailto" href="' + esc(mailto) + '">Email your booking to ' + esc(ORDERS_EMAIL) + '</a>' +
+			'<p class="dbq-demo">Demo — in production this takes a card deposit via Stripe and emails your booking to ' + esc(ORDERS_EMAIL) + ' instantly.</p></div>';
 		if (mount.scrollIntoView) { mount.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 	}
 	mount.addEventListener('click', function (e) {

@@ -2648,9 +2648,9 @@ class DoughBoss_REST_Controller {
 			wp_mail( $enquiry['customer_email'], $subject, $body );
 		}
 
-		$admin_email = get_option( 'admin_email' );
-		if ( is_email( $admin_email ) ) {
-			wp_mail( $admin_email, $subject, $body );
+		$orders_email = DoughBoss_Settings::orders_email();
+		if ( is_email( $orders_email ) ) {
+			wp_mail( $orders_email, $subject, $body );
 		}
 	}
 
@@ -2691,9 +2691,9 @@ class DoughBoss_REST_Controller {
 			wp_mail( $order->customer_email, $subject, $body );
 		}
 
-		$admin_email = get_option( 'admin_email' );
-		if ( is_email( $admin_email ) ) {
-			wp_mail( $admin_email, $subject, $body );
+		$orders_email = DoughBoss_Settings::orders_email();
+		if ( is_email( $orders_email ) ) {
+			wp_mail( $orders_email, $subject, $body );
 		}
 	}
 }

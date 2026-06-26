@@ -77,6 +77,10 @@ class DoughBoss_Settings {
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
 			'ordering_open'   => 1,
+			// Shop inbox: where order + catering notifications are emailed. Blank falls
+			// back to the WordPress admin email (see orders_email()). Defaults to the
+			// Dough Boss orders inbox so the shop is notified out of the box.
+			'orders_email'    => 'orders@doughboss.com.au',
 			'sizes'           => array(),
 			'toppings'        => array(),
 			// Payments (Stripe) — off by default; keys added later.
@@ -169,6 +173,21 @@ class DoughBoss_Settings {
 	 */
 	public static function gst_inclusive() {
 		return (bool) self::get( 'gst_inclusive', 1 );
+	}
+
+	/**
+	 * Email address that order + catering notifications are sent to (the shop inbox).
+	 * Falls back to the WordPress admin email when unset or invalid. Filterable via
+	 * 'doughboss_orders_email'.
+	 *
+	 * @return string
+	 */
+	public static function orders_email() {
+		$email = sanitize_email( (string) self::get( 'orders_email', '' ) );
+		if ( ! is_email( $email ) ) {
+			$email = (string) get_option( 'admin_email' );
+		}
+		return (string) apply_filters( 'doughboss_orders_email', $email );
 	}
 
 	/**
