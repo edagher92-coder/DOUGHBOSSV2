@@ -26,7 +26,10 @@
 html,body{margin:0;height:100%;}
 body{font-family:'Barlow',system-ui,Arial,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:16px;}
 .disp{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;line-height:.96;}
-.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}
+.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
+.skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+.skip:focus{top:0;}
+:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:3px;}
 button{font:inherit;cursor:pointer;}
 a{color:inherit;}
 
@@ -138,6 +141,7 @@ a{color:inherit;}
 </style>
 </head>
 <body>
+<a class="skip" href="#p-live">Skip to orders</a>
 
 <header class="top">
 	<div class="top-in">
@@ -160,11 +164,11 @@ a{color:inherit;}
 
 <nav class="nav" aria-label="Orders">
 	<div class="nav-in" id="tabs" role="tablist">
-		<button class="ntab" role="tab" data-panel="live" aria-selected="true"><span class="ico">🔥</span><span class="nm">New &amp; cooking</span><span class="nbadge alert" id="b-live">0</span></button>
-		<button class="ntab" role="tab" data-panel="today" aria-selected="false"><span class="ico">📋</span><span class="nm">Today</span><span class="nbadge" id="b-today">0</span></button>
-		<button class="ntab" role="tab" data-panel="upcoming" aria-selected="false"><span class="ico">📅</span><span class="nm">Coming up</span><span class="nbadge" id="b-upcoming">0</span></button>
-		<button class="ntab" role="tab" data-panel="catering" aria-selected="false"><span class="ico">🎉</span><span class="nm">Catering</span><span class="nbadge" id="b-catering">0</span></button>
-		<button class="ntab" role="tab" data-panel="history" aria-selected="false"><span class="ico">✓</span><span class="nm">Done</span><span class="nbadge" id="b-history">0</span></button>
+		<button class="ntab" role="tab" data-panel="live" aria-selected="true" aria-controls="p-live"><span class="ico" aria-hidden="true">🔥</span><span class="nm">New &amp; cooking</span><span class="nbadge" id="b-live" aria-label="0 live orders">0</span></button>
+		<button class="ntab" role="tab" data-panel="today" aria-selected="false" aria-controls="p-today"><span class="ico" aria-hidden="true">📋</span><span class="nm">Today</span><span class="nbadge" id="b-today" aria-label="0 orders today">0</span></button>
+		<button class="ntab" role="tab" data-panel="upcoming" aria-selected="false" aria-controls="p-upcoming"><span class="ico" aria-hidden="true">📅</span><span class="nm">Coming up</span><span class="nbadge" id="b-upcoming" aria-label="0 upcoming orders">0</span></button>
+		<button class="ntab" role="tab" data-panel="catering" aria-selected="false" aria-controls="p-catering"><span class="ico" aria-hidden="true">🎉</span><span class="nm">Catering</span><span class="nbadge" id="b-catering" aria-label="0 catering orders">0</span></button>
+		<button class="ntab" role="tab" data-panel="history" aria-selected="false" aria-controls="p-history"><span class="ico" aria-hidden="true">✓</span><span class="nm">Done</span><span class="nbadge" id="b-history" aria-label="0 completed orders">0</span></button>
 	</div>
 </nav>
 
@@ -292,7 +296,7 @@ a{color:inherit;}
 			'<div class="c-meta">' + esc(o.type) + ' · ' + esc(o.store) + ' ' + chanTag(o) + '</div>' +
 			'<ul class="c-items">' + liEls(o.items) + '</ul>' +
 			'<div class="c-bottom"><span class="c-tot">' + money(o.total) + '</span>' +
-			'<button type="button" class="act ' + next.cls + '" data-ref="' + esc(o.ref) + '">' + next.label + ' →</button></div></div>';
+			'<button type="button" class="act ' + next.cls + '" data-ref="' + esc(o.ref) + '">' + next.label + ' <span aria-hidden="true">→</span></button></div></div>';
 	}
 
 	/* read-only info card (today / upcoming / done) */
@@ -313,16 +317,18 @@ a{color:inherit;}
 			'<div class="c-top"><span class="c-ref">' + esc(o.who) + '</span><span class="c-age">' + (o.scheduled ? dayLabel(o.scheduled) : 'enquired ' + ago(o.placed)) + '</span></div>' +
 			'<div class="c-meta" style="margin-top:6px"><b style="color:var(--text)">' + (o.pax || '—') + ' pax</b> · ' + esc(o.pkg || 'Catering') + ' · ' + esc(o.store) + '</div>' +
 			'<ul class="c-items">' + liEls(o.items) + '</ul>' +
-			'<div class="c-bottom">' + (o.total ? '<span>' + statLine(o.status) + ' · deposit <b>' + money(o.deposit || 0) + '</b></span><span class="c-tot">' + money(o.total) + '</span>' : statLine(o.status) + '<button type="button" class="act" style="flex:0 0 auto;padding:10px 16px">Send quote →</button>') +
+			'<div class="c-bottom">' + (o.total ? '<span>' + statLine(o.status) + ' · deposit <b>' + money(o.deposit || 0) + '</b></span><span class="c-tot">' + money(o.total) + '</span>' : statLine(o.status) + '<button type="button" class="act" style="flex:0 0 auto;padding:10px 16px">Send quote <span aria-hidden="true">→</span></button>') +
 			'</div></div>';
 	}
 
 	function emptyCard(msg) { return '<div class="empty">' + msg + '</div>'; }
 
-	function badge(id, n, alert) {
+	var BADGE_LABELS = { 'b-live': 'live orders', 'b-today': 'orders today', 'b-upcoming': 'upcoming orders', 'b-catering': 'catering orders', 'b-history': 'completed orders' };
+	function badge(id, n, isAlert) {
 		var el = document.getElementById(id);
 		el.textContent = n;
-		el.className = 'nbadge' + (n === 0 ? ' zero' : (alert ? ' alert' : ''));
+		el.className = 'nbadge' + (n === 0 ? ' zero' : (isAlert ? ' alert' : ''));
+		el.setAttribute('aria-label', n + ' ' + (BADGE_LABELS[id] || ''));
 	}
 
 	function render() {
@@ -371,6 +377,7 @@ a{color:inherit;}
 			var p = document.getElementById('p-' + t.getAttribute('data-panel'));
 			p.classList.add('on'); p.hidden = false;
 			window.scrollTo({ top: 0, behavior: 'smooth' });
+			var h = p.querySelector('.ph'); if (h) { h.setAttribute('tabindex', '-1'); h.focus(); }
 		});
 	});
 

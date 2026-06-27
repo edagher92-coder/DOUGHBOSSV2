@@ -26,7 +26,10 @@
 html,body{margin:0;height:100%;}
 body{font-family:'Barlow',system-ui,Arial,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:16px;}
 .disp{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;line-height:.96;}
-.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}
+.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
+.skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+.skip:focus{top:0;}
+:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:3px;}
 button{font:inherit;cursor:pointer;}
 a{color:inherit;}
 
@@ -94,6 +97,7 @@ a{color:inherit;}
 .kpi.dark .l{color:#d7cbba;} .kpi.dark .s{color:#c9bdac;} .kpi.dark .v{color:var(--amber);}
 .kpi.alert{position:relative;}
 .kpi.alert::after{content:"";position:absolute;top:13px;right:13px;width:9px;height:9px;border-radius:50%;background:var(--new);box-shadow:0 0 0 4px rgba(192,57,43,.16);}
+.kpi.alert .l::after{content:" (live)";font-size:10px;color:var(--new);}
 
 .cols2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px;}
 .block{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:16px 18px;}
@@ -185,6 +189,7 @@ a{color:inherit;}
 </style>
 </head>
 <body>
+<a class="skip" href="#p-dashboard">Skip to dashboard</a>
 
 <header class="top">
 	<div class="top-in">
@@ -207,10 +212,10 @@ a{color:inherit;}
 
 <nav class="tabs" aria-label="Owner sections">
 	<div class="tabs-in" role="tablist">
-		<button class="tab" role="tab" data-panel="dashboard" aria-selected="true">Dashboard</button>
-		<button class="tab" role="tab" data-panel="live">Live orders <span class="pill" id="c-live">0</span></button>
-		<button class="tab" role="tab" data-panel="catering">Catering <span class="pill" id="c-cat">0</span></button>
-		<button class="tab" role="tab" data-panel="orders">All orders <span class="pill" id="c-ord">0</span></button>
+		<button class="tab" role="tab" data-panel="dashboard" aria-selected="true" aria-controls="p-dashboard">Dashboard</button>
+		<button class="tab" role="tab" data-panel="live" aria-selected="false" aria-controls="p-live">Live orders <span class="pill" id="c-live" aria-label="0 live orders">0</span></button>
+		<button class="tab" role="tab" data-panel="catering" aria-selected="false" aria-controls="p-catering">Catering <span class="pill" id="c-cat" aria-label="0 catering orders">0</span></button>
+		<button class="tab" role="tab" data-panel="orders" aria-selected="false" aria-controls="p-orders">All orders <span class="pill" id="c-ord" aria-label="0 total orders">0</span></button>
 	</div>
 </nav>
 
@@ -391,7 +396,7 @@ a{color:inherit;}
 		var labels=[];for(var i=6;i>=0;i--){var d=new Date(now);d.setDate(d.getDate()-i);labels.push(DOW[d.getDay()]);}
 		document.getElementById('trend').innerHTML=series.map(function(v,i){
 			var hgt=Math.round(v/mx*84)+4;var lab=i===6?'Today':labels[i];
-			return '<div class="d"><div class="bar2" style="height:'+hgt+'px" title="'+money0(v)+'"></div><div class="dl">'+lab+'</div></div>';
+			return '<div class="d"><div class="bar2" style="height:'+hgt+'px" role="img" aria-label="'+lab+': '+money0(v)+'"></div><div class="dl" aria-hidden="true">'+lab+'</div></div>';
 		}).join('');
 
 		var byStore=STORES.map(function(s){var o=ORDERS.filter(function(x){return x.store===s&&(sameDay(x.placed,now)||(x.scheduled&&sameDay(x.scheduled,now)));});return {s:s,n:o.length,rev:o.reduce(function(a,b){return a+(b.total||0);},0)};});
@@ -441,7 +446,7 @@ a{color:inherit;}
 		return '<div class="catc"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><h4>'+esc(o.who)+'</h4><div class="cw">'+(o.scheduled?dayLabel(o.scheduled):'enquired '+ago(o.placed))+'</div></div>'+depChip(o)+'</div>'+
 			'<div class="cr"><span><b>'+(o.pax||'—')+'</b> pax</span><span>'+esc(o.pkg||'Catering')+'</span><span>'+esc(o.store)+'</span></div>'+
 			'<ul>'+liEls(o.items)+'</ul>'+
-			'<div class="cf"><span class="dep">'+(o.total?'Quote '+money(o.total)+' · deposit <b style="color:var(--ready)">'+money(o.deposit||0)+'</b>':'Awaiting quote')+'</span><button class="mini">'+(o.total?'View':'Send quote')+'</button></div></div>';
+			'<div class="cf"><span class="dep">'+(o.total?'Quote '+money(o.total)+' · deposit <b style="color:var(--ready)">'+money(o.deposit||0)+'</b>':'Awaiting quote')+'</span><button class="mini" aria-label="'+(o.total?'View details for '+esc(o.who):'Send quote to '+esc(o.who))+'">'+(o.total?'View':'Send quote')+'</button></div></div>';
 	}
 	function renderCatering(){
 		var enq=catEnq(),bk=catBooked();
@@ -474,10 +479,11 @@ a{color:inherit;}
 		}).join(''):'<p class="empty">Nothing in this filter.</p>');
 	}
 
+	function setPill(id,n,label){var el=document.getElementById(id);el.textContent=n;el.setAttribute('aria-label',n+' '+label);}
 	function counts(){
-		document.getElementById('c-live').textContent=live().length;
-		document.getElementById('c-cat').textContent=catEnq().length+catBooked().length;
-		document.getElementById('c-ord').textContent=ORDERS.filter(inStore).length;
+		setPill('c-live',live().length,'live orders');
+		setPill('c-cat',catEnq().length+catBooked().length,'catering orders');
+		setPill('c-ord',ORDERS.filter(inStore).length,'total orders');
 	}
 	function renderAll(){counts();renderHealth();renderDashboard();renderOversight();renderCatering();renderOrders();}
 
@@ -487,6 +493,7 @@ a{color:inherit;}
 		tabs.forEach(function(x){x.setAttribute('aria-selected',x.getAttribute('data-panel')===name?'true':'false');});
 		document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('on');p.hidden=true;});
 		var p=document.getElementById('p-'+name);p.classList.add('on');p.hidden=false;window.scrollTo({top:0,behavior:'smooth'});
+		var h=p.querySelector('.ph');if(h){h.setAttribute('tabindex','-1');h.focus();}
 	}
 	tabs.forEach(function(t){t.addEventListener('click',function(){show(t.getAttribute('data-panel'));});});
 

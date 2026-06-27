@@ -15,6 +15,7 @@ html,body{height:100%;}
 body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;background:var(--ink);-webkit-font-smoothing:antialiased;}
 .disp{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;line-height:.96;}
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
+:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:3px;}
 
 /* cinematic scene */
 .scene{position:relative;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:44px 18px 60px;}
@@ -92,7 +93,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
        stone oven. Fully drawn in SVG + CSS so it always renders, stays light,
        and needs no external image or video. -->
   <div class="scene-art" aria-hidden="true">
-    <svg viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice" role="img">
+    <svg viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Animated scene of a grandmother rolling dough beside a warm stone oven">
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#241407"/>
@@ -204,10 +205,10 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
       <div class="signed" id="signed" hidden></div>
       <form id="staff-form" novalidate>
         <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" value="Doughboss2026" required></div>
-        <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required></div>
+        <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
         <label class="stay"><input type="checkbox" id="stay" checked> Keep me signed in (no timeout)</label>
-        <button type="submit" class="btn">Open orders &amp; kitchen</button>
-        <p class="err" id="su-err" role="alert"></p>
+        <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
+        <p class="err" id="su-err" role="alert" aria-live="assertive"></p>
       </form>
 
       <div class="divider">OWNER &amp; MANAGER</div>
@@ -259,13 +260,14 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
   form.addEventListener('submit', function(e){
     e.preventDefault();
-    var u=document.getElementById('su').value.trim(), p=document.getElementById('sp').value.trim();
+    var u=document.getElementById('su').value.trim(), p=document.getElementById('sp').value;
     if(!u||!p){ err.textContent='Enter your staff ID and passcode.'; return; }
     err.textContent='';
-    var stay=document.getElementById('stay');
-    if(!stay || stay.checked){ try{ localStorage.setItem(KEY, u); }catch(_){} }
-    else { try{ localStorage.setItem(KEY, u); }catch(_){} }
-    var btn=form.querySelector('.btn'); btn.textContent='Signing in…'; btn.disabled=true;
+    try{ localStorage.setItem(KEY, u); }catch(_){}
+    var btn=form.querySelector('.btn');
+    btn.setAttribute('aria-busy','true');
+    btn.disabled=true;
+    btn.innerHTML='Signing in…';
     setTimeout(function(){ window.location.href='backend.html'; }, 650);
   });
 
