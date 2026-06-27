@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Orders</title>
 <meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self';">
 <!-- Auth gate: nothing here shows until a staff session exists.
      A signed-out visitor is bounced straight to the cinematic sign-in. -->
 <script>
@@ -19,8 +20,8 @@
 <style>
 :root{
 	--gold:#b5571f;--amber:#d98a3d;--ink:#1a120c;--bg:#f6f1e9;--card:#ffffff;
-	--line:#e9e1d3;--text:#241b14;--muted:#8a8073;
-	--new:#c0392b;--prep:#2f6db0;--ready:#2e7d4f;--done:#7a8472;--cancel:#b06a6a;--cater:#9b6a1f;
+	--line:#e9e1d3;--text:#241b14;--muted:#6b6358;
+	--new:#c0392b;--prep:#2f6db0;--ready:#246640;--done:#5f6a58;--cancel:#8a4a4a;--cater:#9b6a1f;
 }
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;}
@@ -29,7 +30,7 @@ body{font-family:'Barlow',system-ui,Arial,sans-serif;color:var(--text);backgroun
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
 .skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 .skip:focus{top:0;}
-:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:3px;}
+:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:3px;}
 button{font:inherit;cursor:pointer;}
 a{color:inherit;}
 
@@ -55,8 +56,8 @@ a{color:inherit;}
 
 /* ---- big section tabs ---- */
 .nav{max-width:1100px;margin:14px auto 0;padding:0 16px;}
-.nav-in{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
-.ntab{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:14px 8px 12px;text-align:center;color:var(--muted);position:relative;}
+.nav-in{display:flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);}
+.ntab{flex:0 0 auto;min-width:88px;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:14px 8px 12px;text-align:center;color:var(--muted);position:relative;}
 .ntab .ico{font-size:26px;line-height:1;display:block;margin-bottom:5px;}
 .ntab .nm{font-size:14px;font-weight:700;color:var(--text);display:block;}
 .ntab[aria-selected="true"]{border-color:var(--gold);background:#fff;box-shadow:0 6px 18px rgba(181,87,31,.14);}
@@ -107,9 +108,9 @@ a{color:inherit;}
 .act{flex:1;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:800;color:#fff;background:var(--gold);display:flex;align-items:center;justify-content:center;gap:8px;}
 .act:hover{filter:brightness(1.07);}
 .act:active{transform:scale(.98);}
-.act.prep{background:var(--prep);}
 .act.ready{background:var(--ready);}
 .act.ghost{background:#efe7d9;color:#6b6356;}
+.act:disabled,.mini:disabled{opacity:.55;cursor:not-allowed;filter:none;}
 .statline{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;}
 .statline .s-dot{width:10px;height:10px;border-radius:50%;}
 .s-completed{color:var(--done);} .s-completed .s-dot{background:var(--done);}
@@ -130,8 +131,10 @@ a{color:inherit;}
 .sim{background:var(--ink);color:#fff;border:0;border-radius:11px;padding:11px 16px;font-size:14.5px;font-weight:700;white-space:nowrap;}
 .empty{grid-column:1/-1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px;text-align:center;color:var(--muted);font-size:15px;}
 
+@keyframes flash{0%,100%{box-shadow:0 2px 5px rgba(0,0,0,.04);}50%{box-shadow:0 0 0 4px rgba(192,57,43,.35);}}
+.card.flash{animation:flash .8s ease;}
 @media(max-width:820px){
-	.nav-in{grid-template-columns:repeat(5,1fr);gap:7px;}
+	.nav-in{gap:7px;}
 	.ntab{padding:11px 4px 9px;border-radius:13px;}
 	.ntab .ico{font-size:22px;}
 	.ntab .nm{font-size:11.5px;}
@@ -180,6 +183,7 @@ a{color:inherit;}
 		<p class="psub">Tap the big button on a card to move it along: <b>Accept</b> → <b>Cooking</b> → <b>Ready</b> → <b>Done</b>.</p>
 		<div class="tip"><span>🔔</span><span>New orders pop in here automatically.</span><div style="flex:1"></div><button type="button" class="sim" id="sim">+ New order (demo)</button></div>
 		<div class="cols" id="board"></div>
+		<div class="vh" id="announce" aria-live="polite" aria-atomic="true"></div>
 	</section>
 
 	<!-- TODAY -->
@@ -200,7 +204,7 @@ a{color:inherit;}
 	<section class="panel" id="p-catering" role="tabpanel" aria-label="Catering" hidden>
 		<h1 class="ph">Catering</h1>
 		<p class="psub">Big orders, handled by Revesby.</p>
-		<h2 class="section-h">New enquiries <span class="n" id="enq-n">0</span></h2>
+		<h2 class="section-h">New enquiries <span class="n" id="enq-n" aria-live="polite" aria-atomic="true">0</span></h2>
 		<div class="list" id="cat-enq"></div>
 		<h2 class="section-h">Booked events</h2>
 		<div class="list" id="cat-booked"></div>
@@ -231,6 +235,8 @@ a{color:inherit;}
 	/* helpers */
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 	function money(n) { return '$' + n.toFixed(2); }
+	var SAFE = {new:1,preparing:1,ready:1,completed:1,cancelled:1,confirmed:1,enquiry:1};
+	function safeStatus(s) { return SAFE[s] ? s : 'muted'; }
 	var now = new Date();
 	function at(off, h, m) { var d = new Date(now); d.setDate(d.getDate() + off); d.setHours(h, m || 0, 0, 0); return d; }
 	function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
@@ -246,27 +252,27 @@ a{color:inherit;}
 	function liEls(arr) { return arr.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join(''); }
 	function chanTag(o) { return o.channel === 'catering' ? '<span class="tag ca">CATERING</span>' : '<span class="tag on">ONLINE</span>'; }
 
-	/* data */
+	/* data — All names and figures below are fictional, for demonstration only. */
 	var seq = 1042;
 	function ref() { seq += 1; return 'DB-' + seq; }
 	var ORDERS = [
 		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Layla M.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese', '1× Soft drink 600ml'], total: 27.50, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 2)) },
 		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Sam K.', type: 'Delivery', items: ['1× All Meat', '1× Garlic Prawns', '2× Spring water'], total: 41.00, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 6)) },
-		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Mariam H.', type: 'Pickup', items: ['3× Zaatar & Cheese', '1× Choc banana'], total: 33.50, status: 'preparing', placed: at(0, now.getHours() - 1, 12) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Joe T.', type: 'Pickup', items: ['1× Chicken Delight', '1× BBQ Chicken', '1× Juice'], total: 29.00, status: 'preparing', placed: at(0, now.getHours() - 1, 38) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Nadia A.', type: 'Delivery', items: ['2× Veggie Plus', '1× Fattoush', '1× Ayran'], total: 36.50, status: 'ready', placed: at(0, now.getHours() - 1, 5) },
+		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Mariam H.', type: 'Pickup', items: ['3× Zaatar & Cheese', '1× Choc banana'], total: 33.50, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 12) },
+		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Joe T.', type: 'Pickup', items: ['1× Chicken Delight', '1× BBQ Chicken', '1× Juice'], total: 29.00, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 38) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Nadia A.', type: 'Delivery', items: ['2× Veggie Plus', '1× Fattoush', '1× Ayran'], total: 36.50, status: 'ready', placed: at(0, Math.max(0, now.getHours() - 1), 5) },
 		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Omar S.', type: 'Pickup', items: ['2× Lahm bi ajeen', '1× Lentil soup'], total: 24.00, status: 'completed', placed: at(0, 9, 14) },
 		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Priya R.', type: 'Delivery', items: ['1× Margherita', '1× Garlic bread'], total: 28.50, status: 'completed', placed: at(0, 11, 2) },
 		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Hassan D.', type: 'Pickup', items: ['4× Mixed manoush', '2× Soft drinks'], total: 46.00, status: 'confirmed', placed: at(0, Math.max(0, now.getHours() - 2), 0), scheduled: at(0, Math.min(21, now.getHours() + 3), 30) },
 		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Office — Lvl 3', type: 'Delivery', items: ['6× Assorted manoush', '3× Salads', '6× Drinks'], total: 92.00, status: 'confirmed', placed: at(-1, 16, 40), scheduled: at(1, 12, 0) },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Al-Noor School', type: 'Catering', items: ['Lunch run — 60 pax', 'Mixed manoush platters ×6', 'Fruit & juice'], total: 540.00, deposit: 150, status: 'confirmed', placed: at(-3, 10, 0), scheduled: at(2, 11, 30), pax: 60, pkg: 'School Lunch Run' },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Mansour Wedding', type: 'Catering', items: ['Grazing + hot manoush — 120 pax', 'Dessert table (Snow Boss)', 'Service staff ×2'], total: 1980.00, deposit: 500, status: 'confirmed', placed: at(-6, 13, 0), scheduled: at(9, 17, 0), pax: 120, pkg: 'Premium Event' },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Westfield Corporate', type: 'Catering', items: ['Corporate breakfast — ~40 pax', 'Manoush + coffee cart'], total: 0, deposit: 0, status: 'enquiry', placed: at(0, Math.max(0, now.getHours() - 3), 20), pax: 40, pkg: 'Corporate Breakfast' },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Hbeishi Family', type: 'Catering', items: ['Engagement — ~80 pax', 'Mixed platters + dessert'], total: 0, deposit: 0, status: 'enquiry', placed: at(-1, 19, 5), pax: 80, pkg: 'Event (TBC)' },
+		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample School', type: 'Catering', items: ['Lunch run — 60 pax', 'Mixed manoush platters ×6', 'Fruit & juice'], total: 540.00, deposit: 150, status: 'confirmed', placed: at(-3, 10, 0), scheduled: at(2, 11, 30), pax: 60, pkg: 'School Lunch Run' },
+		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Smith Wedding', type: 'Catering', items: ['Grazing + hot manoush — 120 pax', 'Dessert table (Snow Boss)', 'Service staff ×2'], total: 1980.00, deposit: 500, status: 'confirmed', placed: at(-6, 13, 0), scheduled: at(9, 17, 0), pax: 120, pkg: 'Premium Event' },
+		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample Corporate', type: 'Catering', items: ['Corporate breakfast — ~40 pax', 'Manoush + coffee cart'], total: 0, deposit: 0, status: 'enquiry', placed: at(0, Math.max(0, now.getHours() - 3), 20), pax: 40, pkg: 'Corporate Breakfast' },
+		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Brown Family', type: 'Catering', items: ['Engagement — ~80 pax', 'Mixed platters + dessert'], total: 0, deposit: 0, status: 'enquiry', placed: at(-1, 19, 5), pax: 80, pkg: 'Event (TBC)' },
 		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Karim B.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese & tomato'], total: 22.00, status: 'completed', placed: at(-1, 12, 30) },
 		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Sophie L.', type: 'Delivery', items: ['1× All Meat', '1× Veggie Plus'], total: 31.00, status: 'completed', placed: at(-1, 18, 12) },
 		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Daniel P.', type: 'Pickup', items: ['1× Chicken Delight'], total: 14.00, status: 'cancelled', placed: at(-2, 13, 47) },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Bankstown Sports Club', type: 'Catering', items: ['Function — 90 pax', 'Mixed manoush + salads'], total: 1260.00, deposit: 350, status: 'completed', placed: at(-12, 10, 0), scheduled: at(-4, 18, 0), pax: 90, pkg: 'Function' },
+		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample Sports Club', type: 'Catering', items: ['Function — 90 pax', 'Mixed manoush + salads'], total: 1260.00, deposit: 350, status: 'completed', placed: at(-12, 10, 0), scheduled: at(-4, 18, 0), pax: 90, pkg: 'Function' },
 		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Yusra M.', type: 'Delivery', items: ['2× Margherita', '1× Garlic bread', '1× Soft drink'], total: 39.50, status: 'completed', placed: at(-2, 19, 22) }
 	];
 
@@ -274,7 +280,7 @@ a{color:inherit;}
 	function inStore(o) { return store === 'all' || o.store === store; }
 
 	function liveOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'online' && (o.status === 'new' || o.status === 'preparing' || o.status === 'ready'); }); }
-	function todayOrders() { return ORDERS.filter(function (o) { return inStore(o) && (sameDay(o.placed, now) || (o.scheduled && sameDay(o.scheduled, now))); }).sort(function (a, b) { return (a.scheduled || a.placed) - (b.scheduled || b.placed); }); }
+	function todayOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel !== 'catering' && (sameDay(o.placed, now) || (o.scheduled && sameDay(o.scheduled, now))); }).sort(function (a, b) { return (a.scheduled || a.placed) - (b.scheduled || b.placed); }); }
 	function upcomingOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.scheduled && o.scheduled > now && !sameDay(o.scheduled, now) && o.status !== 'cancelled'; }).sort(function (a, b) { return a.scheduled - b.scheduled; }); }
 	function catEnquiries() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'catering' && o.status === 'enquiry'; }); }
 	function catBooked() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'catering' && o.status === 'confirmed' && o.scheduled && o.scheduled > now; }).sort(function (a, b) { return a.scheduled - b.scheduled; }); }
@@ -282,15 +288,15 @@ a{color:inherit;}
 
 	function statLine(s) {
 		var t = { completed: 'Done', cancelled: 'Cancelled', confirmed: 'Booked', enquiry: 'New enquiry' }[s] || s;
-		return '<span class="statline s-' + s + '"><span class="s-dot"></span>' + t + '</span>';
+		return '<span class="statline s-' + safeStatus(s) + '"><span class="s-dot" aria-hidden="true"></span>' + t + '</span>';
 	}
 
 	/* live card with big action button */
 	function liveCard(o) {
 		var next = o.status === 'new' ? { cls: '', label: 'Accept order' } :
 			o.status === 'preparing' ? { cls: 'ready', label: 'Mark ready' } :
-				{ cls: 'ghost', label: 'Picked up · done' };
-		return '<div class="card ' + o.status + '">' +
+				{ cls: 'ghost', label: o.type === 'Delivery' ? 'Dispatched · done' : 'Picked up · done' };
+		return '<div class="card ' + safeStatus(o.status) + '">' +
 			'<div class="c-top"><span class="c-ref">#' + esc(o.ref) + '</span><span class="c-age">' + ago(o.placed) + '</span></div>' +
 			'<div class="c-who">' + esc(o.who) + '</div>' +
 			'<div class="c-meta">' + esc(o.type) + ' · ' + esc(o.store) + ' ' + chanTag(o) + '</div>' +
@@ -302,10 +308,10 @@ a{color:inherit;}
 	/* read-only info card (today / upcoming / done) */
 	function infoCard(o, showWhen) {
 		var when = showWhen === 'scheduled' && o.scheduled ? dayLabel(o.scheduled) : dayLabel(o.placed);
-		return '<div class="card ' + o.status + '">' +
+		return '<div class="card ' + safeStatus(o.status) + '">' +
 			'<div class="c-top"><span class="c-ref">#' + esc(o.ref) + '</span><span class="c-age">' + (o.channel === 'catering' ? esc(o.who) : esc(o.type)) + '</span></div>' +
 			'<div class="when-row">' + when + '</div>' +
-			'<div class="c-who">' + esc(o.who) + (o.channel !== 'catering' ? '' : '') + '</div>' +
+			'<div class="c-who">' + esc(o.who) + '</div>' +
 			'<div class="c-meta">' + esc(o.store) + ' ' + chanTag(o) + '</div>' +
 			'<ul class="c-items">' + liEls(o.items) + '</ul>' +
 			'<div class="c-bottom">' + statLine(o.status) + '<span class="c-tot">' + (o.total ? money(o.total) : '') + '</span></div></div>';
@@ -313,11 +319,11 @@ a{color:inherit;}
 
 	/* catering card */
 	function catCard(o) {
-		return '<div class="card ' + o.status + '">' +
+		return '<div class="card ' + safeStatus(o.status) + '">' +
 			'<div class="c-top"><span class="c-ref">' + esc(o.who) + '</span><span class="c-age">' + (o.scheduled ? dayLabel(o.scheduled) : 'enquired ' + ago(o.placed)) + '</span></div>' +
 			'<div class="c-meta" style="margin-top:6px"><b style="color:var(--text)">' + (o.pax || '—') + ' pax</b> · ' + esc(o.pkg || 'Catering') + ' · ' + esc(o.store) + '</div>' +
 			'<ul class="c-items">' + liEls(o.items) + '</ul>' +
-			'<div class="c-bottom">' + (o.total ? '<span>' + statLine(o.status) + ' · deposit <b>' + money(o.deposit || 0) + '</b></span><span class="c-tot">' + money(o.total) + '</span>' : statLine(o.status) + '<button type="button" class="act" style="flex:0 0 auto;padding:10px 16px">Send quote <span aria-hidden="true">→</span></button>') +
+			'<div class="c-bottom">' + (o.total ? '<span>' + statLine(o.status) + ' · deposit <b>' + money(o.deposit || 0) + '</b></span><span class="c-tot">' + money(o.total) + '</span>' : statLine(o.status) + '<button type="button" class="act" style="flex:0 0 auto;padding:10px 16px" disabled>Send quote via owner panel</button>') +
 			'</div></div>';
 	}
 
@@ -337,8 +343,8 @@ a{color:inherit;}
 		var live = liveOrders();
 		document.getElementById('board').innerHTML = lanes.map(function (l) {
 			var list = live.filter(function (o) { return o.status === l[0]; });
-			var body = list.map(liveCard).join('') || '<p style="color:#9a9081;font-size:14px;margin:6px;">Nothing here</p>';
-			return '<div class="col ' + l[2] + '"><div class="col-h"><span class="c-dot"></span>' + l[1] + '<span class="n">' + list.length + '</span></div>' + body + '</div>';
+			var body = list.map(liveCard).join('') || '<p style="color:#9a9081;font-size:14px;margin:6px;">Nothing here yet</p>';
+			return '<div class="col ' + l[2] + '"><div class="col-h"><span class="c-dot" aria-hidden="true"></span>' + l[1] + '<span class="n" aria-hidden="true">' + list.length + '</span></div>' + body + '</div>';
 		}).join('');
 
 		// today
@@ -357,7 +363,7 @@ a{color:inherit;}
 
 		// done
 		var dn = doneOrders();
-		document.getElementById('list-history').innerHTML = dn.length ? dn.map(function (o) { return infoCard(o, o.scheduled ? 'scheduled' : 'placed'); }).join('') : emptyCard('Nothing here yet.');
+		document.getElementById('list-history').innerHTML = dn.length ? dn.map(function (o) { return infoCard(o, o.scheduled ? 'scheduled' : 'placed'); }).join('') : emptyCard('Nothing here yet. Orders you complete or cancel will appear here.');
 
 		// badges
 		badge('b-live', live.length, live.some(function (o) { return o.status === 'new'; }));
@@ -371,14 +377,23 @@ a{color:inherit;}
 	var tabs = Array.prototype.slice.call(document.querySelectorAll('.ntab'));
 	tabs.forEach(function (t) {
 		t.addEventListener('click', function () {
-			tabs.forEach(function (x) { x.setAttribute('aria-selected', 'false'); });
+			tabs.forEach(function (x) { x.setAttribute('aria-selected', 'false'); x.setAttribute('tabindex', '-1'); });
 			t.setAttribute('aria-selected', 'true');
+			t.setAttribute('tabindex', '0');
 			document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('on'); p.hidden = true; });
 			var p = document.getElementById('p-' + t.getAttribute('data-panel'));
 			p.classList.add('on'); p.hidden = false;
 			window.scrollTo({ top: 0, behavior: 'smooth' });
 			var h = p.querySelector('.ph'); if (h) { h.setAttribute('tabindex', '-1'); h.focus(); }
 		});
+	});
+	tabs.forEach(function (t) { t.setAttribute('tabindex', t.getAttribute('aria-selected') === 'true' ? '0' : '-1'); });
+	document.getElementById('tabs').addEventListener('keydown', function (e) {
+		if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') { return; }
+		var idx = tabs.indexOf(document.activeElement); if (idx === -1) { return; }
+		e.preventDefault();
+		var next = e.key === 'ArrowRight' ? (idx + 1) % tabs.length : (idx - 1 + tabs.length) % tabs.length;
+		tabs[next].focus(); tabs[next].click();
 	});
 
 	/* store pills */
@@ -394,13 +409,17 @@ a{color:inherit;}
 	document.getElementById('board').addEventListener('click', function (e) {
 		var b = e.target.closest('[data-ref]'); if (!b) { return; }
 		var r = b.getAttribute('data-ref');
+		var newStatus = '';
 		for (var i = 0; i < ORDERS.length; i++) {
 			if (ORDERS[i].ref === r) {
 				var s = ORDERS[i].status;
-				ORDERS[i].status = s === 'new' ? 'preparing' : (s === 'preparing' ? 'ready' : 'completed');
+				newStatus = s === 'new' ? 'preparing' : (s === 'preparing' ? 'ready' : 'completed');
+				ORDERS[i].status = newStatus;
 				break;
 			}
 		}
+		var lbl = {preparing: 'now preparing', ready: 'ready for collection', completed: 'completed'}[newStatus] || newStatus;
+		document.getElementById('announce').textContent = 'Order #' + r + ' — ' + lbl;
 		render();
 	});
 
@@ -415,6 +434,12 @@ a{color:inherit;}
 		var s = simSet[simN % simSet.length]; simN += 1;
 		ORDERS.unshift({ ref: ref(), channel: 'online', store: s.store, who: s.who, type: s.type, items: s.items, total: s.total, status: 'new', placed: new Date() });
 		render();
+		var first = document.querySelector('#board .card.new');
+		if (first) {
+			first.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+			first.classList.add('flash');
+			setTimeout(function () { first.classList.remove('flash'); }, 900);
+		}
 	});
 
 	render();

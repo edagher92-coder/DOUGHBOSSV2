@@ -59,13 +59,11 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .fld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
 .fld label{font-family:'Bebas Neue',sans-serif;letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:#cfc9bd;}
 .fld input{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:12px 14px;font:inherit;font-size:15px;}
-.fld input:focus{outline:2px solid var(--gold);border-color:var(--gold);}
+.fld input:focus-visible{outline:3px solid var(--gold);outline-offset:2px;border-color:var(--gold);}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#241405;background:var(--gold);box-shadow:0 12px 30px rgba(217,138,61,.32);transition:filter .15s,transform .1s;text-decoration:none;}
 .btn:hover{filter:brightness(1.07);}
 .btn:active{transform:scale(.98);}
 .err{color:#ffb38a;font-size:13px;min-height:1em;margin:4px 0 0;}
-.stay{display:flex;align-items:center;gap:8px;font-size:13px;color:#cfc9bd;margin:2px 0 16px;cursor:pointer;}
-.stay input{width:16px;height:16px;accent-color:var(--gold);}
 .signed{text-align:center;}
 .signed-t{color:#e7ddcd;font-size:15px;margin:0 0 14px;}
 .signed-t small{color:#b8b1a4;}
@@ -93,7 +91,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
        stone oven. Fully drawn in SVG + CSS so it always renders, stays light,
        and needs no external image or video. -->
   <div class="scene-art" aria-hidden="true">
-    <svg viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Animated scene of a grandmother rolling dough beside a warm stone oven">
+    <svg viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice">
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#241407"/>
@@ -201,12 +199,12 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
     <div class="card">
       <h2>Staff sign-in</h2>
-      <p class="hint">Sign in once to open the orders platform for your shop &mdash; it stays signed in, no timeout.</p>
+      <p class="hint">Sign in to open the orders platform for your shop. <span style="color:#b8b1a4">Demo: any staff ID and passcode work.</span></p>
       <div class="signed" id="signed" hidden></div>
       <form id="staff-form" novalidate>
-        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" value="Doughboss2026" required></div>
+        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required></div>
         <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
-        <label class="stay"><input type="checkbox" id="stay" checked> Keep me signed in (no timeout)</label>
+        <p class="vh" role="status" aria-live="polite" id="form-status"></p>
         <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
         <p class="err" id="su-err" role="alert" aria-live="assertive"></p>
       </form>
@@ -263,11 +261,15 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     var u=document.getElementById('su').value.trim(), p=document.getElementById('sp').value;
     if(!u||!p){ err.textContent='Enter your staff ID and passcode.'; return; }
     err.textContent='';
-    try{ localStorage.setItem(KEY, u); }catch(_){}
     var btn=form.querySelector('.btn');
+    try{ localStorage.setItem(KEY, u); }catch(_){
+      err.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
+      return;
+    }
     btn.setAttribute('aria-busy','true');
     btn.disabled=true;
     btn.innerHTML='Signing in…';
+    document.getElementById('form-status').textContent='Signing in…';
     setTimeout(function(){ window.location.href='backend.html'; }, 650);
   });
 
@@ -275,9 +277,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
   var ownerLink = document.getElementById('owner-link');
   if (ownerLink) {
     ownerLink.addEventListener('click', function(){
-      var el = document.getElementById('su');
-      var u = el && el.value && el.value.trim() ? el.value.trim() : 'Manager';
-      try { localStorage.setItem(KEY, u); } catch(_){}
+      try { localStorage.setItem(KEY, 'Owner'); } catch(_){}
     });
   }
 }());
