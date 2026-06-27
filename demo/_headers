@@ -1,0 +1,7 @@
+# Note: GitHub Pages ignores this file. For GitHub Pages hosting, use a Cloudflare proxy
+# or GitHub Actions worker to inject these headers on every response.
+# Netlify and Cloudflare Pages honour this file directly.
+
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
