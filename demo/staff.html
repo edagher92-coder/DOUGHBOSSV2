@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Staff &amp; Kitchen Sign-in</title>
 <meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
+     For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
+     Content-Security-Policy: frame-ancestors 'none'
+     X-Frame-Options: DENY -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
@@ -15,6 +20,8 @@ html,body{height:100%;}
 body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;background:var(--ink);-webkit-font-smoothing:antialiased;}
 .disp{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;line-height:.96;}
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
+.skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#241405;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+.skip:focus{top:0;}
 :focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:3px;}
 
 /* cinematic scene */
@@ -86,6 +93,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 </style>
 </head>
 <body>
+<a class="skip" href="#staff-form">Skip to sign-in</a>
 <main class="scene">
   <!-- Self-contained cinematic scene: a teta (grandmother) rolling dough by the
        stone oven. Fully drawn in SVG + CSS so it always renders, stays light,
@@ -202,7 +210,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
       <p class="hint">Sign in to open the orders platform for your shop. <span style="color:#b8b1a4">Demo: any staff ID and passcode work.</span></p>
       <div class="signed" id="signed" hidden></div>
       <form id="staff-form" novalidate>
-        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required></div>
+        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required aria-describedby="su-err"></div>
         <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
         <p class="vh" role="status" aria-live="polite" id="form-status"></p>
         <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
@@ -262,7 +270,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     if(!u||!p){ err.textContent='Enter your staff ID and passcode.'; return; }
     err.textContent='';
     var btn=form.querySelector('.btn');
-    try{ localStorage.setItem(KEY, u); }catch(_){
+    try{ localStorage.setItem(KEY, u); localStorage.setItem('db_role', 'staff'); }catch(_){
       err.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
       return;
     }
@@ -276,8 +284,10 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
   // Owner / manager entry: seed the session (so the gate passes) then open the dashboard.
   var ownerLink = document.getElementById('owner-link');
   if (ownerLink) {
-    ownerLink.addEventListener('click', function(){
-      try { localStorage.setItem(KEY, 'Owner'); } catch(_){}
+    ownerLink.addEventListener('click', function(e){
+      e.preventDefault();
+      try { localStorage.setItem(KEY, 'Owner'); localStorage.setItem('db_role', 'owner'); window.location.href = 'owner.html'; }
+      catch(_){ err.textContent = 'Sign-in cannot be saved in private browsing — please use a regular browser window.'; }
     });
   }
 }());

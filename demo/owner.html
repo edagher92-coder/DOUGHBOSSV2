@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Owner / Manager</title>
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
+     For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
+     Content-Security-Policy: frame-ancestors 'none'
+     X-Frame-Options: DENY -->
 <!-- Gate: nothing here shows until a staff/owner session exists. -->
 <script>
 (function () {
@@ -13,6 +17,7 @@
 	catch (e) { location.replace('staff.html'); }
 }());
 </script>
+<noscript><meta http-equiv="refresh" content="0;url=staff.html"></noscript>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&display=swap">
@@ -26,7 +31,6 @@
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;}
 body{font-family:'Barlow',system-ui,Arial,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:16px;}
-.disp{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;line-height:.96;}
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
 .skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 .skip:focus{top:0;}
@@ -82,7 +86,7 @@ a{color:inherit;}
 .hstate{font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;border-radius:999px;padding:3px 9px;display:inline-flex;align-items:center;gap:5px;}
 .hstate .sd{width:8px;height:8px;border-radius:50%;}
 .hstate.ok{background:#e2f3e9;color:var(--ok);} .hstate.ok .sd{background:var(--ok);}
-.hstate.busy{background:#f7ecd6;color:var(--busy);} .hstate.busy .sd{background:var(--busy);}
+.hstate.busy{background:#f7ecd6;color:#6b4a10;} .hstate.busy .sd{background:#6b4a10;}
 .hstate.behind{background:#fbe7e4;color:var(--behind);} .hstate.behind .sd{background:var(--behind);}
 .htile .hm{font-size:13px;color:var(--muted);margin-top:8px;}
 .htile .hm b{color:var(--text);font-variant-numeric:tabular-nums;}
@@ -121,7 +125,7 @@ a{color:inherit;}
 .srow .vv{font-variant-numeric:tabular-nums;color:var(--muted);min-width:96px;text-align:right;}
 .alertrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px;}
 .alertrow:first-of-type{border-top:0;}
-.dismiss{background:transparent;border:0;color:var(--muted2);font-size:18px;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;}
+.dismiss{background:transparent;border:0;color:var(--muted);font-size:18px;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;}
 .dismiss:hover{color:var(--text);}
 
 /* read-only live oversight */
@@ -150,7 +154,7 @@ a{color:inherit;}
 .tr .amt{font-weight:800;text-align:right;font-variant-numeric:tabular-nums;}
 .badge{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;text-transform:capitalize;}
 .b-new{background:#fbe7e4;color:var(--new);} .b-preparing{background:#e4eefa;color:var(--prep);} .b-ready{background:#e2f3e9;color:var(--ready);}
-.b-completed{background:#eceee9;color:var(--done);} .b-cancelled{background:#f3e7e7;color:var(--cancel);} .b-confirmed,.b-enquiry{background:#f6ecd9;color:var(--cater);}
+.b-completed{background:#eceee9;color:var(--done);} .b-cancelled{background:#f3e7e7;color:var(--cancel);} .b-confirmed,.b-enquiry{background:#f6ecd9;color:#6e4a0c;}
 .ct{font-size:10.5px;font-weight:800;color:var(--muted);} .ct.ca{color:var(--cater);}
 .filterbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
 .filterbar button{background:#fff;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:700;}
@@ -187,6 +191,7 @@ a{color:inherit;}
 	.tr{grid-template-columns:80px 1.4fr 96px;}
 	.tr .when,.tr .ctcell{display:none;}
 }
+@media(prefers-reduced-motion:reduce){.dot,.nbadge.alert{animation:none;}.panel.on{animation:none;}}
 </style>
 </head>
 <body>
@@ -213,18 +218,18 @@ a{color:inherit;}
 
 <nav class="tabs" aria-label="Owner sections">
 	<div class="tabs-in" role="tablist">
-		<button class="tab" role="tab" data-panel="dashboard" aria-selected="true" aria-controls="p-dashboard">Dashboard</button>
-		<button class="tab" role="tab" data-panel="live" aria-selected="false" aria-controls="p-live">Live orders <span class="pill" id="c-live" aria-label="0 live orders">0</span></button>
-		<button class="tab" role="tab" data-panel="catering" aria-selected="false" aria-controls="p-catering">Catering <span class="pill" id="c-cat" aria-label="0 catering orders">0</span></button>
-		<button class="tab" role="tab" data-panel="orders" aria-selected="false" aria-controls="p-orders">All orders <span class="pill" id="c-ord" aria-label="0 total orders">0</span></button>
+		<button id="tab-dashboard" class="tab" role="tab" data-panel="dashboard" aria-selected="true" aria-controls="p-dashboard">Dashboard</button>
+		<button id="tab-live" class="tab" role="tab" data-panel="live" aria-selected="false" aria-controls="p-live" aria-label="Live orders, 0 live orders">Live orders <span class="pill" id="c-live" aria-hidden="true">0</span></button>
+		<button id="tab-catering" class="tab" role="tab" data-panel="catering" aria-selected="false" aria-controls="p-catering" aria-label="Catering, 0 catering orders">Catering <span class="pill" id="c-cat" aria-hidden="true">0</span></button>
+		<button id="tab-orders" class="tab" role="tab" data-panel="orders" aria-selected="false" aria-controls="p-orders" aria-label="All orders, 0 total orders">All orders <span class="pill" id="c-ord" aria-hidden="true">0</span></button>
 	</div>
 </nav>
 
 <main class="wrap">
 
 	<!-- DASHBOARD -->
-	<section class="panel on" id="p-dashboard" role="tabpanel" aria-label="Dashboard">
-		<div class="h"><div><h1 class="ph">Today at a glance</h1><p class="psub" id="dsub">Live across all three stores</p></div></div>
+	<section class="panel on" id="p-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+		<div class="h"><div><h1 class="ph">Today at a glance</h1><p class="psub" id="dsub" aria-live="polite">Live across all three stores</p></div></div>
 		<p class="demo-note">&#9432; Demo figures are representative — once wired to WordPress, every dollar comes from the server (orders + GST), never the browser.</p>
 
 		<div class="hstrip" id="hstrip"></div>
@@ -255,7 +260,7 @@ a{color:inherit;}
 	</section>
 
 	<!-- LIVE (read-only oversight) -->
-	<section class="panel" id="p-live" role="tabpanel" aria-label="Live orders" hidden>
+	<section class="panel" id="p-live" role="tabpanel" aria-labelledby="tab-live" hidden>
 		<h1 class="ph">Live orders</h1>
 		<p class="psub">Oversight only — see that the floor is moving and nothing's stuck. Staff action orders on the kitchen board.</p>
 		<div class="ovr" id="ovr"></div>
@@ -267,7 +272,7 @@ a{color:inherit;}
 	</section>
 
 	<!-- CATERING -->
-	<section class="panel" id="p-catering" role="tabpanel" aria-label="Catering" hidden>
+	<section class="panel" id="p-catering" role="tabpanel" aria-labelledby="tab-catering" hidden>
 		<h1 class="ph">Catering pipeline</h1>
 		<p class="psub">Enquiry → quote → deposit → booked. All catering runs through Revesby.</p>
 		<div class="cattot" id="cattot"></div>
@@ -278,8 +283,9 @@ a{color:inherit;}
 	</section>
 
 	<!-- ALL ORDERS -->
-	<section class="panel" id="p-orders" role="tabpanel" aria-label="All orders" hidden>
+	<section class="panel" id="p-orders" role="tabpanel" aria-labelledby="tab-orders" hidden>
 		<div class="h"><div><h1 class="ph">All orders</h1><p class="psub">Every order — today, upcoming and past, online and catering.</p></div></div>
+		<p class="demo-note" style="margin-bottom:12px">&#9432; All customer names and order data shown are fictional and for demonstration purposes only.</p>
 		<div class="filterbar" id="filter">
 			<button data-f="all" aria-pressed="true">All</button>
 			<button data-f="today">Today</button>
@@ -298,7 +304,9 @@ a{color:inherit;}
 	'use strict';
 	var who = 'Manager';
 	try { who = localStorage.getItem('db_staff') || 'Manager'; } catch (e) {}
-	document.getElementById('who').textContent = who;
+	var role = 'owner';
+	try { role = localStorage.getItem('db_role') || 'owner'; } catch (e) {}
+	document.getElementById('who').textContent = who + (role === 'staff' ? ' (Staff)' : '');
 	document.getElementById('signout').addEventListener('click', function () {
 		try { localStorage.removeItem('db_staff'); } catch (e) {}
 		location.replace('staff.html');
@@ -321,15 +329,15 @@ a{color:inherit;}
 	/* All names and figures below are fictional, for demonstration only. */
 	var seq=1042; function ref(){seq+=1;return 'DB-'+seq;}
 	var ORDERS=[
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft drink'],total:27.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Delivery',items:['1× All Meat','1× Garlic Prawns','2× Spring water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-7))},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft drink 600ml'],total:27.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Delivery',items:['1× All Meat','1× Garlic Prawns','2× Spring water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-6))},
 		{ref:ref(),channel:'online',store:'Roselands',who:'Mariam H.',type:'Pickup',items:['3× Zaatar & Cheese','1× Choc banana'],total:33.50,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),12)},
 		{ref:ref(),channel:'online',store:'Bankstown',who:'Joe T.',type:'Pickup',items:['1× Chicken Delight','1× BBQ Chicken','1× Juice'],total:29.00,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),38)},
 		{ref:ref(),channel:'online',store:'Revesby',who:'Nadia A.',type:'Delivery',items:['2× Veggie Plus','1× Fattoush','1× Ayran'],total:36.50,status:'ready',placed:at(0,Math.max(0,now.getHours()-1),5)},
 		{ref:ref(),channel:'online',store:'Bankstown',who:'Omar S.',type:'Pickup',items:['2× Lahm bi ajeen','1× Lentil soup'],total:24.00,status:'completed',placed:at(0,9,14)},
 		{ref:ref(),channel:'online',store:'Roselands',who:'Priya R.',type:'Delivery',items:['1× Margherita','1× Garlic bread'],total:28.50,status:'completed',placed:at(0,11,2)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Hassan D.',type:'Pickup',items:['4× Mixed manoush','2× Soft drinks'],total:46.00,status:'confirmed',placed:at(0,Math.max(0,now.getHours()-2),0),scheduled:at(0,Math.min(21,now.getHours()+3),30)},
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Office — Lvl 3',type:'Delivery',items:['6× Assorted manoush','3× Salads','6× Drinks'],total:92.00,status:'confirmed',placed:at(-1,16,40),scheduled:at(1,12,0)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Hassan D.',type:'Pickup',items:['4× Mixed manoush','2× Soft drinks'],total:46.00,status:'new',placed:at(0,Math.max(0,now.getHours()-2),0),scheduled:at(0,Math.min(21,now.getHours()+3),30)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Office — Lvl 3',type:'Delivery',items:['6× Assorted manoush','3× Salads','6× Drinks'],total:92.00,status:'new',placed:at(-1,16,40),scheduled:at(1,12,0)},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample School',type:'Catering',items:['Lunch run — 60 pax','Mixed manoush platters ×6','Fruit & juice'],total:540.00,deposit:150,status:'confirmed',placed:at(-3,10,0),scheduled:at(2,11,30),pax:60,pkg:'School Lunch Run'},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Smith Wedding',type:'Catering',items:['Grazing + hot manoush — 120 pax','Dessert table (Snow Boss)','Service staff ×2'],total:1980.00,deposit:500,status:'confirmed',placed:at(-6,13,0),scheduled:at(9,17,0),pax:120,pkg:'Premium Event'},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Corporate',type:'Catering',items:['Corporate breakfast — ~40 pax','Manoush + coffee cart'],total:0,deposit:0,status:'enquiry',placed:at(0,Math.max(0,now.getHours()-3),20),pax:40,pkg:'Corporate Breakfast'},
@@ -348,10 +356,13 @@ a{color:inherit;}
 	function inStore(o){return store==='all'||o.store===store;}
 	function isLive(o){return o.channel==='online'&&(o.status==='new'||o.status==='preparing'||o.status==='ready');}
 	function live(){return ORDERS.filter(function(o){return inStore(o)&&isLive(o);});}
+	// today() intentionally includes catering orders in KPIs so the owner sees full revenue across all channels.
+	// Backend's todayOrders() excludes catering because staff action only online orders; owner KPIs include both.
 	function today(){return ORDERS.filter(function(o){return inStore(o)&&(sameDay(o.placed,now)||(o.scheduled&&sameDay(o.scheduled,now)));});}
 	function catEnq(){return ORDERS.filter(function(o){return inStore(o)&&o.channel==='catering'&&o.status==='enquiry';});}
 	function catBooked(){return ORDERS.filter(function(o){return inStore(o)&&o.channel==='catering'&&o.status==='confirmed'&&o.scheduled&&o.scheduled>now;}).sort(function(a,b){return a.scheduled-b.scheduled;});}
-	function badge(s){return '<span class="badge b-'+s+'">'+s+'</span>';}
+	var SAFE_STATUS={new:1,preparing:1,ready:1,completed:1,cancelled:1,confirmed:1,enquiry:1};
+	function badge(s){var safe=SAFE_STATUS[s]?s:'unknown';return '<span class="badge b-'+safe+'">'+safe+'</span>';}
 
 	function storeLiveList(s){return ORDERS.filter(function(o){return o.store===s&&isLive(o);});}
 	function oldestUnaccepted(s){var ns=ORDERS.filter(function(o){return o.store===s&&o.status==='new';});if(!ns.length)return null;var m=0;ns.forEach(function(o){m=Math.max(m,mins(o.placed));});return m;}
@@ -403,7 +414,8 @@ a{color:inherit;}
 			return '<div class="d"><div class="bar2" style="height:'+hgt+'px" role="img" aria-label="'+lab+': '+money0(v)+'"></div><div class="dl" aria-hidden="true">'+lab+'</div></div>';
 		}).join('');
 
-		var byStore=STORES.map(function(s){var o=ORDERS.filter(function(x){return x.store===s&&(sameDay(x.placed,now)||(x.scheduled&&sameDay(x.scheduled,now)));});return {s:s,n:o.length,rev:o.reduce(function(a,b){return a+(b.total||0);},0)};});
+		var storeList=store==='all'?STORES:[store];
+		var byStore=storeList.map(function(s){var o=ORDERS.filter(function(x){return x.store===s&&(sameDay(x.placed,now)||(x.scheduled&&sameDay(x.scheduled,now)));});return {s:s,n:o.length,rev:o.reduce(function(a,b){return a+(b.total||0);},0)};});
 		var mxr=Math.max.apply(null,byStore.map(function(x){return x.rev;}).concat([1]));
 		document.getElementById('stores-break').innerHTML=byStore.map(function(x){
 			return '<div class="srow"><span class="nm">'+x.s+'</span><span class="tk"><i style="width:'+Math.round(x.rev/mxr*100)+'%"></i></span><span class="vv">'+x.n+' · '+money0(x.rev)+'</span></div>';
@@ -411,14 +423,15 @@ a{color:inherit;}
 
 		// alerts
 		var al=[];
-		catEnq().forEach(function(o){al.push({id:'enq-'+o.ref,ic:'🎉',t:'New catering enquiry — <b>'+esc(o.who)+'</b> ('+o.pax+' pax)',go:'catering'});});
+		catEnq().forEach(function(o){al.push({id:'enq-'+o.ref,ic:'🎉',who:o.who,pax:o.pax,go:'catering'});});
 		STORES.forEach(function(s){var old=oldestUnaccepted(s);var nN=ORDERS.filter(function(o){return o.store===s&&o.status==='new';}).length;
 			if(old!==null&&old>=5&&(store==='all'||store===s)){al.push({id:'behind-'+s,ic:'⏱️',t:'<b>'+s+'</b> running behind — '+nN+' order'+(nN>1?'s':'')+' unaccepted, oldest '+old+'m',go:'live'});}
 		});
 		al=al.filter(function(x){return !dismissed[x.id];});
 		document.getElementById('attention').innerHTML=al.length?al.map(function(x){
-			var plain=x.t.replace(/<[^>]+>/g,'');
-			return '<div class="alertrow"><span style="font-size:18px" aria-hidden="true">'+x.ic+'</span><span style="flex:1">'+x.t+'</span><button class="mini" data-go="'+x.go+'">Open</button><button class="dismiss" data-dismiss="'+x.id+'" aria-label="Dismiss: '+esc(plain)+'">&times;</button></div>';
+			var msg=x.who?'New catering enquiry — <b>'+esc(x.who)+'</b> ('+Number(x.pax||0)+' pax)':esc(x.t||'');
+			var plain=x.who?'New catering enquiry — '+esc(x.who)+' ('+Number(x.pax||0)+' pax)':(x.t||'').replace(/<[^>]+>/g,'');
+			return '<div class="alertrow"><span style="font-size:18px" aria-hidden="true">'+x.ic+'</span><span style="flex:1">'+msg+'</span><button class="mini" data-go="'+x.go+'">Open</button><button class="dismiss" data-dismiss="'+x.id+'" aria-label="Dismiss: '+esc(plain)+'">&times;</button></div>';
 		}).join(''):'<p style="color:var(--muted);margin:4px 0;">All clear — nothing needs you right now.</p>';
 	}
 	function tile(l,v,s,dark,alert){return '<div class="kpi'+(dark?' dark':'')+(alert?' alert':'')+'"><div class="l">'+l+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>';}
@@ -484,7 +497,7 @@ a{color:inherit;}
 		}).join(''):'<p class="empty">Nothing in this filter.</p>');
 	}
 
-	function setPill(id,n,label){var el=document.getElementById(id);el.textContent=n;el.setAttribute('aria-label',n+' '+label);}
+	function setPill(id,n,label){var el=document.getElementById(id);el.textContent=n;var btn=el.closest('[role="tab"]');if(btn){var nm=btn.textContent.trim().replace(/\d+/,'').trim()||label;btn.setAttribute('aria-label',nm+', '+n+' '+label);}}
 	function counts(){
 		setPill('c-live',live().length,'live orders');
 		setPill('c-cat',catEnq().length+catBooked().length,'catering orders');
