@@ -236,7 +236,7 @@ a{color:inherit;}
 	try { role = localStorage.getItem('db_role') || 'staff'; } catch (e) {}
 	document.getElementById('who').textContent = who + (role === 'owner' ? ' (Owner)' : '');
 	document.getElementById('signout').addEventListener('click', function () {
-		try { localStorage.removeItem('db_staff'); } catch (e) {}
+		try { localStorage.removeItem('db_staff'); localStorage.removeItem('db_role'); } catch (e) {}
 		location.replace('staff.html');
 	});
 
