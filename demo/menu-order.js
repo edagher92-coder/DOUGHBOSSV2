@@ -159,7 +159,12 @@
 		var verr = drawer.querySelector('.cd-verr');
 		if (verr) { verr.textContent = ''; }
 		var code = input ? input.value.trim().toUpperCase() : '';
-		if (!/^SNOW-[A-Z0-9]{6}$/.test(code)) {
+		// Demo-only shape check (2-4 hyphen-separated groups) — accepts both the
+		// short demo-style code (SNOW-7K2D9Q) and real WordPress-issued codes
+		// (e.g. SNOW110022-ZRGQ-U8P5). This does NOT check a real database or
+		// consume a real voucher; it just stops the demo rejecting real-shaped
+		// codes on sight so it looks right when showing people the flow.
+		if (!/^[A-Z0-9]{2,12}(-[A-Z0-9]{2,12}){1,3}$/.test(code)) {
 			if (verr) { verr.textContent = 'Enter a valid voucher code, e.g. SNOW-7K2D9Q.'; }
 			if (input) { input.focus(); }
 			return;
