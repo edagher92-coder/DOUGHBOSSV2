@@ -306,6 +306,11 @@ body.cart-on{padding-bottom:114px;}
 .cd-f input:focus,.cd-f select:focus{outline:none;border-color:var(--ember);box-shadow:0 0 0 3px rgba(17,17,17,.15);}
 .cd-rad{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-weight:500;}
 .cd-err:not(:empty){color:#b3261e;font-weight:600;font-size:13px;}
+.cd-pay>span{display:flex;align-items:center;gap:8px;}
+.cd-stripe-badge{font-size:11px;font-weight:700;letter-spacing:.03em;color:#635bff;background:#f1f0ff;border-radius:999px;padding:2px 9px;}
+.cd-cardrow2{display:flex;gap:8px;}
+.cd-cardrow2 input{flex:1;min-width:0;}
+.cd-carddemo{margin-top:2px;}
 .cd-vouch{padding:14px 20px 0;}
 .cd-vrow{display:flex;gap:8px;}
 .cd-vinput{flex:1;min-width:0;font:inherit;padding:10px 11px;border:1px solid var(--linel);border-radius:8px;background:#fff;text-transform:uppercase;letter-spacing:.04em;}

@@ -145,13 +145,42 @@
 			'<label class="cd-f"><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required></label>' +
 			'<fieldset class="cd-f"><span>Fulfilment</span><label class="cd-rad"><input type="radio" name="ful" value="pickup" checked> Pickup</label><label class="cd-rad"><input type="radio" name="ful" value="delivery"> Delivery</label></fieldset>' +
 			'<label class="cd-f"><span>Shop</span><select name="shop">' + shopOpts + '</select></label>' +
+			'<fieldset class="cd-f cd-pay">' +
+			'<span>Payment <span class="cd-stripe-badge">&#128274; Stripe</span></span>' +
+			'<input type="text" class="cd-card-num" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242" maxlength="19" aria-label="Card number">' +
+			'<div class="cd-cardrow2">' +
+			'<input type="text" class="cd-card-exp" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" maxlength="7" aria-label="Expiry date">' +
+			'<input type="text" class="cd-card-cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="CVC" maxlength="4" aria-label="Security code">' +
+			'</div>' +
+			'<p class="cd-privacy cd-carddemo">Demo card field — nothing is sent anywhere or charged. In production this is the real Stripe Elements card form.</p>' +
+			'</fieldset>' +
 			'<div class="cd-tots">' + totsHtml + '</div>' +
 			'<div class="cd-err" role="alert"></div>' +
-			'<button type="submit" class="vb-btn vb-btn-ember">Place order</button>' +
+			'<button type="submit" class="vb-btn vb-btn-ember">Pay &amp; place order</button>' +
 			'<button type="button" class="vb-btn vb-btn-dark cd-back">Back to order</button>' +
-			'<p class="cd-privacy">We use your name and phone only to process your order. Card payment is handled by Stripe in production. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
+			'<p class="cd-privacy">We use your name and phone only to process your order. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
 			'</form>';
 		var f = drawer.querySelector('input[name="name"]'); if (f) { f.focus(); }
+		var cf = drawer.querySelector('.cd-form'); if (cf) { formatCardInputs(cf); }
+	}
+
+	/* Cosmetic input formatting for the mock card fields — demo only, nothing is
+	   parsed for real validation beyond a plausible shape (see placeOrder()). */
+	function formatCardInputs(form) {
+		var num = form.querySelector('.cd-card-num');
+		var exp = form.querySelector('.cd-card-exp');
+		if (num) {
+			num.addEventListener('input', function () {
+				var digits = num.value.replace(/\D/g, '').slice(0, 16);
+				num.value = digits.replace(/(.{4})/g, '$1 ').trim();
+			});
+		}
+		if (exp) {
+			exp.addEventListener('input', function () {
+				var digits = exp.value.replace(/\D/g, '').slice(0, 4);
+				exp.value = digits.length > 2 ? digits.slice(0, 2) + ' / ' + digits.slice(2) : digits;
+			});
+		}
 	}
 
 	function applyVoucher() {
@@ -179,11 +208,25 @@
 		var phone = (fd.get('phone') || '').toString().trim();
 		var err = form.querySelector('.cd-err');
 		if (!name || !phone) { err.textContent = 'Please add your name and phone.'; return; }
+
+		// Mock card check — shape only, demo purposes. Never read/stored beyond
+		// this function; nothing is transmitted anywhere, matching the note
+		// shown right under the fields.
+		var cardNum = (form.querySelector('.cd-card-num') || {}).value || '';
+		var cardExp = (form.querySelector('.cd-card-exp') || {}).value || '';
+		var cardCvc = (form.querySelector('.cd-card-cvc') || {}).value || '';
+		var digits = cardNum.replace(/\s+/g, '');
+		if (!/^\d{12,19}$/.test(digits) || !/^\d{2}\s*\/\s*\d{2}$/.test(cardExp) || !/^\d{3,4}$/.test(cardCvc)) {
+			err.textContent = 'Enter a card number, expiry (MM / YY) and CVC — try the test number 4242 4242 4242 4242.';
+			return;
+		}
+
 		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
 		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
+		var last4 = digits.slice(-4);
 		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-done" role="status"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p><p class="cd-note">Demo &mdash; in production this goes straight to the kitchen board and takes card payment.</p></div>';
+			'<div class="cd-done" role="status"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p><p class="cd-note">Payment &#128274; card ending ' + esc(last4) + ' (demo — not a real charge).</p><p class="cd-note">In production this goes straight to the kitchen board and takes a real Stripe payment.</p></div>';
 		cart = {};
 		voucher = null;
 		for (var n in controls) { paintItem(n); }
