@@ -29,6 +29,7 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_save_location', array( $this, 'handle_save_location' ) );
 		add_action( 'admin_post_doughboss_delete_location', array( $this, 'handle_delete_location' ) );
 		add_action( 'admin_post_doughboss_issue_voucher', array( $this, 'handle_issue_voucher' ) );
+		add_action( 'admin_post_doughboss_claim_voucher', array( $this, 'handle_claim_voucher' ) );
 		add_action( 'admin_post_doughboss_void_voucher', array( $this, 'handle_void_voucher' ) );
 		add_action( 'admin_post_doughboss_seed_menu', array( $this, 'handle_seed_menu' ) );
 	}
@@ -1084,9 +1085,13 @@ JS;
 		<div class="wrap doughboss-vouchers">
 			<h1><?php esc_html_e( 'Vouchers', 'doughboss' ); ?></h1>
 			<?php if ( 'issued' === $msg ) : ?>
-				<div class="notice notice-success is-dismissible"><p><?php echo esc_html__( 'Voucher created:', 'doughboss' ); ?> <code><?php echo esc_html( $new_code ); ?></code></p></div>
+				<div class="notice notice-success is-dismissible"><p><?php echo esc_html__( 'Voucher created:', 'doughboss' ); ?> <code><?php echo esc_html( $new_code ); ?></code> — <?php esc_html_e( 'reminder: this one does not reach POSPal.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'claimed' === $msg ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php echo esc_html__( 'Voucher claimed:', 'doughboss' ); ?> <code><?php echo esc_html( $new_code ); ?></code> — <?php esc_html_e( 'this went through the real claim flow, so it will be granted to POSPal if configured.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'voided' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Voucher voided.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'claim_error' === $msg ) : ?>
+				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Could not claim the voucher — the campaign may be inactive or today\'s cap may be reached.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'error' === $msg ) : ?>
 				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Could not create the voucher — check the value and try again.', 'doughboss' ); ?></p></div>
 			<?php endif; ?>
@@ -1144,7 +1149,39 @@ JS;
 				</tbody>
 			</table>
 
-			<h2><?php esc_html_e( 'Create a voucher', 'doughboss' ); ?></h2>
+			<h2><?php esc_html_e( 'Claim a voucher for a customer', 'doughboss' ); ?></h2>
+			<p class="description" style="max-width:640px;">
+				<?php esc_html_e( 'Use this for a customer standing in front of you (or on the phone) who wants a real campaign voucher — it runs the exact same claim used by the website widget, so it counts against the daily cap and, when POSPal is configured, automatically grants a matching coupon at the till against their phone number.', 'doughboss' ); ?>
+			</p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="doughboss_claim_voucher" />
+				<?php wp_nonce_field( 'doughboss_claim_voucher' ); ?>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-cv-campaign"><?php esc_html_e( 'Campaign', 'doughboss' ); ?></label></th>
+						<td><select name="campaign" id="db-cv-campaign">
+							<?php foreach ( $campaigns as $c ) : ?>
+								<option value="<?php echo esc_attr( $c['slug'] ); ?>"><?php echo esc_html( $c['label'] . ' (' . ( 'percent' === $c['type'] ? $c['value'] . '%' : DoughBoss_Settings::format_price( $c['value'] ) ) . ')' ); ?></option>
+							<?php endforeach; ?>
+						</select></td>
+					</tr>
+					<tr>
+						<th><label for="db-cv-phone"><?php esc_html_e( 'Customer phone', 'doughboss' ); ?></label></th>
+						<td><input name="phone" id="db-cv-phone" type="tel" class="regular-text" required />
+							<p class="description"><?php esc_html_e( 'Required — this is the POSPal member key. Without it the voucher still works online but nothing is granted at the till.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-cv-email"><?php esc_html_e( 'Customer email', 'doughboss' ); ?></label></th>
+						<td><input name="email" id="db-cv-email" type="email" class="regular-text" /></td>
+					</tr>
+				</table>
+				<?php submit_button( __( 'Claim voucher', 'doughboss' ) ); ?>
+			</form>
+
+			<h2><?php esc_html_e( 'Create a voucher (manual, one-off)', 'doughboss' ); ?></h2>
+			<p class="description" style="max-width:640px;">
+				<?php esc_html_e( 'For a custom one-off code (a promotion, a goodwill gesture) outside the daily campaigns. Important: this does NOT reach POSPal — it never grants a till coupon, even with a phone number. It still works fine as an online discount and can still be redeemed in-store via the Scan tool. If you need a code that is already sitting on the POSPal till, use "Claim a voucher for a customer" above instead.', 'doughboss' ); ?>
+			</p>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="doughboss_issue_voucher" />
 				<?php wp_nonce_field( 'doughboss_issue_voucher' ); ?>
@@ -1252,6 +1289,44 @@ JS;
 			$args['msg'] = 'error';
 		} else {
 			$args['msg']  = 'issued';
+			$args['code'] = $result['code'];
+		}
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Handle claiming a real campaign voucher on a customer's behalf — runs the
+	 * same DoughBoss_Voucher::claim() path the storefront widget uses, so it
+	 * counts against the daily cap and fires the doughboss_voucher_claimed hook
+	 * (which triggers the POSPal grant when configured). Unlike issue() above,
+	 * a code from here is a real campaign claim, not a one-off manual code.
+	 *
+	 * @return void
+	 */
+	public function handle_claim_voucher() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_claim_voucher' );
+
+		$campaign = isset( $_POST['campaign'] ) ? sanitize_key( wp_unslash( $_POST['campaign'] ) ) : '';
+		$phone    = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
+		$email    = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+
+		$result = DoughBoss_Voucher::claim(
+			$campaign,
+			array(
+				'customer_phone' => $phone,
+				'customer_email' => $email,
+			)
+		);
+
+		$args = array( 'page' => 'doughboss-vouchers' );
+		if ( is_wp_error( $result ) ) {
+			$args['msg'] = 'claim_error';
+		} else {
+			$args['msg']  = 'claimed';
 			$args['code'] = $result['code'];
 		}
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
