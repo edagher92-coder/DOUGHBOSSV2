@@ -101,9 +101,9 @@
 </table>
 
 <h2><span class="n">5</span>What's Left to Go Live</h2>
-<h3>One blocking business item — the last link in the voucher loop</h3>
-<div class="callout-amber">
-Vouchers can already be issued, scanned and marked redeemed in DoughBoss, and the code that grants and revokes a till discount on claim/redeem is already fully built and connected end-to-end. The only remaining step is Dough Boss creating the $5 and $10 discount <em>rules</em> inside the POSPal back office and giving us the resulting rule IDs to enter into settings. <strong>This is a setup task on your side, not a coding task on ours</strong> — once those two rule IDs are entered, the loop is live. (POSPal access is currently provisioned for one shop only; additional shops need their own POSPal account connected first.)
+<h3>Voucher-to-till loop — done at Revesby</h3>
+<div class="callout">
+The $5 and $10 discount rules are now created in the POSPal back office, entered into DoughBoss Settings, and verified live (confirmed 1 July 2026) — the connection check found both coupon rules and matched them correctly. Vouchers claimed with a phone number will now grant automatically at the Revesby till. One recommended step remains: a real end-to-end test (claim a voucher, confirm it appears in POSPal, redeem it, confirm it's marked used) before relying on it for customers. (POSPal access is currently provisioned for Revesby only; additional shops need their own POSPal account connected first.)
 </div>
 
 <div class="two">
@@ -134,7 +134,7 @@ Vouchers can already be issued, scanned and marked redeemed in DoughBoss, and th
 <p class="muted small">Path to a first soft-launch:</p>
 <ol>
 <li><strong>Lock the menu and shop details</strong> — send through final items, prices and the operating details for the first shop going live so we can load the real menu and configure that shop in the admin.</li>
-<li><strong>Set the two POSPal discount rules</strong> for that shop and hand us the rule IDs — this closes the voucher-to-till loop.</li>
+<li><strong>POSPal discount rules — done</strong> at Revesby; run one real end-to-end voucher test before the first live customer relies on it.</li>
 <li><strong>Decide on Stripe</strong> — tell us whether to switch it on for day one; it can also follow later with zero rebuild.</li>
 <li><strong>Soft-launch the first shop</strong> — run it live at one shop first, confirm it end-to-end with real orders, then configure and roll out to additional shops with confidence.</li>
 </ol>

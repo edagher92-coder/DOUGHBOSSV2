@@ -89,7 +89,7 @@
 <p class="lead">The DoughBoss ordering, kitchen-board, voucher and POS-integration platform is <strong>built and working</strong> — reviewed and hardened across multiple passes. What remains is mostly <strong>real business data, account setup and a handful of decisions</strong>, not further engineering. This brief is the working document for today's meeting: what's done, what it's cost, what's outstanding, and the questions to walk through with the team.</p>
 
 <h2><span class="n">1</span>Executive summary</h2>
-<p>The engine — online ordering across all three shops, Stripe card-payment plumbing, the live kitchen order board, the student voucher system, the POSPal till bridge, and a catering enquiry pipeline — is built and has been through several rounds of security and accessibility review. Revesby is connected live to POSPal; Bankstown and Roselands are not yet. The main blockers to going live are: closing the last POSPal wiring step, collecting the real menu and business details, confirming brand naming, and switching on the payment/notification layers that are already built but deliberately left off.</p>
+<p>The engine — online ordering across all three shops, Stripe card-payment plumbing, the live kitchen order board, the student voucher system, the POSPal till bridge, and a catering enquiry pipeline — is built and has been through several rounds of security and accessibility review. Revesby is connected, enabled and verified in POSPal (both $5/$10 coupon rules confirmed live); Bankstown and Roselands are not yet. The main remaining items are: a real end-to-end voucher test at Revesby, collecting the real menu and business details, confirming brand naming, and switching on the payment/notification layers that are already built but deliberately left off.</p>
 
 <h2><span class="n">2</span>What's been built</h2>
 <table>
@@ -98,7 +98,7 @@
   <tr><td><strong>Payments (Stripe)</strong></td><td><span class="tag tag-dev">BUILT, OFF</span></td><td>Card entry, payment confirmation, refund-capable. Fully wired, switched off until a go-live decision.</td></tr>
   <tr><td><strong>Live Order Board (kitchen)</strong></td><td><span class="tag">LIVE-READY</span></td><td>Real-time screen for the kitchen — one-tap Accept → Preparing → Ready, audible alert. Upgraded from a refresh-based screen to instant push updates.</td></tr>
   <tr><td><strong>Vouchers / discounts</strong></td><td><span class="tag">LIVE-READY</span></td><td>$5/$10 student voucher scheme — typo-proof codes, QR codes, atomic one-time redemption, shared 100/day cap. Staff camera-scan tool included.</td></tr>
-  <tr><td><strong>POSPal till integration</strong></td><td><span class="tag tag-dev">IN PROGRESS</span></td><td>Revesby connected live. Voucher-to-till coupon grant/revoke is the last wiring step (~1–2 weeks, blocked on a POSPal back-office task — see §4).</td></tr>
+  <tr><td><strong>POSPal till integration</strong></td><td><span class="tag">LIVE-READY</span></td><td>Revesby connected, enabled, and verified — both $5/$10 coupon rules confirmed live in POSPal on 1 July 2026. One recommended step remains: a real end-to-end test (claim → grant → redeem → revoke) before relying on it for customers.</td></tr>
   <tr><td><strong>Notifications &amp; printing</strong></td><td><span class="tag tag-dev">BUILT, OFF</span></td><td>Customer SMS, staff push alerts, cloud receipt printing — all built and tested, none switched on yet.</td></tr>
   <tr><td><strong>Catering</strong></td><td><span class="tag">LIVE-READY</span></td><td>Enquiry → quote → deposit pipeline exists in the live code, not just the demo.</td></tr>
   <tr><td><strong>Snow Boss</strong></td><td><span class="tag tag-dev">PROTOTYPE</span></td><td>Dual-brand section and a working student-voucher prototype on the demo site. See §5 for the open decision.</td></tr>
@@ -122,17 +122,17 @@
 <h2><span class="n">4</span>What's remaining until completion</h2>
 <div class="timeline">
   <div class="tstep done"><div class="s">BUILT</div><div class="t">Core platform</div><div class="d">ordering, board, vouchers</div></div>
-  <div class="tstep dev"><div class="s">IN PROGRESS</div><div class="t">POSPal loop</div><div class="d">~1–2 wks</div></div>
+  <div class="tstep done"><div class="s">DONE</div><div class="t">POSPal loop (Revesby)</div><div class="d">connected + verified</div></div>
   <div class="tstep"><div class="s">NEXT</div><div class="t">Real data + decisions</div><div class="d">menu, shops, brand</div></div>
   <div class="tstep"><div class="s">NEXT</div><div class="t">Hardware + training</div><div class="d">per shop</div></div>
   <div class="tstep"><div class="s">THEN</div><div class="t">Switch-on decisions</div><div class="d">Stripe, SMS, print</div></div>
   <div class="tstep"><div class="s">LATER</div><div class="t">Marketing</div><div class="d">once live</div></div>
 </div>
 
-<h3>Blocking / near-term development</h3>
+<h3>Near-term</h3>
 <table>
-  <tr><th>Item</th><th>What's needed</th></tr>
-  <tr><td>POSPal voucher grant/revoke</td><td>Connection to Revesby is live. Final wiring needs the <strong>$5/$10 discount rules created in the POSPal back office first</strong> — a POSPal admin task, not a coding task.</td></tr>
+  <tr><th>Item</th><th>Status</th></tr>
+  <tr><td>POSPal voucher grant/revoke (Revesby)</td><td><strong>Done</strong> — connected, enabled, both $5/$10 coupon rules verified live on 1 July 2026. Recommended: one real end-to-end test (claim → grant → redeem → revoke) before relying on it for customers.</td></tr>
   <tr><td>Bankstown &amp; Roselands POSPal</td><td>Only Revesby is currently connected. Confirm whether the other two shops are on the same POSPal account or separate ones, and request credentials if separate.</td></tr>
 </table>
 
@@ -183,12 +183,12 @@
     </ul>
   </div>
 </div>
-<p class="callout"><strong>Recommendation:</strong> treat Snow Boss as a cross-promotion layer on the existing platform for now — the student voucher already does this well and is nearly launch-ready (blocked only on the POSPal coupon-rule setup in §4). Defer the full licensing/wholesale question and any separate Snow Boss menu build until the core Dough Boss rollout (menu, 3 shops, payments) is live and stable. Revisit Snow Boss as its own product line once Dough Boss is generating real order volume — launching both fully at once spreads the team thin on data entry, training and testing for no immediate payoff.</p>
+<p class="callout"><strong>Recommendation:</strong> treat Snow Boss as a cross-promotion layer on the existing platform for now — the student voucher already does this well and is now launch-ready at Revesby (POSPal coupon-rule setup in §4 is done). Defer the full licensing/wholesale question and any separate Snow Boss menu build until the core Dough Boss rollout (menu, 3 shops, payments) is live and stable. Revisit Snow Boss as its own product line once Dough Boss is generating real order volume — launching both fully at once spreads the team thin on data entry, training and testing for no immediate payoff.</p>
 
 <h2><span class="n">6</span>Recommended rollout path</h2>
 <ol>
   <li><strong>Close out data collection this week</strong> — menu, shop details, ABN, brand naming (§4). This is the actual bottleneck, not further development.</li>
-  <li><strong>Finish the POSPal loop</strong> — get the $5/$10 coupon rules created in the POSPal back office (staff task), then the grant/revoke wiring finishes in ~1–2 weeks.</li>
+  <li><strong>POSPal loop — done</strong> — Revesby's $5/$10 coupon rules are created and verified live; run one real end-to-end voucher test before trusting it for customers.</li>
   <li><strong>Soft-launch Revesby only</strong> — it already has POSPal connected and can go live fastest. Use it to validate the kitchen board and voucher flow with real orders before rolling to the other two shops.</li>
   <li><strong>Decide the payments path</strong> — switch Stripe on for the soft-launch, or run pickup/cash first and add cards once the flow is proven.</li>
   <li><strong>Roll out shop #2 and #3</strong> once Revesby is stable — mostly data entry + POSPal credentials, not new development.</li>
@@ -213,7 +213,7 @@
     </ul>
     <h3>Till / POSPal</h3>
     <ul>
-      <li>Has anyone set up the $5/$10 rules in the POSPal back office yet?</li>
+      <li>Revesby's $5/$10 rules are set up and verified — who will run the first real test claim + redemption?</li>
       <li>Are Bankstown &amp; Roselands on the same POSPal account as Revesby?</li>
       <li>Who has POSPal back-office access for the other two shops?</li>
     </ul>
@@ -247,7 +247,7 @@
   <li>Pickup vs delivery per shop, delivery radius/postcodes, delivery fee</li>
   <li>Business ABN (for tax invoices)</li>
   <li>POSPal back-office access details for Bankstown and Roselands (if separate from Revesby)</li>
-  <li>Confirmation of who is setting up the $5/$10 discount rules in POSPal</li>
+  <li>Who will run the first real end-to-end voucher test at Revesby (claim → grant → redeem → revoke)</li>
   <li>Current hosting provider + plan</li>
   <li>Domain registrar details (who owns/renews it)</li>
   <li>Stripe account status — exists already, or needs setting up?</li>
@@ -259,7 +259,7 @@
 
 <h2><span class="n">9</span>Next step</h2>
 <p class="lead" style="text-align:center; font-size:12.5pt;"><strong>The platform is built. What's left is data, decisions and a switch-flip — not more engineering.</strong></p>
-<p>Walk the team through §7–8 today, assign owners to each open item, and target closing the POSPal loop and the data checklist within the next 1–2 weeks so Revesby can soft-launch.</p>
+<p>Walk the team through §7–8 today, assign owners to each open item, and target the data checklist and a first real Revesby voucher test within the next 1–2 weeks so Revesby can soft-launch.</p>
 
 <p class="disclaimer" style="margin-top:14pt;">Prepared by Elie D. for internal staff use. Figures marked "to confirm" are placeholders for the meeting — fill in from actual invoices/accounts. Build valuation figures are drawn from the internal DoughBoss Costing &amp; Valuation Report (25 June 2026) and are estimates, not guarantees. Confidential — not for external distribution.</p>
 

@@ -105,8 +105,8 @@
 <ul>
   <li><strong>How it authenticates:</strong> every request is signed — a timestamp plus an MD5 signature built from the shop's secret key and the request body. The secret key itself never appears in the request body, the URL, or any log — it's only ever used to compute that signature.</li>
   <li><strong>What it does:</strong> when a customer claims a voucher, the plugin can grant it as a real member coupon on the shop's till (<span class="mono">grant_coupon()</span>); when it's redeemed, the plugin revokes it (<span class="mono">revoke_coupon()</span>) so it can't be used twice. Both of these are fully coded and connected end-to-end — this part of the build is finished.</li>
-  <li><strong>What's still needed:</strong> POSPal requires the actual discount <em>rules</em> (the $5 and $10 amounts) to be created inside the POSPal back office first — that produces two "rule IDs" that get entered into the plugin's settings. That's the one remaining step, and it's a setup task on Dough Boss's side, not a coding task.</li>
-  <li><strong>Current reach:</strong> POSPal API access has been provisioned for one shop so far; connecting additional shops means requesting POSPal credentials for each one and entering them the same way.</li>
+  <li><strong>Status at Revesby:</strong> done. The $5 and $10 discount rules were created in the POSPal back office, entered into the plugin's settings, and verified live on 1 July 2026 — both rule IDs confirmed to match real POSPal coupon rules. Recommended: one real end-to-end test (claim → grant → redeem → revoke) before relying on it for customers.</li>
+  <li><strong>Current reach:</strong> POSPal is connected at Revesby only; connecting additional shops means requesting POSPal credentials for each one and entering them the same way.</li>
 </ul>
 
 <h3>Stripe — card payments</h3>
@@ -155,8 +155,7 @@
 <p>The remaining work is short and specific — business inputs and setup decisions, not open engineering problems:</p>
 <table>
 <tr><th style="width:30%">Item</th><th>What it needs</th></tr>
-<tr><td>POSPal discount rules</td><td>Dough Boss creates the $5/$10 rules in the POSPal back office and shares the rule IDs (see §3) — the code side is already done.</td></tr>
-<tr><td>Additional shops</td><td>POSPal credentials + shop details for each new location beyond the one configured today.</td></tr>
+<tr><td>Additional shops</td><td>POSPal credentials + shop details for each new location beyond Revesby, which is now connected and verified (see §3).</td></tr>
 <tr><td>Real menu &amp; business details</td><td>Final items/prices/photos, each shop's address/hours/delivery area, and ABN for tax invoices.</td></tr>
 <tr><td>Brand name confirmation</td><td>Lock in "Dough Boss" (vs. "Bite Pizzas" as a working name) before anything goes to print.</td></tr>
 <tr><td>Switch-on decisions</td><td>Card payments, SMS, staff push and printing are all built — each just needs an account/keys and a go-ahead.</td></tr>
