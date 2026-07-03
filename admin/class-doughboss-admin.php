@@ -167,7 +167,13 @@ class DoughBoss_Admin {
 	 */
 	public function sanitize_settings( $input ) {
 		$input = is_array( $input ) ? $input : array();
-		$clean = array();
+		// Start from the currently stored settings so any key this form doesn't
+		// explicitly know about (e.g. app_origin, voucher_campaigns, pospal_label)
+		// survives a save instead of being silently dropped — every key this
+		// function lists below is still explicitly re-validated from $input,
+		// this only changes what happens to keys it does NOT list.
+		$existing = DoughBoss_Settings::all();
+		$clean    = $existing;
 
 		$clean['currency_symbol'] = isset( $input['currency_symbol'] ) ? sanitize_text_field( $input['currency_symbol'] ) : '$';
 		$clean['currency_code']   = isset( $input['currency_code'] ) ? sanitize_text_field( $input['currency_code'] ) : 'USD';
@@ -180,21 +186,26 @@ class DoughBoss_Admin {
 
 		// Payments (Stripe). Keys are stored for the active mode; secret keys are
 		// only ever used in server-side calls and are never sent to the browser.
-		$clean['payments_enabled'] = empty( $input['payments_enabled'] ) ? 0 : 1;
-		$clean['stripe_mode']      = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
-		$clean['stripe_test_pk']   = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
-		$clean['stripe_test_sk']   = isset( $input['stripe_test_sk'] ) ? sanitize_text_field( $input['stripe_test_sk'] ) : '';
-		$clean['stripe_live_pk']   = isset( $input['stripe_live_pk'] ) ? sanitize_text_field( $input['stripe_live_pk'] ) : '';
-		$clean['stripe_live_sk']   = isset( $input['stripe_live_sk'] ) ? sanitize_text_field( $input['stripe_live_sk'] ) : '';
-		$clean['stripe_test_whsec'] = isset( $input['stripe_test_whsec'] ) ? sanitize_text_field( $input['stripe_test_whsec'] ) : '';
-		$clean['stripe_live_whsec'] = isset( $input['stripe_live_whsec'] ) ? sanitize_text_field( $input['stripe_live_whsec'] ) : '';
+		// The secret key and webhook secret fields render blank (see the form
+		// below) and use keep_secret() so a routine save without re-entering them
+		// preserves the stored value instead of wiping it.
+		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
+		$clean['stripe_mode']       = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
+		$clean['stripe_test_pk']    = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
+		$clean['stripe_test_sk']    = $this->keep_secret( $input, $existing, 'stripe_test_sk' );
+		$clean['stripe_live_pk']    = isset( $input['stripe_live_pk'] ) ? sanitize_text_field( $input['stripe_live_pk'] ) : '';
+		$clean['stripe_live_sk']    = $this->keep_secret( $input, $existing, 'stripe_live_sk' );
+		$clean['stripe_test_whsec'] = $this->keep_secret( $input, $existing, 'stripe_test_whsec' );
+		$clean['stripe_live_whsec'] = $this->keep_secret( $input, $existing, 'stripe_live_whsec' );
 
 		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
-		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback.
+		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback, and
+		// (like the Stripe secret keys above) renders blank + uses keep_secret()
+		// so it is never echoed back into the page and a routine save can't wipe it.
 		$clean['pospal_enabled'] = empty( $input['pospal_enabled'] ) ? 0 : 1;
 		$clean['pospal_host']    = isset( $input['pospal_host'] ) ? esc_url_raw( trim( (string) $input['pospal_host'] ) ) : '';
 		$clean['pospal_app_id']  = isset( $input['pospal_app_id'] ) ? sanitize_text_field( $input['pospal_app_id'] ) : '';
-		$clean['pospal_app_key'] = isset( $input['pospal_app_key'] ) ? sanitize_text_field( $input['pospal_app_key'] ) : '';
+		$clean['pospal_app_key'] = $this->keep_secret( $input, $existing, 'pospal_app_key' );
 		$clean['pospal_coupon_uid_5']  = isset( $input['pospal_coupon_uid_5'] ) ? sanitize_text_field( $input['pospal_coupon_uid_5'] ) : '';
 		$clean['pospal_coupon_uid_10'] = isset( $input['pospal_coupon_uid_10'] ) ? sanitize_text_field( $input['pospal_coupon_uid_10'] ) : '';
 		// Additional POSPal stores (multi-store): store 2 + store 3.
@@ -202,7 +213,7 @@ class DoughBoss_Admin {
 			$clean[ 'pospal' . $sn . '_label' ]         = isset( $input[ 'pospal' . $sn . '_label' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_label' ] ) : '';
 			$clean[ 'pospal' . $sn . '_host' ]          = isset( $input[ 'pospal' . $sn . '_host' ] ) ? esc_url_raw( trim( (string) $input[ 'pospal' . $sn . '_host' ] ) ) : '';
 			$clean[ 'pospal' . $sn . '_app_id' ]        = isset( $input[ 'pospal' . $sn . '_app_id' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_app_id' ] ) : '';
-			$clean[ 'pospal' . $sn . '_app_key' ]       = isset( $input[ 'pospal' . $sn . '_app_key' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_app_key' ] ) : '';
+			$clean[ 'pospal' . $sn . '_app_key' ]       = $this->keep_secret( $input, $existing, 'pospal' . $sn . '_app_key' );
 			$clean[ 'pospal' . $sn . '_coupon_uid_5' ]  = isset( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) : '';
 			$clean[ 'pospal' . $sn . '_coupon_uid_10' ] = isset( $input[ 'pospal' . $sn . '_coupon_uid_10' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_coupon_uid_10' ] ) : '';
 		}
@@ -211,7 +222,7 @@ class DoughBoss_Admin {
 		// configured. Secret fields (publish JWT, ntfy token, ClickSend API key,
 		// printer token) render blank in the form, so a blank submission PRESERVES
 		// the previously stored value rather than wiping it (see keep_secret()).
-		$existing = DoughBoss_Settings::all();
+		// ($existing was already fetched above, at the top of this function.)
 
 		// Shop inbox for order + catering notifications. When the field is present,
 		// take a valid email or blank (blank => orders_email() falls back to the WP
@@ -1502,7 +1513,8 @@ JS;
 						</tr>
 						<tr>
 							<th><label for="db-stripe-test-sk"><?php esc_html_e( 'Test secret key', 'doughboss' ); ?></label></th>
-							<td><input type="password" id="db-stripe-test-sk" class="regular-text" autocomplete="off" placeholder="sk_test_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_sk]" value="<?php echo esc_attr( isset( $settings['stripe_test_sk'] ) ? $settings['stripe_test_sk'] : '' ); ?>" /></td>
+							<td><input type="password" id="db-stripe-test-sk" class="regular-text" autocomplete="off" placeholder="sk_test_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_sk]" value="" />
+								<p class="description"><?php echo isset( $settings['stripe_test_sk'] ) && '' !== $settings['stripe_test_sk'] ? esc_html__( 'A key is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-stripe-live-pk"><?php esc_html_e( 'Live publishable key', 'doughboss' ); ?></label></th>
@@ -1510,20 +1522,22 @@ JS;
 						</tr>
 						<tr>
 							<th><label for="db-stripe-live-sk"><?php esc_html_e( 'Live secret key', 'doughboss' ); ?></label></th>
-							<td><input type="password" id="db-stripe-live-sk" class="regular-text" autocomplete="off" placeholder="sk_live_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_sk]" value="<?php echo esc_attr( isset( $settings['stripe_live_sk'] ) ? $settings['stripe_live_sk'] : '' ); ?>" />
-								<p class="description"><?php esc_html_e( 'Find your keys in the Stripe Dashboard → Developers → API keys. Secret keys are used only on the server.', 'doughboss' ); ?></p></td>
+							<td><input type="password" id="db-stripe-live-sk" class="regular-text" autocomplete="off" placeholder="sk_live_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_sk]" value="" />
+								<p class="description"><?php esc_html_e( 'Find your keys in the Stripe Dashboard → Developers → API keys. Secret keys are used only on the server.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_live_sk'] ) && '' !== $settings['stripe_live_sk'] ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-stripe-test-whsec"><?php esc_html_e( 'Test webhook secret', 'doughboss' ); ?></label></th>
-							<td><input type="password" id="db-stripe-test-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_whsec]" value="<?php echo esc_attr( isset( $settings['stripe_test_whsec'] ) ? $settings['stripe_test_whsec'] : '' ); ?>" /></td>
+							<td><input type="password" id="db-stripe-test-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_whsec]" value="" />
+								<p class="description"><?php echo isset( $settings['stripe_test_whsec'] ) && '' !== $settings['stripe_test_whsec'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-stripe-live-whsec"><?php esc_html_e( 'Live webhook secret', 'doughboss' ); ?></label></th>
-							<td><input type="password" id="db-stripe-live-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_whsec]" value="<?php echo esc_attr( isset( $settings['stripe_live_whsec'] ) ? $settings['stripe_live_whsec'] : '' ); ?>" />
+							<td><input type="password" id="db-stripe-live-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_whsec]" value="" />
 								<p class="description">
 									<?php esc_html_e( 'Stripe Dashboard → Developers → Webhooks. Add an endpoint pointing to:', 'doughboss' ); ?>
 									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/stripe-webhook' ) ); ?></code>
 									<?php esc_html_e( 'and subscribe to payment_intent.succeeded. Then paste its signing secret here.', 'doughboss' ); ?>
+									<?php echo isset( $settings['stripe_live_whsec'] ) && '' !== $settings['stripe_live_whsec'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
 								</p></td>
 						</tr>
 					</table>
@@ -1554,8 +1568,8 @@ JS;
 						</tr>
 						<tr>
 							<th><label for="db-pospal-app-key"><?php esc_html_e( 'App Key', 'doughboss' ); ?></label></th>
-							<td><input type="password" id="db-pospal-app-key" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal_app_key]" value="<?php echo esc_attr( isset( $settings['pospal_app_key'] ) ? $settings['pospal_app_key'] : '' ); ?>" />
-								<p class="description"><?php esc_html_e( 'The secret key is used only to sign server-side calls. For best security set it as the DOUGHBOSS_POSPAL_APPKEY environment variable instead of here; this field is a fallback.', 'doughboss' ); ?></p></td>
+							<td><input type="password" id="db-pospal-app-key" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal_app_key]" value="" />
+								<p class="description"><?php esc_html_e( 'The secret key is used only to sign server-side calls. For best security set it as the DOUGHBOSS_POSPAL_APPKEY environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['pospal_app_key'] ) && '' !== $settings['pospal_app_key'] ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-pospal-uid5"><?php esc_html_e( '$5 coupon rule UID', 'doughboss' ); ?></label></th>
@@ -1622,11 +1636,13 @@ JS;
 							</tr>
 							<tr>
 								<th><?php esc_html_e( 'App Key', 'doughboss' ); ?></th>
-								<td><input type="password" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_app_key]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_app_key' ] ) ? $settings[ 'pospal' . $sn . '_app_key' ] : '' ); ?>" />
+								<td><input type="password" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_app_key]" value="" />
 									<p class="description">
 										<?php
 										/* translators: %d: store number. */
 										printf( esc_html__( 'For best security set the DOUGHBOSS_POSPAL_APPKEY_%d environment variable instead; this field is a fallback.', 'doughboss' ), (int) $sn );
+										echo ' ';
+										echo ( isset( $settings[ 'pospal' . $sn . '_app_key' ] ) && '' !== $settings[ 'pospal' . $sn . '_app_key' ] ) ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' );
 										?>
 									</p></td>
 							</tr>

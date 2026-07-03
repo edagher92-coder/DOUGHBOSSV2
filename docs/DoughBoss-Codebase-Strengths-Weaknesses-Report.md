@@ -1,8 +1,9 @@
 # DoughBoss Codebase — Strengths, Weaknesses & Improvement Report
 
-**Scope:** full plugin codebase (`includes/`, `admin/`, `demo/`, `app/`, `public/`) at `/home/user/DOUGHBOSSV2`, plugin v2.12.2.
+**Scope:** full plugin codebase (`includes/`, `admin/`, `demo/`, `app/`, `public/`) at `/home/user/DOUGHBOSSV2`, plugin v2.12.2 at time of review.
 **Method:** initial broad recon by Claude (Fable 5), then independently re-verified line-by-line for every finding below marked **CONFIRMED**. Findings not personally re-verified are marked **REPORTED (unverified)** — treat with slightly less certainty, but they came with specific file:line citations and read as credible.
 **Date:** 2 July 2026.
+**Update:** items §1, §2, and §4 (Stripe + POSPal secret-key echoing) were implemented same-day — shipped in v2.12.3. See the "Recommended fix order" table at the end for status.
 
 ---
 
@@ -170,14 +171,21 @@ Each of the 8 demo pages (`index/owner/staff/backend/franchise/licensing/privacy
 
 ## Recommended fix order
 
-| # | Fix | Effort | Why this order |
-|---|---|---|---|
-| 1 | Cart token case-mismatch (§1) | ~5 min | Actively losing real customer carts right now |
-| 2 | Settings-save wiping `app_origin`/`voucher_campaigns` (§2) | ~10 min | Silently breaks the staff Console + campaign config on the next unrelated settings save |
-| 3 | Stripe + POSPal secret keys echoed to admin HTML (§4) | ~30 min | Real credential-exposure surface, easy retrofit of an existing pattern |
-| 4 | Rate limiter proxy-awareness + atomicity (§3) | ~1–2 hrs | Correctness/availability risk, not urgent but not free |
-| 5 | Regenerate CLAUDE.md (§5) | ~1 hr | Keeps compounding — every future session (human or AI) inherits wrong assumptions until this is fixed |
-| 6 | Minimal test harness for money-path classes (§6) | ~1–2 days | Biggest structural risk, but the least urgent to ship *today* |
-| 7 | Everything else | as time allows | Real but lower-stakes |
+| # | Fix | Effort | Status | Why this order |
+|---|---|---|---|---|
+| 1 | Cart token case-mismatch (§1) | ~5 min | **Done — v2.12.3** | Actively losing real customer carts right now |
+| 2 | Settings-save wiping `app_origin`/`voucher_campaigns` (§2) | ~10 min | **Done — v2.12.3** | Silently breaks the staff Console + campaign config on the next unrelated settings save |
+| 3 | Stripe + POSPal secret keys echoed to admin HTML (§4) | ~30 min | **Done — v2.12.3** | Real credential-exposure surface, easy retrofit of an existing pattern |
+| 4 | Rate limiter proxy-awareness + atomicity (§3) | ~1–2 hrs | Not started | Correctness/availability risk, not urgent but not free |
+| 5 | Regenerate CLAUDE.md (§5) | ~1 hr | Not started | Keeps compounding — every future session (human or AI) inherits wrong assumptions until this is fixed |
+| 6 | Minimal test harness for money-path classes (§6) | ~1–2 days | Not started | Biggest structural risk, but the least urgent to ship *today* |
+| 7 | Everything else | as time allows | Not started | Real but lower-stakes |
+
+**What "Done — v2.12.3" actually shipped:**
+- **§1 fix:** `class-doughboss-cart.php:get_token()` now strips non-alphanumeric characters case-preservingly (`preg_replace('/[^A-Za-z0-9]/', '', ...)`) instead of running the cookie through `sanitize_key()`, which was silently lowercasing mixed-case tokens and orphaning the cart transient written under the original case.
+- **§2 fix:** `sanitize_settings()` now seeds `$clean` from `DoughBoss_Settings::all()` instead of an empty array, so every key the form doesn't explicitly list (`app_origin`, `voucher_campaigns`, `pospal_label`, etc.) survives a save instead of being dropped. Every field the function does list is still explicitly re-validated from `$input` exactly as before — this only changes what happens to *unlisted* keys.
+- **§4 fix:** applied the existing `keep_secret()` write-only pattern (already used for Mercure/ntfy/SMS/printer) to the four Stripe secret fields (`stripe_test_sk`, `stripe_live_sk`, `stripe_test_whsec`, `stripe_live_whsec`) and all three POSPal app-key fields (main store + stores 2/3). Each field now renders blank and shows "A key is set — leave blank to keep it." instead of echoing the actual secret into the page HTML.
+
+All three verified with `php -l` (30/30 files clean) plus manual code review; no PHPUnit harness exists to run automated regression tests against (see §6). **Not yet deployed to the live site** — these changes are committed to the repo only; deploying requires the normal plugin update/deploy process.
 
 Items 1–3 are small, mechanical, and low-risk — happy to implement and push them now if you want. Item 5 (CLAUDE.md regeneration) is also quick and would meaningfully improve every future session's starting accuracy.
