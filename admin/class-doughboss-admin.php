@@ -1516,7 +1516,7 @@ JS;
 						<tr>
 							<th><label for="db-stripe-test-sk"><?php esc_html_e( 'Test secret key', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-stripe-test-sk" class="regular-text" autocomplete="off" placeholder="sk_test_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_sk]" value="" />
-								<p class="description"><?php echo isset( $settings['stripe_test_sk'] ) && '' !== $settings['stripe_test_sk'] ? esc_html__( 'A key is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_TEST_SK environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_test_sk'] ) && '' !== $settings['stripe_test_sk'] ? esc_html__( 'A key is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-stripe-live-pk"><?php esc_html_e( 'Live publishable key', 'doughboss' ); ?></label></th>
@@ -1525,12 +1525,12 @@ JS;
 						<tr>
 							<th><label for="db-stripe-live-sk"><?php esc_html_e( 'Live secret key', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-stripe-live-sk" class="regular-text" autocomplete="off" placeholder="sk_live_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_sk]" value="" />
-								<p class="description"><?php esc_html_e( 'Find your keys in the Stripe Dashboard → Developers → API keys. Secret keys are used only on the server.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_live_sk'] ) && '' !== $settings['stripe_live_sk'] ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+								<p class="description"><?php esc_html_e( 'Find your keys in the Stripe Dashboard → Developers → API keys. Secret keys are used only on the server.', 'doughboss' ); ?> <?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_LIVE_SK environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_live_sk'] ) && '' !== $settings['stripe_live_sk'] ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-stripe-test-whsec"><?php esc_html_e( 'Test webhook secret', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-stripe-test-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_whsec]" value="" />
-								<p class="description"><?php echo isset( $settings['stripe_test_whsec'] ) && '' !== $settings['stripe_test_whsec'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_TEST_WHSEC environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_test_whsec'] ) && '' !== $settings['stripe_test_whsec'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-stripe-live-whsec"><?php esc_html_e( 'Live webhook secret', 'doughboss' ); ?></label></th>
@@ -1539,6 +1539,7 @@ JS;
 									<?php esc_html_e( 'Stripe Dashboard → Developers → Webhooks. Add an endpoint pointing to:', 'doughboss' ); ?>
 									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/stripe-webhook' ) ); ?></code>
 									<?php esc_html_e( 'and subscribe to payment_intent.succeeded. Then paste its signing secret here.', 'doughboss' ); ?>
+									<?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
 									<?php echo isset( $settings['stripe_live_whsec'] ) && '' !== $settings['stripe_live_whsec'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
 								</p></td>
 						</tr>

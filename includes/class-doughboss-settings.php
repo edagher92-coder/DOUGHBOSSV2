@@ -306,21 +306,52 @@ class DoughBoss_Settings {
 	}
 
 	/**
-	 * Stripe secret key for the active mode.
+	 * Env-first read for a secret: a wp-config.php constant or environment
+	 * variable of the given name overrides the stored option, so the secret can
+	 * be kept out of the database (and therefore out of backups). Mirrors the
+	 * pattern already used for POSPal/Mercure/ntfy/ClickSend/printer secrets.
+	 *
+	 * @param string $const_name Constant/env var name (e.g. DOUGHBOSS_STRIPE_TEST_SK).
+	 * @param string $option_key Fallback option key.
+	 * @return string
+	 */
+	private static function env_first_secret( $const_name, $option_key ) {
+		if ( defined( $const_name ) && '' !== (string) constant( $const_name ) ) {
+			return (string) constant( $const_name );
+		}
+		$env = getenv( $const_name );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( $option_key, '' );
+	}
+
+	/**
+	 * Stripe secret key for the active mode. Read env-first — the constant
+	 * DOUGHBOSS_STRIPE_TEST_SK/DOUGHBOSS_STRIPE_LIVE_SK or the matching
+	 * environment variable take precedence over the stored option. Only ever
+	 * used server-side; never echoed to a client.
 	 *
 	 * @return string
 	 */
 	public static function stripe_secret_key() {
-		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_sk' : 'stripe_test_sk', '' );
+		return 'live' === self::stripe_mode()
+			? self::env_first_secret( 'DOUGHBOSS_STRIPE_LIVE_SK', 'stripe_live_sk' )
+			: self::env_first_secret( 'DOUGHBOSS_STRIPE_TEST_SK', 'stripe_test_sk' );
 	}
 
 	/**
 	 * Stripe webhook signing secret for the active mode (server-side only).
+	 * Read env-first — the constant DOUGHBOSS_STRIPE_TEST_WHSEC/
+	 * DOUGHBOSS_STRIPE_LIVE_WHSEC or the matching environment variable take
+	 * precedence over the stored option.
 	 *
 	 * @return string
 	 */
 	public static function stripe_webhook_secret() {
-		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_whsec' : 'stripe_test_whsec', '' );
+		return 'live' === self::stripe_mode()
+			? self::env_first_secret( 'DOUGHBOSS_STRIPE_LIVE_WHSEC', 'stripe_live_whsec' )
+			: self::env_first_secret( 'DOUGHBOSS_STRIPE_TEST_WHSEC', 'stripe_test_whsec' );
 	}
 
 	/**
