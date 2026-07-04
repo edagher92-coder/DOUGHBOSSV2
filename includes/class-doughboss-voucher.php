@@ -434,12 +434,14 @@ class DoughBoss_Voucher {
 	}
 
 	/**
-	 * Default campaigns — the Dough Boss × Snow Boss student launch: two separate
-	 * vouchers, a $5 and a $10, that share ONE daily pool of 100 claims across
-	 * both combined (not 100 each) and release fresh every day.
+	 * Default campaigns — the Dough Boss × Snow Boss student launch: a single
+	 * $5 voucher with a daily pool of 100 claims that releases fresh every day.
+	 * (The $10 tier that previously shared this pool has been retired — $5 is
+	 * the only student voucher going forward.)
 	 *
-	 * The shared cap is expressed with `cap_group` — every campaign carrying the
-	 * same group counts against the same `daily_cap`. Owners can override the
+	 * The daily pool is expressed with `cap_group` so the mechanism can still
+	 * pool multiple campaigns together in future without a schema change; today
+	 * it pools only this one campaign against itself. Owners can override the
 	 * whole set via the 'voucher_campaigns' setting.
 	 *
 	 * @return array[]
@@ -451,17 +453,6 @@ class DoughBoss_Voucher {
 				'label'     => '$5 Student Voucher (Dough Boss × Snow Boss)',
 				'type'      => 'amount',
 				'value'     => 5.00,
-				'prefix'    => 'SNOW',
-				'daily_cap' => 100,
-				'cap_group' => 'student',
-				'scope'     => 'both',
-				'active'    => 1,
-			),
-			'snow10' => array(
-				'slug'      => 'snow10',
-				'label'     => '$10 Student Voucher (Dough Boss × Snow Boss)',
-				'type'      => 'amount',
-				'value'     => 10.00,
 				'prefix'    => 'SNOW',
 				'daily_cap' => 100,
 				'cap_group' => 'student',
@@ -508,8 +499,7 @@ class DoughBoss_Voucher {
 	/**
 	 * Claims counted today against a campaign's daily cap. When the campaign
 	 * declares a `cap_group`, the count is pooled across every campaign sharing
-	 * that group (e.g. the $5 and $10 student vouchers share one pool of 100);
-	 * otherwise it is just this campaign's own claims.
+	 * that group; otherwise it is just this campaign's own claims.
 	 *
 	 * @param array $campaign Campaign definition.
 	 * @return int

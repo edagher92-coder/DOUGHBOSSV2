@@ -176,7 +176,7 @@ class DoughBoss_Admin {
 		$clean    = $existing;
 
 		$clean['currency_symbol'] = isset( $input['currency_symbol'] ) ? sanitize_text_field( $input['currency_symbol'] ) : '$';
-		$clean['currency_code']   = isset( $input['currency_code'] ) ? sanitize_text_field( $input['currency_code'] ) : 'USD';
+		$clean['currency_code']   = isset( $input['currency_code'] ) ? sanitize_text_field( $input['currency_code'] ) : ( isset( $existing['currency_code'] ) ? $existing['currency_code'] : 'AUD' );
 		$clean['tax_rate']        = isset( $input['tax_rate'] ) ? max( 0, (float) $input['tax_rate'] ) : 0;
 		$clean['gst_inclusive']   = empty( $input['gst_inclusive'] ) ? 0 : 1;
 		$clean['delivery_fee']    = isset( $input['delivery_fee'] ) ? max( 0, (float) $input['delivery_fee'] ) : 0;
@@ -207,7 +207,9 @@ class DoughBoss_Admin {
 		$clean['pospal_app_id']  = isset( $input['pospal_app_id'] ) ? sanitize_text_field( $input['pospal_app_id'] ) : '';
 		$clean['pospal_app_key'] = $this->keep_secret( $input, $existing, 'pospal_app_key' );
 		$clean['pospal_coupon_uid_5']  = isset( $input['pospal_coupon_uid_5'] ) ? sanitize_text_field( $input['pospal_coupon_uid_5'] ) : '';
-		$clean['pospal_coupon_uid_10'] = isset( $input['pospal_coupon_uid_10'] ) ? sanitize_text_field( $input['pospal_coupon_uid_10'] ) : '';
+		// The $10 voucher tier has been retired — $5 is the only student voucher
+		// going forward. Purge any leftover $10 coupon-rule UID from storage.
+		unset( $clean['pospal_coupon_uid_10'] );
 		// Additional POSPal stores (multi-store): store 2 + store 3.
 		foreach ( array( 2, 3 ) as $sn ) {
 			$clean[ 'pospal' . $sn . '_label' ]         = isset( $input[ 'pospal' . $sn . '_label' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_label' ] ) : '';
@@ -215,7 +217,7 @@ class DoughBoss_Admin {
 			$clean[ 'pospal' . $sn . '_app_id' ]        = isset( $input[ 'pospal' . $sn . '_app_id' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_app_id' ] ) : '';
 			$clean[ 'pospal' . $sn . '_app_key' ]       = $this->keep_secret( $input, $existing, 'pospal' . $sn . '_app_key' );
 			$clean[ 'pospal' . $sn . '_coupon_uid_5' ]  = isset( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) : '';
-			$clean[ 'pospal' . $sn . '_coupon_uid_10' ] = isset( $input[ 'pospal' . $sn . '_coupon_uid_10' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_coupon_uid_10' ] ) : '';
+			unset( $clean[ 'pospal' . $sn . '_coupon_uid_10' ] );
 		}
 
 		// Phase 2 — real-time & notifications. Off by default; fully dormant until
@@ -1573,12 +1575,8 @@ JS;
 						</tr>
 						<tr>
 							<th><label for="db-pospal-uid5"><?php esc_html_e( '$5 coupon rule UID', 'doughboss' ); ?></label></th>
-							<td><input type="text" id="db-pospal-uid5" class="regular-text" autocomplete="off" inputmode="numeric" placeholder="e.g. 1782386149561969589" name="<?php echo esc_attr( $opt ); ?>[pospal_coupon_uid_5]" value="<?php echo esc_attr( isset( $settings['pospal_coupon_uid_5'] ) ? $settings['pospal_coupon_uid_5'] : '' ); ?>" /></td>
-						</tr>
-						<tr>
-							<th><label for="db-pospal-uid10"><?php esc_html_e( '$10 coupon rule UID', 'doughboss' ); ?></label></th>
-							<td><input type="text" id="db-pospal-uid10" class="regular-text" autocomplete="off" inputmode="numeric" placeholder="e.g. 1782388334407537808" name="<?php echo esc_attr( $opt ); ?>[pospal_coupon_uid_10]" value="<?php echo esc_attr( isset( $settings['pospal_coupon_uid_10'] ) ? $settings['pospal_coupon_uid_10'] : '' ); ?>" />
-								<p class="description"><?php esc_html_e( 'The POSPal coupon-rule UID for each student voucher value (copied from your POSPal coupon list). Granting stays off until at least one is set.', 'doughboss' ); ?></p></td>
+							<td><input type="text" id="db-pospal-uid5" class="regular-text" autocomplete="off" inputmode="numeric" placeholder="e.g. 1782386149561969589" name="<?php echo esc_attr( $opt ); ?>[pospal_coupon_uid_5]" value="<?php echo esc_attr( isset( $settings['pospal_coupon_uid_5'] ) ? $settings['pospal_coupon_uid_5'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'The POSPal coupon-rule UID for the $5 student voucher (copied from your POSPal coupon list). Granting stays off until this is set.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Verify coupons', 'doughboss' ); ?></th>
@@ -1599,7 +1597,6 @@ JS;
 								<input type="text" id="db-pospal-test-phone" class="regular-text" inputmode="tel" autocomplete="off" style="max-width:240px;" placeholder="<?php esc_attr_e( 'Throwaway test phone, e.g. 0400000000', 'doughboss' ); ?>" />
 								<select id="db-pospal-test-value">
 									<option value="5"><?php esc_html_e( '$5 coupon', 'doughboss' ); ?></option>
-									<option value="10"><?php esc_html_e( '$10 coupon', 'doughboss' ); ?></option>
 								</select>
 								<button type="button" class="button" id="db-pospal-test-grant"><?php esc_html_e( 'Send test coupon', 'doughboss' ); ?></button>
 								<button type="button" class="button" id="db-pospal-probe"><?php esc_html_e( 'Probe methods', 'doughboss' ); ?></button>
@@ -1612,7 +1609,7 @@ JS;
 
 					<h3><?php esc_html_e( 'Additional stores (multi-store)', 'doughboss' ); ?></h3>
 					<p class="description" style="max-width:760px;">
-						<?php esc_html_e( 'Optional. Add Bankstown and Roselands here — each is a separate POSPal account with its own host, App ID, App Key and $5/$10 coupon-rule UIDs. A claimed voucher is granted to EVERY configured store. Leave a store blank to skip it. After saving, use the store dropdown above (Store 2 / Store 3) to Verify and Test each one.', 'doughboss' ); ?>
+						<?php esc_html_e( 'Optional. Add Bankstown and Roselands here — each is a separate POSPal account with its own host, App ID, App Key and $5 coupon-rule UID. A claimed voucher is granted to EVERY configured store. Leave a store blank to skip it. After saving, use the store dropdown above (Store 2 / Store 3) to Verify and Test each one.', 'doughboss' ); ?>
 					</p>
 					<?php foreach ( array( 2, 3 ) as $sn ) : ?>
 						<h4>
@@ -1649,10 +1646,6 @@ JS;
 							<tr>
 								<th><?php esc_html_e( '$5 coupon rule UID', 'doughboss' ); ?></th>
 								<td><input type="text" class="regular-text" autocomplete="off" inputmode="numeric" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_coupon_uid_5]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_coupon_uid_5' ] ) ? $settings[ 'pospal' . $sn . '_coupon_uid_5' ] : '' ); ?>" /></td>
-							</tr>
-							<tr>
-								<th><?php esc_html_e( '$10 coupon rule UID', 'doughboss' ); ?></th>
-								<td><input type="text" class="regular-text" autocomplete="off" inputmode="numeric" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_coupon_uid_10]" value="<?php echo esc_attr( isset( $settings[ 'pospal' . $sn . '_coupon_uid_10' ] ) ? $settings[ 'pospal' . $sn . '_coupon_uid_10' ] : '' ); ?>" /></td>
 							</tr>
 						</table>
 					<?php endforeach; ?>

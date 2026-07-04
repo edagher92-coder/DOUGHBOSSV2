@@ -103,7 +103,7 @@ class DoughBoss_POSPal_Sync {
 		$any_ok   = false;
 		$last_uid = '';
 		foreach ( DoughBoss_Settings::pospal_stores() as $store ) {
-			$store_uid = ( 5 === $dollars ) ? $store['uid5'] : ( ( 10 === $dollars ) ? $store['uid10'] : '' );
+			$store_uid = ( 5 === $dollars ) ? $store['uid5'] : '';
 			if ( '' === $store_uid ) {
 				continue; // This store has no coupon mapped for this value.
 			}

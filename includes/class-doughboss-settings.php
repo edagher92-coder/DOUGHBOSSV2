@@ -103,26 +103,23 @@ class DoughBoss_Settings {
 			'pospal_app_id'     => '',
 			'pospal_app_key'    => '',
 			// POSPal coupon-rule mapping: which POSPal coupon (优惠券) rule UID
-			// represents the $5 / $10 student vouchers. Blank = grant disabled for
-			// that value (the GRANT leg is dormant until at least one is set).
+			// represents the $5 student voucher. Blank = grant disabled (the GRANT
+			// leg is dormant until this is set). The $10 tier has been retired.
 			'pospal_coupon_uid_5'  => '',
-			'pospal_coupon_uid_10' => '',
 			// Additional POSPal stores (multi-store). Store 2 + store 3 each carry their
 			// own host / App ID / App Key (env-first DOUGHBOSS_POSPAL_APPKEY_2/_3) and
-			// $5/$10 coupon-rule UIDs. Blank = that store is skipped; store 1 is the
+			// $5 coupon-rule UID. Blank = that store is skipped; store 1 is the
 			// legacy single-store fields above.
 			'pospal2_label'         => '',
 			'pospal2_host'          => '',
 			'pospal2_app_id'        => '',
 			'pospal2_app_key'       => '',
 			'pospal2_coupon_uid_5'  => '',
-			'pospal2_coupon_uid_10' => '',
 			'pospal3_label'         => '',
 			'pospal3_host'          => '',
 			'pospal3_app_id'        => '',
 			'pospal3_app_key'       => '',
 			'pospal3_coupon_uid_5'  => '',
-			'pospal3_coupon_uid_10' => '',
 			// POSPal order push (mirror online orders onto the till) — off by default.
 			// Orders only push once a product map is built (pospal_product_map, via
 			// `wp doughboss pospal-map`). pay_method/pay_online describe how a Stripe-
@@ -402,22 +399,13 @@ class DoughBoss_Settings {
 	}
 
 	/**
-	 * POSPal coupon-rule UID mapped to the $10 voucher (blank when unmapped).
-	 *
-	 * @return string
-	 */
-	public static function pospal_coupon_uid_10() {
-		return (string) self::get( 'pospal_coupon_uid_10', '' );
-	}
-
-	/**
 	 * Map a dollar voucher value to the configured POSPal coupon-rule UID.
 	 *
-	 * Only the pilot's $5 and $10 student vouchers are mapped today; any other
-	 * value returns '' (no rule), which the grant flow treats as "skip — nothing
-	 * to grant in POSPal".
+	 * Only the pilot's $5 student voucher is mapped today (the $10 tier was
+	 * retired); any other value returns '' (no rule), which the grant flow
+	 * treats as "skip — nothing to grant in POSPal".
 	 *
-	 * @param int|float|string $value Voucher dollar value (e.g. 5, 10, '5.00').
+	 * @param int|float|string $value Voucher dollar value (e.g. 5, '5.00').
 	 * @return string The mapped coupon-rule UID, or '' when none is configured.
 	 */
 	public static function pospal_coupon_uid_for( $value ) {
@@ -425,8 +413,6 @@ class DoughBoss_Settings {
 		switch ( $dollars ) {
 			case 5:
 				return self::pospal_coupon_uid_5();
-			case 10:
-				return self::pospal_coupon_uid_10();
 			default:
 				return '';
 		}
@@ -444,7 +430,7 @@ class DoughBoss_Settings {
 			return false;
 		}
 		foreach ( self::pospal_stores() as $store ) {
-			if ( '' !== $store['uid5'] || '' !== $store['uid10'] ) {
+			if ( '' !== $store['uid5'] ) {
 				return true;
 			}
 		}
@@ -535,7 +521,7 @@ class DoughBoss_Settings {
 	 * the pospal2_* / pospal3_* settings. Only fully-configured stores (host + App ID
 	 * + App Key all set) are returned, so an empty store is skipped and nothing breaks.
 	 *
-	 * @return array[] List of { label, host, app_id, app_key, uid5, uid10 }.
+	 * @return array[] List of { label, host, app_id, app_key, uid5 }.
 	 */
 	public static function pospal_stores() {
 		$raw = array(
@@ -545,7 +531,6 @@ class DoughBoss_Settings {
 				'app_id'  => self::pospal_app_id(),
 				'app_key' => self::pospal_app_key(),
 				'uid5'    => self::pospal_coupon_uid_5(),
-				'uid10'   => self::pospal_coupon_uid_10(),
 				'default' => __( 'Store 1', 'doughboss' ),
 			),
 		);
@@ -556,7 +541,6 @@ class DoughBoss_Settings {
 				'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
 				'app_key' => self::pospal_store_key( $n ),
 				'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
-				'uid10'   => (string) self::get( 'pospal' . $n . '_coupon_uid_10', '' ),
 				/* translators: %d: store number. */
 				'default' => sprintf( __( 'Store %d', 'doughboss' ), $n ),
 			);
@@ -580,7 +564,7 @@ class DoughBoss_Settings {
 	 * tools so an incomplete store reports clearly instead of falling back silently.
 	 *
 	 * @param int $n Store number.
-	 * @return array { label, host, app_id, app_key, uid5, uid10 }.
+	 * @return array { label, host, app_id, app_key, uid5 }.
 	 */
 	public static function pospal_store( $n ) {
 		$n = max( 1, (int) $n );
@@ -592,7 +576,6 @@ class DoughBoss_Settings {
 				'app_id'  => self::pospal_app_id(),
 				'app_key' => self::pospal_app_key(),
 				'uid5'    => self::pospal_coupon_uid_5(),
-				'uid10'   => self::pospal_coupon_uid_10(),
 			);
 		}
 		$label = (string) self::get( 'pospal' . $n . '_label', '' );
@@ -603,7 +586,6 @@ class DoughBoss_Settings {
 			'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
 			'app_key' => self::pospal_store_key( $n ),
 			'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
-			'uid10'   => (string) self::get( 'pospal' . $n . '_coupon_uid_10', '' ),
 		);
 	}
 

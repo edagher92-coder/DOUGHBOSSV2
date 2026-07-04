@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.12.1
+Stable tag: 2.13.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -42,15 +42,34 @@ Everything is rendered through shortcodes and a small REST API; no theme changes
 
 = Does this process payments? =
 
-Not yet. Orders are recorded and the store is notified; payment integration
-(e.g. Stripe) is planned for a future release. Today it suits "order now, pay
-on pickup/delivery" workflows.
+Optionally. Orders are always recorded and the store is notified — DoughBoss
+suits "order now, pay on pickup/delivery" out of the box. Stripe card payments
+are also built in and can be switched on under **DoughBoss → Settings →
+Payments** (off by default); once configured, checkout collects a card and the
+order is verified server-side before it's accepted.
 
 = Does it need an account system? =
 
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.13.0 =
+* Change: the **$10 student voucher tier has been retired** — the Dough Boss ×
+  Snow Boss launch voucher is now **$5 only**. Removed from the default
+  campaign, the POSPal coupon-rule mapping (Settings → POSPal, all stores),
+  and the storefront demo.
+* Security: fixed a site-wide CORS regression — the plugin no longer removes
+  WordPress's default REST CORS handling for every other route on the site.
+* Security: catering enquiry status changes (paid/confirmed/lost) now require
+  owner-level access, matching the same boundary already used for vouchers —
+  a kitchen/KDS till login can no longer change catering payment status.
+* Fix: `create_payment_intent` now checks the shop's open/closed and
+  delivery/pickup settings before charging a card, matching `/checkout`.
+* Fix: corrected customer-facing copy that incorrectly claimed an unverified
+  card charge "will be reversed automatically."
+* Fix: the currency-code setting no longer falls back to USD when unset.
+* Security: added rate limiting to the three payment-intent routes.
 
 = 2.12.1 =
 * New: **one-click "Import standard menu"** button (DoughBoss → Settings → Menu) —

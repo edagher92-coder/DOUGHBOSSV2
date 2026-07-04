@@ -45,19 +45,24 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
-	 * Swap WordPress's permissive default CORS handling for a scoped one: only
-	 * the configured console origin, only this plugin's namespace.
+	 * Supplement WordPress's default CORS handling with the staff console's
+	 * origin on doughboss/v1 routes. Deliberately does NOT remove WordPress's
+	 * own 'rest_send_cors_headers' callback — this plugin previously did, which
+	 * disabled default CORS handling for every REST route on the site (core
+	 * `/wp/v2/*`, any other plugin's namespace), not just its own. Both
+	 * callbacks now run: WordPress's own default first, this one layered on top
+	 * only for the configured console origin on this plugin's namespace.
 	 *
 	 * @return void
 	 */
 	public function enable_cors() {
-		remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
 		add_filter( 'rest_pre_serve_request', array( $this, 'send_cors_headers' ), 10, 4 );
 	}
 
 	/**
 	 * Send CORS headers for the staff console origin on doughboss/v1 routes
-	 * (Application Password auth). Scoped — never site-wide wildcard.
+	 * (Application Password auth). Scoped — never site-wide wildcard, and never
+	 * removes WordPress's own default CORS handling for other routes.
 	 *
 	 * @param bool             $served  Whether the request has been served.
 	 * @param WP_HTTP_Response $result  Result to send.
@@ -707,14 +712,18 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
-		// Catering — staff status update for an enquiry.
+		// Catering — staff status update for an enquiry. Owner-only: a status
+		// change can mark an enquiry PAID/CONFIRMED/LOST (real financial/business
+		// state), so this uses verify_manage (not verify_admin) — the same "a
+		// till device can never create value" boundary already enforced for
+		// vouchers. The kitchen/KDS role only gets order-board actions.
 		register_rest_route(
 			$ns,
 			'/admin/catering/(?P<id>\d+)/status',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'admin_update_catering_status' ),
-				'permission_callback' => array( $this, 'verify_admin' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
 				'args'                => array(
 					'status' => array(
 						'required'          => true,
@@ -1166,7 +1175,7 @@ class DoughBoss_REST_Controller {
 
 	/**
 	 * GET /pospal/verify-coupons — owner action: read-only check that the connection
-	 * works and that the configured $5 / $10 coupon-rule UIDs each match a real rule
+	 * works and that the configured $5 coupon-rule UID matches a real rule
 	 * in the POSPal account. No side effects (no member or coupon is created).
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -1183,7 +1192,7 @@ class DoughBoss_REST_Controller {
 			'app_id'  => $store['app_id'],
 			'app_key' => $store['app_key'],
 		);
-		$result = DoughBoss_POSPal::verify_coupon_rules( $creds, $store['uid5'], $store['uid10'] );
+		$result = DoughBoss_POSPal::verify_coupon_rules( $creds, $store['uid5'] );
 		if ( is_wp_error( $result ) ) {
 			return rest_ensure_response(
 				array(
@@ -1197,16 +1206,11 @@ class DoughBoss_REST_Controller {
 		if ( '' !== $result['uid5'] ) {
 			$parts[] = $result['found5'] ? __( '$5 UID matches a rule ✓', 'doughboss' ) : __( '$5 UID NOT found in rules', 'doughboss' );
 		}
-		if ( '' !== $result['uid10'] ) {
-			$parts[] = $result['found10'] ? __( '$10 UID matches a rule ✓', 'doughboss' ) : __( '$10 UID NOT found in rules', 'doughboss' );
-		}
 		if ( empty( $parts ) ) {
-			$parts[] = __( 'No coupon UIDs set yet.', 'doughboss' );
+			$parts[] = __( 'No coupon UID set yet.', 'doughboss' );
 		}
 
-		$all_ok = ( '' === $result['uid5'] || $result['found5'] )
-			&& ( '' === $result['uid10'] || $result['found10'] )
-			&& ( '' !== $result['uid5'] || '' !== $result['uid10'] );
+		$all_ok = '' !== $result['uid5'] && $result['found5'];
 
 		/* translators: %d: number of coupon rules returned by POSPal. */
 		$prefix = sprintf( _n( 'Connected — %d coupon rule found. ', 'Connected — %d coupon rules found. ', (int) $result['rules_count'], 'doughboss' ), (int) $result['rules_count'] );
@@ -1268,7 +1272,7 @@ class DoughBoss_REST_Controller {
 			/* translators: %s: store label. */
 			return rest_ensure_response( array( 'ok' => false, 'message' => sprintf( __( 'Enable POSPal and configure %s (host, App ID, App Key) first.', 'doughboss' ), $store['label'] ) ) );
 		}
-		$rule_uid = ( 5 === $value ) ? $store['uid5'] : ( ( 10 === $value ) ? $store['uid10'] : '' );
+		$rule_uid = ( 5 === $value ) ? $store['uid5'] : '';
 		if ( '' === $rule_uid ) {
 			/* translators: %s: store label. */
 			return rest_ensure_response( array( 'ok' => false, 'message' => sprintf( __( 'No coupon UID is mapped for that value at %s — set it and save.', 'doughboss' ), $store['label'] ) ) );
@@ -1600,9 +1604,9 @@ class DoughBoss_REST_Controller {
 
 	/**
 	 * POST /voucher/claim — claim a voucher from a daily-capped campaign (e.g.
-	 * the Dough Boss × Snow Boss $5 or $10 student vouchers, which share one
-	 * daily pool of 100). Public (nonce) + rate-limited; the per-day cap is
-	 * enforced server-side, pooled across the campaign's cap_group.
+	 * the Dough Boss × Snow Boss $5 student voucher, with a daily pool of 100).
+	 * Public (nonce) + rate-limited; the per-day cap is enforced server-side,
+	 * pooled across the campaign's cap_group.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
@@ -1676,12 +1680,31 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
+		if ( $this->rate_limited( 'payment_intent', 12, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+
+		// Mirror checkout()'s business-rule gates here — a card must never be
+		// charged for an order the shop will go on to refuse (closed, or an
+		// order type it doesn't offer). Charging first and discovering the
+		// refusal only at /checkout leaves a captured payment with no order.
+		if ( ! DoughBoss_Settings::ordering_open() ) {
+			return new WP_Error( 'doughboss_closed', __( 'Online ordering is currently closed.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+
 		if ( $this->cart->is_empty() ) {
 			return new WP_Error( 'doughboss_empty', __( 'Your cart is empty.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
 		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
 		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+
+		if ( 'delivery' === $order_type && ! DoughBoss_Settings::get( 'enable_delivery', 0 ) ) {
+			return new WP_Error( 'doughboss_no_delivery', __( 'Delivery is not available.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( 'pickup' === $order_type && ! DoughBoss_Settings::get( 'enable_pickup', 1 ) ) {
+			return new WP_Error( 'doughboss_no_pickup', __( 'Pickup is not available.', 'doughboss' ), array( 'status' => 400 ) );
+		}
 
 		$totals   = $this->cart->totals( $order_type );
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
@@ -2192,7 +2215,10 @@ class DoughBoss_REST_Controller {
 		$cur      = isset( $intent['currency'] ) ? strtolower( $intent['currency'] ) : '';
 
 		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency ) {
-			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your card payment. If you were charged it will be reversed automatically.', 'doughboss' ), array( 'status' => 402 ) );
+			// Do not claim an automatic reversal: nothing in this plugin refunds a
+			// payment automatically today. Point the customer at a human instead
+			// of a false promise.
+			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your card payment. If you were charged, please contact us and we will sort out a refund.', 'doughboss' ), array( 'status' => 402 ) );
 		}
 
 		return $pi_id;
@@ -2432,6 +2458,10 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
+		if ( $this->rate_limited( 'catering_payment_intent', 12, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+
 		$enquiry = $this->resolve_catering_enquiry( $request );
 		if ( is_wp_error( $enquiry ) ) {
 			return $enquiry;
@@ -2491,6 +2521,10 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
+		if ( $this->rate_limited( 'catering_confirm_payment', 12, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+
 		$enquiry = $this->resolve_catering_enquiry( $request );
 		if ( is_wp_error( $enquiry ) ) {
 			return $enquiry;
@@ -2527,7 +2561,10 @@ class DoughBoss_REST_Controller {
 		$cur      = isset( $intent['currency'] ) ? strtolower( $intent['currency'] ) : '';
 
 		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency ) {
-			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your payment. If you were charged it will be reversed automatically.', 'doughboss' ), array( 'status' => 402 ) );
+			// Do not claim an automatic reversal: nothing in this plugin refunds a
+			// payment automatically today. Point the customer at a human instead
+			// of a false promise.
+			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your payment. If you were charged, please contact us and we will sort out a refund.', 'doughboss' ), array( 'status' => 402 ) );
 		}
 
 		DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );

@@ -153,34 +153,28 @@ class DoughBoss_POSPal {
 
 	/**
 	 * Read-only validation for the admin "Verify coupon setup" action: confirm the
-	 * connection works and that the configured $5 / $10 coupon-rule UIDs each match a
-	 * real rule in the account. No side effects — it only queries the rule list and
-	 * searches the response for the configured UIDs (field-name agnostic).
+	 * connection works and that the configured $5 coupon-rule UID matches a real
+	 * rule in the account. No side effects — it only queries the rule list and
+	 * searches the response for the configured UID (field-name agnostic).
 	 *
-	 * @return array|WP_Error { rules_count:int, uid5, uid10, found5:bool, found10:bool }
+	 * @return array|WP_Error { rules_count:int, uid5, found5:bool }
 	 *                        or a WP_Error when POSPal is off or the query fails.
 	 */
-	public static function verify_coupon_rules( $creds = null, $uid5 = null, $uid10 = null ) {
-		// Default to the legacy single-store coupon UIDs when no store context given.
+	public static function verify_coupon_rules( $creds = null, $uid5 = null ) {
+		// Default to the legacy single-store coupon UID when no store context given.
 		if ( null === $uid5 ) {
 			$uid5 = DoughBoss_Settings::pospal_coupon_uid_5();
-		}
-		if ( null === $uid10 ) {
-			$uid10 = DoughBoss_Settings::pospal_coupon_uid_10();
 		}
 		$rules = self::query_coupon_promotions( $creds );
 		if ( is_wp_error( $rules ) ) {
 			return $rules;
 		}
-		$blob  = (string) wp_json_encode( $rules );
-		$uid5  = (string) $uid5;
-		$uid10 = (string) $uid10;
+		$blob = (string) wp_json_encode( $rules );
+		$uid5 = (string) $uid5;
 		return array(
 			'rules_count' => is_array( $rules ) ? count( $rules ) : 0,
 			'uid5'        => $uid5,
-			'uid10'       => $uid10,
 			'found5'      => '' !== $uid5 && false !== strpos( $blob, $uid5 ),
-			'found10'     => '' !== $uid10 && false !== strpos( $blob, $uid10 ),
 		);
 	}
 

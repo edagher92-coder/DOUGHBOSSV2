@@ -34,7 +34,7 @@ class DoughBoss_Shortcodes {
 
 	/**
 	 * [doughboss_voucher_claim] — lets a customer claim a single-use voucher from
-	 * an active daily campaign (e.g. the $5 / $10 student vouchers). The offers
+	 * an active daily campaign (e.g. the $5 student voucher). The offers
 	 * are rendered server-side; doughboss-voucher.js posts the claim to
 	 * /voucher/claim and shows the resulting code.
 	 *

@@ -299,11 +299,12 @@ dependency), not something that exists today.
    Two separate gates have to pass, not one. `pospal_ready()` requires
    `pospal_enabled()` **and** a host **and** an App ID **and** an App Key
    (env or Settings). But the coupon-**grant** leg specifically also needs
-   `pospal_grant_enabled()` — which additionally requires at least one of
-   `pospal_coupon_uid_5`/`pospal_coupon_uid_10` (or the store-2/3 equivalents)
-   to be set (`includes/class-doughboss-settings.php:442`). Leaving both coupon
-   UID fields blank is a deliberate "grant leg stays dormant" state, not a bug
-   — map at least one coupon-rule UID under Settings → POSPal to turn it on.
+   `pospal_grant_enabled()` — which additionally requires `pospal_coupon_uid_5`
+   (or a store-2/3 equivalent) to be set (`includes/class-doughboss-settings.php:432`).
+   Leaving the coupon UID field blank is a deliberate "grant leg stays dormant"
+   state, not a bug — map the $5 coupon-rule UID under Settings → POSPal to turn
+   it on. (The plugin only supports a single $5 student voucher — the earlier
+   $10 tier was retired.)
 
 2. **"I set `DOUGHBOSS_POSPAL_APPKEY` in wp-config.php but the Settings page
    still shows the App Key field as empty / lets me type a new one."**

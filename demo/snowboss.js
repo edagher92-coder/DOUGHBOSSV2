@@ -1,7 +1,7 @@
 /**
  * Snow Boss — dual-brand view.
  * 1) Animated falling snow (snowflakes), generated only when motion is allowed.
- * 2) Instagram follow-gate: the $5 + $10 student voucher form stays locked until
+ * 2) Instagram follow-gate: the $5 student voucher form stays locked until
  *    the visitor taps Follow @doughboss AND Follow @snowboss, then the email
  *    field unlocks and the claim posts to Formspree.
  */

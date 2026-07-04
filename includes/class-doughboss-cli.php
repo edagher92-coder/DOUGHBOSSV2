@@ -96,7 +96,7 @@ class DoughBoss_CLI {
 	 * ## OPTIONS
 	 *
 	 * <campaign>
-	 * : Campaign slug, e.g. snow5 or snow10.
+	 * : Campaign slug, e.g. snow5.
 	 *
 	 * [--phone=<phone>]
 	 * : Customer phone (the POSPal member key).
