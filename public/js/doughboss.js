@@ -356,21 +356,46 @@
 	function renderCart(root) {
 		var orderType = 'pickup';
 		var locationId = 0;
+		// The cart lines/totals region is rebuilt freely on every reload. The
+		// checkout region is NOT — once a checkout form exists it is updated in
+		// place (see checkoutEl.update below) rather than torn down. Rebuilding it
+		// on every cart mutation (e.g. bumping a line's quantity) used to wipe
+		// whatever the customer had already typed, and — worse — remount the
+		// Stripe card Element's iframe, silently clearing a card number they'd
+		// already entered mid-checkout.
+		var cartRegion = el('div', { class: 'db-cart-region' });
+		var checkoutRegion = el('div', { class: 'db-checkout-region' });
+		var checkoutEl = null;
+		// Once an order is successfully placed, this cart widget's job is done —
+		// further reloads (triggered by the notifyCartChanged() that placeOrder
+		// itself fires, telling the rest of the page the cart is now empty) must
+		// not overwrite the confirmation message with an "empty cart" render.
+		var orderComplete = false;
+		root.appendChild(cartRegion);
+		root.appendChild(checkoutRegion);
 
 		function load() {
+			if (orderComplete) { return; }
 			Promise.all([getConfig(), request('/cart?order_type=' + orderType), getLocations()]).then(function (results) {
 				draw(results[0], results[1], results[2]);
 			}).catch(function (err) {
-				root.innerHTML = '';
-				root.appendChild(el('p', { class: 'db-error', text: err.message }));
+				cartRegion.innerHTML = '';
+				checkoutRegion.innerHTML = '';
+				checkoutEl = null;
+				cartRegion.appendChild(el('p', { class: 'db-error', text: err.message }));
 			});
 		}
 
 		function draw(cfg, cart, locs) {
-			root.innerHTML = '';
+			if (orderComplete) { return; }
+			cartRegion.innerHTML = '';
 
 			if (!cart.items.length) {
-				root.appendChild(el('p', { class: 'db-empty', text: I18N.emptyCart || 'Your cart is empty.' }));
+				cartRegion.appendChild(el('p', { class: 'db-empty', text: I18N.emptyCart || 'Your cart is empty.' }));
+				// Nothing to check out — drop any previous checkout form so a later
+				// non-empty cart starts with a fresh one (and a fresh card mount).
+				checkoutRegion.innerHTML = '';
+				checkoutEl = null;
 				return;
 			}
 
@@ -381,14 +406,14 @@
 			cart.items.forEach(function (line) {
 				list.appendChild(cartLine(line, load));
 			});
-			root.appendChild(list);
+			cartRegion.appendChild(list);
 
 			// Shop selector — routes the order to the right kitchen board. Only
 			// shown when more than one shop exists; otherwise the single shop is
 			// remembered silently.
 			if (locs.length > 1) {
 				setLocation(locationId, true);
-				root.appendChild(el('div', { class: 'db-cart-shop' }, [
+				cartRegion.appendChild(el('div', { class: 'db-cart-shop' }, [
 					el('span', { class: 'db-cart-shop-label', text: I18N.chooseShop || 'Choose your shop' }),
 					shopSelect(locs, locationId, function (id) { locationId = id; setLocation(id); })
 				]));
@@ -401,16 +426,23 @@
 			var typeWrap = el('div', { class: 'db-fulfilment' });
 			if (cfg.enable_pickup) { typeWrap.appendChild(typeRadio('pickup', 'Pickup', orderType, onType)); }
 			if (cfg.enable_delivery) { typeWrap.appendChild(typeRadio('delivery', 'Delivery', orderType, onType)); }
-			root.appendChild(typeWrap);
+			cartRegion.appendChild(typeWrap);
 
 			// Totals.
-			root.appendChild(totalsBlock(cart.totals, cfg));
+			cartRegion.appendChild(totalsBlock(cart.totals, cfg));
 
 			// Voucher code (apply/remove — preview only; redeemed at checkout).
-			root.appendChild(voucherBox(cart.totals, orderType, load));
+			cartRegion.appendChild(voucherBox(cart.totals, orderType, load));
 
-			// Checkout.
-			root.appendChild(checkoutForm(cfg, orderType, function () { return locationId; }, cart.totals));
+			// Checkout — create once, then only update in place.
+			if (!checkoutEl) {
+				checkoutEl = checkoutForm(cfg, orderType, function () { return locationId; }, cart.totals, function () {
+					orderComplete = true;
+				});
+				checkoutRegion.appendChild(checkoutEl.form);
+			} else {
+				checkoutEl.update(orderType, cart.totals);
+			}
 		}
 
 		function onType(value) {
@@ -527,7 +559,15 @@
 		return wrap;
 	}
 
-	function checkoutForm(cfg, orderType, getLocationId, totals) {
+	function checkoutForm(cfg, initialOrderType, getLocationId, initialTotals, onOrderComplete) {
+		// orderType/totals are mutable — update() below can revise them (e.g. the
+		// customer switches pickup/delivery, or the cart total changes) without
+		// recreating this form or its mounted Stripe card Element. The submit
+		// handler always reads the current values through these closures, not the
+		// frozen constructor arguments.
+		var orderType = initialOrderType;
+		var totals = initialTotals;
+
 		var form = el('form', { class: 'db-checkout' });
 		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
 
@@ -540,8 +580,11 @@
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
 		// When Stripe is active, mount a card field and label the button "Pay $X".
-		var grandTotal = totals && typeof totals.total !== 'undefined' ? totals.total : 0;
-		var payLabel = stripe ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
+		function payLabelFor(t) {
+			var grandTotal = t && typeof t.total !== 'undefined' ? t.total : 0;
+			return stripe ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
+		}
+		var payLabel = payLabelFor(totals);
 		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
 
 		form.appendChild(el('h3', { text: 'Checkout' }));
@@ -575,12 +618,21 @@
 			// without creating a duplicate order.
 			var idem = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + Math.random());
 			return request('/checkout', { method: 'POST', body: payload, headers: { 'Idempotency-Key': idem } }).then(function (res) {
-				form.parentNode.innerHTML = '';
-				form.parentNode.appendChild(el('div', { class: 'db-confirm' }, [
+				// Capture the parent BEFORE clearing it: clearing via innerHTML
+				// detaches `form` from the document, which nulls form.parentNode —
+				// re-reading form.parentNode afterwards to append the confirmation
+				// would throw against null.
+				var parent = form.parentNode;
+				parent.innerHTML = '';
+				parent.appendChild(el('div', { class: 'db-confirm' }, [
 					el('h3', { text: res.message }),
 					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
 					el('p', { text: (stripe ? 'Paid: ' : 'Total: ') + money(res.total) })
 				]));
+				// Mark this cart widget done BEFORE notifying — the notification
+				// triggers this same widget's own reload listener, which must not
+				// overwrite the confirmation just shown with an "empty cart" render.
+				if (onOrderComplete) { onOrderComplete(); }
 				notifyCartChanged();
 			});
 		}
@@ -626,7 +678,23 @@
 			}
 		});
 
-		return form;
+		// Called by draw() when the cart reloads (quantity change, voucher applied,
+		// pickup/delivery switch, ...) instead of recreating this form. Only
+		// touches what genuinely needs to reflect the new state — never the
+		// customer's typed fields, and never the mounted Stripe card Element.
+		function update(newOrderType, newTotals) {
+			orderType = newOrderType;
+			totals = newTotals;
+			address.style.display = orderType === 'delivery' ? '' : 'none';
+			var addrInput = address.querySelector('input,textarea');
+			if (addrInput) { addrInput.required = orderType === 'delivery'; }
+			payLabel = payLabelFor(totals);
+			// Don't stomp on "Processing payment…"/"Placing order…" if a submit is
+			// already in flight.
+			if (!submit.disabled) { submit.textContent = payLabel; }
+		}
+
+		return { form: form, update: update };
 	}
 
 	function field(type, nameAttr, label, required) {
