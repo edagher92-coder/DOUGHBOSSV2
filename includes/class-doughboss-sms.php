@@ -97,10 +97,9 @@ class DoughBoss_SMS {
 		}
 
 		$number  = isset( $order->order_number ) ? (string) $order->order_number : (string) $order_id;
-		$message = sprintf(
-			/* translators: %s: order number. */
-			__( 'Your DoughBoss order #%s is ready for pickup.', 'doughboss' ),
-			$number
+		$message = DoughBoss_Settings::render_template(
+			DoughBoss_Settings::tpl_sms_ready(),
+			array( 'order_number' => $number )
 		);
 
 		$result = self::send( $phone, $message );
@@ -159,10 +158,9 @@ class DoughBoss_SMS {
 			return;
 		}
 
-		$message = sprintf(
-			/* translators: %s: voucher code. */
-			__( 'Your DoughBoss voucher is ready: %s. Show this code to redeem.', 'doughboss' ),
-			$code
+		$message = DoughBoss_Settings::render_template(
+			DoughBoss_Settings::tpl_sms_voucher(),
+			array( 'code' => $code )
 		);
 
 		$result = self::send( $phone, $message );

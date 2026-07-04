@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.13.0
+Stable tag: 2.14.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,23 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.14.0 =
+* New: **DoughBoss → Message Templates** — an owner-only screen to edit the
+  exact wording of the order-confirmation email (subject + body) and the two
+  SMS messages ("order ready", "voucher claimed"), with placeholder tokens
+  like `{order_number}` and `{total}`. Leaving a field blank restores the
+  built-in default text. Saves via its own handler (a true partial update),
+  so it can never affect any other setting.
+* Fix: the checkout form (and its Stripe card field, when enabled) no longer
+  gets rebuilt every time the cart changes — quantity edits, removing a
+  line, or applying a voucher used to silently clear whatever the customer
+  had already typed, including a card number mid-entry.
+* Fix: a crash in the order-confirmation renderer that could leave a
+  successful order looking like an error to the customer.
+* Security: Stripe's secret key and webhook secret can now be set via
+  environment variable / wp-config.php constant, matching the pattern
+  already used for POSPal, Mercure, ntfy, ClickSend and the receipt printer.
 
 = 2.13.0 =
 * Change: the **$10 student voucher tier has been retired** — the Dough Boss ×

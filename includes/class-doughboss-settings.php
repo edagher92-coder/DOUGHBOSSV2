@@ -162,6 +162,15 @@ class DoughBoss_Settings {
 			'printer_protocol' => 'cloudprnt',
 			'printer_token'    => '',
 			'printer_width'    => 48,
+			// Customer-facing message templates — owner-editable copy for the
+			// order-confirmation email and the two SMS messages. Blank means
+			// "use the built-in default text" (see the tpl_*() getters below),
+			// so leaving a field blank restores the default rather than sending
+			// an empty message.
+			'tpl_order_email_subject' => '',
+			'tpl_order_email_body'    => '',
+			'tpl_sms_ready'           => '',
+			'tpl_sms_voucher'         => '',
 		);
 	}
 
@@ -883,5 +892,71 @@ class DoughBoss_Settings {
 	 */
 	public static function printer_ready() {
 		return self::printer_enabled() && '' !== self::printer_token();
+	}
+
+	/**
+	 * Order-confirmation email subject. Owner-editable (DoughBoss → Message
+	 * Templates); blank restores the built-in default. Supports the
+	 * {site_name}/{order_number} placeholders — see render_template().
+	 *
+	 * @return string
+	 */
+	public static function tpl_order_email_subject() {
+		$v = trim( (string) self::get( 'tpl_order_email_subject', '' ) );
+		return '' !== $v ? $v : '[{site_name}] Order {order_number} received';
+	}
+
+	/**
+	 * Order-confirmation email body. Owner-editable; blank restores the
+	 * built-in default. Supports {customer_name}/{order_number}/{items}/{total}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_order_email_body() {
+		$v = (string) self::get( 'tpl_order_email_body', '' );
+		return '' !== trim( $v )
+			? $v
+			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\nWe'll let you know as it progresses.\n";
+	}
+
+	/**
+	 * "Order ready" SMS text. Owner-editable; blank restores the built-in
+	 * default. Supports {order_number}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_sms_ready() {
+		$v = trim( (string) self::get( 'tpl_sms_ready', '' ) );
+		return '' !== $v ? $v : 'Your DoughBoss order #{order_number} is ready for pickup.';
+	}
+
+	/**
+	 * Voucher-claimed SMS text. Owner-editable; blank restores the built-in
+	 * default. Supports {code}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_sms_voucher() {
+		$v = trim( (string) self::get( 'tpl_sms_voucher', '' ) );
+		return '' !== $v ? $v : 'Your DoughBoss voucher is ready: {code}. Show this code to redeem.';
+	}
+
+	/**
+	 * Replace {placeholder} tokens in a message template with the given values.
+	 * Unknown placeholders are left as literal text rather than silently
+	 * blanked, so a typo in a custom template stays visible instead of hidden.
+	 *
+	 * @param string $template Template text containing {placeholder} tokens.
+	 * @param array  $vars     Map of placeholder name (without braces) => value.
+	 * @return string
+	 */
+	public static function render_template( $template, array $vars ) {
+		$search  = array();
+		$replace = array();
+		foreach ( $vars as $key => $value ) {
+			$search[]  = '{' . $key . '}';
+			$replace[] = (string) $value;
+		}
+		return str_replace( $search, $replace, (string) $template );
 	}
 }

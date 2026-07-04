@@ -32,6 +32,7 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_claim_voucher', array( $this, 'handle_claim_voucher' ) );
 		add_action( 'admin_post_doughboss_void_voucher', array( $this, 'handle_void_voucher' ) );
 		add_action( 'admin_post_doughboss_seed_menu', array( $this, 'handle_seed_menu' ) );
+		add_action( 'admin_post_doughboss_save_templates', array( $this, 'handle_save_templates' ) );
 	}
 
 	/**
@@ -114,6 +115,20 @@ class DoughBoss_Admin {
 			$this->cap(),
 			'doughboss-settings',
 			array( $this, 'render_settings_page' )
+		);
+
+		// Owner-only: the customer-facing copy sent by email/SMS. A dedicated
+		// page rather than a Settings tab so it's never touched by a Settings
+		// save from a different tab, and saves via its own admin-post handler
+		// (a true partial DoughBoss_Settings::update(), not the full Settings-API
+		// rebuild) so it can never wipe an unrelated setting.
+		add_submenu_page(
+			'doughboss',
+			__( 'Message Templates', 'doughboss' ),
+			__( 'Message Templates', 'doughboss' ),
+			$this->cap(),
+			'doughboss-templates',
+			array( $this, 'render_templates_page' )
 		);
 
 		// Standalone, tablet-friendly live order board. Registered with the
@@ -1388,6 +1403,108 @@ JS;
 		}
 		wp_safe_redirect( add_query_arg( 'doughboss_seeded', rawurlencode( $msg ), $base ) );
 		exit;
+	}
+
+	/**
+	 * Admin-post handler: save the customer-facing message templates.
+	 *
+	 * Deliberately bypasses the Settings API (register_setting/sanitize_settings)
+	 * that the main Settings page uses, and instead calls
+	 * DoughBoss_Settings::update() directly — a true partial merge onto the
+	 * stored option. This page's form only ever contains the four tpl_* fields,
+	 * and a true partial merge is the only way to save that without risking
+	 * resetting every other setting to its hardcoded fallback (the same class
+	 * of bug already fixed once for the main Settings form).
+	 *
+	 * @return void
+	 */
+	public function handle_save_templates() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_save_templates' );
+
+		DoughBoss_Settings::update(
+			array(
+				'tpl_order_email_subject' => isset( $_POST['tpl_order_email_subject'] ) ? sanitize_text_field( wp_unslash( $_POST['tpl_order_email_subject'] ) ) : '',
+				'tpl_order_email_body'    => isset( $_POST['tpl_order_email_body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_order_email_body'] ) ) : '',
+				'tpl_sms_ready'           => isset( $_POST['tpl_sms_ready'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_sms_ready'] ) ) : '',
+				'tpl_sms_voucher'         => isset( $_POST['tpl_sms_voucher'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_sms_voucher'] ) ) : '',
+			)
+		);
+
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-templates', 'msg' => 'saved' ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Render the Message Templates page.
+	 *
+	 * @return void
+	 */
+	public function render_templates_page() {
+		if ( ! current_user_can( $this->cap() ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+
+		$t = array(
+			'tpl_order_email_subject' => DoughBoss_Settings::tpl_order_email_subject(),
+			'tpl_order_email_body'    => DoughBoss_Settings::tpl_order_email_body(),
+			'tpl_sms_ready'           => DoughBoss_Settings::tpl_sms_ready(),
+			'tpl_sms_voucher'         => DoughBoss_Settings::tpl_sms_voucher(),
+		);
+		?>
+		<div class="wrap doughboss-templates">
+			<h1><?php esc_html_e( 'Message Templates', 'doughboss' ); ?></h1>
+			<p class="description" style="max-width:760px;">
+				<?php esc_html_e( 'The exact wording sent to customers by email and SMS. Leave any field blank and save to restore its built-in default text — nothing here can ever be left broken.', 'doughboss' ); ?>
+			</p>
+			<?php
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
+			if ( isset( $_GET['msg'] ) && 'saved' === $_GET['msg'] ) {
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Message templates saved.', 'doughboss' ) . '</p></div>';
+			}
+			?>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="doughboss_save_templates" />
+				<?php wp_nonce_field( 'doughboss_save_templates' ); ?>
+
+				<h2><?php esc_html_e( 'Order confirmation email', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Sent to the customer (and a copy to your shop inbox) the moment an order is placed.', 'doughboss' ); ?>
+					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
+					<code>{site_name}</code> <code>{order_number}</code> <code>{customer_name}</code> <code>{items}</code> <code>{total}</code>
+				</p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-tpl-order-subject"><?php esc_html_e( 'Subject', 'doughboss' ); ?></label></th>
+						<td><input type="text" id="db-tpl-order-subject" class="large-text" name="tpl_order_email_subject" value="<?php echo esc_attr( $t['tpl_order_email_subject'] ); ?>" placeholder="[{site_name}] Order {order_number} received" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-tpl-order-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-tpl-order-body" class="large-text" rows="8" name="tpl_order_email_body" placeholder="Hi {customer_name}, thanks for your order {order_number}...&#10;&#10;{items}&#10;&#10;Total: {total}"><?php echo esc_textarea( $t['tpl_order_email_body'] ); ?></textarea></td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'SMS messages', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Only sent when SMS is switched on under Settings → Real-time & Notifications.', 'doughboss' ); ?></p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-tpl-sms-ready"><?php esc_html_e( '"Order ready" text', 'doughboss' ); ?></label></th>
+						<td><input type="text" id="db-tpl-sms-ready" class="large-text" name="tpl_sms_ready" value="<?php echo esc_attr( $t['tpl_sms_ready'] ); ?>" placeholder="Your DoughBoss order #{order_number} is ready for pickup." />
+							<p class="description"><?php esc_html_e( 'Placeholder:', 'doughboss' ); ?> <code>{order_number}</code></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-tpl-sms-voucher"><?php esc_html_e( '"Voucher claimed" text', 'doughboss' ); ?></label></th>
+						<td><input type="text" id="db-tpl-sms-voucher" class="large-text" name="tpl_sms_voucher" value="<?php echo esc_attr( $t['tpl_sms_voucher'] ); ?>" placeholder="Your DoughBoss voucher is ready: {code}. Show this code to redeem." />
+							<p class="description"><?php esc_html_e( 'Placeholder:', 'doughboss' ); ?> <code>{code}</code></p></td>
+					</tr>
+				</table>
+
+				<?php submit_button( __( 'Save message templates', 'doughboss' ) ); ?>
+			</form>
+		</div>
+		<?php
 	}
 
 	/**

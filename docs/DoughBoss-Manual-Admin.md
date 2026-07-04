@@ -1,7 +1,7 @@
 # DoughBoss — Admin Manual
 
 **For:** the business owner / manager, working in `wp-admin`
-**Covers:** DoughBoss plugin v2.12.3 (DB schema v1.7.0)
+**Covers:** DoughBoss plugin v2.14.0 (DB schema v1.7.0)
 **Does not cover:** the Voucher Scan tablet app UI itself, the Live Order Board UI itself, or the separate POSPal till software — this manual covers the WordPress **Settings, Vouchers, Shops and Orders** screens that configure and feed those tools.
 
 ---
@@ -10,12 +10,13 @@
 
 Log into WordPress as usual. If DoughBoss is installed and you have the right access (see §2), you'll see **two** separate items in the left-hand admin menu:
 
-- **DoughBoss** (pizza-slice icon) — a group with five sub-pages:
+- **DoughBoss** (pizza-slice icon) — a group with six sub-pages:
   - **Orders** — the order list (also the page you land on first).
   - **Catering** — catering enquiries (quote → deposit → balance pipeline). Not covered in depth in this manual.
   - **Shops** — your locations (address, phone, delivery postcodes, pickup/delivery toggles).
   - **Vouchers** — create and track discount codes. See §5.
   - **Settings** — the main configuration screen. See §4.
+  - **Message Templates** — the exact wording of the order-confirmation email and the two SMS messages. Owner-only, saved separately from the main Settings form. See the note at the end of §4.
 - **Order Board** (screen-options icon) — the live kitchen screen, on its own top-level menu item (not a sub-page of "DoughBoss").
 - **Voucher Scan** (tickets icon) — the till-side voucher scanner, also its own top-level item.
 
@@ -128,6 +129,15 @@ Three independent, optional channels. Each is off by default and stays fully dor
 - **Receipt printer** — Protocol (Star CloudPRNT or Epson ePOS), Shared token (secret), Receipt width in characters (48 for an 80mm roll, 32 for 58mm).
 
 For every secret field in this section, the recommended path is the matching server environment variable (named in the description text right under each field, e.g. `DOUGHBOSS_MERCURE_PUBLISH_JWT`, `DOUGHBOSS_NTFY_TOKEN`, `DOUGHBOSS_CLICKSEND_API_KEY`, `DOUGHBOSS_PRINTER_TOKEN`) — the wp-admin field is explicitly a fallback for when you can't set server environment variables.
+
+### 4.6 Message Templates — a separate page, not a Settings tab
+**DoughBoss → Message Templates** is its own page (not part of the Settings form above) because it saves independently: it has its own "Save message templates" button and posts through its own handler, so saving it can never touch — or accidentally reset — anything on the main Settings screen.
+
+- **Order confirmation email** — the Subject and Body sent to the customer (and a copy to your shop inbox) the instant an order is placed. Supports placeholders: `{site_name}`, `{order_number}`, `{customer_name}`, `{items}`, `{total}` — each is swapped for the real value when the email is sent.
+- **"Order ready" SMS** — the text sent when an order is marked Ready, if SMS is switched on (§4.5). Placeholder: `{order_number}`.
+- **"Voucher claimed" SMS** — the text sent when a customer claims a voucher, if the "on voucher claim" SMS toggle is on (§4.5). Placeholder: `{code}`.
+
+**Leaving any field blank and saving restores its built-in default wording** — there is no way to end up with a broken, empty message. A typo'd placeholder (e.g. `{oder_number}`) is left as literal text in the sent message rather than silently disappearing, so a mistake is visible and easy to spot in a test send.
 
 ---
 

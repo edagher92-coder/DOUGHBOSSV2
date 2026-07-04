@@ -2698,9 +2698,7 @@ class DoughBoss_REST_Controller {
 	 * @return void
 	 */
 	private function send_confirmation( $order ) {
-		$blog  = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
-		/* translators: 1: site name, 2: order number. */
-		$subject = sprintf( __( '[%1$s] Order %2$s received', 'doughboss' ), $blog, $order->order_number );
+		$blog = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
 
 		$lines = array();
 		foreach ( DoughBoss_Order::get_items( $order->id ) as $item ) {
@@ -2715,14 +2713,17 @@ class DoughBoss_REST_Controller {
 			);
 		}
 
-		$body = sprintf(
-			/* translators: 1: customer name, 2: order number, 3: items list, 4: total. */
-			__( "Hi %1\$s,\n\nThanks for your order %2\$s. Here's what we got:\n\n%3\$s\n\nTotal: %4\$s\n\nWe'll let you know as it progresses.\n", 'doughboss' ),
-			$order->customer_name,
-			$order->order_number,
-			implode( "\n", $lines ),
-			DoughBoss_Settings::format_price( $order->total )
+		// Subject/body come from the owner-editable templates (DoughBoss →
+		// Message Templates), falling back to the built-in default copy.
+		$vars = array(
+			'site_name'    => $blog,
+			'order_number' => $order->order_number,
+			'customer_name' => $order->customer_name,
+			'items'        => implode( "\n", $lines ),
+			'total'        => DoughBoss_Settings::format_price( $order->total ),
 		);
+		$subject = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_subject(), $vars );
+		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_body(), $vars );
 
 		if ( is_email( $order->customer_email ) ) {
 			wp_mail( $order->customer_email, $subject, $body );
