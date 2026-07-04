@@ -33,6 +33,9 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_void_voucher', array( $this, 'handle_void_voucher' ) );
 		add_action( 'admin_post_doughboss_seed_menu', array( $this, 'handle_seed_menu' ) );
 		add_action( 'admin_post_doughboss_save_templates', array( $this, 'handle_save_templates' ) );
+		add_action( 'admin_post_doughboss_clear_payment_issues', array( $this, 'handle_clear_payment_issues' ) );
+		add_action( 'admin_post_doughboss_refund_order', array( $this, 'handle_refund_order' ) );
+		add_action( 'admin_post_doughboss_export_report', array( $this, 'handle_export_report' ) );
 	}
 
 	/**
@@ -129,6 +132,15 @@ class DoughBoss_Admin {
 			$this->cap(),
 			'doughboss-templates',
 			array( $this, 'render_templates_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
+			__( 'Reports', 'doughboss' ),
+			__( 'Reports', 'doughboss' ),
+			$this->cap(),
+			'doughboss-reports',
+			array( $this, 'render_reports_page' )
 		);
 
 		// Standalone, tablet-friendly live order board. Registered with the
@@ -642,11 +654,61 @@ JS;
 			)
 		);
 
-		$statuses    = DoughBoss_Order::statuses();
-		$total_pages = (int) ceil( $result['total'] / $per_page );
+		$statuses       = DoughBoss_Order::statuses();
+		$total_pages    = (int) ceil( $result['total'] / $per_page );
+		$pay_issues     = $this->unreconciled_payments();
+		$items_by_order = DoughBoss_Order::get_items_for_orders( wp_list_pluck( $result['items'], 'id' ) );
 		?>
 		<div class="wrap doughboss-orders">
 			<h1><?php esc_html_e( 'Orders', 'doughboss' ); ?></h1>
+
+			<?php
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
+			$flash = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
+			if ( 'refunded' === $flash ) {
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Refund issued via Stripe. Note: a voucher used on the order is NOT automatically reissued — issue a new one from the Vouchers page if needed.', 'doughboss' ) . '</p></div>';
+			} elseif ( 'refund_already' === $flash ) {
+				echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'That order has already been refunded.', 'doughboss' ) . '</p></div>';
+			} elseif ( 'refund_ineligible' === $flash ) {
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That order cannot be refunded here — it has no verified Stripe card payment.', 'doughboss' ) . '</p></div>';
+			} elseif ( 'refund_error' === $flash ) {
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
+				$detail = isset( $_GET['detail'] ) ? sanitize_text_field( wp_unslash( $_GET['detail'] ) ) : '';
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'The refund could not be processed.', 'doughboss' ) . ( '' !== $detail ? ' ' . esc_html( $detail ) : '' ) . '</p></div>';
+			}
+			?>
+
+			<?php if ( ! empty( $pay_issues ) ) : ?>
+				<div class="notice notice-error" style="padding:12px 16px;">
+					<h2 style="margin-top:0;"><?php esc_html_e( 'Payment issues — money taken, no order created', 'doughboss' ); ?></h2>
+					<p><?php esc_html_e( 'Stripe reported these payments as succeeded, but no matching order was ever created (the customer paid and then their checkout never completed). Look each one up in the Stripe Dashboard for the card-holder details, then contact the customer or refund the payment. Clear the list once every payment has been dealt with.', 'doughboss' ); ?></p>
+					<table class="widefat striped" style="max-width:720px;">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'PaymentIntent', 'doughboss' ); ?></th>
+								<th><?php esc_html_e( 'Amount', 'doughboss' ); ?></th>
+								<th><?php esc_html_e( 'Currency', 'doughboss' ); ?></th>
+								<th><?php esc_html_e( 'Seen', 'doughboss' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $pay_issues as $issue ) : ?>
+								<tr>
+									<td><code><?php echo esc_html( $issue['id'] ); ?></code></td>
+									<td><?php echo esc_html( number_format_i18n( absint( $issue['amount'] ) / 100, 2 ) ); ?></td>
+									<td><?php echo esc_html( strtoupper( (string) $issue['currency'] ) ); ?></td>
+									<td><?php echo esc_html( wp_date( 'M j, Y g:i a', (int) $issue['time'] ) ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<?php wp_nonce_field( 'doughboss_clear_payment_issues' ); ?>
+						<input type="hidden" name="action" value="doughboss_clear_payment_issues" />
+						<p><button type="submit" class="button"><?php esc_html_e( 'Clear list — all handled', 'doughboss' ); ?></button></p>
+					</form>
+				</div>
+			<?php endif; ?>
 
 			<form method="get" class="db-orders-filter">
 				<input type="hidden" name="page" value="doughboss" />
@@ -679,7 +741,7 @@ JS;
 						<tr><td colspan="7"><?php esc_html_e( 'No orders yet.', 'doughboss' ); ?></td></tr>
 					<?php else : ?>
 						<?php foreach ( $result['items'] as $order ) : ?>
-							<?php $items = DoughBoss_Order::get_items( $order->id ); ?>
+							<?php $items = isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(); ?>
 							<tr>
 								<td><strong><?php echo esc_html( $order->order_number ); ?></strong></td>
 								<td>
@@ -713,6 +775,16 @@ JS;
 										);
 										?>
 										</small>
+									<?php endif; ?>
+									<?php if ( isset( $order->payment_method ) && 'stripe' === $order->payment_method && ! empty( $order->payment_intent_id ) ) : ?>
+										<?php if ( 'paid' === $order->payment_status ) : ?>
+											<br /><small>
+												<?php esc_html_e( 'Paid by card', 'doughboss' ); ?> ·
+												<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full via Stripe? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
+											</small>
+										<?php elseif ( 'refunded' === $order->payment_status ) : ?>
+											<br /><small style="color:#b32d2e;"><?php esc_html_e( 'Refunded', 'doughboss' ); ?></small>
+										<?php endif; ?>
 									<?php endif; ?>
 								</td>
 								<td><?php echo esc_html( mysql2date( 'M j, g:i a', $order->created_at ) ); ?></td>
@@ -751,6 +823,144 @@ JS;
 			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Unreconciled Stripe payments to surface, pruned of false alarms.
+	 *
+	 * The storefront webhook usually races the synchronous /checkout call, so
+	 * an entry is often reconciled seconds after it is recorded. Re-checking
+	 * payment_intent_used() here (and holding back entries still inside a
+	 * short race window) keeps the card limited to payments that genuinely
+	 * never became an order.
+	 *
+	 * @return array[] Entries with id/amount/currency/time keys.
+	 */
+	private function unreconciled_payments() {
+		global $wpdb;
+
+		$list = get_option( 'doughboss_unreconciled_payments', array() );
+		if ( ! is_array( $list ) || empty( $list ) ) {
+			return array();
+		}
+
+		$kept     = array();
+		$kept_ids = array();
+		foreach ( $list as $entry ) {
+			if ( ! is_array( $entry ) || empty( $entry['id'] ) ) {
+				continue;
+			}
+			if ( DoughBoss_Order::payment_intent_used( (string) $entry['id'] ) ) {
+				continue;
+			}
+			$kept[]     = $entry;
+			$kept_ids[] = $entry['id'];
+		}
+
+		if ( count( $kept ) !== count( $list ) ) {
+			// Persist the prune only under the same named lock the webhook writer
+			// takes, re-reading inside it: a plain rewrite here could clobber an
+			// entry a concurrent webhook just appended, and Stripe never
+			// redelivers an event it got a 200 for. If the lock isn't free, skip
+			// persisting — pruning is cosmetic and re-runs on the next page load.
+			$locked = ( 1 === (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', 'doughboss_unrec_pay', 1 ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			if ( $locked ) {
+				wp_cache_delete( 'doughboss_unreconciled_payments', 'options' );
+				$fresh    = get_option( 'doughboss_unreconciled_payments', array() );
+				$read_ids = wp_list_pluck( $list, 'id' );
+				$store    = array();
+				foreach ( ( is_array( $fresh ) ? $fresh : array() ) as $entry ) {
+					if ( ! is_array( $entry ) || empty( $entry['id'] ) ) {
+						continue;
+					}
+					// Keep entries that arrived after our read, plus the ones we
+					// verified as still unreconciled; drop only verified-pruned ones.
+					if ( ! in_array( $entry['id'], $read_ids, true ) || in_array( $entry['id'], $kept_ids, true ) ) {
+						$store[] = $entry;
+					}
+				}
+				if ( empty( $store ) ) {
+					delete_option( 'doughboss_unreconciled_payments' );
+				} else {
+					update_option( 'doughboss_unreconciled_payments', $store, false );
+				}
+				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', 'doughboss_unrec_pay' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+		}
+
+		$now  = time();
+		$show = array();
+		foreach ( $kept as $entry ) {
+			$seen = isset( $entry['time'] ) ? (int) $entry['time'] : 0;
+			if ( ( $now - $seen ) >= 5 * MINUTE_IN_SECONDS ) {
+				$show[] = $entry;
+			}
+		}
+
+		return $show;
+	}
+
+	/**
+	 * Admin-post handler: clear the unreconciled-payments list once the owner
+	 * has dealt with the flagged payments in the Stripe Dashboard.
+	 *
+	 * @return void
+	 */
+	public function handle_clear_payment_issues() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_clear_payment_issues' );
+
+		delete_option( 'doughboss_unreconciled_payments' );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * Admin-post handler: refund a Stripe-paid order in full.
+	 *
+	 * The PaymentIntent id is always read from the stored order row (never from
+	 * the request), and only orders verified as paid by card are eligible. A
+	 * voucher redeemed on the order is deliberately NOT reissued here — the
+	 * owner reissues one manually from the Vouchers page if they want to.
+	 *
+	 * @return void
+	 */
+	public function handle_refund_order() {
+		$id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_refund_order_' . $id );
+
+		$args  = array( 'page' => 'doughboss' );
+		$order = $id ? DoughBoss_Order::get( $id ) : null;
+
+		if ( ! $order ) {
+			$args['msg'] = 'refund_error';
+		} elseif ( isset( $order->payment_status ) && 'refunded' === $order->payment_status ) {
+			$args['msg'] = 'refund_already';
+		} elseif ( ! isset( $order->payment_status, $order->payment_method ) || 'paid' !== $order->payment_status || 'stripe' !== $order->payment_method || empty( $order->payment_intent_id ) ) {
+			$args['msg'] = 'refund_ineligible';
+		} else {
+			$refund = DoughBoss_Stripe::create_refund( (string) $order->payment_intent_id );
+			if ( is_wp_error( $refund ) ) {
+				$args['msg']    = 'refund_error';
+				$args['detail'] = rawurlencode( $refund->get_error_message() );
+			} else {
+				DoughBoss_Order::update_payment_status( (int) $order->id, 'refunded' );
+				$args['msg'] = 'refunded';
+			}
+		}
+
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+		exit;
 	}
 
 	/**
@@ -1508,6 +1718,211 @@ JS;
 	}
 
 	/**
+	 * Resolve the requested report date range from $_GET, defaulting to the
+	 * last 7 days. Display-only, so no nonce is required (matching the other
+	 * read-only list pages).
+	 *
+	 * @return array{0:string,1:string} From/to dates (Y-m-d).
+	 */
+	private function report_range() {
+		$to_default   = gmdate( 'Y-m-d' );
+		$from_default = gmdate( 'Y-m-d', time() - 6 * DAY_IN_SECONDS );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter form.
+		$from = DoughBoss_Reports::sanitize_date( isset( $_GET['from'] ) ? wp_unslash( $_GET['from'] ) : '', $from_default );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter form.
+		$to = DoughBoss_Reports::sanitize_date( isset( $_GET['to'] ) ? wp_unslash( $_GET['to'] ) : '', $to_default );
+
+		if ( strtotime( $from ) > strtotime( $to ) ) {
+			list( $from, $to ) = array( $to, $from );
+		}
+
+		return array( $from, $to );
+	}
+
+	/**
+	 * Render the Reports page: revenue summary, pickup/delivery split and
+	 * top-selling items for a date range, with a CSV export.
+	 *
+	 * @return void
+	 */
+	public function render_reports_page() {
+		if ( ! current_user_can( $this->cap() ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+
+		list( $from, $to ) = $this->report_range();
+
+		$summary   = DoughBoss_Reports::summary( $from, $to );
+		$mix       = DoughBoss_Reports::order_type_mix( $from, $to );
+		$top_items = DoughBoss_Reports::top_items( $from, $to, 10 );
+
+		$type_labels = array(
+			'pickup'   => __( 'Pickup', 'doughboss' ),
+			'delivery' => __( 'Delivery', 'doughboss' ),
+		);
+		?>
+		<div class="wrap doughboss-reports">
+			<h1><?php esc_html_e( 'Reports', 'doughboss' ); ?></h1>
+			<p class="description"><?php esc_html_e( 'Sales for the selected period. Cancelled orders are excluded.', 'doughboss' ); ?></p>
+
+			<form method="get" style="margin:12px 0 20px;">
+				<input type="hidden" name="page" value="doughboss-reports" />
+				<label for="db-report-from"><?php esc_html_e( 'From', 'doughboss' ); ?></label>
+				<input type="date" id="db-report-from" name="from" value="<?php echo esc_attr( $from ); ?>" />
+				<label for="db-report-to"><?php esc_html_e( 'To', 'doughboss' ); ?></label>
+				<input type="date" id="db-report-to" name="to" value="<?php echo esc_attr( $to ); ?>" />
+				<button class="button"><?php esc_html_e( 'Apply', 'doughboss' ); ?></button>
+			</form>
+
+			<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
+					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Revenue', 'doughboss' ); ?></h2>
+					<p style="font-size:1.8em;margin:0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $summary['revenue'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
+					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Orders', 'doughboss' ); ?></h2>
+					<p style="font-size:1.8em;margin:0;"><strong><?php echo esc_html( number_format_i18n( $summary['orders'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
+					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Average order value', 'doughboss' ); ?></h2>
+					<p style="font-size:1.8em;margin:0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $summary['aov'] ) ); ?></strong></p>
+				</div>
+			</div>
+
+			<h2><?php esc_html_e( 'Pickup vs delivery', 'doughboss' ); ?></h2>
+			<table class="widefat striped" style="max-width:560px;">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Type', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Orders', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Revenue', 'doughboss' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( empty( $mix ) ) : ?>
+						<tr><td colspan="3"><?php esc_html_e( 'No orders in this period.', 'doughboss' ); ?></td></tr>
+					<?php else : ?>
+						<?php foreach ( $mix as $type => $stats ) : ?>
+							<tr>
+								<td><?php echo esc_html( isset( $type_labels[ $type ] ) ? $type_labels[ $type ] : ucfirst( $type ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $stats['orders'] ) ); ?></td>
+								<td><?php echo esc_html( DoughBoss_Settings::format_price( $stats['revenue'] ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+			<h2 style="margin-top:24px;"><?php esc_html_e( 'Top items', 'doughboss' ); ?></h2>
+			<table class="widefat striped" style="max-width:560px;">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Item', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Units sold', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Revenue', 'doughboss' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( empty( $top_items ) ) : ?>
+						<tr><td colspan="3"><?php esc_html_e( 'No items sold in this period.', 'doughboss' ); ?></td></tr>
+					<?php else : ?>
+						<?php foreach ( $top_items as $item ) : ?>
+							<tr>
+								<td><?php echo esc_html( $item['name'] ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $item['quantity'] ) ); ?></td>
+								<td><?php echo esc_html( DoughBoss_Settings::format_price( $item['revenue'] ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:20px;">
+				<input type="hidden" name="action" value="doughboss_export_report" />
+				<?php wp_nonce_field( 'doughboss_export_report' ); ?>
+				<input type="hidden" name="from" value="<?php echo esc_attr( $from ); ?>" />
+				<input type="hidden" name="to" value="<?php echo esc_attr( $to ); ?>" />
+				<button type="submit" class="button button-primary"><?php esc_html_e( 'Download CSV', 'doughboss' ); ?></button>
+			</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Neutralise spreadsheet formula injection in a CSV cell.
+	 *
+	 * Excel/Sheets execute cells starting with =, +, -, @ (or a tab/CR) as
+	 * formulas, and customer-supplied values (names, emails) end up in this
+	 * export — prefix such cells with a single quote so they render as text.
+	 *
+	 * @param mixed $value Raw cell value.
+	 * @return string
+	 */
+	private function csv_cell( $value ) {
+		$value = (string) $value;
+		if ( '' !== $value && in_array( $value[0], array( '=', '+', '-', '@', "\t", "\r" ), true ) ) {
+			return "'" . $value;
+		}
+		return $value;
+	}
+
+	/**
+	 * Admin-post handler: stream the per-order report as a CSV download for
+	 * the posted date range.
+	 *
+	 * @return void
+	 */
+	public function handle_export_report() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_export_report' );
+
+		$to_default   = gmdate( 'Y-m-d' );
+		$from_default = gmdate( 'Y-m-d', time() - 6 * DAY_IN_SECONDS );
+		$from         = DoughBoss_Reports::sanitize_date( isset( $_POST['from'] ) ? wp_unslash( $_POST['from'] ) : '', $from_default );
+		$to           = DoughBoss_Reports::sanitize_date( isset( $_POST['to'] ) ? wp_unslash( $_POST['to'] ) : '', $to_default );
+
+		$rows = DoughBoss_Reports::orders_for_export( $from, $to );
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="doughboss-report-' . $from . '-to-' . $to . '.csv"' );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- streaming CSV to the browser.
+		$out = fopen( 'php://output', 'w' );
+		fputcsv(
+			$out,
+			array( 'Order #', 'Placed (UTC)', 'Type', 'Status', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
+		);
+		foreach ( $rows as $row ) {
+			fputcsv(
+				$out,
+				array(
+					$this->csv_cell( $row->order_number ),
+					$this->csv_cell( $row->created_at ),
+					$this->csv_cell( $row->order_type ),
+					$this->csv_cell( $row->status ),
+					$this->csv_cell( $row->customer_name ),
+					$this->csv_cell( $row->customer_email ),
+					number_format( (float) $row->subtotal, 2, '.', '' ),
+					number_format( (float) $row->tax, 2, '.', '' ),
+					number_format( (float) $row->delivery_fee, 2, '.', '' ),
+					number_format( (float) $row->discount, 2, '.', '' ),
+					$this->csv_cell( $row->voucher_code ),
+					number_format( (float) $row->total, 2, '.', '' ),
+					$this->csv_cell( $row->currency ),
+					$this->csv_cell( $row->payment_status ),
+				)
+			);
+		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+		fclose( $out );
+		exit;
+	}
+
+	/**
 	 * Render the Settings page.
 	 *
 	 * @return void
@@ -1653,9 +2068,11 @@ JS;
 							<th><label for="db-stripe-live-whsec"><?php esc_html_e( 'Live webhook secret', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-stripe-live-whsec" class="regular-text" autocomplete="off" placeholder="whsec_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_whsec]" value="" />
 								<p class="description">
-									<?php esc_html_e( 'Stripe Dashboard → Developers → Webhooks. Add an endpoint pointing to:', 'doughboss' ); ?>
+									<?php esc_html_e( 'Stripe Dashboard → Developers → Webhooks. Add one endpoint pointing to:', 'doughboss' ); ?>
+									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/stripe-webhook' ) ); ?></code>
+									<?php esc_html_e( 'and subscribe it to payment_intent.succeeded, then paste its signing secret here. It covers both storefront orders (flagging any successful payment that never became an order) and catering deposits. The older catering-only endpoint', 'doughboss' ); ?>
 									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/stripe-webhook' ) ); ?></code>
-									<?php esc_html_e( 'and subscribe to payment_intent.succeeded. Then paste its signing secret here.', 'doughboss' ); ?>
+									<?php esc_html_e( 'still works if already registered — Stripe issues one signing secret per endpoint and this plugin stores a single secret, so register only one of them.', 'doughboss' ); ?>
 									<?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
 									<?php echo isset( $settings['stripe_live_whsec'] ) && '' !== $settings['stripe_live_whsec'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
 								</p></td>
@@ -1709,6 +2126,7 @@ JS;
 								<p class="description"><?php esc_html_e( 'Read-only: checks the selected store\'s POSPal connection and that its UIDs match real coupon rules. This store dropdown also applies to the Test grant below. Save your changes first.', 'doughboss' ); ?></p>
 							</td>
 						</tr>
+						<?php if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) : // Dev-only diagnostics — the matching REST routes are only registered under WP_DEBUG. ?>
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Test grant', 'doughboss' ); ?></th>
 							<td>
@@ -1723,6 +2141,7 @@ JS;
 								<p class="description"><?php esc_html_e( 'Writes a test member + grants the mapped coupon in POSPal and shows the raw response — use a throwaway phone, then Revoke. This is how the exact coupon-grant method is confirmed.', 'doughboss' ); ?></p>
 							</td>
 						</tr>
+						<?php endif; ?>
 					</table>
 
 					<h3><?php esc_html_e( 'Additional stores (multi-store)', 'doughboss' ); ?></h3>

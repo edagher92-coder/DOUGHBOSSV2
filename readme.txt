@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.14.0
+Stable tag: 2.15.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,34 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.15.0 =
+* New: **Reports** admin page (DoughBoss → Reports) — revenue, order count,
+  average order value, top-selling items and a pickup/delivery split for any
+  date range, with a CSV download.
+* New: **Stripe webhook reconciliation** — a `/doughboss/v1/stripe-webhook`
+  endpoint (signature-verified) catches a card charge that succeeds but never
+  became an order, and surfaces it in a "Payment issues" panel on the Orders
+  screen for the owner to resolve. No money is ever auto-refunded.
+* New: **Refund from the Orders screen** — a card-paid Stripe order can be
+  refunded in one click (owner-only, guarded against double-refund).
+* New: **Privacy Tools** — order/catering/voucher data is now covered by
+  WordPress's built-in personal-data export and erase tools (Australian
+  Privacy Act / GDPR), redacting personal details while keeping records for
+  accounting.
+* New: read-only `/doughboss/v1/status` health endpoint (admin-gated).
+* Performance: the Live Order Board and Orders list now load order items in a
+  single batched query instead of one query per order; POSPal and SMS calls
+  no longer make checkout wait on slow external services.
+* Security: the request rate limiter is now atomic (closes a concurrency race);
+  developer diagnostic endpoints are hidden unless WP_DEBUG is on; CSV exports
+  are guarded against spreadsheet formula injection.
+* Data: database datetime columns migrated off the legacy `0000-00-00` default;
+  new index on the catering payment-intent lookup; catering enquiries reject
+  past dates and cap guest counts; location slugs de-duplicate on create.
+* Demo site: brand colours reconciled and legal pages made mobile-responsive;
+  kitchen board honours "reduce motion" and meets colour-contrast standards;
+  accessibility and loading-state polish across the storefront and Staff Console.
 
 = 2.14.0 =
 * New: **DoughBoss → Message Templates** — an owner-only screen to edit the

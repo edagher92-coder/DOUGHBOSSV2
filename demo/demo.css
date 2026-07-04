@@ -30,7 +30,7 @@ a{text-decoration:none;color:inherit;}
 .links a.nl{font-family:'Bebas Neue',sans-serif;letter-spacing:.12em;text-transform:uppercase;font-size:16px;color:#e8e3da;padding-bottom:2px;border-bottom:2px solid transparent;}
 .links a.nl:hover{color:#fff;}
 .links a.nl.on{color:#fff;border-bottom-color:var(--ember);}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:'Bebas Neue',sans-serif;letter-spacing:.08em;text-transform:uppercase;font-size:17px;padding:13px 26px;border-radius:7px;cursor:pointer;border:1.5px solid transparent;transition:filter .15s,transform .15s,background .15s,color .15s;}
+.btn,.vb-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:'Bebas Neue',sans-serif;letter-spacing:.08em;text-transform:uppercase;font-size:17px;padding:13px 26px;border-radius:7px;cursor:pointer;border:1.5px solid transparent;transition:filter .15s,transform .15s,background .15s,color .15s;}
 .btn svg{flex:0 0 auto;}
 .btn-ember{background:var(--ember);color:#fff!important;box-shadow:0 10px 30px rgba(17,17,17,.32);}
 .btn-ember:hover{filter:brightness(1.08);transform:translateY(-2px);}
@@ -436,8 +436,7 @@ body.cart-on{padding-bottom:114px;}
 
 .demo-ribbon{position:fixed;bottom:0;left:0;right:0;z-index:80;background:#0d0d0d;color:#cfc9bf;text-align:center;font-size:12px;padding:7px 12px;letter-spacing:.02em;}
 .demo-ribbon b{color:#fff;}
-/* aliases for buttons emitted by the app scripts */
-.vb-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:'Bebas Neue',sans-serif;letter-spacing:.08em;text-transform:uppercase;font-size:16px;padding:13px 26px;border-radius:7px;cursor:pointer;border:1.5px solid transparent;transition:filter .15s,transform .15s;}
+/* aliases for buttons emitted by the app scripts — geometry shared with .btn above */
 .vb-btn-ember{background:var(--ember);color:#fff!important;box-shadow:0 8px 22px rgba(17,17,17,.28);}
 .vb-btn-ember:hover{filter:brightness(1.08);transform:translateY(-1px);}
 .vb-btn-dark{background:#0d0d0d;color:#fff!important;}
@@ -610,8 +609,8 @@ body.cart-on{padding-bottom:114px;}
 .hero h1 em,.snow-theme .disp em{text-decoration:underline;text-decoration-thickness:.06em;text-underline-offset:.1em;}
 
 /* ---- Kitchen view: staff-only lock panel (orders hidden until sign-in) ---- */
-.kitchen-lock{max-width:560px;margin:6px auto 0;text-align:center;background:var(--card,#fff);border:1px solid rgba(0,0,0,.08);border-radius:18px;padding:30px 26px 28px;box-shadow:0 10px 30px rgba(0,0,0,.06);}
-.kl-ico{width:64px;height:64px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(181,87,31,.10);color:#b5571f;}
+.kitchen-lock{max-width:560px;margin:6px auto 0;text-align:center;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:18px;padding:30px 26px 28px;box-shadow:0 10px 30px rgba(0,0,0,.06);}
+.kl-ico{width:64px;height:64px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(17,17,17,.08);color:var(--ink);}
 .kl-lead{font-size:16px;line-height:1.5;color:#3a312a;margin:0 0 20px;}
 .kitchen-lock .btn{display:inline-flex;}
 .kitchen-lock .app-note-dark{margin:16px 0 0;}

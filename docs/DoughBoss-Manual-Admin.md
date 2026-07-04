@@ -10,13 +10,14 @@
 
 Log into WordPress as usual. If DoughBoss is installed and you have the right access (see §2), you'll see **two** separate items in the left-hand admin menu:
 
-- **DoughBoss** (pizza-slice icon) — a group with six sub-pages:
+- **DoughBoss** (pizza-slice icon) — a group with seven sub-pages:
   - **Orders** — the order list (also the page you land on first).
   - **Catering** — catering enquiries (quote → deposit → balance pipeline). Not covered in depth in this manual.
   - **Shops** — your locations (address, phone, delivery postcodes, pickup/delivery toggles).
   - **Vouchers** — create and track discount codes. See §5.
   - **Settings** — the main configuration screen. See §4.
   - **Message Templates** — the exact wording of the order-confirmation email and the two SMS messages. Owner-only, saved separately from the main Settings form. See the note at the end of §4.
+  - **Reports** — revenue, order counts and top sellers for a date range, with a CSV download. See §4.7.
 - **Order Board** (screen-options icon) — the live kitchen screen, on its own top-level menu item (not a sub-page of "DoughBoss").
 - **Voucher Scan** (tickets icon) — the till-side voucher scanner, also its own top-level item.
 
@@ -138,6 +139,9 @@ For every secret field in this section, the recommended path is the matching ser
 - **"Voucher claimed" SMS** — the text sent when a customer claims a voucher, if the "on voucher claim" SMS toggle is on (§4.5). Placeholder: `{code}`.
 
 **Leaving any field blank and saving restores its built-in default wording** — there is no way to end up with a broken, empty message. A typo'd placeholder (e.g. `{oder_number}`) is left as literal text in the sent message rather than silently disappearing, so a mistake is visible and easy to spot in a test send.
+
+### 4.7 Reports — sales at a glance
+**DoughBoss → Reports** is a read-only sales summary for any date range (it defaults to the last 7 days — change the **From**/**To** dates and click **Apply**). It shows three headline cards — **Revenue**, **Orders** and **Average order value** — plus a **Pickup vs delivery** split and a **Top items** table (units sold and revenue per menu item). Cancelled orders are excluded from every figure; everything else counts as money taken. The **Download CSV** button exports one row per order for the selected range (order number, date, type, status, customer, totals, voucher and payment status) — handy for your accountant or a spreadsheet. It needs the same `manage_doughboss` capability as the rest of the group; there is nothing to configure.
 
 ---
 

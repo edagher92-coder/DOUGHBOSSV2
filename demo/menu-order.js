@@ -225,12 +225,24 @@
 		var amt = money(netTotal());
 		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
 		var last4 = digits.slice(-4);
-		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-done" role="status"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p><p class="cd-note">Payment &#128274; card ending ' + esc(last4) + ' (demo — not a real charge).</p><p class="cd-note">In production this goes straight to the kitchen board and takes a real Stripe payment.</p></div>';
-		cart = {};
-		voucher = null;
-		for (var n in controls) { paintItem(n); }
-		renderFab(false);
+
+		// Loading state while the (simulated) payment settles — same pattern as
+		// the snowboss.js claim button.
+		if (form.dataset.busy) { return; }
+		form.dataset.busy = '1';
+		var payBtn = form.querySelector('button[type="submit"]');
+		if (payBtn) { payBtn.disabled = true; payBtn.textContent = 'Placing order…'; }
+
+		setTimeout(function () {
+			drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+				'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p><p class="cd-note">Payment &#128274; card ending ' + esc(last4) + ' (demo — not a real charge).</p><p class="cd-note">In production this goes straight to the kitchen board and takes a real Stripe payment.</p></div>';
+			cart = {};
+			voucher = null;
+			for (var n in controls) { paintItem(n); }
+			renderFab(false);
+			var done = drawer.querySelector('.cd-done');
+			if (done) { try { done.focus({ preventScroll: true }); } catch (e) { done.focus(); } }
+		}, 450);
 	}
 
 	/* --- events --- */

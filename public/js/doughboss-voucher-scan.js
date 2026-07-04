@@ -129,6 +129,8 @@
 		scanCard.appendChild( make( 'p', 'db-scan__hint', 'Tip: a barcode scanner can type the code and press Enter. Enter the order total to cap a discount to the order value.' ) );
 
 		els.result = make( 'div', 'db-scan__result' );
+		els.result.setAttribute( 'role', 'status' );
+		els.result.setAttribute( 'aria-live', 'polite' );
 		scanCard.appendChild( els.result );
 
 		grid.appendChild( scanCard );

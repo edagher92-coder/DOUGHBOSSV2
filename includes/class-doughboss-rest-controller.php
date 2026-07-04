@@ -266,6 +266,45 @@ class DoughBoss_REST_Controller {
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'voucher_issue' ),
 				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'type'           => array(
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'value'          => array(
+						// Wrap the cast: WordPress passes 3 args to sanitize
+						// callbacks and the built-in floatval() accepts exactly 1
+						// (fatal ArgumentCountError on PHP 8).
+						'sanitize_callback' => static function ( $value ) {
+							return (float) $value;
+						},
+					),
+					'prefix'         => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'min_spend'      => array(
+						'sanitize_callback' => static function ( $value ) {
+							return (float) $value;
+						},
+					),
+					'scope'          => array(
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'location_id'    => array(
+						'sanitize_callback' => 'absint',
+					),
+					'customer_phone' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'customer_email' => array(
+						'sanitize_callback' => 'sanitize_email',
+					),
+					'valid_from'     => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'valid_to'       => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
 			)
 		);
 
@@ -356,65 +395,72 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
-		register_rest_route(
-			$ns,
-			'/pospal/test-grant',
-			array(
-				'methods'             => WP_REST_Server::CREATABLE,
-				'callback'            => array( $this, 'pospal_test_grant' ),
-				'permission_callback' => array( $this, 'verify_manage' ),
-				'args'                => array(
-					'phone' => array(
-						'required'          => true,
-						'sanitize_callback' => 'sanitize_text_field',
+		// Dev-only POSPal diagnostics (grant/revoke real coupons on the till;
+		// probe-grant brute-forces candidate POSPal endpoints). Registered only
+		// under WP_DEBUG so they are not part of the production API surface. The
+		// read-only handshake checks (/pospal/test, /pospal/verify-coupons,
+		// /mercure/test) stay registered — the Settings screen uses them.
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			register_rest_route(
+				$ns,
+				'/pospal/test-grant',
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'pospal_test_grant' ),
+					'permission_callback' => array( $this, 'verify_manage' ),
+					'args'                => array(
+						'phone' => array(
+							'required'          => true,
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'value' => array(
+							'default'           => 5,
+							'sanitize_callback' => 'absint',
+						),
 					),
-					'value' => array(
-						'default'           => 5,
-						'sanitize_callback' => 'absint',
-					),
-				),
-			)
-		);
+				)
+			);
 
-		register_rest_route(
-			$ns,
-			'/pospal/test-revoke',
-			array(
-				'methods'             => WP_REST_Server::CREATABLE,
-				'callback'            => array( $this, 'pospal_test_revoke' ),
-				'permission_callback' => array( $this, 'verify_manage' ),
-				'args'                => array(
-					'customer_uid' => array(
-						'required'          => true,
-						'sanitize_callback' => 'sanitize_text_field',
+			register_rest_route(
+				$ns,
+				'/pospal/test-revoke',
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'pospal_test_revoke' ),
+					'permission_callback' => array( $this, 'verify_manage' ),
+					'args'                => array(
+						'customer_uid' => array(
+							'required'          => true,
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'coupon_ref'   => array(
+							'required'          => true,
+							'sanitize_callback' => 'sanitize_text_field',
+						),
 					),
-					'coupon_ref'   => array(
-						'required'          => true,
-						'sanitize_callback' => 'sanitize_text_field',
-					),
-				),
-			)
-		);
+				)
+			);
 
-		register_rest_route(
-			$ns,
-			'/pospal/probe-grant',
-			array(
-				'methods'             => WP_REST_Server::CREATABLE,
-				'callback'            => array( $this, 'pospal_probe_grant' ),
-				'permission_callback' => array( $this, 'verify_manage' ),
-				'args'                => array(
-					'phone' => array(
-						'required'          => true,
-						'sanitize_callback' => 'sanitize_text_field',
+			register_rest_route(
+				$ns,
+				'/pospal/probe-grant',
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'pospal_probe_grant' ),
+					'permission_callback' => array( $this, 'verify_manage' ),
+					'args'                => array(
+						'phone' => array(
+							'required'          => true,
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'value' => array(
+							'default'           => 5,
+							'sanitize_callback' => 'absint',
+						),
 					),
-					'value' => array(
-						'default'           => 5,
-						'sanitize_callback' => 'absint',
-					),
-				),
-			)
-		);
+				)
+			);
+		}
 
 		register_rest_route(
 			$ns,
@@ -433,6 +479,18 @@ class DoughBoss_REST_Controller {
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'auth_me' ),
 				'permission_callback' => array( $this, 'verify_staff' ),
+			)
+		);
+
+		// Ops/monitoring snapshot: versions + per-integration readiness booleans.
+		// Staff-gated; never returns keys, secrets or URLs.
+		register_rest_route(
+			$ns,
+			'/status',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_status' ),
+				'permission_callback' => array( $this, 'verify_admin' ),
 			)
 		);
 
@@ -537,6 +595,35 @@ class DoughBoss_REST_Controller {
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'checkout' ),
 				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'order_type'        => array(
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'customer_name'     => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'customer_email'    => array(
+						'sanitize_callback' => 'sanitize_email',
+					),
+					'customer_phone'    => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'notes'             => array(
+						'sanitize_callback' => 'sanitize_textarea_field',
+					),
+					'address'           => array(
+						'sanitize_callback' => 'sanitize_textarea_field',
+					),
+					'location_id'       => array(
+						'sanitize_callback' => 'absint',
+					),
+					'payment_intent_id' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'idempotency_key'   => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
 			)
 		);
 
@@ -799,6 +886,19 @@ class DoughBoss_REST_Controller {
 				'permission_callback' => '__return_true',
 			)
 		);
+
+		// Storefront — Stripe webhook (reconciliation safety-net for a payment
+		// that succeeds but never becomes an order). Public route, gated by the
+		// Stripe-Signature HMAC, not a nonce.
+		register_rest_route(
+			$ns,
+			'/stripe-webhook',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'stripe_webhook' ),
+				'permission_callback' => '__return_true',
+			)
+		);
 	}
 
 	/**
@@ -896,14 +996,28 @@ class DoughBoss_REST_Controller {
 	 * @return bool True when the caller is over the limit.
 	 */
 	private function rate_limited( $bucket, $max, $window ) {
-		$ip   = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-		$key  = 'doughboss_rl_' . $bucket . '_' . md5( $ip );
-		$hits = (int) get_transient( $key );
-		if ( $hits >= $max ) {
-			return true;
+		global $wpdb;
+		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$key = 'doughboss_rl_' . $bucket . '_' . md5( $ip );
+
+		// Serialize the read-increment-write per bucket+IP with a named DB lock
+		// (same pattern as DoughBoss_Voucher::claim) so concurrent requests can't
+		// both read the same count and under-increment. If the lock can't be
+		// taken, fail open — availability beats strictness for a rate limiter.
+		$lock = 'dbrl_' . md5( $bucket . '|' . $ip );
+		$got  = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $lock, 1 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		if ( 1 !== $got ) {
+			return false;
 		}
-		set_transient( $key, $hits + 1, $window );
-		return false;
+
+		$hits    = (int) get_transient( $key );
+		$limited = $hits >= $max;
+		if ( ! $limited ) {
+			set_transient( $key, $hits + 1, $window );
+		}
+		$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+		return $limited;
 	}
 
 	/**
@@ -1511,6 +1625,33 @@ class DoughBoss_REST_Controller {
 				'can_manage' => current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
 				'can_board'  => current_user_can( 'manage_doughboss_kds' ) || current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
 				'currency'   => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+			)
+		);
+	}
+
+	/**
+	 * GET /status — health/version snapshot for uptime monitoring (admin-gated).
+	 *
+	 * Reports the stored vs. code DB schema version (a mismatch means a pending
+	 * or stuck migration) and each integration's ready() boolean. Booleans only —
+	 * no keys, secrets or endpoint URLs ever leave the server here.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function get_status() {
+		return rest_ensure_response(
+			array(
+				'plugin_version'    => DOUGHBOSS_VERSION,
+				'db_version_code'   => DOUGHBOSS_DB_VERSION,
+				'db_version_stored' => (string) get_option( 'doughboss_db_version', '0' ),
+				'integrations'      => array(
+					'stripe'  => (bool) DoughBoss_Stripe::ready(),
+					'pospal'  => (bool) DoughBoss_POSPal::ready(),
+					'mercure' => (bool) DoughBoss_Settings::mercure_ready(),
+					'ntfy'    => (bool) DoughBoss_Settings::ntfy_ready(),
+					'sms'     => (bool) DoughBoss_SMS::ready(),
+					'printer' => (bool) DoughBoss_Settings::printer_ready(),
+				),
 			)
 		);
 	}
@@ -2610,18 +2751,151 @@ class DoughBoss_REST_Controller {
 			$meta = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
 
 			if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
-				$leg     = self::catering_leg( isset( $meta['leg'] ) ? $meta['leg'] : 'deposit' );
-				$enquiry = ! empty( $obj['id'] ) ? DoughBoss_Catering::find_by_intent( $obj['id'] ) : null;
-				if ( ! $enquiry && ! empty( $meta['enquiry_id'] ) ) {
-					$enquiry = DoughBoss_Catering::get( (int) $meta['enquiry_id'] );
-				}
-				if ( $enquiry ) {
-					DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );
+				$this->reconcile_catering_intent( $obj, $meta );
+			}
+		}
+
+		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * POST /stripe-webhook — storefront payment reconciliation safety-net.
+	 *
+	 * Verifies the Stripe signature, then on payment_intent.succeeded checks
+	 * whether the PaymentIntent has produced an order. The common case is
+	 * handled synchronously by /checkout; this webhook exists so a payment
+	 * whose checkout call never lands (browser crash, network drop) is
+	 * surfaced to the owner instead of silently keeping the customer's money.
+	 * It never creates orders and never refunds — refunding real money is a
+	 * human decision made from the flagged list on the Orders screen.
+	 *
+	 * Catering-context events are delegated to the same idempotent handling as
+	 * /catering/stripe-webhook: Stripe issues one signing secret per endpoint
+	 * and the plugin stores a single secret per mode, so this endpoint must be
+	 * able to serve as the site's only registered webhook.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function stripe_webhook( WP_REST_Request $request ) {
+		$payload = $request->get_body();
+		$sig     = $request->get_header( 'stripe_signature' );
+
+		if ( ! DoughBoss_Stripe::verify_webhook_signature( $payload, $sig ) ) {
+			return new WP_Error( 'doughboss_wh_sig', __( 'Invalid signature.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$event = json_decode( $payload, true );
+		if ( ! is_array( $event ) || empty( $event['type'] ) ) {
+			return rest_ensure_response( array( 'received' => true ) );
+		}
+
+		if ( 'payment_intent.succeeded' === $event['type'] ) {
+			$obj  = isset( $event['data']['object'] ) && is_array( $event['data']['object'] ) ? $event['data']['object'] : array();
+			$meta = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
+
+			if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
+				$this->reconcile_catering_intent( $obj, $meta );
+			} else {
+				$pi_id = isset( $obj['id'] ) ? sanitize_text_field( $obj['id'] ) : '';
+				if ( '' !== $pi_id && ! DoughBoss_Order::payment_intent_used( $pi_id ) ) {
+					$this->record_unreconciled_payment( $pi_id, $obj );
 				}
 			}
 		}
 
 		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * Idempotently mark the paid leg for a succeeded catering PaymentIntent.
+	 *
+	 * Shared by both webhook endpoints so either one can be the site's single
+	 * registered Stripe endpoint (Stripe assigns one signing secret per
+	 * endpoint; the plugin stores one secret per mode).
+	 *
+	 * @param array<string,mixed> $obj  PaymentIntent object from the event.
+	 * @param array<string,mixed> $meta PaymentIntent metadata.
+	 * @return void
+	 */
+	private function reconcile_catering_intent( array $obj, array $meta ) {
+		$leg     = self::catering_leg( isset( $meta['leg'] ) ? $meta['leg'] : 'deposit' );
+		$enquiry = ! empty( $obj['id'] ) ? DoughBoss_Catering::find_by_intent( $obj['id'] ) : null;
+		if ( ! $enquiry && ! empty( $meta['enquiry_id'] ) ) {
+			$enquiry = DoughBoss_Catering::get( (int) $meta['enquiry_id'] );
+		}
+		if ( $enquiry ) {
+			DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );
+		}
+	}
+
+	/**
+	 * Record a succeeded storefront PaymentIntent that has no matching order.
+	 *
+	 * Kept in a small capped option (autoload off) so the Orders screen can
+	 * surface it for a human decision. This webhook usually races the
+	 * synchronous /checkout call that creates the order, so most entries are
+	 * reconciled seconds after being recorded; the admin surface re-checks
+	 * payment_intent_used() and prunes reconciled entries before showing
+	 * anything. Deliberately no auto-refund.
+	 *
+	 * @param string              $pi_id PaymentIntent id.
+	 * @param array<string,mixed> $obj   PaymentIntent object from the event.
+	 * @return void
+	 */
+	private function record_unreconciled_payment( $pi_id, array $obj ) {
+		global $wpdb;
+		$amount   = isset( $obj['amount'] ) ? absint( $obj['amount'] ) : 0;
+		$currency = isset( $obj['currency'] ) ? sanitize_key( $obj['currency'] ) : '';
+
+		// Serialize writers with the admin pruner (same named-lock pattern as
+		// rate_limited): both do read-modify-write on this option, and a lost
+		// update here would permanently drop a money-taken-no-order flag —
+		// Stripe will not retry a delivery that already got a 200. If the lock
+		// can't be taken, append anyway: a rare duplicate/clobbered entry beats
+		// a silently lost one, and the error_log line below always fires.
+		$locked = ( 1 === (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', 'doughboss_unrec_pay', 3 ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+		wp_cache_delete( 'doughboss_unreconciled_payments', 'options' );
+		$list = get_option( 'doughboss_unreconciled_payments', array() );
+		if ( ! is_array( $list ) ) {
+			$list = array();
+		}
+
+		$already = false;
+		foreach ( $list as $entry ) {
+			if ( isset( $entry['id'] ) && $entry['id'] === $pi_id ) {
+				$already = true; // Stripe retries deliveries; record each intent once.
+				break;
+			}
+		}
+
+		if ( ! $already ) {
+			$list[] = array(
+				'id'       => $pi_id,
+				'amount'   => $amount,
+				'currency' => $currency,
+				'time'     => time(),
+			);
+
+			if ( count( $list ) > 50 ) {
+				$list = array_slice( $list, -50 );
+			}
+
+			update_option( 'doughboss_unreconciled_payments', $list, false );
+		}
+
+		if ( $locked ) {
+			$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', 'doughboss_unrec_pay' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		}
+
+		if ( $already ) {
+			return;
+		}
+
+		if ( function_exists( 'error_log' ) ) {
+			error_log( sprintf( 'DoughBoss: unreconciled PaymentIntent %s (%d %s) succeeded with no matching order.', $pi_id, $amount, $currency ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log — deliberate greppable audit trail for money reconciliation.
+		}
 	}
 
 	/**
@@ -2681,13 +2955,13 @@ class DoughBoss_REST_Controller {
 			DoughBoss_Settings::format_price( $enquiry['deposit_amount'] )
 		);
 
-		if ( is_email( $enquiry['customer_email'] ) ) {
-			wp_mail( $enquiry['customer_email'], $subject, $body );
+		if ( is_email( $enquiry['customer_email'] ) && false === wp_mail( $enquiry['customer_email'], $subject, $body ) ) {
+			error_log( 'DoughBoss mail: catering enquiry email to customer failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
 		$orders_email = DoughBoss_Settings::orders_email();
-		if ( is_email( $orders_email ) ) {
-			wp_mail( $orders_email, $subject, $body );
+		if ( is_email( $orders_email ) && false === wp_mail( $orders_email, $subject, $body ) ) {
+			error_log( 'DoughBoss mail: catering enquiry email to shop failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 	}
 
@@ -2725,13 +2999,13 @@ class DoughBoss_REST_Controller {
 		$subject = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_subject(), $vars );
 		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_body(), $vars );
 
-		if ( is_email( $order->customer_email ) ) {
-			wp_mail( $order->customer_email, $subject, $body );
+		if ( is_email( $order->customer_email ) && false === wp_mail( $order->customer_email, $subject, $body ) ) {
+			error_log( 'DoughBoss mail: order confirmation email to customer failed for #' . $order->order_number ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
 		$orders_email = DoughBoss_Settings::orders_email();
-		if ( is_email( $orders_email ) ) {
-			wp_mail( $orders_email, $subject, $body );
+		if ( is_email( $orders_email ) && false === wp_mail( $orders_email, $subject, $body ) ) {
+			error_log( 'DoughBoss mail: order confirmation email to shop failed for #' . $order->order_number ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 	}
 }

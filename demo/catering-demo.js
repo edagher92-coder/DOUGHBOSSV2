@@ -101,14 +101,25 @@
 			'Total: ' + money(q.total), 'Deposit (30%): ' + money(q.deposit), 'Balance: ' + money(q.balance)
 		];
 		var mailto = 'mailto:' + ORDERS_EMAIL + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(bodyLines.join('\n'));
-		mount.innerHTML =
-			'<div class="dbq-done" role="status"><div class="dbq-check">✓</div><h3>Booking request received</h3>' +
-			'<p class="dbq-ref">Reference <strong>' + esc(ref) + '</strong></p>' +
-			'<p>Deposit to secure your date: <strong>' + money(q.deposit) + '</strong> · balance ' + money(q.balance) + ' due 48h before.</p>' +
-			'<p>We\'ll send your quote to <strong>' + esc(state.email) + '</strong> and confirm shortly.</p>' +
-			'<a class="vb-btn vb-btn-ember dbq-mailto" href="' + esc(mailto) + '">Email your booking to ' + esc(ORDERS_EMAIL) + '</a>' +
-			'<p class="dbq-demo">Demo — in production this takes a card deposit via Stripe and emails your booking to ' + esc(ORDERS_EMAIL) + ' instantly.</p></div>';
-		if (mount.scrollIntoView) { mount.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+		// Loading state while the (simulated) booking settles — same pattern as
+		// the snowboss.js claim button.
+		if (mount.dataset.busy) { return; }
+		mount.dataset.busy = '1';
+		var payBtn = mount.querySelector('.dbq-pay');
+		if (payBtn) { payBtn.disabled = true; payBtn.textContent = 'Booking…'; }
+
+		setTimeout(function () {
+			delete mount.dataset.busy;
+			mount.innerHTML =
+				'<div class="dbq-done" role="status"><div class="dbq-check">✓</div><h3>Booking request received</h3>' +
+				'<p class="dbq-ref">Reference <strong>' + esc(ref) + '</strong></p>' +
+				'<p>Deposit to secure your date: <strong>' + money(q.deposit) + '</strong> · balance ' + money(q.balance) + ' due 48h before.</p>' +
+				'<p>We\'ll send your quote to <strong>' + esc(state.email) + '</strong> and confirm shortly.</p>' +
+				'<a class="vb-btn vb-btn-ember dbq-mailto" href="' + esc(mailto) + '">Email your booking to ' + esc(ORDERS_EMAIL) + '</a>' +
+				'<p class="dbq-demo">Demo — in production this takes a card deposit via Stripe and emails your booking to ' + esc(ORDERS_EMAIL) + ' instantly.</p></div>';
+			if (mount.scrollIntoView) { mount.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+		}, 450);
 	}
 	mount.addEventListener('click', function (e) {
 		var pk = e.target.closest('[data-pk]');

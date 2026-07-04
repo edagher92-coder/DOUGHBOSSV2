@@ -47,6 +47,7 @@ foreach ( $post_ids as $post_id ) {
 // Remove options.
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
+delete_option( 'doughboss_unreconciled_payments' );
 
 // Remove the custom capabilities and the kitchen role.
 $role = get_role( 'administrator' );

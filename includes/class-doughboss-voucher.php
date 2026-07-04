@@ -98,6 +98,11 @@ class DoughBoss_Voucher {
 		if ( $value <= 0 ) {
 			return new WP_Error( 'doughboss_voucher_value', __( 'Voucher value must be greater than zero.', 'doughboss' ), array( 'status' => 400 ) );
 		}
+		// A percentage discount can never exceed the whole order; clamp at issue
+		// time so a typo'd 500% is stored as 100% (evaluate() also clamps).
+		if ( 'percent' === $type && $value > 100 ) {
+			$value = 100.00;
+		}
 
 		$now  = current_time( 'mysql' );
 		$code = '';

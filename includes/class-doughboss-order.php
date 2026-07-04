@@ -214,6 +214,8 @@ class DoughBoss_Order {
 			);
 		}
 
+		$items_by_order = self::get_items_for_orders( wp_list_pluck( (array) $rows, 'id' ) );
+
 		$out = array();
 		foreach ( (array) $rows as $order ) {
 			$out[] = array(
@@ -233,7 +235,7 @@ class DoughBoss_Order {
 				'acknowledged'   => ! empty( $order->acknowledged_at ),
 				'accepted'       => ! empty( $order->accepted_at ),
 				'created_at'     => $order->created_at,
-				'items'          => self::get_items( (int) $order->id ),
+				'items'          => isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(),
 			);
 		}
 
@@ -374,6 +376,39 @@ class DoughBoss_Order {
 	}
 
 	/**
+	 * Fetch the items for many orders in one query, grouped by order ID.
+	 *
+	 * Batch counterpart to get_items() — same row shape per item — used by the
+	 * live board and admin list to avoid one query per order.
+	 *
+	 * @param int[] $order_ids Order IDs.
+	 * @return array<int,array[]> Map of order_id => item rows (missing = no items).
+	 */
+	public static function get_items_for_orders( array $order_ids ) {
+		global $wpdb;
+		$order_ids = array_values( array_unique( array_filter( array_map( 'absint', $order_ids ) ) ) );
+		if ( empty( $order_ids ) ) {
+			return array();
+		}
+
+		$table        = self::items_table();
+		$placeholders = implode( ',', array_fill( 0, count( $order_ids ), '%d' ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE order_id IN ({$placeholders}) ORDER BY id ASC", $order_ids ),
+			ARRAY_A
+		);
+
+		$grouped = array();
+		foreach ( (array) $rows as $row ) {
+			$row['toppings']                     = $row['toppings'] ? json_decode( $row['toppings'], true ) : array();
+			$grouped[ (int) $row['order_id'] ][] = $row;
+		}
+
+		return $grouped;
+	}
+
+	/**
 	 * Update the status of an order.
 	 *
 	 * @param int    $order_id Order ID.
@@ -404,6 +439,35 @@ class DoughBoss_Order {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Update the payment status of an order (e.g. after an admin refund).
+	 *
+	 * @param int    $order_id       Order ID.
+	 * @param string $payment_status New payment status (must be a known value).
+	 * @return bool
+	 */
+	public static function update_payment_status( $order_id, $payment_status ) {
+		global $wpdb;
+
+		if ( ! in_array( $payment_status, array( 'unpaid', 'paid', 'refunded' ), true ) ) {
+			return false;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$updated = $wpdb->update(
+			self::orders_table(),
+			array(
+				'payment_status' => $payment_status,
+				'updated_at'     => current_time( 'mysql', true ),
+			),
+			array( 'id' => $order_id ),
+			array( '%s', '%s' ),
+			array( '%d' )
+		);
+
+		return false !== $updated;
 	}
 
 	/**

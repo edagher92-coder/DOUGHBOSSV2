@@ -44,6 +44,7 @@
 		if ( pollTimer ) { clearInterval( pollTimer ); pollTimer = null; }
 		closeSse();
 		stopCamScan();
+		netUp();
 	}
 	function closeSse() {
 		if ( eventSource ) {
@@ -63,9 +64,30 @@
 	}
 	function toast( msg ) {
 		var t = el( 'div', 'toast show', msg );
+		t.setAttribute( 'role', 'status' );
+		t.setAttribute( 'aria-live', 'polite' );
 		document.body.appendChild( t );
 		setTimeout( function () { t.classList.remove( 'show' ); }, 2600 );
 		setTimeout( function () { if ( t.parentNode ) { t.parentNode.removeChild( t ); } }, 3000 );
+	}
+
+	/* ---------- network status ---------- */
+
+	// Shown while any poller is failing; cleared on the next successful poll.
+	// Styled inline because app.css is shared and this element is app.js-only.
+	var netEl = null;
+	function netDown() {
+		if ( netEl ) { return; }
+		netEl = el( 'div', 'net-reconnect', 'Reconnecting…' );
+		netEl.setAttribute( 'role', 'status' );
+		netEl.setAttribute( 'aria-live', 'polite' );
+		netEl.style.cssText = 'position:fixed;bottom:16px;left:16px;background:#b45309;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.35);';
+		document.body.appendChild( netEl );
+	}
+	function netUp() {
+		if ( ! netEl ) { return; }
+		if ( netEl.parentNode ) { netEl.parentNode.removeChild( netEl ); }
+		netEl = null;
 	}
 
 	/* ---------- api ---------- */
@@ -139,13 +161,19 @@
 		var fSite = field( 'Site address', 'url', state.site || DEFAULT_SITE );
 		var fUser = field( 'WordPress username', 'text', state.user || '' );
 		var fPass = field( 'Application password', 'password', '' );
+		fUser.input.setAttribute( 'autocomplete', 'username' );
 		fPass.input.setAttribute( 'autocomplete', 'current-password' );
-		card.appendChild( fSite.row );
-		card.appendChild( fUser.row );
-		card.appendChild( fPass.row );
+
+		// A real form so Enter submits from any field and password managers engage.
+		var form = el( 'form' );
+		form.appendChild( fSite.row );
+		form.appendChild( fUser.row );
+		form.appendChild( fPass.row );
 
 		var btn = el( 'button', 'login__btn', 'Sign in' );
-		card.appendChild( btn );
+		btn.setAttribute( 'type', 'submit' );
+		form.appendChild( btn );
+		card.appendChild( form );
 		if ( err ) { card.appendChild( el( 'div', 'login__err', err ) ); }
 
 		var help = el( 'div', 'login__help' );
@@ -177,8 +205,7 @@
 				renderLogin( 'Could not reach ' + site + '. Check the address and that the site allows this app (CORS).' );
 			} );
 		}
-		btn.addEventListener( 'click', go );
-		fPass.input.addEventListener( 'keydown', function ( e ) { if ( 'Enter' === e.key ) { go(); } } );
+		form.addEventListener( 'submit', function ( e ) { e.preventDefault(); go(); } );
 
 		wrap.appendChild( card );
 		root.appendChild( wrap );
@@ -371,6 +398,7 @@
 
 		function activity() {
 			return api( '/voucher/activity', 'GET' ).then( function ( r ) {
+				netUp();
 				if ( ! r.ok || ! r.data ) { return; }
 				if ( r.data.currency ) { state.currency = r.data.currency; }
 				var tt = r.data.totals || {};
@@ -412,7 +440,7 @@
 					li.appendChild( el( 'span', 'val', v.type === 'percent' ? v.value + '%' : money( v.value ) ) );
 					s.feed.appendChild( li );
 				} );
-			} ).catch( function () {} );
+			} ).catch( function () { netDown(); } );
 		}
 		focusCode();
 		activity();
@@ -494,9 +522,10 @@
 		}
 		function refresh() {
 			return api( '/admin/vouchers', 'GET' ).then( function ( r ) {
+				netUp();
 				if ( r.ok && r.data && r.data.vouchers ) { cache = r.data.vouchers; render(); }
 				else if ( r.status === 403 ) { list.innerHTML = ''; list.appendChild( el( 'div', 'empty', 'Owner access required.' ) ); }
-			} ).catch( function () {} );
+			} ).catch( function () { netDown(); } );
 		}
 		refresh();
 		pollTimer = setInterval( refresh, 15000 );
@@ -524,6 +553,7 @@
 		}
 		function refresh() {
 			return api( '/admin/orders', 'GET' ).then( function ( r ) {
+				netUp();
 				if ( ! r.ok || ! r.data ) { return; }
 				var orders = r.data.data || r.data.orders || [];
 				wrap.innerHTML = '';
@@ -556,7 +586,7 @@
 					card.appendChild( actions );
 					wrap.appendChild( card );
 				} );
-			} ).catch( function () {} );
+			} ).catch( function () { netDown(); } );
 		}
 		refresh();
 		pollTimer = setInterval( refresh, 8000 );

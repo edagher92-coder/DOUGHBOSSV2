@@ -74,13 +74,14 @@ class DoughBoss_POSPal_Orders {
 			return;
 		}
 
-		$result = DoughBoss_POSPal::push_order( $build['body'], is_array( $creds ) ? $creds : null );
+		// Fire-and-forget: the mirror must never stall the checkout request, so the
+		// push is dispatched without waiting for POSPal's response.
+		$result = DoughBoss_POSPal::push_order( $build['body'], is_array( $creds ) ? $creds : null, false );
 		if ( is_wp_error( $result ) ) {
 			self::log( 'push failed for #' . $order_id . ' (' . $result->get_error_code() . ')' );
 			return;
 		}
-		$order_no = is_array( $result ) && isset( $result['orderNo'] ) ? (string) $result['orderNo'] : '';
-		self::log( 'push ok for #' . $order_id . ( '' !== $order_no ? ' -> POSPal ' . $order_no : '' ) );
+		self::log( 'push dispatched (non-blocking) for #' . $order_id );
 	}
 
 	/**

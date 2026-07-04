@@ -118,6 +118,30 @@ class DoughBoss_Locations {
 	}
 
 	/**
+	 * Make a slug unique among stored locations by appending a numeric suffix
+	 * on collision (bankstown, bankstown-2, bankstown-3, …) — the same de-dup
+	 * idea as the settings rows in DoughBoss_Admin::sanitize_rows(), but
+	 * deterministic against what's already in the table.
+	 *
+	 * @param string $slug Candidate slug (already sanitized).
+	 * @return string
+	 */
+	private static function unique_slug( $slug ) {
+		global $wpdb;
+		$slug  = '' !== $slug ? $slug : 'shop';
+		$table = self::table();
+
+		$candidate = $slug;
+		$suffix    = 2;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		while ( (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE slug = %s", $candidate ) ) > 0 ) {
+			$candidate = $slug . '-' . $suffix;
+			++$suffix;
+		}
+		return $candidate;
+	}
+
+	/**
 	 * Create a location.
 	 *
 	 * @param array $data Raw input.
@@ -129,6 +153,7 @@ class DoughBoss_Locations {
 		if ( '' === $row['name'] ) {
 			return 0;
 		}
+		$row['slug'] = self::unique_slug( $row['slug'] );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$ok = $wpdb->insert(
 			self::table(),

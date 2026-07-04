@@ -12,8 +12,13 @@
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
 	<link rel="preload" as="image" href="https://doughboss.com.au/wp-content/uploads/Zaatar-768x432.jpg" fetchpriority="high">
 	<link rel="stylesheet" href="demo.css?v=20260626b">
+	<style>
+	.skip{position:absolute;top:-999px;left:12px;background:var(--ember);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+	.skip:focus{top:0;}
+	</style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
 <header class="nav">
 	<div class="wrap">
@@ -31,7 +36,7 @@
 	</div>
 </header>
 
-<main>
+<main id="main">
 
 <!-- ============ MENU (default order view; About is the landing) ============ -->
 <section class="view" id="view-menu">
@@ -417,6 +422,14 @@
 		try{window.dispatchEvent(new CustomEvent('db:view',{detail:key}));}catch(e){}
 	}
 	window.addEventListener('hashchange',show);
+	// The skip link must not go through the hash router (an unknown hash would
+	// reset the page to About), so focus the active view directly instead.
+	var skip=document.querySelector('a.skip');
+	if(skip){skip.addEventListener('click',function(e){
+		e.preventDefault();
+		var v=document.querySelector('.view.active');
+		if(v){v.setAttribute('tabindex','-1');try{v.focus({preventScroll:true});}catch(err){v.focus();}}
+	});}
 	document.addEventListener('click',function(e){
 		var b=e.target.closest('[data-cat]');
 		if(!b){return;}

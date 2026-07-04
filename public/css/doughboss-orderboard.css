@@ -5,6 +5,26 @@
  */
 
 .doughboss-board-wrap {
+	--dbb-ink: #111;
+	--dbb-ink-soft: #444;
+	--dbb-muted: #555;
+	--dbb-muted-2: #666;
+	--dbb-paper: #fff;
+	--dbb-paper-soft: #fafafa;
+	--dbb-lane-bg: #f1f1f1;
+	--dbb-line: #dcdcde;
+	--dbb-blue: #2271b1;
+	--dbb-red: #d6452b;
+	--dbb-green: #1d7a3e;
+	--dbb-green-dark: #176231;
+	--dbb-amber: #b45309;
+	--dbb-danger: #b32d2e;
+	--dbb-chip-bg: #e7e7e7;
+	--dbb-chip-ink: #333;
+	--dbb-chip-delivery-bg: #fde6c4;
+	--dbb-chip-delivery-ink: #7a4b00;
+	--dbb-chip-shop-bg: #e8eefc;
+	--dbb-chip-shop-ink: #213a6b;
 	margin-right: 20px;
 }
 
@@ -29,7 +49,7 @@
 }
 
 .db-board-status {
-	color: #555;
+	color: var(--dbb-muted);
 	font-size: 0.85rem;
 }
 
@@ -38,20 +58,20 @@
 }
 
 .db-sound-toggle.is-on {
-	background: #1d7a3e;
-	border-color: #176231;
-	color: #fff;
+	background: var(--dbb-green);
+	border-color: var(--dbb-green-dark);
+	color: var(--dbb-paper);
 }
 
 .db-board-loading,
 .db-lane-empty {
-	color: #888;
+	color: var(--dbb-muted-2);
 	font-style: italic;
 }
 
 .db-sound-warn {
-	background: #b45309;
-	color: #fff;
+	background: var(--dbb-amber);
+	color: var(--dbb-paper);
 	font-weight: 700;
 	padding: 0.6rem 1rem;
 	border-radius: 8px;
@@ -65,8 +85,8 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 1rem;
-	background: #d6452b;
-	color: #fff;
+	background: var(--dbb-red);
+	color: var(--dbb-paper);
 	font-size: 1.2rem;
 	font-weight: 700;
 	padding: 0.75rem 1rem;
@@ -82,7 +102,7 @@
 
 body.db-alerting .db-board-bar h1::after {
 	content: " ● LIVE";
-	color: #d6452b;
+	color: var(--dbb-red);
 	animation: db-flash 1s steps(1) infinite;
 }
 
@@ -104,7 +124,7 @@ body.db-alerting .db-board-bar h1::after {
 }
 
 .db-lane {
-	background: #f1f1f1;
+	background: var(--dbb-lane-bg);
 	border-radius: 10px;
 	padding: 0.75rem;
 	min-height: 120px;
@@ -126,29 +146,29 @@ body.db-alerting .db-board-bar h1::after {
 	height: 1.6rem;
 	padding: 0 0.4rem;
 	border-radius: 1rem;
-	background: #2271b1;
-	color: #fff;
+	background: var(--dbb-blue);
+	color: var(--dbb-paper);
 	font-size: 0.85rem;
 }
 
-.db-lane-new .db-lane-count { background: #d6452b; }
-.db-lane-ready .db-lane-count { background: #1d7a3e; }
+.db-lane-new .db-lane-count { background: var(--dbb-red); }
+.db-lane-ready .db-lane-count { background: var(--dbb-green); }
 
 /* --- Cards ----------------------------------------------------------- */
 
 .db-card {
-	background: #fff;
-	border: 1px solid #dcdcde;
-	border-left: 6px solid #2271b1;
+	background: var(--dbb-paper);
+	border: 1px solid var(--dbb-line);
+	border-left: 6px solid var(--dbb-blue);
 	border-radius: 8px;
 	padding: 0.75rem;
 	margin-bottom: 0.75rem;
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-.db-card-pending { border-left-color: #d6452b; }
+.db-card-pending { border-left-color: var(--dbb-red); }
 .db-card-ready,
-.db-card-out_for_delivery { border-left-color: #1d7a3e; }
+.db-card-out_for_delivery { border-left-color: var(--dbb-green); }
 
 .db-card-fresh {
 	animation: db-card-pop 1.2s ease-in-out infinite;
@@ -177,11 +197,11 @@ body.db-alerting .db-board-bar h1::after {
 	letter-spacing: 0.03em;
 	padding: 0.1rem 0.4rem;
 	border-radius: 4px;
-	background: #e7e7e7;
-	color: #333;
+	background: var(--dbb-chip-bg);
+	color: var(--dbb-chip-ink);
 }
 
-.db-type-delivery { background: #fde6c4; color: #7a4b00; }
+.db-type-delivery { background: var(--dbb-chip-delivery-bg); color: var(--dbb-chip-delivery-ink); }
 
 .db-card-shop {
 	font-size: 0.7rem;
@@ -189,15 +209,15 @@ body.db-alerting .db-board-bar h1::after {
 	letter-spacing: 0.03em;
 	padding: 0.1rem 0.4rem;
 	border-radius: 4px;
-	background: #e8eefc;
-	color: #213a6b;
+	background: var(--dbb-chip-shop-bg);
+	color: var(--dbb-chip-shop-ink);
 }
 
 .db-shop-select { min-height: 40px; }
 
 .db-card-time {
 	margin-left: auto;
-	color: #666;
+	color: var(--dbb-muted-2);
 	font-size: 0.8rem;
 }
 
@@ -206,7 +226,7 @@ body.db-alerting .db-board-bar h1::after {
 	margin: 0.35rem 0;
 	font-size: 0.8rem;
 	font-weight: 600;
-	color: #2271b1;
+	color: var(--dbb-blue);
 }
 
 .db-card-contact { font-size: 0.9rem; margin-bottom: 0.4rem; }
@@ -215,24 +235,24 @@ body.db-alerting .db-board-bar h1::after {
 	list-style: none;
 	margin: 0 0 0.5rem;
 	padding: 0.5rem;
-	background: #fafafa;
+	background: var(--dbb-paper-soft);
 	border-radius: 6px;
 }
 
 .db-card-item { padding: 0.15rem 0; }
 .db-card-item-name { font-weight: 600; }
-.db-card-item-toppings { display: block; font-size: 0.8rem; color: #555; }
+.db-card-item-toppings { display: block; font-size: 0.8rem; color: var(--dbb-muted); }
 
-.db-card-meta { font-size: 0.85rem; color: #444; margin-bottom: 0.5rem; }
+.db-card-meta { font-size: 0.85rem; color: var(--dbb-ink-soft); margin-bottom: 0.5rem; }
 .db-card-meta > div { margin: 0.15rem 0; }
-.db-card-total { font-weight: 700; color: #111; }
-.db-card-eta { color: #1d7a3e; font-weight: 600; }
-.db-card-addr { color: #7a4b00; }
+.db-card-total { font-weight: 700; color: var(--dbb-ink); }
+.db-card-eta { color: var(--dbb-green); font-weight: 600; }
+.db-card-addr { color: var(--dbb-chip-delivery-ink); }
 
 /* --- Actions --------------------------------------------------------- */
 
 .db-card-actions { margin-top: 0.5rem; }
-.db-accept-label { font-size: 0.8rem; color: #555; margin-bottom: 0.25rem; }
+.db-accept-label { font-size: 0.8rem; color: var(--dbb-muted); margin-bottom: 0.25rem; }
 
 .db-eta-row,
 .db-card-actions-row {
@@ -250,10 +270,23 @@ body.db-alerting .db-board-bar h1::after {
 }
 
 .db-eta { min-width: 52px; justify-content: center; }
-.db-cancel { color: #b32d2e; margin-left: auto; }
+.db-cancel { color: var(--dbb-danger); margin-left: auto; }
 
 /* Visible keyboard focus for accessibility. */
 .doughboss-board-wrap .button:focus-visible {
-	outline: 3px solid #2271b1;
+	outline: 3px solid var(--dbb-blue);
 	outline-offset: 1px;
+}
+
+/* Accessibility: respect reduced motion — stop the two infinite loops but
+   keep a static equivalent of each cue. */
+@media (prefers-reduced-motion: reduce) {
+	body.db-alerting .db-board-bar h1::after {
+		animation: none;
+	}
+
+	.db-card-fresh {
+		animation: none;
+		box-shadow: 0 0 0 3px rgba(214, 69, 43, 0.35);
+	}
 }

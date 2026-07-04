@@ -102,9 +102,13 @@ class DoughBoss_SMS {
 			array( 'order_number' => $number )
 		);
 
-		$result = self::send( $phone, $message );
+		// Fire-and-forget: this runs inside the kitchen's status-update request, so
+		// the text is dispatched without waiting for ClickSend's response.
+		$result = self::send( $phone, $message, false );
 		if ( is_wp_error( $result ) ) {
 			self::log( 'ready: send failed (' . $result->get_error_code() . ') for order #' . $order_id );
+		} else {
+			self::log( 'ready: dispatched (non-blocking) for order #' . $order_id );
 		}
 	}
 
@@ -163,9 +167,13 @@ class DoughBoss_SMS {
 			array( 'code' => $code )
 		);
 
-		$result = self::send( $phone, $message );
+		// Fire-and-forget: this runs inside the customer's claim request, so the
+		// text is dispatched without waiting for ClickSend's response.
+		$result = self::send( $phone, $message, false );
 		if ( is_wp_error( $result ) ) {
 			self::log( 'voucher: send failed (' . $result->get_error_code() . ') for voucher #' . $voucher_id );
+		} else {
+			self::log( 'voucher: dispatched (non-blocking) for voucher #' . $voucher_id );
 		}
 	}
 
@@ -183,11 +191,15 @@ class DoughBoss_SMS {
 	 * the API key, the destination number or the message body — and returned as a
 	 * WP_Error so callers can record a status line of their own.
 	 *
-	 * @param string $to      Destination number in E.164 (already normalised).
-	 * @param string $message Message text.
-	 * @return true|WP_Error True on a successful send, WP_Error otherwise.
+	 * @param string $to       Destination number in E.164 (already normalised).
+	 * @param string $message  Message text.
+	 * @param bool   $blocking False = fire-and-forget: dispatch the request without
+	 *                         waiting for ClickSend's response, so a notification
+	 *                         never stalls the customer/admin request. Returns true
+	 *                         once dispatched (delivery is not confirmed).
+	 * @return true|WP_Error True on a successful send/dispatch, WP_Error otherwise.
 	 */
-	public static function send( $to, $message ) {
+	public static function send( $to, $message, $blocking = true ) {
 		if ( ! self::ready() ) {
 			return new WP_Error( 'doughboss_sms_config', __( 'SMS is not configured.', 'doughboss' ), array( 'status' => 503 ) );
 		}
@@ -218,13 +230,14 @@ class DoughBoss_SMS {
 		$response = wp_remote_post(
 			self::API_SEND,
 			array(
-				'timeout' => 20,
-				'headers' => array(
+				'timeout'  => 20,
+				'blocking' => (bool) $blocking,
+				'headers'  => array(
 					'Authorization' => 'Basic ' . $auth,
 					'Content-Type'  => 'application/json',
 					'Accept'        => 'application/json',
 				),
-				'body'    => $raw_body,
+				'body'     => $raw_body,
 			)
 		);
 
@@ -232,6 +245,12 @@ class DoughBoss_SMS {
 			// Network-level failure; do not echo the underlying message (could leak the URL/headers).
 			self::log( 'send: network error' );
 			return new WP_Error( 'doughboss_sms_network', __( 'Could not reach the SMS service.', 'doughboss' ), array( 'status' => 502 ) );
+		}
+
+		// Fire-and-forget: the request was handed to the transport; there is no
+		// response status to read, by design.
+		if ( ! $blocking ) {
+			return true;
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );

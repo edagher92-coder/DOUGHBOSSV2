@@ -74,6 +74,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-menu-seeder.php';
 		require_once $dir . 'class-doughboss-cart.php';
 		require_once $dir . 'class-doughboss-order.php';
+		require_once $dir . 'class-doughboss-reports.php';
 		require_once $dir . 'class-doughboss-catering-package.php';
 		require_once $dir . 'class-doughboss-catering.php';
 		require_once $dir . 'class-doughboss-stripe.php';
@@ -86,6 +87,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-ntfy.php';
 		require_once $dir . 'class-doughboss-sms.php';
 		require_once $dir . 'class-doughboss-printer.php';
+		require_once $dir . 'class-doughboss-privacy.php';
 		require_once $dir . 'class-doughboss-cli.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
@@ -121,6 +123,7 @@ final class DoughBoss {
 		( new DoughBoss_Shortcodes() )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
+		( new DoughBoss_Privacy() )->init();
 
 		// POSPal voucher mirror (grant on claim, revoke on redeem). Static hooks;
 		// fully dormant until POSPal + a coupon-rule UID are configured.

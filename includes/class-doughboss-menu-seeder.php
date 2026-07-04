@@ -4,8 +4,11 @@
  *
  * Shared by the WP-CLI command (`wp doughboss seed-menu`) and the admin
  * "Import standard menu" button, so the menu can be created with one click even
- * where WP-CLI isn't available. Idempotent: items are matched by exact title and
- * UPDATED (not duplicated); each is stamped meta `_doughboss_seed = v1`.
+ * where WP-CLI isn't available. Idempotent: items are matched by the stable
+ * `_doughboss_seed_key` marker meta (falling back to exact title once for items
+ * seeded before the marker existed) and UPDATED (not duplicated), so renaming a
+ * seeded item in wp-admin no longer duplicates it on re-run. Each item is also
+ * stamped meta `_doughboss_seed = v1`.
  *
  * @package DoughBoss
  */
@@ -106,16 +109,35 @@ class DoughBoss_Menu_Seeder {
 			foreach ( $items as $item ) {
 				++$total;
 				list( $name, $price, $type, $diet, $desc ) = $item;
+
+				// Match on the stable seed-key marker first so an item renamed in
+				// wp-admin is still recognised (and updated, not duplicated).
+				$seed_key = sanitize_title( $cat_name . ' ' . $name );
 				$existing = get_posts(
 					array(
 						'post_type'        => $post_type,
 						'post_status'      => 'any',
-						'title'            => $name,
 						'posts_per_page'   => 1,
 						'fields'           => 'ids',
+						'meta_key'         => '_doughboss_seed_key', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+						'meta_value'       => $seed_key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 						'suppress_filters' => false,
 					)
 				);
+				if ( empty( $existing ) ) {
+					// Legacy fallback: items seeded before the marker existed only
+					// match by title; they get stamped with the key below.
+					$existing = get_posts(
+						array(
+							'post_type'        => $post_type,
+							'post_status'      => 'any',
+							'title'            => $name,
+							'posts_per_page'   => 1,
+							'fields'           => 'ids',
+							'suppress_filters' => false,
+						)
+					);
+				}
 				$post_id = ! empty( $existing ) ? (int) $existing[0] : 0;
 				if ( $dry ) {
 					if ( $post_id ) {
@@ -147,6 +169,7 @@ class DoughBoss_Menu_Seeder {
 				update_post_meta( $post_id, DoughBoss_Post_Types::META_AVAILABLE, '1' );
 				update_post_meta( $post_id, DoughBoss_Post_Types::META_DIETARY, array_values( $diet ) );
 				update_post_meta( $post_id, '_doughboss_seed', 'v1' );
+				update_post_meta( $post_id, '_doughboss_seed_key', $seed_key );
 				if ( $term_id ) {
 					wp_set_object_terms( $post_id, array( $term_id ), $taxonomy, false );
 				}

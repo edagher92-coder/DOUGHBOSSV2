@@ -177,12 +177,14 @@ class DoughBoss_POSPal_Sync {
 				'app_id'  => $store['app_id'],
 				'app_key' => $store['app_key'],
 			);
-			$result = DoughBoss_POSPal::revoke_coupon( '', $coupon_ref, $creds );
+			// Fire-and-forget: nothing downstream needs POSPal's answer, so the revoke
+			// is dispatched without waiting (a WP_Error here is a pre-dispatch failure).
+			$result = DoughBoss_POSPal::revoke_coupon( '', $coupon_ref, $creds, false );
 			if ( is_wp_error( $result ) ) {
 				self::log( 'revoke: failed (' . $result->get_error_code() . ') at ' . $store['label'] . ' for voucher #' . $vid );
 				continue;
 			}
-			self::log( 'revoke: ok at ' . $store['label'] . ' for voucher #' . $vid );
+			self::log( 'revoke: dispatched (non-blocking) at ' . $store['label'] . ' for voucher #' . $vid );
 		}
 	}
 

@@ -60,6 +60,7 @@ class DoughBoss_Migrations {
 				'1.5.0' => 'upgrade_to_1_5_0',
 				'1.6.0' => 'upgrade_to_1_6_0',
 				'1.7.0' => 'upgrade_to_1_7_0',
+				'1.8.0' => 'upgrade_to_1_8_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -197,5 +198,46 @@ class DoughBoss_Migrations {
 	 */
 	private static function upgrade_to_1_7_0() {
 		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.8.0 — datetime hygiene + catering webhook index.
+	 *
+	 * create_tables() now declares created_at/updated_at/redeemed_at as
+	 * `datetime NULL DEFAULT NULL` (instead of the invalid '0000-00-00' zero
+	 * date) and adds KEY balance_intent_id to the catering table. dbDelta will
+	 * not retroactively change a column default on existing installs, so the
+	 * columns are altered explicitly here. Every insert path already supplies
+	 * explicit timestamps, so no data backfill is needed.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_8_0() {
+		global $wpdb;
+
+		$columns = array(
+			$wpdb->prefix . 'doughboss_orders'              => array( 'created_at', 'updated_at' ),
+			$wpdb->prefix . 'doughboss_catering_enquiries'  => array( 'created_at', 'updated_at' ),
+			$wpdb->prefix . 'doughboss_vouchers'            => array( 'created_at', 'updated_at' ),
+			$wpdb->prefix . 'doughboss_voucher_redemptions' => array( 'redeemed_at' ),
+		);
+		foreach ( $columns as $table => $cols ) {
+			foreach ( $cols as $col ) {
+				// Table names come from $wpdb->prefix and columns from the
+				// hardcoded map above — nothing user-supplied to prepare.
+				$wpdb->query( "ALTER TABLE {$table} MODIFY {$col} datetime NULL DEFAULT NULL" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+			}
+		}
+
+		// Index balance_intent_id so find_by_intent()'s OR lookup stops table-
+		// scanning on every Stripe webhook. dbDelta may already have added it via
+		// create_tables(), so guard against a duplicate-key error.
+		$catering = $wpdb->prefix . 'doughboss_catering_enquiries';
+		$existing = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SHOW INDEX FROM {$catering} WHERE Key_name = %s", 'balance_intent_id' )
+		);
+		if ( ! $existing ) {
+			$wpdb->query( "ALTER TABLE {$catering} ADD KEY balance_intent_id (balance_intent_id)" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+		}
 	}
 }

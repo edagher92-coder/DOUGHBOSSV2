@@ -33,6 +33,12 @@ class DoughBoss_Catering {
 	const LEG_BALANCE = 'balance';
 
 	/**
+	 * Sanity cap on headcount (mirrors DoughBoss_Cart::MAX_QTY's role for the
+	 * cart) — bigger events are quoted by hand, not through the enquiry form.
+	 */
+	const MAX_GUESTS = 1000;
+
+	/**
 	 * The enquiries table name for the current site.
 	 *
 	 * @return string
@@ -149,6 +155,15 @@ class DoughBoss_Catering {
 		$order_type  = ( isset( $data['order_type'] ) && 'delivery' === $data['order_type'] ) ? 'delivery' : 'pickup';
 		$delivery    = isset( $data['delivery_fee'] ) ? (float) $data['delivery_fee'] : 0.0;
 
+		if ( $guest_count > self::MAX_GUESTS ) {
+			return new WP_Error( 'doughboss_catering_guests', __( 'That guest count is too large for an online enquiry — please call us to arrange it.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$event_date = self::sanitize_date( isset( $data['event_date'] ) ? $data['event_date'] : '' );
+		if ( '' !== $event_date && $event_date < current_time( 'Y-m-d' ) ) {
+			return new WP_Error( 'doughboss_catering_date', __( 'The event date can’t be in the past.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
 		$quote = self::quote( $package_id, $guest_count, $order_type, $delivery );
 
 		$number = self::generate_enquiry_number();
@@ -162,7 +177,7 @@ class DoughBoss_Catering {
 			'customer_name'  => $name,
 			'customer_email' => $mail,
 			'customer_phone' => isset( $data['customer_phone'] ) ? sanitize_text_field( $data['customer_phone'] ) : '',
-			'event_date'     => self::sanitize_date( isset( $data['event_date'] ) ? $data['event_date'] : '' ),
+			'event_date'     => $event_date,
 			'event_time'     => isset( $data['event_time'] ) ? sanitize_text_field( $data['event_time'] ) : '',
 			'guest_count'    => $guest_count,
 			'order_type'     => $order_type,

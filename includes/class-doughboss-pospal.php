@@ -325,11 +325,13 @@ class DoughBoss_POSPal {
 	 * with numeric productUid, totalAmount, …); appId is added by call(). Off-by-
 	 * default orchestration lives in DoughBoss_POSPal_Orders.
 	 *
-	 * @param array      $body  Fully-built addOnLineOrder body (minus appId).
-	 * @param array|null $creds Optional per-store creds.
+	 * @param array      $body     Fully-built addOnLineOrder body (minus appId).
+	 * @param array|null $creds    Optional per-store creds.
+	 * @param bool       $blocking False = dispatch without waiting for the response
+	 *                             (fire-and-forget mirror; returns { dispatched: true }).
 	 * @return array|WP_Error Data { orderNo, orderCreateDateTime, … } or error.
 	 */
-	public static function push_order( array $body, $creds = null ) {
+	public static function push_order( array $body, $creds = null, $blocking = true ) {
 		/**
 		 * Filter the POSPal order body just before it is sent (final escape hatch to
 		 * tweak field mapping without editing the plugin).
@@ -338,7 +340,7 @@ class DoughBoss_POSPal {
 		 * @param array|null $creds Per-store creds (or null for the default store).
 		 */
 		$body = (array) apply_filters( 'doughboss_pospal_order_body', $body, $creds );
-		return self::call( 'order', 'addOnLineOrder', $body, self::PATH_ADD_ONLINE_ORDER, $creds );
+		return self::call( 'order', 'addOnLineOrder', $body, self::PATH_ADD_ONLINE_ORDER, $creds, $blocking );
 	}
 
 	/**
@@ -453,11 +455,14 @@ class DoughBoss_POSPal {
 	 * A 'doughboss_pospal_revoke_noop' filter can disable it; the body is filterable
 	 * via 'doughboss_pospal_revoke_body'.
 	 *
-	 * @param string $customer_uid POSPal member uid (optional for the call).
-	 * @param string $code         The coupon code created at grant (the voucher code).
+	 * @param string     $customer_uid POSPal member uid (optional for the call).
+	 * @param string     $code         The coupon code created at grant (the voucher code).
+	 * @param array|null $creds        Optional per-store creds.
+	 * @param bool       $blocking     False = dispatch without waiting for the response
+	 *                                 (best-effort revoke; returns { dispatched: true }).
 	 * @return array|WP_Error
 	 */
-	public static function revoke_coupon( $customer_uid, $code, $creds = null ) {
+	public static function revoke_coupon( $customer_uid, $code, $creds = null, $blocking = true ) {
 		$customer_uid = sanitize_text_field( (string) $customer_uid );
 		$code         = self::coupon_code( $code );
 		if ( '' === $code ) {
@@ -491,7 +496,7 @@ class DoughBoss_POSPal {
 		 */
 		$body = apply_filters( 'doughboss_pospal_revoke_body', $body, $customer_uid, $code );
 
-		return self::call( 'promotioncouponcode', 'use', (array) $body, self::PATH_USE_COUPONCODE, $creds );
+		return self::call( 'promotioncouponcode', 'use', (array) $body, self::PATH_USE_COUPONCODE, $creds, $blocking );
 	}
 
 	/**
@@ -523,12 +528,18 @@ class DoughBoss_POSPal {
 	 * The JSON body is built once and the same exact bytes are both signed and
 	 * sent — re-encoding the body would break the signature.
 	 *
-	 * @param string $module  API module, e.g. 'promotionOpenApi', 'customerOpenApi'.
-	 * @param string $method  API method, e.g. 'queryCouponPromotions'.
-	 * @param array  $payload Request fields ('appId' is added automatically).
+	 * @param string     $module        API module, e.g. 'promotionOpenApi', 'customerOpenApi'.
+	 * @param string     $method        API method, e.g. 'queryCouponPromotions'.
+	 * @param array      $payload       Request fields ('appId' is added automatically).
+	 * @param string     $override_path Optional explicit endpoint path.
+	 * @param array|null $creds         Optional per-store creds.
+	 * @param bool       $blocking      False = fire-and-forget: dispatch the signed request
+	 *                                  without waiting for the response (for best-effort
+	 *                                  mirrors that must not stall the customer request).
+	 *                                  Returns array( 'dispatched' => true ) on dispatch.
 	 * @return array|WP_Error Decoded `data` payload on success, or an error.
 	 */
-	public static function call( $module, $method, array $payload = array(), $override_path = '', $creds = null ) {
+	public static function call( $module, $method, array $payload = array(), $override_path = '', $creds = null, $blocking = true ) {
 		// Resolve which store's credentials to use: an explicit per-store set (multi-
 		// store), or the default/legacy single-store settings when none is passed.
 		$creds = self::resolve_creds( $creds );
@@ -558,22 +569,29 @@ class DoughBoss_POSPal {
 		$response = wp_remote_post(
 			$url,
 			array(
-				'method'  => 'POST',
-				'timeout' => 25,
+				'method'   => 'POST',
+				'blocking' => (bool) $blocking,
+				'timeout'  => 25,
 				// Let WP manage Accept-Encoding so it auto-decompresses the reply;
 				// a gzip fallback below covers servers that gzip regardless.
-				'headers' => array(
+				'headers'  => array(
 					'User-Agent'     => 'openApi',
 					'Content-Type'   => 'application/json; charset=utf-8',
 					'time-stamp'     => self::timestamp_ms(),
 					'data-signature' => strtoupper( md5( $creds['app_key'] . $raw_body ) ),
 				),
-				'body'    => $raw_body,
+				'body'     => $raw_body,
 			)
 		);
 
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error( 'doughboss_pospal_network', __( 'Could not reach POSPal. Please try again.', 'doughboss' ), array( 'status' => 502 ) );
+		}
+
+		// Fire-and-forget: the request was handed to the transport; there is no
+		// response to parse, by design.
+		if ( ! $blocking ) {
+			return array( 'dispatched' => true );
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
