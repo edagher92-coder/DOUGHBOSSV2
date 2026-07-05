@@ -1,0 +1,103 @@
+name: Plugin CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "claude/**"
+      - "chatgpt/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify PHP and JS
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["7.4", "8.2"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run strict verifier
+        run: bash scripts/dev-check.sh --strict
+
+  build-zip:
+    name: Build installable plugin zip
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build zip
+        run: bash build-zip.sh
+
+      - name: Validate zip contents
+        run: |
+          test -f dist/doughboss.zip
+          unzip -l dist/doughboss.zip | grep -q "doughboss/doughboss.php"
+          unzip -l dist/doughboss.zip | grep -q "doughboss/includes/class-doughboss.php"
+
+  secret-scan:
+    name: Static secret pattern scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan for high-confidence committed secrets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          skip_dirs = {'.git', 'node_modules', 'vendor', 'dist'}
+          patterns = {
+              'Stripe secret key': re.compile(r'\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b'),
+              'Stripe webhook secret': re.compile(r'\bwhsec_[A-Za-z0-9]{16,}\b'),
+              'Google API key': re.compile(r'\bAIza[0-9A-Za-z_-]{35}\b'),
+              'AWS access key': re.compile(r'\bA(?:KIA|SIA)[0-9A-Z]{16}\b'),
+              'GitHub token': re.compile(r'\bgh[pousr]_[A-Za-z0-9_]{36,}\b'),
+              'Slack token': re.compile(r'\bxox[baprs]-[0-9A-Za-z-]{20,}\b'),
+          }
+
+          hits = []
+          for path in Path('.').rglob('*'):
+              if not path.is_file():
+                  continue
+              if any(part in skip_dirs for part in path.parts):
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              for name, pattern in patterns.items():
+                  for match in pattern.finditer(text):
+                      line = text.count('\n', 0, match.start()) + 1
+                      hits.append((str(path), line, name))
+
+          if hits:
+              print('Potential committed secrets found:')
+              for file, line, name in hits:
+                  print(f'- {file}:{line}: {name}')
+              sys.exit(1)
+
+          print('No high-confidence committed secrets found.')
+          PY
