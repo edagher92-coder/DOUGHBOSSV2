@@ -1,0 +1,345 @@
+/**
+ * DoughBoss — staff Voucher Scan dashboard.
+ *
+ * A modern, tablet-friendly in-store scanner & tracker. Black/white brand base
+ * with functional status colour (green = redeemed/ok, red = used/error,
+ * amber = live/issued). Loaded only on the DoughBoss → Voucher Scan screen.
+ */
+
+.db-scan-wrap {
+	margin-right: 20px;
+}
+
+.db-scan {
+	--db-ink: #111;
+	--db-paper: #fff;
+	--db-line: #e3e3e3;
+	--db-muted: #6b6b6b;
+	--db-ok: #1f9d55;
+	--db-ok-bg: #e9f7ef;
+	--db-bad: #d4351c;
+	--db-bad-bg: #fbeae8;
+	--db-live: #b07400;
+	--db-live-bg: #fdf5e6;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	color: var(--db-ink);
+	max-width: 1180px;
+}
+
+/* Header band */
+.db-scan__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	background: var(--db-ink);
+	color: #fff;
+	border-radius: 14px;
+	padding: 18px 22px;
+	margin: 8px 0 18px;
+}
+
+.db-scan__head h1 {
+	color: #fff;
+	font-size: 22px;
+	margin: 0;
+	letter-spacing: .3px;
+}
+
+.db-scan__head p {
+	margin: 4px 0 0;
+	color: #c9c9c9;
+	font-size: 13px;
+}
+
+.db-scan__live {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 12px;
+	color: #c9c9c9;
+}
+
+.db-scan__dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--db-ok);
+	box-shadow: 0 0 0 0 rgba(31, 157, 85, .6);
+	animation: db-pulse 2s infinite;
+}
+
+@keyframes db-pulse {
+	0%   { box-shadow: 0 0 0 0 rgba(31, 157, 85, .55); }
+	70%  { box-shadow: 0 0 0 8px rgba(31, 157, 85, 0); }
+	100% { box-shadow: 0 0 0 0 rgba(31, 157, 85, 0); }
+}
+
+/* Layout */
+.db-scan__grid {
+	display: grid;
+	grid-template-columns: 1.05fr 1.35fr;
+	gap: 18px;
+	align-items: start;
+}
+
+@media (max-width: 960px) {
+	.db-scan__grid { grid-template-columns: 1fr; }
+}
+
+.db-card {
+	background: var(--db-paper);
+	border: 1px solid var(--db-line);
+	border-radius: 14px;
+	padding: 18px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+
+.db-card h2 {
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: .8px;
+	color: var(--db-muted);
+	margin: 0 0 14px;
+}
+
+/* Scan box */
+.db-scan__input {
+	width: 100%;
+	box-sizing: border-box;
+	font-size: 30px;
+	font-weight: 700;
+	letter-spacing: 2px;
+	text-align: center;
+	text-transform: uppercase;
+	padding: 18px 14px;
+	border: 2px dashed #c7c7c7;
+	border-radius: 12px;
+	background: #fafafa;
+	transition: border-color .15s, background .15s;
+}
+
+.db-scan__input:focus {
+	outline: none;
+	border-color: var(--db-ink);
+	border-style: solid;
+	background: #fff;
+}
+
+.db-scan__row {
+	display: flex;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.db-scan__total {
+	flex: 1;
+	font-size: 15px;
+	padding: 12px 14px;
+	border: 1px solid var(--db-line);
+	border-radius: 10px;
+}
+
+.db-scan__btn {
+	appearance: none;
+	border: 0;
+	border-radius: 10px;
+	background: var(--db-ink);
+	color: #fff;
+	font-size: 15px;
+	font-weight: 600;
+	padding: 0 22px;
+	cursor: pointer;
+}
+
+.db-scan__btn:active { transform: translateY(1px); }
+.db-scan__btn:disabled { opacity: .5; cursor: default; }
+
+.db-scan__hint {
+	margin: 12px 2px 0;
+	font-size: 12px;
+	color: var(--db-muted);
+}
+
+/* Camera QR scan */
+.db-scan__cam {
+	appearance: none;
+	width: 100%;
+	margin-top: 12px;
+	border: 1px solid var(--db-line);
+	border-radius: 10px;
+	background: var(--db-paper);
+	color: var(--db-ink);
+	font-size: 14px;
+	font-weight: 600;
+	padding: 11px 16px;
+	cursor: pointer;
+}
+
+.db-scan__cam:active { transform: translateY(1px); }
+.db-scan__cam:disabled { opacity: .5; cursor: default; }
+
+.db-scan__cam-wrap { display: none; margin-top: 12px; }
+.db-scan__cam-wrap.is-on { display: block; }
+
+.db-scan__cam-view {
+	width: 100%;
+	max-width: 320px;
+	aspect-ratio: 1 / 1;
+	margin: 0 auto;
+	background: #000;
+	border: 1px solid var(--db-line);
+	border-radius: 12px;
+	overflow: hidden;
+}
+
+.db-scan__cam-view video,
+.db-scan__cam-view img,
+.db-scan__cam-view canvas {
+	width: 100% !important;
+	height: 100% !important;
+	object-fit: cover;
+	display: block;
+	border-radius: 12px;
+}
+
+.db-scan__cam-stop {
+	appearance: none;
+	display: block;
+	width: 100%;
+	max-width: 320px;
+	margin: 10px auto 0;
+	border: 1px solid var(--db-line);
+	border-radius: 10px;
+	background: var(--db-paper);
+	color: var(--db-ink);
+	font-size: 14px;
+	font-weight: 600;
+	padding: 10px 16px;
+	cursor: pointer;
+}
+
+.db-scan__cam-stop:active { transform: translateY(1px); }
+
+/* Result banner */
+.db-scan__result {
+	margin-top: 16px;
+	border-radius: 12px;
+	padding: 18px;
+	text-align: center;
+	display: none;
+}
+
+.db-scan__result.is-ok      { display: block; background: var(--db-ok-bg);  border: 1px solid #bfe6cf; }
+.db-scan__result.is-bad     { display: block; background: var(--db-bad-bg); border: 1px solid #f1c5be; }
+.db-scan__result.is-neutral { display: block; background: #f3f4f6; border: 1px solid var(--db-line); }
+.db-scan__total.is-required { border-color: var(--db-live); background: var(--db-live-bg); }
+
+.db-scan__result-title {
+	font-size: 19px;
+	font-weight: 800;
+	margin: 0 0 4px;
+}
+
+.db-scan__result.is-ok  .db-scan__result-title { color: var(--db-ok); }
+.db-scan__result.is-bad .db-scan__result-title { color: var(--db-bad); }
+
+.db-scan__result-sub { font-size: 14px; color: #333; margin: 0; }
+.db-scan__result-amt { font-size: 34px; font-weight: 800; margin: 6px 0 0; }
+
+/* Tiles */
+.db-tiles {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 12px;
+	margin-bottom: 18px;
+}
+
+.db-tile {
+	background: var(--db-paper);
+	border: 1px solid var(--db-line);
+	border-radius: 14px;
+	padding: 14px 16px;
+}
+
+.db-tile__n { font-size: 30px; font-weight: 800; line-height: 1; }
+.db-tile__l { font-size: 12px; color: var(--db-muted); text-transform: uppercase; letter-spacing: .6px; margin-top: 6px; }
+.db-tile--ok  .db-tile__n { color: var(--db-ok); }
+.db-tile--live .db-tile__n { color: var(--db-live); }
+
+/* Campaign release meters */
+.db-meter { margin-bottom: 16px; }
+.db-meter:last-child { margin-bottom: 0; }
+
+.db-meter__top {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	margin-bottom: 7px;
+}
+
+.db-meter__name { font-weight: 700; font-size: 14px; }
+.db-meter__name small { color: var(--db-muted); font-weight: 400; }
+.db-meter__count { font-size: 13px; color: var(--db-muted); }
+.db-meter__count b { color: var(--db-ink); }
+
+.db-bar {
+	height: 10px;
+	background: #eee;
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.db-bar__fill {
+	height: 100%;
+	background: var(--db-ink);
+	border-radius: 6px;
+	transition: width .4s ease;
+}
+
+.db-bar__fill.is-full { background: var(--db-bad); }
+
+/* Recent feed */
+.db-feed__search {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 9px 12px;
+	border: 1px solid var(--db-line);
+	border-radius: 9px;
+	margin-bottom: 12px;
+	font-size: 14px;
+}
+
+.db-feed { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow-y: auto; }
+
+.db-feed li {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 11px 4px;
+	border-bottom: 1px solid #f0f0f0;
+}
+
+.db-feed li:last-child { border-bottom: 0; }
+
+.db-feed__code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 700; font-size: 14px; }
+.db-feed__meta { flex: 1; min-width: 0; }
+.db-feed__sub { font-size: 12px; color: var(--db-muted); margin-top: 2px; }
+.db-feed__val { font-weight: 700; font-size: 14px; white-space: nowrap; }
+
+.db-badge {
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: .5px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+.db-badge--issued   { background: var(--db-live-bg); color: var(--db-live); }
+.db-badge--redeemed { background: var(--db-ok-bg);   color: var(--db-ok); }
+.db-badge--voided   { background: #f0f0f0;            color: var(--db-muted); }
+
+.db-empty { color: var(--db-muted); font-size: 14px; padding: 18px 4px; text-align: center; }

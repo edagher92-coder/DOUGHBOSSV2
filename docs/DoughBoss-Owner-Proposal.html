@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>Dough Boss — Digital Turnaround Proposal</title>
+<style>
+  @page {
+    size: A4; margin: 15mm 15mm 18mm;
+    @bottom-left { content: "Dough Boss · Digital Turnaround Proposal"; font-size: 7.5pt; color: #b9b9b9; }
+    @bottom-right { content: "Prepared by Elie D.  ·  page " counter(page) "/" counter(pages); font-size: 7.5pt; color: #b9b9b9; }
+  }
+  @page :first { @bottom-left { content: ""; } @bottom-right { content: ""; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #2a2a2a; font-size: 10.6pt; line-height: 1.5; margin: 0; }
+  h2 { color: #b8341d; font-size: 14pt; margin: 20pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid #f0c8c0; }
+  h2 .n { display:inline-block; background:#d6452b; color:#fff; width:20pt; height:20pt; line-height:20pt; text-align:center; border-radius:50%; font-size:10pt; margin-right:6pt; vertical-align: middle; }
+  h3 { color: #333; font-size: 11.5pt; margin: 12pt 0 4pt; }
+  p { margin: 6pt 0; }
+  ul, ol { margin: 6pt 0 6pt 16pt; }
+  li { margin: 3pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 9.8pt; }
+  th, td { border: 1px solid #e2e2e2; padding: 5pt 8pt; text-align: left; vertical-align: top; }
+  th { background: #f7e6e1; color: #7c2414; font-weight: 700; }
+  tr:nth-child(even) td { background: #fcfbfb; }
+  .num { text-align: right; white-space: nowrap; }
+  .muted { color:#777; } .small { font-size: 9pt; color: #6a6a6a; }
+  .disclaimer { font-size: 8.6pt; color: #888; font-style: italic; }
+
+  /* Cover */
+  .cover { background: linear-gradient(135deg,#d6452b 0%, #a82a16 100%); color: #fff; margin: -15mm -15mm 12pt; padding: 56pt 15mm 30pt; }
+  .wordmark { font-size: 13pt; font-weight: 800; letter-spacing: 3px; opacity:.95; }
+  .wordmark .dot { color:#ffd9cf; }
+  .cover h1 { font-size: 30pt; margin: 14pt 0 4pt; line-height:1.1; }
+  .cover .sub { font-size: 13pt; opacity: 0.96; max-width: 80%; }
+  .cover .by { margin-top: 16pt; font-size: 9.5pt; opacity: 0.9; border-top:1px solid rgba(255,255,255,.3); padding-top:8pt; }
+
+  /* At a glance tiles */
+  .glance { display:flex; gap:8pt; margin: 4pt 0 10pt; }
+  .tile { flex:1; border:1px solid #eadfdb; border-radius:8px; padding:9pt 11pt; background:#fcf6f4; }
+  .tile .v { font-size:16pt; font-weight:800; color:#b8341d; }
+  .tile .l { font-size:8.6pt; color:#666; }
+
+  .lead { font-size: 11pt; background: #fbf1ef; border-left: 4px solid #d6452b; padding: 11pt 15pt; border-radius: 5px; }
+  .callout { background: #eef7f0; border-left: 4px solid #1d7a3e; padding: 9pt 13pt; border-radius: 5px; }
+  .callout-blue { background: #eef3fb; border-left: 4px solid #2563eb; padding: 9pt 13pt; border-radius: 5px; }
+  .callout-amber { background: #fdf6ec; border-left: 4px solid #b45309; padding: 9pt 13pt; border-radius: 5px; }
+  .big { font-size: 12.5pt; font-weight: 700; }
+  .tag { display:inline-block; background:#1d7a3e; color:#fff; font-size:7.5pt; padding:1pt 6pt; border-radius:4px; vertical-align: middle; }
+  .tag-dev { background:#b45309; }
+  .pagebreak { page-break-before: always; }
+
+  /* Timeline */
+  .timeline { display:flex; gap:5pt; margin:10pt 0; }
+  .tstep { flex:1; border-top:4px solid #d6452b; padding:6pt 6pt 2pt; background:#faf6f5; border-radius:0 0 5px 5px; }
+  .tstep.done { border-top-color:#1d7a3e; }
+  .tstep.dev { border-top-color:#b45309; }
+  .tstep .s { font-size:8pt; font-weight:800; color:#b8341d; }
+  .tstep.done .s { color:#1d7a3e; } .tstep.dev .s { color:#b45309; }
+  .tstep .t { font-size:8.4pt; font-weight:700; }
+  .tstep .d { font-size:7.6pt; color:#777; }
+
+  .two { display:flex; gap:10pt; }
+  .two > div { flex:1; }
+  .price-hero { background:#1d7a3e; color:#fff; border-radius:8px; padding:13pt 16pt; text-align:center; }
+  .price-hero .v { font-size: 21pt; font-weight: 800; }
+  .incl { color:#2a2a2a; } .excl { color:#777; }
+  .assume { background:#f4f4f6; border:1px solid #e3e3e8; border-radius:6px; padding:8pt 12pt; font-size:9pt; color:#555; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wordmark">DOUGH<span class="dot">·</span>BOSS &nbsp;|&nbsp; DIGITAL OS</div>
+  <h1>Digital Turnaround Proposal</h1>
+  <div class="sub">Your own ordering, shop-floor &amp; growth system — zero commission, every customer yours.</div>
+  <div class="by"><strong>Prepared by Elie D.</strong> for the Dough Boss ownership team &nbsp;·&nbsp; 17 June 2026 &nbsp;·&nbsp; Confidential &nbsp;·&nbsp; Site backup completed before implementation</div>
+</div>
+
+<div class="glance">
+  <div class="tile"><div class="v">$0</div><div class="l">per-order commission (vs 7–35% on the apps)</div></div>
+  <div class="tile"><div class="v">≈$4.5–6k</div><div class="l">to start (first 2 weeks, mate's rate)</div></div>
+  <div class="tile"><div class="v">~2–5 mo</div><div class="l">setup pays back from app savings*</div></div>
+  <div class="tile"><div class="v">$800 + 5%</div><div class="l">weekly base + a share of online sales</div></div>
+</div>
+
+<p class="lead">Dough Boss already has brand equity, <strong>three shops (Bankstown, Revesby, Roselands)</strong>, a proven food offer and a working website. This turns that brochure-style site into <strong>DoughBoss Digital OS</strong> — orders land <strong>instantly on a screen in each kitchen</strong>, customers pay by card, and you keep <strong>100% of every dollar and 100% of your customers</strong>. The kitchen order board (Phase 1) is <strong>already in development</strong>.</p>
+
+<p class="callout-amber"><strong>Straight up:</strong> this is a <strong>large, multi-month build</strong> — a real software platform across three shops, payments and live kitchens, not a website refresh. Even with AI accelerating the work it takes serious <strong>time, expertise, testing and energy</strong>. It's staged so you fund it in sensible steps and see value early — and my fee is a <strong>genuine 50% mate's rate</strong>.</p>
+
+<h2><span class="n">1</span>Executive summary</h2>
+<p>We transform the website into <strong>DoughBoss Digital OS</strong> — a direct <strong>ordering, shop-operations and marketing platform</strong> — built in stages, inside the existing site, without disrupting the live business. We prove real online ordering and a live kitchen screen first, then expand into payments, marketing, multi-shop reporting and growth. You own the system, the orders and the customers.</p>
+
+<h2><span class="n">2</span>Where you are today</h2>
+<ul>
+  <li><strong>43 menu items already on the site</strong> — not yet wired into ordering, and the menu has a display bug (<em>Flat Bread 11"</em> shows empty).</li>
+  <li>The ordering engine is installed but in a <strong>demo state</strong> (US dollars, generic toppings, empty live menu).</li>
+  <li><strong>No live kitchen view</strong> and <strong>no online card payment</strong> yet.</li>
+  <li><strong>Marketing not measured:</strong> no SEO plugin, <strong>66/66 images missing “alt” text</strong>, no Facebook/TikTok/Google tracking. Catering/wholesale leads aren't captured.</li>
+</ul>
+
+<h2><span class="n">3</span>The real tangible value</h2>
+<table>
+  <tr><th>What you gain</th><th>Why it's real money / real value</th></tr>
+  <tr><td><strong>Commission kept</strong></td><td>Every direct order avoids a 7–35% app cut — thousands a month back in your pocket (tables in §6).</td></tr>
+  <tr><td><strong>A customer database you own</strong></td><td>Names, phones, order history across all shops — an asset the apps never give you, worth more each month.</td></tr>
+  <tr><td><strong>Fewer missed / wrong orders</strong></td><td>Live screens + alerts → fewer refunds, remakes and angry calls.</td></tr>
+  <tr><td><strong>Faster kitchens</strong></td><td>One-tap flow speeds the rush — more orders out per hour.</td></tr>
+  <tr><td><strong>A growth engine</strong></td><td>Ads to your own customers get cheaper over time; catering/wholesale leads finally followed up.</td></tr>
+  <tr><td><strong>Scale-ready</strong></td><td>Duplicates to new shops and future franchises — commission-free, every time.</td></tr>
+</table>
+
+<h2><span class="n">4</span>How it works</h2>
+<ol>
+  <li>Customer picks a shop, builds their pizza, and checks out (card online or pay-on-pickup).</li>
+  <li><strong>That shop's kitchen screen lights up with an alarm the instant the order lands.</strong></li>
+  <li>Staff tap once: <strong>Accept</strong> (+ time) &rarr; <strong>Preparing</strong> &rarr; <strong>Ready</strong>.</li>
+  <li>The customer watches live status on their phone.</li>
+</ol>
+
+<h2 class="pagebreak"><span class="n">5</span>The plan — stages &amp; timeline</h2>
+<div class="timeline">
+  <div class="tstep done"><div class="s">STAGE 0</div><div class="t">Backup &amp; access</div><div class="d">1–2 days · done</div></div>
+  <div class="tstep dev"><div class="s">STAGE 1</div><div class="t">Stabilise + board</div><div class="d">1–2 wks · in dev</div></div>
+  <div class="tstep"><div class="s">STAGE 2</div><div class="t">Ordering + pay</div><div class="d">2–4 wks</div></div>
+  <div class="tstep"><div class="s">STAGE 3</div><div class="t">Shop rollout</div><div class="d">1–2 wks</div></div>
+  <div class="tstep"><div class="s">STAGE 4</div><div class="t">Marketing</div><div class="d">2–4 wks +</div></div>
+  <div class="tstep"><div class="s">STAGE 5</div><div class="t">Scale</div><div class="d">ongoing</div></div>
+</div>
+<table>
+  <tr><th>Stage</th><th>What it involves</th></tr>
+  <tr><td><strong>0 — Backup &amp; access</strong> <span class="tag">DONE</span></td><td>Full site backup, confirm hosting/logins, set up a safe way to build without taking the live site down.</td></tr>
+  <tr><td><strong>1 — Stabilise + kitchen board</strong> <span class="tag tag-dev">IN DEV</span></td><td>Fix the menu bug, switch money to AUD + GST, wire your 43 items into ordering, stand up the <strong>live kitchen order board</strong> per shop.</td></tr>
+  <tr><td><strong>2 — Ordering MVP + payments</strong></td><td>Full pickup/delivery ordering, per-shop menus, <strong>online card payments</strong> (Stripe, AUD+GST), and getting found on Google (local SEO).</td></tr>
+  <tr><td><strong>3 — Shop rollout</strong></td><td>Tablet + printer per shop, staff training, soft-launch one store first, then all.</td></tr>
+  <tr><td><strong>4 — Marketing launch</strong></td><td>Facebook/Instagram &amp; TikTok ads from <strong>your own data</strong>, catering/wholesale lead funnel, automatic review requests.</td></tr>
+  <tr><td><strong>5 — Scale &amp; franchise readiness</strong></td><td>Multi-shop reporting, loyalty, gift cards, delivery rules, franchise admin controls.</td></tr>
+</table>
+
+<h2><span class="n">6</span>The numbers — what it saves</h2>
+<div class="assume"><strong>Assumptions (conservative, planning only):</strong> average order <strong>A$32</strong>; effective commission avoided <strong>15–25%</strong> (apps take 7–35%); month = 4.33 weeks; running cost ~$200/mo; build at the mate's rate (~$11k typical, §8). A$, ex-GST. Not guarantees.</div>
+<table>
+  <tr><th>Orders/week</th><th class="num">Weekly sales</th><th class="num">Saved/MONTH @15%</th><th class="num">Saved/MONTH @25%</th></tr>
+  <tr><td>200</td><td class="num">$6,400</td><td class="num"><strong>$4,160</strong></td><td class="num"><strong>$6,930</strong></td></tr>
+  <tr><td>350</td><td class="num">$11,200</td><td class="num"><strong>$7,280</strong></td><td class="num"><strong>$12,130</strong></td></tr>
+  <tr><td>500</td><td class="num">$16,000</td><td class="num"><strong>$10,400</strong></td><td class="num"><strong>$17,330</strong></td></tr>
+</table>
+<p class="callout"><strong>Across three shops, 350 orders/week keeps roughly $7,280–$12,130 every month</strong> that would otherwise go to the apps.</p>
+
+<h3>You vs the apps — even after my fee</h3>
+<p>The apps take ~20% of every order, forever. On your own system you pay a <strong>flat $800/week base plus 5% of online sales</strong> (see §8) and <strong>no per-order commission</strong> — so even after paying me you're ahead at every level, and the gap <em>widens</em> as you grow:</p>
+<table>
+  <tr><th>Orders/week</th><th class="num">Apps would take @20% /mo</th><th class="num">My fee (base + 5%) /mo</th><th class="num">You're better off by</th></tr>
+  <tr><td>200</td><td class="num">$5,542</td><td class="num">$4,157</td><td class="num"><strong>+$1,385/mo</strong></td></tr>
+  <tr><td>350</td><td class="num">$9,699</td><td class="num">$5,889</td><td class="num"><strong>+$3,810/mo</strong></td></tr>
+  <tr><td>500</td><td class="num">$13,856</td><td class="num">$6,928</td><td class="num"><strong>+$6,928/mo</strong></td></tr>
+</table>
+<p class="callout-blue"><span class="big" style="color:#2563eb;">You stay ahead of the apps — and the lead grows as you scale</span> — because the base is fixed, every extra order tilts further your way. The one-off setup (~$11k, at cost) pays back from this gap in about <strong>3 months</strong> at a typical 350 orders/week, and you keep the customer database the apps never give you. <span class="small">(Ad media is a separate, optional growth spend.)</span></p>
+
+<h2 class="pagebreak"><span class="n">7</span>Scope — what's included &amp; what's not</h2>
+<div class="two">
+  <div>
+    <h3 class="incl">Included in Phase 1</h3>
+    <ul>
+      <li>Stabilise site + fix the menu bug</li>
+      <li>AUD + GST, wire your 43-item menu</li>
+      <li>Per-shop menus &amp; the live kitchen order board (built)</li>
+      <li>Online ordering: pickup &amp; delivery</li>
+      <li>Stripe card payments (AUD, GST invoices)</li>
+      <li>Local SEO basics + Google Business per shop</li>
+      <li>Analytics + pixels + first ad campaign setup</li>
+      <li>Staff training + simple how-to docs</li>
+    </ul>
+  </div>
+  <div>
+    <h3 class="excl">Later / not in Phase 1</h3>
+    <ul>
+      <li>Loyalty, gift cards, advanced coupons</li>
+      <li>Driver dispatch / live delivery tracking</li>
+      <li>Native mobile app</li>
+      <li>Franchise portal &amp; multi-entity reporting</li>
+      <li>Ongoing ad management (separate retainer)</li>
+      <li>Third-party POS integration</li>
+      <li>Professional photography / content production</li>
+      <li>Hardware (tablets/printers) — supplied at cost</li>
+    </ul>
+  </div>
+</div>
+<h3>Key deliverables</h3>
+<p>Working storefront across the 3 shops · per-shop kitchen order boards · Stripe payments live · Google Business + local SEO · tracking pixels + first campaigns · admin training &amp; documentation.</p>
+
+<h2><span class="n">8</span>Investment &amp; how we work together</h2>
+<p>This splits into two clean parts: <strong>setup at cost</strong>, then a <strong>growth partnership</strong>.</p>
+<h3>Part 1 — Setup, charged at cost</h3>
+<p>The upfront fee <strong>isn't where I make money</strong> — it covers the <strong>real costs and overheads</strong> of building and switching on your system: the ordering platform, the <strong>Meta &amp; TikTok</strong> ad accounts, hosting, tools, and the first two weeks of development &amp; research. It's offered at roughly <strong>half of market</strong> as a friend — essentially at my own build cost. You approve and pay <strong>stage by stage</strong>; you're never locked in.</p>
+<table>
+  <tr><th>Phase 1 — full build</th><th class="num">Typical market</th><th class="num">My rate (50%)</th></tr>
+  <tr><td>End-to-end (stabilise → ordering → payments → rollout → marketing setup)</td><td class="num">$16,000 – $30,000</td><td class="num"><strong>$8,000 – $15,000</strong><br><span class="small">(typical ~$11,000)</span></td></tr>
+</table>
+<h3>Milestone payments (my rate)</h3>
+<table>
+  <tr><th>When</th><th>Covers</th><th class="num">Amount (A$)</th></tr>
+  <tr><td><strong>Now — to start</strong></td><td>Stage 0–1: stabilise, AUD/GST, wire menu, kitchen board + research &amp; social setup (first 2 weeks, ~70–90 hrs)</td><td class="num"><strong>$4,000 – $5,000</strong></td></tr>
+  <tr><td>Ordering + payments live</td><td>Stage 2: full ordering, Stripe, local SEO</td><td class="num">$3,000 – $6,000</td></tr>
+  <tr><td>Rollout + marketing</td><td>Stage 3–4: shop rollout, ads, lead funnel</td><td class="num">$1,000 – $4,000</td></tr>
+  <tr><td>+ Social media / ad test budget</td><td>First 2 weeks — <em>paid to Meta, not to me</em></td><td class="num">$500 – $1,000</td></tr>
+</table>
+<div class="price-hero" style="margin-top:8pt;">
+  <div style="opacity:.9; font-size:9pt;">To forward now to get started this fortnight (covers setup costs)</div>
+  <div class="v">≈ A$4,500 – $6,000</div>
+  <div class="small" style="color:#dff3e6;">incl. ~$500–$1,000 ad spend that goes straight to Meta</div>
+</div>
+
+<h3 class="pagebreak">Part 2 — Running it for you (the ongoing arrangement)</h3>
+<p>Once you're live, <strong>I fully run and maintain the whole system for a flat A$800/week base plus 5% of online sales.</strong> The <strong>base</strong> covers the labour and running costs so the lights are always on; the <strong>5% share</strong> keeps me directly invested in growing your sales — <strong>I only earn more when you sell more.</strong> Combined that's roughly <strong>10–15% of online sales</strong> (capped at 15%, and <em>shrinking</em> toward 10% as you grow), still well under the apps' 20–35% — and unlike them, you own every customer. <span class="small">(Ad media — the money paid to Meta/TikTok — is separate and your dial.)</span></p>
+<div class="two">
+  <div>
+    <h3 style="margin:6pt 0 2pt; font-size:11pt;">What the $800/week covers</h3>
+    <ul style="font-size:9.6pt;">
+      <li>Full maintenance &amp; uptime, monitored continuously</li>
+      <li>Hosting, security &amp; updates</li>
+      <li>Kitchen-screen &amp; staff support / on-call</li>
+      <li>Payment, refund &amp; order-issue handling</li>
+      <li>The marketing engine — <strong>Meta &amp; TikTok</strong> ads, local SEO, your customer database, catering funnel, review requests</li>
+      <li>Monthly reporting</li>
+      <li>Ongoing improvements &amp; new features (no extra build fee)</li>
+    </ul>
+  </div>
+  <div>
+    <h3 style="margin:6pt 0 2pt; font-size:11pt;">Why it's fair both ways</h3>
+    <ul style="font-size:9.6pt;">
+      <li><strong>Predictable base</strong> — the weekly base keeps it running, easy to budget</li>
+      <li><strong>Aligned upside</strong> — the 5% means I earn more only when your sales grow</li>
+      <li><strong>A fraction of app fees</strong> — ~10–15% vs 20–35%, and falling as you scale</li>
+      <li><strong>All-inclusive</strong> — labour + running costs in the base; no surprise invoices</li>
+      <li><strong>Reviewed together at 12 months</strong>; you stay the <strong>owner</strong> of every account</li>
+    </ul>
+  </div>
+</div>
+<p class="small">Assumptions: average order A$32; month = 4.33 weeks; $800/wk = $3,464/mo; app comparison at a typical 20% on the same sales.</p>
+<table>
+  <tr><th>Orders / week</th><th class="num">Monthly online sales</th><th class="num">Base /mo</th><th class="num">+ 5% of sales</th><th class="num">Total fee (% of sales)</th><th class="num">Apps @20%</th></tr>
+  <tr><td>200</td><td class="num">$27,712</td><td class="num">$3,464</td><td class="num">$1,386</td><td class="num"><strong>$4,157 (15.0%, capped)</strong></td><td class="num">$5,542</td></tr>
+  <tr><td>350</td><td class="num">$48,496</td><td class="num">$3,464</td><td class="num">$2,425</td><td class="num"><strong>$5,889 (12.1%)</strong></td><td class="num">$9,699</td></tr>
+  <tr><td>500</td><td class="num">$69,280</td><td class="num">$3,464</td><td class="num">$3,464</td><td class="num"><strong>$6,928 (10.0%)</strong></td><td class="num">$13,856</td></tr>
+</table>
+<p class="callout">Base + share still comes in <strong>under the apps at every level</strong> — and as you grow it falls toward <strong>~10% of sales</strong> while the apps stay at 20%+. <strong>Built-in cap:</strong> the combined fee never exceeds <strong>15% of online sales</strong>, so it can't drift toward app territory — the cap only bites below ~230 orders/week (at 200/wk the $4,850 base+5% is trimmed to $4,157).</p>
+
+<h2><span class="n">9</span>What it costs to run</h2>
+<table>
+  <tr><th>Item</th><th class="num">Monthly (A$)</th></tr>
+  <tr><td>Managed hosting</td><td class="num">$50 – $300</td></tr>
+  <tr><td>SMS / email notifications &amp; CRM</td><td class="num">$50 – $300</td></tr>
+  <tr><td>Card payments (Stripe)</td><td class="num">1.7% + 30c per order (no monthly fee)</td></tr>
+  <tr><td>Advertising media (your dial)</td><td class="num">$500 – $2,500</td></tr>
+  <tr><td>Tablet / printer per shop (one-off)</td><td class="num">$300–$900 / $400–$1,200</td></tr>
+</table>
+
+<h2><span class="n">10</span>What we need from you &amp; risks</h2>
+<div class="two">
+  <div>
+    <h3>To start</h3>
+    <ul>
+      <li>Sign-off + the first tranche</li>
+      <li>Final menu (prices, dietary tags) + photos</li>
+      <li>Each shop's address, hours, pickup/delivery + area</li>
+      <li>Stripe + bank + ABN details</li>
+      <li><strong>Meta Business</strong> (Facebook + Instagram) &amp; <strong>TikTok Business</strong> account logins/access</li>
+      <li>Website/hosting + Google Business access</li>
+      <li>A kitchen tablet + wifi per shop</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Risks &amp; handling</h3>
+    <ul>
+      <li><strong>Big project:</strong> staged — you fund &amp; approve each step</li>
+      <li><strong>Missed order:</strong> alarm + backup SMS + printed ticket</li>
+      <li><strong>Site breakage:</strong> backup + staging; live site stays up</li>
+      <li><strong>GST/pricing:</strong> AUD+GST from day one, tested</li>
+      <li><strong>Ad waste:</strong> start small, measure, scale what works</li>
+    </ul>
+  </div>
+</div>
+
+<h2><span class="n">11</span>Next step</h2>
+<p>To get moving this fortnight: <strong>approve the first tranche (≈ A$4,500–$6,000)</strong>, <strong>hand over the signed-off menu + photos + ABN/bank</strong>, and <strong>confirm shop details + access</strong>. We take your first real online order within days, and have the live kitchen board running in about 1–2 weeks.</p>
+<p class="lead" style="text-align:center; font-size:12.5pt;"><strong>The system is already built and waiting. Let's switch it on.</strong></p>
+
+<p class="disclaimer" style="margin-top:14pt;">Prepared by Elie D. All figures A$, ex-GST, conservative planning estimates only — not guarantees. Payback/Year-1 computed on the client's investment at the mate's rate; Stripe pricing to be re-confirmed before launch. Based on a live-site inspection on 17 June 2026 and the project reference brief. My fee is ~50% of typical market rate as a friend; the ad budget is a pass-through cost paid directly to the ad platforms.</p>
+
+</body>
+</html>

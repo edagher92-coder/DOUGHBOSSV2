@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dough Boss — Manoush, Pizza &amp; Catering (Demo)</title>
+	<meta name="description" content="Dough Boss — a taste of the Mediterranean since 2013: stone-baked manoush, pizza, pies, wraps and catering for 10–200 across Sydney. Interactive concept demo.">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="preconnect" href="https://doughboss.com.au" crossorigin>
+	<link rel="dns-prefetch" href="https://doughboss.com.au">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
+	<link rel="preload" as="image" href="https://doughboss.com.au/wp-content/uploads/Zaatar-768x432.jpg" fetchpriority="high">
+	<link rel="stylesheet" href="demo.css?v=20260626b">
+	<style>
+	.skip{position:absolute;top:-999px;left:12px;background:var(--ember);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+	.skip:focus{top:0;}
+	</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+	<div class="wrap">
+		<a class="brand" href="#about">DOUGH<span>BOSS</span></a>
+		<nav class="links" aria-label="Primary">
+			<a class="nl" href="#about">About</a>
+			<a class="nl" href="#menu">Menu</a>
+			<a class="nl" href="#catering">Catering</a>
+			<a class="nl" href="#locations">Locations</a>
+			<a class="nl nl-snow" href="#snow">Snow Boss</a>
+			<a class="nl" href="#kitchen">Kitchen</a>
+			<a class="nl" href="franchise.html">Partners</a>
+		</nav>
+		<a class="btn btn-ember nav-cta" href="#catering">Get a quote</a>
+	</div>
+</header>
+
+<main id="main">
+
+<!-- ============ MENU (default order view; About is the landing) ============ -->
+<section class="view" id="view-menu">
+	<section class="hero compact grain">
+		<div class="hero-bg" style="background-image:url('https://doughboss.com.au/wp-content/uploads/zaatar-w-jebneh-768x432.jpg');"></div>
+		<div class="hero-main"><div class="wrap">
+			<p class="eyebrow">The menu</p>
+			<h1 class="disp">Fresh from the<br><em>stone oven.</em></h1>
+			<p class="lead">Stone-baked manoush, pizza, pies and wraps &mdash; a taste of the Mediterranean, wholesome, halal, made to order. Pickup, delivery and catering across Sydney.</p>
+			<div class="cta-row">
+				<button type="button" class="btn btn-ember" data-cat="cat-manoush">Start your order
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+				<a class="btn btn-light" href="#catering">Catering quote</a>
+			</div>
+		</div></div>
+	</section>
+	<section class="mn"><div class="wrap">
+		<nav class="mn-jumpbar" aria-label="Jump to menu section">
+			<button type="button" class="mn-jump" data-cat="cat-manoush">Manoush</button>
+			<button type="button" class="mn-jump" data-cat="cat-pizza">Pizza</button>
+			<button type="button" class="mn-jump" data-cat="cat-pies">Pies</button>
+			<button type="button" class="mn-jump" data-cat="cat-wraps">Wraps</button>
+			<button type="button" class="mn-jump" data-cat="cat-desserts">Desserts</button>
+			<button type="button" class="mn-jump" data-cat="cat-drinks">Drinks</button>
+		</nav>
+		<div class="mn-legend">
+			<span class="mn-leg"><b class="mn-badge t-vg">VG</b> Vegan</span>
+			<span class="mn-leg"><b class="mn-badge t-v">V</b> Vegetarian</span>
+			<span class="mn-leg-note">Halal &middot; baked fresh daily &middot; pizza bread options: wholemeal +$2.50, gluten-free +$3.50 &middot; tap <b>Add</b> on any item to build your order.</span>
+		</div>
+
+		<div class="mn-cat" id="cat-manoush">
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="https://doughboss.com.au/wp-content/uploads/Zaatar-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Manoush</h2><p class="mn-cat-sub">Stone-baked flatbreads &mdash; served flat or folded, made fresh to order.</p></div></div>
+			<div class="mn-list">
+				<div class="mn-item"><img class="mn-it-img" src="https://doughboss.com.au/wp-content/uploads/Zaatar-150x150.jpg" alt="Zaatar manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar<span class="mn-tag t-vg">VG</span></span><span class="mn-lead"></span><span class="mn-it-p">$4.50</span></div><p class="mn-it-d">Dried thyme, sumac &amp; toasted sesame mixed with olive oil &mdash; flat or folded.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" src="https://doughboss.com.au/wp-content/uploads/zaatar-w-jebneh-150x150.jpg" alt="Zaatar &amp; cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar &amp; Cheese<span class="mn-tag t-v">V</span><span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Zaatar on one half, blended cheese on the other &mdash; flat or folded.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" src="https://doughboss.com.au/wp-content/uploads/Aged-Cheese-150x150.jpg" alt="Cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Cheese<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.50</span></div><p class="mn-it-d">A beautiful mix of our blended cheese, baked golden.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" src="https://doughboss.com.au/wp-content/uploads/Meat-150x150.png" alt="Meat manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Meat<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.00</span></div><p class="mn-it-d">Minced lamb blended with spices, onions &amp; tomatoes &mdash; flat or folded.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" src="https://doughboss.com.au/wp-content/uploads/soujouk-w-jebneh-150x150.jpg" alt="Meat &amp; cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Meat &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Minced lamb with spices, topped with melted cheese.</p></div></div>
+			</div>
+		</div>
+
+		<div class="mn-cat" id="cat-pizza">
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="https://doughboss.com.au/wp-content/uploads/Dough-Boss-Pie-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Pizza</h2><p class="mn-cat-sub">Stone-baked pizzas &mdash; add a wholemeal (+$2.50) or gluten-free (+$3.50) base.</p></div></div>
+			<div class="mn-list">
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">All Meat</span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Pepperoni, sujuk, chicken &amp; cheese on a BBQ sauce base.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Sujuk Deluxe</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Spiced beef sausage with tomato, capsicum, mushroom, olives &amp; cheese.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spinach Deluxe<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Spinach mix, mushroom, tomato, olives &amp; cheese.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Veggie Plus<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Cheese, tomato, olives, capsicum, onion &amp; mushroom on a garlic sauce base.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Pepperoni &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">A perfect blend of pepperoni &amp; cheese on a tomato sauce base.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Dough Boss Special<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Pepperoni, tomato, mushroom, capsicum, onion, black olives &amp; cheese on a tomato base.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Chicken &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken &amp; mushroom on garlic sauce, topped with cheese.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">BBQ Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">BBQ sauce base with chicken, onion, capsicum, mushroom &amp; cheese.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Peri Peri Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, mushroom, capsicum, onion &amp; cheese, finished with peri peri sauce.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Garlic Prawns</span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Prawns, mushroom, onion, capsicum &amp; cheese on a garlic-tomato base.</p></div></div>
+			</div>
+		</div>
+
+		<a class="mn-xsell" href="#catering"><b>Feeding a crowd?</b> See catering packages for 10&ndash;200 <span aria-hidden="true">&rarr;</span></a>
+
+		<div class="mn-cat" id="cat-pies">
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="https://doughboss.com.au/wp-content/uploads/Spinach-Cheese-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Pies</h2><p class="mn-cat-sub">Golden baked turnovers, filled fresh.</p></div></div>
+			<div class="mn-list">
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spinach &amp; Cheese<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$10.00</span></div><p class="mn-it-d">A triangular turnover of spinach, onion, lemon, spices &amp; cheese.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Haloumi<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Delicious haloumi cheese baked in a pie.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Chicken Pie</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Grilled chicken, capsicum, mushroom &amp; cheese.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Aged Cheese<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$10.00</span></div><p class="mn-it-d">Aged white cheese (shanklish) with diced tomatoes &amp; onions.</p></div></div>
+			</div>
+		</div>
+
+		<div class="mn-cat" id="cat-wraps">
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="https://doughboss.com.au/wp-content/uploads/zaatar-w-jebneh-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Wraps</h2><p class="mn-cat-sub">Rolled fresh &mdash; made your way.</p></div></div>
+			<div class="mn-list">
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar &amp; Veggie<span class="mn-tag t-vg">VG</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Zaatar with fresh tomato, cucumber, olives &amp; mint. Add labneh or cheese +$2.50 each.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Chicken Delight</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, fresh tomato, lettuce, pickled cucumber &amp; garlic mayo.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Ultimate Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, melted cheese, mushroom, capsicum &amp; lettuce, topped with mayo.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Dough Boss Wrap<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Sujuk, fresh tomato, pickled cucumber, lettuce &amp; cheese, topped with mayo.</p></div></div>
+			</div>
+		</div>
+
+		<div class="mn-cat" id="cat-desserts">
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="https://doughboss.com.au/wp-content/uploads/chocobanana-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Desserts</h2><p class="mn-cat-sub">Save room for the sweet side.</p></div></div>
+			<div class="mn-list">
+				<div class="mn-item"><img class="mn-it-img" src="https://doughboss.com.au/wp-content/uploads/chocobanana-150x150.jpg" alt="Choco banana" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Choco Banana</span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Nutella chocolate &amp; banana baked in a pie.</p></div></div>
+			</div>
+		</div>
+
+		<div class="mn-cat" id="cat-drinks">
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/drinks-banner.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Drinks</h2><p class="mn-cat-sub">To wash it all down.</p></div></div>
+			<div class="mn-list">
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spring Water</span><span class="mn-lead"></span><span class="mn-it-p">$3.50</span></div><p class="mn-it-d">Still, chilled.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Soft Drinks 600ml</span><span class="mn-lead"></span><span class="mn-it-p">$5.00</span></div><p class="mn-it-d">Coke, Sprite, Fanta or Solo &mdash; ice-cold.</p></div></div>
+				<div class="mn-item"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Juice</span><span class="mn-lead"></span><span class="mn-it-p">$4.50</span></div><p class="mn-it-d">Chilled fruit juice.</p></div></div>
+			</div>
+		</div>
+	</div></section>
+	<section class="final grain">
+		<p class="eyebrow" style="color:#fff;">Hungry yet?</p>
+		<h2 class="disp">Order it your way</h2>
+		<p>Pickup or delivery across Sydney &mdash; or let us cater the whole spread.</p>
+		<div class="cta-row" style="justify-content:center;">
+			<button type="button" class="btn btn-dark" data-cat="cat-manoush">Start an order</button>
+			<a class="btn btn-light" href="#catering">Catering packages</a>
+		</div>
+	</section>
+</section>
+
+<!-- ============ ABOUT (landing) ============ -->
+<section class="view" id="view-about">
+	<section class="hero grain">
+		<div class="hero-bg" style="background-image:url('https://doughboss.com.au/wp-content/uploads/Zaatar-768x432.jpg');"></div>
+		<div class="hero-main"><div class="wrap">
+			<p class="eyebrow">In the industry since 2013</p>
+			<h1 class="disp">A taste of the<br><em>Mediterranean.</em></h1>
+			<p class="lead">In the industry since 2013 — a contemporary Mediterranean bakery serving the finest, most authentic manoush, pizza and pies, baked fresh to order with a modern twist.</p>
+			<div class="cta-row">
+				<a class="btn btn-ember" href="#menu">See the menu
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+				<a class="btn btn-light" href="#catering">Catering</a>
+			</div>
+		</div></div>
+		<div class="hero-foot"><div class="wrap">
+			<div class="stat"><b>Since 2013</b><span>in the industry</span></div>
+			<div class="stat"><b>Fresh</b><span>baked to order</span></div>
+			<div class="stat"><b>Sydney</b><span>made &amp; delivered</span></div>
+			<div class="stat"><b>10–200</b><span>we cater</span></div>
+		</div></div>
+	</section>
+
+	<section class="show grain"><div class="wrap"><div class="grid">
+		<div>
+			<p class="eyebrow">Who we are</p>
+			<h2 class="disp">A taste of the Mediterranean,<br>since 2013.</h2>
+			<p class="about-lead">Dough Boss is a contemporary Mediterranean bakery preserving traditional dough recipes passed down through generations, while embracing a modern twist. We've been in the industry since 2013, using only the finest natural ingredients to craft simple, delicious manoush, pizza and pies — a taste of the Mediterranean in every bite.</p>
+			<div class="reassure"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d7d1c6" stroke-width="2" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg> Baked fresh daily &middot; recipes through generations</div>
+			<a class="btn btn-ember" href="#menu">See the menu
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+		</div>
+		<div class="show-img"><img src="https://doughboss.com.au/wp-content/uploads/Dough-Boss-Pie-768x432.jpg" alt="Fresh Dough Boss manoush" loading="lazy" decoding="async"></div>
+	</div></div></section>
+
+	<section class="steps"><div class="wrap">
+		<div class="head"><p class="eyebrow">What we do</p><h2 class="disp">Three ways we feed you</h2></div>
+		<div class="grid">
+			<div class="step"><div class="n">01</div><h3>Manoush</h3><p>Stone-baked flatbreads — zaatar, cheese, meat and more, served flat or folded, made to order.</p><a class="about-link" href="#menu">See the menu &rarr;</a></div>
+			<div class="step"><div class="n">02</div><h3>Pizza, pies &amp; wraps</h3><p>Stone-baked pizzas, golden pies and fresh-rolled wraps — a Mediterranean spread, made to order.</p><a class="about-link" href="#menu">Browse the menu &rarr;</a></div>
+			<div class="step"><div class="n">03</div><h3>Catering</h3><p>Feed 10 to 200 — office runs, footy nights and functions, on time every time.</p><a class="about-link" href="#catering">Get a quote &rarr;</a></div>
+		</div>
+	</div></section>
+
+	<section class="final grain">
+		<p class="eyebrow" style="color:#fff;">Hungry?</p>
+		<h2 class="disp">Let's get you fed</h2>
+		<p>Order manoush, pizza and more for pickup or delivery, or let us cater your next big one.</p>
+		<div class="cta-row" style="justify-content:center;">
+			<a class="btn btn-dark" href="#menu">See the menu</a>
+			<a class="btn btn-light" href="#catering">Catering quote</a>
+		</div>
+	</section>
+</section>
+
+<!-- ============ CATERING ============ -->
+<section class="view" id="view-catering">
+	<section class="hero compact grain">
+		<div class="hero-bg" style="background-image:url('https://doughboss.com.au/wp-content/uploads/Dough-Boss-Pie-768x432.jpg');"></div>
+		<div class="hero-main"><div class="wrap">
+			<p class="eyebrow">Catering · 10 to 200 guests</p>
+			<h1 class="disp">Catering that<br><em>feeds the room.</em></h1>
+			<p class="lead">Trays of stone-baked manoush, stone-baked pizza, golden pies and fresh sweets — wholesome, on time. Lock your date with a 30% deposit; balance later.</p>
+		</div></div>
+	</section>
+	<section class="steps"><div class="wrap">
+		<div class="head"><p class="eyebrow">How it works</p><h2 class="disp">Three steps, sorted</h2></div>
+		<div class="grid">
+			<div class="step"><div class="n">01</div><h3>Pick &amp; quote</h3><p>Choose a package or tell us your headcount and date. Your price is locked before you pay a cent.</p></div>
+			<div class="step"><div class="n">02</div><h3>Pay 30% deposit</h3><p>Secure your slot online by card. The balance is due 48 hours before the event.</p></div>
+			<div class="step"><div class="n">03</div><h3>Pickup or delivery</h3><p>We bake fresh and deliver across Sydney, or you collect &mdash; your call.</p></div>
+		</div>
+	</div></section>
+	<section class="app-slot"><div class="wrap">
+		<div class="head"><p class="eyebrow">Build your quote</p><h2 class="disp">Your date, your headcount, your price</h2></div>
+		<div class="app-card"><div id="db-catering-demo"></div>
+			<p class="app-note">30% deposit secures your date · balance due 48h before · card payment in production.</p>
+		</div>
+	</div></section>
+	<section class="faq"><div class="wrap">
+		<div class="head"><p class="eyebrow">Good to know</p><h2 class="disp">Catering FAQ</h2></div>
+		<div class="list">
+			<details><summary>How much notice do you need?</summary><p class="a">48 hours for most orders, and 72 hours for 40+ guests.</p></details>
+			<details><summary>Do you cater dietary requirements?</summary><p class="a">Yes — everything is halal, with vegetarian and vegan options on every package.</p></details>
+			<details><summary>What's the minimum order?</summary><p class="a">$150. The Lunch Run ($165) feeds 8–10 and is our most popular weekday option.</p></details>
+			<details><summary>Pickup or delivery?</summary><p class="a">Both. Delivery is free within 8km of a shop, $25 up to 15km, quoted beyond. Pickup is always free.</p></details>
+			<details><summary>How does the deposit work?</summary><p class="a">A 30% deposit secures your date. The balance is due 48 hours before the event.</p></details>
+		</div>
+	</div></section>
+</section>
+
+<!-- ============ LOCATIONS ============ -->
+<section class="view" id="view-locations">
+	<section class="hero compact grain">
+		<div class="hero-bg" style="background-image:url('https://doughboss.com.au/wp-content/uploads/Dough-Boss-Pie-768x432.jpg');"></div>
+		<div class="hero-main"><div class="wrap">
+			<p class="eyebrow">Find us &middot; three Sydney shops</p>
+			<h1 class="disp">Three shops,<br><em>one Dough Boss.</em></h1>
+			<p class="lead">Bankstown, Roselands &amp; Revesby &mdash; order ahead for pickup or delivery, or let us cater your next event. Fresh Mediterranean manoush, pizza and pies, baked daily.</p>
+		</div></div>
+	</section>
+	<section class="loc"><div class="wrap">
+		<div class="head"><p class="eyebrow">Find us</p><h2 class="disp">Our Sydney shops</h2></div>
+			<div class="shops">
+				<div class="card shop-card"><h3>Bankstown</h3><span class="shop-flag">Dough Boss <b>+</b> Snow Boss</span><p class="shop-addr">462 Chapel Rd, Bankstown NSW 2200<span class="shop-sub">Little Saigon Plaza &middot; cnr Kitchener Pde &amp; French Ave &middot; <a href="#snow">Snow Boss opening Aug 2026 &rarr;</a></span></p><dl class="shop-meta"><div><dt>Hours</dt><dd>Mon&ndash;Fri 7am&ndash;2pm</dd></div><div><dt>Phone</dt><dd><a href="tel:+61287646783">(02) 8764 6783</a></dd></div></dl><a class="shop-map" href="https://www.google.com/maps/search/?api=1&amp;query=Dough+Boss+462+Chapel+Rd+Bankstown+NSW+2200" target="_blank" rel="noopener">Open in Maps <span aria-hidden="true">&rarr;</span></a></div>
+				<div class="card shop-card"><h3>Roselands Centro</h3><p class="shop-addr">Shop MM03, Roselands Dr, Roselands NSW 2196<span class="shop-sub">Roselands Centro shopping centre</span></p><dl class="shop-meta"><div><dt>Hours</dt><dd>Daily 8am&ndash;3pm</dd></div><div><dt>Phone</dt><dd><a href="tel:+61466353133">0466 353 133</a></dd></div></dl><a class="shop-map" href="https://www.google.com/maps/search/?api=1&amp;query=Dough+Boss+Roselands+Centro+Roselands+Dr+NSW+2196" target="_blank" rel="noopener">Open in Maps <span aria-hidden="true">&rarr;</span></a></div>
+				<div class="card shop-card"><h3>Revesby</h3><p class="shop-addr">12/25 Selems Parade, Revesby NSW 2212<span class="shop-sub">Open seven days</span></p><dl class="shop-meta"><div><dt>Hours</dt><dd>7 days 6:30am&ndash;2:30pm</dd></div><div><dt>Phone</dt><dd><a href="tel:+61297742286">(02) 9774 2286</a></dd></div></dl><a class="shop-map" href="https://www.google.com/maps/search/?api=1&amp;query=Dough+Boss+12+25+Selems+Parade+Revesby+NSW+2212" target="_blank" rel="noopener">Open in Maps <span aria-hidden="true">&rarr;</span></a></div>
+			</div>
+			<div class="head head-sub"><p class="eyebrow">How to get your fix</p><h2 class="disp">Three ways to order</h2></div>
+		<div class="cards">
+			<a class="card loc-card" href="#menu"><div class="loc-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2.1" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8a3 3 0 016 0"/></svg></div><h3>Pickup &amp; delivery</h3><p class="loc-p">Order manoush, pizza, pies and wraps online for pickup or delivery across Sydney.</p><span class="loc-go">See the menu &rarr;</span></a>
+			<a class="card loc-card" href="#catering"><div class="loc-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2.1" aria-hidden="true"><path d="M4 19h16M6 19V9l6-4 6 4v10"/></svg></div><h3>Catering, 10&ndash;200</h3><p class="loc-p">Office runs, footy nights and functions — trays of manoush, pizza and sweets, on time.</p><span class="loc-go">Get a quote &rarr;</span></a>
+			<a class="card loc-card" href="#catering"><div class="loc-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2.1" aria-hidden="true"><path d="M3 7h13v8H3zM16 10h3l2 2v3h-5z"/><circle cx="7" cy="17" r="1.6"/><circle cx="18" cy="17" r="1.6"/></svg></div><h3>Wholesale &amp; supply</h3><p class="loc-p">We supply fresh-baked goods to caterers, schools, institutions and restaurants.</p><span class="loc-go">Enquire &rarr;</span></a>
+		</div>
+		<p class="loc-note">A Sydney Mediterranean bakery, in the industry since 2013 &middot; halal &middot; baked fresh daily.</p>
+	</div></section>
+</section>
+
+<!-- ============ KITCHEN ============ -->
+<section class="view" id="view-kitchen">
+	<section class="hero compact grain">
+		<div class="hero-bg" style="background-image:url('https://doughboss.com.au/wp-content/uploads/soujouk-w-jebneh-768x432.jpg');"></div>
+		<div class="hero-main"><div class="wrap">
+			<p class="eyebrow">Kitchen · Staff sign-in &amp; Live Order Board</p>
+			<h1 class="disp">Every order,<br><em>in real time.</em></h1>
+			<p class="lead">The shop-tablet flow: staff sign in once on the cinematic sign-in screen — it stays signed in, no timeout — then the Live Order Board takes over. New orders land instantly and move New → Preparing → Ready. Online and catering, one board.</p>
+			<div class="cta-row">
+				<a class="btn btn-ember" href="staff.html">Staff &amp; kitchen sign-in
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+				<a class="btn btn-light" href="#menu">Back to ordering</a>
+			</div>
+		</div></div>
+	</section>
+	<section class="app-slot light"><div class="wrap">
+		<div class="head"><p class="eyebrow">Staff only</p><h2 class="disp">Orders are behind sign-in</h2></div>
+		<div class="kitchen-lock">
+			<div class="kl-ico" aria-hidden="true">
+				<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="11" width="17" height="10" rx="2"/><path d="M7.5 11V8a4.5 4.5 0 0 1 9 0v3"/><circle cx="12" cy="16" r="1.4"/></svg>
+			</div>
+			<p class="kl-lead">The Live Order Board and the full orders platform are for staff. Nothing is shown here until you sign in &mdash; then you get incoming, today, upcoming, catering and history in one simple screen.</p>
+			<a class="btn btn-ember" href="staff.html">Staff &amp; kitchen sign-in
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+			<p class="app-note app-note-dark">Once signed in it stays signed in (no timeout) on the shop tablet, with sound alerts and per-shop routing.</p>
+		</div>
+	</div></section>
+</section>
+
+<!-- ============ SNOW BOSS (dual-brand) ============ -->
+<section class="view snow-theme" id="view-snow">
+	<div class="snow-field" id="snow-field" aria-hidden="true"></div>
+
+	<section class="sb-hero">
+		<div class="sb-hero-media" aria-hidden="true"><img src="assets/snowboss-hero.jpg" alt="" decoding="async"></div>
+		<div class="sb-glow" aria-hidden="true"></div>
+		<div class="wrap sb-hero-in">
+			<p class="eyebrow sb-eyebrow">Two brands. One destination.</p>
+			<h1 class="disp sb-title">Dough by day.<br><em>Snow by night.</em></h1>
+			<p class="lead sb-lead">Dough Boss and Snow Boss are coming together under one roof in Bankstown &mdash; stone-baked Mediterranean manoush by day, loaded snow desserts by night. One destination, two ways to treat yourself.</p>
+			<div class="cta-row">
+				<button type="button" class="btn sb-btn-amber" data-cat="snow-voucher">Claim student voucher
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+				<a class="btn sb-btn-ice" href="#catering">See catering</a>
+			</div>
+			<div class="sb-brands">
+				<div class="sb-brand"><b class="sb-bn">DOUGH<span>BOSS</span></b><span class="sb-bd">Mediterranean manoush &amp; pizza &middot; by day</span></div>
+				<div class="sb-x" aria-hidden="true">&times;</div>
+				<div class="sb-brand sb-brand-snow"><b class="sb-bn">SNOW<span>BOSS</span></b><span class="sb-bd">Loaded snow desserts &middot; by night</span></div>
+			</div>
+		</div>
+	</section>
+
+	<!-- coming soon -->
+	<section class="sb-soon"><div class="wrap">
+		<div class="sb-soon-card">
+			<p class="eyebrow sb-eyebrow">Bankstown &middot; 462 Chapel Rd</p>
+			<h2 class="disp sb-h2">Snow Boss is<br><em>coming soon.</em></h2>
+			<p class="sb-soon-lead">Our first dual-brand flagship lands at <b>462 Chapel Rd, Bankstown</b> &mdash; Dough Boss manoush fresh from the stone oven, and Snow Boss loaded snow under the same roof.</p>
+			<div class="sb-badge">Opening August 2026</div>
+			<div class="sb-soon-stats">
+				<div class="sb-stat"><b>Aug 2026</b><span>flagship opens</span></div>
+				<div class="sb-stat"><b>2-in-1</b><span>dough &amp; snow</span></div>
+				<div class="sb-stat"><b>Bankstown</b><span>462 Chapel Rd</span></div>
+			</div>
+		</div>
+	</div></section>
+
+	<!-- student voucher + follow gate -->
+	<section class="sb-voucher" id="snow-voucher"><div class="wrap sb-voucher-in">
+		<div class="sb-voucher-copy">
+			<p class="eyebrow sb-eyebrow">Students &middot; launch offer</p>
+			<h2 class="disp sb-h2">$5<br><em>student voucher.</em></h2>
+			<p class="sb-soon-lead">Unlock the launch drop: <b>$5 off</b> your Dough Boss manoush order. Follow both brands to claim &mdash; Bankstown only, valid from opening day.</p>
+			<ul class="sb-perks">
+				<li><span class="sb-tick" aria-hidden="true">&check;</span> $5 off your manoush order</li>
+				<li><span class="sb-tick" aria-hidden="true">&check;</span> Early access to the launch</li>
+			</ul>
+		</div>
+
+		<div class="sb-gate card">
+			<p class="sb-step"><span class="sb-step-n">1</span> Follow both brands</p>
+			<div class="sb-follows">
+				<a class="sb-follow" data-brand="doughboss" href="https://instagram.com/doughboss" target="_blank" rel="noopener">
+					<span class="sb-ig" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+					<span class="sb-follow-t"><b>Follow @doughboss</b><small>Dough Boss</small></span>
+					<span class="sb-follow-state">Follow</span>
+				</a>
+				<a class="sb-follow" data-brand="snowboss" href="https://instagram.com/snowbosssyd" target="_blank" rel="noopener">
+					<span class="sb-ig" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+					<span class="sb-follow-t"><b>Follow @snowbosssyd</b><small>Snow Boss</small></span>
+					<span class="sb-follow-state">Follow</span>
+				</a>
+			</div>
+
+			<form class="sb-form is-locked" id="sb-voucher-form" action="https://formspree.io/f/mbdvrkpz" method="POST" novalidate>
+				<p class="sb-step"><span class="sb-step-n">2</span> Claim your voucher</p>
+				<input type="hidden" name="voucher" value="Snow Boss student launch voucher — $5 manoush (Bankstown)">
+				<input type="hidden" name="_subject" value="New Snow Boss student voucher claim">
+				<input type="hidden" name="followed" id="sb-followed" value="">
+				<label class="sb-f"><span>Student email</span>
+					<input type="email" name="email" id="sb-email" placeholder="you@student.edu.au" autocomplete="email" required disabled>
+				</label>
+				<button type="submit" class="btn sb-btn-amber sb-claim" disabled>Claim voucher</button>
+				<p class="sb-lockmsg" id="sb-lockmsg"><span class="sb-lock" aria-hidden="true">&#128274;</span> Follow <b>@doughboss</b> and <b>@snowbosssyd</b> to unlock.</p>
+				<p class="sb-err" id="sb-err" role="alert"></p>
+				<p class="sb-privacy">Submitting adds your email to the Snow Boss launch list (sent via Formspree, US) for launch offers. Unsubscribe anytime &middot; <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+			</form>
+
+			<div class="sb-thanks" id="sb-thanks" hidden>
+				<div class="sb-check" aria-hidden="true">&check;</div>
+				<h3 class="disp">Voucher unlocked</h3>
+				<p class="sb-thanks-sub">Here's your student launch voucher &mdash; screenshot it or copy the code. We've emailed a copy too.</p>
+				<div class="sb-ticket">
+					<div class="sb-ticket-top"><span class="sb-ticket-brand">DOUGH<b>BOSS</b> &times; SNOW<b>BOSS</b></span><span class="sb-ticket-tag">Student launch</span></div>
+					<div class="sb-ticket-offer"><b>$5</b> off your manoush order</div>
+					<div class="sb-ticket-code"><div class="sb-ticket-code-l"><span>Voucher code</span><strong id="sb-code">SNOW-••••••</strong></div><button type="button" class="sb-copy" id="sb-copy">Copy</button></div>
+					<div class="sb-ticket-foot">Bankstown &middot; 462 Chapel Rd &middot; valid from opening day &middot; one per student</div>
+				</div>
+			</div>
+		</div>
+	</div></section>
+</section>
+
+</main>
+
+<footer class="foot">
+	<div class="ph">Bankstown · Roselands Centro · Revesby</div>
+	<div class="flinks"><a href="#about">About</a>· <a href="#menu">Menu</a>· <a href="#catering">Catering</a>· <a href="#locations">Locations</a>· <a href="#snow">Snow Boss</a>· <a href="#kitchen">Kitchen</a></div>
+	<div class="flinks"><a href="franchise.html">Partners</a>· <a href="licensing.html">Licensing</a>· <a href="staff.html">Staff</a>· <a href="privacy.html">Privacy Policy</a>· <a href="terms.html">Terms</a></div>
+	<div class="fsocial"><a href="https://instagram.com/snowbosssyd" target="_blank" rel="noopener" aria-label="SnowBoss on Instagram"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1.3" fill="currentColor" stroke="none"/></svg>SnowBoss &middot; @snowbosssyd</a></div>
+	<div>Concept demo · Dough Boss × Snow Boss — dough by day, snow by night</div>
+</footer>
+
+<div class="demo-ribbon">Concept demo · <b>orders &amp; payments are simulated</b> · details &amp; images illustrative.</div>
+
+<script>
+(function(){
+	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	function show(){
+		var key=(location.hash||'#about').replace('#','');
+		if(key==='order'){key='menu';}
+		if(key==='home'){key='about';}
+		if(!document.getElementById('view-'+key)){key='about';}
+		var view=document.getElementById('view-'+key);
+		document.querySelectorAll('.view').forEach(function(s){s.classList.remove('active');});
+		view.classList.add('active');
+		document.querySelectorAll('.links a.nl').forEach(function(a){
+			var on=a.getAttribute('href')==='#'+key;
+			a.classList.toggle('on',on);
+			if(on){a.setAttribute('aria-current','page');a.scrollIntoView({inline:'center',block:'nearest'});}
+			else{a.removeAttribute('aria-current');}
+		});
+		window.scrollTo(0,0);
+		// Move keyboard focus to the new view so AT users land in the right region.
+		try{view.setAttribute('tabindex','-1');view.focus({preventScroll:true});}catch(e){}
+		// Tell the cart (menu-order.js) which view is active so its FAB/drawer only
+		// show on the menu and don't leak across About/Catering/Snow/etc.
+		try{window.dispatchEvent(new CustomEvent('db:view',{detail:key}));}catch(e){}
+	}
+	window.addEventListener('hashchange',show);
+	// The skip link must not go through the hash router (an unknown hash would
+	// reset the page to About), so focus the active view directly instead.
+	var skip=document.querySelector('a.skip');
+	if(skip){skip.addEventListener('click',function(e){
+		e.preventDefault();
+		var v=document.querySelector('.view.active');
+		if(v){v.setAttribute('tabindex','-1');try{v.focus({preventScroll:true});}catch(err){v.focus();}}
+	});}
+	document.addEventListener('click',function(e){
+		var b=e.target.closest('[data-cat]');
+		if(!b){return;}
+		var el=document.getElementById(b.getAttribute('data-cat'));
+		if(!el){return;}
+		var y=el.getBoundingClientRect().top+window.pageYOffset-138;
+		window.scrollTo({top:y<0?0:y,behavior:reduce?'auto':'smooth'});
+	});
+	if('IntersectionObserver' in window){
+		var bar=document.querySelector('.mn-jumpbar');
+		if(bar){
+			var spy=new IntersectionObserver(function(es){
+				es.forEach(function(en){
+					if(en.isIntersecting){
+						var id=en.target.id;
+						bar.querySelectorAll('.mn-jump').forEach(function(j){j.classList.toggle('is-on',j.getAttribute('data-cat')===id);});
+					}
+				});
+			},{rootMargin:'-45% 0px -50% 0px',threshold:0});
+			document.querySelectorAll('#view-menu .mn-cat').forEach(function(c){spy.observe(c);});
+		}
+	}
+	show();
+}());
+</script>
+<script src="catering-demo.js?v=20260626b"></script>
+<script src="menu-order.js?v=20260626b"></script>
+<script src="snowboss.js?v=20260626b"></script>
+</body>
+</html>
