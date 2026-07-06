@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>Dough Boss — Full Build Breakdown</title>
+<style>
+  @font-face { font-family: "Bebas"; src: url("brand/BebasNeue.ttf") format("truetype"); font-weight: normal; font-style: normal; }
+  @page {
+    size: A4; margin: 13mm 15mm 16mm;
+    @bottom-left { content: "Dough Boss · Full Build Breakdown"; font-size: 7.5pt; color: #b9b9b9; }
+    @bottom-right { content: "Prepared by Elie D.  ·  page " counter(page) "/" counter(pages); font-size: 7.5pt; color: #b9b9b9; }
+  }
+  @page :first { @bottom-left { content: ""; } @bottom-right { content: ""; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Liberation Sans", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #2a2a2a; font-size: 10pt; line-height: 1.38; margin: 0; }
+  h2 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: .5px; color: #b8341d; font-size: 17pt; margin: 8pt 0 4pt; padding-bottom: 2pt; border-bottom: 2px solid #f0c8c0; break-after: avoid; break-inside: avoid; }
+  h2 .n { display:inline-block; background:#d6452b; color:#fff; width:19pt; height:19pt; line-height:19pt; text-align:center; border-radius:50%; font-family:"Liberation Sans",sans-serif; font-size:9.5pt; font-weight:700; margin-right:6pt; vertical-align: middle; }
+  h3 { color: #7c2414; font-size: 10.6pt; margin: 6pt 0 2pt; break-after: avoid; }
+  p { margin: 3pt 0; }
+  ul, ol { margin: 2pt 0 2pt 15pt; }
+  li { margin: 0.5pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 9.2pt; break-inside: avoid; }
+  th, td { border: 1px solid #e2e2e2; padding: 4pt 7pt; text-align: left; vertical-align: top; }
+  th { background: #f7e6e1; color: #7c2414; font-weight: 700; }
+  tr:nth-child(even) td { background: #fcfbfb; }
+  tr { break-inside: avoid; }
+  .num { text-align: right; white-space: nowrap; }
+  .muted { color:#777; } .small { font-size: 8.8pt; color: #6a6a6a; }
+  .mono { font-family: "Liberation Mono", monospace; font-size: 8.6pt; background:#f5f2ec; padding:1px 4px; border-radius:3px; }
+  .disclaimer { font-size: 8.4pt; color: #888; font-style: italic; }
+  .cover { background: linear-gradient(135deg,#d6452b 0%, #a82a16 100%); color: #fff; margin: -15mm -15mm 12pt; padding: 46pt 15mm 24pt; }
+  .wordmark { font-family:"Bebas",sans-serif; font-size: 15pt; letter-spacing: 3px; opacity:.95; }
+  .wordmark .dot { color:#ffd9cf; }
+  .cover h1 { font-family:"Bebas",sans-serif; font-weight:normal; font-size: 30pt; margin: 12pt 0 4pt; line-height:1.05; letter-spacing:.5px; }
+  .cover .sub { font-size: 12pt; opacity: 0.96; max-width: 90%; }
+  .cover .by { margin-top: 12pt; font-size: 9pt; opacity: 0.9; border-top:1px solid rgba(255,255,255,.3); padding-top:7pt; }
+  .link-box { background:#fff; border:1.5px solid #d6452b; border-radius:8px; padding:9pt 13pt; margin-top:10pt; }
+  .link-box .u { font-family:"Liberation Mono",monospace; font-size:10pt; font-weight:700; color:#b8341d; }
+  .glance { display:flex; gap:7pt; margin: 4pt 0 8pt; break-inside: avoid; flex-wrap: wrap; }
+  .tile { flex:1; min-width:100pt; border:1px solid #eadfdb; border-radius:8px; padding:8pt 10pt; background:#fcf6f4; }
+  .tile .v { font-size:14pt; font-weight:800; color:#b8341d; }
+  .tile .l { font-size:8pt; color:#666; }
+  .lead { font-size: 10.4pt; background: #fbf1ef; border-left: 4px solid #d6452b; padding: 8pt 13pt; border-radius: 5px; break-inside: avoid; }
+  .callout { background: #eef7f0; border-left: 4px solid #1d7a3e; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .callout-blue { background: #eef3fb; border-left: 4px solid #2563eb; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .callout-amber { background: #fdf6ec; border-left: 4px solid #b45309; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .tag { display:inline-block; background:#1d7a3e; color:#fff; font-size:7.2pt; font-weight:800; padding:1pt 6pt; border-radius:4px; vertical-align: middle; }
+  .tag-dev { background:#b45309; }
+  .tag-live { background:#2563eb; }
+  .two { display:flex; gap:10pt; break-inside: avoid; }
+  .two > div { flex:1; }
+  .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wordmark">DOUGH<span class="dot">·</span>BOSS &nbsp;|&nbsp; DIGITAL OS</div>
+  <h1>Full Build Breakdown</h1>
+  <div class="sub">Every module, every integration, every page of the demo — what it is, how it works, and what it's built on.</div>
+  <div class="link-box">Live demo: <span class="u">https://edagher92-coder.github.io/DOUGHBOSSV2/</span><br><span class="small" style="color:#555">Staff / kitchen sign-in: <span class="mono">/staff.html</span> &nbsp;·&nbsp; Partner/licensing page: <span class="mono">/franchise.html</span></span></div>
+  <div class="by">Prepared by Elie D. for the Dough Boss ownership team &nbsp;·&nbsp; 1 July 2026</div>
+</div>
+
+<div class="glance">
+  <div class="tile"><div class="v">25</div><div class="l">plugin classes / modules</div></div>
+  <div class="tile"><div class="v">13,339</div><div class="l">lines of PHP (includes/admin)</div></div>
+  <div class="tile"><div class="v">6</div><div class="l">database tables</div></div>
+  <div class="tile"><div class="v">113</div><div class="l">commits, incl. 16 dedicated hardening passes</div></div>
+</div>
+
+<p class="lead">This is a complete, dependency-free WordPress plugin — no Composer, no npm, no bundler — that gives Dough Boss its own commission-free ordering platform: storefront, kitchen board, payments, a POS bridge, a voucher engine, catering, and staff tooling, all built from scratch and reviewed repeatedly for security and accessibility. Everything below is grounded in the actual code, not a plan.</p>
+
+<h2><span class="n">1</span>The Live Demo Site — What's There to Click Through</h2>
+<p>The demo runs on GitHub Pages at the link on the cover. It's built with plain HTML/CSS/JS (no server needed to view it) and mirrors what the real WordPress plugin does. Four pages, each with its own job:</p>
+<table>
+<tr><th style="width:22%">Page</th><th>What it shows</th></tr>
+<tr><td><strong>/ (index.html)</strong><br><span class="small muted">Manoush, Pizza &amp; Catering</span></td><td>The customer-facing storefront: browse the menu, build a pizza, see pricing. This is what a customer visiting the real site would use to order.</td></tr>
+<tr><td><strong>/staff.html</strong><br><span class="small muted">Staff &amp; Kitchen Sign-in</span></td><td>The front door for staff — a cinematic sign-in gate. Anything staff-only (the order board, the owner dashboard) sits behind this; there's no way to reach them without going through here first.</td></tr>
+<tr><td><strong>/backend.html</strong><br><span class="small muted">Orders</span></td><td>The Live Order Board — what kitchen staff see after signing in. New orders, one-tap Accept → Preparing → Ready, the catering pipeline, and order history.</td></tr>
+<tr><td><strong>/owner.html</strong><br><span class="small muted">Owner / Manager</span></td><td>The owner/manager dashboard — a read-only oversight view across all shops: live orders, catering pipeline, all-orders history, and daily figures.</td></tr>
+<tr><td><strong>/franchise.html</strong><br><span class="small muted">Partner with Dough Boss</span></td><td>A licensing/wholesale partner page — the pitch and terms for anyone looking to open a licensed Dough Boss/Snow Boss outlet.</td></tr>
+</table>
+<p class="small muted">The demo is a front-end preview of the real plugin's UX — it uses placeholder/fictional order data so it's safe to show anyone, but the actual WordPress plugin behind it is real, working code (detailed below), not a mockup.</p>
+
+<h2><span class="n">2</span>The Core Platform — What's Actually Built</h2>
+<table>
+<tr><th style="width:24%">Module</th><th>What it does</th><th style="width:16%">Status</th></tr>
+<tr><td><strong>Storefront &amp; pizza builder</strong></td><td>Menu (custom post type), a build-your-own-pizza tool, and a cookie/token-based guest cart — no account required to order.</td><td><span class="tag">Live</span></td></tr>
+<tr><td><strong>Checkout &amp; pricing</strong></td><td>Pickup/delivery checkout. Every price is recalculated on the server from scratch on every request — the browser's numbers are never trusted, so nothing can be tampered with. AUD with GST built in correctly.</td><td><span class="tag">Live</span></td></tr>
+<tr><td><strong>Card payments (Stripe)</strong></td><td>Full PaymentIntents flow: card entry, server-side confirmation, replay protection (a payment can't be reused on a second order). Switched off until live keys are entered.</td><td><span class="tag tag-dev">Built · off</span></td></tr>
+<tr><td><strong>Live Order Board (kitchen)</strong></td><td>Real-time kitchen screen. Orders appear instantly (see §3 — Mercure), with a 7-second automatic re-check as a safety net if the instant connection ever drops.</td><td><span class="tag">Live</span></td></tr>
+<tr><td><strong>Vouchers &amp; discounts</strong></td><td>Typo-resistant codes with a built-in check digit, QR-code claim/scan, and redemption that's provably impossible to use twice — even if two people scan the same code at the same instant. Includes the $5/$10 student campaign sharing one daily-capped pool.</td><td><span class="tag">Live</span></td></tr>
+<tr><td><strong>Catering</strong></td><td>Enquiry → quote → deposit → balance → fulfilled pipeline, with its own database table and a quote engine that (like checkout) never trusts numbers from the browser.</td><td><span class="tag">Live</span></td></tr>
+<tr><td><strong>Multi-shop routing</strong></td><td>Every order, voucher and shop setting is location-aware. One shop is configured today; more can be added through the admin without any new code.</td><td><span class="tag tag-dev">Built · 1 shop configured</span></td></tr>
+<tr><td><strong>Staff Console app</strong></td><td>A separate installable mini-app (Scan vouchers / manage vouchers / view the order board) that staff can use without ever logging into full WordPress admin.</td><td><span class="tag">Live</span></td></tr>
+<tr><td><strong>Notifications &amp; printing</strong></td><td>See §3 for the full breakdown — SMS, staff push alerts and kitchen receipt printing.</td><td><span class="tag tag-dev">Built · off</span></td></tr>
+</table>
+
+<h2><span class="n">3</span>Integrations — the POS bridge and everything else it talks to</h2>
+<p>Every integration below follows the same rule: <strong>dependency-free</strong> (no third-party SDK bundled — the plugin talks to each service directly over HTTP) and <strong>fully dormant until explicitly configured</strong>. If a setting isn't filled in, that feature doesn't run — the plugin behaves exactly as if it wasn't there.</p>
+
+<h3>POSPal (银豹) — the point-of-sale till bridge</h3>
+<p>This is the integration that connects the online voucher system to the physical till, so a voucher a customer claims online can be redeemed as a real discount when they pay in-store.</p>
+<ul>
+  <li><strong>How it authenticates:</strong> every request is signed — a timestamp plus an MD5 signature built from the shop's secret key and the request body. The secret key itself never appears in the request body, the URL, or any log — it's only ever used to compute that signature.</li>
+  <li><strong>What it does:</strong> when a customer claims a voucher, the plugin can grant it as a real member coupon on the shop's till (<span class="mono">grant_coupon()</span>); when it's redeemed, the plugin revokes it (<span class="mono">revoke_coupon()</span>) so it can't be used twice. Both of these are fully coded and connected end-to-end — this part of the build is finished.</li>
+  <li><strong>Status at Revesby:</strong> done. The $5 and $10 discount rules were created in the POSPal back office, entered into the plugin's settings, and verified live on 1 July 2026 — both rule IDs confirmed to match real POSPal coupon rules. Recommended: one real end-to-end test (claim → grant → redeem → revoke) before relying on it for customers.</li>
+  <li><strong>Current reach:</strong> POSPal is connected at Revesby only; connecting additional shops means requesting POSPal credentials for each one and entering them the same way.</li>
+</ul>
+
+<h3>Stripe — card payments</h3>
+<p>PaymentIntents (not the older Charges API), created and verified entirely server-side. The secret key never leaves the server; the publishable key is the only thing sent to the browser. A completed payment is checked against the order amount and currency before the order is accepted, and the same payment can't be attached to two different orders.</p>
+
+<h3>Mercure — instant kitchen updates</h3>
+<p>Replaces the old "refresh every few seconds" kitchen board with real push updates: the moment an order is created or changes status, a tiny, privacy-safe signal (just "something changed, go refresh" — no customer details) is pushed to the board over Server-Sent Events. The board then re-fetches the real order data through the normal secure, logged-in route — the push message itself is never treated as trustworthy data. If Mercure isn't configured, the board simply falls back to checking every 7 seconds, so nothing ever breaks from this being off.</p>
+
+<h3>ClickSend — customer SMS</h3>
+<p>Texts a customer when their order is ready for pickup, and optionally when they claim a voucher. Authenticates with HTTP Basic auth (a username + API key, never logged). Phone numbers are auto-formatted for Australia. If SMS isn't configured, message sending is skipped silently — checkout and order flow are unaffected either way.</p>
+
+<h3>ntfy — staff push alerts</h3>
+<p>A near-free way to ping kitchen staff's phones the instant a new order comes in, separate from the order board itself. Carries no customer contact details — just a short "new order" heads-up.</p>
+
+<h3>Cloud receipt printing — CloudPRNT / Epson</h3>
+<p>Supports two printer protocols (Star CloudPRNT and Epson Server Direct Print). Unusually, there's no on-site print server required — the printer itself polls the plugin and pulls the next unprinted order as a ticket. Every poll must present a secret printer token or it's rejected. This is the kind of detail that makes "just add a receipt printer" simple later, since there's nothing extra to host.</p>
+
+<h2 class="pagebreak"><span class="n">4</span>Under the Hood — Data, Security &amp; Scale</h2>
+<div class="two">
+<div>
+<h3>Database</h3>
+<p>Six dedicated tables, all created and kept current automatically on plugin update:</p>
+<ul>
+  <li><span class="mono">doughboss_orders</span> &amp; <span class="mono">order_items</span> — every order and its line items</li>
+  <li><span class="mono">doughboss_locations</span> — the shops</li>
+  <li><span class="mono">doughboss_catering_enquiries</span> — the catering pipeline</li>
+  <li><span class="mono">doughboss_vouchers</span> &amp; <span class="mono">voucher_redemptions</span> — the voucher engine plus a permanent, unchangeable log of every redemption</li>
+</ul>
+<h3>Access &amp; roles</h3>
+<p>Two dedicated capabilities and a purpose-built <span class="mono">doughboss_kitchen</span> WordPress role, so a kitchen tablet login can be handed to staff with access to only the order board and voucher scanning — nothing else in WordPress admin.</p>
+</div>
+<div>
+<h3>Security principles applied throughout</h3>
+<ul>
+  <li>Every price and total is recomputed on the server — the browser is never the source of truth for money.</li>
+  <li>All database queries use parameterised statements; nothing is built by pasting values into SQL.</li>
+  <li>All state-changing actions require a verified session token; public read-only data (menu, shop list) is intentionally open.</li>
+  <li>Every secret (Stripe key, POSPal key, SMS key, printer token) is read from environment/settings, never hard-coded, never logged.</li>
+</ul>
+<h3>Review history</h3>
+<p>The codebase has been through <strong>16 separate hardening passes</strong> — dedicated review rounds covering security, WCAG accessibility (colour contrast, screen-reader labels, keyboard navigation), and everyday usability bugs — not a single pass, but repeated stress-testing against its own edge cases.</p>
+</div>
+</div>
+
+<h2><span class="n">5</span>What's Left</h2>
+<p>The remaining work is short and specific — business inputs and setup decisions, not open engineering problems:</p>
+<table>
+<tr><th style="width:30%">Item</th><th>What it needs</th></tr>
+<tr><td>Additional shops</td><td>POSPal credentials + shop details for each new location beyond Revesby, which is now connected and verified (see §3).</td></tr>
+<tr><td>Real menu &amp; business details</td><td>Final items/prices/photos, each shop's address/hours/delivery area, and ABN for tax invoices.</td></tr>
+<tr><td>Brand name confirmation</td><td>Lock in "Dough Boss" (vs. "Bite Pizzas" as a working name) before anything goes to print.</td></tr>
+<tr><td>Switch-on decisions</td><td>Card payments, SMS, staff push and printing are all built — each just needs an account/keys and a go-ahead.</td></tr>
+<tr><td>Hardware &amp; hosting</td><td>A kitchen tablet + wifi per shop, and moving off any free/basic hosting plan before real orders go live.</td></tr>
+</table>
+<p class="callout">Everything in this document is built and sitting in the codebase today. What turns it into a live, revenue-taking system is a short list of decisions and setup steps — not more development.</p>
+
+<p class="disclaimer" style="margin-top:10pt;">Prepared by Elie D. for internal use. Figures reflect the codebase as of 1 July 2026 (plugin v2.12.1). The demo site shows placeholder/fictional data for privacy; the plugin code it previews is real and described accurately above.</p>
+
+</body>
+</html>

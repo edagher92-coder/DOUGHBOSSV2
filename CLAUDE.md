@@ -1,75 +1,177 @@
-# CLAUDE.md — DoughBoss V2 Agent Context (main baseline)
+# CLAUDE.md — DoughBoss V2 Agent Context
 
-First-stop memory for agents working on `main`. Keep it current in the same PR as any change
-to version, schema, architecture, or release status.
+This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working on DoughBoss. Keep it current in the same PR as any feature that changes version, schema, architecture, release status, integrations, or deployment assumptions.
 
-## Current state
+## Current repo state
 
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
-- **This branch's scope:** slice 1 — **core plugin + CI + docs + packaging**. This is the first
-  release slice landing the platform on `main` incrementally (see "Release slices" below).
-- **Plugin version:** `2.0.0` (`DOUGHBOSS_VERSION`)
-- **DB schema version:** `1.0.0` (`DOUGHBOSS_DB_VERSION`)
-- **Requires:** WordPress 6.0+, PHP 7.4+ · **REST namespace:** `doughboss/v1` · **Text domain:** `doughboss` · **License:** GPL-2.0-or-later
+- **Primary platform branch under review:** `claude/funny-goodall-gsoog4`
+- **Open platform PR:** PR #2, draft, large Phase 2 branch. Treat it as a staging/integration branch, not a production release by default.
+- **Plugin version on the platform branch:** `2.15.0` (`DOUGHBOSS_VERSION`)
+- **DB schema version on the platform branch:** `1.8.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
+- **Requires:** WordPress 6.0+, PHP 7.4+
+- **REST namespace:** `doughboss/v1`
+- **Text domain:** `doughboss`
+- **License:** GPL-2.0-or-later
 
-DoughBoss is a commission-free restaurant ordering platform delivered as a WordPress plugin.
-The **full Phase 2 platform (2.15.0)** — Stripe, vouchers, POSPal, catering, KDS, notifications,
-demo site — lives on `claude/funny-goodall-gsoog4` (PR #2) and is restored on
-`claude/doughboss-v2-access-restore-f9idab` (PR #11). It lands on `main` slice by slice, not as
-one merge. Do not assume a feature exists on `main` just because it exists on the platform branch.
+The repository now contains both the WordPress plugin and supporting demo/docs/app assets. Do not assume a feature is deployed to production just because code exists in this branch. Confirm deployment separately.
 
-## Core plugin (this slice)
+## Product summary
 
-- Storefront menu (`doughboss_item` CPT + category taxonomy, price/type meta).
-- Custom pizza builder with server-trusted pricing.
-- Cookie/transient guest cart; pickup or delivery with configurable tax + delivery fee.
-- Orders in custom tables; customer order tracking by number + email.
-- wp-admin Orders screen + Settings page; order confirmation emails.
-- Shortcodes: `[doughboss_menu]` `[doughboss_builder]` `[doughboss_cart]` `[doughboss_order_tracking]`.
+DoughBoss is a commission-free restaurant ordering platform delivered as a WordPress plugin. It started as pizza/food ordering and now includes, on the current platform branch, a broader operating platform:
 
-### Key files
+- Storefront menu and custom pizza builder.
+- Guest cart and checkout with server-side pricing.
+- Pickup/delivery order capture and customer order tracking.
+- Admin orders/settings.
+- Multi-shop locations and order routing.
+- Live kitchen order board / KDS.
+- Stripe payment scaffolding/integration, off by default until configured.
+- Voucher/coupon system with staff scan tools.
+- POSPal integration work for POS mirroring.
+- Catering packages/enquiries/quote/deposit workflow.
+- Optional notifications/real-time/printer/SMS integrations, dormant until configured.
+- Static demo/marketing site and standalone staff console assets.
 
-- `doughboss.php` — header, constants, activation/deactivation, boot.
-- `includes/class-doughboss.php` — core loader/singleton.
-- `includes/class-doughboss-activator.php` — tables, defaults, capabilities.
-- `includes/class-doughboss-settings.php` — typed wrapper over `doughboss_settings`; use instead of raw `get_option()`.
-- `includes/class-doughboss-post-types.php` — menu CPT + taxonomy + meta.
-- `includes/class-doughboss-cart.php` — guest cart, server-side totals.
-- `includes/class-doughboss-order.php` — order persistence, status, tracking.
-- `includes/class-doughboss-rest-controller.php` — REST routes. Extract new domains into smaller controllers rather than growing this.
-- `admin/class-doughboss-admin.php` — wp-admin screens.
-- `public/css/`, `public/js/doughboss.js` — storefront assets.
-- `scripts/dev-check.sh` — verifier (`--strict` in CI). `.github/workflows/plugin-ci.yml` — CI. `build-zip.sh` — installable zip. `uninstall.php` — full data removal.
+## Release discipline
 
-## Release slices (toward `main`, per RELEASE_CHECKLIST.md / #8)
+The Phase 2 branch is intentionally broad. Stabilize it by splitting future work into small release PRs:
 
-1. **Core plugin + CI + docs + packaging** ← this slice
-2. Stripe checkout + webhooks
-3. Vouchers + staff scan console (`app/`)
-4. POSPal integration
-5. Catering workflow
-6. Notifications / printer / SMS / Mercure real-time
-7. Demo / static marketing site + Snow Boss content
+1. Core plugin stabilization, CI, docs, packaging.
+2. Stripe checkout and webhooks.
+3. Vouchers and staff scan console.
+4. POSPal integration.
+5. Catering workflow.
+6. Notifications, printer, SMS, Mercure/real-time.
+7. Demo/static marketing site and Snow Boss content.
+
+Every release should use `RELEASE_CHECKLIST.md`.
+
+## Key files and directories
+
+- `doughboss.php` — plugin header, constants, activation/deactivation hooks, boot entrypoint.
+- `includes/class-doughboss.php` — core loader/singleton; loads dependencies, migrations, and runtime components.
+- `includes/class-doughboss-activator.php` — DB creation/defaults/capabilities/roles.
+- `includes/class-doughboss-migrations.php` — versioned schema/data upgrade runner.
+- `includes/class-doughboss-settings.php` — typed wrapper around the `doughboss_settings` option; use this instead of raw `get_option()` for settings.
+- `includes/class-doughboss-post-types.php` — menu item CPT, category taxonomy, price/type/availability metadata.
+- `includes/class-doughboss-cart.php` — guest cart token, transient storage, line caps, server-side totals.
+- `includes/class-doughboss-order.php` — order persistence, order status, public/customer view, admin queries.
+- `includes/class-doughboss-rest-controller.php` — current large route/controller surface. Prefer extracting new domains into smaller controllers rather than growing this file.
+- `includes/class-doughboss-stripe.php` — Stripe client/payment helpers.
+- `includes/class-doughboss-voucher.php` and `includes/class-doughboss-coupon-code.php` — voucher engine and typo-resistant codes.
+- `includes/class-doughboss-pospal*.php` — POSPal integration modules.
+- `includes/class-doughboss-catering*.php` — catering package/enquiry/quote/deposit workflow.
+- `includes/class-doughboss-mercure.php`, `class-doughboss-ntfy.php`, `class-doughboss-sms.php`, `class-doughboss-printer.php` — optional external integration modules.
+- `admin/class-doughboss-admin.php` — wp-admin screens/settings/order board/admin JS hooks.
+- `public/js/` and `public/css/` — storefront, voucher, order board, and catering front-end assets.
+- `app/` — standalone staff console assets.
+- `demo/` — static demo/marketing site and Snow Boss view.
+- `docs/` — owner/dev/product documentation, reports, proposals, PDFs, and assets.
+- `scripts/dev-check.sh` — session-safe verifier; use `--strict` in CI.
+- `.github/workflows/plugin-ci.yml` — plugin verification/build/secret-pattern workflow.
+- `.github/workflows/pages.yml` — static demo Pages deploy workflow.
+- `build-zip.sh` — creates an installable `dist/doughboss.zip`.
+- `uninstall.php` — full plugin data removal.
+
+## Data model notes
+
+Known custom data areas include:
+
+- Orders and order items.
+- Shop/location routing.
+- Catering enquiries/packages/quotes/deposits.
+- Vouchers and voucher redemptions/audit trail.
+- Settings stored in `doughboss_settings`.
+- Cart/idempotency/rate-limit transient or option data.
+- Menu items as WordPress CPT `doughboss_item` with category taxonomy and meta.
+
+Before editing schema, inspect the current activator and migration files directly. `dbDelta()` is additive; schema changes usually require `create_tables()` changes plus an ordered migration step plus a DB version bump.
 
 ## Security invariants
 
-- Never commit API keys, tokens, passwords, webhook secrets, or customer PII. Prefer env vars.
-  Admin secret fields are write-only (blank = keep current; never echo stored values into HTML).
-- All money totals, discounts, taxes, delivery fees are recomputed **server-side**; client totals are display hints.
-- State-changing REST routes need `X-WP-Nonce` or capability checks; admin routes need capability checks.
-  Public reads are intentional only for public storefront data or independently-gated routes (e.g. order tracking by number + matching email).
-- Sanitize input, escape output. Use `$wpdb->prepare()` for variable SQL; interpolate only plugin-owned table names from `$wpdb->prefix`.
+- Never commit API keys, tokens, passwords, webhook secrets, private customer data, or live credentials.
+- Prefer environment variables for secrets. Admin secret fields must be write-only: blank means keep current, never echo stored values back into HTML.
+- All money totals, discounts, taxes, delivery fees, voucher effects, and payment amounts are recomputed server-side.
+- Browser/client totals are display hints only.
+- State-changing REST routes need `X-WP-Nonce` or capability checks.
+- Admin routes need capability checks.
+- Public read routes are intentional only when they expose public storefront data or are independently gated, such as order tracking by number + matching email.
+- Sanitize all input and escape all output.
+- Use `$wpdb->prepare()` for variable SQL. Interpolate only plugin-owned table names derived from `$wpdb->prefix`, with narrow comments where WPCS suppression is needed.
+- Avoid logging secrets or PII. Logs may include high-level status codes and safe diagnostic labels.
+- Integrations should be dormant until their `*_ready()` gate is true.
 
 ## Money-path requirements
 
-Changes to checkout, cart totals, or order amounts require code review, security review, strict
-CI pass, a staging smoke test, and test cases (or a written reason none are possible). High-value
-targets: `DoughBoss_Cart::totals()` across pickup/delivery/GST branches; custom pizza price
-recomputation from settings.
+Changes touching checkout, Stripe, vouchers, POSPal, invoices, refunds, deposits, or order totals require:
 
-## Verify before pushing
+- Code review.
+- Security review.
+- Strict verifier/CI pass.
+- Manual staging smoke test.
+- Test cases or a written reason why automated coverage is not possible in that PR.
+
+High-value test targets:
+
+- `DoughBoss_Cart::totals()` across pickup/delivery/GST branches.
+- Custom pizza price recomputation from settings.
+- Voucher preview vs redeem state transitions.
+- Atomic single-use voucher redeem and checkout-failure revert.
+- Stripe PaymentIntent amount/currency/status verification.
+- PaymentIntent replay protection.
+- Coupon check-character validation and normalization.
+
+## Verification
+
+Session-safe check:
 
 ```bash
-bash scripts/dev-check.sh --strict   # PHP + JS syntax
-bash build-zip.sh                    # installable dist/doughboss.zip
+bash scripts/dev-check.sh
 ```
+
+CI/strict check:
+
+```bash
+bash scripts/dev-check.sh --strict
+```
+
+Build installable plugin zip:
+
+```bash
+bash build-zip.sh
+```
+
+The strict verifier should fail on PHP syntax errors, JS syntax errors when Node is available, missing PHP in CI, or configured-but-missing phpcs in strict mode. Normal session mode stays non-blocking.
+
+## Agent roles
+
+Use this board for complex work:
+
+- **Product agent:** scope, release slice, customer value, rollout order.
+- **Engineering agent:** code structure, dependencies, performance, maintainability.
+- **Security agent:** secrets, auth, capabilities, REST, SQL, PII, payment/voucher abuse.
+- **QA agent:** tests, smoke scenarios, regression risk, staging checklist.
+- **Docs/release agent:** `CLAUDE.md`, `README`, `readme.txt`, manuals, changelog, release notes.
+- **UX/front-end agent:** checkout conversion, accessibility, KDS usability, mobile performance.
+
+When agents disagree, choose the smallest safe release that preserves the ability to roll back.
+
+## Current priorities
+
+1. Stabilize the Phase 2 branch with CI, release checklist, and refreshed agent memory.
+2. Split the large draft PR into smaller domain PRs.
+3. Fix remaining high-priority audit items, especially proxy-aware/atomic rate limiting.
+4. Add a minimal money-path test harness.
+5. Complete and verify Stripe on staging before claiming revenue readiness.
+6. Harden kitchen operations: chime, heartbeat, SLA timers, undo, and printer reprint.
+7. Keep demo/Snow Boss marketing pages clean without duplicating shared nav/footer logic.
+
+## Known gotchas
+
+- The current platform branch is ahead of the default/base branch and includes many off-by-default integrations. Inspect the target branch before making assumptions.
+- `includes/class-doughboss-rest-controller.php` is large. Prefer extracting new REST domains instead of adding more methods to it.
+- Demo assets and docs are useful, but plugin release safety comes first.
+- Static demo deploy workflow is separate from plugin CI.
+- Live-site deployment is not proven by repository state alone. Require explicit approval, backup, and smoke test before production.
+- Keep this file current. A stale `CLAUDE.md` creates cascading agent errors.

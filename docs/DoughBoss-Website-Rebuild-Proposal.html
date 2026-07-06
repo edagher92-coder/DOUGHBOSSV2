@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<title>Dough Boss — Website Rebuild &amp; Catering Launch · Proposal</title>
+<style>
+	@font-face{font-family:"Bebas";src:url("brand/BebasNeue.ttf") format("truetype");}
+	@page{size:A4 landscape;margin:0;}
+	*{box-sizing:border-box;}
+	html,body{margin:0;padding:0;}
+	body{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif;color:#0d0d0d;}
+	:root{--ink:#0d0d0d;--slate:#1a1a1a;--paper:#faf9f6;--mist:#6b6b6b;--line:#e4e1da;--ember:#E2231A;--green:#1f8a54;}
+	.disp{font-family:"Bebas",sans-serif;letter-spacing:.5px;font-weight:normal;}
+	.slide{position:relative;width:297mm;height:209.6mm;overflow:hidden;background:var(--paper);padding:12mm 15mm;page-break-after:always;}
+	.slide:last-child{page-break-after:auto;}
+	.top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:8mm;}
+	.top .wm{display:flex;align-items:center;gap:8px;}
+	.top .wm img{width:16px;height:16px;}
+	.top .wm b{font-family:"Bebas",sans-serif;letter-spacing:1.4px;font-size:14px;}
+	.top .sec{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#a39c8f;font-weight:700;}
+	.foot{position:absolute;left:15mm;right:15mm;bottom:8mm;display:flex;justify-content:space-between;font-size:8.5px;color:#aaa395;font-weight:600;}
+	.foot .pg{font-family:"Bebas",sans-serif;font-size:12px;letter-spacing:1px;color:#9a9385;}
+	.kick{font-family:"Bebas",sans-serif;letter-spacing:2px;text-transform:uppercase;font-size:13px;color:var(--ember);margin:0 0 4px;}
+	h1{font-family:"Bebas",sans-serif;font-weight:normal;font-size:40px;line-height:.98;margin:0 0 6px;letter-spacing:.5px;}
+	h2{font-family:"Bebas",sans-serif;font-weight:normal;font-size:25px;margin:0;letter-spacing:.5px;}
+	.lead{font-size:12.5px;color:var(--mist);line-height:1.55;margin:0;}
+	.cap{font-size:12.5px;color:var(--ink);font-weight:600;line-height:1.45;border-left:3px solid var(--ember);padding-left:11px;margin:11px 0 0;}
+	.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;}
+	.cards2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+	.card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:13px 15px;}
+	.card h3{font-family:"Bebas",sans-serif;font-weight:normal;letter-spacing:.5px;font-size:18px;margin:0 0 5px;}
+	.card p{margin:0;font-size:10.5px;color:var(--mist);line-height:1.45;}
+	.card.rec{border:2px solid var(--ember);}
+	.tag{display:inline-block;font-family:"Bebas",sans-serif;letter-spacing:.5px;font-size:11px;padding:2px 9px;border-radius:20px;}
+	.tag.rec{background:var(--ember);color:#fff;}
+	.tag.mut{background:#efeae2;color:#6b6b6b;}
+	ul.t{margin:6px 0 0;padding-left:15px;}
+	ul.t li{font-size:10px;color:var(--ink);line-height:1.5;}
+	.pro{color:var(--green);font-weight:700;}.con{color:#b3261e;font-weight:700;}
+	/* wireframe */
+	.wf{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+	.wf .wfb{background:#11111a;color:#cfcfda;font-family:"Bebas",sans-serif;letter-spacing:.5px;font-size:8px;text-align:center;padding:4px;}
+	.wf .row{display:flex;gap:4px;padding:4px;}
+	.wf .b{background:#efeae2;border-radius:4px;font-size:7.5px;color:#8a8377;text-align:center;padding:6px 3px;flex:1;font-weight:700;}
+	.wf .b.hero{background:linear-gradient(135deg,#23232a,#3a3a44);color:#fff;padding:14px 3px;}
+	.wf .b.em{background:var(--ember);color:#fff;}
+	.wf .b.dark{background:#15151a;color:#fff;}
+	.wf .b.tall{padding:11px 3px;}
+	table.mx{width:100%;border-collapse:collapse;font-size:10.5px;}
+	table.mx th{font-family:"Bebas",sans-serif;letter-spacing:.04em;font-size:11px;text-align:left;color:var(--mist);padding:7px 8px;border-bottom:1px solid var(--line);}
+	table.mx th.em{color:var(--ember);}
+	table.mx td{padding:7px 8px;border-bottom:1px solid #f1ece4;}
+	table.mx td.feat{font-weight:700;width:24%;}
+	.pkg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+	.pkc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;}
+	.pkc .nm{font-family:"Bebas",sans-serif;letter-spacing:.5px;font-size:16px;}
+	.pkc .sv{font-size:9px;color:var(--mist);}
+	.pkc .pr{font-family:"Bebas",sans-serif;font-size:24px;color:var(--ember);margin-top:4px;}
+	.pkc .inc{font-size:9px;color:var(--ink);margin-top:3px;line-height:1.35;}
+	.stack{display:flex;flex-direction:column;gap:5px;}
+	.srow{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 11px;}
+	.srow .n{width:20px;height:20px;border-radius:50%;background:var(--ink);color:#fff;font-family:"Bebas",sans-serif;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+	.srow .tt{font-size:11px;}.srow .tt b{font-size:12px;}
+	.flow{display:flex;align-items:stretch;gap:0;}
+	.fst{flex:1;background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px;text-align:center;}
+	.fst .h{font-family:"Bebas",sans-serif;letter-spacing:.5px;font-size:12px;}
+	.fst .p{font-size:8.5px;color:var(--mist);line-height:1.3;}
+	.far{display:flex;align-items:center;color:var(--ember);font-size:15px;width:18px;justify-content:center;}
+	.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+	.stp{background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px;}
+	.stp .ph{font-family:"Bebas",sans-serif;letter-spacing:.5px;color:var(--ember);font-size:12px;}
+	.stp h4{margin:2px 0 4px;font-size:12px;}
+	.stp p{margin:0;font-size:9.5px;color:var(--mist);line-height:1.4;}
+	.need{background:#11111a;color:#fff;border-radius:11px;padding:14px 16px;}
+	.need h3{font-family:"Bebas",sans-serif;font-weight:normal;letter-spacing:.5px;font-size:16px;margin:0 0 8px;}
+	.need li{font-size:10.5px;line-height:1.65;color:#dcdce6;}
+	.flex{display:flex;}.between{justify-content:space-between;}.center{align-items:center;}
+	.chk{display:flex;gap:8px;align-items:flex-start;font-size:10.5px;color:var(--ink);line-height:1.45;margin:5px 0;}
+	.chk .bx{width:13px;height:13px;border:2px solid var(--ember);border-radius:3px;flex:0 0 auto;margin-top:1px;}
+</style>
+</head>
+<body>
+
+<!-- 1 COVER -->
+<div class="slide" style="background:radial-gradient(120% 120% at 0% 0%, #2a0a07 0%, #160605 55%, #0d0403 100%);padding:0;">
+	<div style="position:absolute;inset:0;padding:18mm;color:#fff;display:flex;flex-direction:column;justify-content:space-between;">
+		<div class="flex between center">
+			<img src="brand/db-mono-white.svg" style="width:30px;" />
+			<div style="font-family:Bebas;letter-spacing:2px;font-size:12px;color:#caa99f;">PROPOSAL · JUNE 2026</div>
+		</div>
+		<div>
+			<img src="brand/wordmark-white.svg" style="width:210px;display:block;margin-bottom:16px;" />
+			<div style="font-family:Bebas;letter-spacing:2px;font-size:13px;color:#f0a58f;">Website Rebuild &amp; Catering Launch</div>
+			<h1 style="color:#fff;font-size:56px;line-height:.96;margin-top:8px;">CATERING THAT<br/>FEEDS THE ROOM.</h1>
+			<p class="lead" style="color:#d8c7c1;font-size:15px;max-width:185mm;margin-top:12px;">A complete rebuild of doughboss.com.au — operational functionality, GUI, front-end &amp; back-end integration and APIs — with <b style="color:#fff;">catering</b> as the new flagship and <b style="color:#fff;">pay-now</b> built in. Three variants, the improvements, and how we execute.</p>
+		</div>
+		<div class="flex between center" style="font-size:11px;color:#9a8079;">
+			<span>Prepared for the Owner · Bankstown · Revesby · Roselands</span>
+			<span style="font-family:Bebas;letter-spacing:1.5px;color:#f0a58f;">3 VARIANTS · IMPROVEMENTS · EXECUTION</span>
+		</div>
+	</div>
+</div>
+
+<!-- 2 OPPORTUNITY -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">The opportunity</div></div>
+	<p class="kick">Why rebuild, why now</p>
+	<h1>Make catering the engine — not an afterthought</h1>
+	<p class="lead" style="max-width:215mm;">Today the site sells single pizzas well. Catering is where the big, planned, high-margin orders live — and it's barely surfaced. The rebuild puts catering at the centre, keeps everyday ordering fast, and uses the <b>pay-now</b> layer we already built to turn enquiries into <b>deposit-secured, board-routed bookings</b>.</p>
+	<div class="cards3" style="margin-top:14px;">
+		<div class="card"><h3>Higher-value orders</h3><p>Catering baskets are $150–$850 vs a ~$36 walk-in order. One booking ≈ 5–20 normal orders, planned in advance.</p></div>
+		<div class="card"><h3>Own the relationship</h3><p>Commission-free, on your domain, with leads captured — recurring office &amp; club accounts become a sales pipeline you own.</p></div>
+		<div class="card"><h3>Pay-now ready</h3><p>The Stripe layer (2.5.0) already verifies payments server-side. Catering reuses it for deposits + balance — minimal new build.</p></div>
+	</div>
+	<p class="cap" style="margin-top:16px;">The brief: rebuild functionality, GUI, FE/BE integration and APIs — with catering and pay-now at the core.</p>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">02</span></div>
+</div>
+
+<!-- 3 THREE VARIANTS OVERVIEW -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">The three variants</div></div>
+	<p class="kick">Pick a direction</p>
+	<h1>Three ways to build it</h1>
+	<div class="cards3" style="margin-top:10px;">
+		<div class="card">
+			<div class="flex between center"><h3>A · The Wood-Fired Caterer</h3></div>
+			<div class="tag mut">Catering-first</div>
+			<div class="wf" style="margin:9px 0;">
+				<div class="wfb">doughboss.com.au</div>
+				<div class="row"><div class="b">nav</div><div class="b em">BOOK CATERING</div></div>
+				<div class="row"><div class="b hero">CATERING HERO</div></div>
+				<div class="row"><div class="b">pkg</div><div class="b">pkg</div><div class="b">pkg</div></div>
+				<div class="row"><div class="b">order strip</div></div>
+			</div>
+			<p>Catering is the flagship; single orders are the entry point. Boldest brand swing (ember glow).</p>
+		</div>
+		<div class="card rec">
+			<div class="flex between center"><h3>B · Dual-Engine</h3><span class="tag rec">RECOMMENDED</span></div>
+			<div class="tag mut">Balanced</div>
+			<div class="wf" style="margin:9px 0;">
+				<div class="wfb">doughboss.com.au</div>
+				<div class="row"><div class="b">nav</div><div class="b">order</div><div class="b em">catering</div></div>
+				<div class="row"><div class="b hero tall">ORDER NOW</div><div class="b hero tall">BOOK CATERING</div></div>
+				<div class="row"><div class="b">menu tiles</div><div class="b dark">catering band</div></div>
+				<div class="row"><div class="b">proof</div><div class="b">locations</div></div>
+			</div>
+			<p>Order &amp; catering co-equal. Protects daily ordering, grows catering, flexes toward A over time.</p>
+		</div>
+		<div class="card">
+			<div class="flex between center"><h3>C · Boss Mode</h3></div>
+			<div class="tag mut">Conversion-first</div>
+			<div class="wf" style="margin:9px 0;">
+				<div class="wfb">doughboss.com.au</div>
+				<div class="row"><div class="b">nav</div><div class="b em">ORDER · QUOTE</div></div>
+				<div class="row"><div class="b hero">ORDER NOW + store picker</div></div>
+				<div class="row"><div class="b dark">slim catering band</div></div>
+			</div>
+			<p>Lean, app-like, pay-upfront. Two actions only. Fastest to build &amp; highest conversion; least brand storytelling/SEO.</p>
+		</div>
+	</div>
+	<p class="cap" style="margin-top:12px;">Our recommendation: build <b>B</b>, dressed in <b>A's</b> wood-fired creative, with <b>C's</b> frictionless checkout. Best of all three.</p>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">03</span></div>
+</div>
+
+<!-- 4 VARIANT COMPARISON MATRIX -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">Variants · side by side</div></div>
+	<p class="kick">The trade-offs</p>
+	<h1>A vs B vs C</h1>
+	<table class="mx" style="margin-top:8px;">
+		<tr><th></th><th>A · Wood-Fired Caterer</th><th class="em">B · Dual-Engine (rec.)</th><th>C · Boss Mode</th></tr>
+		<tr><td class="feat">Homepage hero</td><td>Catering leads</td><td>Split: Order | Catering</td><td>Order + quote, lean</td></tr>
+		<tr><td class="feat">Best for</td><td>Catering as #1 growth driver</td><td>Protect ordering + grow catering</td><td>Max conversion, min content</td></tr>
+		<tr><td class="feat">Catering depth</td><td>Rich hub + on-site/truck</td><td>Rich hub (co-equal)</td><td>Quote form only</td></tr>
+		<tr><td class="feat">Brand storytelling / SEO</td><td class="pro">Strong</td><td class="pro">Strong</td><td class="con">Weaker</td></tr>
+		<tr><td class="feat">Risk</td><td>Dilutes daily-order habit</td><td>Low — most flexible</td><td>Thin brand, less organic reach</td></tr>
+		<tr><td class="feat">Build effort</td><td>Med–High</td><td>High (safest ROI)</td><td>Low–Med (fastest)</td></tr>
+	</table>
+	<p class="cap" style="margin-top:14px;">B is the safe, high-ceiling choice. If catering revenue proves dominant, the same build leans into A without a rebuild.</p>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">04</span></div>
+</div>
+
+<!-- 5 CATERING OFFER -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">The catering offer</div></div>
+	<p class="kick">The product to sell</p>
+	<h1>Packages, per-head &amp; the deposit model</h1>
+	<div class="pkg" style="margin-top:10px;">
+		<div class="pkc"><div class="nm">The Lunch Run</div><div class="sv">Serves 8–10 · corporate</div><div class="pr">$165</div><div class="inc">Mixed pizzas, garlic breads, salad, drinks</div></div>
+		<div class="pkc"><div class="nm">The Party Box</div><div class="sv">Serves 15–20 · parties</div><div class="pr">$320</div><div class="inc">Crowd-pleasers + a specialty, sides, drinks</div></div>
+		<div class="pkc"><div class="nm">The Footy Feed</div><div class="sv">Serves 25–30 · game day</div><div class="pr">$520</div><div class="inc">High-volume mix, sides, drinks</div></div>
+		<div class="pkc"><div class="nm">The Big Event</div><div class="sv">Serves 40–50 · functions</div><div class="pr">$850</div><div class="inc">Full spread, custom build available</div></div>
+	</div>
+	<div class="cards3" style="margin-top:13px;">
+		<div class="card"><h3>Per-head &amp; rules</h3><p><b>$19/head</b> custom (min 10) · min order <b>$150</b> · lead time <b>48 hrs</b> (72 hrs for 40+) · delivery free within 8 km, $25 to 15 km, quote beyond.</p></div>
+		<div class="card"><h3>Deposit via pay-now</h3><p><b>30% deposit</b> at booking (Stripe), <b>balance auto-charged 24 hrs prior</b> (or pay-on-pickup). Routes by postcode to the nearest shop's kitchen board.</p></div>
+		<div class="card"><h3>Upsells &amp; B2B</h3><p>Dessert platter +$45 · GF/vegan +$6/pizza · keep-warm setup +$35. Pursue <b>SME office accounts</b> &amp; <b>sports/community clubs</b> (recurring).</p></div>
+	</div>
+	<div class="foot"><span>Indicative — confirm pricing &amp; policy</span><span class="pg">05</span></div>
+</div>
+
+<!-- 6 CATERING PAGE BLUEPRINT -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">Catering page</div></div>
+	<p class="kick">The page that converts</p>
+	<h1>Catering page blueprint</h1>
+	<div class="flex" style="gap:16px;margin-top:8px;">
+		<div style="flex:1;">
+			<div class="stack">
+				<div class="srow"><span class="n">1</span><span class="tt"><b>Hero</b> — "Catering that feeds the room" + Build Your Quote</span></div>
+				<div class="srow"><span class="n">2</span><span class="tt"><b>Social proof</b> — 4.9 from 300+ events</span></div>
+				<div class="srow"><span class="n">3</span><span class="tt"><b>Packages</b> — 4 cards, per-head, Select</span></div>
+				<div class="srow" style="border-color:var(--ember);"><span class="n" style="background:var(--ember);">4</span><span class="tt"><b>Quote builder</b> — headcount · date · pickup/delivery · shop · live deposit</span></div>
+				<div class="srow"><span class="n">5</span><span class="tt"><b>How it works</b> · <b>Gallery</b> · <b>Reviews</b> · <b>FAQ</b></span></div>
+				<div class="srow"><span class="n">6</span><span class="tt"><b>Final CTA band</b> + 3 shop details</span></div>
+			</div>
+		</div>
+		<div style="flex:1;">
+			<div style="font-family:Bebas;letter-spacing:1px;font-size:14px;margin-bottom:8px;">THE CONVERSION FLOW</div>
+			<div class="flow">
+				<div class="fst"><div class="h">QUOTE</div><div class="p">headcount, date, shop</div></div>
+				<div class="far">&#8594;</div>
+				<div class="fst" style="border-color:var(--ember);"><div class="h" style="color:var(--ember);">PAY DEPOSIT</div><div class="p">Stripe · Apple/Google Pay</div></div>
+				<div class="far">&#8594;</div>
+				<div class="fst"><div class="h">CONFIRMED</div><div class="p">order # · balance due</div></div>
+				<div class="far">&#8594;</div>
+				<div class="fst"><div class="h">KITCHEN</div><div class="p">routed to the shop board</div></div>
+			</div>
+			<p class="cap" style="margin-top:12px;">The single most important moment is the <b>Pay Deposit</b> click — that's where intent becomes a committed, board-routed booking. Make it wallet-first and frictionless.</p>
+			<p class="lead" style="margin-top:10px;font-size:11px;">Mobile: sticky "Build Your Quote" bar, one field per screen, tap-to-call, swipeable packages &amp; gallery.</p>
+		</div>
+	</div>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">06</span></div>
+</div>
+
+<!-- 7 DESIGN SYSTEM -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">Design system</div></div>
+	<p class="kick">A premium upgrade — same DNA</p>
+	<h1>Bold black-and-white, plus one spark</h1>
+	<div class="cards3" style="margin-top:10px;">
+		<div class="card"><h3>Type</h3><p><b>Bebas Neue</b> stays for display, labels &amp; buttons (never body). Add <b>Inter</b> for body — clean, legible, tabular figures for prices.</p></div>
+		<div class="card"><h3>Colour — add ONE accent</h3><p>Keep mono (Ink, Slate, Paper). Introduce <b style="color:var(--ember);">Ember Red #E2231A</b> for CTAs, "Pay Now" &amp; price tags only (&le;10% of any screen).</p></div>
+		<div class="card"><h3>System</h3><p>8px spacing scale, 12-col grid, rounded 8–12px cards, soft shadows, 150–250ms motion. Dark-slate food photography, consistent grade.</p></div>
+	</div>
+	<div class="flex" style="gap:10px;margin-top:14px;align-items:center;">
+		<span class="disp" style="font-size:30px;">PAY NOW</span>
+		<span style="background:var(--ember);color:#fff;font-family:Bebas;letter-spacing:1px;font-size:16px;padding:9px 18px;border-radius:8px;">BUILD YOUR QUOTE</span>
+		<span style="background:var(--ink);color:#fff;font-family:Bebas;letter-spacing:1px;font-size:16px;padding:9px 18px;border-radius:8px;">ORDER NOW</span>
+		<span style="border:1px solid var(--line);background:#fff;font-family:Bebas;letter-spacing:1px;font-size:16px;padding:9px 18px;border-radius:8px;">VIEW MENU</span>
+		<span style="margin-left:auto;font-family:Bebas;font-size:24px;color:var(--ember);">$165</span>
+	</div>
+	<p class="cap" style="margin-top:14px;">Upgrade from today: a body face, one disciplined accent, real spacing tokens and rounded corners — premium, not poster-flat. Plus a full accessibility pass (focus states, contrast, reduced-motion).</p>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">07</span></div>
+</div>
+
+<!-- 8 ARCHITECTURE -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">Architecture &amp; integration</div></div>
+	<p class="kick">Reuse what we built · add only what's new</p>
+	<h1>How it's wired</h1>
+	<div class="cards3" style="margin-top:10px;">
+		<div class="card"><h3>Front-end</h3><p><b>Hybrid FSE block theme</b> + vanilla-JS islands. Owner edits catering/marketing pages in WordPress; the ordering/builder/Stripe/KDS stay as shortcode islands (no rewrite). No bundler. CWV budget, self-host Bebas, conditional asset loading, AVIF/WebP images.</p></div>
+		<div class="card"><h3>Back-end</h3><p>New <b>catering package CPT</b> (owner-editable) + a new <b>enquiries table</b> with a lifecycle (new → quoted → deposit_paid → confirmed → balance → fulfilled). <b>Reuse</b> orders/locations/KDS routing. New admin "Catering" screen; DB version bump + migration.</p></div>
+		<div class="card"><h3>Payments &amp; APIs</h3><p>Extend pay-now: <b>two PaymentIntents</b> (deposit now, balance near event) + saved <b>Customer</b>; <b>webhook</b> (<code>payment_intent.succeeded</code>, refunds) as source of truth; refunds UI; GST tax invoices. Analytics from existing hooks; SEO schema (LocalBusiness/Menu/Offer/FAQ/Review).</p></div>
+	</div>
+	<div class="flow" style="margin-top:14px;">
+		<div class="fst"><div class="h">CATERING CPT</div><div class="p">packages, owner-edited</div></div>
+		<div class="far">&#8594;</div>
+		<div class="fst"><div class="h">ENQUIRY → QUOTE</div><div class="p">/catering/enquiry (REST)</div></div>
+		<div class="far">&#8594;</div>
+		<div class="fst" style="border-color:var(--ember);"><div class="h" style="color:var(--ember);">DEPOSIT PI</div><div class="p">Stripe + webhook</div></div>
+		<div class="far">&#8594;</div>
+		<div class="fst"><div class="h">CONFIRMED</div><div class="p">routes to KDS</div></div>
+		<div class="far">&#8594;</div>
+		<div class="fst"><div class="h">BALANCE PI</div><div class="p">charged near event</div></div>
+	</div>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">08</span></div>
+</div>
+
+<!-- 9 IMPROVEMENTS -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">Improvements</div></div>
+	<p class="kick">What gets better</p>
+	<h1>The upgrade list</h1>
+	<div class="cards2" style="margin-top:8px;">
+		<div class="card"><h3>Functionality</h3><ul class="t">
+			<li>Catering packages + live quote builder</li>
+			<li>Deposit + balance payments; lead/CRM capture</li>
+			<li>Per-shop location pages + shop routing</li>
+			<li>Order history / accounts (optional v1); gift cards (later)</li>
+			<li>Scheduled catering &amp; SMS notifications (roadmap)</li>
+		</ul></div>
+		<div class="card"><h3>GUI / UX</h3><ul class="t">
+			<li>Design-system upgrade: body font, ember accent, spacing tokens, rounded cards</li>
+			<li>Premium dark-slate imagery system</li>
+			<li>Mobile-first sticky CTAs &amp; wallet-pay</li>
+			<li>Full accessibility pass (focus, contrast, reduced-motion)</li>
+		</ul></div>
+		<div class="card"><h3>Front-end &amp; Back-end</h3><ul class="t">
+			<li>Hybrid FSE block theme + vanilla-JS islands</li>
+			<li>Performance budget / Core Web Vitals, self-hosted fonts</li>
+			<li>Catering CPT + enquiries table + lifecycle + admin screen</li>
+			<li>Reuse orders/locations/KDS; DB migration</li>
+		</ul></div>
+		<div class="card"><h3>APIs / Integration</h3><ul class="t">
+			<li>Stripe deposit+balance, Customer reuse, <b>webhook source-of-truth</b>, refunds, GST invoices</li>
+			<li>Analytics events from existing order hooks + Stripe webhooks (GA4, consent-aware)</li>
+			<li>SEO schema + 3 Google Business Profiles</li>
+		</ul></div>
+	</div>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">09</span></div>
+</div>
+
+<!-- 10 EXECUTION -->
+<div class="slide">
+	<div class="top"><div class="wm"><img src="brand/db-mono-black.svg"/><b>DOUGH BOSS</b></div><div class="sec">Execution</div></div>
+	<p class="kick">How we build it — parallel workstreams, draft-first</p>
+	<h1>The plan · ~8–10 weeks</h1>
+	<div class="steps" style="margin-top:10px;">
+		<div class="stp"><div class="ph">Phase 0 · Wk 1</div><h4>Discovery &amp; sign-off</h4><p>Pick a variant, confirm the catering offer, gather brand assets, get WordPress/Stripe access + a backup.</p></div>
+		<div class="stp"><div class="ph">Phase 1 · Wk 1–2</div><h4>Design system + pages</h4><p>Tokens, then homepage + catering + location templates designed and approved (draft theme preview).</p></div>
+		<div class="stp"><div class="ph">Phase 2 · Wk 3–4</div><h4>Theme build + content</h4><p>FSE block theme, marketing pages, plugin shortcode islands wired, copy &amp; imagery in.</p></div>
+		<div class="stp"><div class="ph">Phase 3 · Wk 5–6</div><h4>Catering back-end</h4><p>Package CPT, enquiries table + lifecycle, admin Catering screen, REST enquiry, KDS routing.</p></div>
+		<div class="stp"><div class="ph">Phase 4 · Wk 6–7</div><h4>Payments</h4><p>Deposit+balance PaymentIntents, webhook, refunds, GST invoices. Test mode → live keys.</p></div>
+		<div class="stp"><div class="ph">Phase 5 · Wk 8+</div><h4>SEO, analytics &amp; launch</h4><p>Schema, GBPs, GA4/consent, QA + a11y, go-live on a fresh backup, monitor first weekends.</p></div>
+	</div>
+	<p class="cap" style="margin-top:13px;">Every step is built on a <b>draft theme</b> and previewed — nothing touches production without your go-ahead and a fresh backup. Workstreams run in parallel to compress the timeline.</p>
+	<div class="foot"><span>Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg">10</span></div>
+</div>
+
+<!-- 11 WHAT WE NEED -->
+<div class="slide" style="background:#0d0403;color:#fff;">
+	<div class="top" style="border-color:#3a1a14;"><div class="wm"><img src="brand/db-mono-white.svg"/><b style="color:#fff;">DOUGH BOSS</b></div><div class="sec" style="color:#9a8079;">To go forward</div></div>
+	<p class="kick" style="color:#f0a58f;">Your call</p>
+	<h1 style="color:#fff;">What I need from you to accept &amp; start</h1>
+	<div class="flex" style="gap:14px;margin-top:12px;">
+		<div style="flex:1.1;" class="need">
+			<h3>Decisions</h3>
+			<div class="chk"><span class="bx"></span><span>Pick a <b>variant</b> — A, B (recommended) or C</span></div>
+			<div class="chk"><span class="bx"></span><span>Approve the <b>catering offer</b> (packages, prices, 30% deposit, lead times, delivery zones) — or adjust</span></div>
+			<div class="chk"><span class="bx"></span><span>Brand: keep <b>Dough Boss</b>, OK to add <b>Ember Red</b> accent + a body font?</span></div>
+			<div class="chk"><span class="bx"></span><span>Deposit vs full-prepay default · refund/cancellation policy</span></div>
+			<div class="chk"><span class="bx"></span><span>v1 scope: accounts / gift cards in now or later?</span></div>
+		</div>
+		<div style="flex:1;" class="need" style="background:#160605;">
+			<h3>Assets &amp; access</h3>
+			<div class="chk"><span class="bx"></span><span>Logo vector (have it) + real <b>food / event photos</b> — or approve AI-generated placeholders</span></div>
+			<div class="chk"><span class="bx"></span><span>3 shop details, hours, <b>ABN</b>, any reviews/testimonials</span></div>
+			<div class="chk"><span class="bx"></span><span><b>WordPress admin + hosting</b> access (via WPVibe) + go-ahead to work on a draft theme</span></div>
+			<div class="chk"><span class="bx"></span><span><b>Stripe</b>: test keys now, live keys + business entity at launch</span></div>
+			<div class="chk"><span class="bx"></span><span>Timeline &amp; budget sign-off · privacy/terms + GST invoicing details</span></div>
+		</div>
+	</div>
+	<div class="flex between center" style="margin-top:16px;">
+		<div style="font-family:Bebas;letter-spacing:1px;font-size:15px;color:#f0a58f;">RECOMMENDATION: Variant B — Dual-Engine, wood-fired creative, frictionless pay-now.</div>
+		<img src="brand/wordmark-white.svg" style="width:120px;opacity:.9;" />
+	</div>
+	<div class="foot"><span style="color:#9a8079;">Dough Boss · Website Rebuild &amp; Catering Launch</span><span class="pg" style="color:#9a8079;">11</span></div>
+</div>
+
+</body>
+</html>

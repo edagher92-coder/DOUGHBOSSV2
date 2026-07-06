@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>Dough Boss — How Vouchers, POSPal &amp; Scanning Work</title>
+<style>
+  @font-face { font-family: "Bebas"; src: url("brand/BebasNeue.ttf") format("truetype"); font-weight: normal; font-style: normal; }
+  @page {
+    size: A4; margin: 13mm 15mm 16mm;
+    @bottom-left { content: "Dough Boss · Voucher & POSPal System Explainer"; font-size: 7.5pt; color: #b9b9b9; }
+    @bottom-right { content: "Prepared by Elie D.  ·  page " counter(page) "/" counter(pages); font-size: 7.5pt; color: #b9b9b9; }
+  }
+  @page :first { @bottom-left { content: ""; } @bottom-right { content: ""; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Liberation Sans", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #2a2a2a; font-size: 10pt; line-height: 1.4; margin: 0; }
+  h2 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: .5px; color: #b8341d; font-size: 17pt; margin: 9pt 0 4pt; padding-bottom: 2pt; border-bottom: 2px solid #f0c8c0; break-after: avoid; break-inside: avoid; }
+  h2 .n { display:inline-block; background:#d6452b; color:#fff; width:19pt; height:19pt; line-height:19pt; text-align:center; border-radius:50%; font-family:"Liberation Sans",sans-serif; font-size:9.5pt; font-weight:700; margin-right:6pt; vertical-align: middle; }
+  h3 { color: #7c2414; font-size: 10.6pt; margin: 6pt 0 2pt; break-after: avoid; }
+  p { margin: 3pt 0; }
+  ul, ol { margin: 2pt 0 2pt 15pt; }
+  li { margin: 0.5pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 9.2pt; break-inside: avoid; }
+  th, td { border: 1px solid #e2e2e2; padding: 4pt 7pt; text-align: left; vertical-align: top; }
+  th { background: #f7e6e1; color: #7c2414; font-weight: 700; }
+  tr:nth-child(even) td { background: #fcfbfb; }
+  tr { break-inside: avoid; }
+  .small { font-size: 8.8pt; color: #6a6a6a; }
+  .mono { font-family: "Liberation Mono", monospace; font-size: 8.6pt; background:#f5f2ec; padding:1px 4px; border-radius:3px; }
+  .disclaimer { font-size: 8.4pt; color: #888; font-style: italic; }
+  .cover { background: linear-gradient(135deg,#d6452b 0%, #a82a16 100%); color: #fff; margin: -13mm -15mm 12pt; padding: 46pt 15mm 24pt; }
+  .wordmark { font-family:"Bebas",sans-serif; font-size: 15pt; letter-spacing: 3px; opacity:.95; }
+  .wordmark .dot { color:#ffd9cf; }
+  .cover h1 { font-family:"Bebas",sans-serif; font-weight:normal; font-size: 28pt; margin: 12pt 0 4pt; line-height:1.08; letter-spacing:.5px; }
+  .cover .sub { font-size: 12pt; opacity: 0.96; max-width: 92%; }
+  .cover .by { margin-top: 12pt; font-size: 9pt; opacity: 0.9; border-top:1px solid rgba(255,255,255,.3); padding-top:7pt; }
+  .lead { font-size: 10.4pt; background: #fbf1ef; border-left: 4px solid #d6452b; padding: 8pt 13pt; border-radius: 5px; break-inside: avoid; }
+  .callout { background: #eef7f0; border-left: 4px solid #1d7a3e; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .callout-amber { background: #fdf6ec; border-left: 4px solid #b45309; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .callout-red { background: #fbeceb; border-left: 4px solid #b8341d; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .tag { display:inline-block; background:#1d7a3e; color:#fff; font-size:7.2pt; font-weight:800; padding:1pt 6pt; border-radius:4px; vertical-align: middle; }
+  .tag-dev { background:#b45309; }
+
+  /* flow diagram */
+  .flow { display:flex; align-items:stretch; gap:4pt; margin:10pt 0; break-inside: avoid; }
+  .fstep { flex:1; background:#fcf6f4; border:1.5px solid #eadfdb; border-radius:8px; padding:8pt 8pt; text-align:center; }
+  .fstep .k { font-size:8pt; font-weight:800; color:#b8341d; letter-spacing:.3px; }
+  .fstep .t { font-size:9.2pt; font-weight:700; margin-top:2pt; }
+  .fstep .d { font-size:7.8pt; color:#666; margin-top:2pt; }
+  .farrow { align-self:center; font-size:16pt; color:#d6452b; padding:0 1pt; }
+  .two { display:flex; gap:10pt; break-inside: avoid; }
+  .two > div { flex:1; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wordmark">DOUGH<span class="dot">·</span>BOSS &nbsp;|&nbsp; DIGITAL OS</div>
+  <h1>How Vouchers, POSPal &amp; Scanning Work</h1>
+  <div class="sub">A plain-English walkthrough of the voucher system end to end — from a customer claiming a code, to it appearing as a real discount on the Revesby till.</div>
+  <div class="by">Prepared by Elie D. for the Dough Boss ownership team &nbsp;·&nbsp; 1 July 2026 &nbsp;·&nbsp; Confidential</div>
+</div>
+
+<p class="lead"><strong>Short version:</strong> a customer claims a $5 or $10 voucher on the website. That code works two ways — spent online at checkout, or brought in-store and either scanned by staff or, at Revesby, applied automatically as a real discount at the till. Revesby's till connection is <strong>live and verified as of 1 July 2026.</strong></p>
+
+<h2><span class="n">1</span>The whole journey, in one picture</h2>
+<div class="flow">
+  <div class="fstep"><div class="k">STEP 1</div><div class="t">Customer claims</div><div class="d">Website voucher widget, phone number required</div></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><div class="k">STEP 2</div><div class="t">Code + QR issued</div><div class="d">Typo-proof code, e.g. <span class="mono">K7QF-3MR9</span></div></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><div class="k">STEP 3</div><div class="t">Granted to POSPal</div><div class="d">Auto-pushed to Revesby as a real till coupon</div></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><div class="k">STEP 4</div><div class="t">Redeemed</div><div class="d">Online at checkout, or in-store</div></div>
+</div>
+<p class="small muted">Every step from claim to redemption is logged, and a code can only ever be spent once — online <em>or</em> in-store, not both.</p>
+
+<h2><span class="n">2</span>Step 1–2 — the customer-facing side (front end)</h2>
+<p>A customer claims a voucher through a widget on the website (the <span class="mono">[doughboss_voucher_claim]</span> block), entering their <strong>mobile number</strong>. The system:</p>
+<ul>
+  <li>Checks the daily pool hasn't run out (the $5 and $10 vouchers share one pool of 100 claims a day).</li>
+  <li>Generates a unique, typo-resistant code — built so a customer can't easily guess or mistype their way to a working code.</li>
+  <li>Displays it with a scannable <strong>QR code</strong> on screen, so it can be shown on a phone at the till.</li>
+</ul>
+<p>That single code is now valid for exactly one use, online or in-store — whichever happens first.</p>
+
+<h2><span class="n">3</span>Step 3 — how it reaches the Revesby till (POSPal)</h2>
+<p>This is the part that connects the website to the physical POS system:</p>
+<ul>
+  <li>The moment a voucher is claimed <strong>with a phone number</strong>, the system automatically creates a matching coupon on the Revesby POSPal account, tied to that phone number.</li>
+  <li>When the voucher is later redeemed (online or in-store), the system tells POSPal to mark that coupon used — so it can never be spent a second time in either place.</li>
+  <li>This connection is <strong>authenticated and signed</strong> — every request to POSPal carries a signature built from a secret key that never leaves the server, so nothing can be faked or intercepted.</li>
+</ul>
+<div class="callout"><strong>Status: live.</strong> Revesby's POSPal connection is switched on, and both the $5 and $10 discount rules are created and verified (confirmed 1 July 2026) — a live check found both rules and matched them correctly. The next voucher claimed with a phone number will grant automatically.</div>
+
+<h2><span class="n">4</span>Step 4 — redeeming it (two paths)</h2>
+<div class="two">
+<div>
+<h3>Path A — online, at checkout</h3>
+<p>The customer enters the code in the cart's voucher box. The discount is recalculated on the server (never trusted from the browser) and applied to the order. The system marks the code used the instant the order is placed — this also tells POSPal to cancel the matching till coupon, so it can't be reused in-store.</p>
+</div>
+<div>
+<h3>Path B — in-store, at Revesby</h3>
+<p>Two ways this can happen:</p>
+<ol>
+<li><strong>Staff scan it</strong> — using the Voucher Scan tool (camera QR scan or manual code entry, in wp-admin or the standalone staff Console app) — this checks and redeems the code the same way as online.</li>
+<li><strong>It's already sitting on the till as a POSPal coupon</strong> (from Step 3) — staff can apply it directly in POSPal against that customer's phone number, without needing to open the Scan tool at all.</li>
+</ol>
+</div>
+</div>
+
+<h2><span class="n">5</span>Where staff scanning fits in</h2>
+<p>The "Voucher Scan" tool is the staff-facing side of redemption — it exists in two places:</p>
+<table>
+<tr><th style="width:30%">Where</th><th>What it's for</th></tr>
+<tr><td>wp-admin "Voucher Scan" dashboard</td><td>Built into the main WordPress admin, for staff who already have a WordPress login.</td></tr>
+<tr><td>Standalone staff Console app</td><td>A separate, install-on-any-device mini app (camera QR scan included) so a kitchen tablet doesn't need a full WordPress login — just enough access to scan vouchers, manage them, and watch the order board.</td></tr>
+</table>
+<p>Both do the same underlying redemption — check the code, mark it used once, tell POSPal to cancel the matching till coupon.</p>
+
+<h2><span class="n">6</span>One important exception — vouchers made manually in WP admin</h2>
+<div class="callout-amber">
+There's a separate "Voucher Maker" tool in WordPress admin for staff to create one-off codes by hand (for a promotion, a goodwill gesture, etc.). <strong>These do <em>not</em> automatically reach POSPal</strong> — only vouchers claimed by a customer through the website widget (Step 1) trigger the automatic POSPal grant. A hand-made code still works perfectly as an online discount, and can still be redeemed in-store via the Scan tool — it just won't already be sitting on the POSPal till as a coupon the way a customer-claimed one is. If staff need a code to be usable directly at the till without scanning, it needs to go through the normal claim flow, not the manual maker.
+</div>
+
+<h2><span class="n">7</span>What's still worth doing before relying on this for real customers</h2>
+<div class="callout-red">
+<strong>Recommended: one real end-to-end test.</strong> The check run so far confirms the <em>connection</em> and that the two coupon rules exist correctly — it hasn't yet exercised a real claim through to a granted till coupon. Before the first paying customer uses this:
+<ol>
+<li>Claim a $5 or $10 voucher through the actual website with a real mobile number.</li>
+<li>Check the Revesby POSPal coupon/member list — the code should appear there within moments.</li>
+<li>Redeem it (online or via the Scan tool) and confirm it flips to used/cancelled in POSPal too.</li>
+</ol>
+</div>
+
+<p class="disclaimer" style="margin-top:10pt;">Prepared by Elie D. for internal/client use. Describes the system as built in the DoughBoss WordPress plugin as of 1 July 2026. Confidential.</p>
+
+</body>
+</html>

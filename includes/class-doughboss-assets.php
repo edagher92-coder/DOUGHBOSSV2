@@ -24,6 +24,9 @@ class DoughBoss_Assets {
 		'doughboss_builder',
 		'doughboss_cart',
 		'doughboss_order_tracking',
+		'doughboss_shop_picker',
+		'doughboss_catering',
+		'doughboss_voucher_claim',
 	);
 
 	/**
@@ -62,6 +65,22 @@ class DoughBoss_Assets {
 	}
 
 	/**
+	 * Whether the current singular post contains a given shortcode.
+	 *
+	 * @param string $shortcode Shortcode tag.
+	 * @return bool
+	 */
+	private function current_post_has( $shortcode ) {
+		if ( is_singular() ) {
+			$post = get_post();
+			if ( $post instanceof WP_Post && has_shortcode( $post->post_content, $shortcode ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Enqueue styles and scripts when needed.
 	 *
 	 * @return void
@@ -78,10 +97,19 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION
 		);
 
+		// Load Stripe.js (from Stripe's CDN, as they require) only when card
+		// payments are switched on and configured. Our script then depends on it.
+		$deps         = array();
+		$payments_on  = DoughBoss_Stripe::ready();
+		if ( $payments_on ) {
+			wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
+			$deps[] = 'stripe-js';
+		}
+
 		wp_enqueue_script(
 			'doughboss',
 			DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss.js',
-			array(),
+			$deps,
 			DOUGHBOSS_VERSION,
 			true
 		);
@@ -93,6 +121,10 @@ class DoughBoss_Assets {
 				'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+				'payments' => array(
+					'enabled' => $payments_on,
+					'pk'      => $payments_on ? DoughBoss_Stripe::publishable_key() : '',
+				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),
 					'added'        => __( 'Added!', 'doughboss' ),
@@ -104,9 +136,71 @@ class DoughBoss_Assets {
 					'total'        => __( 'Total', 'doughboss' ),
 					'placeOrder'   => __( 'Place order', 'doughboss' ),
 					'placing'      => __( 'Placing order…', 'doughboss' ),
+					'soldOut'      => __( 'Sold out', 'doughboss' ),
+					'chooseShop'   => __( 'Choose your shop', 'doughboss' ),
 					'genericError' => __( 'Something went wrong. Please try again.', 'doughboss' ),
+					'pay'          => __( 'Pay', 'doughboss' ),
+					'cardDetails'  => __( 'Card details', 'doughboss' ),
+					'payProcessing'=> __( 'Processing payment…', 'doughboss' ),
+					'cardError'    => __( 'Please check your card details and try again.', 'doughboss' ),
+					'vClaiming'    => __( 'Getting your code…', 'doughboss' ),
+					'vYourCode'    => __( 'Your code', 'doughboss' ),
+					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),
+					'vNeedPhone'   => __( 'Please enter your mobile number.', 'doughboss' ),
+					'discount'     => __( 'Discount', 'doughboss' ),
+					'apply'        => __( 'Apply', 'doughboss' ),
+					'voucherApplied'     => __( 'Voucher applied', 'doughboss' ),
+					'voucherPlaceholder' => __( 'Voucher code', 'doughboss' ),
 				),
 			)
 		);
+
+		// Catering page: ship its own self-contained app + styles, loaded only
+		// when the catering shortcode is on the page (it reuses DoughBossData).
+		if ( $this->current_post_has( 'doughboss_catering' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-catering',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-catering.css',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-catering',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-catering.js',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
+		// Voucher claim widget: its own small app + styles, loaded only when the
+		// claim shortcode is on the page (reuses DoughBossData from the main app).
+		if ( $this->current_post_has( 'doughboss_voucher_claim' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-voucher',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-voucher.css',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION
+			);
+			// Load the QR generator (from jsDelivr's CDN, as a runtime dependency,
+			// exactly like Stripe.js above): full https URL, no local file, version
+			// null, in footer. Exposes the global `qrcode`. Our voucher script then
+			// depends on it so it loads first; the script degrades gracefully if the
+			// CDN is unreachable and the global is missing.
+			wp_enqueue_script(
+				'doughboss-qrcode',
+				'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+				array(),
+				null,
+				true
+			);
+			wp_enqueue_script(
+				'doughboss-voucher',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-voucher.js',
+				array( 'doughboss', 'doughboss-qrcode' ),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
 	}
 }

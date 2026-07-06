@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>Dough Boss — Staff Meeting Brief</title>
+<style>
+  @font-face { font-family: "Bebas"; src: url("brand/BebasNeue.ttf") format("truetype"); font-weight: normal; font-style: normal; }
+  @page {
+    size: A4; margin: 15mm 15mm 18mm;
+    @bottom-left { content: "Dough Boss · Staff Meeting Brief"; font-size: 7.5pt; color: #b9b9b9; }
+    @bottom-right { content: "Prepared by Elie D.  ·  page " counter(page) "/" counter(pages); font-size: 7.5pt; color: #b9b9b9; }
+  }
+  @page :first { @bottom-left { content: ""; } @bottom-right { content: ""; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Liberation Sans", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #2a2a2a; font-size: 10.4pt; line-height: 1.5; margin: 0; }
+  h2 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: .5px; color: #b8341d; font-size: 20pt; margin: 20pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid #f0c8c0; }
+  h2 .n { display:inline-block; background:#d6452b; color:#fff; width:20pt; height:20pt; line-height:20pt; text-align:center; border-radius:50%; font-family:"Liberation Sans",sans-serif; font-size:10pt; font-weight:700; margin-right:6pt; vertical-align: middle; }
+  h3 { color: #333; font-size: 11.5pt; margin: 12pt 0 4pt; }
+  p { margin: 6pt 0; }
+  ul, ol { margin: 6pt 0 6pt 16pt; }
+  li { margin: 3pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 9.6pt; break-inside: avoid; }
+  th, td { border: 1px solid #e2e2e2; padding: 5pt 8pt; text-align: left; vertical-align: top; }
+  th { background: #f7e6e1; color: #7c2414; font-weight: 700; }
+  tr:nth-child(even) td { background: #fcfbfb; }
+  tr { break-inside: avoid; }
+  .num { text-align: right; white-space: nowrap; }
+  .muted { color:#777; } .small { font-size: 9pt; color: #6a6a6a; }
+  .disclaimer { font-size: 8.6pt; color: #888; font-style: italic; }
+  .fill { color:#b8341d; font-weight:700; }
+  h2 { break-after: avoid; break-inside: avoid; }
+  h3 { break-after: avoid; }
+  .callout, .callout-blue, .callout-amber, .lead, .two, .timeline, .glance { break-inside: avoid; }
+
+  /* Cover */
+  .cover { background: linear-gradient(135deg,#d6452b 0%, #a82a16 100%); color: #fff; margin: -15mm -15mm 12pt; padding: 56pt 15mm 30pt; }
+  .wordmark { font-family:"Bebas",sans-serif; font-size: 16pt; letter-spacing: 3px; opacity:.95; }
+  .wordmark .dot { color:#ffd9cf; }
+  .cover h1 { font-family:"Bebas",sans-serif; font-weight:normal; font-size: 34pt; margin: 14pt 0 4pt; line-height:1.05; letter-spacing:.5px; }
+  .cover .sub { font-size: 13pt; opacity: 0.96; max-width: 85%; }
+  .cover .by { margin-top: 16pt; font-size: 9.5pt; opacity: 0.9; border-top:1px solid rgba(255,255,255,.3); padding-top:8pt; }
+
+  .glance { display:flex; gap:8pt; margin: 4pt 0 10pt; }
+  .tile { flex:1; border:1px solid #eadfdb; border-radius:8px; padding:9pt 11pt; background:#fcf6f4; }
+  .tile .v { font-size:15pt; font-weight:800; color:#b8341d; }
+  .tile .l { font-size:8.4pt; color:#666; }
+
+  .lead { font-size: 11pt; background: #fbf1ef; border-left: 4px solid #d6452b; padding: 11pt 15pt; border-radius: 5px; }
+  .callout { background: #eef7f0; border-left: 4px solid #1d7a3e; padding: 9pt 13pt; border-radius: 5px; }
+  .callout-blue { background: #eef3fb; border-left: 4px solid #2563eb; padding: 9pt 13pt; border-radius: 5px; }
+  .callout-amber { background: #fdf6ec; border-left: 4px solid #b45309; padding: 9pt 13pt; border-radius: 5px; }
+  .tag { display:inline-block; background:#1d7a3e; color:#fff; font-size:7.5pt; padding:1pt 6pt; border-radius:4px; vertical-align: middle; }
+  .tag-dev { background:#b45309; }
+  .tag-block { background:#8a2020; }
+  .pagebreak { page-break-before: always; }
+
+  .timeline { display:flex; gap:5pt; margin:10pt 0; }
+  .tstep { flex:1; border-top:4px solid #d6452b; padding:6pt 6pt 2pt; background:#faf6f5; border-radius:0 0 5px 5px; }
+  .tstep.done { border-top-color:#1d7a3e; }
+  .tstep.dev { border-top-color:#b45309; }
+  .tstep .s { font-size:7.6pt; font-weight:800; color:#b8341d; }
+  .tstep.done .s { color:#1d7a3e; } .tstep.dev .s { color:#b45309; }
+  .tstep .t { font-size:8.2pt; font-weight:700; }
+  .tstep .d { font-size:7.4pt; color:#777; }
+
+  .two { display:flex; gap:10pt; }
+  .two > div { flex:1; }
+  .chk { list-style:none; margin:6pt 0; padding:0; }
+  .chk li { margin:4pt 0; padding-left:18pt; position:relative; }
+  .chk li:before { content:"☐"; position:absolute; left:0; color:#b8341d; font-size:11pt; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wordmark">DOUGH<span class="dot">·</span>BOSS &nbsp;|&nbsp; DIGITAL OS</div>
+  <h1>Staff Meeting Brief</h1>
+  <div class="sub">Project status, spend to date, what's left, and the decisions we need from the team.</div>
+  <div class="by"><strong>Prepared by Elie D.</strong> for the Dough Boss staff meeting &nbsp;·&nbsp; 1 July 2026 &nbsp;·&nbsp; Confidential — internal use only</div>
+</div>
+
+<div class="glance">
+  <div class="tile"><div class="v">10</div><div class="l">core platform modules built</div></div>
+  <div class="tile"><div class="v">$600</div><div class="l">AI dev spend confirmed to date</div></div>
+  <div class="tile"><div class="v">1–3</div><div class="l">of 3 shops POS-connected (Revesby)</div></div>
+  <div class="tile"><div class="v">1–2 wks</div><div class="l">estimated to close the POS voucher loop</div></div>
+</div>
+
+<p class="lead">The DoughBoss ordering, kitchen-board, voucher and POS-integration platform is <strong>built and working</strong> — reviewed and hardened across multiple passes. What remains is mostly <strong>real business data, account setup and a handful of decisions</strong>, not further engineering. This brief is the working document for today's meeting: what's done, what it's cost, what's outstanding, and the questions to walk through with the team.</p>
+
+<h2><span class="n">1</span>Executive summary</h2>
+<p>The engine — online ordering across all three shops, Stripe card-payment plumbing, the live kitchen order board, the student voucher system, the POSPal till bridge, and a catering enquiry pipeline — is built and has been through several rounds of security and accessibility review. Revesby is connected, enabled and verified in POSPal (both $5/$10 coupon rules confirmed live); Bankstown and Roselands are not yet. The main remaining items are: a real end-to-end voucher test at Revesby, collecting the real menu and business details, confirming brand naming, and switching on the payment/notification layers that are already built but deliberately left off.</p>
+
+<h2><span class="n">2</span>What's been built</h2>
+<table>
+  <tr><th>Area</th><th>Status</th><th>What it does</th></tr>
+  <tr><td><strong>Core ordering</strong></td><td><span class="tag">LIVE-READY</span></td><td>Menu, custom pizza/manoush builder, cart, checkout, routed to the correct shop across Revesby, Bankstown &amp; Roselands. AUD pricing with GST built in, always locked server-side.</td></tr>
+  <tr><td><strong>Payments (Stripe)</strong></td><td><span class="tag tag-dev">BUILT, OFF</span></td><td>Card entry, payment confirmation, refund-capable. Fully wired, switched off until a go-live decision.</td></tr>
+  <tr><td><strong>Live Order Board (kitchen)</strong></td><td><span class="tag">LIVE-READY</span></td><td>Real-time screen for the kitchen — one-tap Accept → Preparing → Ready, audible alert. Upgraded from a refresh-based screen to instant push updates.</td></tr>
+  <tr><td><strong>Vouchers / discounts</strong></td><td><span class="tag">LIVE-READY</span></td><td>$5/$10 student voucher scheme — typo-proof codes, QR codes, atomic one-time redemption, shared 100/day cap. Staff camera-scan tool included.</td></tr>
+  <tr><td><strong>POSPal till integration</strong></td><td><span class="tag">LIVE-READY</span></td><td>Revesby connected, enabled, and verified — both $5/$10 coupon rules confirmed live in POSPal on 1 July 2026. One recommended step remains: a real end-to-end test (claim → grant → redeem → revoke) before relying on it for customers.</td></tr>
+  <tr><td><strong>Notifications &amp; printing</strong></td><td><span class="tag tag-dev">BUILT, OFF</span></td><td>Customer SMS, staff push alerts, cloud receipt printing — all built and tested, none switched on yet.</td></tr>
+  <tr><td><strong>Catering</strong></td><td><span class="tag">LIVE-READY</span></td><td>Enquiry → quote → deposit pipeline exists in the live code, not just the demo.</td></tr>
+  <tr><td><strong>Snow Boss</strong></td><td><span class="tag tag-dev">PROTOTYPE</span></td><td>Dual-brand section and a working student-voucher prototype on the demo site. See §5 for the open decision.</td></tr>
+  <tr><td><strong>Staff Console</strong></td><td><span class="tag">LIVE-READY</span></td><td>Standalone installable app for staff — Scan vouchers, manage vouchers, view the order board — without needing full WordPress admin access.</td></tr>
+  <tr><td><strong>Security &amp; accessibility</strong></td><td><span class="tag">DONE</span></td><td>Multiple full review passes on the staff sign-in, kitchen board and owner dashboard — contrast, screen-reader labels, keyboard navigation, content security policy.</td></tr>
+</table>
+
+<h2><span class="n">3</span>Investment to date</h2>
+<table>
+  <tr><th>Item</th><th class="num">Amount (AUD)</th><th>Status</th></tr>
+  <tr><td>Claude (AI development) credits</td><td class="num"><strong>$600</strong></td><td>Confirmed</td></tr>
+  <tr><td>Domain registration</td><td class="num fill">$______</td><td>To confirm at meeting</td></tr>
+  <tr><td>SQL / database hosting</td><td class="num fill">$______</td><td>To confirm at meeting</td></tr>
+  <tr><td>Web hosting</td><td class="num fill">$______</td><td>To confirm at meeting</td></tr>
+  <tr><td>Other tool/service signups</td><td class="num fill">$______</td><td>To confirm at meeting</td></tr>
+  <tr><td><strong>Total actual spend to date</strong></td><td class="num fill"><strong>$______</strong></td><td></td></tr>
+</table>
+<p class="callout-blue">For context: an independent costing report (<em>DoughBoss — Costing &amp; Valuation Report</em>, 25 June 2026) values a commissioned build of this same platform from an Australian agency at <strong>~$128,000 typical</strong> for the plugin alone ($95k–$165k range), or <strong>~$180,000 typical</strong> for the whole system including website, branding, content and project management. Useful context if the team asks what this is worth.</p>
+<p class="callout">Ongoing running cost once live is estimated at <strong>~$95–$180/month</strong> (hosting, real-time push, SMS, printing) — no per-order commission, ever. Stripe card fees (~1.75% + $0.30/transaction) scale with sales and aren't a fixed cost.</p>
+
+<h2><span class="n">4</span>What's remaining until completion</h2>
+<div class="timeline">
+  <div class="tstep done"><div class="s">BUILT</div><div class="t">Core platform</div><div class="d">ordering, board, vouchers</div></div>
+  <div class="tstep done"><div class="s">DONE</div><div class="t">POSPal loop (Revesby)</div><div class="d">connected + verified</div></div>
+  <div class="tstep"><div class="s">NEXT</div><div class="t">Real data + decisions</div><div class="d">menu, shops, brand</div></div>
+  <div class="tstep"><div class="s">NEXT</div><div class="t">Hardware + training</div><div class="d">per shop</div></div>
+  <div class="tstep"><div class="s">THEN</div><div class="t">Switch-on decisions</div><div class="d">Stripe, SMS, print</div></div>
+  <div class="tstep"><div class="s">LATER</div><div class="t">Marketing</div><div class="d">once live</div></div>
+</div>
+
+<h3>Near-term</h3>
+<table>
+  <tr><th>Item</th><th>Status</th></tr>
+  <tr><td>POSPal voucher grant/revoke (Revesby)</td><td><strong>Done</strong> — connected, enabled, both $5/$10 coupon rules verified live on 1 July 2026. Recommended: one real end-to-end test (claim → grant → redeem → revoke) before relying on it for customers.</td></tr>
+  <tr><td>Bankstown &amp; Roselands POSPal</td><td>Only Revesby is currently connected. Confirm whether the other two shops are on the same POSPal account or separate ones, and request credentials if separate.</td></tr>
+</table>
+
+<h3>Data &amp; decisions only the business can provide</h3>
+<table>
+  <tr><th>Item</th><th>Detail</th></tr>
+  <tr><td>Final menu</td><td>Item names, descriptions, photos, AUD prices, sizes/toppings, combos — real content still needs loading into the live menu.</td></tr>
+  <tr><td>Business details</td><td>Order email, phone, each shop's exact address, trading hours, pickup/delivery areas + delivery fee, and ABN for tax invoices.</td></tr>
+  <tr><td>Brand clarity</td><td>Is it "Dough Boss," or was "Bite Pizzas" ever meant to be a rebrand/second name? Flagged as an open question early on — still not closed out.</td></tr>
+  <tr><td>Snow Boss relationship</td><td>See §5 — needs a clear decision before further build.</td></tr>
+</table>
+
+<h3>Operational / hardware</h3>
+<ul>
+  <li><strong>Kitchen hardware</strong> — a tablet or screen + reliable wifi at each shop to run the Live Order Board.</li>
+  <li><strong>Staff training</strong> — one or two people per shop trained to use the board day-to-day.</li>
+  <li><strong>Hosting</strong> — move off any free/basic WordPress hosting to a proper managed host before real orders go live (~$25–60/month).</li>
+  <li><strong>Backups</strong> — confirm a backup plan/plugin is active before go-live.</li>
+</ul>
+
+<h3>Switch-on decisions (already built, just need a decision + accounts)</h3>
+<ul>
+  <li><strong>Stripe payments</strong> — turn on when ready to take live cards.</li>
+  <li><strong>SMS / staff push / receipt printing</strong> — each needs an account (ClickSend, ntfy, printer service) and a decision on which to switch on first.</li>
+</ul>
+
+<h3>Later stage</h3>
+<ul>
+  <li>Marketing account access (Facebook/Instagram/Google Business) once ready to promote.</li>
+  <li>Refunds button inside DoughBoss itself (currently possible directly via Stripe, not yet a one-click action in the order board).</li>
+</ul>
+
+<h2><span class="n">5</span>Snow Boss — status &amp; recommendation</h2>
+<p><strong>What it is:</strong> Snow Boss is the sister dessert brand under the same hospitality group as Dough Boss (Revesby, Bankstown, Roselands) — confirmed in the draft licensing/wholesale agreement.</p>
+<div class="two">
+  <div>
+    <h3>Already built</h3>
+    <ul>
+      <li>A dual-brand section on the demo site pairing Dough Boss + Snow Boss.</li>
+      <li>A working student-voucher prototype ($5/$10) that issues a real, redeemable code.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Not yet decided</h3>
+    <ul>
+      <li>Whether Snow Boss gets its own menu items inside the ordering system, or stays a voucher/cross-promotion tie-in.</li>
+      <li>Whether the drafted (unsigned) wholesale/licensing terms are meant to formalise Snow Boss as a licensable sub-brand, or it stays run in-house.</li>
+    </ul>
+  </div>
+</div>
+<p class="callout"><strong>Recommendation:</strong> treat Snow Boss as a cross-promotion layer on the existing platform for now — the student voucher already does this well and is now launch-ready at Revesby (POSPal coupon-rule setup in §4 is done). Defer the full licensing/wholesale question and any separate Snow Boss menu build until the core Dough Boss rollout (menu, 3 shops, payments) is live and stable. Revisit Snow Boss as its own product line once Dough Boss is generating real order volume — launching both fully at once spreads the team thin on data entry, training and testing for no immediate payoff.</p>
+
+<h2><span class="n">6</span>Recommended rollout path</h2>
+<ol>
+  <li><strong>Close out data collection this week</strong> — menu, shop details, ABN, brand naming (§4). This is the actual bottleneck, not further development.</li>
+  <li><strong>POSPal loop — done</strong> — Revesby's $5/$10 coupon rules are created and verified live; run one real end-to-end voucher test before trusting it for customers.</li>
+  <li><strong>Soft-launch Revesby only</strong> — it already has POSPal connected and can go live fastest. Use it to validate the kitchen board and voucher flow with real orders before rolling to the other two shops.</li>
+  <li><strong>Decide the payments path</strong> — switch Stripe on for the soft-launch, or run pickup/cash first and add cards once the flow is proven.</li>
+  <li><strong>Roll out shop #2 and #3</strong> once Revesby is stable — mostly data entry + POSPal credentials, not new development.</li>
+  <li><strong>Snow Boss as phase two</strong> — launch the student voucher alongside the Dough Boss rollout (it's nearly ready), hold deeper Snow Boss build until after all 3 shops are live.</li>
+  <li><strong>Switch on the "nice to have" layers last</strong> — SMS, staff push and receipt printing are built and tested but off; turn them on one at a time after go-live so any issues are easy to isolate.</li>
+</ol>
+
+<h2><span class="n">7</span>Questions for today's meeting</h2>
+<div class="two">
+  <div>
+    <h3>Operations &amp; rollout</h3>
+    <ul>
+      <li>Revesby first, or all three shops together?</li>
+      <li>Who is the point person per shop for the kitchen board day-to-day?</li>
+      <li>Realistic go-live date once menu/details are locked in?</li>
+    </ul>
+    <h3>Menu &amp; pricing</h3>
+    <ul>
+      <li>Is the demo menu data accurate, or has anything changed?</li>
+      <li>Dietary tags correct for every item?</li>
+      <li>Any seasonal/limited items to plan for?</li>
+    </ul>
+    <h3>Till / POSPal</h3>
+    <ul>
+      <li>Revesby's $5/$10 rules are set up and verified — who will run the first real test claim + redemption?</li>
+      <li>Are Bankstown &amp; Roselands on the same POSPal account as Revesby?</li>
+      <li>Who has POSPal back-office access for the other two shops?</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Kitchen workflow</h3>
+    <ul>
+      <li>Does Accept → Preparing → Ready match how the kitchen actually works?</li>
+      <li>Audible alert wanted? Shared tablet, or one screen per station?</li>
+    </ul>
+    <h3>Vouchers &amp; Snow Boss</h3>
+    <ul>
+      <li>Is the $5/$10 student voucher still the plan?</li>
+      <li>Redeem online only, in-store only, or both from day one?</li>
+    </ul>
+    <h3>Payments &amp; access</h3>
+    <ul>
+      <li>Ready for live Stripe cards, or soft-launch cash/pickup first?</li>
+      <li>Who holds the Stripe account for live API keys?</li>
+      <li>Who has WordPress/hosting admin access?</li>
+      <li>Has hosting been upgraded off any free/basic plan?</li>
+      <li>Is a backup solution active?</li>
+    </ul>
+  </div>
+</div>
+
+<h2><span class="n">8</span>Data checklist to collect</h2>
+<ul class="chk">
+  <li>Final menu spreadsheet: item name, description, price (AUD), size/toppings, dietary tags, photo (or "need photo")</li>
+  <li>Each shop's exact street address, phone number, trading hours</li>
+  <li>Pickup vs delivery per shop, delivery radius/postcodes, delivery fee</li>
+  <li>Business ABN (for tax invoices)</li>
+  <li>POSPal back-office access details for Bankstown and Roselands (if separate from Revesby)</li>
+  <li>Who will run the first real end-to-end voucher test at Revesby (claim → grant → redeem → revoke)</li>
+  <li>Current hosting provider + plan</li>
+  <li>Domain registrar details (who owns/renews it)</li>
+  <li>Stripe account status — exists already, or needs setting up?</li>
+  <li>Facebook/Instagram/Google Business account access (for later marketing phase)</li>
+  <li>Kitchen hardware inventory per shop — tablet/screen + wifi already in place, or needs buying?</li>
+  <li>Nominated staff member per shop to be trained on the order board</li>
+  <li>Any outstanding invoices from data, SQL or hosting registration (see §3)</li>
+</ul>
+
+<h2><span class="n">9</span>Next step</h2>
+<p class="lead" style="text-align:center; font-size:12.5pt;"><strong>The platform is built. What's left is data, decisions and a switch-flip — not more engineering.</strong></p>
+<p>Walk the team through §7–8 today, assign owners to each open item, and target the data checklist and a first real Revesby voucher test within the next 1–2 weeks so Revesby can soft-launch.</p>
+
+<p class="disclaimer" style="margin-top:14pt;">Prepared by Elie D. for internal staff use. Figures marked "to confirm" are placeholders for the meeting — fill in from actual invoices/accounts. Build valuation figures are drawn from the internal DoughBoss Costing &amp; Valuation Report (25 June 2026) and are estimates, not guarantees. Confidential — not for external distribution.</p>
+
+</body>
+</html>
