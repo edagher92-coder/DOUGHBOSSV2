@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>DoughBoss — Login &amp; Usage Guide</title>
+<style>
+  @font-face { font-family: "Bebas"; src: url("brand/BebasNeue.ttf") format("truetype"); font-weight: normal; font-style: normal; }
+  @page {
+    size: A4; margin: 13mm 15mm 16mm;
+    @bottom-left { content: "DoughBoss · Login & Usage Guide"; font-size: 7.5pt; color: #b9b9b9; }
+    @bottom-right { content: "Confidential  ·  page " counter(page) "/" counter(pages); font-size: 7.5pt; color: #b9b9b9; }
+  }
+  @page :first { @bottom-left { content: ""; } @bottom-right { content: ""; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Liberation Sans", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #2a2a2a; font-size: 10pt; line-height: 1.45; margin: 0; }
+  h2 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: .5px; color: #b8341d; font-size: 17pt; margin: 12pt 0 4pt; padding-bottom: 2pt; border-bottom: 2px solid #f0c8c0; break-after: avoid; break-inside: avoid; }
+  h2 .n { display:inline-block; background:#d6452b; color:#fff; width:19pt; height:19pt; line-height:19pt; text-align:center; border-radius:50%; font-family:"Liberation Sans",sans-serif; font-size:9.5pt; font-weight:700; margin-right:6pt; vertical-align: middle; }
+  h3 { color: #7c2414; font-size: 10.8pt; margin: 8pt 0 3pt; break-after: avoid; }
+  p { margin: 3pt 0; }
+  ul, ol { margin: 2pt 0 4pt 15pt; }
+  li { margin: 1.5pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 9.2pt; break-inside: avoid; }
+  th, td { border: 1px solid #e2e2e2; padding: 4pt 7pt; text-align: left; vertical-align: top; }
+  th { background: #f7e6e1; color: #7c2414; font-weight: 700; }
+  tr:nth-child(even) td { background: #fcfbfb; }
+  tr { break-inside: avoid; }
+  .small { font-size: 8.8pt; color: #6a6a6a; }
+  .muted { color: #6a6a6a; }
+  .mono { font-family: "Liberation Mono", monospace; font-size: 9pt; background:#f5f2ec; padding:1px 5px; border-radius:3px; }
+  .disclaimer { font-size: 8.4pt; color: #888; font-style: italic; }
+  .cover { background: linear-gradient(135deg,#d6452b 0%, #a82a16 100%); color: #fff; margin: -13mm -15mm 12pt; padding: 46pt 15mm 24pt; }
+  .wordmark { font-family:"Bebas",sans-serif; font-size: 15pt; letter-spacing: 3px; opacity:.95; }
+  .wordmark .dot { color:#ffd9cf; }
+  .cover h1 { font-family:"Bebas",sans-serif; font-weight:normal; font-size: 26pt; margin: 12pt 0 4pt; line-height:1.1; letter-spacing:.5px; }
+  .cover .sub { font-size: 11.5pt; opacity: 0.96; max-width: 94%; }
+  .cover .by { margin-top: 12pt; font-size: 9pt; opacity: 0.9; border-top:1px solid rgba(255,255,255,.3); padding-top:7pt; }
+  .lead { font-size: 10.4pt; background: #fbf1ef; border-left: 4px solid #d6452b; padding: 8pt 13pt; border-radius: 5px; break-inside: avoid; }
+  .callout { background: #eef7f0; border-left: 4px solid #1d7a3e; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .callout-amber { background: #fdf6ec; border-left: 4px solid #b45309; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .callout-red { background: #fbeceb; border-left: 4px solid #b8341d; padding: 7pt 12pt; border-radius: 5px; break-inside: avoid; margin: 6pt 0; }
+  .tag { display:inline-block; background:#1d7a3e; color:#fff; font-size:7.2pt; font-weight:800; padding:1pt 6pt; border-radius:4px; vertical-align: middle; }
+  .tag-owner { background:#b8341d; }
+  .tag-staff { background:#b45309; }
+
+  .flow { display:flex; align-items:stretch; gap:4pt; margin:10pt 0; break-inside: avoid; }
+  .fstep { flex:1; background:#fcf6f4; border:1.5px solid #eadfdb; border-radius:8px; padding:8pt 8pt; text-align:center; }
+  .fstep .k { font-size:8pt; font-weight:800; color:#b8341d; letter-spacing:.3px; }
+  .fstep .t { font-size:9.2pt; font-weight:700; margin-top:2pt; }
+  .fstep .d { font-size:7.8pt; color:#666; margin-top:2pt; }
+  .farrow { align-self:center; font-size:16pt; color:#d6452b; padding:0 1pt; }
+  .two { display:flex; gap:10pt; break-inside: avoid; }
+  .two > div { flex:1; }
+
+  .steps { counter-reset: stepnum; margin: 4pt 0; }
+  .step { display:flex; gap:8pt; margin: 5pt 0; break-inside: avoid; }
+  .step .num { counter-increment: stepnum; flex: 0 0 18pt; height:18pt; width:18pt; background:#7c2414; color:#fff; border-radius:50%; text-align:center; line-height:18pt; font-size:9pt; font-weight:700; }
+  .step .num::before { content: counter(stepnum); }
+  .step .body { flex:1; padding-top:1pt; }
+  .step .body b { color:#7c2414; }
+
+  .toc { background:#faf8f5; border:1px solid #eee0da; border-radius:8px; padding:10pt 16pt; margin:8pt 0; break-inside: avoid; }
+  .toc ol { margin:2pt 0 2pt 16pt; }
+  .toc a { color:#7c2414; text-decoration:none; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wordmark">DOUGH<span class="dot">·</span>BOSS &nbsp;|&nbsp; DIGITAL OS</div>
+  <h1>Login &amp; Usage Guide</h1>
+  <div class="sub">A plain-English, step-by-step guide to logging in and using everything — the website customers order from, the control room you manage it from, and the tools your kitchen/counter staff use every shift.</div>
+  <div class="by">Prepared for the Dough Boss ownership team &nbsp;·&nbsp; Confidential &nbsp;·&nbsp; written for a non-technical reader — no computer background assumed</div>
+</div>
+
+<div class="toc">
+<b>What's in this guide</b>
+<ol>
+<li><a href="#s1">The 30-second overview</a></li>
+<li><a href="#s2">How to log in — the logins you'll use</a></li>
+<li><a href="#s3">Your control room (wp-admin), screen by screen</a></li>
+<li><a href="#s4">What your customers see (the website)</a></li>
+<li><a href="#s5">The Staff Console app (kitchen &amp; counter tablets)</a></li>
+<li><a href="#s6">Who should have which login</a></li>
+<li><a href="#s7">Creating a new staff login, step by step</a></li>
+<li><a href="#s8">"I want to..." — quick reference</a></li>
+<li><a href="#s9">Keeping it secure</a></li>
+<li><a href="#s10">If something goes wrong</a></li>
+</ol>
+</div>
+
+<h2 id="s1"><span class="n">1</span>The 30-second overview</h2>
+<p>DoughBoss is one system with three faces. A customer never sees your control room, and you rarely need to touch the parts customers see — but they're all talking to each other, live, the whole time.</p>
+<div class="flow">
+  <div class="fstep"><div class="k">CUSTOMERS</div><div class="t">Order on the website</div><div class="d">Menu, pizza builder, cart, checkout</div></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><div class="k">INSTANTLY</div><div class="t">Order lands in your control room</div><div class="d">wp-admin Orders + the Live Order Board</div></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><div class="k">KITCHEN</div><div class="t">Staff accept &amp; prepare</div><div class="d">One tap: New → Preparing → Ready</div></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><div class="k">CUSTOMER</div><div class="t">Tracks their order</div><div class="d">Order number + email, on the website</div></div>
+</div>
+<p class="small muted">Everything in this guide is one of these three faces: the <b>website</b> (what customers use), the <b>control room</b> — WordPress's admin area, called "wp-admin" — (what you, the owner/manager, use), and the <b>Staff Console</b> app (a lighter-weight tool for kitchen/counter tablets that don't need a full login).</p>
+
+<h2 id="s2"><span class="n">2</span>How to log in — the logins you'll use</h2>
+<table>
+<tr><th style="width:20%">Who</th><th style="width:32%">Where</th><th>What you log in with</th></tr>
+<tr><td><span class="tag tag-owner">OWNER</span> Owner / Manager</td><td>The control room (wp-admin) at your website address, e.g. <span class="mono">https://doughboss.com.au/wp-admin/</span></td><td>Your existing WordPress email + password. This is the same login you already use to manage the site — DoughBoss just adds a new menu to it.</td></tr>
+<tr><td><span class="tag tag-staff">STAFF</span> Kitchen / counter staff</td><td>Either the control room's Live Order Board, or the separate Staff Console app on a tablet/phone</td><td>A staff login created for them (see §7) — never your own owner login.</td></tr>
+<tr><td><span class="tag tag-staff">STAFF</span> Till / voucher scanning</td><td>Staff Console app, or the "Voucher Scan" screen inside wp-admin</td><td>Same staff login as above — one login covers both the order board and voucher scanning.</td></tr>
+</table>
+<div class="callout"><b>What is "wp-admin"?</b> It's WordPress's built-in control panel — the same one you'd use to edit any page on the website, just with a "DoughBoss" section added to the left-hand menu. If you've ever logged in to change something on the site before, you already know how to get here.</div>
+<div class="callout-amber"><b>What is a Staff Console "Application Password"?</b> It's a special password generated just for one device/app — not your everyday WordPress password. Think of it like a spare key cut specifically for the kitchen tablet: if that tablet is ever lost, you can cancel just that one key without changing anyone else's password. Your admin sets this up once per device (§7).</div>
+
+<h2 id="s3"><span class="n">3</span>Your control room (wp-admin), screen by screen</h2>
+<p>Once logged in, look for <b>DoughBoss</b> in the left-hand menu. Everything below lives under it.</p>
+
+<h3>Orders</h3>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body"><b>What it's for:</b> a list of every order — pickup or delivery, paid or unpaid, with the customer's details and what they ordered.</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>How to use it:</b> click <b>DoughBoss → Orders</b>. Click any order to see its full detail; change its status (e.g. mark it Ready) directly from the list.</div></div>
+</div>
+
+<h3>Live Order Board (the Kitchen Board)</h3>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body"><b>What it's for:</b> the big-screen view for the kitchen — new orders appear automatically in a "New" column, and one tap moves them to "Preparing" then "Ready."</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>How to use it:</b> click <b>DoughBoss → Live Order Board</b>. Leave it open on a kitchen tablet or monitor all shift — it refreshes itself.</div></div>
+</div>
+
+<h3>Shops (Locations)</h3>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body"><b>What it's for:</b> if you run more than one shop, this is where each one's name, address, phone, and which suburbs it delivers to are set up.</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>How to use it:</b> click <b>DoughBoss → Shops</b>. Add a shop, or edit an existing one's details and delivery postcodes.</div></div>
+</div>
+
+<h3>Vouchers</h3>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body"><b>What it's for:</b> managing discount codes — both the ones customers claim themselves online, and one-off codes you create by hand.</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>How to use it:</b> click <b>DoughBoss → Vouchers</b>. Use <b>"Claim a voucher for a customer"</b> when a real customer calls in or asks in person — this is the option that also sends the code to the till system automatically. The separate <b>"Create a voucher (manual, one-off)"</b> section is for internal/goodwill codes and does <em>not</em> reach the till automatically — use it only when that's not needed.</div></div>
+</div>
+<div class="callout-amber">This distinction trips people up, so it's worth repeating here: <b>only "Claim a voucher for a customer"</b> and the website's own voucher-claim button push a code to the till system. The manual "Create a voucher" tool is for internal use and stays WordPress-only unless someone scans it in-store.</div>
+
+<h3>Catering</h3>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body"><b>What it's for:</b> catering enquiries — quotes, deposits, and balance payments for bookings.</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>How to use it:</b> click <b>DoughBoss → Catering</b> to see enquiries and update their status (e.g. mark a deposit received) as a booking progresses.</div></div>
+</div>
+
+<h3>Settings</h3>
+<p>This is the one screen with several tabs — take it slowly, nothing here needs changing often.</p>
+<table>
+<tr><th style="width:26%">Tab</th><th>What it controls</th></tr>
+<tr><td>Store</td><td>Currency, tax/GST rate, delivery fee, opening/closing ordering, pickup vs delivery toggles, the email address that gets notified of new orders.</td></tr>
+<tr><td>Payments (Stripe)</td><td>Turns on card payments at checkout. Off by default — customers pay on pickup/delivery until this is switched on and the keys from your Stripe account are entered.</td></tr>
+<tr><td>POSPal POS</td><td>Connects the voucher system to your till so claimed vouchers show up there automatically. Off by default; needs your POSPal account details entered once.</td></tr>
+<tr><td>Real-time &amp; Notifications</td><td>Optional extras: instant push updates to the order board, staff phone alerts on new orders, customer SMS on "order ready," and cloud receipt printing. Each is independently off until you choose to turn it on.</td></tr>
+<tr><td>Menu (Sizes / Toppings)</td><td>The sizes and toppings customers can choose in the pizza builder, plus a one-click "Import standard menu" button if you ever need to reset to the standard board menu.</td></tr>
+</table>
+
+<h3>Message Templates (its own page, not a Settings tab)</h3>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body"><b>What it's for:</b> the exact wording of the order-confirmation email and the two SMS texts ("order ready" and "voucher claimed") — edit them without touching code.</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>How to use it:</b> click <b>DoughBoss → Message Templates</b>. Type your own wording, using placeholders like <span class="mono">{order_number}</span> and <span class="mono">{total}</span> where you want the real value inserted. Leave a field blank and save to restore the original wording — you can't end up with a broken message.</div></div>
+</div>
+
+<h2 id="s4"><span class="n">4</span>What your customers see (the website)</h2>
+<p>None of this needs your day-to-day attention — it's here so you know what a customer experiences when something comes up in conversation.</p>
+<ul>
+<li><b>Menu</b> — browses categories and items, each with a price and description.</li>
+<li><b>Pizza builder</b> — pick a size, add toppings, see the price update live as they go.</li>
+<li><b>Cart &amp; checkout</b> — review the order, choose pickup or delivery, enter their details, pay (by card if Payments/Stripe is switched on, otherwise pay on pickup/delivery).</li>
+<li><b>Voucher box</b> — at checkout, a customer can type in a discount code; the saving is worked out on our side, never just trusted from what the customer's screen shows.</li>
+<li><b>Order tracking</b> — a customer looks up their order status later using their order number and the email they used.</li>
+</ul>
+
+<h2 id="s5"><span class="n">5</span>The Staff Console app (kitchen &amp; counter tablets)</h2>
+<p>This is a separate, lightweight app — it's for a shop tablet that shouldn't need a full WordPress login just to watch the order board or scan a voucher.</p>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body"><b>Installing it:</b> open the Console's web address on the tablet/phone and add it to the home screen like any app — no app-store download needed.</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>Logging in:</b> enter the staff Application Password set up for that device (see §7) — not a personal password, and not your owner login.</div></div>
+<div class="step"><div class="num"></div><div class="body"><b>What staff can do there:</b> watch the live order board, and scan customer vouchers (camera QR scan, or type the code in by hand) to redeem them.</div></div>
+</div>
+
+<h2 id="s6"><span class="n">6</span>Who should have which login</h2>
+<table>
+<tr><th style="width:22%">Login type</th><th style="width:40%">Can do</th><th>Give this to</th></tr>
+<tr><td><b>Administrator</b> (full wp-admin)</td><td>Everything — Orders, Vouchers, Settings, Payments, POSPal, adding other staff logins.</td><td>Owner / manager only. Do not hand this out to kitchen or counter staff.</td></tr>
+<tr><td><b>DoughBoss Kitchen</b> role</td><td>Live Order Board + redeeming vouchers. No access to Settings, Payments, or creating vouchers.</td><td>Kitchen and counter staff who need the board and voucher scanning, nothing more.</td></tr>
+<tr><td><b>Staff Console Application Password</b></td><td>Same as DoughBoss Kitchen, but through the lighter Console app instead of full wp-admin.</td><td>Shared shop tablets — one per device is tidiest, so a lost tablet only needs one password cancelled.</td></tr>
+</table>
+<div class="callout-red"><b>Never share your own Administrator login with staff.</b> If a staff member needs board/voucher access, create them their own login (§7) instead of handing out yours — that way you can see who did what, and remove just their access if they leave, without having to change your own password.</div>
+
+<h2 id="s7"><span class="n">7</span>Creating a new staff login, step by step</h2>
+<p>Use this whenever a new staff member joins, a tablet needs setting up, or you want a throwaway login just to try things out yourself.</p>
+<div class="steps">
+<div class="step"><div class="num"></div><div class="body">Log in to the control room (wp-admin) with your own Administrator login.</div></div>
+<div class="step"><div class="num"></div><div class="body">In the left-hand menu, click <b>Users → Add New</b>.</div></div>
+<div class="step"><div class="num"></div><div class="body">Fill in a <b>Username</b> (e.g. <span class="mono">kitchen-revesby</span>) and an <b>Email address</b>. For a shared kitchen/counter login, a dedicated address like <span class="mono">kitchen@doughboss.com.au</span> works well — it doesn't need to be a real inbox anyone checks daily, but must be a validly-formatted email address WordPress will accept.</div></div>
+<div class="step"><div class="num"></div><div class="body">Click <b>Show password</b> and either keep the strong password WordPress generates, or set your own. Write it down somewhere safe — WordPress will not show it again.</div></div>
+<div class="step"><div class="num"></div><div class="body">Under <b>Role</b>, choose <b>DoughBoss Kitchen</b> (not Administrator) for kitchen/counter staff.</div></div>
+<div class="step"><div class="num"></div><div class="body">Click <b>Add New User</b>. That's it — hand the username + password to the staff member, and they can log in at the same control-room address you use.</div></div>
+</div>
+<div class="callout"><b>Setting up the Staff Console app instead?</b> Create the staff user exactly as above, then log in as <em>that</em> user, go to <b>Users → Profile → Application Passwords</b>, give it a name (e.g. "Kitchen tablet — front counter"), and click <b>Add New Application Password</b>. WordPress shows a one-time password — enter that (with the same username) into the Console app on the tablet. It's a different password from the one used to log into wp-admin directly, on purpose.</div>
+<div class="callout-amber"><b>Want a throwaway "demo" login to explore the system yourself first?</b> Follow the exact same steps above with a username like <span class="mono">demo-owner</span> and an email like <span class="mono">demo@doughboss.com.au</span>, and choose the <b>Administrator</b> role only if you want to see everything (including Settings/Payments) — otherwise choose <b>DoughBoss Kitchen</b> to see it exactly as staff would. Delete the user from <b>Users</b> afterwards if it was only for a test drive.</div>
+
+<h2 id="s8"><span class="n">8</span>"I want to..." — quick reference</h2>
+<table>
+<tr><th style="width:46%">I want to...</th><th>Go to...</th></tr>
+<tr><td>See today's orders</td><td>DoughBoss → Orders</td></tr>
+<tr><td>Watch orders come in live, kitchen-style</td><td>DoughBoss → Live Order Board</td></tr>
+<tr><td>Turn online ordering off temporarily (e.g. fully booked)</td><td>DoughBoss → Settings → Store → "Online ordering open"</td></tr>
+<tr><td>Turn delivery (or pickup) on/off</td><td>DoughBoss → Settings → Store → Enable pickup / Enable delivery</td></tr>
+<tr><td>Change the tax/GST rate or delivery fee</td><td>DoughBoss → Settings → Store</td></tr>
+<tr><td>Give a customer a one-off discount code</td><td>DoughBoss → Vouchers → Claim a voucher for a customer</td></tr>
+<tr><td>Turn on card payments (Stripe)</td><td>DoughBoss → Settings → Payments</td></tr>
+<tr><td>Change the wording of the order-confirmation email or an SMS text</td><td>DoughBoss → Message Templates</td></tr>
+<tr><td>Connect the till (POSPal) so vouchers show up there</td><td>DoughBoss → Settings → POSPal POS</td></tr>
+<tr><td>Add or edit a shop location</td><td>DoughBoss → Shops</td></tr>
+<tr><td>Check on a catering enquiry</td><td>DoughBoss → Catering</td></tr>
+<tr><td>Set up a new staff member or tablet</td><td>Users → Add New (see §7 above)</td></tr>
+<tr><td>Add or change a menu item</td><td>DoughBoss → Menu Items</td></tr>
+</table>
+
+<h2 id="s9"><span class="n">9</span>Keeping it secure</h2>
+<ul>
+<li><b>Never share your Administrator login</b> — create a separate staff login instead (§7), so access can be removed for one person without affecting anyone else.</li>
+<li><b>One login per person or per device</b> where practical — it makes it obvious who did what, and what to cancel if a phone/tablet is lost.</li>
+<li><b>Staff only ever need the "DoughBoss Kitchen" role</b> (or a Console Application Password) — never give kitchen or counter staff the Administrator role.</li>
+<li><b>Payment keys (Stripe, POSPal) are never shown back on screen once saved</b> — if a field looks blank when you return to Settings, that's normal; it means a value is already saved and safely hidden, not that it was lost.</li>
+</ul>
+
+<h2 id="s10"><span class="n">10</span>If something goes wrong</h2>
+<p>This guide covers day-to-day use. For anything deeper — troubleshooting a specific error, deployment, or how a feature is actually built underneath — five detailed technical manuals and a full project audit already exist for the technical side of the team:</p>
+<ul class="small">
+<li><span class="mono">docs/DoughBoss-Manual-Admin.md</span> — a deeper version of §3 of this guide, with troubleshooting.</li>
+<li><span class="mono">docs/DoughBoss-Manual-User.md</span> — the customer-facing experience in more detail.</li>
+<li><span class="mono">docs/DoughBoss-Manual-Deployment.md</span> and <span class="mono">docs/DoughBoss-Manual-Maintenance.md</span> — for whoever handles updates and hosting.</li>
+<li><span class="mono">docs/DoughBoss-Manual-Developer-Setup.md</span> and <span class="mono">docs/DoughBoss-Project-Audit-Final-Report.md</span> — for a developer.</li>
+</ul>
+
+<p class="disclaimer" style="margin-top:10pt;">Prepared for internal/client use. Describes DoughBoss as installed at doughboss.com.au. No real usernames or passwords are included in this document by design — §7 shows you how to create your own. Confidential.</p>
+
+</body>
+</html>

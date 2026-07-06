@@ -1,0 +1,339 @@
+/**
+ * DoughBoss — catering page styles.
+ *
+ * Black-and-white brand with a single Ember-Red accent (per the rebuild design
+ * system). Scoped under .db-catering so it never bleeds into the theme.
+ */
+.db-catering {
+	--dbc-ink: #0d0d0d;
+	--dbc-slate: #1a1a1a;
+	--dbc-paper: #ffffff;
+	--dbc-mist: #6b6b6b;
+	--dbc-line: #e4e1da;
+	--dbc-ember: #e2231a;
+	--dbc-radius: 12px;
+	color: var(--dbc-ink);
+	max-width: 1100px;
+	margin: 0 auto;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+.db-catering * {
+	box-sizing: border-box;
+}
+
+/* Honeypot — hidden from people, catches bots (audit anti-spam). */
+.db-catering .dbc-hp {
+	position: absolute !important;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.db-catering .dbc-head {
+	margin: 0 0 18px;
+}
+
+.db-catering .dbc-kicker {
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--dbc-ember);
+	margin: 0 0 4px;
+}
+
+.db-catering .dbc-h2 {
+	font-size: clamp(26px, 4vw, 40px);
+	line-height: 1.02;
+	margin: 0 0 6px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.db-catering .dbc-sub {
+	color: var(--dbc-mist);
+	margin: 0;
+}
+
+.db-catering .dbc-empty {
+	color: var(--dbc-mist);
+	padding: 18px;
+	border: 1px dashed var(--dbc-line);
+	border-radius: var(--dbc-radius);
+}
+
+/* Packages */
+.db-catering .dbc-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 16px;
+	margin: 0 0 44px;
+}
+
+.db-catering .dbc-card {
+	display: flex;
+	flex-direction: column;
+	text-align: left;
+	padding: 0;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--dbc-radius);
+	background: var(--dbc-paper);
+	cursor: pointer;
+	overflow: hidden;
+	transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+	font: inherit;
+	color: inherit;
+}
+
+.db-catering .dbc-card:hover {
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+	transform: translateY(-2px);
+}
+
+.db-catering .dbc-card.is-selected {
+	border-color: var(--dbc-ember);
+	box-shadow: 0 0 0 2px var(--dbc-ember);
+}
+
+.db-catering .dbc-card-img {
+	display: block;
+	height: 130px;
+	background-size: cover;
+	background-position: center;
+	background-color: var(--dbc-slate);
+}
+
+.db-catering .dbc-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 14px 15px 16px;
+}
+
+.db-catering .dbc-card-name {
+	font-size: 19px;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.3px;
+}
+
+.db-catering .dbc-card-serves {
+	font-size: 12px;
+	color: var(--dbc-mist);
+}
+
+.db-catering .dbc-card-desc {
+	font-size: 13px;
+	color: var(--dbc-mist);
+	margin-top: 2px;
+}
+
+.db-catering .dbc-card-price {
+	margin-top: 6px;
+	font-size: 22px;
+	font-weight: 800;
+	color: var(--dbc-ember);
+}
+
+/* Builder / form */
+.db-catering .dbc-builder {
+	border-top: 1px solid var(--dbc-line);
+	padding-top: 28px;
+}
+
+.db-catering .dbc-form {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	max-width: 760px;
+}
+
+.db-catering .dbc-selected {
+	background: #faf9f6;
+	border: 1px solid var(--dbc-line);
+	border-radius: 8px;
+	padding: 10px 13px;
+	font-size: 14px;
+}
+
+.db-catering .dbc-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+}
+
+.db-catering .dbc-row > .dbc-field {
+	flex: 1 1 150px;
+}
+
+.db-catering .dbc-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.db-catering .dbc-field > span {
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.db-catering .dbc-field input,
+.db-catering .dbc-field textarea {
+	font: inherit;
+	padding: 10px 12px;
+	border: 1px solid var(--dbc-line);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--dbc-ink);
+	width: 100%;
+}
+
+.db-catering .dbc-field input:focus,
+.db-catering .dbc-field textarea:focus {
+	outline: none;
+	border-color: var(--dbc-ember);
+	box-shadow: 0 0 0 3px rgba(226, 35, 26, 0.15);
+}
+
+.db-catering .dbc-ful {
+	border: 0;
+	margin: 0;
+	padding: 0;
+}
+
+.db-catering .dbc-radio {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-right: 16px;
+	font-weight: 500;
+}
+
+/* Quote box */
+.db-catering .dbc-quote {
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--dbc-radius);
+	padding: 14px 16px;
+	background: #faf9f6;
+}
+
+.db-catering .dbc-quote-line {
+	display: flex;
+	justify-content: space-between;
+	padding: 4px 0;
+	font-size: 15px;
+}
+
+.db-catering .dbc-quote-deposit {
+	color: var(--dbc-ember);
+	font-size: 17px;
+	border-top: 1px dashed var(--dbc-line);
+	border-bottom: 1px dashed var(--dbc-line);
+	margin: 4px 0;
+	padding: 8px 0;
+}
+
+.db-catering .dbc-quote-note {
+	display: block;
+	font-size: 13px;
+	color: var(--dbc-mist);
+	margin-top: 6px;
+}
+
+.db-catering .dbc-error:not(:empty) {
+	color: #b3261e;
+	font-weight: 600;
+	font-size: 14px;
+}
+
+.db-catering .dbc-submit {
+	align-self: flex-start;
+	font: inherit;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: #fff;
+	background: var(--dbc-ember);
+	border: 0;
+	border-radius: 8px;
+	padding: 14px 28px;
+	cursor: pointer;
+	transition: filter 0.15s;
+}
+
+.db-catering .dbc-submit:hover {
+	filter: brightness(0.92);
+}
+
+.db-catering .dbc-submit:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+/* Success */
+.db-catering .dbc-success {
+	text-align: center;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--dbc-radius);
+	padding: 44px 24px;
+	background: #faf9f6;
+}
+
+.db-catering .dbc-success-check {
+	width: 56px;
+	height: 56px;
+	margin: 0 auto 14px;
+	border-radius: 50%;
+	background: var(--dbc-ember);
+	color: #fff;
+	font-size: 30px;
+	line-height: 56px;
+}
+
+.db-catering .dbc-success-num {
+	font-size: 17px;
+}
+
+/* Deposit payment panel */
+.db-catering .dbc-pay {
+	max-width: 420px;
+	margin: 18px auto 0;
+	text-align: left;
+}
+
+.db-catering .dbc-pay-label {
+	display: block;
+	font-size: 13px;
+	font-weight: 700;
+	margin-bottom: 5px;
+}
+
+.db-catering .dbc-card-element {
+	padding: 13px 14px;
+	border: 1px solid var(--dbc-line);
+	border-radius: 8px;
+	background: #fff;
+	margin-bottom: 12px;
+}
+
+.db-catering .dbc-pay .dbc-submit {
+	width: 100%;
+	text-align: center;
+}
+
+.db-catering .dbc-pay-secure {
+	text-align: center;
+	font-size: 12px;
+	margin: 10px 0 0;
+}
+
+@media (max-width: 540px) {
+	.db-catering .dbc-submit {
+		align-self: stretch;
+		text-align: center;
+	}
+}

@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<title>Dough Boss — Online &amp; Catering Ordering System · Product Walkthrough</title>
+<style>
+	@font-face { font-family: "Bebas"; src: url("brand/BebasNeue.ttf") format("truetype"); font-weight: normal; font-style: normal; }
+	@page { size: A4 landscape; margin: 0; }
+	* { box-sizing: border-box; }
+	html, body { margin: 0; padding: 0; }
+	body { font-family: "Liberation Sans", "DejaVu Sans", Arial, sans-serif; color: #15151a; -weasy-hyphens: none; }
+
+	:root {
+		--ink: #15151a;
+		--ink2: #33333b;
+		--muted: #6c6c75;
+		--line: #e4e0d8;
+		--bg: #f5f3ee;
+		--paper: #ffffff;
+		--green: #1f8a54;
+		--amber: #c1851f;
+		--alert: #d8412f;
+		--char: #16161b;
+	}
+	.disp { font-family: "Bebas", "DejaVu Sans Condensed", sans-serif; font-weight: normal; letter-spacing: 0.5px; }
+
+	.slide { position: relative; width: 297mm; height: 209.6mm; overflow: hidden; page-break-after: always; background: var(--bg); padding: 11mm 15mm 13mm; }
+	.slide:last-child { page-break-after: auto; }
+
+	/* chrome */
+	.topbar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 7px; border-bottom: 1px solid var(--line); margin-bottom: 7mm; }
+	.topbar .wm { display: flex; align-items: center; gap: 8px; }
+	.topbar .wm img { width: 16px; height: 16px; }
+	.topbar .wm span { font-family: "Bebas", sans-serif; font-size: 14px; letter-spacing: 1.2px; color: var(--ink); }
+	.topbar .sec { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #a39c8f; font-weight: 700; }
+	.foot { position: absolute; left: 15mm; right: 15mm; bottom: 7mm; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #aaa395; font-weight: 600; letter-spacing: 0.03em; }
+	.foot .pg { font-family: "Bebas", sans-serif; font-size: 12px; letter-spacing: 1px; color: #9a9385; }
+
+	.kicker { font-family: "Bebas", sans-serif; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink); margin: 0 0 4px; }
+	h1 { font-family: "Bebas", sans-serif; font-weight: normal; font-size: 40px; line-height: 0.98; margin: 0 0 6px; color: var(--ink); letter-spacing: 0.5px; }
+	h2 { font-family: "Bebas", sans-serif; font-weight: normal; font-size: 26px; margin: 0; color: var(--ink); letter-spacing: 0.5px; }
+	.lead { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.55; }
+	.caption { font-size: 12.5px; color: var(--ink); font-weight: 600; line-height: 1.45; margin: 11px 0 0; padding-left: 12px; border-left: 3px solid var(--ink); }
+
+	/* devices */
+	.browser { border-radius: 12px; background: #fff; box-shadow: 0 20px 46px rgba(20,20,30,0.14); overflow: hidden; border: 1px solid #e8e2d9; }
+	.browser-bar { display: flex; align-items: center; gap: 7px; padding: 8px 13px; background: #efeae2; border-bottom: 1px solid #e6e0d6; }
+	.dot { width: 10px; height: 10px; border-radius: 50%; background: #cfc7b9; }
+	.url { flex: 1; background: #fff; border: 1px solid #e3ddd3; border-radius: 20px; padding: 4px 12px; font-size: 9.5px; color: #8a8377; text-align: center; }
+	.ipad { background: #0c0c10; border-radius: 24px; padding: 14px 18px; box-shadow: 0 26px 56px rgba(0,0,0,0.4); }
+	.ipad-cam { width: 6px; height: 6px; border-radius: 50%; background: #33333c; margin: 0 auto 8px; }
+	.phone { width: 72mm; background: #0c0c10; border-radius: 28px; padding: 10px; box-shadow: 0 22px 46px rgba(0,0,0,0.3); }
+	.phone-notch { width: 36%; height: 12px; background: #0c0c10; border-radius: 0 0 11px 11px; margin: 0 auto; position: relative; top: -10px; }
+	.phone-screen { background: #fff; border-radius: 20px; overflow: hidden; margin-top: -10px; }
+
+	/* buttons (brand = black) */
+	.btn { background: var(--ink); color: #fff; font-family: "Bebas", sans-serif; letter-spacing: 1px; font-size: 11px; padding: 6px 13px; border-radius: 6px; display: inline-block; }
+	.btn.inv { background: #fff; color: var(--ink); }
+	.btn.block { display: block; text-align: center; padding: 10px; font-size: 14px; }
+
+	/* storefront */
+	.sf-hero { background: var(--ink); color: #fff; padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; }
+	.sf-hero .ht { font-family: "Bebas", sans-serif; font-size: 19px; letter-spacing: 1px; }
+	.sf-hero .hs { font-size: 9.5px; color: #c9c6bf; margin-top: 2px; }
+	.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }
+	.mcard { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: #fff; }
+	.mcard .pic { height: 40px; position: relative; background: linear-gradient(135deg,#23232a,#3a3a44); display: flex; align-items: center; justify-content: center; }
+	.mcard .pic img { width: 22px; opacity: 0.16; }
+	.mcard .cat { position: absolute; left: 7px; top: 6px; font-family: "Bebas", sans-serif; font-size: 8px; letter-spacing: 1px; color: #d7d3ca; }
+	.mcard .body { padding: 7px 8px; }
+	.mcard h4 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: 0.5px; margin: 0; font-size: 13px; color: var(--ink); }
+	.mcard .desc { margin: 1px 0 6px; font-size: 8.5px; color: var(--muted); line-height: 1.3; }
+	.mcard .foot2 { display: flex; align-items: center; justify-content: space-between; }
+	.mcard .price { font-family: "Bebas", sans-serif; font-size: 14px; letter-spacing: 0.5px; }
+	.addbtn { background: var(--ink); color: #fff; font-family: "Bebas", sans-serif; font-size: 10px; letter-spacing: 0.5px; padding: 4px 11px; border-radius: 5px; }
+	.mcard.out .pic { filter: grayscale(1) brightness(1.4); }
+	.soldout { background: var(--ink); color: #fff; font-family: "Bebas", sans-serif; font-size: 8px; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 3px; }
+	.addbtn.dis { background: #cbc6bc; }
+
+	.builder { background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 12px; }
+	.builder h4 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: 1px; margin: 0 0 8px; font-size: 16px; }
+	.opt { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 10px; margin-bottom: 5px; }
+	.opt .nm { flex: 1; }
+	.opt .pr { color: var(--muted); font-size: 9.5px; }
+	.opt.sel { border-color: var(--ink); background: #f3f1ec; }
+	.radio { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #c2bcb0; }
+	.radio.on { border-color: var(--ink); background: var(--ink); }
+	.chk { width: 12px; height: 12px; border-radius: 3px; border: 2px solid #c2bcb0; }
+	.chk.on { border-color: var(--ink); background: var(--ink); }
+	.builder-total { display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed var(--line); margin-top: 9px; padding-top: 9px; }
+	.builder-total .big { font-family: "Bebas", sans-serif; font-size: 24px; letter-spacing: 0.5px; color: var(--ink); }
+
+	/* checkout */
+	.co-row { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid #f0ece4; }
+	.co-th { width: 34px; height: 34px; border-radius: 7px; background: linear-gradient(135deg,#23232a,#3a3a44); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+	.co-th img { width: 17px; opacity: 0.2; }
+	.co-row .nm { flex: 1; font-size: 10.5px; }
+	.co-row .nm small { display: block; color: var(--muted); font-size: 8.5px; }
+	.qty { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; font-size: 10px; }
+	.qty b { font-family: "Bebas", sans-serif; font-size: 12px; }
+	.co-row .lp { font-family: "Bebas", sans-serif; font-size: 13px; width: 46px; text-align: right; }
+	.sumline { display: flex; justify-content: space-between; font-size: 10.5px; padding: 3px 0; color: var(--ink); }
+	.sumline.tot { font-family: "Bebas", sans-serif; font-size: 19px; border-top: 1px solid var(--line); margin-top: 5px; padding-top: 7px; }
+	.promo { display: flex; gap: 6px; margin: 8px 0; }
+	.promo .inp { flex: 1; border: 1px dashed #c7c1b6; border-radius: 6px; padding: 6px 9px; font-size: 9.5px; color: #8a8377; }
+	.wallet { display: flex; gap: 7px; margin-bottom: 8px; }
+	.wbtn { flex: 1; text-align: center; border-radius: 7px; padding: 8px; font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 12px; }
+	.wbtn.apple { background: #000; color: #fff; }
+	.wbtn.gpay { background: #fff; color: #3c4043; border: 1px solid #dadce0; }
+	.cardbox { border: 1px solid var(--line); border-radius: 8px; padding: 9px; margin-bottom: 8px; }
+	.cardbox .cl { font-size: 8.5px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 4px; }
+	.cardline { display: flex; justify-content: space-between; font-size: 11px; color: #444; }
+	.divider { display: flex; align-items: center; gap: 8px; color: #b3ac9f; font-size: 8.5px; margin: 8px 0; }
+	.divider:before, .divider:after { content: ""; height: 1px; background: var(--line); flex: 1; }
+
+	/* phone bits */
+	.p-head { background: var(--ink); color: #fff; padding: 9px 12px; font-family: "Bebas", sans-serif; letter-spacing: 1px; font-size: 13px; }
+	.p-body { padding: 10px 12px; }
+	.step { display: flex; gap: 9px; align-items: flex-start; padding: 7px 0; }
+	.sdot { width: 15px; height: 15px; border-radius: 50%; flex: 0 0 auto; margin-top: 1px; }
+	.sdot.done { background: var(--green); }
+	.sdot.active { background: var(--ink); }
+	.sdot.todo { background: #d6cfc3; }
+	.step .t { font-size: 10.5px; font-weight: 700; color: var(--ink); }
+	.step .t small { display: block; font-weight: 500; color: var(--muted); font-size: 9px; }
+
+	/* KDS */
+	.kds { background: #0b0b0f; padding: 12px 13px; color: #e9e9ee; }
+	.kds-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+	.kds-brand { display: flex; align-items: center; gap: 8px; }
+	.kds-brand img { width: 18px; }
+	.kds-brand .bt { font-family: "Bebas", sans-serif; font-size: 15px; letter-spacing: 1px; color: #fff; }
+	.kds-brand .bs { font-size: 8.5px; color: #8a8a96; }
+	.kds-clock { font-family: "Bebas", sans-serif; font-size: 14px; letter-spacing: 0.5px; color: #9a9aa6; }
+	.alert { background: var(--alert); border-radius: 9px; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; box-shadow: 0 0 0 3px rgba(216,65,47,0.28); }
+	.alert .msg { font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 14px; color: #fff; }
+	.kbtn { background: #fff; color: var(--ink); font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 12px; padding: 5px 13px; border-radius: 6px; }
+	.kbtn.ghost { background: rgba(255,255,255,0.16); color: #fff; }
+	.lanes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+	.lane-h { font-family: "Bebas", sans-serif; letter-spacing: 1.5px; font-size: 12px; padding: 4px 2px; color: #8a8a96; display: flex; justify-content: space-between; }
+	.kcard { background: #16161e; border-radius: 9px; padding: 9px 10px; margin-bottom: 8px; border-left: 4px solid #3a3a48; }
+	.kcard.new { border-left-color: var(--alert); }
+	.kcard.prep { border-left-color: var(--amber); }
+	.kcard.ready { border-left-color: #29b765; }
+	.kcard .knum { display: flex; justify-content: space-between; font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 12px; color: #fff; }
+	.kcard .kcust { font-size: 9px; color: #9a9aa8; margin: 2px 0 5px; }
+	.kcard .kitems { font-size: 9.5px; color: #d2d2dc; line-height: 1.35; }
+	.kcard .kfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+	.kcard .ktime { font-size: 8.5px; color: #7c7c8a; font-weight: 700; }
+	.kmini { font-family: "Bebas", sans-serif; letter-spacing: 0.5px; background: #29b765; color: #06210f; font-size: 9px; padding: 3px 8px; border-radius: 5px; }
+	.kmini.amber { background: var(--amber); color: #241701; }
+	.kmini.lt { background: #fff; color: var(--alert); }
+
+	/* tables */
+	table.dt { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+	table.dt th { text-align: left; color: var(--muted); font-family: "Bebas", sans-serif; letter-spacing: 0.06em; font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+	table.dt th.num, table.dt td.num { text-align: right; }
+	table.dt td { padding: 6px 8px; border-bottom: 1px solid #f1ece4; }
+	.pill { font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 9px; padding: 2px 8px; border-radius: 11px; }
+	.pill.paid { background: #e7f4ec; color: var(--green); }
+	.pill.ref { background: #f3eae3; color: #9a6a2f; }
+	.pill.on { background: var(--ink); color: #fff; }
+
+	/* generic cards */
+	.cards3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+	.cards2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
+	.card { background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 14px 15px; }
+	.card h4 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: 0.5px; margin: 0 0 4px; font-size: 16px; color: var(--ink); }
+	.card p { margin: 0; font-size: 10.5px; color: var(--muted); line-height: 1.45; }
+	.num-badge { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-family: "Bebas", sans-serif; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+
+	/* flow */
+	.flow { display: flex; align-items: stretch; }
+	.fstage { flex: 1; background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 12px 11px; }
+	.fstage h4 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: 0.5px; margin: 0 0 4px; font-size: 14px; }
+	.fstage p { margin: 0; font-size: 9.5px; color: var(--muted); line-height: 1.4; }
+	.farrow { display: flex; align-items: center; justify-content: center; width: 24px; color: var(--ink); font-size: 17px; flex: 0 0 auto; }
+
+	/* feature inventory */
+	.inv { display: grid; grid-template-columns: 1.55fr 1fr; gap: 13px; }
+	.invcol { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; }
+	.invcol.add { background: var(--ink); border: 0; }
+	.invcol h3 { font-family: "Bebas", sans-serif; font-weight: normal; letter-spacing: 0.8px; margin: 0 0 9px; font-size: 16px; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+	.invcol.add h3 { color: #fff; }
+	.invcol h3 .tag { font-family: "Liberation Sans", sans-serif; font-size: 8px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 10px; }
+	.tag.now { background: #e7f4ec; color: var(--green); }
+	.tag.soon { background: rgba(255,255,255,0.16); color: #e8d9bf; }
+	.invcat { font-family: "Bebas", sans-serif; letter-spacing: 1px; font-size: 11px; color: var(--ink); margin: 8px 0 3px; }
+	.invlist { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+	.invlist span { font-size: 9.8px; color: var(--ink2); padding: 1.5px 0; }
+	.invlist span:before { content: "\2713"; color: var(--green); font-weight: 900; margin-right: 5px; }
+	.addlist span { display: block; font-size: 10px; color: #e6e6ec; padding: 4px 0; border-bottom: 1px solid #2a2a33; }
+	.addlist span:before { content: "+"; color: #e8d9bf; font-weight: 900; margin-right: 6px; }
+	.addlist span small { color: #9a9aa8; }
+
+	/* stack diagram */
+	.stack { display: flex; flex-direction: column; gap: 9px; }
+	.layer { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; display: flex; align-items: center; justify-content: space-between; }
+	.layer.dark { background: var(--ink); color: #fff; border: 0; }
+	.layer .lt { font-family: "Bebas", sans-serif; letter-spacing: 0.8px; font-size: 15px; }
+	.layer .ls { font-size: 9.5px; color: var(--muted); }
+	.layer.dark .ls { color: #b6b6c0; }
+	.layer .chip { font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 10px; background: #f0ece4; color: var(--ink); padding: 3px 9px; border-radius: 20px; }
+	.layer.dark .chip { background: rgba(255,255,255,0.14); color: #fff; }
+	.flowdown { text-align: center; color: #b9b2a4; font-size: 13px; line-height: 0.5; }
+
+	/* money flow chips */
+	.mflow { display: flex; align-items: center; gap: 8px; }
+	.mchip { background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; text-align: center; flex: 1; }
+	.mchip .mt { font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 13px; }
+	.mchip .ms { font-size: 8.5px; color: var(--muted); margin-top: 1px; }
+	.mflow .ar { color: var(--ink); font-size: 15px; }
+
+	/* KPI */
+	.kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+	.kpi { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; }
+	.kpi .v { font-family: "Bebas", sans-serif; font-size: 26px; letter-spacing: 0.5px; color: var(--ink); }
+	.kpi .v.good { color: var(--green); }
+	.kpi .l { font-size: 9px; color: var(--muted); margin-top: 1px; line-height: 1.3; }
+	.bars .br { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 10px; }
+	.bars .br .nm { width: 92px; }
+	.bars .tk { flex: 1; height: 8px; background: #eae5dc; border-radius: 6px; overflow: hidden; }
+	.bars .fl { height: 8px; background: var(--ink); border-radius: 6px; }
+	.bars .vv { width: 34px; text-align: right; font-family: "Bebas", sans-serif; font-size: 12px; color: var(--ink2); }
+
+	/* catering */
+	.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+	.pkg { border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; background: #fff; }
+	.pkg.sel { border: 2px solid var(--ink); background: #f3f1ec; }
+	.pkg .nm { font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 15px; }
+	.pkg .serves { font-size: 9px; color: var(--muted); margin: 0 0 5px; }
+	.pkg .inc { font-size: 9px; color: var(--ink2); line-height: 1.35; }
+	.pkg .pr { font-family: "Bebas", sans-serif; font-size: 19px; color: var(--ink); margin-top: 5px; }
+	.summary { background: var(--ink); color: #fff; border-radius: 10px; padding: 12px 13px; }
+	.summary .row { display: flex; justify-content: space-between; font-size: 10.5px; padding: 4px 0; border-bottom: 1px solid #2b2b34; }
+	.summary .row.dep { font-family: "Bebas", sans-serif; font-size: 14px; letter-spacing: 0.5px; }
+	.summary .pay { margin-top: 9px; background: #fff; color: var(--ink); text-align: center; padding: 8px; border-radius: 7px; font-family: "Bebas", sans-serif; letter-spacing: 0.5px; font-size: 14px; }
+
+	.flex { display: flex; } .between { justify-content: space-between; } .center { align-items: center; }
+	.glance { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+	.glance .g { flex: 1; padding: 10px 12px; border-right: 1px solid var(--line); }
+	.glance .g:last-child { border-right: 0; }
+	.glance .gv { font-family: "Bebas", sans-serif; font-size: 17px; letter-spacing: 0.5px; }
+	.glance .gl { font-size: 8.5px; color: var(--muted); margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<!-- ===== 1 · COVER ===== -->
+<div class="slide" style="background:#0b0b0f; padding:0;">
+	<div style="position:absolute; inset:0; padding:18mm; color:#fff; display:flex; flex-direction:column; justify-content:space-between;">
+		<div class="flex between center">
+			<img src="brand/db-mono-white.svg" style="width:30px;" />
+			<div style="font-family:'Bebas',sans-serif; letter-spacing:2px; font-size:12px; color:#9a9aa6;">PRODUCT WALKTHROUGH · JUNE 2026</div>
+		</div>
+		<div>
+			<img src="brand/wordmark-white.svg" style="width:230px; display:block; margin-bottom:18px;" />
+			<h1 class="disp" style="color:#fff; font-size:58px; line-height:0.96; max-width:230mm;">ONLINE &amp; CATERING<br/>ORDERING SYSTEM</h1>
+			<p class="lead" style="color:#c7c7d0; font-size:15px; max-width:175mm; margin-top:12px;">A representation of the finished product and how it works — from a customer&rsquo;s phone, to the kitchen iPad, to the owner&rsquo;s dashboard. Built for Dough Boss across Bankstown, Revesby &amp; Roselands.</p>
+			<div class="flex" style="gap:10px; margin-top:20px;">
+				<span style="font-family:'Bebas',sans-serif; letter-spacing:1px; font-size:12px; border:1px solid #33333c; border-radius:20px; padding:6px 13px; color:#e6e6ec;">ORDER ONLINE</span>
+				<span style="font-family:'Bebas',sans-serif; letter-spacing:1px; font-size:12px; border:1px solid #33333c; border-radius:20px; padding:6px 13px; color:#e6e6ec;">CATERING</span>
+				<span style="font-family:'Bebas',sans-serif; letter-spacing:1px; font-size:12px; border:1px solid #33333c; border-radius:20px; padding:6px 13px; color:#e6e6ec;">KITCHEN BOARD</span>
+				<span style="font-family:'Bebas',sans-serif; letter-spacing:1px; font-size:12px; border:1px solid #33333c; border-radius:20px; padding:6px 13px; color:#e6e6ec;">STRIPE PAYMENTS</span>
+			</div>
+		</div>
+		<div class="flex between center" style="font-size:11px; color:#7c7c88;">
+			<span>doughboss.com.au</span>
+			<span style="font-family:'Bebas',sans-serif; letter-spacing:1.5px; color:#9a9aa6;">YOUR SYSTEM · YOUR CUSTOMERS · YOUR DATA</span>
+		</div>
+	</div>
+</div>
+
+<!-- ===== 2 · SYSTEM OVERVIEW ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Overview</div></div>
+	<p class="kicker">What the system is</p>
+	<h1>One system, three experiences</h1>
+	<p class="lead" style="max-width:215mm;">Dough Boss runs as a single ordering platform on your own website. Customers order and pay online, the kitchen works orders on an iPad, and you see everything across all three shops — no delivery-app middleman, no commission, your data.</p>
+	<div class="cards3" style="margin-top:14px;">
+		<div class="card"><div class="num-badge">1</div><h4>Customers order</h4><p>Browse the menu, build a pizza or pick a catering pack, choose pickup or delivery, and pay by card — all in the phone&rsquo;s browser, no app to download.</p></div>
+		<div class="card"><div class="num-badge">2</div><h4>The kitchen runs it</h4><p>Each order lands on the right shop&rsquo;s iPad board with an alert. Staff accept with one tap, set an ETA, and move it New → Preparing → Ready.</p></div>
+		<div class="card"><div class="num-badge">3</div><h4>You stay in control</h4><p>Payments settle into your Stripe account; sales, top items and customers show on one dashboard; you edit the menu and hours yourself.</p></div>
+	</div>
+	<div class="glance" style="margin-top:14px;">
+		<div class="g"><div class="gv">$0 COMMISSION</div><div class="gl">a flat fee, not a cut of each order</div></div>
+		<div class="g"><div class="gv">100% YOUR CUSTOMERS</div><div class="gl">names &amp; orders in your database</div></div>
+		<div class="g"><div class="gv">3 SHOPS</div><div class="gl">automatic order routing</div></div>
+		<div class="g"><div class="gv">NO APP</div><div class="gl">works in any browser</div></div>
+	</div>
+	<div class="foot"><span>Dough Boss · Online &amp; Catering Ordering System</span><span class="pg">02</span></div>
+</div>
+
+<!-- ===== 3 · HOW IT WORKS ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">How it works</div></div>
+	<p class="kicker">End to end</p>
+	<h1>From their phone to your kitchen</h1>
+	<div class="flow" style="margin-top:12px;">
+		<div class="fstage"><div class="num-badge">1</div><h4>Order</h4><p>Customer browses the menu, builds their pizza or picks a catering pack, chooses pickup or delivery.</p></div>
+		<div class="farrow">&#8594;</div>
+		<div class="fstage"><div class="num-badge">2</div><h4>Pay</h4><p>Secure Stripe checkout. Funds settle into your Stripe account with an automatic GST receipt.</p></div>
+		<div class="farrow">&#8594;</div>
+		<div class="fstage"><div class="num-badge">3</div><h4>Route</h4><p>The order is sent to the closest of your three shops by postcode or pickup choice.</p></div>
+		<div class="farrow">&#8594;</div>
+		<div class="fstage"><div class="num-badge">4</div><h4>Cook</h4><p>It lands on the kitchen iPad with an alert. One tap to accept and set an ETA; the customer tracks it live.</p></div>
+		<div class="farrow">&#8594;</div>
+		<div class="fstage"><div class="num-badge">5</div><h4>Done</h4><p>Picked up or delivered. The order and the customer&rsquo;s details are saved in your system.</p></div>
+	</div>
+	<div class="cards3" style="margin-top:16px;">
+		<div class="card"><h4>Automatic shop routing</h4><p>Delivery postcodes and pickup choice send each order to the right kitchen — no manual sorting between Bankstown, Revesby and Roselands.</p></div>
+		<div class="card"><h4>Server-checked pricing</h4><p>Every total is recalculated on the server in AUD with GST, so what the customer pays is always correct — never trusted from the browser.</p></div>
+		<div class="card"><h4>Nothing to install</h4><p>Customers order in their browser and staff use a normal iPad in Safari. No apps to install, no third-party tablets.</p></div>
+	</div>
+	<div class="foot"><span>Dough Boss · Online &amp; Catering Ordering System</span><span class="pg">03</span></div>
+</div>
+
+<!-- ===== 4 · ONLINE ORDERING ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Customer · Online ordering</div></div>
+	<p class="kicker">Screen 01</p>
+	<h1>Online ordering</h1>
+	<div class="flex" style="gap:12px; margin-top:8px;">
+		<div style="flex:1.35;">
+			<div class="browser">
+				<div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">doughboss.com.au/order</span></div>
+				<div class="sf-hero">
+					<div><div class="ht">REAL WOOD-FIRED PIZZA</div><div class="hs">Order direct · pickup or delivery · Bankstown · Revesby · Roselands</div></div>
+					<span class="btn inv">ORDER NOW</span>
+				</div>
+				<div class="menu-grid">
+					<div class="mcard"><div class="pic"><span class="cat">CLASSIC</span><img src="brand/db-mono-white.svg"/></div><div class="body"><h4>Margherita</h4><div class="desc">San Marzano, fresh mozzarella, basil</div><div class="foot2"><span class="price">$16.90</span><span class="addbtn">ADD</span></div></div></div>
+					<div class="mcard"><div class="pic"><span class="cat">CLASSIC</span><img src="brand/db-mono-white.svg"/></div><div class="body"><h4>Pepperoni</h4><div class="desc">Double pepperoni, mozzarella, oregano</div><div class="foot2"><span class="price">$18.90</span><span class="addbtn">ADD</span></div></div></div>
+					<div class="mcard"><div class="pic"><span class="cat">GOURMET</span><img src="brand/db-mono-white.svg"/></div><div class="body"><h4>Truffle Mushroom</h4><div class="desc">Field mushrooms, truffle oil, parmesan</div><div class="foot2"><span class="price">$24.90</span><span class="addbtn">ADD</span></div></div></div>
+					<div class="mcard out"><div class="pic"><span class="cat">GOURMET</span><img src="brand/db-mono-white.svg"/></div><div class="body"><h4>Wagyu &amp; Onion <span class="soldout">SOLD OUT</span></h4><div class="desc">Wagyu beef, onion jam, rocket</div><div class="foot2"><span class="price">$26.90</span><span class="addbtn dis">SOLD OUT</span></div></div></div>
+				</div>
+			</div>
+			<p class="caption">Your branded menu on your own domain. Items and prices are managed by you and can be marked sold-out in a tap.</p>
+		</div>
+		<div style="flex:1;">
+			<div class="builder">
+				<h4>BUILD YOUR PIZZA</h4>
+				<div class="opt"><span class="radio"></span><span class="nm">Small 9&Prime;</span><span class="pr">$13.90</span></div>
+				<div class="opt sel"><span class="radio on"></span><span class="nm">Large 13&Prime;</span><span class="pr">$21.90</span></div>
+				<div class="opt"><span class="chk on"></span><span class="nm">Grilled chicken</span><span class="pr">+$3.50</span></div>
+				<div class="opt"><span class="chk on"></span><span class="nm">Mushrooms</span><span class="pr">+$2.00</span></div>
+				<div class="opt"><span class="chk on"></span><span class="nm">Bocconcini</span><span class="pr">+$3.00</span></div>
+				<div class="opt"><span class="chk"></span><span class="nm">Kalamata olives</span><span class="pr">+$2.00</span></div>
+				<div class="builder-total"><span style="font-size:11px; color:var(--muted); font-weight:700;">Large + 3 toppings</span><span class="big">$30.40</span></div>
+			</div>
+			<p style="font-size:9.5px; color:var(--muted); margin-top:9px; line-height:1.5;">The builder totals live as toppings are chosen, in AUD with GST included.</p>
+		</div>
+	</div>
+	<div class="foot"><span>Representation of the finished product · sample data</span><span class="pg">04</span></div>
+</div>
+
+<!-- ===== 5 · CHECKOUT ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Customer · Checkout</div></div>
+	<p class="kicker">Screen 02</p>
+	<h1>Checkout &amp; payment</h1>
+	<div class="flex" style="gap:12px; margin-top:8px;">
+		<div style="flex:1.5;">
+			<div class="browser">
+				<div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">doughboss.com.au/checkout</span></div>
+				<div style="padding:11px 13px;">
+					<div class="co-row"><div class="co-th"><img src="brand/db-mono-white.svg"/></div><div class="nm">Large Pepperoni<small>Extra cheese</small></div><div class="qty">&minus; <b>1</b> +</div><div class="lp">$21.90</div></div>
+					<div class="co-row"><div class="co-th"><img src="brand/db-mono-white.svg"/></div><div class="nm">Garlic Bread<small>4 pieces</small></div><div class="qty">&minus; <b>1</b> +</div><div class="lp">$7.90</div></div>
+					<div class="co-row"><div class="co-th"><img src="brand/db-mono-white.svg"/></div><div class="nm">Coke<small>1.25L bottle</small></div><div class="qty">&minus; <b>1</b> +</div><div class="lp">$4.50</div></div>
+					<div class="promo"><span class="inp">Promo code — WELCOME10</span><span class="btn">APPLY</span></div>
+				</div>
+			</div>
+			<p class="caption">A familiar cart: adjust quantities, add a promo code, choose pickup or delivery — then pay without leaving your site.</p>
+		</div>
+		<div style="flex:1;">
+			<div class="builder">
+				<div class="sumline"><span>Subtotal</span><span>$34.30</span></div>
+				<div class="sumline"><span>GST (incl.)</span><span>$3.12</span></div>
+				<div class="sumline"><span>Pickup · Bankstown</span><span>Free</span></div>
+				<div class="sumline"><span>Tip</span><span>$2.00</span></div>
+				<div class="sumline tot"><span>TOTAL</span><span>$36.30</span></div>
+				<div class="wallet" style="margin-top:10px;"><span class="wbtn apple">&#63743; PAY</span><span class="wbtn gpay">G PAY</span></div>
+				<div class="divider">OR PAY BY CARD</div>
+				<div class="cardbox"><div class="cl">Card details</div><div class="cardline"><span>4242 4242 4242 4242</span><span style="color:#999;">12/27 · 123</span></div></div>
+				<div class="btn block">PAY $36.30</div>
+				<div style="font-size:8.5px; color:var(--green); text-align:center; margin-top:6px; font-weight:800;">&#10003; SECURED BY STRIPE · GST RECEIPT EMAILED</div>
+			</div>
+		</div>
+	</div>
+	<div class="foot"><span>Representation of the finished product · sample data</span><span class="pg">05</span></div>
+</div>
+
+<!-- ===== 6 · ORDER TRACKING ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Customer · Order tracking</div></div>
+	<p class="kicker">Screen 03</p>
+	<h1>Live order tracking</h1>
+	<div class="flex" style="gap:22px; margin-top:8px; align-items:flex-start;">
+		<div class="phone">
+			<div class="phone-notch"></div>
+			<div class="phone-screen">
+				<div class="p-head">YOUR ORDER · BANKSTOWN</div>
+				<div class="p-body">
+					<div class="sumline"><span>1× Large Pepperoni</span><span>$21.90</span></div>
+					<div class="sumline"><span>1× Garlic Bread</span><span>$7.90</span></div>
+					<div class="sumline"><span>1× Coke 1.25L</span><span>$4.50</span></div>
+					<div class="sumline tot"><span>PAID</span><span>$36.30</span></div>
+					<div style="font-size:9px; color:var(--muted); text-align:center; margin-top:7px;">Ready for pickup in ~25 min</div>
+				</div>
+			</div>
+		</div>
+		<div class="phone">
+			<div class="phone-notch"></div>
+			<div class="phone-screen">
+				<div class="p-head">TRACK · DB-260617-B7T2</div>
+				<div class="p-body">
+					<div class="step"><span class="sdot done"></span><div class="t">Order received<small>6:18pm</small></div></div>
+					<div class="step"><span class="sdot done"></span><div class="t">Accepted by kitchen<small>6:21pm · ETA 20 min</small></div></div>
+					<div class="step"><span class="sdot active"></span><div class="t">In the oven — ready ~6:45pm<small>We&rsquo;ll text you when it&rsquo;s ready</small></div></div>
+					<div class="step"><span class="sdot todo"></span><div class="t" style="color:#9a9488;">Ready for pickup</div></div>
+					<div style="border-top:1px solid #f1ece4; margin-top:6px; padding-top:7px; font-size:9px; color:var(--muted);">Dough Boss Bankstown · 0466 xxx xxx</div>
+				</div>
+			</div>
+		</div>
+		<div style="flex:1; padding-top:6px;">
+			<p class="caption" style="font-size:14px;">The customer sees their order move through each stage — the same status the kitchen sets on the iPad.</p>
+			<ul style="font-size:11px; color:var(--muted); line-height:1.7; margin-top:13px; padding-left:16px;">
+				<li><strong style="color:var(--ink);">One source of truth</strong> — kitchen taps a stage, the customer sees it.</li>
+				<li><strong style="color:var(--ink);">Fewer phone calls</strong> — no &ldquo;is my order ready yet?&rdquo;</li>
+				<li><strong style="color:var(--ink);">SMS add-on</strong> — optional &ldquo;ready&rdquo; / &ldquo;on its way&rdquo; texts.</li>
+				<li><strong style="color:var(--ink);">Receipt &amp; details saved</strong> to your customer list.</li>
+			</ul>
+		</div>
+	</div>
+	<div class="foot"><span>Representation of the finished product · sample data</span><span class="pg">06</span></div>
+</div>
+
+<!-- ===== 7 · CATERING ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Customer · Catering</div></div>
+	<p class="kicker">Screen 04</p>
+	<h1>Catering ordering</h1>
+	<div class="flex" style="gap:12px; margin-top:8px;">
+		<div style="flex:1.4;">
+			<div class="browser">
+				<div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">doughboss.com.au/catering</span></div>
+				<div style="padding:12px;">
+					<div class="cat-grid">
+						<div class="pkg"><div class="nm">Office Lunch</div><div class="serves">Serves 10&ndash;12</div><div class="inc">6 large pizzas, 2 garlic breads</div><div class="pr">$129</div></div>
+						<div class="pkg sel"><div class="nm">Party Pack &nbsp;<span class="pill on">SELECTED</span></div><div class="serves">Serves 18&ndash;20</div><div class="inc">10 large pizzas, 4 sides, 2 drinks</div><div class="pr">$229</div></div>
+						<div class="pkg"><div class="nm">Big Footy Feast</div><div class="serves">Serves 30&ndash;35</div><div class="inc">16 large pizzas, 6 sides, 4 drinks</div><div class="pr">$379</div></div>
+						<div class="pkg"><div class="nm">Grazing</div><div class="serves">Serves 40+ · ~$11/head</div><div class="inc">Build-your-own platters</div><div class="pr">from $449</div></div>
+					</div>
+				</div>
+			</div>
+			<p class="caption">Larger orders captured online — package, headcount, date and deposit handled without a phone call.</p>
+		</div>
+		<div style="flex:1;">
+			<div class="summary">
+				<div style="font-family:'Bebas',sans-serif; letter-spacing:0.5px; font-size:15px; margin-bottom:6px;">PARTY PACK — SUMMARY</div>
+				<div class="row"><span>Subtotal (GST incl.)</span><span>$229.00</span></div>
+				<div class="row"><span>Fulfilment</span><span>Pickup</span></div>
+				<div class="row"><span>Fulfilled by</span><span>Revesby</span></div>
+				<div class="row"><span>Ready</span><span>Fri 19 Jun · 12:30pm</span></div>
+				<div class="row dep"><span>DEPOSIT NOW (30%)</span><span>$68.70</span></div>
+				<div class="row" style="border:0;"><span>Balance on pickup</span><span>$160.30</span></div>
+				<div class="pay">PAY $68.70 DEPOSIT &amp; CONFIRM</div>
+				<p style="font-size:8.5px; color:#9a9aa8; margin:8px 0 0;">Min. 24 hrs notice · deposit via Stripe · routes to the Revesby kitchen board.</p>
+			</div>
+		</div>
+	</div>
+	<div class="foot"><span>Representation of the finished product · sample data</span><span class="pg">07</span></div>
+</div>
+
+<!-- ===== 8 · KITCHEN iPad ===== -->
+<div class="slide" style="background:#e7e3da;">
+	<div class="topbar" style="border-color:#d6cfc4;"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Kitchen · Live order board</div></div>
+	<p class="kicker">Screen 05</p>
+	<h1>The kitchen iPad</h1>
+	<div class="ipad" style="margin-top:6px;">
+		<div class="ipad-cam"></div>
+		<div style="border-radius:7px; overflow:hidden;">
+			<div class="kds">
+				<div class="kds-top">
+					<div class="kds-brand"><img src="brand/db-mono-white.svg"/><div><div class="bt">LIVE ORDER BOARD</div><div class="bs">Bankstown · kitchen tablet</div></div></div>
+					<div class="kds-clock">WED 17 JUN · 6:34PM · 4 ACTIVE</div>
+				</div>
+				<div class="alert">
+					<div class="msg">&#9679; NEW ORDER — DB-260617-A4K9 · 2 ITEMS · $48.50 · PICKUP</div>
+					<div class="flex" style="gap:7px;"><span class="kbtn">ACCEPT</span><span class="kbtn ghost">ETA 20M &#9662;</span></div>
+				</div>
+				<div class="lanes">
+					<div>
+						<div class="lane-h"><span>NEW</span><span>1</span></div>
+						<div class="kcard new"><div class="knum"><span>DB-…A4K9</span><span>$48.50</span></div><div class="kcust">Sam · Pickup</div><div class="kitems">1 Lg Margherita<br/>1 Lg Aussie BBQ<br/>1 Garlic Bread (4pc)</div><div class="kfoot"><span class="ktime">waiting 0:12</span><span class="kmini lt">TAP TO ACCEPT</span></div></div>
+					</div>
+					<div>
+						<div class="lane-h"><span>PREPARING</span><span>2</span></div>
+						<div class="kcard prep"><div class="knum"><span>DB-…X3M1</span><span>$41.20</span></div><div class="kcust">Aisha · Delivery</div><div class="kitems">2 Lg Pepperoni, wedges, 2 Coke</div><div class="kfoot"><span class="ktime">8:40 · ETA 6:50pm</span><span class="kmini amber">IN OVEN</span></div></div>
+						<div class="kcard prep"><div class="knum"><span>DB-…K9P7</span><span>$41.80</span></div><div class="kcust">Tony · Pickup</div><div class="kitems">1 Truffle Mushroom, 1 Margherita</div><div class="kfoot"><span class="ktime">5:05</span><span class="kmini amber">PREP</span></div></div>
+					</div>
+					<div>
+						<div class="lane-h"><span>READY</span><span>1</span></div>
+						<div class="kcard ready"><div class="knum"><span>DB-…R2N5</span><span>$72.60</span></div><div class="kcust">Mel · Pickup</div><div class="kitems">3 Lg Pepperoni, 2 Garlic Bread</div><div class="kfoot"><span class="ktime">ready 0:30</span><span class="kmini">READY &#10003;</span></div></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<p class="caption" style="margin-top:9px;">New orders arrive with a looping alert until a staff member taps Accept. Each card moves New → Preparing → Ready, and that status is what the customer sees.</p>
+	<div class="foot"><span>Representation of the finished product · sample data</span><span class="pg">08</span></div>
+</div>
+
+<!-- ===== 9 · PAYMENTS (STRIPE) ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Owner · Payments</div></div>
+	<p class="kicker">Screen 06</p>
+	<h1>Payments in your own Stripe</h1>
+	<div class="mflow" style="margin-top:8px; margin-bottom:11px;">
+		<div class="mchip"><div class="mt">CUSTOMER CARD</div><div class="ms">paid at checkout</div></div>
+		<span class="ar">&#8594;</span>
+		<div class="mchip"><div class="mt">YOUR STRIPE</div><div class="ms">you hold the funds</div></div>
+		<span class="ar">&#8594;</span>
+		<div class="mchip"><div class="mt">YOUR BANK</div><div class="ms">automatic payouts</div></div>
+		<span class="ar">&#8594;</span>
+		<div class="mchip"><div class="mt">DASHBOARD</div><div class="ms">order marked paid</div></div>
+	</div>
+	<div class="flex" style="gap:12px;">
+		<div style="flex:1.5;">
+			<div class="browser">
+				<div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">dashboard.stripe.com · Dough Boss Pty Ltd</span></div>
+				<div style="padding:11px 13px;">
+					<div class="flex" style="gap:10px; margin-bottom:9px;">
+						<div class="kpi" style="flex:1;"><div class="v good">$1,847</div><div class="l">Today · 52 orders</div></div>
+						<div class="kpi" style="flex:1;"><div class="v">$11,920</div><div class="l">This week · 327 orders</div></div>
+						<div class="kpi" style="flex:1;"><div class="v">$36.45</div><div class="l">Average order</div></div>
+					</div>
+					<table class="dt">
+						<tr><th>Time</th><th>Order</th><th>Customer</th><th class="num">Amount</th><th>Status</th></tr>
+						<tr><td>6:21pm</td><td>DB-…A4K9</td><td>Sam P.</td><td class="num">$48.50</td><td><span class="pill paid">PAID</span></td></tr>
+						<tr><td>6:18pm</td><td>DB-…B7T2</td><td>Layla M.</td><td class="num">$36.30</td><td><span class="pill paid">PAID</span></td></tr>
+						<tr><td>1:10pm</td><td>DB-…W8Q4</td><td>David N. <span style="color:var(--muted); font-size:9px;">(catering deposit)</span></td><td class="num">$68.70</td><td><span class="pill paid">PAID</span></td></tr>
+						<tr><td>Yest.</td><td>DB-…J1L0</td><td>Chris R.</td><td class="num">$22.40</td><td><span class="pill ref">REFUNDED</span></td></tr>
+					</table>
+				</div>
+			</div>
+			<p class="caption">Money settles into your account, not ours — Stripe pays you directly, minus only Stripe&rsquo;s ~1.7% + 30c.</p>
+		</div>
+		<div style="flex:1;">
+			<div class="builder">
+				<h4>PAYMENT SETTINGS</h4>
+				<div class="opt between"><span class="nm">Card payments</span><span class="pill on">ON</span></div>
+				<div class="opt sel between"><span class="nm">Mode</span><span class="pr" style="color:var(--ink); font-weight:800;">Test | &#9679; Live</span></div>
+				<div class="opt between"><span class="nm">Publishable key</span><span class="pr">pk_live_&bull;&bull;&bull;&bull;4Tq9</span></div>
+				<div class="opt between"><span class="nm">Secret key</span><span class="pr">sk_live_&bull;&bull;&bull;&bull;91Hd</span></div>
+				<div class="opt between"><span class="nm">Webhook</span><span class="pr" style="color:var(--green); font-weight:700;">Connected &#10003;</span></div>
+				<div class="opt between"><span class="nm">Currency</span><span class="pr">AUD · auto receipt</span></div>
+			</div>
+			<p style="font-size:9.5px; color:var(--muted); margin-top:9px; line-height:1.5;">Built switched off and in test mode, proven with test cards, then turned live with your keys.</p>
+		</div>
+	</div>
+	<div class="foot"><span>Representation of the finished product · sample data</span><span class="pg">09</span></div>
+</div>
+
+<!-- ===== 10 · OWNER DASHBOARD ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Owner · Dashboard &amp; management</div></div>
+	<p class="kicker">Screen 07</p>
+	<h1>One view, three shops</h1>
+	<div class="browser" style="margin-top:8px;">
+		<div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">doughboss.com.au/wp-admin · Dough Boss</span></div>
+		<div style="padding:12px 13px;">
+			<div class="kpis">
+				<div class="kpi"><div class="v">327</div><div class="l">Orders this week</div></div>
+				<div class="kpi"><div class="v">$11,920</div><div class="l">Revenue this week</div></div>
+				<div class="kpi"><div class="v good">~$3,040</div><div class="l">Commission saved this week</div></div>
+				<div class="kpi"><div class="v">42%</div><div class="l">Repeat customers</div></div>
+			</div>
+			<div class="flex" style="gap:16px; margin-top:12px;">
+				<div style="flex:1;">
+					<div style="font-family:'Bebas',sans-serif; letter-spacing:1px; font-size:13px; margin-bottom:6px;">TOP ITEMS THIS WEEK</div>
+					<div class="bars">
+						<div class="br"><span class="nm">Pepperoni</span><span class="tk"><span class="fl" style="width:100%;"></span></span><span class="vv">211</span></div>
+						<div class="br"><span class="nm">Margherita</span><span class="tk"><span class="fl" style="width:78%;"></span></span><span class="vv">164</span></div>
+						<div class="br"><span class="nm">Garlic Bread</span><span class="tk"><span class="fl" style="width:75%;"></span></span><span class="vv">158</span></div>
+						<div class="br"><span class="nm">Aussie BBQ</span><span class="tk"><span class="fl" style="width:46%;"></span></span><span class="vv">97</span></div>
+					</div>
+				</div>
+				<div style="flex:1;">
+					<div style="font-family:'Bebas',sans-serif; letter-spacing:1px; font-size:13px; margin-bottom:6px;">REVENUE BY SHOP</div>
+					<div class="bars">
+						<div class="br"><span class="nm">Bankstown</span><span class="tk"><span class="fl" style="width:100%; background:var(--green);"></span></span><span class="vv">$4.9k</span></div>
+						<div class="br"><span class="nm">Revesby</span><span class="tk"><span class="fl" style="width:85%; background:var(--green);"></span></span><span class="vv">$4.2k</span></div>
+						<div class="br"><span class="nm">Roselands</span><span class="tk"><span class="fl" style="width:58%; background:var(--green);"></span></span><span class="vv">$2.8k</span></div>
+					</div>
+					<div style="font-size:9.5px; color:var(--muted); margin-top:9px; line-height:1.5;">Busiest <strong>Fri 6&ndash;8pm</strong>. Edit menu, prices, hours and the &ldquo;accepting orders&rdquo; switch yourself — no developer needed.</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<p class="caption">Sales, top items and customers across every shop, live — plus self-serve menu and store controls.</p>
+	<div class="foot"><span>Representation of the finished product · sample data</span><span class="pg">10</span></div>
+</div>
+
+<!-- ===== 11 · FEATURE SET ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">What&rsquo;s included</div></div>
+	<p class="kicker">The complete platform</p>
+	<h1>Everything in the system</h1>
+	<div class="inv" style="margin-top:8px;">
+		<div class="invcol">
+			<h3>LIVE FROM DAY ONE <span class="tag now">Included</span></h3>
+			<div class="invcat">ORDERING</div>
+			<div class="invlist"><span>Branded storefront</span><span>Custom pizza builder</span><span>Sizes &amp; toppings pricing</span><span>Server-checked totals</span><span>Pickup &amp; delivery</span><span>AUD &amp; GST handling</span><span>Sold-out toggles</span><span>Mobile-first, no app</span></div>
+			<div class="invcat">CHECKOUT &amp; CATERING</div>
+			<div class="invlist"><span>Cart &amp; quantities</span><span>Promo codes &amp; tips</span><span>Card / Apple / Google Pay</span><span>Catering packages</span><span>Deposits via Stripe</span><span>Lead-time rules</span></div>
+			<div class="invcat">KITCHEN &amp; PAYMENTS</div>
+			<div class="invlist"><span>Live iPad order board</span><span>New / Preparing / Ready</span><span>Audible new-order alert</span><span>One-tap accept &amp; ETA</span><span>Stripe payments, your account</span><span>Auto GST receipts &amp; refunds</span></div>
+			<div class="invcat">OWNER</div>
+			<div class="invlist"><span>Multi-shop order routing</span><span>Sales dashboard</span><span>Self-serve menu manager</span><span>Hours &amp; open/closed control</span></div>
+		</div>
+		<div class="invcol add">
+			<h3>ADD-ONS <span class="tag soon">When you&rsquo;re ready</span></h3>
+			<div class="addlist">
+				<span>Loyalty rewards <small>— &ldquo;10th pizza free&rdquo;, tracked</small></span>
+				<span>SMS notifications <small>— &ldquo;ready&rdquo; / &ldquo;on its way&rdquo;</small></span>
+				<span>Scheduled &amp; recurring catering <small>— office accounts</small></span>
+				<span>Auto-printed kitchen dockets <small>— screen backup</small></span>
+				<span>QR table ordering <small>— dine-in scan &amp; pay</small></span>
+				<span>Google review booster <small>— auto review link</small></span>
+				<span>Email marketing <small>— to your own list</small></span>
+			</div>
+			<p style="font-size:9px; color:#9a9aa8; margin-top:11px; line-height:1.5;">Add-ons slot into the same system — no rebuild, switched on as the business grows.</p>
+		</div>
+	</div>
+	<div class="foot"><span>Dough Boss · Online &amp; Catering Ordering System</span><span class="pg">11</span></div>
+</div>
+
+<!-- ===== 12 · HOW IT'S BUILT ===== -->
+<div class="slide">
+	<div class="topbar"><div class="wm"><img src="brand/db-mono-black.svg"/><span>DOUGH BOSS</span></div><div class="sec">Under the hood</div></div>
+	<p class="kicker">How it&rsquo;s built</p>
+	<h1>Standard, proven, and yours</h1>
+	<div class="flex" style="gap:16px; margin-top:10px;">
+		<div style="flex:1.2;">
+			<div class="stack">
+				<div class="layer"><div><div class="lt">CUSTOMER BROWSER &amp; KITCHEN iPAD</div><div class="ls">Any phone or tablet — no app to install</div></div><span class="chip">SAFARI / CHROME</span></div>
+				<div class="flowdown">&#8595;</div>
+				<div class="layer dark"><div><div class="lt">YOUR WEBSITE — WORDPRESS</div><div class="ls">doughboss.com.au, on your own hosting</div></div><span class="chip">YOUR DOMAIN</span></div>
+				<div class="flowdown">&#8595;</div>
+				<div class="layer"><div><div class="lt">DOUGH BOSS PLUGIN</div><div class="ls">Ordering · catering · kitchen board · dashboard</div></div><span class="chip">THE SYSTEM</span></div>
+				<div class="flowdown">&#8595;</div>
+				<div class="flex" style="gap:10px;">
+					<div class="layer" style="flex:1;"><div><div class="lt">STRIPE</div><div class="ls">Card payments &rarr; your bank</div></div></div>
+					<div class="layer" style="flex:1;"><div><div class="lt">YOUR DATABASE</div><div class="ls">Customers &amp; orders stay yours</div></div></div>
+				</div>
+			</div>
+		</div>
+		<div style="flex:1;">
+			<div class="cards2" style="grid-template-columns:1fr;">
+				<div class="card"><h4>No lock-in</h4><p>Your domain, your WordPress, your Stripe account and your customer data. The system runs on tools you already own or control.</p></div>
+				<div class="card"><h4>Reliable by design</h4><p>Orders are saved as they arrive, so nothing is lost if a screen is closed or refreshed — and everything is backed up. We maintain and update it for you.</p></div>
+				<div class="card"><h4>Secure payments</h4><p>Card details go straight to Stripe (PCI-compliant) and never touch your server — you simply receive the funds.</p></div>
+			</div>
+		</div>
+	</div>
+	<div class="foot"><span>Dough Boss · Online &amp; Catering Ordering System</span><span class="pg">12</span></div>
+</div>
+
+<!-- ===== 13 · GOING LIVE ===== -->
+<div class="slide" style="background:#0b0b0f; color:#fff;">
+	<div class="topbar" style="border-color:#27272f;"><div class="wm"><img src="brand/db-mono-white.svg"/><span style="color:#fff;">DOUGH BOSS</span></div><div class="sec" style="color:#7c7c88;">Going live</div></div>
+	<p class="kicker" style="color:#fff;">Rollout</p>
+	<h1 style="color:#fff;">How we go live</h1>
+	<div class="cards3" style="margin-top:12px;">
+		<div class="card" style="background:#16161e; border:1px solid #27272f;"><div class="num-badge" style="background:#fff; color:var(--ink);">1</div><h4 style="color:#fff;">Set up · Week 1</h4><p style="color:#c2c2cc;">Load your menu, branding and shop details; connect Stripe and WordPress; set up the kitchen iPads.</p></div>
+		<div class="card" style="background:#16161e; border:1px solid #27272f;"><div class="num-badge" style="background:#fff; color:var(--ink);">2</div><h4 style="color:#fff;">Test · Week 2</h4><p style="color:#c2c2cc;">Run real orders through ordering, checkout, catering and the kitchen board with your team in test mode.</p></div>
+		<div class="card" style="background:#16161e; border:1px solid #27272f;"><div class="num-badge" style="background:#fff; color:var(--ink);">3</div><h4 style="color:#fff;">Go live</h4><p style="color:#c2c2cc;">Switch to live payments across all three shops; we stay close through the first busy weekends.</p></div>
+	</div>
+	<div class="flex" style="gap:14px; margin-top:14px; align-items:stretch;">
+		<div style="flex:1.2; background:#16161e; border:1px solid #27272f; border-radius:11px; padding:14px 16px;">
+			<h4 style="font-family:'Bebas',sans-serif; font-weight:normal; letter-spacing:0.8px; margin:0 0 8px; font-size:16px; color:#fff;">WHAT WE NEED FROM YOU</h4>
+			<div class="flex" style="gap:20px;">
+				<ul style="margin:0; padding-left:15px; flex:1;">
+					<li style="font-size:10.5px; color:#d4d4dc; line-height:1.7;">Menu — items, sizes, prices</li>
+					<li style="font-size:10.5px; color:#d4d4dc; line-height:1.7;">Shop details &amp; hours (×3)</li>
+					<li style="font-size:10.5px; color:#d4d4dc; line-height:1.7;">Your ABN (GST invoices)</li>
+				</ul>
+				<ul style="margin:0; padding-left:15px; flex:1;">
+					<li style="font-size:10.5px; color:#d4d4dc; line-height:1.7;">WordPress access</li>
+					<li style="font-size:10.5px; color:#d4d4dc; line-height:1.7;">Stripe account (we&rsquo;ll help)</li>
+					<li style="font-size:10.5px; color:#d4d4dc; line-height:1.7;">Logo &amp; brand assets (high-res)</li>
+				</ul>
+			</div>
+		</div>
+		<div style="flex:1; background:#16161e; border:1px solid #27272f; border-radius:11px; padding:14px 16px; display:flex; flex-direction:column; justify-content:center;">
+			<div style="font-family:'Bebas',sans-serif; letter-spacing:1px; font-size:13px; color:#9a9aa6;">THE COMMERCIALS, IN SHORT</div>
+			<div style="font-size:11px; color:#d4d4dc; margin-top:7px; line-height:1.6;">Setup ~$4&ndash;5k at cost · $800/week + 5% of online sales (capped 15%) to run, maintain &amp; support it. Stripe&rsquo;s ~1.7% + 30c per card is separate — a flat, capped fee with no per-order commission.</div>
+		</div>
+	</div>
+	<div class="flex between center" style="margin-top:13px; font-size:11px; color:#7c7c88;">
+		<img src="brand/wordmark-white.svg" style="width:120px; opacity:0.9;" />
+		<span style="font-family:'Bebas',sans-serif; letter-spacing:1.5px; color:#9a9aa6;">YOUR SYSTEM · YOUR CUSTOMERS · YOUR DATA</span>
+	</div>
+</div>
+
+</body>
+</html>

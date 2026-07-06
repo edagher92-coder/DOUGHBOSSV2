@@ -16,36 +16,54 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
-// Drop custom tables.
-$orders_table = $wpdb->prefix . 'doughboss_orders';
-$items_table  = $wpdb->prefix . 'doughboss_order_items';
-// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
-$wpdb->query( "DROP TABLE IF EXISTS {$items_table}" );
-$wpdb->query( "DROP TABLE IF EXISTS {$orders_table}" );
+// Drop custom tables (children before parents).
+$tables = array(
+	$wpdb->prefix . 'doughboss_voucher_redemptions',
+	$wpdb->prefix . 'doughboss_vouchers',
+	$wpdb->prefix . 'doughboss_order_items',
+	$wpdb->prefix . 'doughboss_orders',
+	$wpdb->prefix . 'doughboss_catering_enquiries',
+	$wpdb->prefix . 'doughboss_locations',
+);
+// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+foreach ( $tables as $table ) {
+	$wpdb->query( "DROP TABLE IF EXISTS {$table}" );
+}
 // phpcs:enable
 
-// Delete menu items and their meta.
-$item_ids = get_posts(
+// Delete menu items, catering packages, and their meta.
+$post_ids = get_posts(
 	array(
-		'post_type'   => 'doughboss_item',
+		'post_type'   => array( 'doughboss_item', 'doughboss_catering_package' ),
 		'post_status' => 'any',
 		'numberposts' => -1,
 		'fields'      => 'ids',
 	)
 );
-foreach ( $item_ids as $item_id ) {
-	wp_delete_post( $item_id, true );
+foreach ( $post_ids as $post_id ) {
+	wp_delete_post( $post_id, true );
 }
 
 // Remove options.
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
+delete_option( 'doughboss_unreconciled_payments' );
 
-// Remove the custom capability.
+// Remove the custom capabilities and the kitchen role.
 $role = get_role( 'administrator' );
 if ( $role ) {
 	$role->remove_cap( 'manage_doughboss' );
+	$role->remove_cap( 'manage_doughboss_kds' );
+	$role->remove_cap( 'redeem_doughboss_vouchers' );
 }
+remove_role( 'doughboss_kitchen' );
+
+// Clean up checkout idempotency transients.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->query(
+	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_idem_%' OR option_name LIKE '_transient_timeout_doughboss_idem_%'"
+);
+// phpcs:enable
 
 // Clean up cart transients.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery

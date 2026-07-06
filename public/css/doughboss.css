@@ -4,13 +4,47 @@
  */
 
 .db-app {
-	--db-accent: #d6452b;
-	--db-accent-dark: #b8381f;
+	--db-accent: #e2231a;
+	--db-accent-dark: #c41c14;
 	--db-border: #e6e1da;
 	--db-muted: #6b6b6b;
 	font-size: 16px;
 	line-height: 1.5;
 	color: #2b2b2b;
+}
+
+/* Accessibility: visible keyboard focus + respect reduced motion (audit P4). */
+.db-app :focus-visible {
+	outline: 3px solid var(--db-accent);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.db-app *,
+	.db-app *::before,
+	.db-app *::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}
+
+/* Non-blocking toast for transient errors (replaces alert()). */
+.db-toast {
+	position: fixed;
+	left: 50%;
+	bottom: 24px;
+	transform: translateX(-50%);
+	z-index: 99999;
+	background: #0d0d0d;
+	color: #fff;
+	padding: 13px 20px;
+	border-radius: 8px;
+	font-size: 14px;
+	max-width: 90vw;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+	border-left: 3px solid #e2231a;
 }
 
 .db-app * {
@@ -91,6 +125,7 @@
 }
 
 .db-card-img {
+	position: relative;
 	height: 140px;
 	background-size: cover;
 	background-position: center;
@@ -281,6 +316,25 @@
 	min-height: 1rem;
 }
 
+/* Card payment (Stripe) --------------------------------------------- */
+.db-cardfield {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.db-field-label {
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.db-card-element {
+	padding: 0.7rem 0.75rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+	background: #fff;
+}
+
 .db-confirm {
 	border: 2px solid var(--db-accent);
 	border-radius: 10px;
@@ -334,3 +388,104 @@
 	margin: 0.5rem 0;
 	padding-left: 1.1rem;
 }
+
+/* Sold out --------------------------------------------------------- */
+.db-card--soldout {
+	opacity: 0.72;
+}
+
+.db-card--soldout .db-card-img {
+	filter: grayscale(0.85);
+}
+
+.db-soldout-badge {
+	position: absolute;
+	top: 0.5rem;
+	left: 0.5rem;
+	background: #2b2b2b;
+	color: #fff;
+	border-radius: 4px;
+	padding: 0.2rem 0.55rem;
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+/* Shop picker ------------------------------------------------------ */
+.db-shop {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	border: 1px solid var(--db-border);
+	border-radius: 10px;
+	padding: 0.9rem 1rem;
+	background: #fff;
+	max-width: 420px;
+}
+
+.db-shop-heading {
+	font-size: 0.85rem;
+	font-weight: 700;
+}
+
+.db-shop-name {
+	font-size: 1.05rem;
+}
+
+.db-shop-select,
+.db-cart-shop .db-shop-select {
+	padding: 0.55rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+	font: inherit;
+	background: #fff;
+}
+
+.db-shop-info {
+	color: var(--db-muted);
+	font-size: 0.85rem;
+	line-height: 1.4;
+}
+
+.db-cart-shop {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	margin: 1rem 0 0;
+}
+
+.db-cart-shop-label {
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+/* Voucher code box in the cart */
+.db-total-row--discount span:last-child { color: #1f9d55; font-weight: 600; }
+
+.db-voucher { margin: 0.75rem 0 1rem; }
+.db-voucher-row { display: flex; gap: 0.5rem; }
+.db-voucher-input {
+	flex: 1;
+	padding: 0.6rem 0.75rem;
+	border: 1px solid #d8d8d8;
+	border-radius: 8px;
+	font-size: 0.95rem;
+	text-transform: uppercase;
+}
+.db-voucher-input:focus { outline: none; border-color: #111; }
+.db-btn--sm { padding: 0.6rem 1rem; font-size: 0.9rem; }
+.db-voucher-applied {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	padding: 0.6rem 0.85rem;
+	background: #f0f9f3;
+	border: 1px solid #bfe6cf;
+	border-radius: 8px;
+	font-size: 0.9rem;
+	font-weight: 600;
+}
+.db-voucher-msg { margin-top: 0.4rem; font-size: 0.85rem; color: #d4351c; }

@@ -1,0 +1,292 @@
+/**
+ * DoughBoss — Live Order Board (Kitchen Display) styles.
+ * Designed for a wall-mounted tablet: large touch targets, high contrast,
+ * three status lanes that stack on narrow screens.
+ */
+
+.doughboss-board-wrap {
+	--dbb-ink: #111;
+	--dbb-ink-soft: #444;
+	--dbb-muted: #555;
+	--dbb-muted-2: #666;
+	--dbb-paper: #fff;
+	--dbb-paper-soft: #fafafa;
+	--dbb-lane-bg: #f1f1f1;
+	--dbb-line: #dcdcde;
+	--dbb-blue: #2271b1;
+	--dbb-red: #d6452b;
+	--dbb-green: #1d7a3e;
+	--dbb-green-dark: #176231;
+	--dbb-amber: #b45309;
+	--dbb-danger: #b32d2e;
+	--dbb-chip-bg: #e7e7e7;
+	--dbb-chip-ink: #333;
+	--dbb-chip-delivery-bg: #fde6c4;
+	--dbb-chip-delivery-ink: #7a4b00;
+	--dbb-chip-shop-bg: #e8eefc;
+	--dbb-chip-shop-ink: #213a6b;
+	margin-right: 20px;
+}
+
+.db-board-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin: 0.5rem 0 1rem;
+}
+
+.db-board-bar h1 {
+	margin: 0;
+	font-size: 1.6rem;
+}
+
+.db-board-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.db-board-status {
+	color: var(--dbb-muted);
+	font-size: 0.85rem;
+}
+
+.db-sound-toggle {
+	min-height: 40px;
+}
+
+.db-sound-toggle.is-on {
+	background: var(--dbb-green);
+	border-color: var(--dbb-green-dark);
+	color: var(--dbb-paper);
+}
+
+.db-board-loading,
+.db-lane-empty {
+	color: var(--dbb-muted-2);
+	font-style: italic;
+}
+
+.db-sound-warn {
+	background: var(--dbb-amber);
+	color: var(--dbb-paper);
+	font-weight: 700;
+	padding: 0.6rem 1rem;
+	border-radius: 8px;
+	margin-bottom: 0.75rem;
+}
+
+/* --- New-order alert ------------------------------------------------- */
+
+.db-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	background: var(--dbb-red);
+	color: var(--dbb-paper);
+	font-size: 1.2rem;
+	font-weight: 700;
+	padding: 0.75rem 1rem;
+	border-radius: 8px;
+	margin-bottom: 1rem;
+}
+
+.db-banner .button {
+	min-height: 44px;
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+body.db-alerting .db-board-bar h1::after {
+	content: " ● LIVE";
+	color: var(--dbb-red);
+	animation: db-flash 1s steps(1) infinite;
+}
+
+@keyframes db-flash {
+	50% { opacity: 0; }
+}
+
+/* --- Lanes ----------------------------------------------------------- */
+
+.db-lanes {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1rem;
+	align-items: start;
+}
+
+@media (max-width: 1100px) {
+	.db-lanes { grid-template-columns: 1fr; }
+}
+
+.db-lane {
+	background: var(--dbb-lane-bg);
+	border-radius: 10px;
+	padding: 0.75rem;
+	min-height: 120px;
+}
+
+.db-lane-title {
+	margin: 0.2rem 0 0.75rem;
+	font-size: 1.1rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.db-lane-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.6rem;
+	height: 1.6rem;
+	padding: 0 0.4rem;
+	border-radius: 1rem;
+	background: var(--dbb-blue);
+	color: var(--dbb-paper);
+	font-size: 0.85rem;
+}
+
+.db-lane-new .db-lane-count { background: var(--dbb-red); }
+.db-lane-ready .db-lane-count { background: var(--dbb-green); }
+
+/* --- Cards ----------------------------------------------------------- */
+
+.db-card {
+	background: var(--dbb-paper);
+	border: 1px solid var(--dbb-line);
+	border-left: 6px solid var(--dbb-blue);
+	border-radius: 8px;
+	padding: 0.75rem;
+	margin-bottom: 0.75rem;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.db-card-pending { border-left-color: var(--dbb-red); }
+.db-card-ready,
+.db-card-out_for_delivery { border-left-color: var(--dbb-green); }
+
+.db-card-fresh {
+	animation: db-card-pop 1.2s ease-in-out infinite;
+}
+
+@keyframes db-card-pop {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(214, 69, 43, 0.5); }
+	50% { box-shadow: 0 0 0 4px rgba(214, 69, 43, 0.25); }
+}
+
+.db-card-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.db-card-number {
+	font-weight: 700;
+	font-size: 1.05rem;
+}
+
+.db-card-type {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+	background: var(--dbb-chip-bg);
+	color: var(--dbb-chip-ink);
+}
+
+.db-type-delivery { background: var(--dbb-chip-delivery-bg); color: var(--dbb-chip-delivery-ink); }
+
+.db-card-shop {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+	background: var(--dbb-chip-shop-bg);
+	color: var(--dbb-chip-shop-ink);
+}
+
+.db-shop-select { min-height: 40px; }
+
+.db-card-time {
+	margin-left: auto;
+	color: var(--dbb-muted-2);
+	font-size: 0.8rem;
+}
+
+.db-card-status {
+	display: inline-block;
+	margin: 0.35rem 0;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--dbb-blue);
+}
+
+.db-card-contact { font-size: 0.9rem; margin-bottom: 0.4rem; }
+
+.db-card-items {
+	list-style: none;
+	margin: 0 0 0.5rem;
+	padding: 0.5rem;
+	background: var(--dbb-paper-soft);
+	border-radius: 6px;
+}
+
+.db-card-item { padding: 0.15rem 0; }
+.db-card-item-name { font-weight: 600; }
+.db-card-item-toppings { display: block; font-size: 0.8rem; color: var(--dbb-muted); }
+
+.db-card-meta { font-size: 0.85rem; color: var(--dbb-ink-soft); margin-bottom: 0.5rem; }
+.db-card-meta > div { margin: 0.15rem 0; }
+.db-card-total { font-weight: 700; color: var(--dbb-ink); }
+.db-card-eta { color: var(--dbb-green); font-weight: 600; }
+.db-card-addr { color: var(--dbb-chip-delivery-ink); }
+
+/* --- Actions --------------------------------------------------------- */
+
+.db-card-actions { margin-top: 0.5rem; }
+.db-accept-label { font-size: 0.8rem; color: var(--dbb-muted); margin-bottom: 0.25rem; }
+
+.db-eta-row,
+.db-card-actions-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-bottom: 0.4rem;
+}
+
+.db-card-actions .button {
+	min-height: 44px;
+	font-size: 0.95rem;
+	display: inline-flex;
+	align-items: center;
+}
+
+.db-eta { min-width: 52px; justify-content: center; }
+.db-cancel { color: var(--dbb-danger); margin-left: auto; }
+
+/* Visible keyboard focus for accessibility. */
+.doughboss-board-wrap .button:focus-visible {
+	outline: 3px solid var(--dbb-blue);
+	outline-offset: 1px;
+}
+
+/* Accessibility: respect reduced motion — stop the two infinite loops but
+   keep a static equivalent of each cue. */
+@media (prefers-reduced-motion: reduce) {
+	body.db-alerting .db-board-bar h1::after {
+		animation: none;
+	}
+
+	.db-card-fresh {
+		animation: none;
+		box-shadow: 0 0 0 3px rgba(214, 69, 43, 0.35);
+	}
+}

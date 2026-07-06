@@ -1,6 +1,14 @@
+# Secrets — never commit real keys. .env.example is the committed template.
+.env
+.env.*
+!.env.example
+
 # Build output
 /dist/
 *.zip
+
+# Test scratch (WP-stub kernel writes no artifacts, but keep tmp out)
+/tests/wp-content/
 
 # Dependencies
 /node_modules/
@@ -15,3 +23,14 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Generated scratch (regenerable Gemini image intermediates; the prototype
+# HTML embeds the final images inline, so these are not needed at runtime)
+/docs/proto-img/
+
+# Gemini prompt-hash cache (regenerable; commit only if cross-machine reuse is wanted)
+/.cache/
+
+# Python bytecode
+__pycache__/
+*.pyc

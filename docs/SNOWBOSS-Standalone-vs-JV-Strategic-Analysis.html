@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>SNOWBOSS — Standalone vs Joint Venture: Strategic Analysis &amp; Recommendation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
+@page {
+  size: A4 portrait;
+  margin: 17mm 15mm 16mm;
+  @bottom-left { content: "SNOWBOSS · Standalone vs Joint Venture Strategic Analysis"; font-size: 7.2pt; color: #8a8a95; }
+  @bottom-right { content: "Confidential · page " counter(page) " / " counter(pages); font-size: 7.2pt; color: #8a8a95; }
+}
+@page :first {
+  margin: 0;
+  @bottom-left { content: ""; }
+  @bottom-right { content: ""; }
+}
+
+* { box-sizing: border-box; }
+html, body { padding: 0; margin: 0; }
+body {
+  font-family: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: #ffffff;
+  color: #1c1c22;
+  font-size: 9.6pt;
+  line-height: 1.48;
+}
+
+/* ---------- Palette ---------- */
+:root {
+  --navy: #071C33;
+  --ice: #8DEBFF;
+  --slush: #18A7E0;
+  --amber: #FF8A2B;
+  --cream: #FFF4E3;
+  --black: #0a0a0f;
+}
+
+/* ---------- Typography ---------- */
+h1, h2, h3, h4 { font-family: 'Poppins', sans-serif; font-weight: 700; color: #0a0a0f; break-after: avoid; }
+p { margin: 5pt 0; }
+ul, ol { margin: 5pt 0 5pt 15pt; padding: 0; }
+li { margin: 2.4pt 0; }
+strong { font-weight: 600; color: #0a0a0f; }
+a { color: var(--slush); }
+.small { font-size: 8.1pt; color: #666; }
+.muted { color: #6b6b73; }
+
+/* ---------- Section header bars (near-black, like source PDF) ---------- */
+.section-bar {
+  background: var(--black);
+  color: #fff;
+  padding: 8pt 12pt;
+  margin: 16pt 0 8pt;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8pt;
+  break-inside: avoid;
+  break-after: avoid;
+}
+.section-bar .num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20pt; height: 20pt;
+  min-width: 20pt;
+  background: var(--slush);
+  color: #04121f;
+  font-weight: 800;
+  font-size: 10pt;
+  border-radius: 50%;
+}
+.section-bar h2 {
+  color: #fff;
+  font-size: 13.5pt;
+  margin: 0;
+  line-height: 1.2;
+}
+.section-bar .sub {
+  color: var(--ice);
+  font-size: 8pt;
+  font-weight: 500;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
+
+h3 { font-size: 10.8pt; color: var(--navy); margin: 10pt 0 4pt; }
+h4 { font-size: 9.8pt; color: var(--slush); margin: 8pt 0 3pt; }
+
+/* ---------- Tables ---------- */
+table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 8.6pt; break-inside: avoid; }
+th, td { border: 1px solid #e3e3e8; padding: 4.2pt 6.5pt; text-align: left; vertical-align: top; }
+th { background: var(--navy); color: #fff; font-weight: 600; font-size: 8.3pt; }
+tr:nth-child(even) td { background: #f7f9fb; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+table.tight td, table.tight th { padding: 3.4pt 5.5pt; font-size: 8.1pt; }
+table.breakable { break-inside: auto; }
+table.breakable tr { break-inside: avoid; }
+table.breakable thead, table.breakable tr:first-child { break-after: avoid; }
+
+/* ---------- Callouts ---------- */
+.callout { border-left: 4px solid var(--slush); background: #eef8fd; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; break-inside: avoid; }
+.callout-amber { border-left: 4px solid var(--amber); background: #fff5ec; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; break-inside: avoid; }
+.callout-navy { border-left: 4px solid var(--navy); background: #eef1f6; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; break-inside: avoid; }
+.callout-dark { border-left: 4px solid var(--black); background: #f3f3f5; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; break-inside: avoid; }
+.callout strong:first-child, .callout-amber strong:first-child, .callout-navy strong:first-child, .callout-dark strong:first-child { color: inherit; }
+
+.tag { display: inline-block; font-size: 6.8pt; font-weight: 700; padding: 1.5pt 5pt; border-radius: 3px; letter-spacing: 0.3px; margin-right: 3pt; }
+.tag-jv { background: var(--navy); color: #fff; }
+.tag-standalone { background: var(--amber); color: #23120a; }
+.tag-concept { background: #e2e2e8; color: #333; }
+.tag-projected { background: var(--slush); color: #04121f; }
+
+/* Dark-background components must force light text on all descendants, incl. <strong> */
+.rec-banner, .rec-banner *,
+.headline-rec, .headline-rec *,
+.section-bar, .section-bar * { color: #fff; }
+.rec-banner .label, .headline-rec .k { color: var(--amber); }
+.rec-banner p, .headline-rec p { color: #dce8f2; }
+.rec-banner strong, .headline-rec strong { color: #fff; }
+.section-bar .sub { color: var(--ice); }
+
+/* ---------- Recommendation banner ---------- */
+.rec-banner {
+  background: linear-gradient(135deg, var(--navy) 0%, #0c2b4d 100%);
+  color: #fff;
+  border-radius: 8px;
+  padding: 12pt 15pt;
+  margin: 8pt 0;
+  break-inside: avoid;
+}
+.rec-banner .label { color: var(--ice); font-size: 7.8pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.rec-banner .headline { font-size: 12.5pt; font-weight: 800; margin: 3pt 0 3pt; line-height: 1.25; }
+.rec-banner p { color: #dce8f2; font-size: 8.8pt; margin: 3pt 0; }
+
+/* ---------- Glance tiles ---------- */
+.glance { display: flex; gap: 6pt; margin: 6pt 0; }
+.tile { flex: 1; border: 1px solid #e3e3e8; border-radius: 6px; padding: 7pt 9pt; background: #fafafc; break-inside: avoid; }
+.tile .v { font-size: 13pt; font-weight: 800; color: var(--navy); }
+.tile .l { font-size: 7.4pt; color: #666; line-height: 1.3; }
+
+/* ---------- Two column ---------- */
+.two { display: flex; gap: 9pt; }
+.two > div { flex: 1; min-width: 0; }
+.three { display: flex; gap: 7pt; }
+.three > div { flex: 1; min-width: 0; }
+
+/* ---------- Pros/Cons ---------- */
+.proscons { display: flex; gap: 9pt; margin: 6pt 0; }
+.proscons > div { flex: 1; border-radius: 6px; padding: 8pt 10pt; break-inside: avoid; }
+.pros { background: #eef9f0; border: 1px solid #cfe9d4; }
+.cons { background: #fdeeee; border: 1px solid #f0cccc; }
+.proscons h4 { margin: 0 0 4pt; font-size: 9.4pt; }
+.pros h4 { color: #1d7a3e; }
+.cons h4 { color: #b8341d; }
+.proscons ul { margin: 0 0 0 13pt; font-size: 8.3pt; }
+.proscons li { margin: 2.2pt 0; }
+
+/* ---------- Q&A persona blocks ---------- */
+.persona { break-inside: avoid; margin: 8pt 0 4pt; }
+.persona-title {
+  background: var(--slush);
+  color: #04121f;
+  font-weight: 700;
+  font-size: 9pt;
+  padding: 4pt 9pt;
+  border-radius: 4px 4px 0 0;
+  display: inline-block;
+}
+.qa-block { border: 1px solid #d8e9f2; border-top: none; border-radius: 0 4px 4px 4px; padding: 6pt 10pt 2pt; margin-bottom: 6pt; }
+.qa-block .q { font-weight: 700; color: var(--navy); font-size: 8.7pt; margin: 5pt 0 1.5pt; }
+.qa-block .a { font-size: 8.3pt; margin: 0 0 4pt; }
+
+/* ---------- Misc ---------- */
+.pagebreak { break-before: page; }
+hr.rule { border: none; border-top: 1px solid #e3e3e8; margin: 10pt 0; }
+.disclaimer { font-size: 7.8pt; color: #777; font-style: italic; }
+.footnote { font-size: 7.6pt; color: #777; }
+.cite { font-size: 7.6pt; color: var(--slush); font-weight: 600; }
+.verified { color: #1d7a3e; font-weight: 700; }
+
+/* ---------- Cover ---------- */
+.cover {
+  background: var(--black);
+  color: #fff;
+  width: 210mm;
+  height: 297mm;
+  padding: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  break-after: page;
+}
+.cover-top { padding: 26mm 20mm 0; }
+.cover-wordmark { font-size: 15pt; font-weight: 800; letter-spacing: 2px; }
+.cover-wordmark .times { color: var(--slush); padding: 0 4pt; }
+.cover-wordmark .snow { color: var(--ice); }
+.cover-kicker { color: var(--amber); font-size: 9pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-top: 30mm; }
+.cover-title { font-size: 27pt; font-weight: 800; line-height: 1.14; margin: 8pt 0 0; max-width: 150mm; }
+.cover-title .accent { color: var(--ice); }
+.cover-sub { font-size: 11pt; color: #cfd8e0; max-width: 140mm; margin-top: 10pt; line-height: 1.5; }
+.cover-badge-row { display: flex; gap: 8pt; margin-top: 16pt; }
+.cover-badge { border: 1px solid rgba(141,235,255,0.35); color: var(--ice); font-size: 8pt; font-weight: 600; padding: 4pt 10pt; border-radius: 20px; }
+.cover-bottom { padding: 0 20mm 18mm; }
+.cover-divider { height: 1px; background: linear-gradient(90deg, var(--slush), var(--amber)); margin-bottom: 10pt; }
+.cover-meta { font-size: 9pt; color: #b9c3cc; line-height: 1.7; }
+.cover-meta strong { color: #fff; }
+.cover-stripe { height: 7mm; background: linear-gradient(90deg, var(--navy) 0%, var(--slush) 45%, var(--ice) 75%, var(--amber) 100%); }
+.cover-flakes { position: absolute; top: 0; right: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.06; background-image: radial-gradient(circle, #8DEBFF 1.5px, transparent 1.5px); background-size: 26px 26px; }
+
+/* ---------- TOC ---------- */
+.toc { margin: 6pt 0; }
+.toc-item { display: flex; justify-content: space-between; padding: 4pt 0; border-bottom: 1px dotted #d8d8de; font-size: 9.2pt; }
+.toc-item .t { font-weight: 500; }
+.toc-item .p { color: #888; }
+
+/* ---------- Exec summary highlight ---------- */
+.headline-rec {
+  background: var(--navy);
+  color: #fff;
+  border-radius: 8px;
+  padding: 10pt 13pt;
+  margin: 8pt 0;
+  break-inside: avoid;
+}
+.headline-rec .k { color: var(--amber); font-weight: 800; font-size: 9pt; letter-spacing: 0.5px; text-transform: uppercase; }
+.headline-rec p { color: #e8eef3; margin: 4pt 0 0; font-size: 9pt; }
+
+.closing-box {
+  background: var(--cream);
+  border: 1px solid #eadfc8;
+  border-radius: 8px;
+  padding: 11pt 14pt;
+  margin: 8pt 0;
+  break-inside: avoid;
+}
+</style>
+</head>
+<body>
+
+<!-- ======================= COVER ======================= -->
+<div class="cover">
+  <div class="cover-flakes"></div>
+  <div class="cover-top">
+    <div class="cover-wordmark">DOUGH<span class="times">×</span><span class="snow">SNOW</span></div>
+    <div class="cover-kicker">Strategic Analysis &amp; Recommendation</div>
+    <div class="cover-title">SNOWBOSS — Standalone vs Joint&nbsp;Venture<span class="accent">.</span></div>
+    <div class="cover-sub">This document extends the <strong style="color:#fff;">12 June 2026 "DOUGH x SNOW — SNOWBOSS Business Proposal v3.2"</strong> with updated verified research and a full comparative analysis: standalone vs joint-venture paths, turnover, collaboration-revenue, profit, BAS/GST, SWOT, and a hard-questions Q&amp;A — closing with a clear, decisive recommendation.</div>
+    <div class="cover-badge-row">
+      <div class="cover-badge">Opens week of 20 Jul 2026</div>
+      <div class="cover-badge">Bankstown, NSW</div>
+      <div class="cover-badge">Halal-certified dessert daypart</div>
+    </div>
+  </div>
+  <div class="cover-bottom">
+    <div class="cover-divider"></div>
+    <div class="cover-meta">
+      <strong>Prepared by Elie D.</strong> · 1 July 2026 · Confidential<br>
+      Snow Flow × Dough Boss Bankstown — planning &amp; decision-support document, not a signed agreement.
+    </div>
+  </div>
+  <div class="cover-stripe"></div>
+</div>
+
+<!-- ======================= TOC ======================= -->
+<h2 style="font-size:14pt;margin-top:0;">Contents</h2>
+<div class="toc">
+  <div class="toc-item"><span class="t">1. Executive Summary</span><span class="p">3</span></div>
+  <div class="toc-item"><span class="t">2. What's Changed Since 12 June 2026</span><span class="p">3</span></div>
+  <div class="toc-item"><span class="t">3. Standalone vs Joint Venture — Comparative Analysis</span><span class="p">4</span></div>
+  <div class="toc-item"><span class="t">4. Turnover Report (Projected)</span><span class="p">6</span></div>
+  <div class="toc-item"><span class="t">5. Collaboration Revenue Analysis</span><span class="p">7</span></div>
+  <div class="toc-item"><span class="t">6. Profit Analysis</span><span class="p">8</span></div>
+  <div class="toc-item"><span class="t">7. BAS &amp; GST Analysis</span><span class="p">10</span></div>
+  <div class="toc-item"><span class="t">8. SWOT Analysis</span><span class="p">11</span></div>
+  <div class="toc-item"><span class="t">9. Team &amp; Management Structure Recommendation</span><span class="p">12</span></div>
+  <div class="toc-item"><span class="t">10. Team Q&amp;A — Hard Questions, Honest Answers</span><span class="p">13</span></div>
+  <div class="toc-item"><span class="t">11. Recommendations &amp; Approach to Pursue</span><span class="p">14</span></div>
+  <div class="toc-item"><span class="t">12. Closing Statement &amp; Disclaimer</span><span class="p">15</span></div>
+</div>
+<p class="disclaimer">Page numbers above are approximate section starting points for navigation; see the live page counter in the footer of each page.</p>
+
+<!-- ======================= 1. EXEC SUMMARY ======================= -->
+<div class="section-bar"><span class="num">1</span><h2>Executive Summary</h2></div>
+
+<p><strong>SNOWBOSS</strong> is a halal-certified frozen-dessert daypart (slush + soft-serve) proposed to operate inside the existing, trading Dough Boss Bankstown pizza shop — trading as Dough Boss 8am–1pm and "flipping" to SNOWBOSS from 1pm, opposite the $2B Bankstown Hospital development and a combined ~11,000-student university/TAFE precinct. It was scoped in the 12 June 2026 "DOUGH x SNOW — SNOWBOSS Business Proposal v3.2" as a joint venture between Charlie (Dough Boss Bankstown — site, lease, staff, brand) and Elie (Snow Flow — machines/product at cost, servicing, marketing, innovation pipeline), targeting a grand launch the week commencing <strong>20 July 2026</strong>.</p>
+
+<p>This document extends that proposal. It does not re-litigate the original numbers; it (a) verifies what has changed in the three weeks since 12 June, (b) builds a genuine standalone-path comparison so the joint-venture case can be judged against a real alternative rather than assumed, and (c) adds five analyses the original proposal didn't fully develop: a turnover report, a collaboration-revenue analysis isolating what the partnership itself is worth, a profit analysis, a BAS/GST analysis, a SWOT, a team &amp; management structure recommendation, and a Q&amp;A stress-test from four adversarial perspectives (accountant, operator, investor, competitor).</p>
+
+<div class="headline-rec">
+  <div class="k">Headline recommendation</div>
+  <p><strong>Proceed with the joint venture</strong> — the capital, speed, and catchment case is decisive and quantified, not just "further along." Standalone requires an estimated $60k&ndash;$130k+ in pre-trading capital against a multi-month timeline with zero proof of demand; the JV requires $10,800 to finish a build that is already ~85% paid, against a six-week timeline, on a site with independently corroborated demand drivers. But this is <strong>conditional, not unconditional</strong>: the section-10 partnership agreement — share split, staff-time compensation, servicing valuation, licence fee, exit/key-person terms — must be signed <em>before</em> the 20 July grand launch, not attempted and left open. Full reasoning in Section 11.</p>
+</div>
+
+<p>Every dollar figure in this document is traced to either (i) the 12 June 2026 v3.2 proposal, quoted as stated, (ii) externally verified research current as of <strong>1 July 2026</strong>, or (iii) an explicitly labelled analyst estimate/recalculation shown with its derivation. Nothing is presented as more precise or more certain than its source warrants — projections are marked <span class="tag tag-projected">PROJECTED</span>, joint-venture-specific facts <span class="tag tag-jv">JV</span>, standalone-only reasoning <span class="tag tag-standalone">STANDALONE</span>, and structure-independent facts <span class="tag tag-concept">CONCEPT</span> throughout.</p>
+
+<!-- ======================= 2. WHAT'S CHANGED ======================= -->
+<div class="section-bar"><span class="num">2</span><h2>What's Changed Since 12 June 2026</h2><span class="sub">Verified 1 Jul 2026</span></div>
+
+<p>Three material facts have moved from "planning assumption" to "confirmed current reality" in the three weeks since the v3.2 proposal was written. Each is verified as of today, 1 July 2026.</p>
+
+<div class="three">
+  <div class="callout-navy">
+    <h4 style="margin-top:0;color:var(--navy);">1. Wage rise now <em>in effect</em>, not future</h4>
+    <p style="font-size:8.3pt;">The FWC Annual Wage Review 2026 took effect <strong>1 July 2026 — today</strong>. The National Minimum Wage rose to <strong>$26.44/hour</strong>, and modern award minimums rose <strong>4.75%</strong> from the first full pay period on or after this date. The source proposal's labour planning line ("plan incremental casual labour at $35&ndash;45/hr loaded") was written pre-effective-date. Any casual rostered from today must already be paid at the new floor — the Year-1 labour figures in Section 6 should be re-run against current rates before being treated as final. <span class="cite">Verified 1 Jul 2026.</span></p>
+  </div>
+  <div class="callout-navy">
+    <h4 style="margin-top:0;color:var(--navy);">2. Bankstown Hospital timeline on-track</h4>
+    <p style="font-size:8.3pt;">The $2B, 14-storey Bankstown Hospital redevelopment's enabling works are confirmed <strong>actively underway through 2026</strong>, consistent with the source proposal's own timeline. The "opposite the new hospital" demand driver — cited in the proposal as ~3,600 direct construction jobs plus the eventual hospital workforce — remains current, not speculative. <span class="cite">Verified 1 Jul 2026.</span></p>
+  </div>
+  <div class="callout-navy">
+    <h4 style="margin-top:0;color:var(--navy);">3. SilverChef terms confirmed</h4>
+    <p style="font-size:8.3pt;">The SilverChef Rent-Try-Buy quote (35% of retail package price, $14,766.50 inc GST funded price, ~1.2692%/week, 1-week advance + 6-week bond, 12-month minimum term, 75%-of-net-rent purchase rebate) is independently confirmed <strong>consistent with SilverChef's own published commercial structure</strong>. This de-risks the single largest capital line in either path. <span class="cite">Verified 1 Jul 2026.</span></p>
+  </div>
+</div>
+
+<p class="footnote">None of these three verifications change the underlying numbers in the source proposal — they confirm the assumptions the proposal was built on are still sound (hospital, SilverChef) or flag one that needs an active update (wages). This is the extent of "what's new"; everything else in this document is analysis built on the source's existing facts, not new external research.</p>
+
+<!-- ======================= 3. STANDALONE VS JV ======================= -->
+<div class="section-bar"><span class="num">3</span><h2>Standalone vs Joint Venture — Comparative Analysis</h2></div>
+
+<p>There is no existing standalone proposal, site, or lease — everything site-specific in the standalone column below is an explicitly flagged <strong>estimate</strong>, not a quote or a real deal. Only three things carry over from the source document as real, verified figures regardless of path: Snow Flow's supply-at-cost menu economics (~91% GP), the SilverChef Rent-Try-Buy equipment channel, and the FWC minimum-wage figures (Section 2). Everything involving Charlie's site, lease, staff, brand base, or the Bankstown catchment belongs to the joint-venture path only.</p>
+
+<div class="proscons">
+  <div class="pros">
+    <h4>Standalone — Pros</h4>
+    <ul>
+      <li><strong>100% ownership</strong> — no shareholders' agreement, no split of brand IP or profit with a partner.</li>
+      <li><strong>Zero JV governance risk</strong> — no $2k sign-off threshold, no exit-clause negotiation, no partnership-dispute exposure.</li>
+      <li><strong>Free choice of site, format, and brand</strong> — not constrained to a shared day/night identity inside someone else's shop.</li>
+      <li><strong>No dependency on Charlie's business decisions</strong> — immune to "what happens if Dough Boss Bankstown is sold."</li>
+      <li>Keeps everything Snow Flow already owns independently: at-cost supply, servicing capability, innovation pipeline, SEO/marketing system.</li>
+      <li><strong>SilverChef channel is not exclusive to the JV</strong> — the same confirmed equipment-finance terms are available standalone.</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>Standalone — Cons</h4>
+    <ul>
+      <li><strong>Full market-rate lease from scratch</strong> — no discount, plus a bond (commonly 1&ndash;3 months' rent, NSW retail leasing convention).</li>
+      <li><strong>Full fit-out from zero</strong> — electrical, counter, POS, compliance sign-off — not just a ~$10.8k top-up.</li>
+      <li><strong>No existing trained roster</strong> to absorb launch labour or provide surge cover.</li>
+      <li><strong>Loses the Bankstown catchment entirely</strong> — the single biggest gap: zero proof of foot traffic, zero demographic validation at any new site.</li>
+      <li><strong>No food safety / halal cert for a new premises</strong> — an added compliance step and timeline the JV has already cleared.</li>
+      <li><strong>Materially slower</strong> — likely months, not six weeks, to reach grand launch.</li>
+      <li>100% of the downside risk alone, with no sister-site cushion and no existing pizza trade to absorb a slow ramp.</li>
+      <li>No "store-in-a-box" replication pipeline — every future site is a full new-site exercise.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="proscons">
+  <div class="pros">
+    <h4>Joint Venture — Pros</h4>
+    <ul>
+      <li><strong>Site, lease, power, counter, and machines already done and paid</strong> — remaining spend to launch is ≈$10,800 against $42,190 of retail equipment value already in place.</li>
+      <li><strong>Catchment validated with real data</strong>: hospital opposite, ~11,000-student precinct ~600m away, ABS-verified demographics matching the halal-certified positioning.</li>
+      <li><strong>Existing staff roster absorbs launch at low incremental cost</strong> (~$4,500/mo soft-launch) plus Charlie's 20-year in-house servicing capability.</li>
+      <li><strong>Six-week path to trading</strong> vs a from-scratch build.</li>
+      <li>Shared risk with an experienced operator; genuine second income stream for both parties.</li>
+      <li><strong>Immediate combo/cross-sell revenue</strong> with the existing pizza trade from day one.</li>
+      <li>An existing 3-store chain ready for low-cost replication.</li>
+      <li>$179,000 Year-1 base-case contribution modelled with real supplier pricing and confirmed SilverChef terms.</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>Joint Venture — Cons</h4>
+    <ul>
+      <li><strong>Revenue split must be shared under an agreement that is NOT YET SIGNED</strong> — the share split itself is unspecified anywhere in the source.</li>
+      <li>Partnership dispute is rated <strong>Low likelihood / High impact</strong> in the source's own risk register; its "sign before grand launch" mitigation deadline had not been met as of 12 June.</li>
+      <li><strong>Dependency on Charlie's site</strong> — what happens if Dough Boss Bankstown is sold or the lease ends is unresolved; the licence-fee mechanism is "not yet decided."</li>
+      <li>Staff time from Charlie's roster is "not free," and compensation for it is explicitly unresolved.</li>
+      <li>Brand upside and expansion rights are shared, not solely either party's.</li>
+      <li>The value of Charlie's servicing contribution is not yet quantified in writing.</li>
+    </ul>
+  </div>
+</div>
+
+<h3>Rough capital &amp; timeline comparison — explicitly ballpark, not a quote</h3>
+<p class="footnote">All standalone figures are general hospitality/retail order-of-magnitude estimates from general knowledge — not quotes, not sourced from the SNOWBOSS proposal, not externally verified. Treat as wide ranges for directional comparison only.</p>
+<table class="tight">
+<tr><th>Item</th><th>JV (actual, from source doc)</th><th>Standalone (ESTIMATE — order of magnitude only)</th></tr>
+<tr><td>Site / lease</td><td>Guaranteed, $0 incremental, no search time</td><td>New ~40&ndash;80sqm site; bond ~1&ndash;3 months' rent, roughly $5k&ndash;$15k tied up, highly location-dependent</td></tr>
+<tr><td>Electrical (dedicated circuits)</td><td>Complete, paid</td><td>Estimate: roughly $2k&ndash;$8k+ depending on existing switchboard capacity</td></tr>
+<tr><td>Counter / bench / shopfront fit-out</td><td>In place</td><td>Estimate: stripped-back kiosk-style counter format, plausibly $30k&ndash;$80k+ — highly site-condition-dependent</td></tr>
+<tr><td>Equipment (2×SFX3 + 2×B2P)</td><td>Already installed via SilverChef</td><td>Same SilverChef Rent-Try-Buy channel available — this part is genuinely portable</td></tr>
+<tr><td>Signage / smallwares / cups / legal / contingency</td><td>$10,800 (remaining top-up only)</td><td>Similar relative band (~$8k&ndash;$12k), but additional to, not instead of, site + fit-out</td></tr>
+<tr><td>Working capital buffer</td><td>$8k&ndash;$10k recommended</td><td>Estimate: likely $15k&ndash;$25k+ given no sister-store cushion</td></tr>
+<tr><td><strong>Rough total pre-trading capital</strong></td><td><strong>~$10.8k topped-up spend</strong></td><td><strong>~$60k&ndash;$130k+</strong> (directional estimate only)</td></tr>
+<tr><td><strong>Timeline to grand launch</strong></td><td><strong>6 weeks</strong> (15 Jun &rarr; 20 Jul 2026)</td><td><strong>Several months</strong> (directional inference — no specific figure available without a real site)</td></tr>
+</table>
+
+<div class="callout-amber">
+<strong>Realistic Year-1 revenue for a standalone shop — do not copy the JV's $316,050 base case.</strong> The JV's revenue model is grounded in a specific, evidenced catchment (hospital construction, university/TAFE, an established plaza, an already-trading pizza customer base). A standalone site starts with none of that evidence. What <em>does</em> transfer is the ~91% blended gross margin and the SilverChef cost structure (unit economics); what does <em>not</em> transfer is the volume those unit economics get applied to. <strong>There is no credible basis in the source material to forecast a specific standalone Year-1 revenue number</strong> — doing so would be false precision. A standalone case should budget for a materially longer and more expensive path to viability than the JV, and should treat the JV's revenue scenarios as not applicable until a real site with its own footfall evidence is identified.
+</div>
+
+<p class="footnote"><strong>Summary:</strong> Standalone gives full ownership and removes every JV governance risk, but trades away a site with hard, verified demand evidence for an unspecified new location starting at zero — with plausibly 5&ndash;10× higher pre-trading capital exposure and a multi-month rather than six-week runway, before the first sale. Only Snow Flow's supply-cost/margin structure and the SilverChef financing terms carry over cleanly; the demand side has to be proven again from scratch.</p>
+
+<!-- ======================= 4. TURNOVER REPORT ======================= -->
+<div class="section-bar"><span class="num">4</span><h2>Turnover Report</h2><span class="sub">SNOWBOSS Dessert Daypart · JV · Base Case</span></div>
+
+<div class="callout-amber">
+<strong><span class="tag tag-projected">PROJECTED / FORECAST ONLY — NOT ACTUAL RESULTS.</span></strong> SNOWBOSS has not yet opened for trade. Soft launch is scheduled for weeks 4&ndash;5 (6 &amp; 13 July 2026); grand launch is scheduled for the week commencing 20 July 2026. As of this report, no historical or actual trading data exists. Every figure below is a modelled projection from the source proposal's Base Case (91% gross-profit assumption, $7.00 average ticket, 30 trading days/month, seasonality-adjusted) and must not be read as actual turnover.
+</div>
+
+<h3>Monthly turnover (projected) — Aug 2026 to Jul 2027</h3>
+<table class="tight">
+<tr><th>Month</th><th>Milestone</th><th class="num">Units/day (avg)</th><th class="num">Projected revenue</th></tr>
+<tr><td>Aug 2026</td><td>Soft launch</td><td class="num">72</td><td class="num">$15,120</td></tr>
+<tr><td>Sep 2026</td><td>Grand launch</td><td class="num">98</td><td class="num">$20,580</td></tr>
+<tr><td>Oct 2026</td><td>—</td><td class="num">124</td><td class="num">$26,040</td></tr>
+<tr><td>Nov 2026</td><td>—</td><td class="num">143</td><td class="num">$30,030</td></tr>
+<tr><td>Dec 2026</td><td>—</td><td class="num">169</td><td class="num">$35,490</td></tr>
+<tr><td>Jan 2027</td><td>—</td><td class="num">189</td><td class="num">$39,690</td></tr>
+<tr><td>Feb 2027</td><td>Ramadan</td><td class="num">195</td><td class="num">$40,950</td></tr>
+<tr><td>Mar 2027</td><td>Ramadan ends mid-month</td><td class="num">163</td><td class="num">$34,230</td></tr>
+<tr><td>Apr 2027</td><td>—</td><td class="num">124</td><td class="num">$26,040</td></tr>
+<tr><td>May 2027</td><td>—</td><td class="num">91</td><td class="num">$19,110</td></tr>
+<tr><td>Jun 2027</td><td>—</td><td class="num">65</td><td class="num">$13,650</td></tr>
+<tr><td>Jul 2027</td><td>—</td><td class="num">72</td><td class="num">$15,120</td></tr>
+</table>
+
+<h3>Quarterly turnover rollup (projected)</h3>
+<table class="tight">
+<tr><th>Quarter</th><th>Months</th><th class="num">Revenue (sum)</th><th class="num">Avg units/day</th></tr>
+<tr><td>Q1</td><td>Aug&ndash;Oct 2026</td><td class="num">$61,740</td><td class="num">98.0</td></tr>
+<tr><td>Q2</td><td>Nov 2026&ndash;Jan 2027</td><td class="num">$105,210</td><td class="num">167.0</td></tr>
+<tr><td>Q3</td><td>Feb&ndash;Apr 2027</td><td class="num">$101,220</td><td class="num">160.7</td></tr>
+<tr><td>Q4</td><td>May&ndash;Jul 2027</td><td class="num">$47,880</td><td class="num">76.0</td></tr>
+<tr><td><strong>Year-1 Total</strong></td><td>Aug 2026&ndash;Jul 2027</td><td class="num"><strong>$316,050</strong></td><td class="num"><strong>125</strong></td></tr>
+</table>
+<p class="footnote">Quarterly figures are arithmetic sums/averages of the source's own monthly figures; both independently reconcile to the source's stated Year-1 totals ($316,050 revenue; 125/day average). No new revenue, cost, or GP assumptions have been introduced.</p>
+
+<h3>Seasonal shape</h3>
+<p>The projected turnover curve is not flat — it traces a launch ramp, a Ramadan-driven double peak, and a winter trough. Q1 is the launch ramp ($61,740), rising as the 1pm changeover and grand-launch marketing take hold. Q2 is projected as the <strong>strongest quarter</strong> ($105,210), combining early-summer heat demand with the December/January holiday period. Q3 opens at the <strong>single highest month in the model</strong> — February 2027 at $40,950, coinciding with Ramadan — before falling away sharply once Ramadan ends mid-March. Q4 is the projected winter trough, bottoming at $13,650 in June before a modest recovery to $15,120 in July. Q2 and Q3 together are projected to generate roughly two-thirds of Year-1 turnover ($206,430 of $316,050) — consistent with the source's own risk-register entry flagging "winter demand dip" as High likelihood/Medium impact, mitigated by cumulative contribution clearing the ~$10,800 remaining spend within the first two months, before the first winter trough is reached.</p>
+
+<div class="callout">These are <strong>Base Case Year-1 projections only</strong>, one of three scenarios (Conservative ≈$176k, Base $316,050, Strong ≈$570k Year-1 revenue). The source specifies a formal <strong>60-day review gate on real trading data around 20 September 2026</strong> — actual turnover should be compared against this forecast from that point, not substituted for it retroactively.</div>
+
+<!-- ======================= 5. COLLABORATION REVENUE ======================= -->
+<div class="section-bar"><span class="num">5</span><h2>Collaboration Revenue Analysis</h2><span class="sub">What the partnership itself is worth</span></div>
+
+<p>The source proposal presents SNOWBOSS's Year-1 numbers ($316,050 revenue / $179,000 contribution) as if they were the dessert counter's own standalone output. Almost none of that output is achievable by a standalone concept on its own site with its own customer acquisition. This section isolates the value created <em>by the collaboration mechanic itself</em>, using only figures the source provides.</p>
+
+<h3>(a) Combo / cross-sell revenue</h3>
+<p>The narrowest, most defensible slice — the only category that structurally cannot exist without both brands present at once: +$5 = 2 slushes with pizza, +$8 = 2 cones, Boss Lunch $14.90, Family Sunday +$10, Smoko Box $45, Office Box $75, and the "Sweet Finish" morning-voucher mechanic (a Dough Boss sale converting into a scheduled SNOWBOSS visit). <strong>Quantification is not possible from the given figures</strong> — the $316,050 Year-1 figure is a blended units × $7.00 build, with no stated SKU-mix or attach-rate breakdown. Directionally significant, numerically unquantified in the source.</p>
+
+<h3>(b) The "existing trade" halo</h3>
+<p>The site is not neutral ground: the counter is built inside an already-trading, already-leased, already-staffed, already-certified shop. None of that cost or time appears in the ~$10,800 remaining spend — because it doesn't need to. Soft-launch labour is explicitly "absorbed by existing roster." The remaining capital spend contains <strong>no customer-acquisition or launch-marketing line item at all</strong> — its absence is itself evidence the model assumes the halo does that job for free.</p>
+
+<h3>(c) Whole-shop combined-profit uplift — the cleanest number the source gives</h3>
+<table class="tight">
+<tr><th></th><th class="num">Pizza-only (baseline, proxy)</th><th class="num">Combined (base case)</th><th class="num">Delta</th></tr>
+<tr><td>Revenue</td><td class="num">$520,000</td><td class="num">$836,050</td><td class="num">+$316,050 (+61%)</td></tr>
+<tr><td>Lease</td><td class="num">$36,000 (6.9% of sales)</td><td class="num">$36,000 unchanged (4.3% of sales)</td><td class="num">Same $, halved as % of sales</td></tr>
+<tr><td>Net profit</td><td class="num">$67,600 (13.0%)</td><td class="num">$247,000 (29.5%)</td><td class="num">+$179,400 (≈×3.6)</td></tr>
+</table>
+<p>Because the $36,000 lease is a sunk cost of the existing Dough Boss operation, SNOWBOSS's $179,000 contribution drops to the shop's bottom line with <strong>zero incremental fixed-occupancy cost</strong> — this is why net margin jumps 13.0%→29.5%. The source's own 40%-lease stress test supports this: even carrying 40% of the lease ($14,400), SNOWBOSS's contribution only falls to ~$165,000. A fully standalone site is a 100%-lease-shouldered scenario the source never models.</p>
+<p class="footnote"><strong>Caveat carried forward from the source:</strong> the $520,000/13% pizza baseline is explicitly flagged as an industry-average proxy, not Charlie's actual P&amp;L — the $247,000/29.5% combined figures are provisional in absolute terms, though the structural mechanism (fixed lease absorbed by host) holds regardless of the real baseline.</p>
+
+<h3>(d) Stated-but-not-counted upside: pizza cross-sell lift</h3>
+<p>The source is explicit: <em>"cross-sell lift on pizza from dessert combos is NOT counted in any of these figures."</em> SNOWBOSS's novelty and drawing power plausibly pull additional pizza volume — the mirror image of (a). This cannot be quantified from the given facts; the source names it as real and uncounted, with no proxy offered.</p>
+
+<div class="rec-banner">
+<div class="label">Converging estimate</div>
+<p><strong>Quantified floor:</strong> at minimum ~20% of Year-1 SNOWBOSS contribution (~$36,000 of $179,000) is directly attributable to the avoided-lease mechanic alone — the one number that can be cleanly isolated from the source's own figures (36,000 / 179,000 ≈ 20%).</p>
+<p><strong>Directional ceiling (not source-quantified):</strong> once avoided site-acquisition cost, avoided marketing spend, avoided full-cost staffing/training, and avoided food-safety-certification lead time are added — none priced anywhere in the source — the true figure is plausibly close to the near-entirety of the $179,000/$316,050 Year-1 case. No standalone comparable exists anywhere in the source document, which is itself the strongest evidence the model was never built to stand alone.</p>
+</div>
+
+<p class="footnote"><strong>Explicitly not invented:</strong> no SKU-level attach-rate percentage, no standalone cost model, no dollar figure for pizza-side cross-sell lift, no agreed profit-share percentage, no market-size figures — none of these appear in the source and none are estimated as numbers here.</p>
+
+<!-- ======================= 6. PROFIT ANALYSIS ======================= -->
+<div class="section-bar"><span class="num">6</span><h2>Profit Analysis</h2><span class="sub">SNOWBOSS JV · Dessert Daypart</span></div>
+
+<p>A contribution-margin (EBITDA-style) view: Revenue → COGS → Gross Profit → Operating Costs → EBITDA Contribution, across the source's three Year-1 scenarios (30 trading days/month, ~91% blended GP at a $7.00 average ticket).</p>
+
+<h3>Scenario table (Year 1)</h3>
+<table class="tight">
+<tr><th>Line item</th><th class="num">Conservative (~70 u/day)</th><th class="num">Base (125&ndash;130 u/day)</th><th class="num">Strong (220 u/day)</th></tr>
+<tr><td>Revenue</td><td class="num">$176,000</td><td class="num">$316,050</td><td class="num">$570,000</td></tr>
+<tr><td>Gross Profit (~91% GP)</td><td class="num">$161,000</td><td class="num">$287,606</td><td class="num">$519,000</td></tr>
+<tr><td>Implied COGS</td><td class="num">~$15,000</td><td class="num">~$28,444</td><td class="num">~$51,000</td></tr>
+<tr><td>Labour + running costs</td><td class="num">$92,000</td><td class="num">$109,000</td><td class="num">$179,000</td></tr>
+<tr><td><strong>EBITDA Contribution</strong></td><td class="num"><strong>≈$69,000</strong></td><td class="num"><strong>≈$179,000</strong></td><td class="num"><strong>≈$340,000</strong></td></tr>
+<tr><td>Payback on ~$10,800 spend</td><td class="num">&lt;2 months</td><td class="num">≈6 weeks</td><td class="num">&lt;1 month</td></tr>
+</table>
+<p class="footnote">Base case breaks out to $96,000 incremental labour (Year-1 total) + $800/mo energy/parts/sundries × 12 = $9,600. No separate marketing cost line exists in the source — combos/promotions are baked into revenue assumptions, not a discrete expense line.</p>
+
+<h3>Base-case monthly detail</h3>
+<table class="tight breakable">
+<tr><th>Month</th><th class="num">Units/day</th><th class="num">Revenue</th><th class="num">Gross Profit</th><th class="num">Incr. Labour</th><th class="num">Contribution</th></tr>
+<tr><td>Aug26 (soft launch)</td><td class="num">72</td><td class="num">$15,120</td><td class="num">$13,759</td><td class="num">$4,500</td><td class="num">$6,959</td></tr>
+<tr><td>Sep26 (grand launch)</td><td class="num">98</td><td class="num">$20,580</td><td class="num">$18,728</td><td class="num">$4,500</td><td class="num">$11,928</td></tr>
+<tr><td>Oct26</td><td class="num">124</td><td class="num">$26,040</td><td class="num">$23,696</td><td class="num">$8,000</td><td class="num">$14,896</td></tr>
+<tr><td>Nov26</td><td class="num">143</td><td class="num">$30,030</td><td class="num">$27,327</td><td class="num">$8,000</td><td class="num">$18,527</td></tr>
+<tr><td>Dec26</td><td class="num">169</td><td class="num">$35,490</td><td class="num">$32,296</td><td class="num">$12,000</td><td class="num">$19,496</td></tr>
+<tr><td>Jan27</td><td class="num">189</td><td class="num">$39,690</td><td class="num">$36,118</td><td class="num">$12,000</td><td class="num">$23,318</td></tr>
+<tr><td>Feb27 (Ramadan)</td><td class="num">195</td><td class="num">$40,950</td><td class="num">$37,265</td><td class="num">$12,000</td><td class="num">$24,465</td></tr>
+<tr><td>Mar27</td><td class="num">163</td><td class="num">$34,230</td><td class="num">$31,149</td><td class="num">$12,000</td><td class="num">$18,349</td></tr>
+<tr><td>Apr27</td><td class="num">124</td><td class="num">$26,040</td><td class="num">$23,696</td><td class="num">$8,000</td><td class="num">$14,896</td></tr>
+<tr><td>May27</td><td class="num">91</td><td class="num">$19,110</td><td class="num">$17,390</td><td class="num">$6,000</td><td class="num">$10,590</td></tr>
+<tr><td>Jun27</td><td class="num">65</td><td class="num">$13,650</td><td class="num">$12,422</td><td class="num">$4,500</td><td class="num">$7,122</td></tr>
+<tr><td>Jul27</td><td class="num">72</td><td class="num">$15,120</td><td class="num">$13,759</td><td class="num">$4,500</td><td class="num">$8,459</td></tr>
+<tr><td><strong>Year-1 Total</strong></td><td class="num"><strong>125 avg</strong></td><td class="num"><strong>$316,050</strong></td><td class="num"><strong>$287,606</strong></td><td class="num"><strong>$96,000</strong></td><td class="num"><strong>≈$179,000</strong></td></tr>
+</table>
+<p class="footnote">All months additionally carry $800/mo energy + parts + sundries (in-house maintenance, no service contracts). Cumulative contribution clears the ~$10,800 remaining spend during September 2026 — payback in month two of trading.</p>
+
+<h3>Net-margin commentary</h3>
+<p>At the daypart level, gross margin is very high (~91%) because COGS is dominated by low-cost slush/soft-serve inputs (~$0.63 COGS on a ~$7.00 sale). The gap to EBITDA-contribution margin is labour and running costs: in the Base case, $105,600 of labour + running costs against $287,606 gross profit converts a 91%-GP business into roughly a 57% EBITDA-contribution margin on revenue. The same compression appears across all scenarios — Conservative converts to ~39% of revenue, Strong to ~60% — meaning cost leverage improves markedly as volume rises, since incremental labour is materially less than proportional to unit volume. The operating dashboard's own breakeven bands (34/day at $5,500/mo cost, 52/day at $8,500/mo, 73/day at $12,000/mo) confirm all three scenarios sit comfortably above minimum-viable.</p>
+
+<h3>Whole-shop combined view (Base case)</h3>
+<p class="footnote">The source explicitly flags the existing Dough Boss figures used here as proxy/placeholder figures ("drop in Charlie's actual rent and P&amp;L"), not Charlie's actual numbers.</p>
+<table class="tight">
+<tr><th></th><th class="num">Existing Dough Boss (proxy)</th><th class="num">+ SNOWBOSS (Base)</th><th class="num">Combined</th></tr>
+<tr><td>Revenue</td><td class="num">$520,000</td><td class="num">$316,050</td><td class="num">$836,050 (+61%)</td></tr>
+<tr><td>Net profit</td><td class="num">≈$68,000</td><td class="num">≈$179,000</td><td class="num">≈$247,000 (+$179,000, ×3.6)</td></tr>
+<tr><td>Net margin</td><td class="num">~13%</td><td class="num">—</td><td class="num">~29.5%</td></tr>
+<tr><td>Lease</td><td class="num">$36,000pa</td><td class="num">unchanged</td><td class="num">4.3% of sales (was 6.9%)</td></tr>
+</table>
+<p>Combined figures across scenarios: Conservative ≈$137,000, Base ≈$247,000, Strong ≈$408,000. Sensitivities (as stated): lease at $30k/$36k/$48k pa → combined profit $253k/$247k/$235k; baseline shop profit at $50k/$68k/$90k → combined profit $229k/$247k/$269k. Stress test: SNOWBOSS notionally carrying 40% of the lease ($14,400) still leaves ~$165,000 contribution. Not counted anywhere above: pizza cross-sell lift from dessert combos (stated upside, not modelled).</p>
+
+<div class="callout-amber">
+<strong>Caveat — read before relying on these numbers.</strong> This is a contribution/EBITDA model, not a full statutory P&amp;L. It excludes income tax, the JV entity's own overhead/insurance/legal costs (a one-off $1,500 only appears in remaining capital spend), and — critically — the SilverChef equipment-finance rental itself. The source states the headline ~$179,000 Base-case contribution excludes the rental cost, and separately gives two different planning bases for it: the partners' BDM-negotiated basis of <strong>~$162/wk (≈$702/mo)</strong>, and a documented planning figure of <strong>$812/mo</strong>. Using the ~$702/mo basis (~$8,424/yr), Base-case contribution would move from ~$179,000 to approximately <strong>~$170,600</strong> — <em>an analyst recalculation, illustrative only, not a source-stated figure.</em> Which of the two bases (~$702/mo vs $812/mo) is the correct one to use should be confirmed against the signed SilverChef quote before this adjustment is relied upon. The whole-shop "combined" view additionally rests on proxy figures for the existing Dough Boss shop that the source itself says should be replaced with Charlie's actual rent and P&amp;L. Before any binding capital commitment, a qualified accountant should convert this into a full pro-forma P&amp;L and cash-flow statement using actual (not proxied) baseline-shop financials, the signed equipment-finance terms, and the JV entity's real overhead and tax position.
+</div>
+
+<!-- ======================= 7. BAS & GST ======================= -->
+<div class="section-bar"><span class="num">7</span><h2>BAS &amp; GST Analysis</h2></div>
+
+<p>This section applies the ATO's general BAS/GST mechanics (verified 1 Jul 2026) to the Year-1 base-case financial model. It is a planning-level estimate only — see closing recommendation below.</p>
+
+<h3>1. GST registration — mandatory at this scale</h3>
+<p>The Base-case Year-1 revenue for SNOWBOSS alone is $316,050 — more than four times the ATO's mandatory GST-registration threshold of <strong>$75,000</strong> in GST turnover. Registration is mandatory, not optional, once a business has or expects turnover of $75,000+, and must occur within 21 days of becoming aware the threshold will be exceeded. Even the Conservative scenario ($176k) clears the threshold, so this applies under every scenario modelled. The source does not state which entity will hold GST registration — the JV company structure is "recommended" and "not yet signed" — this is a decision for the accountant/tax agent alongside entity structure.</p>
+
+<h3>2. BAS lodgement cadence</h3>
+<p>The entity will very likely default to <strong>quarterly BAS</strong> reporting under the Simpler BAS regime (available under $2m aggregated turnover — SNOWBOSS is well under this in every scenario). BAS is due 21 days after each reporting period under the ATO's general rule.</p>
+<table class="tight">
+<tr><th>Quarter</th><th>Period</th><th>Note</th></tr>
+<tr><td>Q1 FY27</td><td>1 Jul&ndash;30 Sep 2026</td><td>Stub trading period — grand launch ~20 Jul; covers Aug/Sep26 months</td></tr>
+<tr><td>Q2 FY27</td><td>1 Oct&ndash;31 Dec 2026</td><td>Full quarter; covers Oct&ndash;Dec26</td></tr>
+<tr><td>Q3 FY27</td><td>1 Jan&ndash;31 Mar 2027</td><td>Covers Jan&ndash;Mar27, including Ramadan peak (Feb27)</td></tr>
+<tr><td>Q4 FY27</td><td>1 Apr&ndash;30 Jun 2027</td><td>Covers Apr&ndash;Jun27, including winter trough (Jun27)</td></tr>
+</table>
+
+<h3>3. Projected quarterly GST position (estimate range)</h3>
+<div class="callout-amber"><strong>Important caveat:</strong> the source's revenue figures do not state whether they are GST-inclusive or GST-exclusive. This must be confirmed before relying on any number below. Both bases are shown.</div>
+<table class="tight">
+<tr><th>Quarter</th><th class="num">Revenue (mapped)</th><th class="num">GST if inclusive (÷11)</th><th class="num">GST if exclusive (×10%)</th></tr>
+<tr><td>Q1 FY27 (Aug&ndash;Sep26)</td><td class="num">$35,700</td><td class="num">$3,245</td><td class="num">$3,570</td></tr>
+<tr><td>Q2 FY27 (Oct&ndash;Dec26)</td><td class="num">$91,560</td><td class="num">$8,324</td><td class="num">$9,156</td></tr>
+<tr><td>Q3 FY27 (Jan&ndash;Mar27)</td><td class="num">$114,870</td><td class="num">$10,443</td><td class="num">$11,487</td></tr>
+<tr><td>Q4 FY27 (Apr&ndash;Jun27)</td><td class="num">$58,800</td><td class="num">$5,345</td><td class="num">$5,880</td></tr>
+<tr><td><strong>Year-1 total</strong></td><td class="num"><strong>$316,050</strong></td><td class="num"><strong>≈$28,732</strong></td><td class="num"><strong>≈$31,605</strong></td></tr>
+</table>
+<p class="footnote">Arithmetic checks out against the source's own quarterly revenue mapping; the inclusive/exclusive question is a genuine open item, clearly caveated above.</p>
+
+<h4>SilverChef GST credits — illustrative only, not a confirmed calculation</h4>
+<p>The source gives two SilverChef rental planning figures: a documented <strong>$812/mo</strong>, and the partners' BDM-negotiated basis of <strong>~$162/wk (≈$702/mo)</strong>. GST credits are available on this taxable supply, but the source does not provide an ex-GST breakdown, so a precise per-quarter credit figure cannot be shown with a reproducible derivation. Rounded to illustrative precision only: roughly <strong>~$2,400/quarter</strong> and roughly <strong>~$9,700 for the year</strong>, using the $812/mo figure. <strong>These are illustrative only — derived loosely from the $812/mo planning figure, not a confirmed GST calculation. Confirm the actual ex-GST rental and resulting credit with a BAS/tax agent once the SilverChef quote is signed</strong> — the risk register itself flags "SilverChef terms differ from planning basis" as an open item. This estimate does not include GST credits on any other supplier cost (opening product, signage, toppings rail, smallwares) — the source doesn't break out which quarter those one-off spends fall in or confirm GST-registered status of each supplier.</p>
+
+<h3>4. PAYG withholding</h3>
+<p>The Year-1 labour lines ($4,500&ndash;$12,000/mo, "casual labour at $35&ndash;45/hr loaded" per the source) sit on a planning basis written before 1 July 2026 — the verified wage rise (Section 2) is now live. For any of this labour engaged as employees, the entity must withhold PAYG and remit via the BAS cycle, and meet annual Single Touch Payroll finalisation obligations. This is separate from GST but typically administered on the same cadence — relevant given the source has not yet resolved how Dough Boss is compensated for staff time absorbed into SNOWBOSS service.</p>
+
+<div class="closing-box">
+<strong>Recommendation: engage a registered BAS or tax agent before the 20 July 2026 grand launch.</strong> Three compounding reasons: (1) GST registration is mandatory, not discretionary, at this revenue scale, and should be actioned proactively; (2) the JV structure adds complexity a template BAS process won't handle — a not-yet-decided licence fee, an unresolved staff-time compensation mechanism, and a "separate POS department" all carry GST/income-tax structuring implications that need a tax agent's input before the shareholders' agreement is finalised; (3) every GST figure in this section is a range built on an unstated inclusive/exclusive assumption and a not-yet-signed SilverChef quote. None of the figures in this section should be relied upon as final.
+</div>
+
+<!-- ======================= 8. SWOT ======================= -->
+<div class="section-bar"><span class="num">8</span><h2>SWOT Analysis</h2><span class="sub">JV = joint-venture-specific · STANDALONE = Elie-alone · CONCEPT = structure-independent</span></div>
+
+<h3>Strengths</h3>
+<ul>
+<li><span class="tag tag-jv">JV</span> Nearly the entire cost base is already sunk and paid: lease guaranteed, electrical complete, counter in place, machines installed, halal certified — only ≈$10,800 remains against $42,190 of retail equipment value.</li>
+<li><span class="tag tag-jv">JV</span> Site sits on independently corroborated demand drivers: $2B hospital enabling works confirmed underway (verified 1 Jul 2026), ~11,000 combined students ~600m away.</li>
+<li><span class="tag tag-concept">CONCEPT</span> Exceptionally high-margin unit economics: ~91% blended GP on a ~$7.00 ticket — a Snow Flow asset, not a site asset.</li>
+<li><span class="tag tag-concept">CONCEPT</span> SilverChef Rent-Try-Buy is a confirmed, externally-verified quote (verified 1 Jul 2026), de-risking the largest capital line under either structure.</li>
+<li><span class="tag tag-jv">JV</span> Six-week time-to-trade achievable specifically because site/power/lease/equipment pre-existed.</li>
+<li><span class="tag tag-jv">JV</span> Combo mechanics monetize an already-trading customer base from day one, with pizza cross-sell lift not even counted in modelled figures.</li>
+<li><span class="tag tag-concept">CONCEPT</span> Halal certification across the full range is a genuine differentiator, aligned with ABS-verified local demographics.</li>
+</ul>
+
+<h3>Weaknesses</h3>
+<ul>
+<li><span class="tag tag-jv">JV</span> Revenue/profit split not yet contractually settled — Section 10 is a recommendation, not a signed agreement; the split is nowhere specified.</li>
+<li><span class="tag tag-jv">JV</span> Two core in-kind contributions are explicitly unpriced: Charlie's servicing value ("to be stated explicitly") and staff-time compensation ("not yet resolved").</li>
+<li><span class="tag tag-jv">JV</span> Structural single points of dependency: lease stays with Dough Boss, licence fee "not yet decided," servicing depends on Charlie's personal skillset with no key-person cover.</li>
+<li><span class="tag tag-standalone">STANDALONE</span> A from-scratch build has none of the JV's pre-paid infrastructure — realistic pre-trading capital is plausibly $60k&ndash;$130k+ versus the JV's real $10,800.</li>
+<li><span class="tag tag-standalone">STANDALONE</span> No existing trained roster or family surge cover — a full crew must be recruited and trained from zero.</li>
+<li><span class="tag tag-standalone">STANDALONE</span> No catchment evidence transfers to any alternative site — zero validated foot traffic, a multi-month runway.</li>
+<li><span class="tag tag-concept">CONCEPT</span> The whole-shop "$247,000 combined profit" figure is built on proxy placeholder numbers the source itself says to replace with Charlie's actual P&amp;L.</li>
+</ul>
+
+<h3>Opportunities</h3>
+<ul>
+<li><span class="tag tag-concept">CONCEPT</span> The 60-day review gate (~20 Sep 2026) offers a low-cost, fast validation checkpoint with clear go/no-go bands (40/day minimum-viable, 60&ndash;80/day validated, 150+/day replication candidate).</li>
+<li><span class="tag tag-jv">JV</span> Store-in-a-box replication into Charlie's stores 2 and 3 — low-marginal-cost, since leases/kitchens/staff/brand already exist.</li>
+<li><span class="tag tag-concept">CONCEPT</span> Strong scenario projects ≈$340,000 EBITDA contribution with sub-1-month payback — substantial operating leverage once volume clears fixed costs.</li>
+<li><span class="tag tag-concept">CONCEPT</span> Unmodelled upside on top of every stated figure: pizza cross-sell lift, acai/catering/mobile-trailer/hospital-kiosk expansion all deliberately excluded from the financial model.</li>
+<li><span class="tag tag-jv">JV</span> The ~91% economics plus the SilverChef channel make the format "genuinely franchisable" — an opportunity to move first, ahead of larger low-cost entrants.</li>
+<li><span class="tag tag-concept">CONCEPT</span> Targeted, currently uncontested micro-markets: Student Hour, Scrub Club, Smoko/Office Box directly monetize the two verified nearby institutional populations.</li>
+<li><span class="tag tag-standalone">STANDALONE</span> Snow Flow's product-innovation pipeline and marketing system are Elie's own, independent of Charlie — portable to a standalone shop once a viable site is found.</li>
+</ul>
+
+<h3>Threats</h3>
+<ul>
+<li><span class="tag tag-concept">CONCEPT</span> Wage-cost pressure: NMW rose to $26.44/hr, awards +4.75%, effective 1 July 2026 (verified, live today) — the source's own planning basis was written pre-effective-date.</li>
+<li><span class="tag tag-concept">CONCEPT</span> Rapid low-cost franchise entrants (e.g. Mixue's Sydney expansion, verified 1 Jul 2026) could commoditize the category before SNOWBOSS scales — compounds the source's own "Copycats" risk-register item (High likelihood/Medium impact).</li>
+<li><span class="tag tag-jv">JV</span> Partnership dispute: Low likelihood/High impact per the source's own risk register; mitigation deadline (sign before grand launch) had not been met as of 12 June.</li>
+<li><span class="tag tag-jv">JV</span> Winter demand dip: High likelihood/Medium impact — the model's own seasonality shows a ~3× swing (195/day Feb peak to 65/day Jun trough) the labour model must flex against.</li>
+<li><span class="tag tag-concept">CONCEPT</span> Machine breakdown in peak season: Medium/Medium; mitigation depends on Charlie's personal servicing expertise — the same single point of failure flagged under Weaknesses.</li>
+<li><span class="tag tag-standalone">STANDALONE</span> No cushioning income stream against the winter dip or demand uncertainty — unlike the JV's stress-tested ~$165,000 floor, a standalone shop has no existing pizza trade to absorb a slow ramp.</li>
+<li><span class="tag tag-jv">JV</span> Construction disruption: Medium/Medium — the same hospital construction cited as a demand driver could disrupt access/parking/footfall during active works.</li>
+</ul>
+
+<div class="callout-navy"><strong>Cross-reference:</strong> the same underlying dynamic — cheap, fast-to-replicate input economics — is simultaneously SNOWBOSS's own franchising opportunity and the mechanism by which a better-capitalized entrant could out-scale the same format in the same catchment type. Whoever moves fastest from proof-of-concept (the 60-day gate) to replication captures the advantage; the source's stated moat (economics + halal + innovation cadence, not hardware) is the stated defense, but is untested as of the document date.</div>
+
+<!-- ======================= 9. TEAM & MANAGEMENT ======================= -->
+<div class="section-bar"><span class="num">9</span><h2>Team &amp; Management Structure Recommendation</h2></div>
+
+<h3>A. If joint — reporting lines and ownership split</h3>
+<p>Two functional owners, not a hierarchy: <strong>Charlie</strong> owns daily operations — site, staff, compliance, machine servicing (consistent with his 20 years of in-house maintenance experience and existing roster). <strong>Elie</strong> owns supply and growth — machines/product at cost, spare parts, training curriculum, the innovation pipeline, and the SEO/marketing system. Menu, pricing, and any spend over $2,000 require both partners' sign-off, with a written response-time expectation (e.g. 48 hours) so the threshold doesn't become a launch bottleneck.</p>
+<table class="tight">
+<tr><th>Function</th><th>Owner</th><th>Basis</th></tr>
+<tr><td>Shift rostering, staff supervision</td><td>Charlie</td><td>Existing roster/staff; soft-launch labour absorbed by it</td></tr>
+<tr><td>Machine servicing/maintenance</td><td>Charlie</td><td>20-year in-house capability, no service contracts needed</td></tr>
+<tr><td>Food safety compliance on-site</td><td>Charlie</td><td>Holds current cert for the trading premises</td></tr>
+<tr><td>Equipment supply, training, spare parts</td><td>Elie</td><td>Snow Flow supply-at-cost model</td></tr>
+<tr><td>Marketing/SEO, social, brand assets</td><td>Elie</td><td>SEO/meta marketing system</td></tr>
+<tr><td>Menu, pricing, spend &gt;$2k</td><td>Both</td><td>Explicit joint sign-off per Section 10</td></tr>
+</table>
+<p>One person runs the dessert station per shift. Soft launch: existing staff rotate through as part of normal shifts. From October (dedicated crew): trained staff scheduled specifically for the station, with the group's "4 trained staff + family surge cover" as a shared overflow pool — scheduled by whoever is rostering, with both partners aware it's a shared asset. At least one back-up trained staff member beyond the primary operator is recommended, mirroring the machines' own built-in redundancy.</p>
+
+<h3>B. What the written agreement must cover before launch — highest priority action item</h3>
+<p>The source's own risk register rates "partnership dispute" Low likelihood but <strong>High impact</strong>, with a stated mitigation deadline (sign before grand launch) not yet met as of drafting. In priority order:</p>
+<ol>
+<li><strong>The Section 10 shareholders' agreement and JV entity itself</strong> — the blocking item; nothing else below has legal effect until an entity exists.</li>
+<li><strong>The revenue/profit split percentage</strong> — currently unspecified anywhere; both parties' in-kind contributions need pricing (items 3 &amp; 4) before a split can be fairly negotiated.</li>
+<li><strong>Staff-time compensation</strong> — how Dough Boss is paid for existing staff absorbed into SNOWBOSS service; explicitly unresolved in the source.</li>
+<li><strong>The value of Charlie's in-house servicing contribution</strong>, stated explicitly in dollars — flagged as needing quantification, currently isn't.</li>
+<li><strong>The SNOWBOSS trading licence-fee mechanism</strong> (fixed fee vs % of dessert revenue) — "not yet decided."</li>
+<li><strong>Exit / buy-sell clause</strong>, including what happens if Dough Boss Bankstown is sold, and key-person cover for Charlie's servicing role.</li>
+<li><strong>GST registration and invoicing structure</strong> for the JV entity — depends on items 1 and 5 being settled first.</li>
+<li><strong>Re-cost the labour line</strong> against the wage rise that is now live (Section 2) — a spreadsheet fix, not a negotiation, but must happen before item 2's split is treated as final.</li>
+<li><strong>SilverChef signed quote reviewed by a tax agent</strong> for rent-vs-hire-purchase characterisation, given the intended month-12 purchase conversion.</li>
+</ol>
+<p class="footnote">With today's date (1 July 2026) and grand launch targeted for 20 July 2026, roughly <strong>three weeks</strong> remain to draft and sign this agreement — the most time-critical non-signage item on the launch plan, on par with the signage lead time itself.</p>
+
+<h3>C. If standalone — what a from-scratch team build requires</h3>
+<p>Every one of Charlie's roles (site ops, staff, compliance, servicing) would need to be performed by Elie directly or hired for. This requires: a full crew hired and trained before day one with no existing-roster shortcut; a hiring/training lead time that should not be assumed to fit inside six weeks; casual labour budgeted against the current, live minimum-wage figures (Section 2), since there's no existing-roster discount to lean on; and either Elie or a hired manager holding food-safety certification and registering the new premises with the relevant council before trading — a hard prerequisite, not a parallel task. The realistic standalone timeline (Section 3) runs to several months, not six weeks.</p>
+
+<div class="rec-banner">
+<div class="label">Recommendation</div>
+<p>On management/team grounds alone — separate from the capital and catchment case made elsewhere — <strong>the joint venture is the lower-risk structure</strong> for the 20 July 2026 launch. The JV's team risk is a <strong>paperwork risk with a known fix</strong>: get the Section 10 agreement signed in the roughly three weeks remaining. The standalone path's team risk is a <strong>structural timeline risk with no quick fix</strong>: building an entire operations, staffing, and compliance function from nothing, which is very unlikely to be achievable by the same date. Proceed with the joint venture, contingent on the written agreement being completed before grand launch, not after.</p>
+</div>
+
+<!-- ======================= 10. Q&A ======================= -->
+<div class="section-bar"><span class="num">10</span><h2>Team Q&amp;A — Hard Questions, Honest Answers</h2></div>
+<p class="footnote">All answers use only the facts in the source proposal and this analysis. Where a question isn't resolved by the source, that is stated explicitly rather than guessed.</p>
+
+<div class="persona"><div class="persona-title">From the accountant</div>
+<div class="qa-block">
+<div class="q">1. Is $316,050/$836,050 GST-inclusive or GST-exclusive?</div>
+<div class="a">Not stated anywhere in the source — an explicitly unresolved fact. Section 7 computes both bases precisely because it cannot be determined which applies, and there's no evidence pricing, monthly projections, and the whole-shop proxy P&amp;L were built on a consistent basis — this needs checking line-by-line against the model.</div>
+<div class="q">2. Does combining SNOWBOSS with existing trade accelerate GST registration, and does the JV need its own?</div>
+<div class="a">Both entities clear the $75,000 threshold on their own — registration timing isn't meaningfully "accelerated," it's already mandatory for each. Whether "Dough x Snow Pty Ltd" needs its own registration depends on how it's structured to invoice/licence Dough Boss, which Section 10 explicitly leaves open — unanswerable until entity structure and licence fee are settled.</div>
+<div class="q">3. Are the SilverChef rentals genuine rentals or a disguised hire-purchase, and has that been confirmed?</div>
+<div class="a">The source states terms are "independently confirmed consistent with SilverChef's published structure" (verified 1 Jul 2026) — but nothing confirms a tax agent has reviewed the specific signed quote for recharacterisation risk, and the risk register separately flags "SilverChef terms differ from planning basis" as open. Given the stated intent to convert to purchase at month 12, this needs tax-agent sign-off before relying on the "100% deductible operating expense" characterisation.</div>
+<div class="q">4. Who legally invoices, holds halal certification, and remits GST before the JV is formalised?</div>
+<div class="a">The source does not answer this — Section 10 was "NOT YET SIGNED" as of 12 June, with no interim legal-entity arrangement described for the gap between grand launch and JV formation. A genuine gap that needs resolving before trading starts.</div>
+</div></div>
+
+<div class="persona"><div class="persona-title">From the operator</div>
+<div class="qa-block">
+<div class="q">1. Where is the post-1-July wage rise re-costed into the labour line?</div>
+<div class="a">Nowhere in the given figures — the labour numbers were built on the proposal's pre-1-July wording. The verified research confirms the NMW rise and 4.75% award increase are now live, not hypothetical, as of today. Nothing shows the labour line has been rerun against current rates — this should happen before the budget is treated as current.</div>
+<div class="q">2. What's the actual fallback if Charlie can't personally service a breakdown at peak?</div>
+<div class="a">The source names Charlie's 20-year in-house servicing as the reason no service contracts are needed, and separately flags key-person cover as needing resolution — but no fallback (backup technician, service contract, cross-trained staff) is described anywhere. The $800/mo energy+parts+sundries line assumes flat costs only as long as Charlie personally remains available.</div>
+<div class="q">3. What happens to the six-week timeline and $4,700 signage spend if the partnership isn't settled before money is committed?</div>
+<div class="a">Week 1 of the launch plan has signage ordered in the same week as "partnership session held," while Section 10's share split, licence fee, and staff-time compensation remain unresolved, and the risk register requires the agreement signed "BEFORE grand launch," not before spend commitment. Comparing the Week 1 schedule against the risk register's "sign before grand launch" deadline suggests a potential scheduling conflict — this is an analyst inference drawn from comparing two source items, not a flaw the source states outright, and no contingency for it is described in the facts given.</div>
+<div class="q">4. Is a 60-day gate before the first winter sufficient evidence for a store-2 greenlight?</div>
+<div class="a">By the model's own numbers, the 60-day window (~20 Jul&ndash;20 Sep) covers only the Aug/Sep soft-launch and grand-launch months (72&rarr;98 units/day), while the same table shows units nearly tripling to 195/day by February before crashing to 65/day by June. Nothing in the source explains why a pre-winter snapshot should be sufficient for a capital-committing store-2 decision rather than, at minimum, a full seasonal cycle — a genuine tension in the source's own logic, not resolved by any fact given.</div>
+</div></div>
+
+<div class="persona"><div class="persona-title">From the investor</div>
+<div class="qa-block">
+<div class="q">1. What does the JV structure buy Charlie that a straight at-cost supplier deal doesn't?</div>
+<div class="a">On the facts given, nothing shown is necessary for Charlie to capture the $179k&ndash;$340k contribution — Elie already offers machines/product at cost, and Charlie already holds the site, lease, staff, brand, and servicing skill outright. The stated JV rationale (shared brand IP, shared innovation pipeline/SEO system, shared replication rights) is Elie's contribution, not a stated reason Charlie needs a joint entity rather than a vendor relationship.</div>
+<div class="q">2. What happens to Elie's machines, brand share, and capital if the lease is sold or the relationship sours?</div>
+<div class="a">The source states plainly the lease "stays with Dough Boss," and an exit/buy-sell clause is flagged as "needed" but not drafted — meaning, on the facts given, there is currently no answer. A stated open risk (partnership dispute, Low likelihood/High impact), not a resolved protection.</div>
+<div class="q">3. What's the actual equity/revenue split, and why isn't it pre-agreed?</div>
+<div class="a">The source is explicit: the agreed share split is not specified anywhere. No percentage exists for what Elie is compensated for machines, servicing, marketing system, or the innovation pipeline. Section 10 frames this as something to settle via a shareholders' agreement before grand launch, without explaining why it wasn't negotiated to a number before the six-week execution plan (including spend) began.</div>
+<div class="q">4. What protects a minority partner today, given no buy-sell, no key-person cover, no staff-time compensation, and no licence-fee resolution?</div>
+<div class="a">Per the facts given: nothing currently does. All four protections are explicitly listed as unresolved or "needed but not drafted" — not weak protections, but absent ones. This is precisely why the risk register rates partnership dispute High-impact and requires the Section 10 agreement signed before grand launch.</div>
+</div></div>
+
+<div class="persona"><div class="persona-title">From the competition</div>
+<div class="qa-block">
+<div class="q">1. What survives contact with a chain that can undercut Snow Flow's COGS?</div>
+<div class="a">The source asserts the moat is "~91% input economics + halal program + innovation cadence, not the machines," but provides no data comparing Snow Flow's cost basis to a centralized-procurement entrant's. This is an assumption in the source, not a proven moat; the risk register rates copycats High likelihood/Medium impact with the same unproven claim as mitigation.</div>
+<div class="q">2. What converts halal certification from a buyable credential into a durable advantage?</div>
+<div class="a">Nothing in the source does — certification is positioned as a "precinct-wide first," but that's a timing advantage, not a structural one, and the source itself provides the counter-evidence: Mixue is cited as already running halal-certified stores in other markets. Nothing in the source would prevent a serious competitor from certifying too.</div>
+<div class="q">3. What evidence supports "innovation cadence" as a moat?</div>
+<div class="a">None is given — the pipeline is named as one of Elie's contributions but no release-history data, cadence metrics, or lead-time-to-copy figures exist for any SKU in the facts provided. An asserted capability, not a demonstrated one.</div>
+<div class="q">4. What contingency exists for a Mixue-style entrant during the proof-of-concept window?</div>
+<div class="a">None — the risk register flags copycats as High likelihood and separately cites the Mixue scaling pattern as a live risk data point, yet the Conservative/Base/Strong scenarios contain no competitor-entry or margin-compression case. A stated gap: the risk is named but not built into any modelled scenario.</div>
+</div></div>
+
+<!-- ======================= 11. RECOMMENDATIONS ======================= -->
+<div class="section-bar"><span class="num">11</span><h2>Recommendations &amp; Approach to Pursue</h2></div>
+
+<div class="rec-banner">
+<div class="label">1. Overall recommendation</div>
+<p class="headline" style="font-size:12pt;">Pursue the joint venture at Bankstown — not standalone. Proceed, but treat 20 July&ndash;20 September 2026 as a conditional trial, not a done deal.</p>
+<p>Standalone requires an estimated $60k&ndash;$130k+ in pre-trading capital against a multi-month timeline with zero proof of demand. The JV requires $10,800 to finish work already ~85% complete, against a six-week timeline, because site, power, lease, counter, machines, and halal certification are already done and paid. The collaboration revenue analysis's hardest number: at minimum ~20% of Year-1 SNOWBOSS contribution (~$36,000 of $179,000) is mechanically attributable to the avoided-lease mechanic alone — a hard, source-computable figure, not a hand-wave. Directionally, the large majority of the $179,000/$316,050 Year-1 case is plausibly not replicable standalone on anything like the same capital or speed.</p>
+<p>This is not a free win. Every dollar currently flows into an unformalized partnership: no signed share split, structural dependencies running one-way against the minority partner (lease stays with Dough Boss, licence fee undecided, servicing tied to one person), and — per the investor Q&amp;A — nothing currently protects a minority partner. Standalone's real strength (100% ownership, zero governance risk) is dominated at this specific site, at this specific moment, by the capital/speed/catchment gap — not erased by it.</p>
+<p><strong>Resolution:</strong> pursue the JV now to capture the site-specific, time-sensitive advantage — but do not let operational urgency compress the governance work that protects Elie's position. The trading clock and the legal clock must run in parallel, not one ahead of the other.</p>
+</div>
+
+<h3>2. Must be locked in writing before 20 July 2026 — non-negotiable</h3>
+<p>Priority order, most urgent first (full detail in Section 9B):</p>
+<ol>
+<li>The Section 10 shareholders' agreement and the JV entity itself — the blocking item.</li>
+<li>The revenue/profit split percentage.</li>
+<li>Staff-time compensation for Dough Boss's absorbed roster.</li>
+<li>The value of Charlie's servicing contribution, stated explicitly in dollars.</li>
+<li>The SNOWBOSS trading licence-fee mechanism.</li>
+<li>Exit / buy-sell clause and key-person cover.</li>
+<li>GST registration and invoicing structure for the JV entity.</li>
+<li>Re-cost the labour line against the wage rise now in effect.</li>
+<li>SilverChef signed quote reviewed by a tax agent.</li>
+</ol>
+<div class="callout-amber"><strong>Sequencing note:</strong> Week 1 has signage ordered ($4,700, 3-week lead, critical path) the same week as "partnership session held" — a potential scheduling tension against the risk register's own "sign before grand launch" deadline. Recommendation: proceed with signage/name/trademark lock (needed regardless of final JV terms), but treat items 1&ndash;6 above as the actual gate for grand launch, not for spend commitment. If terms aren't signed by grand launch, delay the launch, not the paperwork.</div>
+
+<h3>3. Sequencing: Bankstown is the proof-of-concept regardless of eventual structure</h3>
+<p>Run the six-week plan to grand launch in parallel with the governance work above — don't let either block the other, but don't let trading start without items 1&ndash;6 signed. Six weeks to real trading data is valuable independent of how the standalone-vs-joint question ultimately resolves: it tests real unit economics against a real, evidenced catchment; if JV terms later prove unfavourable, the trading data, brand assets, and menu-performance evidence remain portable to Elie regardless.</p>
+<table class="tight">
+<tr><th>Phase</th><th>Action</th></tr>
+<tr><td>Now &ndash; Week 1</td><td>Lock name/tagline/menu/signage order in parallel with opening the Section 10 negotiation — independent tracks.</td></tr>
+<tr><td>Weeks 2&ndash;5</td><td>Continue build-out (electrical cert, smallwares, staff training, soft launch 6 &amp; 13 Jul) while items 1&ndash;6 are negotiated and drafted.</td></tr>
+<tr><td>Hard gate: before 20 Jul</td><td>Items 1&ndash;6 signed. If not, delay grand launch — smaller and more recoverable than launching a revenue-sharing business with no share agreement.</td></tr>
+<tr><td>20 Jul &ndash; 20 Sep (60-day window)</td><td>Trade under signed terms; track daily transactions against the operating dashboard bands; resolve items 7&ndash;9 (lower urgency, but must close before the 60-day gate feeds a capital-committing decision).</td></tr>
+</table>
+
+<h3>4. What to revisit at the 60-day gate (~20 September 2026)</h3>
+<p>The 60-day window covers only the soft-launch/grand-launch months (72&rarr;98 units/day), not the Feb27 Ramadan peak (195/day) or the Jun27 trough (65/day) the same model projects — a ~3× seasonal swing the risk register calls the primary revenue risk. <strong>Do not treat a pre-winter snapshot as sufficient evidence for a full-year or store-2 capital commitment.</strong> Use the gate to check: actual units/day against the operating dashboard bands; whether the signed Section 10 terms are holding up in practice; actual labour cost at post-1-July wage rates; the combo/cross-sell attach rate (the biggest data gap identified in Section 5); whether Charlie's servicing model held under real peak conditions; and GST/BAS mechanics running as designed.</p>
+
+<div class="callout-dark">
+<strong>What would change the recommendation:</strong> if the Section 10 terms don't get signed before grand launch, or get signed on terms leaving Elie's contributions unpriced or the split materially skewed with no real exit protection — standalone, or a renegotiated split, become live options and should be pursued. If units/day comes in persistently under ~40/day (below minimum-viable) through the 60-day window with no clear seasonal explanation, this should trigger a hard reassessment of the whole concept at this site. If a well-capitalized copycat entrant moves into the same catchment type during the window, this strengthens the case for moving fast on franchisability rather than treating the gate as leisurely. If the whole-shop proxy figures get replaced with Charlie's actual P&amp;L and prove materially worse, the $247,000/29.5% headline needs restating before use in any external conversation.
+</div>
+
+<p><strong>Bottom line:</strong> proceed with the joint venture — the capital, speed, and catchment case is decisive and quantified. But make the 20 July grand launch conditional on the governance items being signed, not just attempted, and treat the 60-day gate as a partial signal (demand validation) rather than a full verdict — with an explicit trigger to revisit standalone or renegotiation if the partnership protections aren't real by then.</p>
+
+<!-- ======================= 12. CLOSING ======================= -->
+<div class="section-bar"><span class="num">12</span><h2>Closing Statement &amp; Disclaimer</h2></div>
+
+<p>SNOWBOSS is a genuinely compelling opportunity: exceptional unit economics, a hospital- and university-anchored catchment with independently verified demand drivers, and a low-capital path to trading inside an existing, operating shop. The joint-venture path captures nearly all of that opportunity for roughly $10,800 and six weeks — an outcome no standalone path can currently match. The recommendation in this document is to proceed with the joint venture, decisively, while treating the outstanding partnership paperwork as equally urgent as the signage lead time, not secondary to it.</p>
+
+<div class="closing-box">
+<p style="margin-top:0;"><strong>Disclaimer.</strong> The figures in this document are planning estimates drawn from the 12 June 2026 "DOUGH x SNOW — SNOWBOSS Business Proposal v3.2," supplemented by research verified as of 1 July 2026, and by explicitly labelled analyst estimates and recalculations shown with their derivation. They are <strong>not</strong> audited financial statements, a signed lease, a signed equipment-finance agreement, or a legal opinion. Standalone-path figures in particular are order-of-magnitude estimates only, with no real site identified. Whole-shop combined figures rest on proxy placeholder data for the existing Dough Boss shop that the source document itself instructs be replaced with actual figures.</p>
+<p style="margin-bottom:0;"><strong>Before signing any partnership agreement or committing capital, engage a qualified accountant and a lawyer</strong> to: convert this into a full pro-forma profit-and-loss and cash-flow statement using actual (not proxied) baseline-shop financials; confirm GST treatment, registration, and BAS mechanics; review the signed SilverChef quote for correct tax characterisation; and draft and execute the Section 10 shareholders' agreement covering share split, staff-time compensation, servicing valuation, licence fee, and exit/key-person terms — all before the 20 July 2026 grand launch.</p>
+</div>
+
+<p class="disclaimer">Confidential. Prepared by Elie D., 1 July 2026. This document is a decision-support analysis, not a binding offer, agreement, or financial statement.</p>
+
+</body>
+</html>
