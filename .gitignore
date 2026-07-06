@@ -1,6 +1,14 @@
+# Secrets — never commit real keys. .env.example is the committed template.
+.env
+.env.*
+!.env.example
+
 # Build output
 /dist/
 *.zip
+
+# Test scratch (WP-stub kernel writes no artifacts, but keep tmp out)
+/tests/wp-content/
 
 # Dependencies
 /node_modules/
