@@ -77,6 +77,25 @@ ok( in_array( 'doughboss/v1/config', $routes, true ) || (bool) preg_grep( '#doug
 ok( (bool) preg_grep( '#doughboss/v1/menu#', $routes ), '/menu route present' );
 ok( (bool) preg_grep( '#doughboss/v1/checkout#', $routes ), '/checkout route present' );
 
+// 4b. Route parity — the exact registered-route surface must not drift.
+// Guards refactors (e.g. splitting the controller into per-domain sub-controllers):
+// the set of routes must stay byte-identical to tests/routes.snapshot.
+section( 'Route parity (vs tests/routes.snapshot)' );
+$snap_file = __DIR__ . '/routes.snapshot';
+if ( ! is_file( $snap_file ) ) {
+	ok( false, 'routes.snapshot present' );
+} else {
+	$expected = array_values( array_filter( array_map( 'trim', explode( "\n", (string) file_get_contents( $snap_file ) ) ) ) );
+	$actual   = $GLOBALS['__db_rest'];
+	sort( $expected );
+	sort( $actual );
+	$missing = array_diff( $expected, $actual );
+	$added   = array_diff( $actual, $expected );
+	ok( count( $expected ) === count( $actual ) && ! $missing && ! $added, 'registered routes match snapshot exactly (' . count( $actual ) . ' routes)' );
+	foreach ( $missing as $r ) { echo "    MISSING (in snapshot, not registered): $r\n"; }
+	foreach ( $added as $r ) { echo "    ADDED (registered, not in snapshot): $r\n"; }
+}
+
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
 foreach ( array( 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'doughboss_order_tracking' ) as $sc ) {
