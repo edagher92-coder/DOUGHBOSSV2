@@ -65,7 +65,19 @@ function rest_url( $p = '' ) { return 'http://example.test/wp-json/' . ltrim( $p
 function is_wp_error( $t ) { return $t instanceof WP_Error; }
 class WP_Error { public $errors = array(); public function __construct( $c = '', $m = '', $d = null ) { if ( $c ) { $this->errors[ $c ][] = $m; } } public function get_error_message() { return ''; } public function get_error_code() { return ''; } }
 class WP_REST_Response { public $data; public $status; public function __construct( $d = null, $s = 200 ) { $this->data = $d; $this->status = $s; } public function set_status( $s ) { $this->status = $s; } }
-class WP_REST_Request implements ArrayAccess { private $p = array(); public function __construct( $p = array() ) { $this->p = $p; } public function get_param( $k ) { return $this->p[ $k ] ?? null; } public function get_params() { return $this->p; } public function get_json_params() { return $this->p; } public function get_header( $k ) { return ''; } #[\ReturnTypeWillChange] public function offsetExists( $o ) { return isset( $this->p[ $o ] ); } #[\ReturnTypeWillChange] public function offsetGet( $o ) { return $this->p[ $o ] ?? null; } #[\ReturnTypeWillChange] public function offsetSet( $o, $v ) { $this->p[ $o ] = $v; } #[\ReturnTypeWillChange] public function offsetUnset( $o ) { unset( $this->p[ $o ] ); } }
+class WP_REST_Request implements ArrayAccess {
+	private $p = array();
+	public function __construct( $p = array() ) { $this->p = $p; }
+	public function get_param( $k ) { return $this->p[ $k ] ?? null; }
+	public function get_params() { return $this->p; }
+	public function get_json_params() { return $this->p; }
+	public function get_header( $k ) { return ''; }
+	// No return types + E_DEPRECATED suppressed → works on PHP 7.4 and 8.x alike.
+	public function offsetExists( $o ) { return isset( $this->p[ $o ] ); }
+	public function offsetGet( $o ) { return $this->p[ $o ] ?? null; }
+	public function offsetSet( $o, $v ) { $this->p[ $o ] = $v; }
+	public function offsetUnset( $o ) { unset( $this->p[ $o ] ); }
+}
 
 /* ---- CPT / taxonomy / shortcodes ---- */
 function register_post_type( $t, $a = array() ) { $GLOBALS['__db_posttypes'][] = $t; return (object) array( 'name' => $t ); }
