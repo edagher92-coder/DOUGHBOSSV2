@@ -41,6 +41,9 @@ jobs:
       - name: Boot smoke test (WP-stub — proves the plugin boots, routes register, integrations dormant)
         run: php tests/smoke-boot.php
 
+      - name: Money-path unit tests (voucher preview maths + coupon check-character)
+        run: php tests/money-path.test.php
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
