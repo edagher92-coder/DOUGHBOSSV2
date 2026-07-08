@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Orders</title>
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
 <!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
      For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
      Content-Security-Policy: frame-ancestors 'none'
@@ -90,12 +90,22 @@ a{color:inherit;}
 /* ---- order card (big, friendly) ---- */
 .card{background:#fff;border-radius:14px;border:1px solid var(--line);border-top:5px solid var(--muted);padding:14px 15px;margin-bottom:12px;box-shadow:0 2px 5px rgba(0,0,0,.04);}
 .card.new{border-top-color:var(--new);}
+.card.confirmed{border-top-color:var(--cater);}
 .card.preparing{border-top-color:var(--prep);}
+.card.baking{border-top-color:var(--amber);}
 .card.ready{border-top-color:var(--ready);}
+.card.out_for_delivery{border-top-color:var(--prep);}
 .card.completed{border-top-color:var(--done);}
 .card.cancelled{border-top-color:var(--cancel);opacity:.78;}
-.card.confirmed{border-top-color:var(--cater);}
 .card.enquiry{border-top-color:var(--cater);}
+.sbadge{font-size:11px;font-weight:800;letter-spacing:.03em;border-radius:999px;padding:2px 8px;background:#efe7d9;color:#5b5347;}
+.sbadge.new{background:#fbe3df;color:var(--new);}
+.sbadge.confirmed{background:#f2e6cf;color:var(--cater);}
+.sbadge.preparing{background:#e2edf7;color:var(--prep);}
+.sbadge.baking{background:#f6e6d0;color:#9e5a12;}
+.sbadge.ready{background:#dcefe1;color:var(--ready);}
+.sbadge.out_for_delivery{background:#e2edf7;color:var(--prep);}
+.c-eta{font-size:11px;font-weight:800;letter-spacing:.03em;border-radius:999px;padding:2px 8px;background:#efe7d9;color:#5b5347;}
 .c-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
 .c-ref{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.02em;}
 .c-age{font-size:13px;color:var(--muted);white-space:nowrap;}
@@ -176,7 +186,7 @@ a{color:inherit;}
 	<div class="nav-in" id="tabs" role="tablist">
 		<button id="tab-live" class="ntab" role="tab" data-panel="live" aria-selected="true" aria-controls="p-live" aria-label="New &amp; cooking, 0 live orders"><span class="ico" aria-hidden="true">🔥</span><span class="nm">New &amp; cooking</span><span class="nbadge" id="b-live" aria-hidden="true">0</span></button>
 		<button id="tab-today" class="ntab" role="tab" data-panel="today" aria-selected="false" aria-controls="p-today" aria-label="Today, 0 orders today"><span class="ico" aria-hidden="true">📋</span><span class="nm">Today</span><span class="nbadge" id="b-today" aria-hidden="true">0</span></button>
-		<button id="tab-upcoming" class="ntab" role="tab" data-panel="upcoming" aria-selected="false" aria-controls="p-upcoming" aria-label="Coming up, 0 upcoming orders"><span class="ico" aria-hidden="true">📅</span><span class="nm">Coming up</span><span class="nbadge" id="b-upcoming" aria-hidden="true">0</span></button>
+		<button id="tab-upcoming" class="ntab" role="tab" data-panel="upcoming" aria-selected="false" aria-controls="p-upcoming" aria-label="Coming up, 0 upcoming catering bookings"><span class="ico" aria-hidden="true">📅</span><span class="nm">Coming up</span><span class="nbadge" id="b-upcoming" aria-hidden="true">0</span></button>
 		<button id="tab-catering" class="ntab" role="tab" data-panel="catering" aria-selected="false" aria-controls="p-catering" aria-label="Catering, 0 catering orders"><span class="ico" aria-hidden="true">🎉</span><span class="nm">Catering</span><span class="nbadge" id="b-catering" aria-hidden="true">0</span></button>
 		<button id="tab-history" class="ntab" role="tab" data-panel="history" aria-selected="false" aria-controls="p-history" aria-label="Done, 0 completed orders"><span class="ico" aria-hidden="true">✓</span><span class="nm">Done</span><span class="nbadge" id="b-history" aria-hidden="true">0</span></button>
 	</div>
@@ -187,7 +197,7 @@ a{color:inherit;}
 	<!-- LIVE -->
 	<section class="panel on" id="p-live" role="tabpanel" aria-labelledby="tab-live">
 		<h1 class="ph">New &amp; cooking</h1>
-		<p class="psub">Tap the big button on a card to move it along: <b>Accept</b> → <b>Cooking</b> → <b>Ready</b> → <b>Done</b>.</p>
+		<p class="psub">Tap the big button on a card to move it along: <b>Accept</b> (set ETA) → <b>Prep</b> → <b>Oven</b> → <b>Ready</b> → <b>Out for delivery</b> / <b>Pickup</b> → <b>Done</b>.</p>
 		<div class="tip"><span>🔔</span><span>New orders pop in here automatically.</span><div style="flex:1"></div><button type="button" class="sim" id="sim">+ New order (demo)</button></div>
 		<p class="psub" style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">&#9432; All customer names and order data shown are fictional and for demonstration purposes only.</p>
 		<div class="cols" id="board"></div>
@@ -197,14 +207,14 @@ a{color:inherit;}
 	<!-- TODAY -->
 	<section class="panel" id="p-today" role="tabpanel" aria-labelledby="tab-today" hidden>
 		<h1 class="ph">Today</h1>
-		<p class="psub">Online orders placed or scheduled for today — see the Catering tab for events.</p>
+		<p class="psub">Online orders placed today — see the Catering tab for events.</p>
 		<div class="list" id="list-today"></div>
 	</section>
 
 	<!-- UPCOMING -->
 	<section class="panel" id="p-upcoming" role="tabpanel" aria-labelledby="tab-upcoming" hidden>
 		<h1 class="ph">Coming up</h1>
-		<p class="psub">Booked ahead — pickups, deliveries and catering, soonest first.</p>
+		<p class="psub">Upcoming catering bookings — confirmed events booked ahead, soonest first.</p>
 		<div class="list" id="list-upcoming"></div>
 	</section>
 
@@ -245,8 +255,22 @@ a{color:inherit;}
 	/* helpers */
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 	function money(n) { return '$' + n.toFixed(2); }
-	var SAFE = {new:1,preparing:1,ready:1,completed:1,cancelled:1,confirmed:1,enquiry:1};
+	var SAFE = {new:1,confirmed:1,preparing:1,baking:1,ready:1,out_for_delivery:1,completed:1,cancelled:1,enquiry:1};
 	function safeStatus(s) { return SAFE[s] ? s : 'muted'; }
+	/* live order status machine — same vocabulary as includes/class-doughboss-order.php */
+	var LIVE_STATUSES = { new:1, confirmed:1, preparing:1, baking:1, ready:1, out_for_delivery:1 };
+	var LIVE_STATUS_LABEL = { new:'New', confirmed:'Accepted', preparing:'Prepping', baking:'In the oven', ready:'Ready', out_for_delivery:'Out for delivery' };
+	function liveNext(o) {
+		switch (o.status) {
+			case 'new': return { to: 'confirmed', cls: '', label: 'Accept order' };
+			case 'confirmed': return { to: 'preparing', cls: '', label: 'Start prepping' };
+			case 'preparing': return { to: 'baking', cls: '', label: 'Into the oven' };
+			case 'baking': return { to: 'ready', cls: 'ready', label: 'Mark ready' };
+			case 'ready': return o.type === 'Delivery' ? { to: 'out_for_delivery', cls: '', label: 'Send for delivery' } : { to: 'completed', cls: 'ghost', label: 'Picked up · done' };
+			case 'out_for_delivery': return { to: 'completed', cls: 'ghost', label: 'Delivered · done' };
+			default: return { to: 'completed', cls: 'ghost', label: 'Done' };
+		}
+	}
 	var now = new Date();
 	function at(off, h, m) { var d = new Date(now); d.setDate(d.getDate() + off); d.setHours(h, m || 0, 0, 0); return d; }
 	function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
@@ -273,8 +297,8 @@ a{color:inherit;}
 		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Nadia A.', type: 'Delivery', items: ['2× Veggie Plus', '1× Fattoush', '1× Ayran'], total: 36.50, status: 'ready', placed: at(0, Math.max(0, now.getHours() - 1), 5) },
 		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Omar S.', type: 'Pickup', items: ['2× Lahm bi ajeen', '1× Lentil soup'], total: 24.00, status: 'completed', placed: at(0, 9, 14) },
 		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Priya R.', type: 'Delivery', items: ['1× Margherita', '1× Garlic bread'], total: 28.50, status: 'completed', placed: at(0, 11, 2) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Hassan D.', type: 'Pickup', items: ['4× Mixed manoush', '2× Soft drinks'], total: 46.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 2), 0), scheduled: at(0, Math.min(21, now.getHours() + 3), 30) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Office — Lvl 3', type: 'Delivery', items: ['6× Assorted manoush', '3× Salads', '6× Drinks'], total: 92.00, status: 'new', placed: at(-1, 16, 40), scheduled: at(1, 12, 0) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Hassan D.', type: 'Pickup', items: ['4× Mixed manoush', '2× Soft drinks'], total: 46.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 2), 0) },
+		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Office — Lvl 3', type: 'Delivery', items: ['6× Assorted manoush', '3× Salads', '6× Drinks'], total: 92.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 1), 40) },
 		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample School', type: 'Catering', items: ['Lunch run — 60 pax', 'Mixed manoush platters ×6', 'Fruit & juice'], total: 540.00, deposit: 150, status: 'confirmed', placed: at(-3, 10, 0), scheduled: at(2, 11, 30), pax: 60, pkg: 'School Lunch Run' },
 		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Smith Wedding', type: 'Catering', items: ['Grazing + hot manoush — 120 pax', 'Dessert table (Snow Boss)', 'Service staff ×2'], total: 1980.00, deposit: 500, status: 'confirmed', placed: at(-6, 13, 0), scheduled: at(9, 17, 0), pax: 120, pkg: 'Premium Event' },
 		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample Corporate', type: 'Catering', items: ['Corporate breakfast — ~40 pax', 'Manoush + coffee cart'], total: 0, deposit: 0, status: 'enquiry', placed: at(0, Math.max(0, now.getHours() - 3), 20), pax: 40, pkg: 'Corporate Breakfast' },
@@ -289,9 +313,9 @@ a{color:inherit;}
 	var store = 'all';
 	function inStore(o) { return store === 'all' || o.store === store; }
 
-	function liveOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'online' && (o.status === 'new' || o.status === 'preparing' || o.status === 'ready'); }); }
+	function liveOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'online' && LIVE_STATUSES[o.status]; }); }
 	function todayOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel !== 'catering' && (sameDay(o.placed, now) || (o.scheduled && sameDay(o.scheduled, now))); }).sort(function (a, b) { return (a.scheduled || a.placed) - (b.scheduled || b.placed); }); }
-	function upcomingOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel !== 'catering' && o.scheduled && o.scheduled > now && !sameDay(o.scheduled, now) && o.status !== 'cancelled'; }).sort(function (a, b) { return a.scheduled - b.scheduled; }); }
+	function upcomingOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'catering' && o.status === 'confirmed' && o.scheduled && o.scheduled > now; }).sort(function (a, b) { return a.scheduled - b.scheduled; }); }
 	function catEnquiries() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'catering' && o.status === 'enquiry'; }); }
 	function catBooked() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'catering' && o.status === 'confirmed' && o.scheduled && o.scheduled > now; }).sort(function (a, b) { return a.scheduled - b.scheduled; }); }
 	function doneOrders() { return ORDERS.filter(function (o) { return inStore(o) && (o.status === 'completed' || o.status === 'cancelled'); }).sort(function (a, b) { return (b.scheduled || b.placed) - (a.scheduled || a.placed); }); }
@@ -303,13 +327,13 @@ a{color:inherit;}
 
 	/* live card with big action button */
 	function liveCard(o) {
-		var next = o.status === 'new' ? { cls: '', label: 'Accept order' } :
-			o.status === 'preparing' ? { cls: 'ready', label: 'Mark ready' } :
-				{ cls: 'ghost', label: o.type === 'Delivery' ? 'Dispatched · done' : 'Picked up · done' };
+		var next = liveNext(o);
+		var sbadge = '<span class="sbadge ' + safeStatus(o.status) + '">' + esc(LIVE_STATUS_LABEL[o.status] || o.status) + '</span>';
+		var etaBit = o.eta ? '<span class="c-eta">⏱ ETA ' + esc(o.eta) + ' min</span>' : '';
 		return '<div class="card ' + safeStatus(o.status) + '">' +
 			'<div class="c-top"><span class="c-ref">#' + esc(o.ref) + '</span><span class="c-age">' + ago(o.placed) + '</span></div>' +
 			'<div class="c-who">' + esc(o.who) + '</div>' +
-			'<div class="c-meta">' + esc(o.type) + ' · ' + esc(o.store) + ' ' + chanTag(o) + '</div>' +
+			'<div class="c-meta">' + esc(o.type) + ' · ' + esc(o.store) + ' ' + sbadge + ' ' + chanTag(o) + etaBit + '</div>' +
 			'<ul class="c-items">' + liEls(o.items) + '</ul>' +
 			'<div class="c-bottom"><span class="c-tot">' + money(o.total) + '</span>' +
 			'<button type="button" class="act ' + next.cls + '" data-ref="' + esc(o.ref) + '">' + next.label + ' <span aria-hidden="true">→</span></button></div></div>';
@@ -339,7 +363,7 @@ a{color:inherit;}
 
 	function emptyCard(msg) { return '<div class="empty">' + msg + '</div>'; }
 
-	var BADGE_LABELS = { 'b-live': 'live orders', 'b-today': 'orders today', 'b-upcoming': 'upcoming orders', 'b-catering': 'catering orders', 'b-history': 'completed orders' };
+	var BADGE_LABELS = { 'b-live': 'live orders', 'b-today': 'orders today', 'b-upcoming': 'upcoming catering bookings', 'b-catering': 'catering orders', 'b-history': 'completed orders' };
 	function badge(id, n, isAlert) {
 		var el = document.getElementById(id);
 		el.textContent = n;
@@ -349,13 +373,13 @@ a{color:inherit;}
 	}
 
 	function render() {
-		// live board
-		var lanes = [['new', 'New orders', 'c-new'], ['preparing', 'Cooking now', 'c-prep'], ['ready', 'Ready', 'c-ready']];
+		// live board — 3 columns, each grouping one or more real statuses
+		var lanes = [['New orders', 'c-new', ['new']], ['In the kitchen', 'c-prep', ['confirmed', 'preparing', 'baking']], ['Ready to go', 'c-ready', ['ready', 'out_for_delivery']]];
 		var live = liveOrders();
 		document.getElementById('board').innerHTML = lanes.map(function (l) {
-			var list = live.filter(function (o) { return o.status === l[0]; });
+			var list = live.filter(function (o) { return l[2].indexOf(o.status) !== -1; });
 			var body = list.map(liveCard).join('') || '<p style="color:#9a9081;font-size:14px;margin:6px;">Nothing here yet' + (store !== 'all' ? ' for ' + esc(store) : '') + '</p>';
-			return '<div class="col ' + l[2] + '"><div class="col-h"><span class="c-dot" aria-hidden="true"></span>' + l[1] + '<span class="n" aria-hidden="true">' + list.length + '</span></div>' + body + '</div>';
+			return '<div class="col ' + l[1] + '"><div class="col-h"><span class="c-dot" aria-hidden="true"></span>' + l[0] + '<span class="n" aria-hidden="true">' + list.length + '</span></div>' + body + '</div>';
 		}).join('');
 
 		// today
@@ -364,7 +388,7 @@ a{color:inherit;}
 
 		// upcoming
 		var up = upcomingOrders();
-		document.getElementById('list-upcoming').innerHTML = up.length ? up.map(function (o) { return infoCard(o, 'scheduled'); }).join('') : emptyCard('Nothing booked ahead' + (store !== 'all' ? ' for ' + esc(store) : '') + '.');
+		document.getElementById('list-upcoming').innerHTML = up.length ? up.map(catCard).join('') : emptyCard('No upcoming catering bookings' + (store !== 'all' ? ' for ' + esc(store) : '') + '.');
 
 		// catering
 		var enq = catEnquiries(), bk = catBooked();
@@ -417,20 +441,24 @@ a{color:inherit;}
 		document.getElementById('announce').textContent = 'Showing ' + (store === 'all' ? 'all stores' : store);
 	});
 
-	/* advance an order */
+	/* advance an order through the real status machine */
 	document.getElementById('board').addEventListener('click', function (e) {
 		var b = e.target.closest('[data-ref]'); if (!b) { return; }
 		var r = b.getAttribute('data-ref');
-		var newStatus = '';
-		for (var i = 0; i < ORDERS.length; i++) {
-			if (ORDERS[i].ref === r) {
-				var s = ORDERS[i].status;
-				newStatus = s === 'new' ? 'preparing' : (s === 'preparing' ? 'ready' : 'completed');
-				ORDERS[i].status = newStatus;
-				break;
-			}
+		var o = null;
+		for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].ref === r) { o = ORDERS[i]; break; } }
+		if (!o) { return; }
+		if (o.status === 'new') {
+			// accept step records a staff-entered ETA before confirming (mirrors app/app.js)
+			var eta = window.prompt('ETA in minutes?', '20');
+			if (eta === null) { return; }
+			var mins = parseInt(eta, 10);
+			o.eta = (mins > 0) ? mins : 0;
+			o.status = 'confirmed';
+		} else {
+			o.status = liveNext(o).to;
 		}
-		var lbl = {preparing: 'now preparing', ready: 'ready for collection', completed: 'completed'}[newStatus] || newStatus;
+		var lbl = {confirmed: 'accepted', preparing: 'now prepping', baking: 'in the oven', ready: 'ready for collection', out_for_delivery: 'out for delivery', completed: 'completed'}[o.status] || o.status;
 		document.getElementById('announce').textContent = 'Order #' + r + ' — ' + lbl;
 		render();
 	});

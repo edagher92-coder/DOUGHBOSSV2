@@ -5,7 +5,7 @@
  */
 /* Fonts are loaded via <link rel="preconnect"> + stylesheet in index.html <head> for faster first paint. */
 
-:root{--ink:#0d0d0d;--ash:#141110;--char:#0a0807;--paper:#f7f5f0;--ember:#111111;--ember2:#5a5a5a;--mist:#b8b1a4;--line:#2a2521;--linel:#e6e2da;--pad:clamp(64px,8vw,108px);}
+:root{--ink:#0d0d0d;--ash:#141110;--char:#0a0807;--paper:#f7f5f0;--ember:#111111;--ember2:#5a5a5a;--mist:#b8b1a4;--line:#2a2521;--linel:#e6e2da;--pad:clamp(64px,8vw,108px);--ice:#ffffff;--amber:#ffffff;}
 *{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
 body{font-family:'Barlow','Helvetica Neue',Arial,sans-serif;color:var(--ink);background:var(--paper);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden;padding-bottom:60px;}
@@ -243,7 +243,7 @@ a{text-decoration:none;color:inherit;}
    horizontal-scroll fade cue, matching the primary nav. */
 @media(max-width:880px){.mn-jumpbar{top:56px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent);}.mn-jumpbar::-webkit-scrollbar{display:none;}.mn-jump{flex:0 0 auto;}.mn-jump-go{margin-left:6px;}}
 /* Touch devices: bring the small steppers/pills up toward the 44px tap-target guidance. */
-@media(pointer:coarse){.mn-jump{padding:11px 18px;}.mn-add{height:42px;}.mn-step button{width:40px;height:40px;}.cd-qty button{width:36px;height:36px;}.dbo-qty button{width:34px;height:34px;}}
+@media(pointer:coarse){.mn-jump{padding:11px 18px;}.mn-add{height:42px;}.mn-step button{width:40px;height:40px;}.cd-qty button{width:36px;height:36px;}}
 @media(max-width:760px){.mn-list{grid-template-columns:1fr;gap:0;}.mn-item{padding:15px 0;}}
 
 /* browse-and-order: per-item controls */
@@ -381,58 +381,6 @@ body.cart-on{padding-bottom:114px;}
 .dbq-ref{font-size:17px;}
 .dbq-demo{font-size:12.5px;color:#6f6a60;max-width:440px;margin:12px auto 0;}
 @media(max-width:820px){.dbq{grid-template-columns:1fr;}.dbq-sum{position:static;}}
-
-/* online ordering */
-.dbo{display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;}
-.dbo-cat{margin-bottom:22px;}
-.dbo-cat h3{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:25px;color:var(--ember);margin-bottom:10px;border-bottom:1px solid #e4e1da;padding-bottom:6px;}
-.dbo-items{display:flex;flex-direction:column;gap:8px;}
-.dbo-item{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:10px 12px;border:1px solid #e4e1da;border-radius:10px;background:#fff;}
-.dbo-it-main{display:flex;justify-content:space-between;flex:1;gap:12px;}
-.dbo-it-n{font-weight:600;}
-.dbo-it-p{color:#6b645a;}
-.dbo-tag{display:inline-block;font-size:10px;font-weight:700;color:#1f8a54;border:1px solid #cfe9da;border-radius:4px;padding:0 4px;margin-left:3px;vertical-align:middle;}
-.dbo-add{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:15px;background:#0d0d0d;color:#fff;border:0;border-radius:7px;padding:8px 16px;cursor:pointer;}
-.dbo-add:hover{background:var(--ember);}
-.dbo-cart{position:sticky;top:80px;border:1px solid #e4e1da;border-radius:14px;background:#faf9f6;padding:18px;}
-.dbo-cart-h{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:21px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.dbo-cart-h span{background:var(--ember);color:#fff;border-radius:20px;font-size:13px;padding:1px 9px;}
-.dbo-line{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:6px 0;border-bottom:1px solid #efe9e0;font-size:14px;}
-.dbo-line-n{flex:1;}
-.dbo-qty{display:inline-flex;align-items:center;gap:7px;}
-.dbo-qty button{width:24px;height:24px;border:1px solid #e4e1da;background:#fff;border-radius:6px;cursor:pointer;font-size:15px;line-height:1;}
-.dbo-empty{color:#6f6a60;font-size:14px;padding:10px 0;}
-.dbo-tot{display:flex;justify-content:space-between;font-family:'Bebas Neue',sans-serif;font-size:21px;padding:10px 0;}
-.dbo-checkout,.dbo-form .btn{width:100%;justify-content:center;margin-top:8px;}
-.dbo-form{display:flex;flex-direction:column;gap:10px;}
-.dbo-f{display:flex;flex-direction:column;gap:5px;border:0;padding:0;margin:0;}
-.dbo-f>span{font-size:13px;font-weight:700;}
-.dbo-f input,.dbo-f select{font:inherit;padding:9px 11px;border:1px solid #e4e1da;border-radius:8px;}
-.dbo-rad{display:inline-flex;align-items:center;gap:6px;margin-right:14px;}
-.dbo-err:not(:empty){color:#b3261e;font-weight:600;font-size:13px;}
-.dbo-done{text-align:center;padding:20px 6px;}
-.dbo-check{width:48px;height:48px;line-height:48px;margin:0 auto 10px;border-radius:50%;background:#1f8a54;color:#fff;font-size:24px;}
-.dbo-done h3{font-family:'Bebas Neue',sans-serif;font-size:25px;}
-.dbo-demo{font-size:12px;color:#6f6a60;margin-top:8px;}
-@media(max-width:820px){.dbo{grid-template-columns:1fr;}.dbo-cart{position:static;}}
-
-/* kitchen board */
-.dbk-bar{display:flex;align-items:center;gap:16px;margin-bottom:16px;}
-.dbk-count{color:#6f6a60;font-size:14px;}
-.dbk-board{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.dbk-lane{background:#f1ece4;border-radius:12px;padding:12px;min-height:160px;}
-.dbk-lane-h{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:17px;color:#0d0d0d;margin-bottom:10px;text-transform:uppercase;}
-.dbk-card{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px;border-left:4px solid var(--ember);box-shadow:0 4px 12px rgba(0,0,0,.06);}
-.dbk-preparing{border-left-color:#e8a700;}
-.dbk-ready{border-left-color:#1f8a54;}
-.dbk-card-top{display:flex;justify-content:space-between;font-size:13px;font-weight:700;}
-.dbk-meta{font-size:12px;color:#6b645a;margin:3px 0 6px;}
-.dbk-items{list-style:none;margin:0;padding:0;font-size:13px;}
-.dbk-items li{padding:1px 0;}
-.dbk-adv{margin-top:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:14px;background:#0d0d0d;color:#fff;border:0;border-radius:6px;padding:7px;cursor:pointer;}
-.dbk-adv:hover{background:var(--ember);}
-.dbk-empty{color:#b5ab9c;text-align:center;padding:14px 0;}
-@media(max-width:760px){.dbk-board{grid-template-columns:1fr;}}
 
 .demo-ribbon{position:fixed;bottom:0;left:0;right:0;z-index:80;background:#0d0d0d;color:#cfc9bf;text-align:center;font-size:12px;padding:7px 12px;letter-spacing:.02em;}
 .demo-ribbon b{color:#fff;}

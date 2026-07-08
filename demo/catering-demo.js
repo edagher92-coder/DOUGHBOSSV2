@@ -11,7 +11,7 @@
 		{ id: 'big', name: 'The Big Event', serves: '40–50', max: 50, price: 850, desc: 'Full Mediterranean spread' },
 		{ id: 'custom', name: 'Custom', serves: '10+', max: 0, price: 0, perHead: 19, desc: '$19 per head, min 10' }
 	];
-	var SHOPS = ['Bankstown', 'Roselands Centro', 'Revesby'];
+	var SHOPS = ['Bankstown', 'Roselands', 'Revesby'];
 	var state = { pkg: 'party', guests: 18, date: '', type: 'pickup', shop: 'Bankstown', name: '', email: '', phone: '' };
 	function money(n) { return '$' + (Math.round(Number(n) * 100) / 100).toFixed(2); }
 	function pkgById(id) { for (var i = 0; i < PACKAGES.length; i++) { if (PACKAGES[i].id === id) { return PACKAGES[i]; } } return PACKAGES[1]; }
