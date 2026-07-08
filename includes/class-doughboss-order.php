@@ -218,28 +218,68 @@ class DoughBoss_Order {
 
 		$out = array();
 		foreach ( (array) $rows as $order ) {
-			$out[] = array(
-				'id'             => (int) $order->id,
-				'order_number'   => $order->order_number,
-				'location_id'    => (int) $order->location_id,
-				'status'         => $order->status,
-				'status_label'   => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
-				'order_type'     => $order->order_type,
-				'customer_name'  => $order->customer_name,
-				'customer_phone' => $order->customer_phone,
-				'address'        => $order->address,
-				'notes'          => $order->notes,
-				'total'          => (float) $order->total,
-				'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
-				'eta_minutes'    => (int) $order->eta_minutes,
-				'acknowledged'   => ! empty( $order->acknowledged_at ),
-				'accepted'       => ! empty( $order->accepted_at ),
-				'created_at'     => $order->created_at,
-				'items'          => isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(),
-			);
+			$out[] = self::shape_board_row( $order, $items_by_order, $statuses );
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Shape a raw order row into the board/list representation shared by
+	 * active_orders() and query_board() so both surfaces return an identical
+	 * per-order field shape.
+	 *
+	 * @param object   $order          Raw order row.
+	 * @param array    $items_by_order Map of order id => line items.
+	 * @param string[] $statuses       Status slug => label map.
+	 * @return array
+	 */
+	private static function shape_board_row( $order, array $items_by_order, array $statuses ) {
+		return array(
+			'id'             => (int) $order->id,
+			'order_number'   => $order->order_number,
+			'location_id'    => (int) $order->location_id,
+			'status'         => $order->status,
+			'status_label'   => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+			'order_type'     => $order->order_type,
+			'customer_name'  => $order->customer_name,
+			'customer_phone' => $order->customer_phone,
+			'address'        => $order->address,
+			'notes'          => $order->notes,
+			'total'          => (float) $order->total,
+			'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
+			'eta_minutes'    => (int) $order->eta_minutes,
+			'acknowledged'   => ! empty( $order->acknowledged_at ),
+			'accepted'       => ! empty( $order->accepted_at ),
+			'created_at'     => $order->created_at,
+			'items'          => isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(),
+		);
+	}
+
+	/**
+	 * Paginated order query returning rows in the same shape as active_orders()
+	 * (id, order_number, status, items, …), used by the admin orders/history
+	 * REST view. Unlike active_orders() this can reach completed/cancelled orders
+	 * via the status filter supported by query().
+	 *
+	 * @param array $args Same arguments as query() (status, search, page, per_page).
+	 * @return array{items:array[],total:int}
+	 */
+	public static function query_board( array $args = array() ) {
+		$result         = self::query( $args );
+		$rows           = $result['items'];
+		$items_by_order = self::get_items_for_orders( wp_list_pluck( (array) $rows, 'id' ) );
+		$statuses       = self::statuses();
+
+		$out = array();
+		foreach ( (array) $rows as $order ) {
+			$out[] = self::shape_board_row( $order, $items_by_order, $statuses );
+		}
+
+		return array(
+			'items' => $out,
+			'total' => (int) $result['total'],
+		);
 	}
 
 	/**

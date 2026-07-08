@@ -320,5 +320,31 @@ class DoughBoss_Activator {
 		} elseif ( ! $kitchen->has_cap( 'redeem_doughboss_vouchers' ) ) {
 			$kitchen->add_cap( 'redeem_doughboss_vouchers' );
 		}
+
+		// Owner/Manager role: full DoughBoss management (menu, orders, settings,
+		// KDS, vouchers) without granting full WordPress administrator access.
+		$manager = get_role( 'doughboss_manager' );
+		if ( ! $manager ) {
+			add_role(
+				'doughboss_manager',
+				__( 'DoughBoss Manager', 'doughboss' ),
+				array(
+					'read'                      => true,
+					'manage_doughboss'          => true,
+					'manage_doughboss_kds'      => true,
+					'redeem_doughboss_vouchers' => true,
+				)
+			);
+		} else {
+			if ( ! $manager->has_cap( 'manage_doughboss' ) ) {
+				$manager->add_cap( 'manage_doughboss' );
+			}
+			if ( ! $manager->has_cap( 'manage_doughboss_kds' ) ) {
+				$manager->add_cap( 'manage_doughboss_kds' );
+			}
+			if ( ! $manager->has_cap( 'redeem_doughboss_vouchers' ) ) {
+				$manager->add_cap( 'redeem_doughboss_vouchers' );
+			}
+		}
 	}
 }

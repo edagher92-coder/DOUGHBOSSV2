@@ -84,6 +84,16 @@ class DoughBoss_Settings {
 			// Keep logged-in sessions for this many days (0 = WordPress default).
 			// Set high (e.g. 3650) so shop tablets stay signed in; off by default.
 			'staff_session_days' => 0,
+			// Rate-limiter client-IP resolution. Off by default so REMOTE_ADDR is used
+			// verbatim (zero behaviour change). Only enable 'behind_reverse_proxy' when
+			// the site sits behind a reverse proxy/CDN/load balancer that you have
+			// confirmed strips or overwrites any client-supplied forwarded header
+			// before appending its own — otherwise a caller could spoof the header and
+			// evade the checkout/voucher rate limiter. 'trusted_proxy_header' names the
+			// header the proxy sets (its first comma-separated entry is the client IP).
+			// See DoughBoss_REST_Controller::client_ip().
+			'behind_reverse_proxy' => 0,
+			'trusted_proxy_header' => 'X-Forwarded-For',
 			'sizes'           => array(),
 			'toppings'        => array(),
 			// Payments (Stripe) — off by default; keys added later.
@@ -274,6 +284,29 @@ class DoughBoss_Settings {
 	 */
 	public static function ordering_open() {
 		return (bool) self::get( 'ordering_open', 1 );
+	}
+
+	/**
+	 * Whether the site sits behind a trusted reverse proxy/CDN, so the rate
+	 * limiter should read the client IP from a forwarded header instead of
+	 * REMOTE_ADDR. Off by default. See the note in defaults() and
+	 * DoughBoss_REST_Controller::client_ip() for the trust assumption.
+	 *
+	 * @return bool
+	 */
+	public static function behind_reverse_proxy() {
+		return (bool) self::get( 'behind_reverse_proxy', 0 );
+	}
+
+	/**
+	 * The forwarded header the trusted proxy sets the real client IP in (e.g.
+	 * 'X-Forwarded-For'). Only consulted when behind_reverse_proxy() is true.
+	 *
+	 * @return string
+	 */
+	public static function trusted_proxy_header() {
+		$header = trim( (string) self::get( 'trusted_proxy_header', 'X-Forwarded-For' ) );
+		return '' !== $header ? $header : 'X-Forwarded-For';
 	}
 
 	/**

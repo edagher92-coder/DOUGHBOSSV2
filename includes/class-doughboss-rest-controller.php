@@ -659,7 +659,9 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
-		// Live kitchen order board: incremental feed of active orders.
+		// Live kitchen order board: incremental feed of active orders. Adding a
+		// 'status' or 'history' param switches it to a paginated history view
+		// (completed/cancelled reachable); with neither it is the live board.
 		register_rest_route(
 			$ns,
 			'/admin/orders',
@@ -667,6 +669,28 @@ class DoughBoss_REST_Controller {
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'admin_orders' ),
 				'permission_callback' => array( $this, 'verify_admin' ),
+				'args'                => array(
+					'status'   => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'history'  => array(
+						'default'           => false,
+						'sanitize_callback' => 'rest_sanitize_boolean',
+					),
+					'search'   => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'page'     => array(
+						'default'           => 1,
+						'sanitize_callback' => 'absint',
+					),
+					'per_page' => array(
+						'default'           => 20,
+						'sanitize_callback' => 'absint',
+					),
+				),
 			)
 		);
 
@@ -804,6 +828,35 @@ class DoughBoss_REST_Controller {
 		// state), so this uses verify_manage (not verify_admin) — the same "a
 		// till device can never create value" boundary already enforced for
 		// vouchers. The kitchen/KDS role only gets order-board actions.
+		// Catering — list enquiries for the staff admin screen (filter/search/paginate).
+		register_rest_route(
+			$ns,
+			'/admin/catering',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_catering' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'status'   => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'search'   => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'page'     => array(
+						'default'           => 1,
+						'sanitize_callback' => 'absint',
+					),
+					'per_page' => array(
+						'default'           => 20,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
 		register_rest_route(
 			$ns,
 			'/admin/catering/(?P<id>\d+)/status',
@@ -988,7 +1041,63 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Resolve the client IP used to bucket the rate limiter.
+	 *
+	 * By default this is REMOTE_ADDR verbatim — the safe choice for a site that
+	 * talks to visitors directly, because REMOTE_ADDR is set by the web server
+	 * and cannot be spoofed by the client.
+	 *
+	 * Behind a reverse proxy/CDN/load balancer, REMOTE_ADDR is the proxy's own
+	 * address for every visitor, so a single shared bucket would let one burst
+	 * lock all customers out of checkout. When the operator opts in via the
+	 * 'behind_reverse_proxy' setting we instead read the first entry of the
+	 * configured forwarded header (e.g. X-Forwarded-For), which the proxy
+	 * appends the real client IP to.
+	 *
+	 * TRUST ASSUMPTION: enabling 'behind_reverse_proxy' is only safe when the
+	 * admin has confirmed their actual proxy/CDN strips or overwrites any
+	 * client-supplied copy of that header before appending its own value. If the
+	 * origin were reachable directly, a caller could send a fake header and pick
+	 * their own bucket, evading the limiter entirely — which is why this is a
+	 * scoped, admin-opt-in fix for the common single-reverse-proxy case, not a
+	 * general spoofing-proof multi-hop resolver. Every failure mode here
+	 * (setting off, header missing, empty, or malformed) falls back to the
+	 * unspoofable REMOTE_ADDR.
+	 *
+	 * @return string Sanitised client IP, or '' when none is available.
+	 */
+	private function client_ip() {
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+
+		if ( ! DoughBoss_Settings::behind_reverse_proxy() ) {
+			return $remote;
+		}
+
+		// Map the configured header name to its $_SERVER key: HTTP_ prefix, upper
+		// case, dashes to underscores (e.g. 'X-Forwarded-For' => HTTP_X_FORWARDED_FOR).
+		$server_key = 'HTTP_' . strtoupper( str_replace( '-', '_', DoughBoss_Settings::trusted_proxy_header() ) );
+		if ( empty( $_SERVER[ $server_key ] ) ) {
+			return $remote;
+		}
+
+		$forwarded = sanitize_text_field( wp_unslash( $_SERVER[ $server_key ] ) );
+		// The header may carry a comma-separated chain (client, proxy1, proxy2, …);
+		// the left-most entry is the originating client the proxy recorded.
+		$parts     = explode( ',', $forwarded );
+		$candidate = trim( (string) reset( $parts ) );
+
+		if ( '' === $candidate || ! filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+			return $remote; // Missing or malformed — fall back to the unspoofable address.
+		}
+
+		return $candidate;
+	}
+
+	/**
 	 * Simple per-IP transient rate limiter for mutation endpoints.
+	 *
+	 * The bucket key is derived from client_ip(), which is REMOTE_ADDR unless the
+	 * operator has opted into trusting a reverse-proxy forwarded header.
 	 *
 	 * @param string $bucket Logical bucket name (e.g. 'checkout').
 	 * @param int    $max    Max requests allowed within the window.
@@ -997,7 +1106,7 @@ class DoughBoss_REST_Controller {
 	 */
 	private function rate_limited( $bucket, $max, $window ) {
 		global $wpdb;
-		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$ip  = $this->client_ip();
 		$key = 'doughboss_rl_' . $bucket . '_' . md5( $ip );
 
 		// Serialize the read-increment-write per bucket+IP with a named DB lock
@@ -2247,6 +2356,28 @@ class DoughBoss_REST_Controller {
 					$this->cart->set_voucher_code( '' );
 					return $redeem;
 				}
+
+				// Paid order that lost the redeem race: we keep the discount the
+				// customer already paid (see the note above) rather than failing a
+				// paid order, but that leaves an order carrying a discount with no
+				// backing voucher_redemptions row. Leave a reconciliation trail —
+				// an operator-visible order note plus a safe log line — so the gap
+				// is auditable rather than silent. Customer-facing behaviour is
+				// unchanged; only the stored notes gain a [SYSTEM] annotation.
+				$system_note = sprintf(
+					/* translators: 1: formatted discount amount, 2: voucher code, 3: redemption error message. */
+					'[SYSTEM] Discount of %1$s from voucher "%2$s" applied to this paid order, but redemption failed post-payment (%3$s) — no matching voucher_redemptions row exists. Reconcile manually.',
+					DoughBoss_Settings::format_price( $discount ),
+					$voucher_code,
+					$redeem->get_error_message()
+				);
+				$notes = '' !== $notes ? $notes . "\n\n" . $system_note : $system_note;
+
+				if ( function_exists( 'error_log' ) ) {
+					// Safe diagnostic only: voucher code + idempotency key + label.
+					// No WP_Error object, PII, or payment details.
+					error_log( 'DoughBoss voucher: unbacked discount on paid order — code ' . $voucher_code . ' idem ' . $voucher_idem ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				}
 			} else {
 				$discount = (float) $redeem['amount'];
 			}
@@ -2407,10 +2538,44 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function admin_orders( WP_REST_Request $request ) {
-		$location_id = absint( $request->get_param( 'location_id' ) );
+		$status  = sanitize_key( (string) $request->get_param( 'status' ) );
+		$history = rest_sanitize_boolean( $request->get_param( 'history' ) );
+
+		// No status/history filter: preserve the existing live-board behaviour
+		// exactly (active orders only, oldest first, location-scoped).
+		if ( '' === $status && ! $history ) {
+			$location_id = absint( $request->get_param( 'location_id' ) );
+			return rest_ensure_response(
+				array(
+					'data'        => DoughBoss_Order::active_orders( 100, $location_id ),
+					'server_time' => current_time( 'mysql', true ),
+				)
+			);
+		}
+
+		// History / status-filtered view: paginated query that can reach every
+		// order, not just the live board — a KDS/kitchen tablet (verify_admin,
+		// checked above for the live-board path) has no business paging
+		// through completed/cancelled customer history, only the owner tier
+		// does. Re-check with the stricter capability before running it.
+		$manage = $this->verify_manage();
+		if ( is_wp_error( $manage ) ) {
+			return $manage;
+		}
+
+		$result = DoughBoss_Order::query_board(
+			array(
+				'status'   => $status,
+				'search'   => sanitize_text_field( (string) $request->get_param( 'search' ) ),
+				'page'     => max( 1, absint( $request->get_param( 'page' ) ) ),
+				'per_page' => min( 200, max( 1, absint( $request->get_param( 'per_page' ) ) ) ),
+			)
+		);
+
 		return rest_ensure_response(
 			array(
-				'data'        => DoughBoss_Order::active_orders( 100, $location_id ),
+				'data'        => $result['items'],
+				'total'       => $result['total'],
 				'server_time' => current_time( 'mysql', true ),
 			)
 		);
@@ -2562,6 +2727,33 @@ class DoughBoss_REST_Controller {
 				'deposit'        => (float) $enquiry['deposit_amount'],
 				'total'          => (float) $enquiry['quote_total'],
 				'message'        => __( "Thanks! Your catering enquiry is in — we'll confirm the details and send your deposit link shortly.", 'doughboss' ),
+			)
+		);
+	}
+
+	/**
+	 * GET /admin/catering — list catering enquiries for the staff screen.
+	 * Mirrors the admin catering page's DoughBoss_Catering::query() call
+	 * (status filter + search + pagination).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function admin_catering( WP_REST_Request $request ) {
+		$result = DoughBoss_Catering::query(
+			array(
+				'status'   => (string) $request->get_param( 'status' ),
+				'search'   => (string) $request->get_param( 'search' ),
+				'page'     => max( 1, absint( $request->get_param( 'page' ) ) ),
+				'per_page' => max( 1, absint( $request->get_param( 'per_page' ) ) ),
+			)
+		);
+
+		return rest_ensure_response(
+			array(
+				'data'        => $result['items'],
+				'total'       => $result['total'],
+				'server_time' => current_time( 'mysql', true ),
 			)
 		);
 	}

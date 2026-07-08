@@ -242,9 +242,22 @@ class DoughBoss_Stripe {
 			? $data['error']['message']
 			: __( 'The payment service returned an error.', 'doughboss' );
 
-		// Log the detail for the operator; return a clean message to the customer.
+		// Log only the status + Stripe's short error type/code for the operator —
+		// never the response body or 'message' (both can carry customer PII such
+		// as receipt_email, name, address, or decline details).
 		if ( function_exists( 'error_log' ) ) {
-			error_log( 'DoughBoss Stripe error (' . $code . '): ' . wp_remote_retrieve_body( $response ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			$error_type = ( is_array( $data ) && isset( $data['error']['type'] ) && is_scalar( $data['error']['type'] ) )
+				? (string) $data['error']['type']
+				: '';
+			$error_code = ( is_array( $data ) && isset( $data['error']['code'] ) && is_scalar( $data['error']['code'] ) )
+				? (string) $data['error']['code']
+				: '';
+
+			if ( '' !== $error_type || '' !== $error_code ) {
+				error_log( 'DoughBoss Stripe error: HTTP ' . $code . ' type=' . $error_type . ' code=' . $error_code ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			} else {
+				error_log( 'DoughBoss Stripe error: HTTP ' . $code ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
 		}
 
 		return new WP_Error( 'doughboss_pay_api', $message, array( 'status' => 502 ) );
