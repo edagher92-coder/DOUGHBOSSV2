@@ -29,6 +29,11 @@
 	function save() { localStorage.setItem( STORE, JSON.stringify( state ) ); }
 	function wipe() { localStorage.removeItem( STORE ); state = {}; }
 
+	// Single sign-out path: wipe the stored credential and return to the login
+	// screen. Used by both the explicit "Sign out" button and the inactivity
+	// auto sign-out below — never duplicate this logic elsewhere.
+	function signOut( msg ) { wipe(); renderLogin( msg ); }
+
 	/* ---------- dom ---------- */
 	function el( tag, cls, text ) {
 		var n = document.createElement( tag );
@@ -149,9 +154,44 @@
 		return true;
 	}
 
+	/* ---------- inactivity auto sign-out ---------- */
+
+	// A lost/shared/kiosk device would otherwise hold a live, reusable REST
+	// credential indefinitely — sign out automatically after 30 minutes with
+	// no user activity. Only armed while signed in (see renderApp/renderLogin).
+	var IDLE_LIMIT_MS = 30 * 60 * 1000;
+	var idleTimer = null;
+	var idleWatching = false;
+	var IDLE_EVENTS = [ 'click', 'keydown', 'touchstart' ];
+
+	function idleTimeout() {
+		signOut( 'Signed out after 30 minutes of inactivity for security.' );
+	}
+	// Debounced: each tracked event just restarts the 30-minute countdown
+	// rather than reacting on every event (e.g. we deliberately skip mousemove).
+	function resetIdleTimer() {
+		clearTimeout( idleTimer );
+		idleTimer = setTimeout( idleTimeout, IDLE_LIMIT_MS );
+	}
+	function startIdleWatch() {
+		if ( idleWatching ) { return; }
+		idleWatching = true;
+		IDLE_EVENTS.forEach( function ( evt ) { document.addEventListener( evt, resetIdleTimer, { passive: true } ); } );
+		resetIdleTimer();
+	}
+	function stopIdleWatch() {
+		if ( idleWatching ) {
+			IDLE_EVENTS.forEach( function ( evt ) { document.removeEventListener( evt, resetIdleTimer, { passive: true } ); } );
+		}
+		idleWatching = false;
+		clearTimeout( idleTimer );
+		idleTimer = null;
+	}
+
 	/* ---------- login ---------- */
 	function renderLogin( err ) {
 		stopPoll();
+		stopIdleWatch();
 		root.innerHTML = '';
 		var wrap = el( 'div', 'login' );
 		var card = el( 'div', 'login__card' );
@@ -231,7 +271,7 @@
 		var right = el( 'div', 'topbar__right' );
 		right.appendChild( el( 'span', null, state.name || '' ) );
 		var out = el( 'button', 'topbar__out', 'Sign out' );
-		out.addEventListener( 'click', function () { wipe(); renderLogin(); } );
+		out.addEventListener( 'click', function () { signOut(); } );
 		right.appendChild( out );
 		bar.appendChild( right );
 		root.appendChild( bar );
@@ -265,6 +305,8 @@
 
 		var active = tabs.filter( function ( t ) { return t.key === current; } )[0];
 		if ( active ) { active.render( screen ); }
+
+		startIdleWatch();
 	}
 
 	/* ---------- Scan screen ---------- */

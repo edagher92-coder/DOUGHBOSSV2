@@ -468,7 +468,7 @@
 			sub.push(line.toppings.map(function (t) { return t.label; }).join(', '));
 		}
 
-		var qty = el('input', { type: 'number', min: '0', value: line.quantity, class: 'db-qty' });
+		var qty = el('input', { type: 'number', min: '0', value: line.quantity, class: 'db-qty', 'aria-label': 'Quantity for ' + line.name });
 		qty.addEventListener('change', function () {
 			request('/cart/update', { method: 'POST', body: { key: line.key, quantity: Number(qty.value) } })
 				.then(function () { notifyCartChanged(); }).catch(function (err) { dbToast(err.message); });
@@ -539,7 +539,7 @@
 				remove
 			]));
 		} else {
-			var input = el('input', { type: 'text', class: 'db-voucher-input', placeholder: I18N.voucherPlaceholder || 'Voucher code' });
+			var input = el('input', { type: 'text', class: 'db-voucher-input', placeholder: I18N.voucherPlaceholder || 'Voucher code', 'aria-label': 'Voucher code' });
 			var apply = el('button', { class: 'db-btn db-btn--sm', type: 'button', text: I18N.apply || 'Apply' });
 			function doApply() {
 				var code = (input.value || '').trim();
