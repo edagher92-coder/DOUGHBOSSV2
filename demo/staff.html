@@ -85,6 +85,15 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .backend .arr{color:var(--gold);font-size:20px;}
 .foot{position:relative;z-index:2;margin-top:24px;font-size:11.5px;color:#a89f90;text-align:center;}
 .foot a{color:#cbbfaf;}
+
+/* role tabs */
+.roletabs{display:flex;gap:4px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:4px;margin-bottom:18px;}
+.roletab{flex:1;border:0;background:transparent;color:#cfc9bd;font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;font-size:15px;padding:10px 8px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s;}
+.roletab.is-active{background:var(--gold);color:#241405;}
+.roletab:not(.is-active):hover{background:rgba(255,255,255,.06);}
+.rolepanel{display:none;}
+.rolepanel.is-active{display:block;}
+.role-note{display:flex;align-items:center;gap:8px;background:rgba(217,138,61,.1);border:1px solid rgba(217,138,61,.28);border-radius:10px;padding:10px 12px;font-size:12px;color:#e7ddcd;margin:0 0 16px;}
 @media(prefers-reduced-motion:reduce){
 	.scene-art,.arms,.torso,.dough,.bokeh{animation:none;}
 	.puff,.fleck{display:none;}
@@ -207,22 +216,37 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     <p class="tagline">Fresh from the stone oven &middot; since 2013</p>
 
     <div class="card">
-      <h2>Staff sign-in</h2>
-      <p class="hint">Sign in to open the orders platform for your shop. <span style="color:#b8b1a4">Demo: any staff ID and passcode work.</span></p>
-      <div class="signed" id="signed" hidden></div>
-      <form id="staff-form" novalidate>
-        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required aria-describedby="su-err"></div>
-        <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
-        <p class="vh" role="status" aria-live="polite" id="form-status"></p>
-        <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
-        <p class="err" id="su-err" role="alert" aria-live="assertive"></p>
-      </form>
+      <div class="roletabs" role="tablist" aria-label="Sign-in role">
+        <button type="button" class="roletab is-active" id="tab-staff" role="tab" aria-selected="true" aria-controls="panel-staff">Staff</button>
+        <button type="button" class="roletab" id="tab-owner" role="tab" aria-selected="false" aria-controls="panel-owner">Owner / Manager</button>
+      </div>
 
-      <div class="divider">OWNER &amp; MANAGER</div>
-      <a class="backend" id="owner-link" href="owner.html">
-        <span><b>Owner / Manager dashboard</b><small>Sales &amp; revenue, stores, catering pipeline &amp; all orders</small></span>
-        <span class="arr" aria-hidden="true">&rarr;</span>
-      </a>
+      <div class="signed" id="signed" hidden></div>
+
+      <div class="rolepanel is-active" id="panel-staff" role="tabpanel" aria-labelledby="tab-staff">
+        <h2>Staff sign-in</h2>
+        <p class="hint">Sign in to open the orders platform for your shop. <span style="color:#b8b1a4">Demo: any staff ID and passcode work.</span></p>
+        <form id="staff-form" novalidate>
+          <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required aria-describedby="su-err"></div>
+          <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
+          <p class="vh" role="status" aria-live="polite" id="form-status"></p>
+          <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
+          <p class="err" id="su-err" role="alert" aria-live="assertive"></p>
+        </form>
+      </div>
+
+      <div class="rolepanel" id="panel-owner" role="tabpanel" aria-labelledby="tab-owner" hidden>
+        <h2>Owner / Manager sign-in</h2>
+        <p class="hint">Sales &amp; revenue, stores, catering pipeline and all orders. <span style="color:#b8b1a4">Demo: any owner ID and passcode work.</span></p>
+        <div class="role-note" aria-hidden="true">In production this authenticates against the full WordPress admin, not the staff orders platform.</div>
+        <form id="owner-form" novalidate>
+          <div class="fld"><label for="ou">Owner / Manager ID</label><input id="ou" name="user" type="text" autocomplete="username" placeholder="Owner ID" required aria-describedby="ou-err"></div>
+          <div class="fld"><label for="op">Passcode</label><input id="op" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="ou-err"></div>
+          <p class="vh" role="status" aria-live="polite" id="owner-form-status"></p>
+          <button type="submit" class="btn">Open owner dashboard <span aria-hidden="true">→</span></button>
+          <p class="err" id="ou-err" role="alert" aria-live="assertive"></p>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -248,31 +272,57 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     field.appendChild(frag);
   }
   var KEY='db_staff';
-  var form = document.getElementById('staff-form'), err = document.getElementById('su-err'),
+  var tabs = document.getElementById('signed').parentElement;
+  var tabStaff = document.getElementById('tab-staff'), tabOwner = document.getElementById('tab-owner'),
+      panelStaff = document.getElementById('panel-staff'), panelOwner = document.getElementById('panel-owner'),
+      roletabs = document.querySelector('.roletabs');
+  var staffForm = document.getElementById('staff-form'), staffErr = document.getElementById('su-err'),
+      ownerForm = document.getElementById('owner-form'), ownerErr = document.getElementById('ou-err'),
       signed = document.getElementById('signed');
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
+  function selectTab(role){
+    var toStaff = role==='staff';
+    tabStaff.classList.toggle('is-active', toStaff);
+    tabOwner.classList.toggle('is-active', !toStaff);
+    tabStaff.setAttribute('aria-selected', toStaff ? 'true' : 'false');
+    tabOwner.setAttribute('aria-selected', !toStaff ? 'true' : 'false');
+    panelStaff.classList.toggle('is-active', toStaff);
+    panelOwner.classList.toggle('is-active', !toStaff);
+    panelStaff.hidden = !toStaff;
+    panelOwner.hidden = toStaff;
+  }
+  tabStaff.addEventListener('click', function(){ selectTab('staff'); });
+  tabOwner.addEventListener('click', function(){ selectTab('owner'); });
+
   // Persistent session: localStorage has no expiry, so a signed-in staffer stays
   // signed in indefinitely (no timeout) until they explicitly sign out.
-  function showSigned(name){
-    form.style.display='none';
+  function showSigned(name, role){
+    roletabs.style.display='none';
+    panelStaff.hidden=true; panelOwner.hidden=true;
     signed.hidden=false;
-    signed.innerHTML='<p class="signed-t">&#10003; Signed in as <b>'+esc(name)+'</b><br><small>Staying signed in &mdash; no timeout.</small></p>'+
-      '<a class="btn" href="backend.html">Open orders &amp; kitchen</a>'+
+    var isOwner = role==='owner';
+    var dest = isOwner ? 'owner.html' : 'backend.html';
+    var label = isOwner ? 'Open owner dashboard' : 'Open orders &amp; kitchen';
+    signed.innerHTML='<p class="signed-t">&#10003; Signed in as <b>'+esc(name)+'</b> <small>('+(isOwner?'Owner/Manager':'Staff')+')</small><br><small>Staying signed in &mdash; no timeout.</small></p>'+
+      '<a class="btn" href="'+dest+'">'+label+'</a>'+
       '<button type="button" class="signout" id="signout">Sign out</button>';
     var so=document.getElementById('signout');
-    if(so){ so.addEventListener('click', function(){ try{localStorage.removeItem(KEY);}catch(_){} window.location.reload(); }); }
+    if(so){ so.addEventListener('click', function(){ try{localStorage.removeItem(KEY); localStorage.removeItem('db_role');}catch(_){} window.location.reload(); }); }
   }
-  try{ var existing=localStorage.getItem(KEY); if(existing){ showSigned(existing); } }catch(_){}
+  try{
+    var existing=localStorage.getItem(KEY);
+    if(existing){ showSigned(existing, localStorage.getItem('db_role')||'staff'); }
+  }catch(_){}
 
-  form.addEventListener('submit', function(e){
+  staffForm.addEventListener('submit', function(e){
     e.preventDefault();
     var u=document.getElementById('su').value.trim(), p=document.getElementById('sp').value;
-    if(!u||!p){ err.textContent='Enter your staff ID and passcode.'; return; }
-    err.textContent='';
-    var btn=form.querySelector('.btn');
+    if(!u||!p){ staffErr.textContent='Enter your staff ID and passcode.'; return; }
+    staffErr.textContent='';
+    var btn=staffForm.querySelector('.btn');
     try{ localStorage.setItem(KEY, u); localStorage.setItem('db_role', 'staff'); }catch(_){
-      err.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
+      staffErr.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
       return;
     }
     btn.setAttribute('aria-busy','true');
@@ -282,15 +332,22 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     setTimeout(function(){ window.location.href='backend.html'; }, 650);
   });
 
-  // Owner / manager entry: seed the session (so the gate passes) then open the dashboard.
-  var ownerLink = document.getElementById('owner-link');
-  if (ownerLink) {
-    ownerLink.addEventListener('click', function(e){
-      e.preventDefault();
-      try { localStorage.setItem(KEY, 'Owner'); localStorage.setItem('db_role', 'owner'); window.location.href = 'owner.html'; }
-      catch(_){ err.textContent = 'Sign-in cannot be saved in private browsing — please use a regular browser window.'; }
-    });
-  }
+  ownerForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var u=document.getElementById('ou').value.trim(), p=document.getElementById('op').value;
+    if(!u||!p){ ownerErr.textContent='Enter your owner/manager ID and passcode.'; return; }
+    ownerErr.textContent='';
+    var btn=ownerForm.querySelector('.btn');
+    try{ localStorage.setItem(KEY, u); localStorage.setItem('db_role', 'owner'); }catch(_){
+      ownerErr.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
+      return;
+    }
+    btn.setAttribute('aria-busy','true');
+    btn.disabled=true;
+    btn.innerHTML='Signing in…';
+    document.getElementById('owner-form-status').textContent='Signing in…';
+    setTimeout(function(){ window.location.href='owner.html'; }, 650);
+  });
 }());
 </script>
 
