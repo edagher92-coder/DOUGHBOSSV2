@@ -68,6 +68,29 @@ section( 'Money-path surface' );
 ok( method_exists( 'DoughBoss_Cart', 'totals' ), 'DoughBoss_Cart::totals() exists' );
 ok( class_exists( 'DoughBoss_Coupon_Code' ) && method_exists( 'DoughBoss_Coupon_Code', 'validate' ), 'DoughBoss_Coupon_Code::validate() exists' );
 ok( class_exists( 'DoughBoss_Coupon_Code' ) && method_exists( 'DoughBoss_Coupon_Code', 'normalize' ), 'DoughBoss_Coupon_Code::normalize() exists' );
+ok( method_exists( 'DoughBoss_Order', 'query_board' ), 'DoughBoss_Order::query_board() exists' );
+// Not just existence — actually call it against the stub $wpdb so the shared
+// row-shaping path (shape_board_row(), get_items_for_orders(), wp_list_pluck())
+// executes end-to-end with no fatal, and confirm the {items,total} contract.
+try {
+	$board_result = DoughBoss_Order::query_board();
+	ok(
+		is_array( $board_result ) && array_key_exists( 'items', $board_result ) && array_key_exists( 'total', $board_result ),
+		'DoughBoss_Order::query_board() returns an {items,total} array with no fatal'
+	);
+} catch ( Throwable $e ) {
+	ok( false, 'DoughBoss_Order::query_board() threw: ' . $e->getMessage() );
+}
+
+// 3b. Settings defaults for the new proxy-aware rate limiting keys.
+section( 'Settings defaults' );
+$defaults = DoughBoss_Settings::defaults();
+ok( array_key_exists( 'behind_reverse_proxy', $defaults ), "defaults() has 'behind_reverse_proxy' key" );
+ok( isset( $defaults['behind_reverse_proxy'] ) && 0 === $defaults['behind_reverse_proxy'], "'behind_reverse_proxy' defaults to 0 (off)" );
+ok( array_key_exists( 'trusted_proxy_header', $defaults ), "defaults() has 'trusted_proxy_header' key" );
+ok( isset( $defaults['trusted_proxy_header'] ) && 'X-Forwarded-For' === $defaults['trusted_proxy_header'], "'trusted_proxy_header' defaults to 'X-Forwarded-For'" );
+ok( method_exists( 'DoughBoss_Settings', 'behind_reverse_proxy' ) && false === DoughBoss_Settings::behind_reverse_proxy(), 'DoughBoss_Settings::behind_reverse_proxy() reads false with no option set' );
+ok( method_exists( 'DoughBoss_Settings', 'trusted_proxy_header' ) && 'X-Forwarded-For' === DoughBoss_Settings::trusted_proxy_header(), "DoughBoss_Settings::trusted_proxy_header() reads 'X-Forwarded-For' with no option set" );
 
 // 4. REST surface registered routes.
 section( 'REST surface' );
@@ -76,6 +99,11 @@ ok( count( $routes ) > 0, 'REST routes registered (' . count( $routes ) . ' rout
 ok( in_array( 'doughboss/v1/config', $routes, true ) || (bool) preg_grep( '#doughboss/v1/config#', $routes ), 'GET /config route present' );
 ok( (bool) preg_grep( '#doughboss/v1/menu#', $routes ), '/menu route present' );
 ok( (bool) preg_grep( '#doughboss/v1/checkout#', $routes ), '/checkout route present' );
+ok( (bool) preg_grep( '#doughboss/v1/admin/catering$#', $routes ), 'GET /admin/catering route present' );
+// The admin/catering listing route (and its /{id}/status sibling, already present
+// before this change) bring the full registered surface to 42 — a real count
+// check, not just ">0", so a route silently failing to register would fail this.
+ok( 42 === count( $routes ), 'REST route count reflects admin/catering addition (' . count( $routes ) . ' routes, expected 42)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
@@ -86,6 +114,39 @@ foreach ( array( 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'dough
 // 6. Menu CPT registered.
 section( 'Post types' );
 ok( in_array( 'doughboss_item', $GLOBALS['__db_posttypes'], true ), 'doughboss_item CPT registered' );
+
+// 6b. Roles & capabilities. The stub's add_role()/get_role() now keep real
+// WP_Role-like objects with has_cap()/add_cap(), so we can exercise
+// DoughBoss_Activator::add_capabilities() and assert on the resulting role
+// capability sets rather than just "didn't throw". Covers both the existing
+// doughboss_kitchen role (previously untested) and the new doughboss_manager
+// role, consistently.
+section( 'Roles & capabilities' );
+try {
+	DoughBoss_Activator::add_capabilities();
+	ok( true, 'DoughBoss_Activator::add_capabilities() ran with no fatal' );
+} catch ( Throwable $e ) {
+	ok( false, 'DoughBoss_Activator::add_capabilities() threw: ' . $e->getMessage() );
+}
+
+$kitchen = get_role( 'doughboss_kitchen' );
+ok( null !== $kitchen, 'doughboss_kitchen role exists after add_capabilities()' );
+if ( $kitchen ) {
+	ok( $kitchen->has_cap( 'read' ), 'doughboss_kitchen has read' );
+	ok( $kitchen->has_cap( 'manage_doughboss_kds' ), 'doughboss_kitchen has manage_doughboss_kds' );
+	ok( $kitchen->has_cap( 'redeem_doughboss_vouchers' ), 'doughboss_kitchen has redeem_doughboss_vouchers' );
+	ok( ! $kitchen->has_cap( 'manage_doughboss' ), 'doughboss_kitchen does NOT have manage_doughboss (low-privilege boundary)' );
+}
+
+$manager = get_role( 'doughboss_manager' );
+ok( null !== $manager, 'doughboss_manager role exists after add_capabilities()' );
+if ( $manager ) {
+	ok( $manager->has_cap( 'read' ), 'doughboss_manager has read' );
+	ok( $manager->has_cap( 'manage_doughboss' ), 'doughboss_manager has manage_doughboss' );
+	ok( $manager->has_cap( 'manage_doughboss_kds' ), 'doughboss_manager has manage_doughboss_kds' );
+	ok( $manager->has_cap( 'redeem_doughboss_vouchers' ), 'doughboss_manager has redeem_doughboss_vouchers' );
+	ok( 4 === count( $manager->capabilities ), 'doughboss_manager has exactly the 4 expected capabilities' );
+}
 
 // 7. Optional integrations dormant by default (no config → *_ready() false).
 section( 'Integrations dormant-by-default (security gate)' );

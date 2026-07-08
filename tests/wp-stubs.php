@@ -112,9 +112,33 @@ function current_user_can( $c ) { return true; }
 function is_user_logged_in() { return false; }
 function wp_get_current_user() { return (object) array( 'ID' => 0, 'roles' => array() ); }
 function get_current_user_id() { return 0; }
-function add_role( $r, $d, $c = array() ) { return null; }
-function remove_role( $r ) {}
-function get_role( $r ) { return null; }
+
+/**
+ * Minimal WP_Role stand-in: real capability storage with has_cap()/add_cap()/
+ * remove_cap(), so plugin code that provisions roles (e.g.
+ * DoughBoss_Activator::add_capabilities()) can be exercised and asserted on,
+ * not just "didn't throw".
+ */
+class WP_Role_Stub {
+	public $name;
+	public $capabilities;
+	public function __construct( $name, $capabilities = array() ) {
+		$this->name         = $name;
+		$this->capabilities = $capabilities;
+	}
+	public function has_cap( $cap ) { return ! empty( $this->capabilities[ $cap ] ); }
+	public function add_cap( $cap, $grant = true ) { $this->capabilities[ $cap ] = $grant; }
+	public function remove_cap( $cap ) { unset( $this->capabilities[ $cap ] ); }
+}
+$GLOBALS['__db_roles'] = array();
+function add_role( $r, $d, $c = array() ) {
+	// Real WordPress no-ops (returns null) if the role already exists.
+	if ( isset( $GLOBALS['__db_roles'][ $r ] ) ) { return null; }
+	$GLOBALS['__db_roles'][ $r ] = new WP_Role_Stub( $r, $c );
+	return $GLOBALS['__db_roles'][ $r ];
+}
+function remove_role( $r ) { unset( $GLOBALS['__db_roles'][ $r ] ); }
+function get_role( $r ) { return $GLOBALS['__db_roles'][ $r ] ?? null; }
 function wp_verify_nonce( $n, $a = -1 ) { return 1; }
 function wp_create_nonce( $a = -1 ) { return 'nonce'; }
 function check_ajax_referer( ...$x ) { return true; }
@@ -163,6 +187,19 @@ function site_url( $p = '' ) { return 'http://example.test/' . ltrim( $p, '/' );
 function get_bloginfo( $k = '' ) { return 'DoughBoss Test'; }
 function wp_json_encode( $d, $o = 0, $depth = 512 ) { return json_encode( $d, $o, $depth ); }
 function wp_parse_args( $a, $d = array() ) { return array_merge( (array) $d, (array) $a ); }
+function wp_list_pluck( $list, $field, $index_key = null ) {
+	$plucked = array();
+	foreach ( (array) $list as $item ) {
+		$row = is_object( $item ) ? get_object_vars( $item ) : (array) $item;
+		if ( ! array_key_exists( $field, $row ) ) { continue; }
+		if ( null !== $index_key && isset( $row[ $index_key ] ) ) {
+			$plucked[ $row[ $index_key ] ] = $row[ $field ];
+		} else {
+			$plucked[] = $row[ $field ];
+		}
+	}
+	return $plucked;
+}
 function wp_generate_password( $len = 12, $s = true, $x = false ) { return substr( str_repeat( 'a1B2c3D4', 8 ), 0, $len ); }
 function wp_rand( $min = 0, $max = 0 ) { return $min; }
 function wp_hash( $d, $s = 'auth' ) { return md5( (string) $d ); }
@@ -210,6 +247,7 @@ class DB_Stub {
 	public $insert_id = 1;
 	public $last_error = '';
 	public function get_charset_collate() { return ''; }
+	public function esc_like( $t ) { return addcslashes( (string) $t, '_%\\' ); }
 	public function prepare( $q, ...$a ) { return $q; }
 	public function query( $q ) { return 0; }
 	public function get_var( $q = null ) { return null; }
