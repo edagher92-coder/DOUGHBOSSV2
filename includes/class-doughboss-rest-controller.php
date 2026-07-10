@@ -2019,7 +2019,11 @@ class DoughBoss_REST_Controller {
 			$thumb      = get_the_post_thumbnail_url( $post->ID, 'medium' );
 			$items[]    = array(
 				'id'          => $post->ID,
-				'name'        => get_the_title( $post ),
+				// Raw title, not get_the_title() — this is a JSON API field the
+				// front-end inserts via textContent (XSS-safe already), so an
+				// HTML-entity-encoded title (e.g. "Chicken &#038; Cheese") would
+				// render literally instead of decoding to "&".
+				'name'        => $post->post_title,
 				'description' => wp_strip_all_tags( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
 				'price'       => (float) get_post_meta( $post->ID, DoughBoss_Post_Types::META_PRICE, true ),
 				'type'        => get_post_meta( $post->ID, DoughBoss_Post_Types::META_TYPE, true ),
@@ -2096,7 +2100,7 @@ class DoughBoss_REST_Controller {
 
 		if ( ! DoughBoss_Post_Types::is_available( $item_id ) ) {
 			/* translators: %s: menu item name. */
-			return new WP_Error( 'doughboss_sold_out', sprintf( __( 'Sorry, %s is sold out right now.', 'doughboss' ), get_the_title( $post ) ), array( 'status' => 409 ) );
+			return new WP_Error( 'doughboss_sold_out', sprintf( __( 'Sorry, %s is sold out right now.', 'doughboss' ), $post->post_title ), array( 'status' => 409 ) );
 		}
 
 		$price = (float) get_post_meta( $item_id, DoughBoss_Post_Types::META_PRICE, true );
@@ -2104,7 +2108,8 @@ class DoughBoss_REST_Controller {
 		return array(
 			'type'       => 'menu',
 			'item_id'    => $item_id,
-			'name'       => get_the_title( $post ),
+			// Raw title — see the /menu handler's comment above for why.
+			'name'       => $post->post_title,
 			'size'       => '',
 			'toppings'   => array(),
 			'unit_price' => $price,
@@ -2633,7 +2638,8 @@ class DoughBoss_REST_Controller {
 			$thumb = get_the_post_thumbnail_url( $id, 'large' );
 			$out[] = array(
 				'id'          => $id,
-				'name'        => get_the_title( $post ),
+				// Raw title — see the /menu handler's comment for why.
+				'name'        => $post->post_title,
 				'description' => wp_strip_all_tags( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
 				'serves_min'  => (int) get_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MIN, true ),
 				'serves_max'  => (int) get_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MAX, true ),
@@ -3134,7 +3140,9 @@ class DoughBoss_REST_Controller {
 		/* translators: 1: site name, 2: enquiry number. */
 		$subject = sprintf( __( '[%1$s] Catering enquiry %2$s received', 'doughboss' ), $blog, $enquiry['enquiry_number'] );
 
-		$package = (int) $enquiry['package_id'] ? get_the_title( (int) $enquiry['package_id'] ) : __( 'Custom', 'doughboss' );
+		// Plain-text email body, same reasoning as $blog above: decode entities
+		// get_the_title() adds for HTML display so "&" doesn't show as "&#038;".
+		$package = (int) $enquiry['package_id'] ? wp_specialchars_decode( get_the_title( (int) $enquiry['package_id'] ), ENT_QUOTES ) : __( 'Custom', 'doughboss' );
 
 		$body = sprintf(
 			/* translators: 1: name, 2: enquiry number, 3: package, 4: guests, 5: event date, 6: deposit. */

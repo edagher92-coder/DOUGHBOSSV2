@@ -19,7 +19,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Catering_Package {
 
-	const POST_TYPE = 'doughboss_catering_package';
+	// WordPress hard-limits post type names to 20 characters (wp_posts.post_type
+	// is varchar(20)); register_post_type() silently no-ops past that, which is
+	// what 'doughboss_catering_package' (27 chars) was doing on every real
+	// WordPress install. Caught via a real WP boot, not the PHP stub.
+	const POST_TYPE = 'doughboss_cat_pkg';
 
 	const META_SERVES_MIN  = '_doughboss_cat_serves_min';
 	const META_SERVES_MAX  = '_doughboss_cat_serves_max';

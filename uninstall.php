@@ -34,7 +34,7 @@ foreach ( $tables as $table ) {
 // Delete menu items, catering packages, and their meta.
 $post_ids = get_posts(
 	array(
-		'post_type'   => array( 'doughboss_item', 'doughboss_catering_package' ),
+		'post_type'   => array( 'doughboss_item', 'doughboss_cat_pkg' ),
 		'post_status' => 'any',
 		'numberposts' => -1,
 		'fields'      => 'ids',
