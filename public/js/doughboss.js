@@ -438,6 +438,12 @@
 			if (!checkoutEl) {
 				checkoutEl = checkoutForm(cfg, orderType, function () { return locationId; }, cart.totals, function () {
 					orderComplete = true;
+					// The checkout form's own parent gets replaced with the
+					// confirmation message (see placeOrder() above), but that
+					// leaves this region's last-rendered cart items/subtotal/
+					// voucher box on screen untouched — clear it too so the
+					// confirmation isn't shown underneath a stale cart.
+					cartRegion.innerHTML = '';
 				});
 				checkoutRegion.appendChild(checkoutEl.form);
 			} else {
