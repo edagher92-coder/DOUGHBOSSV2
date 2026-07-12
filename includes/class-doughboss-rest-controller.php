@@ -395,6 +395,31 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		register_rest_route(
+			$ns,
+			'/pospal/products',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'pospal_products' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/pospal/product-map',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'pospal_save_product_map' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'map' => array(
+						'required' => true,
+					),
+				),
+			)
+		);
+
 		// Dev-only POSPal diagnostics (grant/revoke real coupons on the till;
 		// probe-grant brute-forces candidate POSPal endpoints). Registered only
 		// under WP_DEBUG so they are not part of the production API surface. The
@@ -1442,6 +1467,109 @@ class DoughBoss_REST_Controller {
 			array(
 				'ok'      => (bool) $all_ok,
 				'message' => $prefix . implode( ' · ', $parts ),
+			)
+		);
+	}
+
+	/**
+	 * GET /pospal/products — list the selected store's POSPal products, for the
+	 * admin "Product mapping" screen. Read-only, paginates through
+	 * queryProductPages itself (capped) so the browser gets one flat list.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function pospal_products( WP_REST_Request $request ) {
+		$store = DoughBoss_Settings::pospal_store( max( 1, (int) $request->get_param( 'store' ) ) );
+		if ( '' === $store['host'] || '' === $store['app_id'] || '' === $store['app_key'] ) {
+			/* translators: %s: store label. */
+			return rest_ensure_response( array( 'ok' => false, 'message' => sprintf( __( '%s is not configured — set its host, App ID and App Key, then save.', 'doughboss' ), $store['label'] ) ) );
+		}
+		$creds = array(
+			'host'    => $store['host'],
+			'app_id'  => $store['app_id'],
+			'app_key' => $store['app_key'],
+		);
+
+		$products = array();
+		$params   = array();
+		// POSPal paginates via an echoed-back postBackParameter; cap at 20 pages
+		// (a few thousand products) so a misbehaving account can't hang the request.
+		for ( $page = 0; $page < 20; $page++ ) {
+			$result = DoughBoss_POSPal::query_products( $creds, $params );
+			if ( is_wp_error( $result ) ) {
+				if ( empty( $products ) ) {
+					return rest_ensure_response( array( 'ok' => false, 'message' => $result->get_error_message() ) );
+				}
+				break; // Later page failed — return what we already have.
+			}
+			$rows = isset( $result['result'] ) && is_array( $result['result'] ) ? $result['result'] : array();
+			foreach ( $rows as $row ) {
+				if ( empty( $row['uid'] ) || ! isset( $row['name'] ) ) {
+					continue;
+				}
+				$products[] = array(
+					'uid'   => (string) $row['uid'],
+					'name'  => (string) $row['name'],
+					'price' => isset( $row['sellPrice'] ) ? (float) $row['sellPrice'] : null,
+				);
+			}
+			$next = isset( $result['postBackParameter'] ) ? $result['postBackParameter'] : '';
+			if ( '' === $next || empty( $rows ) ) {
+				break;
+			}
+			$params = array( 'postBackParameter' => $next );
+		}
+
+		return rest_ensure_response(
+			array(
+				'ok'       => true,
+				'products' => $products,
+				'message'  => sprintf(
+					/* translators: %d: number of products found. */
+					_n( '%d product found.', '%d products found.', count( $products ), 'doughboss' ),
+					count( $products )
+				),
+			)
+		);
+	}
+
+	/**
+	 * POST /pospal/product-map — save the menu-item -> POSPal product uid map used
+	 * by order push (DoughBoss_POSPal_Orders::build_body()). Same setting the
+	 * `wp doughboss pospal-map` CLI command writes; this is the point-and-click
+	 * equivalent for operators without shell access.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function pospal_save_product_map( WP_REST_Request $request ) {
+		$raw = $request->get_param( 'map' );
+		if ( ! is_array( $raw ) ) {
+			return rest_ensure_response( array( 'ok' => false, 'message' => __( 'No mapping data received.', 'doughboss' ) ) );
+		}
+
+		$clean = array();
+		foreach ( $raw as $key => $uid ) {
+			$key = DoughBoss_POSPal_Orders::norm( sanitize_text_field( (string) $key ) );
+			$uid = sanitize_text_field( (string) $uid );
+			if ( '' === $key || '' === $uid ) {
+				continue; // Blank selection ("— not mapped —") — leave that item unmapped.
+			}
+			$clean[ $key ] = DoughBoss_POSPal::long_id( $uid );
+		}
+
+		DoughBoss_Settings::update( array( 'pospal_product_map' => $clean ) );
+
+		return rest_ensure_response(
+			array(
+				'ok'      => true,
+				'count'   => count( $clean ),
+				'message' => sprintf(
+					/* translators: %d: number of menu items mapped. */
+					_n( 'Saved — %d item mapped.', 'Saved — %d items mapped.', count( $clean ), 'doughboss' ),
+					count( $clean )
+				),
 			)
 		);
 	}

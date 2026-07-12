@@ -71,6 +71,7 @@ class DoughBoss_POSPal_Orders {
 		$build = self::build_body( $order, $items );
 		if ( ! empty( $build['unmapped'] ) ) {
 			self::log( 'push skipped for #' . $order_id . ' — unmapped items: ' . implode( ', ', $build['unmapped'] ) );
+			self::record_unmapped_alert( $order, $build['unmapped'] );
 			return;
 		}
 
@@ -224,5 +225,33 @@ class DoughBoss_POSPal_Orders {
 		if ( function_exists( 'error_log' ) ) {
 			error_log( 'DoughBoss POSPal order: ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
+	}
+
+	/**
+	 * Option key for the admin-visible unmapped-item alert queue. A dedicated
+	 * option (not part of doughboss_settings) so reading/writing it never risks
+	 * touching unrelated settings.
+	 */
+	const UNMAPPED_ALERTS_OPTION = 'doughboss_pospal_unmapped_alerts';
+
+	/**
+	 * Record a skipped push so it surfaces as a wp-admin notice, not just a log
+	 * line. Capped at the most recent 20 so a bad menu/catalogue mismatch can't
+	 * grow this option without bound; item names only — no customer PII.
+	 *
+	 * @param object   $order    Order row (for the order number).
+	 * @param string[] $unmapped Item names with no POSPal product match.
+	 * @return void
+	 */
+	private static function record_unmapped_alert( $order, array $unmapped ) {
+		$alerts   = get_option( self::UNMAPPED_ALERTS_OPTION, array() );
+		$alerts   = is_array( $alerts ) ? $alerts : array();
+		$alerts[] = array(
+			'order_number' => isset( $order->order_number ) ? (string) $order->order_number : '',
+			'items'        => array_map( 'sanitize_text_field', $unmapped ),
+			'time'         => current_time( 'mysql' ),
+		);
+		$alerts = array_slice( $alerts, -20 );
+		update_option( self::UNMAPPED_ALERTS_OPTION, $alerts, false );
 	}
 }

@@ -100,10 +100,10 @@ ok( in_array( 'doughboss/v1/config', $routes, true ) || (bool) preg_grep( '#doug
 ok( (bool) preg_grep( '#doughboss/v1/menu#', $routes ), '/menu route present' );
 ok( (bool) preg_grep( '#doughboss/v1/checkout#', $routes ), '/checkout route present' );
 ok( (bool) preg_grep( '#doughboss/v1/admin/catering$#', $routes ), 'GET /admin/catering route present' );
-// The admin/catering listing route (and its /{id}/status sibling, already present
-// before this change) bring the full registered surface to 42 — a real count
-// check, not just ">0", so a route silently failing to register would fail this.
-ok( 42 === count( $routes ), 'REST route count reflects admin/catering addition (' . count( $routes ) . ' routes, expected 42)' );
+// A real count check, not just ">0", so a route silently failing to register
+// would fail this. Bumped to 44 with the /pospal/products and
+// /pospal/product-map routes added for the visual product-mapping screen.
+ok( 44 === count( $routes ), 'REST route count reflects pospal product-map addition (' . count( $routes ) . ' routes, expected 44)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );

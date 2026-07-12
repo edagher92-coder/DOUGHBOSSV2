@@ -36,6 +36,8 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_clear_payment_issues', array( $this, 'handle_clear_payment_issues' ) );
 		add_action( 'admin_post_doughboss_refund_order', array( $this, 'handle_refund_order' ) );
 		add_action( 'admin_post_doughboss_export_report', array( $this, 'handle_export_report' ) );
+		add_action( 'admin_post_doughboss_clear_pospal_alerts', array( $this, 'handle_clear_pospal_alerts' ) );
+		add_action( 'admin_notices', array( $this, 'render_pospal_unmapped_notice' ) );
 	}
 
 	/**
@@ -625,6 +627,90 @@ class DoughBoss_Admin {
 				if (trOut) { trOut.textContent = 'Request failed.'; trOut.style.color = '#b32d2e'; }
 			});
 		}
+
+		var pmLoadBtn = e.target.closest('#db-pospal-map-load');
+		if (pmLoadBtn) {
+			e.preventDefault();
+			var pmLoadOut = document.getElementById('db-pospal-map-result');
+			var pmStore = (document.getElementById('db-pospal-map-store') || {}).value || '1';
+			pmLoadBtn.disabled = true;
+			if (pmLoadOut) { pmLoadOut.textContent = 'Loading…'; pmLoadOut.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/pospal/products?store=' + encodeURIComponent(pmStore), {
+				headers: { 'X-WP-Nonce': DoughBossAdmin.nonce }
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				pmLoadBtn.disabled = false;
+				if (!d || !d.ok) {
+					if (pmLoadOut) { pmLoadOut.textContent = (d && d.message) ? d.message : 'Could not load products.'; pmLoadOut.style.color = '#b32d2e'; }
+					return;
+				}
+				var norm = function (s) { return String(s == null ? '' : s).toLowerCase().trim().replace(/\s+/g, ' '); };
+				var byName = {};
+				(d.products || []).forEach(function (p) { byName[norm(p.name)] = p; });
+				var selects = document.querySelectorAll('.db-pospal-map-select');
+				var matched = 0;
+				selects.forEach(function (sel) {
+					var key = sel.getAttribute('data-key');
+					var current = sel.getAttribute('data-current') || '';
+					var keep = sel.value; // Preserve "not mapped" vs the placeholder "currently mapped" option if no fresh match is found below.
+					sel.innerHTML = '';
+					var blank = document.createElement('option');
+					blank.value = '';
+					blank.textContent = '— not mapped —';
+					sel.appendChild(blank);
+					(d.products || []).forEach(function (p) {
+						var opt = document.createElement('option');
+						opt.value = p.uid;
+						opt.textContent = p.name + (p.price != null ? ' ($' + p.price + ')' : '');
+						sel.appendChild(opt);
+					});
+					var hit = byName[key];
+					if (hit) {
+						sel.value = String(hit.uid);
+						matched++;
+					} else if (current && !sel.querySelector('option[value="' + CSS.escape(current) + '"]')) {
+						// Kept mapping doesn't match any fetched product by name — surface it
+						// rather than silently dropping it so the operator can decide.
+						var keepOpt = document.createElement('option');
+						keepOpt.value = current;
+						keepOpt.textContent = 'Currently mapped (uid ' + current + ') — no name match found';
+						keepOpt.selected = true;
+						sel.appendChild(keepOpt);
+					} else {
+						sel.value = current || '';
+					}
+				});
+				if (pmLoadOut) {
+					pmLoadOut.textContent = (d.message || '') + ' — ' + matched + ' of ' + selects.length + ' menu items auto-matched by name. Review below, then Save.';
+					pmLoadOut.style.color = '#1f7a37';
+				}
+			}).catch(function () {
+				pmLoadBtn.disabled = false;
+				if (pmLoadOut) { pmLoadOut.textContent = 'Request failed.'; pmLoadOut.style.color = '#b32d2e'; }
+			});
+		}
+
+		var pmSaveBtn = e.target.closest('#db-pospal-map-save');
+		if (pmSaveBtn) {
+			e.preventDefault();
+			var pmSaveOut = document.getElementById('db-pospal-map-result');
+			var map = {};
+			document.querySelectorAll('.db-pospal-map-select').forEach(function (sel) {
+				if (sel.value) { map[sel.getAttribute('data-key')] = sel.value; }
+			});
+			pmSaveBtn.disabled = true;
+			if (pmSaveOut) { pmSaveOut.textContent = 'Saving…'; pmSaveOut.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/pospal/product-map', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
+				body: JSON.stringify({ map: map })
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				pmSaveBtn.disabled = false;
+				if (pmSaveOut) { pmSaveOut.textContent = (d && d.message) ? d.message : 'Done.'; pmSaveOut.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e'; }
+			}).catch(function () {
+				pmSaveBtn.disabled = false;
+				if (pmSaveOut) { pmSaveOut.textContent = 'Request failed.'; pmSaveOut.style.color = '#b32d2e'; }
+			});
+		}
 	});
 }());
 JS;
@@ -920,6 +1006,72 @@ JS;
 		}
 		wp_safe_redirect( $base );
 		exit;
+	}
+
+	/**
+	 * Admin-post handler: clear the POSPal unmapped-item alert queue.
+	 *
+	 * @return void
+	 */
+	public function handle_clear_pospal_alerts() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_clear_pospal_alerts' );
+
+		delete_option( DoughBoss_POSPal_Orders::UNMAPPED_ALERTS_OPTION );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * admin_notices: surface recent POSPal order-push skips (unmapped menu items)
+	 * so they're visible in wp-admin rather than only in the server error log.
+	 * Shown to anyone who can manage DoughBoss, on every admin screen, until
+	 * dismissed — a skipped till push is easy to miss otherwise.
+	 *
+	 * @return void
+	 */
+	public function render_pospal_unmapped_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$alerts = get_option( DoughBoss_POSPal_Orders::UNMAPPED_ALERTS_OPTION, array() );
+		if ( empty( $alerts ) || ! is_array( $alerts ) ) {
+			return;
+		}
+
+		$names = array();
+		foreach ( $alerts as $a ) {
+			foreach ( (array) ( isset( $a['items'] ) ? $a['items'] : array() ) as $n ) {
+				$names[ $n ] = true;
+			}
+		}
+		$names = array_keys( $names );
+
+		$clear_url = wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_clear_pospal_alerts' ), 'doughboss_clear_pospal_alerts' );
+		?>
+		<div class="notice notice-warning is-dismissible">
+			<p>
+				<?php
+				printf(
+					/* translators: 1: number of orders, 2: comma-separated item names. */
+					esc_html( _n( '%1$d recent order didn\'t reach the POSPal till — unmapped menu item(s): %2$s.', '%1$d recent orders didn\'t reach the POSPal till — unmapped menu item(s): %2$s.', count( $alerts ), 'doughboss' ) ),
+					count( $alerts ),
+					esc_html( implode( ', ', array_slice( $names, 0, 8 ) ) . ( count( $names ) > 8 ? '…' : '' ) )
+				);
+				?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>#db-pospal-map-load"><?php esc_html_e( 'Map them in Settings', 'doughboss' ); ?></a>
+				&middot;
+				<a href="<?php echo esc_url( $clear_url ); ?>"><?php esc_html_e( 'Dismiss', 'doughboss' ); ?></a>
+			</p>
+		</div>
+		<?php
 	}
 
 	/**
@@ -2186,6 +2338,62 @@ JS;
 							</tr>
 						</table>
 					<?php endforeach; ?>
+
+					<h3><?php esc_html_e( 'Product mapping (for order push)', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Only needed if you switch on "Push online orders" above. Each menu item below needs a matching POSPal product before an order containing it can reach the till — an unmapped item is safely skipped from the push rather than sent broken, but it won\'t show up on the till until it\'s mapped here.', 'doughboss' ); ?>
+					</p>
+					<?php
+					$map_items = get_posts(
+						array(
+							'post_type'      => DoughBoss_Post_Types::POST_TYPE,
+							'post_status'    => 'publish',
+							'posts_per_page' => -1,
+							'orderby'        => 'title',
+							'order'          => 'ASC',
+						)
+					);
+					$saved_map = isset( $settings['pospal_product_map'] ) && is_array( $settings['pospal_product_map'] ) ? $settings['pospal_product_map'] : array();
+					?>
+					<p>
+						<select id="db-pospal-map-store" style="margin-right:6px;">
+							<option value="1"><?php esc_html_e( 'Store 1', 'doughboss' ); ?></option>
+							<option value="2"><?php esc_html_e( 'Store 2', 'doughboss' ); ?></option>
+							<option value="3"><?php esc_html_e( 'Store 3', 'doughboss' ); ?></option>
+						</select>
+						<button type="button" class="button" id="db-pospal-map-load"><?php esc_html_e( 'Load POSPal products &amp; auto-match', 'doughboss' ); ?></button>
+						<button type="button" class="button button-primary" id="db-pospal-map-save"><?php esc_html_e( 'Save mapping', 'doughboss' ); ?></button>
+						<span id="db-pospal-map-result" class="description" style="margin-left:8px;"></span>
+					</p>
+					<?php if ( empty( $map_items ) ) : ?>
+						<p class="description"><?php esc_html_e( 'No published menu items yet — import the standard menu above first.', 'doughboss' ); ?></p>
+					<?php else : ?>
+						<table class="wp-list-table widefat striped" style="max-width:760px;">
+							<thead><tr>
+								<th><?php esc_html_e( 'Menu item', 'doughboss' ); ?></th>
+								<th><?php esc_html_e( 'POSPal product', 'doughboss' ); ?></th>
+							</tr></thead>
+							<tbody id="db-pospal-map-body">
+								<?php foreach ( $map_items as $mi ) :
+									$key         = DoughBoss_POSPal_Orders::norm( $mi->post_title );
+									$current_uid = isset( $saved_map[ $key ] ) ? (string) $saved_map[ $key ] : '';
+									?>
+									<tr>
+										<td><?php echo esc_html( $mi->post_title ); ?></td>
+										<td>
+											<select class="db-pospal-map-select" data-key="<?php echo esc_attr( $key ); ?>" data-current="<?php echo esc_attr( $current_uid ); ?>" style="min-width:280px;">
+												<option value=""><?php esc_html_e( '— not mapped —', 'doughboss' ); ?></option>
+												<?php if ( '' !== $current_uid ) : ?>
+													<option value="<?php echo esc_attr( $current_uid ); ?>" selected="selected"><?php echo esc_html( sprintf( /* translators: %s: POSPal product uid. */ __( 'Currently mapped (uid %s) — load products to see its name', 'doughboss' ), $current_uid ) ); ?></option>
+												<?php endif; ?>
+											</select>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+						<p class="description"><?php esc_html_e( '"Load POSPal products" fetches your catalogue and auto-selects the closest name match for every item below — review each one, adjust anything wrong, then Save mapping. Nothing is saved until you click Save.', 'doughboss' ); ?></p>
+					<?php endif; ?>
 
 					<h2><?php esc_html_e( 'Real-time &amp; Notifications', 'doughboss' ); ?></h2>
 					<p class="description" style="max-width:760px;">
