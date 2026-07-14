@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.15.0
+Stable tag: 2.16.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,29 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.16.0 =
+* New: **POSPal push outbox** — online orders that failed to reach the till
+  (network blip, POSPal outage) are now retried automatically on a durable
+  outbox with exponential backoff (60s / 5 min / 30 min, capped at 5 tries).
+  A cron worker owns dispatch under an atomic pending → in_flight claim, so
+  concurrent sweeps can never double-push the same order. Fully off unless
+  "Push online orders" is enabled.
+* New: **Failed-push visibility** — wp-admin surfaces a dismissible notice
+  when orders exhaust their retry budget or are still retrying after several
+  attempts, with a "Re-send now" button to reset them.
+* New: **Hourly POSPal reconciliation** — recent orders DoughBoss thinks it
+  pushed are re-checked against the till via `queryOrderByNo`; genuine gaps
+  are automatically re-enqueued (only a positive orderNo/daySeq counts as
+  "present" — ambiguous responses are skipped so partial outages can't
+  trigger duplicate ring-ins). Runs only when POSPal push is on.
+* New: **Visual POSPal product mapping** — a settings-page table that loads
+  POSPal's catalogue and auto-matches menu items by name, replacing the
+  previous WP-CLI-only setup for mapping menu items to POSPal product uids.
+* Change: signing helper `DoughBoss_POSPal::sign()` is now the single
+  signature implementation used by every call, with a known-vector smoke
+  test that breaks loudly if the wire format ever drifts.
+* Data: new `{prefix}doughboss_pospal_outbox` table (DB v1.9.0); dbDelta-safe.
 
 = 2.15.0 =
 * New: **Reports** admin page (DoughBoss → Reports) — revenue, order count,
