@@ -100,7 +100,8 @@ class DoughBoss_Settings {
 			// capability check. Only ever written by the random generator in
 			// DoughBoss_Admin::generate_board_key() (admin-post actions
 			// doughboss_generate_board_key / doughboss_clear_board_key) — never
-			// accepted as free text — so it's always a URL-safe generated value.
+			// accepted as free text. New keys are stored only as SHA-256 verifiers;
+			// the raw value exists in the one-time owner reveal and staff URL.
 			// See admin/class-doughboss-admin.php render_board_page().
 			'board_access_key' => '',
 			// Rate-limiter client-IP resolution. Off by default so REMOTE_ADDR is used
@@ -214,17 +215,44 @@ class DoughBoss_Settings {
 	}
 
 	/**
-	 * Optional extra access key for the wp-admin Order Board. Blank (default)
+	 * Optional extra access-key verifier for the Order Board. Blank (default)
 	 * means the board relies solely on WP login + the manage_doughboss_kds
 	 * capability. When set, render_board_page() requires a matching ?key=
 	 * query argument in addition to that login + capability check — a
 	 * bookmarkable "specific URL" for kitchen staff, layered on top of the
-	 * real auth boundary, never a replacement for it.
+	 * real auth boundary and enforced again on KDS REST calls. New values are
+	 * SHA-256 verifiers rather than recoverable plaintext.
 	 *
 	 * @return string
 	 */
 	public static function board_access_key() {
 		return trim( (string) self::get( 'board_access_key', '' ) );
+	}
+
+	/**
+	 * Verify a presented Order Board key against the stored verifier.
+	 *
+	 * New keys are stored as SHA-256 verifiers so database/config backups cannot
+	 * reveal the bookmark secret. A 24-character legacy plaintext value is still
+	 * accepted for a safe upgrade path and is replaced the next time the owner
+	 * generates a key.
+	 *
+	 * @param string $supplied Raw key supplied by the staff client.
+	 * @return bool
+	 */
+	public static function verify_board_access_key( $supplied ) {
+		$stored   = self::board_access_key();
+		$supplied = trim( (string) $supplied );
+		if ( '' === $stored ) {
+			return true;
+		}
+		if ( '' === $supplied ) {
+			return false;
+		}
+		if ( 64 === strlen( $stored ) && ctype_xdigit( $stored ) ) {
+			return hash_equals( strtolower( $stored ), hash( 'sha256', $supplied ) );
+		}
+		return hash_equals( $stored, $supplied );
 	}
 
 	/**

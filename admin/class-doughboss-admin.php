@@ -217,6 +217,13 @@ class DoughBoss_Admin {
 		$clean['enable_pickup']   = empty( $input['enable_pickup'] ) ? 0 : 1;
 		$clean['enable_delivery'] = empty( $input['enable_delivery'] ) ? 0 : 1;
 		$clean['ordering_open']   = empty( $input['ordering_open'] ) ? 0 : 1;
+		$active_locations         = DoughBoss_Locations::all( true );
+		$clean['single_location_mode'] = ! empty( $input['single_location_mode'] ) && 1 === count( $active_locations ) ? 1 : 0;
+		if ( $clean['single_location_mode'] ) {
+			// Single-location launch mode is deliberately pickup-only.
+			$clean['enable_pickup']   = 1;
+			$clean['enable_delivery'] = 0;
+		}
 
 		// Payments (Stripe). Keys are stored for the active mode; secret keys are
 		// only ever used in server-side calls and are never sent to the browser.
@@ -438,6 +445,12 @@ class DoughBoss_Admin {
 		// The live order board ships its own (larger) app + styles, loaded only
 		// on its screen.
 		if ( false !== strpos( $hook, 'doughboss-board' ) ) {
+			// Only pass a raw board key to the board JavaScript after it has passed
+			// the same verifier used by the page and REST API. The key is held in
+			// memory for this page load and sent on each protected KDS request.
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page gate, verified against the stored secret.
+			$supplied_board_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
+			$board_key_for_js    = DoughBoss_Settings::verify_board_access_key( $supplied_board_key ) ? $supplied_board_key : '';
 			wp_enqueue_style(
 				'doughboss-orderboard',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-orderboard.css',
@@ -457,6 +470,7 @@ class DoughBoss_Admin {
 				array(
 					'restUrl'   => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 					'nonce'     => wp_create_nonce( 'wp_rest' ),
+					'boardKey'  => $board_key_for_js,
 					'currency'  => DoughBoss_Settings::get( 'currency_symbol', '$' ),
 					'pollMs'    => 7000,
 					'statuses'  => DoughBoss_Order::statuses(),
@@ -504,7 +518,12 @@ class DoughBoss_Admin {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
 			body: JSON.stringify({ status: sel.value })
-		}).then(function (r) { return r.json(); }).then(function () {
+		}).then(function (r) {
+			return r.json().catch(function () { return {}; }).then(function (data) {
+				if (!r.ok) { throw new Error(data.message || 'Request failed.'); }
+				return data;
+			});
+		}).then(function () {
 			sel.disabled = false;
 			var row = sel.closest('tr');
 			if (row) { row.style.transition = 'background .6s'; row.style.background = '#eaffea'; setTimeout(function(){ row.style.background=''; }, 800); }
@@ -1089,8 +1108,9 @@ JS;
 	}
 
 	/**
-	 * Handle the "Re-send now" button on the outbox notice: reset every terminal
-	 * outbox row to pending and schedule the cron worker immediately.
+	 * Handle POSPal outbox retries. Bulk retry excludes ambiguous outcomes. A
+	 * selected ambiguous row requires an explicit confirmation that staff checked
+	 * the till and found no matching order.
 	 *
 	 * @return void
 	 */
@@ -1098,9 +1118,26 @@ JS;
 		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
 		}
-		check_admin_referer( 'doughboss_pospal_outbox_resend' );
-
-		DoughBoss_POSPal_Outbox::reset_for_retry();
+		$id = isset( $_REQUEST['outbox_id'] ) ? absint( $_REQUEST['outbox_id'] ) : 0;
+		if ( $id ) {
+			$expected_updated_at = isset( $_POST['outbox_updated_at'] ) ? sanitize_text_field( wp_unslash( $_POST['outbox_updated_at'] ) ) : '';
+			$expected_error      = isset( $_POST['outbox_error'] ) ? sanitize_key( wp_unslash( $_POST['outbox_error'] ) ) : '';
+			if ( '' === $expected_updated_at || ! in_array( $expected_error, array( 'ambiguous_network', 'ambiguous_in_flight' ), true ) ) {
+				wp_die( esc_html__( 'This POSPal review form is incomplete. Refresh the page and try again.', 'doughboss' ) );
+			}
+			$state_token = md5( $expected_updated_at . '|' . $expected_error );
+			check_admin_referer( 'doughboss_pospal_outbox_resend_' . $id . '_' . $state_token );
+			if ( empty( $_POST['confirm_missing'] ) ) {
+				wp_die( esc_html__( 'Check the POSPal till and confirm that the order is missing before re-sending it.', 'doughboss' ) );
+			}
+			$released = DoughBoss_POSPal_Outbox::reset_for_retry( $id, true, $expected_updated_at, $expected_error );
+			if ( 1 !== (int) $released ) {
+				wp_die( esc_html__( 'This POSPal outcome changed after you opened the page. Nothing was re-sent; refresh and review the current state.', 'doughboss' ) );
+			}
+		} else {
+			check_admin_referer( 'doughboss_pospal_outbox_resend' );
+			DoughBoss_POSPal_Outbox::reset_for_retry();
+		}
 
 		$base = wp_get_referer();
 		if ( ! $base ) {
@@ -1113,7 +1150,8 @@ JS;
 	/**
 	 * admin_notices: surface POSPal outbox rows that either exhausted their retry
 	 * budget (terminal) or are still retrying after 3+ attempts (borderline).
-	 * The operator can hit "Re-send now" to reset every terminal row for retry.
+	 * Explicit remote failures may be bulk-retried. Ambiguous outcomes are listed
+	 * individually and require a confirmed till check before release.
 	 * Silent when the outbox is clean — no notice noise on a healthy site.
 	 *
 	 * @return void
@@ -1131,15 +1169,26 @@ JS;
 		}
 
 		$resend_url = wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_pospal_outbox_resend' ), 'doughboss_pospal_outbox_resend' );
+		$rows       = DoughBoss_POSPal_Outbox::list_ambiguous_rows( 100 );
 		?>
 		<div class="notice notice-warning">
 			<p>
 				<?php
-				if ( $counts['terminal'] > 0 ) {
+				if ( $counts['retryable_terminal'] > 0 ) {
 					printf(
-						/* translators: %d: number of failed POSPal push rows. */
-						esc_html( _n( '%d order didn\'t reach the POSPal till after 5 tries.', '%d orders didn\'t reach the POSPal till after 5 tries.', $counts['terminal'], 'doughboss' ) ),
-						(int) $counts['terminal']
+						/* translators: %d: number of explicit POSPal failures. */
+						esc_html( _n( '%d order received repeated explicit POSPal errors.', '%d orders received repeated explicit POSPal errors.', $counts['retryable_terminal'], 'doughboss' ) ),
+						(int) $counts['retryable_terminal']
+					);
+				}
+				if ( $counts['ambiguous'] > 0 ) {
+					if ( $counts['retryable_terminal'] > 0 ) {
+						echo ' ';
+					}
+					printf(
+						/* translators: %d: number of orders whose remote outcome is unknown. */
+						esc_html( _n( '%d order may already be on the till and needs a manual check.', '%d orders may already be on the till and need a manual check.', $counts['ambiguous'], 'doughboss' ) ),
+						(int) $counts['ambiguous']
 					);
 				}
 				if ( $counts['retrying'] > 0 ) {
@@ -1152,16 +1201,43 @@ JS;
 						(int) $counts['retrying']
 					);
 				}
-				echo ' ';
+				if ( $counts['retryable_terminal'] > 0 ) {
+					echo ' ';
 				?>
-				<a href="<?php echo esc_url( $resend_url ); ?>"><?php esc_html_e( 'Re-send now', 'doughboss' ); ?></a>
+				<a href="<?php echo esc_url( $resend_url ); ?>"><?php esc_html_e( 'Retry explicit failures', 'doughboss' ); ?></a>
+				<?php } ?>
 			</p>
+			<?php if ( (int) $counts['ambiguous'] > count( $rows ) ) : ?>
+				<p><?php echo esc_html( sprintf( __( 'Showing the oldest %1$d of %2$d ambiguous orders. Resolve these and refresh to review the remainder.', 'doughboss' ), count( $rows ), (int) $counts['ambiguous'] ) ); ?></p>
+			<?php endif; ?>
+			<?php foreach ( $rows as $row ) : ?>
+				<?php
+				$payload = json_decode( (string) $row->payload_json, true );
+				$day_seq = is_array( $payload ) && ! empty( $payload['daySeq'] ) ? sanitize_text_field( (string) $payload['daySeq'] ) : '';
+				$state_token = md5( (string) $row->updated_at . '|' . (string) $row->last_error );
+				?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:8px 0 12px;">
+					<input type="hidden" name="action" value="doughboss_pospal_outbox_resend" />
+					<input type="hidden" name="outbox_id" value="<?php echo esc_attr( (int) $row->id ); ?>" />
+					<input type="hidden" name="outbox_updated_at" value="<?php echo esc_attr( (string) $row->updated_at ); ?>" />
+					<input type="hidden" name="outbox_error" value="<?php echo esc_attr( (string) $row->last_error ); ?>" />
+					<?php wp_nonce_field( 'doughboss_pospal_outbox_resend_' . (int) $row->id . '_' . $state_token ); ?>
+					<strong><?php echo esc_html( $day_seq ? sprintf( __( 'POSPal order %s', 'doughboss' ), $day_seq ) : __( 'POSPal order number unavailable', 'doughboss' ) ); ?></strong>
+					&mdash; <?php echo esc_html( sprintf( __( 'store %1$d, outbox #%2$d, %3$s, %4$s', 'doughboss' ), (int) $row->store_index, (int) $row->id, (string) $row->updated_at, (string) $row->last_error ) ); ?><br />
+					<?php if ( $day_seq ) : ?>
+						<label><input type="checkbox" name="confirm_missing" value="1" required /> <?php echo esc_html( sprintf( __( 'I searched POSPal for %s and confirmed this order is missing.', 'doughboss' ), $day_seq ) ); ?></label>
+						<button type="submit" class="button button-secondary"><?php esc_html_e( 'Re-send this order', 'doughboss' ); ?></button>
+					<?php else : ?>
+						<?php esc_html_e( 'Do not re-send from this screen. Match the customer, store and time with POSPal, then escalate for manual recovery.', 'doughboss' ); ?>
+					<?php endif; ?>
+				</form>
+			<?php endforeach; ?>
 		</div>
 		<?php
 	}
 
 	/**
-	 * Generate a fresh random Order Board access key and store it. Only ever
+	 * Generate a fresh random Order Board access key and store its verifier. Only ever
 	 * called from this dedicated, nonce-protected action — never accepted as
 	 * free text from the general settings form — so the stored key is always
 	 * drawn from generate_board_key()'s URL-safe alphabet. Redirects back with
@@ -1177,11 +1253,12 @@ JS;
 		check_admin_referer( 'doughboss_generate_board_key' );
 
 		$key = self::generate_board_key();
-		DoughBoss_Settings::update( array( 'board_access_key' => $key ) );
+		DoughBoss_Settings::update( array( 'board_access_key' => hash( 'sha256', $key ) ) );
 
 		// One-time reveal: a short-lived transient keyed to this user so only
 		// the person who just generated it sees the plaintext, and only once —
-		// the settings form itself never echoes the stored key back into HTML.
+		// the settings form itself never echoes the raw key back into HTML. The
+		// persistent option contains only a SHA-256 verifier.
 		set_transient( 'doughboss_board_key_reveal_' . get_current_user_id(), $key, MINUTE_IN_SECONDS );
 
 		$base = wp_get_referer();
@@ -1461,10 +1538,11 @@ JS;
 		// ?key= — giving kitchen staff a specific, bookmarkable URL per the
 		// owner's request, in addition to (not instead of) the login above.
 		$required_key = DoughBoss_Settings::board_access_key();
-		if ( '' !== $required_key ) {
+		$kds_only     = ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' );
+		if ( $kds_only && '' !== $required_key ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page gate, not a state change; compared with hash_equals() below.
 			$supplied_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
-			if ( '' === $supplied_key || ! hash_equals( $required_key, $supplied_key ) ) {
+			if ( ! DoughBoss_Settings::verify_board_access_key( $supplied_key ) ) {
 				wp_die( esc_html__( 'This Order Board link is missing or has an incorrect access key. Ask an owner/manager for the bookmarked board URL from DoughBoss Settings.', 'doughboss' ) );
 			}
 		}
@@ -1809,7 +1887,7 @@ JS;
 					</tr>
 					<tr>
 						<th><label for="db-v-prefix"><?php esc_html_e( 'Code prefix', 'doughboss' ); ?></label></th>
-						<td><input name="prefix" id="db-v-prefix" type="text" class="regular-text" value="SNOW" /></td>
+						<td><input name="prefix" id="db-v-prefix" type="text" class="regular-text" value="DOUGH" /></td>
 					</tr>
 					<tr>
 						<th><label for="db-v-min"><?php esc_html_e( 'Minimum spend', 'doughboss' ); ?></label></th>
@@ -2346,6 +2424,13 @@ JS;
 						</td>
 					</tr>
 					<tr>
+						<th><label for="db-single-location-mode"><?php esc_html_e( 'Single-location launch', 'doughboss' ); ?></label></th>
+						<td>
+							<label><input type="checkbox" id="db-single-location-mode" name="<?php echo esc_attr( $opt ); ?>[single_location_mode]" value="1" <?php checked( ! empty( $settings['single_location_mode'] ), true ); ?> <?php disabled( 1 !== count( DoughBoss_Locations::all( true ) ) ); ?> /> <?php esc_html_e( 'Pin ordering to the sole active shop and allow pickup only', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Available only when exactly one shop is active. This prevents accidental routing to the wrong shop on multi-location sites.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
 						<th><label for="db-currency-symbol"><?php esc_html_e( 'Currency symbol', 'doughboss' ); ?></label></th>
 						<td><input type="text" id="db-currency-symbol" class="small-text" name="<?php echo esc_attr( $opt ); ?>[currency_symbol]" value="<?php echo esc_attr( $settings['currency_symbol'] ); ?>" /></td>
 					</tr>
@@ -2389,7 +2474,7 @@ JS;
 								<?php endif; ?>
 							</p>
 							<p class="description">
-								<?php esc_html_e( 'Optional. Kitchen staff still sign in with their own WordPress username and password — this does not replace that. When set, it adds a specific bookmarkable link: staff must also have the matching key in the URL, so a guessed admin URL alone is not enough. The link is only shown once, right after you generate it — the key isn\'t stored in a form field on this page, since anyone who could see this settings screen (screenshot, screen-share) would otherwise be able to read it back out.', 'doughboss' ); ?>
+								<?php esc_html_e( 'Optional. KDS-only kitchen staff still sign in with their own WordPress username and password — this does not replace that. When set, it adds a specific bookmarkable link and protects the order feed/actions: kitchen accounts must also have the matching key, while owner/manager accounts retain their broader wp-admin access. The link is shown once after generation and only a verifier is stored.', 'doughboss' ); ?>
 							</p>
 							<p>
 								<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_generate_board_key' ), 'doughboss_generate_board_key' ) ); ?>"><?php echo $has_board_key ? esc_html__( 'Generate new link (invalidates the old one)', 'doughboss' ) : esc_html__( 'Generate a board link', 'doughboss' ); ?></a>

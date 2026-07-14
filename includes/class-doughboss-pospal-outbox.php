@@ -10,14 +10,17 @@
  * This class introduces a small, WP-native outbox that owns the push:
  *   1. Every POSPal push intent is inserted as a row (kind, entity, payload, idempotency key).
  *   2. `wp_schedule_single_event` fires a cron worker at the row's `next_attempt_at`.
- *   3. On failure, the row is re-scheduled with exponential backoff
+ *   3. On an explicit remote failure, the row is re-scheduled with exponential backoff
  *      (60s → 300s → 1800s → 1800s → 1800s, capped at 5 attempts).
+ *      Ambiguous network outcomes stop for human review rather than risk a duplicate.
  *   4. On success, the row is marked 'succeeded' and kept 30 days for audit/visibility.
  *   5. After 5 failures, the row is marked 'failed_terminal' and surfaced in wp-admin.
  *
  * Idempotency: each row carries an `idempotency_key` derived from the WP order id
  * plus the store index. A duplicate enqueue for the same key is rejected at insert
- * time (UNIQUE), so a retry cascade or a reconciliation cron cannot double-push.
+ * time (UNIQUE), so duplicate local enqueue calls share the same row. It does
+ * not prove that an ambiguous remote timeout was rejected by POSPal; a stable
+ * remote order identifier is still required for safe reconciliation.
  *
  * Fully dormant unless `DoughBoss_Settings::pospal_push_enabled()` is true — the
  * cron worker no-ops, and callers are simply free to skip enqueue when it's off.
@@ -61,10 +64,9 @@ class DoughBoss_POSPal_Outbox {
 	const CRON_HOOK = 'doughboss_pospal_outbox_dispatch';
 
 	/**
-	 * Hourly cron hook that reconciles recent 'succeeded' outbox rows against
-	 * POSPal's queryOrderByNo — the safety-net check that makes the fire-and-
-	 * forget-with-retry design safe long-term. Anything DoughBoss thinks it
-	 * pushed but POSPal doesn't know about is re-enqueued for a fresh attempt.
+	 * Hourly maintenance hook. It prunes old successful rows and reports the
+	 * reconciliation gap. It deliberately performs no automatic remote re-push
+	 * until dispatch persists POSPal's returned orderNo.
 	 */
 	const RECONCILE_HOOK = 'doughboss_pospal_outbox_reconcile';
 
@@ -78,6 +80,7 @@ class DoughBoss_POSPal_Outbox {
 		add_action( self::CRON_HOOK, array( __CLASS__, 'run_due' ) );
 		add_action( self::RECONCILE_HOOK, array( __CLASS__, 'reconcile_recent' ) );
 		add_action( 'init', array( __CLASS__, 'ensure_reconcile_scheduled' ) );
+		add_action( 'init', array( __CLASS__, 'ensure_dispatch_scheduled' ) );
 	}
 
 	/**
@@ -224,6 +227,66 @@ class DoughBoss_POSPal_Outbox {
 	}
 
 	/**
+	 * Re-arm durable work after activation, restart or cron loss.
+	 *
+	 * Deactivation deliberately clears scheduled hooks but preserves the outbox.
+	 * On the next active request, schedule the earliest pending row or an immediate
+	 * sweep when an abandoned in-flight lease needs to be quarantined for review.
+	 *
+	 * @return void
+	 */
+	public static function ensure_dispatch_scheduled() {
+		global $wpdb;
+
+		if ( ! DoughBoss_Settings::pospal_push_enabled() ) {
+			wp_clear_scheduled_hook( self::CRON_HOOK );
+			return;
+		}
+		if ( wp_next_scheduled( self::CRON_HOOK ) ) {
+			return;
+		}
+
+		$table        = self::table();
+		$lease_cutoff = gmdate( 'Y-m-d H:i:s', time() - 10 * MINUTE_IN_SECONDS );
+		$stale        = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE status = 'in_flight' AND updated_at < %s",
+				$lease_cutoff
+			)
+		);
+		if ( $stale > 0 ) {
+			self::schedule_soon( 0 );
+			return;
+		}
+
+		self::schedule_next_pending();
+	}
+
+	/**
+	 * Arm the worker for the earliest pending retry in the database.
+	 *
+	 * A sweep may process a newly-enqueued row while older failures are not due
+	 * yet. Deriving the next wake from the whole queue prevents those future
+	 * retries being stranded after the current cron event is consumed.
+	 *
+	 * @return void
+	 */
+	private static function schedule_next_pending() {
+		global $wpdb;
+		$table = self::table();
+		$next  = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			"SELECT MIN(next_attempt_at) FROM {$table} WHERE status = 'pending'"
+		);
+		if ( ! $next ) {
+			return;
+		}
+		$next_ts = strtotime( (string) $next . ' UTC' );
+		if ( false !== $next_ts ) {
+			self::schedule_soon( max( 60, $next_ts - time() ) );
+		}
+	}
+
+	/**
 	 * Cron worker: dispatch every row whose next_attempt_at is due. Capped at 25
 	 * rows per sweep so a large backlog can't monopolise a WP request; anything
 	 * left is picked up by the next scheduled sweep.
@@ -241,14 +304,15 @@ class DoughBoss_POSPal_Outbox {
 		$now    = gmdate( 'Y-m-d H:i:s' );
 		$batch  = 25;
 
-		// 1. Reclaim orphaned in_flight rows — a previous worker died mid-dispatch
-		// (crash, timeout, SIGKILL). Rows older than the lease window are safe to
-		// take back; wp_cron's default max_execution guarantees this is always past.
+		// 1. Quarantine orphaned in_flight rows. A previous worker may have died
+		// after POSPal accepted the request but before the success row was saved.
+		// Automatic re-push would risk a duplicate till order, so require an operator
+		// to check POSPal before using the manual resend control.
 		$lease_cutoff = gmdate( 'Y-m-d H:i:s', time() - 10 * MINUTE_IN_SECONDS );
 		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$wpdb->prepare(
 				"UPDATE {$table}
-				   SET status = 'pending', updated_at = %s
+				   SET status = 'failed_terminal', last_error = 'ambiguous_in_flight', updated_at = %s
 				 WHERE status = 'in_flight' AND updated_at < %s",
 				$now,
 				$lease_cutoff
@@ -268,11 +332,11 @@ class DoughBoss_POSPal_Outbox {
 			)
 		);
 		if ( empty( $ids ) ) {
+			self::schedule_next_pending();
 			return;
 		}
 
-		$next_wake = 0;
-		$claimed   = 0;
+		$claimed = 0;
 		foreach ( $ids as $id ) {
 			// Atomic claim: only one worker can flip pending -> in_flight for a given
 			// row. A concurrent sweep (WP-CLI cron event run, second frontend) will
@@ -296,10 +360,7 @@ class DoughBoss_POSPal_Outbox {
 			if ( ! $row ) {
 				continue;
 			}
-			$scheduled_at = self::dispatch_row( $row );
-			if ( $scheduled_at && ( 0 === $next_wake || $scheduled_at < $next_wake ) ) {
-				$next_wake = $scheduled_at;
-			}
+			self::dispatch_row( $row );
 		}
 
 		// If we hit the batch cap and still had claims, there may be more waiting —
@@ -309,9 +370,9 @@ class DoughBoss_POSPal_Outbox {
 			return;
 		}
 
-		if ( $next_wake ) {
-			self::schedule_soon( max( 60, $next_wake - time() ) );
-		}
+		// Recompute from the complete queue rather than only the rows touched in
+		// this batch; another pending row may have a later retry time.
+		self::schedule_next_pending();
 	}
 
 	/**
@@ -382,6 +443,12 @@ class DoughBoss_POSPal_Outbox {
 		}
 
 		$error_code = (string) $result->get_error_code();
+		if ( 'doughboss_pospal_network' === $error_code ) {
+			// A transport timeout/error does not prove POSPal rejected the order. Stop
+			// here so staff can check the till before deliberately resending it.
+			self::mark_terminal( $id, 'ambiguous_network', $attempts );
+			return 0;
+		}
 
 		if ( $attempts >= self::MAX_ATTEMPTS ) {
 			self::mark_terminal( $id, $error_code, $attempts );
@@ -440,7 +507,7 @@ class DoughBoss_POSPal_Outbox {
 	 * Count of rows the operator should see in wp-admin: anything terminal, plus
 	 * anything still pending but past its 3rd attempt (a warning, not just a fail).
 	 *
-	 * @return array{ terminal:int, retrying:int }
+	 * @return array{ terminal:int, retryable_terminal:int, ambiguous:int, retrying:int }
 	 */
 	public static function counts_for_alert() {
 		global $wpdb;
@@ -448,10 +515,18 @@ class DoughBoss_POSPal_Outbox {
 		$terminal = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			"SELECT COUNT(*) FROM {$table} WHERE status = 'failed_terminal'"
 		);
+		$ambiguous = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			"SELECT COUNT(*) FROM {$table} WHERE status = 'failed_terminal' AND last_error IN ('ambiguous_network', 'ambiguous_in_flight')"
+		);
 		$retrying = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			"SELECT COUNT(*) FROM {$table} WHERE status = 'pending' AND attempts >= 3"
 		);
-		return array( 'terminal' => $terminal, 'retrying' => $retrying );
+		return array(
+			'terminal'           => $terminal,
+			'retryable_terminal' => max( 0, $terminal - $ambiguous ),
+			'ambiguous'          => $ambiguous,
+			'retrying'           => $retrying,
+		);
 	}
 
 	/**
@@ -477,30 +552,79 @@ class DoughBoss_POSPal_Outbox {
 	}
 
 	/**
-	 * Manual re-push: reset a row (or all failed_terminal rows) to pending so the
-	 * next cron sweep re-tries. Called from the admin "Re-send" button.
+	 * List ambiguous rows separately so ordinary retries cannot hide a till-check
+	 * action from the operator notice.
 	 *
-	 * @param int|null $id Row id, or null to reset every failed_terminal row.
+	 * @param int $limit Max rows to return.
+	 * @return array<int,object>
+	 */
+	public static function list_ambiguous_rows( $limit = 100 ) {
+		global $wpdb;
+		$table = self::table();
+		$limit = max( 1, min( 500, (int) $limit ) );
+		return (array) $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare(
+				"SELECT * FROM {$table}
+				 WHERE status = 'failed_terminal'
+				   AND last_error IN ('ambiguous_network', 'ambiguous_in_flight')
+				 ORDER BY updated_at ASC
+				 LIMIT %d",
+				$limit
+			)
+		);
+	}
+
+	/**
+	 * Manual re-push: reset a row (or safe failed_terminal rows) to pending so the
+	 * next cron sweep re-tries. Bulk retry always excludes ambiguous transport or
+	 * abandoned-worker outcomes. An individual ambiguous row can be released only
+	 * after the admin handler records the operator's explicit till check.
+	 *
+	 * @param int|null $id                  Row id, or null to reset safe terminal rows.
+	 * @param bool     $allow_ambiguous     Whether an explicitly selected ambiguous row may be reset.
+	 * @param string   $expected_updated_at Exact attempt timestamp from the confirmed operator form.
+	 * @param string   $expected_error      Exact ambiguous state from the confirmed operator form.
 	 * @return int Rows updated.
 	 */
-	public static function reset_for_retry( $id = null ) {
+	public static function reset_for_retry( $id = null, $allow_ambiguous = false, $expected_updated_at = '', $expected_error = '' ) {
 		global $wpdb;
 		$table = self::table();
 		$now   = gmdate( 'Y-m-d H:i:s' );
 
 		if ( null !== $id ) {
-			$updated = (int) $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-				$table,
-				array(
-					'status'          => 'pending',
-					'attempts'        => 0,
-					'last_error'      => '',
-					'next_attempt_at' => $now,
-					'updated_at'      => $now,
-				),
-				array( 'id' => (int) $id ),
-				array( '%s', '%d', '%s', '%s', '%s' ),
-				array( '%d' )
+			if ( $allow_ambiguous ) {
+				$row = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					$wpdb->prepare(
+						"SELECT payload_json, last_error, updated_at FROM {$table} WHERE id = %d AND status = 'failed_terminal'",
+						(int) $id
+					)
+				);
+				$payload = $row ? json_decode( (string) $row->payload_json, true ) : null;
+				if (
+					! $row
+					|| ! in_array( (string) $row->last_error, array( 'ambiguous_network', 'ambiguous_in_flight' ), true )
+					|| ! is_array( $payload )
+					|| empty( $payload['daySeq'] )
+					|| (string) $row->updated_at !== (string) $expected_updated_at
+					|| (string) $row->last_error !== (string) $expected_error
+				) {
+					return 0;
+				}
+			}
+			$ambiguity_guard = $allow_ambiguous ? ' AND last_error = %s AND updated_at = %s' : " AND last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight')";
+			$prepare_args    = array( $now, $now, (int) $id );
+			if ( $allow_ambiguous ) {
+				$prepare_args[] = (string) $expected_error;
+				$prepare_args[] = (string) $expected_updated_at;
+			}
+			$updated = (int) $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare(
+					"UPDATE {$table}
+					    SET status = 'pending', attempts = 0, last_error = '',
+					        next_attempt_at = %s, updated_at = %s
+					  WHERE id = %d AND status = 'failed_terminal'{$ambiguity_guard}",
+					$prepare_args
+				)
 			);
 		} else {
 			// Reset every terminal row in one query — the operator's "resend all" path.
@@ -509,7 +633,8 @@ class DoughBoss_POSPal_Outbox {
 					"UPDATE {$table}
 					   SET status = 'pending', attempts = 0, last_error = '',
 					       next_attempt_at = %s, updated_at = %s
-					 WHERE status = 'failed_terminal'",
+					 WHERE status = 'failed_terminal'
+					   AND last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight')",
 					$now,
 					$now
 				)
@@ -517,20 +642,21 @@ class DoughBoss_POSPal_Outbox {
 		}
 
 		if ( $updated > 0 ) {
+			if ( null !== $id && $allow_ambiguous ) {
+				self::log( '#' . (int) $id . ' released for manual retry after operator till-check confirmation' );
+			}
 			self::schedule_soon( 0 );
 		}
 		return $updated;
 	}
 
 	/**
-	 * Hourly safety-net reconciliation: for every 'succeeded' outbox row from the
-	 * last hour (capped), ask POSPal `queryOrderByNo` for the matching order and
-	 * confirm it actually landed. If POSPal doesn't know about an order we thought
-	 * we pushed, resurface it as a pending retry so the cron worker re-pushes.
+	 * Hourly maintenance for recent successful rows.
 	 *
-	 * This is the backstop mentioned in the client memo — the pattern that makes
-	 * the fire-and-forget-plus-outbox design safe over the long term without ever
-	 * blocking the customer request.
+	 * Dispatch does not yet persist POSPal's stable orderNo, so a positive remote
+	 * reconciliation lookup is not possible. This method prunes the audit window
+	 * and logs that gap only. Treating an empty lookup as proof of absence can
+	 * create duplicate till orders after an ambiguous network response.
 	 *
 	 * @return void
 	 */
@@ -543,6 +669,11 @@ class DoughBoss_POSPal_Outbox {
 
 		$table  = self::table();
 		$since  = gmdate( 'Y-m-d H:i:s', time() - 2 * HOUR_IN_SECONDS );
+		// Housekeeping must run even when there are no recent rows to reconcile.
+		$pruned = self::prune_succeeded( 30 );
+		if ( $pruned > 0 ) {
+			self::log( 'reconcile pruned ' . $pruned . ' succeeded row(s) older than 30 days' );
+		}
 		// Only reconcile a small window: this call talks to POSPal once per row, so
 		// keep the batch small. The hourly cadence with a 2-hour lookback still
 		// double-checks every recent order at least once before it ages out.
@@ -560,84 +691,13 @@ class DoughBoss_POSPal_Outbox {
 			return;
 		}
 
-		$requeued = 0;
-		foreach ( $rows as $row ) {
-			$payload = json_decode( (string) $row->payload_json, true );
-			$day_seq = is_array( $payload ) && isset( $payload['daySeq'] ) ? (string) $payload['daySeq'] : '';
-			if ( '' === $day_seq ) {
-				continue;
-			}
-			$store   = DoughBoss_Settings::pospal_store( max( 1, (int) $row->store_index ) );
-			$creds   = array(
-				'host'    => (string) $store['host'],
-				'app_id'  => (string) $store['app_id'],
-				'app_key' => (string) $store['app_key'],
-			);
-			if ( '' === $creds['host'] || '' === $creds['app_id'] || '' === $creds['app_key'] ) {
-				continue;
-			}
-			$found = DoughBoss_POSPal::query_order_by_no( $day_seq, $creds );
-			if ( is_wp_error( $found ) ) {
-				// A network error is not "missing" — leave the row alone and let the
-				// next hour's reconciliation try again.
-				continue;
-			}
-			// Require a POSITIVE "not found" signal before requeuing — an ambiguous
-			// or partial response must not trigger a duplicate push. POSPal replies
-			// to queryOrderByNo with an object carrying the order fields (orderNo /
-			// daySeq); presence of either is proof the till has our order. Missing
-			// BOTH is treated as "unknown"; anything else (empty array, unrecognised
-			// shape) we deliberately skip and let the next hour retry.
-			$is_present = false;
-			if ( is_array( $found ) ) {
-				if ( ! empty( $found['orderNo'] ) || ! empty( $found['daySeq'] ) ) {
-					$is_present = true;
-				} elseif ( isset( $found[0] ) && is_array( $found[0] ) && ( ! empty( $found[0]['orderNo'] ) || ! empty( $found[0]['daySeq'] ) ) ) {
-					// Some POSPal endpoints wrap results in a list; accept that shape too.
-					$is_present = true;
-				}
-			}
-			if ( $is_present ) {
-				continue;
-			}
-			// Ambiguous responses (empty array, unfamiliar shape) are NOT treated as
-			// "missing" — only an explicit response with no orderNo/daySeq counts. In
-			// practice POSPal's queryOrderByNo either returns the order fields or an
-			// error; skipping ambiguity avoids a duplicate ring-in on a partial outage.
-			$looks_missing = is_array( $found ) && empty( $found );
-			if ( ! $looks_missing ) {
-				continue;
-			}
-
-			// Requeue: reset this row to pending so the next cron sweep re-pushes it.
-			$now_utc = gmdate( 'Y-m-d H:i:s' );
-			$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-				$table,
-				array(
-					'status'          => 'pending',
-					'attempts'        => 0,
-					'last_error'      => 'reconcile_missing',
-					'next_attempt_at' => $now_utc,
-					'updated_at'      => $now_utc,
-				),
-				array( 'id' => (int) $row->id ),
-				array( '%s', '%d', '%s', '%s', '%s' ),
-				array( '%d' )
-			);
-			$requeued++;
-		}
-
-		if ( $requeued > 0 ) {
-			self::log( 'reconcile requeued ' . $requeued . ' row(s)' );
-			self::schedule_soon( 0 );
-		}
-
-		// Housekeeping — keep the outbox tiny by pruning long-succeeded rows. Only
-		// runs once per hour (piggybacking on this cron), so it's cheap.
-		$pruned = self::prune_succeeded( 30 );
-		if ( $pruned > 0 ) {
-			self::log( 'reconcile pruned ' . $pruned . ' succeeded row(s) older than 30 days' );
-		}
+		// Verification is intentionally fail-closed until dispatch persists the
+		// POSPal-generated orderNo. The push payload only contains DoughBoss's
+		// daySeq, and queryOrderByNo cannot safely query by that value. The former
+		// implementation treated an empty response as proof of absence and could
+		// duplicate a successful till order. Keep the hourly job for pruning and
+		// record the visibility gap without making another remote write.
+		self::log( 'reconcile deferred for ' . count( $rows ) . ' recent row(s): POSPal orderNo was not persisted; no automatic re-push performed' );
 	}
 
 	/**

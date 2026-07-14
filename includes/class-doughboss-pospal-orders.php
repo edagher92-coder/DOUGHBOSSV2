@@ -131,7 +131,7 @@ class DoughBoss_POSPal_Orders {
 			'orderSource'                => 'openApi',
 			'payMethod'                  => DoughBoss_Settings::pospal_order_pay_method(),
 			'orderDateTime'              => isset( $order->created_at ) ? (string) $order->created_at : current_time( 'mysql' ),
-			'deliveryType'               => $delivery ? 0 : 1,
+			'deliveryType'               => $delivery ? 0 : 2,
 			'daySeq'                     => isset( $order->order_number ) ? (string) $order->order_number : '',
 			'contactName'                => '' !== (string) $order->customer_name ? (string) $order->customer_name : __( 'Online order', 'doughboss' ),
 			'contactTel'                 => isset( $order->customer_phone ) ? (string) $order->customer_phone : '',
