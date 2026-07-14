@@ -257,6 +257,13 @@ body.db-alerting .db-board-bar h1::after {
 .db-card-meta > div { margin: 0.15rem 0; }
 .db-card-total { font-weight: 700; color: var(--dbb-ink); }
 .db-card-eta { color: var(--dbb-green); font-weight: 600; }
+.db-card-timing-passed {
+	border: 2px solid var(--dbb-danger);
+	border-radius: 4px;
+	padding: 0.35rem 0.5rem;
+	color: var(--dbb-danger);
+	font-weight: 700;
+}
 .db-card-addr { color: var(--dbb-chip-delivery-ink); }
 
 /* --- SLA aging --------------------------------------------------------- */

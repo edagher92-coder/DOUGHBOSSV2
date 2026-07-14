@@ -86,6 +86,27 @@
 		return STATUSES[status] || status;
 	}
 
+	function eventKey(o, target) {
+		return ['kds', o.id, o.version, target, Date.now(), Math.random().toString(36).slice(2)].join(':');
+	}
+
+	function formatTime(value, timezone) {
+		if (!value) { return ''; }
+		var date = new Date(value);
+		if (isNaN(date.getTime())) { return ''; }
+		var options = { hour: 'numeric', minute: '2-digit' };
+		if (timezone) { options.timeZone = timezone; }
+		try { return new Intl.DateTimeFormat('en-AU', options).format(date); }
+		catch (e) { delete options.timeZone; return new Intl.DateTimeFormat('en-AU', options).format(date); }
+	}
+
+	function readyWindow(o) {
+		var from = formatTime(o.promised_ready_from_utc, o.timezone);
+		var by = formatTime(o.promised_ready_by_utc, o.timezone);
+		if (!from) { return ''; }
+		return by && by !== from ? from + '–' + by : from;
+	}
+
 	/* --------------------------------------------------------------- Sound */
 
 	function enableSound() {
@@ -148,17 +169,26 @@
 		});
 	}
 
-	function accept(id, eta) {
-		localAck[id] = true;
-		api('/admin/order/' + id + '/accept', 'POST', { eta: eta || 0 }).then(load).catch(function (error) {
-			delete localAck[id];
+	function accept(o, eta) {
+		localAck[o.id] = true;
+		api('/admin/order/' + o.id + '/accept', 'POST', {
+			eta: eta || 0,
+			expected_version: o.version,
+			event_key: eventKey(o, 'confirmed')
+		}).then(load).catch(function (error) {
+			delete localAck[o.id];
 			var message = error.message || 'Could not accept the order.';
 			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
 		});
 	}
 
-	function setStatus(id, status) {
-		return api('/admin/order/' + id + '/status', 'POST', { status: status }).then(load).catch(function (error) {
+	function setStatus(o, status) {
+		return api('/admin/order/' + o.id + '/status', 'POST', {
+			status: status,
+			expected_version: o.version,
+			event_key: eventKey(o, status),
+			reason_code: status === 'cancelled' ? 'staff_cancelled' : ''
+		}).then(load).catch(function (error) {
 			var message = error.message || 'Could not update the order.';
 			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
 		});
@@ -293,14 +323,7 @@
 	}
 
 	function advanceActions(o) {
-		switch (o.status) {
-			case 'confirmed': return ['preparing', 'ready'];
-			case 'preparing': return ['baking', 'ready'];
-			case 'baking': return ['ready'];
-			case 'ready': return o.order_type === 'delivery' ? ['out_for_delivery', 'completed'] : ['completed'];
-			case 'out_for_delivery': return ['completed'];
-			default: return [];
-		}
+		return (o.allowed_next_statuses || []).filter(function (status) { return status !== 'cancelled'; });
 	}
 
 	function itemLine(it) {
@@ -341,30 +364,24 @@
 			meta.push(el('div', { class: 'db-card-notes', text: '📝 ' + o.notes }));
 		}
 		if (o.eta_minutes) {
-			meta.push(el('div', { class: 'db-card-eta', text: 'ETA ' + o.eta_minutes + ' min' }));
-			// "Due" hint — measured from acceptance when known, else order creation.
-			var sinceRef = minutesSince(o.accepted_at || o.created_at);
-			if (sinceRef !== null) {
-				var remaining = o.eta_minutes - sinceRef;
-				meta.push(el('div', {
-					class: 'db-card-due' + (remaining < 0 ? ' db-card-due-over' : ''),
-					text: remaining >= 0 ? 'Due in ' + remaining + 'm' : 'Overdue ' + (-remaining) + 'm'
-				}));
-			}
+			var windowText = readyWindow(o);
+			meta.push(el('div', { class: 'db-card-eta', text: windowText ? 'Staff estimate ' + windowText : 'Staff estimate ' + o.eta_minutes + ' min' }));
+		}
+		if (o.timing_status === 'estimate_passed') {
+			meta.push(el('div', { class: 'db-card-timing db-card-timing-passed', text: o.timing_label || 'Estimate passed — check this order' }));
 		}
 		meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
 
 		var actions;
 		if (isNew) {
 			var etaRow = ETA_CHOICES.map(function (m) {
-				return el('button', { class: 'button db-eta', type: 'button', onclick: function () { accept(o.id, m); } }, [m + 'm']);
+				return el('button', { class: 'button db-eta', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ', ready in ' + m + ' minutes', onclick: function () { accept(o, m); } }, [m + 'm']);
 			});
 			actions = el('div', { class: 'db-card-actions' }, [
 				el('div', { class: 'db-accept-label', text: 'Accept — ready in:' }),
 				el('div', { class: 'db-eta-row' }, etaRow),
 				el('div', { class: 'db-card-actions-row' }, [
-					el('button', { class: 'button button-primary db-accept', type: 'button', onclick: function () { accept(o.id, 0); } }, ['Accept']),
-					el('button', { class: 'button db-cancel', type: 'button', onclick: function () { if (window.confirm('Cancel order ' + o.order_number + '?')) { changeStatus(o, 'cancelled'); } } }, ['Cancel'])
+					el('button', { class: 'button button-primary db-accept', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ' without an estimate', onclick: function () { accept(o, 0); } }, ['Accept'])
 				])
 			]);
 		} else {
@@ -373,13 +390,10 @@
 				return el('button', {
 					class: 'button ' + (primary ? 'button-primary' : '') + ' db-advance',
 					type: 'button',
-					onclick: function () { changeStatus(o, st); }
+					'aria-label': label(st) + ' for order ' + o.order_number,
+					onclick: function () { setStatus(o, st); }
 				}, [label(st)]);
 			});
-			advBtns.push(el('button', {
-				class: 'button db-cancel', type: 'button',
-				onclick: function () { if (window.confirm('Cancel order ' + o.order_number + '?')) { changeStatus(o, 'cancelled'); } }
-			}, ['Cancel']));
 			actions = el('div', { class: 'db-card-actions' }, [el('div', { class: 'db-card-actions-row' }, advBtns)]);
 		}
 

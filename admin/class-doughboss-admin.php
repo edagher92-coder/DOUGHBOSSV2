@@ -45,6 +45,28 @@ class DoughBoss_Admin {
 		add_action( 'admin_notices', array( $this, 'render_board_key_reveal_notice' ) );
 		add_action( 'admin_post_doughboss_clear_delivery_notice', array( $this, 'handle_clear_delivery_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_delivery_autodisabled_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_migration_notice' ) );
+	}
+
+	/**
+	 * Tell owners when the lifecycle migration failed closed.
+	 *
+	 * @return void
+	 */
+	public function render_migration_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$error = (string) get_option( 'doughboss_migration_error', '' );
+		if ( '' === $error ) {
+			return;
+		}
+		?>
+		<div class="notice notice-error">
+			<p><strong><?php esc_html_e( 'DoughBoss order upgrade needs attention.', 'doughboss' ); ?></strong></p>
+			<p><?php echo esc_html( $error ); ?> <?php esc_html_e( 'Online checkout and staff order changes are paused to protect order history. Ask the site administrator to verify the DoughBoss Orders, Order Items and Order Events tables use InnoDB, then retry the plugin upgrade.', 'doughboss' ); ?></p>
+		</div>
+		<?php
 	}
 
 	/**
@@ -542,6 +564,7 @@ class DoughBoss_Admin {
 		var isCatering = sel.matches('.db-catering-status');
 		if (!isOrder && !isCatering) { return; }
 		var id = sel.getAttribute(isOrder ? 'data-order' : 'data-enquiry');
+		var previous = sel.getAttribute('data-current') || '';
 		var endpoint = isOrder
 			? DoughBossAdmin.restUrl + '/admin/order/' + id + '/status'
 			: DoughBossAdmin.restUrl + '/admin/catering/' + id + '/status';
@@ -549,17 +572,25 @@ class DoughBoss_Admin {
 		fetch(endpoint, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
-			body: JSON.stringify({ status: sel.value })
+			body: JSON.stringify(isOrder ? {
+				status: sel.value,
+				expected_version: parseInt(sel.getAttribute('data-version'), 10) || 1,
+				event_key: ['admin', id, sel.getAttribute('data-version') || '1', sel.value, Date.now(), Math.random().toString(36).slice(2)].join(':'),
+				reason_code: sel.value === 'cancelled' ? 'staff_cancelled' : ''
+			} : { status: sel.value })
 		}).then(function (r) {
 			return r.json().catch(function () { return {}; }).then(function (data) {
 				if (!r.ok) { throw new Error(data.message || 'Request failed.'); }
 				return data;
 			});
-		}).then(function () {
+		}).then(function (data) {
 			sel.disabled = false;
+			if (isOrder && data.version) { sel.setAttribute('data-version', data.version); }
+			sel.setAttribute('data-current', sel.value);
 			var row = sel.closest('tr');
 			if (row) { row.style.transition = 'background .6s'; row.style.background = '#eaffea'; setTimeout(function(){ row.style.background=''; }, 800); }
-		}).catch(function () { sel.disabled = false; alert('Could not update status.'); });
+			if (isOrder) { window.location.reload(); }
+		}).catch(function (error) { sel.disabled = false; sel.value = previous; alert(error.message || 'Could not update status.'); });
 	});
 
 	document.addEventListener('click', function (e) {
@@ -1011,8 +1042,15 @@ JS;
 								</td>
 								<td><?php echo esc_html( mysql2date( 'M j, g:i a', $order->created_at ) ); ?></td>
 								<td>
-									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>">
+									<?php
+									$available_statuses = array_merge( array( $order->status ), DoughBoss_Order::allowed_transitions( $order->status, $order->order_type ) );
+									if ( isset( $order->payment_status ) && 'paid' === $order->payment_status ) {
+										$available_statuses = array_values( array_diff( $available_statuses, array( 'cancelled' ) ) );
+									}
+									?>
+									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>" data-version="<?php echo esc_attr( isset( $order->version ) ? (int) $order->version : 1 ); ?>" data-current="<?php echo esc_attr( $order->status ); ?>">
 										<?php foreach ( $statuses as $key => $label ) : ?>
+											<?php if ( ! in_array( $key, $available_statuses, true ) ) { continue; } ?>
 											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $order->status, $key ); ?>>
 												<?php echo esc_html( $label ); ?>
 											</option>
@@ -1721,7 +1759,7 @@ JS;
 					</button>
 				</div>
 			</div>
-			<div id="db-board" class="db-board" aria-live="polite">
+			<div id="db-board" class="db-board">
 				<p class="db-board-loading"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
 			</div>
 		</div>

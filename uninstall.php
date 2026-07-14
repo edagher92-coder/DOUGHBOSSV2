@@ -20,6 +20,7 @@ global $wpdb;
 $tables = array(
 	$wpdb->prefix . 'doughboss_voucher_redemptions',
 	$wpdb->prefix . 'doughboss_vouchers',
+	$wpdb->prefix . 'doughboss_order_events',
 	$wpdb->prefix . 'doughboss_order_items',
 	$wpdb->prefix . 'doughboss_orders',
 	$wpdb->prefix . 'doughboss_catering_enquiries',
@@ -48,6 +49,8 @@ foreach ( $post_ids as $post_id ) {
 // Remove options.
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
+delete_option( 'doughboss_migration_error' );
+delete_option( 'doughboss_migration_lock' );
 delete_option( 'doughboss_unreconciled_payments' );
 delete_option( 'doughboss_pospal_unmapped_alerts' );
 delete_option( 'doughboss_delivery_autodisabled' );

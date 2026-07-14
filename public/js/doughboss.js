@@ -927,8 +927,9 @@
 				parent.innerHTML = '';
 				parent.appendChild(el('div', { class: 'db-confirm' }, [
 					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
-					el('h3', { text: res.message }),
+					el('h3', { text: 'Order received' }),
 					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
+					el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }),
 					el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) })
 				]));
 				// Mark this cart widget done BEFORE notifying — the notification
@@ -1143,25 +1144,51 @@
 		}
 
 		function buildPaymentHint(order) {
-			if (order.payment_status === 'paid') {
-				return el('p', { class: 'db-track-paid', text: '✓ Paid' });
+			if (order.payment_status === 'refunded') {
+				return el('p', { class: 'db-track-payment', text: 'Payment: refunded' });
 			}
-			return el('p', { class: 'db-track-pay-hint', text: 'Please pay at the counter — ' + money(order.total) });
+			if (order.payment_status === 'paid') {
+				return el('p', { class: 'db-track-paid', text: order.customer_status === 'cancelled' ? 'Payment: paid — contact the shop for the refund status' : '✓ Paid' });
+			}
+			return el('p', { class: 'db-track-pay-hint', text: order.customer_status === 'cancelled' ? 'Payment: no payment due' : 'Please pay at the counter — ' + money(order.total) });
+		}
+
+		function trackingTime(value, timezone) {
+			if (!value) { return ''; }
+			var date = new Date(value);
+			if (isNaN(date.getTime())) { return ''; }
+			var options = { hour: 'numeric', minute: '2-digit' };
+			if (timezone) { options.timeZone = timezone; }
+			try { return new Intl.DateTimeFormat('en-AU', options).format(date); }
+			catch (ignore) { delete options.timeZone; return new Intl.DateTimeFormat('en-AU', options).format(date); }
 		}
 
 		function renderOrder(order) {
 			result.innerHTML = '';
 			var card = el('div', { class: 'db-track-card' }, [
-				el('h4', { text: 'Order ' + order.order_number })
+				el('h4', { text: 'Order ' + order.order_number }),
+				el('p', { class: 'db-status-badge', text: order.customer_status_label || order.status_label || order.status })
 			]);
 			if (order.status === 'cancelled') {
 				var cancelled = el('p', { class: 'db-track-cancelled', text: 'This order was cancelled' });
 				cancelled.setAttribute('role', 'status');
 				card.appendChild(cancelled);
+				card.appendChild(el('p', { class: 'db-track-note', text: order.payment_status === 'refunded' ? 'Your payment has been refunded.' : 'If you paid online, contact the shop to confirm the refund status.' }));
 			} else {
 				card.appendChild(buildTracker(order));
+				var from = trackingTime(order.promised_ready_from_utc, order.timezone);
+				var by = trackingTime(order.promised_ready_by_utc, order.timezone);
+				var showEstimate = ['confirmed', 'preparing', 'baking'].indexOf(order.status) !== -1;
+				if (showEstimate && from) {
+					card.appendChild(el('p', { class: 'db-track-timing', text: 'Staff ready estimate: ' + (by && by !== from ? from + '–' + by : from) }));
+				}
 				var eta = buildEta(order);
 				if (eta) { card.appendChild(eta); }
+				if (order.customer_status === 'ready_for_pickup') {
+					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready — please collect it from the shop.' }));
+				} else if (order.customer_status === 'ready_for_delivery') {
+					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready for delivery.' }));
+				}
 			}
 			var items = el('ul', { class: 'db-item-list' });
 			(order.items || []).forEach(function (it) {

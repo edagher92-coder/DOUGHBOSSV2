@@ -31,7 +31,12 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
+		if ( self::lifecycle_storage_ready() ) {
+			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
+			delete_option( 'doughboss_migration_error' );
+		} else {
+			update_option( 'doughboss_migration_error', 'Order lifecycle storage is missing or is not using InnoDB.' );
+		}
 	}
 
 	/**
@@ -50,6 +55,7 @@ class DoughBoss_Activator {
 		$charset_collate = $wpdb->get_charset_collate();
 		$orders          = $wpdb->prefix . 'doughboss_orders';
 		$order_items     = $wpdb->prefix . 'doughboss_order_items';
+		$order_events    = $wpdb->prefix . 'doughboss_order_events';
 		$locations       = $wpdb->prefix . 'doughboss_locations';
 		$catering        = $wpdb->prefix . 'doughboss_catering_enquiries';
 		$vouchers        = $wpdb->prefix . 'doughboss_vouchers';
@@ -61,6 +67,7 @@ class DoughBoss_Activator {
 			order_number varchar(32) NOT NULL,
 			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			status varchar(20) NOT NULL DEFAULT 'pending',
+			version bigint(20) unsigned NOT NULL DEFAULT 1,
 			order_type varchar(20) NOT NULL DEFAULT 'pickup',
 			customer_name varchar(191) NOT NULL DEFAULT '',
 			customer_email varchar(191) NOT NULL DEFAULT '',
@@ -81,6 +88,14 @@ class DoughBoss_Activator {
 			seen_at datetime NULL DEFAULT NULL,
 			acknowledged_at datetime NULL DEFAULT NULL,
 			accepted_at datetime NULL DEFAULT NULL,
+			status_changed_at datetime NULL DEFAULT NULL,
+			promised_ready_from_utc datetime NULL DEFAULT NULL,
+			promised_ready_by_utc datetime NULL DEFAULT NULL,
+			timezone_snapshot varchar(64) NOT NULL DEFAULT '',
+			cooking_started_at datetime NULL DEFAULT NULL,
+			ready_at datetime NULL DEFAULT NULL,
+			completed_at datetime NULL DEFAULT NULL,
+			cancelled_at datetime NULL DEFAULT NULL,
 			created_at datetime NULL DEFAULT NULL,
 			updated_at datetime NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
@@ -88,8 +103,28 @@ class DoughBoss_Activator {
 			KEY status (status),
 			KEY customer_email (customer_email),
 			KEY location_id (location_id),
+			KEY promised_ready_from (location_id,promised_ready_from_utc),
 			KEY payment_intent_id (payment_intent_id)
-		) {$charset_collate};";
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_events = "CREATE TABLE {$order_events} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			order_id bigint(20) unsigned NOT NULL,
+			order_version bigint(20) unsigned NOT NULL,
+			event_type varchar(32) NOT NULL DEFAULT 'status_changed',
+			from_status varchar(20) NOT NULL DEFAULT '',
+			to_status varchar(20) NOT NULL DEFAULT '',
+			actor_type varchar(20) NOT NULL DEFAULT 'system',
+			actor_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			reason_code varchar(32) NOT NULL DEFAULT '',
+			event_key varchar(191) NOT NULL,
+			occurred_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY event_key (event_key),
+			UNIQUE KEY order_version (order_id,order_version),
+			KEY order_time (order_id,occurred_at),
+			KEY occurred_at (occurred_at)
+		) ENGINE=InnoDB {$charset_collate};";
 
 		$sql_items = "CREATE TABLE {$order_items} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -103,7 +138,7 @@ class DoughBoss_Activator {
 			line_total decimal(10,2) NOT NULL DEFAULT 0.00,
 			PRIMARY KEY  (id),
 			KEY order_id (order_id)
-		) {$charset_collate};";
+		) ENGINE=InnoDB {$charset_collate};";
 
 		$sql_locations = "CREATE TABLE {$locations} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -227,11 +262,67 @@ class DoughBoss_Activator {
 
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
+		dbDelta( $sql_events );
 		dbDelta( $sql_locations );
 		dbDelta( $sql_catering );
 		dbDelta( $sql_vouchers );
 		dbDelta( $sql_redemptions );
 		dbDelta( $sql_pospal_outbox );
+	}
+
+	/**
+	 * Verify that the three lifecycle tables exist and support transactions.
+	 *
+	 * @return bool
+	 */
+	public static function lifecycle_storage_ready() {
+		global $wpdb;
+		$orders = $wpdb->prefix . 'doughboss_orders';
+		$events = $wpdb->prefix . 'doughboss_order_events';
+		$tables = array(
+			$orders,
+			$wpdb->prefix . 'doughboss_order_items',
+			$events,
+		);
+
+		foreach ( $tables as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',
+					$table
+				)
+			);
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		$order_columns = array(
+			'version', 'status_changed_at', 'promised_ready_from_utc',
+			'promised_ready_by_utc', 'timezone_snapshot', 'cooking_started_at',
+			'ready_at', 'completed_at', 'cancelled_at',
+		);
+		$event_columns = array(
+			'order_id', 'order_version', 'event_type', 'from_status', 'to_status',
+			'actor_type', 'actor_id', 'reason_code', 'event_key', 'occurred_at',
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$actual_order_columns = $wpdb->get_col( "SHOW COLUMNS FROM {$orders}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$actual_event_columns = $wpdb->get_col( "SHOW COLUMNS FROM {$events}" );
+		if ( array_diff( $order_columns, (array) $actual_order_columns ) || array_diff( $event_columns, (array) $actual_event_columns ) ) {
+			return false;
+		}
+
+		// Both uniqueness constraints are required for retry idempotency and to
+		// guarantee one event for each order version.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$event_key_unique = $wpdb->get_var( "SHOW INDEX FROM {$events} WHERE Key_name = 'event_key' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$order_version_unique = $wpdb->get_var( "SHOW INDEX FROM {$events} WHERE Key_name = 'order_version' AND Non_unique = 0" );
+
+		return (bool) $event_key_unique && (bool) $order_version_unique;
 	}
 
 	/**

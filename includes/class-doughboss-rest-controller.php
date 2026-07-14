@@ -694,6 +694,18 @@ class DoughBoss_REST_Controller {
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_key',
 					),
+					'expected_version' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+					'event_key' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'reason_code' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_key',
+					),
 				),
 			)
 		);
@@ -756,6 +768,14 @@ class DoughBoss_REST_Controller {
 					'eta' => array(
 						'default'           => 0,
 						'sanitize_callback' => 'absint',
+					),
+					'expected_version' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+					'event_key' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
 					),
 				),
 			)
@@ -2863,12 +2883,22 @@ class DoughBoss_REST_Controller {
 	public function admin_update_status( WP_REST_Request $request ) {
 		$order_id = absint( $request->get_param( 'id' ) );
 		$status   = sanitize_key( $request->get_param( 'status' ) );
-
-		if ( ! DoughBoss_Order::update_status( $order_id, $status ) ) {
-			return new WP_Error( 'doughboss_status', __( 'Could not update that order.', 'doughboss' ), array( 'status' => 400 ) );
+		if ( 'cancelled' === $status && ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
+			return new WP_Error( 'doughboss_cancel_forbidden', __( 'A manager must cancel an order.', 'doughboss' ), array( 'status' => 403 ) );
 		}
+		$result   = DoughBoss_Order::transition(
+			$order_id,
+			$status,
+			array(
+				'expected_version' => absint( $request->get_param( 'expected_version' ) ),
+				'event_key'       => sanitize_text_field( $request->get_param( 'event_key' ) ),
+				'actor_type'      => 'staff',
+				'actor_id'        => get_current_user_id(),
+				'reason_code'     => sanitize_key( $request->get_param( 'reason_code' ) ),
+			)
+		);
 
-		return rest_ensure_response( array( 'success' => true, 'status' => $status ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
 	}
 
 	/**
@@ -2939,13 +2969,19 @@ class DoughBoss_REST_Controller {
 	 */
 	public function admin_accept( WP_REST_Request $request ) {
 		$order_id = absint( $request->get_param( 'id' ) );
-		$eta      = absint( $request->get_param( 'eta' ) );
+		$result   = DoughBoss_Order::transition(
+			$order_id,
+			'confirmed',
+			array(
+				'expected_version' => absint( $request->get_param( 'expected_version' ) ),
+				'event_key'       => sanitize_text_field( $request->get_param( 'event_key' ) ),
+				'actor_type'      => 'staff',
+				'actor_id'        => get_current_user_id(),
+				'eta_minutes'     => absint( $request->get_param( 'eta' ) ),
+			)
+		);
 
-		if ( ! DoughBoss_Order::accept( $order_id, $eta ) ) {
-			return new WP_Error( 'doughboss_accept', __( 'Could not accept that order.', 'doughboss' ), array( 'status' => 400 ) );
-		}
-
-		return rest_ensure_response( array( 'success' => true, 'status' => 'confirmed', 'eta' => $eta ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
 	}
 
 	/**
