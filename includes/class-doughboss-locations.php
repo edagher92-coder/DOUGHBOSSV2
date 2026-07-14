@@ -93,6 +93,23 @@ class DoughBoss_Locations {
 	}
 
 	/**
+	 * Effective single-location mode.
+	 *
+	 * The stored toggle is only honoured when exactly one active shop exists.
+	 * This fail-closed rule prevents a stale migration/default from silently
+	 * routing a multi-shop order to whichever row happens to sort first.
+	 *
+	 * @return int The sole active location id, or 0 when the mode is not effective.
+	 */
+	public static function single_location_id() {
+		if ( ! DoughBoss_Settings::get( 'single_location_mode', 1 ) ) {
+			return 0;
+		}
+		$active = self::all( true );
+		return 1 === count( $active ) ? (int) $active[0]->id : 0;
+	}
+
+	/**
 	 * Sanitize a raw input row into a storable record.
 	 *
 	 * @param array $data Raw input.

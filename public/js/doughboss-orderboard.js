@@ -128,26 +128,43 @@
 	/* ----------------------------------------------------------------- API */
 
 	function api(path, method, body) {
+		var headers = { 'Content-Type': 'application/json', 'X-WP-Nonce': cfg.nonce };
+		if (cfg.boardKey) { headers['X-DoughBoss-Board-Key'] = cfg.boardKey; }
 		return fetch(cfg.restUrl + path, {
 			method: method || 'GET',
-			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': cfg.nonce },
+			headers: headers,
 			body: body ? JSON.stringify(body) : undefined
-		}).then(function (r) { return r.json().catch(function () { return {}; }); });
+		}).then(function (r) {
+			return r.json().catch(function () { return {}; }).then(function (data) {
+				if (!r.ok) { throw new Error(data.message || 'Request failed.'); }
+				return data;
+			});
+		});
 	}
 
 	function accept(id, eta) {
 		localAck[id] = true;
-		api('/admin/order/' + id + '/accept', 'POST', { eta: eta || 0 }).then(load);
+		api('/admin/order/' + id + '/accept', 'POST', { eta: eta || 0 }).then(load).catch(function (error) {
+			delete localAck[id];
+			var message = error.message || 'Could not accept the order.';
+			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		});
 	}
 
 	function setStatus(id, status) {
-		api('/admin/order/' + id + '/status', 'POST', { status: status }).then(load);
+		api('/admin/order/' + id + '/status', 'POST', { status: status }).then(load).catch(function (error) {
+			var message = error.message || 'Could not update the order.';
+			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		});
 	}
 
 	function acknowledgeAll(ids) {
 		ids.forEach(function (id) {
 			localAck[id] = true;
-			api('/admin/order/' + id + '/ack', 'POST', {});
+			api('/admin/order/' + id + '/ack', 'POST', {}).catch(function (error) {
+				delete localAck[id];
+				if (statusEl) { statusEl.textContent = error.message || 'Could not acknowledge an order.'; }
+			});
 		});
 		stopAlert();
 		render(lastOrders);

@@ -87,7 +87,7 @@ DoughBoss stores everything in standard WordPress mechanisms; there is no separa
 - Any uploaded media (menu photography, brand assets) referenced by menu items — standard `wp-content/uploads` backup.
 
 ### Explicitly *not* part of the WordPress backup, and *not* covered by any backup discussed above
-- The **staff Console** (`app/`) stores its WordPress Application Password in the browser's `localStorage` on whatever tablet it's installed on — that credential lives on the device, not in WordPress data, and isn't restorable from a site backup. If a kitchen tablet is lost/replaced, that Application Password should be revoked from **Users → your user → Application Passwords** in wp-admin and a new one issued — it isn't a "restore from backup" scenario.
+- The **staff Console** (`app/`) keeps its WordPress Application Password in memory only; it is cleared by sign-out, reload or tab/browser close. Only the non-secret site address, username and selected tab are stored in `localStorage`. If a signed-in kitchen tablet is lost/replaced, revoke that Application Password from **Users → your user → Application Passwords** in wp-admin and issue a new one — it is not a backup/restore item.
 - The **demo site** (`demo/`) is static HTML deployed to GitHub Pages via `.github/workflows/pages.yml` — it's a marketing artifact, not part of the live ordering system, and has no data to back up.
 
 ---

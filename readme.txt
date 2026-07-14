@@ -55,11 +55,10 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 == Changelog ==
 
 = 2.17.0 =
-* New: **Single-location / pickup-only mode.** A `single_location_mode`
-  setting (defaults on) hides the shop picker and delivery toggle across the
-  storefront and pins every order to the single active shop. Matches the
-  "For now, pickup only from Revesby" launch scope. Flip the toggle off to
-  re-enable multi-shop ordering.
+* New: **Single-location / pickup-only mode.** When exactly one shop is active,
+  the owner can enable a guarded `single_location_mode` setting that hides the
+  shop picker and delivery toggle, rejects delivery server-side, and pins every
+  order to that sole shop. Multi-shop sites fail closed and cannot enable it.
 * New: **Storefront rebrand.** Snow Boss is retired; the "Snow Boss" section
   is now "Offers & News" (Dough Boss only, single Instagram follow gate).
   The "Locations" tab is renamed "Contact Us" (backend data model unchanged).
@@ -67,25 +66,27 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 * Change: voucher campaign `dough5` (prefix `DOUGH-`) replaces `snow5` (prefix
   `SNOW-`); the legacy `snow5` campaign is dormant but every voucher already
   issued under it stays redeemable at the till.
-* Data: 1.10.0 migration seeds `single_location_mode` = 1 and turns
-  `enable_delivery` off on any site running one active shop; multi-shop
-  delivery sites are deliberately left alone.
+* Data: 1.10.0 migration enables `single_location_mode` only for sites with no
+  more than one active shop and turns delivery off there. Multi-shop sites are
+  seeded with the mode off and their delivery setting is left alone.
 
 = 2.16.0 =
-* New: **POSPal push outbox** — online orders that failed to reach the till
-  (network blip, POSPal outage) are now retried automatically on a durable
+* New: **POSPal push outbox** — online orders rejected by POSPal with an explicit
+  retryable error are now retried automatically on a durable
   outbox with exponential backoff (60s / 5 min / 30 min, capped at 5 tries).
   A cron worker owns dispatch under an atomic pending → in_flight claim, so
-  concurrent sweeps can never double-push the same order. Fully off unless
-  "Push online orders" is enabled.
+  concurrent local sweeps share one row. Every transport error or abandoned
+  in-flight request is treated as ambiguous: it stops for operator review and
+  is not retried until staff confirm the order is absent from the till.
+  Fully off unless "Push online orders" is enabled.
 * New: **Failed-push visibility** — wp-admin surfaces a dismissible notice
   when orders exhaust their retry budget or are still retrying after several
-  attempts, with a "Re-send now" button to reset them.
-* New: **Hourly POSPal reconciliation** — recent orders DoughBoss thinks it
-  pushed are re-checked against the till via `queryOrderByNo`; genuine gaps
-  are automatically re-enqueued (only a positive orderNo/daySeq counts as
-  "present" — ambiguous responses are skipped so partial outages can't
-  trigger duplicate ring-ins). Runs only when POSPal push is on.
+  attempts. Explicit failures may be retried in bulk; ambiguous transport or
+  abandoned-worker outcomes require a per-order till check and confirmation.
+* New: **Hourly POSPal outbox maintenance** — successful rows are retained for
+  30 days, then pruned. Automatic remote re-push is deliberately disabled until
+  dispatch persists POSPal's stable `orderNo`; this prevents an empty or
+  ambiguous lookup from duplicating a till order.
 * New: **Visual POSPal product mapping** — a settings-page table that loads
   POSPal's catalogue and auto-matches menu items by name, replacing the
   previous WP-CLI-only setup for mapping menu items to POSPal product uids.

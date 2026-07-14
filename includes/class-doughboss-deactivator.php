@@ -23,6 +23,10 @@ class DoughBoss_Deactivator {
 	 * @return void
 	 */
 	public static function deactivate() {
+		// A deactivated plugin must not leave recurring or single-run POSPal work
+		// queued in WP-Cron. Customer/order data remains intact for reactivation.
+		wp_clear_scheduled_hook( 'doughboss_pospal_outbox_dispatch' );
+		wp_clear_scheduled_hook( 'doughboss_pospal_outbox_reconcile' );
 		flush_rewrite_rules();
 	}
 }

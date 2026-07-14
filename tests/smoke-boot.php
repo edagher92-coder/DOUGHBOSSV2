@@ -98,6 +98,16 @@ ok( method_exists( 'DoughBoss_Settings', 'trusted_proxy_header' ) && 'X-Forwarde
 ok( array_key_exists( 'board_access_key', $defaults ), "defaults() has 'board_access_key' key" );
 ok( isset( $defaults['board_access_key'] ) && '' === $defaults['board_access_key'], "'board_access_key' defaults to '' (extra gate off)" );
 ok( method_exists( 'DoughBoss_Settings', 'board_access_key' ) && '' === DoughBoss_Settings::board_access_key(), 'DoughBoss_Settings::board_access_key() reads \'\' with no option set' );
+ok( method_exists( 'DoughBoss_Settings', 'verify_board_access_key' ), 'Order Board key has a central verifier' );
+
+$board_test_key = 'BoardKey23456789ABCDEFGH';
+update_option( DoughBoss_Settings::OPTION_KEY, array( 'board_access_key' => hash( 'sha256', $board_test_key ) ) );
+$board_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
+$GLOBALS['__db_caps_override'] = array( 'manage_doughboss_kds' );
+ok( true === $board_controller->verify_board_access( new WP_REST_Request( array(), array( 'X-DoughBoss-Board-Key' => $board_test_key ) ) ), 'correct Order Board key unlocks KDS REST access' );
+ok( is_wp_error( $board_controller->verify_board_access( new WP_REST_Request( array(), array( 'X-DoughBoss-Board-Key' => 'wrong-key' ) ) ) ), 'wrong Order Board key blocks KDS REST access' );
+$GLOBALS['__db_caps_override'] = null;
+update_option( DoughBoss_Settings::OPTION_KEY, array() );
 
 // 4. REST surface registered routes.
 section( 'REST surface' );
@@ -107,6 +117,22 @@ ok( in_array( 'doughboss/v1/config', $routes, true ) || (bool) preg_grep( '#doug
 ok( (bool) preg_grep( '#doughboss/v1/menu#', $routes ), '/menu route present' );
 ok( (bool) preg_grep( '#doughboss/v1/checkout#', $routes ), '/checkout route present' );
 ok( (bool) preg_grep( '#doughboss/v1/admin/catering$#', $routes ), 'GET /admin/catering route present' );
+$payment_route = $GLOBALS['__db_rest_args']['doughboss/v1/payment-intent'] ?? array();
+$payment_args  = isset( $payment_route['args'] ) ? $payment_route['args'] : array();
+ok( isset( $payment_args['location_id'] ), 'POST /payment-intent declares location_id validation' );
+$remove_voucher_route = $GLOBALS['__db_rest_args']['doughboss/v1/cart/remove-voucher'] ?? array();
+$remove_voucher_args  = isset( $remove_voucher_route['args'] ) ? $remove_voucher_route['args'] : array();
+ok( ! isset( $remove_voucher_args['location_id'] ), 'POST /cart/remove-voucher does not expose unrelated location_id' );
+$board_routes = array(
+	'doughboss/v1/admin/orders',
+	'doughboss/v1/admin/order/(?P<id>\d+)/status',
+	'doughboss/v1/admin/order/(?P<id>\d+)/ack',
+	'doughboss/v1/admin/order/(?P<id>\d+)/accept',
+);
+foreach ( $board_routes as $board_route ) {
+	$permission = $GLOBALS['__db_rest_args'][ $board_route ]['permission_callback'] ?? null;
+	ok( is_array( $permission ) && isset( $permission[1] ) && 'verify_board_access' === $permission[1], $board_route . ' requires the board key verifier' );
+}
 // A real count check, not just ">0", so a route silently failing to register
 // would fail this. Bumped to 44 with the /pospal/products and
 // /pospal/product-map routes added for the visual product-mapping screen.
@@ -214,6 +240,12 @@ ok( method_exists( 'DoughBoss_POSPal_Sync', 'on_voucher_redeemed' ), 'revoke hoo
 // 9. POSPal outbox: table declared + gated + retry curve constants sane.
 section( 'POSPal outbox' );
 ok( class_exists( 'DoughBoss_POSPal_Outbox' ), 'DoughBoss_POSPal_Outbox class exists' );
+ok( method_exists( 'DoughBoss_POSPal_Outbox', 'ensure_dispatch_scheduled' ), 'POSPal outbox can re-arm durable dispatch after activation' );
+ok( method_exists( 'DoughBoss_POSPal_Outbox', 'list_ambiguous_rows' ), 'ambiguous POSPal outcomes have a dedicated operator review query' );
+$outbox_source = file_get_contents( DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-pospal-outbox.php' );
+ok( false !== strpos( $outbox_source, "last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight')" ), 'bulk POSPal retry excludes ambiguous remote outcomes' );
+ok( false !== strpos( $outbox_source, 'allow_ambiguous' ), 'ambiguous POSPal retry requires an explicit per-row release path' );
+ok( false !== strpos( $outbox_source, 'expected_updated_at' ), 'ambiguous POSPal retry is bound to the reviewed attempt state' );
 ok( defined( 'DoughBoss_POSPal_Outbox::MAX_ATTEMPTS' ) && 5 === DoughBoss_POSPal_Outbox::MAX_ATTEMPTS, 'MAX_ATTEMPTS === 5' );
 ok( count( DoughBoss_POSPal_Outbox::BACKOFF_SECONDS ) >= DoughBoss_POSPal_Outbox::MAX_ATTEMPTS,
 	'BACKOFF_SECONDS covers every attempt slot' );

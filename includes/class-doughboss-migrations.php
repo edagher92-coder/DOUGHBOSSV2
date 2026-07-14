@@ -276,16 +276,19 @@ class DoughBoss_Migrations {
 		}
 		$changed = false;
 
-		// Seed the new toggle at 1 (single-location / pickup-only) if unset.
+		$active = DoughBoss_Locations::all( true );
+
+		// Enable only for a genuine single-shop install. Multi-shop sites must
+		// opt out by default so an upgrade cannot silently pin every order to the
+		// first sorted location.
 		if ( ! isset( $settings['single_location_mode'] ) ) {
-			$settings['single_location_mode'] = 1;
+			$settings['single_location_mode'] = count( $active ) <= 1 ? 1 : 0;
 			$changed = true;
 		}
 
 		// Auto-narrow to pickup-only if the site currently runs 0 or 1 active
 		// shops — matches the discovery doc's "For now, pickup only from Revesby"
 		// scope. A multi-shop delivery site is deliberately left alone.
-		$active = DoughBoss_Locations::all( true );
 		if ( count( $active ) <= 1 && ! empty( $settings['enable_delivery'] ) ) {
 			$settings['enable_delivery'] = 0;
 			$changed = true;
