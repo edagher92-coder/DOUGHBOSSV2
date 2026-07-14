@@ -54,6 +54,7 @@ class DoughBoss_Activator {
 		$catering        = $wpdb->prefix . 'doughboss_catering_enquiries';
 		$vouchers        = $wpdb->prefix . 'doughboss_vouchers';
 		$redemptions     = $wpdb->prefix . 'doughboss_voucher_redemptions';
+		$pospal_outbox   = $wpdb->prefix . 'doughboss_pospal_outbox';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -205,12 +206,32 @@ class DoughBoss_Activator {
 			KEY pospal_ticket_no (pospal_ticket_no)
 		) {$charset_collate};";
 
+		$sql_pospal_outbox = "CREATE TABLE {$pospal_outbox} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			kind varchar(32) NOT NULL DEFAULT 'order_push',
+			entity_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			store_index tinyint(3) unsigned NOT NULL DEFAULT 1,
+			payload_json longtext NULL,
+			idempotency_key varchar(191) NOT NULL DEFAULT '',
+			attempts tinyint(3) unsigned NOT NULL DEFAULT 0,
+			status varchar(20) NOT NULL DEFAULT 'pending',
+			last_error varchar(64) NOT NULL DEFAULT '',
+			next_attempt_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY idempotency_key (idempotency_key),
+			KEY status_next (status,next_attempt_at),
+			KEY entity_id (entity_id)
+		) {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
 		dbDelta( $sql_locations );
 		dbDelta( $sql_catering );
 		dbDelta( $sql_vouchers );
 		dbDelta( $sql_redemptions );
+		dbDelta( $sql_pospal_outbox );
 	}
 
 	/**

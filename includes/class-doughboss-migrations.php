@@ -61,6 +61,7 @@ class DoughBoss_Migrations {
 				'1.6.0' => 'upgrade_to_1_6_0',
 				'1.7.0' => 'upgrade_to_1_7_0',
 				'1.8.0' => 'upgrade_to_1_8_0',
+				'1.9.0' => 'upgrade_to_1_9_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -239,5 +240,19 @@ class DoughBoss_Migrations {
 		if ( ! $existing ) {
 			$wpdb->query( "ALTER TABLE {$catering} ADD KEY balance_intent_id (balance_intent_id)" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
 		}
+	}
+
+	/**
+	 * 1.9.0 — POSPal push outbox (durable retry for the till mirror).
+	 *
+	 * The new {prefix}doughboss_pospal_outbox table is created by dbDelta via
+	 * create_tables(); nothing to backfill. The outbox is only used by NEW
+	 * orders placed after upgrade — orders placed before the upgrade never had
+	 * a retry story and stay unchanged.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_9_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
 	}
 }

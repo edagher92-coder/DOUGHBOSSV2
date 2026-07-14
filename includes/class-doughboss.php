@@ -81,6 +81,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-pospal.php';
 		require_once $dir . 'class-doughboss-coupon-code.php';
 		require_once $dir . 'class-doughboss-voucher.php';
+		require_once $dir . 'class-doughboss-pospal-outbox.php';
 		require_once $dir . 'class-doughboss-pospal-sync.php';
 		require_once $dir . 'class-doughboss-pospal-orders.php';
 		require_once $dir . 'class-doughboss-mercure.php';
@@ -128,6 +129,11 @@ final class DoughBoss {
 		// POSPal voucher mirror (grant on claim, revoke on redeem). Static hooks;
 		// fully dormant until POSPal + a coupon-rule UID are configured.
 		DoughBoss_POSPal_Sync::init();
+
+		// Durable POSPal push outbox — the cron worker that owns retries. Must
+		// register before Orders::init() so its cron hook is bound before any
+		// enqueue schedules a sweep.
+		DoughBoss_POSPal_Outbox::init();
 
 		// POSPal order push (mirror placed online orders onto the till). Off by
 		// default; dormant until "push orders" is on AND a product map exists.

@@ -75,14 +75,21 @@ class DoughBoss_POSPal_Orders {
 			return;
 		}
 
-		// Fire-and-forget: the mirror must never stall the checkout request, so the
-		// push is dispatched without waiting for POSPal's response.
-		$result = DoughBoss_POSPal::push_order( $build['body'], is_array( $creds ) ? $creds : null, false );
-		if ( is_wp_error( $result ) ) {
-			self::log( 'push failed for #' . $order_id . ' (' . $result->get_error_code() . ')' );
+		// Which store index this order rings into (1/2/3). Default 1 (primary).
+		// Filterable so a site can route by the order's location, alongside the
+		// per-store credentials filter above.
+		$store_index = (int) apply_filters( 'doughboss_pospal_order_store_index', 1, $order, $creds );
+		$store_index = max( 1, $store_index );
+
+		// Enqueue on the durable outbox — the cron worker owns the actual push and
+		// its retry curve. The checkout request never waits on POSPal here, and a
+		// POSPal blip no longer silently drops the till copy.
+		$row_id = DoughBoss_POSPal_Outbox::enqueue_order_push( $order_id, $store_index, $build['body'] );
+		if ( ! $row_id ) {
+			self::log( 'enqueue failed for #' . $order_id );
 			return;
 		}
-		self::log( 'push dispatched (non-blocking) for #' . $order_id );
+		self::log( 'enqueued #' . $order_id . ' as outbox row #' . $row_id . ' (store ' . $store_index . ')' );
 	}
 
 	/**

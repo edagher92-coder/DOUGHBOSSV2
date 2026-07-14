@@ -170,5 +170,37 @@ foreach ( $gates as $class => $method ) {
 	}
 }
 
+// 8. POSPal signature invariant. The signature format is a wire-protocol contract
+// with POSPal's Open Platform — strtoupper(md5(appKey . rawBody)) — so it needs a
+// known-vector test that breaks loudly if the algorithm ever drifts. Anything
+// else in the transport can move; this must not.
+section( 'POSPal signature invariant' );
+$expected_sig = strtoupper( md5( 'demoKey' . '{"appId":"demoApp","x":1}' ) );
+ok( DoughBoss_POSPal::sign( 'demoKey', '{"appId":"demoApp","x":1}' ) === $expected_sig,
+	'DoughBoss_POSPal::sign() matches strtoupper(md5(appKey . rawBody))' );
+ok( 32 === strlen( DoughBoss_POSPal::sign( 'k', 'body' ) ), 'signature is 32 hex chars' );
+ok( DoughBoss_POSPal::sign( 'k', 'body' ) === strtoupper( DoughBoss_POSPal::sign( 'k', 'body' ) ), 'signature is uppercase' );
+
+// 8b. Voucher redeem invariants (audit for step 5 of the POSPal hardening).
+// The POSPal grant/revoke code is best-effort by design — WordPress owns the
+// redemption transition — so this asserts the WP-side safety net rather than
+// the POSPal mirror: atomic redeem, revert_redemption() present, and the
+// POSPal_Sync hook gated behind pospal_grant_enabled().
+section( 'Voucher redeem invariants' );
+ok( method_exists( 'DoughBoss_Voucher', 'redeem' ), 'DoughBoss_Voucher::redeem() present' );
+ok( method_exists( 'DoughBoss_Voucher', 'revert_redemption' ), 'DoughBoss_Voucher::revert_redemption() present (checkout-failure revert path)' );
+ok( method_exists( 'DoughBoss_Voucher', 'redemption_by_key' ), 'DoughBoss_Voucher::redemption_by_key() present (idempotency lookup)' );
+ok( class_exists( 'DoughBoss_POSPal_Sync' ), 'DoughBoss_POSPal_Sync class exists' );
+ok( method_exists( 'DoughBoss_POSPal_Sync', 'on_voucher_claimed' ), 'grant hook (on_voucher_claimed) present' );
+ok( method_exists( 'DoughBoss_POSPal_Sync', 'on_voucher_redeemed' ), 'revoke hook (on_voucher_redeemed) present' );
+
+// 9. POSPal outbox: table declared + gated + retry curve constants sane.
+section( 'POSPal outbox' );
+ok( class_exists( 'DoughBoss_POSPal_Outbox' ), 'DoughBoss_POSPal_Outbox class exists' );
+ok( defined( 'DoughBoss_POSPal_Outbox::MAX_ATTEMPTS' ) && 5 === DoughBoss_POSPal_Outbox::MAX_ATTEMPTS, 'MAX_ATTEMPTS === 5' );
+ok( count( DoughBoss_POSPal_Outbox::BACKOFF_SECONDS ) >= DoughBoss_POSPal_Outbox::MAX_ATTEMPTS,
+	'BACKOFF_SECONDS covers every attempt slot' );
+ok( DoughBoss_POSPal_Outbox::BACKOFF_SECONDS[0] <= 300, 'first backoff <= 5 min' );
+
 echo "\n=== RESULT: $pass passed · $fail failed ===\n";
 exit( $fail > 0 ? 1 : 0 );

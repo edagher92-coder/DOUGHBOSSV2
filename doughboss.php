@@ -23,12 +23,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Current plugin version.
  */
-define( 'DOUGHBOSS_VERSION', '2.15.0' );
+define( 'DOUGHBOSS_VERSION', '2.16.0' );
 
 /**
  * Database schema version. Bump when the schema in the activator changes.
  */
-define( 'DOUGHBOSS_DB_VERSION', '1.8.0' );
+define( 'DOUGHBOSS_DB_VERSION', '1.9.0' );
 
 define( 'DOUGHBOSS_PLUGIN_FILE', __FILE__ );
 define( 'DOUGHBOSS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );

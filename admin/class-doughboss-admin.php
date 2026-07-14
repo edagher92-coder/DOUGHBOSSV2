@@ -38,6 +38,8 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_export_report', array( $this, 'handle_export_report' ) );
 		add_action( 'admin_post_doughboss_clear_pospal_alerts', array( $this, 'handle_clear_pospal_alerts' ) );
 		add_action( 'admin_notices', array( $this, 'render_pospal_unmapped_notice' ) );
+		add_action( 'admin_post_doughboss_pospal_outbox_resend', array( $this, 'handle_pospal_outbox_resend' ) );
+		add_action( 'admin_notices', array( $this, 'render_pospal_outbox_notice' ) );
 	}
 
 	/**
@@ -1069,6 +1071,78 @@ JS;
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>#db-pospal-map-load"><?php esc_html_e( 'Map them in Settings', 'doughboss' ); ?></a>
 				&middot;
 				<a href="<?php echo esc_url( $clear_url ); ?>"><?php esc_html_e( 'Dismiss', 'doughboss' ); ?></a>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Handle the "Re-send now" button on the outbox notice: reset every terminal
+	 * outbox row to pending and schedule the cron worker immediately.
+	 *
+	 * @return void
+	 */
+	public function handle_pospal_outbox_resend() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_pospal_outbox_resend' );
+
+		DoughBoss_POSPal_Outbox::reset_for_retry();
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * admin_notices: surface POSPal outbox rows that either exhausted their retry
+	 * budget (terminal) or are still retrying after 3+ attempts (borderline).
+	 * The operator can hit "Re-send now" to reset every terminal row for retry.
+	 * Silent when the outbox is clean — no notice noise on a healthy site.
+	 *
+	 * @return void
+	 */
+	public function render_pospal_outbox_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( ! class_exists( 'DoughBoss_POSPal_Outbox' ) ) {
+			return;
+		}
+		$counts = DoughBoss_POSPal_Outbox::counts_for_alert();
+		if ( 0 === (int) $counts['terminal'] && 0 === (int) $counts['retrying'] ) {
+			return;
+		}
+
+		$resend_url = wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_pospal_outbox_resend' ), 'doughboss_pospal_outbox_resend' );
+		?>
+		<div class="notice notice-warning">
+			<p>
+				<?php
+				if ( $counts['terminal'] > 0 ) {
+					printf(
+						/* translators: %d: number of failed POSPal push rows. */
+						esc_html( _n( '%d order didn\'t reach the POSPal till after 5 tries.', '%d orders didn\'t reach the POSPal till after 5 tries.', $counts['terminal'], 'doughboss' ) ),
+						(int) $counts['terminal']
+					);
+				}
+				if ( $counts['retrying'] > 0 ) {
+					if ( $counts['terminal'] > 0 ) {
+						echo ' ';
+					}
+					printf(
+						/* translators: %d: number of POSPal push rows still retrying. */
+						esc_html( _n( '%d order is still retrying.', '%d orders are still retrying.', $counts['retrying'], 'doughboss' ) ),
+						(int) $counts['retrying']
+					);
+				}
+				echo ' ';
+				?>
+				<a href="<?php echo esc_url( $resend_url ); ?>"><?php esc_html_e( 'Re-send now', 'doughboss' ); ?></a>
 			</p>
 		</div>
 		<?php
