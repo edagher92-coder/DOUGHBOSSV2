@@ -41,6 +41,9 @@ jobs:
       - name: Boot smoke test (WP-stub — proves the plugin boots, routes register, integrations dormant)
         run: php tests/smoke-boot.php
 
+      - name: Versioned lifecycle transaction test
+        run: php tests/lifecycle.php
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest

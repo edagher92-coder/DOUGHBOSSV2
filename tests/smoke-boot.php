@@ -82,6 +82,39 @@ try {
 	ok( false, 'DoughBoss_Order::query_board() threw: ' . $e->getMessage() );
 }
 
+echo "\n== Versioned order lifecycle ==\n";
+ok( '1.11.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.11.0' );
+ok( method_exists( 'DoughBoss_Order', 'transition' ), 'DoughBoss_Order::transition() exists' );
+ok( method_exists( 'DoughBoss_Order', 'events' ), 'DoughBoss_Order::events() exists' );
+ok( DoughBoss_Order::can_transition( 'pending', 'confirmed' ), 'pending can be accepted' );
+ok( ! DoughBoss_Order::can_transition( 'pending', 'completed' ), 'pending cannot jump to completed' );
+ok( ! DoughBoss_Order::can_transition( 'confirmed', 'ready' ), 'confirmed cannot skip cooking' );
+ok( DoughBoss_Order::can_transition( 'confirmed', 'preparing' ), 'confirmed can start cooking' );
+ok( DoughBoss_Order::can_transition( 'preparing', 'ready' ), 'preparing can be marked ready' );
+ok( DoughBoss_Order::can_transition( 'ready', 'completed', 'pickup' ), 'pickup ready can complete' );
+ok( DoughBoss_Order::can_transition( 'ready', 'out_for_delivery', 'delivery' ), 'delivery ready can leave the shop' );
+ok( ! DoughBoss_Order::can_transition( 'ready', 'completed', 'delivery' ), 'delivery cannot be marked delivered before leaving the shop' );
+ok( ! DoughBoss_Order::can_transition( 'ready', 'out_for_delivery', 'pickup' ), 'pickup cannot enter delivery state' );
+ok( empty( DoughBoss_Order::allowed_transitions( 'completed' ) ), 'completed is terminal' );
+ok( empty( DoughBoss_Order::allowed_transitions( 'cancelled' ) ), 'cancelled is terminal' );
+
+$customer_pending = DoughBoss_Order::customer_projection( (object) array( 'status' => 'pending', 'order_type' => 'pickup' ) );
+$customer_baking  = DoughBoss_Order::customer_projection( (object) array( 'status' => 'baking', 'order_type' => 'pickup' ) );
+$customer_done    = DoughBoss_Order::customer_projection( (object) array( 'status' => 'completed', 'order_type' => 'pickup' ) );
+$delivery_ready   = DoughBoss_Order::customer_projection( (object) array( 'status' => 'ready', 'order_type' => 'delivery' ) );
+ok( 'received' === $customer_pending['status'], 'pending projects to customer received' );
+ok( 'preparing' === $customer_baking['status'], 'baking projects to customer preparing' );
+ok( 'collected' === $customer_done['status'], 'completed pickup projects to collected' );
+ok( 'ready_for_delivery' === $delivery_ready['status'], 'ready delivery never projects to pickup wording' );
+$late = DoughBoss_Order::timing_projection(
+	(object) array(
+		'status'                    => 'preparing',
+		'promised_ready_by_utc'     => '2026-07-06 00:10:00',
+	),
+	'2026-07-06 00:11:00'
+);
+ok( 'estimate_passed' === $late['status'], 'passed promise derives a warning without changing status' );
+
 // 3b. Settings defaults for the new proxy-aware rate limiting keys.
 section( 'Settings defaults' );
 $defaults = DoughBoss_Settings::defaults();
@@ -123,6 +156,22 @@ ok( isset( $payment_args['location_id'] ), 'POST /payment-intent declares locati
 $remove_voucher_route = $GLOBALS['__db_rest_args']['doughboss/v1/cart/remove-voucher'] ?? array();
 $remove_voucher_args  = isset( $remove_voucher_route['args'] ) ? $remove_voucher_route['args'] : array();
 ok( ! isset( $remove_voucher_args['location_id'] ), 'POST /cart/remove-voucher does not expose unrelated location_id' );
+$status_route = $GLOBALS['__db_rest_args']['doughboss/v1/admin/order/(?P<id>\d+)/status'] ?? array();
+$status_args  = isset( $status_route['args'] ) ? $status_route['args'] : array();
+$accept_route = $GLOBALS['__db_rest_args']['doughboss/v1/admin/order/(?P<id>\d+)/accept'] ?? array();
+$accept_args  = isset( $accept_route['args'] ) ? $accept_route['args'] : array();
+ok( ! empty( $status_args['expected_version']['required'] ), 'status update requires expected_version' );
+ok( ! empty( $status_args['event_key']['required'] ), 'status update requires an idempotency event_key' );
+ok( ! empty( $accept_args['expected_version']['required'] ), 'accept requires expected_version' );
+ok( ! empty( $accept_args['event_key']['required'] ), 'accept requires an idempotency event_key' );
+$GLOBALS['__db_caps_override'] = array( 'manage_doughboss_kds' );
+$kds_cancel = $board_controller->admin_update_status(
+	new WP_REST_Request(
+		array( 'id' => 1, 'status' => 'cancelled', 'expected_version' => 1, 'event_key' => 'smoke:kds-cancel', 'reason_code' => 'staff_cancelled' )
+	)
+);
+ok( is_wp_error( $kds_cancel ) && 'doughboss_cancel_forbidden' === $kds_cancel->get_error_code(), 'kitchen-only account cannot cancel orders' );
+$GLOBALS['__db_caps_override'] = null;
 $board_routes = array(
 	'doughboss/v1/admin/orders',
 	'doughboss/v1/admin/order/(?P<id>\d+)/status',

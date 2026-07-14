@@ -297,3 +297,10 @@ html, body {
 	font-size: 14px; font-weight: 600; z-index: 50; opacity: 0; transition: opacity .2s; pointer-events: none;
 }
 .toast.show { opacity: 1; }
+.btn--ghost:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+	outline: 3px solid var(--gold);
+	outline-offset: 2px;
+}

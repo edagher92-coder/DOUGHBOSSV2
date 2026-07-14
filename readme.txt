@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.17.0
+Stable tag: 2.18.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,18 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.18.0 =
+* New: versioned, forward-only order lifecycle with optimistic concurrency so a
+  stale staff screen cannot overwrite a newer kitchen update.
+* New: transactional order event history and UTC lifecycle timestamps, including
+  staff-estimated ready windows and customer-safe status wording.
+* Change: kitchen board, staff console and WordPress order screen now use the
+  server-approved next actions; order cancellation is manager-only.
+* Change: customer tracking shows truthful shop status, payment wording and ready
+  collection cues. Payment provider activation remains unchanged and optional.
+* Safety: the 1.11.0 schema migration verifies InnoDB lifecycle storage and fails
+  closed with an owner notice when atomic order history cannot be guaranteed.
 
 = 2.17.0 =
 * New: **Single-location / pickup-only mode.** When exactly one shop is active,
