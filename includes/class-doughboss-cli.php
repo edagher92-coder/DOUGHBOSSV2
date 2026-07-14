@@ -9,7 +9,7 @@
  *
  *   wp doughboss pospal-test
  *   wp doughboss campaigns
- *   wp doughboss voucher-claim snow5 --phone=0400000000
+ *   wp doughboss voucher-claim dough5 --phone=0400000000
  *   wp doughboss voucher-list --limit=20
  *   wp doughboss voucher-redeem SNOW-ABCD1234 --subtotal=25 --channel=online
  *   wp doughboss voucher-void 12
@@ -96,7 +96,7 @@ class DoughBoss_CLI {
 	 * ## OPTIONS
 	 *
 	 * <campaign>
-	 * : Campaign slug, e.g. snow5.
+	 * : Campaign slug, e.g. dough5.
 	 *
 	 * [--phone=<phone>]
 	 * : Customer phone (the POSPal member key).
@@ -106,7 +106,7 @@ class DoughBoss_CLI {
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp doughboss voucher-claim snow5 --phone=0400000000
+	 *     wp doughboss voucher-claim dough5 --phone=0400000000
 	 *
 	 * @param array $args       Positional args.
 	 * @param array $assoc_args Flags.
