@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.16.0
+Stable tag: 2.17.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,23 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.17.0 =
+* New: **Single-location / pickup-only mode.** A `single_location_mode`
+  setting (defaults on) hides the shop picker and delivery toggle across the
+  storefront and pins every order to the single active shop. Matches the
+  "For now, pickup only from Revesby" launch scope. Flip the toggle off to
+  re-enable multi-shop ordering.
+* New: **Storefront rebrand.** Snow Boss is retired; the "Snow Boss" section
+  is now "Offers & News" (Dough Boss only, single Instagram follow gate).
+  The "Locations" tab is renamed "Contact Us" (backend data model unchanged).
+  Catering is a contact-only block until the online quote flow ships.
+* Change: voucher campaign `dough5` (prefix `DOUGH-`) replaces `snow5` (prefix
+  `SNOW-`); the legacy `snow5` campaign is dormant but every voucher already
+  issued under it stays redeemable at the till.
+* Data: 1.10.0 migration seeds `single_location_mode` = 1 and turns
+  `enable_delivery` off on any site running one active shop; multi-shop
+  delivery sites are deliberately left alone.
 
 = 2.16.0 =
 * New: **POSPal push outbox** — online orders that failed to reach the till

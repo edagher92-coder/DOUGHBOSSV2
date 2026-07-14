@@ -77,6 +77,13 @@ class DoughBoss_Settings {
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
 			'ordering_open'   => 1,
+			// Single-shop mode: hides the shop picker + delivery toggle on the
+			// storefront and pins every order to the one active location. Set
+			// automatically by the 1.10.0 migration when the site has ≤ 1 active
+			// shop, and manually by the owner when they want to lock ordering to a
+			// single location for a period (e.g. "Revesby-only pickup for now").
+			// Flip to 0 to re-enable multi-shop ordering.
+			'single_location_mode' => 1,
 			// Shop inbox: where order + catering notifications are emailed. Blank falls
 			// back to the WordPress admin email (see orders_email()). Defaults to the
 			// Dough Boss orders inbox so the shop is notified out of the box.

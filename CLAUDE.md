@@ -7,8 +7,8 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
 - **Primary platform branch under review:** `claude/funny-goodall-gsoog4`
 - **Open platform PR:** PR #2, draft, large Phase 2 branch. Treat it as a staging/integration branch, not a production release by default.
-- **Plugin version on the platform branch:** `2.16.0` (`DOUGHBOSS_VERSION`)
-- **DB schema version on the platform branch:** `1.9.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
+- **Plugin version on the platform branch:** `2.17.0` (`DOUGHBOSS_VERSION`)
+- **DB schema version on the platform branch:** `1.10.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
 - **Requires:** WordPress 6.0+, PHP 7.4+
 - **REST namespace:** `doughboss/v1`
 - **Text domain:** `doughboss`

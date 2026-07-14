@@ -62,6 +62,7 @@ class DoughBoss_Migrations {
 				'1.7.0' => 'upgrade_to_1_7_0',
 				'1.8.0' => 'upgrade_to_1_8_0',
 				'1.9.0' => 'upgrade_to_1_9_0',
+				'1.10.0' => 'upgrade_to_1_10_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -254,5 +255,44 @@ class DoughBoss_Migrations {
 	 */
 	private static function upgrade_to_1_9_0() {
 		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.10.0 — single-location / pickup-only mode.
+	 *
+	 * Adds the `single_location_mode` setting (defaults to 1). Also, if the site
+	 * has zero or exactly one *active* shop today, we auto-turn `enable_delivery`
+	 * off — the "For now, pickup only from Revesby" scope in the discovery doc.
+	 * A multi-shop site with delivery already on stays untouched.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_10_0() {
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-locations.php';
+
+		$settings = get_option( DoughBoss_Settings::OPTION_KEY );
+		if ( ! is_array( $settings ) ) {
+			$settings = array();
+		}
+		$changed = false;
+
+		// Seed the new toggle at 1 (single-location / pickup-only) if unset.
+		if ( ! isset( $settings['single_location_mode'] ) ) {
+			$settings['single_location_mode'] = 1;
+			$changed = true;
+		}
+
+		// Auto-narrow to pickup-only if the site currently runs 0 or 1 active
+		// shops — matches the discovery doc's "For now, pickup only from Revesby"
+		// scope. A multi-shop delivery site is deliberately left alone.
+		$active = DoughBoss_Locations::all( true );
+		if ( count( $active ) <= 1 && ! empty( $settings['enable_delivery'] ) ) {
+			$settings['enable_delivery'] = 0;
+			$changed = true;
+		}
+
+		if ( $changed ) {
+			update_option( DoughBoss_Settings::OPTION_KEY, $settings );
+		}
 	}
 }

@@ -217,15 +217,25 @@ class DoughBoss_Locations {
 		if ( self::count() > 0 ) {
 			return;
 		}
-		$name = get_option( 'blogname' );
-		self::create(
-			array(
-				'name'             => $name ? $name : __( 'Main Shop', 'doughboss' ),
-				'pickup_enabled'   => DoughBoss_Settings::get( 'enable_pickup', 1 ),
-				'delivery_enabled' => DoughBoss_Settings::get( 'enable_delivery', 0 ),
-				'is_active'        => 1,
-			)
+		// If the blogname looks like a Dough Boss install, seed the primary
+		// Revesby shop with real address + phone so the storefront works out of
+		// the box. Any other install falls back to the WP site name (previous
+		// behaviour). Owners can edit or rename the seed row afterwards.
+		$blog       = (string) get_option( 'blogname' );
+		$is_dough   = '' !== $blog && false !== stripos( $blog, 'dough boss' );
+		$seed_name  = $is_dough ? __( 'Revesby', 'doughboss' ) : ( '' !== $blog ? $blog : __( 'Main Shop', 'doughboss' ) );
+		$seed = array(
+			'name'             => $seed_name,
+			'pickup_enabled'   => DoughBoss_Settings::get( 'enable_pickup', 1 ),
+			'delivery_enabled' => DoughBoss_Settings::get( 'enable_delivery', 0 ),
+			'is_active'        => 1,
 		);
+		if ( $is_dough ) {
+			$seed['suburb']  = 'Revesby';
+			$seed['address'] = "12/25 Selems Parade\nRevesby NSW 2212";
+			$seed['phone']   = '(02) 9774 2286';
+		}
+		self::create( $seed );
 	}
 
 	/**

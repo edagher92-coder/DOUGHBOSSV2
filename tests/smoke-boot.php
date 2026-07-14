@@ -170,6 +170,16 @@ foreach ( $gates as $class => $method ) {
 	}
 }
 
+// 7b. Single-location / pickup-only mode default (1.10.0). This asserts the
+// new setting exists in defaults and defaults on — the money-path invariant
+// that a fresh install lands in pickup-only Revesby mode.
+section( 'Single-location mode' );
+$defs = DoughBoss_Settings::defaults();
+ok( isset( $defs['single_location_mode'] ) && 1 === (int) $defs['single_location_mode'],
+	'single_location_mode default is 1 (pickup-only Revesby launch scope)' );
+ok( isset( $defs['enable_delivery'] ) && 0 === (int) $defs['enable_delivery'],
+	'enable_delivery default is 0' );
+
 // 8. POSPal signature invariant. The signature format is a wire-protocol contract
 // with POSPal's Open Platform — strtoupper(md5(appKey . rawBody)) — so it needs a
 // known-vector test that breaks loudly if the algorithm ever drifts. Anything

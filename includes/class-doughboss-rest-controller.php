@@ -2026,6 +2026,11 @@ class DoughBoss_REST_Controller {
 				'delivery_fee'    => (float) DoughBoss_Settings::get( 'delivery_fee', 0 ),
 				'enable_pickup'   => (bool) DoughBoss_Settings::get( 'enable_pickup', 1 ),
 				'enable_delivery' => (bool) DoughBoss_Settings::get( 'enable_delivery', 0 ),
+				// Single-location / pickup-only mode. When on, the storefront should
+				// hide the shop picker + delivery toggle and auto-select the single
+				// active location — matches the "For now, pickup only from Revesby"
+				// scope in the client discovery doc.
+				'single_location_mode' => (bool) DoughBoss_Settings::get( 'single_location_mode', 1 ),
 				'ordering_open'   => DoughBoss_Settings::ordering_open(),
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
