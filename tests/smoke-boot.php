@@ -92,6 +92,13 @@ ok( isset( $defaults['trusted_proxy_header'] ) && 'X-Forwarded-For' === $default
 ok( method_exists( 'DoughBoss_Settings', 'behind_reverse_proxy' ) && false === DoughBoss_Settings::behind_reverse_proxy(), 'DoughBoss_Settings::behind_reverse_proxy() reads false with no option set' );
 ok( method_exists( 'DoughBoss_Settings', 'trusted_proxy_header' ) && 'X-Forwarded-For' === DoughBoss_Settings::trusted_proxy_header(), "DoughBoss_Settings::trusted_proxy_header() reads 'X-Forwarded-For' with no option set" );
 
+// 3c. Order Board optional access key (kitchen access hardening). Defaults to
+// blank so a fresh install's board is gated by login + manage_doughboss_kds
+// only, never silently locked out by an unset key.
+ok( array_key_exists( 'board_access_key', $defaults ), "defaults() has 'board_access_key' key" );
+ok( isset( $defaults['board_access_key'] ) && '' === $defaults['board_access_key'], "'board_access_key' defaults to '' (extra gate off)" );
+ok( method_exists( 'DoughBoss_Settings', 'board_access_key' ) && '' === DoughBoss_Settings::board_access_key(), 'DoughBoss_Settings::board_access_key() reads \'\' with no option set' );
+
 // 4. REST surface registered routes.
 section( 'REST surface' );
 $routes = $GLOBALS['__db_rest'];

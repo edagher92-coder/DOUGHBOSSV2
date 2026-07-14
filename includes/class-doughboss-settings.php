@@ -91,6 +91,18 @@ class DoughBoss_Settings {
 			// Keep logged-in sessions for this many days (0 = WordPress default).
 			// Set high (e.g. 3650) so shop tablets stay signed in; off by default.
 			'staff_session_days' => 0,
+			// Kitchen Order Board — optional extra access-key layer. Blank (default)
+			// means the board is reachable at the normal wp-admin URL, gated only by
+			// login + the manage_doughboss_kds capability (the real security
+			// boundary). When set, render_board_page() ALSO requires a matching
+			// ?key= query arg — a memorable, bookmarkable "specific URL" for
+			// kitchen staff, layered on top of (never instead of) the WP login +
+			// capability check. Only ever written by the random generator in
+			// DoughBoss_Admin::generate_board_key() (admin-post actions
+			// doughboss_generate_board_key / doughboss_clear_board_key) — never
+			// accepted as free text — so it's always a URL-safe generated value.
+			// See admin/class-doughboss-admin.php render_board_page().
+			'board_access_key' => '',
 			// Rate-limiter client-IP resolution. Off by default so REMOTE_ADDR is used
 			// verbatim (zero behaviour change). Only enable 'behind_reverse_proxy' when
 			// the site sits behind a reverse proxy/CDN/load balancer that you have
@@ -199,6 +211,20 @@ class DoughBoss_Settings {
 	 */
 	public static function app_origin() {
 		return untrailingslashit( (string) apply_filters( 'doughboss_app_origin', self::get( 'app_origin', '' ) ) );
+	}
+
+	/**
+	 * Optional extra access key for the wp-admin Order Board. Blank (default)
+	 * means the board relies solely on WP login + the manage_doughboss_kds
+	 * capability. When set, render_board_page() requires a matching ?key=
+	 * query argument in addition to that login + capability check — a
+	 * bookmarkable "specific URL" for kitchen staff, layered on top of the
+	 * real auth boundary, never a replacement for it.
+	 *
+	 * @return string
+	 */
+	public static function board_access_key() {
+		return trim( (string) self::get( 'board_access_key', '' ) );
 	}
 
 	/**

@@ -6,6 +6,16 @@
 	<meta name="theme-color" content="#0a0807" />
 	<title>DoughBoss Console</title>
 	<meta name="robots" content="noindex" />
+	<!--
+		SECURITY: "noindex" only asks search engines not to index this page — it is
+		NOT access control. This is a static bundle with no server-side gate in
+		front of it; the REST data behind the login is still protected by real
+		WordPress capability checks, but this shell itself is publicly fetchable
+		by anyone with the URL. Before sharing this console's URL with staff,
+		configure hosting-level access control (Basic Auth / Cloudflare Access /
+		equivalent) per docs/DoughBoss-Manual-Deployment.md §7 — this cannot be
+		enforced from the WordPress plugin.
+	-->
 	<!-- PWA: installable (add-to-home-screen) via manifest + icons. No service worker by design. -->
 	<link rel="manifest" href="./manifest.webmanifest" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />

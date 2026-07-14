@@ -196,6 +196,22 @@ Settings persist across a plugin file upgrade (they live in the `doughboss_setti
 
 ---
 
+## 7. Staff Console (`app/`) — hosting-level access control the plugin cannot enforce
+
+`app/` is a static HTML/JS/CSS bundle (no PHP, no server), deployed however you host static files — GitHub Pages by default (`app/app.js`), or any other static host. It is **not** packaged by `build-zip.sh` and is **not** a WordPress page, so nothing in this plugin's PHP can gate access to it.
+
+Its login screen (`app/app.js`) authenticates to the real WordPress REST API using a WordPress username + Application Password, over HTTPS Basic Auth, and every REST call behind it is still protected by the normal DoughBoss capability checks (`manage_doughboss_kds`, `manage_doughboss`, `redeem_doughboss_vouchers`, etc. — see `includes/class-doughboss-rest-controller.php`, `/auth/me`). **That part is real auth for the data.** But the static shell itself — the login form, the app code, the site URL it's pre-configured to talk to — is served to anyone who requests the URL, with zero server-side gate in front of it. `<meta name="robots" content="noindex">` in `app/index.html` only asks search engines not to index it; it does not restrict access, and is trivially bypassed by anyone with the direct link (view-source or `curl` see the full page regardless).
+
+**This plugin cannot fix that from PHP** — it's a static-hosting concern, not a WordPress one. If you want the "specific URL, locked behind a username and password" requirement to apply to the Staff Console as well as the wp-admin Order Board, configure ONE of these at the hosting layer, outside this repository:
+
+- **GitHub Pages / most static CDNs:** these generally do not support IP allow-lists or HTTP Basic Auth natively. Put the static host behind a service that does (e.g. a Cloudflare Access application, or any reverse proxy you control that can enforce HTTP Basic Auth or SSO in front of the `app/` origin) before sharing the console URL with staff.
+- **Apache-based static hosting:** ship or hand-place an `.htaccess` in the `app/` directory with `AuthType Basic` + an `.htpasswd` file, so the web server itself demands a username/password before serving any file in that directory. This is a genuine second server-side gate, but only works where Apache actually honors `.htaccess` (many managed/static hosts, including GitHub Pages, do not) — confirm your specific host supports it before relying on it.
+- **Simplest for now, if the above isn't set up yet:** don't publish/share the `app/` URL at all, and use the wp-admin Order Board (`/wp-admin/admin.php?page=doughboss-board`, with the optional access key from DoughBoss → Settings, see `docs/DoughBoss-Manual-Admin.md`) as the kitchen-facing flow instead. It has a real server-side gate today; `app/` currently does not.
+
+Whichever option you pick, treat it as **required before sharing the `app/` URL with anyone outside the dev team** — not an optional hardening step, since today there is no gate at all in front of the static bundle.
+
+---
+
 ## Related reading
 - `docs/DoughBoss-Manual-Developer-Setup.md` — environment variables, local dev loop, the higher-risk manual-QA list for money-path classes.
 - `docs/DoughBoss-Manual-Admin.md` — what each Settings field does, day-to-day owner/manager operation, voucher/POSPal troubleshooting.

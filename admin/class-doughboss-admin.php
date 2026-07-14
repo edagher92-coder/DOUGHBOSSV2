@@ -40,6 +40,9 @@ class DoughBoss_Admin {
 		add_action( 'admin_notices', array( $this, 'render_pospal_unmapped_notice' ) );
 		add_action( 'admin_post_doughboss_pospal_outbox_resend', array( $this, 'handle_pospal_outbox_resend' ) );
 		add_action( 'admin_notices', array( $this, 'render_pospal_outbox_notice' ) );
+		add_action( 'admin_post_doughboss_generate_board_key', array( $this, 'handle_generate_board_key' ) );
+		add_action( 'admin_post_doughboss_clear_board_key', array( $this, 'handle_clear_board_key' ) );
+		add_action( 'admin_notices', array( $this, 'render_board_key_reveal_notice' ) );
 	}
 
 	/**
@@ -267,6 +270,15 @@ class DoughBoss_Admin {
 			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
 		}
 		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? max( 0, absint( $input['staff_session_days'] ) ) : 0;
+
+		// Order Board access key is intentionally NOT part of this form — it is
+		// only ever set by handle_generate_board_key() (a random, URL-safe value)
+		// or cleared by handle_clear_board_key(), so the settings POST handler
+		// preserves whatever is already stored rather than accepting free text.
+		// This keeps it out of reach of a general form submission and guarantees
+		// the stored value always comes from the safe-alphabet generator below.
+		$existing_settings              = DoughBoss_Settings::all();
+		$clean['board_access_key']      = isset( $existing_settings['board_access_key'] ) ? $existing_settings['board_access_key'] : '';
 
 		// POSPal order push (mirror online orders to the till). The product map is
 		// managed via WP-CLI (`wp doughboss pospal-map`), not this form, so it is
@@ -1149,6 +1161,125 @@ JS;
 	}
 
 	/**
+	 * Generate a fresh random Order Board access key and store it. Only ever
+	 * called from this dedicated, nonce-protected action — never accepted as
+	 * free text from the general settings form — so the stored key is always
+	 * drawn from generate_board_key()'s URL-safe alphabet. Redirects back with
+	 * a one-time reveal transient so the plaintext key can be shown exactly
+	 * once (see render_board_key_reveal_notice()).
+	 *
+	 * @return void
+	 */
+	public function handle_generate_board_key() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_generate_board_key' );
+
+		$key = self::generate_board_key();
+		DoughBoss_Settings::update( array( 'board_access_key' => $key ) );
+
+		// One-time reveal: a short-lived transient keyed to this user so only
+		// the person who just generated it sees the plaintext, and only once —
+		// the settings form itself never echoes the stored key back into HTML.
+		set_transient( 'doughboss_board_key_reveal_' . get_current_user_id(), $key, MINUTE_IN_SECONDS );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * Turn the Order Board access key off — the board falls back to being
+	 * gated by login + the manage_doughboss_kds capability only.
+	 *
+	 * @return void
+	 */
+	public function handle_clear_board_key() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_clear_board_key' );
+
+		DoughBoss_Settings::update( array( 'board_access_key' => '' ) );
+		delete_transient( 'doughboss_board_key_reveal_' . get_current_user_id() );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * admin_notices: show the just-generated Order Board key + bookmark URL
+	 * exactly once, immediately after handle_generate_board_key() redirects
+	 * back. The transient is deleted on read, so refreshing the page (or any
+	 * later page load) never re-shows the plaintext key — the settings form
+	 * itself only ever renders a masked "a key is set" state.
+	 *
+	 * @return void
+	 */
+	public function render_board_key_reveal_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$uid = get_current_user_id();
+		$key = get_transient( 'doughboss_board_key_reveal_' . $uid );
+		if ( ! $key ) {
+			return;
+		}
+		delete_transient( 'doughboss_board_key_reveal_' . $uid );
+
+		$board_url = add_query_arg(
+			array(
+				'page' => 'doughboss-board',
+				'key'  => $key,
+			),
+			admin_url( 'admin.php' )
+		);
+		?>
+		<div class="notice notice-success is-dismissible">
+			<p>
+				<strong><?php esc_html_e( 'New Order Board link generated.', 'doughboss' ); ?></strong>
+				<?php esc_html_e( "Copy it now — for your security it won't be shown again. Bookmark it on the kitchen device.", 'doughboss' ); ?>
+			</p>
+			<p>
+				<input type="text" class="large-text" readonly onclick="this.select();" value="<?php echo esc_url( $board_url ); ?>" style="max-width:560px;" />
+			</p>
+			<p class="description">
+				<?php esc_html_e( "This link contains a secret key in the URL. Anyone who sees the URL — a screen-share, browser history, a shared device, or your web host's access logs — could use it, so only bookmark it on the kitchen device itself and don't share it anywhere else.", 'doughboss' ); ?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * A random, URL-safe Order Board access key. Restricting the alphabet to
+	 * unambiguous alphanumerics (no 0/O/1/l/I confusion, and critically no &,
+	 * +, #, space, or / — characters that would otherwise corrupt the
+	 * generated bookmark URL's query string or fall foul of PHP's '+' -> space
+	 * GET-decoding) means the value is always safe to embed in a URL by
+	 * construction, rather than relying on sanitizing free-text input after
+	 * the fact.
+	 *
+	 * @return string 24-character key.
+	 */
+	private static function generate_board_key() {
+		$alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+		$max      = strlen( $alphabet ) - 1;
+		$key      = '';
+		for ( $i = 0; $i < 24; $i++ ) {
+			$key .= $alphabet[ random_int( 0, $max ) ];
+		}
+		return $key;
+	}
+
+	/**
 	 * Admin-post handler: refund a Stripe-paid order in full.
 	 *
 	 * The PaymentIntent id is always read from the stored order row (never from
@@ -1319,8 +1450,23 @@ JS;
 	 * @return void
 	 */
 	public function render_board_page() {
+		// Primary gate: WP login + the kitchen capability. This is the real
+		// security boundary and is never weakened by the optional key below.
 		if ( ! current_user_can( 'manage_doughboss_kds' ) ) {
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+
+		// Optional secondary gate: if the owner has set a board access key in
+		// Settings, this authenticated + capable user must ALSO supply it via
+		// ?key= — giving kitchen staff a specific, bookmarkable URL per the
+		// owner's request, in addition to (not instead of) the login above.
+		$required_key = DoughBoss_Settings::board_access_key();
+		if ( '' !== $required_key ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page gate, not a state change; compared with hash_equals() below.
+			$supplied_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
+			if ( '' === $supplied_key || ! hash_equals( $required_key, $supplied_key ) ) {
+				wp_die( esc_html__( 'This Order Board link is missing or has an incorrect access key. Ask an owner/manager for the bookmarked board URL from DoughBoss Settings.', 'doughboss' ) );
+			}
 		}
 		?>
 		<div class="wrap doughboss-board-wrap">
@@ -2230,6 +2376,28 @@ JS;
 						<th><label for="db-staff-session"><?php esc_html_e( 'Staff session (days)', 'doughboss' ); ?></label></th>
 						<td><input type="number" min="0" step="1" id="db-staff-session" class="small-text" name="<?php echo esc_attr( $opt ); ?>[staff_session_days]" value="<?php echo esc_attr( isset( $settings['staff_session_days'] ) ? $settings['staff_session_days'] : 0 ); ?>" />
 							<span class="description"><?php esc_html_e( 'Keep logged-in users signed in for this many days (0 = WordPress default ~2 days). Set high, e.g. 3650, so shop tablets stay signed in and never time out.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Order Board access key', 'doughboss' ); ?></th>
+						<td>
+							<?php $has_board_key = '' !== trim( (string) ( isset( $settings['board_access_key'] ) ? $settings['board_access_key'] : '' ) ); ?>
+							<p>
+								<?php if ( $has_board_key ) : ?>
+									<span class="description"><strong><?php esc_html_e( 'A key is set.', 'doughboss' ); ?></strong> <?php esc_html_e( "The key itself isn't shown again here for security — generate a new link below if you need it again.", 'doughboss' ); ?></span>
+								<?php else : ?>
+									<span class="description"><?php esc_html_e( 'No key set — the board is reachable at the normal address for anyone who signs in with kitchen access.', 'doughboss' ); ?></span>
+								<?php endif; ?>
+							</p>
+							<p class="description">
+								<?php esc_html_e( 'Optional. Kitchen staff still sign in with their own WordPress username and password — this does not replace that. When set, it adds a specific bookmarkable link: staff must also have the matching key in the URL, so a guessed admin URL alone is not enough. The link is only shown once, right after you generate it — the key isn\'t stored in a form field on this page, since anyone who could see this settings screen (screenshot, screen-share) would otherwise be able to read it back out.', 'doughboss' ); ?>
+							</p>
+							<p>
+								<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_generate_board_key' ), 'doughboss_generate_board_key' ) ); ?>"><?php echo $has_board_key ? esc_html__( 'Generate new link (invalidates the old one)', 'doughboss' ) : esc_html__( 'Generate a board link', 'doughboss' ); ?></a>
+								<?php if ( $has_board_key ) : ?>
+									<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_clear_board_key' ), 'doughboss_clear_board_key' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Turn off the board link key? The board will go back to being reachable by login + capability only.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Turn off', 'doughboss' ); ?></a>
+								<?php endif; ?>
+							</p>
+						</td>
 					</tr>
 				</table>
 
