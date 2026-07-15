@@ -44,6 +44,9 @@ jobs:
       - name: Versioned lifecycle transaction test
         run: php tests/lifecycle.php
 
+      - name: Capacity window and timezone test
+        run: php tests/capacity.php
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
