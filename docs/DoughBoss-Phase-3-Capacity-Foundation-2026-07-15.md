@@ -72,10 +72,19 @@ Each shop can configure:
 
 Every configuration save advances the planning version. Existing materialised slots and future order promises retain their snapshots rather than being silently rewritten by later settings.
 
+When a shop is in shadow mode, its administration page now shows the first proposed schedule-only windows. The panel is staff-only, includes no current-order load, reserves nothing and is never sent to checkout or a payment provider.
+
+### Atomic hold-to-order primitive
+
+A verified-paid backend caller can now attach a valid hold to order creation. Slot, hold, order, items and creation event participate in one transaction. The service locks slot then hold, recomputes the cart hash, stores the ready-window/timezone/planning snapshots and converts the hold exactly once. Any item, event or conversion failure rolls the whole operation back and leaves the hold retryable.
+
+This backend primitive does not make the feature customer-live. Capacity orders retain the existing pending/staff-acceptance lifecycle, fire time remains unset until a snapshotted planning model exists, and a converted-hold replay verifies both sides of the order/hold link without creating another order, event or notification hook.
+
 ## Verification completed
 
 - Capacity window suite: 17 passed, 0 failed.
 - Capacity hold transaction suite: 15 passed, 0 failed.
+- Atomic hold-to-order suite: 25 passed, 0 failed.
 - WordPress-stub boot suite: 123 passed, 0 failed.
 - Lifecycle transaction suite: 16 passed, 0 failed.
 - Strict PHP syntax and release-version checks pass locally.
@@ -87,7 +96,7 @@ The deterministic suite covers Sydney summer/winter offsets, spring and autumn d
 
 - No public availability endpoint or customer slot picker.
 - No customer-enforced capacity mode.
-- No conversion of a hold into an order allocation inside order creation.
+- No checkout or payment endpoint passes a capacity hold into the atomic conversion primitive.
 - No payment attempt starts from a capacity hold.
 - No Tyro or Stripe provider activation.
 - No item-specific prep, station, oven, tray or batch model.
@@ -103,7 +112,7 @@ These are deliberate safety boundaries, not missing feature flags that should be
 3. Race two independent database connections for the final unit on an initially empty slot; exactly one must succeed.
 4. Prove migration idempotency and fail-closed behaviour for a missing index, missing table and MyISAM transaction participant.
 5. Materialise slot rows from validated hours and dated exceptions.
-6. Convert the locked hold to the created order inside the same order/items/event transaction.
+6. Wire checkout/payment attempts to the proven atomic conversion primitive without allowing duplicate confirmation side effects.
 7. Add checkout and payment-attempt records so a provider success after browser loss is reconciled safely.
 8. Configure actual Revesby hours and observe shadow recommendations against real order history.
 9. Measure useful order and item-unit limits with staff during both one-person and two-person shifts.
