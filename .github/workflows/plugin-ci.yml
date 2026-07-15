@@ -44,6 +44,15 @@ jobs:
       - name: Versioned lifecycle transaction test
         run: php tests/lifecycle.php
 
+      - name: Capacity window and timezone test
+        run: php tests/capacity.php
+
+      - name: Capacity hold transaction test
+        run: php tests/capacity-holds.php
+
+      - name: Atomic hold-to-order conversion test
+        run: php tests/order-capacity.php
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
@@ -108,8 +117,8 @@ jobs:
           print('No high-confidence committed secrets found.')
           PY
 
-  mariadb-lifecycle:
-    name: MariaDB ${{ matrix.mariadb }} lifecycle migration
+  mariadb-capacity:
+    name: MariaDB ${{ matrix.mariadb }} lifecycle + capacity integration
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -138,7 +147,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: mysqli
+          extensions: mysqli, pcntl
           coverage: none
           tools: wp-cli
 
@@ -153,3 +162,6 @@ jobs:
 
       - name: Rehearse lifecycle migration and rollback
         run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-lifecycle.php" --path=/tmp/wp --skip-plugins --allow-root
+
+      - name: Migration and final-slot race
+        run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-capacity.php" --path=/tmp/wp --skip-plugins --allow-root

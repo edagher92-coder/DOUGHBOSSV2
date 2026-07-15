@@ -232,6 +232,7 @@ function wp_list_pluck( $list, $field, $index_key = null ) {
 function wp_generate_password( $len = 12, $s = true, $x = false ) { return substr( str_repeat( 'a1B2c3D4', 8 ), 0, $len ); }
 function wp_rand( $min = 0, $max = 0 ) { return $min; }
 function wp_hash( $d, $s = 'auth' ) { return md5( (string) $d ); }
+function wp_salt( $scheme = 'auth' ) { return 'doughboss-test-salt-' . $scheme; }
 function current_time( $type = 'mysql', $gmt = 0 ) { return $type === 'timestamp' ? 1750000000 : '2026-07-06 00:00:00'; }
 function wp_timezone_string() { return 'Australia/Sydney'; }
 function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, $d ); }

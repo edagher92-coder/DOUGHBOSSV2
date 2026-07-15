@@ -211,7 +211,7 @@ class DoughBoss_Order {
 	 *
 	 * @param array   $data  Customer/order fields and totals.
 	 * @param array[] $lines Cart lines.
-	 * @return int|WP_Error New order ID or error.
+	 * @return array|WP_Error Creation result with order_id/replayed, or error.
 	 */
 	public static function create( array $data, array $lines ) {
 		global $wpdb;
@@ -233,6 +233,39 @@ class DoughBoss_Order {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
 			return new WP_Error( 'doughboss_db_error', __( 'Could not start your order safely. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		$capacity = null;
+		if ( ! empty( $data['capacity_hold_token'] ) ) {
+			if ( 'paid' !== ( isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid' ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_capacity_payment_required', __( 'A verified payment is required before a scheduled pickup can be confirmed.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.12.0', '<' ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_capacity_unavailable', __( 'Pickup-time scheduling is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			$cart_hash = DoughBoss_Capacity::cart_hash(
+				$lines,
+				array(
+					'location_id' => isset( $data['location_id'] ) ? (int) $data['location_id'] : 0,
+					'order_type'  => isset( $data['order_type'] ) ? $data['order_type'] : 'pickup',
+					'voucher'     => isset( $data['voucher_code'] ) ? $data['voucher_code'] : '',
+					'total'       => isset( $data['total'] ) ? $data['total'] : 0,
+				)
+			);
+			$capacity = DoughBoss_Capacity::lock_hold_for_order( $data['capacity_hold_token'], $cart_hash, isset( $data['location_id'] ) ? (int) $data['location_id'] : 0 );
+			if ( is_wp_error( $capacity ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return $capacity;
+			}
+			if ( ! empty( $capacity['replayed_order_id'] ) ) {
+				if ( false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					return new WP_Error( 'doughboss_db_error', __( 'Could not safely replay your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+				}
+				return array( 'order_id' => (int) $capacity['replayed_order_id'], 'replayed' => true );
+			}
 		}
 
 		// Insert the order, retrying on the (rare) order-number collision that
@@ -263,10 +296,17 @@ class DoughBoss_Order {
 					'payment_status'    => isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid',
 					'payment_method'    => isset( $data['payment_method'] ) ? $data['payment_method'] : '',
 					'payment_intent_id' => isset( $data['payment_intent_id'] ) ? $data['payment_intent_id'] : '',
+					'capacity_hold_id' => $capacity ? $capacity['hold_id'] : 0,
+					'capacity_units' => $capacity ? $capacity['capacity_units'] : 0,
+					'promised_ready_from_utc' => $capacity ? $capacity['promised_ready_from_utc'] : null,
+					'promised_ready_by_utc' => $capacity ? $capacity['promised_ready_by_utc'] : null,
+					'timezone_snapshot' => $capacity ? $capacity['timezone_snapshot'] : '',
+					'fire_at_utc' => $capacity ? $capacity['fire_at_utc'] : null,
+					'planning_version' => $capacity ? $capacity['planning_version'] : 0,
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
@@ -327,6 +367,11 @@ class DoughBoss_Order {
 			return new WP_Error( 'doughboss_db_error', __( 'Could not save your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
 		}
 
+		if ( $capacity && ! DoughBoss_Capacity::convert_locked_hold( $capacity['hold_id'], $order_id, $now ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_hold_conversion', __( 'The pickup time could not be attached to the order. Please try again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		if ( false === $wpdb->query( 'COMMIT' ) ) {
 			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
@@ -341,7 +386,7 @@ class DoughBoss_Order {
 		 */
 		do_action( 'doughboss_order_created', $order_id, $data );
 
-		return $order_id;
+		return array( 'order_id' => $order_id, 'replayed' => false );
 	}
 
 	/**

@@ -18,6 +18,10 @@ global $wpdb;
 
 // Drop custom tables (children before parents).
 $tables = array(
+	$wpdb->prefix . 'doughboss_capacity_holds',
+	$wpdb->prefix . 'doughboss_capacity_slots',
+	$wpdb->prefix . 'doughboss_schedule_exceptions',
+	$wpdb->prefix . 'doughboss_location_hours',
 	$wpdb->prefix . 'doughboss_voucher_redemptions',
 	$wpdb->prefix . 'doughboss_vouchers',
 	$wpdb->prefix . 'doughboss_order_events',

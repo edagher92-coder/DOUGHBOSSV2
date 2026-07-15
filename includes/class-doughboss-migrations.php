@@ -72,6 +72,7 @@ class DoughBoss_Migrations {
 				'1.9.0' => 'upgrade_to_1_9_0',
 				'1.10.0' => 'upgrade_to_1_10_0',
 				'1.11.0' => 'upgrade_to_1_11_0',
+				'1.12.0' => 'upgrade_to_1_12_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -326,6 +327,17 @@ class DoughBoss_Migrations {
 		// 1.11.0 while versioning/events are missing or non-transactional.
 		if ( ! DoughBoss_Activator::lifecycle_storage_ready() ) {
 			throw new RuntimeException( 'Order lifecycle tables are missing or are not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.12.0 — transactional pickup-capacity storage, disabled by default.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_12_0() {
+		if ( ! DoughBoss_Activator::capacity_storage_ready() ) {
+			throw new RuntimeException( 'Capacity scheduling tables or unique locks are missing or are not using InnoDB.' );
 		}
 	}
 }
