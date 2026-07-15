@@ -80,7 +80,7 @@ a{color:inherit;}
 .h{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .demo-note{background:#fff6e9;border:1px solid #f0dcb8;color:#8a6a2a;border-radius:11px;padding:9px 13px;font-size:12.5px;margin:0 0 16px;display:flex;gap:8px;align-items:center;}
 
-/* 3-store health strip */
+/* location health strip */
 .hstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 16px;}
 .htile{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--muted);border-radius:14px;padding:13px 15px;}
 .htile.ok{border-left-color:var(--ok);} .htile.busy{border-left-color:var(--busy);} .htile.behind{border-left-color:var(--behind);}
@@ -213,11 +213,8 @@ a{color:inherit;}
 
 <div class="stores">
 	<div class="stores-in" id="stores">
-		<span class="lbl">Store</span>
-		<button class="spill" data-store="all" aria-pressed="true">All stores</button>
-		<button class="spill" data-store="Revesby" aria-pressed="false">Revesby</button>
-		<button class="spill" data-store="Bankstown" aria-pressed="false">Bankstown</button>
-		<button class="spill" data-store="Roselands" aria-pressed="false">Roselands</button>
+		<span class="lbl">Location</span>
+		<button class="spill" data-store="Revesby" aria-pressed="true">Revesby · pickup only</button>
 	</div>
 </div>
 
@@ -234,7 +231,7 @@ a{color:inherit;}
 
 	<!-- DASHBOARD -->
 	<section class="panel on" id="p-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
-		<div class="h"><div><h1 class="ph">Today at a glance</h1><p class="psub" id="dsub" aria-live="polite">Live across all three stores</p></div></div>
+		<div class="h"><div><h1 class="ph">Today at a glance</h1><p class="psub" id="dsub" aria-live="polite">Revesby pickup operations</p></div></div>
 		<p class="demo-note">&#9432; Demo figures are representative — once wired to WordPress, every dollar comes from the server (orders + GST), never the browser.</p>
 
 		<div class="hstrip" id="hstrip"></div>
@@ -253,7 +250,7 @@ a{color:inherit;}
 					<span><span class="cdot" aria-hidden="true" style="background:var(--ember)"></span>Online <b id="lg-on">0</b></span>
 					<span><span class="cdot" aria-hidden="true" style="background:var(--cater)"></span>Catering <b id="lg-ca">0</b></span>
 				</div>
-				<h3 style="margin-top:18px">Today by store</h3>
+				<h3 style="margin-top:18px">Today at Revesby</h3>
 				<div id="stores-break"></div>
 			</div>
 		</div>
@@ -332,6 +329,8 @@ a{color:inherit;}
 	/* All names and figures below are fictional, for demonstration only. */
 	var seq=1042; function ref(){seq+=1;return 'DB-'+seq;}
 	var ORDERS=[
+		/* Superseded multi-location fixtures retained only during the profile migration. */
+		/*
 		{ref:ref(),channel:'online',store:'Bankstown',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft Drinks 600ml'],total:23.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
 		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Delivery',items:['1× All Meat','1× Garlic Prawns','2× Spring Water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-6))},
 		{ref:ref(),channel:'online',store:'Roselands',who:'Mariam H.',type:'Pickup',items:['3× Zaatar & Cheese','1× Choco Banana'],total:38.50,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),12)},
@@ -350,13 +349,32 @@ a{color:inherit;}
 		{ref:ref(),channel:'online',store:'Revesby',who:'Daniel P.',type:'Pickup',items:['1× Chicken Delight'],total:14.00,status:'cancelled',placed:at(-2,13,47)},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Sports Club',type:'Catering',items:['Function — 90 pax','Mixed manoush + salads'],total:1260.00,deposit:350,status:'completed',placed:at(-12,10,0),scheduled:at(-4,18,0),pax:90,pkg:'Function'},
 		{ref:ref(),channel:'online',store:'Bankstown',who:'Yusra M.',type:'Delivery',items:['2× Pepperoni & Cheese','1× Spinach & Cheese','1× Soft Drinks 600ml'],total:45.00,status:'completed',placed:at(-2,19,22)}
+		*/
+		{ref:ref(),channel:'online',store:'Revesby',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft drink 600ml'],total:27.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Pickup',items:['1× All Meat','1× Garlic Prawns','2× Spring water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-6))},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Mariam H.',type:'Pickup',items:['3× Zaatar & Cheese','1× Choc banana'],total:33.50,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),12)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Joe T.',type:'Pickup',items:['1× Chicken Delight','1× BBQ Chicken','1× Juice'],total:29.00,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),38)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Nadia A.',type:'Pickup',items:['2× Veggie Plus','1× Fattoush','1× Ayran'],total:36.50,status:'ready',placed:at(0,Math.max(0,now.getHours()-1),5)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Omar S.',type:'Pickup',items:['2× Lahm bi ajeen','1× Lentil soup'],total:24.00,status:'completed',placed:at(0,9,14)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Priya R.',type:'Pickup',items:['1× Margherita','1× Garlic bread'],total:28.50,status:'completed',placed:at(0,11,2)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Hassan D.',type:'Pickup',items:['4× Mixed manoush','2× Soft drinks'],total:46.00,status:'new',placed:at(0,Math.max(0,now.getHours()-2),0),scheduled:at(0,Math.min(21,now.getHours()+3),30)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Office — Lvl 3',type:'Pickup',items:['6× Assorted manoush','3× Salads','6× Drinks'],total:92.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-12))},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample School',type:'Catering',items:['Lunch run — 60 pax','Mixed manoush platters ×6','Fruit & juice'],total:540.00,deposit:150,status:'confirmed',placed:at(-3,10,0),scheduled:at(2,11,30),pax:60,pkg:'School Lunch Run'},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Smith Wedding',type:'Catering',items:['Grazing + hot manoush — 120 pax','Dessert platters','Service staff ×2'],total:1980.00,deposit:500,status:'confirmed',placed:at(-6,13,0),scheduled:at(9,17,0),pax:120,pkg:'Premium Event'},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Corporate',type:'Catering',items:['Corporate breakfast — ~40 pax','Manoush + coffee cart'],total:0,deposit:0,status:'enquiry',placed:at(0,Math.max(0,now.getHours()-3),20),pax:40,pkg:'Corporate Breakfast'},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Brown Family',type:'Catering',items:['Engagement — ~80 pax','Mixed platters + dessert'],total:0,deposit:0,status:'enquiry',placed:at(-1,19,5),pax:80,pkg:'Event (TBC)'},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Karim B.',type:'Pickup',items:['2× Zaatar','1× Cheese & tomato'],total:22.00,status:'completed',placed:at(-1,12,30)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Sophie L.',type:'Pickup',items:['1× All Meat','1× Veggie Plus'],total:31.00,status:'completed',placed:at(-1,18,12)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Daniel P.',type:'Pickup',items:['1× Chicken Delight'],total:14.00,status:'cancelled',placed:at(-2,13,47)},
+		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Sports Club',type:'Catering',items:['Function — 90 pax','Mixed manoush + salads'],total:1260.00,deposit:350,status:'completed',placed:at(-12,10,0),scheduled:at(-4,18,0),pax:90,pkg:'Function'},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Yusra M.',type:'Pickup',items:['2× Margherita','1× Garlic bread','1× Soft drink'],total:39.50,status:'completed',placed:at(-2,19,22)}
 	];
 	var DAYREV=[820,1140,990,1370,1210,1580,1310];
-	var STORES=['Revesby','Bankstown','Roselands'];
+	var STORES=['Revesby'];
 
-	var store='all';
+	var store='Revesby';
 	var dismissed={};
-	function inStore(o){return store==='all'||o.store===store;}
+	function inStore(o){return o.store===store;}
 	function isLive(o){return o.channel==='online'&&(o.status==='new'||o.status==='preparing'||o.status==='ready');}
 	function live(){return ORDERS.filter(function(o){return inStore(o)&&isLive(o);});}
 	// today() intentionally includes catering orders in KPIs so the owner sees full revenue across all channels.
@@ -376,7 +394,7 @@ a{color:inherit;}
 	}
 	var STATE_LBL={ok:'Running OK',busy:'Busy',behind:'Behind'};
 
-	/* ---- 3-store health strip (always all three) ---- */
+	/* ---- launch-location health strip ---- */
 	function renderHealth(){
 		document.getElementById('hstrip').innerHTML=STORES.map(function(s){
 			var list=storeLiveList(s),old=oldestUnaccepted(s),st=storeState(s);
@@ -397,7 +415,7 @@ a{color:inherit;}
 		var aov=counted.length?revToday/counted.length:0;
 		var liveN=live().length;
 		var bookedN=catBooked().length;
-		document.getElementById('dsub').textContent=store==='all'?'Live across all three stores':'Scoped to '+store;
+		document.getElementById('dsub').textContent=store+' pickup operations';
 		document.getElementById('kpis').innerHTML=
 			tile('Sales today',money0(revToday),'incl. GST '+money(gst),true,false)+
 			tile('Orders today',counted.length,on.length+' online · '+ca.length+' catering',false,false)+

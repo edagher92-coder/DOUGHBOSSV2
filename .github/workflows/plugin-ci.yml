@@ -53,6 +53,9 @@ jobs:
       - name: Atomic hold-to-order conversion test
         run: php tests/order-capacity.php
 
+      - name: Verify demo launch scope
+        run: php tests/demo-scope.php
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
