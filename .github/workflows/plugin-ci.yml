@@ -118,7 +118,7 @@ jobs:
           PY
 
   mariadb-capacity:
-    name: MariaDB ${{ matrix.mariadb }} capacity integration
+    name: MariaDB ${{ matrix.mariadb }} lifecycle + capacity integration
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -159,6 +159,9 @@ jobs:
           wp db check --path=/tmp/wp --allow-root
           wp core install --path=/tmp/wp --url=http://doughboss.test --title=DoughBoss --admin_user=admin --admin_password=test-only-password --admin_email=test@example.invalid --skip-email --allow-root
           ln -s "$GITHUB_WORKSPACE" /tmp/wp/wp-content/plugins/doughboss
+
+      - name: Rehearse lifecycle migration and rollback
+        run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-lifecycle.php" --path=/tmp/wp --skip-plugins --allow-root
 
       - name: Migration and final-slot race
         run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-capacity.php" --path=/tmp/wp --skip-plugins --allow-root

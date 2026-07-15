@@ -117,6 +117,10 @@ This slice is not production-live until all gates below are completed:
 5. Verify POSPal, printer, email, optional SMS and Mercure listeners after commit.
 6. Test Sydney daylight-saving formatting with WordPress timezone `Australia/Sydney`.
 7. Confirm owner policy for cancellation reasons and paid-order refunds.
+
+The exact backup, migration, preservation, rollback and evidence procedure is
+recorded in `docs/DoughBoss-Phase-2-Staging-Rehearsal-Runbook.md`. Automated
+MariaDB CI is supporting evidence only; it does not complete this manual gate.
 8. Add a durable notification outbox before promising reliable status messages.
 
 ## Recommended next slice

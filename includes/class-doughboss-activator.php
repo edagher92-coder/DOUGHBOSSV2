@@ -407,14 +407,120 @@ class DoughBoss_Activator {
 			return false;
 		}
 
+		// Presence alone is not enough: a partial/manual migration could leave a
+		// nullable version, the wrong default, or text where a UTC datetime is
+		// required. Verify the definitions that transaction/version semantics rely
+		// on before allowing the stored database version to advance.
+		$order_contract = array(
+			'version'                   => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+			'status_changed_at'         => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'promised_ready_from_utc'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'promised_ready_by_utc'     => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'timezone_snapshot'         => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ),
+			'cooking_started_at'        => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'ready_at'                  => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'completed_at'              => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'cancelled_at'              => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+		);
+		$event_contract = array(
+			'order_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+			'order_version' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+			'event_type'    => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'status_changed' ),
+			'from_status'   => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => '' ),
+			'to_status'     => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => '' ),
+			'actor_type'    => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'system' ),
+			'actor_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+			'reason_code'   => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => '' ),
+			'event_key'     => array( 'type' => 'varchar(191)', 'null' => 'NO' ),
+			'occurred_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+		);
+		if ( ! self::column_contract_ready( $orders, $order_contract ) || ! self::column_contract_ready( $events, $event_contract ) ) {
+			return false;
+		}
+
 		// Both uniqueness constraints are required for retry idempotency and to
 		// guarantee one event for each order version.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$event_key_unique = $wpdb->get_var( "SHOW INDEX FROM {$events} WHERE Key_name = 'event_key' AND Non_unique = 0" );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$order_version_unique = $wpdb->get_var( "SHOW INDEX FROM {$events} WHERE Key_name = 'order_version' AND Non_unique = 0" );
+		return self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 191 ) )
+			&& self::index_contract_ready( $events, 'order_version', array( 'order_id', 'order_version' ), true )
+			&& self::index_contract_ready( $orders, 'promised_ready_from', array( 'location_id', 'promised_ready_from_utc' ), false );
+	}
 
-		return (bool) $event_key_unique && (bool) $order_version_unique;
+	/**
+	 * Verify selected column metadata exactly.
+	 *
+	 * @param string $table    Table name.
+	 * @param array  $contract Field contracts.
+	 * @return bool
+	 */
+	private static function column_contract_ready( $table, array $contract ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = (array) $wpdb->get_results( "SHOW COLUMNS FROM {$table}" );
+		$actual = array();
+		foreach ( $rows as $row ) {
+			$actual[ $row->Field ] = $row;
+		}
+		foreach ( $contract as $field => $expected ) {
+			if ( ! isset( $actual[ $field ] ) ) {
+				return false;
+			}
+			$row = $actual[ $field ];
+			// MySQL 8 omits deprecated integer display widths while MariaDB still
+			// reports them. They describe the same storage contract, so compare the
+			// semantic type while retaining exact varchar lengths and signedness.
+			$actual_type   = preg_replace( '/\b(tinyint|smallint|mediumint|int|bigint)\(\d+\)/', '$1', strtolower( (string) $row->Type ) );
+			$expected_type = preg_replace( '/\b(tinyint|smallint|mediumint|int|bigint)\(\d+\)/', '$1', $expected['type'] );
+			if ( $actual_type !== $expected_type || strtoupper( (string) $row->Null ) !== $expected['null'] ) {
+				return false;
+			}
+			if ( array_key_exists( 'default', $expected ) ) {
+				$actual_default   = $row->Default;
+				$expected_default = $expected['default'];
+				if ( ( null === $actual_default ) !== ( null === $expected_default ) ) {
+					return false;
+				}
+				if ( null !== $actual_default && (string) $actual_default !== (string) $expected_default ) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Verify index uniqueness and exact ordered columns.
+	 *
+	 * @param string   $table   Table name.
+	 * @param string   $name    Index name.
+	 * @param string[] $columns Ordered columns.
+	 * @param bool     $unique  Whether the index must be unique.
+	 * @param int[]    $lengths Minimum full lengths for string index parts.
+	 * @return bool
+	 */
+	private static function index_contract_ready( $table, $name, array $columns, $unique, array $lengths = array() ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = (array) $wpdb->get_results( $wpdb->prepare( "SHOW INDEX FROM {$table} WHERE Key_name = %s", $name ) );
+		usort(
+			$rows,
+			static function ( $left, $right ) {
+				return (int) $left->Seq_in_index <=> (int) $right->Seq_in_index;
+			}
+		);
+		if ( count( $rows ) !== count( $columns ) ) {
+			return false;
+		}
+		foreach ( $rows as $offset => $row ) {
+			$sub_part = null === $row->Sub_part ? null : (int) $row->Sub_part;
+			if (
+				(string) $row->Column_name !== $columns[ $offset ]
+				|| ( $unique ? 0 : 1 ) !== (int) $row->Non_unique
+				|| ( null !== $sub_part && ( ! isset( $lengths[ $offset ] ) || $sub_part < $lengths[ $offset ] ) )
+			) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
