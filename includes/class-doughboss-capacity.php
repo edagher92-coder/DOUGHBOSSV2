@@ -332,14 +332,13 @@ class DoughBoss_Capacity {
 
 		$holds = $wpdb->prefix . 'doughboss_capacity_holds';
 		$slots = $wpdb->prefix . 'doughboss_capacity_slots';
-		$locations = $wpdb->prefix . 'doughboss_locations';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$slot_id = $wpdb->get_var( $wpdb->prepare( "SELECT slot_id FROM {$holds} WHERE token_hash = %s", $token_hash ) );
 		if ( ! $slot_id ) {
 			return new WP_Error( 'doughboss_hold_missing', __( 'That pickup-time hold could not be found.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$slot = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, l.prep_time_default FROM {$slots} s INNER JOIN {$locations} l ON l.id = s.location_id WHERE s.id = %d FOR UPDATE", $slot_id ) );
+		$slot = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$slots} WHERE id = %d FOR UPDATE", $slot_id ) );
 		if ( ! $slot || (int) $slot->location_id !== (int) $location_id || 'pickup' !== $slot->order_type ) {
 			return new WP_Error( 'doughboss_hold_mismatch', __( 'That pickup-time hold belongs to another shop or order type.', 'doughboss' ), array( 'status' => 409 ) );
 		}
@@ -349,6 +348,13 @@ class DoughBoss_Capacity {
 			return new WP_Error( 'doughboss_hold_mismatch', __( 'The cart changed after this pickup time was held.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		if ( 'converted' === $hold->status && ! empty( $hold->order_id ) ) {
+			$orders = $wpdb->prefix . 'doughboss_orders';
+			// A replay is valid only when both sides of the allocation link agree.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$linked = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$orders} WHERE id = %d AND capacity_hold_id = %d", $hold->order_id, $hold->id ) );
+			if ( (int) $linked !== (int) $hold->order_id ) {
+				return new WP_Error( 'doughboss_hold_corrupt', __( 'That pickup-time allocation is incomplete. Please contact the shop.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 			return array( 'replayed_order_id' => (int) $hold->order_id );
 		}
 		if ( 'held' !== $hold->status || (string) $hold->expires_at <= $now->format( 'Y-m-d H:i:s' ) ) {
@@ -360,16 +366,13 @@ class DoughBoss_Capacity {
 		if ( ! $ready_from || ! $ready_by || $ready_from <= $now || $ready_by <= $ready_from ) {
 			return new WP_Error( 'doughboss_slot_unavailable', __( 'That pickup time is no longer available.', 'doughboss' ), array( 'status' => 409 ) );
 		}
-		$prep_minutes = max( 0, min( 240, (int) $slot->prep_time_default ) );
-		$fire_at      = $ready_from->modify( '-' . $prep_minutes . ' minutes' );
-
 		return array(
 			'hold_id'        => (int) $hold->id,
 			'capacity_units' => (int) $hold->capacity_units,
 			'promised_ready_from_utc' => $ready_from->format( 'Y-m-d H:i:s' ),
 			'promised_ready_by_utc'   => $ready_by->format( 'Y-m-d H:i:s' ),
 			'timezone_snapshot'       => (string) $slot->timezone_snapshot,
-			'fire_at_utc'             => $fire_at->format( 'Y-m-d H:i:s' ),
+			'fire_at_utc'             => null,
 			'planning_version'        => (int) $slot->planning_version,
 		);
 	}

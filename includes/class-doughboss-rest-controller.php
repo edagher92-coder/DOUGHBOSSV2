@@ -2601,7 +2601,7 @@ class DoughBoss_REST_Controller {
 			$voucher_code = '';
 		}
 
-		$order_id = DoughBoss_Order::create(
+		$created = DoughBoss_Order::create(
 			array(
 				'order_type'     => $order_type,
 				'location_id'    => $location_id,
@@ -2623,22 +2623,26 @@ class DoughBoss_REST_Controller {
 			$lines
 		);
 
-		if ( is_wp_error( $order_id ) ) {
+		if ( is_wp_error( $created ) ) {
 			// The voucher was already redeemed above; undo it so the customer
 			// keeps it (and a retry can redeem it again) rather than losing it to
 			// a failed order insert.
 			if ( '' !== $voucher_idem ) {
 				DoughBoss_Voucher::revert_redemption( $voucher_idem );
 			}
-			return $order_id;
+			return $created;
 		}
+		$order_id = (int) $created['order_id'];
+		$replayed = ! empty( $created['replayed'] );
 
 		$order = DoughBoss_Order::get( $order_id );
 		if ( '' !== $voucher_idem ) {
 			DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
 		}
 		$this->cart->clear();
-		$this->send_confirmation( $order );
+		if ( ! $replayed ) {
+			$this->send_confirmation( $order );
+		}
 
 		$payload = array(
 			'success'      => true,
