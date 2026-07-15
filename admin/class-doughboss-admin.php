@@ -1780,6 +1780,8 @@ JS;
 		$edit_id = isset( $_GET['edit'] ) ? absint( $_GET['edit'] ) : 0;
 		$editing = $edit_id ? DoughBoss_Locations::get( $edit_id ) : null;
 		$hours  = $editing ? DoughBoss_Locations::weekly_hours( $edit_id ) : array_fill_keys( array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' ), '' );
+		$preview_config = $editing ? DoughBoss_Locations::capacity_preview_config( $edit_id ) : null;
+		$preview_windows = $preview_config ? DoughBoss_Capacity::windows( $preview_config, 1 ) : array();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$msg     = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
 
@@ -1915,6 +1917,19 @@ JS;
 				</table>
 				<?php submit_button( $editing ? __( 'Update shop', 'doughboss' ) : __( 'Add shop', 'doughboss' ) ); ?>
 			</form>
+			<?php if ( $editing && 'shadow' === $f( 'capacity_mode', 'off' ) ) : ?>
+				<h2><?php esc_html_e( 'Shadow pickup preview', 'doughboss' ); ?></h2>
+				<p><?php esc_html_e( 'Schedule-only planning for one item unit. These times are not shown to customers, do not include existing order load, and reserve nothing.', 'doughboss' ); ?></p>
+				<?php if ( ! $preview_windows ) : ?>
+					<div class="notice notice-warning inline"><p><?php esc_html_e( 'No proposed windows are available. Check the timezone, weekly hours, notice period and dated exceptions.', 'doughboss' ); ?></p></div>
+				<?php else : ?>
+					<table class="widefat striped" style="max-width:720px;"><thead><tr><th><?php esc_html_e( 'Local date', 'doughboss' ); ?></th><th><?php esc_html_e( 'Proposed ready window', 'doughboss' ); ?></th><th><?php esc_html_e( 'UTC reference', 'doughboss' ); ?></th></tr></thead><tbody>
+					<?php foreach ( array_slice( $preview_windows, 0, 12 ) as $window ) : ?>
+						<tr><td><?php echo esc_html( $window['local_date'] ); ?></td><td><?php echo esc_html( $window['local_from'] . '–' . $window['local_by'] . ' ' . $window['utc_offset'] ); ?></td><td><code><?php echo esc_html( $window['ready_from_utc'] ); ?></code></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				<?php endif; ?>
+			<?php endif; ?>
 		</div>
 		<?php
 	}

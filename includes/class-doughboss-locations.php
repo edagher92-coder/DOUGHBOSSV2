@@ -309,6 +309,62 @@ class DoughBoss_Locations {
 		return true;
 	}
 
+	/**
+	 * Build a read-only, schedule-only capacity configuration for staff shadowing.
+	 *
+	 * Dated overrides are not interpreted as live capacity yet. Closed dates and
+	 * every unsupported override date are blacked out so the preview fails closed.
+	 *
+	 * @param int $location_id Location id.
+	 * @return array|null
+	 */
+	public static function capacity_preview_config( $location_id ) {
+		global $wpdb;
+		$loc = self::get( $location_id );
+		if ( ! $loc || ! isset( $loc->capacity_mode ) || 'shadow' !== (string) $loc->capacity_mode || empty( $loc->is_active ) || empty( $loc->pickup_enabled ) ) {
+			return null;
+		}
+		$hours_raw = self::weekly_hours( $location_id );
+		$hours = array();
+		foreach ( array( 'sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat' ) as $day ) {
+			$hours[ $day ] = array();
+			if ( empty( $hours_raw[ $day ] ) ) { continue; }
+			foreach ( explode( ',', $hours_raw[ $day ] ) as $range ) {
+				if ( preg_match( '/^(\d{2}:\d{2})-(\d{2}:\d{2})$/', trim( $range ), $match ) ) {
+					$hours[ $day ][] = array( $match[1], $match[2] );
+				}
+			}
+		}
+
+		$exceptions = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		try {
+			$local_today = new DateTimeImmutable( 'today', new DateTimeZone( (string) $loc->timezone ) );
+		} catch ( Exception $e ) {
+			return null;
+		}
+		$today   = $local_today->format( 'Y-m-d' );
+		$through = $local_today->modify( '+' . max( 1, min( 31, (int) $loc->booking_horizon_days ) ) . ' days' )->format( 'Y-m-d' );
+		// Until dated hours/capacity overrides are implemented end-to-end, omit
+		// every exception date rather than showing a potentially false promise.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$blackouts = (array) $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT service_date FROM {$exceptions} WHERE location_id = %d AND order_type = 'pickup' AND service_date BETWEEN %s AND %s", absint( $location_id ), $today, $through ) );
+
+		return array(
+			'location_id'      => (int) $loc->id,
+			'planning_version' => (int) $loc->planning_version,
+			'enabled'          => true,
+			'active'           => true,
+			'pickup_enabled'   => true,
+			'timezone'         => (string) $loc->timezone,
+			'slot_minutes'     => (int) $loc->slot_minutes,
+			'notice_minutes'   => (int) $loc->minimum_notice_minutes,
+			'horizon_days'     => (int) $loc->booking_horizon_days,
+			'capacity_units'   => (int) $loc->slot_unit_capacity,
+			'blackout_dates'   => $blackouts,
+			'hours'            => $hours,
+		);
+	}
+
 	/** @return bool */
 	private static function valid_clock( $time ) {
 		return (bool) preg_match( '/^(?:[01]\d|2[0-3]):[0-5]\d$/', (string) $time );
