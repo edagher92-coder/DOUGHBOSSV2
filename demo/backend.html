@@ -94,7 +94,6 @@ a{color:inherit;}
 .card.preparing{border-top-color:var(--prep);}
 .card.baking{border-top-color:var(--amber);}
 .card.ready{border-top-color:var(--ready);}
-.card.out_for_delivery{border-top-color:var(--prep);}
 .card.completed{border-top-color:var(--done);}
 .card.cancelled{border-top-color:var(--cancel);opacity:.78;}
 .card.enquiry{border-top-color:var(--cater);}
@@ -104,7 +103,6 @@ a{color:inherit;}
 .sbadge.preparing{background:#e2edf7;color:var(--prep);}
 .sbadge.baking{background:#f6e6d0;color:#9e5a12;}
 .sbadge.ready{background:#dcefe1;color:var(--ready);}
-.sbadge.out_for_delivery{background:#e2edf7;color:var(--prep);}
 .c-eta{font-size:11px;font-weight:800;letter-spacing:.03em;border-radius:999px;padding:2px 8px;background:#efe7d9;color:#5b5347;}
 .c-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
 .c-ref{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.02em;}
@@ -174,11 +172,8 @@ a{color:inherit;}
 
 <div class="stores">
 	<div class="stores-in" id="stores">
-		<span class="lbl">Store</span>
-		<button class="spill" data-store="all" aria-pressed="true">All</button>
-		<button class="spill" data-store="Revesby" aria-pressed="false">Revesby</button>
-		<button class="spill" data-store="Bankstown" aria-pressed="false">Bankstown</button>
-		<button class="spill" data-store="Roselands" aria-pressed="false">Roselands</button>
+		<span class="lbl">Location</span>
+		<button class="spill" data-store="Revesby" aria-pressed="true">Revesby · pickup only</button>
 	</div>
 </div>
 
@@ -197,7 +192,7 @@ a{color:inherit;}
 	<!-- LIVE -->
 	<section class="panel on" id="p-live" role="tabpanel" aria-labelledby="tab-live">
 		<h1 class="ph">New &amp; cooking</h1>
-		<p class="psub">Tap the big button on a card to move it along: <b>Accept</b> (set ETA) → <b>Prep</b> → <b>Oven</b> → <b>Ready</b> → <b>Out for delivery</b> / <b>Pickup</b> → <b>Done</b>.</p>
+		<p class="psub">Tap the big button on a card to move it along: <b>Accept</b> (set ETA) → <b>Prep</b> → <b>Oven</b> → <b>Ready</b> → <b>Collected</b>. Direct online orders are pickup-only from Revesby for launch.</p>
 		<div class="tip"><span>🔔</span><span>New orders pop in here automatically.</span><div style="flex:1"></div><button type="button" class="sim" id="sim">+ New order (demo)</button></div>
 		<p class="psub" style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">&#9432; All customer names and order data shown are fictional and for demonstration purposes only.</p>
 		<div class="cols" id="board"></div>
@@ -255,19 +250,18 @@ a{color:inherit;}
 	/* helpers */
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 	function money(n) { return '$' + n.toFixed(2); }
-	var SAFE = {new:1,confirmed:1,preparing:1,baking:1,ready:1,out_for_delivery:1,completed:1,cancelled:1,enquiry:1};
+	var SAFE = {new:1,confirmed:1,preparing:1,baking:1,ready:1,completed:1,cancelled:1,enquiry:1};
 	function safeStatus(s) { return SAFE[s] ? s : 'muted'; }
 	/* live order status machine — same vocabulary as includes/class-doughboss-order.php */
-	var LIVE_STATUSES = { new:1, confirmed:1, preparing:1, baking:1, ready:1, out_for_delivery:1 };
-	var LIVE_STATUS_LABEL = { new:'New', confirmed:'Accepted', preparing:'Prepping', baking:'In the oven', ready:'Ready', out_for_delivery:'Out for delivery' };
+	var LIVE_STATUSES = { new:1, confirmed:1, preparing:1, baking:1, ready:1 };
+	var LIVE_STATUS_LABEL = { new:'New', confirmed:'Accepted', preparing:'Prepping', baking:'In the oven', ready:'Ready for pickup' };
 	function liveNext(o) {
 		switch (o.status) {
 			case 'new': return { to: 'confirmed', cls: '', label: 'Accept order' };
 			case 'confirmed': return { to: 'preparing', cls: '', label: 'Start prepping' };
 			case 'preparing': return { to: 'baking', cls: '', label: 'Into the oven' };
 			case 'baking': return { to: 'ready', cls: 'ready', label: 'Mark ready' };
-			case 'ready': return o.type === 'Delivery' ? { to: 'out_for_delivery', cls: '', label: 'Send for delivery' } : { to: 'completed', cls: 'ghost', label: 'Picked up · done' };
-			case 'out_for_delivery': return { to: 'completed', cls: 'ghost', label: 'Delivered · done' };
+			case 'ready': return { to: 'completed', cls: 'ghost', label: 'Collected · done' };
 			default: return { to: 'completed', cls: 'ghost', label: 'Done' };
 		}
 	}
@@ -290,28 +284,28 @@ a{color:inherit;}
 	var seq = 1042;
 	function ref() { seq += 1; return 'DB-' + seq; }
 	var ORDERS = [
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Layla M.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese', '1× Soft drink 600ml'], total: 27.50, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 2)) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Sam K.', type: 'Delivery', items: ['1× All Meat', '1× Garlic Prawns', '2× Spring water'], total: 41.00, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 6)) },
-		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Mariam H.', type: 'Pickup', items: ['3× Zaatar & Cheese', '1× Choc banana'], total: 33.50, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 12) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Joe T.', type: 'Pickup', items: ['1× Chicken Delight', '1× BBQ Chicken', '1× Juice'], total: 29.00, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 38) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Nadia A.', type: 'Delivery', items: ['2× Veggie Plus', '1× Fattoush', '1× Ayran'], total: 36.50, status: 'ready', placed: at(0, Math.max(0, now.getHours() - 1), 5) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Omar S.', type: 'Pickup', items: ['2× Lahm bi ajeen', '1× Lentil soup'], total: 24.00, status: 'completed', placed: at(0, 9, 14) },
-		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Priya R.', type: 'Delivery', items: ['1× Margherita', '1× Garlic bread'], total: 28.50, status: 'completed', placed: at(0, 11, 2) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Layla M.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese', '1× Soft drink 600ml'], total: 27.50, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 2)) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Sam K.', type: 'Pickup', items: ['1× All Meat', '1× Garlic Prawns', '2× Spring water'], total: 41.00, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 6)) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Mariam H.', type: 'Pickup', items: ['3× Zaatar & Cheese', '1× Choc banana'], total: 33.50, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 12) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Joe T.', type: 'Pickup', items: ['1× Chicken Delight', '1× BBQ Chicken', '1× Juice'], total: 29.00, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 38) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Nadia A.', type: 'Pickup', items: ['2× Veggie Plus', '1× Fattoush', '1× Ayran'], total: 36.50, status: 'ready', placed: at(0, Math.max(0, now.getHours() - 1), 5) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Omar S.', type: 'Pickup', items: ['2× Lahm bi ajeen', '1× Lentil soup'], total: 24.00, status: 'completed', placed: at(0, 9, 14) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Priya R.', type: 'Pickup', items: ['1× Margherita', '1× Garlic bread'], total: 28.50, status: 'completed', placed: at(0, 11, 2) },
 		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Hassan D.', type: 'Pickup', items: ['4× Mixed manoush', '2× Soft drinks'], total: 46.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 2), 0) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Office — Lvl 3', type: 'Delivery', items: ['6× Assorted manoush', '3× Salads', '6× Drinks'], total: 92.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 1), 40) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Office — Lvl 3', type: 'Pickup', items: ['6× Assorted manoush', '3× Salads', '6× Drinks'], total: 92.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 1), 40) },
 		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample School', type: 'Catering', items: ['Lunch run — 60 pax', 'Mixed manoush platters ×6', 'Fruit & juice'], total: 540.00, deposit: 150, status: 'confirmed', placed: at(-3, 10, 0), scheduled: at(2, 11, 30), pax: 60, pkg: 'School Lunch Run' },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Smith Wedding', type: 'Catering', items: ['Grazing + hot manoush — 120 pax', 'Dessert table (Snow Boss)', 'Service staff ×2'], total: 1980.00, deposit: 500, status: 'confirmed', placed: at(-6, 13, 0), scheduled: at(9, 17, 0), pax: 120, pkg: 'Premium Event' },
+		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Smith Wedding', type: 'Catering', items: ['Grazing + hot manoush — 120 pax', 'Dessert platters', 'Service staff ×2'], total: 1980.00, deposit: 500, status: 'confirmed', placed: at(-6, 13, 0), scheduled: at(9, 17, 0), pax: 120, pkg: 'Premium Event' },
 		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample Corporate', type: 'Catering', items: ['Corporate breakfast — ~40 pax', 'Manoush + coffee cart'], total: 0, deposit: 0, status: 'enquiry', placed: at(0, Math.max(0, now.getHours() - 3), 20), pax: 40, pkg: 'Corporate Breakfast' },
 		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Brown Family', type: 'Catering', items: ['Engagement — ~80 pax', 'Mixed platters + dessert'], total: 0, deposit: 0, status: 'enquiry', placed: at(-1, 19, 5), pax: 80, pkg: 'Event (TBC)' },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Karim B.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese & tomato'], total: 22.00, status: 'completed', placed: at(-1, 12, 30) },
-		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Sophie L.', type: 'Delivery', items: ['1× All Meat', '1× Veggie Plus'], total: 31.00, status: 'completed', placed: at(-1, 18, 12) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Karim B.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese & tomato'], total: 22.00, status: 'completed', placed: at(-1, 12, 30) },
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Sophie L.', type: 'Pickup', items: ['1× All Meat', '1× Veggie Plus'], total: 31.00, status: 'completed', placed: at(-1, 18, 12) },
 		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Daniel P.', type: 'Pickup', items: ['1× Chicken Delight'], total: 14.00, status: 'cancelled', placed: at(-2, 13, 47) },
 		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample Sports Club', type: 'Catering', items: ['Function — 90 pax', 'Mixed manoush + salads'], total: 1260.00, deposit: 350, status: 'completed', placed: at(-12, 10, 0), scheduled: at(-4, 18, 0), pax: 90, pkg: 'Function' },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Yusra M.', type: 'Delivery', items: ['2× Margherita', '1× Garlic bread', '1× Soft drink'], total: 39.50, status: 'completed', placed: at(-2, 19, 22) }
+		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Yusra M.', type: 'Pickup', items: ['2× Margherita', '1× Garlic bread', '1× Soft drink'], total: 39.50, status: 'completed', placed: at(-2, 19, 22) }
 	];
 
-	var store = 'all';
-	function inStore(o) { return store === 'all' || o.store === store; }
+	var store = 'Revesby';
+	function inStore(o) { return o.store === store; }
 
 	function liveOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'online' && LIVE_STATUSES[o.status]; }); }
 	function todayOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel !== 'catering' && (sameDay(o.placed, now) || (o.scheduled && sameDay(o.scheduled, now))); }).sort(function (a, b) { return (a.scheduled || a.placed) - (b.scheduled || b.placed); }); }
@@ -374,7 +368,7 @@ a{color:inherit;}
 
 	function render() {
 		// live board — 3 columns, each grouping one or more real statuses
-		var lanes = [['New orders', 'c-new', ['new']], ['In the kitchen', 'c-prep', ['confirmed', 'preparing', 'baking']], ['Ready to go', 'c-ready', ['ready', 'out_for_delivery']]];
+		var lanes = [['New orders', 'c-new', ['new']], ['In the kitchen', 'c-prep', ['confirmed', 'preparing', 'baking']], ['Ready for pickup', 'c-ready', ['ready']]];
 		var live = liveOrders();
 		document.getElementById('board').innerHTML = lanes.map(function (l) {
 			var list = live.filter(function (o) { return l[2].indexOf(o.status) !== -1; });
@@ -438,7 +432,7 @@ a{color:inherit;}
 		b.setAttribute('aria-pressed', 'true');
 		store = b.getAttribute('data-store');
 		render();
-		document.getElementById('announce').textContent = 'Showing ' + (store === 'all' ? 'all stores' : store);
+		document.getElementById('announce').textContent = 'Showing ' + store + ' pickup orders';
 	});
 
 	/* advance an order through the real status machine */
@@ -458,16 +452,16 @@ a{color:inherit;}
 		} else {
 			o.status = liveNext(o).to;
 		}
-		var lbl = {confirmed: 'accepted', preparing: 'now prepping', baking: 'in the oven', ready: 'ready for collection', out_for_delivery: 'out for delivery', completed: 'completed'}[o.status] || o.status;
+		var lbl = {confirmed: 'accepted', preparing: 'now prepping', baking: 'in the oven', ready: 'ready for collection', completed: 'collected'}[o.status] || o.status;
 		document.getElementById('announce').textContent = 'Order #' + r + ' — ' + lbl;
 		render();
 	});
 
 	/* simulate */
 	var simSet = [
-		{ store: 'Bankstown', who: 'Walk-in tablet', type: 'Pickup', items: ['1× Zaatar', '1× Cheese'], total: 13.00 },
-		{ store: 'Revesby', who: 'Hadi N.', type: 'Delivery', items: ['1× All Meat', '1× Ayran'], total: 22.50 },
-		{ store: 'Roselands', who: 'Tina V.', type: 'Pickup', items: ['2× Zaatar & Cheese', '1× Juice'], total: 24.00 }
+		{ store: 'Revesby', who: 'Walk-in tablet', type: 'Pickup', items: ['1× Zaatar', '1× Cheese'], total: 13.00 },
+		{ store: 'Revesby', who: 'Hadi N.', type: 'Pickup', items: ['1× All Meat', '1× Ayran'], total: 22.50 },
+		{ store: 'Revesby', who: 'Tina V.', type: 'Pickup', items: ['2× Zaatar & Cheese', '1× Juice'], total: 24.00 }
 	];
 	var simN = 0;
 	document.getElementById('sim').addEventListener('click', function () {

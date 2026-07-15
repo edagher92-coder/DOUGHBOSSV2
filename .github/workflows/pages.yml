@@ -2,7 +2,7 @@ name: Deploy demo to GitHub Pages
 
 on:
   push:
-    branches: [ "claude/funny-goodall-gsoog4" ]
+    branches: [ "claude/doughboss-website-design-fixes-li6dqa" ]
     paths:
       - "demo/**"
       - ".github/workflows/pages.yml"
