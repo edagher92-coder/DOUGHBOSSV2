@@ -1779,6 +1779,7 @@ JS;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$edit_id = isset( $_GET['edit'] ) ? absint( $_GET['edit'] ) : 0;
 		$editing = $edit_id ? DoughBoss_Locations::get( $edit_id ) : null;
+		$hours  = $editing ? DoughBoss_Locations::weekly_hours( $edit_id ) : array_fill_keys( array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' ), '' );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$msg     = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
 
@@ -1792,6 +1793,8 @@ JS;
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop saved.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'deleted' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop deleted.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'hours_invalid' === $msg ) : ?>
+				<div class="notice notice-error"><p><?php esc_html_e( 'The shop was saved, but its pickup hours were invalid. Use 24-hour ranges such as 11:00-21:00.', 'doughboss' ); ?></p></div>
 			<?php endif; ?>
 
 			<table class="wp-list-table widefat fixed striped" style="margin-bottom:1.5rem;">
@@ -1865,6 +1868,40 @@ JS;
 						<td><input name="prep_time_default" id="db-loc-prep" type="number" min="0" class="small-text" value="<?php echo esc_attr( $f( 'prep_time_default', 20 ) ); ?>" /></td>
 					</tr>
 					<tr>
+						<th><label for="db-loc-timezone"><?php esc_html_e( 'Shop timezone', 'doughboss' ); ?></label></th>
+						<td><input name="timezone" id="db-loc-timezone" type="text" class="regular-text" value="<?php echo esc_attr( $f( 'timezone', 'Australia/Sydney' ) ); ?>" /><p class="description"><?php esc_html_e( 'IANA timezone used for opening hours and daylight saving, normally Australia/Sydney.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-capacity-mode"><?php esc_html_e( 'Capacity rollout', 'doughboss' ); ?></label></th>
+						<td><select name="capacity_mode" id="db-capacity-mode"><option value="off" <?php selected( $f( 'capacity_mode', 'off' ), 'off' ); ?>><?php esc_html_e( 'Off — current checkout', 'doughboss' ); ?></option><option value="shadow" <?php selected( $f( 'capacity_mode', 'off' ), 'shadow' ); ?>><?php esc_html_e( 'Shadow — staff preview only', 'doughboss' ); ?></option></select><p class="description"><?php esc_html_e( 'Shadow mode calculates proposed windows without restricting customers or changing payments. Customer enforcement stays locked until the concurrency rehearsal passes.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Slot rules', 'doughboss' ); ?></th>
+						<td>
+							<label><?php esc_html_e( 'Window', 'doughboss' ); ?> <input name="slot_minutes" type="number" min="5" max="120" value="<?php echo esc_attr( $f( 'slot_minutes', 15 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Notice', 'doughboss' ); ?> <input name="minimum_notice_minutes" type="number" min="0" max="1440" value="<?php echo esc_attr( $f( 'minimum_notice_minutes', 30 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Horizon', 'doughboss' ); ?> <input name="booking_horizon_days" type="number" min="1" max="31" value="<?php echo esc_attr( $f( 'booking_horizon_days', 7 ) ); ?>" class="small-text" /> <?php esc_html_e( 'days', 'doughboss' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Conservative limits', 'doughboss' ); ?></th>
+						<td>
+							<label><?php esc_html_e( 'Orders per window', 'doughboss' ); ?> <input name="slot_order_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_order_capacity', 4 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Item units per window', 'doughboss' ); ?> <input name="slot_unit_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_unit_capacity', 12 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Hold', 'doughboss' ); ?> <input name="hold_minutes" type="number" min="1" max="30" value="<?php echo esc_attr( $f( 'hold_minutes', 10 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Item units currently mean cart quantity, not prep minutes or oven load. Tune from real Revesby observations before customer use.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Weekly pickup hours', 'doughboss' ); ?></th>
+						<td>
+							<?php foreach ( array( 'mon' => __( 'Mon', 'doughboss' ), 'tue' => __( 'Tue', 'doughboss' ), 'wed' => __( 'Wed', 'doughboss' ), 'thu' => __( 'Thu', 'doughboss' ), 'fri' => __( 'Fri', 'doughboss' ), 'sat' => __( 'Sat', 'doughboss' ), 'sun' => __( 'Sun', 'doughboss' ) ) as $day_key => $day_label ) : ?>
+								<label style="display:inline-block;margin:0 .75rem .5rem 0;"><?php echo esc_html( $day_label ); ?> <input name="capacity_hours[<?php echo esc_attr( $day_key ); ?>]" type="text" size="16" value="<?php echo esc_attr( $hours[ $day_key ] ); ?>" placeholder="11:00-21:00" /></label>
+							<?php endforeach; ?>
+							<p class="description"><?php esc_html_e( 'Leave closed days blank. Split service is supported with comma-separated ranges, for example 11:00-14:00, 17:00-21:00.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
 						<td>
 							<label><input type="checkbox" name="pickup_enabled" value="1" <?php checked( $editing ? $editing->pickup_enabled : 1, 1 ); ?> /> <?php esc_html_e( 'Pickup', 'doughboss' ); ?></label><br />
@@ -1901,6 +1938,14 @@ JS;
 			'phone'             => isset( $_POST['phone'] ) ? wp_unslash( $_POST['phone'] ) : '',
 			'postcodes'         => isset( $_POST['postcodes'] ) ? wp_unslash( $_POST['postcodes'] ) : '',
 			'prep_time_default' => isset( $_POST['prep_time_default'] ) ? (int) $_POST['prep_time_default'] : 20,
+			'timezone'          => isset( $_POST['timezone'] ) ? wp_unslash( $_POST['timezone'] ) : 'Australia/Sydney',
+			'capacity_mode'     => isset( $_POST['capacity_mode'] ) ? wp_unslash( $_POST['capacity_mode'] ) : 'off',
+			'slot_minutes'      => isset( $_POST['slot_minutes'] ) ? (int) $_POST['slot_minutes'] : 15,
+			'minimum_notice_minutes' => isset( $_POST['minimum_notice_minutes'] ) ? (int) $_POST['minimum_notice_minutes'] : 30,
+			'booking_horizon_days' => isset( $_POST['booking_horizon_days'] ) ? (int) $_POST['booking_horizon_days'] : 7,
+			'hold_minutes'      => isset( $_POST['hold_minutes'] ) ? (int) $_POST['hold_minutes'] : 10,
+			'slot_order_capacity' => isset( $_POST['slot_order_capacity'] ) ? (int) $_POST['slot_order_capacity'] : 4,
+			'slot_unit_capacity' => isset( $_POST['slot_unit_capacity'] ) ? (int) $_POST['slot_unit_capacity'] : 12,
 			'pickup_enabled'    => isset( $_POST['pickup_enabled'] ) ? 1 : 0,
 			'delivery_enabled'  => isset( $_POST['delivery_enabled'] ) ? 1 : 0,
 			'is_active'         => isset( $_POST['is_active'] ) ? 1 : 0,
@@ -1909,10 +1954,13 @@ JS;
 		if ( $id ) {
 			DoughBoss_Locations::update( $id, $data );
 		} else {
-			DoughBoss_Locations::create( $data );
+			$id = DoughBoss_Locations::create( $data );
 		}
+		$raw_hours = isset( $_POST['capacity_hours'] ) && is_array( $_POST['capacity_hours'] ) ? wp_unslash( $_POST['capacity_hours'] ) : array();
+		$hours_saved = $id ? DoughBoss_Locations::save_weekly_hours( $id, $raw_hours ) : new WP_Error( 'doughboss_location_save', __( 'The shop could not be saved.', 'doughboss' ) );
+		$msg = is_wp_error( $hours_saved ) ? 'hours_invalid' : 'saved';
 
-		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'msg' => 'saved' ), admin_url( 'admin.php' ) ) );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'edit' => $id, 'msg' => $msg ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
