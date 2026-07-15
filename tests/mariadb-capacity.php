@@ -12,12 +12,11 @@ require_once $plugin . '/includes/class-doughboss-migrations.php';
 require_once $plugin . '/includes/class-doughboss-capacity.php';
 
 global $wpdb;
-$passed = 0;
-$failed = 0;
+$GLOBALS['doughboss_mariadb_passed'] = 0;
+$GLOBALS['doughboss_mariadb_failed'] = 0;
 function mariadb_ok( $condition, $label ) {
-	global $passed, $failed;
-	if ( $condition ) { ++$passed; echo "  ok   {$label}\n"; }
-	else { ++$failed; echo "  FAIL {$label}\n"; }
+	if ( $condition ) { ++$GLOBALS['doughboss_mariadb_passed']; echo "  ok   {$label}\n"; }
+	else { ++$GLOBALS['doughboss_mariadb_failed']; echo "  FAIL {$label}\n"; }
 }
 function mariadb_sql( $sql ) {
 	global $wpdb;
@@ -160,5 +159,7 @@ $usage = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) AS holds, COALESCE(SUM
 mariadb_ok( 1 === (int) $usage->holds && 1 === (int) $usage->units, 'committed capacity never exceeds the final unit' );
 
 foreach ( glob( $base . '.*' ) as $file ) { unlink( $file ); }
+$passed = (int) $GLOBALS['doughboss_mariadb_passed'];
+$failed = (int) $GLOBALS['doughboss_mariadb_failed'];
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed ? 1 : 0 );
