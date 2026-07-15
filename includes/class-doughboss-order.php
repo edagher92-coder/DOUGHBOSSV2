@@ -211,7 +211,7 @@ class DoughBoss_Order {
 	 *
 	 * @param array   $data  Customer/order fields and totals.
 	 * @param array[] $lines Cart lines.
-	 * @return int|WP_Error New order ID or error.
+	 * @return array|WP_Error Creation result with order_id/replayed, or error.
 	 */
 	public static function create( array $data, array $lines ) {
 		global $wpdb;
@@ -237,6 +237,10 @@ class DoughBoss_Order {
 
 		$capacity = null;
 		if ( ! empty( $data['capacity_hold_token'] ) ) {
+			if ( 'paid' !== ( isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid' ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_capacity_payment_required', __( 'A verified payment is required before a scheduled pickup can be confirmed.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 			if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.12.0', '<' ) ) {
 				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 				return new WP_Error( 'doughboss_capacity_unavailable', __( 'Pickup-time scheduling is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
@@ -256,8 +260,11 @@ class DoughBoss_Order {
 				return $capacity;
 			}
 			if ( ! empty( $capacity['replayed_order_id'] ) ) {
-				$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-				return (int) $capacity['replayed_order_id'];
+				if ( false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					return new WP_Error( 'doughboss_db_error', __( 'Could not safely replay your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+				}
+				return array( 'order_id' => (int) $capacity['replayed_order_id'], 'replayed' => true );
 			}
 		}
 
@@ -272,7 +279,7 @@ class DoughBoss_Order {
 				array(
 					'order_number'  => self::generate_order_number(),
 					'location_id'   => isset( $data['location_id'] ) ? (int) $data['location_id'] : 0,
-					'status'        => $capacity ? 'confirmed' : 'pending',
+					'status'        => 'pending',
 					'order_type'    => $data['order_type'],
 					'customer_name' => $data['customer_name'],
 					'customer_email'=> $data['customer_email'],
@@ -346,7 +353,7 @@ class DoughBoss_Order {
 				'order_version' => 1,
 				'event_type'    => 'created',
 				'from_status'   => '',
-				'to_status'     => $capacity ? 'confirmed' : 'pending',
+				'to_status'     => 'pending',
 				'actor_type'    => 'customer',
 				'actor_id'      => 0,
 				'reason_code'   => '',
@@ -379,7 +386,7 @@ class DoughBoss_Order {
 		 */
 		do_action( 'doughboss_order_created', $order_id, $data );
 
-		return $order_id;
+		return array( 'order_id' => $order_id, 'replayed' => false );
 	}
 
 	/**
