@@ -424,31 +424,47 @@ class DoughBoss_Activator {
 	 */
 	public static function capacity_storage_ready() {
 		global $wpdb;
-		$tables = array(
-			$wpdb->prefix . 'doughboss_locations',
-			$wpdb->prefix . 'doughboss_location_hours',
-			$wpdb->prefix . 'doughboss_schedule_exceptions',
-			$wpdb->prefix . 'doughboss_capacity_slots',
-			$wpdb->prefix . 'doughboss_capacity_holds',
+		$orders     = $wpdb->prefix . 'doughboss_orders';
+		$locations  = $wpdb->prefix . 'doughboss_locations';
+		$hours      = $wpdb->prefix . 'doughboss_location_hours';
+		$exceptions = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		$slots      = $wpdb->prefix . 'doughboss_capacity_slots';
+		$holds      = $wpdb->prefix . 'doughboss_capacity_holds';
+		$required = array(
+			$orders => array( 'capacity_hold_id', 'capacity_units', 'fire_at_utc', 'planning_version' ),
+			$locations => array( 'timezone', 'capacity_mode', 'slot_minutes', 'minimum_notice_minutes', 'booking_horizon_days', 'hold_minutes', 'slot_order_capacity', 'slot_unit_capacity', 'planning_version' ),
+			$hours => array( 'location_id', 'order_type', 'weekday', 'segment', 'opens_at', 'closes_at', 'is_active' ),
+			$exceptions => array( 'location_id', 'order_type', 'service_date', 'segment', 'is_closed', 'opens_at', 'closes_at', 'order_capacity', 'unit_capacity' ),
+			$slots => array( 'location_id', 'order_type', 'starts_at_utc', 'ends_at_utc', 'timezone_snapshot', 'order_capacity', 'unit_capacity', 'planning_version', 'accepting_holds' ),
+			$holds => array( 'slot_id', 'token_hash', 'idempotency_key', 'cart_hash', 'status', 'capacity_units', 'expires_at', 'order_id', 'converted_at', 'released_at' ),
 		);
-		foreach ( $tables as $table ) {
+		foreach ( $required as $table => $columns ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
 			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
 				return false;
 			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$actual = (array) $wpdb->get_col( "SHOW COLUMNS FROM {$table}" );
+			if ( array_diff( $columns, $actual ) ) {
+				return false;
+			}
 		}
 
-		$slots = $wpdb->prefix . 'doughboss_capacity_slots';
-		$holds = $wpdb->prefix . 'doughboss_capacity_holds';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$slot_mutex = $wpdb->get_var( "SHOW INDEX FROM {$slots} WHERE Key_name = 'location_slot' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$hours_unique = $wpdb->get_var( "SHOW INDEX FROM {$hours} WHERE Key_name = 'location_schedule' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$exception_unique = $wpdb->get_var( "SHOW INDEX FROM {$exceptions} WHERE Key_name = 'location_exception' AND Non_unique = 0" );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$token_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'token_hash' AND Non_unique = 0" );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$idem_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'idempotency_key' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$order_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'order_id' AND Non_unique = 0" );
 
-		return (bool) $slot_mutex && (bool) $token_unique && (bool) $idem_unique;
+		return (bool) $slot_mutex && (bool) $hours_unique && (bool) $exception_unique && (bool) $token_unique && (bool) $idem_unique && (bool) $order_unique;
 	}
 
 	/**
