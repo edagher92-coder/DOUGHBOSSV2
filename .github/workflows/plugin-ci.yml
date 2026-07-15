@@ -47,6 +47,9 @@ jobs:
       - name: Capacity window and timezone test
         run: php tests/capacity.php
 
+      - name: Capacity hold transaction test
+        run: php tests/capacity-holds.php
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
