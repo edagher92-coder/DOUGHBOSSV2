@@ -100,6 +100,38 @@ lifecycle_db_ok( ! DoughBoss_Activator::lifecycle_storage_ready(), 'partial even
 DoughBoss_Activator::create_tables();
 lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'dbDelta repairs the missing event contract' );
 
+// A same-named but wrongly-shaped unique index must not satisfy readiness.
+lifecycle_db_sql( "ALTER TABLE {$events} DROP INDEX order_version, ADD UNIQUE KEY order_version (order_id)" );
+lifecycle_db_ok( ! DoughBoss_Activator::lifecycle_storage_ready(), 'wrong ordered columns under the expected index name fail readiness' );
+lifecycle_db_sql( "ALTER TABLE {$events} DROP INDEX order_version, ADD UNIQUE KEY order_version (order_id,order_version)" );
+lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'exact event uniqueness contract restores readiness' );
+
+// A prefix-only idempotency key can still collide and is not the same contract.
+lifecycle_db_sql( "ALTER TABLE {$events} DROP INDEX event_key, ADD UNIQUE KEY event_key (event_key(16))" );
+lifecycle_db_ok( ! DoughBoss_Activator::lifecycle_storage_ready(), 'prefix-only event key fails readiness' );
+lifecycle_db_sql( "ALTER TABLE {$events} DROP INDEX event_key, ADD UNIQUE KEY event_key (event_key)" );
+lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'full event idempotency key restores readiness' );
+
+// A present column with an unsafe default must also fail readiness.
+lifecycle_db_sql( "ALTER TABLE {$orders} MODIFY version bigint(20) unsigned NOT NULL DEFAULT 2" );
+lifecycle_db_ok( ! DoughBoss_Activator::lifecycle_storage_ready(), 'wrong order-version default fails readiness' );
+lifecycle_db_sql( "ALTER TABLE {$orders} MODIFY version bigint(20) unsigned NOT NULL DEFAULT 1" );
+lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'exact lifecycle column contract restores readiness' );
+
+// Integer display width is not storage semantics and is omitted by MySQL 8.
+lifecycle_db_sql( "ALTER TABLE {$orders} MODIFY version bigint(19) unsigned NOT NULL DEFAULT 1" );
+lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'integer display-width variation remains compatible' );
+lifecycle_db_sql( "ALTER TABLE {$orders} MODIFY version bigint(20) NOT NULL DEFAULT 1" );
+lifecycle_db_ok( ! DoughBoss_Activator::lifecycle_storage_ready(), 'signed lifecycle version fails readiness' );
+lifecycle_db_sql( "ALTER TABLE {$orders} MODIFY version bigint(20) unsigned NOT NULL DEFAULT 1" );
+lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'unsigned lifecycle version restores readiness' );
+
+// NULL and an empty default must never be treated as equivalent.
+lifecycle_db_sql( "ALTER TABLE {$orders} ALTER timezone_snapshot DROP DEFAULT" );
+lifecycle_db_ok( ! DoughBoss_Activator::lifecycle_storage_ready(), 'missing timezone default fails readiness' );
+lifecycle_db_sql( "ALTER TABLE {$orders} ALTER timezone_snapshot SET DEFAULT ''" );
+lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'empty timezone default restores readiness' );
+
 // Prove the real InnoDB transaction rolls the order update back when its event
 // cannot be written.
 $wpdb->insert( $orders, array( 'order_number' => 'DB-LIFECYCLE-ROLLBACK-1', 'location_id' => $location_id, 'status' => 'pending', 'version' => 1, 'order_type' => 'pickup' ) );
