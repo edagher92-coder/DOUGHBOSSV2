@@ -7,6 +7,9 @@
 
 $plugin = dirname( __DIR__ );
 require_once $plugin . '/doughboss.php';
+require_once $plugin . '/includes/class-doughboss-settings.php';
+require_once $plugin . '/includes/class-doughboss-migrations.php';
+require_once $plugin . '/includes/class-doughboss-capacity.php';
 
 global $wpdb;
 $passed = 0;
