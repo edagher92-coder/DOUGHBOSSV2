@@ -634,8 +634,9 @@
 				var parent = form.parentNode;
 				parent.innerHTML = '';
 				parent.appendChild(el('div', { class: 'db-confirm' }, [
-					el('h3', { text: res.message }),
+					el('h3', { text: 'Order received' }),
 					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
+					el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }),
 					el('p', { text: (stripe ? 'Paid: ' : 'Total: ') + money(res.total) })
 				]));
 				// Mark this cart widget done BEFORE notifying — the notification
@@ -723,6 +724,16 @@
 		var result = root.querySelector('.db-track-result');
 		if (!form) { return; }
 
+		function trackingTime(value, timezone) {
+			if (!value) { return ''; }
+			var date = new Date(value);
+			if (isNaN(date.getTime())) { return ''; }
+			var options = { hour: 'numeric', minute: '2-digit' };
+			if (timezone) { options.timeZone = timezone; }
+			try { return new Intl.DateTimeFormat('en-AU', options).format(date); }
+			catch (ignore) { delete options.timeZone; return new Intl.DateTimeFormat('en-AU', options).format(date); }
+		}
+
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
 			result.innerHTML = '';
@@ -735,11 +746,32 @@
 					(order.items || []).forEach(function (it) {
 						items.appendChild(el('li', { text: it.quantity + '× ' + it.name }));
 					});
-					result.appendChild(el('div', { class: 'db-track-card' }, [
+					var from = trackingTime(order.promised_ready_from_utc, order.timezone);
+					var by = trackingTime(order.promised_ready_by_utc, order.timezone);
+					var showEstimate = ['confirmed', 'preparing', 'baking'].indexOf(order.status) !== -1;
+					var windowText = showEstimate && from ? (by && by !== from ? from + '–' + by : from) : '';
+					var paymentText;
+					if (order.customer_status === 'cancelled') {
+						paymentText = order.payment_status === 'refunded' ? 'Payment: refunded' : (order.payment_status === 'paid' ? 'Payment: paid — contact the shop for the refund status' : 'Payment: no payment due');
+					} else {
+						paymentText = order.payment_status === 'paid' ? 'Payment: paid' : (order.payment_status === 'refunded' ? 'Payment: refunded' : 'Payment: due at the shop');
+					}
+					var collectionCue = order.customer_status === 'ready_for_pickup'
+						? el('p', { class: 'db-track-collection', text: 'Your order is ready — please collect it from the shop.' })
+						: (order.customer_status === 'ready_for_delivery' ? el('p', { class: 'db-track-collection', text: 'Your order is ready for delivery.' }) : null);
+					var cancellationCue = order.customer_status === 'cancelled'
+						? el('p', { class: 'db-track-note', text: order.payment_status === 'refunded' ? 'Your payment has been refunded.' : 'If you paid online, contact the shop to confirm the refund status.' })
+						: null;
+					result.appendChild(el('div', { class: 'db-track-card db-track-' + (order.customer_status || 'received') }, [
 						el('h4', { text: 'Order ' + order.order_number }),
-						el('p', { class: 'db-status-badge', text: order.status_label }),
+						el('p', { class: 'db-status-badge', text: order.customer_status_label || order.status_label }),
+						windowText ? el('p', { class: 'db-track-timing', text: 'Staff ready estimate: ' + windowText }) : null,
+						collectionCue,
+						cancellationCue,
 						items,
-						el('p', { text: 'Total: ' + money(order.total) })
+						el('p', { text: 'Total: ' + money(order.total) }),
+						el('p', { class: 'db-track-payment', text: paymentText }),
+						el('p', { class: 'db-track-checked', text: 'Last checked ' + new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date()) })
 					]));
 				})
 				.catch(function (err) {

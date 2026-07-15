@@ -390,6 +390,27 @@
 	font-size: 0.9rem;
 }
 
+.db-track-timing,
+.db-track-collection,
+.db-track-note {
+	border-left: 4px solid var(--db-accent);
+	padding: 0.55rem 0.7rem;
+	background: #fff8f5;
+}
+
+.db-track-collection {
+	border-color: #137333;
+	font-weight: 700;
+}
+
+.db-track-payment,
+.db-track-checked {
+	color: #5f6368;
+	font-size: 0.85rem;
+}
+
+.db-track-checked { margin-bottom: 0; }
+
 .db-item-list {
 	margin: 0.5rem 0;
 	padding-left: 1.1rem;

@@ -1,9 +1,11 @@
 # ADR: order lifecycle, timing and capacity
 
-**Status:** proposed; Stage 0 initiated by architecture review
+**Status:** Stage 1 compatibility foundation implemented locally; production rollout pending
 
 **Date:** 14 July 2026
 **Scope:** Revesby pickup-first customer ordering and staff kitchen workflow
+
+**Implementation update (15 July 2026):** Versioned forward-only transitions, durable order events, lifecycle timestamps, staff-estimated ready windows and separate customer status wording are implemented while retaining existing persisted state names. Capacity slots, manager overrides, durable notifications and payment-provider activation remain later stages. See `DoughBoss-Phase-2-Lifecycle-Implementation-2026-07-15.md`.
 
 ## Context
 

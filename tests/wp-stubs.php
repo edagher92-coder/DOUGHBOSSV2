@@ -64,7 +64,25 @@ class WP_REST_Server { const READABLE = 'GET'; const CREATABLE = 'POST'; const E
 function register_rest_route( $ns, $route, $args = array(), $override = false ) { $key = rtrim( $ns, '/' ) . '/' . ltrim( $route, '/' ); $GLOBALS['__db_rest'][] = $key; $GLOBALS['__db_rest_args'][ $key ] = $args; return true; }
 function rest_url( $p = '' ) { return 'http://example.test/wp-json/' . ltrim( $p, '/' ); }
 function is_wp_error( $t ) { return $t instanceof WP_Error; }
-class WP_Error { public $errors = array(); public function __construct( $c = '', $m = '', $d = null ) { if ( $c ) { $this->errors[ $c ][] = $m; } } public function get_error_message() { return ''; } public function get_error_code() { return ''; } }
+class WP_Error {
+	public $errors = array();
+	public $error_data = array();
+	public function __construct( $c = '', $m = '', $d = null ) {
+		if ( $c ) {
+			$this->errors[ $c ][] = $m;
+			if ( null !== $d ) { $this->error_data[ $c ] = $d; }
+		}
+	}
+	public function get_error_message( $c = '' ) {
+		$c = $c ?: $this->get_error_code();
+		return isset( $this->errors[ $c ][0] ) ? $this->errors[ $c ][0] : '';
+	}
+	public function get_error_code() { return $this->errors ? array_key_first( $this->errors ) : ''; }
+	public function get_error_data( $c = '' ) {
+		$c = $c ?: $this->get_error_code();
+		return isset( $this->error_data[ $c ] ) ? $this->error_data[ $c ] : null;
+	}
+}
 class WP_REST_Response { public $data; public $status; public function __construct( $d = null, $s = 200 ) { $this->data = $d; $this->status = $s; } public function set_status( $s ) { $this->status = $s; } }
 class WP_REST_Request implements ArrayAccess {
 	private $p = array();

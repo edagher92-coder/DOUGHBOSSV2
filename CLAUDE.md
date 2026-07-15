@@ -5,10 +5,11 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 ## Current repo state
 
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
-- **Primary platform branch under review:** `claude/funny-goodall-gsoog4`
-- **Open platform PR:** PR #2, draft, large Phase 2 branch. Treat it as a staging/integration branch, not a production release by default.
-- **Plugin version on the platform branch:** `2.17.0` (`DOUGHBOSS_VERSION`)
-- **DB schema version on the platform branch:** `1.10.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
+- **Primary integration branch:** `claude/doughboss-website-design-fixes-li6dqa`
+- **Open lifecycle PR:** PR #22, draft, plugin `2.18.0` / DB `1.11.0`. It adds the versioned order lifecycle and must remain a staging release until the sanitised-backup migration/restore rehearsal is recorded.
+- **Stacked capacity PR:** PR #23, draft, based on PR #22. It is a shadow-only Phase 3 foundation and must be retargeted/retested after PR #22 merges.
+- **Plugin version on the lifecycle branch:** `2.18.0` (`DOUGHBOSS_VERSION`)
+- **DB schema version on the lifecycle branch:** `1.11.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
 - **Requires:** WordPress 6.0+, PHP 7.4+
 - **REST namespace:** `doughboss/v1`
 - **Text domain:** `doughboss`
@@ -172,6 +173,7 @@ When agents disagree, choose the smallest safe release that preserves the abilit
 - The current platform branch is ahead of the default/base branch and includes many off-by-default integrations. Inspect the target branch before making assumptions.
 - `includes/class-doughboss-rest-controller.php` is large. Prefer extracting new REST domains instead of adding more methods to it.
 - Demo assets and docs are useful, but plugin release safety comes first.
-- Static demo deploy workflow is separate from plugin CI.
+- Static demo deploy workflow is separate from plugin CI. Plugin CI now covers PHP/JavaScript verification, an installable zip, secret scanning and MariaDB lifecycle rehearsal.
 - Live-site deployment is not proven by repository state alone. Require explicit approval, backup, and smoke test before production.
+- PR #22's MariaDB jobs are synthetic evidence; they do not replace `docs/DoughBoss-Phase-2-Staging-Rehearsal-Runbook.md` on a recent sanitised production copy.
 - Keep this file current. A stale `CLAUDE.md` creates cascading agent errors.
