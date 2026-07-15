@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.18.0
+Stable tag: 2.19.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,11 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.19.0 =
+* Add the disabled-by-default, time-zone-aware pickup capacity planning engine.
+* Add transactional schedule, slot and hold storage with durable per-slot locking.
+* Add deterministic Sydney DST, notice, blackout and capacity-boundary tests.
 
 = 2.18.0 =
 * New: versioned, forward-only order lifecycle with optimistic concurrency so a
