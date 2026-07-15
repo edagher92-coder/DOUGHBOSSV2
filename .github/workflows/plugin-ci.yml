@@ -50,6 +50,9 @@ jobs:
       - name: Capacity hold transaction test
         run: php tests/capacity-holds.php
 
+      - name: Atomic hold-to-order conversion test
+        run: php tests/order-capacity.php
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
