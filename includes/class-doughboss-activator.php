@@ -31,11 +31,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Order lifecycle storage is missing or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order or capacity storage is missing or is not using InnoDB.' );
 		}
 	}
 
@@ -61,6 +61,10 @@ class DoughBoss_Activator {
 		$vouchers        = $wpdb->prefix . 'doughboss_vouchers';
 		$redemptions     = $wpdb->prefix . 'doughboss_voucher_redemptions';
 		$pospal_outbox   = $wpdb->prefix . 'doughboss_pospal_outbox';
+		$location_hours  = $wpdb->prefix . 'doughboss_location_hours';
+		$exceptions      = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		$capacity_slots  = $wpdb->prefix . 'doughboss_capacity_slots';
+		$capacity_holds  = $wpdb->prefix . 'doughboss_capacity_holds';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -92,6 +96,10 @@ class DoughBoss_Activator {
 			promised_ready_from_utc datetime NULL DEFAULT NULL,
 			promised_ready_by_utc datetime NULL DEFAULT NULL,
 			timezone_snapshot varchar(64) NOT NULL DEFAULT '',
+			capacity_hold_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			capacity_units int(10) unsigned NOT NULL DEFAULT 0,
+			fire_at_utc datetime NULL DEFAULT NULL,
+			planning_version bigint(20) unsigned NOT NULL DEFAULT 0,
 			cooking_started_at datetime NULL DEFAULT NULL,
 			ready_at datetime NULL DEFAULT NULL,
 			completed_at datetime NULL DEFAULT NULL,
@@ -104,6 +112,7 @@ class DoughBoss_Activator {
 			KEY customer_email (customer_email),
 			KEY location_id (location_id),
 			KEY promised_ready_from (location_id,promised_ready_from_utc),
+			KEY fire_time (location_id,fire_at_utc),
 			KEY payment_intent_id (payment_intent_id)
 		) ENGINE=InnoDB {$charset_collate};";
 
@@ -149,6 +158,15 @@ class DoughBoss_Activator {
 			phone varchar(40) NOT NULL DEFAULT '',
 			postcodes text NULL,
 			prep_time_default int(11) NOT NULL DEFAULT 20,
+			timezone varchar(64) NOT NULL DEFAULT 'Australia/Sydney',
+			capacity_mode varchar(12) NOT NULL DEFAULT 'off',
+			slot_minutes smallint(5) unsigned NOT NULL DEFAULT 15,
+			minimum_notice_minutes smallint(5) unsigned NOT NULL DEFAULT 30,
+			booking_horizon_days smallint(5) unsigned NOT NULL DEFAULT 7,
+			hold_minutes smallint(5) unsigned NOT NULL DEFAULT 10,
+			slot_order_capacity smallint(5) unsigned NOT NULL DEFAULT 4,
+			slot_unit_capacity smallint(5) unsigned NOT NULL DEFAULT 12,
+			planning_version bigint(20) unsigned NOT NULL DEFAULT 1,
 			pickup_enabled tinyint(1) NOT NULL DEFAULT 1,
 			delivery_enabled tinyint(1) NOT NULL DEFAULT 0,
 			is_active tinyint(1) NOT NULL DEFAULT 1,
@@ -156,7 +174,77 @@ class DoughBoss_Activator {
 			PRIMARY KEY  (id),
 			KEY slug (slug),
 			KEY is_active (is_active)
-		) {$charset_collate};";
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_location_hours = "CREATE TABLE {$location_hours} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			location_id bigint(20) unsigned NOT NULL,
+			order_type varchar(20) NOT NULL DEFAULT 'pickup',
+			weekday tinyint(3) unsigned NOT NULL,
+			segment tinyint(3) unsigned NOT NULL DEFAULT 1,
+			opens_at time NOT NULL,
+			closes_at time NOT NULL,
+			is_active tinyint(1) NOT NULL DEFAULT 1,
+			PRIMARY KEY  (id),
+			UNIQUE KEY location_schedule (location_id,order_type,weekday,segment),
+			KEY active_hours (location_id,order_type,is_active)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_exceptions = "CREATE TABLE {$exceptions} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			location_id bigint(20) unsigned NOT NULL,
+			order_type varchar(20) NOT NULL DEFAULT 'pickup',
+			service_date date NOT NULL,
+			segment tinyint(3) unsigned NOT NULL DEFAULT 1,
+			is_closed tinyint(1) NOT NULL DEFAULT 0,
+			opens_at time NULL DEFAULT NULL,
+			closes_at time NULL DEFAULT NULL,
+			order_capacity smallint(5) unsigned NULL DEFAULT NULL,
+			unit_capacity smallint(5) unsigned NULL DEFAULT NULL,
+			note varchar(191) NOT NULL DEFAULT '',
+			PRIMARY KEY  (id),
+			UNIQUE KEY location_exception (location_id,order_type,service_date,segment),
+			KEY service_date (service_date)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_capacity_slots = "CREATE TABLE {$capacity_slots} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			location_id bigint(20) unsigned NOT NULL,
+			order_type varchar(20) NOT NULL DEFAULT 'pickup',
+			starts_at_utc datetime NOT NULL,
+			ends_at_utc datetime NOT NULL,
+			timezone_snapshot varchar(64) NOT NULL,
+			order_capacity smallint(5) unsigned NOT NULL,
+			unit_capacity smallint(5) unsigned NOT NULL,
+			planning_version bigint(20) unsigned NOT NULL DEFAULT 1,
+			accepting_holds tinyint(1) NOT NULL DEFAULT 1,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY location_slot (location_id,order_type,starts_at_utc),
+			KEY available_slots (location_id,order_type,starts_at_utc,accepting_holds)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_capacity_holds = "CREATE TABLE {$capacity_holds} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			slot_id bigint(20) unsigned NOT NULL,
+			token_hash char(64) NOT NULL,
+			idempotency_key varchar(191) NOT NULL,
+			cart_hash char(64) NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'held',
+			capacity_units int(10) unsigned NOT NULL,
+			expires_at datetime NOT NULL,
+			order_id bigint(20) unsigned NULL DEFAULT NULL,
+			converted_at datetime NULL DEFAULT NULL,
+			released_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY token_hash (token_hash),
+			UNIQUE KEY idempotency_key (idempotency_key),
+			UNIQUE KEY order_id (order_id),
+			KEY slot_state (slot_id,status,expires_at)
+		) ENGINE=InnoDB {$charset_collate};";
 
 		$sql_catering = "CREATE TABLE {$catering} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -268,6 +356,10 @@ class DoughBoss_Activator {
 		dbDelta( $sql_vouchers );
 		dbDelta( $sql_redemptions );
 		dbDelta( $sql_pospal_outbox );
+		dbDelta( $sql_location_hours );
+		dbDelta( $sql_exceptions );
+		dbDelta( $sql_capacity_slots );
+		dbDelta( $sql_capacity_holds );
 	}
 
 	/**
@@ -323,6 +415,40 @@ class DoughBoss_Activator {
 		$order_version_unique = $wpdb->get_var( "SHOW INDEX FROM {$events} WHERE Key_name = 'order_version' AND Non_unique = 0" );
 
 		return (bool) $event_key_unique && (bool) $order_version_unique;
+	}
+
+	/**
+	 * Verify the Phase 3 capacity tables and mutex/uniqueness constraints.
+	 *
+	 * @return bool
+	 */
+	public static function capacity_storage_ready() {
+		global $wpdb;
+		$tables = array(
+			$wpdb->prefix . 'doughboss_locations',
+			$wpdb->prefix . 'doughboss_location_hours',
+			$wpdb->prefix . 'doughboss_schedule_exceptions',
+			$wpdb->prefix . 'doughboss_capacity_slots',
+			$wpdb->prefix . 'doughboss_capacity_holds',
+		);
+		foreach ( $tables as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		$slots = $wpdb->prefix . 'doughboss_capacity_slots';
+		$holds = $wpdb->prefix . 'doughboss_capacity_holds';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$slot_mutex = $wpdb->get_var( "SHOW INDEX FROM {$slots} WHERE Key_name = 'location_slot' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$token_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'token_hash' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$idem_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'idempotency_key' AND Non_unique = 0" );
+
+		return (bool) $slot_mutex && (bool) $token_unique && (bool) $idem_unique;
 	}
 
 	/**

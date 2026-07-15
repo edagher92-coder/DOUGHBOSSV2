@@ -83,7 +83,7 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.11.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.11.0' );
+ok( '1.12.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.12.0' );
 ok( method_exists( 'DoughBoss_Order', 'transition' ), 'DoughBoss_Order::transition() exists' );
 ok( method_exists( 'DoughBoss_Order', 'events' ), 'DoughBoss_Order::events() exists' );
 ok( DoughBoss_Order::can_transition( 'pending', 'confirmed' ), 'pending can be accepted' );
