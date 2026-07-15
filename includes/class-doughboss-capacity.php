@@ -305,6 +305,91 @@ class DoughBoss_Capacity {
 		}
 	}
 
+	/**
+	 * Lock and validate a hold from inside the order-creation transaction.
+	 *
+	 * The first lookup is advisory only; writers always lock the durable slot
+	 * row before the hold row, matching create_hold() and preventing deadlocks.
+	 *
+	 * @param string                 $raw_token   Browser hold token.
+	 * @param string                 $cart_hash   Recomputed server cart hash.
+	 * @param int                    $location_id Resolved order location.
+	 * @param DateTimeImmutable|null $now_utc     Injected test clock.
+	 * @return array|WP_Error
+	 */
+	public static function lock_hold_for_order( $raw_token, $cart_hash, $location_id, $now_utc = null ) {
+		global $wpdb;
+		$raw_token  = trim( (string) $raw_token );
+		$cart_hash  = (string) $cart_hash;
+		$token_hash = hash( 'sha256', $raw_token );
+		if ( 64 !== strlen( $raw_token ) || 64 !== strlen( $cart_hash ) || ! absint( $location_id ) ) {
+			return new WP_Error( 'doughboss_hold_invalid', __( 'The pickup-time hold is invalid.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$now = self::utc_clock( $now_utc );
+		if ( ! $now ) {
+			return new WP_Error( 'doughboss_hold_clock', __( 'The server clock is unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+
+		$holds = $wpdb->prefix . 'doughboss_capacity_holds';
+		$slots = $wpdb->prefix . 'doughboss_capacity_slots';
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$slot_id = $wpdb->get_var( $wpdb->prepare( "SELECT slot_id FROM {$holds} WHERE token_hash = %s", $token_hash ) );
+		if ( ! $slot_id ) {
+			return new WP_Error( 'doughboss_hold_missing', __( 'That pickup-time hold could not be found.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$slot = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, l.prep_time_default FROM {$slots} s INNER JOIN {$locations} l ON l.id = s.location_id WHERE s.id = %d FOR UPDATE", $slot_id ) );
+		if ( ! $slot || (int) $slot->location_id !== (int) $location_id || 'pickup' !== $slot->order_type ) {
+			return new WP_Error( 'doughboss_hold_mismatch', __( 'That pickup-time hold belongs to another shop or order type.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$hold = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$holds} WHERE token_hash = %s AND slot_id = %d FOR UPDATE", $token_hash, $slot_id ) );
+		if ( ! $hold || ! hash_equals( (string) $hold->token_hash, $token_hash ) || ! hash_equals( (string) $hold->cart_hash, $cart_hash ) ) {
+			return new WP_Error( 'doughboss_hold_mismatch', __( 'The cart changed after this pickup time was held.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( 'converted' === $hold->status && ! empty( $hold->order_id ) ) {
+			return array( 'replayed_order_id' => (int) $hold->order_id );
+		}
+		if ( 'held' !== $hold->status || (string) $hold->expires_at <= $now->format( 'Y-m-d H:i:s' ) ) {
+			return new WP_Error( 'doughboss_hold_expired', __( 'That pickup-time hold has expired. Please choose a time again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		$ready_from = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', (string) $slot->starts_at_utc, new DateTimeZone( 'UTC' ) );
+		$ready_by   = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', (string) $slot->ends_at_utc, new DateTimeZone( 'UTC' ) );
+		if ( ! $ready_from || ! $ready_by || $ready_from <= $now || $ready_by <= $ready_from ) {
+			return new WP_Error( 'doughboss_slot_unavailable', __( 'That pickup time is no longer available.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$prep_minutes = max( 0, min( 240, (int) $slot->prep_time_default ) );
+		$fire_at      = $ready_from->modify( '-' . $prep_minutes . ' minutes' );
+
+		return array(
+			'hold_id'        => (int) $hold->id,
+			'capacity_units' => (int) $hold->capacity_units,
+			'promised_ready_from_utc' => $ready_from->format( 'Y-m-d H:i:s' ),
+			'promised_ready_by_utc'   => $ready_by->format( 'Y-m-d H:i:s' ),
+			'timezone_snapshot'       => (string) $slot->timezone_snapshot,
+			'fire_at_utc'             => $fire_at->format( 'Y-m-d H:i:s' ),
+			'planning_version'        => (int) $slot->planning_version,
+		);
+	}
+
+	/**
+	 * Convert a previously locked hold to an order in the caller's transaction.
+	 *
+	 * @param int    $hold_id Hold id.
+	 * @param int    $order_id New order id.
+	 * @param string $now_utc UTC MySQL timestamp.
+	 * @return bool
+	 */
+	public static function convert_locked_hold( $hold_id, $order_id, $now_utc ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_capacity_holds';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$updated = $wpdb->query( $wpdb->prepare( "UPDATE {$table} SET status = 'converted', order_id = %d, converted_at = %s, updated_at = %s WHERE id = %d AND status = 'held' AND order_id IS NULL", absint( $order_id ), $now_utc, $now_utc, absint( $hold_id ) ) );
+		return 1 === $updated;
+	}
+
 	/** @return DateTimeImmutable|false */
 	private static function utc_clock( $now_utc ) {
 		try {
