@@ -54,7 +54,7 @@ $slices = array(
 	'4 · POSPal'               => array( 'DoughBoss_POSPal', 'DoughBoss_POSPal_Sync', 'DoughBoss_POSPal_Orders' ),
 	'5 · catering'             => array( 'DoughBoss_Catering', 'DoughBoss_Catering_Package' ),
 	'6 · notifications/RT'     => array( 'DoughBoss_Mercure', 'DoughBoss_Ntfy', 'DoughBoss_SMS', 'DoughBoss_Emails', 'DoughBoss_Printer' ),
-	'7 · locations/reports/etc'=> array( 'DoughBoss_Locations', 'DoughBoss_Reports', 'DoughBoss_Privacy', 'DoughBoss_Menu_Seeder', 'DoughBoss_CLI' ),
+	'7 · locations/reports/etc'=> array( 'DoughBoss_Locations', 'DoughBoss_Capacity', 'DoughBoss_Reports', 'DoughBoss_Privacy', 'DoughBoss_Menu_Seeder', 'DoughBoss_CLI' ),
 );
 foreach ( $slices as $name => $classes ) {
 	section( "Slice $name" );
