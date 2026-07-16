@@ -5,6 +5,10 @@
 	'use strict';
 	var menuView = document.getElementById('view-menu');
 	if (!menuView) { return; }
+	var CFG = window.DBDemo.config;
+	var DEFAULT_LOCATION = window.DBDemo.getLocation(CFG.defaultLocationId);
+	document.documentElement.lang = CFG.region.language;
+	document.documentElement.dir = CFG.region.direction;
 	var cart = {};       // lineKey -> { key, name, catId, basePrice, price, opts, summary, qty, seq }
 	var controls = {};   // item name -> { el, name, price, catId, groups, lastSel }
 	var seq = 0;         // insertion counter so the tile "−" targets the newest line
@@ -14,7 +18,7 @@
 	var pendingOrder = null; // { name, phone } held during the simulated card-payment step
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-	function money(n) { return '$' + Number(n).toFixed(2); }
+	function money(n) { return window.DBDemo.formatMoney(n); }
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 	function count() { var c = 0; for (var k in cart) { c += cart[k].qty; } return c; }
 	function total() { var t = 0; for (var k in cart) { t += cart[k].price * cart[k].qty; } return t; }
@@ -110,7 +114,9 @@
 		var clone = nameEl.cloneNode(true);
 		Array.prototype.forEach.call(clone.querySelectorAll('.mn-tag'), function (t) { t.parentNode.removeChild(t); });
 		var name = clone.textContent.replace(/\s+/g, ' ').trim();
-		var price = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
+		var price = parseFloat(priceEl.getAttribute('data-price') || priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
+		priceEl.setAttribute('data-price', String(price));
+		priceEl.textContent = money(price);
 		var catEl = el.closest('.mn-cat');
 		var catId = catEl ? catEl.id : '';
 		var imgEl = el.querySelector('.mn-it-img');
@@ -348,11 +354,22 @@
 		var xsell = (!hasDrink && count())
 			? '<div class="cd-xsell"><span class="cd-xsell-t">Fancy a drink with that?</span><button type="button" class="cd-xsell-add" data-xsell="Soft Drinks 600ml">Add a soft drink <b>+' + money(dPrice) + '</b></button></div>'
 			: '';
+		var defaultMethods = window.DBDemo.enabledFulfilments(DEFAULT_LOCATION.id).map(function (key) { return window.DBDemo.t('fulfilment.' + key).toLowerCase(); });
 		drawer.innerHTML = '<div class="cd-head"><h3>Your order</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-body">' + lines + xsell + '</div>' +
 			'<div class="cd-foot"><div class="cd-tot"><span>Total</span><strong>' + money(total()) + '</strong></div>' +
 			'<button type="button" class="vb-btn vb-btn-ember cd-checkout"' + (count() ? '' : ' disabled') + '>Checkout</button>' +
-			'<p class="cd-note">Demo &middot; pickup from Revesby only &middot; no real payment.</p></div>';
+			'<p class="cd-note">Demo &middot; ' + esc(defaultMethods.join(' / ')) + ' from ' + esc(DEFAULT_LOCATION.name) + ' by default &middot; no real payment.</p></div>';
+	}
+
+	function routeOptions() {
+		var options = [];
+		window.DBDemo.activeLocations().forEach(function (location) {
+			window.DBDemo.enabledFulfilments(location.id).forEach(function (method) {
+				options.push('<option value="' + esc(location.id + '|' + method) + '">' + esc(window.DBDemo.t('fulfilment.' + method) + ' · ' + location.name) + '</option>');
+			});
+		});
+		return options.join('');
 	}
 
 	/* Compact read-only line list shown on the checkout step, so options like
@@ -396,6 +413,8 @@
 		var hoursHtml = open
 			? '<div class="cd-hours cd-hours--open">Open now &middot; pickup from Revesby</div>'
 			: '<div class="cd-hours cd-hours--shut">We&rsquo;re closed right now. Revesby ordering hours are <strong>6:30am&ndash;2pm</strong> (Thu&ndash;Sat to 8:30pm). Please order during opening hours.</div>';
+		var anyDelivery = window.DBDemo.activeLocations().some(function (location) { return window.DBDemo.enabledFulfilments(location.id).indexOf('delivery') !== -1; });
+		var paymentProvider = CFG.payments.enabled ? CFG.payments.selectedProvider : null;
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<form class="cd-form" novalidate>' +
 			'<div class="cd-scroll">' +
@@ -404,10 +423,11 @@
 			'<div class="cd-vouch">' + vouchHtml + '<p class="cd-verr" role="alert"></p></div>' +
 			'<label class="cd-f"><span>Name</span><input name="name" type="text" autocomplete="name" required></label>' +
 			'<label class="cd-f"><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required></label>' +
-			'<fieldset class="cd-f"><legend>Fulfilment</legend><p>Pickup from <strong>Revesby</strong></p><input type="hidden" name="ful" value="pickup"><input type="hidden" name="shop" value="Revesby"></fieldset>' +
+			'<label class="cd-f"><span>Location and fulfilment</span><select name="route" required>' + routeOptions() + '</select></label>' +
+			(anyDelivery ? '<label class="cd-f"><span>Delivery address <small>(required for delivery)</small></span><input name="address" type="text" autocomplete="street-address"></label>' : '') +
 			'<fieldset class="cd-f cd-pay">' +
 			'<legend>Payment</legend>' +
-			'<p class="cd-privacy cd-carddemo">Card payment (simulated). You&rsquo;ll enter test card details on the next step &mdash; orders &amp; payments are simulated, no real payment is taken.</p>' +
+			'<p class="cd-privacy cd-carddemo">Interactive demo only — use made-up test details, never a real card. ' + (paymentProvider ? esc(paymentProvider.toUpperCase()) + ' is selected by this profile.' : 'Payments are disabled; Tyro and Stripe remain available adapters.') + '</p>' +
 			'</fieldset>' +
 			'<p class="cd-privacy cd-modnote">Once your order is placed only small changes can be made &mdash; please check it over before you pay.</p>' +
 			'<p class="cd-privacy">We use your name and phone only to process your order. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
@@ -438,7 +458,7 @@
 			if (input) { input.focus(); }
 			return;
 		}
-		voucher = { code: code, amount: 5 };   // $5 off — the Dough Boss side of the student voucher
+		voucher = { code: code, amount: Number((CFG.promotions.studentVoucher || {}).amount || 0) };
 		renderCheckout();
 	}
 
@@ -446,11 +466,22 @@
 		var fd = new FormData(form);
 		var name = (fd.get('name') || '').toString().trim();
 		var phone = (fd.get('phone') || '').toString().trim();
+		var route = (fd.get('route') || '').toString().split('|');
+		var locationId = route[0], fulfilment = route[1];
+		var address = (fd.get('address') || '').toString().trim();
 		var err = form.querySelector('.cd-err');
 		if (!name || !phone) {
 			err.textContent = 'Please add your name and phone.';
 			var miss = form.querySelector(!name ? 'input[name="name"]' : 'input[name="phone"]');
 			if (miss) { miss.focus(); }
+			return;
+		}
+		if (!window.DBDemo.getLocation(locationId) || window.DBDemo.enabledFulfilments(locationId).indexOf(fulfilment) === -1) {
+			err.textContent = 'Please choose an available location and fulfilment method.';
+			return;
+		}
+		if (fulfilment === 'delivery' && !address) {
+			err.textContent = 'Please add a delivery address.';
 			return;
 		}
 		var agree = form.querySelector('input[name="agree"]');
@@ -463,7 +494,7 @@
 			err.textContent = 'Sorry, we’re closed right now — please order during opening hours (6:30am–2pm).';
 			return;
 		}
-		pendingOrder = { name: name, phone: phone };
+		pendingOrder = { name: name, phone: phone, locationId: locationId, fulfilment: fulfilment, address: address };
 		renderCardSheet();
 	}
 
@@ -514,14 +545,15 @@
 		if (!pendingOrder || !drawerOpen) { pendingOrder = null; return; }
 		drawer.setAttribute('aria-label', 'Order placed');
 		var name = pendingOrder.name;
-		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+		var location = window.DBDemo.getLocation(pendingOrder.locationId) || DEFAULT_LOCATION;
+		var ref = CFG.brand.orderReferencePrefix + '-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
 		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
 		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p>' +
-			'<p class="cd-eta">Ready for pickup in <strong>~15&ndash;20 min</strong> &middot; Revesby</p>' +
+			'<p class="cd-eta">' + esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated</p>' +
 			'<div class="cd-summary cd-donesum">' + summaryLines() + '</div>' +
-			'<p class="cd-note">No payment was taken and no real order was sent.</p></div>';
+			'<p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
 		cart = {};
 		voucher = null;
 		pendingOrder = null;
