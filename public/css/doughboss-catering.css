@@ -12,6 +12,16 @@
 	--dbc-line: #e4e1da;
 	--dbc-ember: #e2231a;
 	--dbc-radius: 12px;
+	--db-r-sm: 10px;
+	--db-r-md: 14px;
+	--db-r-lg: 18px;
+	--db-r-xl: 24px;
+	--db-r-pill: 999px;
+	--db-shadow-1: 0 1px 2px rgba(20, 16, 12, 0.05), 0 4px 12px rgba(20, 16, 12, 0.06);
+	--db-shadow-2: 0 2px 6px rgba(20, 16, 12, 0.07), 0 12px 28px rgba(20, 16, 12, 0.10);
+	--db-ease: cubic-bezier(0.32, 0.72, 0.33, 1);
+	--db-t-fast: 150ms;
+	--db-t-med: 220ms;
 	color: var(--dbc-ink);
 	max-width: 1100px;
 	margin: 0 auto;
@@ -79,19 +89,22 @@
 	flex-direction: column;
 	text-align: left;
 	padding: 0;
-	border: 1px solid var(--dbc-line);
-	border-radius: var(--dbc-radius);
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
 	background: var(--dbc-paper);
 	cursor: pointer;
 	overflow: hidden;
-	transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+	box-shadow: var(--db-shadow-1);
+	transition: border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease), transform var(--db-t-med) var(--db-ease);
 	font: inherit;
 	color: inherit;
 }
 
-.db-catering .dbc-card:hover {
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-	transform: translateY(-2px);
+@media (hover: hover) {
+	.db-catering .dbc-card:hover {
+		box-shadow: var(--db-shadow-2);
+		transform: translateY(-2px);
+	}
 }
 
 .db-catering .dbc-card.is-selected {
@@ -155,7 +168,7 @@
 .db-catering .dbc-selected {
 	background: #faf9f6;
 	border: 1px solid var(--dbc-line);
-	border-radius: 8px;
+	border-radius: var(--db-r-md);
 	padding: 10px 13px;
 	font-size: 14px;
 }
@@ -184,12 +197,13 @@
 .db-catering .dbc-field input,
 .db-catering .dbc-field textarea {
 	font: inherit;
-	padding: 10px 12px;
+	padding: 11px 13px;
 	border: 1px solid var(--dbc-line);
-	border-radius: 8px;
+	border-radius: var(--db-r-sm);
 	background: #fff;
 	color: var(--dbc-ink);
 	width: 100%;
+	transition: border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 }
 
 .db-catering .dbc-field input:focus,
@@ -215,10 +229,11 @@
 
 /* Quote box */
 .db-catering .dbc-quote {
-	border: 1px solid var(--dbc-line);
-	border-radius: var(--dbc-radius);
-	padding: 14px 16px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	padding: 16px 18px;
 	background: #faf9f6;
+	box-shadow: var(--db-shadow-1);
 }
 
 .db-catering .dbc-quote-line {
@@ -259,10 +274,15 @@
 	color: #fff;
 	background: var(--dbc-ember);
 	border: 0;
-	border-radius: 8px;
-	padding: 14px 28px;
+	border-radius: var(--db-r-pill);
+	padding: 14px 30px;
+	min-height: 48px;
 	cursor: pointer;
-	transition: filter 0.15s;
+	transition: filter var(--db-t-fast) var(--db-ease), transform var(--db-t-fast) var(--db-ease);
+}
+
+.db-catering .dbc-submit:active:not(:disabled) {
+	transform: scale(0.98);
 }
 
 .db-catering .dbc-submit:hover {
@@ -277,10 +297,11 @@
 /* Success */
 .db-catering .dbc-success {
 	text-align: center;
-	border: 1px solid var(--dbc-line);
-	border-radius: var(--dbc-radius);
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-xl);
 	padding: 44px 24px;
 	background: #faf9f6;
+	box-shadow: var(--db-shadow-1);
 }
 
 .db-catering .dbc-success-check {
@@ -315,7 +336,7 @@
 .db-catering .dbc-card-element {
 	padding: 13px 14px;
 	border: 1px solid var(--dbc-line);
-	border-radius: 8px;
+	border-radius: var(--db-r-sm);
 	background: #fff;
 	margin-bottom: 12px;
 }
@@ -335,5 +356,16 @@
 	.db-catering .dbc-submit {
 		align-self: stretch;
 		text-align: center;
+	}
+}
+
+/* Accessibility: respect reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+	.db-catering *,
+	.db-catering *::before,
+	.db-catering *::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
 	}
 }
