@@ -24,6 +24,7 @@ $tables = array(
 	$wpdb->prefix . 'doughboss_orders',
 	$wpdb->prefix . 'doughboss_catering_enquiries',
 	$wpdb->prefix . 'doughboss_locations',
+	$wpdb->prefix . 'doughboss_pospal_outbox',
 );
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 foreach ( $tables as $table ) {
@@ -48,6 +49,8 @@ foreach ( $post_ids as $post_id ) {
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
 delete_option( 'doughboss_unreconciled_payments' );
+delete_option( 'doughboss_pospal_unmapped_alerts' );
+delete_option( 'doughboss_delivery_autodisabled' );
 
 // Remove the custom capabilities and the kitchen role.
 $role = get_role( 'administrator' );

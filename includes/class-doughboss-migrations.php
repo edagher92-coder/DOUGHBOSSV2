@@ -284,11 +284,20 @@ class DoughBoss_Migrations {
 
 		// Auto-narrow to pickup-only if the site currently runs 0 or 1 active
 		// shops — matches the discovery doc's "For now, pickup only from Revesby"
-		// scope. A multi-shop delivery site is deliberately left alone.
+		// scope. A multi-shop delivery site is deliberately left alone. This
+		// step is version-gated (runs once), so an owner who re-enables delivery
+		// afterwards is never overridden again — but the flip itself must not be
+		// silent: record a marker (surfaced as a dismissible wp-admin notice by
+		// DoughBoss_Admin::render_delivery_autodisabled_notice()) and a log line
+		// so the change is visible and easy to reverse in Settings.
 		$active = DoughBoss_Locations::all( true );
 		if ( count( $active ) <= 1 && ! empty( $settings['enable_delivery'] ) ) {
 			$settings['enable_delivery'] = 0;
 			$changed = true;
+			update_option( 'doughboss_delivery_autodisabled', '1.10.0' );
+			if ( function_exists( 'error_log' ) ) {
+				error_log( 'DoughBoss migration 1.10.0: enable_delivery turned off (single-location pickup-only scope); re-enable in DoughBoss Settings if delivery is wanted.' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
 		}
 
 		if ( $changed ) {

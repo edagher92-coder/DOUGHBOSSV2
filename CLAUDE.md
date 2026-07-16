@@ -43,7 +43,7 @@ The Phase 2 branch is intentionally broad. Stabilize it by splitting future work
 4. POSPal integration.
 5. Catering workflow.
 6. Notifications, printer, SMS, Mercure/real-time.
-7. Demo/static marketing site and Snow Boss content.
+7. Demo/static marketing site and Offers & News content (Snow Boss brand retired in S1).
 
 Every release should use `RELEASE_CHECKLIST.md`.
 
@@ -66,7 +66,7 @@ Every release should use `RELEASE_CHECKLIST.md`.
 - `admin/class-doughboss-admin.php` — wp-admin screens/settings/order board/admin JS hooks.
 - `public/js/` and `public/css/` — storefront, voucher, order board, and catering front-end assets.
 - `app/` — standalone staff console assets.
-- `demo/` — static demo/marketing site and Snow Boss view.
+- `demo/` — static demo/marketing site, including the Offers & News view (ex Snow Boss; brand retired in S1, `#view-snow` id kept for deep-links).
 - `docs/` — owner/dev/product documentation, reports, proposals, PDFs, and assets.
 - `scripts/dev-check.sh` — session-safe verifier; use `--strict` in CI.
 - `.github/workflows/plugin-ci.yml` — plugin verification/build/secret-pattern workflow.
@@ -165,7 +165,7 @@ When agents disagree, choose the smallest safe release that preserves the abilit
 4. Add a minimal money-path test harness.
 5. Complete and verify Stripe on staging before claiming revenue readiness.
 6. Harden kitchen operations: chime, heartbeat, SLA timers, undo, and printer reprint.
-7. Keep demo/Snow Boss marketing pages clean without duplicating shared nav/footer logic.
+7. Keep demo marketing pages (including Offers & News) clean without duplicating shared nav/footer logic.
 
 ## Known gotchas
 

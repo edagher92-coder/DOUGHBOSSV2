@@ -91,6 +91,13 @@
 			return Promise.resolve(configCache);
 		}
 		return request('/config').then(function (cfg) {
+			// Single-location mode: the storefront behaves as one pickup-only
+			// shop regardless of how many locations or fulfilment types are
+			// configured. Display-only — the checkout REST endpoint's own
+			// enable_delivery gate rejects delivery orders server-side.
+			if (cfg && cfg.single_location_mode) {
+				cfg.enable_delivery = false;
+			}
 			configCache = cfg;
 			return cfg;
 		});
@@ -109,8 +116,18 @@
 			return Promise.resolve(locationsCache);
 		}
 		return request('/locations').then(function (locs) {
-			locationsCache = Array.isArray(locs) ? locs : [];
-			return locationsCache;
+			locs = Array.isArray(locs) ? locs : [];
+			// Single-location mode pins the storefront to the first active shop:
+			// the picker collapses to the single-shop display and orders carry
+			// that shop's id. Note this is client-side narrowing only — keep the
+			// site's location list itself trimmed to the real active shop.
+			return getConfig().then(function (cfg) {
+				if (cfg && cfg.single_location_mode && locs.length > 1) {
+					locs = locs.slice(0, 1);
+				}
+				locationsCache = locs;
+				return locationsCache;
+			});
 		});
 	}
 

@@ -227,7 +227,7 @@
 		var last4 = digits.slice(-4);
 
 		// Loading state while the (simulated) payment settles — same pattern as
-		// the snowboss.js claim button.
+		// the offers.js voucher-claim button.
 		if (form.dataset.busy) { return; }
 		form.dataset.busy = '1';
 		var payBtn = form.querySelector('button[type="submit"]');

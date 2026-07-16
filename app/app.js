@@ -499,7 +499,7 @@
 			var op = el( 'option', null, o[1] ); op.value = o[0]; type.appendChild( op );
 		} );
 		var value = el( 'input' ); value.type = 'number'; value.min = '0'; value.step = '0.01'; value.placeholder = 'Value';
-		var prefix = el( 'input' ); prefix.type = 'text'; prefix.value = 'SNOW'; prefix.placeholder = 'Prefix';
+		var prefix = el( 'input' ); prefix.type = 'text'; prefix.value = 'DOUGH'; prefix.placeholder = 'Prefix';
 		var phone = el( 'input' ); phone.type = 'text'; phone.placeholder = 'Customer phone (optional)';
 		fr.appendChild( labelled( 'Type', type ) );
 		fr.appendChild( labelled( 'Value', value ) );

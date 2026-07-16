@@ -61,10 +61,17 @@ class DoughBoss_POSPal_Outbox {
 	const CRON_HOOK = 'doughboss_pospal_outbox_dispatch';
 
 	/**
-	 * Hourly cron hook that reconciles recent 'succeeded' outbox rows against
-	 * POSPal's queryOrderByNo — the safety-net check that makes the fire-and-
-	 * forget-with-retry design safe long-term. Anything DoughBoss thinks it
-	 * pushed but POSPal doesn't know about is re-enqueued for a fresh attempt.
+	 * Hourly cron hook for outbox housekeeping (pruning long-succeeded rows).
+	 *
+	 * This hook originally also "reconciled" succeeded rows against POSPal's
+	 * queryOrderByNo and auto-requeued anything that looked missing. That check
+	 * was disabled deliberately: the lookup key it used (our WP order number,
+	 * sent as `daySeq`) is NOT the `orderNo` POSPal assigns and expects in
+	 * queryOrderByNo, so every lookup was against an identifier POSPal never
+	 * issued. Depending on POSPal's not-found response shape that made the
+	 * check either a permanent no-op (error responses) or, worse, an hourly
+	 * auto-requeue of orders that had in fact landed — i.e. duplicate ring-ins
+	 * on the till. See reconcile_recent() for the re-enable requirements.
 	 */
 	const RECONCILE_HOOK = 'doughboss_pospal_outbox_reconcile';
 
@@ -81,7 +88,7 @@ class DoughBoss_POSPal_Outbox {
 	}
 
 	/**
-	 * Register the hourly reconciliation cron once. Idempotent — wp-cron only
+	 * Register the hourly housekeeping cron once. Idempotent — wp-cron only
 	 * schedules the recurring event if it isn't already booked. Only booked when
 	 * POSPal push is switched on, so a plain WP install stays clean.
 	 *
@@ -277,13 +284,22 @@ class DoughBoss_POSPal_Outbox {
 			// Atomic claim: only one worker can flip pending -> in_flight for a given
 			// row. A concurrent sweep (WP-CLI cron event run, second frontend) will
 			// see 0 rows updated and skip this row cleanly — no double-push.
+			//
+			// The lease timestamp is taken fresh PER ROW (not the sweep-start $now):
+			// with 25 blocking HTTP calls a sweep can outlive the 10-minute reclaim
+			// window, and a stale sweep-start stamp would let a concurrent worker
+			// reclaim a row that is still genuinely in flight. The claim also
+			// re-checks next_attempt_at so a row selected by an earlier query but
+			// already retried-and-backed-off by another worker isn't pushed early.
+			$claim_ts = gmdate( 'Y-m-d H:i:s' );
 			$affected = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				$wpdb->prepare(
 					"UPDATE {$table}
 					   SET status = 'in_flight', updated_at = %s
-					 WHERE id = %d AND status = 'pending'",
-					$now,
-					(int) $id
+					 WHERE id = %d AND status = 'pending' AND next_attempt_at <= %s",
+					$claim_ts,
+					(int) $id,
+					$claim_ts
 				)
 			);
 			if ( 1 !== (int) $affected ) {
@@ -331,7 +347,7 @@ class DoughBoss_POSPal_Outbox {
 		$store   = DoughBoss_Settings::pospal_store( $store_n );
 		$payload = json_decode( (string) $row->payload_json, true );
 		if ( ! is_array( $payload ) ) {
-			self::mark_terminal( $id, 'invalid_payload' );
+			self::mark_terminal( $id, 'invalid_payload', (int) $row->attempts + 1 );
 			return 0;
 		}
 
@@ -377,11 +393,18 @@ class DoughBoss_POSPal_Outbox {
 				array( '%s', '%d', '%s', '%s' ),
 				array( '%d' )
 			);
-			self::log( '#' . $id . ' pushed (attempt ' . $attempts . ')' );
+			// Log the POSPal-assigned orderNo (its own identifier, not ours): this is
+			// the key a future reconciliation must persist and query by. Safe to log —
+			// a till sequence number, no PII. See reconcile_recent() for the plan.
+			$pospal_no = ( is_array( $result ) && isset( $result['orderNo'] ) ) ? (string) $result['orderNo'] : '';
+			self::log(
+				'#' . $id . ' pushed (attempt ' . $attempts . ')'
+				. ( '' !== $pospal_no ? ' — POSPal orderNo ' . $pospal_no : '' )
+			);
 			return 0;
 		}
 
-		$error_code = (string) $result->get_error_code();
+		$error_code = substr( (string) $result->get_error_code(), 0, 64 );
 
 		if ( $attempts >= self::MAX_ATTEMPTS ) {
 			self::mark_terminal( $id, $error_code, $attempts );
@@ -426,7 +449,7 @@ class DoughBoss_POSPal_Outbox {
 			array(
 				'status'      => 'failed_terminal',
 				'attempts'    => (int) $attempts,
-				'last_error'  => sanitize_text_field( (string) $error ),
+				'last_error'  => substr( sanitize_text_field( (string) $error ), 0, 64 ),
 				'updated_at'  => gmdate( 'Y-m-d H:i:s' ),
 			),
 			array( 'id' => (int) $id ),
@@ -523,120 +546,50 @@ class DoughBoss_POSPal_Outbox {
 	}
 
 	/**
-	 * Hourly safety-net reconciliation: for every 'succeeded' outbox row from the
-	 * last hour (capped), ask POSPal `queryOrderByNo` for the matching order and
-	 * confirm it actually landed. If POSPal doesn't know about an order we thought
-	 * we pushed, resurface it as a pending retry so the cron worker re-pushes.
+	 * Hourly outbox housekeeping. Currently: prune long-succeeded rows only.
 	 *
-	 * This is the backstop mentioned in the client memo — the pattern that makes
-	 * the fire-and-forget-plus-outbox design safe over the long term without ever
-	 * blocking the customer request.
+	 * The original "safety-net reconciliation" this hook shipped with — query
+	 * POSPal `queryOrderByNo` for every recently-succeeded row and auto-requeue
+	 * anything that looked missing — has been REMOVED, deliberately, because it
+	 * was verifying against the wrong identifier:
+	 *
+	 *   - The lookup key it used was our WP order number (the value build_body()
+	 *     sends as `daySeq`), but `queryOrderByNo` takes POSPal's own assigned
+	 *     `orderNo` — which the push RESPONSE returns and dispatch_row() never
+	 *     persisted. POSPal never issued the key we were querying with.
+	 *   - Depending on POSPal's (uncaptured, unverified) not-found response
+	 *     shape, that made the check either a permanent silent no-op (WP_Error
+	 *     branch skipped every row) or an unbounded hourly duplicate ring-in
+	 *     loop: success-with-empty-data satisfied the "missing" test, the row
+	 *     was requeued with attempts reset to 0, re-pushed, re-succeeded, and
+	 *     re-entered the reconcile window — forever.
+	 *
+	 * Re-enable contract (do NOT restore the old loop without ALL of these):
+	 *   1. Persist the POSPal-assigned `orderNo` from the push response onto the
+	 *      outbox row (new column: activator create_tables() + ordered migration
+	 *      + DB version bump per CLAUDE.md), and query by THAT key.
+	 *   2. Capture POSPal's real not-found response against a live/staging till
+	 *      and encode it as a fixture — the "missing" test must match a verified
+	 *      shape, not an assumed one.
+	 *   3. On a confirmed miss, do not auto-requeue: surface the row for human
+	 *      confirmation (the failed_terminal + admin-notice + Re-send pattern
+	 *      already exists), so an ambiguous response can never re-ring an order.
+	 *
+	 * Until then, lost-after-success pushes are covered by the operator-visible
+	 * failure path (counts_for_alert/list_problem_rows + manual Re-send), and
+	 * dispatch_row() logs the POSPal orderNo on every success so real response
+	 * shapes accumulate in the logs for step 2.
 	 *
 	 * @return void
 	 */
 	public static function reconcile_recent() {
-		global $wpdb;
-
-		if ( ! DoughBoss_Settings::pospal_push_enabled() ) {
-			return;
-		}
-
-		$table  = self::table();
-		$since  = gmdate( 'Y-m-d H:i:s', time() - 2 * HOUR_IN_SECONDS );
-		// Only reconcile a small window: this call talks to POSPal once per row, so
-		// keep the batch small. The hourly cadence with a 2-hour lookback still
-		// double-checks every recent order at least once before it ages out.
-		$rows = (array) $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare(
-				"SELECT * FROM {$table}
-				 WHERE status = 'succeeded'
-				   AND updated_at >= %s
-				 ORDER BY updated_at ASC
-				 LIMIT 25",
-				$since
-			)
-		);
-		if ( empty( $rows ) ) {
-			return;
-		}
-
-		$requeued = 0;
-		foreach ( $rows as $row ) {
-			$payload = json_decode( (string) $row->payload_json, true );
-			$day_seq = is_array( $payload ) && isset( $payload['daySeq'] ) ? (string) $payload['daySeq'] : '';
-			if ( '' === $day_seq ) {
-				continue;
-			}
-			$store   = DoughBoss_Settings::pospal_store( max( 1, (int) $row->store_index ) );
-			$creds   = array(
-				'host'    => (string) $store['host'],
-				'app_id'  => (string) $store['app_id'],
-				'app_key' => (string) $store['app_key'],
-			);
-			if ( '' === $creds['host'] || '' === $creds['app_id'] || '' === $creds['app_key'] ) {
-				continue;
-			}
-			$found = DoughBoss_POSPal::query_order_by_no( $day_seq, $creds );
-			if ( is_wp_error( $found ) ) {
-				// A network error is not "missing" — leave the row alone and let the
-				// next hour's reconciliation try again.
-				continue;
-			}
-			// Require a POSITIVE "not found" signal before requeuing — an ambiguous
-			// or partial response must not trigger a duplicate push. POSPal replies
-			// to queryOrderByNo with an object carrying the order fields (orderNo /
-			// daySeq); presence of either is proof the till has our order. Missing
-			// BOTH is treated as "unknown"; anything else (empty array, unrecognised
-			// shape) we deliberately skip and let the next hour retry.
-			$is_present = false;
-			if ( is_array( $found ) ) {
-				if ( ! empty( $found['orderNo'] ) || ! empty( $found['daySeq'] ) ) {
-					$is_present = true;
-				} elseif ( isset( $found[0] ) && is_array( $found[0] ) && ( ! empty( $found[0]['orderNo'] ) || ! empty( $found[0]['daySeq'] ) ) ) {
-					// Some POSPal endpoints wrap results in a list; accept that shape too.
-					$is_present = true;
-				}
-			}
-			if ( $is_present ) {
-				continue;
-			}
-			// Ambiguous responses (empty array, unfamiliar shape) are NOT treated as
-			// "missing" — only an explicit response with no orderNo/daySeq counts. In
-			// practice POSPal's queryOrderByNo either returns the order fields or an
-			// error; skipping ambiguity avoids a duplicate ring-in on a partial outage.
-			$looks_missing = is_array( $found ) && empty( $found );
-			if ( ! $looks_missing ) {
-				continue;
-			}
-
-			// Requeue: reset this row to pending so the next cron sweep re-pushes it.
-			$now_utc = gmdate( 'Y-m-d H:i:s' );
-			$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-				$table,
-				array(
-					'status'          => 'pending',
-					'attempts'        => 0,
-					'last_error'      => 'reconcile_missing',
-					'next_attempt_at' => $now_utc,
-					'updated_at'      => $now_utc,
-				),
-				array( 'id' => (int) $row->id ),
-				array( '%s', '%d', '%s', '%s', '%s' ),
-				array( '%d' )
-			);
-			$requeued++;
-		}
-
-		if ( $requeued > 0 ) {
-			self::log( 'reconcile requeued ' . $requeued . ' row(s)' );
-			self::schedule_soon( 0 );
-		}
-
-		// Housekeeping — keep the outbox tiny by pruning long-succeeded rows. Only
-		// runs once per hour (piggybacking on this cron), so it's cheap.
+		// Housekeeping runs even when push is currently disabled: rows created
+		// while push WAS enabled must still age out. (The hook itself is only
+		// scheduled while push is on — see ensure_reconcile_scheduled() — but a
+		// final sweep before unscheduling, or a WP-CLI invocation, still prunes.)
 		$pruned = self::prune_succeeded( 30 );
 		if ( $pruned > 0 ) {
-			self::log( 'reconcile pruned ' . $pruned . ' succeeded row(s) older than 30 days' );
+			self::log( 'housekeeping pruned ' . $pruned . ' succeeded row(s) older than 30 days' );
 		}
 	}
 

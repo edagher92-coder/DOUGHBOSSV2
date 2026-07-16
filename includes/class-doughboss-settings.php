@@ -77,12 +77,13 @@ class DoughBoss_Settings {
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
 			'ordering_open'   => 1,
-			// Single-shop mode: hides the shop picker + delivery toggle on the
-			// storefront and pins every order to the one active location. Set
-			// automatically by the 1.10.0 migration when the site has ≤ 1 active
-			// shop, and manually by the owner when they want to lock ordering to a
-			// single location for a period (e.g. "Revesby-only pickup for now").
-			// Flip to 0 to re-enable multi-shop ordering.
+			// Single-shop mode: the storefront JS (getConfig/getLocations in
+			// public/js/doughboss.js) hides the delivery toggle and pins the shop
+			// picker to the first active location while this is 1. Display-only —
+			// the checkout endpoint's enable_delivery gate is the server-side
+			// enforcement. Seeded to 1 by the 1.10.0 migration ("Revesby-only
+			// pickup for now"). Flipping to 0 restores the multi-shop picker;
+			// delivery additionally needs enable_delivery back on.
 			'single_location_mode' => 1,
 			// Shop inbox: where order + catering notifications are emailed. Blank falls
 			// back to the WordPress admin email (see orders_email()). Defaults to the
@@ -100,8 +101,10 @@ class DoughBoss_Settings {
 			// capability check. Only ever written by the random generator in
 			// DoughBoss_Admin::generate_board_key() (admin-post actions
 			// doughboss_generate_board_key / doughboss_clear_board_key) — never
-			// accepted as free text — so it's always a URL-safe generated value.
-			// See admin/class-doughboss-admin.php render_board_page().
+			// accepted as free text. Stored as a sha256 hex digest of the key
+			// (the plaintext exists only in the one-time reveal transient);
+			// legacy plaintext values from before hashing still verify until
+			// regenerated. See admin/class-doughboss-admin.php render_board_page().
 			'board_access_key' => '',
 			// Rate-limiter client-IP resolution. Off by default so REMOTE_ADDR is used
 			// verbatim (zero behaviour change). Only enable 'behind_reverse_proxy' when
@@ -115,8 +118,12 @@ class DoughBoss_Settings {
 			'trusted_proxy_header' => 'X-Forwarded-For',
 			'sizes'           => array(),
 			'toppings'        => array(),
-			// Payments (Stripe) — off by default; keys added later.
+			// Payments — off by default; keys added later. 'payment_gateway' picks
+			// which of the two clients below (DoughBoss_Stripe / DoughBoss_Tyro)
+			// DoughBoss_Payment routes to; default 'stripe' preserves the exact
+			// pre-existing behaviour on every site that never touches this setting.
 			'payments_enabled' => 0,
+			'payment_gateway'  => 'stripe',
 			'stripe_mode'      => 'test',
 			'stripe_test_pk'   => '',
 			'stripe_test_sk'   => '',
@@ -124,6 +131,22 @@ class DoughBoss_Settings {
 			'stripe_live_sk'   => '',
 			'stripe_test_whsec' => '',
 			'stripe_live_whsec' => '',
+			// Tyro eCommerce (Mastercard Payment Gateway Services). Off/dormant
+			// until 'payment_gateway' is switched to 'tyro' AND merchant id +
+			// integration password are set for the active mode. 'tyro_host' and
+			// 'tyro_api_version' are blank-defaults-to-documented-value fields
+			// (see DoughBoss_Settings::tyro_host()/tyro_api_version()) rather than
+			// hardcoded constants, since Tyro provisions the gateway hostname per
+			// merchant in some cases — confirm the real values once sandbox
+			// credentials are issued rather than assuming ours match every account.
+			'tyro_mode'                => 'test',
+			'tyro_merchant_id'         => '',
+			'tyro_host'                => '',
+			'tyro_api_version'         => '',
+			'tyro_test_password'       => '',
+			'tyro_live_password'       => '',
+			'tyro_test_webhook_secret' => '',
+			'tyro_live_webhook_secret' => '',
 			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
 			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
 			// this option is only a fallback and is best left blank where env is set.
@@ -437,6 +460,117 @@ class DoughBoss_Settings {
 	 */
 	public static function stripe_ready() {
 		return self::payments_enabled() && '' !== self::stripe_publishable_key() && '' !== self::stripe_secret_key();
+	}
+
+	/**
+	 * Which payment gateway is active: 'stripe' or 'tyro'. Defaults to
+	 * 'stripe' so existing sites are unaffected until an owner deliberately
+	 * switches this.
+	 *
+	 * @return string
+	 */
+	public static function payment_gateway() {
+		return 'tyro' === self::get( 'payment_gateway', 'stripe' ) ? 'tyro' : 'stripe';
+	}
+
+	/**
+	 * Active Tyro mode: 'test' or 'live'.
+	 *
+	 * @return string
+	 */
+	public static function tyro_mode() {
+		return 'live' === self::get( 'tyro_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Tyro merchant id (public-safe — this is what the browser's Session.js
+	 * needs, analogous to Stripe's publishable key).
+	 *
+	 * @return string
+	 */
+	public static function tyro_merchant_id() {
+		return trim( (string) self::get( 'tyro_merchant_id', '' ) );
+	}
+
+	/**
+	 * Tyro (MPGS) gateway host, trailing slash removed. Blank restores the
+	 * documented default gateway host — see the note in defaults() on why this
+	 * is configurable rather than a hardcoded constant.
+	 *
+	 * @return string
+	 */
+	public static function tyro_host() {
+		$host = trim( (string) self::get( 'tyro_host', '' ) );
+		return '' !== $host ? untrailingslashit( $host ) : 'https://tyro.gateway.mastercard.com';
+	}
+
+	/**
+	 * MPGS REST API version segment (e.g. '74'). Blank restores a documented
+	 * default; confirm the real value against Tyro's onboarding docs once
+	 * sandbox access exists — see the class docblock on DoughBoss_Tyro.
+	 *
+	 * @return string
+	 */
+	public static function tyro_api_version() {
+		$v = trim( (string) self::get( 'tyro_api_version', '' ) );
+		return '' !== $v ? $v : '74';
+	}
+
+	/**
+	 * Tyro integration password for the active mode. Read env-first — the
+	 * constant DOUGHBOSS_TYRO_TEST_PASSWORD/DOUGHBOSS_TYRO_LIVE_PASSWORD or the
+	 * matching environment variable take precedence over the stored option, so
+	 * the secret can be kept out of the database (and therefore out of
+	 * backups). Only ever used server-side to sign the Basic-auth header;
+	 * never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function tyro_password() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_PASSWORD', 'tyro_live_password' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_PASSWORD', 'tyro_test_password' );
+	}
+
+	/**
+	 * Tyro webhook signing secret for the active mode (server-side only).
+	 * Read env-first — the constant DOUGHBOSS_TYRO_TEST_WHSEC/
+	 * DOUGHBOSS_TYRO_LIVE_WHSEC or the matching environment variable take
+	 * precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_WHSEC', 'tyro_live_webhook_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_WHSEC', 'tyro_test_webhook_secret' );
+	}
+
+	/**
+	 * Whether Tyro is both the active gateway and fully configured for the
+	 * active mode (so the storefront should actually route card payments to
+	 * it instead of Stripe).
+	 *
+	 * @return bool
+	 */
+	public static function tyro_ready() {
+		return self::payments_enabled()
+			&& 'tyro' === self::payment_gateway()
+			&& '' !== self::tyro_merchant_id()
+			&& '' !== self::tyro_password();
+	}
+
+	/**
+	 * HTTP header name Tyro sends its webhook signature in. Configurable
+	 * because the real header name has not been confirmed against Tyro's live
+	 * webhook docs (see DoughBoss_Tyro's class docblock) — filterable via
+	 * 'doughboss_tyro_webhook_signature_header' so a site can correct it
+	 * without a plugin update once the real value is known.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_signature_header() {
+		return (string) apply_filters( 'doughboss_tyro_webhook_signature_header', 'x_tyro_signature' );
 	}
 
 	/**

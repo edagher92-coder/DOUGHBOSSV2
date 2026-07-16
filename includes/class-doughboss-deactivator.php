@@ -24,5 +24,13 @@ class DoughBoss_Deactivator {
 	 */
 	public static function deactivate() {
 		flush_rewrite_rules();
+
+		// Clear the POSPal outbox cron events — a deactivated plugin must not
+		// leave recurring hooks behind (WP would fire them into a void, and the
+		// hourly event would linger forever after uninstall otherwise). Constants
+		// are inlined rather than referencing DoughBoss_POSPal_Outbox:: because
+		// the class file may not be loaded on the deactivation request.
+		wp_clear_scheduled_hook( 'doughboss_pospal_outbox_dispatch' );
+		wp_clear_scheduled_hook( 'doughboss_pospal_outbox_reconcile' );
 	}
 }
