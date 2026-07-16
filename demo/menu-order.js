@@ -48,7 +48,7 @@
 	] };
 	function optionGroups(catId, name) {
 		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE]; }
-		if (catId === 'cat-manoush') { return name === 'Zaatar' ? [OPT_STYLE, OPT_ZAATAR_MIX] : [OPT_STYLE]; }
+		if (catId === 'cat-manoush') { return name === 'Zaatar' ? [OPT_STYLE, OPT_ZAATAR_MIX, OPT_PIZZA_BASE] : [OPT_STYLE, OPT_PIZZA_BASE]; }
 		if (catId === 'cat-wraps' && name === 'Zaatar & Veggie') { return [OPT_WRAP_EXTRAS]; }
 		return null;
 	}
