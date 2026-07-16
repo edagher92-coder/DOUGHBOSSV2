@@ -977,6 +977,31 @@ class DoughBoss_REST_Controller {
 				'permission_callback' => '__return_true',
 			)
 		);
+
+		// Catering — Tyro webhook, mirrors /catering/stripe-webhook above.
+		// Public route, gated by DoughBoss_Tyro::verify_webhook_signature(), not
+		// a nonce.
+		register_rest_route(
+			$ns,
+			'/catering/tyro-webhook',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'catering_tyro_webhook' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		// Storefront — Tyro webhook, mirrors /stripe-webhook above. Public
+		// route, gated by DoughBoss_Tyro::verify_webhook_signature(), not a nonce.
+		register_rest_route(
+			$ns,
+			'/tyro-webhook',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'tyro_webhook' ),
+				'permission_callback' => '__return_true',
+			)
+		);
 	}
 
 	/**
@@ -1883,6 +1908,7 @@ class DoughBoss_REST_Controller {
 				'db_version_stored' => (string) get_option( 'doughboss_db_version', '0' ),
 				'integrations'      => array(
 					'stripe'  => (bool) DoughBoss_Stripe::ready(),
+					'tyro'    => (bool) DoughBoss_Tyro::ready(),
 					'pospal'  => (bool) DoughBoss_POSPal::ready(),
 					'mercure' => (bool) DoughBoss_Settings::mercure_ready(),
 					'ntfy'    => (bool) DoughBoss_Settings::ntfy_ready(),
@@ -1982,7 +2008,8 @@ class DoughBoss_REST_Controller {
 
 	/**
 	 * POST /voucher/claim — claim a voucher from a daily-capped campaign (e.g.
-	 * the Dough Boss × Snow Boss $5 student voucher, with a daily pool of 100).
+	 * the dough5 $5 student launch voucher with its DOUGH- codes and a daily
+	 * pool of 100).
 	 * Public (nonce) + rate-limited; the per-day cap is enforced server-side,
 	 * pooled across the campaign's cap_group.
 	 *
@@ -2034,8 +2061,13 @@ class DoughBoss_REST_Controller {
 				'ordering_open'   => DoughBoss_Settings::ordering_open(),
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
-				'payments_enabled' => DoughBoss_Stripe::ready(),
-				'stripe_pk'        => DoughBoss_Stripe::ready() ? DoughBoss_Stripe::publishable_key() : '',
+				'payments_enabled' => DoughBoss_Payment::ready(),
+				// 'stripe_pk' kept as the field name for backward compatibility with
+				// existing storefront JS — it now carries whichever gateway's public
+				// key/identifier is active (Stripe publishable key, or Tyro merchant
+				// id), per 'payment_gateway' below.
+				'stripe_pk'        => DoughBoss_Payment::ready() ? DoughBoss_Payment::publishable_key() : '',
+				'payment_gateway'  => DoughBoss_Settings::payment_gateway(),
 				// Mercure real-time config for the standalone Console (no secrets —
 				// only the public hub URL + topic; the publish JWT never leaves the
 				// server, and the board topic is publicly readable).
@@ -2059,7 +2091,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function create_payment_intent( WP_REST_Request $request ) {
-		if ( ! DoughBoss_Stripe::ready() ) {
+		if ( ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
@@ -2091,9 +2123,9 @@ class DoughBoss_REST_Controller {
 
 		$totals   = $this->cart->totals( $order_type );
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
-		$amount   = DoughBoss_Stripe::to_minor_units( $totals['total'] );
+		$amount   = DoughBoss_Payment::to_minor_units( $totals['total'] );
 
-		$intent = DoughBoss_Stripe::create_payment_intent(
+		$intent = DoughBoss_Payment::create_payment_intent(
 			$amount,
 			$currency,
 			array(
@@ -2110,9 +2142,10 @@ class DoughBoss_REST_Controller {
 			array(
 				'client_secret'   => $intent['client_secret'],
 				'payment_intent'  => $intent['id'],
-				'publishable_key' => DoughBoss_Stripe::publishable_key(),
+				'publishable_key' => DoughBoss_Payment::publishable_key(),
 				'amount'          => $intent['amount'],
 				'currency'        => $intent['currency'],
+				'gateway'         => DoughBoss_Settings::payment_gateway(),
 			)
 		);
 	}
@@ -2458,20 +2491,23 @@ class DoughBoss_REST_Controller {
 		$totals = $this->cart->totals( $order_type );
 		$lines  = $this->cart->get_lines();
 
-		// When Stripe is configured, the order is only accepted once a matching
-		// PaymentIntent has actually succeeded. The amount/currency are verified
-		// against this order's server-computed total, and each PaymentIntent can
-		// be used for at most one order.
+		// When a payment gateway is configured, the order is only accepted once a
+		// matching payment has actually succeeded. The amount/currency are
+		// verified against this order's server-computed total, and each payment
+		// reference can be used for at most one order. The gateway that actually
+		// processed the payment is recorded on the order (not just whichever is
+		// "active" today) so a later refund always targets the right one even if
+		// the owner switches gateways afterwards — see DoughBoss_Payment::refund_via().
 		$payment_status    = 'unpaid';
 		$payment_method    = '';
 		$payment_intent_id = '';
-		if ( DoughBoss_Stripe::ready() ) {
+		if ( DoughBoss_Payment::ready() ) {
 			$verified = $this->verify_payment( $request, $totals['total'] );
 			if ( is_wp_error( $verified ) ) {
 				return $verified;
 			}
 			$payment_status    = 'paid';
-			$payment_method    = 'stripe';
+			$payment_method    = DoughBoss_Settings::payment_gateway();
 			$payment_intent_id = $verified;
 		}
 
@@ -2593,32 +2629,43 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
-	 * Verify a Stripe PaymentIntent before an order is trusted as paid.
+	 * Verify a payment before an order is trusted as paid.
 	 *
-	 * Confirms the intent succeeded, that its amount and currency match this
-	 * order's server-computed total, and that it has not already been used for
-	 * another order. Returns the PaymentIntent id on success.
+	 * Confirms the payment succeeded (for gateways that require it — e.g.
+	 * Tyro — this is also where the charge is actually submitted; see
+	 * DoughBoss_Tyro::retrieve_payment_intent()), that its amount and currency
+	 * match this order's server-computed total, and that it has not already
+	 * been used for another order. Returns the payment reference id on success.
 	 *
 	 * @param WP_REST_Request $request        Request.
 	 * @param float           $expected_total Server-computed order total.
-	 * @return string|WP_Error PaymentIntent id, or an error.
+	 * @return string|WP_Error Payment reference id, or an error.
 	 */
 	private function verify_payment( WP_REST_Request $request, $expected_total ) {
-		$pi_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
-		if ( '' === $pi_id ) {
+		$raw_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
+		if ( '' === $raw_id ) {
 			return new WP_Error( 'doughboss_pay_required', __( 'Payment is required to place this order.', 'doughboss' ), array( 'status' => 402 ) );
 		}
+
+		// The value stored on the order row (and checked for reuse) is the
+		// gateway's CANONICAL reference — for Stripe this equals $raw_id; for
+		// Tyro, $raw_id additionally carries a client-side session id needed
+		// only to actually submit the charge below. A webhook payload can never
+		// carry that session id, so storing anything other than the canonical
+		// id here would make webhook-based reconciliation permanently unable to
+		// find this order. See DoughBoss_Tyro::canonical_id().
+		$pi_id = DoughBoss_Payment::canonical_id( $raw_id );
 
 		if ( DoughBoss_Order::payment_intent_used( $pi_id ) ) {
 			return new WP_Error( 'doughboss_pay_used', __( 'This payment has already been used for an order.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
-		$intent = DoughBoss_Stripe::retrieve_payment_intent( $pi_id );
+		$intent = DoughBoss_Payment::retrieve_payment_intent( $raw_id );
 		if ( is_wp_error( $intent ) ) {
 			return $intent;
 		}
 
-		$expected = DoughBoss_Stripe::to_minor_units( $expected_total );
+		$expected = DoughBoss_Payment::to_minor_units( $expected_total );
 		$currency = strtolower( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) );
 		$status   = isset( $intent['status'] ) ? $intent['status'] : '';
 		$amount   = isset( $intent['amount'] ) ? (int) $intent['amount'] : 0;
@@ -2926,7 +2973,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function catering_payment_intent( WP_REST_Request $request ) {
-		if ( ! DoughBoss_Stripe::ready() ) {
+		if ( ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
@@ -2953,8 +3000,8 @@ class DoughBoss_REST_Controller {
 		}
 
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
-		$intent   = DoughBoss_Stripe::create_payment_intent(
-			DoughBoss_Stripe::to_minor_units( $amount ),
+		$intent   = DoughBoss_Payment::create_payment_intent(
+			DoughBoss_Payment::to_minor_units( $amount ),
 			$currency,
 			array(
 				'context'        => 'catering',
@@ -2974,10 +3021,11 @@ class DoughBoss_REST_Controller {
 			array(
 				'client_secret'   => $intent['client_secret'],
 				'payment_intent'  => $intent['id'],
-				'publishable_key' => DoughBoss_Stripe::publishable_key(),
+				'publishable_key' => DoughBoss_Payment::publishable_key(),
 				'amount'          => $intent['amount'],
 				'currency'        => $intent['currency'],
 				'leg'             => $leg,
+				'gateway'         => DoughBoss_Settings::payment_gateway(),
 			)
 		);
 	}
@@ -2989,7 +3037,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function catering_confirm_payment( WP_REST_Request $request ) {
-		if ( ! DoughBoss_Stripe::ready() ) {
+		if ( ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
@@ -3021,12 +3069,12 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_pay_mismatch', __( 'We could not match that payment.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$intent = DoughBoss_Stripe::retrieve_payment_intent( $pi_id );
+		$intent = DoughBoss_Payment::retrieve_payment_intent( $pi_id );
 		if ( is_wp_error( $intent ) ) {
 			return $intent;
 		}
 
-		$expected = DoughBoss_Stripe::to_minor_units( DoughBoss_Catering::leg_amount( $enquiry, $leg ) );
+		$expected = DoughBoss_Payment::to_minor_units( DoughBoss_Catering::leg_amount( $enquiry, $leg ) );
 		$currency = strtolower( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) );
 		$status   = isset( $intent['status'] ) ? $intent['status'] : '';
 		$amount   = isset( $intent['amount'] ) ? (int) $intent['amount'] : 0;
@@ -3136,6 +3184,149 @@ class DoughBoss_REST_Controller {
 		}
 
 		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * POST /catering/tyro-webhook — Tyro equivalent of catering_stripe_webhook().
+	 *
+	 * UNVERIFIED against live Tyro webhook docs (see DoughBoss_Tyro's class
+	 * docblock) — the exact event/order field names below are best-effort. This
+	 * handler is deliberately conservative: it only ever marks a leg paid on an
+	 * unambiguous captured-order payload, and — like the Stripe webhooks —
+	 * never refunds or creates orders. Confirm the real payload shape against
+	 * one live test delivery before relying on this in production.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function catering_tyro_webhook( WP_REST_Request $request ) {
+		$payload = $request->get_body();
+		$sig     = $request->get_header( DoughBoss_Settings::tyro_webhook_signature_header() );
+
+		if ( ! DoughBoss_Tyro::verify_webhook_signature( $payload, $sig ) ) {
+			return new WP_Error( 'doughboss_wh_sig', __( 'Invalid signature.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$event = json_decode( $payload, true );
+		if ( ! is_array( $event ) ) {
+			return rest_ensure_response( array( 'received' => true ) );
+		}
+
+		$reconciled = $this->reconcile_tyro_event( $event );
+		if ( $reconciled && isset( $reconciled['meta']['context'] ) && 'catering' === $reconciled['meta']['context'] ) {
+			$this->reconcile_catering_intent( $reconciled['obj'], $reconciled['meta'] );
+		}
+
+		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * POST /tyro-webhook — storefront payment reconciliation safety-net, the
+	 * Tyro equivalent of stripe_webhook(). Same invariants: never creates
+	 * orders, never refunds — only ever surfaces a payment-with-no-order for a
+	 * human to review from the Orders screen. UNVERIFIED against live Tyro
+	 * webhook docs — see the class docblock on DoughBoss_Tyro and the note on
+	 * catering_tyro_webhook() above.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function tyro_webhook( WP_REST_Request $request ) {
+		$payload = $request->get_body();
+		$sig     = $request->get_header( DoughBoss_Settings::tyro_webhook_signature_header() );
+
+		if ( ! DoughBoss_Tyro::verify_webhook_signature( $payload, $sig ) ) {
+			return new WP_Error( 'doughboss_wh_sig', __( 'Invalid signature.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$event = json_decode( $payload, true );
+		if ( ! is_array( $event ) ) {
+			return rest_ensure_response( array( 'received' => true ) );
+		}
+
+		$reconciled = $this->reconcile_tyro_event( $event );
+		if ( $reconciled ) {
+			$meta = $reconciled['meta'];
+			$obj  = $reconciled['obj'];
+			if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
+				$this->reconcile_catering_intent( $obj, $meta );
+			} else {
+				$pi_id = isset( $obj['id'] ) ? sanitize_text_field( $obj['id'] ) : '';
+				if ( '' !== $pi_id && ! DoughBoss_Order::payment_intent_used( $pi_id ) ) {
+					$this->record_unreconciled_payment( $pi_id, $obj );
+				}
+			}
+		}
+
+		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * Shared Tyro webhook parsing: extract the merchant order id from the
+	 * event payload, confirm the payload represents a captured payment, and
+	 * look up the metadata this plugin itself stashed at create_payment_intent()
+	 * time (order_type/context/enquiry_id/etc — see DoughBoss_Tyro) so the two
+	 * Tyro webhook handlers above can branch exactly like their Stripe
+	 * counterparts do on `$meta['context']`.
+	 *
+	 * Best-effort field extraction — checks a small set of plausible field
+	 * names ('order' => ['id' => ...] or a top-level 'id'/'orderId') rather
+	 * than assuming one exact shape, since the real payload has not been
+	 * confirmed against live Tyro docs. Returns null (does nothing) on
+	 * anything it cannot confidently parse, rather than guessing.
+	 *
+	 * @param array<string,mixed> $event Decoded webhook payload.
+	 * @return array{obj:array,meta:array}|null
+	 */
+	private function reconcile_tyro_event( array $event ) {
+		$order_id = '';
+		if ( isset( $event['order']['id'] ) && is_scalar( $event['order']['id'] ) ) {
+			$order_id = (string) $event['order']['id'];
+		} elseif ( isset( $event['orderId'] ) && is_scalar( $event['orderId'] ) ) {
+			$order_id = (string) $event['orderId'];
+		} elseif ( isset( $event['id'] ) && is_scalar( $event['id'] ) ) {
+			$order_id = (string) $event['id'];
+		}
+		$order_id = sanitize_text_field( $order_id );
+		if ( '' === $order_id ) {
+			return null;
+		}
+
+		$status = '';
+		if ( isset( $event['order']['status'] ) && is_scalar( $event['order']['status'] ) ) {
+			$status = (string) $event['order']['status'];
+		} elseif ( isset( $event['status'] ) && is_scalar( $event['status'] ) ) {
+			$status = (string) $event['status'];
+		}
+		if ( ! in_array( $status, array( 'CAPTURED', 'PAID' ), true ) ) {
+			return null; // Not an unambiguous captured-payment event — do nothing.
+		}
+
+		$meta = get_transient( 'doughboss_tyro_meta_' . $order_id );
+		$meta = is_array( $meta ) ? $meta : array();
+
+		$amount_minor = isset( $event['order']['totalCapturedAmount'] )
+			? (int) round( (float) $event['order']['totalCapturedAmount'] * 100 )
+			: ( isset( $meta['_amount_minor'] ) ? (int) $meta['_amount_minor'] : 0 );
+		$currency = isset( $event['order']['currency'] ) ? strtolower( (string) $event['order']['currency'] ) : '';
+
+		// The composite id our own create_payment_intent()/checkout flow uses is
+		// "{order_id}.{session_id}"; reconstruct enough of it for
+		// payment_intent_used()/record_unreconciled_payment() to match the same
+		// value stored on the order row. The session id half is not present in
+		// a webhook payload and is not needed for a payment_intent_id match —
+		// DoughBoss_Order::payment_intent_used() does an exact-string lookup, so
+		// this webhook path only recognises orders that were, in fact, created
+		// with the full composite id already resolved by /checkout — i.e. it
+		// exists purely as the "payment succeeded but /checkout never landed"
+		// safety net, exactly like the Stripe webhook.
+		$obj = array(
+			'id'       => $order_id,
+			'amount'   => $amount_minor,
+			'currency' => $currency,
+		);
+
+		return array( 'obj' => $obj, 'meta' => $meta );
 	}
 
 	/**

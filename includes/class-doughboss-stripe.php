@@ -70,6 +70,20 @@ class DoughBoss_Stripe {
 	}
 
 	/**
+	 * The id that should be persisted (order row / dedup lookups). Stripe's
+	 * PaymentIntent id already IS the canonical, storable reference — no
+	 * composite-id scheme like Tyro's — so this is a passthrough. Exists so
+	 * DoughBoss_Payment::canonical_id() can dispatch identically regardless of
+	 * the active gateway.
+	 *
+	 * @param string $id PaymentIntent id.
+	 * @return string
+	 */
+	public static function canonical_id( $id ) {
+		return sanitize_text_field( (string) $id );
+	}
+
+	/**
 	 * Create a PaymentIntent for the given amount.
 	 *
 	 * @param int    $amount_minor Amount in the smallest currency unit (cents).

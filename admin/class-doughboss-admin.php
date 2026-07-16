@@ -43,6 +43,8 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_generate_board_key', array( $this, 'handle_generate_board_key' ) );
 		add_action( 'admin_post_doughboss_clear_board_key', array( $this, 'handle_clear_board_key' ) );
 		add_action( 'admin_notices', array( $this, 'render_board_key_reveal_notice' ) );
+		add_action( 'admin_post_doughboss_clear_delivery_notice', array( $this, 'handle_clear_delivery_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_delivery_autodisabled_notice' ) );
 	}
 
 	/**
@@ -224,6 +226,7 @@ class DoughBoss_Admin {
 		// below) and use keep_secret() so a routine save without re-entering them
 		// preserves the stored value instead of wiping it.
 		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
+		$clean['payment_gateway']   = ( isset( $input['payment_gateway'] ) && 'tyro' === $input['payment_gateway'] ) ? 'tyro' : 'stripe';
 		$clean['stripe_mode']       = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
 		$clean['stripe_test_pk']    = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
 		$clean['stripe_test_sk']    = $this->keep_secret( $input, $existing, 'stripe_test_sk' );
@@ -231,6 +234,17 @@ class DoughBoss_Admin {
 		$clean['stripe_live_sk']    = $this->keep_secret( $input, $existing, 'stripe_live_sk' );
 		$clean['stripe_test_whsec'] = $this->keep_secret( $input, $existing, 'stripe_test_whsec' );
 		$clean['stripe_live_whsec'] = $this->keep_secret( $input, $existing, 'stripe_live_whsec' );
+
+		// Tyro eCommerce. Same write-only pattern as Stripe above: the merchant
+		// id is public-safe (echoed back), the password/webhook secrets are not.
+		$clean['tyro_mode']                = ( isset( $input['tyro_mode'] ) && 'live' === $input['tyro_mode'] ) ? 'live' : 'test';
+		$clean['tyro_merchant_id']         = isset( $input['tyro_merchant_id'] ) ? sanitize_text_field( $input['tyro_merchant_id'] ) : '';
+		$clean['tyro_host']                = isset( $input['tyro_host'] ) ? esc_url_raw( trim( (string) $input['tyro_host'] ) ) : '';
+		$clean['tyro_api_version']         = isset( $input['tyro_api_version'] ) ? sanitize_text_field( $input['tyro_api_version'] ) : '';
+		$clean['tyro_test_password']       = $this->keep_secret( $input, $existing, 'tyro_test_password' );
+		$clean['tyro_live_password']       = $this->keep_secret( $input, $existing, 'tyro_live_password' );
+		$clean['tyro_test_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_test_webhook_secret' );
+		$clean['tyro_live_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_live_webhook_secret' );
 
 		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
 		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback, and
@@ -766,11 +780,11 @@ JS;
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
 			$flash = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
 			if ( 'refunded' === $flash ) {
-				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Refund issued via Stripe. Note: a voucher used on the order is NOT automatically reissued — issue a new one from the Vouchers page if needed.', 'doughboss' ) . '</p></div>';
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Refund issued. Note: a voucher used on the order is NOT automatically reissued — issue a new one from the Vouchers page if needed.', 'doughboss' ) . '</p></div>';
 			} elseif ( 'refund_already' === $flash ) {
 				echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'That order has already been refunded.', 'doughboss' ) . '</p></div>';
 			} elseif ( 'refund_ineligible' === $flash ) {
-				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That order cannot be refunded here — it has no verified Stripe card payment.', 'doughboss' ) . '</p></div>';
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That order cannot be refunded here — it has no verified card payment.', 'doughboss' ) . '</p></div>';
 			} elseif ( 'refund_error' === $flash ) {
 				// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
 				$detail = isset( $_GET['detail'] ) ? sanitize_text_field( wp_unslash( $_GET['detail'] ) ) : '';
@@ -781,7 +795,7 @@ JS;
 			<?php if ( ! empty( $pay_issues ) ) : ?>
 				<div class="notice notice-error" style="padding:12px 16px;">
 					<h2 style="margin-top:0;"><?php esc_html_e( 'Payment issues — money taken, no order created', 'doughboss' ); ?></h2>
-					<p><?php esc_html_e( 'Stripe reported these payments as succeeded, but no matching order was ever created (the customer paid and then their checkout never completed). Look each one up in the Stripe Dashboard for the card-holder details, then contact the customer or refund the payment. Clear the list once every payment has been dealt with.', 'doughboss' ); ?></p>
+					<p><?php esc_html_e( 'The payment gateway reported these payments as succeeded, but no matching order was ever created (the customer paid and then their checkout never completed). Look each one up in your payment gateway\'s dashboard for the card-holder details, then contact the customer or refund the payment. Clear the list once every payment has been dealt with.', 'doughboss' ); ?></p>
 					<table class="widefat striped" style="max-width:720px;">
 						<thead>
 							<tr>
@@ -876,11 +890,11 @@ JS;
 										?>
 										</small>
 									<?php endif; ?>
-									<?php if ( isset( $order->payment_method ) && 'stripe' === $order->payment_method && ! empty( $order->payment_intent_id ) ) : ?>
+									<?php if ( isset( $order->payment_method ) && in_array( $order->payment_method, array( 'stripe', 'tyro' ), true ) && ! empty( $order->payment_intent_id ) ) : ?>
 										<?php if ( 'paid' === $order->payment_status ) : ?>
 											<br /><small>
 												<?php esc_html_e( 'Paid by card', 'doughboss' ); ?> ·
-												<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full via Stripe? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
+												<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
 											</small>
 										<?php elseif ( 'refunded' === $order->payment_status ) : ?>
 											<br /><small style="color:#b32d2e;"><?php esc_html_e( 'Refunded', 'doughboss' ); ?></small>
@@ -1089,6 +1103,56 @@ JS;
 	}
 
 	/**
+	 * admin_notices: tell the owner that the 1.10.0 migration turned delivery
+	 * off (single-location pickup-only scope). The migration is a one-shot and
+	 * deliberately conservative, but it must never be silent — this notice
+	 * stays until dismissed so the owner knows delivery can be re-enabled in
+	 * Settings at any time.
+	 *
+	 * @return void
+	 */
+	public function render_delivery_autodisabled_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( ! get_option( 'doughboss_delivery_autodisabled' ) ) {
+			return;
+		}
+		$dismiss_url = wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_clear_delivery_notice' ), 'doughboss_clear_delivery_notice' );
+		?>
+		<div class="notice notice-info">
+			<p>
+				<?php esc_html_e( 'DoughBoss update: delivery ordering was switched off as part of the pickup-only launch scope (single-location mode). Pickup ordering is unaffected.', 'doughboss' ); ?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>"><?php esc_html_e( 'Re-enable delivery in Settings', 'doughboss' ); ?></a>
+				&middot;
+				<a href="<?php echo esc_url( $dismiss_url ); ?>"><?php esc_html_e( 'Dismiss', 'doughboss' ); ?></a>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Handle the dismiss link on the delivery-autodisabled notice.
+	 *
+	 * @return void
+	 */
+	public function handle_clear_delivery_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_clear_delivery_notice' );
+
+		delete_option( 'doughboss_delivery_autodisabled' );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
 	 * Handle the "Re-send now" button on the outbox notice: reset every terminal
 	 * outbox row to pending and schedule the cron worker immediately.
 	 *
@@ -1177,7 +1241,11 @@ JS;
 		check_admin_referer( 'doughboss_generate_board_key' );
 
 		$key = self::generate_board_key();
-		DoughBoss_Settings::update( array( 'board_access_key' => $key ) );
+		// Store only a sha256 digest — a DB read/dump/backup can no longer
+		// disclose the working key. The one-time reveal below is the only place
+		// the plaintext exists, and verification hashes the supplied ?key=
+		// before comparing (see render_board_page()).
+		DoughBoss_Settings::update( array( 'board_access_key' => hash( 'sha256', $key ) ) );
 
 		// One-time reveal: a short-lived transient keyed to this user so only
 		// the person who just generated it sees the plaintext, and only once —
@@ -1280,12 +1348,17 @@ JS;
 	}
 
 	/**
-	 * Admin-post handler: refund a Stripe-paid order in full.
+	 * Admin-post handler: refund a card-paid order in full.
 	 *
-	 * The PaymentIntent id is always read from the stored order row (never from
-	 * the request), and only orders verified as paid by card are eligible. A
-	 * voucher redeemed on the order is deliberately NOT reissued here — the
-	 * owner reissues one manually from the Vouchers page if they want to.
+	 * The payment reference id is always read from the stored order row (never
+	 * from the request), and only orders verified as paid by card are
+	 * eligible. The refund is routed to whichever gateway the order's own
+	 * `payment_method` column records ('stripe' or 'tyro') — NOT whichever
+	 * gateway is active in Settings today — so refunding an old order still
+	 * works correctly even after the owner switches the active gateway. See
+	 * DoughBoss_Payment::refund_via(). A voucher redeemed on the order is
+	 * deliberately NOT reissued here — the owner reissues one manually from
+	 * the Vouchers page if they want to.
 	 *
 	 * @return void
 	 */
@@ -1296,17 +1369,19 @@ JS;
 		}
 		check_admin_referer( 'doughboss_refund_order_' . $id );
 
-		$args  = array( 'page' => 'doughboss' );
-		$order = $id ? DoughBoss_Order::get( $id ) : null;
+		$args      = array( 'page' => 'doughboss' );
+		$order     = $id ? DoughBoss_Order::get( $id ) : null;
+		$gateway   = $order && isset( $order->payment_method ) ? (string) $order->payment_method : '';
+		$is_paid_by_gateway = in_array( $gateway, array( 'stripe', 'tyro' ), true );
 
 		if ( ! $order ) {
 			$args['msg'] = 'refund_error';
 		} elseif ( isset( $order->payment_status ) && 'refunded' === $order->payment_status ) {
 			$args['msg'] = 'refund_already';
-		} elseif ( ! isset( $order->payment_status, $order->payment_method ) || 'paid' !== $order->payment_status || 'stripe' !== $order->payment_method || empty( $order->payment_intent_id ) ) {
+		} elseif ( ! isset( $order->payment_status ) || 'paid' !== $order->payment_status || ! $is_paid_by_gateway || empty( $order->payment_intent_id ) ) {
 			$args['msg'] = 'refund_ineligible';
 		} else {
-			$refund = DoughBoss_Stripe::create_refund( (string) $order->payment_intent_id );
+			$refund = DoughBoss_Payment::refund_via( $gateway, (string) $order->payment_intent_id );
 			if ( is_wp_error( $refund ) ) {
 				$args['msg']    = 'refund_error';
 				$args['detail'] = rawurlencode( $refund->get_error_message() );
@@ -1464,7 +1539,19 @@ JS;
 		if ( '' !== $required_key ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page gate, not a state change; compared with hash_equals() below.
 			$supplied_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
-			if ( '' === $supplied_key || ! hash_equals( $required_key, $supplied_key ) ) {
+			// Keys generated since hashing shipped are stored as a sha256 hex
+			// digest (always 64 hex chars — generated plaintext keys are 24 chars
+			// from a no-lookalike alphabet, so the two can never be confused).
+			// A pre-hashing install may still hold a legacy plaintext key; it
+			// keeps working until the owner regenerates.
+			$stored_is_hash = (bool) preg_match( '/^[0-9a-f]{64}$/', $required_key );
+			$ok             = false;
+			if ( '' !== $supplied_key ) {
+				$ok = $stored_is_hash
+					? hash_equals( $required_key, hash( 'sha256', $supplied_key ) )
+					: hash_equals( $required_key, $supplied_key );
+			}
+			if ( ! $ok ) {
 				wp_die( esc_html__( 'This Order Board link is missing or has an incorrect access key. Ask an owner/manager for the bookmarked board URL from DoughBoss Settings.', 'doughboss' ) );
 			}
 		}
@@ -2409,25 +2496,46 @@ JS;
 				<p class="description"><?php esc_html_e( 'Each topping and the price added when selected in the builder.', 'doughboss' ); ?></p>
 				<?php $this->render_repeater( 'toppings', $settings['toppings'], $opt ); ?>
 
-				<h2><?php esc_html_e( 'Payments (Stripe)', 'doughboss' ); ?></h2>
+				<h2><?php esc_html_e( 'Payments', 'doughboss' ); ?></h2>
 					<p class="description">
-						<?php esc_html_e( 'Optional. Take card payments at checkout via Stripe. Off by default — start in Test mode with your test keys, then switch to Live. Card payments apply only once payments are on AND keys are set for the active mode.', 'doughboss' ); ?>
+						<?php esc_html_e( 'Optional. Take card payments at checkout via Stripe or Tyro — pick one active gateway below. Off by default — start in Test/Sandbox mode with your test keys, then switch to Live. Card payments apply only once payments are on AND the active gateway is fully configured for its mode.', 'doughboss' ); ?>
 						<?php
-						if ( ! class_exists( 'DoughBoss_Stripe' ) || ! DoughBoss_Stripe::ready() ) {
+						if ( ! class_exists( 'DoughBoss_Payment' ) || ! DoughBoss_Payment::ready() ) {
 							echo ' <strong>' . esc_html__( 'Status: card payments are OFF.', 'doughboss' ) . '</strong>';
 						} else {
-							/* translators: %s: Stripe mode (Test or Live). */
-							echo ' <strong style="color:#1f8a54;">' . esc_html( sprintf( __( 'Status: card payments are ON (%s mode).', 'doughboss' ), DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' ) ) ) . '</strong>';
+							/* translators: 1: gateway name (Stripe or Tyro), 2: mode (Test/Sandbox or Live). */
+							echo ' <strong style="color:#1f8a54;">' . esc_html(
+								sprintf(
+									__( 'Status: card payments are ON via %1$s (%2$s mode).', 'doughboss' ),
+									DoughBoss_Payment::gateway_label(),
+									'tyro' === DoughBoss_Settings::payment_gateway()
+										? ( DoughBoss_Settings::tyro_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Sandbox', 'doughboss' ) )
+										: ( DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' ) )
+								)
+							) . '</strong>';
 						}
 						?>
 					</p>
-					<?php $mode = isset( $settings['stripe_mode'] ) && 'live' === $settings['stripe_mode'] ? 'live' : 'test'; ?>
 					<table class="form-table" role="presentation">
 						<tr>
 							<th><label for="db-payments-enabled"><?php esc_html_e( 'Accept card payments', 'doughboss' ); ?></label></th>
 							<td><input type="checkbox" id="db-payments-enabled" name="<?php echo esc_attr( $opt ); ?>[payments_enabled]" value="1" <?php checked( ! empty( $settings['payments_enabled'] ), true ); ?> />
-								<span class="description"><?php esc_html_e( 'When on (and keys are set for the active mode), customers pay by card before the order is placed.', 'doughboss' ); ?></span></td>
+								<span class="description"><?php esc_html_e( 'When on (and the active gateway is fully configured), customers pay by card before the order is placed.', 'doughboss' ); ?></span></td>
 						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Active gateway', 'doughboss' ); ?></th>
+							<td>
+								<?php $gateway = isset( $settings['payment_gateway'] ) && 'tyro' === $settings['payment_gateway'] ? 'tyro' : 'stripe'; ?>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="stripe" <?php checked( 'stripe' === $gateway, true ); ?> /> <?php esc_html_e( 'Stripe', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="tyro" <?php checked( 'tyro' === $gateway, true ); ?> /> <?php esc_html_e( 'Tyro', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Existing paid orders always refund correctly against whichever gateway actually processed them, even after you switch this.', 'doughboss' ); ?></p>
+							</td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Stripe', 'doughboss' ); ?></h3>
+					<?php $mode = isset( $settings['stripe_mode'] ) && 'live' === $settings['stripe_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
 						<tr>
 							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
 							<td>
@@ -2469,6 +2577,63 @@ JS;
 									<?php esc_html_e( 'still works if already registered — Stripe issues one signing secret per endpoint and this plugin stores a single secret, so register only one of them.', 'doughboss' ); ?>
 									<?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
 									<?php echo isset( $settings['stripe_live_whsec'] ) && '' !== $settings['stripe_live_whsec'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
+								</p></td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Tyro', 'doughboss' ); ?></h3>
+					<?php $tyro_mode = isset( $settings['tyro_mode'] ) && 'live' === $settings['tyro_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[tyro_mode]" value="test" <?php checked( 'test' === $tyro_mode, true ); ?> /> <?php esc_html_e( 'Sandbox', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[tyro_mode]" value="live" <?php checked( 'live' === $tyro_mode, true ); ?> /> <?php esc_html_e( 'Live', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-merchant-id"><?php esc_html_e( 'Merchant ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-tyro-merchant-id" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_merchant_id]" value="<?php echo esc_attr( isset( $settings['tyro_merchant_id'] ) ? $settings['tyro_merchant_id'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'From your Tyro / Mastercard Payment Gateway Services merchant portal. Used for both sandbox and live — the Mode above selects which password is used against it.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-host"><?php esc_html_e( 'API host (optional)', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-tyro-host" class="regular-text" autocomplete="off" placeholder="https://tyro.gateway.mastercard.com" name="<?php echo esc_attr( $opt ); ?>[tyro_host]" value="<?php echo esc_attr( isset( $settings['tyro_host'] ) ? $settings['tyro_host'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Leave blank to use the default gateway host shown above.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-api-version"><?php esc_html_e( 'API version (optional)', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-tyro-api-version" class="small-text" autocomplete="off" placeholder="74" name="<?php echo esc_attr( $opt ); ?>[tyro_api_version]" value="<?php echo esc_attr( isset( $settings['tyro_api_version'] ) ? $settings['tyro_api_version'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Leave blank to use the default API version shown above.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-test-password"><?php esc_html_e( 'Sandbox integration password', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-test-password" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_password]" value="" />
+								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_TYRO_TEST_PASSWORD environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_test_password'] ) && '' !== $settings['tyro_test_password'] ? esc_html__( 'A password is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-live-password"><?php esc_html_e( 'Live integration password', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-live-password" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_password]" value="" />
+								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_TYRO_LIVE_PASSWORD environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_live_password'] ) && '' !== $settings['tyro_live_password'] ? esc_html__( 'A password is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-test-whsec"><?php esc_html_e( 'Sandbox webhook secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-test-whsec" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_webhook_secret]" value="" />
+								<p class="description">
+									<?php esc_html_e( 'Register a webhook in your Tyro sandbox account pointing to:', 'doughboss' ); ?>
+									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/tyro-webhook' ) ); ?></code>
+									<?php esc_html_e( 'Catering deposits use:', 'doughboss' ); ?>
+									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/tyro-webhook' ) ); ?></code>
+									<?php esc_html_e( 'then paste its signing secret here. For best security set it as the DOUGHBOSS_TYRO_TEST_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
+									<?php echo isset( $settings['tyro_test_webhook_secret'] ) && '' !== $settings['tyro_test_webhook_secret'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
+								</p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-live-whsec"><?php esc_html_e( 'Live webhook secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-live-whsec" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_webhook_secret]" value="" />
+								<p class="description">
+									<?php esc_html_e( 'Same endpoints as above, registered against your live Tyro account. For best security set it as the DOUGHBOSS_TYRO_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
+									<?php echo isset( $settings['tyro_live_webhook_secret'] ) && '' !== $settings['tyro_live_webhook_secret'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
 								</p></td>
 						</tr>
 					</table>
