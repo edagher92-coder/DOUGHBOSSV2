@@ -18,9 +18,23 @@
 	var configCache = null;
 	var locationsCache = null;
 
-	// Build a single Stripe instance when card payments are enabled and Stripe.js
-	// has loaded. Stays null otherwise, and the checkout falls back to no payment.
-	var stripe = (PAY.enabled && PAY.pk && typeof window.Stripe === 'function') ? window.Stripe(PAY.pk) : null;
+	// Which gateway the server enqueued a card library for ('stripe' or 'tyro').
+	// Defaults to 'stripe' so older localized data behaves exactly as before.
+	var GATEWAY = PAY.gateway || 'stripe';
+
+	// Build a single Stripe instance when Stripe is the active gateway and
+	// Stripe.js has loaded. Stays null otherwise, and the checkout falls back
+	// to Tyro (below) or to no payment.
+	var stripe = (PAY.enabled && PAY.pk && GATEWAY === 'stripe' && typeof window.Stripe === 'function') ? window.Stripe(PAY.pk) : null;
+
+	// Tyro (MPGS) hosted-session payments: true when Tyro is the active gateway
+	// and its Session.js library loaded. The library is a page-global singleton
+	// (window.PaymentSession), not an instance like Stripe's.
+	var tyroPay = !!(PAY.enabled && GATEWAY === 'tyro' && window.PaymentSession && typeof window.PaymentSession.configure === 'function');
+
+	// PaymentSession.configure() may only run once per page load — this guard
+	// keeps a second checkout widget on the same page from breaking the first.
+	var tyroConfigured = false;
 
 	/* ------------------------------------------------------------------ */
 	/* Helpers                                                            */
@@ -585,6 +599,206 @@
 		return wrap;
 	}
 
+	// Tyro (MPGS) hosted-session card capture for the checkout form.
+	//
+	// Card-data isolation — the same guarantee as Stripe Elements, different
+	// mechanics: the four inputs built here start readOnly and are handed over
+	// to Tyro's Session.js, which replaces them with gateway-controlled proxied
+	// fields the moment configure() succeeds. What the customer types goes
+	// straight from the browser to Tyro's gateway host and lands in a Hosted
+	// Session there; this script (and every DoughBoss REST call) only ever sees
+	// the opaque session id — never a card number, expiry or security code.
+	//
+	// Flow (mirrors the Stripe branch's create → confirm → checkout shape):
+	//   mount:  POST /payment-intent  → PaymentSession.configure(session id)
+	//           so the hosted fields are live before the customer types.
+	//   submit: POST /payment-intent again for a FRESH order reference — the
+	//           amount and pickup/delivery/shop details the server stashes for
+	//           the PAY call must reflect the cart as it is NOW, not as it was
+	//           when the form mounted (the hosted session itself only carries
+	//           card details, so it is safely reused) — then
+	//           PaymentSession.updateSessionFromForm('card') to push the hosted
+	//           fields into the session, then POST /checkout with the composite
+	//           "{order_id}.{session_id}" reference. The server submits and
+	//           verifies the actual charge before trusting the order as paid.
+	function tyroCheckout(form, msg, getState) {
+		var uid = 'db-tyro-' + String(Date.now()) + String(Math.floor(Math.random() * 1000));
+		var ids = {
+			number: uid + '-number',
+			month: uid + '-month',
+			year: uid + '-year',
+			csc: uid + '-csc'
+		};
+
+		// readOnly until Session.js takes the field over (so nothing typed early
+		// can sit in a page-readable input); autocomplete off so the browser
+		// never offers to store card data against our own DOM.
+		function cardInput(id, ariaLabel, placeholder, extraClass) {
+			return el('input', {
+				type: 'text',
+				id: id,
+				class: 'db-card-input' + (extraClass ? ' ' + extraClass : ''),
+				readOnly: true,
+				autocomplete: 'off',
+				placeholder: placeholder,
+				'aria-label': ariaLabel
+			});
+		}
+
+		form.appendChild(el('div', { class: 'db-cardfield db-cardfield--tyro' }, [
+			el('span', { class: 'db-field-label', text: I18N.cardDetails || 'Card details' }),
+			el('div', { class: 'db-card-fields' }, [
+				cardInput(ids.number, I18N.cardNumber || 'Card number', '1234 1234 1234 1234'),
+				el('div', { class: 'db-card-row' }, [
+					cardInput(ids.month, I18N.cardExpiryMonth || 'Expiry month (MM)', 'MM', 'db-card-input--sm'),
+					cardInput(ids.year, I18N.cardExpiryYear || 'Expiry year (YY)', 'YY', 'db-card-input--sm'),
+					cardInput(ids.csc, I18N.cardCsc || 'Security code (CVC)', 'CVC', 'db-card-input--sm')
+				])
+			])
+		]));
+
+		var state = {
+			sessionId: '',   // the Hosted Session the fields are bound to
+			initPromise: null,
+			pending: null    // in-flight updateSessionFromForm resolver
+		};
+
+		function createIntent() {
+			var s = getState();
+			return request('/payment-intent', { method: 'POST', body: { order_type: s.orderType, location_id: s.locationId } });
+		}
+
+		function fieldErrorMessage(errors) {
+			errors = errors || {};
+			if (errors.cardNumber) { return I18N.cardNumberError || 'Please check the card number.'; }
+			if (errors.expiryMonth || errors.expiryYear) { return I18N.cardExpiryError || 'Please check the card expiry date.'; }
+			if (errors.securityCode) { return I18N.cardCscError || 'Please check the card security code.'; }
+			return I18N.cardError || 'Please check your card details and try again.';
+		}
+
+		function configureSession(sessionId) {
+			return new Promise(function (resolve, reject) {
+				if (tyroConfigured) {
+					reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
+					return;
+				}
+				tyroConfigured = true;
+				state.sessionId = sessionId;
+				// Session.js is expected to call initialized(); if it never does
+				// (bad merchant id / wrong host / blocked script), surface that
+				// instead of leaving the form silently dead.
+				var timer = setTimeout(function () {
+					reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
+				}, 20000);
+				window.PaymentSession.configure({
+					session: sessionId,
+					fields: {
+						card: {
+							number: '#' + ids.number,
+							expiryMonth: '#' + ids.month,
+							expiryYear: '#' + ids.year,
+							securityCode: '#' + ids.csc
+						}
+					},
+					frameEmbeddingMitigation: ['javascript'],
+					interaction: {
+						displayControl: {
+							formatCard: 'EMBOSSED',
+							invalidFieldCharacters: 'REJECT'
+						}
+					},
+					callbacks: {
+						initialized: function (response) {
+							clearTimeout(timer);
+							if (response && response.status && response.status !== 'ok') {
+								reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
+							} else {
+								resolve(sessionId);
+							}
+						},
+						formSessionUpdate: function (response) {
+							var pending = state.pending;
+							state.pending = null;
+							if (!pending) { return; }
+							clearTimeout(pending.timer);
+							if (response && response.status === 'ok') {
+								pending.resolve((response.session && response.session.id) || state.sessionId);
+							} else if (response && response.status === 'fields_in_error') {
+								pending.reject(new Error(fieldErrorMessage(response.errors)));
+							} else {
+								pending.reject(new Error(I18N.cardError || 'Please check your card details and try again.'));
+							}
+						}
+					}
+				});
+			});
+		}
+
+		function init() {
+			if (!state.initPromise) {
+				state.initPromise = createIntent().then(function (pi) {
+					// client_secret carries the bare Hosted Session id.
+					return configureSession(pi.client_secret);
+				}).catch(function (err) {
+					// Allow the next submit to retry a failed initialization
+					// (unless configure() itself already ran — that is one-shot).
+					if (!tyroConfigured) { state.initPromise = null; }
+					throw err;
+				});
+			}
+			return state.initPromise;
+		}
+
+		function updateSession() {
+			return new Promise(function (resolve, reject) {
+				if (state.pending) {
+					reject(new Error(I18N.payProcessing || 'Processing payment…'));
+					return;
+				}
+				var pending = { resolve: resolve, reject: reject, timer: 0 };
+				pending.timer = setTimeout(function () {
+					if (state.pending === pending) {
+						state.pending = null;
+						reject(new Error(I18N.cardError || 'Please check your card details and try again.'));
+					}
+				}, 30000);
+				state.pending = pending;
+				try {
+					window.PaymentSession.updateSessionFromForm('card');
+				} catch (e) {
+					state.pending = null;
+					clearTimeout(pending.timer);
+					reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
+				}
+			});
+		}
+
+		// Kick the hosted fields off once the form is in the DOM (it is appended
+		// synchronously by draw() — same deferral as the Stripe card mount).
+		setTimeout(function () {
+			init().catch(function (err) {
+				msg.textContent = err.message || (I18N.cardInitError || 'The secure card form could not be loaded.');
+				msg.className = 'db-checkout-msg db-error';
+			});
+		}, 0);
+
+		return {
+			pay: function () {
+				return init().then(function () {
+					return createIntent();
+				}).then(function (pi) {
+					return updateSession().then(function (sessionId) {
+						// Fresh order-reference half + the (card-carrying) hosted
+						// session half. On MPGS both halves are plugin-generated
+						// alnum ids, so splitting on the first '.' is safe — see
+						// DoughBoss_Tyro::ID_DELIM.
+						return String(pi.payment_intent).split('.')[0] + '.' + sessionId;
+					});
+				});
+			}
+		};
+	}
+
 	function checkoutForm(cfg, initialOrderType, getLocationId, initialTotals, onOrderComplete) {
 		// orderType/totals are mutable — update() below can revise them (e.g. the
 		// customer switches pickup/delivery, or the cart total changes) without
@@ -605,10 +819,13 @@
 
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
-		// When Stripe is active, mount a card field and label the button "Pay $X".
+		// Whether this checkout takes a card payment (either gateway).
+		var paying = !!(stripe || tyroPay);
+
+		// When a gateway is active, mount card fields and label the button "Pay $X".
 		function payLabelFor(t) {
 			var grandTotal = t && typeof t.total !== 'undefined' ? t.total : 0;
-			return stripe ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
+			return paying ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
 		}
 		var payLabel = payLabelFor(totals);
 		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
@@ -627,6 +844,17 @@
 			card = elements.create('card', { hidePostalCode: true });
 			// Mount once the form is in the DOM (it is appended synchronously by draw()).
 			setTimeout(function () { try { card.mount(cardMount); } catch (e) {} }, 0);
+		}
+
+		// Tyro (MPGS): hosted-session card fields — see tyroCheckout() above.
+		var tyro = null;
+		if (tyroPay) {
+			tyro = tyroCheckout(form, msg, function () {
+				return {
+					orderType: orderType,
+					locationId: getLocationId ? getLocationId() : storedLocationId()
+				};
+			});
 		}
 
 		form.appendChild(submit);
@@ -653,7 +881,7 @@
 				parent.appendChild(el('div', { class: 'db-confirm' }, [
 					el('h3', { text: res.message }),
 					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
-					el('p', { text: (stripe ? 'Paid: ' : 'Total: ') + money(res.total) })
+					el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) })
 				]));
 				// Mark this cart widget done BEFORE notifying — the notification
 				// triggers this same widget's own reload listener, which must not
@@ -697,6 +925,19 @@
 						payload.payment_intent_id = result.paymentIntent.id;
 						return placeOrder(payload);
 					});
+				}).catch(fail);
+			} else if (tyro) {
+				// 1) make sure the hosted card session is live, 2) create a fresh
+				// payment reference for the cart AS IT IS NOW, 3) push the gateway-
+				// hosted card fields into the session, 4) place the order with the
+				// composite payment reference — the server submits and verifies the
+				// actual charge before accepting the order as paid. Note the card
+				// details themselves never appear in `payload`: they live only in
+				// Tyro's hosted session.
+				submit.textContent = I18N.payProcessing || 'Processing payment…';
+				tyro.pay().then(function (paymentId) {
+					payload.payment_intent_id = paymentId;
+					return placeOrder(payload);
 				}).catch(fail);
 			} else {
 				submit.textContent = I18N.placing || 'Placing order…';

@@ -97,13 +97,33 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION
 		);
 
-		// Load Stripe.js (from Stripe's CDN, as they require) only when card
-		// payments are switched on and configured. Our script then depends on it.
-		$deps         = array();
-		$payments_on  = DoughBoss_Stripe::ready();
+		// Load the ACTIVE gateway's official card-capture library (from the
+		// gateway's own host, as both require) only when card payments are
+		// switched on and configured. Gating goes through the gateway-agnostic
+		// DoughBoss_Payment facade — the same gate the REST checkout enforces —
+		// never DoughBoss_Stripe directly: checking only Stripe here while the
+		// `payment_gateway` setting selects Tyro would leave checkout demanding
+		// a payment the storefront renders no card UI for.
+		$deps        = array();
+		$payments_on = DoughBoss_Payment::ready();
+		$gateway     = DoughBoss_Settings::payment_gateway();
 		if ( $payments_on ) {
-			wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
-			$deps[] = 'stripe-js';
+			if ( 'tyro' === $gateway ) {
+				// Tyro (MPGS) Hosted Session library. Per MPGS's integration
+				// docs the script is served by the merchant's own gateway host
+				// — the same configurable host the server-side API client uses
+				// (DoughBoss_Settings::tyro_host()) — with the API version and
+				// merchant id embedded in the URL.
+				$session_js = DoughBoss_Settings::tyro_host()
+					. '/form/version/' . rawurlencode( DoughBoss_Settings::tyro_api_version() )
+					. '/merchant/' . rawurlencode( DoughBoss_Settings::tyro_merchant_id() )
+					. '/session.js';
+				wp_enqueue_script( 'tyro-session-js', $session_js, array(), null, true );
+				$deps[] = 'tyro-session-js';
+			} else {
+				wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
+				$deps[] = 'stripe-js';
+			}
 		}
 
 		wp_enqueue_script(
@@ -123,7 +143,12 @@ class DoughBoss_Assets {
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
 				'payments' => array(
 					'enabled' => $payments_on,
-					'pk'      => $payments_on ? DoughBoss_Stripe::publishable_key() : '',
+					// Public-safe browser identifier for the ACTIVE gateway:
+					// Stripe's publishable key, or Tyro's merchant id.
+					'pk'      => $payments_on ? DoughBoss_Payment::publishable_key() : '',
+					// Which gateway the storefront JS should drive (Stripe.js
+					// Elements vs Tyro's Session.js hosted fields).
+					'gateway' => $gateway,
 				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),
@@ -143,6 +168,14 @@ class DoughBoss_Assets {
 					'cardDetails'  => __( 'Card details', 'doughboss' ),
 					'payProcessing'=> __( 'Processing payment…', 'doughboss' ),
 					'cardError'    => __( 'Please check your card details and try again.', 'doughboss' ),
+					'cardNumber'   => __( 'Card number', 'doughboss' ),
+					'cardExpiryMonth' => __( 'Expiry month (MM)', 'doughboss' ),
+					'cardExpiryYear'  => __( 'Expiry year (YY)', 'doughboss' ),
+					'cardCsc'         => __( 'Security code (CVC)', 'doughboss' ),
+					'cardNumberError' => __( 'Please check the card number.', 'doughboss' ),
+					'cardExpiryError' => __( 'Please check the card expiry date.', 'doughboss' ),
+					'cardCscError'    => __( 'Please check the card security code.', 'doughboss' ),
+					'cardInitError'   => __( 'The secure card form could not be loaded. Please refresh the page and try again.', 'doughboss' ),
 					'vClaiming'    => __( 'Getting your code…', 'doughboss' ),
 					'vYourCode'    => __( 'Your code', 'doughboss' ),
 					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),

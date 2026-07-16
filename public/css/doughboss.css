@@ -408,6 +408,40 @@
 	background: #fff;
 }
 
+/* Card payment (Tyro / MPGS hosted session) -------------------------- */
+/* Session.js replaces these inputs with gateway-hosted proxied fields;
+   the visual style below is what the customer sees, matching the Stripe
+   card element and the regular .db-field inputs. */
+.db-card-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.db-card-row {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.db-card-input {
+	width: 100%;
+	padding: 0.7rem 0.75rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-sm);
+	background: #fff;
+	font: inherit;
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-card-input:focus {
+	border-color: var(--db-accent);
+}
+
+.db-card-row .db-card-input--sm {
+	flex: 1;
+	min-width: 0;
+}
+
 .db-confirm {
 	border: 2px solid var(--db-accent);
 	border-radius: var(--db-r-xl);
