@@ -11,6 +11,7 @@
 	var sheetOpen = false, sheetName = null, sheetLastFocus = null;
 	var voucher = null;      // { code, amount } once a valid code is applied
 	var lemonChilli = null;  // 'Yes' | 'No' — pre-checkout question, re-asked on each checkout tap
+	var pendingOrder = null; // { name, phone } held during the simulated card-payment step
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	function money(n) { return '$' + Number(n).toFixed(2); }
@@ -247,7 +248,7 @@
 		var x = drawer.querySelector('.cd-close'); if (x) { x.focus(); }
 	}
 	function closeDrawer() {
-		drawerOpen = false; checkoutMode = false;
+		drawerOpen = false; checkoutMode = false; pendingOrder = null;
 		overlay.classList.remove('is-open'); drawer.classList.remove('is-open');
 		fab.setAttribute('aria-expanded', 'false');
 		if (lastFocus && lastFocus.focus && lastFocus.offsetParent !== null) { lastFocus.focus(); }
@@ -306,7 +307,7 @@
 			'<fieldset class="cd-f"><legend>Fulfilment</legend><p>Pickup from <strong>Revesby</strong></p><input type="hidden" name="ful" value="pickup"><input type="hidden" name="shop" value="Revesby"></fieldset>' +
 			'<fieldset class="cd-f cd-pay">' +
 			'<legend>Payment</legend>' +
-			'<p class="cd-privacy cd-carddemo">Interactive demo only — do not enter card details. The production payment provider is still to be confirmed.</p>' +
+			'<p class="cd-privacy cd-carddemo">Card payment (simulated). You&rsquo;ll enter test card details on the next step &mdash; orders &amp; payments are simulated, no real payment is taken.</p>' +
 			'</fieldset>' +
 			'<div class="cd-tots">' + totsHtml + '</div>' +
 			'<div class="cd-err" role="alert"></div>' +
@@ -342,30 +343,65 @@
 		var phone = (fd.get('phone') || '').toString().trim();
 		var err = form.querySelector('.cd-err');
 		if (!name || !phone) { err.textContent = 'Please add your name and phone.'; return; }
+		pendingOrder = { name: name, phone: phone };
+		renderCardSheet();
+	}
 
-		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
-		var amt = money(netTotal());
-		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
-		var lcline = lemonChilli !== null ? ' &middot; lemon &amp; chilli: <strong>' + esc(lemonChilli) + '</strong>' : '';
+	/* Simulated card-payment step — modeled on a hosted-fields checkout but
+	   unmistakably TEST MODE: any input is accepted, nothing is stored or sent. */
+	function renderCardSheet() {
+		if (!count() || !pendingOrder) { return; }
+		checkoutMode = true;
+		drawer.innerHTML = '<div class="cd-head"><h3>Payment</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+			'<div class="cd-test" role="status">Test mode &mdash; no real payment. Orders &amp; payments are simulated.</div>' +
+			'<form class="cd-cardform" novalidate>' +
+			'<label class="cd-f"><span>Card number</span><input name="cnum" class="cd-cnum" type="text" inputmode="numeric" autocomplete="off" placeholder="4242 4242 4242 4242"></label>' +
+			'<div class="cd-cardrow2">' +
+			'<label class="cd-f"><span>Expiry (MM/YY)</span><input name="cexp" class="cd-cexp" type="text" inputmode="numeric" autocomplete="off" placeholder="12/29"></label>' +
+			'<label class="cd-f"><span>CVC</span><input name="ccvc" class="cd-ccvc" type="text" inputmode="numeric" autocomplete="off" placeholder="123"></label>' +
+			'</div>' +
+			'<div class="cd-err" role="alert"></div>' +
+			'<button type="submit" class="vb-btn vb-btn-ember cd-payb">Pay ' + money(netTotal()) + ' &mdash; test mode</button>' +
+			'<button type="button" class="vb-btn vb-btn-dark cd-cardback">Back</button>' +
+			'<p class="cd-privacy">Nothing you type here is stored or sent anywhere &mdash; this screen is part of the interactive demo. Use made-up test details, not a real card.</p>' +
+			'</form>';
+		var f = drawer.querySelector('.cd-cnum'); if (f) { f.focus(); }
+	}
 
+	function payCard(form) {
+		var err = form.querySelector('.cd-err');
+		var num = form.querySelector('.cd-cnum'), exp = form.querySelector('.cd-cexp'), cvc = form.querySelector('.cd-ccvc');
+		if (!num.value.trim() || !exp.value.trim() || !cvc.value.trim()) {
+			err.textContent = 'Fill in all card fields — any made-up test values work.';
+			(!num.value.trim() ? num : (!exp.value.trim() ? exp : cvc)).focus();
+			return;
+		}
 		// Loading state while the (simulated) payment settles — same pattern as
 		// the offers.js voucher-claim button.
 		if (form.dataset.busy) { return; }
 		form.dataset.busy = '1';
-		var payBtn = form.querySelector('button[type="submit"]');
-		if (payBtn) { payBtn.disabled = true; payBtn.textContent = 'Placing order…'; }
+		var payBtn = form.querySelector('.cd-payb');
+		if (payBtn) { payBtn.disabled = true; payBtn.innerHTML = '<span class="cd-spin" aria-hidden="true"></span>Processing test payment&hellip;'; }
+		setTimeout(renderDone, 1500);
+	}
 
-		setTimeout(function () {
-			drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-				'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + lcline + '</p><p class="cd-note">No payment was taken and no real order was sent.</p></div>';
-			cart = {};
-			voucher = null;
-			lemonChilli = null;
-			for (var n in controls) { paintItem(n); }
-			renderFab(false);
-			var done = drawer.querySelector('.cd-done');
-			if (done) { try { done.focus({ preventScroll: true }); } catch (e) { done.focus(); } }
-		}, 450);
+	function renderDone() {
+		if (!pendingOrder || !drawerOpen) { pendingOrder = null; return; }
+		var name = pendingOrder.name;
+		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+		var amt = money(netTotal());
+		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
+		var lcline = lemonChilli !== null ? ' &middot; lemon &amp; chilli: <strong>' + esc(lemonChilli) + '</strong>' : '';
+		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + lcline + '</p><p class="cd-note">No payment was taken and no real order was sent.</p></div>';
+		cart = {};
+		voucher = null;
+		lemonChilli = null;
+		pendingOrder = null;
+		for (var n in controls) { paintItem(n); }
+		renderFab(false);
+		var done = drawer.querySelector('.cd-done');
+		if (done) { try { done.focus({ preventScroll: true }); } catch (e) { done.focus(); } }
 	}
 
 	/* --- events --- */
@@ -383,6 +419,7 @@
 			return;
 		}
 		var lc = e.target.closest('[data-lc]'); if (lc) { lemonChilli = lc.getAttribute('data-lc'); renderCheckout(); return; }
+		if (e.target.closest('.cd-cardback')) { pendingOrder = null; renderCheckout(); return; }
 		if (e.target.closest('.cd-back')) { renderDrawer(); return; }
 		if (e.target.closest('.cd-vapply')) { applyVoucher(); return; }
 		if (e.target.closest('.cd-vremove')) { voucher = null; renderCheckout(); return; }
