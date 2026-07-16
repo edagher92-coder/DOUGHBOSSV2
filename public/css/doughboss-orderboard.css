@@ -25,6 +25,16 @@
 	--dbb-chip-delivery-ink: #7a4b00;
 	--dbb-chip-shop-bg: #e8eefc;
 	--dbb-chip-shop-ink: #213a6b;
+	--r-sm: 10px;
+	--r-md: 14px;
+	--r-lg: 18px;
+	--r-xl: 24px;
+	--r-pill: 999px;
+	--sh-1: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 14px rgba(0, 0, 0, .06);
+	--sh-2: 0 4px 10px rgba(0, 0, 0, .08), 0 16px 36px rgba(0, 0, 0, .10);
+	--ease: cubic-bezier(.32, .72, .33, 1);
+	--t-fast: 150ms;
+	--t-med: 220ms;
 	margin-right: 20px;
 }
 
@@ -125,7 +135,7 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-lane {
 	background: var(--dbb-lane-bg);
-	border-radius: 10px;
+	border-radius: var(--r-lg);
 	padding: 0.75rem;
 	min-height: 120px;
 }
@@ -160,10 +170,10 @@ body.db-alerting .db-board-bar h1::after {
 	background: var(--dbb-paper);
 	border: 1px solid var(--dbb-line);
 	border-left: 6px solid var(--dbb-blue);
-	border-radius: 8px;
+	border-radius: var(--r-md);
 	padding: 0.75rem;
 	margin-bottom: 0.75rem;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+	box-shadow: var(--sh-1);
 }
 
 .db-card-pending { border-left-color: var(--dbb-red); }
@@ -267,6 +277,12 @@ body.db-alerting .db-board-bar h1::after {
 	font-size: 0.95rem;
 	display: inline-flex;
 	align-items: center;
+	border-radius: var(--r-sm);
+	transition: transform var(--t-fast) var(--ease);
+}
+
+.db-card-actions .button:active {
+	transform: scale(.98);
 }
 
 .db-eta { min-width: 52px; justify-content: center; }
@@ -288,5 +304,13 @@ body.db-alerting .db-board-bar h1::after {
 	.db-card-fresh {
 		animation: none;
 		box-shadow: 0 0 0 3px rgba(214, 69, 43, 0.35);
+	}
+
+	.db-card-actions .button {
+		transition: none;
+	}
+
+	.db-card-actions .button:active {
+		transform: none;
 	}
 }

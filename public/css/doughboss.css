@@ -8,6 +8,16 @@
 	--db-accent-dark: #c41c14;
 	--db-border: #e6e1da;
 	--db-muted: #6b6b6b;
+	--db-r-sm: 10px;
+	--db-r-md: 14px;
+	--db-r-lg: 18px;
+	--db-r-xl: 24px;
+	--db-r-pill: 999px;
+	--db-shadow-1: 0 1px 2px rgba(20, 16, 12, 0.05), 0 4px 12px rgba(20, 16, 12, 0.06);
+	--db-shadow-2: 0 2px 6px rgba(20, 16, 12, 0.07), 0 12px 28px rgba(20, 16, 12, 0.10);
+	--db-ease: cubic-bezier(0.32, 0.72, 0.33, 1);
+	--db-t-fast: 150ms;
+	--db-t-med: 220ms;
 	font-size: 16px;
 	line-height: 1.5;
 	color: #2b2b2b;
@@ -40,11 +50,19 @@
 	background: #0d0d0d;
 	color: #fff;
 	padding: 13px 20px;
-	border-radius: 8px;
+	border-radius: 14px;
 	font-size: 14px;
 	max-width: 90vw;
 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 	border-left: 3px solid #e2231a;
+}
+
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+	.db-toast {
+		background: rgba(13, 13, 13, 0.78);
+		backdrop-filter: blur(12px) saturate(1.4);
+		-webkit-backdrop-filter: blur(12px) saturate(1.4);
+	}
 }
 
 .db-app * {
@@ -68,12 +86,16 @@
 	background: var(--db-accent);
 	color: #fff;
 	border: 0;
-	border-radius: 6px;
-	padding: 0.55rem 1rem;
+	border-radius: var(--db-r-pill);
+	padding: 0.6rem 1.25rem;
 	font-size: 0.95rem;
-	font-weight: 600;
+	font-weight: 700;
 	cursor: pointer;
-	transition: background 0.15s ease;
+	transition: background var(--db-t-fast) var(--db-ease), transform var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+}
+
+.db-btn:active:not(:disabled) {
+	transform: scale(0.98);
 }
 
 .db-btn:hover:not(:disabled) {
@@ -88,6 +110,7 @@
 .db-btn--lg {
 	width: 100%;
 	padding: 0.8rem 1rem;
+	min-height: 44px;
 	font-size: 1.05rem;
 	margin-top: 0.75rem;
 }
@@ -104,24 +127,47 @@
 
 /* Menu -------------------------------------------------------------- */
 .db-category {
-	margin: 1.5rem 0 0.75rem;
-	border-bottom: 2px solid var(--db-accent);
-	padding-bottom: 0.25rem;
+	position: relative;
+	margin: 1.75rem 0 1rem;
+	padding-bottom: 0.55rem;
+	font-size: 1.35em;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+}
+
+.db-category::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 44px;
+	height: 4px;
+	border-radius: var(--db-r-pill);
+	background: var(--db-accent);
 }
 
 .db-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: 1rem;
+	gap: 1.25rem;
 }
 
 .db-card {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	background: #fff;
+	box-shadow: var(--db-shadow-1);
+	transition: transform var(--db-t-med) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+}
+
+@media (hover: hover) {
+	.db-card:not(.db-card--soldout):hover {
+		transform: translateY(-2px);
+		box-shadow: var(--db-shadow-2);
+	}
 }
 
 .db-card-img {
@@ -138,7 +184,7 @@
 }
 
 .db-card-body {
-	padding: 0.85rem;
+	padding: 1rem;
 	display: flex;
 	flex-direction: column;
 	flex: 1;
@@ -168,10 +214,11 @@
 
 /* Builder ----------------------------------------------------------- */
 .db-builder-inner {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
 	padding: 1.25rem;
 	background: #fff;
+	box-shadow: var(--db-shadow-1);
 	max-width: 560px;
 }
 
@@ -189,10 +236,17 @@
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
-	padding: 0.5rem 0.6rem;
+	padding: 0.6rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-md);
 	cursor: pointer;
+	transition: border-color var(--db-t-fast) var(--db-ease), background-color var(--db-t-fast) var(--db-ease);
+}
+
+@media (hover: hover) {
+	.db-option:hover {
+		border-color: var(--db-accent);
+	}
 }
 
 .db-option span:nth-of-type(1) {
@@ -225,9 +279,11 @@
 
 /* Cart -------------------------------------------------------------- */
 .db-cart-lines {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
 	overflow: hidden;
+	background: #fff;
+	box-shadow: var(--db-shadow-1);
 }
 
 .db-cart-line {
@@ -254,9 +310,14 @@
 
 .db-qty {
 	width: 60px;
-	padding: 0.35rem;
+	padding: 0.45rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-qty:focus {
+	border-color: var(--db-accent);
 }
 
 .db-fulfilment {
@@ -296,7 +357,7 @@
 	margin-top: 1.5rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.75rem;
+	gap: 0.9rem;
 }
 
 .db-field {
@@ -312,10 +373,16 @@
 
 .db-field input,
 .db-field textarea {
-	padding: 0.55rem;
+	padding: 0.65rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	font: inherit;
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-field input:focus,
+.db-field textarea:focus {
+	border-color: var(--db-accent);
 }
 
 .db-checkout-msg {
@@ -337,16 +404,17 @@
 .db-card-element {
 	padding: 0.7rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	background: #fff;
 }
 
 .db-confirm {
 	border: 2px solid var(--db-accent);
-	border-radius: 10px;
-	padding: 1.5rem;
+	border-radius: var(--db-r-xl);
+	padding: 1.75rem 1.5rem;
 	text-align: center;
 	background: #fff8f5;
+	box-shadow: var(--db-shadow-1);
 }
 
 /* Tracking ---------------------------------------------------------- */
@@ -366,28 +434,36 @@
 }
 
 .db-track-form input {
-	padding: 0.55rem;
+	padding: 0.65rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	font: inherit;
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-track-form input:focus {
+	border-color: var(--db-accent);
 }
 
 .db-track-card {
 	margin-top: 1rem;
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
-	padding: 1rem;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	padding: 1.25rem;
 	max-width: 380px;
+	background: #fff;
+	box-shadow: var(--db-shadow-1);
 }
 
 .db-status-badge {
 	display: inline-block;
 	background: var(--db-accent);
 	color: #fff;
-	border-radius: 20px;
-	padding: 0.25rem 0.85rem;
-	font-weight: 600;
-	font-size: 0.9rem;
+	border-radius: var(--db-r-pill);
+	padding: 0.3rem 0.9rem;
+	font-weight: 700;
+	font-size: 0.85rem;
+	letter-spacing: 0.02em;
 }
 
 .db-item-list {
@@ -410,12 +486,12 @@
 	left: 0.5rem;
 	background: #2b2b2b;
 	color: #fff;
-	border-radius: 4px;
-	padding: 0.2rem 0.55rem;
+	border-radius: var(--db-r-pill);
+	padding: 0.25rem 0.65rem;
 	font-size: 0.72rem;
 	font-weight: 700;
 	text-transform: uppercase;
-	letter-spacing: 0.03em;
+	letter-spacing: 0.06em;
 }
 
 /* Shop picker ------------------------------------------------------ */
@@ -423,10 +499,11 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.4rem;
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
-	padding: 0.9rem 1rem;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	padding: 1rem 1.1rem;
 	background: #fff;
+	box-shadow: var(--db-shadow-1);
 	max-width: 420px;
 }
 
@@ -441,11 +518,16 @@
 
 .db-shop-select,
 .db-cart-shop .db-shop-select {
-	padding: 0.55rem;
+	padding: 0.6rem 0.7rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	font: inherit;
 	background: #fff;
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-shop-select:focus {
+	border-color: var(--db-accent);
 }
 
 .db-shop-info {
@@ -474,11 +556,12 @@
 .db-voucher-row { display: flex; gap: 0.5rem; }
 .db-voucher-input {
 	flex: 1;
-	padding: 0.6rem 0.75rem;
+	padding: 0.65rem 0.8rem;
 	border: 1px solid #d8d8d8;
-	border-radius: 8px;
+	border-radius: var(--db-r-sm);
 	font-size: 0.95rem;
 	text-transform: uppercase;
+	transition: border-color var(--db-t-fast) var(--db-ease);
 }
 .db-voucher-input:focus { outline: none; border-color: #111; }
 .db-btn--sm { padding: 0.6rem 1rem; font-size: 0.9rem; }
@@ -487,11 +570,12 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 0.75rem;
-	padding: 0.6rem 0.85rem;
+	padding: 0.65rem 0.9rem;
 	background: #f0f9f3;
 	border: 1px solid #bfe6cf;
-	border-radius: 8px;
+	border-radius: var(--db-r-md);
 	font-size: 0.9rem;
 	font-weight: 600;
+	box-shadow: var(--db-shadow-1);
 }
 .db-voucher-msg { margin-top: 0.4rem; font-size: 0.85rem; color: #d4351c; }
