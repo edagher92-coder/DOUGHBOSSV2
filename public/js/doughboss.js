@@ -416,7 +416,10 @@
 				return;
 			}
 
-			if (!locationId) { locationId = currentLocationId(locs); }
+			if (cfg.single_location_mode && cfg.single_location_id) {
+				locationId = Number(cfg.single_location_id);
+				orderType = 'pickup';
+			} else if (!locationId) { locationId = currentLocationId(locs); }
 
 			// Line items.
 			var list = el('div', { class: 'db-cart-lines' });
@@ -428,7 +431,7 @@
 			// Shop selector — routes the order to the right kitchen board. Only
 			// shown when more than one shop exists; otherwise the single shop is
 			// remembered silently.
-			if (locs.length > 1) {
+			if (!cfg.single_location_mode && locs.length > 1) {
 				setLocation(locationId, true);
 				cartRegion.appendChild(el('div', { class: 'db-cart-shop' }, [
 					el('span', { class: 'db-cart-shop-label', text: I18N.chooseShop || 'Choose your shop' }),
@@ -681,7 +684,7 @@
 				// payment, 3) place the order with the confirmed PaymentIntent id —
 				// which the server re-verifies before accepting the order as paid.
 				submit.textContent = I18N.payProcessing || 'Processing payment…';
-				request('/payment-intent', { method: 'POST', body: { order_type: orderType } }).then(function (pi) {
+				request('/payment-intent', { method: 'POST', body: { order_type: orderType, location_id: payload.location_id } }).then(function (pi) {
 					return stripe.confirmCardPayment(pi.client_secret, {
 						payment_method: {
 							card: card,

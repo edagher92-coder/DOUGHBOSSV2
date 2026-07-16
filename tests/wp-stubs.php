@@ -24,6 +24,7 @@ define( 'OBJECT', 'OBJECT' );
 /** Recorded runtime state the smoke test inspects. */
 $GLOBALS['__db_hooks']      = array();
 $GLOBALS['__db_rest']       = array();
+$GLOBALS['__db_rest_args']  = array();
 $GLOBALS['__db_shortcodes'] = array();
 $GLOBALS['__db_posttypes']  = array();
 $GLOBALS['__db_options']    = array();
@@ -60,18 +61,22 @@ function wp_using_ext_object_cache() { return false; }
 
 /* ---- REST ---- */
 class WP_REST_Server { const READABLE = 'GET'; const CREATABLE = 'POST'; const EDITABLE = 'POST, PUT, PATCH'; const DELETABLE = 'DELETE'; const ALLMETHODS = 'GET, POST, PUT, PATCH, DELETE'; }
-function register_rest_route( $ns, $route, $args = array(), $override = false ) { $GLOBALS['__db_rest'][] = rtrim( $ns, '/' ) . '/' . ltrim( $route, '/' ); return true; }
+function register_rest_route( $ns, $route, $args = array(), $override = false ) { $key = rtrim( $ns, '/' ) . '/' . ltrim( $route, '/' ); $GLOBALS['__db_rest'][] = $key; $GLOBALS['__db_rest_args'][ $key ] = $args; return true; }
 function rest_url( $p = '' ) { return 'http://example.test/wp-json/' . ltrim( $p, '/' ); }
 function is_wp_error( $t ) { return $t instanceof WP_Error; }
 class WP_Error { public $errors = array(); public function __construct( $c = '', $m = '', $d = null ) { if ( $c ) { $this->errors[ $c ][] = $m; } } public function get_error_message() { return ''; } public function get_error_code() { return ''; } }
 class WP_REST_Response { public $data; public $status; public function __construct( $d = null, $s = 200 ) { $this->data = $d; $this->status = $s; } public function set_status( $s ) { $this->status = $s; } }
 class WP_REST_Request implements ArrayAccess {
 	private $p = array();
-	public function __construct( $p = array() ) { $this->p = $p; }
+	private $headers = array();
+	public function __construct( $p = array(), $headers = array() ) {
+		$this->p = $p;
+		foreach ( (array) $headers as $name => $value ) { $this->headers[ strtolower( $name ) ] = $value; }
+	}
 	public function get_param( $k ) { return $this->p[ $k ] ?? null; }
 	public function get_params() { return $this->p; }
 	public function get_json_params() { return $this->p; }
-	public function get_header( $k ) { return ''; }
+	public function get_header( $k ) { return $this->headers[ strtolower( $k ) ] ?? ''; }
 	// No return types + E_DEPRECATED suppressed → works on PHP 7.4 and 8.x alike.
 	public function offsetExists( $o ) { return isset( $this->p[ $o ] ); }
 	public function offsetGet( $o ) { return $this->p[ $o ] ?? null; }
@@ -108,7 +113,13 @@ function add_shortcode( $tag, $cb ) { $GLOBALS['__db_shortcodes'][ $tag ] = $cb;
 function shortcode_atts( $defaults, $atts, $sc = '' ) { return array_merge( $defaults, (array) $atts ); }
 
 /* ---- Capabilities / users ---- */
-function current_user_can( $c ) { return true; }
+$GLOBALS['__db_caps_override'] = null;
+function current_user_can( $c ) {
+	if ( is_array( $GLOBALS['__db_caps_override'] ) ) {
+		return in_array( $c, $GLOBALS['__db_caps_override'], true );
+	}
+	return true;
+}
 function is_user_logged_in() { return false; }
 function wp_get_current_user() { return (object) array( 'ID' => 0, 'roles' => array() ); }
 function get_current_user_id() { return 0; }

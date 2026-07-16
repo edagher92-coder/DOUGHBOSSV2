@@ -15,19 +15,47 @@
 
 	var root = document.getElementById( 'app' );
 	var state = load();
+	state.boardKey = boardKeyFromUrl();
 	var pollTimer = null;
 	var clearTimer = null;
 	var camScanner = null;
 	var eventSource = null; // Mercure SSE, when the site advertises it on /config.
+	var fieldSeq = 0;
+
+	function boardKeyFromUrl() {
+		try { return new URLSearchParams( window.location.search ).get( 'key' ) || ''; }
+		catch ( e ) { return ''; }
+	}
 
 	/* ---------- storage ---------- */
 	function load() {
 		try {
-			return JSON.parse( localStorage.getItem( STORE ) ) || {};
-		} catch ( e ) { return {}; }
+			var stored = JSON.parse( localStorage.getItem( STORE ) ) || {};
+			// Never restore a reusable Application Password (or server-provided
+			// capability/config data) from persistent browser storage. This also
+			// removes credentials written by older Console versions on first load.
+			var safe = {
+				site: typeof stored.site === 'string' ? stored.site : '',
+				user: typeof stored.user === 'string' ? stored.user : '',
+				tab: typeof stored.tab === 'string' ? stored.tab : ''
+			};
+			localStorage.setItem( STORE, JSON.stringify( safe ) );
+			return safe;
+		} catch ( e ) {
+			try { localStorage.removeItem( STORE ); } catch ( ignored ) {}
+			return {};
+		}
 	}
-	function save() { localStorage.setItem( STORE, JSON.stringify( state ) ); }
-	function wipe() { localStorage.removeItem( STORE ); state = {}; }
+	function save() {
+		// Preferences only. The Application Password and capabilities live in
+		// memory and are cleared by sign-out, reload, tab close or browser restart.
+		localStorage.setItem( STORE, JSON.stringify( {
+			site: state.site || '',
+			user: state.user || '',
+			tab: state.tab || ''
+		} ) );
+	}
+	function wipe() { localStorage.removeItem( STORE ); state = { boardKey: boardKeyFromUrl() }; }
 
 	// Single sign-out path: wipe the stored credential and return to the login
 	// screen. Used by both the explicit "Sign out" button and the inactivity
@@ -97,12 +125,14 @@
 
 	/* ---------- api ---------- */
 	function api( path, method, body ) {
+		var headers = {
+			'Content-Type': 'application/json',
+			'Authorization': 'Basic ' + btoa( state.user + ':' + state.pass )
+		};
+		if ( state.boardKey ) { headers['X-DoughBoss-Board-Key'] = state.boardKey; }
 		return fetch( state.site + '/wp-json/' + NS + path, {
 			method: method,
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': 'Basic ' + btoa( state.user + ':' + state.pass )
-			},
+			headers: headers,
 			body: body ? JSON.stringify( body ) : undefined
 		} ).then( function ( res ) {
 			return res.json().then( function ( data ) {
@@ -217,7 +247,7 @@
 		if ( err ) { card.appendChild( el( 'div', 'login__err', err ) ); }
 
 		var help = el( 'div', 'login__help' );
-		help.innerHTML = 'Create an <strong>Application Password</strong> in WordPress: Users → Profile → Application Passwords. Use your WordPress username and that generated password here. Your login is stored only on this device.';
+		help.innerHTML = 'Create an <strong>Application Password</strong> in WordPress: Users → Profile → Application Passwords. Your site and username are remembered on this device; the Application Password is kept only in memory and is cleared when this page reloads or closes.';
 		card.appendChild( help );
 
 		function go() {
@@ -225,6 +255,16 @@
 			var user = ( fUser.input.value || '' ).trim();
 			var pass = ( fPass.input.value || '' ).trim();
 			if ( ! site || ! user || ! pass ) { return renderLogin( 'Please fill in every field.' ); }
+			try {
+				var siteUrl = new URL( site );
+				var localDev = siteUrl.hostname === 'localhost' || siteUrl.hostname === '127.0.0.1';
+				if ( siteUrl.protocol !== 'https:' && ! localDev ) {
+					return renderLogin( 'Use an HTTPS site address so the Application Password is encrypted in transit.' );
+				}
+				site = siteUrl.origin + siteUrl.pathname.replace( /\/$/, '' );
+			} catch ( e ) {
+				return renderLogin( 'Enter a valid site address, including https://.' );
+			}
 			btn.disabled = true; btn.textContent = 'Signing in…';
 			state.site = site; state.user = user; state.pass = pass;
 			api( '/auth/me', 'GET' ).then( function ( r ) {
@@ -253,8 +293,12 @@
 	}
 	function field( label, type, value ) {
 		var row = el( 'div' );
-		row.appendChild( el( 'label', null, label ) );
+		var id = 'db-console-field-' + ( ++fieldSeq );
+		var labelEl = el( 'label', null, label );
+		labelEl.setAttribute( 'for', id );
+		row.appendChild( labelEl );
 		var input = el( 'input' );
+		input.id = id;
 		input.type = type;
 		input.value = value || '';
 		row.appendChild( input );
@@ -317,7 +361,7 @@
 		var c1 = el( 'div', 'card' );
 		c1.appendChild( el( 'h2', null, 'Redeem a voucher' ) );
 		s.input = el( 'input', 'scan__input' );
-		s.input.placeholder = 'SNOW-XXXXXXXX';
+		s.input.placeholder = 'DOUGH-XXXXXXXX';
 		s.input.setAttribute( 'autocomplete', 'off' );
 		c1.appendChild( s.input );
 
@@ -574,7 +618,10 @@
 	}
 	function labelled( label, input ) {
 		var w = el( 'div' );
-		w.appendChild( el( 'label', null, label ) );
+		if ( ! input.id ) { input.id = 'db-console-field-' + ( ++fieldSeq ); }
+		var labelEl = el( 'label', null, label );
+		labelEl.setAttribute( 'for', input.id );
+		w.appendChild( labelEl );
 		w.appendChild( input );
 		return w;
 	}

@@ -78,7 +78,7 @@ class DoughBoss_REST_Controller {
 		if ( $origin && $allowed && $origin === $allowed && 0 === strpos( $route, '/' . DOUGHBOSS_REST_NAMESPACE ) ) {
 			header( 'Access-Control-Allow-Origin: ' . $allowed );
 			header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
-			header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce' );
+			header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, X-DoughBoss-Board-Key' );
 			header( 'Vary: Origin' );
 		}
 		return $served;
@@ -609,6 +609,10 @@ class DoughBoss_REST_Controller {
 						'default'           => 'pickup',
 						'sanitize_callback' => 'sanitize_key',
 					),
+					'location_id' => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
 				),
 			)
 		);
@@ -674,7 +678,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'admin_update_status' ),
-				'permission_callback' => array( $this, 'verify_admin' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
 				'args'                => array(
 					'status' => array(
 						'required'          => true,
@@ -693,7 +697,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'admin_orders' ),
-				'permission_callback' => array( $this, 'verify_admin' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
 				'args'                => array(
 					'status'   => array(
 						'default'           => '',
@@ -726,7 +730,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'admin_acknowledge' ),
-				'permission_callback' => array( $this, 'verify_admin' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
 			)
 		);
 
@@ -737,7 +741,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'admin_accept' ),
-				'permission_callback' => array( $this, 'verify_admin' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
 				'args'                => array(
 					'eta' => array(
 						'default'           => 0,
@@ -1028,6 +1032,39 @@ class DoughBoss_REST_Controller {
 			return true;
 		}
 		return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
+	}
+
+	/**
+	 * Permission check for live Order Board data and actions.
+	 *
+	 * WordPress authentication and the KDS capability remain the primary gate.
+	 * When the optional board key is configured, the client must also present it
+	 * on every order read/write request; gating only the HTML shell would leave
+	 * the underlying customer data and status actions reachable through REST.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return bool|WP_Error
+	 */
+	public function verify_board_access( WP_REST_Request $request ) {
+		$allowed = $this->verify_admin();
+		if ( is_wp_error( $allowed ) ) {
+			return $allowed;
+		}
+		// Owners/managers already hold the broader management capability and use
+		// these endpoints from ordinary wp-admin screens that do not carry the
+		// kitchen bookmark. The optional second gate is for KDS-only staff accounts.
+		if ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+		if ( '' === DoughBoss_Settings::board_access_key() ) {
+			return true;
+		}
+
+		$supplied = sanitize_text_field( (string) $request->get_header( 'X-DoughBoss-Board-Key' ) );
+		if ( DoughBoss_Settings::verify_board_access_key( $supplied ) ) {
+			return true;
+		}
+		return new WP_Error( 'doughboss_board_key_required', __( 'This Order Board request needs the current staff access key.', 'doughboss' ), array( 'status' => 403 ) );
 	}
 
 	/**
@@ -2044,6 +2081,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function get_config() {
+		$single_location_id = DoughBoss_Locations::single_location_id();
 		return rest_ensure_response(
 			array(
 				'currency_symbol' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
@@ -2052,12 +2090,13 @@ class DoughBoss_REST_Controller {
 				'gst_inclusive'   => DoughBoss_Settings::gst_inclusive(),
 				'delivery_fee'    => (float) DoughBoss_Settings::get( 'delivery_fee', 0 ),
 				'enable_pickup'   => (bool) DoughBoss_Settings::get( 'enable_pickup', 1 ),
-				'enable_delivery' => (bool) DoughBoss_Settings::get( 'enable_delivery', 0 ),
+				'enable_delivery' => $single_location_id ? false : (bool) DoughBoss_Settings::get( 'enable_delivery', 0 ),
 				// Single-location / pickup-only mode. When on, the storefront should
 				// hide the shop picker + delivery toggle and auto-select the single
 				// active location — matches the "For now, pickup only from Revesby"
 				// scope in the client discovery doc.
-				'single_location_mode' => (bool) DoughBoss_Settings::get( 'single_location_mode', 1 ),
+				'single_location_mode' => (bool) $single_location_id,
+				'single_location_id'   => $single_location_id,
 				'ordering_open'   => DoughBoss_Settings::ordering_open(),
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
@@ -2113,12 +2152,20 @@ class DoughBoss_REST_Controller {
 
 		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
 		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+		if ( DoughBoss_Locations::single_location_id() ) {
+			$order_type = 'pickup';
+		}
 
 		if ( 'delivery' === $order_type && ! DoughBoss_Settings::get( 'enable_delivery', 0 ) ) {
 			return new WP_Error( 'doughboss_no_delivery', __( 'Delivery is not available.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 		if ( 'pickup' === $order_type && ! DoughBoss_Settings::get( 'enable_pickup', 1 ) ) {
 			return new WP_Error( 'doughboss_no_pickup', __( 'Pickup is not available.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$location_id = $this->resolve_order_location( $request->get_param( 'location_id' ), $order_type );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
 		}
 
 		$totals   = $this->cart->totals( $order_type );
@@ -2129,8 +2176,9 @@ class DoughBoss_REST_Controller {
 			$amount,
 			$currency,
 			array(
-				'order_type' => $order_type,
-				'site'       => home_url(),
+				'order_type'  => $order_type,
+				'location_id' => $location_id,
+				'site'        => home_url(),
 			)
 		);
 
@@ -2212,6 +2260,10 @@ class DoughBoss_REST_Controller {
 	public function get_cart( WP_REST_Request $request ) {
 		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
 		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+		$single_location_id = DoughBoss_Locations::single_location_id();
+		if ( $single_location_id ) {
+			$order_type = 'pickup';
+		}
 		return rest_ensure_response( $this->cart->to_array( $order_type ) );
 	}
 
@@ -2449,6 +2501,10 @@ class DoughBoss_REST_Controller {
 
 		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
 		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+		$single_location_id = DoughBoss_Locations::single_location_id();
+		if ( $single_location_id ) {
+			$order_type = 'pickup';
+		}
 
 		if ( 'delivery' === $order_type && ! DoughBoss_Settings::get( 'enable_delivery', 0 ) ) {
 			return new WP_Error( 'doughboss_no_delivery', __( 'Delivery is not available.', 'doughboss' ), array( 'status' => 400 ) );
@@ -2481,11 +2537,12 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_invalid', implode( ' ', $errors ), array( 'status' => 400 ) );
 		}
 
-		// Resolve which shop the order is for. When shops are configured, accept
-		// a valid one or fall back to the default; single-shop sites use 0.
-		$location_id = absint( $request->get_param( 'location_id' ) );
-		if ( DoughBoss_Locations::count() > 0 && ! DoughBoss_Locations::is_valid( $location_id ) ) {
-			$location_id = DoughBoss_Locations::default_id();
+		// Resolve the shop before charging or creating an order. Multi-shop sites
+		// must receive an explicit active location; silently choosing the first
+		// row can send a paid order to the wrong kitchen.
+		$location_id = $this->resolve_order_location( $request->get_param( 'location_id' ), $order_type );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
 		}
 
 		$totals = $this->cart->totals( $order_type );
@@ -2502,7 +2559,7 @@ class DoughBoss_REST_Controller {
 		$payment_method    = '';
 		$payment_intent_id = '';
 		if ( DoughBoss_Payment::ready() ) {
-			$verified = $this->verify_payment( $request, $totals['total'] );
+			$verified = $this->verify_payment( $request, $totals['total'], $order_type, $location_id );
 			if ( is_wp_error( $verified ) ) {
 				return $verified;
 			}
@@ -2629,19 +2686,64 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Resolve and validate the active shop for a customer order.
+	 *
+	 * A sole active shop is selected automatically. Sites with multiple active
+	 * shops must send an explicit location id so a stale client cannot route a
+	 * paid order to an arbitrary kitchen. Per-location fulfilment flags are
+	 * enforced in addition to the global settings.
+	 *
+	 * @param mixed  $requested_id Requested location id.
+	 * @param string $order_type   pickup or delivery.
+	 * @return int|WP_Error
+	 */
+	private function resolve_order_location( $requested_id, $order_type ) {
+		$active = DoughBoss_Locations::all( true );
+		$count  = count( $active );
+
+		if ( 0 === $count ) {
+			return 0;
+		}
+
+		if ( 1 === $count ) {
+			$location = $active[0];
+		} else {
+			$requested_id = absint( $requested_id );
+			if ( ! $requested_id || ! DoughBoss_Locations::is_valid( $requested_id ) ) {
+				return new WP_Error( 'doughboss_location_required', __( 'Please choose an active shop.', 'doughboss' ), array( 'status' => 400 ) );
+			}
+			$location = DoughBoss_Locations::get( $requested_id );
+		}
+
+		if ( 'delivery' === $order_type && empty( $location->delivery_enabled ) ) {
+			return new WP_Error( 'doughboss_location_no_delivery', __( 'Delivery is not available from that location.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( 'pickup' === $order_type && empty( $location->pickup_enabled ) ) {
+			return new WP_Error( 'doughboss_location_no_pickup', __( 'Pickup is not available from that location.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		return (int) $location->id;
+	}
+
+	/**
 	 * Verify a payment before an order is trusted as paid.
 	 *
 	 * Confirms the payment succeeded (for gateways that require it — e.g.
 	 * Tyro — this is also where the charge is actually submitted; see
 	 * DoughBoss_Tyro::retrieve_payment_intent()), that its amount and currency
-	 * match this order's server-computed total, and that it has not already
-	 * been used for another order. Returns the payment reference id on success.
+	 * match this order's server-computed total, that its order_type/location_id
+	 * metadata match the order actually being placed (a stale client can't reuse
+	 * a payment verified for one fulfilment type/shop against another), and that
+	 * it has not already been used for another order. Returns the payment
+	 * reference id on success.
 	 *
 	 * @param WP_REST_Request $request        Request.
 	 * @param float           $expected_total Server-computed order total.
+	 * @param string          $order_type     Expected fulfilment type.
+	 * @param int             $location_id    Expected shop id.
 	 * @return string|WP_Error Payment reference id, or an error.
 	 */
-	private function verify_payment( WP_REST_Request $request, $expected_total ) {
+	private function verify_payment( WP_REST_Request $request, $expected_total, $order_type, $location_id ) {
 		$raw_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
 		if ( '' === $raw_id ) {
 			return new WP_Error( 'doughboss_pay_required', __( 'Payment is required to place this order.', 'doughboss' ), array( 'status' => 402 ) );
@@ -2670,8 +2772,11 @@ class DoughBoss_REST_Controller {
 		$status   = isset( $intent['status'] ) ? $intent['status'] : '';
 		$amount   = isset( $intent['amount'] ) ? (int) $intent['amount'] : 0;
 		$cur      = isset( $intent['currency'] ) ? strtolower( $intent['currency'] ) : '';
+		$metadata      = isset( $intent['metadata'] ) && is_array( $intent['metadata'] ) ? $intent['metadata'] : array();
+		$meta_type     = isset( $metadata['order_type'] ) ? sanitize_key( $metadata['order_type'] ) : '';
+		$meta_location = isset( $metadata['location_id'] ) ? absint( $metadata['location_id'] ) : -1;
 
-		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency ) {
+		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency || $meta_type !== $order_type || $meta_location !== (int) $location_id ) {
 			// Do not claim an automatic reversal: nothing in this plugin refunds a
 			// payment automatically today. Point the customer at a human instead
 			// of a false promise.

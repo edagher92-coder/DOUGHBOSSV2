@@ -276,9 +276,13 @@ class DoughBoss_Migrations {
 		}
 		$changed = false;
 
-		// Seed the new toggle at 1 (single-location / pickup-only) if unset.
+		$active = DoughBoss_Locations::all( true );
+
+		// Enable only for a genuine single-shop install. Multi-shop sites must
+		// opt out by default so an upgrade cannot silently pin every order to the
+		// first sorted location.
 		if ( ! isset( $settings['single_location_mode'] ) ) {
-			$settings['single_location_mode'] = 1;
+			$settings['single_location_mode'] = count( $active ) <= 1 ? 1 : 0;
 			$changed = true;
 		}
 
@@ -290,7 +294,6 @@ class DoughBoss_Migrations {
 		// silent: record a marker (surfaced as a dismissible wp-admin notice by
 		// DoughBoss_Admin::render_delivery_autodisabled_notice()) and a log line
 		// so the change is visible and easy to reverse in Settings.
-		$active = DoughBoss_Locations::all( true );
 		if ( count( $active ) <= 1 && ! empty( $settings['enable_delivery'] ) ) {
 			$settings['enable_delivery'] = 0;
 			$changed = true;

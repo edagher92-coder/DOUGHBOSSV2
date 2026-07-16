@@ -2,10 +2,11 @@
 <html lang="en-AU">
 <head>
 	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 	<meta name="theme-color" content="#0a0807" />
 	<title>DoughBoss Console</title>
 	<meta name="robots" content="noindex" />
+	<meta name="referrer" content="no-referrer" />
 	<!--
 		SECURITY: "noindex" only asks search engines not to index this page — it is
 		NOT access control. This is a static bundle with no server-side gate in
@@ -16,7 +17,7 @@
 		equivalent) per docs/DoughBoss-Manual-Deployment.md §7 — this cannot be
 		enforced from the WordPress plugin.
 	-->
-	<!-- PWA: installable (add-to-home-screen) via manifest + icons. No service worker by design. -->
+	<!-- Online add-to-home-screen app via manifest + icons. Network access is required. -->
 	<link rel="manifest" href="./manifest.webmanifest" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="black" />
@@ -31,7 +32,7 @@
 	<div id="app"><div class="db-boot">Loading…</div></div>
 	<!-- html5-qrcode (Apache-2.0) — camera QR scanning for the Voucher Scan screen.
 	     UMD build from jsDelivr; exposes window.Html5Qrcode. Degrades gracefully if it fails to load. -->
-	<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js" integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+" crossorigin="anonymous"></script>
 	<script src="app.js"></script>
 </body>
 </html>

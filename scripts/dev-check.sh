@@ -58,6 +58,18 @@ done < <(find . -type d \( -name .git -o -name vendor -o -name node_modules -o -
 
 echo "--- php summary: $((php_total - php_failed))/$php_total passed · $php_failed failed ---"
 
+echo "--- release version consistency ---"
+header_version="$(sed -n 's/^ \* Version:[[:space:]]*//p' doughboss.php | head -n 1 | tr -d '\r')"
+constant_version="$(sed -n "s/^define( 'DOUGHBOSS_VERSION', '\([^']*\)' );/\1/p" doughboss.php | head -n 1 | tr -d '\r')"
+stable_version="$(sed -n 's/^Stable tag:[[:space:]]*//p' readme.txt | head -n 1 | tr -d '\r')"
+changelog_version="$(awk '{sub(/\r$/, "")} /^== Changelog ==/{found=1; next} found && /^= [^=]+ =$/{sub(/^= /, ""); sub(/ =$/, ""); print; exit}' readme.txt)"
+if [ -z "$header_version" ] || [ "$header_version" != "$constant_version" ] || [ "$header_version" != "$stable_version" ] || [ "$header_version" != "$changelog_version" ]; then
+	failed=$((failed + 1))
+	echo "FAIL: version mismatch (header=$header_version constant=$constant_version stable=$stable_version changelog=$changelog_version)"
+else
+	echo "PASS: $header_version matches plugin header, constant, stable tag and changelog"
+fi
+
 # JavaScript syntax check is intentionally dependency-light. It runs when node is
 # available and silently skips in normal sessions where node is absent.
 if command -v node >/dev/null 2>&1; then

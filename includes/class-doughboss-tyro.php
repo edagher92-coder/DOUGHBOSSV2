@@ -186,11 +186,17 @@ class DoughBoss_Tyro {
 			return new WP_Error( 'doughboss_pay_id', __( 'Invalid payment reference.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
+		// Loaded once, up front, so both the idempotent-GET path and the PAY-submit
+		// path below can echo the same original caller-supplied metadata back to
+		// the caller (verify_payment() checks order_type/location_id from it,
+		// exactly as it does for Stripe's PaymentIntent metadata).
+		$meta = get_transient( 'doughboss_tyro_meta_' . $order_id );
+
 		// Idempotent check first: has this order already been charged (our own
 		// earlier attempt, or a webhook that beat us here)?
 		$existing = self::request( 'GET', '/order/' . rawurlencode( $order_id ) );
 		if ( ! is_wp_error( $existing ) && self::order_is_captured( $existing ) ) {
-			return self::normalise_order( $existing );
+			return self::normalise_order( $existing, $meta );
 		}
 
 		// Not yet captured: submit the PAY transaction now. Requires the session
@@ -208,7 +214,6 @@ class DoughBoss_Tyro {
 		// expected amount server-side before calling this; we echo back
 		// whatever Tyro actually captured, and the caller compares that against
 		// its own expected total exactly as it does for Stripe today.
-		$meta = get_transient( 'doughboss_tyro_meta_' . $order_id );
 		$desc = ( is_array( $meta ) && isset( $meta['order_type'] ) ) ? sanitize_text_field( (string) $meta['order_type'] ) : '';
 
 		// We don't have the amount at this layer (Tyro's PAY body requires one,
@@ -244,7 +249,7 @@ class DoughBoss_Tyro {
 			return $result;
 		}
 
-		return self::normalise_order( $result );
+		return self::normalise_order( $result, $meta );
 	}
 
 	/**
@@ -423,21 +428,33 @@ class DoughBoss_Tyro {
 	}
 
 	/**
-	 * Normalise an MPGS order response into the { status, amount, currency }
-	 * shape DoughBoss_Payment callers already expect from Stripe's
+	 * Normalise an MPGS order response into the { status, amount, currency,
+	 * metadata } shape DoughBoss_Payment callers already expect from Stripe's
 	 * retrieve_payment_intent() (status 'succeeded' on a captured payment).
 	 *
-	 * @param array $order Decoded order response.
+	 * Tyro's own order response carries no caller-supplied metadata (MPGS has
+	 * no equivalent field), so `metadata` is echoed back from the transient
+	 * create_payment_intent() stashed against this order id — the same
+	 * mechanism that supplies the PAY transaction's amount/currency above.
+	 * Without this, REST_Controller::verify_payment()'s order_type/location_id
+	 * check (shared across both gateways) would reject every Tyro payment.
+	 *
+	 * @param array      $order Decoded order response.
+	 * @param array|null $meta  The create_payment_intent() metadata transient,
+	 *                          or null/false if it expired or was never set.
 	 * @return array
 	 */
-	private static function normalise_order( array $order ) {
+	private static function normalise_order( array $order, $meta = null ) {
 		$captured = self::order_is_captured( $order );
 		$amount   = isset( $order['totalCapturedAmount'] ) ? self::to_minor_units( (float) $order['totalCapturedAmount'] ) : 0;
 		$currency = isset( $order['currency'] ) ? strtolower( (string) $order['currency'] ) : '';
+		$metadata = is_array( $meta ) ? $meta : array();
+		unset( $metadata['_amount_minor'], $metadata['_currency'] );
 		return array(
 			'status'   => $captured ? 'succeeded' : 'failed',
 			'amount'   => $amount,
 			'currency' => $currency,
+			'metadata' => $metadata,
 		);
 	}
 
