@@ -1,5 +1,6 @@
 /* Dough Boss — browse-and-order: per-item add (with Domino's-style options sheet),
-   floating cart button, slide-in cart + checkout with a lemon & chilli confirm step. */
+   floating cart button, slide-in cart + checkout. Lemon & chilli is asked per item
+   (inside the options sheet on pizzas and meat manoush), not once per order. */
 (function () {
 	'use strict';
 	var menuView = document.getElementById('view-menu');
@@ -10,7 +11,6 @@
 	var drawerOpen = false, checkoutMode = false, lastFocus = null;
 	var sheetOpen = false, sheetName = null, sheetLastFocus = null;
 	var voucher = null;      // { code, amount } once a valid code is applied
-	var lemonChilli = null;  // 'Yes' | 'No' — pre-checkout question, re-asked on each checkout tap
 	var pendingOrder = null; // { name, phone } held during the simulated card-payment step
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -23,7 +23,6 @@
 	function onMenuView() { var k = (location.hash || '#about').replace('#', ''); return k === 'menu' || k === 'order'; }
 	function itemQty(name) { var q = 0; for (var k in cart) { if (cart[k].name === name) { q += cart[k].qty; } } return q; }
 	function newestLine(name) { var best = null; for (var k in cart) { if (cart[k].name === name && (!best || cart[k].seq > best.seq)) { best = cart[k]; } } return best; }
-	function hasPizza() { for (var k in cart) { if (cart[k].catId === 'cat-pizza') { return true; } } return false; }
 
 	/* --- per-category item options (Domino's-style customization) ---
 	   Choices carry a price delta; `def` marks the pre-selected default; `sum` is the
@@ -46,9 +45,20 @@
 		{ label: 'Add labneh', sum: 'Labneh', delta: 2.5 },
 		{ label: 'Add cheese', sum: 'Cheese', delta: 2.5 }
 	] };
+	/* Per-item lemon & chilli (free) — offered on every pizza and on the meat
+	   manoush (traditional with lahme). "No thanks" is the default, so a line only
+	   shows "Lemon & chilli" when the customer said yes — per-item kitchen accuracy. */
+	var OPT_LEMON = { id: 'lc', label: 'Lemon & chilli — free', type: 'radio', choices: [
+		{ label: 'No thanks', delta: 0, def: true },
+		{ label: 'Yes please', sum: 'Lemon & chilli', delta: 0 }
+	] };
+	var MEAT_MANOUSH = { 'Meat': 1, 'Meat & Cheese': 1 };
 	function optionGroups(catId, name) {
-		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE]; }
-		if (catId === 'cat-manoush') { return name === 'Zaatar' ? [OPT_STYLE, OPT_ZAATAR_MIX, OPT_PIZZA_BASE] : [OPT_STYLE, OPT_PIZZA_BASE]; }
+		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_LEMON]; }
+		if (catId === 'cat-manoush') {
+			if (name === 'Zaatar') { return [OPT_STYLE, OPT_ZAATAR_MIX, OPT_PIZZA_BASE]; }
+			return MEAT_MANOUSH[name] ? [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON] : [OPT_STYLE, OPT_PIZZA_BASE];
+		}
 		if (catId === 'cat-wraps' && name === 'Zaatar & Veggie') { return [OPT_WRAP_EXTRAS]; }
 		return null;
 	}
@@ -93,6 +103,7 @@
 			cart[key] = { key: key, name: name, catId: c.catId, basePrice: c.price, price: unit, opts: opts, summary: summary, qty: 0, seq: 0 };
 		}
 		bumpLine(key, 1);
+		flashAdded(name);
 	}
 	function bumpLine(key, delta) {
 		var it = cart[key]; if (!it) { return; }
@@ -107,7 +118,10 @@
 	   Tile "−" removes from the most recently added line for that item. */
 	function tileAdd(name) {
 		var c = controls[name]; if (!c) { return; }
-		if (c.groups) { openSheet(name); } else { addLine(name, []); }
+		if (c.groups) { openSheet(name); return; }
+		addLine(name, []);
+		// Repainting the tile destroyed the focused button — keep keyboard focus on the control.
+		var b = c.el.querySelector('[data-inc]'); if (b) { b.focus(); }
 	}
 	function tileDec(name) {
 		var line = newestLine(name);
@@ -214,6 +228,20 @@
 
 	function bag() { return '<svg class="cf-bag" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8a3 3 0 016 0"/></svg>'; }
 
+	/* Tiny "added ✓" toast — the FAB can be off-screen when adding from the top of a
+	   long menu, so acknowledge every add near the thumb. role=status announces it too. */
+	var toast = document.createElement('div');
+	toast.className = 'cart-toast';
+	toast.setAttribute('role', 'status');
+	document.body.appendChild(toast);
+	var toastT = null;
+	function flashAdded(name) {
+		toast.innerHTML = '<span aria-hidden="true">&#10003;</span> ' + esc(name) + ' added';
+		toast.classList.add('is-on');
+		if (toastT) { clearTimeout(toastT); }
+		toastT = setTimeout(function () { toast.classList.remove('is-on'); }, 1500);
+	}
+
 	function renderFab(bump) {
 		var c = count();
 		document.body.classList.toggle('cart-on', c > 0 && onMenuView());
@@ -262,13 +290,13 @@
 
 	function renderDrawer() {
 		checkoutMode = false;
-		lemonChilli = null;   // cart is editable again — re-ask on the next checkout tap
+		drawer.setAttribute('aria-label', 'Your order');
 		var lines = '';
 		for (var k in cart) {
 			var it = cart[k];
-			lines += '<div class="cd-line"><span class="cd-n">' + esc(it.name) + (it.summary ? '<small class="cd-opts">' + esc(it.summary) + '</small>' : '') + '</span><span class="cd-qty"><button type="button" data-kdec="' + esc(k) + '" aria-label="Remove one">&minus;</button><b>' + it.qty + '</b><button type="button" data-kinc="' + esc(k) + '" aria-label="Add one">+</button></span><span class="cd-p">' + money(it.price * it.qty) + '</span></div>';
+			lines += '<div class="cd-line"><span class="cd-n">' + esc(it.name) + (it.summary ? '<small class="cd-opts">' + esc(it.summary) + '</small>' : '') + '</span><span class="cd-qty"><button type="button" data-kdec="' + esc(k) + '" aria-label="Remove one ' + esc(it.name) + '">&minus;</button><b>' + it.qty + '</b><button type="button" data-kinc="' + esc(k) + '" aria-label="Add one ' + esc(it.name) + '">+</button></span><span class="cd-p">' + money(it.price * it.qty) + '</span></div>';
 		}
-		if (!lines) { lines = '<p class="cd-empty">Your order is empty &mdash; add a few manoush.</p>'; }
+		if (!lines) { lines = '<div class="cd-empty">' + bag() + '<p>Your order is empty &mdash; add a few manoush.</p></div>'; }
 		drawer.innerHTML = '<div class="cd-head"><h3>Your order</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-body">' + lines + '</div>' +
 			'<div class="cd-foot"><div class="cd-tot"><span>Total</span><strong>' + money(total()) + '</strong></div>' +
@@ -276,20 +304,21 @@
 			'<p class="cd-note">Demo &middot; pickup from Revesby only &middot; no real payment.</p></div>';
 	}
 
-	/* Pre-checkout confirm: pizzas prompt the lemon & chilli question (required choice). */
-	function renderLemonConfirm() {
-		checkoutMode = true;
-		drawer.innerHTML = '<div class="cd-head"><h3>One quick thing</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="opt-lc"><p class="opt-lc-q">Would you like lemon &amp; chilli with your pizza?</p>' +
-			'<div class="opt-lc-btns"><button type="button" class="vb-btn vb-btn-ember" data-lc="Yes">Yes please</button>' +
-			'<button type="button" class="vb-btn vb-btn-dark" data-lc="No">No thanks</button></div>' +
-			'<button type="button" class="cd-back opt-lc-back">Back to order</button></div>';
-		var y = drawer.querySelector('[data-lc]'); if (y) { y.focus(); }
+	/* Compact read-only line list shown on the checkout step, so options like
+	   lemon & chilli / base stay visible per item right up to payment. */
+	function summaryLines() {
+		var html = '';
+		for (var k in cart) {
+			var it = cart[k];
+			html += '<div class="cd-sline"><span class="cd-n">' + it.qty + ' &times; ' + esc(it.name) + (it.summary ? '<small class="cd-opts">' + esc(it.summary) + '</small>' : '') + '</span><span class="cd-p">' + money(it.price * it.qty) + '</span></div>';
+		}
+		return html;
 	}
 
 	function renderCheckout() {
 		if (!count()) { return; }
 		checkoutMode = true;
+		drawer.setAttribute('aria-label', 'Checkout');
 		var vouchHtml = voucher
 			? '<div class="cd-von"><span class="cd-vcode">&#127915; ' + esc(voucher.code) + ' applied</span><button type="button" class="cd-vremove">Remove</button></div>'
 			: '<div class="cd-vrow"><input type="text" class="cd-vinput" placeholder="Voucher code (try a DOUGH-… code)" aria-label="Voucher code" autocapitalize="characters"><button type="button" class="cd-vapply">Apply</button></div>';
@@ -297,9 +326,9 @@
 			? '<div class="cd-tline"><span>Subtotal</span><span>' + money(total()) + '</span></div>' +
 				'<div class="cd-tline cd-tdisc"><span>Voucher ' + esc(voucher.code) + '</span><span>&minus;' + money(discount()) + '</span></div>'
 			: '') +
-			(lemonChilli !== null ? '<div class="cd-tline"><span>Lemon &amp; chilli</span><span>' + esc(lemonChilli) + '</span></div>' : '') +
 			'<div class="cd-tot"><span>Total</span><strong>' + money(netTotal()) + '</strong></div>';
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+			'<div class="cd-summary">' + summaryLines() + '</div>' +
 			'<div class="cd-vouch">' + vouchHtml + '<p class="cd-verr" role="alert"></p></div>' +
 			'<form class="cd-form" novalidate>' +
 			'<label class="cd-f"><span>Name</span><input name="name" type="text" autocomplete="name" required></label>' +
@@ -352,6 +381,7 @@
 	function renderCardSheet() {
 		if (!count() || !pendingOrder) { return; }
 		checkoutMode = true;
+		drawer.setAttribute('aria-label', 'Payment');
 		drawer.innerHTML = '<div class="cd-head"><h3>Payment</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-test" role="status">Test mode &mdash; no real payment. Orders &amp; payments are simulated.</div>' +
 			'<form class="cd-cardform" novalidate>' +
@@ -387,16 +417,18 @@
 
 	function renderDone() {
 		if (!pendingOrder || !drawerOpen) { pendingOrder = null; return; }
+		drawer.setAttribute('aria-label', 'Order placed');
 		var name = pendingOrder.name;
 		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
 		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
-		var lcline = lemonChilli !== null ? ' &middot; lemon &amp; chilli: <strong>' + esc(lemonChilli) + '</strong>' : '';
 		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + lcline + '</p><p class="cd-note">No payment was taken and no real order was sent.</p></div>';
+			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p>' +
+			'<p class="cd-eta">Ready for pickup in <strong>~15&ndash;20 min</strong> &middot; Revesby</p>' +
+			'<div class="cd-summary cd-donesum">' + summaryLines() + '</div>' +
+			'<p class="cd-note">No payment was taken and no real order was sent.</p></div>';
 		cart = {};
 		voucher = null;
-		lemonChilli = null;
 		pendingOrder = null;
 		for (var n in controls) { paintItem(n); }
 		renderFab(false);
@@ -414,11 +446,7 @@
 	overlay.addEventListener('click', closeDrawer);
 	drawer.addEventListener('click', function (e) {
 		if (e.target.closest('.cd-close')) { closeDrawer(); return; }
-		if (e.target.closest('.cd-checkout')) {
-			if (hasPizza() && lemonChilli === null) { renderLemonConfirm(); } else { renderCheckout(); }
-			return;
-		}
-		var lc = e.target.closest('[data-lc]'); if (lc) { lemonChilli = lc.getAttribute('data-lc'); renderCheckout(); return; }
+		if (e.target.closest('.cd-checkout')) { renderCheckout(); return; }
 		if (e.target.closest('.cd-cardback')) { pendingOrder = null; renderCheckout(); return; }
 		if (e.target.closest('.cd-back')) { renderDrawer(); return; }
 		if (e.target.closest('.cd-vapply')) { applyVoucher(); return; }
