@@ -511,6 +511,19 @@ class DoughBoss_Admin {
 	}
 
 	/**
+	 * Shop names keyed by location ID, for oversight filters/columns.
+	 *
+	 * @return array<int,string>
+	 */
+	private function location_names() {
+		$out = array();
+		foreach ( DoughBoss_Locations::all() as $loc ) {
+			$out[ (int) $loc->id ] = (string) $loc->name;
+		}
+		return $out;
+	}
+
+	/**
 	 * Inline JS powering the orders status dropdowns and settings repeaters.
 	 *
 	 * @return string
@@ -773,17 +786,19 @@ JS;
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
 		}
 
-		$paged  = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$status = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$paged    = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$status   = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$search   = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$location = isset( $_GET['location'] ) ? absint( $_GET['location'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 		$per_page = 20;
 		$result   = DoughBoss_Order::query(
 			array(
-				'status'   => $status,
-				'search'   => $search,
-				'per_page' => $per_page,
-				'page'     => $paged,
+				'status'      => $status,
+				'search'      => $search,
+				'location_id' => $location,
+				'per_page'    => $per_page,
+				'page'        => $paged,
 			)
 		);
 
@@ -791,9 +806,57 @@ JS;
 		$total_pages    = (int) ceil( $result['total'] / $per_page );
 		$pay_issues     = $this->unreconciled_payments();
 		$items_by_order = DoughBoss_Order::get_items_for_orders( wp_list_pluck( $result['items'], 'id' ) );
+		$location_names = $this->location_names();
+		$multi_shop     = count( $location_names ) > 1;
+		$colspan        = $multi_shop ? 8 : 7;
+
+		// Today-at-a-glance strip (site-local day, respects the shop filter).
+		list( $t_start, $t_end ) = DoughBoss_Reports::today_bounds();
+		$today     = DoughBoss_Reports::summary( $t_start, $t_end, $location );
+		$today_pay = DoughBoss_Reports::payment_mix( $t_start, $t_end, $location );
+		$today_unpaid   = isset( $today_pay['unpaid'] ) ? $today_pay['unpaid'] : array( 'orders' => 0, 'revenue' => 0.0 );
+		$today_refunded = isset( $today_pay['refunded'] ) ? $today_pay['refunded'] : array( 'orders' => 0, 'revenue' => 0.0 );
 		?>
 		<div class="wrap doughboss-orders">
 			<h1><?php esc_html_e( 'Orders', 'doughboss' ); ?></h1>
+
+			<h2 style="margin:14px 0 6px;">
+				<?php
+				if ( $location > 0 && isset( $location_names[ $location ] ) ) {
+					/* translators: %s: shop/location name. */
+					echo esc_html( sprintf( __( 'Today — %s', 'doughboss' ), $location_names[ $location ] ) );
+				} else {
+					esc_html_e( 'Today — all shops', 'doughboss' );
+				}
+				?>
+			</h2>
+			<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px;">
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'Orders', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( number_format_i18n( $today['orders'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'Gross sales', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today['revenue'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'Paid by card', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today['paid_revenue'] ) ); ?></strong>
+						<small><?php echo esc_html( sprintf( /* translators: %s: order count. */ _n( '%s order', '%s orders', $today['paid_orders'], 'doughboss' ), number_format_i18n( $today['paid_orders'] ) ) ); ?></small></p>
+				</div>
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'To collect in store', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today_unpaid['revenue'] ) ); ?></strong>
+						<small><?php echo esc_html( sprintf( /* translators: %s: order count. */ _n( '%s order', '%s orders', $today_unpaid['orders'], 'doughboss' ), number_format_i18n( $today_unpaid['orders'] ) ) ); ?></small></p>
+				</div>
+				<?php if ( $today_refunded['orders'] > 0 ) : ?>
+					<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+						<p style="margin:0;color:#b32d2e;"><?php esc_html_e( 'Refunded', 'doughboss' ); ?></p>
+						<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today_refunded['revenue'] ) ); ?></strong>
+							<small><?php echo esc_html( sprintf( /* translators: %s: order count. */ _n( '%s order', '%s orders', $today_refunded['orders'], 'doughboss' ), number_format_i18n( $today_refunded['orders'] ) ) ); ?></small></p>
+					</div>
+				<?php endif; ?>
+			</div>
 
 			<?php
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
@@ -853,6 +916,16 @@ JS;
 						</option>
 					<?php endforeach; ?>
 				</select>
+				<?php if ( $multi_shop ) : ?>
+					<select name="location">
+						<option value="0"><?php esc_html_e( 'All shops', 'doughboss' ); ?></option>
+						<?php foreach ( $location_names as $loc_id => $loc_name ) : ?>
+							<option value="<?php echo esc_attr( $loc_id ); ?>" <?php selected( $location, $loc_id ); ?>>
+								<?php echo esc_html( $loc_name ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				<?php endif; ?>
 				<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php esc_attr_e( 'Search orders…', 'doughboss' ); ?>" />
 				<button class="button"><?php esc_html_e( 'Filter', 'doughboss' ); ?></button>
 			</form>
@@ -862,6 +935,9 @@ JS;
 					<tr>
 						<th><?php esc_html_e( 'Order #', 'doughboss' ); ?></th>
 						<th><?php esc_html_e( 'Customer', 'doughboss' ); ?></th>
+						<?php if ( $multi_shop ) : ?>
+							<th><?php esc_html_e( 'Shop', 'doughboss' ); ?></th>
+						<?php endif; ?>
 						<th><?php esc_html_e( 'Type', 'doughboss' ); ?></th>
 						<th><?php esc_html_e( 'Items', 'doughboss' ); ?></th>
 						<th><?php esc_html_e( 'Total', 'doughboss' ); ?></th>
@@ -871,7 +947,7 @@ JS;
 				</thead>
 				<tbody>
 					<?php if ( empty( $result['items'] ) ) : ?>
-						<tr><td colspan="7"><?php esc_html_e( 'No orders yet.', 'doughboss' ); ?></td></tr>
+						<tr><td colspan="<?php echo esc_attr( $colspan ); ?>"><?php esc_html_e( 'No orders yet.', 'doughboss' ); ?></td></tr>
 					<?php else : ?>
 						<?php foreach ( $result['items'] as $order ) : ?>
 							<?php $items = isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(); ?>
@@ -882,6 +958,14 @@ JS;
 									<small><?php echo esc_html( $order->customer_email ); ?></small><br />
 									<small><?php echo esc_html( $order->customer_phone ); ?></small>
 								</td>
+								<?php if ( $multi_shop ) : ?>
+									<td>
+										<?php
+										$loc_id = isset( $order->location_id ) ? (int) $order->location_id : 0;
+										echo esc_html( isset( $location_names[ $loc_id ] ) ? $location_names[ $loc_id ] : __( '—', 'doughboss' ) );
+										?>
+									</td>
+								<?php endif; ?>
 								<td><?php echo esc_html( ucfirst( $order->order_type ) ); ?></td>
 								<td>
 									<ul class="db-item-list">
@@ -2277,19 +2361,31 @@ JS;
 		}
 
 		list( $from, $to ) = $this->report_range();
+		$location = isset( $_GET['location'] ) ? absint( $_GET['location'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter form.
 
-		$summary   = DoughBoss_Reports::summary( $from, $to );
-		$mix       = DoughBoss_Reports::order_type_mix( $from, $to );
-		$top_items = DoughBoss_Reports::top_items( $from, $to, 10 );
+		$summary     = DoughBoss_Reports::summary( $from, $to, $location );
+		$mix         = DoughBoss_Reports::order_type_mix( $from, $to, $location );
+		$top_items   = DoughBoss_Reports::top_items( $from, $to, 10, $location );
+		$payment_mix = DoughBoss_Reports::payment_mix( $from, $to, $location );
+
+		$location_names = $this->location_names();
+		$multi_shop     = count( $location_names ) > 1;
+		$by_location    = $multi_shop ? DoughBoss_Reports::location_breakdown( $from, $to ) : array();
 
 		$type_labels = array(
 			'pickup'   => __( 'Pickup', 'doughboss' ),
 			'delivery' => __( 'Delivery', 'doughboss' ),
 		);
+
+		$payment_labels = array(
+			'paid'     => __( 'Paid by card', 'doughboss' ),
+			'unpaid'   => __( 'Unpaid — collected in store', 'doughboss' ),
+			'refunded' => __( 'Refunded', 'doughboss' ),
+		);
 		?>
 		<div class="wrap doughboss-reports">
 			<h1><?php esc_html_e( 'Reports', 'doughboss' ); ?></h1>
-			<p class="description"><?php esc_html_e( 'Sales for the selected period. Cancelled orders are excluded.', 'doughboss' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Sales for the selected period. Cancelled orders are excluded. Gross sales include unpaid (pay-in-store) and refunded orders — see the payments breakdown for money actually collected by card.', 'doughboss' ); ?></p>
 
 			<form method="get" style="margin:12px 0 20px;">
 				<input type="hidden" name="page" value="doughboss-reports" />
@@ -2297,13 +2393,43 @@ JS;
 				<input type="date" id="db-report-from" name="from" value="<?php echo esc_attr( $from ); ?>" />
 				<label for="db-report-to"><?php esc_html_e( 'To', 'doughboss' ); ?></label>
 				<input type="date" id="db-report-to" name="to" value="<?php echo esc_attr( $to ); ?>" />
+				<?php if ( $multi_shop ) : ?>
+					<label for="db-report-location"><?php esc_html_e( 'Shop', 'doughboss' ); ?></label>
+					<select id="db-report-location" name="location">
+						<option value="0"><?php esc_html_e( 'All shops', 'doughboss' ); ?></option>
+						<?php foreach ( $location_names as $loc_id => $loc_name ) : ?>
+							<option value="<?php echo esc_attr( $loc_id ); ?>" <?php selected( $location, $loc_id ); ?>>
+								<?php echo esc_html( $loc_name ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				<?php endif; ?>
 				<button class="button"><?php esc_html_e( 'Apply', 'doughboss' ); ?></button>
 			</form>
 
+			<?php if ( $location > 0 && isset( $location_names[ $location ] ) ) : ?>
+				<p><strong>
+					<?php
+					/* translators: %s: shop/location name. */
+					echo esc_html( sprintf( __( 'Showing: %s only.', 'doughboss' ), $location_names[ $location ] ) );
+					?>
+				</strong></p>
+			<?php endif; ?>
+
 			<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
 				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
-					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Revenue', 'doughboss' ); ?></h2>
+					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Gross sales', 'doughboss' ); ?></h2>
 					<p style="font-size:1.8em;margin:0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $summary['revenue'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
+					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Paid by card', 'doughboss' ); ?></h2>
+					<p style="font-size:1.8em;margin:0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $summary['paid_revenue'] ) ); ?></strong></p>
+					<p class="description" style="margin:2px 0 0;">
+						<?php
+						/* translators: %s: order count. */
+						echo esc_html( sprintf( _n( '%s order', '%s orders', $summary['paid_orders'], 'doughboss' ), number_format_i18n( $summary['paid_orders'] ) ) );
+						?>
+					</p>
 				</div>
 				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
 					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Orders', 'doughboss' ); ?></h2>
@@ -2315,7 +2441,60 @@ JS;
 				</div>
 			</div>
 
-			<h2><?php esc_html_e( 'Pickup vs delivery', 'doughboss' ); ?></h2>
+			<h2><?php esc_html_e( 'Payments', 'doughboss' ); ?></h2>
+			<table class="widefat striped" style="max-width:560px;">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Payment status', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Orders', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Amount', 'doughboss' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( empty( $payment_mix ) ) : ?>
+						<tr><td colspan="3"><?php esc_html_e( 'No orders in this period.', 'doughboss' ); ?></td></tr>
+					<?php else : ?>
+						<?php foreach ( $payment_mix as $pay_status => $stats ) : ?>
+							<tr>
+								<td><?php echo esc_html( isset( $payment_labels[ $pay_status ] ) ? $payment_labels[ $pay_status ] : ucfirst( $pay_status ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $stats['orders'] ) ); ?></td>
+								<td><?php echo esc_html( DoughBoss_Settings::format_price( $stats['revenue'] ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+			<?php if ( $multi_shop ) : ?>
+				<h2 style="margin-top:24px;"><?php esc_html_e( 'By shop', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'All shops for the selected period, regardless of the shop filter above.', 'doughboss' ); ?></p>
+				<table class="widefat striped" style="max-width:560px;">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Shop', 'doughboss' ); ?></th>
+							<th><?php esc_html_e( 'Orders', 'doughboss' ); ?></th>
+							<th><?php esc_html_e( 'Gross sales', 'doughboss' ); ?></th>
+							<th><?php esc_html_e( 'Paid by card', 'doughboss' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php if ( empty( $by_location ) ) : ?>
+							<tr><td colspan="4"><?php esc_html_e( 'No orders in this period.', 'doughboss' ); ?></td></tr>
+						<?php else : ?>
+							<?php foreach ( $by_location as $loc_row ) : ?>
+								<tr>
+									<td><?php echo esc_html( isset( $location_names[ $loc_row['location_id'] ] ) ? $location_names[ $loc_row['location_id'] ] : __( 'Unassigned', 'doughboss' ) ); ?></td>
+									<td><?php echo esc_html( number_format_i18n( $loc_row['orders'] ) ); ?></td>
+									<td><?php echo esc_html( DoughBoss_Settings::format_price( $loc_row['revenue'] ) ); ?></td>
+									<td><?php echo esc_html( DoughBoss_Settings::format_price( $loc_row['paid_revenue'] ) ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+
+			<h2 style="margin-top:24px;"><?php esc_html_e( 'Pickup vs delivery', 'doughboss' ); ?></h2>
 			<table class="widefat striped" style="max-width:560px;">
 				<thead>
 					<tr>
@@ -2368,6 +2547,7 @@ JS;
 				<?php wp_nonce_field( 'doughboss_export_report' ); ?>
 				<input type="hidden" name="from" value="<?php echo esc_attr( $from ); ?>" />
 				<input type="hidden" name="to" value="<?php echo esc_attr( $to ); ?>" />
+				<input type="hidden" name="location" value="<?php echo esc_attr( $location ); ?>" />
 				<button type="submit" class="button button-primary"><?php esc_html_e( 'Download CSV', 'doughboss' ); ?></button>
 			</form>
 		</div>
@@ -2408,8 +2588,10 @@ JS;
 		$from_default = gmdate( 'Y-m-d', time() - 6 * DAY_IN_SECONDS );
 		$from         = DoughBoss_Reports::sanitize_date( isset( $_POST['from'] ) ? wp_unslash( $_POST['from'] ) : '', $from_default );
 		$to           = DoughBoss_Reports::sanitize_date( isset( $_POST['to'] ) ? wp_unslash( $_POST['to'] ) : '', $to_default );
+		$location     = isset( $_POST['location'] ) ? absint( $_POST['location'] ) : 0;
 
-		$rows = DoughBoss_Reports::orders_for_export( $from, $to );
+		$rows           = DoughBoss_Reports::orders_for_export( $from, $to, $location );
+		$location_names = $this->location_names();
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
@@ -2419,9 +2601,10 @@ JS;
 		$out = fopen( 'php://output', 'w' );
 		fputcsv(
 			$out,
-			array( 'Order #', 'Placed (UTC)', 'Type', 'Status', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
+			array( 'Order #', 'Placed (UTC)', 'Type', 'Status', 'Shop', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
 		);
 		foreach ( $rows as $row ) {
+			$row_loc = isset( $row->location_id ) ? (int) $row->location_id : 0;
 			fputcsv(
 				$out,
 				array(
@@ -2429,6 +2612,7 @@ JS;
 					$this->csv_cell( $row->created_at ),
 					$this->csv_cell( $row->order_type ),
 					$this->csv_cell( $row->status ),
+					$this->csv_cell( isset( $location_names[ $row_loc ] ) ? $location_names[ $row_loc ] : '' ),
 					$this->csv_cell( $row->customer_name ),
 					$this->csv_cell( $row->customer_email ),
 					number_format( (float) $row->subtotal, 2, '.', '' ),

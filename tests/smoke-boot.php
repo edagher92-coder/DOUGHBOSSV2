@@ -109,6 +109,52 @@ ok( is_wp_error( $board_controller->verify_board_access( new WP_REST_Request( ar
 $GLOBALS['__db_caps_override'] = null;
 update_option( DoughBoss_Settings::OPTION_KEY, array() );
 
+// 3d. Management oversight surface: shop/location filtering on the admin
+// order query and an honest paid-vs-gross split in reporting. These are
+// core (always-on) views, so assert the query paths execute with no fatal
+// against the stub $wpdb and keep their return contracts.
+section( 'Management oversight' );
+try {
+	$oversight_q = DoughBoss_Order::query( array( 'location_id' => 2 ) );
+	ok(
+		is_array( $oversight_q ) && array_key_exists( 'items', $oversight_q ) && array_key_exists( 'total', $oversight_q ),
+		'DoughBoss_Order::query() accepts location_id and keeps the {items,total} contract'
+	);
+} catch ( Throwable $e ) {
+	ok( false, 'DoughBoss_Order::query( location_id ) threw: ' . $e->getMessage() );
+}
+try {
+	$oversight_s = DoughBoss_Reports::summary( '2026-01-01', '2026-01-31', 1 );
+	$s_keys      = array( 'revenue', 'orders', 'aov', 'paid_revenue', 'paid_orders' );
+	$s_ok        = is_array( $oversight_s );
+	foreach ( $s_keys as $k ) {
+		$s_ok = $s_ok && array_key_exists( $k, $oversight_s );
+	}
+	ok( $s_ok, 'DoughBoss_Reports::summary() returns gross + paid split (revenue/orders/aov/paid_revenue/paid_orders)' );
+} catch ( Throwable $e ) {
+	ok( false, 'DoughBoss_Reports::summary() threw: ' . $e->getMessage() );
+}
+ok( method_exists( 'DoughBoss_Reports', 'payment_mix' ), 'DoughBoss_Reports::payment_mix() exists (paid/unpaid/refunded split)' );
+ok( method_exists( 'DoughBoss_Reports', 'location_breakdown' ), 'DoughBoss_Reports::location_breakdown() exists (per-shop oversight)' );
+try {
+	ok( is_array( DoughBoss_Reports::payment_mix( '2026-01-01', '2026-01-31', 1 ) ), 'payment_mix() executes with a location filter, no fatal' );
+	ok( is_array( DoughBoss_Reports::location_breakdown( '2026-01-01', '2026-01-31' ) ), 'location_breakdown() executes with no fatal' );
+} catch ( Throwable $e ) {
+	ok( false, 'reports oversight queries threw: ' . $e->getMessage() );
+}
+try {
+	$tb = DoughBoss_Reports::today_bounds();
+	ok(
+		is_array( $tb ) && 2 === count( $tb )
+			&& preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $tb[0] )
+			&& preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $tb[1] )
+			&& strtotime( $tb[0] ) < strtotime( $tb[1] ),
+		'today_bounds() returns an ordered UTC datetime pair (site-local day)'
+	);
+} catch ( Throwable $e ) {
+	ok( false, 'DoughBoss_Reports::today_bounds() threw: ' . $e->getMessage() );
+}
+
 // 4. REST surface registered routes.
 section( 'REST surface' );
 $routes = $GLOBALS['__db_rest'];

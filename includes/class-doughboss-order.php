@@ -514,12 +514,13 @@ class DoughBoss_Order {
 	 * Query orders for the admin list.
 	 *
 	 * @param array $args { Optional. Query arguments.
-	 *     @type string $status  Filter by status.
-	 *     @type string $search  Search order number / name / email.
-	 *     @type int    $per_page Results per page.
-	 *     @type int    $page    Current page (1-based).
-	 *     @type string $orderby Column to order by.
-	 *     @type string $order   ASC or DESC.
+	 *     @type string $status      Filter by status.
+	 *     @type string $search      Search order number / name / email.
+	 *     @type int    $location_id Filter by shop/location ID (0 = all shops).
+	 *     @type int    $per_page    Results per page.
+	 *     @type int    $page        Current page (1-based).
+	 *     @type string $orderby     Column to order by.
+	 *     @type string $order       ASC or DESC.
 	 * }
 	 * @return array{items:object[],total:int}
 	 */
@@ -530,12 +531,13 @@ class DoughBoss_Order {
 		$args = wp_parse_args(
 			$args,
 			array(
-				'status'   => '',
-				'search'   => '',
-				'per_page' => 20,
-				'page'     => 1,
-				'orderby'  => 'created_at',
-				'order'    => 'DESC',
+				'status'      => '',
+				'search'      => '',
+				'location_id' => 0,
+				'per_page'    => 20,
+				'page'        => 1,
+				'orderby'     => 'created_at',
+				'order'       => 'DESC',
 			)
 		);
 
@@ -545,6 +547,11 @@ class DoughBoss_Order {
 		if ( $args['status'] && array_key_exists( $args['status'], self::statuses() ) ) {
 			$where   .= ' AND status = %s';
 			$params[] = $args['status'];
+		}
+
+		if ( (int) $args['location_id'] > 0 ) {
+			$where   .= ' AND location_id = %d';
+			$params[] = (int) $args['location_id'];
 		}
 
 		if ( '' !== $args['search'] ) {
