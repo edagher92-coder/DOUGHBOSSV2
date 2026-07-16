@@ -103,3 +103,42 @@ Never place AI-generated food online without kitchen confirmation that it is an 
 - [ ] Core Web Vitals budget is met; below-fold media is lazy-loaded.
 - [ ] AVIF/WebP and fallback outputs include width/height to prevent layout shift.
 - [ ] All generated content is recorded in the asset register.
+
+## Demo menu shot list (S2 — items awaiting real photography or generation)
+
+Status as of 16 July 2026: the WordPress media library (`/wp-json/wp/v2/media`) was fully
+enumerated. The static demo (`demo/index.html`) now shows a real, touched-up WordPress photo
+for every item that has one (300x300 q82 progressive JPEG, stored locally in
+`demo/assets/menu/`), and a branded mono placeholder tile for the 9 items below. Each needs
+either a real kitchen photo (preferred) or a Higgsfield generation per the menu image
+standard above.
+
+| # | Section | Item | Notes for the shot |
+|---|---------|------|--------------------|
+| 1 | Pizza | All Meat | Pepperoni, sujuk, chicken & cheese on BBQ sauce base |
+| 2 | Pizza | Peri Peri Chicken | Chicken, mushroom, capsicum, onion, cheese, peri peri drizzle |
+| 3 | Pies | Chicken Pie | Grilled chicken, capsicum, mushroom & cheese turnover |
+| 4 | Wraps | Chicken Delight | Grilled chicken, tomato, lettuce, pickled cucumber, garlic mayo |
+| 5 | Wraps | Ultimate Chicken | Chicken, melted cheese, mushroom, capsicum, lettuce, mayo |
+| 6 | Wraps | Dough Boss Wrap | Sujuk, tomato, pickled cucumber, lettuce, cheese, mayo |
+| 7 | Drinks | Spring Water | Bottle shot, chilled condensation, neutral surface |
+| 8 | Drinks | Soft Drinks 600ml | Range shot (Coke/Sprite/Fanta/Solo) or single hero bottle |
+| 9 | Drinks | Juice | Chilled juice bottle/glass, neutral surface |
+
+Real WordPress photos wired into the demo (source file -> item): Zaatar.jpg -> Zaatar;
+zaatar-w-jebneh.jpg -> Zaatar & Cheese; jebneh.jpg -> Cheese manoush; Meat.png -> Meat;
+lahme-w-jebneh.jpg -> Meat & Cheese; soujouk-deluxe.jpg -> Sujuk Deluxe; Spinach-Deluxe.png ->
+Spinach Deluxe; Veggie-Lovers-scaled.jpg -> Veggie Plus (NOTE: WP file is named "Veggie
+Lovers" — owner to confirm it is the same product as the menu's "Veggie Plus");
+peperoni-cheese.png -> Pepperoni & Cheese; Dough-boss-special.jpg -> Dough Boss Special;
+Chicken-Cheese.png -> Chicken & Cheese; BBQ-Chicken.png -> BBQ Chicken; Garlic-Prawns.png ->
+Garlic Prawns; spinach-pie / Spinach-Cheese.jpg -> Spinach & Cheese pie; Halloumi-Pie.jpg ->
+Haloumi pie; shanglish-pie.jpg -> Aged Cheese pie; zaatar-and-veges.jpg -> Zaatar & Veggie
+wrap; chocobanana.jpg -> Choco Banana. (Aged-Cheese.jpg and soujouk-w-jebneh.jpg, previously
+shown on the demo for Cheese and Meat & Cheese, were replaced by the name-exact jebneh.jpg and
+lahme-w-jebneh.jpg.)
+
+Bonus library items not on the current demo menu (possible future use): Kaak.png,
+Kafta-Extra.png, Mini-Feta/Mini-Spinach/Mini-haloumi/mini-* range, Choco-Pie.png,
+ashta-w-aasal.jpg, Aussie-Breakie-scaled.jpg, DB-*-Roll.png wrap renders, catering
+placeholder heroes, Dough-Boss-Logo.png / dbicon.png.
