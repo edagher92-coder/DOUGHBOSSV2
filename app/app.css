@@ -7,7 +7,7 @@
 * { box-sizing: border-box; }
 
 :root {
-	--gold: #d98a3d;
+	--gold: #f3efe8; /* mono brand accent (ex-amber) — the 2026 logo is strictly ink/paper */
 	--ink: #0a0807;
 	--paper: #17130f;
 	--bg: #0a0807;
@@ -19,7 +19,7 @@
 	--bad: #ff6b52;
 	--bad-bg: rgba(255, 107, 82, .14);
 	--live: var(--gold);
-	--live-bg: rgba(217, 138, 61, .14);
+	--live-bg: rgba(243, 239, 232, .14);
 	--r-sm: 10px;
 	--r-md: 14px;
 	--r-lg: 18px;
@@ -96,14 +96,14 @@ html, body {
 	border: 0;
 	border-radius: var(--r-md);
 	background: var(--gold);
-	color: #241405;
+	color: #0a0807;
 	font-family: 'Bebas Neue', sans-serif;
 	letter-spacing: .06em;
 	font-size: 19px;
 	padding: 14px;
 	min-height: 48px;
 	cursor: pointer;
-	box-shadow: 0 12px 30px rgba(217, 138, 61, .32);
+	box-shadow: 0 12px 30px rgba(243, 239, 232, .18);
 	transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 .login__btn:active { transform: scale(.98); }
@@ -222,7 +222,7 @@ html, body {
 .scan__total { flex: 1; font-size: 16px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(0, 0, 0, .2); }
 .scan__total.is-required { border-color: var(--live); background: var(--live-bg); }
 .btn {
-	border: 0; border-radius: var(--r-md); background: var(--gold); color: #241405;
+	border: 0; border-radius: var(--r-md); background: var(--gold); color: #0a0807;
 	font-family: 'Bebas Neue', sans-serif; letter-spacing: .04em;
 	font-size: 16px; padding: 0 24px; min-height: 54px; cursor: pointer;
 	transition: transform var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
@@ -319,7 +319,7 @@ html, body {
 .order__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .toast {
 	position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-	background: var(--gold); color: #241405; padding: 11px 18px; border-radius: var(--r-md);
+	background: var(--gold); color: #0a0807; padding: 11px 18px; border-radius: var(--r-md);
 	font-size: 14px; font-weight: 600; z-index: 50; opacity: 0; transition: opacity var(--t-med) var(--ease); pointer-events: none;
 	box-shadow: var(--sh-2);
 }

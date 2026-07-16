@@ -10,7 +10,7 @@
 	--dbc-paper: #ffffff;
 	--dbc-mist: #6b6b6b;
 	--dbc-line: #e4e1da;
-	--dbc-ember: #e2231a;
+	--dbc-ember: #111111; /* mono brand accent (ex-red) — matches the 2026 ink/paper logo */
 	--dbc-radius: 12px;
 	--db-r-sm: 10px;
 	--db-r-md: 14px;

@@ -4,8 +4,8 @@
  */
 
 .db-app {
-	--db-accent: #e2231a;
-	--db-accent-dark: #c41c14;
+	--db-accent: #111111; /* mono brand accent (ex-red) — matches the 2026 ink/paper logo */
+	--db-accent-dark: #000000;
 	--db-border: #e6e1da;
 	--db-muted: #6b6b6b;
 	--db-r-sm: 10px;
@@ -54,7 +54,7 @@
 	font-size: 14px;
 	max-width: 90vw;
 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-	border-left: 3px solid #e2231a;
+	border-left: 3px solid var(--db-accent);
 }
 
 @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
@@ -77,7 +77,7 @@
 }
 
 .db-error {
-	color: var(--db-accent-dark);
+	color: #c41c14; /* stays red — errors must not blend into the mono accent */
 	font-weight: 600;
 }
 

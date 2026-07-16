@@ -27,7 +27,7 @@
 	/* --- per-category item options (Domino's-style customization) ---
 	   Choices carry a price delta; `def` marks the pre-selected default; `sum` is the
 	   short label used in cart summaries when it differs from the sheet label.
-	   Pizza base surcharges follow the published site copy (+$2.50 / +$3.50). */
+	   Pizza base surcharges follow the owner's confirmed pricing (+$4.00 either base). */
 	var OPT_STYLE = { id: 'style', label: 'Style', type: 'radio', choices: [
 		{ label: 'Flat', delta: 0, def: true },
 		{ label: 'Folded', delta: 0 }
@@ -38,8 +38,8 @@
 	] };
 	var OPT_PIZZA_BASE = { id: 'base', label: 'Base', type: 'radio', choices: [
 		{ label: 'Normal', delta: 0, def: true },
-		{ label: 'Wholemeal', delta: 2.5 },
-		{ label: 'Gluten-free', delta: 3.5 }
+		{ label: 'Wholemeal', delta: 4 },
+		{ label: 'Gluten-free', delta: 4 }
 	] };
 	var OPT_WRAP_EXTRAS = { id: 'extras', label: 'Extras', type: 'check', choices: [
 		{ label: 'Add labneh', sum: 'Labneh', delta: 2.5 },
