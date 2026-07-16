@@ -3,13 +3,17 @@
 	'use strict';
 	var menuView = document.getElementById('view-menu');
 	if (!menuView) { return; }
+	var CFG = window.DBDemo.config;
+	var DEFAULT_LOCATION = window.DBDemo.getLocation(CFG.defaultLocationId);
+	document.documentElement.lang = CFG.region.language;
+	document.documentElement.dir = CFG.region.direction;
 	var cart = {};       // name -> { name, price, qty }
 	var controls = {};   // name -> { el, name, price }
 	var drawerOpen = false, checkoutMode = false, lastFocus = null;
 	var voucher = null;   // { code, amount } once a valid code is applied
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-	function money(n) { return '$' + Number(n).toFixed(2); }
+	function money(n) { return window.DBDemo.formatMoney(n); }
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 	function count() { var c = 0; for (var k in cart) { c += cart[k].qty; } return c; }
 	function total() { var t = 0; for (var k in cart) { t += cart[k].price * cart[k].qty; } return t; }
@@ -25,7 +29,9 @@
 		var clone = nameEl.cloneNode(true);
 		Array.prototype.forEach.call(clone.querySelectorAll('.mn-tag'), function (t) { t.parentNode.removeChild(t); });
 		var name = clone.textContent.replace(/\s+/g, ' ').trim();
-		var price = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
+		var price = parseFloat(priceEl.getAttribute('data-price') || priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
+		priceEl.setAttribute('data-price', String(price));
+		priceEl.textContent = money(price);
 		var act = document.createElement('div');
 		act.className = 'mn-it-act';
 		(el.querySelector('.mn-it-body') || el).appendChild(act);
@@ -118,11 +124,22 @@
 			lines += '<div class="cd-line"><span class="cd-n">' + esc(it.name) + '</span><span class="cd-qty"><button type="button" data-dec="' + esc(k) + '" aria-label="Remove one">&minus;</button><b>' + it.qty + '</b><button type="button" data-inc="' + esc(k) + '" aria-label="Add one">+</button></span><span class="cd-p">' + money(it.price * it.qty) + '</span></div>';
 		}
 		if (!lines) { lines = '<p class="cd-empty">Your order is empty — add a few manoush.</p>'; }
+		var defaultMethods = window.DBDemo.enabledFulfilments(DEFAULT_LOCATION.id).map(function (key) { return window.DBDemo.t('fulfilment.' + key).toLowerCase(); });
 		drawer.innerHTML = '<div class="cd-head"><h3>Your order</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-body">' + lines + '</div>' +
 			'<div class="cd-foot"><div class="cd-tot"><span>Total</span><strong>' + money(total()) + '</strong></div>' +
 			'<button type="button" class="vb-btn vb-btn-ember cd-checkout"' + (count() ? '' : ' disabled') + '>Checkout</button>' +
-			'<p class="cd-note">Demo &middot; pickup from Revesby only &middot; no real payment.</p></div>';
+			'<p class="cd-note">Demo &middot; ' + esc(defaultMethods.join(' / ')) + ' from ' + esc(DEFAULT_LOCATION.name) + ' by default &middot; no real payment.</p></div>';
+	}
+
+	function routeOptions() {
+		var options = [];
+		window.DBDemo.activeLocations().forEach(function (location) {
+			window.DBDemo.enabledFulfilments(location.id).forEach(function (method) {
+				options.push('<option value="' + esc(location.id + '|' + method) + '">' + esc(window.DBDemo.t('fulfilment.' + method) + ' · ' + location.name) + '</option>');
+			});
+		});
+		return options.join('');
 	}
 
 	function renderCheckout() {
@@ -136,15 +153,18 @@
 				'<div class="cd-tline cd-tdisc"><span>Voucher ' + esc(voucher.code) + '</span><span>&minus;' + money(discount()) + '</span></div>'
 			: '') +
 			'<div class="cd-tot"><span>Total</span><strong>' + money(netTotal()) + '</strong></div>';
+		var anyDelivery = window.DBDemo.activeLocations().some(function (location) { return window.DBDemo.enabledFulfilments(location.id).indexOf('delivery') !== -1; });
+		var paymentProvider = CFG.payments.enabled ? CFG.payments.selectedProvider : null;
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-vouch">' + vouchHtml + '<p class="cd-verr" role="alert"></p></div>' +
 			'<form class="cd-form" novalidate>' +
 			'<label class="cd-f"><span>Name</span><input name="name" type="text" autocomplete="name" required></label>' +
 			'<label class="cd-f"><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required></label>' +
-			'<fieldset class="cd-f"><legend>Fulfilment</legend><p>Pickup from <strong>Revesby</strong></p><input type="hidden" name="ful" value="pickup"><input type="hidden" name="shop" value="Revesby"></fieldset>' +
+			'<label class="cd-f"><span>Location and fulfilment</span><select name="route" required>' + routeOptions() + '</select></label>' +
+			(anyDelivery ? '<label class="cd-f"><span>Delivery address <small>(required for delivery)</small></span><input name="address" type="text" autocomplete="street-address"></label>' : '') +
 			'<fieldset class="cd-f cd-pay">' +
 			'<legend>Payment</legend>' +
-			'<p class="cd-privacy cd-carddemo">Interactive demo only — do not enter card details. The production payment provider is still to be confirmed.</p>' +
+			'<p class="cd-privacy cd-carddemo">Interactive demo only — do not enter card details. ' + (paymentProvider ? esc(paymentProvider.toUpperCase()) + ' is selected by this profile.' : 'Payments are disabled; Tyro and Stripe remain available adapters.') + '</p>' +
 			'</fieldset>' +
 			'<div class="cd-tots">' + totsHtml + '</div>' +
 			'<div class="cd-err" role="alert"></div>' +
@@ -170,7 +190,7 @@
 			if (input) { input.focus(); }
 			return;
 		}
-		voucher = { code: code, amount: 5 };   // $5 off — the Dough Boss side of the student voucher
+		voucher = { code: code, amount: Number((CFG.promotions.studentVoucher || {}).amount || 0) };
 		renderCheckout();
 	}
 
@@ -178,10 +198,15 @@
 		var fd = new FormData(form);
 		var name = (fd.get('name') || '').toString().trim();
 		var phone = (fd.get('phone') || '').toString().trim();
+		var route = (fd.get('route') || '').toString().split('|');
+		var locationId = route[0], fulfilment = route[1];
+		var address = (fd.get('address') || '').toString().trim();
 		var err = form.querySelector('.cd-err');
 		if (!name || !phone) { err.textContent = 'Please add your name and phone.'; return; }
+		if (!window.DBDemo.getLocation(locationId) || window.DBDemo.enabledFulfilments(locationId).indexOf(fulfilment) === -1) { err.textContent = 'Please choose an available location and fulfilment method.'; return; }
+		if (fulfilment === 'delivery' && !address) { err.textContent = 'Please add a delivery address.'; return; }
 
-		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+		var ref = CFG.brand.orderReferencePrefix + '-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
 		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
 
@@ -194,7 +219,7 @@
 
 		setTimeout(function () {
 			drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-				'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p><p class="cd-note">No payment was taken and no real order was sent.</p></div>';
+				'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p><p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
 			cart = {};
 			voucher = null;
 			for (var n in controls) { paintItem(n); }

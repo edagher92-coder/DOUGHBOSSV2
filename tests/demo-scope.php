@@ -12,9 +12,12 @@ $staff = file_get_contents($root . '/demo/backend.html');
 $owner = file_get_contents($root . '/demo/owner.html');
 $ordering = file_get_contents($root . '/demo/menu-order.js');
 $offers = file_get_contents($root . '/demo/offers.js');
+$profile = file_get_contents($root . '/demo/config/profiles/doughboss-revesby-launch.js');
+$runtime = file_get_contents($root . '/demo/demo-runtime.js');
+$fixtures = file_get_contents($root . '/demo/demo-fixtures.js');
 $pages = file_get_contents($root . '/.github/workflows/pages.yml');
 
-if ($customer === false || $staff === false || $owner === false || $ordering === false || $offers === false || $pages === false) {
+if ($customer === false || $staff === false || $owner === false || $ordering === false || $offers === false || $profile === false || $runtime === false || $fixtures === false || $pages === false) {
 	fwrite(STDERR, "FAIL: Could not read the demo files.\n");
 	exit(1);
 }
@@ -23,19 +26,19 @@ $checks = array(
 	'customer copy names Revesby pickup' => strpos($customer, 'Pickup from Revesby') !== false,
 	'customer primary navigation uses Offers and News' => strpos($customer, 'href="#offers">Offers &amp; News</a>') !== false,
 	'customer primary navigation does not expose Snow Boss' => strpos($customer, '>Snow Boss</a>') === false,
-	'staff location is Revesby pickup-only' => strpos($staff, 'Revesby · pickup only') !== false,
-	'staff launch workflow ends at collected' => strpos($staff, 'Collected · done') !== false,
-	'staff fixtures do not contain Bankstown' => stripos($staff, 'Bankstown') === false,
-	'staff fixtures do not contain Roselands' => stripos($staff, 'Roselands') === false,
-	'staff fixtures do not contain direct delivery orders' => !preg_match('/type:\s*[\'\"]Delivery[\'\"]/', $staff),
-	'staff workflow does not contain delivery status' => stripos($staff, 'out_for_delivery') === false,
-	'staff fixtures do not present Snow Boss' => stripos($staff, 'Snow Boss') === false,
-	'owner location is Revesby pickup-only' => strpos($owner, 'Revesby · pickup only') !== false,
-	'owner fixtures do not contain Bankstown' => stripos($owner, 'Bankstown') === false,
-	'owner fixtures do not contain Roselands' => stripos($owner, 'Roselands') === false,
-	'owner fixtures do not contain direct delivery orders' => !preg_match('/type:\s*[\'\"]Delivery[\'\"]/', $owner),
-	'owner fixtures do not present Snow Boss' => stripos($owner, 'Snow Boss') === false,
-	'ordering confirms no payment or real order' => strpos($ordering, 'No payment was taken and no real order was sent.') !== false,
+	'launch profile is explicitly versioned' => strpos($profile, "profileId: 'doughboss-revesby-launch'") !== false,
+	'launch profile defaults to Revesby' => strpos($profile, "defaultLocationId: 'revesby'") !== false,
+	'launch profile enables pickup' => preg_match('/pickup:\s*\{\s*enabled:\s*true/', $profile) === 1,
+	'launch profile disables direct delivery' => preg_match('/delivery:\s*\{\s*enabled:\s*false/', $profile) === 1,
+	'launch profile disables online payments' => preg_match('/payments:\s*\{\s*enabled:\s*false/', $profile) === 1,
+	'launch profile keeps Stripe and Tyro available' => strpos($profile, "allowedProviders: ['stripe', 'tyro']") !== false,
+	'staff consumes the universal runtime' => strpos($staff, 'demo-runtime.js') !== false && strpos($staff, 'demo-fixtures.js') !== false,
+	'owner consumes the universal runtime' => strpos($owner, 'demo-runtime.js') !== false && strpos($owner, 'demo-fixtures.js') !== false,
+	'staff does not duplicate an inline fixture array' => strpos($staff, 'var ORDERS = [') === false,
+	'owner does not duplicate an inline fixture array' => strpos($owner, 'var ORDERS=[') === false,
+	'runtime validates payment-provider selection' => strpos($runtime, 'selectedProvider') !== false,
+	'shared fixtures route through configured locations' => strpos($fixtures, 'enabledFulfilments') !== false,
+	'ordering confirms no payment or real order through translations' => strpos($ordering, "DBDemo.t('checkout.demoNotice')") !== false,
 	'ordering makes no network request' => stripos($ordering, 'fetch(') === false && stripos($ordering, 'XMLHttpRequest') === false,
 	'offers form makes no network request' => stripos($offers, 'fetch(') === false && stripos($offers, 'XMLHttpRequest') === false,
 	'offers form does not submit to an external endpoint' => strpos($customer, 'id="sb-voucher-form" action="#"') !== false,

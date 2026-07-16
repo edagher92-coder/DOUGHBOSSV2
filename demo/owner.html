@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Owner / Manager</title>
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
 <!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
      For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
      Content-Security-Policy: frame-ancestors 'none'
@@ -211,7 +211,6 @@ a{color:inherit;}
 <div class="stores">
 	<div class="stores-in" id="stores">
 		<span class="lbl">Location</span>
-		<button class="spill" data-store="Revesby" aria-pressed="true">Revesby · pickup only</button>
 	</div>
 </div>
 
@@ -228,7 +227,7 @@ a{color:inherit;}
 
 	<!-- DASHBOARD -->
 	<section class="panel on" id="p-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
-		<div class="h"><div><h1 class="ph">Today at a glance</h1><p class="psub" id="dsub" aria-live="polite">Revesby pickup operations</p></div></div>
+		<div class="h"><div><h1 class="ph">Today at a glance</h1><p class="psub" id="dsub" aria-live="polite">Configured operations</p></div></div>
 		<p class="demo-note">&#9432; Demo figures are representative — once wired to WordPress, every dollar comes from the server (orders + GST), never the browser.</p>
 
 		<div class="hstrip" id="hstrip"></div>
@@ -247,7 +246,7 @@ a{color:inherit;}
 					<span><span class="cdot" aria-hidden="true" style="background:var(--gold)"></span>Online <b id="lg-on">0</b></span>
 					<span><span class="cdot" aria-hidden="true" style="background:var(--cater)"></span>Catering <b id="lg-ca">0</b></span>
 				</div>
-				<h3 style="margin-top:18px">Today at Revesby</h3>
+				<h3 style="margin-top:18px">Today by location</h3>
 				<div id="stores-break"></div>
 			</div>
 		</div>
@@ -273,7 +272,7 @@ a{color:inherit;}
 	<!-- CATERING -->
 	<section class="panel" id="p-catering" role="tabpanel" aria-labelledby="tab-catering" hidden>
 		<h1 class="ph">Catering pipeline</h1>
-		<p class="psub">Enquiry → quote → deposit → booked. All catering runs through Revesby.</p>
+		<p class="psub">Enquiry → quote → deposit → booked. Catering is routed to the configured location.</p>
 		<div class="cattot" id="cattot"></div>
 		<h2 class="subh">New enquiries — action needed</h2>
 		<div class="pipe" id="cat-enq"></div>
@@ -298,6 +297,11 @@ a{color:inherit;}
 
 </main>
 
+<script src="config/base.js"></script>
+<script src="config/profiles/doughboss-revesby-launch.js"></script>
+<script src="config/i18n/en-AU.js"></script>
+<script src="demo-runtime.js"></script>
+<script src="demo-fixtures.js"></script>
 <script>
 (function () {
 	'use strict';
@@ -308,10 +312,20 @@ a{color:inherit;}
 		try { localStorage.removeItem('db_staff'); localStorage.removeItem('db_role'); } catch (e) {}
 		location.replace('staff.html');
 	});
+	var CFG=window.DBDemo.config;
+	document.documentElement.lang=CFG.region.language;
+	document.documentElement.dir=CFG.region.direction;
+	var LOCATIONS=window.DBDemo.activeLocations();
+	var storesEl=document.getElementById('stores');
+	var multiLocation=LOCATIONS.length>1;
+	var storeButtons=[];
+	if(multiLocation)storeButtons.push('<button class="spill" data-store="all" aria-pressed="true">All locations</button>');
+	LOCATIONS.forEach(function(location){var methods=window.DBDemo.enabledFulfilments(location.id).map(function(key){return window.DBDemo.t('fulfilment.'+key).toLowerCase();});storeButtons.push('<button class="spill" data-store="'+location.name+'" aria-pressed="'+(!multiLocation&&location.id===CFG.defaultLocationId?'true':'false')+'">'+location.name+' · '+methods.join(' / ')+'</button>');});
+	storesEl.insertAdjacentHTML('beforeend',storeButtons.join(''));
 
 	function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-	function money(n){return '$' + n.toFixed(2);}
-	function money0(n){return '$' + Math.round(n).toLocaleString();}
+	function money(n){return window.DBDemo.formatMoney(n);}
+	function money0(n){return window.DBDemo.formatMoney(n,{maximumFractionDigits:0});}
 	var now = new Date();
 	function at(o,h,m){var d=new Date(now);d.setDate(d.getDate()+o);d.setHours(h,m||0,0,0);return d;}
 	function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
@@ -323,42 +337,29 @@ a{color:inherit;}
 	function liEls(a){return a.map(function(i){return '<li>'+esc(i)+'</li>';}).join('');}
 	function ctag(o){return o.channel==='catering'?'<span class="ct ca">CATERING</span>':'<span class="ct">ONLINE</span>';}
 
-	/* All names and figures below are fictional, for demonstration only. */
-	var seq=1042; function ref(){seq+=1;return 'DB-'+seq;}
-	var ORDERS=[
-		{ref:ref(),channel:'online',store:'Revesby',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft drink 600ml'],total:27.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Pickup',items:['1× All Meat','1× Garlic Prawns','2× Spring water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-6))},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Mariam H.',type:'Pickup',items:['3× Zaatar & Cheese','1× Choc banana'],total:33.50,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),12)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Joe T.',type:'Pickup',items:['1× Chicken Delight','1× BBQ Chicken','1× Juice'],total:29.00,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),38)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Nadia A.',type:'Pickup',items:['2× Veggie Plus','1× Fattoush','1× Ayran'],total:36.50,status:'ready',placed:at(0,Math.max(0,now.getHours()-1),5)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Omar S.',type:'Pickup',items:['2× Lahm bi ajeen','1× Lentil soup'],total:24.00,status:'completed',placed:at(0,9,14)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Priya R.',type:'Pickup',items:['1× Margherita','1× Garlic bread'],total:28.50,status:'completed',placed:at(0,11,2)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Hassan D.',type:'Pickup',items:['4× Mixed manoush','2× Soft drinks'],total:46.00,status:'new',placed:at(0,Math.max(0,now.getHours()-2),0),scheduled:at(0,Math.min(21,now.getHours()+3),30)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Office — Lvl 3',type:'Pickup',items:['6× Assorted manoush','3× Salads','6× Drinks'],total:92.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-12))},
-		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample School',type:'Catering',items:['Lunch run — 60 pax','Mixed manoush platters ×6','Fruit & juice'],total:540.00,deposit:150,status:'confirmed',placed:at(-3,10,0),scheduled:at(2,11,30),pax:60,pkg:'School Lunch Run'},
-		{ref:ref(),channel:'catering',store:'Revesby',who:'Smith Wedding',type:'Catering',items:['Grazing + hot manoush — 120 pax','Dessert platters','Service staff ×2'],total:1980.00,deposit:500,status:'confirmed',placed:at(-6,13,0),scheduled:at(9,17,0),pax:120,pkg:'Premium Event'},
-		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Corporate',type:'Catering',items:['Corporate breakfast — ~40 pax','Manoush + coffee cart'],total:0,deposit:0,status:'enquiry',placed:at(0,Math.max(0,now.getHours()-3),20),pax:40,pkg:'Corporate Breakfast'},
-		{ref:ref(),channel:'catering',store:'Revesby',who:'Brown Family',type:'Catering',items:['Engagement — ~80 pax','Mixed platters + dessert'],total:0,deposit:0,status:'enquiry',placed:at(-1,19,5),pax:80,pkg:'Event (TBC)'},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Karim B.',type:'Pickup',items:['2× Zaatar','1× Cheese & tomato'],total:22.00,status:'completed',placed:at(-1,12,30)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Sophie L.',type:'Pickup',items:['1× All Meat','1× Veggie Plus'],total:31.00,status:'completed',placed:at(-1,18,12)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Daniel P.',type:'Pickup',items:['1× Chicken Delight'],total:14.00,status:'cancelled',placed:at(-2,13,47)},
-		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Sports Club',type:'Catering',items:['Function — 90 pax','Mixed manoush + salads'],total:1260.00,deposit:350,status:'completed',placed:at(-12,10,0),scheduled:at(-4,18,0),pax:90,pkg:'Function'},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Yusra M.',type:'Pickup',items:['2× Margherita','1× Garlic bread','1× Soft drink'],total:39.50,status:'completed',placed:at(-2,19,22)}
-	];
+	/* Shared fictional fixtures are routed through the selected profile. */
+	var ORDERS=window.DBDemoFixtures.build(now);
 	var DAYREV=[820,1140,990,1370,1210,1580,1310];
-	var STORES=['Revesby'];
+	var STORES=LOCATIONS.map(function(location){return location.name;});
 
-	var store='Revesby';
+	var defaultLocation=window.DBDemo.getLocation(CFG.defaultLocationId);
+	var store=multiLocation?'all':defaultLocation.name;
 	var dismissed={};
-	function inStore(o){return o.store===store;}
-	function isLive(o){return o.channel==='online'&&(o.status==='new'||o.status==='preparing'||o.status==='ready');}
+	function inStore(o){return store==='all'||o.store===store;}
+	function scopeLabel(){
+		if(store==='all')return 'All configured locations';
+		var location=LOCATIONS.filter(function(item){return item.name===store;})[0];
+		var methods=location?window.DBDemo.enabledFulfilments(location.id).map(function(key){return window.DBDemo.t('fulfilment.'+key).toLowerCase();}):[];
+		return store+(methods.length?' · '+methods.join(' / '):'')+' operations';
+	}
+	function isLive(o){return window.DBDemo.isLive(o);}
 	function live(){return ORDERS.filter(function(o){return inStore(o)&&isLive(o);});}
 	// today() intentionally includes catering orders in KPIs so the owner sees full revenue across all channels.
 	// Backend's todayOrders() excludes catering because staff action only online orders; owner KPIs include both.
 	function today(){return ORDERS.filter(function(o){return inStore(o)&&(sameDay(o.placed,now)||(o.scheduled&&sameDay(o.scheduled,now)));});}
 	function catEnq(){return ORDERS.filter(function(o){return inStore(o)&&o.channel==='catering'&&o.status==='enquiry';});}
 	function catBooked(){return ORDERS.filter(function(o){return inStore(o)&&o.channel==='catering'&&o.status==='confirmed'&&o.scheduled&&o.scheduled>now;}).sort(function(a,b){return a.scheduled-b.scheduled;});}
-	var SAFE_STATUS={new:1,preparing:1,ready:1,completed:1,cancelled:1,confirmed:1,enquiry:1};
+	var SAFE_STATUS={new:1,confirmed:1,preparing:1,baking:1,ready:1,out_for_delivery:1,completed:1,cancelled:1,enquiry:1};
 	function badge(s){var safe=SAFE_STATUS[s]?s:'unknown';return '<span class="badge b-'+safe+'">'+safe+'</span>';}
 
 	function storeLiveList(s){return ORDERS.filter(function(o){return o.store===s&&isLive(o);});}
@@ -391,7 +392,7 @@ a{color:inherit;}
 		var aov=counted.length?revToday/counted.length:0;
 		var liveN=live().length;
 		var bookedN=catBooked().length;
-		document.getElementById('dsub').textContent=store+' pickup operations';
+		document.getElementById('dsub').textContent=scopeLabel();
 		document.getElementById('kpis').innerHTML=
 			tile('Sales today',money0(revToday),'incl. GST '+money(gst),true,false)+
 			tile('Orders today',counted.length,on.length+' online · '+ca.length+' catering',false,false)+
@@ -439,8 +440,8 @@ a{color:inherit;}
 		document.getElementById('ovr').innerHTML=stores.map(function(s){
 			var list=storeLiveList(s);
 			var nN=list.filter(function(o){return o.status==='new';}).length;
-			var nP=list.filter(function(o){return o.status==='preparing';}).length;
-			var nR=list.filter(function(o){return o.status==='ready';}).length;
+			var nP=list.filter(function(o){return o.status==='confirmed'||o.status==='preparing'||o.status==='baking';}).length;
+			var nR=list.filter(function(o){return o.status==='ready'||o.status==='out_for_delivery';}).length;
 			var old=oldestUnaccepted(s);
 			return '<div class="ocard"><h4>'+s+'<span class="age">oldest '+(old===null?'—':old+'m')+'</span></h4>'+
 				'<div class="ocount"><div class="cc n"><div class="num">'+nN+'</div><div class="cl">New</div></div>'+

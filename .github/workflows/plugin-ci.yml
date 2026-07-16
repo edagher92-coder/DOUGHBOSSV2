@@ -44,6 +44,9 @@ jobs:
       - name: Verify demo launch scope
         run: php tests/demo-scope.php
 
+      - name: Verify universal demo profiles
+        run: node tests/demo-config.test.js
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
