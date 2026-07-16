@@ -426,7 +426,22 @@
 		var inc = e.target.closest('[data-kinc]'); if (inc) { bumpLine(inc.getAttribute('data-kinc'), 1); return; }
 		var dec = e.target.closest('[data-kdec]'); if (dec) { bumpLine(dec.getAttribute('data-kdec'), -1); return; }
 	});
-	drawer.addEventListener('submit', function (e) { if (e.target.closest('.cd-form')) { e.preventDefault(); placeOrder(e.target); } });
+	drawer.addEventListener('submit', function (e) {
+		if (e.target.closest('.cd-form')) { e.preventDefault(); placeOrder(e.target); return; }
+		if (e.target.closest('.cd-cardform')) { e.preventDefault(); payCard(e.target); }
+	});
+	/* Light cosmetic formatting on the simulated card fields (digits only, grouping). */
+	drawer.addEventListener('input', function (e) {
+		var t = e.target;
+		if (t.classList.contains('cd-cnum')) {
+			t.value = t.value.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
+		} else if (t.classList.contains('cd-cexp')) {
+			var d = t.value.replace(/\D/g, '').slice(0, 4);
+			t.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+		} else if (t.classList.contains('cd-ccvc')) {
+			t.value = t.value.replace(/\D/g, '').slice(0, 4);
+		}
+	});
 	document.addEventListener('keydown', function (e) {
 		var root = sheetOpen ? sheet : (drawerOpen ? drawer : null);
 		if (!root) { return; }

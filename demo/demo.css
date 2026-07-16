@@ -565,4 +565,12 @@ body.cart-on{padding-bottom:114px;}
 .opt-lc-btns .vb-btn{width:100%;justify-content:center;}
 .opt-lc-back{background:none;border:0;align-self:center;color:#6f6a60;font-size:13px;text-decoration:underline;cursor:pointer;}
 .opt-lc-back:hover{color:var(--ember);}
-@media(prefers-reduced-motion:reduce){.opt-overlay.is-open,.opt-sheet.is-open{animation:none;}}
+/* simulated card-payment step (TEST MODE, inside the cart drawer) */
+.cd-test{margin:14px 20px 0;padding:9px 12px;border:1px dashed var(--ink);border-radius:var(--r-sm);background:#fff;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:center;box-shadow:var(--sh-1);}
+.cd-cardform{display:flex;flex-direction:column;gap:11px;padding:16px 20px;overflow-y:auto;}
+.cd-cardform .vb-btn{width:100%;justify-content:center;}
+.cd-cardform .cd-cardrow2{gap:10px;}
+.cd-cardform .cd-cardrow2 .cd-f{flex:1;min-width:0;}
+.cd-spin{display:inline-block;width:15px;height:15px;margin-right:9px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;vertical-align:-2px;animation:optspin .7s linear infinite;}
+@keyframes optspin{to{transform:rotate(360deg);}}
+@media(prefers-reduced-motion:reduce){.opt-overlay.is-open,.opt-sheet.is-open{animation:none;}.cd-spin{animation:none;border-top-color:rgba(255,255,255,.35);}}
