@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Orders</title>
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
 <!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
      For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
      Content-Security-Policy: frame-ancestors 'none'
@@ -174,11 +174,7 @@ a{color:inherit;}
 
 <div class="stores">
 	<div class="stores-in" id="stores">
-		<span class="lbl">Store</span>
-		<button class="spill" data-store="all" aria-pressed="true">All</button>
-		<button class="spill" data-store="Revesby" aria-pressed="false">Revesby</button>
-		<button class="spill" data-store="Bankstown" aria-pressed="false">Bankstown</button>
-		<button class="spill" data-store="Roselands" aria-pressed="false">Roselands</button>
+		<span class="lbl">Location</span>
 	</div>
 </div>
 
@@ -197,7 +193,7 @@ a{color:inherit;}
 	<!-- LIVE -->
 	<section class="panel on" id="p-live" role="tabpanel" aria-labelledby="tab-live">
 		<h1 class="ph">New &amp; cooking</h1>
-		<p class="psub">Tap the big button on a card to move it along: <b>Accept</b> (set ETA) → <b>Prep</b> → <b>Oven</b> → <b>Ready</b> → <b>Out for delivery</b> / <b>Pickup</b> → <b>Done</b>.</p>
+		<p class="psub" id="workflow-copy">Order actions follow the configured fulfilment workflow.</p>
 		<div class="tip"><span>🔔</span><span>New orders pop in here automatically.</span><div style="flex:1"></div><button type="button" class="sim" id="sim">+ New order (demo)</button></div>
 		<p class="psub" style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">&#9432; All customer names and order data shown are fictional and for demonstration purposes only.</p>
 		<div class="cols" id="board"></div>
@@ -221,7 +217,7 @@ a{color:inherit;}
 	<!-- CATERING -->
 	<section class="panel" id="p-catering" role="tabpanel" aria-labelledby="tab-catering" hidden>
 		<h1 class="ph">Catering</h1>
-		<p class="psub">Big orders, handled by Revesby.</p>
+		<p class="psub" id="catering-copy">Big orders are routed to the selected location.</p>
 		<h2 class="section-h">New enquiries <span class="n" id="enq-n" aria-live="polite" aria-atomic="true">0</span></h2>
 		<div class="list" id="cat-enq"></div>
 		<h2 class="section-h">Booked events</h2>
@@ -237,6 +233,11 @@ a{color:inherit;}
 
 </main>
 
+<script src="config/base.js"></script>
+<script src="config/profiles/doughboss-revesby-launch.js"></script>
+<script src="config/i18n/en-AU.js"></script>
+<script src="demo-runtime.js"></script>
+<script src="demo-fixtures.js"></script>
 <script>
 (function () {
 	'use strict';
@@ -251,25 +252,34 @@ a{color:inherit;}
 		try { localStorage.removeItem('db_staff'); localStorage.removeItem('db_role'); } catch (e) {}
 		location.replace('staff.html');
 	});
+	var CFG = window.DBDemo.config;
+	document.documentElement.lang = CFG.region.language;
+	document.documentElement.dir = CFG.region.direction;
+	var LOCATIONS = window.DBDemo.activeLocations();
+	var DEFAULT_LOCATION = window.DBDemo.getLocation(CFG.defaultLocationId);
+	var multiLocation = LOCATIONS.length > 1;
+	var storesEl = document.getElementById('stores');
+	var storeButtons = [];
+	if (multiLocation) { storeButtons.push('<button class="spill" data-store="all" aria-pressed="true">All locations</button>'); }
+	LOCATIONS.forEach(function (location) {
+		var methods = window.DBDemo.enabledFulfilments(location.id).map(function (key) { return window.DBDemo.t('fulfilment.' + key).toLowerCase(); });
+		storeButtons.push('<button class="spill" data-store="' + location.id + '" aria-pressed="' + (!multiLocation && location.id === CFG.defaultLocationId ? 'true' : 'false') + '">' + location.name + ' · ' + methods.join(' / ') + '</button>');
+	});
+	storesEl.insertAdjacentHTML('beforeend', storeButtons.join(''));
+	var defaultMethods = window.DBDemo.enabledFulfilments(CFG.defaultLocationId);
+	document.getElementById('workflow-copy').textContent = 'Actions follow the configured ' + defaultMethods.map(function (key) { return window.DBDemo.t('fulfilment.' + key).toLowerCase(); }).join(' / ') + ' workflow. Each location can enable its own fulfilment methods.';
 
 	/* helpers */
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-	function money(n) { return '$' + n.toFixed(2); }
+	function money(n) { return window.DBDemo.formatMoney(n); }
 	var SAFE = {new:1,confirmed:1,preparing:1,baking:1,ready:1,out_for_delivery:1,completed:1,cancelled:1,enquiry:1};
 	function safeStatus(s) { return SAFE[s] ? s : 'muted'; }
-	/* live order status machine — same vocabulary as includes/class-doughboss-order.php */
-	var LIVE_STATUSES = { new:1, confirmed:1, preparing:1, baking:1, ready:1, out_for_delivery:1 };
-	var LIVE_STATUS_LABEL = { new:'New', confirmed:'Accepted', preparing:'Prepping', baking:'In the oven', ready:'Ready', out_for_delivery:'Out for delivery' };
+	/* Status transitions come from the selected fulfilment workflow. */
+	function statusLabel(o) { var state = window.DBDemo.state(o); return state ? window.DBDemo.t(state.labelKey) : o.status; }
 	function liveNext(o) {
-		switch (o.status) {
-			case 'new': return { to: 'confirmed', cls: '', label: 'Accept order' };
-			case 'confirmed': return { to: 'preparing', cls: '', label: 'Start prepping' };
-			case 'preparing': return { to: 'baking', cls: '', label: 'Into the oven' };
-			case 'baking': return { to: 'ready', cls: 'ready', label: 'Mark ready' };
-			case 'ready': return o.type === 'Delivery' ? { to: 'out_for_delivery', cls: '', label: 'Send for delivery' } : { to: 'completed', cls: 'ghost', label: 'Picked up · done' };
-			case 'out_for_delivery': return { to: 'completed', cls: 'ghost', label: 'Delivered · done' };
-			default: return { to: 'completed', cls: 'ghost', label: 'Done' };
-		}
+		var current = window.DBDemo.state(o);
+		if (!current || !current.action) { return { to: o.status, cls: 'ghost', label: window.DBDemo.t('action.done') }; }
+		return { to: current.action.to, requiresEta: !!current.action.requiresEta, cls: current.action.to === 'completed' ? 'ghost' : (current.action.to === 'ready' ? 'ready' : ''), label: window.DBDemo.t(current.action.labelKey) };
 	}
 	var now = new Date();
 	function at(off, h, m) { var d = new Date(now); d.setDate(d.getDate() + off); d.setHours(h, m || 0, 0, 0); return d; }
@@ -286,34 +296,15 @@ a{color:inherit;}
 	function liEls(arr) { return arr.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join(''); }
 	function chanTag(o) { return o.channel === 'catering' ? '<span class="tag ca">CATERING</span>' : '<span class="tag on">ONLINE</span>'; }
 
-	/* data — All names and figures below are fictional, for demonstration only. */
+	/* Shared fictional fixtures are routed through the selected profile. */
 	var seq = 1042;
-	function ref() { seq += 1; return 'DB-' + seq; }
-	var ORDERS = [
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Layla M.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese', '1× Soft drink 600ml'], total: 27.50, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 2)) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Sam K.', type: 'Delivery', items: ['1× All Meat', '1× Garlic Prawns', '2× Spring water'], total: 41.00, status: 'new', placed: at(0, now.getHours(), Math.max(0, now.getMinutes() - 6)) },
-		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Mariam H.', type: 'Pickup', items: ['3× Zaatar & Cheese', '1× Choc banana'], total: 33.50, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 12) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Joe T.', type: 'Pickup', items: ['1× Chicken Delight', '1× BBQ Chicken', '1× Juice'], total: 29.00, status: 'preparing', placed: at(0, Math.max(0, now.getHours() - 1), 38) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Nadia A.', type: 'Delivery', items: ['2× Veggie Plus', '1× Fattoush', '1× Ayran'], total: 36.50, status: 'ready', placed: at(0, Math.max(0, now.getHours() - 1), 5) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Omar S.', type: 'Pickup', items: ['2× Lahm bi ajeen', '1× Lentil soup'], total: 24.00, status: 'completed', placed: at(0, 9, 14) },
-		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Priya R.', type: 'Delivery', items: ['1× Margherita', '1× Garlic bread'], total: 28.50, status: 'completed', placed: at(0, 11, 2) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Hassan D.', type: 'Pickup', items: ['4× Mixed manoush', '2× Soft drinks'], total: 46.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 2), 0) },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Office — Lvl 3', type: 'Delivery', items: ['6× Assorted manoush', '3× Salads', '6× Drinks'], total: 92.00, status: 'new', placed: at(0, Math.max(0, now.getHours() - 1), 40) },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample School', type: 'Catering', items: ['Lunch run — 60 pax', 'Mixed manoush platters ×6', 'Fruit & juice'], total: 540.00, deposit: 150, status: 'confirmed', placed: at(-3, 10, 0), scheduled: at(2, 11, 30), pax: 60, pkg: 'School Lunch Run' },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Smith Wedding', type: 'Catering', items: ['Grazing + hot manoush — 120 pax', 'Dessert table (Snow Boss)', 'Service staff ×2'], total: 1980.00, deposit: 500, status: 'confirmed', placed: at(-6, 13, 0), scheduled: at(9, 17, 0), pax: 120, pkg: 'Premium Event' },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample Corporate', type: 'Catering', items: ['Corporate breakfast — ~40 pax', 'Manoush + coffee cart'], total: 0, deposit: 0, status: 'enquiry', placed: at(0, Math.max(0, now.getHours() - 3), 20), pax: 40, pkg: 'Corporate Breakfast' },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Brown Family', type: 'Catering', items: ['Engagement — ~80 pax', 'Mixed platters + dessert'], total: 0, deposit: 0, status: 'enquiry', placed: at(-1, 19, 5), pax: 80, pkg: 'Event (TBC)' },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Karim B.', type: 'Pickup', items: ['2× Zaatar', '1× Cheese & tomato'], total: 22.00, status: 'completed', placed: at(-1, 12, 30) },
-		{ ref: ref(), channel: 'online', store: 'Roselands', who: 'Sophie L.', type: 'Delivery', items: ['1× All Meat', '1× Veggie Plus'], total: 31.00, status: 'completed', placed: at(-1, 18, 12) },
-		{ ref: ref(), channel: 'online', store: 'Revesby', who: 'Daniel P.', type: 'Pickup', items: ['1× Chicken Delight'], total: 14.00, status: 'cancelled', placed: at(-2, 13, 47) },
-		{ ref: ref(), channel: 'catering', store: 'Revesby', who: 'Sample Sports Club', type: 'Catering', items: ['Function — 90 pax', 'Mixed manoush + salads'], total: 1260.00, deposit: 350, status: 'completed', placed: at(-12, 10, 0), scheduled: at(-4, 18, 0), pax: 90, pkg: 'Function' },
-		{ ref: ref(), channel: 'online', store: 'Bankstown', who: 'Yusra M.', type: 'Delivery', items: ['2× Margherita', '1× Garlic bread', '1× Soft drink'], total: 39.50, status: 'completed', placed: at(-2, 19, 22) }
-	];
+	function ref() { seq += 1; return CFG.brand.orderReferencePrefix + '-' + seq; }
+	var ORDERS = window.DBDemoFixtures.build(now);
 
-	var store = 'all';
-	function inStore(o) { return store === 'all' || o.store === store; }
+	var store = multiLocation ? 'all' : CFG.defaultLocationId;
+	function inStore(o) { return store === 'all' || o.locationId === store; }
 
-	function liveOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'online' && LIVE_STATUSES[o.status]; }); }
+	function liveOrders() { return ORDERS.filter(function (o) { return inStore(o) && window.DBDemo.isLive(o); }); }
 	function todayOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel !== 'catering' && (sameDay(o.placed, now) || (o.scheduled && sameDay(o.scheduled, now))); }).sort(function (a, b) { return (a.scheduled || a.placed) - (b.scheduled || b.placed); }); }
 	function upcomingOrders() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'catering' && o.status === 'confirmed' && o.scheduled && o.scheduled > now; }).sort(function (a, b) { return a.scheduled - b.scheduled; }); }
 	function catEnquiries() { return ORDERS.filter(function (o) { return inStore(o) && o.channel === 'catering' && o.status === 'enquiry'; }); }
@@ -328,7 +319,7 @@ a{color:inherit;}
 	/* live card with big action button */
 	function liveCard(o) {
 		var next = liveNext(o);
-		var sbadge = '<span class="sbadge ' + safeStatus(o.status) + '">' + esc(LIVE_STATUS_LABEL[o.status] || o.status) + '</span>';
+		var sbadge = '<span class="sbadge ' + safeStatus(o.status) + '">' + esc(statusLabel(o)) + '</span>';
 		var etaBit = o.eta ? '<span class="c-eta">⏱ ETA ' + esc(o.eta) + ' min</span>' : '';
 		return '<div class="card ' + safeStatus(o.status) + '">' +
 			'<div class="c-top"><span class="c-ref">#' + esc(o.ref) + '</span><span class="c-age">' + ago(o.placed) + '</span></div>' +
@@ -371,15 +362,30 @@ a{color:inherit;}
 		var btn = el.closest('[role="tab"]');
 		if (btn) { btn.setAttribute('aria-label', (btn.querySelector('.nm').textContent || '') + ', ' + n + ' ' + (BADGE_LABELS[id] || '')); }
 	}
+	function locationName(id) { var location = window.DBDemo.getLocation(id); return location ? location.name : 'all locations'; }
+	function boardLanes() {
+		var methods = {};
+		LOCATIONS.forEach(function (location) {
+			if (store !== 'all' && location.id !== store) { return; }
+			window.DBDemo.enabledFulfilments(location.id).forEach(function (key) { methods[key] = true; });
+		});
+		var lanes = {};
+		Object.keys(methods).forEach(function (key) {
+			(window.DBDemo.workflow(key).lanes || []).forEach(function (lane) {
+				if (!lanes[lane.id]) { lanes[lane.id] = { id: lane.id, className: lane.className, label: window.DBDemo.t(lane.labelKey), statuses: [] }; }
+				lane.statuses.forEach(function (status) { if (lanes[lane.id].statuses.indexOf(status) === -1) { lanes[lane.id].statuses.push(status); } });
+			});
+		});
+		return Object.keys(lanes).map(function (id) { return lanes[id]; });
+	}
 
 	function render() {
-		// live board — 3 columns, each grouping one or more real statuses
-		var lanes = [['New orders', 'c-new', ['new']], ['In the kitchen', 'c-prep', ['confirmed', 'preparing', 'baking']], ['Ready to go', 'c-ready', ['ready', 'out_for_delivery']]];
+		var lanes = boardLanes();
 		var live = liveOrders();
 		document.getElementById('board').innerHTML = lanes.map(function (l) {
-			var list = live.filter(function (o) { return l[2].indexOf(o.status) !== -1; });
-			var body = list.map(liveCard).join('') || '<p style="color:#9a9081;font-size:14px;margin:6px;">Nothing here yet' + (store !== 'all' ? ' for ' + esc(store) : '') + '</p>';
-			return '<div class="col ' + l[1] + '"><div class="col-h"><span class="c-dot" aria-hidden="true"></span>' + l[0] + '<span class="n" aria-hidden="true">' + list.length + '</span></div>' + body + '</div>';
+			var list = live.filter(function (o) { return l.statuses.indexOf(o.status) !== -1; });
+			var body = list.map(liveCard).join('') || '<p style="color:#9a9081;font-size:14px;margin:6px;">Nothing here yet' + (store !== 'all' ? ' for ' + esc(locationName(store)) : '') + '</p>';
+			return '<div class="col ' + l.className + '"><div class="col-h"><span class="c-dot" aria-hidden="true"></span>' + esc(l.label) + '<span class="n" aria-hidden="true">' + list.length + '</span></div>' + body + '</div>';
 		}).join('');
 
 		// today
@@ -438,7 +444,7 @@ a{color:inherit;}
 		b.setAttribute('aria-pressed', 'true');
 		store = b.getAttribute('data-store');
 		render();
-		document.getElementById('announce').textContent = 'Showing ' + (store === 'all' ? 'all stores' : store);
+		document.getElementById('announce').textContent = 'Showing ' + locationName(store) + ' orders';
 	});
 
 	/* advance an order through the real status machine */
@@ -448,31 +454,29 @@ a{color:inherit;}
 		var o = null;
 		for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].ref === r) { o = ORDERS[i]; break; } }
 		if (!o) { return; }
-		if (o.status === 'new') {
+		var transition = liveNext(o);
+		if (transition.requiresEta) {
 			// accept step records a staff-entered ETA before confirming (mirrors app/app.js)
 			var eta = window.prompt('ETA in minutes?', '20');
 			if (eta === null) { return; }
 			var mins = parseInt(eta, 10);
 			o.eta = (mins > 0) ? mins : 0;
-			o.status = 'confirmed';
-		} else {
-			o.status = liveNext(o).to;
 		}
-		var lbl = {confirmed: 'accepted', preparing: 'now prepping', baking: 'in the oven', ready: 'ready for collection', out_for_delivery: 'out for delivery', completed: 'completed'}[o.status] || o.status;
+		o.status = transition.to;
+		var lbl = statusLabel(o);
 		document.getElementById('announce').textContent = 'Order #' + r + ' — ' + lbl;
 		render();
 	});
 
 	/* simulate */
-	var simSet = [
-		{ store: 'Bankstown', who: 'Walk-in tablet', type: 'Pickup', items: ['1× Zaatar', '1× Cheese'], total: 13.00 },
-		{ store: 'Revesby', who: 'Hadi N.', type: 'Delivery', items: ['1× All Meat', '1× Ayran'], total: 22.50 },
-		{ store: 'Roselands', who: 'Tina V.', type: 'Pickup', items: ['2× Zaatar & Cheese', '1× Juice'], total: 24.00 }
-	];
+	var simNames = ['Walk-in tablet', 'Hadi N.', 'Tina V.'];
 	var simN = 0;
 	document.getElementById('sim').addEventListener('click', function () {
-		var s = simSet[simN % simSet.length]; simN += 1;
-		ORDERS.unshift({ ref: ref(), channel: 'online', store: s.store, who: s.who, type: s.type, items: s.items, total: s.total, status: 'new', placed: new Date() });
+		var location = store === 'all' ? LOCATIONS[simN % LOCATIONS.length] : window.DBDemo.getLocation(store);
+		var methods = window.DBDemo.enabledFulfilments(location.id);
+		var fulfilment = methods[simN % methods.length];
+		ORDERS.unshift({ ref: ref(), channel: 'online', locationId: location.id, store: location.name, fulfilment: fulfilment, who: simNames[simN % simNames.length], type: window.DBDemo.t('fulfilment.' + fulfilment), items: ['1× Zaatar', '1× Cheese'], total: 13.00, status: 'new', placed: new Date() });
+		simN += 1;
 		render();
 		var first = document.querySelector('#board .card.new');
 		if (first) {
