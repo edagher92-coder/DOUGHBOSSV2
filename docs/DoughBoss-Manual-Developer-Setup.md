@@ -174,7 +174,7 @@ functionality and are easy to overlook:
   (`class-doughboss-settings.php:137`). If you stand up your own Staff Console
   origin, update this or cross-origin REST calls will be blocked.
 - `orders_email` — where order/catering notification emails go; defaults to
-  `orders@doughboss.com.au` (`class-doughboss-settings.php:83`). Change this
+  `hello@doughboss.com.au` (`class-doughboss-settings.php:83`). Change this
   on any install that isn't the real Dough Boss business, or notification
   emails will go to someone else's inbox.
 

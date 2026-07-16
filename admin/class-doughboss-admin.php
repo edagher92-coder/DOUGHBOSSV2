@@ -288,7 +288,7 @@ class DoughBoss_Admin {
 		if ( isset( $input['orders_email'] ) ) {
 			$clean['orders_email'] = is_email( $input['orders_email'] ) ? sanitize_email( $input['orders_email'] ) : '';
 		} else {
-			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
+			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'hello@doughboss.com.au';
 		}
 		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? max( 0, absint( $input['staff_session_days'] ) ) : 0;
 
