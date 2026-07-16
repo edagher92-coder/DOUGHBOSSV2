@@ -397,6 +397,16 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/pay/tyro-test',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'tyro_test' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/pospal/products',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1479,6 +1489,45 @@ class DoughBoss_REST_Controller {
 				'ok'      => true,
 				'message' => __( 'POSPal reachable and the signature was accepted.', 'doughboss' ),
 				'rules'   => $result,
+			)
+		);
+	}
+
+	/**
+	 * GET /pay/tyro-test — owner action: read-only Tyro handshake, mirroring
+	 * /pospal/test above. The one pre-production safety valve for confirming
+	 * the merchant id/password authenticate before going live — see
+	 * DoughBoss_Tyro::test_connection(). No money moves and no order is created.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function tyro_test( WP_REST_Request $request ) {
+		unset( $request );
+		if ( ! class_exists( 'DoughBoss_Tyro' ) || '' === DoughBoss_Settings::tyro_merchant_id() || '' === DoughBoss_Settings::tyro_password() ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => false,
+					'ok'      => false,
+					'message' => __( 'Tyro is not fully configured — set the merchant ID and password for the active mode.', 'doughboss' ),
+				)
+			);
+		}
+		$result = DoughBoss_Tyro::test_connection();
+		if ( is_wp_error( $result ) ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => true,
+					'ok'      => false,
+					'message' => $result->get_error_message(),
+				)
+			);
+		}
+		return rest_ensure_response(
+			array(
+				'ready'   => true,
+				'ok'      => true,
+				'message' => __( 'Tyro reachable and the credentials were accepted.', 'doughboss' ),
 			)
 		);
 	}
@@ -3120,7 +3169,13 @@ class DoughBoss_REST_Controller {
 			return $intent;
 		}
 
-		DoughBoss_Catering::set_intent( (int) $enquiry['id'], $leg, $intent['id'] );
+		// Store the CANONICAL reference, not the raw id: for Tyro, $intent['id']
+		// is a composite ("{order_id}.{session_id}") and a webhook can only ever
+		// carry the bare order id, so storing the composite here would make
+		// reconcile_catering_intent()'s webhook-based lookup permanently unable
+		// to match this leg once the short-lived metadata transient expires. See
+		// DoughBoss_Tyro::canonical_id() and the same fix in verify_payment().
+		DoughBoss_Catering::set_intent( (int) $enquiry['id'], $leg, DoughBoss_Payment::canonical_id( $intent['id'] ) );
 
 		return rest_ensure_response(
 			array(
@@ -3168,13 +3223,16 @@ class DoughBoss_REST_Controller {
 			);
 		}
 
-		$pi_id  = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
+		// $raw_id is what the client actually round-tripped (carries the Tyro
+		// session id needed below); $stored is the canonical reference recorded
+		// at intent-creation time, so the match must compare canonical-to-canonical.
+		$raw_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
 		$stored = DoughBoss_Catering::LEG_BALANCE === $leg ? $enquiry['balance_intent_id'] : $enquiry['deposit_intent_id'];
-		if ( '' === $pi_id || $pi_id !== $stored ) {
+		if ( '' === $raw_id || DoughBoss_Payment::canonical_id( $raw_id ) !== $stored ) {
 			return new WP_Error( 'doughboss_pay_mismatch', __( 'We could not match that payment.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$intent = DoughBoss_Payment::retrieve_payment_intent( $pi_id );
+		$intent = DoughBoss_Payment::retrieve_payment_intent( $raw_id );
 		if ( is_wp_error( $intent ) ) {
 			return $intent;
 		}

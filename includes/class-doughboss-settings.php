@@ -528,8 +528,17 @@ class DoughBoss_Settings {
 	 * @return string
 	 */
 	public static function tyro_host() {
-		$host = trim( (string) self::get( 'tyro_host', '' ) );
-		return '' !== $host ? untrailingslashit( $host ) : 'https://tyro.gateway.mastercard.com';
+		$default = 'https://tyro.gateway.mastercard.com';
+		$host    = trim( (string) self::get( 'tyro_host', '' ) );
+		if ( '' === $host ) {
+			return $default;
+		}
+		// The merchant password goes out as HTTP Basic auth on every request to
+		// this host — never allow a plain-http override to send it in cleartext.
+		if ( 0 !== stripos( $host, 'https://' ) ) {
+			return $default;
+		}
+		return untrailingslashit( $host );
 	}
 
 	/**

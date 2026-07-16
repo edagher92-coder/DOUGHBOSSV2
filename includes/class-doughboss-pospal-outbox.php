@@ -679,17 +679,21 @@ class DoughBoss_POSPal_Outbox {
 	public static function reconcile_recent() {
 		global $wpdb;
 
-		if ( ! DoughBoss_Settings::pospal_push_enabled() ) {
-			return;
-		}
-
-		$table  = self::table();
-		$since  = gmdate( 'Y-m-d H:i:s', time() - 2 * HOUR_IN_SECONDS );
-		// Housekeeping must run even when there are no recent rows to reconcile.
+		// Housekeeping runs even when push is currently disabled: rows created
+		// while push WAS enabled must still age out. (The hook itself is only
+		// scheduled while push is on — see ensure_reconcile_scheduled() — but a
+		// final sweep before unscheduling, or a WP-CLI invocation, still prunes.)
 		$pruned = self::prune_succeeded( 30 );
 		if ( $pruned > 0 ) {
 			self::log( 'reconcile pruned ' . $pruned . ' succeeded row(s) older than 30 days' );
 		}
+
+		if ( ! DoughBoss_Settings::pospal_push_enabled() ) {
+			return;
+		}
+
+		$table = self::table();
+		$since = gmdate( 'Y-m-d H:i:s', time() - 2 * HOUR_IN_SECONDS );
 		// Only reconcile a small window: this call talks to POSPal once per row, so
 		// keep the batch small. The hourly cadence with a 2-hour lookback still
 		// double-checks every recent order at least once before it ages out.

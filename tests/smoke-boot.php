@@ -134,9 +134,9 @@ foreach ( $board_routes as $board_route ) {
 	ok( is_array( $permission ) && isset( $permission[1] ) && 'verify_board_access' === $permission[1], $board_route . ' requires the board key verifier' );
 }
 // A real count check, not just ">0", so a route silently failing to register
-// would fail this. Bumped to 46 with the /tyro-webhook and
-// /catering/tyro-webhook routes added for the Tyro payment gateway backend.
-ok( 46 === count( $routes ), 'REST route count reflects Tyro webhook route addition (' . count( $routes ) . ' routes, expected 46)' );
+// would fail this. Bumped to 47 with the /tyro-webhook, /catering/tyro-webhook
+// and /pay/tyro-test routes added for the Tyro payment gateway backend.
+ok( 47 === count( $routes ), 'REST route count reflects Tyro route additions (' . count( $routes ) . ' routes, expected 47)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );

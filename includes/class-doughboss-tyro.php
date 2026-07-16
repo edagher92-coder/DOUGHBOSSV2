@@ -157,7 +157,10 @@ class DoughBoss_Tyro {
 			'id'            => $order_id . self::ID_DELIM . $session_id,
 			'client_secret' => $session_id,
 			'amount'        => $amount_minor,
-			'currency'      => strtoupper( (string) $currency ),
+			// Lowercase for consistency with DoughBoss_Stripe::create_payment_intent()'s
+			// return shape (callers/JS treat this as a display value); Tyro's own
+			// wire format always uses strtoupper() at the actual API call sites.
+			'currency'      => strtolower( (string) $currency ),
 		);
 	}
 
@@ -311,13 +314,22 @@ class DoughBoss_Tyro {
 		// non-existent order id authenticates (401 on bad credentials vs 404 on
 		// good credentials + unknown order) without any side effect.
 		$probe = self::request( 'GET', '/order/doughboss-connection-test' );
-		if ( is_wp_error( $probe ) && 'doughboss_pay_auth' === $probe->get_error_code() ) {
-			return $probe;
+		if ( ! is_wp_error( $probe ) ) {
+			// The probe order id should never actually exist; an unexpected 2xx
+			// here means either a stale test fixture or an unverified API shape
+			// mismatch — report it rather than silently declaring success.
+			return array( 'connected' => true );
 		}
-		// A 404-shaped "not found" (i.e. anything that isn't an auth failure) is
-		// exactly what authenticating successfully against an unknown order id
-		// looks like — treat that as a successful connection check.
-		return array( 'connected' => true );
+		// Only a genuine HTTP 404 (order authenticated against, but not found) —
+		// exactly what a successful auth against an unknown order id looks like —
+		// counts as a successful connection check. Any other outcome (auth
+		// failure, network error, missing config, or an API error whose HTTP
+		// status isn't 404) is reported as a failure rather than assumed benign.
+		$data = $probe->get_error_data();
+		if ( 'doughboss_pay_api' === $probe->get_error_code() && is_array( $data ) && 404 === (int) ( $data['http_status'] ?? 0 ) ) {
+			return array( 'connected' => true );
+		}
+		return $probe;
 	}
 
 	/**
@@ -547,6 +559,9 @@ class DoughBoss_Tyro {
 			error_log( 'DoughBoss Tyro error: HTTP ' . $code . ( '' !== $cause ? ' cause=' . $cause : '' ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
-		return new WP_Error( 'doughboss_pay_api', $message, array( 'status' => 502 ) );
+		// http_status is the raw upstream code (distinct from the synthetic REST
+		// 'status' above) so callers like test_connection() can distinguish a
+		// genuine "not found" from a real API failure without guessing.
+		return new WP_Error( 'doughboss_pay_api', $message, array( 'status' => 502, 'http_status' => $code ) );
 	}
 }
