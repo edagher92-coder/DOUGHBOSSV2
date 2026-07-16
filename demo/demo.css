@@ -531,3 +531,38 @@ body.cart-on{padding-bottom:114px;}
 .kl-lead{font-size:16px;line-height:1.5;color:#3a312a;margin:0 0 20px;}
 .kitchen-lock .btn{display:inline-flex;}
 .kitchen-lock .app-note-dark{margin:16px 0 0;}
+
+/* ===== Item options sheet + pre-checkout confirm (menu-order.js) ===== */
+.opt-overlay{display:none;position:fixed;inset:0;background:rgba(10,8,7,.52);z-index:97;}
+.opt-overlay.is-open{display:block;animation:fade .2s ease;}
+.opt-sheet{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(400px,94vw);max-height:min(600px,92vh);background:var(--paper);z-index:98;flex-direction:column;border-radius:var(--r-lg);box-shadow:var(--sh-2);overflow:hidden;}
+@supports (backdrop-filter:blur(14px)){.opt-sheet{background:rgba(247,245,240,.92);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);}}
+.opt-sheet.is-open{display:flex;animation:optpop var(--t-med) var(--ease);}
+@keyframes optpop{from{opacity:0;transform:translate(-50%,-47%);}to{opacity:1;transform:translate(-50%,-50%);}}
+.opt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 20px;border-bottom:1px solid var(--linel);}
+.opt-head h3{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:26px;}
+.opt-close{background:none;border:0;font-size:28px;line-height:1;cursor:pointer;color:#6b645a;padding:0 4px;}
+.opt-close:hover{color:var(--ember);}
+.opt-form{display:flex;flex-direction:column;gap:14px;padding:16px 20px 18px;overflow-y:auto;}
+.opt-g{border:0;margin:0;padding:0;}
+.opt-g legend{font-size:13px;font-weight:700;padding:0;margin-bottom:7px;}
+.opt-optional{font-weight:500;color:#6f6a60;}
+.opt-c{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border:1px solid var(--linel);border-radius:var(--r-sm);background:#fff;box-shadow:var(--sh-1);cursor:pointer;transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease);}
+.opt-c:hover{border-color:var(--ember);}
+.opt-c:has(input:checked){border-color:var(--ink);box-shadow:0 0 0 1px var(--ink);}
+.opt-c input{flex:0 0 auto;width:16px;height:16px;margin:0;accent-color:var(--ink);}
+.opt-c-l{flex:1;font-size:14.5px;font-weight:500;}
+.opt-c-p{font-family:'Bebas Neue',sans-serif;font-size:17px;color:var(--ember);font-variant-numeric:tabular-nums;}
+.opt-add{width:100%;justify-content:center;height:50px;margin-top:2px;}
+@media(max-width:560px){.opt-sheet{left:0;right:0;top:auto;bottom:0;transform:none;width:100%;max-height:82vh;border-radius:var(--r-lg) var(--r-lg) 0 0;}.opt-sheet.is-open{animation:barpop .26s ease;}}
+@media(pointer:coarse){.opt-c{padding:13px 12px;}}
+/* option summary under a cart-drawer line name */
+.cd-opts{display:block;font-size:12px;font-weight:500;color:#6f6a60;margin-top:2px;}
+/* lemon & chilli pre-checkout confirm step (inside the cart drawer) */
+.opt-lc{display:flex;flex-direction:column;gap:18px;padding:30px 20px;}
+.opt-lc-q{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;font-size:26px;line-height:1.15;text-align:center;}
+.opt-lc-btns{display:flex;flex-direction:column;gap:10px;}
+.opt-lc-btns .vb-btn{width:100%;justify-content:center;}
+.opt-lc-back{background:none;border:0;align-self:center;color:#6f6a60;font-size:13px;text-decoration:underline;cursor:pointer;}
+.opt-lc-back:hover{color:var(--ember);}
+@media(prefers-reduced-motion:reduce){.opt-overlay.is-open,.opt-sheet.is-open{animation:none;}}
