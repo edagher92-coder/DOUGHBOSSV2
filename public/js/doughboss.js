@@ -976,31 +976,181 @@
 	/* Order tracking                                                     */
 	/* ------------------------------------------------------------------ */
 
+	// Coarse progress stages for the customer tracker. Index = stage (0-3);
+	// unknown statuses fall back to stage 0 so the tracker never disappears.
+	var TRACK_STAGE_MAP = {
+		pending: 0,
+		confirmed: 1,
+		preparing: 1,
+		baking: 1,
+		ready: 2,
+		out_for_delivery: 2,
+		completed: 3
+	};
+
+	// Parse the API's UTC 'YYYY-MM-DD HH:MM:SS' timestamps to epoch ms.
+	// Returns null for anything malformed/absent so callers can bail out.
+	function parseUtcTimestamp(value) {
+		if (!value || typeof value !== 'string') { return null; }
+		var m = value.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+		if (!m) { return null; }
+		return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+	}
+
 	function renderTracking(root) {
 		var form = root.querySelector('.db-track-form');
 		var result = root.querySelector('.db-track-result');
 		if (!form) { return; }
 
+		var POLL_MS = 15000;
+		var POLL_MAX_MS = 2 * 60 * 60 * 1000; // give up after 2 hours
+		var pollTimer = null;
+		var pollPath = null;   // current lookup; also stale-response guard
+		var pollStarted = 0;
+		var pollDone = false;  // permanent stop (completed/cancelled/expired)
+
+		function stopPolling() {
+			if (pollTimer) {
+				clearTimeout(pollTimer);
+				pollTimer = null;
+			}
+		}
+
+		function scheduleTick() {
+			stopPolling();
+			if (pollDone || !pollPath || document.hidden) { return; }
+			if (Date.now() - pollStarted >= POLL_MAX_MS) {
+				pollDone = true;
+				return;
+			}
+			pollTimer = setTimeout(pollTick, POLL_MS);
+		}
+
+		function pollTick() {
+			pollTimer = null;
+			if (pollDone || !pollPath) { return; }
+			var path = pollPath;
+			request(path)
+				.then(function (order) {
+					if (path !== pollPath) { return; } // a newer lookup took over
+					renderOrder(order);
+					scheduleTick();
+				})
+				.catch(function () {
+					// Silent: keep the last good render, retry on the next tick.
+					if (path !== pollPath) { return; }
+					scheduleTick();
+				});
+		}
+
+		// Pause polling while the tab is hidden, resume when visible again.
+		document.addEventListener('visibilitychange', function () {
+			if (document.hidden) {
+				stopPolling();
+			} else {
+				scheduleTick();
+			}
+		});
+
+		// 4-stage horizontal progress tracker (pickup vs delivery wording).
+		function buildTracker(order) {
+			var isDelivery = order.order_type === 'delivery';
+			var labels = [
+				'Order placed',
+				'Being prepared',
+				isDelivery ? 'On its way' : 'Ready for pickup',
+				isDelivery ? 'Delivered' : 'Picked up'
+			];
+			var current = TRACK_STAGE_MAP.hasOwnProperty(order.status) ? TRACK_STAGE_MAP[order.status] : 0;
+			var list = el('ol', { class: 'db-stage-tracker', 'aria-label': 'Order progress' });
+			labels.forEach(function (label, i) {
+				// A completed order is fully done, check on every stage.
+				var done = i < current || order.status === 'completed';
+				var cls = 'db-stage' + (done ? ' db-stage--done' : '') + (i === current ? ' db-stage--current' : '');
+				var item = el('li', { class: cls }, [
+					el('span', { class: 'db-stage-dot', 'aria-hidden': 'true', text: done ? '✓' : '' }),
+					el('span', { class: 'db-stage-label', text: label })
+				]);
+				if (i === current) { item.setAttribute('aria-current', 'step'); }
+				list.appendChild(item);
+			});
+			return list;
+		}
+
+		// Honest ETA line. accepted_at is a new server field that may not be
+		// deployed yet — when it's missing the countdown is simply omitted.
+		function buildEta(order) {
+			if (order.status === 'ready') {
+				return el('p', { class: 'db-track-eta db-track-eta--ready', text: 'Your order is ready!' });
+			}
+			if (order.status === 'completed' || order.status === 'cancelled') { return null; }
+			var accepted = parseUtcTimestamp(order.accepted_at);
+			var etaMinutes = Number(order.eta_minutes || 0);
+			if (accepted === null || !(etaMinutes > 0)) { return null; }
+			var remaining = Math.ceil((accepted + etaMinutes * 60000 - Date.now()) / 60000);
+			return el('p', {
+				class: 'db-track-eta',
+				text: remaining > 0 ? 'Ready in about ' + remaining + 'm' : 'Any minute now…'
+			});
+		}
+
+		function buildPaymentHint(order) {
+			if (order.payment_status === 'paid') {
+				return el('p', { class: 'db-track-paid', text: '✓ Paid' });
+			}
+			return el('p', { class: 'db-track-pay-hint', text: 'Please pay at the counter — ' + money(order.total) });
+		}
+
+		function renderOrder(order) {
+			result.innerHTML = '';
+			var card = el('div', { class: 'db-track-card' }, [
+				el('h4', { text: 'Order ' + order.order_number })
+			]);
+			if (order.status === 'cancelled') {
+				var cancelled = el('p', { class: 'db-track-cancelled', text: 'This order was cancelled' });
+				cancelled.setAttribute('role', 'status');
+				card.appendChild(cancelled);
+			} else {
+				card.appendChild(buildTracker(order));
+				var eta = buildEta(order);
+				if (eta) { card.appendChild(eta); }
+			}
+			var items = el('ul', { class: 'db-item-list' });
+			(order.items || []).forEach(function (it) {
+				items.appendChild(el('li', { text: it.quantity + '× ' + it.name }));
+			});
+			card.appendChild(items);
+			card.appendChild(el('p', { text: 'Total: ' + money(order.total) }));
+			card.appendChild(buildPaymentHint(order));
+			result.appendChild(card);
+
+			// Terminal states: stop polling for good.
+			if (order.status === 'completed' || order.status === 'cancelled') {
+				pollDone = true;
+				stopPolling();
+			}
+		}
+
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
+			// A new lookup invalidates any in-flight poll cycle.
+			stopPolling();
+			pollPath = null;
+			pollDone = false;
 			result.innerHTML = '';
 			var number = form.number.value.trim();
 			var email = form.email.value.trim();
+			var path = '/order/' + encodeURIComponent(number) + '?email=' + encodeURIComponent(email);
 
-			request('/order/' + encodeURIComponent(number) + '?email=' + encodeURIComponent(email))
+			request(path)
 				.then(function (order) {
-					var items = el('ul', { class: 'db-item-list' });
-					(order.items || []).forEach(function (it) {
-						items.appendChild(el('li', { text: it.quantity + '× ' + it.name }));
-					});
-					result.appendChild(el('div', { class: 'db-track-card' }, [
-						el('h4', { text: 'Order ' + order.order_number }),
-						el('p', { class: 'db-status-badge', text: order.status_label }),
-						items,
-						el('p', { text: 'Total: ' + money(order.total) })
-					]));
+					pollPath = path;
+					pollStarted = Date.now();
+					renderOrder(order);
+					scheduleTick();
 				})
 				.catch(function (err) {
+					result.innerHTML = '';
 					result.appendChild(el('p', { class: 'db-error', text: err.message }));
 				});
 		});

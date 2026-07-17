@@ -251,6 +251,7 @@ class DoughBoss_Order {
 			'eta_minutes'    => (int) $order->eta_minutes,
 			'acknowledged'   => ! empty( $order->acknowledged_at ),
 			'accepted'       => ! empty( $order->accepted_at ),
+			'accepted_at'    => isset( $order->accepted_at ) ? $order->accepted_at : null,
 			'created_at'     => $order->created_at,
 			'items'          => isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(),
 		);
@@ -606,6 +607,7 @@ class DoughBoss_Order {
 			'currency'     => $order->currency,
 			'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
 			'eta_minutes'  => isset( $order->eta_minutes ) ? (int) $order->eta_minutes : 0,
+			'accepted_at'  => isset( $order->accepted_at ) ? $order->accepted_at : null,
 			'created_at'   => $order->created_at,
 			'items'        => self::get_items( $order->id ),
 		);

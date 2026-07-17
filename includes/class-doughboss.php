@@ -89,6 +89,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-mercure.php';
 		require_once $dir . 'class-doughboss-ntfy.php';
 		require_once $dir . 'class-doughboss-sms.php';
+		require_once $dir . 'class-doughboss-emails.php';
 		require_once $dir . 'class-doughboss-printer.php';
 		require_once $dir . 'class-doughboss-privacy.php';
 		require_once $dir . 'class-doughboss-cli.php';
@@ -160,6 +161,7 @@ final class DoughBoss {
 		DoughBoss_Mercure::init();
 		DoughBoss_Ntfy::init();
 		DoughBoss_SMS::init();
+		DoughBoss_Emails::init();
 		DoughBoss_Printer::init();
 
 		if ( is_admin() ) {

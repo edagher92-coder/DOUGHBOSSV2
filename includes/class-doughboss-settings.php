@@ -208,6 +208,11 @@ class DoughBoss_Settings {
 			'sms_from'              => '',
 			'sms_on_ready'          => 1,
 			'sms_on_voucher_claim'  => 0,
+			// Customer stage-transition emails — sent via native wp_mail, so no
+			// external configuration is needed; the toggles are the whole gate.
+			'email_on_accepted' => 1,
+			'email_on_ready'    => 1,
+			'email_staff_copy'  => 0,
 			// Receipt printer (CloudPRNT / ePOS) — off by default. The shared token
 			// is a secret, read env-first (DOUGHBOSS_PRINTER_TOKEN); this option is
 			// only a fallback.
@@ -224,6 +229,10 @@ class DoughBoss_Settings {
 			'tpl_order_email_body'    => '',
 			'tpl_sms_ready'           => '',
 			'tpl_sms_voucher'         => '',
+			'tpl_accepted_email_subject' => '',
+			'tpl_accepted_email_body'    => '',
+			'tpl_ready_email_subject'    => '',
+			'tpl_ready_email_body'       => '',
 		);
 	}
 
@@ -1065,6 +1074,35 @@ class DoughBoss_Settings {
 	}
 
 	/**
+	 * Whether to email the customer when their order is accepted (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_accepted() {
+		return (bool) self::get( 'email_on_accepted', 1 );
+	}
+
+	/**
+	 * Whether to email the customer when their order is marked ready for
+	 * pickup (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_ready() {
+		return (bool) self::get( 'email_on_ready', 1 );
+	}
+
+	/**
+	 * Whether to send the shop inbox (orders_email()) a copy of each stage
+	 * email (default off).
+	 *
+	 * @return bool
+	 */
+	public static function email_staff_copy() {
+		return (bool) self::get( 'email_staff_copy', 0 );
+	}
+
+	/**
 	 * Whether SMS is both enabled and fully configured (username + API key), so
 	 * the server should actually send messages.
 	 *
@@ -1176,6 +1214,63 @@ class DoughBoss_Settings {
 	public static function tpl_sms_voucher() {
 		$v = trim( (string) self::get( 'tpl_sms_voucher', '' ) );
 		return '' !== $v ? $v : 'Your DoughBoss voucher is ready: {code}. Show this code to redeem.';
+	}
+
+	/**
+	 * "Order accepted" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports {customer_name}/{order_number}/{eta_minutes}/
+	 * {total}/{status_label}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_accepted_email_subject() {
+		$v = trim( (string) self::get( 'tpl_accepted_email_subject', '' ) );
+		return '' !== $v ? $v : "We're on it! Order {order_number} is being prepared";
+	}
+
+	/**
+	 * "Order accepted" stage email body. Owner-editable; blank restores the
+	 * built-in default. The built-in default has two variants: one with the
+	 * "ready in about {eta_minutes} minutes" line and a neutral one used when
+	 * no ETA was given (eta 0), so the customer never reads "in about 0
+	 * minutes". A custom template is returned as-is either way.
+	 *
+	 * @param bool $with_eta Whether an ETA was given (selects the default variant).
+	 * @return string
+	 */
+	public static function tpl_accepted_email_body( $with_eta = true ) {
+		$v = (string) self::get( 'tpl_accepted_email_body', '' );
+		if ( '' !== trim( $v ) ) {
+			return $v;
+		}
+		if ( $with_eta ) {
+			return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. It should be ready in about {eta_minutes} minutes.\n\nOrder total: {total}\n\nThanks for choosing us — see you soon!\n";
+		}
+		return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. We'll let you know the moment it's ready.\n\nOrder total: {total}\n\nThanks for choosing us — see you soon!\n";
+	}
+
+	/**
+	 * "Order ready" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports the same placeholders as the accepted email.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_subject() {
+		$v = trim( (string) self::get( 'tpl_ready_email_subject', '' ) );
+		return '' !== $v ? $v : 'Order {order_number} is ready for pickup!';
+	}
+
+	/**
+	 * "Order ready" stage email body. Owner-editable; blank restores the
+	 * built-in default.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_body() {
+		$v = (string) self::get( 'tpl_ready_email_body', '' );
+		return '' !== trim( $v )
+			? $v
+			: "Hi {customer_name},\n\nYour order {order_number} is fresh out of the oven and ready for pickup. Come grab it while it's warm!\n\nOrder total: {total}\n\nSee you soon!\n";
 	}
 
 	/**

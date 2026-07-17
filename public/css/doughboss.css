@@ -505,6 +505,123 @@
 	padding-left: 1.1rem;
 }
 
+/* Order progress tracker -------------------------------------------- */
+.db-stage-tracker {
+	list-style: none;
+	display: flex;
+	margin: 1rem 0 0.75rem;
+	padding: 0;
+}
+
+.db-stage {
+	flex: 1;
+	position: relative;
+	padding-top: 1.7rem;
+	text-align: center;
+	font-size: 0.72rem;
+	line-height: 1.25;
+	color: var(--db-muted);
+}
+
+/* Connector line between dots (none before the first stage). */
+.db-stage::before {
+	content: '';
+	position: absolute;
+	top: 0.65rem;
+	left: -50%;
+	width: 100%;
+	height: 2px;
+	background: var(--db-border);
+}
+
+.db-stage:first-child::before {
+	display: none;
+}
+
+.db-stage--done::before,
+.db-stage--current::before {
+	background: var(--db-accent);
+}
+
+.db-stage-dot {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	box-sizing: border-box;
+	width: 1.35rem;
+	height: 1.35rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 2px solid var(--db-border);
+	border-radius: var(--db-r-pill);
+	background: #fff;
+	color: #fff;
+	font-size: 0.7rem;
+	font-weight: 700;
+	z-index: 1;
+}
+
+.db-stage--done .db-stage-dot {
+	background: var(--db-accent);
+	border-color: var(--db-accent);
+}
+
+.db-stage--current .db-stage-dot {
+	border-color: var(--db-accent);
+	box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 8px var(--db-accent);
+}
+
+.db-stage--current {
+	color: var(--db-accent-dark);
+	font-weight: 700;
+}
+
+/* Animated only when the visitor hasn't asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+	.db-stage-dot {
+		transition: background var(--db-t-med) var(--db-ease), border-color var(--db-t-med) var(--db-ease);
+	}
+
+	.db-stage::before {
+		transition: background var(--db-t-med) var(--db-ease);
+	}
+}
+
+.db-track-eta {
+	margin: 0.25rem 0 0.75rem;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+.db-track-eta--ready {
+	color: var(--db-accent-dark);
+}
+
+.db-track-cancelled {
+	margin: 0.75rem 0;
+	padding: 0.6rem 0.9rem;
+	border: 1px solid #c41c14; /* stays red — must not blend into the mono accent */
+	border-radius: var(--db-r-sm);
+	color: #c41c14;
+	font-weight: 700;
+	font-size: 0.9rem;
+}
+
+.db-track-pay-hint {
+	margin: 0.5rem 0 0;
+	font-size: 0.85rem;
+	color: var(--db-muted);
+}
+
+.db-track-paid {
+	margin: 0.5rem 0 0;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--db-muted);
+}
+
 /* Sold out --------------------------------------------------------- */
 .db-card--soldout {
 	opacity: 0.72;

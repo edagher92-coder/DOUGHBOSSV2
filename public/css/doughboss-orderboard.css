@@ -259,6 +259,148 @@ body.db-alerting .db-board-bar h1::after {
 .db-card-eta { color: var(--dbb-green); font-weight: 600; }
 .db-card-addr { color: var(--dbb-chip-delivery-ink); }
 
+/* --- SLA aging --------------------------------------------------------- */
+
+/* Accepted orders still in progress: amber at 5 min, red at 10 min.
+   Colour-only cues — no animation — so they hold under reduced motion. */
+.db-card.db-age-warn {
+	border-left-color: var(--dbb-amber);
+}
+
+.db-card.db-age-warn .db-card-head {
+	background: rgba(180, 83, 9, 0.12);
+	border-radius: 6px;
+	padding: 0.15rem 0.35rem;
+}
+
+.db-card.db-age-late {
+	border-left-color: var(--dbb-danger);
+	border-left-width: 8px;
+}
+
+.db-card.db-age-late .db-card-head {
+	background: rgba(179, 45, 46, 0.16);
+	border-radius: 6px;
+	padding: 0.15rem 0.35rem;
+}
+
+.db-card-due { color: var(--dbb-green); font-weight: 600; }
+.db-card-due-over { color: var(--dbb-danger); font-weight: 700; }
+
+/* --- Undo toast -------------------------------------------------------- */
+
+.db-toast {
+	position: fixed;
+	left: 50%;
+	bottom: 1.25rem;
+	transform: translateX(-50%);
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	background: var(--dbb-ink);
+	color: var(--dbb-paper);
+	font-size: 1rem;
+	font-weight: 600;
+	padding: 0.6rem 0.9rem;
+	border-radius: var(--r-md);
+	box-shadow: var(--sh-2);
+	max-width: calc(100vw - 2rem);
+}
+
+.db-toast .db-toast-undo {
+	min-height: 44px;
+	min-width: 44px;
+	font-weight: 700;
+	border-radius: var(--r-sm);
+}
+
+/* --- Recall ("Recent") panel ------------------------------------------- */
+
+.db-recall-toggle { min-height: 44px; }
+
+.db-recall-panel {
+	background: var(--dbb-paper);
+	border: 1px solid var(--dbb-line);
+	border-radius: var(--r-md);
+	box-shadow: var(--sh-1);
+	padding: 0.5rem 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.db-recall-empty {
+	margin: 0.25rem 0;
+	color: var(--dbb-muted-2);
+	font-style: italic;
+}
+
+.db-recall-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	padding: 0.35rem 0;
+	border-bottom: 1px solid var(--dbb-line);
+}
+
+.db-recall-row:last-child { border-bottom: 0; }
+
+.db-recall-info { font-size: 0.9rem; color: var(--dbb-ink-soft); }
+
+.db-recall-restore { min-height: 44px; }
+
+/* --- Heartbeat badge ---------------------------------------------------- */
+
+.db-heartbeat {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-left: 0.5rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.db-heartbeat-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.db-heartbeat-live { color: var(--dbb-green); }
+.db-heartbeat-polling { color: var(--dbb-amber); }
+.db-heartbeat-offline { color: var(--dbb-danger); }
+
+/* --- All-day strip ------------------------------------------------------ */
+
+.db-allday {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem 0.75rem;
+	background: var(--dbb-paper);
+	border: 1px solid var(--dbb-line);
+	border-radius: var(--r-md);
+	padding: 0.45rem 0.75rem;
+	margin-bottom: 0.75rem;
+	font-size: 0.95rem;
+}
+
+.db-allday-label {
+	color: var(--dbb-muted);
+	font-size: 0.8rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	font-weight: 700;
+}
+
+.db-allday-item { font-weight: 600; color: var(--dbb-ink); }
+.db-allday-item + .db-allday-item::before {
+	content: "· ";
+	color: var(--dbb-muted-2);
+	font-weight: 400;
+}
+
 /* --- Actions --------------------------------------------------------- */
 
 .db-card-actions { margin-top: 0.5rem; }

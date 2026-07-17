@@ -53,7 +53,7 @@ $slices = array(
 	'3 · vouchers'             => array( 'DoughBoss_Voucher', 'DoughBoss_Coupon_Code' ),
 	'4 · POSPal'               => array( 'DoughBoss_POSPal', 'DoughBoss_POSPal_Sync', 'DoughBoss_POSPal_Orders' ),
 	'5 · catering'             => array( 'DoughBoss_Catering', 'DoughBoss_Catering_Package' ),
-	'6 · notifications/RT'     => array( 'DoughBoss_Mercure', 'DoughBoss_Ntfy', 'DoughBoss_SMS', 'DoughBoss_Printer' ),
+	'6 · notifications/RT'     => array( 'DoughBoss_Mercure', 'DoughBoss_Ntfy', 'DoughBoss_SMS', 'DoughBoss_Emails', 'DoughBoss_Printer' ),
 	'7 · locations/reports/etc'=> array( 'DoughBoss_Locations', 'DoughBoss_Reports', 'DoughBoss_Privacy', 'DoughBoss_Menu_Seeder', 'DoughBoss_CLI' ),
 );
 foreach ( $slices as $name => $classes ) {
@@ -91,6 +91,17 @@ ok( array_key_exists( 'trusted_proxy_header', $defaults ), "defaults() has 'trus
 ok( isset( $defaults['trusted_proxy_header'] ) && 'X-Forwarded-For' === $defaults['trusted_proxy_header'], "'trusted_proxy_header' defaults to 'X-Forwarded-For'" );
 ok( method_exists( 'DoughBoss_Settings', 'behind_reverse_proxy' ) && false === DoughBoss_Settings::behind_reverse_proxy(), 'DoughBoss_Settings::behind_reverse_proxy() reads false with no option set' );
 ok( method_exists( 'DoughBoss_Settings', 'trusted_proxy_header' ) && 'X-Forwarded-For' === DoughBoss_Settings::trusted_proxy_header(), "DoughBoss_Settings::trusted_proxy_header() reads 'X-Forwarded-For' with no option set" );
+
+// 3b-ii. Customer stage-email defaults: both customer stages on by default
+// (native wp_mail needs no external config), staff copy off, and all four
+// template overrides blank (= built-in default copy).
+ok( array_key_exists( 'email_on_accepted', $defaults ) && 1 === $defaults['email_on_accepted'], "'email_on_accepted' defaults to 1 (on)" );
+ok( array_key_exists( 'email_on_ready', $defaults ) && 1 === $defaults['email_on_ready'], "'email_on_ready' defaults to 1 (on)" );
+ok( array_key_exists( 'email_staff_copy', $defaults ) && 0 === $defaults['email_staff_copy'], "'email_staff_copy' defaults to 0 (off)" );
+foreach ( array( 'tpl_accepted_email_subject', 'tpl_accepted_email_body', 'tpl_ready_email_subject', 'tpl_ready_email_body' ) as $tpl_key ) {
+	ok( array_key_exists( $tpl_key, $defaults ) && '' === $defaults[ $tpl_key ], "'$tpl_key' defaults to '' (built-in copy)" );
+}
+ok( method_exists( 'DoughBoss_Emails', 'emails_ready' ) && true === DoughBoss_Emails::emails_ready(), 'DoughBoss_Emails::emails_ready() true with default toggles (at least one stage on)' );
 
 // 3c. Order Board optional access key (kitchen access hardening). Defaults to
 // blank so a fresh install's board is gated by login + manage_doughboss_kds

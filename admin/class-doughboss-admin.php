@@ -332,6 +332,11 @@ class DoughBoss_Admin {
 		$clean['sms_on_ready']         = empty( $input['sms_on_ready'] ) ? 0 : 1;
 		$clean['sms_on_voucher_claim'] = empty( $input['sms_on_voucher_claim'] ) ? 0 : 1;
 
+		// Customer stage-transition emails (native wp_mail).
+		$clean['email_on_accepted'] = empty( $input['email_on_accepted'] ) ? 0 : 1;
+		$clean['email_on_ready']    = empty( $input['email_on_ready'] ) ? 0 : 1;
+		$clean['email_staff_copy']  = empty( $input['email_staff_copy'] ) ? 0 : 1;
+
 		// Receipt printer (CloudPRNT / ePOS).
 		$clean['printer_enabled']  = empty( $input['printer_enabled'] ) ? 0 : 1;
 		$clean['printer_protocol'] = ( isset( $input['printer_protocol'] ) && 'epos' === $input['printer_protocol'] ) ? 'epos' : 'cloudprnt';
@@ -2249,6 +2254,10 @@ JS;
 				'tpl_order_email_body'    => isset( $_POST['tpl_order_email_body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_order_email_body'] ) ) : '',
 				'tpl_sms_ready'           => isset( $_POST['tpl_sms_ready'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_sms_ready'] ) ) : '',
 				'tpl_sms_voucher'         => isset( $_POST['tpl_sms_voucher'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_sms_voucher'] ) ) : '',
+				'tpl_accepted_email_subject' => isset( $_POST['tpl_accepted_email_subject'] ) ? sanitize_text_field( wp_unslash( $_POST['tpl_accepted_email_subject'] ) ) : '',
+				'tpl_accepted_email_body'    => isset( $_POST['tpl_accepted_email_body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_accepted_email_body'] ) ) : '',
+				'tpl_ready_email_subject'    => isset( $_POST['tpl_ready_email_subject'] ) ? sanitize_text_field( wp_unslash( $_POST['tpl_ready_email_subject'] ) ) : '',
+				'tpl_ready_email_body'       => isset( $_POST['tpl_ready_email_body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_ready_email_body'] ) ) : '',
 			)
 		);
 
@@ -2271,6 +2280,10 @@ JS;
 			'tpl_order_email_body'    => DoughBoss_Settings::tpl_order_email_body(),
 			'tpl_sms_ready'           => DoughBoss_Settings::tpl_sms_ready(),
 			'tpl_sms_voucher'         => DoughBoss_Settings::tpl_sms_voucher(),
+			'tpl_accepted_email_subject' => DoughBoss_Settings::tpl_accepted_email_subject(),
+			'tpl_accepted_email_body'    => DoughBoss_Settings::tpl_accepted_email_body(),
+			'tpl_ready_email_subject'    => DoughBoss_Settings::tpl_ready_email_subject(),
+			'tpl_ready_email_body'       => DoughBoss_Settings::tpl_ready_email_body(),
 		);
 		?>
 		<div class="wrap doughboss-templates">
@@ -2302,6 +2315,39 @@ JS;
 					<tr>
 						<th><label for="db-tpl-order-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
 						<td><textarea id="db-tpl-order-body" class="large-text" rows="8" name="tpl_order_email_body" placeholder="Hi {customer_name}, thanks for your order {order_number}...&#10;&#10;{items}&#10;&#10;Total: {total}"><?php echo esc_textarea( $t['tpl_order_email_body'] ); ?></textarea></td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( '"Order accepted" email', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Sent to the customer when the kitchen accepts their order (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
+					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
+					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code>
+				</p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-tpl-accepted-subject"><?php esc_html_e( 'Subject', 'doughboss' ); ?></label></th>
+						<td><input type="text" id="db-tpl-accepted-subject" class="large-text" name="tpl_accepted_email_subject" value="<?php echo esc_attr( $t['tpl_accepted_email_subject'] ); ?>" placeholder="We're on it! Order {order_number} is being prepared" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-tpl-accepted-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-tpl-accepted-body" class="large-text" rows="8" name="tpl_accepted_email_body" placeholder="Hi {customer_name}, we've started on your order {order_number}...&#10;&#10;Ready in about {eta_minutes} minutes.&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_accepted_email_body'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'When no ETA is given the built-in default switches to wording without the minutes line.', 'doughboss' ); ?></p></td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( '"Order ready" email', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Sent to the customer when their order is marked ready for pickup (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
+					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
+					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code>
+				</p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-tpl-ready-subject"><?php esc_html_e( 'Subject', 'doughboss' ); ?></label></th>
+						<td><input type="text" id="db-tpl-ready-subject" class="large-text" name="tpl_ready_email_subject" value="<?php echo esc_attr( $t['tpl_ready_email_subject'] ); ?>" placeholder="Order {order_number} is ready for pickup!" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-tpl-ready-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-tpl-ready-body" class="large-text" rows="8" name="tpl_ready_email_body" placeholder="Hi {customer_name}, your order {order_number} is ready for pickup!&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_ready_email_body'] ); ?></textarea></td>
 					</tr>
 				</table>
 
@@ -3164,6 +3210,21 @@ JS;
 							<td>
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[sms_on_ready]" value="1" <?php checked( ! empty( $settings['sms_on_ready'] ), true ); ?> /> <?php esc_html_e( 'SMS the customer when their order is ready', 'doughboss' ); ?></label><br />
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[sms_on_voucher_claim]" value="1" <?php checked( ! empty( $settings['sms_on_voucher_claim'] ), true ); ?> /> <?php esc_html_e( 'SMS the voucher code to the customer when a voucher is claimed', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Customer stage emails', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Email the customer as their order moves through the kitchen. Sent with the site\'s built-in mail — no external service needed. Wording is editable under DoughBoss → Message Templates.', 'doughboss' ); ?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'When to email', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_accepted]" value="1" <?php checked( ! empty( $settings['email_on_accepted'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is accepted', 'doughboss' ); ?></label><br />
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_ready]" value="1" <?php checked( ! empty( $settings['email_on_ready'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is ready for pickup', 'doughboss' ); ?></label><br />
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_staff_copy]" value="1" <?php checked( ! empty( $settings['email_staff_copy'] ), true ); ?> /> <?php esc_html_e( 'Send staff a copy of stage emails', 'doughboss' ); ?></label>
 							</td>
 						</tr>
 					</table>

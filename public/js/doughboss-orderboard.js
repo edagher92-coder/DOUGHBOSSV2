@@ -70,10 +70,16 @@
 	}
 
 	function elapsed(created) {
-		var t = Date.parse(String(created).replace(' ', 'T') + 'Z');
-		if (isNaN(t)) { return ''; }
-		var mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
-		return mins + 'm ago';
+		var mins = minutesSince(created);
+		return mins === null ? '' : mins + 'm ago';
+	}
+
+	// Whole minutes since a UTC 'YYYY-MM-DD HH:MM:SS' datetime, or null.
+	function minutesSince(dt) {
+		if (!dt) { return null; }
+		var t = Date.parse(String(dt).replace(' ', 'T') + 'Z');
+		if (isNaN(t)) { return null; }
+		return Math.max(0, Math.floor((Date.now() - t) / 60000));
 	}
 
 	function label(status) {
@@ -152,9 +158,114 @@
 	}
 
 	function setStatus(id, status) {
-		api('/admin/order/' + id + '/status', 'POST', { status: status }).then(load).catch(function (error) {
+		return api('/admin/order/' + id + '/status', 'POST', { status: status }).then(load).catch(function (error) {
 			var message = error.message || 'Could not update the order.';
 			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		});
+	}
+
+	// Status change initiated from a card button: on success, offer a 10s UNDO
+	// toast and (for completed/cancelled) remember the order for the Recent
+	// recall panel. Server already allows any→any transitions.
+	function changeStatus(o, status) {
+		var prev = o.status;
+		api('/admin/order/' + o.id + '/status', 'POST', { status: status }).then(function () {
+			if (status === 'completed' || status === 'cancelled') {
+				recallRemember(o, prev);
+			}
+			showUndoToast(o, status, prev);
+			return load();
+		}).catch(function (error) {
+			var message = error.message || 'Could not update the order.';
+			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		});
+	}
+
+	/* ------------------------------------------------- Undo toast + recall */
+
+	var toast = { el: null, timer: null };
+	var recall = []; // { id, order_number, prev, time } — this tablet only.
+	var RECALL_MAX = 20;
+	var RECALL_TTL = 60 * 60000; // 60 min.
+	var recallOpen = false;
+
+	function orderTag(o) {
+		var n = String(o.order_number || o.id);
+		return n.charAt(0) === '#' ? n : '#' + n;
+	}
+
+	function hideToast() {
+		if (toast.timer) { clearTimeout(toast.timer); toast.timer = null; }
+		if (toast.el && toast.el.parentNode) { toast.el.parentNode.removeChild(toast.el); }
+		toast.el = null;
+	}
+
+	function showUndoToast(o, status, prev) {
+		hideToast(); // One toast at a time — replace the previous one.
+		toast.el = el('div', { class: 'db-toast', role: 'status' }, [
+			el('span', { class: 'db-toast-text', text: orderTag(o) + ' → ' + label(status) }),
+			el('button', {
+				class: 'button db-toast-undo', type: 'button',
+				onclick: function () {
+					hideToast();
+					recallForget(o.id);
+					setStatus(o.id, prev);
+				}
+			}, ['UNDO'])
+		]);
+		document.body.appendChild(toast.el);
+		toast.timer = setTimeout(hideToast, 10000);
+	}
+
+	function recallPrune() {
+		var cutoff = Date.now() - RECALL_TTL;
+		recall = recall.filter(function (r) { return r.time >= cutoff; });
+	}
+
+	function recallRemember(o, prev) {
+		recallForget(o.id);
+		recall.unshift({ id: o.id, order_number: o.order_number, prev: prev, time: Date.now() });
+		if (recall.length > RECALL_MAX) { recall.length = RECALL_MAX; }
+		renderRecall();
+	}
+
+	function recallForget(id) {
+		recall = recall.filter(function (r) { return r.id !== id; });
+		renderRecall();
+	}
+
+	var recallBtn = null;
+	var recallPanel = null;
+
+	function renderRecall() {
+		recallPrune();
+		if (recallBtn) {
+			recallBtn.textContent = 'Recent (' + recall.length + ')';
+			recallBtn.setAttribute('aria-expanded', recallOpen ? 'true' : 'false');
+		}
+		if (!recallPanel) { return; }
+		recallPanel.textContent = '';
+		recallPanel.hidden = !recallOpen;
+		if (!recallOpen) { return; }
+		if (!recall.length) {
+			recallPanel.appendChild(el('p', { class: 'db-recall-empty', text: 'No recently completed or cancelled orders from this tablet.' }));
+			return;
+		}
+		recall.forEach(function (r) {
+			recallPanel.appendChild(el('div', { class: 'db-recall-row' }, [
+				el('span', { class: 'db-recall-info', text: orderTag(r) + ' · ' + Math.max(0, Math.floor((Date.now() - r.time) / 60000)) + 'm ago → back to ' + label(r.prev) }),
+				el('button', {
+					class: 'button db-recall-restore', type: 'button',
+					onclick: function () {
+						api('/admin/order/' + r.id + '/status', 'POST', { status: r.prev }).then(function () {
+							recallForget(r.id);
+							return load();
+						}).catch(function (error) {
+							if (statusEl) { statusEl.textContent = error.message || 'Could not restore the order.'; }
+						});
+					}
+				}, ['Restore'])
+			]));
 		});
 	}
 
@@ -231,6 +342,15 @@
 		}
 		if (o.eta_minutes) {
 			meta.push(el('div', { class: 'db-card-eta', text: 'ETA ' + o.eta_minutes + ' min' }));
+			// "Due" hint — measured from acceptance when known, else order creation.
+			var sinceRef = minutesSince(o.accepted_at || o.created_at);
+			if (sinceRef !== null) {
+				var remaining = o.eta_minutes - sinceRef;
+				meta.push(el('div', {
+					class: 'db-card-due' + (remaining < 0 ? ' db-card-due-over' : ''),
+					text: remaining >= 0 ? 'Due in ' + remaining + 'm' : 'Overdue ' + (-remaining) + 'm'
+				}));
+			}
 		}
 		meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
 
@@ -244,7 +364,7 @@
 				el('div', { class: 'db-eta-row' }, etaRow),
 				el('div', { class: 'db-card-actions-row' }, [
 					el('button', { class: 'button button-primary db-accept', type: 'button', onclick: function () { accept(o.id, 0); } }, ['Accept']),
-					el('button', { class: 'button db-cancel', type: 'button', onclick: function () { if (window.confirm('Cancel order ' + o.order_number + '?')) { setStatus(o.id, 'cancelled'); } } }, ['Cancel'])
+					el('button', { class: 'button db-cancel', type: 'button', onclick: function () { if (window.confirm('Cancel order ' + o.order_number + '?')) { changeStatus(o, 'cancelled'); } } }, ['Cancel'])
 				])
 			]);
 		} else {
@@ -253,17 +373,26 @@
 				return el('button', {
 					class: 'button ' + (primary ? 'button-primary' : '') + ' db-advance',
 					type: 'button',
-					onclick: function () { setStatus(o.id, st); }
+					onclick: function () { changeStatus(o, st); }
 				}, [label(st)]);
 			});
 			advBtns.push(el('button', {
 				class: 'button db-cancel', type: 'button',
-				onclick: function () { if (window.confirm('Cancel order ' + o.order_number + '?')) { setStatus(o.id, 'cancelled'); } }
+				onclick: function () { if (window.confirm('Cancel order ' + o.order_number + '?')) { changeStatus(o, 'cancelled'); } }
 			}, ['Cancel']));
 			actions = el('div', { class: 'db-card-actions' }, [el('div', { class: 'db-card-actions-row' }, advBtns)]);
 		}
 
-		return el('div', { class: 'db-card db-card-' + o.status + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : '') }, [
+		// SLA aging — accepted orders still in an active state get amber at 5 min
+		// and red at 10 min since acceptance.
+		var ageClass = '';
+		if (o.accepted_at && o.status !== 'completed' && o.status !== 'cancelled') {
+			var ageMins = minutesSince(o.accepted_at);
+			if (ageMins !== null && ageMins >= 10) { ageClass = ' db-age-late'; }
+			else if (ageMins !== null && ageMins >= 5) { ageClass = ' db-age-warn'; }
+		}
+
+		return el('div', { class: 'db-card db-card-' + o.status + ageClass + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : '') }, [
 			head,
 			el('div', { class: 'db-card-status', text: label(o.status) }),
 			contact,
@@ -300,6 +429,30 @@
 			stopAlert();
 		}
 
+		// All-day strip — aggregate item counts across in-progress orders so the
+		// kitchen can batch ("6× Zaatar · 3× All Meat …"). Hidden when empty.
+		var STRIP_STATUSES = ['pending', 'confirmed', 'preparing', 'baking'];
+		var counts = {};
+		orders.forEach(function (o) {
+			if (STRIP_STATUSES.indexOf(o.status) === -1) { return; }
+			(o.items || []).forEach(function (it) {
+				var name = String(it.name || '');
+				if (!name) { return; }
+				counts[name] = (counts[name] || 0) + (parseInt(it.quantity, 10) || 1);
+			});
+		});
+		var stripEntries = Object.keys(counts).map(function (name) {
+			return { name: name, count: counts[name] };
+		}).sort(function (a, b) { return b.count - a.count; }).slice(0, 12);
+		if (stripEntries.length) {
+			boardEl.appendChild(el('div', { class: 'db-allday' },
+				[el('span', { class: 'db-allday-label', text: 'All day:' })].concat(
+					stripEntries.map(function (e) {
+						return el('span', { class: 'db-allday-item', text: e.count + '× ' + e.name });
+					})
+				)));
+		}
+
 		var lanesWrap = el('div', { class: 'db-lanes' }, LANES.map(function (lane) {
 			var laneOrders = orders.filter(function (o) { return laneOf(o.status) === lane.key; });
 			var cards = laneOrders.length
@@ -317,13 +470,34 @@
 		}
 	}
 
+	/* ----------------------------------------------------------- Heartbeat */
+
+	// Small connection badge next to the board status: green "Live" (SSE),
+	// amber "Polling" (poll OK), red "Offline" (last load failed).
+	var offline = false;
+	var heartbeatEl = null;
+
+	function updateHeartbeat() {
+		if (!heartbeatEl) { return; }
+		var state = offline ? 'offline' : (sseHealthy ? 'live' : 'polling');
+		var word = offline ? 'Offline' : (sseHealthy ? 'Live' : 'Polling');
+		heartbeatEl.className = 'db-heartbeat db-heartbeat-' + state;
+		heartbeatEl.textContent = '';
+		heartbeatEl.appendChild(el('span', { class: 'db-heartbeat-dot', 'aria-hidden': 'true' }));
+		heartbeatEl.appendChild(el('span', { class: 'db-heartbeat-word', text: word }));
+	}
+
 	/* --------------------------------------------------------------- Cycle */
 
 	function load() {
 		var path = '/admin/orders' + (currentLocation ? '?location_id=' + currentLocation : '');
 		return api(path, 'GET').then(function (res) {
+			offline = false;
+			updateHeartbeat();
 			if (res && res.data) { render(res.data); }
 		}).catch(function () {
+			offline = true;
+			updateHeartbeat();
 			if (statusEl) { statusEl.textContent = 'Connection problem — retrying…'; }
 		});
 	}
@@ -361,12 +535,14 @@
 
 		sse.onopen = function () {
 			sseHealthy = true;
+			updateHeartbeat();
 		};
 
 		sse.onmessage = function () {
 			// A message means the channel is alive — re-affirm health so a recovery
 			// after a transient error slows the poll again even before onopen refires.
 			sseHealthy = true;
+			updateHeartbeat();
 			// Authoritative re-fetch — never render from the SSE payload itself.
 			load();
 		};
@@ -375,6 +551,7 @@
 			// Drop back to fast polling; the browser auto-reconnects the SSE, and
 			// onopen will slow the poll again once it recovers.
 			sseHealthy = false;
+			updateHeartbeat();
 		};
 	}
 
@@ -402,6 +579,29 @@
 			load();
 		});
 		actionsEl.insertBefore(sel, actionsEl.firstChild);
+	}
+
+	// Heartbeat badge — next to the existing board status text.
+	if (statusEl) {
+		heartbeatEl = el('span', { class: 'db-heartbeat db-heartbeat-polling' }, []);
+		statusEl.parentNode.insertBefore(heartbeatEl, statusEl.nextSibling);
+		updateHeartbeat();
+	}
+
+	// Recall ("Recent") panel — restore orders this tablet completed/cancelled
+	// in the last 60 minutes.
+	if (actionsEl) {
+		recallBtn = el('button', {
+			class: 'button db-recall-toggle', type: 'button', 'aria-expanded': 'false',
+			onclick: function () { recallOpen = !recallOpen; renderRecall(); }
+		}, ['Recent (0)']);
+		actionsEl.appendChild(recallBtn);
+		recallPanel = el('div', { class: 'db-recall-panel' }, []);
+		recallPanel.hidden = true;
+		if (boardEl && boardEl.parentNode) {
+			boardEl.parentNode.insertBefore(recallPanel, boardEl);
+		}
+		renderRecall();
 	}
 
 	// Refresh "x ago" labels even between polls.

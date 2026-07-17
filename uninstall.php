@@ -52,6 +52,7 @@ delete_option( 'doughboss_unreconciled_payments' );
 delete_option( 'doughboss_pospal_unmapped_alerts' );
 delete_option( 'doughboss_delivery_autodisabled' );
 delete_option( 'doughboss_printer_watermark' );
+delete_option( 'doughboss_email_stage_log' );
 delete_transient( 'doughboss_migrating' );
 
 // Remove the custom capabilities and the kitchen role.
