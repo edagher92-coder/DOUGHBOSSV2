@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dough Boss — Kitchen Board (Preview)</title>
+<meta name="robots" content="noindex,nofollow">
+<!-- Hidden preview page: not linked from any customer-facing page and excluded
+     from sitemap.xml on purpose — reachable only by typing the direct URL.
+     Everything on this page is simulated in-browser; the real Live Order
+     Board lives behind the wp-admin login. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self';">
+<!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
+     For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
+     Content-Security-Policy: frame-ancestors 'none'
+     X-Frame-Options: DENY -->
+<link rel="stylesheet" href="kitchen.css">
+</head>
+<body>
+<a class="skip" href="#db-board">Skip to the order board</a>
+
+<header class="top">
+	<div class="top-in">
+		<span class="bm" aria-hidden="true">
+			<span class="bm-box">DOUGH BOSS<span class="bm-dot">.</span></span>
+			<span class="bm-sub">Lebanese Bakery · Since 2009</span>
+		</span>
+		<span class="top-title disp">Live Order Board <em>(Preview)</em></span>
+		<span class="spacer"></span>
+		<span class="db-heartbeat db-heartbeat-live" id="db-heartbeat" role="status" aria-live="polite"
+			title="Connection health: Live = real-time push, Polling = fallback refresh, Offline = connection lost">
+			<span class="db-heartbeat-dot" aria-hidden="true"></span><span class="db-heartbeat-word">Live</span>
+		</span>
+	</div>
+</header>
+
+<div class="preview-banner" role="note">
+	<strong>PREVIEW — simulated kitchen board · no real orders · not staff sign-in</strong>
+	<span>Time runs fast in preview (1&nbsp;second&nbsp;=&nbsp;30&nbsp;seconds) so you can watch cards age to amber and red.
+	The customer phone alongside the board is illustrative — nothing is really sent. The real Live Order Board
+	runs inside WordPress behind the wp-admin login.</span>
+</div>
+
+<main class="board-wrap doughboss-board-wrap" id="main">
+
+	<section class="db-today" id="db-today" aria-label="Today at a glance"></section>
+
+	<div class="db-board-bar">
+		<h1 class="disp">Kitchen orders</h1>
+		<div class="db-board-actions">
+			<span class="db-board-status" role="status" aria-live="polite"></span>
+			<label class="vh" for="db-shop">Filter by shop</label>
+			<select id="db-shop" class="db-shop-select" title="Show one shop's orders only — the real board routes orders per shop">
+				<option value="0">All shops</option>
+				<option value="1">Revesby</option>
+				<option value="2">Bankstown</option>
+				<option value="3">Roselands</option>
+			</select>
+			<button type="button" class="button db-sound-toggle" aria-pressed="false"
+				title="New orders ring a chime until acknowledged — toggle the preview chime">🔕 Sound off</button>
+			<button type="button" class="button db-offline-toggle"
+				title="Watch the heartbeat go red Offline, then recover through Polling back to Live">Simulate connection drop</button>
+			<button type="button" class="button db-recall-toggle" aria-expanded="false"
+				title="Orders completed or cancelled from this tablet in the last hour — bring one back with one tap">Recent (0)</button>
+		</div>
+	</div>
+
+	<details class="db-legend">
+		<summary>What am I looking at?</summary>
+		<div class="db-legend-body">
+			<p>The staff kitchen tablet: orders flow left to right — <strong>New → Preparing → Ready</strong> — and every button works on the simulated orders.</p>
+			<ul>
+				<li><span class="lg-swatch lg-fresh" aria-hidden="true"></span> Fresh card · <span class="lg-swatch lg-warn" aria-hidden="true"></span> amber after 5&nbsp;min in the kitchen · <span class="lg-swatch lg-late" aria-hidden="true"></span> red after 10&nbsp;min — time is accelerated here (1&nbsp;s&nbsp;=&nbsp;30&nbsp;s) so you can watch it happen. The timer pill on each card ages with it.</li>
+				<li><span class="lg-chip lg-paid">PAID</span> paid online by card · <span class="lg-chip lg-collect">COLLECT&nbsp;$X</span> take payment at handover (bolder on Ready cards) · <span class="lg-chip lg-later">LATER</span> scheduled order sitting calm until it's due, with its ⏰ pickup window.</li>
+				<li>Heartbeat (top right): <b>Live</b> real-time connection · <b>Polling</b> fallback refresh · <b>Offline</b> connection lost — try “Simulate connection drop”.</li>
+				<li>Accept a New order with a ready-time (10/15/20/30&nbsp;min) — the customer's phone beside the board shows the email + live-tracker update they'd receive. Every change offers a 10-second <b>UNDO</b>; completed/cancelled orders come back from <b>Recent</b>.</li>
+				<li>The <b>All day</b> strip totals items across active orders so the kitchen can batch bakes; the <b>Today</b> tiles above show orders, gross, paid-by-card and still-to-collect at a glance.</li>
+			</ul>
+		</div>
+	</details>
+
+	<div class="db-recall-panel" id="db-recall" hidden></div>
+
+	<div class="kds-layout">
+		<div id="db-board" class="db-board" aria-live="polite">
+			<p class="db-board-loading">Loading simulated orders…</p>
+		</div>
+
+		<aside class="phone-rail" aria-label="Customer's phone — illustrative simulation">
+			<h2 class="phone-label">Customer's phone
+				<span>Illustrative — what stage emails + the live order tracker send. Nothing is really sent.</span>
+			</h2>
+			<div class="phone" aria-hidden="false">
+				<div class="phone-screen">
+					<div class="phone-status"><span id="db-phone-clock">9:41</span><span aria-hidden="true">▂▄▆ 5G ▮▮▮</span></div>
+					<div id="db-phone-notifs" role="status" aria-live="polite"></div>
+					<div id="db-phone-tracker"></div>
+				</div>
+			</div>
+		</aside>
+	</div>
+</main>
+
+<div class="db-intro" id="db-intro" role="dialog" aria-modal="true" aria-labelledby="db-intro-title">
+	<div class="db-intro-card">
+		<h2 class="disp" id="db-intro-title">The kitchen board, live</h2>
+		<p>This is a <strong>simulated preview</strong> of the staff kitchen tablet — no real orders, not staff sign-in. Time runs fast (1&nbsp;s&nbsp;=&nbsp;30&nbsp;s) so you can see everything happen.</p>
+		<ul class="db-intro-list">
+			<li><span class="ic" aria-hidden="true">🧾</span><span>Orders land in <b>New</b> with a chime and a red banner, then move through <b>Preparing</b> to <b>Ready</b> with one tap.</span></li>
+			<li><span class="ic" aria-hidden="true">⏱️</span><span>Cards quietly turn <b>amber at 5 min</b> and <b>red at 10 min</b> so nothing gets forgotten.</span></li>
+			<li><span class="ic" aria-hidden="true">📱</span><span>The phone beside the board shows what the <b>customer</b> receives the moment staff act — email + live tracker.</span></li>
+			<li><span class="ic" aria-hidden="true">↩️</span><span>Every change has a 10-second <b>UNDO</b>, and <b>Recent</b> brings back anything closed by mistake.</span></li>
+		</ul>
+		<div class="db-try"><b>Try this</b>Tap <strong>15m</strong> on a New order — watch it spring to Preparing and the customer's phone light up with “In the oven — ready in ~15 min”.</div>
+		<button type="button" class="button button-primary" id="db-intro-close">Got it — show me the board</button>
+	</div>
+</div>
+
+<div class="demo-ribbon">Concept demo · <b>every order on this board is simulated</b> · no live kitchen data, no staff access.</div>
+
+<script src="kitchen.js"></script>
+</body>
+</html>
