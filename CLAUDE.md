@@ -5,8 +5,8 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 ## Current repo state
 
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
-- **Primary platform branch under review:** `claude/funny-goodall-gsoog4`
-- **Open platform PR:** PR #2, draft, large Phase 2 branch. Treat it as a staging/integration branch, not a production release by default.
+- **Primary platform branch under review:** `claude/doughboss-website-design-fixes-li6dqa`
+- **Open platform PR:** PR #17. Contains Tyro (MPGS) payment gateway (backend + hosted-session checkout, sandbox-unverified), management oversight (Today strip, per-shop reports, paid-vs-gross), kitchen board upgrade (SLA aging, undo+recall, heartbeat, all-day strip), stage emails module, customer order tracker, POSPal outbox hardening, board access-key hashing, and the refined demo site. Treat it as staging/integration, not a production release by default.
 - **Plugin version on the platform branch:** `2.17.0` (`DOUGHBOSS_VERSION`)
 - **DB schema version on the platform branch:** `1.10.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
 - **Requires:** WordPress 6.0+, PHP 7.4+
@@ -26,7 +26,9 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 - Admin orders/settings.
 - Multi-shop locations and order routing.
 - Live kitchen order board / KDS.
-- Stripe payment scaffolding/integration, off by default until configured.
+- Payment abstraction (`DoughBoss_Payment`) with Stripe and Tyro (MPGS hosted session) gateways, both off by default until configured; Tyro is the pilot launch gateway (pickup-only Revesby pilot) but remains dormant until sandbox-verified.
+- Stage emails module (`DoughBoss_Emails`) and customer order tracker.
+- Management oversight: Today strip, per-shop reports, paid-vs-gross.
 - Voucher/coupon system with staff scan tools.
 - POSPal integration work for POS mirroring.
 - Catering packages/enquiries/quote/deposit workflow.
@@ -159,13 +161,11 @@ When agents disagree, choose the smallest safe release that preserves the abilit
 
 ## Current priorities
 
-1. Stabilize the Phase 2 branch with CI, release checklist, and refreshed agent memory.
-2. Split the large draft PR into smaller domain PRs.
-3. Fix remaining high-priority audit items, especially proxy-aware/atomic rate limiting.
-4. Add a minimal money-path test harness.
-5. Complete and verify Stripe on staging before claiming revenue readiness.
-6. Harden kitchen operations: chime, heartbeat, SLA timers, undo, and printer reprint.
-7. Keep demo marketing pages (including Offers & News) clean without duplicating shared nav/footer logic.
+1. Build `dist/doughboss.zip` and execute `docs/UPLIFT-2-Staging-Verification-Runbook.md` on a staging WordPress.
+2. Sandbox-verify Tyro before enabling any live payment path; Tyro stays dormant until then.
+3. Execute the four UPLIFT specs in `docs/` (UPLIFT-1 storefront design port, UPLIFT-2 staging verification, UPLIFT-3 content completion, UPLIFT-4 performance/SEO) as the forward plan.
+4. Pickup-only Revesby pilot is the launch scope; delivery and other shops come later.
+5. Keep the live demo (https://edagher92-coder.github.io/DOUGHBOSSV2/) as the owner's validation surface; keep brand facts intact (Lebanese Bakery, since 2009, hello@ email, 3 shops, $4 bases, per-item lemon & chilli, no Mixed zaatar).
 
 ## Known gotchas
 
