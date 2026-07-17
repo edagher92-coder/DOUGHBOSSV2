@@ -32,10 +32,6 @@
 		{ label: 'Flat', delta: 0, def: true },
 		{ label: 'Folded', delta: 0 }
 	] };
-	var OPT_ZAATAR_MIX = { id: 'mix', label: 'Zaatar mix', type: 'radio', choices: [
-		{ label: 'Classic', delta: 0, def: true },
-		{ label: 'Mixed — zaatar & cheese', sum: 'Mixed zaatar', delta: 0.5 }
-	] };
 	var OPT_PIZZA_BASE = { id: 'base', label: 'Base', type: 'radio', choices: [
 		{ label: 'Normal', delta: 0, def: true },
 		{ label: 'Wholemeal', delta: 4 },
@@ -56,7 +52,6 @@
 	function optionGroups(catId, name) {
 		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_LEMON]; }
 		if (catId === 'cat-manoush') {
-			if (name === 'Zaatar') { return [OPT_STYLE, OPT_ZAATAR_MIX, OPT_PIZZA_BASE]; }
 			return MEAT_MANOUSH[name] ? [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON] : [OPT_STYLE, OPT_PIZZA_BASE];
 		}
 		if (catId === 'cat-wraps' && name === 'Zaatar & Veggie') { return [OPT_WRAP_EXTRAS]; }
