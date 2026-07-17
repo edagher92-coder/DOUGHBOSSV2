@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /owner.html
+Disallow: /staff.html
+Disallow: /backend.html
+Disallow: /kitchen.html
 
 Sitemap: https://edagher92-coder.github.io/DOUGHBOSSV2/sitemap.xml
