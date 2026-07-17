@@ -617,3 +617,36 @@ body.cart-on{padding-bottom:114px;}
 .show .grid>div{min-width:0;}
 .show h2,.hero h1{overflow-wrap:break-word;}
 @media(max-width:860px){.show .grid{grid-template-columns:minmax(0,1fr);}}
+
+/* ===== Motion revival: spring physics + tactile bounce (bring back the fun) ===== */
+/* The interface had smooth-but-flat easing everywhere (--ease has no overshoot),
+ * which read as plain/standard. This layer adds a spring curve WITH overshoot on
+ * the moments you actually feel — taps, hovers, add-to-cart, confirmation — so the
+ * GUI feels bouncy and alive again. Layout/slide transitions keep the calm --ease. */
+:root{--spring:cubic-bezier(.34,1.56,.64,1);--spring-soft:cubic-bezier(.22,1.2,.36,1);}
+
+/* Buttons: bouncy press + a little hover lift, spring release. */
+.btn,.vb-btn{transition:filter var(--t-fast) var(--ease),transform var(--t-med) var(--spring),background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease);}
+.btn:active,.vb-btn:active{transform:scale(.92);}
+@media(hover:hover){.btn:hover,.vb-btn:hover{transform:translateY(-1px);}}
+
+/* Add-to-cart + steppers: snappy, satisfying spring. */
+.mn-add{transition:background var(--t-fast) var(--ease),filter var(--t-fast) var(--ease),transform var(--t-med) var(--spring),box-shadow var(--t-fast) var(--ease);}
+.mn-add:active{transform:scale(.9);}
+@media(hover:hover){.mn-add:hover{transform:translateY(-1px);}}
+.mn-step button,.cd-qty button{transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-med) var(--spring);}
+.mn-step button:active,.cd-qty button:active{transform:scale(.85);}
+
+/* Category pills: spring tap. */
+.mn-jump{transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-med) var(--spring);}
+.mn-jump:active{transform:scale(.9);}
+
+/* Cards / tiles / plan cards: livelier lift with overshoot. */
+.card,.step,.tile,.pk{transition:border-color var(--t-med) var(--ease),transform var(--t-med) var(--spring),background var(--t-med) var(--ease),box-shadow var(--t-med) var(--ease);}
+@media(hover:hover){.tile:hover,.pk:hover,.card:hover,.step:hover{transform:translateY(-3px);}}
+
+/* Stronger, bouncier feedback on the signature moments. */
+@keyframes cartbump{0%{transform:scale(1);}22%{transform:scale(1.26);}52%{transform:scale(.95);}100%{transform:scale(1);}}
+@keyframes checkpop{0%{transform:scale(.3);opacity:0;}55%{transform:scale(1.18);}75%{transform:scale(.95);}100%{transform:scale(1);opacity:1;}}
+.cart-bump .cf-tot,.cart-bump .cf-ct{animation:cartbump .44s var(--spring);}
+.cart-fab:active{transform:scale(.97);}
