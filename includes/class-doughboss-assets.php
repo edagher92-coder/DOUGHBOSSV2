@@ -153,6 +153,8 @@ class DoughBoss_Assets {
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),
 					'added'        => __( 'Added!', 'doughboss' ),
+					'addedToCart'  => __( 'added to cart', 'doughboss' ),
+					'menuCategories' => __( 'Menu categories', 'doughboss' ),
 					'emptyCart'    => __( 'Your cart is empty.', 'doughboss' ),
 					'remove'       => __( 'Remove', 'doughboss' ),
 					'subtotal'     => __( 'Subtotal', 'doughboss' ),

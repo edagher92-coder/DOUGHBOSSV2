@@ -886,3 +886,110 @@
 	background: #1f8a54;
 	vertical-align: middle;
 }
+
+/* ===== UPLIFT-1 Phase 2: motion "heart" — spring physics + tactile feedback ===== */
+/* Brings back the bouncy, alive feel: a spring easing curve with overshoot,
+ * staggered card entrance, tap bounce, a sticky category jump-bar, and a
+ * celebratory confirmation. All fully disabled under prefers-reduced-motion. */
+
+.db-app {
+	--db-spring: cubic-bezier(.34, 1.56, .64, 1);       /* overshoots ~1.1 — the "bounce" */
+	--db-spring-soft: cubic-bezier(.22, 1.2, .36, 1);   /* gentler overshoot */
+}
+
+/* Tap bounce on buttons (springier press than the base scale). */
+.db-app .db-btn {
+	transition: background var(--db-t-fast) var(--db-ease),
+		transform var(--db-t-fast) var(--db-spring),
+		box-shadow var(--db-t-med) var(--db-ease);
+}
+.db-app .db-btn:active:not(:disabled) { transform: scale(.94); }
+
+/* Reusable "pop" (dbPop() adds .db-pop on add-to-cart, etc.). */
+@keyframes db-pop {
+	0% { transform: scale(1); }
+	35% { transform: scale(1.14); }
+	70% { transform: scale(.97); }
+	100% { transform: scale(1); }
+}
+.db-app .db-pop { animation: db-pop .4s var(--db-spring); }
+
+/* Staggered card entrance — the menu cascades in instead of snapping. --db-i is
+ * set per-card in renderMenu (capped), so the delay stays snappy on long menus. */
+@keyframes db-cardin {
+	from { opacity: 0; transform: translateY(16px) scale(.98); }
+	to { opacity: 1; transform: none; }
+}
+.db-app .db-grid .db-card {
+	animation: db-cardin .5s var(--db-spring) both;
+	animation-delay: calc(var(--db-i, 0) * 45ms);
+	transition: transform var(--db-t-med) var(--db-spring), box-shadow var(--db-t-med) var(--db-ease);
+}
+@media (hover: hover) {
+	.db-app .db-card:not(.db-card--soldout):hover { transform: translateY(-4px); }
+}
+
+/* Builder option rows: subtle spring on press + selected lift. */
+.db-app .db-option {
+	transition: border-color var(--db-t-fast) var(--db-ease),
+		background-color var(--db-t-fast) var(--db-ease),
+		transform var(--db-t-fast) var(--db-spring),
+		box-shadow var(--db-t-fast) var(--db-ease);
+}
+.db-app .db-option:active { transform: scale(.98); }
+.db-app .db-option:has(input:checked) { transform: scale(1.015); }
+
+/* Sticky category jump-bar (rendered by renderMenu when >1 category). */
+.db-app .db-jumpbar {
+	position: sticky;
+	top: var(--db-sticky-top, 0px);
+	z-index: 20;
+	display: flex;
+	gap: .5rem;
+	overflow-x: auto;
+	padding: .6rem 0;
+	margin: .25rem 0 1rem;
+	background: var(--db-paper, #f7f5f0);
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+.db-app .db-jumpbar::-webkit-scrollbar { display: none; }
+.db-app .db-jump {
+	flex: 0 0 auto;
+	border: 1px solid var(--db-border);
+	background: #fff;
+	color: inherit;
+	border-radius: var(--db-r-pill);
+	padding: .4rem .9rem;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	cursor: pointer;
+	white-space: nowrap;
+	touch-action: manipulation;
+	transition: transform var(--db-t-fast) var(--db-spring),
+		border-color var(--db-t-fast) var(--db-ease),
+		background var(--db-t-fast) var(--db-ease);
+}
+@media (hover: hover) { .db-app .db-jump:hover { border-color: var(--db-ink); } }
+.db-app .db-jump:active { transform: scale(.92); }
+/* Land category headings below the sticky bar on jump. */
+.db-app .db-category { scroll-margin-top: 64px; }
+
+/* Success toast springs up from the bottom. */
+@keyframes db-toastin {
+	from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.96); }
+	to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+.db-app .db-toast,
+.db-toast { animation: db-toastin .34s var(--db-spring, cubic-bezier(.34,1.56,.64,1)) both; }
+
+/* Reduced-motion: kill entrance/pop so nothing flashes or lingers hidden
+ * (the global guard zeroes duration but not delay — be explicit here). */
+@media (prefers-reduced-motion: reduce) {
+	.db-app .db-grid .db-card,
+	.db-app .db-pop,
+	.db-app .db-toast,
+	.db-toast { animation: none !important; }
+	.db-app .db-grid .db-card { opacity: 1 !important; transform: none !important; }
+}

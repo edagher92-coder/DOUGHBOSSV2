@@ -68,12 +68,32 @@
 		return node;
 	}
 
-	// Non-blocking, screen-reader-announced error toast (replaces alert()).
-	function dbToast(message) {
-		var t = el('div', { class: 'db-toast', text: String(message || (I18N.genericError || 'Something went wrong.')) });
-		t.setAttribute('role', 'alert');
+	// Non-blocking, screen-reader-announced toast (replaces alert()). Pass ok=true
+	// for the success variant (green check, polite announcement); default is the
+	// error variant (assertive alert). Springs in via the .db-toast animation.
+	function dbToast(message, ok) {
+		var cls = ok ? 'db-toast db-toast--ok' : 'db-toast';
+		var t = el('div', { class: cls, text: String(message || (I18N.genericError || 'Something went wrong.')) });
+		t.setAttribute('role', ok ? 'status' : 'alert');
+		t.setAttribute('aria-live', ok ? 'polite' : 'assertive');
 		document.body.appendChild(t);
-		setTimeout(function () { if (t.parentNode) { t.parentNode.removeChild(t); } }, 4200);
+		setTimeout(function () { if (t.parentNode) { t.parentNode.removeChild(t); } }, ok ? 2600 : 4200);
+	}
+
+	// Brief tactile "pop" on a tap target (spring scale via CSS). Safe to call on
+	// any element; the class is removed after the animation so it can retrigger.
+	function dbPop(node) {
+		if (!node) { return; }
+		node.classList.remove('db-pop');
+		// Force reflow so re-adding the class restarts the animation.
+		void node.offsetWidth;
+		node.classList.add('db-pop');
+		setTimeout(function () { node.classList.remove('db-pop'); }, 420);
+	}
+
+	// Stable DOM id for a category name, for jump-bar scroll anchors.
+	function catId(category) {
+		return 'db-cat-' + String(category).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 	}
 
 	function request(path, options) {
@@ -245,11 +265,34 @@
 				(groups[item.category] = groups[item.category] || []).push(item);
 			});
 
-			Object.keys(groups).forEach(function (category) {
-				root.appendChild(el('h3', { class: 'db-category', text: category }));
+			var categories = Object.keys(groups);
+
+			// Sticky category jump-bar: a pill per category that scrolls to its
+			// section. Only worth showing when there's more than one category.
+			if (categories.length > 1) {
+				var jump = el('nav', { class: 'db-jumpbar', 'aria-label': I18N.menuCategories || 'Menu categories' });
+				categories.forEach(function (category) {
+					var pill = el('button', { class: 'db-jump', type: 'button', text: category });
+					pill.addEventListener('click', function () {
+						var target = document.getElementById(catId(category));
+						if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+					});
+					jump.appendChild(pill);
+				});
+				root.appendChild(jump);
+			}
+
+			var stagger = 0;
+			categories.forEach(function (category) {
+				root.appendChild(el('h3', { class: 'db-category', id: catId(category), text: category }));
 				var grid = el('div', { class: 'db-grid' });
 				groups[category].forEach(function (item) {
-					grid.appendChild(menuCard(item));
+					var card = menuCard(item);
+					// Cap the stagger so a long menu never delays the last card by
+					// seconds; the entrance still reads as a lively cascade.
+					card.style.setProperty('--db-i', String(Math.min(stagger, 12)));
+					stagger += 1;
+					grid.appendChild(card);
 				});
 				root.appendChild(grid);
 			});
@@ -279,6 +322,8 @@
 				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, quantity: 1 } })
 					.then(function () {
 						action.textContent = I18N.added || 'Added!';
+						dbPop(action);
+						dbToast((item.name ? item.name + ' — ' : '') + (I18N.addedToCart || 'added to cart'), true);
 						notifyCartChanged();
 						setTimeout(function () { action.textContent = I18N.addToCart || 'Add to cart'; action.disabled = false; }, 1200);
 					})
@@ -359,6 +404,8 @@
 					body: { type: 'custom', size: state.size.slug, toppings: Object.keys(state.toppings), quantity: 1 }
 				}).then(function () {
 					addBtn.textContent = I18N.added || 'Added!';
+					dbPop(addBtn);
+					dbToast(I18N.addedToCart || 'Added to cart', true);
 					notifyCartChanged();
 					setTimeout(function () { addBtn.textContent = I18N.addToCart || 'Add to cart'; addBtn.disabled = false; }, 1200);
 				}).catch(function (err) { dbToast(err.message); addBtn.disabled = false; });
@@ -879,6 +926,7 @@
 				var parent = form.parentNode;
 				parent.innerHTML = '';
 				parent.appendChild(el('div', { class: 'db-confirm' }, [
+					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
 					el('h3', { text: res.message }),
 					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
 					el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) })
