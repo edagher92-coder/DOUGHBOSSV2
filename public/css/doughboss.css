@@ -3,6 +3,20 @@
  * the active theme.
  */
 
+/* Self-hosted brand fonts (woff2, latin) — no third-party request, no CLS
+ * (Impact/Arial fallbacks in the stack). Files live in public/fonts/, served
+ * directly by WordPress; url() is relative to this stylesheet (css/ -> ../fonts/). */
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:swap;
+	src:url('../fonts/bebasneue-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;
+	src:url('../fonts/barlow-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;
+	src:url('../fonts/barlow-500.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;
+	src:url('../fonts/barlow-600.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;
+	src:url('../fonts/barlow-700.woff2') format('woff2');}
+
 .db-app {
 	--db-accent: #111111; /* mono brand accent (ex-red) — matches the 2026 ink/paper logo */
 	--db-accent-dark: #000000;
@@ -730,3 +744,145 @@
 	box-shadow: var(--db-shadow-1);
 }
 .db-voucher-msg { margin-top: 0.4rem; font-size: 0.85rem; color: #d4351c; }
+
+/* ===== UPLIFT-1 Phase 1: storefront design parity (appended, CSS-only) ===== */
+/* Pure visual/UX port of the demo tone onto the real storefront. Every selector
+ * stays under .db-app; no markup/JS/money-path change. Selectors verified against
+ * public/js/doughboss.js renderMenu + builder output. */
+
+/* Paper-tone tokens + brand body font. */
+.db-app {
+	--db-ink: #0d0d0d;
+	--db-paper: #f7f5f0;
+	--db-linel: #e6e2da;
+	font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Bebas display utility (opt-in on headings). */
+.db-app .db-disp {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .02em;
+	line-height: .9;
+	text-transform: uppercase;
+	font-weight: 400;
+}
+
+/* Buttons: boxy demo geometry + Bebas label + tap affordance. Colour/hover/active
+ * already defined above — not restated (no !important, no duplicate :active). */
+.db-app .db-btn {
+	border-radius: var(--db-r-md);
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+	.db-app .db-btn { min-height: 44px; }
+}
+
+/* Menu cards: Bebas item name + mono tabular price + softened media. */
+.db-app .db-card-body h4 {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .02em;
+	line-height: 1.05;
+	text-transform: uppercase;
+	font-weight: 400;
+}
+.db-app .db-price {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.25rem;
+	font-variant-numeric: tabular-nums;
+}
+.db-app .db-card-img {
+	border-radius: var(--db-r-md) var(--db-r-md) 0 0;
+	box-shadow: var(--db-shadow-1);
+}
+
+/* Branded placeholder tile (boxed mono wordmark) for photo-less items —
+ * .db-card-img--placeholder is emitted by renderMenu when item.image is absent. */
+.db-app .db-card-img--placeholder {
+	background-image: none;
+	background: #fff;
+	border: 2px solid var(--db-ink);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	box-shadow: var(--db-shadow-1);
+}
+.db-app .db-card-img--placeholder::before {
+	content: "DB";
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 34px;
+	letter-spacing: .1em;
+	color: var(--db-ink);
+	line-height: 1;
+}
+.db-app .db-card-img--placeholder::after {
+	content: "DOUGH BOSS";
+	font-weight: 600;
+	font-size: 8px;
+	letter-spacing: .4em;
+	text-transform: uppercase;
+	color: var(--db-muted);
+	padding-left: .4em;
+}
+
+/* Builder option rows (<label class="db-option"><input>…</label>): soft shadow,
+ * ink accent on the control, and a selected-state ring via :has (2020+ browsers;
+ * old Safari simply shows no ring — the native radio/checkbox still indicates). */
+.db-app .db-option {
+	box-shadow: var(--db-shadow-1);
+	touch-action: manipulation;
+}
+.db-app .db-option input { accent-color: var(--db-ink); }
+.db-app .db-option:has(input:checked) {
+	border-color: var(--db-ink);
+	box-shadow: 0 0 0 1px var(--db-ink), var(--db-shadow-1);
+}
+
+/* Confirmation: mono border + optional pop-in check badge (badge markup is a
+ * Phase-2 JS addition; the styles are dormant until then, harmless if unused). */
+.db-app .db-confirm {
+	border: 2px solid var(--db-ink);
+	border-radius: var(--db-r-xl);
+	background: var(--db-paper);
+}
+.db-app .db-confirm-check {
+	width: 54px;
+	height: 54px;
+	margin: 0 auto 12px;
+	border-radius: 50%;
+	background: #1f8a54;
+	color: #fff;
+	font-size: 27px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+	.db-app .db-confirm-check { animation: db-checkpop .42s var(--db-ease) both; }
+}
+@keyframes db-checkpop {
+	0% { transform: scale(.4); opacity: 0; }
+	60% { transform: scale(1.12); }
+	100% { transform: scale(1); opacity: 1; }
+}
+
+/* Success toast variant (Phase-2 JS calls showToast(msg, ok); dormant until then). */
+.db-app .db-toast--ok {
+	background: var(--db-ink);
+	color: #fff;
+}
+.db-app .db-toast--ok::before {
+	content: "";
+	display: inline-block;
+	width: 18px;
+	height: 18px;
+	margin-right: 10px;
+	border-radius: 50%;
+	background: #1f8a54;
+	vertical-align: middle;
+}
