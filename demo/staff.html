@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Staff &amp; Kitchen Sign-in</title>
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self';">
 <!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
      For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
      Content-Security-Policy: frame-ancestors 'none'
@@ -14,14 +14,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
-:root{--gold:#d98a3d;--ink:#0a0807;}
+:root{--paper:#f7f5f0;--ink:#0a0807;}
 *{box-sizing:border-box;}
 html,body{height:100%;}
 body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;background:var(--ink);-webkit-font-smoothing:antialiased;}
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
-.skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#241405;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+.skip{position:absolute;top:-999px;left:12px;background:var(--paper);color:#0d0d0d;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 .skip:focus{top:0;}
-:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:3px;}
+:focus-visible{outline:3px solid var(--paper);outline-offset:3px;border-radius:3px;}
 
 /* cinematic scene */
 .scene{position:relative;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:44px 18px 60px;}
@@ -53,9 +53,11 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
 /* foreground */
 .stage{position:relative;z-index:2;width:100%;max-width:440px;text-align:center;}
-.brand{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:clamp(40px,9vw,64px);color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.55);}
-.brand span{color:var(--gold);}
-.eyebrow{font-family:'Bebas Neue',sans-serif;letter-spacing:.32em;text-transform:uppercase;font-size:14px;color:var(--gold);margin-top:6px;}
+.brand-mark{display:inline-flex;flex-direction:column;align-items:center;gap:6px;line-height:1;text-shadow:0 4px 30px rgba(0,0,0,.55);}
+.brand-mark .bm-box{font-family:'Bebas Neue',sans-serif;font-size:clamp(24px,6vw,34px);letter-spacing:4px;color:#fff;border:3px solid #fff;padding:9px 11px 8px 15px;white-space:nowrap;}
+.brand-mark .bm-dot{letter-spacing:0;}
+.brand-mark .bm-sub{font-family:'Barlow',sans-serif;font-weight:600;font-size:10px;letter-spacing:.4em;text-transform:uppercase;color:#d7d1c6;padding-left:.4em;white-space:nowrap;}
+.eyebrow{font-family:'Bebas Neue',sans-serif;letter-spacing:.32em;text-transform:uppercase;font-size:14px;color:var(--paper);margin-top:6px;}
 .tagline{color:#e7ddcd;font-size:14.5px;margin:6px 0 24px;text-shadow:0 2px 14px rgba(0,0,0,.65);}
 
 /* login card */
@@ -65,8 +67,8 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .fld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
 .fld label{font-family:'Bebas Neue',sans-serif;letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:#cfc9bd;}
 .fld input{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:12px 14px;font:inherit;font-size:15px;}
-.fld input:focus-visible{outline:3px solid var(--gold);outline-offset:2px;border-color:var(--gold);}
-.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#241405;background:var(--gold);box-shadow:0 12px 30px rgba(217,138,61,.32);transition:filter .15s,transform .1s;text-decoration:none;}
+.fld input:focus-visible{outline:3px solid var(--paper);outline-offset:2px;border-color:var(--paper);}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#0d0d0d;background:var(--paper);box-shadow:0 12px 30px rgba(0,0,0,.35);transition:filter .15s,transform .1s;text-decoration:none;}
 .btn:hover{filter:brightness(1.07);}
 .btn:active{transform:scale(.98);}
 .err{color:#ffb38a;font-size:13px;min-height:1em;margin:4px 0 0;}
@@ -82,18 +84,18 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .backend:hover{background:rgba(0,0,0,.42);}
 .backend b{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:17px;display:block;}
 .backend small{color:#b8b1a4;font-size:12px;}
-.backend .arr{color:var(--gold);font-size:20px;}
+.backend .arr{color:var(--paper);font-size:20px;}
 .foot{position:relative;z-index:2;margin-top:24px;font-size:11.5px;color:#a89f90;text-align:center;}
 .foot a{color:#cbbfaf;}
 
 /* role tabs */
 .roletabs{display:flex;gap:4px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:4px;margin-bottom:18px;}
 .roletab{flex:1;border:0;background:transparent;color:#cfc9bd;font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;font-size:15px;padding:10px 8px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s;}
-.roletab.is-active{background:var(--gold);color:#241405;}
+.roletab.is-active{background:var(--paper);color:#0d0d0d;}
 .roletab:not(.is-active):hover{background:rgba(255,255,255,.06);}
 .rolepanel{display:none;}
 .rolepanel.is-active{display:block;}
-.role-note{display:flex;align-items:center;gap:8px;background:rgba(217,138,61,.1);border:1px solid rgba(217,138,61,.28);border-radius:10px;padding:10px 12px;font-size:12px;color:#e7ddcd;margin:0 0 16px;}
+.role-note{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:10px 12px;font-size:12px;color:#e7ddcd;margin:0 0 16px;}
 @media(prefers-reduced-motion:reduce){
 	.scene-art,.arms,.torso,.dough,.bokeh{animation:none;}
 	.puff,.fleck{display:none;}
@@ -211,7 +213,7 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
   <div class="stage">
     <h1 class="vh">Dough Boss &mdash; Staff &amp; Kitchen sign-in</h1>
-    <div class="brand">DOUGH<span>BOSS</span></div>
+    <div class="brand-mark"><span class="bm-box">DOUGH BOSS<span class="bm-dot">.</span></span><span class="bm-sub">Lebanese Bakery</span></div>
     <div class="eyebrow">Kitchen &amp; Staff</div>
     <p class="tagline">Fresh from the stone oven &middot; since 2009</p>
 

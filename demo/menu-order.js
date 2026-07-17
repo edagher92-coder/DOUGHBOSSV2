@@ -277,6 +277,7 @@
 	}
 	function closeDrawer() {
 		drawerOpen = false; checkoutMode = false; pendingOrder = null;
+		drawer.style.bottom = '';
 		overlay.classList.remove('is-open'); drawer.classList.remove('is-open');
 		fab.setAttribute('aria-expanded', 'false');
 		if (lastFocus && lastFocus.focus && lastFocus.offsetParent !== null) { lastFocus.focus(); }
@@ -327,10 +328,14 @@
 				'<div class="cd-tline cd-tdisc"><span>Voucher ' + esc(voucher.code) + '</span><span>&minus;' + money(discount()) + '</span></div>'
 			: '') +
 			'<div class="cd-tot"><span>Total</span><strong>' + money(netTotal()) + '</strong></div>';
+		/* The form is a flex column: everything scrolls inside .cd-scroll while the
+		   submit CTA stays pinned in .cd-cta — reachable on short/landscape screens
+		   and above the on-screen keyboard (see the visualViewport handler below). */
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+			'<form class="cd-form" novalidate>' +
+			'<div class="cd-scroll">' +
 			'<div class="cd-summary">' + summaryLines() + '</div>' +
 			'<div class="cd-vouch">' + vouchHtml + '<p class="cd-verr" role="alert"></p></div>' +
-			'<form class="cd-form" novalidate>' +
 			'<label class="cd-f"><span>Name</span><input name="name" type="text" autocomplete="name" required></label>' +
 			'<label class="cd-f"><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required></label>' +
 			'<fieldset class="cd-f"><legend>Fulfilment</legend><p>Pickup from <strong>Revesby</strong></p><input type="hidden" name="ful" value="pickup"><input type="hidden" name="shop" value="Revesby"></fieldset>' +
@@ -338,11 +343,14 @@
 			'<legend>Payment</legend>' +
 			'<p class="cd-privacy cd-carddemo">Card payment (simulated). You&rsquo;ll enter test card details on the next step &mdash; orders &amp; payments are simulated, no real payment is taken.</p>' +
 			'</fieldset>' +
+			'<p class="cd-privacy">We use your name and phone only to process your order. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
+			'</div>' +
+			'<div class="cd-cta">' +
 			'<div class="cd-tots">' + totsHtml + '</div>' +
 			'<div class="cd-err" role="alert"></div>' +
 			'<button type="submit" class="vb-btn vb-btn-ember">Place demo order</button>' +
 			'<button type="button" class="vb-btn vb-btn-dark cd-back">Back to order</button>' +
-			'<p class="cd-privacy">We use your name and phone only to process your order. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
+			'</div>' +
 			'</form>';
 		var f = drawer.querySelector('input[name="name"]'); if (f) { f.focus(); }
 	}
@@ -371,7 +379,12 @@
 		var name = (fd.get('name') || '').toString().trim();
 		var phone = (fd.get('phone') || '').toString().trim();
 		var err = form.querySelector('.cd-err');
-		if (!name || !phone) { err.textContent = 'Please add your name and phone.'; return; }
+		if (!name || !phone) {
+			err.textContent = 'Please add your name and phone.';
+			var miss = form.querySelector(!name ? 'input[name="name"]' : 'input[name="phone"]');
+			if (miss) { miss.focus(); }
+			return;
+		}
 		pendingOrder = { name: name, phone: phone };
 		renderCardSheet();
 	}
@@ -385,15 +398,19 @@
 		drawer.innerHTML = '<div class="cd-head"><h3>Payment</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-test" role="status">Test mode &mdash; no real payment. Orders &amp; payments are simulated.</div>' +
 			'<form class="cd-cardform" novalidate>' +
+			'<div class="cd-scroll">' +
 			'<label class="cd-f"><span>Card number</span><input name="cnum" class="cd-cnum" type="text" inputmode="numeric" autocomplete="off" placeholder="4242 4242 4242 4242"></label>' +
 			'<div class="cd-cardrow2">' +
 			'<label class="cd-f"><span>Expiry (MM/YY)</span><input name="cexp" class="cd-cexp" type="text" inputmode="numeric" autocomplete="off" placeholder="12/29"></label>' +
 			'<label class="cd-f"><span>CVC</span><input name="ccvc" class="cd-ccvc" type="text" inputmode="numeric" autocomplete="off" placeholder="123"></label>' +
 			'</div>' +
-			'<div class="cd-err" role="alert"></div>' +
-			'<button type="submit" class="vb-btn vb-btn-ember cd-payb">Pay ' + money(netTotal()) + ' &mdash; test mode</button>' +
-			'<button type="button" class="vb-btn vb-btn-dark cd-cardback">Back</button>' +
 			'<p class="cd-privacy">Nothing you type here is stored or sent anywhere &mdash; this screen is part of the interactive demo. Use made-up test details, not a real card.</p>' +
+			'</div>' +
+			'<div class="cd-cta">' +
+			'<div class="cd-err" role="alert"></div>' +
+			'<button type="submit" class="vb-btn vb-btn-ember cd-payb">' + (netTotal() > 0 ? 'Pay ' + money(netTotal()) + ' &mdash; test mode' : 'Place order &mdash; voucher covers it') + '</button>' +
+			'<button type="button" class="vb-btn vb-btn-dark cd-cardback">Back</button>' +
+			'</div>' +
 			'</form>';
 		var f = drawer.querySelector('.cd-cnum'); if (f) { f.focus(); }
 	}
@@ -470,6 +487,51 @@
 			t.value = t.value.replace(/\D/g, '').slice(0, 4);
 		}
 	});
+	/* Enter in the voucher field applies the code instead of submitting checkout
+	   (the field lives inside the checkout form so the whole step scrolls as one). */
+	drawer.addEventListener('keydown', function (e) {
+		if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('cd-vinput')) {
+			e.preventDefault();
+			applyVoucher();
+		}
+	});
+
+	/* --- on-screen keyboard handling (visualViewport) ---
+	   The drawer is fixed top:0/bottom:0; a mobile keyboard overlays the layout
+	   viewport, hiding the pinned CTA. When the visual viewport shrinks we lift
+	   the drawer's bottom edge above the keyboard and nudge only the inner
+	   .cd-scroll so the focused input stays visible (never scrolling the page
+	   behind the drawer). Browsers without visualViewport resize the layout
+	   viewport themselves, which achieves the same and needs no fallback code. */
+	var vv = window.visualViewport || null;
+	function revealFocused() {
+		var t = document.activeElement;
+		if (!t || t.tagName !== 'INPUT' || !drawer.contains(t)) { return; }
+		var sc = t.closest ? t.closest('.cd-scroll') : null;
+		if (!sc) { return; }
+		var r = t.getBoundingClientRect(), c = sc.getBoundingClientRect();
+		if (r.bottom > c.bottom - 10) { sc.scrollTop += (r.bottom - c.bottom) + 10; }
+		else if (r.top < c.top + 10) { sc.scrollTop -= (c.top - r.top) + 10; }
+	}
+	function vvSync() {
+		if (!vv) { return; }
+		var kb = drawerOpen ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+		var off = kb > 1 ? kb + 'px' : '';
+		if (drawer.style.bottom !== off) {
+			drawer.style.bottom = off;
+			if (off) { requestAnimationFrame(revealFocused); }
+		}
+	}
+	if (vv) {
+		vv.addEventListener('resize', vvSync);
+		vv.addEventListener('scroll', vvSync);
+	}
+	drawer.addEventListener('focusin', function (e) {
+		if (e.target.tagName !== 'INPUT') { return; }
+		// Give the keyboard a beat to open/settle, then bring the field into view.
+		setTimeout(function () { vvSync(); revealFocused(); }, 250);
+	});
+
 	document.addEventListener('keydown', function (e) {
 		var root = sheetOpen ? sheet : (drawerOpen ? drawer : null);
 		if (!root) { return; }

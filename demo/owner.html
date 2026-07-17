@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Owner / Manager</title>
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self';">
 <!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
      For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
      Content-Security-Policy: frame-ancestors 'none'
@@ -23,7 +23,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&display=swap">
 <style>
 :root{
-	--gold:#b5571f;--amber:#d98a3d;--ink:#1a120c;--bg:#f6f1e9;--card:#ffffff;
+	--ember:#111111;--ember2:#5a5a5a;--ink:#1a120c;--bg:#f6f1e9;--card:#ffffff;
 	--line:#e9e1d3;--text:#241b14;--muted:#6b6358;--muted2:#a89f90;
 	--new:#c0392b;--prep:#2f6db0;--ready:#246640;--done:#5f6a58;--cancel:#8a4a4a;--cater:#9b6a1f;
 	--ok:#246640;--busy:#c9871f;--behind:#c0392b;
@@ -32,18 +32,19 @@
 html,body{margin:0;height:100%;}
 body{font-family:'Barlow',system-ui,Arial,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:16px;}
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
-.skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+.skip{position:absolute;top:-999px;left:12px;background:var(--ember);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 .skip:focus{top:0;}
-:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:3px;}
+:focus-visible{outline:3px solid var(--ember);outline-offset:3px;border-radius:3px;}
 button{font:inherit;cursor:pointer;}
 a{color:inherit;}
 
 /* top bar */
 .top{background:var(--ink);color:#f3efe8;position:sticky;top:0;z-index:30;}
 .top-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:11px 16px;}
-.bm{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:26px;color:#fff;text-decoration:none;white-space:nowrap;}
-.bm span{color:var(--amber);}
-.bm small{display:block;font-family:'Barlow';letter-spacing:.2em;text-transform:uppercase;font-size:9px;color:var(--muted2);margin-top:-3px;}
+.bm{display:inline-flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;line-height:1;white-space:nowrap;}
+.bm .bm-box{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.2px;color:#fff;border:2px solid #fff;padding:5px 6px 4px 9px;white-space:nowrap;}
+.bm .bm-dot{letter-spacing:0;}
+.bm .bm-sub{font-family:'Barlow',sans-serif;font-weight:600;font-size:7px;letter-spacing:.35em;text-transform:uppercase;color:var(--muted2);padding-left:.35em;white-space:nowrap;}
 .sp{flex:1;}
 .who{font-size:13.5px;color:#d7cdbe;display:flex;align-items:center;gap:7px;}
 .who b{color:#fff;}
@@ -64,9 +65,9 @@ a{color:inherit;}
 .tabs-in{max-width:1180px;margin:0 auto;display:flex;gap:2px;padding:0 10px;overflow-x:auto;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);}
 .tab{background:transparent;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:14px 16px 12px;font-size:14.5px;font-weight:700;white-space:nowrap;}
 .tab:hover{color:var(--text);}
-.tab[aria-selected="true"]{color:var(--gold);border-bottom-color:var(--gold);}
+.tab[aria-selected="true"]{color:var(--ember);border-bottom-color:var(--ember);}
 .tab .pill{background:#f0eadf;color:var(--muted);border-radius:999px;font-size:11px;font-weight:800;padding:1px 7px;margin-left:5px;}
-.tab[aria-selected="true"] .pill{background:var(--gold);color:#fff;}
+.tab[aria-selected="true"] .pill{background:var(--ember);color:#fff;}
 
 .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 80px;}
 .panel{display:none;}
@@ -99,7 +100,7 @@ a{color:inherit;}
 .kpi .s{font-size:12.5px;color:var(--muted);}
 .kpi .s b{color:var(--ready);}
 .kpi.dark{background:linear-gradient(155deg,#241b14,#3c2a1b);border-color:#241b14;color:#fff;}
-.kpi.dark .l{color:#d7cbba;} .kpi.dark .s{color:#c9bdac;} .kpi.dark .v{color:var(--amber);}
+.kpi.dark .l{color:#d7cbba;} .kpi.dark .s{color:#c9bdac;} .kpi.dark .v{color:#ffffff;}
 .kpi.alert{position:relative;}
 .kpi.alert::after{content:"";position:absolute;top:13px;right:13px;width:9px;height:9px;border-radius:50%;background:var(--new);box-shadow:0 0 0 4px rgba(192,57,43,.16);}
 .kpi.alert .l::after{content:" (live)";font-size:10px;color:var(--new);}
@@ -109,19 +110,19 @@ a{color:inherit;}
 .block h3{margin:0 0 13px;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
 .bar{height:16px;border-radius:9px;overflow:hidden;display:flex;background:#efe9de;}
 .bar i{display:block;height:100%;}
-.bar i.on{background:var(--gold);} .bar i.ca{background:var(--cater);}
+.bar i.on{background:var(--ember);} .bar i.ca{background:var(--cater);}
 .legend{display:flex;gap:20px;margin-top:11px;font-size:13.5px;color:var(--muted);}
 .legend b{color:var(--text);}
 .cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;}
 .trend{display:flex;align-items:flex-end;gap:8px;height:96px;margin-top:6px;}
 .trend .d{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;}
-.trend .bar2{width:100%;background:linear-gradient(180deg,var(--amber),var(--gold));border-radius:6px 6px 3px 3px;min-height:4px;}
+.trend .bar2{width:100%;background:linear-gradient(180deg,var(--ember2),var(--ember));border-radius:6px 6px 3px 3px;min-height:4px;}
 .trend .dl{font-size:11px;color:var(--muted);}
 .srow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px;}
 .srow:first-of-type{border-top:0;}
 .srow .nm{font-weight:700;min-width:96px;}
 .srow .tk{flex:1;height:8px;border-radius:6px;background:#efe9de;overflow:hidden;}
-.srow .tk i{display:block;height:100%;background:var(--gold);}
+.srow .tk i{display:block;height:100%;background:var(--ember);}
 .srow .vv{font-variant-numeric:tabular-nums;color:var(--muted);min-width:96px;text-align:right;}
 .alertrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px;}
 .alertrow:first-of-type{border-top:0;}
@@ -140,7 +141,7 @@ a{color:inherit;}
 .ocount .cc.n .num{color:var(--new);} .ocount .cc.p .num{color:var(--prep);} .ocount .cc.r .num{color:var(--ready);}
 .ovr-cta{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
 .ovr-cta .t{font-size:14px;color:var(--muted);}
-.golink{background:var(--gold);color:#fff;border:0;border-radius:11px;padding:11px 16px;font-size:14.5px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+.golink{background:var(--ember);color:#fff;border:0;border-radius:11px;padding:11px 16px;font-size:14.5px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
 .golink:hover{filter:brightness(1.06);}
 
 /* tables */
@@ -177,7 +178,7 @@ a{color:inherit;}
 .catc .dep{font-size:12.5px;color:var(--muted);}
 .dchip{font-size:10.5px;font-weight:800;letter-spacing:.03em;border-radius:999px;padding:3px 9px;text-transform:uppercase;}
 .dchip.paid{background:#e2f3e9;color:var(--ready);} .dchip.due{background:#fbe7e4;color:var(--new);} .dchip.bal{background:#f7ecd6;color:#7a4d0a;}
-.mini{background:var(--gold);color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;min-height:40px;}
+.mini{background:var(--ember);color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;min-height:40px;}
 .subh{font-family:'Bebas Neue',sans-serif;font-size:21px;letter-spacing:.02em;color:#5b5347;margin:22px 0 11px;}
 .subh:first-of-type{margin-top:2px;}
 .empty{grid-column:1/-1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px;text-align:center;color:var(--muted);}
@@ -201,7 +202,7 @@ a{color:inherit;}
 
 <header class="top">
 	<div class="top-in">
-		<a class="bm" href="#p-dashboard">DOUGH<span>BOSS</span><small>Owner / Manager</small></a>
+		<a class="bm brand-mark" href="#p-dashboard" aria-label="Dough Boss — Owner / Manager"><span class="bm-box">DOUGH BOSS<span class="bm-dot">.</span></span><span class="bm-sub">Owner / Manager</span></a>
 		<div class="sp"></div>
 		<span class="who"><span class="dot" aria-hidden="true"></span> <span>Hi <b id="who">Manager</b></span></span>
 		<button type="button" class="out" id="signout">Sign out</button>
@@ -247,7 +248,7 @@ a{color:inherit;}
 				<h3>Today by channel</h3>
 				<div class="bar" id="chanbar" role="img" aria-label="Channel split: Online 0%, Catering 0%"><i class="on" aria-hidden="true" style="width:60%"></i><i class="ca" aria-hidden="true" style="width:40%"></i></div>
 				<div class="legend">
-					<span><span class="cdot" aria-hidden="true" style="background:var(--gold)"></span>Online <b id="lg-on">0</b></span>
+					<span><span class="cdot" aria-hidden="true" style="background:var(--ember)"></span>Online <b id="lg-on">0</b></span>
 					<span><span class="cdot" aria-hidden="true" style="background:var(--cater)"></span>Catering <b id="lg-ca">0</b></span>
 				</div>
 				<h3 style="margin-top:18px">Today by store</h3>
@@ -329,24 +330,24 @@ a{color:inherit;}
 	/* All names and figures below are fictional, for demonstration only. */
 	var seq=1042; function ref(){seq+=1;return 'DB-'+seq;}
 	var ORDERS=[
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft drink 600ml'],total:27.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Delivery',items:['1× All Meat','1× Garlic Prawns','2× Spring water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-6))},
-		{ref:ref(),channel:'online',store:'Roselands',who:'Mariam H.',type:'Pickup',items:['3× Zaatar & Cheese','1× Choc banana'],total:33.50,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),12)},
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Joe T.',type:'Pickup',items:['1× Chicken Delight','1× BBQ Chicken','1× Juice'],total:29.00,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),38)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Nadia A.',type:'Delivery',items:['2× Veggie Plus','1× Fattoush','1× Ayran'],total:36.50,status:'ready',placed:at(0,Math.max(0,now.getHours()-1),5)},
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Omar S.',type:'Pickup',items:['2× Lahm bi ajeen','1× Lentil soup'],total:24.00,status:'completed',placed:at(0,9,14)},
-		{ref:ref(),channel:'online',store:'Roselands',who:'Priya R.',type:'Delivery',items:['1× Margherita','1× Garlic bread'],total:28.50,status:'completed',placed:at(0,11,2)},
-		{ref:ref(),channel:'online',store:'Revesby',who:'Hassan D.',type:'Pickup',items:['4× Mixed manoush','2× Soft drinks'],total:46.00,status:'new',placed:at(0,Math.max(0,now.getHours()-2),0),scheduled:at(0,Math.min(21,now.getHours()+3),30)},
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Office — Lvl 3',type:'Delivery',items:['6× Assorted manoush','3× Salads','6× Drinks'],total:92.00,status:'new',placed:at(-1,16,40),scheduled:at(1,12,0)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Layla M.',type:'Pickup',items:['2× Zaatar','1× Cheese','1× Soft Drinks 600ml'],total:23.50,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-2))},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Sam K.',type:'Delivery',items:['1× All Meat','1× Garlic Prawns','2× Spring Water'],total:41.00,status:'new',placed:at(0,now.getHours(),Math.max(0,now.getMinutes()-6))},
+		{ref:ref(),channel:'online',store:'Roselands',who:'Mariam H.',type:'Pickup',items:['3× Zaatar & Cheese','1× Choco Banana'],total:38.50,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),12)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Joe T.',type:'Pickup',items:['1× Chicken Delight','1× BBQ Chicken','1× Juice'],total:32.50,status:'preparing',placed:at(0,Math.max(0,now.getHours()-1),38)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Nadia A.',type:'Delivery',items:['2× Veggie Plus','1× Zaatar & Veggie','1× Spring Water'],total:42.00,status:'ready',placed:at(0,Math.max(0,now.getHours()-1),5)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Omar S.',type:'Pickup',items:['2× Meat','1× Cheese'],total:27.50,status:'completed',placed:at(0,9,14)},
+		{ref:ref(),channel:'online',store:'Roselands',who:'Priya R.',type:'Delivery',items:['1× Pepperoni & Cheese','1× Garlic Prawns'],total:32.00,status:'completed',placed:at(0,11,2)},
+		{ref:ref(),channel:'online',store:'Revesby',who:'Hassan D.',type:'Pickup',items:['2× Zaatar & Cheese','2× Meat','2× Soft Drinks 600ml'],total:45.00,status:'new',placed:at(0,Math.max(0,now.getHours()-2),0),scheduled:at(0,Math.min(21,now.getHours()+3),30)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Office — Lvl 3',type:'Delivery',items:['4× Zaatar & Cheese','4× Meat','6× Juice'],total:101.00,status:'new',placed:at(-1,16,40),scheduled:at(1,12,0)},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample School',type:'Catering',items:['Lunch run — 60 pax','Mixed manoush platters ×6','Fruit & juice'],total:540.00,deposit:150,status:'confirmed',placed:at(-3,10,0),scheduled:at(2,11,30),pax:60,pkg:'School Lunch Run'},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Smith Wedding',type:'Catering',items:['Grazing + hot manoush — 120 pax','Dessert table','Service staff ×2'],total:1980.00,deposit:500,status:'confirmed',placed:at(-6,13,0),scheduled:at(9,17,0),pax:120,pkg:'Premium Event'},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Corporate',type:'Catering',items:['Corporate breakfast — ~40 pax','Manoush + coffee cart'],total:0,deposit:0,status:'enquiry',placed:at(0,Math.max(0,now.getHours()-3),20),pax:40,pkg:'Corporate Breakfast'},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Brown Family',type:'Catering',items:['Engagement — ~80 pax','Mixed platters + dessert'],total:0,deposit:0,status:'enquiry',placed:at(-1,19,5),pax:80,pkg:'Event (TBC)'},
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Karim B.',type:'Pickup',items:['2× Zaatar','1× Cheese & tomato'],total:22.00,status:'completed',placed:at(-1,12,30)},
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Karim B.',type:'Pickup',items:['2× Zaatar','1× Meat & Cheese'],total:20.00,status:'completed',placed:at(-1,12,30)},
 		{ref:ref(),channel:'online',store:'Roselands',who:'Sophie L.',type:'Delivery',items:['1× All Meat','1× Veggie Plus'],total:31.00,status:'completed',placed:at(-1,18,12)},
 		{ref:ref(),channel:'online',store:'Revesby',who:'Daniel P.',type:'Pickup',items:['1× Chicken Delight'],total:14.00,status:'cancelled',placed:at(-2,13,47)},
 		{ref:ref(),channel:'catering',store:'Revesby',who:'Sample Sports Club',type:'Catering',items:['Function — 90 pax','Mixed manoush + salads'],total:1260.00,deposit:350,status:'completed',placed:at(-12,10,0),scheduled:at(-4,18,0),pax:90,pkg:'Function'},
-		{ref:ref(),channel:'online',store:'Bankstown',who:'Yusra M.',type:'Delivery',items:['2× Margherita','1× Garlic bread','1× Soft drink'],total:39.50,status:'completed',placed:at(-2,19,22)}
+		{ref:ref(),channel:'online',store:'Bankstown',who:'Yusra M.',type:'Delivery',items:['2× Pepperoni & Cheese','1× Spinach & Cheese','1× Soft Drinks 600ml'],total:45.00,status:'completed',placed:at(-2,19,22)}
 	];
 	var DAYREV=[820,1140,990,1370,1210,1580,1310];
 	var STORES=['Revesby','Bankstown','Roselands'];
