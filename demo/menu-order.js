@@ -44,6 +44,37 @@
 		{ label: 'Add labneh', sum: 'Labneh', delta: 2.5 },
 		{ label: 'Add cheese', sum: 'Cheese', delta: 2.5 }
 	] };
+	/* Pizza builder groups from the owner's in-store POS screens (V23 photos).
+	   Base Sauce is free (pick one); Sauce on Top is +$1.50 each; extra toppings
+	   are tiered $1/$2/$3 exactly as the till shows. Crust pricing is intentionally
+	   NOT changed here — the POS shows Wholemeal $2.50 / GF $3.50, which conflicts
+	   with the previously-confirmed flat $4; left for owner confirmation. */
+	var OPT_BASE_SAUCE = { id: 'basesauce', label: 'Base Sauce', type: 'radio', choices: [
+		{ label: 'Tomato (Pizza Sauce)', sum: 'Tomato base', delta: 0, def: true },
+		{ label: 'Garlic', sum: 'Garlic base', delta: 0 },
+		{ label: 'BBQ', sum: 'BBQ base', delta: 0 },
+		{ label: 'No Sauce', sum: 'No base sauce', delta: 0 }
+	] };
+	var OPT_SAUCE_TOP = { id: 'saucetop', label: 'Sauce on Top', type: 'check', choices: [
+		{ label: 'Tomato Ketchup', delta: 1.5 },
+		{ label: 'Smokey BBQ', delta: 1.5 },
+		{ label: 'Mayo Swirl', delta: 1.5 },
+		{ label: 'Peri Peri Sauce', delta: 1.5 },
+		{ label: 'Spicy Siracha', delta: 1.5 }
+	] };
+	var OPT_ADDONS = { id: 'addons', label: 'Add Extra Toppings', type: 'check', choices: [
+		{ label: 'Olives', delta: 1 },
+		{ label: 'Spinach', delta: 2 },
+		{ label: 'Garlic sauce', delta: 2 },
+		{ label: 'Onion', delta: 2 },
+		{ label: 'Mushroom', delta: 2 },
+		{ label: 'Capsicum', delta: 2 },
+		{ label: 'Tomato', delta: 2 },
+		{ label: 'Sujuk', delta: 3 },
+		{ label: 'Chicken', delta: 3 },
+		{ label: 'Cheese', delta: 3 },
+		{ label: 'Pepperoni', delta: 3 }
+	] };
 	/* Per-item lemon & chilli (free) — offered on every pizza and on the meat
 	   manoush (traditional with lahme). "No thanks" is the default, so a line only
 	   shows "Lemon & chilli" when the customer said yes — per-item kitchen accuracy. */
@@ -53,7 +84,7 @@
 	] };
 	var MEAT_MANOUSH = { 'Meat': 1, 'Meat & Cheese': 1 };
 	function optionGroups(catId, name) {
-		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_LEMON]; }
+		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_LEMON]; }
 		if (catId === 'cat-manoush') {
 			return MEAT_MANOUSH[name] ? [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON] : [OPT_STYLE, OPT_PIZZA_BASE];
 		}
