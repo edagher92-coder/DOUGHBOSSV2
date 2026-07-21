@@ -1191,7 +1191,7 @@ class DoughBoss_Settings {
 		$v = (string) self::get( 'tpl_order_email_body', '' );
 		return '' !== trim( $v )
 			? $v
-			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\nWe'll let you know as it progresses.\n";
+			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\nKeep your order number and email to check the latest status on our website.\n";
 	}
 
 	/**

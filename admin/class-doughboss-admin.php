@@ -45,6 +45,28 @@ class DoughBoss_Admin {
 		add_action( 'admin_notices', array( $this, 'render_board_key_reveal_notice' ) );
 		add_action( 'admin_post_doughboss_clear_delivery_notice', array( $this, 'handle_clear_delivery_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_delivery_autodisabled_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_migration_notice' ) );
+	}
+
+	/**
+	 * Tell owners when the lifecycle migration failed closed.
+	 *
+	 * @return void
+	 */
+	public function render_migration_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$error = (string) get_option( 'doughboss_migration_error', '' );
+		if ( '' === $error ) {
+			return;
+		}
+		?>
+		<div class="notice notice-error">
+			<p><strong><?php esc_html_e( 'DoughBoss order upgrade needs attention.', 'doughboss' ); ?></strong></p>
+			<p><?php echo esc_html( $error ); ?> <?php esc_html_e( 'Online checkout and staff order changes are paused to protect order history. Ask the site administrator to verify the DoughBoss Orders, Order Items and Order Events tables use InnoDB, then retry the plugin upgrade.', 'doughboss' ); ?></p>
+		</div>
+		<?php
 	}
 
 	/**
@@ -542,6 +564,7 @@ class DoughBoss_Admin {
 		var isCatering = sel.matches('.db-catering-status');
 		if (!isOrder && !isCatering) { return; }
 		var id = sel.getAttribute(isOrder ? 'data-order' : 'data-enquiry');
+		var previous = sel.getAttribute('data-current') || '';
 		var endpoint = isOrder
 			? DoughBossAdmin.restUrl + '/admin/order/' + id + '/status'
 			: DoughBossAdmin.restUrl + '/admin/catering/' + id + '/status';
@@ -549,17 +572,25 @@ class DoughBoss_Admin {
 		fetch(endpoint, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
-			body: JSON.stringify({ status: sel.value })
+			body: JSON.stringify(isOrder ? {
+				status: sel.value,
+				expected_version: parseInt(sel.getAttribute('data-version'), 10) || 1,
+				event_key: ['admin', id, sel.getAttribute('data-version') || '1', sel.value, Date.now(), Math.random().toString(36).slice(2)].join(':'),
+				reason_code: sel.value === 'cancelled' ? 'staff_cancelled' : ''
+			} : { status: sel.value })
 		}).then(function (r) {
 			return r.json().catch(function () { return {}; }).then(function (data) {
 				if (!r.ok) { throw new Error(data.message || 'Request failed.'); }
 				return data;
 			});
-		}).then(function () {
+		}).then(function (data) {
 			sel.disabled = false;
+			if (isOrder && data.version) { sel.setAttribute('data-version', data.version); }
+			sel.setAttribute('data-current', sel.value);
 			var row = sel.closest('tr');
 			if (row) { row.style.transition = 'background .6s'; row.style.background = '#eaffea'; setTimeout(function(){ row.style.background=''; }, 800); }
-		}).catch(function () { sel.disabled = false; alert('Could not update status.'); });
+			if (isOrder) { window.location.reload(); }
+		}).catch(function (error) { sel.disabled = false; sel.value = previous; alert(error.message || 'Could not update status.'); });
 	});
 
 	document.addEventListener('click', function (e) {
@@ -1011,8 +1042,15 @@ JS;
 								</td>
 								<td><?php echo esc_html( mysql2date( 'M j, g:i a', $order->created_at ) ); ?></td>
 								<td>
-									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>">
+									<?php
+									$available_statuses = array_merge( array( $order->status ), DoughBoss_Order::allowed_transitions( $order->status, $order->order_type ) );
+									if ( isset( $order->payment_status ) && 'paid' === $order->payment_status ) {
+										$available_statuses = array_values( array_diff( $available_statuses, array( 'cancelled' ) ) );
+									}
+									?>
+									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>" data-version="<?php echo esc_attr( isset( $order->version ) ? (int) $order->version : 1 ); ?>" data-current="<?php echo esc_attr( $order->status ); ?>">
 										<?php foreach ( $statuses as $key => $label ) : ?>
+											<?php if ( ! in_array( $key, $available_statuses, true ) ) { continue; } ?>
 											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $order->status, $key ); ?>>
 												<?php echo esc_html( $label ); ?>
 											</option>
@@ -1721,7 +1759,7 @@ JS;
 					</button>
 				</div>
 			</div>
-			<div id="db-board" class="db-board" aria-live="polite">
+			<div id="db-board" class="db-board">
 				<p class="db-board-loading"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
 			</div>
 		</div>
@@ -1741,6 +1779,9 @@ JS;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$edit_id = isset( $_GET['edit'] ) ? absint( $_GET['edit'] ) : 0;
 		$editing = $edit_id ? DoughBoss_Locations::get( $edit_id ) : null;
+		$hours  = $editing ? DoughBoss_Locations::weekly_hours( $edit_id ) : array_fill_keys( array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' ), '' );
+		$preview_config = $editing ? DoughBoss_Locations::capacity_preview_config( $edit_id ) : null;
+		$preview_windows = $preview_config ? DoughBoss_Capacity::windows( $preview_config, 1 ) : array();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$msg     = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
 
@@ -1754,6 +1795,8 @@ JS;
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop saved.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'deleted' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop deleted.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'hours_invalid' === $msg ) : ?>
+				<div class="notice notice-error"><p><?php esc_html_e( 'The shop was saved, but its pickup hours were invalid. Use 24-hour ranges such as 11:00-21:00.', 'doughboss' ); ?></p></div>
 			<?php endif; ?>
 
 			<table class="wp-list-table widefat fixed striped" style="margin-bottom:1.5rem;">
@@ -1827,6 +1870,40 @@ JS;
 						<td><input name="prep_time_default" id="db-loc-prep" type="number" min="0" class="small-text" value="<?php echo esc_attr( $f( 'prep_time_default', 20 ) ); ?>" /></td>
 					</tr>
 					<tr>
+						<th><label for="db-loc-timezone"><?php esc_html_e( 'Shop timezone', 'doughboss' ); ?></label></th>
+						<td><input name="timezone" id="db-loc-timezone" type="text" class="regular-text" value="<?php echo esc_attr( $f( 'timezone', 'Australia/Sydney' ) ); ?>" /><p class="description"><?php esc_html_e( 'IANA timezone used for opening hours and daylight saving, normally Australia/Sydney.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-capacity-mode"><?php esc_html_e( 'Capacity rollout', 'doughboss' ); ?></label></th>
+						<td><select name="capacity_mode" id="db-capacity-mode"><option value="off" <?php selected( $f( 'capacity_mode', 'off' ), 'off' ); ?>><?php esc_html_e( 'Off — current checkout', 'doughboss' ); ?></option><option value="shadow" <?php selected( $f( 'capacity_mode', 'off' ), 'shadow' ); ?>><?php esc_html_e( 'Shadow — staff preview only', 'doughboss' ); ?></option></select><p class="description"><?php esc_html_e( 'Shadow mode calculates proposed windows without restricting customers or changing payments. Customer enforcement stays locked until the concurrency rehearsal passes.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Slot rules', 'doughboss' ); ?></th>
+						<td>
+							<label><?php esc_html_e( 'Window', 'doughboss' ); ?> <input name="slot_minutes" type="number" min="5" max="120" value="<?php echo esc_attr( $f( 'slot_minutes', 15 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Notice', 'doughboss' ); ?> <input name="minimum_notice_minutes" type="number" min="0" max="1440" value="<?php echo esc_attr( $f( 'minimum_notice_minutes', 30 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Horizon', 'doughboss' ); ?> <input name="booking_horizon_days" type="number" min="1" max="31" value="<?php echo esc_attr( $f( 'booking_horizon_days', 7 ) ); ?>" class="small-text" /> <?php esc_html_e( 'days', 'doughboss' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Conservative limits', 'doughboss' ); ?></th>
+						<td>
+							<label><?php esc_html_e( 'Orders per window', 'doughboss' ); ?> <input name="slot_order_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_order_capacity', 4 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Item units per window', 'doughboss' ); ?> <input name="slot_unit_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_unit_capacity', 12 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Hold', 'doughboss' ); ?> <input name="hold_minutes" type="number" min="1" max="30" value="<?php echo esc_attr( $f( 'hold_minutes', 10 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Item units currently mean cart quantity, not prep minutes or oven load. Tune from real Revesby observations before customer use.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Weekly pickup hours', 'doughboss' ); ?></th>
+						<td>
+							<?php foreach ( array( 'mon' => __( 'Mon', 'doughboss' ), 'tue' => __( 'Tue', 'doughboss' ), 'wed' => __( 'Wed', 'doughboss' ), 'thu' => __( 'Thu', 'doughboss' ), 'fri' => __( 'Fri', 'doughboss' ), 'sat' => __( 'Sat', 'doughboss' ), 'sun' => __( 'Sun', 'doughboss' ) ) as $day_key => $day_label ) : ?>
+								<label style="display:inline-block;margin:0 .75rem .5rem 0;"><?php echo esc_html( $day_label ); ?> <input name="capacity_hours[<?php echo esc_attr( $day_key ); ?>]" type="text" size="16" value="<?php echo esc_attr( $hours[ $day_key ] ); ?>" placeholder="11:00-21:00" /></label>
+							<?php endforeach; ?>
+							<p class="description"><?php esc_html_e( 'Leave closed days blank. Split service is supported with comma-separated ranges, for example 11:00-14:00, 17:00-21:00.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
 						<td>
 							<label><input type="checkbox" name="pickup_enabled" value="1" <?php checked( $editing ? $editing->pickup_enabled : 1, 1 ); ?> /> <?php esc_html_e( 'Pickup', 'doughboss' ); ?></label><br />
@@ -1840,6 +1917,19 @@ JS;
 				</table>
 				<?php submit_button( $editing ? __( 'Update shop', 'doughboss' ) : __( 'Add shop', 'doughboss' ) ); ?>
 			</form>
+			<?php if ( $editing && 'shadow' === $f( 'capacity_mode', 'off' ) ) : ?>
+				<h2><?php esc_html_e( 'Shadow pickup preview', 'doughboss' ); ?></h2>
+				<p><?php esc_html_e( 'Schedule-only planning for one item unit. These times are not shown to customers, do not include existing order load, and reserve nothing.', 'doughboss' ); ?></p>
+				<?php if ( ! $preview_windows ) : ?>
+					<div class="notice notice-warning inline"><p><?php esc_html_e( 'No proposed windows are available. Check the timezone, weekly hours, notice period and dated exceptions.', 'doughboss' ); ?></p></div>
+				<?php else : ?>
+					<table class="widefat striped" style="max-width:720px;"><thead><tr><th><?php esc_html_e( 'Local date', 'doughboss' ); ?></th><th><?php esc_html_e( 'Proposed ready window', 'doughboss' ); ?></th><th><?php esc_html_e( 'UTC reference', 'doughboss' ); ?></th></tr></thead><tbody>
+					<?php foreach ( array_slice( $preview_windows, 0, 12 ) as $window ) : ?>
+						<tr><td><?php echo esc_html( $window['local_date'] ); ?></td><td><?php echo esc_html( $window['local_from'] . '–' . $window['local_by'] . ' ' . $window['utc_offset'] ); ?></td><td><code><?php echo esc_html( $window['ready_from_utc'] ); ?></code></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				<?php endif; ?>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -1863,6 +1953,14 @@ JS;
 			'phone'             => isset( $_POST['phone'] ) ? wp_unslash( $_POST['phone'] ) : '',
 			'postcodes'         => isset( $_POST['postcodes'] ) ? wp_unslash( $_POST['postcodes'] ) : '',
 			'prep_time_default' => isset( $_POST['prep_time_default'] ) ? (int) $_POST['prep_time_default'] : 20,
+			'timezone'          => isset( $_POST['timezone'] ) ? wp_unslash( $_POST['timezone'] ) : 'Australia/Sydney',
+			'capacity_mode'     => isset( $_POST['capacity_mode'] ) ? wp_unslash( $_POST['capacity_mode'] ) : 'off',
+			'slot_minutes'      => isset( $_POST['slot_minutes'] ) ? (int) $_POST['slot_minutes'] : 15,
+			'minimum_notice_minutes' => isset( $_POST['minimum_notice_minutes'] ) ? (int) $_POST['minimum_notice_minutes'] : 30,
+			'booking_horizon_days' => isset( $_POST['booking_horizon_days'] ) ? (int) $_POST['booking_horizon_days'] : 7,
+			'hold_minutes'      => isset( $_POST['hold_minutes'] ) ? (int) $_POST['hold_minutes'] : 10,
+			'slot_order_capacity' => isset( $_POST['slot_order_capacity'] ) ? (int) $_POST['slot_order_capacity'] : 4,
+			'slot_unit_capacity' => isset( $_POST['slot_unit_capacity'] ) ? (int) $_POST['slot_unit_capacity'] : 12,
 			'pickup_enabled'    => isset( $_POST['pickup_enabled'] ) ? 1 : 0,
 			'delivery_enabled'  => isset( $_POST['delivery_enabled'] ) ? 1 : 0,
 			'is_active'         => isset( $_POST['is_active'] ) ? 1 : 0,
@@ -1871,10 +1969,13 @@ JS;
 		if ( $id ) {
 			DoughBoss_Locations::update( $id, $data );
 		} else {
-			DoughBoss_Locations::create( $data );
+			$id = DoughBoss_Locations::create( $data );
 		}
+		$raw_hours = isset( $_POST['capacity_hours'] ) && is_array( $_POST['capacity_hours'] ) ? wp_unslash( $_POST['capacity_hours'] ) : array();
+		$hours_saved = $id ? DoughBoss_Locations::save_weekly_hours( $id, $raw_hours ) : new WP_Error( 'doughboss_location_save', __( 'The shop could not be saved.', 'doughboss' ) );
+		$msg = is_wp_error( $hours_saved ) ? 'hours_invalid' : 'saved';
 
-		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'msg' => 'saved' ), admin_url( 'admin.php' ) ) );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'edit' => $id, 'msg' => $msg ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 

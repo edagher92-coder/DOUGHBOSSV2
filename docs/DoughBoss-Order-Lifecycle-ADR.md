@@ -1,9 +1,11 @@
 # ADR: order lifecycle, timing and capacity
 
-**Status:** proposed; Stage 0 initiated by architecture review
+**Status:** Lifecycle foundation and disabled capacity/hold foundation implemented; production rollout pending
 
 **Date:** 14 July 2026
 **Scope:** Revesby pickup-first customer ordering and staff kitchen workflow
+
+**Implementation update (15 July 2026):** Versioned forward-only transitions, durable order events, lifecycle timestamps, staff-estimated ready windows and separate customer status wording are implemented while retaining existing persisted state names. A second draft now adds a disabled-by-default Sydney-aware throughput scheduler, durable slot mutex rows and transactional capacity holds. Customer enforcement, hold-to-order conversion, manager overrides, durable notifications and payment-provider activation remain later stages. See `DoughBoss-Phase-2-Lifecycle-Implementation-2026-07-15.md` and `DoughBoss-Phase-3-Capacity-Foundation-2026-07-15.md`.
 
 ## Context
 

@@ -31,12 +31,20 @@ class DoughBoss_Migrations {
 			return;
 		}
 
-		// run() fires on every request until the version is written; a short lock
-		// stops concurrent visitors from racing on dbDelta and cap seeding.
-		if ( get_transient( 'doughboss_migrating' ) ) {
+		// add_option() is a single INSERT protected by WordPress's unique option
+		// key, so only one request can own the migration. A stale five-minute lock
+		// is recoverable after a crashed PHP process.
+		$lock_key = 'doughboss_migration_lock';
+		$lock_at  = (int) get_option( $lock_key, 0 );
+		if ( $lock_at && ( time() - $lock_at ) < ( 5 * MINUTE_IN_SECONDS ) ) {
 			return;
 		}
-		set_transient( 'doughboss_migrating', 1, 5 * MINUTE_IN_SECONDS );
+		if ( $lock_at ) {
+			delete_option( $lock_key );
+		}
+		if ( ! add_option( $lock_key, time(), '', 'no' ) ) {
+			return;
+		}
 
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-activator.php';
 
@@ -63,6 +71,9 @@ class DoughBoss_Migrations {
 				'1.8.0' => 'upgrade_to_1_8_0',
 				'1.9.0' => 'upgrade_to_1_9_0',
 				'1.10.0' => 'upgrade_to_1_10_0',
+				'1.11.0' => 'upgrade_to_1_11_0',
+				'1.12.0' => 'upgrade_to_1_12_0',
+				'1.13.0' => 'upgrade_to_1_13_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -72,15 +83,18 @@ class DoughBoss_Migrations {
 			}
 
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
+			delete_option( 'doughboss_migration_error' );
 		} catch ( Throwable $e ) {
 			// Leave the version at the last successful checkpoint and let the site
 			// keep serving; the next request retries the remaining steps.
 			if ( function_exists( 'error_log' ) ) {
 				error_log( 'DoughBoss migration halted: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			}
+			update_option( 'doughboss_migration_error', sanitize_text_field( $e->getMessage() ) );
 		}
 
-		delete_transient( 'doughboss_migrating' );
+		delete_option( $lock_key );
+		delete_transient( 'doughboss_migrating' ); // Clean up the pre-1.11 lock.
 	}
 
 	/**
@@ -305,6 +319,101 @@ class DoughBoss_Migrations {
 
 		if ( $changed ) {
 			update_option( DoughBoss_Settings::OPTION_KEY, $settings );
+		}
+	}
+
+	/**
+	 * 1.11.0 — durable, versioned order lifecycle.
+	 *
+	 * dbDelta adds the order version/timestamp columns and creates the event
+	 * table. Historical events and timestamps are deliberately not fabricated:
+	 * the audit trail begins with the first post-upgrade transition.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_11_0() {
+		// dbDelta failures commonly return false instead of throwing. Verify the
+		// storage invariant explicitly so the migration runner cannot checkpoint
+		// 1.11.0 while versioning/events are missing or non-transactional.
+		if ( ! DoughBoss_Activator::lifecycle_storage_ready() ) {
+			throw new RuntimeException( 'Order lifecycle tables are missing or are not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.12.0 — transactional pickup-capacity storage, disabled by default.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_12_0() {
+		if ( ! DoughBoss_Activator::capacity_storage_ready() ) {
+			throw new RuntimeException( 'Capacity scheduling tables or unique locks are missing or are not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.13.0 — durable checkout idempotency and unique payment ownership.
+	 *
+	 * Historical duplicate payment references are financial evidence. Never
+	 * choose a winner automatically: stop the migration and surface the order
+	 * IDs for operator reconciliation.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_13_0() {
+		global $wpdb;
+		$orders = $wpdb->prefix . 'doughboss_orders';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$duplicates = (array) $wpdb->get_results(
+			"SELECT payment_intent_id, GROUP_CONCAT(id ORDER BY id) AS order_ids, COUNT(*) AS copies
+			FROM {$orders}
+			WHERE payment_intent_id IS NOT NULL AND payment_intent_id <> ''
+			GROUP BY payment_intent_id
+			HAVING COUNT(*) > 1
+			LIMIT 20"
+		);
+		if ( $duplicates ) {
+			$groups = array();
+			foreach ( $duplicates as $duplicate ) {
+				$groups[] = 'orders ' . sanitize_text_field( $duplicate->order_ids );
+			}
+			throw new RuntimeException( 'Duplicate payment references require reconciliation before checkout can reopen. Affected ' . implode( '; ', $groups ) . '.' );
+		}
+
+		// Empty strings are absence, not a payment identity. NULL permits multiple
+		// unpaid orders while the unique index protects every real reference.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "UPDATE {$orders} SET payment_intent_id = NULL WHERE payment_intent_id = ''" ) ) {
+			throw new RuntimeException( 'Could not normalise empty payment references.' );
+		}
+
+		// Replace the historical non-unique index explicitly; dbDelta does not
+		// reliably change index uniqueness on existing installations.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$payment_index = (array) $wpdb->get_results( "SHOW INDEX FROM {$orders} WHERE Key_name = 'payment_intent_id'" );
+		if ( $payment_index && 0 !== (int) $payment_index[0]->Non_unique ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( false === $wpdb->query( "ALTER TABLE {$orders} DROP INDEX payment_intent_id" ) ) {
+				throw new RuntimeException( 'Could not replace the payment-reference index.' );
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "ALTER TABLE {$orders} MODIFY payment_intent_id varchar(191) NULL DEFAULT NULL" ) ) {
+			throw new RuntimeException( 'Could not apply the payment-reference column contract.' );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( ! $wpdb->get_var( "SHOW INDEX FROM {$orders} WHERE Key_name = 'payment_intent_id' AND Non_unique = 0" ) && false === $wpdb->query( "ALTER TABLE {$orders} ADD UNIQUE KEY payment_intent_id (payment_intent_id)" ) ) {
+			throw new RuntimeException( 'Could not enforce unique payment ownership.' );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( ! $wpdb->get_var( "SHOW INDEX FROM {$orders} WHERE Key_name = 'checkout_key' AND Non_unique = 0" ) && false === $wpdb->query( "ALTER TABLE {$orders} ADD UNIQUE KEY checkout_key (checkout_key)" ) ) {
+			throw new RuntimeException( 'Could not enforce durable checkout replay keys.' );
+		}
+
+		if ( ! DoughBoss_Activator::checkout_storage_ready() ) {
+			throw new RuntimeException( 'Checkout-integrity columns or unique indexes are incomplete.' );
 		}
 	}
 }

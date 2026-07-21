@@ -33,6 +33,132 @@ class DoughBoss_Order {
 	}
 
 	/**
+	 * Valid next states for an order.
+	 *
+	 * The persisted legacy status names remain in place for compatibility, but
+	 * every write now follows this single forward-only graph.
+	 *
+	 * @param string $status     Current status.
+	 * @param string $order_type pickup or delivery.
+	 * @return string[]
+	 */
+	public static function allowed_transitions( $status, $order_type = 'pickup' ) {
+		$map = array(
+			'pending'          => array( 'confirmed', 'cancelled' ),
+			'confirmed'        => array( 'preparing', 'cancelled' ),
+			'preparing'        => array( 'baking', 'ready', 'cancelled' ),
+			'baking'           => array( 'ready', 'cancelled' ),
+			'ready'            => 'delivery' === $order_type ? array( 'out_for_delivery' ) : array( 'completed' ),
+			'out_for_delivery' => array( 'completed' ),
+			'completed'        => array(),
+			'cancelled'        => array(),
+		);
+
+		return isset( $map[ $status ] ) ? $map[ $status ] : array();
+	}
+
+	/**
+	 * Whether one lifecycle edge is valid.
+	 *
+	 * @param string $from       Current status.
+	 * @param string $to         Requested status.
+	 * @param string $order_type pickup or delivery.
+	 * @return bool
+	 */
+	public static function can_transition( $from, $to, $order_type = 'pickup' ) {
+		return in_array( $to, self::allowed_transitions( $from, $order_type ), true );
+	}
+
+	/**
+	 * Next states currently available for this specific order.
+	 *
+	 * Paid orders must be refunded before cancellation, so that action is not
+	 * advertised to staff while payment still says paid.
+	 *
+	 * @param object $order Order row.
+	 * @return string[]
+	 */
+	private static function available_transitions( $order ) {
+		$allowed = self::allowed_transitions( $order->status, $order->order_type );
+		if ( isset( $order->payment_status ) && 'paid' === $order->payment_status ) {
+			$allowed = array_values( array_diff( $allowed, array( 'cancelled' ) ) );
+		}
+		return $allowed;
+	}
+
+	/**
+	 * Translate internal kitchen states into truthful customer language.
+	 *
+	 * @param object|array $order Order row or a status/order_type pair.
+	 * @return array{status:string,label:string}
+	 */
+	public static function customer_projection( $order ) {
+		$row        = (array) $order;
+		$status     = isset( $row['status'] ) ? $row['status'] : 'pending';
+		$order_type = isset( $row['order_type'] ) ? $row['order_type'] : 'pickup';
+		$map        = array(
+			'pending'          => array( 'received', __( 'Order received — waiting for the shop to accept', 'doughboss' ) ),
+			'confirmed'        => array( 'confirmed', __( 'Accepted by the shop', 'doughboss' ) ),
+			'preparing'        => array( 'preparing', __( 'Being prepared', 'doughboss' ) ),
+			'baking'           => array( 'preparing', __( 'Being prepared', 'doughboss' ) ),
+			'ready'            => 'delivery' === $order_type
+				? array( 'ready_for_delivery', __( 'Ready for delivery', 'doughboss' ) )
+				: array( 'ready_for_pickup', __( 'Ready for pickup', 'doughboss' ) ),
+			'out_for_delivery' => array( 'out_for_delivery', __( 'On its way', 'doughboss' ) ),
+			'completed'        => 'delivery' === $order_type
+				? array( 'delivered', __( 'Delivered', 'doughboss' ) )
+				: array( 'collected', __( 'Collected', 'doughboss' ) ),
+			'cancelled'        => array( 'cancelled', __( 'Cancelled', 'doughboss' ) ),
+		);
+		$value = isset( $map[ $status ] ) ? $map[ $status ] : array( 'received', __( 'Order received', 'doughboss' ) );
+
+		return array( 'status' => $value[0], 'label' => $value[1] );
+	}
+
+	/**
+	 * Derive a display-only timing state. This never advances an order.
+	 *
+	 * @param object|array $order Order row.
+	 * @param string       $now   Optional UTC MySQL timestamp for tests.
+	 * @return array{status:string,label:string}
+	 */
+	public static function timing_projection( $order, $now = '' ) {
+		$row    = (array) $order;
+		$status = isset( $row['status'] ) ? $row['status'] : 'pending';
+		$now    = $now ? $now : current_time( 'mysql', true );
+
+		if ( 'cancelled' === $status ) {
+			return array( 'status' => 'cancelled', 'label' => __( 'Order cancelled', 'doughboss' ) );
+		}
+		if ( 'completed' === $status ) {
+			return array( 'status' => 'complete', 'label' => __( 'Order complete', 'doughboss' ) );
+		}
+		if ( in_array( $status, array( 'ready', 'out_for_delivery' ), true ) ) {
+			return array( 'status' => 'ready', 'label' => __( 'Ready', 'doughboss' ) );
+		}
+		if ( 'pending' === $status ) {
+			return array( 'status' => 'awaiting_acceptance', 'label' => __( 'Awaiting staff acceptance', 'doughboss' ) );
+		}
+
+		$promised_by = isset( $row['promised_ready_by_utc'] ) ? $row['promised_ready_by_utc'] : '';
+		if ( $promised_by && $now > $promised_by ) {
+			return array( 'status' => 'estimate_passed', 'label' => __( 'Estimate passed — check this order', 'doughboss' ) );
+		}
+
+		return array( 'status' => 'on_track', 'label' => __( 'In progress', 'doughboss' ) );
+	}
+
+	/**
+	 * Convert a stored UTC MySQL datetime to an ISO-8601 UTC string.
+	 *
+	 * @param string|null $value Stored datetime.
+	 * @return string
+	 */
+	private static function utc_iso( $value ) {
+		return $value ? str_replace( ' ', 'T', (string) $value ) . 'Z' : '';
+	}
+
+	/**
 	 * Orders table name.
 	 *
 	 * @return string
@@ -50,6 +176,16 @@ class DoughBoss_Order {
 	private static function items_table() {
 		global $wpdb;
 		return $wpdb->prefix . 'doughboss_order_items';
+	}
+
+	/**
+	 * Order lifecycle events table name.
+	 *
+	 * @return string
+	 */
+	private static function events_table() {
+		global $wpdb;
+		return $wpdb->prefix . 'doughboss_order_events';
 	}
 
 	/**
@@ -75,14 +211,24 @@ class DoughBoss_Order {
 	 *
 	 * @param array   $data  Customer/order fields and totals.
 	 * @param array[] $lines Cart lines.
-	 * @return int|WP_Error New order ID or error.
+	 * @return array|WP_Error Creation result with order_id/replayed, or error.
 	 */
 	public static function create( array $data, array $lines ) {
 		global $wpdb;
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) ) {
+			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Online ordering is temporarily unavailable while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
 
 		if ( empty( $lines ) ) {
 			return new WP_Error( 'doughboss_empty', __( 'Cannot create an empty order.', 'doughboss' ), array( 'status' => 400 ) );
 		}
+
+		$checkout_key = isset( $data['checkout_key'] ) ? strtolower( sanitize_text_field( $data['checkout_key'] ) ) : '';
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) ) {
+			return new WP_Error( 'doughboss_checkout_key_required', __( 'This checkout attempt is missing its safety key. Please refresh and try again.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$payment_intent_id = isset( $data['payment_intent_id'] ) ? sanitize_text_field( $data['payment_intent_id'] ) : '';
+		$payment_intent_id = '' === $payment_intent_id ? null : $payment_intent_id;
 
 		$now    = current_time( 'mysql', true );
 		$orders = self::orders_table();
@@ -92,7 +238,42 @@ class DoughBoss_Order {
 		// failure can never leave an order whose stored total doesn't match the
 		// line items actually saved. (Requires InnoDB; a no-op on MyISAM.)
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$wpdb->query( 'START TRANSACTION' );
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
+			return new WP_Error( 'doughboss_db_error', __( 'Could not start your order safely. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		$capacity = null;
+		if ( ! empty( $data['capacity_hold_token'] ) ) {
+			if ( 'paid' !== ( isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid' ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_capacity_payment_required', __( 'A verified payment is required before a scheduled pickup can be confirmed.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.12.0', '<' ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_capacity_unavailable', __( 'Pickup-time scheduling is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			$cart_hash = DoughBoss_Capacity::cart_hash(
+				$lines,
+				array(
+					'location_id' => isset( $data['location_id'] ) ? (int) $data['location_id'] : 0,
+					'order_type'  => isset( $data['order_type'] ) ? $data['order_type'] : 'pickup',
+					'voucher'     => isset( $data['voucher_code'] ) ? $data['voucher_code'] : '',
+					'total'       => isset( $data['total'] ) ? $data['total'] : 0,
+				)
+			);
+			$capacity = DoughBoss_Capacity::lock_hold_for_order( $data['capacity_hold_token'], $cart_hash, isset( $data['location_id'] ) ? (int) $data['location_id'] : 0 );
+			if ( is_wp_error( $capacity ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return $capacity;
+			}
+			if ( ! empty( $capacity['replayed_order_id'] ) ) {
+				if ( false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					return new WP_Error( 'doughboss_db_error', __( 'Could not safely replay your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+				}
+				return array( 'order_id' => (int) $capacity['replayed_order_id'], 'replayed' => true, 'replayed_by' => 'capacity_hold' );
+			}
+		}
 
 		// Insert the order, retrying on the (rare) order-number collision that
 		// the UNIQUE key would otherwise reject under concurrent checkouts.
@@ -121,16 +302,38 @@ class DoughBoss_Order {
 					'currency'      => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
 					'payment_status'    => isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid',
 					'payment_method'    => isset( $data['payment_method'] ) ? $data['payment_method'] : '',
-					'payment_intent_id' => isset( $data['payment_intent_id'] ) ? $data['payment_intent_id'] : '',
+					'payment_intent_id' => $payment_intent_id,
+					'checkout_key'      => $checkout_key,
+					'capacity_hold_id' => $capacity ? $capacity['hold_id'] : 0,
+					'capacity_units' => $capacity ? $capacity['capacity_units'] : 0,
+					'promised_ready_from_utc' => $capacity ? $capacity['promised_ready_from_utc'] : null,
+					'promised_ready_by_utc' => $capacity ? $capacity['promised_ready_by_utc'] : null,
+					'timezone_snapshot' => $capacity ? $capacity['timezone_snapshot'] : '',
+					'fire_at_utc' => $capacity ? $capacity['fire_at_utc'] : null,
+					'planning_version' => $capacity ? $capacity['planning_version'] : 0,
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
 				$order_id = (int) $wpdb->insert_id;
 				break;
+			}
+
+			// A unique-key loser is a replay, not a failed checkout. The conflicting
+			// INSERT waits for the winner's transaction, so these lookups can return
+			// the authoritative order without firing hooks or writing items twice.
+			$replay_id = self::find_id_by_checkout_key( $checkout_key, true );
+			$replayed_by = 'checkout_key';
+			if ( ! $replay_id && null !== $payment_intent_id ) {
+				$replay_id   = self::find_id_by_payment_intent( $payment_intent_id, true );
+				$replayed_by = 'payment_intent_id';
+			}
+			if ( $replay_id ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return array( 'order_id' => $replay_id, 'replayed' => true, 'replayed_by' => $replayed_by );
 			}
 			++$attempts;
 		} while ( $attempts < 5 );
@@ -166,8 +369,36 @@ class DoughBoss_Order {
 			}
 		}
 
+		$event_ok = self::insert_event(
+			array(
+				'order_id'      => $order_id,
+				'order_version' => 1,
+				'event_type'    => 'created',
+				'from_status'   => '',
+				'to_status'     => 'pending',
+				'actor_type'    => 'customer',
+				'actor_id'      => 0,
+				'reason_code'   => '',
+				'event_key'     => 'order-created:' . $order_id,
+				'occurred_at'   => $now,
+			)
+		);
+		if ( ! $event_ok ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$wpdb->query( 'ROLLBACK' );
+			return new WP_Error( 'doughboss_db_error', __( 'Could not save your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		if ( $capacity && ! DoughBoss_Capacity::convert_locked_hold( $capacity['hold_id'], $order_id, $now ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_hold_conversion', __( 'The pickup time could not be attached to the order. Please try again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$wpdb->query( 'COMMIT' );
+		if ( false === $wpdb->query( 'COMMIT' ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_db_error', __( 'Could not finish saving your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
 
 		/**
 		 * Fires after an order has been created and all items stored.
@@ -177,7 +408,7 @@ class DoughBoss_Order {
 		 */
 		do_action( 'doughboss_order_created', $order_id, $data );
 
-		return $order_id;
+		return array( 'order_id' => $order_id, 'replayed' => false, 'replayed_by' => '' );
 	}
 
 	/**
@@ -235,12 +466,15 @@ class DoughBoss_Order {
 	 * @return array
 	 */
 	private static function shape_board_row( $order, array $items_by_order, array $statuses ) {
+		$timing = self::timing_projection( $order );
 		return array(
 			'id'             => (int) $order->id,
 			'order_number'   => $order->order_number,
 			'location_id'    => (int) $order->location_id,
 			'status'         => $order->status,
 			'status_label'   => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+			'version'        => isset( $order->version ) ? (int) $order->version : 1,
+			'allowed_next_statuses' => self::available_transitions( $order ),
 			'order_type'     => $order->order_type,
 			'customer_name'  => $order->customer_name,
 			'customer_phone' => $order->customer_phone,
@@ -249,9 +483,16 @@ class DoughBoss_Order {
 			'total'          => (float) $order->total,
 			'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
 			'eta_minutes'    => (int) $order->eta_minutes,
+			'promised_ready_from_utc' => self::utc_iso( isset( $order->promised_ready_from_utc ) ? $order->promised_ready_from_utc : '' ),
+			'promised_ready_by_utc'   => self::utc_iso( isset( $order->promised_ready_by_utc ) ? $order->promised_ready_by_utc : '' ),
+			'timezone'       => ! empty( $order->timezone_snapshot ) ? $order->timezone_snapshot : self::valid_timezone(),
+			'timing_status'  => $timing['status'],
+			'timing_label'   => $timing['label'],
 			'acknowledged'   => ! empty( $order->acknowledged_at ),
 			'accepted'       => ! empty( $order->accepted_at ),
-			'accepted_at'    => isset( $order->accepted_at ) ? $order->accepted_at : null,
+			'accepted_at'    => self::utc_iso( isset( $order->accepted_at ) ? $order->accepted_at : '' ),
+			'cooking_started_at' => self::utc_iso( isset( $order->cooking_started_at ) ? $order->cooking_started_at : '' ),
+			'ready_at'       => self::utc_iso( isset( $order->ready_at ) ? $order->ready_at : '' ),
 			'created_at'     => $order->created_at,
 			'items'          => isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(),
 		);
@@ -319,34 +560,282 @@ class DoughBoss_Order {
 	 * @return bool
 	 */
 	public static function accept( $order_id, $eta_minutes = 0 ) {
-		global $wpdb;
-		$order_id = absint( $order_id );
-		if ( ! $order_id ) {
+		$order = self::get( $order_id );
+		if ( ! $order ) {
 			return false;
 		}
 
-		$now = current_time( 'mysql', true );
+		$result = self::transition(
+			$order_id,
+			'confirmed',
+			array(
+				'expected_version' => isset( $order->version ) ? (int) $order->version : 1,
+				'event_key'       => self::legacy_event_key( $order_id, 'confirmed' ),
+				'actor_type'      => 'staff',
+				'actor_id'        => get_current_user_id(),
+				'eta_minutes'     => $eta_minutes,
+			)
+		);
+
+		return ! is_wp_error( $result );
+	}
+
+	/**
+	 * Atomically move an order through the lifecycle and append its audit event.
+	 *
+	 * @param int    $order_id Order ID.
+	 * @param string $status   Target status.
+	 * @param array  $context  expected_version, event_key, actor_type, actor_id,
+	 *                         reason_code and eta_minutes.
+	 * @return array|WP_Error Transition result.
+	 */
+	public static function transition( $order_id, $status, array $context = array() ) {
+		global $wpdb;
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.11.0', '<' ) ) {
+			return new WP_Error( 'doughboss_lifecycle_unavailable', __( 'Order updates are temporarily unavailable while the order system is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+
+		$order_id         = absint( $order_id );
+		$status           = sanitize_key( $status );
+		$expected_version = isset( $context['expected_version'] ) ? absint( $context['expected_version'] ) : 0;
+		$event_key        = isset( $context['event_key'] ) ? substr( sanitize_text_field( $context['event_key'] ), 0, 191 ) : '';
+		$actor_type       = isset( $context['actor_type'] ) ? substr( sanitize_key( $context['actor_type'] ), 0, 20 ) : 'staff';
+		$actor_id         = isset( $context['actor_id'] ) ? absint( $context['actor_id'] ) : 0;
+		$reason_code      = isset( $context['reason_code'] ) ? substr( sanitize_key( $context['reason_code'] ), 0, 32 ) : '';
+		$eta_minutes      = isset( $context['eta_minutes'] ) ? min( 240, absint( $context['eta_minutes'] ) ) : 0;
+
+		if ( ! $order_id || ! isset( self::statuses()[ $status ] ) || ! $expected_version || '' === $event_key ) {
+			return new WP_Error( 'doughboss_transition_invalid', __( 'The order update was incomplete. Refresh and try again.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( 'cancelled' === $status && '' === $reason_code ) {
+			return new WP_Error( 'doughboss_cancel_reason', __( 'Choose a cancellation reason before cancelling this order.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
+			return new WP_Error( 'doughboss_transition_db', __( 'Could not start the order update.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		$events = self::events_table();
+		// The idempotency lookup occurs inside the transaction. A duplicate key is
+		// only a replay when it belongs to the same order and target state.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$existing_event = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$events} WHERE event_key = %s LIMIT 1", $event_key ) );
+		if ( $existing_event ) {
+			$order = self::get( $order_id );
+			if ( (int) $existing_event->order_id === $order_id && $existing_event->to_status === $status && $order ) {
+				$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return self::transition_result( $order, true );
+			}
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_event_key_conflict', __( 'That update key has already been used.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		$order = self::get( $order_id );
+		if ( ! $order ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_order_not_found', __( 'That order no longer exists.', 'doughboss' ), array( 'status' => 404 ) );
+		}
+
+		$current_version = isset( $order->version ) ? (int) $order->version : 1;
+		if ( $current_version !== $expected_version ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_stale_order', __( 'This order changed on another screen. It has been refreshed.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( ! self::can_transition( $order->status, $status, $order->order_type ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_invalid_transition', __( 'That step is not available from the order’s current state.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( 'cancelled' === $status && isset( $order->payment_status ) && 'paid' === $order->payment_status ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_refund_required', __( 'Refund the paid order before marking it cancelled.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		$now          = current_time( 'mysql', true );
+		$new_version  = $current_version + 1;
+		$data         = array(
+			'status'            => $status,
+			'version'           => $new_version,
+			'status_changed_at' => $now,
+			'updated_at'        => $now,
+		);
+		$formats      = array( '%s', '%d', '%s', '%s' );
+
+		if ( 'confirmed' === $status ) {
+			$data['accepted_at']     = $now;
+			$data['acknowledged_at'] = $now;
+			$data['eta_minutes']     = $eta_minutes;
+			$formats[]               = '%s';
+			$formats[]               = '%s';
+			$formats[]               = '%d';
+			if ( $eta_minutes > 0 ) {
+				$ready_from                       = strtotime( $now . ' UTC' ) + ( $eta_minutes * MINUTE_IN_SECONDS );
+				$data['promised_ready_from_utc']  = gmdate( 'Y-m-d H:i:s', $ready_from );
+				$data['promised_ready_by_utc']    = gmdate( 'Y-m-d H:i:s', $ready_from + ( 15 * MINUTE_IN_SECONDS ) );
+				$data['timezone_snapshot']        = self::valid_timezone();
+				$formats[]                         = '%s';
+				$formats[]                         = '%s';
+				$formats[]                         = '%s';
+			}
+		} elseif ( 'preparing' === $status ) {
+			$data['cooking_started_at'] = $now;
+			$formats[]                   = '%s';
+		} elseif ( 'ready' === $status ) {
+			$data['ready_at'] = $now;
+			$formats[]        = '%s';
+		} elseif ( 'completed' === $status ) {
+			$data['completed_at'] = $now;
+			$formats[]            = '%s';
+		} elseif ( 'cancelled' === $status ) {
+			$data['cancelled_at'] = $now;
+			$formats[]            = '%s';
+		}
+
+		// Compare-and-set prevents two staff screens from both winning the same
+		// transition. Zero affected rows is a conflict, never a success.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$updated = $wpdb->update(
 			self::orders_table(),
+			$data,
 			array(
-				'status'          => 'confirmed',
-				'accepted_at'     => $now,
-				'acknowledged_at' => $now,
-				'eta_minutes'     => max( 0, (int) $eta_minutes ),
-				'updated_at'      => $now,
+				'id'      => $order_id,
+				'status'  => $order->status,
+				'version' => $current_version,
 			),
-			array( 'id' => $order_id ),
-			array( '%s', '%s', '%s', '%d', '%s' ),
-			array( '%d' )
+			$formats,
+			array( '%d', '%s', '%d' )
 		);
-
-		if ( false !== $updated ) {
-			do_action( 'doughboss_order_accepted', $order_id, max( 0, (int) $eta_minutes ) );
-			do_action( 'doughboss_order_status_changed', $order_id, 'confirmed' );
-			return true;
+		if ( false === $updated || 1 !== (int) $updated ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$code = false === $updated ? 'doughboss_transition_db' : 'doughboss_stale_order';
+			$http = false === $updated ? 500 : 409;
+			return new WP_Error( $code, __( 'This order could not be updated. Refresh and try again.', 'doughboss' ), array( 'status' => $http ) );
 		}
-		return false;
+
+		$event_ok = self::insert_event(
+			array(
+				'order_id'      => $order_id,
+				'order_version' => $new_version,
+				'event_type'    => 'status_changed',
+				'from_status'   => $order->status,
+				'to_status'     => $status,
+				'actor_type'    => $actor_type ? $actor_type : 'staff',
+				'actor_id'      => $actor_id,
+				'reason_code'   => $reason_code,
+				'event_key'     => $event_key,
+				'occurred_at'   => $now,
+			)
+		);
+		if ( ! $event_ok || false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_transition_db', __( 'The order update could not be recorded safely.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		foreach ( $data as $field => $value ) {
+			$order->$field = $value;
+		}
+		if ( 'confirmed' === $status ) {
+			do_action( 'doughboss_order_accepted', $order_id, $eta_minutes );
+		}
+		do_action( 'doughboss_order_status_changed', $order_id, $status );
+
+		return self::transition_result( $order, false );
+	}
+
+	/**
+	 * Persist one non-PII lifecycle event.
+	 *
+	 * @param array $event Event columns.
+	 * @return bool
+	 */
+	private static function insert_event( array $event ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$inserted = $wpdb->insert(
+			self::events_table(),
+			$event,
+			array( '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s' )
+		);
+		return false !== $inserted;
+	}
+
+	/**
+	 * Fetch recent lifecycle events for a staff-only surface.
+	 *
+	 * @param int $order_id Order ID.
+	 * @param int $limit    Maximum events.
+	 * @return array[]
+	 */
+	public static function events( $order_id, $limit = 100 ) {
+		global $wpdb;
+		$table = self::events_table();
+		$limit = max( 1, min( 200, absint( $limit ) ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$rows = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE order_id = %d ORDER BY order_version ASC LIMIT %d", absint( $order_id ), $limit ),
+			ARRAY_A
+		);
+		return $rows ? $rows : array();
+	}
+
+	/**
+	 * Build the REST-safe result returned after a transition or replay.
+	 *
+	 * @param object $order    Updated order row.
+	 * @param bool   $replayed Whether an event-key replay was detected.
+	 * @return array
+	 */
+	private static function transition_result( $order, $replayed ) {
+		$statuses = self::statuses();
+		$customer = self::customer_projection( $order );
+		$timing   = self::timing_projection( $order );
+		return array(
+			'success'                   => true,
+			'replayed'                  => (bool) $replayed,
+			'id'                        => (int) $order->id,
+			'status'                    => $order->status,
+			'status_label'              => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+			'version'                   => isset( $order->version ) ? (int) $order->version : 1,
+			'allowed_next_statuses'     => self::available_transitions( $order ),
+			'customer_status'           => $customer['status'],
+			'customer_status_label'     => $customer['label'],
+			'timing_status'             => $timing['status'],
+			'timing_label'              => $timing['label'],
+			'promised_ready_from_utc'   => self::utc_iso( isset( $order->promised_ready_from_utc ) ? $order->promised_ready_from_utc : '' ),
+			'promised_ready_by_utc'     => self::utc_iso( isset( $order->promised_ready_by_utc ) ? $order->promised_ready_by_utc : '' ),
+			'timezone'                  => ! empty( $order->timezone_snapshot ) ? $order->timezone_snapshot : self::valid_timezone(),
+		);
+	}
+
+	/**
+	 * Return the site's timezone only when it is an IANA identifier.
+	 *
+	 * @return string
+	 */
+	private static function valid_timezone() {
+		$timezone = function_exists( 'wp_timezone_string' ) ? (string) wp_timezone_string() : '';
+		if ( '' === $timezone ) {
+			return '';
+		}
+		try {
+			new DateTimeZone( $timezone );
+			return $timezone;
+		} catch ( Throwable $e ) {
+			return '';
+		}
+	}
+
+	/**
+	 * Generate an event key for backwards-compatible internal callers.
+	 *
+	 * New REST clients supply their own key so network retries are idempotent.
+	 *
+	 * @param int    $order_id Order ID.
+	 * @param string $status   Target status.
+	 * @return string
+	 */
+	private static function legacy_event_key( $order_id, $status ) {
+		return 'legacy:' . absint( $order_id ) . ':' . sanitize_key( $status ) . ':' . md5( uniqid( '', true ) );
 	}
 
 	/**
@@ -385,15 +874,45 @@ class DoughBoss_Order {
 	 * @return bool
 	 */
 	public static function payment_intent_used( $payment_intent_id ) {
+		return 0 !== self::find_id_by_payment_intent( $payment_intent_id );
+	}
+
+	/**
+	 * Resolve an order from its durable checkout replay key.
+	 *
+	 * @param string $checkout_key Server-bound SHA-256 key.
+	 * @param bool   $locking      Use a current locking read inside a transaction.
+	 * @return int Order ID or 0.
+	 */
+	public static function find_id_by_checkout_key( $checkout_key, $locking = false ) {
 		global $wpdb;
-		$payment_intent_id = sanitize_text_field( $payment_intent_id );
-		if ( '' === $payment_intent_id ) {
-			return false;
+		$checkout_key = strtolower( sanitize_text_field( $checkout_key ) );
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) ) {
+			return 0;
 		}
 		$table = self::orders_table();
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$found = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE payment_intent_id = %s LIMIT 1", $payment_intent_id ) );
-		return ! empty( $found );
+		$sql = "SELECT id FROM {$table} WHERE checkout_key = %s LIMIT 1" . ( $locking ? ' FOR UPDATE' : '' );
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $checkout_key ) );
+	}
+
+	/**
+	 * Resolve the order that owns a canonical payment reference.
+	 *
+	 * @param string $payment_intent_id Canonical provider reference.
+	 * @param bool   $locking           Use a current locking read inside a transaction.
+	 * @return int Order ID or 0.
+	 */
+	public static function find_id_by_payment_intent( $payment_intent_id, $locking = false ) {
+		global $wpdb;
+		$payment_intent_id = sanitize_text_field( $payment_intent_id );
+		if ( '' === $payment_intent_id ) {
+			return 0;
+		}
+		$table = self::orders_table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$sql = "SELECT id FROM {$table} WHERE payment_intent_id = %s LIMIT 1" . ( $locking ? ' FOR UPDATE' : '' );
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $payment_intent_id ) );
 	}
 
 	/**
@@ -457,29 +976,24 @@ class DoughBoss_Order {
 	 * @return bool
 	 */
 	public static function update_status( $order_id, $status ) {
-		global $wpdb;
-
-		if ( ! array_key_exists( $status, self::statuses() ) ) {
+		$order = self::get( $order_id );
+		if ( ! $order ) {
 			return false;
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$updated = $wpdb->update(
-			self::orders_table(),
+		$result = self::transition(
+			$order_id,
+			$status,
 			array(
-				'status'     => $status,
-				'updated_at' => current_time( 'mysql', true ),
-			),
-			array( 'id' => $order_id ),
-			array( '%s', '%s' ),
-			array( '%d' )
+				'expected_version' => isset( $order->version ) ? (int) $order->version : 1,
+				'event_key'       => self::legacy_event_key( $order_id, $status ),
+				'actor_type'      => 'staff',
+				'actor_id'        => get_current_user_id(),
+				'reason_code'     => 'cancelled' === $status ? 'staff_cancelled' : '',
+			)
 		);
 
-		if ( false !== $updated ) {
-			do_action( 'doughboss_order_status_changed', $order_id, $status );
-			return true;
-		}
-		return false;
+		return ! is_wp_error( $result );
 	}
 
 	/**
@@ -596,10 +1110,14 @@ class DoughBoss_Order {
 	 */
 	public static function public_view( $order ) {
 		$statuses = self::statuses();
+		$customer = self::customer_projection( $order );
+		$timing   = self::timing_projection( $order );
 		return array(
 			'order_number' => $order->order_number,
 			'status'       => $order->status,
 			'status_label' => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+			'customer_status'       => $customer['status'],
+			'customer_status_label' => $customer['label'],
 			'order_type'   => $order->order_type,
 			'total'        => (float) $order->total,
 			'discount'     => isset( $order->discount ) ? (float) $order->discount : 0,
@@ -607,7 +1125,12 @@ class DoughBoss_Order {
 			'currency'     => $order->currency,
 			'payment_status' => isset( $order->payment_status ) ? $order->payment_status : 'unpaid',
 			'eta_minutes'  => isset( $order->eta_minutes ) ? (int) $order->eta_minutes : 0,
-			'accepted_at'  => isset( $order->accepted_at ) ? $order->accepted_at : null,
+			'promised_ready_from_utc' => self::utc_iso( isset( $order->promised_ready_from_utc ) ? $order->promised_ready_from_utc : '' ),
+			'promised_ready_by_utc'   => self::utc_iso( isset( $order->promised_ready_by_utc ) ? $order->promised_ready_by_utc : '' ),
+			'timezone'      => ! empty( $order->timezone_snapshot ) ? $order->timezone_snapshot : self::valid_timezone(),
+			'timing_status' => $timing['status'],
+			'timing_label'  => $timing['label'],
+			'ready_at'      => self::utc_iso( isset( $order->ready_at ) ? $order->ready_at : '' ),
 			'created_at'   => $order->created_at,
 			'items'        => self::get_items( $order->id ),
 		);

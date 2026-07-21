@@ -5,10 +5,10 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 ## Current repo state
 
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
-- **Primary platform branch under review:** `claude/doughboss-website-design-fixes-li6dqa`
-- **Open platform PR:** PR #17. Contains Tyro (MPGS) payment gateway (backend + hosted-session checkout, sandbox-unverified), management oversight (Today strip, per-shop reports, paid-vs-gross), kitchen board upgrade (SLA aging, undo+recall, heartbeat, all-day strip), stage emails module, customer order tracker, POSPal outbox hardening, board access-key hashing, and the refined demo site. Treat it as staging/integration, not a production release by default.
-- **Plugin version on the platform branch:** `2.17.0` (`DOUGHBOSS_VERSION`)
-- **DB schema version on the platform branch:** `1.10.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
+- **Primary integration branch:** `claude/doughboss-website-design-fixes-li6dqa` (PR #17; staging/integration, not a production release by default).
+- **Consolidation branch:** `codex/doughboss-p0-integrity`, based on the current integration tip and incorporating the lifecycle/capacity work from draft PRs #22/#23 for combined verification.
+- **Lifecycle release:** plugin `2.18.0` / DB `1.11.0`. Keep it in staging until the sanitised-backup migration/restore rehearsal is recorded.
+- **Payments:** Stripe and Tyro remain disabled until their respective test credentials, webhook recovery, reconciliation, and provider certification checks pass.
 - **Requires:** WordPress 6.0+, PHP 7.4+
 - **REST namespace:** `doughboss/v1`
 - **Text domain:** `doughboss`
@@ -36,6 +36,8 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 - Static demo/marketing site and standalone staff console assets.
 
 ## Release discipline
+
+Current consolidated release contract: plugin `2.20.0`, database schema `1.13.0`.
 
 The Phase 2 branch is intentionally broad. Stabilize it by splitting future work into small release PRs:
 
@@ -172,6 +174,7 @@ When agents disagree, choose the smallest safe release that preserves the abilit
 - The current platform branch is ahead of the default/base branch and includes many off-by-default integrations. Inspect the target branch before making assumptions.
 - `includes/class-doughboss-rest-controller.php` is large. Prefer extracting new REST domains instead of adding more methods to it.
 - Demo assets and docs are useful, but plugin release safety comes first.
-- Static demo deploy workflow is separate from plugin CI.
+- Static demo deploy workflow is separate from plugin CI. Plugin CI now covers PHP/JavaScript verification, an installable zip, secret scanning and MariaDB lifecycle rehearsal.
 - Live-site deployment is not proven by repository state alone. Require explicit approval, backup, and smoke test before production.
+- PR #22's MariaDB jobs are synthetic evidence; they do not replace `docs/DoughBoss-Phase-2-Staging-Rehearsal-Runbook.md` on a recent sanitised production copy.
 - Keep this file current. A stale `CLAUDE.md` creates cascading agent errors.

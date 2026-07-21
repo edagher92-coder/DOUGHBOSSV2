@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.17.0
+Stable tag: 2.20.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,30 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.20.0 =
+* Make checkout replay durable with server-bound idempotency keys and database-enforced uniqueness.
+* Prevent the same provider payment reference from creating more than one order under concurrent requests.
+* Add a fail-closed 1.13.0 migration that preserves historical payment evidence and surfaces duplicates for operator reconciliation.
+* Reuse the same browser checkout attempt and verified payment reference after an interrupted response.
+* Add MariaDB 10.6 and 11.4 migration and concurrency coverage for checkout integrity.
+
+= 2.19.0 =
+* Add the disabled-by-default, time-zone-aware pickup capacity planning engine.
+* Add transactional schedule, slot and hold storage with durable per-slot locking.
+* Add deterministic Sydney DST, notice, blackout and capacity-boundary tests.
+
+= 2.18.0 =
+* New: versioned, forward-only order lifecycle with optimistic concurrency so a
+  stale staff screen cannot overwrite a newer kitchen update.
+* New: transactional order event history and UTC lifecycle timestamps, including
+  staff-estimated ready windows and customer-safe status wording.
+* Change: kitchen board, staff console and WordPress order screen now use the
+  server-approved next actions; order cancellation is manager-only.
+* Change: customer tracking shows truthful shop status, payment wording and ready
+  collection cues. Payment provider activation remains unchanged and optional.
+* Safety: the 1.11.0 schema migration verifies InnoDB lifecycle storage and fails
+  closed with an owner notice when atomic order history cannot be guaranteed.
 
 = 2.17.0 =
 * New: **Single-location / pickup-only mode.** When exactly one shop is active,

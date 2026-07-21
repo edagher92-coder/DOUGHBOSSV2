@@ -338,3 +338,11 @@ html, body {
 		transform: none;
 	}
 }
+
+.btn--ghost:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+	outline: 3px solid var(--gold);
+	outline-offset: 2px;
+}
