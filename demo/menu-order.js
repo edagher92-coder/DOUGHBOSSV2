@@ -84,23 +84,21 @@
 		{ label: 'Halloumi', delta: 3 },
 		{ label: 'Pepperoni', delta: 3 }
 	] };
-	/* Per-item lemon & chilli (free) — offered on every pizza and on the meat
-	   manoush (traditional with lahme). "No thanks" is the default, so a line only
-	   shows "Lemon & chilli" when the customer said yes — per-item kitchen accuracy. */
-	var OPT_LEMON = { id: 'lc', label: 'Lemon & chilli — free', type: 'radio', choices: [
-		{ label: 'No thanks', delta: 0, def: true },
-		{ label: 'Yes please', sum: 'Lemon & chilli', delta: 0 }
+	/* Lemon & chilli (free) — now SEPARATE so a customer can pick lemon, chilli,
+	   both or neither on any order. Both default to off; a cart line shows "Lemon"
+	   and/or "Chilli" only when ticked — per-item kitchen accuracy. Offered on all
+	   savoury orders (manoush, pizza, pies, wraps). */
+	var OPT_LEMON = { id: 'lc', label: 'Lemon & chilli — free', type: 'check', choices: [
+		{ label: 'Lemon', sum: 'Lemon', delta: 0 },
+		{ label: 'Chilli', sum: 'Chilli', delta: 0 }
 	] };
-	var MEAT_MANOUSH = { 'Meat': 1, 'Meat & Cheese': 1 };
 	function optionGroups(catId, name) {
 		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_LEMON]; }
 		/* Pies (and minis) take the same add-ons as pizza, plus a free "no sesame"
 		   removable. Minis aren't a separate category in the demo yet — flagged. */
-		if (catId === 'cat-pies') { return [OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_SESAME]; }
-		if (catId === 'cat-manoush') {
-			return MEAT_MANOUSH[name] ? [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON] : [OPT_STYLE, OPT_PIZZA_BASE];
-		}
-		if (catId === 'cat-wraps' && name === 'Zaatar & Veggie') { return [OPT_WRAP_EXTRAS]; }
+		if (catId === 'cat-pies') { return [OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_SESAME, OPT_LEMON]; }
+		if (catId === 'cat-manoush') { return [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON]; }
+		if (catId === 'cat-wraps') { return name === 'Zaatar & Veggie' ? [OPT_WRAP_EXTRAS, OPT_LEMON] : [OPT_LEMON]; }
 		return null;
 	}
 
