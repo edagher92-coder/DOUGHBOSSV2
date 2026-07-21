@@ -32,17 +32,23 @@
 		{ label: 'Flat', delta: 0, def: true },
 		{ label: 'Folded', delta: 0 }
 	] };
-	/* Crust (ex "Base") — Domino's/Pizza Hut say "crust". Normal & Thin are free;
-	   Wholemeal / Gluten-free carry the owner's confirmed +$4.00 surcharge. */
+	/* Crust (ex "Base") — Domino's/Pizza Hut say "crust". Prices per the owner's
+	   in-store POS (V23 photos, confirmed): Crispy & Thin free, Wholemeal +$2.50,
+	   Gluten-free +$3.50. */
 	var OPT_PIZZA_BASE = { id: 'base', label: 'Crust', type: 'radio', choices: [
-		{ label: 'Normal', delta: 0, def: true },
+		{ label: 'Crispy', delta: 0, def: true },
 		{ label: 'Thin', delta: 0 },
-		{ label: 'Wholemeal', delta: 4 },
-		{ label: 'Gluten-free', delta: 4 }
+		{ label: 'Wholemeal', delta: 2.5 },
+		{ label: 'Gluten-free', delta: 3.5 }
 	] };
 	var OPT_WRAP_EXTRAS = { id: 'extras', label: 'Extras', type: 'check', choices: [
-		{ label: 'Add labneh', sum: 'Labneh', delta: 2.5 },
+		{ label: 'Add labneh (Mediterranean yoghurt)', sum: 'Labneh', delta: 2.5 },
 		{ label: 'Add cheese', sum: 'Cheese', delta: 2.5 }
+	] };
+	/* Pies take the same add-ons as pizza; sesame seeds are a free removable. */
+	var OPT_SESAME = { id: 'sesame', label: 'Sesame seeds', type: 'radio', choices: [
+		{ label: 'With sesame seeds', delta: 0, def: true },
+		{ label: 'No sesame seeds', sum: 'No sesame', delta: 0 }
 	] };
 	/* Pizza builder groups from the owner's in-store POS screens (V23 photos).
 	   Base Sauce is free (pick one); Sauce on Top is +$1.50 each; extra toppings
@@ -72,7 +78,10 @@
 		{ label: 'Tomato', delta: 2 },
 		{ label: 'Sujuk', delta: 3 },
 		{ label: 'Chicken', delta: 3 },
+		{ label: 'Meat (lahme)', delta: 3 },
 		{ label: 'Cheese', delta: 3 },
+		{ label: 'Mozzarella', delta: 3 },
+		{ label: 'Halloumi', delta: 3 },
 		{ label: 'Pepperoni', delta: 3 }
 	] };
 	/* Per-item lemon & chilli (free) — offered on every pizza and on the meat
@@ -85,6 +94,9 @@
 	var MEAT_MANOUSH = { 'Meat': 1, 'Meat & Cheese': 1 };
 	function optionGroups(catId, name) {
 		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_LEMON]; }
+		/* Pies (and minis) take the same add-ons as pizza, plus a free "no sesame"
+		   removable. Minis aren't a separate category in the demo yet — flagged. */
+		if (catId === 'cat-pies') { return [OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_SESAME]; }
 		if (catId === 'cat-manoush') {
 			return MEAT_MANOUSH[name] ? [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON] : [OPT_STYLE, OPT_PIZZA_BASE];
 		}
@@ -330,8 +342,16 @@
 			lines += '<div class="cd-line"><span class="cd-n">' + esc(it.name) + (it.summary ? '<small class="cd-opts">' + esc(it.summary) + '</small>' : '') + '</span><span class="cd-qty"><button type="button" data-kdec="' + esc(k) + '" aria-label="Remove one ' + esc(it.name) + '">&minus;</button><b>' + it.qty + '</b><button type="button" data-kinc="' + esc(k) + '" aria-label="Add one ' + esc(it.name) + '">+</button></span><span class="cd-p">' + money(it.price * it.qty) + '</span></div>';
 		}
 		if (!lines) { lines = '<div class="cd-empty">' + bag() + '<p>Your order is empty &mdash; add a few manoush.</p></div>'; }
+		/* One tasteful cross-sell (Pizza Hut pattern): offer a drink once, only when
+		   the cart has food but no drink yet — never a cluttered grid of suggestions. */
+		var hasDrink = false;
+		for (var dk in cart) { if (cart[dk].catId === 'cat-drinks') { hasDrink = true; break; } }
+		var dPrice = controls['Soft Drinks 600ml'] ? controls['Soft Drinks 600ml'].price : 5;
+		var xsell = (!hasDrink && count())
+			? '<div class="cd-xsell"><span class="cd-xsell-t">Fancy a drink with that?</span><button type="button" class="cd-xsell-add" data-xsell="Soft Drinks 600ml">Add a soft drink <b>+' + money(dPrice) + '</b></button></div>'
+			: '';
 		drawer.innerHTML = '<div class="cd-head"><h3>Your order</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-body">' + lines + '</div>' +
+			'<div class="cd-body">' + lines + xsell + '</div>' +
 			'<div class="cd-foot"><div class="cd-tot"><span>Total</span><strong>' + money(total()) + '</strong></div>' +
 			'<button type="button" class="vb-btn vb-btn-ember cd-checkout"' + (count() ? '' : ' disabled') + '>Checkout</button>' +
 			'<p class="cd-note">Demo &middot; pickup from Revesby only &middot; no real payment.</p></div>';
@@ -528,6 +548,7 @@
 		if (e.target.closest('.cd-back')) { renderDrawer(); return; }
 		if (e.target.closest('.cd-vapply')) { applyVoucher(); return; }
 		if (e.target.closest('.cd-vremove')) { voucher = null; renderCheckout(); return; }
+		var xs = e.target.closest('[data-xsell]'); if (xs) { addLine(xs.getAttribute('data-xsell')); renderDrawer(); return; }
 		var inc = e.target.closest('[data-kinc]'); if (inc) { bumpLine(inc.getAttribute('data-kinc'), 1); return; }
 		var dec = e.target.closest('[data-kdec]'); if (dec) { bumpLine(dec.getAttribute('data-kdec'), -1); return; }
 	});

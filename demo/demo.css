@@ -674,3 +674,10 @@ body.cart-on{padding-bottom:114px;}
 .cd-hours{border-radius:var(--r-md);padding:10px 13px;font-size:13px;line-height:1.45;margin:0 0 4px;}
 .cd-hours--open{background:rgba(31,138,84,.12);color:#1f6b45;font-weight:600;}
 .cd-hours--shut{background:#fff4e5;color:#8a5a12;border:1px solid #f0d9b5;}
+
+/* Cart cross-sell (single tasteful "add a drink"). */
+.cd-xsell{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:8px 0 2px;padding:12px 14px;border:1px dashed var(--linel);border-radius:var(--r-md);background:rgba(17,17,17,.03);}
+.cd-xsell-t{font-weight:600;font-size:14px;color:var(--ink);}
+.cd-xsell-add{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:15px;background:var(--ink);color:#fff;border:0;border-radius:var(--r-pill);padding:9px 16px;cursor:pointer;transition:transform var(--t-med) var(--spring,cubic-bezier(.34,1.56,.64,1));}
+.cd-xsell-add:active{transform:scale(.93);}
+.cd-xsell-add b{font-weight:400;opacity:.85;}
