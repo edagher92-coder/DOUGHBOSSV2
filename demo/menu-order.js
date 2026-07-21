@@ -32,8 +32,11 @@
 		{ label: 'Flat', delta: 0, def: true },
 		{ label: 'Folded', delta: 0 }
 	] };
-	var OPT_PIZZA_BASE = { id: 'base', label: 'Base', type: 'radio', choices: [
+	/* Crust (ex "Base") — Domino's/Pizza Hut say "crust". Normal & Thin are free;
+	   Wholemeal / Gluten-free carry the owner's confirmed +$4.00 surcharge. */
+	var OPT_PIZZA_BASE = { id: 'base', label: 'Crust', type: 'radio', choices: [
 		{ label: 'Normal', delta: 0, def: true },
+		{ label: 'Thin', delta: 0 },
 		{ label: 'Wholemeal', delta: 4 },
 		{ label: 'Gluten-free', delta: 4 }
 	] };
@@ -69,10 +72,12 @@
 		var price = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
 		var catEl = el.closest('.mn-cat');
 		var catId = catEl ? catEl.id : '';
+		var imgEl = el.querySelector('.mn-it-img');
 		var act = document.createElement('div');
 		act.className = 'mn-it-act';
 		(el.querySelector('.mn-it-body') || el).appendChild(act);
-		controls[name] = { el: act, name: name, price: price, catId: catId, groups: optionGroups(catId, name), lastSel: null };
+		controls[name] = { el: act, name: name, price: price, catId: catId, groups: optionGroups(catId, name), lastSel: null,
+			img: imgEl ? imgEl.getAttribute('src') : '', imgAlt: imgEl ? (imgEl.getAttribute('alt') || name) : name };
 		paintItem(name);
 	});
 
@@ -141,6 +146,7 @@
 		sheet.setAttribute('aria-label', 'Choose options for ' + name);
 		var pre = c.lastSel || {};
 		var html = '<div class="opt-head"><h3>' + esc(name) + '</h3><button type="button" class="opt-close" aria-label="Close options">&times;</button></div>' +
+			(c.img ? '<div class="opt-hero"><img src="' + esc(c.img) + '" alt="' + esc(c.imgAlt || name) + '" loading="lazy" decoding="async"></div>' : '') +
 			'<form class="opt-form" novalidate>';
 		c.groups.forEach(function (g) {
 			html += '<fieldset class="opt-g"><legend>' + esc(g.label) + (g.type === 'check' ? ' <span class="opt-optional">(optional)</span>' : '') + '</legend>';
@@ -311,6 +317,17 @@
 		return html;
 	}
 
+	/* Revesby ordering hours (minutes from midnight). Mon–Wed & Sun 6:30am–2pm;
+	   Thu/Fri/Sat 6:30am–8:30pm. NOTE: the Thu–Sat evening close (8:30pm) is an
+	   assumption from the brief — CONFIRM with the owner. day: 0=Sun … 6=Sat. */
+	var ORDER_HOURS = { 0: [390, 840], 1: [390, 840], 2: [390, 840], 3: [390, 840], 4: [390, 1230], 5: [390, 1230], 6: [390, 1230] };
+	function storeStatus() {
+		var now = new Date();
+		var span = ORDER_HOURS[now.getDay()];
+		var mins = now.getHours() * 60 + now.getMinutes();
+		return { open: !!span && mins >= span[0] && mins < span[1] };
+	}
+
 	function renderCheckout() {
 		if (!count()) { return; }
 		checkoutMode = true;
@@ -326,9 +343,14 @@
 		/* The form is a flex column: everything scrolls inside .cd-scroll while the
 		   submit CTA stays pinned in .cd-cta — reachable on short/landscape screens
 		   and above the on-screen keyboard (see the visualViewport handler below). */
+		var open = storeStatus().open;
+		var hoursHtml = open
+			? '<div class="cd-hours cd-hours--open">Open now &middot; pickup from Revesby</div>'
+			: '<div class="cd-hours cd-hours--shut">We&rsquo;re closed right now. Revesby ordering hours are <strong>6:30am&ndash;2pm</strong> (Thu&ndash;Sat to 8:30pm). Please order during opening hours.</div>';
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<form class="cd-form" novalidate>' +
 			'<div class="cd-scroll">' +
+			hoursHtml +
 			'<div class="cd-summary">' + summaryLines() + '</div>' +
 			'<div class="cd-vouch">' + vouchHtml + '<p class="cd-verr" role="alert"></p></div>' +
 			'<label class="cd-f"><span>Name</span><input name="name" type="text" autocomplete="name" required></label>' +
@@ -338,7 +360,9 @@
 			'<legend>Payment</legend>' +
 			'<p class="cd-privacy cd-carddemo">Card payment (simulated). You&rsquo;ll enter test card details on the next step &mdash; orders &amp; payments are simulated, no real payment is taken.</p>' +
 			'</fieldset>' +
+			'<p class="cd-privacy cd-modnote">Once your order is placed only small changes can be made &mdash; please check it over before you pay.</p>' +
 			'<p class="cd-privacy">We use your name and phone only to process your order. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
+			'<label class="cd-agree"><input type="checkbox" name="agree" class="cd-agree-cb"><span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>, and to Dough Boss contacting me about this order and occasional offers.</span></label>' +
 			'</div>' +
 			'<div class="cd-cta">' +
 			'<div class="cd-tots">' + totsHtml + '</div>' +
@@ -378,6 +402,16 @@
 			err.textContent = 'Please add your name and phone.';
 			var miss = form.querySelector(!name ? 'input[name="name"]' : 'input[name="phone"]');
 			if (miss) { miss.focus(); }
+			return;
+		}
+		var agree = form.querySelector('input[name="agree"]');
+		if (!agree || !agree.checked) {
+			err.textContent = 'Please agree to the Terms & Conditions to place your order.';
+			if (agree) { agree.focus(); }
+			return;
+		}
+		if (!storeStatus().open) {
+			err.textContent = 'Sorry, we’re closed right now — please order during opening hours (6:30am–2pm).';
 			return;
 		}
 		pendingOrder = { name: name, phone: phone };
