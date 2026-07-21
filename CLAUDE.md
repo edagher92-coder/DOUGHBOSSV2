@@ -37,6 +37,8 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 
 ## Release discipline
 
+Current consolidated release contract: plugin `2.20.0`, database schema `1.13.0`.
+
 The Phase 2 branch is intentionally broad. Stabilize it by splitting future work into small release PRs:
 
 1. Core plugin stabilization, CI, docs, packaging.

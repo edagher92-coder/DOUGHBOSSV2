@@ -2199,6 +2199,9 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function create_payment_intent( WP_REST_Request $request ) {
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
+			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Card payments are paused while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
 		if ( ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
@@ -2545,14 +2548,29 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function checkout( WP_REST_Request $request ) {
-		// Idempotency: if the client supplies a key and we've already processed
-		// it, return the original result instead of creating a duplicate order.
-		// Checked first so a replay still succeeds after the cart was cleared.
+		// The raw browser key is required, validated, then bound to this cart token
+		// with an HMAC. The stored key is therefore useless outside this session.
 		$idem = $this->idempotency_key( $request );
-		if ( '' !== $idem ) {
-			$cached = get_transient( 'doughboss_idem_' . $idem );
-			if ( is_array( $cached ) ) {
-				return rest_ensure_response( $cached );
+		if ( is_wp_error( $idem ) ) {
+			return $idem;
+		}
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
+			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Online ordering is temporarily unavailable while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$cached = get_transient( 'doughboss_idem_' . $idem );
+		if ( is_array( $cached ) ) {
+			return rest_ensure_response( $cached );
+		}
+
+		// Durable replay check precedes cart validation: a response may be lost
+		// after the winning request commits and clears the shared cart.
+		$existing_id = DoughBoss_Order::find_id_by_checkout_key( $idem );
+		if ( $existing_id ) {
+			$existing = DoughBoss_Order::get( $existing_id );
+			if ( $existing ) {
+				$payload = $this->checkout_payload( $existing, true );
+				set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
+				return rest_ensure_response( $payload );
 			}
 		}
 
@@ -2704,6 +2722,7 @@ class DoughBoss_REST_Controller {
 				'payment_status'    => $payment_status,
 				'payment_method'    => $payment_method,
 				'payment_intent_id' => $payment_intent_id,
+				'checkout_key'      => $idem,
 			),
 			$lines
 		);
@@ -2719,9 +2738,17 @@ class DoughBoss_REST_Controller {
 		}
 		$order_id = (int) $created['order_id'];
 		$replayed = ! empty( $created['replayed'] );
+		$replayed_by = isset( $created['replayed_by'] ) ? $created['replayed_by'] : '';
 
 		$order = DoughBoss_Order::get( $order_id );
-		if ( '' !== $voucher_idem ) {
+		if ( ! $order ) {
+			return new WP_Error( 'doughboss_order_replay_missing', __( 'The saved order could not be loaded. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		if ( $replayed && 'checkout_key' !== $replayed_by && '' !== $voucher_idem ) {
+			// A different checkout key reused the same payment/hold. It must not
+			// attach or consume a second voucher against the winning order.
+			DoughBoss_Voucher::revert_redemption( $voucher_idem );
+		} elseif ( '' !== $voucher_idem ) {
 			DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
 		}
 		$this->cart->clear();
@@ -2729,16 +2756,8 @@ class DoughBoss_REST_Controller {
 			$this->send_confirmation( $order );
 		}
 
-		$payload = array(
-			'success'      => true,
-			'order_number' => $order->order_number,
-			'total'        => (float) $order->total,
-			'message'      => __( 'Thanks! Your order has been received.', 'doughboss' ),
-		);
-
-		if ( '' !== $idem ) {
-			set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
-		}
+		$payload = $this->checkout_payload( $order, $replayed );
+		set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
 
 		return rest_ensure_response( $payload );
 	}
@@ -2747,7 +2766,7 @@ class DoughBoss_REST_Controller {
 	 * Read and normalise the checkout idempotency key (header or param).
 	 *
 	 * @param WP_REST_Request $request Request.
-	 * @return string Hashed key, or '' when none supplied.
+	 * @return string|WP_Error Server-bound key or validation error.
 	 */
 	private function idempotency_key( WP_REST_Request $request ) {
 		$key = $request->get_header( 'Idempotency-Key' );
@@ -2755,7 +2774,28 @@ class DoughBoss_REST_Controller {
 			$key = $request->get_param( 'idempotency_key' );
 		}
 		$key = is_string( $key ) ? trim( $key ) : '';
-		return '' !== $key ? md5( $key ) : '';
+		$length = strlen( $key );
+		if ( $length < 16 || $length > 191 ) {
+			return new WP_Error( 'doughboss_idempotency_required', __( 'Checkout needs a valid attempt key. Refresh the page and try again.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		return hash_hmac( 'sha256', $this->cart->get_token() . '|' . $key, wp_salt( 'auth' ) );
+	}
+
+	/**
+	 * Build the stable response used for both a new order and a replay.
+	 *
+	 * @param object $order    Order row.
+	 * @param bool   $replayed Whether this response replayed an existing order.
+	 * @return array
+	 */
+	private function checkout_payload( $order, $replayed ) {
+		return array(
+			'success'      => true,
+			'order_number' => $order->order_number,
+			'total'        => (float) $order->total,
+			'replayed'     => (bool) $replayed,
+			'message'      => __( 'Thanks! Your order has been received.', 'doughboss' ),
+		);
 	}
 
 	/**

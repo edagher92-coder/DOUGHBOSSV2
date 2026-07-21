@@ -58,6 +58,7 @@ function get_transient( $k ) { return false; }
 function set_transient( $k, $v, $t = 0 ) { return true; }
 function delete_transient( $k ) { return true; }
 function wp_using_ext_object_cache() { return false; }
+function wp_salt( $scheme = 'auth' ) { return 'test-only-' . $scheme . '-salt'; }
 
 /* ---- REST ---- */
 class WP_REST_Server { const READABLE = 'GET'; const CREATABLE = 'POST'; const EDITABLE = 'POST, PUT, PATCH'; const DELETABLE = 'DELETE'; const ALLMETHODS = 'GET, POST, PUT, PATCH, DELETE'; }

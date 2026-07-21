@@ -906,6 +906,11 @@
 
 		form.appendChild(submit);
 		form.appendChild(msg);
+		// One browser attempt keeps one checkout key and, after payment succeeds,
+		// one provider reference until the server confirms the order. A lost HTTP
+		// response can therefore be retried without charging or ordering twice.
+		var checkoutAttemptId = null;
+		var checkoutPaymentId = null;
 
 		function fail(err) {
 			msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
@@ -915,10 +920,12 @@
 		}
 
 		function placeOrder(payload) {
-			// A fresh idempotency key per attempt: a dropped response can be retried
-			// without creating a duplicate order.
-			var idem = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + Math.random());
-			return request('/checkout', { method: 'POST', body: payload, headers: { 'Idempotency-Key': idem } }).then(function (res) {
+			if (!checkoutAttemptId) {
+				checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+			}
+			return request('/checkout', { method: 'POST', body: payload, headers: { 'Idempotency-Key': checkoutAttemptId } }).then(function (res) {
+				checkoutAttemptId = null;
+				checkoutPaymentId = null;
 				// Capture the parent BEFORE clearing it: clearing via innerHTML
 				// detaches `form` from the document, which nulls form.parentNode —
 				// re-reading form.parentNode afterwards to append the confirmation
@@ -961,6 +968,11 @@
 				// payment, 3) place the order with the confirmed PaymentIntent id —
 				// which the server re-verifies before accepting the order as paid.
 				submit.textContent = I18N.payProcessing || 'Processing payment…';
+				if (checkoutPaymentId) {
+					payload.payment_intent_id = checkoutPaymentId;
+					placeOrder(payload).catch(fail);
+					return;
+				}
 				request('/payment-intent', { method: 'POST', body: { order_type: orderType, location_id: payload.location_id } }).then(function (pi) {
 					return stripe.confirmCardPayment(pi.client_secret, {
 						payment_method: {
@@ -971,7 +983,8 @@
 						if (result.error) {
 							throw new Error(result.error.message || (I18N.cardError || 'Card error'));
 						}
-						payload.payment_intent_id = result.paymentIntent.id;
+						checkoutPaymentId = result.paymentIntent.id;
+						payload.payment_intent_id = checkoutPaymentId;
 						return placeOrder(payload);
 					});
 				}).catch(fail);
@@ -984,8 +997,14 @@
 				// details themselves never appear in `payload`: they live only in
 				// Tyro's hosted session.
 				submit.textContent = I18N.payProcessing || 'Processing payment…';
+				if (checkoutPaymentId) {
+					payload.payment_intent_id = checkoutPaymentId;
+					placeOrder(payload).catch(fail);
+					return;
+				}
 				tyro.pay().then(function (paymentId) {
-					payload.payment_intent_id = paymentId;
+					checkoutPaymentId = paymentId;
+					payload.payment_intent_id = checkoutPaymentId;
 					return placeOrder(payload);
 				}).catch(fail);
 			} else {

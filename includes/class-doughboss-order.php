@@ -215,13 +215,20 @@ class DoughBoss_Order {
 	 */
 	public static function create( array $data, array $lines ) {
 		global $wpdb;
-		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.11.0', '<' ) ) {
-			return new WP_Error( 'doughboss_lifecycle_unavailable', __( 'Online ordering is temporarily unavailable while the order system is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) ) {
+			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Online ordering is temporarily unavailable while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 
 		if ( empty( $lines ) ) {
 			return new WP_Error( 'doughboss_empty', __( 'Cannot create an empty order.', 'doughboss' ), array( 'status' => 400 ) );
 		}
+
+		$checkout_key = isset( $data['checkout_key'] ) ? strtolower( sanitize_text_field( $data['checkout_key'] ) ) : '';
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) ) {
+			return new WP_Error( 'doughboss_checkout_key_required', __( 'This checkout attempt is missing its safety key. Please refresh and try again.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$payment_intent_id = isset( $data['payment_intent_id'] ) ? sanitize_text_field( $data['payment_intent_id'] ) : '';
+		$payment_intent_id = '' === $payment_intent_id ? null : $payment_intent_id;
 
 		$now    = current_time( 'mysql', true );
 		$orders = self::orders_table();
@@ -264,7 +271,7 @@ class DoughBoss_Order {
 					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 					return new WP_Error( 'doughboss_db_error', __( 'Could not safely replay your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
 				}
-				return array( 'order_id' => (int) $capacity['replayed_order_id'], 'replayed' => true );
+				return array( 'order_id' => (int) $capacity['replayed_order_id'], 'replayed' => true, 'replayed_by' => 'capacity_hold' );
 			}
 		}
 
@@ -295,7 +302,8 @@ class DoughBoss_Order {
 					'currency'      => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
 					'payment_status'    => isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid',
 					'payment_method'    => isset( $data['payment_method'] ) ? $data['payment_method'] : '',
-					'payment_intent_id' => isset( $data['payment_intent_id'] ) ? $data['payment_intent_id'] : '',
+					'payment_intent_id' => $payment_intent_id,
+					'checkout_key'      => $checkout_key,
 					'capacity_hold_id' => $capacity ? $capacity['hold_id'] : 0,
 					'capacity_units' => $capacity ? $capacity['capacity_units'] : 0,
 					'promised_ready_from_utc' => $capacity ? $capacity['promised_ready_from_utc'] : null,
@@ -306,12 +314,26 @@ class DoughBoss_Order {
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
 				$order_id = (int) $wpdb->insert_id;
 				break;
+			}
+
+			// A unique-key loser is a replay, not a failed checkout. The conflicting
+			// INSERT waits for the winner's transaction, so these lookups can return
+			// the authoritative order without firing hooks or writing items twice.
+			$replay_id = self::find_id_by_checkout_key( $checkout_key, true );
+			$replayed_by = 'checkout_key';
+			if ( ! $replay_id && null !== $payment_intent_id ) {
+				$replay_id   = self::find_id_by_payment_intent( $payment_intent_id, true );
+				$replayed_by = 'payment_intent_id';
+			}
+			if ( $replay_id ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return array( 'order_id' => $replay_id, 'replayed' => true, 'replayed_by' => $replayed_by );
 			}
 			++$attempts;
 		} while ( $attempts < 5 );
@@ -386,7 +408,7 @@ class DoughBoss_Order {
 		 */
 		do_action( 'doughboss_order_created', $order_id, $data );
 
-		return array( 'order_id' => $order_id, 'replayed' => false );
+		return array( 'order_id' => $order_id, 'replayed' => false, 'replayed_by' => '' );
 	}
 
 	/**
@@ -852,15 +874,45 @@ class DoughBoss_Order {
 	 * @return bool
 	 */
 	public static function payment_intent_used( $payment_intent_id ) {
+		return 0 !== self::find_id_by_payment_intent( $payment_intent_id );
+	}
+
+	/**
+	 * Resolve an order from its durable checkout replay key.
+	 *
+	 * @param string $checkout_key Server-bound SHA-256 key.
+	 * @param bool   $locking      Use a current locking read inside a transaction.
+	 * @return int Order ID or 0.
+	 */
+	public static function find_id_by_checkout_key( $checkout_key, $locking = false ) {
 		global $wpdb;
-		$payment_intent_id = sanitize_text_field( $payment_intent_id );
-		if ( '' === $payment_intent_id ) {
-			return false;
+		$checkout_key = strtolower( sanitize_text_field( $checkout_key ) );
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) ) {
+			return 0;
 		}
 		$table = self::orders_table();
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$found = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE payment_intent_id = %s LIMIT 1", $payment_intent_id ) );
-		return ! empty( $found );
+		$sql = "SELECT id FROM {$table} WHERE checkout_key = %s LIMIT 1" . ( $locking ? ' FOR UPDATE' : '' );
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $checkout_key ) );
+	}
+
+	/**
+	 * Resolve the order that owns a canonical payment reference.
+	 *
+	 * @param string $payment_intent_id Canonical provider reference.
+	 * @param bool   $locking           Use a current locking read inside a transaction.
+	 * @return int Order ID or 0.
+	 */
+	public static function find_id_by_payment_intent( $payment_intent_id, $locking = false ) {
+		global $wpdb;
+		$payment_intent_id = sanitize_text_field( $payment_intent_id );
+		if ( '' === $payment_intent_id ) {
+			return 0;
+		}
+		$table = self::orders_table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$sql = "SELECT id FROM {$table} WHERE payment_intent_id = %s LIMIT 1" . ( $locking ? ' FOR UPDATE' : '' );
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $payment_intent_id ) );
 	}
 
 	/**

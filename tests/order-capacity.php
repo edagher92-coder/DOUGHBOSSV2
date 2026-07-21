@@ -103,7 +103,8 @@ function order_capacity_fixture() {
 	$data = array(
 		'order_type' => 'pickup', 'location_id' => 1, 'customer_name' => 'Test', 'customer_email' => 'test@example.test',
 		'customer_phone' => '0400000000', 'address' => '', 'notes' => '', 'subtotal' => 20, 'tax' => 1.82,
-		'delivery_fee' => 0, 'total' => 20, 'discount' => 0, 'voucher_code' => '', 'payment_status' => 'paid', 'capacity_hold_token' => $token,
+		'delivery_fee' => 0, 'total' => 20, 'discount' => 0, 'voucher_code' => '', 'payment_status' => 'paid',
+		'checkout_key' => str_repeat( 'c', 64 ), 'capacity_hold_token' => $token,
 	);
 	$hash = DoughBoss_Capacity::cart_hash( $lines, array( 'location_id' => 1, 'order_type' => 'pickup', 'voucher' => '', 'total' => 20 ) );
 	$ready = new DateTimeImmutable( '+2 hours', new DateTimeZone( 'UTC' ) );
@@ -120,7 +121,7 @@ function order_capacity_fixture() {
 }
 
 echo "=== DoughBoss atomic capacity order test ===\n";
-update_option( 'doughboss_db_version', '1.12.0' );
+update_option( 'doughboss_db_version', '1.13.0' );
 list( $db, $data, $lines ) = order_capacity_fixture();
 $GLOBALS['wpdb'] = $db;
 $created_hooks = 0;

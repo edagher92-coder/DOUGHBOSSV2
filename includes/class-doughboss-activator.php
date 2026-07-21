@@ -31,11 +31,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order or capacity storage is missing or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, or checkout-integrity storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -87,7 +87,8 @@ class DoughBoss_Activator {
 			currency varchar(10) NOT NULL DEFAULT 'AUD',
 			payment_status varchar(20) NOT NULL DEFAULT 'unpaid',
 			payment_method varchar(20) NOT NULL DEFAULT '',
-			payment_intent_id varchar(64) NOT NULL DEFAULT '',
+			payment_intent_id varchar(191) NULL DEFAULT NULL,
+			checkout_key char(64) NULL DEFAULT NULL,
 			eta_minutes int(11) NOT NULL DEFAULT 0,
 			seen_at datetime NULL DEFAULT NULL,
 			acknowledged_at datetime NULL DEFAULT NULL,
@@ -113,7 +114,8 @@ class DoughBoss_Activator {
 			KEY location_id (location_id),
 			KEY promised_ready_from (location_id,promised_ready_from_utc),
 			KEY fire_time (location_id,fire_at_utc),
-			KEY payment_intent_id (payment_intent_id)
+			UNIQUE KEY payment_intent_id (payment_intent_id),
+			UNIQUE KEY checkout_key (checkout_key)
 		) ENGINE=InnoDB {$charset_collate};";
 
 		$sql_events = "CREATE TABLE {$order_events} (
@@ -521,6 +523,29 @@ class DoughBoss_Activator {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Verify the durable checkout replay and one-payment/one-order constraints.
+	 *
+	 * @return bool
+	 */
+	public static function checkout_storage_ready() {
+		global $wpdb;
+		$orders = $wpdb->prefix . 'doughboss_orders';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $orders ) );
+		if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+			return false;
+		}
+
+		$columns = array(
+			'payment_intent_id' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+			'checkout_key'      => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+		);
+		return self::column_contract_ready( $orders, $columns )
+			&& self::index_contract_ready( $orders, 'payment_intent_id', array( 'payment_intent_id' ), true, array( 191 ) )
+			&& self::index_contract_ready( $orders, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );
 	}
 
 	/**

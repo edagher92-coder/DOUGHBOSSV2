@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.19.0
+Stable tag: 2.20.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -53,6 +53,13 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.20.0 =
+* Make checkout replay durable with server-bound idempotency keys and database-enforced uniqueness.
+* Prevent the same provider payment reference from creating more than one order under concurrent requests.
+* Add a fail-closed 1.13.0 migration that preserves historical payment evidence and surfaces duplicates for operator reconciliation.
+* Reuse the same browser checkout attempt and verified payment reference after an interrupted response.
+* Add MariaDB 10.6 and 11.4 migration and concurrency coverage for checkout integrity.
 
 = 2.19.0 =
 * Add the disabled-by-default, time-zone-aware pickup capacity planning engine.

@@ -214,3 +214,49 @@ jobs:
 
       - name: Migration and final-slot race
         run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-capacity.php" --path=/tmp/wp --skip-plugins --allow-root
+
+  mariadb-checkout-integrity:
+    name: MariaDB ${{ matrix.mariadb }} checkout integrity
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mariadb: ["10.6", "11.4"]
+    services:
+      db:
+        image: mariadb:${{ matrix.mariadb }}
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: wordpress
+          MARIADB_USER: wordpress
+          MARIADB_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP and WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mysqli, pcntl
+          coverage: none
+          tools: wp-cli
+
+      - name: Install temporary WordPress
+        shell: bash
+        run: |
+          wp core download --path=/tmp/wp --version=6.5.5 --allow-root
+          wp config create --path=/tmp/wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1:3306 --skip-check --allow-root
+          wp db check --path=/tmp/wp --allow-root
+          wp core install --path=/tmp/wp --url=http://doughboss.test --title=DoughBoss --admin_user=admin --admin_password=test-only-password --admin_email=test@example.invalid --skip-email --allow-root
+          ln -s "$GITHUB_WORKSPACE" /tmp/wp/wp-content/plugins/doughboss
+
+      - name: Migration and checkout races
+        run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-checkout-integrity.php" --path=/tmp/wp --skip-plugins --allow-root
