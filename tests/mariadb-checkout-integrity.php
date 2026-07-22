@@ -9,7 +9,14 @@ $plugin = dirname( __DIR__ );
 require_once $plugin . '/doughboss.php';
 require_once $plugin . '/includes/class-doughboss-settings.php';
 require_once $plugin . '/includes/class-doughboss-migrations.php';
+require_once $plugin . '/includes/class-doughboss-locations.php';
+require_once $plugin . '/includes/class-doughboss-cart.php';
 require_once $plugin . '/includes/class-doughboss-order.php';
+require_once $plugin . '/includes/class-doughboss-table-qr.php';
+require_once $plugin . '/includes/class-doughboss-stripe.php';
+require_once $plugin . '/includes/class-doughboss-tyro.php';
+require_once $plugin . '/includes/class-doughboss-payment.php';
+require_once $plugin . '/includes/class-doughboss-rest-controller.php';
 
 global $wpdb;
 $passed = 0;
