@@ -127,10 +127,57 @@ update_option( 'doughboss_db_version', '1.12.0' );
 delete_option( 'doughboss_migration_error' );
 DoughBoss_Migrations::run();
 
-checkout_db_ok( '1.13.0' === get_option( 'doughboss_db_version' ), 'clean 1.12 fixture advances to 1.13' );
+checkout_db_ok( '1.14.0' === get_option( 'doughboss_db_version' ), 'clean 1.12 fixture advances through checkout and table-QR storage' );
 checkout_db_ok( DoughBoss_Activator::checkout_storage_ready(), 'checkout columns and exact unique indexes are ready' );
+checkout_db_ok( DoughBoss_Activator::table_qr_storage_ready(), 'table QR tables, snapshots, and exact unique indexes are ready' );
 checkout_db_ok( null === $wpdb->get_var( "SELECT payment_intent_id FROM {$orders} WHERE order_number = 'DB-LEGACY-UNPAID'" ), 'legacy blank payment reference becomes NULL' );
 checkout_db_ok( 'pi_legacy_unique' === $wpdb->get_var( "SELECT payment_intent_id FROM {$orders} WHERE order_number = 'DB-LEGACY-PAID'" ), 'real payment reference is preserved' );
+
+// A QR code is a public bearer value, but only its SHA-256 hash is persisted.
+$locations = $wpdb->prefix . 'doughboss_locations';
+$wpdb->insert( $locations, array( 'name' => 'Revesby QR Test', 'slug' => 'revesby-qr-test', 'is_active' => 1 ) );
+$location_id = (int) $wpdb->insert_id;
+$issued = DoughBoss_Table_QR::create_table( $location_id, '12', 'Dining room', home_url( '/order/' ) );
+checkout_db_ok( ! is_wp_error( $issued ) && ! empty( $issued['code'] ), 'manager can issue a table QR bearer code once' );
+$stored_hash = $wpdb->get_var( $wpdb->prepare( "SELECT token_hash FROM {$wpdb->prefix}doughboss_table_qr_codes WHERE id = %d", (int) $issued['qr_code_id'] ) );
+checkout_db_ok( hash( 'sha256', $issued['code'] ) === $stored_hash && $issued['code'] !== $stored_hash, 'database stores only the QR token hash' );
+$table_cart = new DoughBoss_Cart();
+$started = DoughBoss_Table_QR::start_from_code( $issued['code'], $table_cart );
+$context = is_wp_error( $started ) ? $started : DoughBoss_Table_QR::current_context( $table_cart->get_token() );
+checkout_db_ok( ! is_wp_error( $context ) && 12 === (int) $context['table_label'] && $location_id === (int) $context['location_id'], 'scan locks a fresh cart to the authoritative store and table' );
+$rotated = DoughBoss_Table_QR::issue_code( (int) $issued['table_id'] );
+$old_context = DoughBoss_Table_QR::current_context( $table_cart->get_token() );
+checkout_db_ok( ! is_wp_error( $rotated ) && is_wp_error( $old_context ), 'QR rotation immediately invalidates the old table session' );
+
+// The REST money path derives location/type/table from the server session and
+// ignores forged pickup/delivery fields from the browser.
+$locked_cart = new DoughBoss_Cart();
+$locked_start = DoughBoss_Table_QR::start_from_code( $rotated['code'], $locked_cart );
+$locked_cart->add( array( 'type' => 'menu', 'item_id' => 1, 'name' => 'QR Pizza', 'size' => '', 'toppings' => array(), 'unit_price' => 20, 'quantity' => 1 ) );
+$controller = new DoughBoss_REST_Controller( $locked_cart );
+$request = new WP_REST_Request( 'POST', '/' . DOUGHBOSS_REST_NAMESPACE . '/checkout' );
+$request->set_header( 'Idempotency-Key', 'table-qr-forgery-test-0001' );
+foreach ( array( 'order_type' => 'delivery', 'location_id' => 999999, 'customer_name' => 'Table Guest', 'customer_email' => 'table-guest@example.test', 'customer_phone' => '0400000000', 'address' => 'Forged address' ) as $key => $value ) {
+	$request->set_param( $key, $value );
+}
+$response = $controller->checkout( $request );
+$payload = is_wp_error( $response ) ? array() : $response->get_data();
+$locked_order = ! empty( $payload['order_number'] ) ? DoughBoss_Order::get_by_number( $payload['order_number'] ) : null;
+checkout_db_ok( $locked_order && 'dine_in' === $locked_order->order_type && $location_id === (int) $locked_order->location_id && '12' === (string) $locked_order->table_label, 'forged browser fulfilment fields cannot replace the server-bound table route' );
+
+// A session that is rotated after cart creation must fail before order creation.
+$revoked_cart = new DoughBoss_Cart();
+DoughBoss_Table_QR::start_from_code( $rotated['code'], $revoked_cart );
+$revoked_cart->add( array( 'type' => 'menu', 'item_id' => 1, 'name' => 'Revoked QR Pizza', 'size' => '', 'toppings' => array(), 'unit_price' => 20, 'quantity' => 1 ) );
+DoughBoss_Table_QR::issue_code( (int) $issued['table_id'] );
+$revoked_request = new WP_REST_Request( 'POST', '/' . DOUGHBOSS_REST_NAMESPACE . '/checkout' );
+$revoked_request->set_header( 'Idempotency-Key', 'table-qr-revoked-test-0001' );
+foreach ( array( 'order_type' => 'pickup', 'location_id' => $location_id, 'customer_name' => 'Revoked Guest', 'customer_email' => 'revoked@example.test', 'customer_phone' => '0400000001' ) as $key => $value ) {
+	$revoked_request->set_param( $key, $value );
+}
+$controller = new DoughBoss_REST_Controller( $revoked_cart );
+$revoked_response = $controller->checkout( $revoked_request );
+checkout_db_ok( is_wp_error( $revoked_response ) && 'doughboss_table_session_expired' === $revoked_response->get_error_code(), 'revoked table session blocks checkout instead of falling back to pickup' );
 
 $wpdb->insert( $orders, array( 'order_number' => 'DB-UNPAID-2', 'payment_intent_id' => null, 'checkout_key' => str_repeat( 'b', 64 ) ) );
 $wpdb->insert( $orders, array( 'order_number' => 'DB-UNPAID-3', 'payment_intent_id' => null, 'checkout_key' => str_repeat( 'c', 64 ) ) );

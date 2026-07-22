@@ -125,7 +125,9 @@ class DoughBoss_POSPal_Orders {
 
 		$type     = isset( $order->order_type ) ? (string) $order->order_type : 'pickup';
 		$delivery = ( 'delivery' === $type );
+		$dine_in  = ( 'dine_in' === $type );
 		$address  = isset( $order->address ) ? trim( (string) $order->address ) : '';
+		$table_label = $dine_in && isset( $order->table_label ) ? trim( (string) $order->table_label ) : '';
 
 		$body = array(
 			'orderSource'                => 'openApi',
@@ -135,7 +137,7 @@ class DoughBoss_POSPal_Orders {
 			'daySeq'                     => isset( $order->order_number ) ? (string) $order->order_number : '',
 			'contactName'                => '' !== (string) $order->customer_name ? (string) $order->customer_name : __( 'Online order', 'doughboss' ),
 			'contactTel'                 => isset( $order->customer_phone ) ? (string) $order->customer_phone : '',
-			'contactAddress'             => ( $delivery && '' !== $address ) ? $address : __( 'Pickup in store', 'doughboss' ),
+			'contactAddress'             => $dine_in && '' !== $table_label ? 'TABLE ' . $table_label : ( ( $delivery && '' !== $address ) ? $address : __( 'Pickup in store', 'doughboss' ) ),
 			'totalAmount'                => round( (float) ( isset( $order->total ) ? $order->total : 0 ), 2 ),
 			'skipProductStockValidation' => 1,
 			'items'                      => $lines,
@@ -144,7 +146,9 @@ class DoughBoss_POSPal_Orders {
 		if ( $delivery && isset( $order->delivery_fee ) && (float) $order->delivery_fee > 0 ) {
 			$body['shippingFee'] = round( (float) $order->delivery_fee, 2 );
 		}
-		if ( isset( $order->notes ) && '' !== trim( (string) $order->notes ) ) {
+		if ( $dine_in && '' !== $table_label ) {
+			$body['orderRemark'] = substr( 'DINE IN — TABLE ' . $table_label . ( ! empty( $order->notes ) ? ' — ' . (string) $order->notes : '' ), 0, 200 );
+		} elseif ( isset( $order->notes ) && '' !== trim( (string) $order->notes ) ) {
 			$body['orderRemark'] = substr( (string) $order->notes, 0, 200 );
 		}
 

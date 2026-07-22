@@ -86,6 +86,14 @@
 		return STATUSES[status] || status;
 	}
 
+	function orderLabel(order, status) {
+		if (order && order.order_type === 'dine_in') {
+			if (status === 'ready') { return 'Ready to Serve'; }
+			if (status === 'completed') { return 'Served'; }
+		}
+		return order && status === order.status && order.status_label ? order.status_label : label(status);
+	}
+
 	function eventKey(o, target) {
 		return ['kds', o.id, o.version, target, Date.now(), Math.random().toString(36).slice(2)].join(':');
 	}
@@ -342,9 +350,12 @@
 	function card(o) {
 		var isNew = o.status === 'pending';
 		var showShop = LOCATIONS.length > 1 && !currentLocation && o.location_id && locationsById[o.location_id];
+		var tableLabel = o.dining_table_label || o.table_label || (o.table && o.table.label) || '';
+		var typeLabel = o.order_type === 'delivery' ? 'Delivery' : (o.order_type === 'dine_in' ? 'Dine in' : 'Pickup');
 		var head = el('div', { class: 'db-card-head' }, [
 			el('span', { class: 'db-card-number', text: o.order_number }),
-			el('span', { class: 'db-card-type db-type-' + o.order_type, text: o.order_type === 'delivery' ? 'Delivery' : 'Pickup' }),
+			el('span', { class: 'db-card-type db-type-' + o.order_type, text: typeLabel }),
+			tableLabel ? el('span', { class: 'db-card-table', text: 'TABLE ' + tableLabel }) : null,
 			showShop ? el('span', { class: 'db-card-shop', text: locationsById[o.location_id] }) : null,
 			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
 		]);
@@ -390,9 +401,9 @@
 				return el('button', {
 					class: 'button ' + (primary ? 'button-primary' : '') + ' db-advance',
 					type: 'button',
-					'aria-label': label(st) + ' for order ' + o.order_number,
+					'aria-label': orderLabel(o, st) + ' for order ' + o.order_number,
 					onclick: function () { setStatus(o, st); }
-				}, [label(st)]);
+				}, [orderLabel(o, st)]);
 			});
 			actions = el('div', { class: 'db-card-actions' }, [el('div', { class: 'db-card-actions-row' }, advBtns)]);
 		}
@@ -408,7 +419,7 @@
 
 		return el('div', { class: 'db-card db-card-' + o.status + ageClass + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : '') }, [
 			head,
-			el('div', { class: 'db-card-status', text: label(o.status) }),
+			el('div', { class: 'db-card-status', text: orderLabel(o, o.status) }),
 			contact,
 			items,
 			el('div', { class: 'db-card-meta' }, meta),

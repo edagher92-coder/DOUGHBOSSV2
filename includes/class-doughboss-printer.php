@@ -440,6 +440,9 @@ class DoughBoss_Printer {
 
 		$type = self::order_type_label( $order->order_type );
 		$lines[] = 'Type:  ' . $type;
+		if ( 'dine_in' === $order->order_type && ! empty( $order->table_label ) ) {
+			$lines[] = self::center( '*** TABLE ' . self::clean( $order->table_label ) . ' ***', $width );
+		}
 		$lines[] = 'Time:  ' . self::clean( self::local_time( $order->created_at ) );
 
 		$name = self::clean( $order->customer_name );
@@ -535,6 +538,11 @@ class DoughBoss_Printer {
 
 		$x[] = self::xml_line( 'Order: ' . $order->order_number );
 		$x[] = self::xml_line( 'Type:  ' . self::order_type_label( $order->order_type ) );
+		if ( 'dine_in' === $order->order_type && ! empty( $order->table_label ) ) {
+			$x[] = '<text align="center" dw="true" dh="true" />';
+			$x[] = self::xml_line( 'TABLE ' . $order->table_label );
+			$x[] = '<text align="left" dw="false" dh="false" />';
+		}
 		$x[] = self::xml_line( 'Time:  ' . self::local_time( $order->created_at ) );
 
 		if ( '' !== trim( (string) $order->customer_name ) ) {
@@ -628,7 +636,7 @@ class DoughBoss_Printer {
 	 * @return string
 	 */
 	private static function order_type_label( $type ) {
-		return ( 'delivery' === $type ) ? 'DELIVERY' : 'PICKUP';
+		return ( 'delivery' === $type ) ? 'DELIVERY' : ( 'dine_in' === $type ? 'DINE IN' : 'PICKUP' );
 	}
 
 	/**

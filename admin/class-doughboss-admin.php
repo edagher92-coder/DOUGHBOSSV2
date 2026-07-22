@@ -135,6 +135,15 @@ class DoughBoss_Admin {
 
 		add_submenu_page(
 			'doughboss',
+			__( 'Dining Tables & QR Codes', 'doughboss' ),
+			__( 'Tables & QR', 'doughboss' ),
+			$this->cap(),
+			'doughboss-tables',
+			array( $this, 'render_tables_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
 			__( 'Vouchers', 'doughboss' ),
 			__( 'Vouchers', 'doughboss' ),
 			$this->cap(),
@@ -455,6 +464,16 @@ class DoughBoss_Admin {
 			)
 		);
 		wp_add_inline_script( 'doughboss-admin', $this->inline_admin_js() );
+
+		if ( false !== strpos( $hook, 'doughboss-tables' ) ) {
+			wp_enqueue_script(
+				'doughboss-qrcode-generator',
+				DOUGHBOSS_PLUGIN_URL . 'public/vendor/qrcode-generator/qrcode.js',
+				array(),
+				'2.0.4',
+				true
+			);
+		}
 
 		// The voucher scanner ships its own modern dashboard app + styles, loaded
 		// only on its screen.
@@ -1052,7 +1071,10 @@ JS;
 										<?php foreach ( $statuses as $key => $label ) : ?>
 											<?php if ( ! in_array( $key, $available_statuses, true ) ) { continue; } ?>
 											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $order->status, $key ); ?>>
-												<?php echo esc_html( $label ); ?>
+												<?php
+												$display_label = 'dine_in' === $order->order_type && 'ready' === $key ? __( 'Ready to Serve', 'doughboss' ) : ( 'dine_in' === $order->order_type && 'completed' === $key ? __( 'Served', 'doughboss' ) : $label );
+												echo esc_html( $display_label );
+												?>
 											</option>
 										<?php endforeach; ?>
 									</select>
@@ -2437,18 +2459,18 @@ JS;
 				</table>
 
 				<h2><?php esc_html_e( '"Order ready" email', 'doughboss' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Sent to the customer when their order is marked ready for pickup (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
+				<p class="description"><?php esc_html_e( 'Sent when an order is ready for pickup, delivery, or table service (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
 					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
 					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code>
 				</p>
 				<table class="form-table" role="presentation">
 					<tr>
 						<th><label for="db-tpl-ready-subject"><?php esc_html_e( 'Subject', 'doughboss' ); ?></label></th>
-						<td><input type="text" id="db-tpl-ready-subject" class="large-text" name="tpl_ready_email_subject" value="<?php echo esc_attr( $t['tpl_ready_email_subject'] ); ?>" placeholder="Order {order_number} is ready for pickup!" /></td>
+						<td><input type="text" id="db-tpl-ready-subject" class="large-text" name="tpl_ready_email_subject" value="<?php echo esc_attr( $t['tpl_ready_email_subject'] ); ?>" placeholder="Order {order_number}: {status_label}" /></td>
 					</tr>
 					<tr>
 						<th><label for="db-tpl-ready-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
-						<td><textarea id="db-tpl-ready-body" class="large-text" rows="8" name="tpl_ready_email_body" placeholder="Hi {customer_name}, your order {order_number} is ready for pickup!&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_ready_email_body'] ); ?></textarea></td>
+						<td><textarea id="db-tpl-ready-body" class="large-text" rows="8" name="tpl_ready_email_body" placeholder="Hi {customer_name}, your order {order_number} is {status_label}. {handoff_message}&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_ready_email_body'] ); ?></textarea></td>
 					</tr>
 				</table>
 
@@ -2457,7 +2479,7 @@ JS;
 				<table class="form-table" role="presentation">
 					<tr>
 						<th><label for="db-tpl-sms-ready"><?php esc_html_e( '"Order ready" text', 'doughboss' ); ?></label></th>
-						<td><input type="text" id="db-tpl-sms-ready" class="large-text" name="tpl_sms_ready" value="<?php echo esc_attr( $t['tpl_sms_ready'] ); ?>" placeholder="Your DoughBoss order #{order_number} is ready for pickup." />
+						<td><input type="text" id="db-tpl-sms-ready" class="large-text" name="tpl_sms_ready" value="<?php echo esc_attr( $t['tpl_sms_ready'] ); ?>" placeholder="Order #{order_number}: {status_label}. {handoff_message}" />
 							<p class="description"><?php esc_html_e( 'Placeholder:', 'doughboss' ); ?> <code>{order_number}</code></p></td>
 					</tr>
 					<tr>
@@ -2748,7 +2770,7 @@ JS;
 		$out = fopen( 'php://output', 'w' );
 		fputcsv(
 			$out,
-			array( 'Order #', 'Placed (UTC)', 'Type', 'Status', 'Shop', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
+			array( 'Order #', 'Placed (UTC)', 'Type', 'Source', 'Table', 'Status', 'Shop', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
 		);
 		foreach ( $rows as $row ) {
 			$row_loc = isset( $row->location_id ) ? (int) $row->location_id : 0;
@@ -2758,6 +2780,8 @@ JS;
 					$this->csv_cell( $row->order_number ),
 					$this->csv_cell( $row->created_at ),
 					$this->csv_cell( $row->order_type ),
+					$this->csv_cell( isset( $row->order_source ) ? $row->order_source : 'web' ),
+					$this->csv_cell( isset( $row->table_label ) ? $row->table_label : '' ),
 					$this->csv_cell( $row->status ),
 					$this->csv_cell( isset( $location_names[ $row_loc ] ) ? $location_names[ $row_loc ] : '' ),
 					$this->csv_cell( $row->customer_name ),
@@ -3324,7 +3348,7 @@ JS;
 							<th scope="row"><?php esc_html_e( 'When to email', 'doughboss' ); ?></th>
 							<td>
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_accepted]" value="1" <?php checked( ! empty( $settings['email_on_accepted'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is accepted', 'doughboss' ); ?></label><br />
-								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_ready]" value="1" <?php checked( ! empty( $settings['email_on_ready'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is ready for pickup', 'doughboss' ); ?></label><br />
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_ready]" value="1" <?php checked( ! empty( $settings['email_on_ready'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is ready', 'doughboss' ); ?></label><br />
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_staff_copy]" value="1" <?php checked( ! empty( $settings['email_staff_copy'] ), true ); ?> /> <?php esc_html_e( 'Send staff a copy of stage emails', 'doughboss' ); ?></label>
 							</td>
 						</tr>
@@ -3396,6 +3420,101 @@ JS;
 			</tbody>
 		</table>
 		<p><button class="button db-add-row" data-target="<?php echo esc_attr( $table_id ); ?>"><?php esc_html_e( '+ Add row', 'doughboss' ); ?></button></p>
+		<?php
+	}
+
+	/**
+	 * Manage store tables and issue one-time printable QR payloads.
+	 *
+	 * @return void
+	 */
+	public function render_tables_page() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage table QR codes.', 'doughboss' ) );
+		}
+
+		$issued = null;
+		$error  = null;
+		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : '';
+		if ( 'POST' === $request_method ) {
+			check_admin_referer( 'doughboss_table_qr' );
+			$action = isset( $_POST['table_action'] ) ? sanitize_key( wp_unslash( $_POST['table_action'] ) ) : '';
+			if ( 'create' === $action ) {
+				$issued = DoughBoss_Table_QR::create_table(
+					isset( $_POST['location_id'] ) ? absint( $_POST['location_id'] ) : 0,
+					isset( $_POST['table_label'] ) ? sanitize_text_field( wp_unslash( $_POST['table_label'] ) ) : '',
+					isset( $_POST['table_zone'] ) ? sanitize_text_field( wp_unslash( $_POST['table_zone'] ) ) : '',
+					isset( $_POST['ordering_url'] ) ? esc_url_raw( wp_unslash( $_POST['ordering_url'] ) ) : ''
+				);
+			} elseif ( 'rotate' === $action ) {
+				$issued = DoughBoss_Table_QR::issue_code( isset( $_POST['table_id'] ) ? absint( $_POST['table_id'] ) : 0 );
+			} elseif ( 'activate' === $action || 'deactivate' === $action ) {
+				$result = DoughBoss_Table_QR::set_active( isset( $_POST['table_id'] ) ? absint( $_POST['table_id'] ) : 0, 'activate' === $action );
+				if ( is_wp_error( $result ) ) {
+					$error = $result;
+				}
+			}
+			if ( is_wp_error( $issued ) ) {
+				$error  = $issued;
+				$issued = null;
+			}
+		}
+
+		$locations = DoughBoss_Locations::all( true );
+		$tables    = DoughBoss_Table_QR::all_tables();
+		?>
+		<div class="wrap doughboss-admin">
+			<h1><?php esc_html_e( 'Dining Tables & QR Codes', 'doughboss' ); ?></h1>
+			<p><?php esc_html_e( 'Each printed code is permanently tied to one store and table. The customer scans it, enters their name at checkout, and the kitchen receives both their name and table.', 'doughboss' ); ?></p>
+			<?php if ( $error ) : ?>
+				<div class="notice notice-error"><p><?php echo esc_html( $error->get_error_message() ); ?></p></div>
+			<?php endif; ?>
+
+			<?php if ( $issued ) : ?>
+				<div class="notice notice-warning"><p><strong><?php esc_html_e( 'Print this QR now.', 'doughboss' ); ?></strong> <?php esc_html_e( 'For security, its bearer code is not stored and cannot be shown again. Rotating creates a replacement and immediately invalidates the old print.', 'doughboss' ); ?></p></div>
+				<section id="doughboss-qr-print" style="background:#fff;border:2px solid #111;max-width:440px;padding:28px;text-align:center;">
+					<h2 style="font-size:30px;margin:0 0 8px;"><?php echo esc_html( sprintf( __( 'TABLE %s', 'doughboss' ), $issued['label'] ) ); ?></h2>
+					<p style="font-size:18px;"><?php esc_html_e( 'Scan to order. Enter your name and we will bring your order to this table.', 'doughboss' ); ?></p>
+					<div id="doughboss-qr-code" data-url="<?php echo esc_attr( $issued['url'] ); ?>" style="display:flex;justify-content:center;margin:18px;"></div>
+					<p><code><?php echo esc_html( $issued['url'] ); ?></code></p>
+				</section>
+				<p><button type="button" class="button button-primary" onclick="window.print()"><?php esc_html_e( 'Print QR label', 'doughboss' ); ?></button></p>
+				<script>
+				document.addEventListener('DOMContentLoaded', function () {
+					var mount = document.getElementById('doughboss-qr-code');
+					if (!mount || typeof qrcode !== 'function') return;
+					var code = qrcode(0, 'M');
+					code.addData(mount.getAttribute('data-url'), 'Byte');
+					code.make();
+					mount.innerHTML = code.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
+				});
+				</script>
+			<?php endif; ?>
+
+			<h2><?php esc_html_e( 'Add a table', 'doughboss' ); ?></h2>
+			<form method="post">
+				<?php wp_nonce_field( 'doughboss_table_qr' ); ?>
+				<input type="hidden" name="table_action" value="create" />
+				<table class="form-table"><tbody>
+				<tr><th><label for="db-table-location"><?php esc_html_e( 'Store', 'doughboss' ); ?></label></th><td><select id="db-table-location" name="location_id" required><option value=""><?php esc_html_e( 'Choose store', 'doughboss' ); ?></option><?php foreach ( $locations as $location ) : ?><option value="<?php echo esc_attr( $location->id ); ?>"><?php echo esc_html( $location->name ); ?></option><?php endforeach; ?></select></td></tr>
+				<tr><th><label for="db-table-label"><?php esc_html_e( 'Table number / label', 'doughboss' ); ?></label></th><td><input id="db-table-label" name="table_label" type="text" maxlength="80" required placeholder="12" /></td></tr>
+				<tr><th><label for="db-table-zone"><?php esc_html_e( 'Zone (optional)', 'doughboss' ); ?></label></th><td><input id="db-table-zone" name="table_zone" type="text" maxlength="80" placeholder="Courtyard" /></td></tr>
+				<tr><th><label for="db-ordering-url"><?php esc_html_e( 'Menu page URL', 'doughboss' ); ?></label></th><td><input id="db-ordering-url" name="ordering_url" type="url" class="regular-text" required value="<?php echo esc_attr( home_url( '/' ) ); ?>" /><p class="description"><?php esc_html_e( 'Must be a page on this WordPress site containing the DoughBoss menu/cart.', 'doughboss' ); ?></p></td></tr>
+				</tbody></table>
+				<?php submit_button( __( 'Create table and QR', 'doughboss' ) ); ?>
+			</form>
+
+			<h2><?php esc_html_e( 'Existing tables', 'doughboss' ); ?></h2>
+			<table class="widefat striped"><thead><tr><th><?php esc_html_e( 'Store', 'doughboss' ); ?></th><th><?php esc_html_e( 'Table', 'doughboss' ); ?></th><th><?php esc_html_e( 'Zone', 'doughboss' ); ?></th><th><?php esc_html_e( 'State', 'doughboss' ); ?></th><th><?php esc_html_e( 'Last scan', 'doughboss' ); ?></th><th><?php esc_html_e( 'Actions', 'doughboss' ); ?></th></tr></thead><tbody>
+			<?php if ( ! $tables ) : ?><tr><td colspan="6"><?php esc_html_e( 'No dining tables have been created.', 'doughboss' ); ?></td></tr><?php endif; ?>
+			<?php foreach ( $tables as $table ) : ?>
+			<tr><td><?php echo esc_html( $table->location_name ); ?></td><td><strong><?php echo esc_html( $table->label ); ?></strong></td><td><?php echo esc_html( $table->zone ); ?></td><td><?php echo $table->is_active ? esc_html__( 'Active', 'doughboss' ) : esc_html__( 'Inactive', 'doughboss' ); ?></td><td><?php echo $table->last_scanned_at ? esc_html( $table->last_scanned_at ) : esc_html__( 'Never', 'doughboss' ); ?></td><td>
+				<form method="post" style="display:inline;"><?php wp_nonce_field( 'doughboss_table_qr' ); ?><input type="hidden" name="table_id" value="<?php echo esc_attr( $table->id ); ?>" /><input type="hidden" name="table_action" value="<?php echo $table->is_active ? 'deactivate' : 'activate'; ?>" /><button class="button"><?php echo $table->is_active ? esc_html__( 'Deactivate', 'doughboss' ) : esc_html__( 'Activate', 'doughboss' ); ?></button></form>
+				<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Rotate this QR? Every old print and active table session will stop working immediately.', 'doughboss' ) ); ?>');"><?php wp_nonce_field( 'doughboss_table_qr' ); ?><input type="hidden" name="table_id" value="<?php echo esc_attr( $table->id ); ?>" /><input type="hidden" name="table_action" value="rotate" /><button class="button"><?php esc_html_e( 'Rotate & print', 'doughboss' ); ?></button></form>
+			</td></tr>
+			<?php endforeach; ?>
+			</tbody></table>
+		</div>
 		<?php
 	}
 }

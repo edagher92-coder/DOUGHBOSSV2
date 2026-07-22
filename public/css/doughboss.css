@@ -366,6 +366,41 @@
 	margin-top: 0.25rem;
 }
 
+/* Verified QR table context ----------------------------------------- */
+.db-table-context {
+	display: flex;
+	align-items: center;
+	gap: 0.7rem;
+	margin: 0 0 1rem;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid var(--db-accent);
+	border-radius: var(--db-r-sm);
+	background: #fff8e8;
+	color: var(--db-ink);
+}
+
+.db-table-context-icon {
+	display: grid;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--db-accent);
+	color: #fff;
+	font-weight: 800;
+}
+
+.db-table-context-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 0.08rem;
+}
+
+.db-table-context-copy strong { font-size: 0.95rem; }
+.db-table-context-copy span { color: var(--db-muted); font-size: 0.85rem; }
+.db-table-context--compact { margin-bottom: 0; }
+
 /* Checkout ---------------------------------------------------------- */
 .db-checkout {
 	margin-top: 1.5rem;

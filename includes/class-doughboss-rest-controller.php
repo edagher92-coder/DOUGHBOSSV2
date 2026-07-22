@@ -124,6 +124,16 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/table/context',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_table_context' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/cart',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -2222,10 +2232,18 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_empty', __( 'Your cart is empty.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
-		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
-		if ( DoughBoss_Locations::single_location_id() ) {
-			$order_type = 'pickup';
+		$table_context = $this->table_order_context();
+		if ( is_wp_error( $table_context ) ) {
+			return $table_context;
+		}
+		if ( $table_context ) {
+			$order_type = 'dine_in';
+		} else {
+			$order_type = sanitize_key( $request->get_param( 'order_type' ) );
+			$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+			if ( DoughBoss_Locations::single_location_id() ) {
+				$order_type = 'pickup';
+			}
 		}
 
 		if ( 'delivery' === $order_type && ! DoughBoss_Settings::get( 'enable_delivery', 0 ) ) {
@@ -2235,7 +2253,7 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_no_pickup', __( 'Pickup is not available.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$location_id = $this->resolve_order_location( $request->get_param( 'location_id' ), $order_type );
+		$location_id = $table_context ? (int) $table_context['location_id'] : $this->resolve_order_location( $request->get_param( 'location_id' ), $order_type );
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}
@@ -2250,6 +2268,8 @@ class DoughBoss_REST_Controller {
 			array(
 				'order_type'  => $order_type,
 				'location_id' => $location_id,
+				'table_id'    => $table_context ? (int) $table_context['table_id'] : 0,
+				'qr_code_id'  => $table_context ? (int) $table_context['qr_code_id'] : 0,
 				'site'        => home_url(),
 			)
 		);
@@ -2281,6 +2301,42 @@ class DoughBoss_REST_Controller {
 			$out[] = DoughBoss_Locations::public_view( $loc );
 		}
 		return rest_ensure_response( $out );
+	}
+
+	/**
+	 * GET /table/context — safe display details for a scanned table session.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function get_table_context() {
+		$context = $this->table_order_context();
+		if ( is_wp_error( $context ) ) {
+			return $context;
+		}
+		if ( ! $context ) {
+			$response = rest_ensure_response( array( 'active' => false ) );
+			$response->header( 'Cache-Control', 'no-store, private' );
+			$response->header( 'Vary', 'Cookie' );
+			return $response;
+		}
+		$response = rest_ensure_response(
+			array(
+				'active'     => true,
+				'order_type' => 'dine_in',
+				'location'   => array(
+					'id'   => (int) $context['location_id'],
+					'name' => $context['location_name'],
+				),
+				'table'      => array(
+					'id'    => (int) $context['table_id'],
+					'label' => $context['table_label'],
+				),
+				'expires_at' => $context['expires_at'],
+			)
+		);
+		$response->header( 'Cache-Control', 'no-store, private' );
+		$response->header( 'Vary', 'Cookie' );
+		return $response;
 	}
 
 	/**
@@ -2330,11 +2386,19 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function get_cart( WP_REST_Request $request ) {
-		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
-		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
-		$single_location_id = DoughBoss_Locations::single_location_id();
-		if ( $single_location_id ) {
-			$order_type = 'pickup';
+		$table_context = $this->table_order_context();
+		if ( is_wp_error( $table_context ) ) {
+			return $table_context;
+		}
+		if ( $table_context ) {
+			$order_type = 'dine_in';
+		} else {
+			$order_type = sanitize_key( $request->get_param( 'order_type' ) );
+			$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+			$single_location_id = DoughBoss_Locations::single_location_id();
+			if ( $single_location_id ) {
+				$order_type = 'pickup';
+			}
 		}
 		return rest_ensure_response( $this->cart->to_array( $order_type ) );
 	}
@@ -2586,11 +2650,19 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_empty', __( 'Your cart is empty.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$order_type = sanitize_key( $request->get_param( 'order_type' ) );
-		$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
-		$single_location_id = DoughBoss_Locations::single_location_id();
-		if ( $single_location_id ) {
-			$order_type = 'pickup';
+		$table_context = $this->table_order_context();
+		if ( is_wp_error( $table_context ) ) {
+			return $table_context;
+		}
+		if ( $table_context ) {
+			$order_type = 'dine_in';
+		} else {
+			$order_type = sanitize_key( $request->get_param( 'order_type' ) );
+			$order_type = ( 'delivery' === $order_type ) ? 'delivery' : 'pickup';
+			$single_location_id = DoughBoss_Locations::single_location_id();
+			if ( $single_location_id ) {
+				$order_type = 'pickup';
+			}
 		}
 
 		if ( 'delivery' === $order_type && ! DoughBoss_Settings::get( 'enable_delivery', 0 ) ) {
@@ -2627,7 +2699,7 @@ class DoughBoss_REST_Controller {
 		// Resolve the shop before charging or creating an order. Multi-shop sites
 		// must receive an explicit active location; silently choosing the first
 		// row can send a paid order to the wrong kitchen.
-		$location_id = $this->resolve_order_location( $request->get_param( 'location_id' ), $order_type );
+		$location_id = $table_context ? (int) $table_context['location_id'] : $this->resolve_order_location( $request->get_param( 'location_id' ), $order_type );
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}
@@ -2646,7 +2718,7 @@ class DoughBoss_REST_Controller {
 		$payment_method    = '';
 		$payment_intent_id = '';
 		if ( DoughBoss_Payment::ready() ) {
-			$verified = $this->verify_payment( $request, $totals['total'], $order_type, $location_id );
+			$verified = $this->verify_payment( $request, $totals['total'], $order_type, $location_id, $table_context );
 			if ( is_wp_error( $verified ) ) {
 				return $verified;
 			}
@@ -2708,6 +2780,11 @@ class DoughBoss_REST_Controller {
 			array(
 				'order_type'     => $order_type,
 				'location_id'    => $location_id,
+				'table_id'       => $table_context ? (int) $table_context['table_id'] : 0,
+				'table_label'    => $table_context ? $table_context['table_label'] : '',
+				'table_qr_code_id' => $table_context ? (int) $table_context['qr_code_id'] : 0,
+				'table_session_id' => $table_context ? (int) $table_context['session_id'] : 0,
+				'order_source'   => $table_context ? 'table_qr' : 'web',
 				'customer_name'  => $name,
 				'customer_email' => $email,
 				'customer_phone' => $phone,
@@ -2789,13 +2866,36 @@ class DoughBoss_REST_Controller {
 	 * @return array
 	 */
 	private function checkout_payload( $order, $replayed ) {
-		return array(
+		$payload = array(
 			'success'      => true,
 			'order_number' => $order->order_number,
 			'total'        => (float) $order->total,
 			'replayed'     => (bool) $replayed,
 			'message'      => __( 'Thanks! Your order has been received.', 'doughboss' ),
 		);
+		if ( isset( $order->order_type ) && 'dine_in' === $order->order_type ) {
+			$location                 = isset( $order->location_id ) ? DoughBoss_Locations::get( (int) $order->location_id ) : null;
+			$payload['table_label']   = isset( $order->table_label ) ? $order->table_label : '';
+			$payload['location_id']   = isset( $order->location_id ) ? (int) $order->location_id : 0;
+			$payload['location_name'] = $location && isset( $location->name ) ? $location->name : '';
+			$payload['message']       = __( 'Thanks! We received your table order and will bring it to you.', 'doughboss' );
+		}
+		return $payload;
+	}
+
+	/**
+	 * Resolve the authoritative table context from its HttpOnly session cookie.
+	 *
+	 * No cookie means an ordinary pickup/delivery visit. An invalid, expired,
+	 * rotated, or inactive context fails closed instead of silently falling back.
+	 *
+	 * @return array|null|WP_Error
+	 */
+	private function table_order_context() {
+		if ( ! DoughBoss_Table_QR::has_session_cookie() ) {
+			return null;
+		}
+		return DoughBoss_Table_QR::current_context( $this->cart->get_token() );
 	}
 
 	/**
@@ -2854,9 +2954,10 @@ class DoughBoss_REST_Controller {
 	 * @param float           $expected_total Server-computed order total.
 	 * @param string          $order_type     Expected fulfilment type.
 	 * @param int             $location_id    Expected shop id.
+	 * @param array|null      $table_context  Authoritative table session, if any.
 	 * @return string|WP_Error Payment reference id, or an error.
 	 */
-	private function verify_payment( WP_REST_Request $request, $expected_total, $order_type, $location_id ) {
+	private function verify_payment( WP_REST_Request $request, $expected_total, $order_type, $location_id, $table_context = null ) {
 		$raw_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
 		if ( '' === $raw_id ) {
 			return new WP_Error( 'doughboss_pay_required', __( 'Payment is required to place this order.', 'doughboss' ), array( 'status' => 402 ) );
@@ -2888,8 +2989,12 @@ class DoughBoss_REST_Controller {
 		$metadata      = isset( $intent['metadata'] ) && is_array( $intent['metadata'] ) ? $intent['metadata'] : array();
 		$meta_type     = isset( $metadata['order_type'] ) ? sanitize_key( $metadata['order_type'] ) : '';
 		$meta_location = isset( $metadata['location_id'] ) ? absint( $metadata['location_id'] ) : -1;
+		$meta_table    = isset( $metadata['table_id'] ) ? absint( $metadata['table_id'] ) : 0;
+		$meta_qr       = isset( $metadata['qr_code_id'] ) ? absint( $metadata['qr_code_id'] ) : 0;
+		$expected_table = $table_context ? (int) $table_context['table_id'] : 0;
+		$expected_qr    = $table_context ? (int) $table_context['qr_code_id'] : 0;
 
-		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency || $meta_type !== $order_type || $meta_location !== (int) $location_id ) {
+		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency || $meta_type !== $order_type || $meta_location !== (int) $location_id || $meta_table !== $expected_table || $meta_qr !== $expected_qr ) {
 			// Do not claim an automatic reversal: nothing in this plugin refunds a
 			// payment automatically today. Point the customer at a human instead
 			// of a false promise.

@@ -83,7 +83,8 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.13.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.13.0' );
+ok( '1.14.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.14.0' );
+ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Order', 'transition' ), 'DoughBoss_Order::transition() exists' );
 ok( method_exists( 'DoughBoss_Order', 'events' ), 'DoughBoss_Order::events() exists' );
@@ -93,6 +94,7 @@ ok( ! DoughBoss_Order::can_transition( 'confirmed', 'ready' ), 'confirmed cannot
 ok( DoughBoss_Order::can_transition( 'confirmed', 'preparing' ), 'confirmed can start cooking' );
 ok( DoughBoss_Order::can_transition( 'preparing', 'ready' ), 'preparing can be marked ready' );
 ok( DoughBoss_Order::can_transition( 'ready', 'completed', 'pickup' ), 'pickup ready can complete' );
+ok( DoughBoss_Order::can_transition( 'ready', 'completed', 'dine_in' ), 'dine-in ready can be served' );
 ok( DoughBoss_Order::can_transition( 'ready', 'out_for_delivery', 'delivery' ), 'delivery ready can leave the shop' );
 ok( ! DoughBoss_Order::can_transition( 'ready', 'completed', 'delivery' ), 'delivery cannot be marked delivered before leaving the shop' );
 ok( ! DoughBoss_Order::can_transition( 'ready', 'out_for_delivery', 'pickup' ), 'pickup cannot enter delivery state' );
@@ -103,10 +105,13 @@ $customer_pending = DoughBoss_Order::customer_projection( (object) array( 'statu
 $customer_baking  = DoughBoss_Order::customer_projection( (object) array( 'status' => 'baking', 'order_type' => 'pickup' ) );
 $customer_done    = DoughBoss_Order::customer_projection( (object) array( 'status' => 'completed', 'order_type' => 'pickup' ) );
 $delivery_ready   = DoughBoss_Order::customer_projection( (object) array( 'status' => 'ready', 'order_type' => 'delivery' ) );
+$dine_in_ready    = DoughBoss_Order::customer_projection( (object) array( 'status' => 'ready', 'order_type' => 'dine_in' ) );
 ok( 'received' === $customer_pending['status'], 'pending projects to customer received' );
 ok( 'preparing' === $customer_baking['status'], 'baking projects to customer preparing' );
 ok( 'collected' === $customer_done['status'], 'completed pickup projects to collected' );
 ok( 'ready_for_delivery' === $delivery_ready['status'], 'ready delivery never projects to pickup wording' );
+ok( 'ready_to_serve' === $dine_in_ready['status'], 'ready dine-in order uses table-service wording' );
+ok( 'Ready to Serve' === DoughBoss_Order::status_label_for( (object) array( 'status' => 'ready', 'order_type' => 'dine_in' ) ), 'staff status label is dine-in aware' );
 $late = DoughBoss_Order::timing_projection(
 	(object) array(
 		'status'                    => 'preparing',
@@ -211,6 +216,7 @@ ok( (bool) preg_grep( '#doughboss/v1/admin/catering$#', $routes ), 'GET /admin/c
 $payment_route = $GLOBALS['__db_rest_args']['doughboss/v1/payment-intent'] ?? array();
 $payment_args  = isset( $payment_route['args'] ) ? $payment_route['args'] : array();
 ok( isset( $payment_args['location_id'] ), 'POST /payment-intent declares location_id validation' );
+ok( in_array( 'doughboss/v1/table/context', $GLOBALS['__db_rest'], true ), 'GET /table/context is registered' );
 $remove_voucher_route = $GLOBALS['__db_rest_args']['doughboss/v1/cart/remove-voucher'] ?? array();
 $remove_voucher_args  = isset( $remove_voucher_route['args'] ) ? $remove_voucher_route['args'] : array();
 ok( ! isset( $remove_voucher_args['location_id'] ), 'POST /cart/remove-voucher does not expose unrelated location_id' );
@@ -241,9 +247,8 @@ foreach ( $board_routes as $board_route ) {
 	ok( is_array( $permission ) && isset( $permission[1] ) && 'verify_board_access' === $permission[1], $board_route . ' requires the board key verifier' );
 }
 // A real count check, not just ">0", so a route silently failing to register
-// would fail this. Bumped to 47 with the /tyro-webhook, /catering/tyro-webhook
-// and /pay/tyro-test routes added for the Tyro payment gateway backend.
-ok( 47 === count( $routes ), 'REST route count reflects Tyro route additions (' . count( $routes ) . ' routes, expected 47)' );
+// would fail this. Includes the public, cookie-gated /table/context route.
+ok( 48 === count( $routes ), 'REST route count includes table context (' . count( $routes ) . ' routes, expected 48)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );

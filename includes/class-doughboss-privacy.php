@@ -148,6 +148,10 @@ class DoughBoss_Privacy {
 						'value' => $row->order_type,
 					),
 					array(
+						'name'  => __( 'Dining table', 'doughboss' ),
+						'value' => isset( $row->table_label ) ? (string) $row->table_label : '',
+					),
+					array(
 						'name'  => __( 'Total', 'doughboss' ),
 						'value' => $row->total . ' ' . $row->currency,
 					),

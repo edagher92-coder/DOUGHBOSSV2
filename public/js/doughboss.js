@@ -17,6 +17,11 @@
 	var PAY = DATA.payments || { enabled: false, pk: '' };
 	var configCache = null;
 	var locationsCache = null;
+	// A table QR opens the ordering page with a server-issued, HttpOnly context
+	// cookie. The browser deliberately receives only the safe display context;
+	// it never gets a table token or an editable table/store authority.
+	var tableContextCache = null;
+	var tableContextRequest = null;
 
 	// Which gateway the server enqueued a card library for ('stripe' or 'tyro').
 	// Defaults to 'stripe' so older localized data behaves exactly as before.
@@ -137,6 +142,42 @@
 		});
 	}
 
+	function getTableContext() {
+		if (tableContextRequest) {
+			return tableContextRequest;
+		}
+		tableContextRequest = request('/table/context').then(function (context) {
+			if (!context || !context.active || !context.location || !context.table) {
+				tableContextCache = null;
+				return null;
+			}
+			tableContextCache = context;
+			return tableContextCache;
+		});
+		return tableContextRequest;
+	}
+
+	function activeTableContext() {
+		return tableContextCache && tableContextCache.active ? tableContextCache : null;
+	}
+
+	function tableContextBanner(context, compact) {
+		if (!context) { return null; }
+		var locationName = context.location.name || 'this store';
+		var tableLabel = context.table.label || 'your table';
+		return el('div', {
+			class: 'db-table-context' + (compact ? ' db-table-context--compact' : ''),
+			role: 'status',
+			'aria-live': 'polite'
+		}, [
+			el('span', { class: 'db-table-context-icon', 'aria-hidden': 'true', text: '\u2713' }),
+			el('div', { class: 'db-table-context-copy' }, [
+				el('strong', { text: 'You are ordering for ' + locationName }),
+				el('span', { text: 'Table ' + tableLabel + ' \u00b7 dine in' })
+			])
+		]);
+	}
+
 	function notifyCartChanged() {
 		document.dispatchEvent(new CustomEvent('doughboss:cart-updated'));
 	}
@@ -218,6 +259,13 @@
 	function renderShopPicker(root) {
 		getLocations().then(function (locs) {
 			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) {
+				// QR table context is fixed on the server. Do not show an editable
+				// shop picker that suggests a customer can change its destination.
+				root.appendChild(tableContextBanner(tableContext, true));
+				return;
+			}
 			if (!locs.length) { root.style.display = 'none'; return; }
 
 			// Single shop: remember it silently and just show its details.
@@ -255,6 +303,8 @@
 	function renderMenu(root) {
 		request('/menu').then(function (items) {
 			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!items.length) {
 				root.appendChild(el('p', { class: 'db-empty', text: 'No menu items yet.' }));
 				return;
@@ -351,6 +401,8 @@
 	function renderBuilder(root) {
 		getConfig().then(function (cfg) {
 			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!cfg.sizes.length) {
 				root.appendChild(el('p', { class: 'db-empty', text: 'No pizza sizes configured yet.' }));
 				return;
@@ -432,8 +484,9 @@
 	/* ------------------------------------------------------------------ */
 
 	function renderCart(root) {
-		var orderType = 'pickup';
-		var locationId = 0;
+		var initialTableContext = activeTableContext();
+		var orderType = initialTableContext ? 'dine_in' : 'pickup';
+		var locationId = initialTableContext ? Number(initialTableContext.location.id) : 0;
 		// The cart lines/totals region is rebuilt freely on every reload. The
 		// checkout region is NOT — once a checkout form exists it is updated in
 		// place (see checkoutEl.update below) rather than torn down. Rebuilding it
@@ -467,8 +520,10 @@
 		function draw(cfg, cart, locs) {
 			if (orderComplete) { return; }
 			cartRegion.innerHTML = '';
+			var tableContext = activeTableContext();
 
 			if (!cart.items.length) {
+				if (tableContext) { cartRegion.appendChild(tableContextBanner(tableContext)); }
 				cartRegion.appendChild(el('p', { class: 'db-empty', text: I18N.emptyCart || 'Your cart is empty.' }));
 				// Nothing to check out — drop any previous checkout form so a later
 				// non-empty cart starts with a fresh one (and a fresh card mount).
@@ -477,7 +532,12 @@
 				return;
 			}
 
-			if (cfg.single_location_mode && cfg.single_location_id) {
+			if (tableContext) {
+				// The server resolves and enforces this QR context again on payment
+				// and checkout. These values are display-only client state.
+				locationId = Number(tableContext.location.id);
+				orderType = 'dine_in';
+			} else if (cfg.single_location_mode && cfg.single_location_id) {
 				locationId = Number(cfg.single_location_id);
 				orderType = 'pickup';
 			} else if (!locationId) { locationId = currentLocationId(locs); }
@@ -488,26 +548,29 @@
 				list.appendChild(cartLine(line, load));
 			});
 			cartRegion.appendChild(list);
+			if (tableContext) { cartRegion.appendChild(tableContextBanner(tableContext)); }
 
 			// Shop selector — routes the order to the right kitchen board. Only
 			// shown when more than one shop exists; otherwise the single shop is
 			// remembered silently.
-			if (!cfg.single_location_mode && locs.length > 1) {
+			if (!tableContext && !cfg.single_location_mode && locs.length > 1) {
 				setLocation(locationId, true);
 				cartRegion.appendChild(el('div', { class: 'db-cart-shop' }, [
 					el('span', { class: 'db-cart-shop-label', text: I18N.chooseShop || 'Choose your shop' }),
 					shopSelect(locs, locationId, function (id) { locationId = id; setLocation(id); })
 				]));
-			} else if (locs.length === 1) {
+			} else if (!tableContext && locs.length === 1) {
 				locationId = Number(locs[0].id);
 				setLocation(locationId, true);
 			}
 
 			// Fulfilment selector.
-			var typeWrap = el('div', { class: 'db-fulfilment' });
-			if (cfg.enable_pickup) { typeWrap.appendChild(typeRadio('pickup', 'Pickup', orderType, onType)); }
-			if (cfg.enable_delivery) { typeWrap.appendChild(typeRadio('delivery', 'Delivery', orderType, onType)); }
-			cartRegion.appendChild(typeWrap);
+			if (!tableContext) {
+				var typeWrap = el('div', { class: 'db-fulfilment' });
+				if (cfg.enable_pickup) { typeWrap.appendChild(typeRadio('pickup', 'Pickup', orderType, onType)); }
+				if (cfg.enable_delivery) { typeWrap.appendChild(typeRadio('delivery', 'Delivery', orderType, onType)); }
+				cartRegion.appendChild(typeWrap);
+			}
 
 			// Totals.
 			cartRegion.appendChild(totalsBlock(cart.totals, cfg));
@@ -932,13 +995,17 @@
 				// would throw against null.
 				var parent = form.parentNode;
 				parent.innerHTML = '';
-				parent.appendChild(el('div', { class: 'db-confirm' }, [
+				var confirmation = el('div', { class: 'db-confirm' }, [
 					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
 					el('h3', { text: 'Order received' }),
 					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
-					el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }),
-					el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) })
-				]));
+				]);
+				if (res.table_label) {
+					confirmation.appendChild(el('p', { class: 'db-table-context', text: 'Dine in · ' + (res.location_name ? res.location_name + ' · ' : '') + 'Table ' + res.table_label + ' · We will bring it to you.' }));
+				}
+				confirmation.appendChild(el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }));
+				confirmation.appendChild(el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) }));
+				parent.appendChild(confirmation);
 				// Mark this cart widget done BEFORE notifying — the notification
 				// triggers this same widget's own reload listener, which must not
 				// overwrite the confirmation just shown with an "empty cart" render.
@@ -1123,11 +1190,12 @@
 		// 4-stage horizontal progress tracker (pickup vs delivery wording).
 		function buildTracker(order) {
 			var isDelivery = order.order_type === 'delivery';
+			var isDineIn = order.order_type === 'dine_in';
 			var labels = [
 				'Order placed',
 				'Being prepared',
-				isDelivery ? 'On its way' : 'Ready for pickup',
-				isDelivery ? 'Delivered' : 'Picked up'
+				isDelivery ? 'On its way' : (isDineIn ? 'Ready to serve' : 'Ready for pickup'),
+				isDelivery ? 'Delivered' : (isDineIn ? 'Served' : 'Picked up')
 			];
 			var current = TRACK_STAGE_MAP.hasOwnProperty(order.status) ? TRACK_STAGE_MAP[order.status] : 0;
 			var list = el('ol', { class: 'db-stage-tracker', 'aria-label': 'Order progress' });
@@ -1205,6 +1273,8 @@
 				if (eta) { card.appendChild(eta); }
 				if (order.customer_status === 'ready_for_pickup') {
 					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready — please collect it from the shop.' }));
+				} else if (order.customer_status === 'ready_to_serve') {
+					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready. We will bring it to your table.' }));
 				} else if (order.customer_status === 'ready_for_delivery') {
 					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready for delivery.' }));
 				}
@@ -1255,11 +1325,23 @@
 	/* ------------------------------------------------------------------ */
 
 	function boot() {
-		document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
-		document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
-		document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
-		document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);
-		document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
+		// Resolve a scanned-table session before any ordering controls render, so
+		// there is no moment where a customer sees a switchable shop or fulfilment
+		// option. Non-QR pages simply continue with a null context.
+		getTableContext().then(function () {
+			document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
+			document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
+			document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
+			document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);
+			document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
+		}).catch(function (err) {
+			// A claimed but expired/revoked table session must never silently become
+			// a switchable pickup order. Stop ordering and direct the guest to staff.
+			document.querySelectorAll('[data-doughboss-shop], [data-doughboss-menu], [data-doughboss-builder], [data-doughboss-cart]').forEach(function (root) {
+				root.innerHTML = '';
+				root.appendChild(el('div', { class: 'db-error', role: 'alert', text: (err && err.message ? err.message : 'This table session is no longer active.') + ' Please scan the table QR again or ask a staff member for help.' }));
+			});
+		});
 	}
 
 	if (document.readyState === 'loading') {

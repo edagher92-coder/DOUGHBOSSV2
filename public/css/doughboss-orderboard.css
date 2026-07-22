@@ -213,6 +213,23 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-type-delivery { background: var(--dbb-chip-delivery-bg); color: var(--dbb-chip-delivery-ink); }
 
+.db-type-dine_in {
+	background: #fff0c2;
+	color: #6d4a00;
+}
+
+.db-card-table {
+	padding: 0.2rem 0.5rem;
+	border: 2px solid #5d3600;
+	border-radius: 4px;
+	background: #ffda62;
+	color: #2d1a00;
+	font-size: 0.78rem;
+	font-weight: 900;
+	letter-spacing: 0.06em;
+	line-height: 1;
+}
+
 .db-card-shop {
 	font-size: 0.7rem;
 	text-transform: uppercase;

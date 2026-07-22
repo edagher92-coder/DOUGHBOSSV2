@@ -231,7 +231,7 @@ class DoughBoss_Reports {
 	}
 
 	/**
-	 * Order count and revenue split by order type (pickup / delivery).
+	 * Order count and revenue split by order type (pickup / delivery / dine-in).
 	 *
 	 * @param string $from        Start date (Y-m-d) or datetime.
 	 * @param string $to          End date (Y-m-d) or datetime.
@@ -324,7 +324,7 @@ class DoughBoss_Reports {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- table name is plugin-owned; WHERE fragment is built from placeholders only.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT order_number, created_at, order_type, status, location_id, customer_name, customer_email, subtotal, tax, delivery_fee, discount, voucher_code, total, currency, payment_status FROM {$table} WHERE {$where} ORDER BY created_at ASC",
+				"SELECT order_number, created_at, order_type, order_source, table_label, status, location_id, customer_name, customer_email, subtotal, tax, delivery_fee, discount, voucher_code, total, currency, payment_status FROM {$table} WHERE {$where} ORDER BY created_at ASC",
 				$params
 			)
 		);

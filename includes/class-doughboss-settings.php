@@ -1202,7 +1202,7 @@ class DoughBoss_Settings {
 	 */
 	public static function tpl_sms_ready() {
 		$v = trim( (string) self::get( 'tpl_sms_ready', '' ) );
-		return '' !== $v ? $v : 'Your DoughBoss order #{order_number} is ready for pickup.';
+		return '' !== $v ? $v : 'DoughBoss order #{order_number}: {status_label}. {handoff_message}';
 	}
 
 	/**
@@ -1257,7 +1257,7 @@ class DoughBoss_Settings {
 	 */
 	public static function tpl_ready_email_subject() {
 		$v = trim( (string) self::get( 'tpl_ready_email_subject', '' ) );
-		return '' !== $v ? $v : 'Order {order_number} is ready for pickup!';
+		return '' !== $v ? $v : 'Order {order_number}: {status_label}';
 	}
 
 	/**
@@ -1270,7 +1270,7 @@ class DoughBoss_Settings {
 		$v = (string) self::get( 'tpl_ready_email_body', '' );
 		return '' !== trim( $v )
 			? $v
-			: "Hi {customer_name},\n\nYour order {order_number} is fresh out of the oven and ready for pickup. Come grab it while it's warm!\n\nOrder total: {total}\n\nSee you soon!\n";
+			: "Hi {customer_name},\n\nYour order {order_number} is {status_label}. {handoff_message}\n\nOrder total: {total}\n\nSee you soon!\n";
 	}
 
 	/**

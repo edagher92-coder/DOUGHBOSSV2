@@ -31,11 +31,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, or checkout-integrity storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, or table-QR storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -65,6 +65,9 @@ class DoughBoss_Activator {
 		$exceptions      = $wpdb->prefix . 'doughboss_schedule_exceptions';
 		$capacity_slots  = $wpdb->prefix . 'doughboss_capacity_slots';
 		$capacity_holds  = $wpdb->prefix . 'doughboss_capacity_holds';
+		$dining_tables   = $wpdb->prefix . 'doughboss_dining_tables';
+		$table_qr_codes  = $wpdb->prefix . 'doughboss_table_qr_codes';
+		$table_sessions  = $wpdb->prefix . 'doughboss_table_sessions';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -73,6 +76,11 @@ class DoughBoss_Activator {
 			status varchar(20) NOT NULL DEFAULT 'pending',
 			version bigint(20) unsigned NOT NULL DEFAULT 1,
 			order_type varchar(20) NOT NULL DEFAULT 'pickup',
+			table_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			table_label varchar(80) NOT NULL DEFAULT '',
+			table_qr_code_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			table_session_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			order_source varchar(20) NOT NULL DEFAULT 'web',
 			customer_name varchar(191) NOT NULL DEFAULT '',
 			customer_email varchar(191) NOT NULL DEFAULT '',
 			customer_phone varchar(40) NOT NULL DEFAULT '',
@@ -112,6 +120,7 @@ class DoughBoss_Activator {
 			KEY status (status),
 			KEY customer_email (customer_email),
 			KEY location_id (location_id),
+			KEY location_table_created (location_id,table_id,created_at),
 			KEY promised_ready_from (location_id,promised_ready_from_utc),
 			KEY fire_time (location_id,fire_at_utc),
 			UNIQUE KEY payment_intent_id (payment_intent_id),
@@ -248,6 +257,50 @@ class DoughBoss_Activator {
 			KEY slot_state (slot_id,status,expires_at)
 		) ENGINE=InnoDB {$charset_collate};";
 
+		$sql_dining_tables = "CREATE TABLE {$dining_tables} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			location_id bigint(20) unsigned NOT NULL,
+			label varchar(80) NOT NULL DEFAULT '',
+			zone varchar(80) NOT NULL DEFAULT '',
+			ordering_url varchar(255) NOT NULL DEFAULT '',
+			is_active tinyint(1) NOT NULL DEFAULT 1,
+			sort_order int(11) NOT NULL DEFAULT 0,
+			current_qr_code_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY location_label (location_id,label),
+			KEY location_active (location_id,is_active)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_table_qr_codes = "CREATE TABLE {$table_qr_codes} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			table_id bigint(20) unsigned NOT NULL,
+			token_hash char(64) NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'active',
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NULL DEFAULT NULL,
+			revoked_at datetime NULL DEFAULT NULL,
+			last_scanned_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY token_hash (token_hash),
+			KEY table_status (table_id,status)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_table_sessions = "CREATE TABLE {$table_sessions} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			session_hash char(64) NOT NULL,
+			qr_code_id bigint(20) unsigned NOT NULL,
+			cart_token_hash char(64) NOT NULL,
+			expires_at datetime NOT NULL,
+			last_seen_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY session_hash (session_hash),
+			KEY qr_code_id (qr_code_id),
+			KEY expires_at (expires_at)
+		) ENGINE=InnoDB {$charset_collate};";
+
 		$sql_catering = "CREATE TABLE {$catering} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			enquiry_number varchar(32) NOT NULL,
@@ -362,6 +415,9 @@ class DoughBoss_Activator {
 		dbDelta( $sql_exceptions );
 		dbDelta( $sql_capacity_slots );
 		dbDelta( $sql_capacity_holds );
+		dbDelta( $sql_dining_tables );
+		dbDelta( $sql_table_qr_codes );
+		dbDelta( $sql_table_sessions );
 	}
 
 	/**
@@ -546,6 +602,72 @@ class DoughBoss_Activator {
 		return self::column_contract_ready( $orders, $columns )
 			&& self::index_contract_ready( $orders, 'payment_intent_id', array( 'payment_intent_id' ), true, array( 191 ) )
 			&& self::index_contract_ready( $orders, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );
+	}
+
+	/**
+	 * Verify the store/table QR ordering schema before accepting table orders.
+	 *
+	 * @return bool
+	 */
+	public static function table_qr_storage_ready() {
+		global $wpdb;
+		$orders   = $wpdb->prefix . 'doughboss_orders';
+		$tables   = $wpdb->prefix . 'doughboss_dining_tables';
+		$codes    = $wpdb->prefix . 'doughboss_table_qr_codes';
+		$sessions = $wpdb->prefix . 'doughboss_table_sessions';
+
+		foreach ( array( $orders, $tables, $codes, $sessions ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		return self::column_contract_ready(
+			$orders,
+			array(
+				'table_id'         => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'table_label'      => array( 'type' => 'varchar(80)', 'null' => 'NO', 'default' => '' ),
+				'table_qr_code_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'table_session_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'order_source'     => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'web' ),
+			)
+		)
+			&& self::column_contract_ready(
+				$tables,
+				array(
+					'location_id'       => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'label'             => array( 'type' => 'varchar(80)', 'null' => 'NO', 'default' => '' ),
+					'ordering_url'      => array( 'type' => 'varchar(255)', 'null' => 'NO', 'default' => '' ),
+					'is_active'         => array( 'type' => 'tinyint(1)', 'null' => 'NO', 'default' => '1' ),
+					'current_qr_code_id'=> array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				)
+			)
+			&& self::column_contract_ready(
+				$codes,
+				array(
+					'table_id'   => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'token_hash' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'status'     => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'active' ),
+				)
+			)
+			&& self::column_contract_ready(
+				$sessions,
+				array(
+					'session_hash'   => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'qr_code_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'cart_token_hash' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'expires_at'      => array( 'type' => 'datetime', 'null' => 'NO' ),
+				)
+			)
+			&& self::index_contract_ready( $tables, 'location_label', array( 'location_id', 'label' ), true )
+			&& self::index_contract_ready( $codes, 'token_hash', array( 'token_hash' ), true, array( 64 ) )
+			&& self::index_contract_ready( $codes, 'table_status', array( 'table_id', 'status' ), false )
+			&& self::index_contract_ready( $sessions, 'session_hash', array( 'session_hash' ), true, array( 64 ) )
+			&& self::index_contract_ready( $sessions, 'qr_code_id', array( 'qr_code_id' ), false )
+			&& self::index_contract_ready( $sessions, 'expires_at', array( 'expires_at' ), false )
+			&& self::index_contract_ready( $orders, 'location_table_created', array( 'location_id', 'table_id', 'created_at' ), false );
 	}
 
 	/**

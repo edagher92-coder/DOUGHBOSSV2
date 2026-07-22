@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.20.0
+Stable tag: 2.21.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,7 +16,7 @@ DoughBoss turns any WordPress site into a pizza/food ordering storefront. It add
 
 * A **Menu Items** custom post type with categories, prices and images.
 * A **custom pizza builder** where customers choose a size and toppings with live pricing.
-* A **cart and checkout** for pickup or delivery, with configurable tax and delivery fees.
+* A **cart and checkout** for pickup, delivery, or secure QR-bound table ordering, with configurable tax and delivery fees.
 * **Order tracking** so customers can check their order status by order number + email.
 * An **Orders** admin screen with live status updates, plus a settings page for sizes, toppings, currency and fees.
 
@@ -53,6 +53,13 @@ order is verified server-side before it's accepted.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.21.0 =
+* Add per-store dining tables with opaque, rotatable QR bearer codes stored only as hashes.
+* Bind a scanned table to a fresh cart and expiring HttpOnly session; revalidate store, table, and QR state before payment and checkout.
+* Add locked dine-in customer flow, required customer name, prominent KDS/table ticket display, and immutable order snapshots.
+* Add a manager-only Tables & QR screen with same-site menu links and locally rendered printable QR labels.
+* Add schema 1.14.0 and MariaDB coverage for hash-only storage, authoritative routing, and rotation invalidation.
 
 = 2.20.0 =
 * Make checkout replay durable with server-bound idempotency keys and database-enforced uniqueness.
