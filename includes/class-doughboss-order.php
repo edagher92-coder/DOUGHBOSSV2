@@ -133,8 +133,8 @@ class DoughBoss_Order {
 		$order_type = isset( $row['order_type'] ) ? $row['order_type'] : 'pickup';
 		if ( self::is_preorder_request( $row ) ) {
 			return array(
-				'preorder_pending_review',
-				__( 'Pre-order request received — Revesby will review it first thing in the morning. It is not confirmed or paid.', 'doughboss' )
+				'status' => 'preorder_pending_review',
+				'label'  => __( 'Pre-order request received — Revesby will review it first thing in the morning. It is not confirmed or paid.', 'doughboss' ),
 			);
 		}
 		$map        = array(
