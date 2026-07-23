@@ -65,6 +65,11 @@ if ! "$PHP_BIN" tests/customer-kds-e2e-contract.php; then
 	failed=$((failed + 1))
 fi
 
+echo "--- customer notification and tracking contract ---"
+if ! "$PHP_BIN" tests/customer-notification-tracking-contract.php; then
+	failed=$((failed + 1))
+fi
+
 echo "--- offline provider contracts ---"
 for contract in tests/tyro-contract.php tests/provider-readiness-contract.php tests/pospal-outbox-contract.php; do
 	if ! "$PHP_BIN" "$contract"; then

@@ -1069,8 +1069,25 @@
 				if (res.table_label) {
 					confirmation.appendChild(el('p', { class: 'db-table-context', text: 'Dine in · ' + (res.location_name ? res.location_name + ' · ' : '') + 'Table ' + res.table_label + ' · We will bring it to you.' }));
 				}
-				confirmation.appendChild(el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }));
+				confirmation.appendChild(el('p', { text: 'The shop has not accepted it yet. We will email confirmation and meaningful updates to the address used at checkout.' }));
+				confirmation.appendChild(el('p', { text: 'You can also track it at any time using this order number and the same email address.' }));
 				confirmation.appendChild(el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) }));
+				var tracker = document.querySelector('[data-doughboss-tracking]');
+				if (res.tracking_url) {
+					confirmation.appendChild(el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' }));
+				} else if (tracker) {
+					confirmation.appendChild(el('a', {
+						class: 'db-btn db-btn--track',
+						href: '#track-order',
+						text: 'Track this order',
+						onclick: function () {
+							var trackForm = tracker.querySelector('.db-track-form');
+							if (!trackForm) { return; }
+							trackForm.number.value = res.order_number || '';
+							trackForm.email.value = payload.customer_email || '';
+						}
+					}));
+				}
 				parent.appendChild(confirmation);
 				trackCommerce('purchase', {
 					currency: 'AUD',
@@ -1212,10 +1229,21 @@
 		var result = root.querySelector('.db-track-result');
 		if (!form) { return; }
 
+		// Email links prefill only the non-sensitive order number. The customer
+		// must still type the matching checkout email, preserving the endpoint's
+		// anti-enumeration boundary.
+		try {
+			var prefill = new URLSearchParams(window.location.search).get('order');
+			if (prefill && prefill.length <= 64 && !form.number.value) {
+				form.number.value = prefill;
+			}
+		} catch (error) {}
+
 		var POLL_MS = 15000;
 		var POLL_MAX_MS = 2 * 60 * 60 * 1000; // give up after 2 hours
 		var pollTimer = null;
-		var pollPath = null;   // current lookup; also stale-response guard
+		var pollKey = null;    // current lookup; also stale-response guard
+		var pollLookup = null; // request body stays in memory, never in a URL
 		var pollStarted = 0;
 		var pollDone = false;  // permanent stop (completed/cancelled/expired)
 
@@ -1228,7 +1256,7 @@
 
 		function scheduleTick() {
 			stopPolling();
-			if (pollDone || !pollPath || document.hidden) { return; }
+			if (pollDone || !pollKey || !pollLookup || document.hidden) { return; }
 			if (Date.now() - pollStarted >= POLL_MAX_MS) {
 				pollDone = true;
 				return;
@@ -1238,17 +1266,17 @@
 
 		function pollTick() {
 			pollTimer = null;
-			if (pollDone || !pollPath) { return; }
-			var path = pollPath;
-			request(path)
+			if (pollDone || !pollKey || !pollLookup) { return; }
+			var key = pollKey;
+			request('/order/track', { method: 'POST', body: pollLookup })
 				.then(function (order) {
-					if (path !== pollPath) { return; } // a newer lookup took over
+					if (key !== pollKey) { return; } // a newer lookup took over
 					renderOrder(order);
 					scheduleTick();
 				})
 				.catch(function () {
 					// Silent: keep the last good render, retry on the next tick.
-					if (path !== pollPath) { return; }
+					if (key !== pollKey) { return; }
 					scheduleTick();
 				});
 		}
@@ -1374,16 +1402,19 @@
 			e.preventDefault();
 			// A new lookup invalidates any in-flight poll cycle.
 			stopPolling();
-			pollPath = null;
+			pollKey = null;
+			pollLookup = null;
 			pollDone = false;
 			result.innerHTML = '';
 			var number = form.number.value.trim();
 			var email = form.email.value.trim();
-			var path = '/order/' + encodeURIComponent(number) + '?email=' + encodeURIComponent(email);
+			var lookup = { number: number, email: email };
+			var key = number + '\n' + email.toLowerCase();
 
-			request(path)
+			request('/order/track', { method: 'POST', body: lookup })
 				.then(function (order) {
-					pollPath = path;
+					pollKey = key;
+					pollLookup = lookup;
 					pollStarted = Date.now();
 					renderOrder(order);
 					scheduleTick();

@@ -98,6 +98,10 @@ class DoughBoss_Settings {
 			// back to the WordPress admin email (see orders_email()). Defaults to the
 			// Dough Boss orders inbox so the shop is notified out of the box.
 			'orders_email'    => 'hello@doughboss.com.au',
+			// Public WordPress page containing [doughboss_order_tracking].
+			// Blank is safe: emails still include the order number and matching-
+			// email instructions, but no potentially broken tracking link.
+			'tracking_page_url' => '',
 			// Keep logged-in sessions for this many days (0 = WordPress default).
 			// Set high (e.g. 3650) so shop tablets stay signed in; off by default.
 			'staff_session_days' => 0,
@@ -312,6 +316,76 @@ class DoughBoss_Settings {
 			$email = (string) get_option( 'admin_email' );
 		}
 		return (string) apply_filters( 'doughboss_orders_email', $email );
+	}
+
+	/**
+	 * Customer-facing tracking page URL, optionally prefilled with an order
+	 * number. The matching email is deliberately never placed in the URL.
+	 *
+	 * @param string $order_number Order number to prefill.
+	 * @return string Empty until an owner configures a published tracking page.
+	 */
+	public static function tracking_page_url( $order_number = '' ) {
+		$url = self::sanitize_tracking_page_url( self::get( 'tracking_page_url', '' ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		if ( '' !== trim( (string) $order_number ) ) {
+			$url = add_query_arg( 'order', (string) $order_number, $url );
+		}
+		return (string) apply_filters( 'doughboss_tracking_page_url', $url, $order_number );
+	}
+
+	/**
+	 * Keep tracking links on the current WordPress host.
+	 *
+	 * @param string $url Candidate page URL.
+	 * @return string Valid first-party URL, or an empty string.
+	 */
+	public static function sanitize_tracking_page_url( $url ) {
+		$url = esc_url_raw( trim( (string) $url ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$site   = wp_parse_url( home_url( '/' ) );
+		$target = wp_parse_url( $url );
+		if (
+			! is_array( $site )
+			|| ! is_array( $target )
+			|| empty( $site['host'] )
+			|| empty( $target['host'] )
+			|| strtolower( (string) $site['host'] ) !== strtolower( (string) $target['host'] )
+			|| empty( $target['scheme'] )
+			|| ! in_array( strtolower( (string) $target['scheme'] ), array( 'http', 'https' ), true )
+			|| ! empty( $target['user'] )
+			|| ! empty( $target['pass'] )
+		) {
+			return '';
+		}
+		return $url;
+	}
+
+	/**
+	 * Plain-text tracking instructions shared by customer emails.
+	 *
+	 * @param string $order_number Order number.
+	 * @return string
+	 */
+	public static function tracking_instructions( $order_number ) {
+		$url = self::tracking_page_url( $order_number );
+		if ( '' !== $url ) {
+			return sprintf(
+				"Track your order: %s\nUse order %s and the same email address used at checkout.",
+				$url,
+				(string) $order_number
+			);
+		}
+		return sprintf(
+			'Keep order %s and use it with the same email address on the Track My Order page.',
+			(string) $order_number
+		);
 	}
 
 	/**
@@ -1210,7 +1284,8 @@ class DoughBoss_Settings {
 
 	/**
 	 * Order-confirmation email body. Owner-editable; blank restores the
-	 * built-in default. Supports {customer_name}/{order_number}/{items}/{total}.
+	 * built-in default. Supports {customer_name}/{order_number}/{items}/{total}/
+	 * {tracking_url}/{tracking_instructions}.
 	 *
 	 * @return string
 	 */
@@ -1218,7 +1293,7 @@ class DoughBoss_Settings {
 		$v = (string) self::get( 'tpl_order_email_body', '' );
 		return '' !== trim( $v )
 			? $v
-			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\nKeep your order number and email to check the latest status on our website.\n";
+			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\n{tracking_instructions}\n";
 	}
 
 	/**
@@ -1271,9 +1346,9 @@ class DoughBoss_Settings {
 			return $v;
 		}
 		if ( $with_eta ) {
-			return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. It should be ready in about {eta_minutes} minutes.\n\nOrder total: {total}\n\nThanks for choosing us — see you soon!\n";
+			return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. It should be ready in about {eta_minutes} minutes.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
 		}
-		return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. We'll let you know the moment it's ready.\n\nOrder total: {total}\n\nThanks for choosing us — see you soon!\n";
+		return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. We'll let you know the moment it's ready.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
 	}
 
 	/**
@@ -1297,7 +1372,7 @@ class DoughBoss_Settings {
 		$v = (string) self::get( 'tpl_ready_email_body', '' );
 		return '' !== trim( $v )
 			? $v
-			: "Hi {customer_name},\n\nYour order {order_number} is {status_label}. {handoff_message}\n\nOrder total: {total}\n\nSee you soon!\n";
+			: "Hi {customer_name},\n\nYour order {order_number} is {status_label}. {handoff_message}\n\nOrder total: {total}\n\n{tracking_instructions}\n\nSee you soon!\n";
 	}
 
 	/**

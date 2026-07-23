@@ -551,6 +551,15 @@
 	box-shadow: var(--db-shadow-1);
 }
 
+.db-confirm .db-btn--track {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-top: 0.4rem;
+	min-height: 44px;
+	text-decoration: none;
+}
+
 /* Tracking ---------------------------------------------------------- */
 .db-track-form {
 	display: flex;
