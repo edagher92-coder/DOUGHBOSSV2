@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.22.1
+Stable tag: 2.22.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,12 @@ include merchant credentials or make a shop payment-ready.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.22.2 =
+* Add the complete item-specific WordPress menu options from the reviewed demo, including Zaatar styles and mix, pizza sauces and crusts, pie sesame defaults, extras, removals, lemon and chilli.
+* Recalculate every selected option and price on the server before storing the cart line.
+* Import the corrected 33-item catalogue and ensure a fresh single-shop activation seeds the Revesby location.
+* Build and validate installable plugin ZIPs consistently across Windows, macOS and Linux.
 
 = 2.22.1 =
 * Add a WordPress-native browse-only launch mode with configurable "Online ordering coming soon" copy.
