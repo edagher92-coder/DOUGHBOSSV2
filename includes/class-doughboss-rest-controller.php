@@ -165,6 +165,9 @@ class DoughBoss_REST_Controller {
 					'toppings' => array(
 						'default' => array(),
 					),
+					'options'  => array(
+						'default' => array(),
+					),
 					'quantity' => array(
 						'default'           => 1,
 						'sanitize_callback' => 'absint',
@@ -2422,6 +2425,7 @@ class DoughBoss_REST_Controller {
 				'category'    => $category,
 				'available'   => DoughBoss_Post_Types::is_available( $post->ID ),
 				'dietary'     => DoughBoss_Post_Types::dietary( $post->ID ),
+				'options'     => DoughBoss_Menu_Options::for_item( $category, $post->post_title ),
 			);
 		}
 
@@ -2507,6 +2511,13 @@ class DoughBoss_REST_Controller {
 		}
 
 		$price = (float) get_post_meta( $item_id, DoughBoss_Post_Types::META_PRICE, true );
+		$terms = get_the_terms( $item_id, DoughBoss_Post_Types::TAXONOMY );
+		$category = ( $terms && ! is_wp_error( $terms ) ) ? $terms[0]->name : '';
+		$groups   = DoughBoss_Menu_Options::for_item( $category, $post->post_title );
+		$resolved = DoughBoss_Menu_Options::resolve( $groups, $request->get_param( 'options' ) );
+		if ( is_wp_error( $resolved ) ) {
+			return $resolved;
+		}
 
 		return array(
 			'type'       => 'menu',
@@ -2514,8 +2525,8 @@ class DoughBoss_REST_Controller {
 			// Raw title — see the /menu handler's comment above for why.
 			'name'       => $post->post_title,
 			'size'       => '',
-			'toppings'   => array(),
-			'unit_price' => $price,
+			'toppings'   => $resolved['modifiers'],
+			'unit_price' => round( $price + $resolved['delta'], 2 ),
 		);
 	}
 

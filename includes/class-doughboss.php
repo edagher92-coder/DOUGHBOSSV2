@@ -74,6 +74,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-capacity.php';
 		require_once $dir . 'class-doughboss-post-types.php';
 		require_once $dir . 'class-doughboss-menu-seeder.php';
+		require_once $dir . 'class-doughboss-menu-options.php';
 		require_once $dir . 'class-doughboss-cart.php';
 		require_once $dir . 'class-doughboss-order.php';
 		require_once $dir . 'class-doughboss-reports.php';

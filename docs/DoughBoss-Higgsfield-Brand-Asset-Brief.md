@@ -19,7 +19,7 @@ Paste each block into Higgsfield as-is. Aspect ratio 1:1.
 **1.2 Peri Peri Chicken (Pizza)**
 > Photorealistic overhead food photograph of a stone-baked pizza topped with grilled chicken pieces, sliced mushroom, capsicum strips, red onion and melted cheese, finished with a light drizzle of orange-red peri peri sauce, blistered golden crust, on a rustic timber board, warm natural window light, authentic Lebanese bakery setting, whole pizza fully visible, no hands, no text, no logo, no cutlery, square 1:1 composition.
 
-**1.3 Chicken Pie (Pies)**
+**1.3 Dough Boss Pie (Pies)**
 > Photorealistic overhead food photograph of a golden baked Lebanese-style turnover pie, folded triangular pastry with a lightly browned crust, split open at one corner to reveal a filling of grilled chicken, capsicum, mushroom and melted cheese, on a rustic timber board, warm natural window light, authentic stone-baked Lebanese bakery setting, no hands, no text, no logo, no cutlery, no side dishes, square 1:1 composition.
 
 **1.4 Chicken Delight (Wraps)**
@@ -79,7 +79,7 @@ Delivery: 4–6 s seamless loop, silent. Preferred format: short H.264 MP4 (mute
 |---|---|---|---|---|
 | All Meat | 300x300 | Progressive JPEG q82 | <=30 KB | `demo/assets/menu/all-meat.jpg` |
 | Peri Peri Chicken | 300x300 | Progressive JPEG q82 | <=30 KB | `demo/assets/menu/peri-peri-chicken.jpg` |
-| Chicken Pie | 300x300 | Progressive JPEG q82 | <=30 KB | `demo/assets/menu/chicken-pie.jpg` |
+| Dough Boss Pie | 300x300 | Progressive JPEG q82 | <=30 KB | `demo/assets/menu/chicken-pie.jpg` |
 | Chicken Delight | 300x300 | Progressive JPEG q82 | <=30 KB | `demo/assets/menu/chicken-delight.jpg` |
 | Ultimate Chicken | 300x300 | Progressive JPEG q82 | <=30 KB | `demo/assets/menu/ultimate-chicken.jpg` |
 | Dough Boss Wrap | 300x300 | Progressive JPEG q82 | <=30 KB | `demo/assets/menu/dough-boss-wrap.jpg` |
