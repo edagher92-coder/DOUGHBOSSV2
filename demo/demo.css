@@ -85,8 +85,8 @@ a{text-decoration:none;color:inherit;}
 /* Homepage ingredient burst: an understated, code-native motion layer rather
    than a large autoplaying film. It stays decorative, never competes with the
    first-order CTA, and respects reduced-motion preferences. */
-.ingredient-burst{position:absolute;z-index:2;right:clamp(5vw,10vw,12vw);top:50%;width:min(35vw,450px);aspect-ratio:1;transform:translateY(-48%);pointer-events:none;}
-.ingredient-burst__glow{position:absolute;inset:17%;border-radius:50%;background:radial-gradient(circle,rgba(206,107,43,.31),rgba(206,107,43,.06) 45%,transparent 70%);filter:blur(2px);}
+.ingredient-burst{position:absolute;z-index:2;right:clamp(5vw,10vw,12vw);top:50%;width:min(35vw,450px);aspect-ratio:1;perspective:1100px;transform:translateY(-48%) rotateX(4deg) rotateY(-5deg);transform-style:preserve-3d;pointer-events:none;}
+.ingredient-burst__glow{position:absolute;inset:17%;border-radius:50%;background:radial-gradient(circle,rgba(206,107,43,.31),rgba(206,107,43,.06) 45%,transparent 70%);filter:blur(2px);transform:translateZ(-120px);}
 .ingredient{position:absolute;width:clamp(82px,12vw,162px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.83);box-shadow:0 18px 42px rgba(0,0,0,.36);animation:ingredient-drift 7s var(--ease) infinite alternate;}
 .ingredient--zaatar{left:12%;top:12%;animation-delay:-1.4s;}
 .ingredient--cheese{right:3%;top:24%;width:clamp(68px,10vw,132px);animation-delay:-4.1s;}
@@ -94,30 +94,32 @@ a{text-decoration:none;color:inherit;}
 .ingredient--spinach{right:18%;bottom:11%;width:clamp(58px,8vw,112px);animation-delay:-2.8s;}
 .ingredient-burst__stamp{position:absolute;left:49%;top:48%;display:flex;align-items:center;justify-content:center;width:clamp(76px,10vw,122px);aspect-ratio:1;border-radius:50%;background:var(--paper);color:var(--ink);border:1px solid rgba(255,255,255,.8);box-shadow:0 12px 28px rgba(0,0,0,.28);text-align:center;font-family:'Bebas Neue',sans-serif;letter-spacing:.1em;text-transform:uppercase;font-size:clamp(14px,1.6vw,20px);line-height:.9;transform:rotate(-9deg);}
 @keyframes ingredient-drift{from{transform:translate3d(-4px,5px,0) rotate(-3deg) scale(.98);}to{transform:translate3d(7px,-8px,0) rotate(4deg) scale(1.03);}}
-@media(max-width:800px){.ingredient-burst{right:-7vw;opacity:.55;width:45vw;}.hero-main .wrap{position:relative;z-index:3;}}
-@media(max-width:560px){.ingredient-burst{display:none;}}
+@media(max-width:800px){.ingredient-burst{right:-7vw;opacity:.6;width:45vw;}.hero-main .wrap{position:relative;z-index:3;}}
+@media(max-width:560px){.ingredient-burst{display:block;right:-31vw;top:57%;width:min(74vw,330px);opacity:.48;}.hero-catering-bites .ingredient-burst{width:min(70vw,320px);}}
 
 /* Reusable full-manoush / catering-bites assembly states. `is-exploded` is
  * deliberately brief and quiet: it gives food a sense of craft without making
  * a customer wait for, or need to understand, an animation. */
-.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{position:absolute;z-index:2;left:50%;top:50%;width:clamp(126px,19vw,238px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.86);box-shadow:0 22px 48px rgba(0,0,0,.44);opacity:0;transform:translate(-50%,-50%) rotate(-8deg) scale(.62);transition:opacity 380ms ease,transform 1000ms cubic-bezier(.2,.88,.2,1);}
-.ingredient-burst[data-manoush-stage] .ingredient{z-index:1;left:50%;top:50%;right:auto;bottom:auto;margin:0;animation:none;opacity:0;transform:translate(-50%,-50%) translate(var(--scatter-x),var(--scatter-y)) rotate(var(--scatter-r)) scale(.82);transition:opacity 250ms ease,transform 920ms cubic-bezier(.2,.88,.2,1);}
-.ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-128px;--scatter-y:-84px;--scatter-r:-20deg;--near-x:-102px;--near-y:-61px;--near-r:-9deg;}
-.ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:145px;--scatter-y:-50px;--scatter-r:18deg;--near-x:108px;--near-y:-47px;--near-r:8deg;}
-.ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-92px;--scatter-y:125px;--scatter-r:-13deg;--near-x:-82px;--near-y:88px;--near-r:-6deg;}
-.ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:124px;--scatter-y:104px;--scatter-r:16deg;--near-x:90px;--near-y:80px;--near-r:7deg;}
-.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{z-index:3;opacity:0;transition:opacity 280ms ease 430ms,transform 900ms cubic-bezier(.2,.88,.2,1);transform:translate(-50%,-50%) rotate(-9deg) scale(.7);}
-.ingredient-burst[data-manoush-stage].is-exploded .ingredient,.ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__stamp{opacity:1;}
-.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__manoush{opacity:1;transform:translate(-50%,-50%) rotate(-5deg) scale(1);}
-.ingredient-burst[data-manoush-stage].is-assembled .ingredient{opacity:.94;transform:translate(-50%,-50%) translate(var(--near-x),var(--near-y)) rotate(var(--near-r)) scale(1);}
-.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__stamp{opacity:1;transform:translate(-50%,-50%) rotate(-9deg) scale(1);}
+.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{position:absolute;z-index:2;left:50%;top:50%;width:clamp(126px,19vw,238px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.86);box-shadow:0 22px 48px rgba(0,0,0,.44);backface-visibility:hidden;opacity:0;transform:translate3d(-50%,-50%,-140px) rotateX(58deg) rotateZ(-8deg) scale(.62);transform-style:preserve-3d;transition:opacity 380ms ease,transform 1000ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage] .ingredient{z-index:1;left:50%;top:50%;right:auto;bottom:auto;margin:0;animation:none;backface-visibility:hidden;opacity:0;transform:translate3d(-50%,-50%,-180px) rotateX(72deg) scale(.58);transform-style:preserve-3d;transition:opacity 300ms ease,transform 920ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-128px;--scatter-y:-84px;--scatter-z:230px;--scatter-r:-20deg;--scatter-rx:68deg;--scatter-ry:-18deg;--near-x:-102px;--near-y:-61px;--near-z:42px;--near-r:-9deg;}
+.ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:145px;--scatter-y:-50px;--scatter-z:285px;--scatter-r:18deg;--scatter-rx:74deg;--scatter-ry:22deg;--near-x:108px;--near-y:-47px;--near-z:62px;--near-r:8deg;}
+.ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-92px;--scatter-y:125px;--scatter-z:205px;--scatter-r:-13deg;--scatter-rx:64deg;--scatter-ry:-20deg;--near-x:-82px;--near-y:88px;--near-z:48px;--near-r:-6deg;}
+.ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:124px;--scatter-y:104px;--scatter-z:260px;--scatter-r:16deg;--scatter-rx:70deg;--scatter-ry:19deg;--near-x:90px;--near-y:80px;--near-z:58px;--near-r:7deg;}
+.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{z-index:3;opacity:0;transition:opacity 280ms ease 430ms,transform 900ms cubic-bezier(.2,.88,.2,1);transform:translate3d(-50%,-50%,-100px) rotateX(62deg) rotateZ(-9deg) scale(.7);transform-style:preserve-3d;will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__manoush{opacity:.7;transform:translate3d(-50%,calc(-50% + 14px),-95px) rotateX(64deg) rotateY(-8deg) rotateZ(6deg) scale(.86);}
+.ingredient-burst[data-manoush-stage].is-exploded .ingredient{opacity:1;transform:translate3d(calc(-50% + var(--scatter-x)),calc(-50% + var(--scatter-y)),var(--scatter-z)) rotateX(var(--scatter-rx)) rotateY(var(--scatter-ry)) rotateZ(var(--scatter-r)) scale(1.08);}
+.ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__stamp{opacity:.94;transform:translate3d(-50%,-50%,170px) rotateX(48deg) rotateY(-10deg) rotateZ(7deg) scale(1.06);}
+.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(51deg) rotateZ(-5deg) scale(1);}
+.ingredient-burst[data-manoush-stage].is-assembled .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(48deg) rotateZ(var(--near-r)) scale(1);}
+.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);}
 .ingredient-burst--bites .ingredient-burst__manoush{border-radius:28%;filter:saturate(1.08) contrast(1.03);}
 .ingredient-burst--bites .ingredient--zaatar{--scatter-x:-118px;--scatter-y:-62px;--near-x:-94px;--near-y:-52px;}
 .ingredient-burst--bites .ingredient--cheese{--scatter-x:118px;--scatter-y:-70px;--near-x:92px;--near-y:-50px;}
 .ingredient-burst--bites .ingredient--meat{--scatter-x:-16px;--scatter-y:142px;--near-x:4px;--near-y:105px;}
 .hero-catering-bites .ingredient-burst{width:min(32vw,405px);}
 @media(max-width:800px){.ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-80px;--scatter-y:-64px;--near-x:-65px;--near-y:-42px;}.ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:80px;--scatter-y:-52px;--near-x:64px;--near-y:-36px;}.ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-62px;--scatter-y:76px;--near-x:-48px;--near-y:60px;}.ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:68px;--scatter-y:66px;--near-x:50px;--near-y:53px;}}
-@media(prefers-reduced-motion:reduce){.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{opacity:1;transform:translate(-50%,-50%) rotate(-5deg) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient{opacity:.94;transform:translate(-50%,-50%) translate(var(--near-x),var(--near-y)) rotate(var(--near-r)) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{opacity:1;transform:translate(-50%,-50%) rotate(-9deg) scale(1);transition:none;}}
+@media(prefers-reduced-motion:reduce){.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(51deg) rotateZ(-5deg) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(48deg) rotateZ(var(--near-r)) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);transition:none;}}
 
 /* dual engine */
 .dual{display:grid;grid-template-columns:1fr 1fr;}

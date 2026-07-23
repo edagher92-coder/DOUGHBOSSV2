@@ -330,6 +330,7 @@
 	align-items: center;
 	gap: 1rem;
 	margin-top: 1.25rem;
+	flex-wrap: wrap;
 	border-top: 1px dashed var(--db-border);
 	padding-top: 1rem;
 }
@@ -338,10 +339,14 @@
 	font-size: 1.5rem;
 	font-weight: 800;
 	color: var(--db-accent-dark);
+	flex: 0 0 auto;
 }
 
 .db-builder-foot .db-btn--lg {
 	margin-top: 0;
+	flex: 1 1 12rem;
+	min-width: 0;
+	width: auto;
 }
 
 /* Cart -------------------------------------------------------------- */
@@ -369,10 +374,12 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
+	min-width: 0;
 }
 
 .db-cart-line-info small {
 	color: var(--db-muted);
+	overflow-wrap: anywhere;
 }
 
 .db-qty {
@@ -385,6 +392,30 @@
 
 .db-qty:focus {
 	border-color: var(--db-accent);
+}
+
+@media (max-width: 480px) {
+	.db-builder-foot {
+		align-items: stretch;
+	}
+
+	.db-builder-price {
+		flex-basis: 100%;
+	}
+
+	.db-builder-foot .db-btn--lg {
+		width: 100%;
+	}
+
+	.db-cart-line {
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.db-cart-line-info {
+		flex-basis: 100%;
+		width: 100%;
+	}
 }
 
 .db-fulfilment {

@@ -95,7 +95,7 @@ class DoughBoss_Shortcodes {
 				<div class="db-mh-world">
 					<div class="db-mh-central">
 						<?php if ( '' !== $atts['central_image'] ) : ?>
-							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" />
+							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" width="258" height="258" loading="eager" decoding="async" fetchpriority="high" />
 						<?php else : ?>
 							<span><?php esc_html_e( 'Manoush', 'doughboss' ); ?></span>
 						<?php endif; ?>
@@ -103,7 +103,7 @@ class DoughBoss_Shortcodes {
 					<?php foreach ( $ingredients as $name => $ingredient ) : ?>
 						<div class="db-mh-ingredient db-mh-ingredient--<?php echo esc_attr( $name ); ?>">
 							<?php if ( '' !== $ingredient['url'] ) : ?>
-								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" />
+								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" width="118" height="118" loading="eager" decoding="async" />
 							<?php else : ?>
 								<span><?php echo esc_html( $ingredient['label'] ); ?></span>
 							<?php endif; ?>
