@@ -83,10 +83,11 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.15.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.15.0' );
+ok( '1.16.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.16.0' );
 ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Activator', 'payment_storage_ready' ), 'payment attempt storage readiness gate exists' );
+ok( method_exists( 'DoughBoss_Activator', 'pospal_outbox_storage_ready' ), 'POSPal remote-reference storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Tyro', 'retrieve_pay_request' ), 'Tyro Connect Pay Request retrieval exists' );
 ok( method_exists( 'DoughBoss_Order', 'transition' ), 'DoughBoss_Order::transition() exists' );
 ok( method_exists( 'DoughBoss_Order', 'events' ), 'DoughBoss_Order::events() exists' );
@@ -385,7 +386,10 @@ ok( class_exists( 'DoughBoss_POSPal_Outbox' ), 'DoughBoss_POSPal_Outbox class ex
 ok( method_exists( 'DoughBoss_POSPal_Outbox', 'ensure_dispatch_scheduled' ), 'POSPal outbox can re-arm durable dispatch after activation' );
 ok( method_exists( 'DoughBoss_POSPal_Outbox', 'list_ambiguous_rows' ), 'ambiguous POSPal outcomes have a dedicated operator review query' );
 $outbox_source = file_get_contents( DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-pospal-outbox.php' );
-ok( false !== strpos( $outbox_source, "last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight')" ), 'bulk POSPal retry excludes ambiguous remote outcomes' );
+ok(
+	false !== strpos( $outbox_source, "last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no')" ),
+	'bulk POSPal retry excludes every ambiguous remote outcome'
+);
 ok( false !== strpos( $outbox_source, 'allow_ambiguous' ), 'ambiguous POSPal retry requires an explicit per-row release path' );
 ok( false !== strpos( $outbox_source, 'expected_updated_at' ), 'ambiguous POSPal retry is bound to the reviewed attempt state' );
 ok( defined( 'DoughBoss_POSPal_Outbox::MAX_ATTEMPTS' ) && 5 === DoughBoss_POSPal_Outbox::MAX_ATTEMPTS, 'MAX_ATTEMPTS === 5' );

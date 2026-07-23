@@ -1342,7 +1342,10 @@ JS;
 		if ( $id ) {
 			$expected_updated_at = isset( $_POST['outbox_updated_at'] ) ? sanitize_text_field( wp_unslash( $_POST['outbox_updated_at'] ) ) : '';
 			$expected_error      = isset( $_POST['outbox_error'] ) ? sanitize_key( wp_unslash( $_POST['outbox_error'] ) ) : '';
-			if ( '' === $expected_updated_at || ! in_array( $expected_error, array( 'ambiguous_network', 'ambiguous_in_flight' ), true ) ) {
+			if (
+				'' === $expected_updated_at
+				|| ! in_array( $expected_error, array( 'ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no' ), true )
+			) {
 				wp_die( esc_html__( 'This POSPal review form is incomplete. Refresh the page and try again.', 'doughboss' ) );
 			}
 			$state_token = md5( $expected_updated_at . '|' . $expected_error );

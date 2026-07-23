@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.23.0
+Stable tag: 2.23.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,13 @@ include merchant credentials or make a shop payment-ready.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.23.1 =
+* Add an end-to-end customer tracking and versioned KDS lifecycle acceptance contract.
+* Persist POSPal's stable order number for safe positive reconciliation.
+* Quarantine ambiguous transport and success-without-order-number outcomes instead of blindly replaying them.
+* Add provider-readiness and behavioural POSPal outbox contracts to the strict verifier.
+* Add schema 1.16.0 for the indexed POSPal remote reference.
 
 = 2.23.0 =
 * Add a live-data WordPress SEO fallback, full social previews, and crawlable Menu and Catering landing pages.

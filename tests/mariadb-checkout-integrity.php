@@ -134,10 +134,11 @@ update_option( 'doughboss_db_version', '1.12.0' );
 delete_option( 'doughboss_migration_error' );
 DoughBoss_Migrations::run();
 
-checkout_db_ok( '1.15.0' === get_option( 'doughboss_db_version' ), 'clean 1.12 fixture advances through checkout, table-QR, and payment-attempt storage' );
+checkout_db_ok( '1.16.0' === get_option( 'doughboss_db_version' ), 'clean 1.12 fixture advances through checkout, table-QR, payment-attempt, and POSPal-reference storage' );
 checkout_db_ok( DoughBoss_Activator::checkout_storage_ready(), 'checkout columns and exact unique indexes are ready' );
 checkout_db_ok( DoughBoss_Activator::table_qr_storage_ready(), 'table QR tables, snapshots, and exact unique indexes are ready' );
 checkout_db_ok( DoughBoss_Activator::payment_storage_ready(), 'payment attempts, webhook events, and location mappings are ready' );
+checkout_db_ok( DoughBoss_Activator::pospal_outbox_storage_ready(), 'POSPal outbox retains an indexed stable remote reference' );
 checkout_db_ok( null === $wpdb->get_var( "SELECT payment_intent_id FROM {$orders} WHERE order_number = 'DB-LEGACY-UNPAID'" ), 'legacy blank payment reference becomes NULL' );
 checkout_db_ok( 'pi_legacy_unique' === $wpdb->get_var( "SELECT payment_intent_id FROM {$orders} WHERE order_number = 'DB-LEGACY-PAID'" ), 'real payment reference is preserved' );
 
