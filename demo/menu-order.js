@@ -604,12 +604,12 @@
 
 	function renderDone() {
 		if (!pendingOrder || !drawerOpen) { pendingOrder = null; return; }
-		drawer.setAttribute('aria-label', 'Order placed');
+		var afterHours = !!pendingOrder.afterHours;
+		drawer.setAttribute('aria-label', afterHours ? 'Preorder request' : 'Order placed');
 		var name = pendingOrder.name;
 		var location = window.DBDemo.getLocation(pendingOrder.locationId) || DEFAULT_LOCATION;
 		var ref = CFG.brand.orderReferencePrefix + '-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
-		var afterHours = !!pendingOrder.afterHours;
 		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (' + (afterHours ? 'to be checked after confirmation' : '&minus;' + money(discount())) + ')' : '';
 		var saving = afterHours
 			? '<p class="cd-reward-note"><b>No payment has been taken.</b> Any voucher, member or VIP benefit will be checked when the preorder is confirmed.</p>'

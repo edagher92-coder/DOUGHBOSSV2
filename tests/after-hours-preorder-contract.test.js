@@ -20,6 +20,7 @@ assert.match(order, /Send preorder request/);
 assert.match(order, /No payment now/);
 assert.match(order, /Awaiting morning review/);
 assert.match(order, /No payment has been taken/);
+assert.match(order, /setAttribute\('aria-label', afterHours \? 'Preorder request' : 'Order placed'\)/);
 assert.doesNotMatch(order, /contacting me about this order and occasional offers/i);
 assert.doesNotMatch(order, /please order during opening hours/i);
 assert.doesNotMatch(index, /0400 000 000/);
