@@ -250,6 +250,9 @@ class DoughBoss_Admin {
 		$clean['enable_pickup']   = empty( $input['enable_pickup'] ) ? 0 : 1;
 		$clean['enable_delivery'] = empty( $input['enable_delivery'] ) ? 0 : 1;
 		$clean['ordering_open']   = empty( $input['ordering_open'] ) ? 0 : 1;
+		$clean['ordering_closed_message'] = isset( $input['ordering_closed_message'] )
+			? sanitize_textarea_field( $input['ordering_closed_message'] )
+			: DoughBoss_Settings::ordering_closed_message();
 		$active_locations         = DoughBoss_Locations::all( true );
 		$clean['single_location_mode'] = ! empty( $input['single_location_mode'] ) && 1 === count( $active_locations ) ? 1 : 0;
 		if ( $clean['single_location_mode'] ) {
@@ -2859,7 +2862,12 @@ JS;
 					<tr>
 						<th><label for="db-ordering-open"><?php esc_html_e( 'Accept orders', 'doughboss' ); ?></label></th>
 						<td><input type="checkbox" id="db-ordering-open" name="<?php echo esc_attr( $opt ); ?>[ordering_open]" value="1" <?php checked( $settings['ordering_open'], 1 ); ?> />
-							<span class="description"><?php esc_html_e( 'Uncheck to temporarily pause online ordering.', 'doughboss' ); ?></span></td>
+							<span class="description"><?php esc_html_e( 'Leave this off for the Coming Soon launch. Menu browsing stays live, while checkout, payments and new orders remain blocked.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-ordering-closed-message"><?php esc_html_e( 'Coming Soon message', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-ordering-closed-message" class="large-text" rows="3" name="<?php echo esc_attr( $opt ); ?>[ordering_closed_message]"><?php echo esc_textarea( $settings['ordering_closed_message'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'Shown above the cart and by the [doughboss_ordering_status] shortcode while ordering is paused.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>

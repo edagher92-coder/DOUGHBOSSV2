@@ -126,6 +126,8 @@ ok( 'estimate_passed' === $late['status'], 'passed promise derives a warning wit
 // 3b. Settings defaults for the new proxy-aware rate limiting keys.
 section( 'Settings defaults' );
 $defaults = DoughBoss_Settings::defaults();
+ok( isset( $defaults['ordering_open'] ) && 0 === $defaults['ordering_open'], "'ordering_open' defaults to 0 (Coming Soon mode)" );
+ok( false !== stripos( DoughBoss_Settings::ordering_closed_message(), 'coming soon' ), 'Coming Soon customer copy has a safe default' );
 ok( array_key_exists( 'behind_reverse_proxy', $defaults ), "defaults() has 'behind_reverse_proxy' key" );
 ok( isset( $defaults['behind_reverse_proxy'] ) && 0 === $defaults['behind_reverse_proxy'], "'behind_reverse_proxy' defaults to 0 (off)" );
 ok( array_key_exists( 'trusted_proxy_header', $defaults ), "defaults() has 'trusted_proxy_header' key" );
@@ -258,7 +260,7 @@ ok( 49 === count( $routes ), 'REST route count includes table context and canoni
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
-foreach ( array( 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'doughboss_order_tracking' ) as $sc ) {
+foreach ( array( 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'doughboss_order_tracking', 'doughboss_ordering_status' ) as $sc ) {
 	ok( isset( $GLOBALS['__db_shortcodes'][ $sc ] ), "[$sc] registered" );
 }
 

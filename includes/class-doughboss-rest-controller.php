@@ -2198,9 +2198,10 @@ class DoughBoss_REST_Controller {
 				'single_location_mode' => (bool) $single_location_id,
 				'single_location_id'   => $single_location_id,
 				'ordering_open'   => DoughBoss_Settings::ordering_open(),
+				'ordering_closed_message' => DoughBoss_Settings::ordering_closed_message(),
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
-				'payments_enabled' => DoughBoss_Payment::ready(),
+				'payments_enabled' => DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready(),
 				// 'stripe_pk' kept as the field name for backward compatibility with
 				// existing storefront JS — it now carries whichever gateway's public
 				// identifier is active (Stripe publishable key or Tyro Connect marker),
@@ -2246,7 +2247,7 @@ class DoughBoss_REST_Controller {
 		// order type it doesn't offer). Charging first and discovering the
 		// refusal only at /checkout leaves a captured payment with no order.
 		if ( ! DoughBoss_Settings::ordering_open() ) {
-			return new WP_Error( 'doughboss_closed', __( 'Online ordering is currently closed.', 'doughboss' ), array( 'status' => 503 ) );
+			return new WP_Error( 'doughboss_closed', DoughBoss_Settings::ordering_closed_message(), array( 'status' => 503 ) );
 		}
 
 		if ( $this->cart->is_empty() ) {
@@ -2691,7 +2692,7 @@ class DoughBoss_REST_Controller {
 		}
 
 		if ( ! DoughBoss_Settings::ordering_open() ) {
-			return new WP_Error( 'doughboss_closed', __( 'Online ordering is currently closed.', 'doughboss' ), array( 'status' => 503 ) );
+			return new WP_Error( 'doughboss_closed', DoughBoss_Settings::ordering_closed_message(), array( 'status' => 503 ) );
 		}
 
 		if ( $this->cart->is_empty() ) {
