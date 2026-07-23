@@ -4,6 +4,7 @@
 	if (!stages.length) { return; }
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	var explodeHoldMs = 1150;
+	document.documentElement.classList.add('motion-ready');
 
 	function clearStageTimer(stage) {
 		if (stage._dbManoushTimer) {
@@ -71,8 +72,70 @@
 		stages.filter(function (stage) { return stage.getAttribute('data-manoush-variant') === variant; }).forEach(play);
 	}
 
+	function wireReplay() {
+		Array.prototype.slice.call(document.querySelectorAll('[data-manoush-replay]')).forEach(function (button) {
+			button.addEventListener('click', function () {
+				var variant = button.getAttribute('data-manoush-replay');
+				var stage = stages.filter(function (item) {
+					return item.getAttribute('data-manoush-variant') === variant;
+				})[0];
+				if (!stage) { return; }
+				play(stage);
+				button.setAttribute('aria-pressed', 'true');
+				window.setTimeout(function () { button.removeAttribute('aria-pressed'); }, reduce ? 50 : explodeHoldMs + 1000);
+			});
+		});
+	}
+
+	function updateStoreStatus() {
+		var status = document.querySelector('[data-store-status]');
+		var label = document.querySelector('[data-store-status-text]');
+		if (!status || !label) { return; }
+		try {
+			var parts = new Intl.DateTimeFormat('en-AU', {
+				timeZone: 'Australia/Sydney',
+				weekday: 'short',
+				hour: '2-digit',
+				minute: '2-digit',
+				hour12: false
+			}).formatToParts(new Date());
+			var values = {};
+			parts.forEach(function (part) { values[part.type] = part.value; });
+			var minutes = Number(values.hour) * 60 + Number(values.minute);
+			var open = minutes >= 390 && minutes < 870;
+			status.classList.toggle('is-closed', !open);
+			label.textContent = open ? 'Baking now · Revesby' : 'Preorders welcome · Revesby';
+		} catch (error) {
+			label.textContent = 'Fresh-baked daily · Revesby';
+		}
+	}
+
+	function wireReveals() {
+		var revealItems = Array.prototype.slice.call(document.querySelectorAll(
+			'#view-about .show .grid, #view-about .steps .head, #view-about .steps .grid, #view-about .member-preview, #view-about .final'
+		));
+		revealItems.forEach(function (item) {
+			item.classList.add(item.matches('.steps .grid') ? 'db-reveal-group' : 'db-reveal');
+		});
+		if (reduce || !('IntersectionObserver' in window)) {
+			revealItems.forEach(function (item) { item.classList.add('is-visible'); });
+			return;
+		}
+		var observer = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				if (!entry.isIntersecting) { return; }
+				entry.target.classList.add('is-visible');
+				observer.unobserve(entry.target);
+			});
+		}, { rootMargin: '0px 0px -10% 0px', threshold: 0.12 });
+		revealItems.forEach(function (item) { observer.observe(item); });
+	}
+
 	window.addEventListener('db:view', function (event) {
 		playForView(event && event.detail ? event.detail : '');
 	});
+	wireReplay();
+	updateStoreStatus();
+	wireReveals();
 	playForView((window.location.hash || '#about').slice(1));
 }());
