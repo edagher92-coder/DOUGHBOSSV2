@@ -23,6 +23,7 @@
 	];
 
 	var boardEl = document.getElementById('db-board');
+	var preorderPanel = document.getElementById('db-preorder-review');
 	var statusEl = document.querySelector('.db-board-status');
 	var soundBtn = document.querySelector('.db-sound-toggle');
 	var actionsEl = document.querySelector('.db-board-actions');
@@ -40,6 +41,8 @@
 	var inFlight = {};
 	var audio = { ctx: null, on: false, timer: null };
 	var pollTimer = null;
+	var retryBtn = null;
+	var lastSuccessfulSync = null;
 
 	// Mercure SSE transport (optional). When connected and healthy, the ~7s poll
 	// is slowed to a long safety net; on any SSE error we fall straight back to
@@ -195,7 +198,24 @@
 			cardEl.classList.toggle('db-card-busy', !!busy);
 			cardEl.setAttribute('aria-busy', busy ? 'true' : 'false');
 			var buttons = cardEl.querySelectorAll('button');
-			for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = !!busy; }
+			for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = !!busy || offline; }
+		}
+		return true;
+	}
+
+	function setPreorderBusy(o, action, busy) {
+		var key = String(o.id);
+		if (busy) {
+			if (inFlight[key]) { return false; }
+			inFlight[key] = action;
+		} else {
+			delete inFlight[key];
+		}
+		var cardEl = preorderPanel && preorderPanel.querySelector('[data-preorder-id="' + key + '"]');
+		if (cardEl) {
+			cardEl.setAttribute('aria-busy', busy ? 'true' : 'false');
+			var buttons = cardEl.querySelectorAll('button');
+			for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = !!busy || offline; }
 		}
 		return true;
 	}
@@ -368,6 +388,128 @@
 		]);
 	}
 
+	/* ------------------------------------------------------ Pre-order review */
+
+	// These requests are deliberately outside the normal live KDS lanes: they
+	// are unpaid and are not a kitchen commitment until a staff member has
+	// spoken to the customer. This panel keeps the required morning decision in
+	// the same staff surface without making it look like an ordinary new order.
+	function setPreorderMessage(message, isError) {
+		if (!preorderPanel) { return; }
+		var feedback = preorderPanel.querySelector('.db-preorder-feedback');
+		if (!feedback) { return; }
+		feedback.textContent = message || '';
+		feedback.classList.toggle('notice-error', !!isError);
+		feedback.hidden = !message;
+	}
+
+	function decidePreorder(o, decision, contactConfirmed, eta) {
+		if (offline || !setPreorderBusy(o, 'preorder-' + decision, true)) { return; }
+		api('/admin/preorder/' + o.id + '/decision', 'POST', {
+			decision: decision,
+			contact_confirmed: !!contactConfirmed,
+			eta: eta || 0,
+			expected_version: o.version,
+			event_key: eventKey(o, 'preorder-' + decision)
+		}).then(function (res) {
+			var message = res && res.message ? res.message : 'Pre-order request updated.';
+			return load().then(function () {
+				setPreorderMessage(message, false);
+				if (statusEl) { statusEl.textContent = message; }
+			});
+		}).catch(function (error) {
+			var message = error.message || 'Could not update the pre-order request.';
+			return load().then(function () {
+				setPreorderMessage(message, true);
+				if (statusEl) { statusEl.textContent = message; }
+			});
+		}).then(function () {
+			setPreorderBusy(o, 'preorder-' + decision, false);
+		});
+	}
+
+	function preorderCard(o) {
+		var timingConfirmed = false;
+		var rejectOpen = false;
+		var eta = 0;
+		var cardEl = el('article', {
+			class: 'db-card db-card-pending db-preorder-card',
+			'data-preorder-id': String(o.id),
+			'aria-busy': 'false'
+		}, []);
+		var acceptBtn = el('button', {
+			class: 'button button-primary db-preorder-accept', type: 'button',
+			text: 'Accept into kitchen', disabled: 'disabled'
+		}, []);
+		var rejectBtn = el('button', { class: 'button db-preorder-reject', type: 'button', text: 'Reject request' }, []);
+		var rejectConfirm = el('div', { class: 'db-card-actions-row', hidden: 'hidden' }, []);
+		var etaSelect = el('select', { class: 'db-preorder-eta', 'aria-label': 'Agreed pickup estimate for ' + orderTag(o) }, []);
+		etaSelect.appendChild(el('option', { value: '0', text: 'Timing agreed by phone' }));
+		ETA_CHOICES.forEach(function (minutes) {
+			etaSelect.appendChild(el('option', { value: String(minutes), text: minutes + ' minutes' }));
+		});
+		etaSelect.addEventListener('change', function () { eta = parseInt(etaSelect.value, 10) || 0; });
+		var contactCheck = el('input', { type: 'checkbox' }, []);
+		contactCheck.addEventListener('change', function () {
+			timingConfirmed = !!contactCheck.checked;
+			acceptBtn.disabled = !timingConfirmed || offline;
+		});
+		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', timingConfirmed, eta); });
+		rejectBtn.addEventListener('click', function () {
+			rejectOpen = !rejectOpen;
+			rejectConfirm.hidden = !rejectOpen;
+			rejectBtn.textContent = rejectOpen ? 'Keep request' : 'Reject request';
+		});
+		rejectConfirm.appendChild(el('span', { text: 'No payment has been taken. Reject this request?' }));
+		rejectConfirm.appendChild(el('button', {
+			class: 'button button-link-delete', type: 'button', text: 'Confirm reject',
+			onclick: function () { decidePreorder(o, 'reject', false, 0); }
+		}, []));
+
+		cardEl.appendChild(el('div', { class: 'db-card-head' }, [
+			el('span', { class: 'db-card-number', text: o.order_number || orderTag(o) }),
+			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
+		]));
+		cardEl.appendChild(el('div', { class: 'db-card-status', text: 'Pre-order request — awaiting morning review' }));
+		cardEl.appendChild(el('div', { class: 'db-card-contact' }, [
+			el('strong', { text: o.customer_name || 'Customer' }),
+			o.customer_phone ? el('span', { text: ' · ' + o.customer_phone }) : null
+		]));
+		if (o.notes) { cardEl.appendChild(el('div', { class: 'db-card-notes', text: 'Notes: ' + o.notes })); }
+		cardEl.appendChild(el('ul', { class: 'db-card-items', 'aria-label': (o.items || []).length + ' items' }, (o.items || []).map(itemLine)));
+		cardEl.appendChild(el('div', { class: 'db-card-meta' }, [
+			el('div', { class: 'db-card-exception', role: 'alert', text: 'Unconfirmed and unpaid — call the customer to agree pickup timing before accepting.' }),
+			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid — agree the payment method with the customer.' }),
+			el('div', { class: 'db-card-exception', text: 'POSPal is deferred. After acceptance, create or confirm the POS action and issue the required manual kitchen ticket.' }),
+			el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) })
+		]));
+		cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [
+			contactCheck,
+			' I called the customer and agreed pickup timing.'
+		]));
+		cardEl.appendChild(el('div', { class: 'db-card-actions' }, [
+			el('div', { class: 'db-card-actions-row' }, [etaSelect, acceptBtn, rejectBtn]),
+			rejectConfirm
+		]));
+		return cardEl;
+	}
+
+	function renderPreorders(requests) {
+		if (!preorderPanel) { return; }
+		preorderPanel.textContent = '';
+		if (!requests.length) {
+			preorderPanel.hidden = true;
+			return;
+		}
+		preorderPanel.hidden = false;
+		preorderPanel.appendChild(el('h2', { id: 'db-preorder-review-title', text: 'Morning pre-order review (' + requests.length + ')' }));
+		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. Call first, then accept or reject.' }));
+		preorderPanel.appendChild(el('div', { class: 'db-preorder-feedback', role: 'status', hidden: 'hidden' }, []));
+		var list = el('div', { class: 'db-lanes db-preorder-list' }, requests.map(preorderCard));
+		preorderPanel.appendChild(list);
+		applyConnectionState();
+	}
+
 	function card(o) {
 		var isNew = o.status === 'pending';
 		var showShop = LOCATIONS.length > 1 && !currentLocation && o.location_id && locationsById[o.location_id];
@@ -527,6 +669,7 @@
 			statusEl.textContent = orders.length + ' active · updated ' +
 				new Date().toLocaleTimeString();
 		}
+		applyConnectionState();
 	}
 
 	/* ----------------------------------------------------------- Heartbeat */
@@ -535,6 +678,37 @@
 	// amber "Polling" (poll OK), red "Offline" (last load failed).
 	var offline = false;
 	var heartbeatEl = null;
+
+	function syncTimeLabel() {
+		return lastSuccessfulSync ? lastSuccessfulSync.toLocaleTimeString() : 'never';
+	}
+
+	function applyConnectionState() {
+		if (boardEl) {
+			boardEl.classList.toggle('db-board-offline', offline);
+			var mutationButtons = boardEl.querySelectorAll('button');
+			for (var i = 0; i < mutationButtons.length; i++) {
+				var card = mutationButtons[i].closest('[data-order-id]');
+				mutationButtons[i].disabled = offline || !!(card && inFlight[card.getAttribute('data-order-id')]);
+			}
+		}
+		if (preorderPanel) {
+			var preorderButtons = preorderPanel.querySelectorAll('button');
+			for (var j = 0; j < preorderButtons.length; j++) {
+				var preorderCardEl = preorderButtons[j].closest('[data-preorder-id]');
+				var preorderBusy = preorderCardEl && inFlight[preorderCardEl.getAttribute('data-preorder-id')];
+				var contactCheck = preorderCardEl && preorderCardEl.querySelector('.db-preorder-contact-check input[type="checkbox"]');
+				preorderButtons[j].disabled = offline || !!preorderBusy ||
+					(preorderButtons[j].classList.contains('db-preorder-accept') && (!contactCheck || !contactCheck.checked));
+			}
+		}
+		if (retryBtn) { retryBtn.hidden = !offline; }
+		if (statusEl) {
+			statusEl.textContent = offline
+				? 'Offline - showing orders last synced ' + syncTimeLabel() + '. Changes are locked.'
+				: lastOrders.length + ' active - synced ' + syncTimeLabel();
+		}
+	}
 
 	function updateHeartbeat() {
 		if (!heartbeatEl) { return; }
@@ -551,12 +725,26 @@
 	function load() {
 		var path = '/admin/orders' + (currentLocation ? '?location_id=' + currentLocation : '');
 		return api(path, 'GET').then(function (res) {
+			if (!res || !Array.isArray(res.data)) { throw new Error('The order feed returned an invalid response.'); }
 			offline = false;
+			lastSuccessfulSync = new Date();
 			updateHeartbeat();
-			if (res && res.data) { render(res.data); }
+			render(res.data);
+			var preorderPath = '/admin/preorder-requests?per_page=100' + (currentLocation ? '&location_id=' + currentLocation : '');
+			return api(preorderPath, 'GET').then(function (preorders) {
+				if (!preorders || !Array.isArray(preorders.data)) { throw new Error('The pre-order review feed returned an invalid response.'); }
+				renderPreorders(preorders.data);
+			}).catch(function (error) {
+				// A review-feed failure must never blank or lock the live kitchen board.
+				if (preorderPanel) { preorderPanel.hidden = true; }
+				if (statusEl) { statusEl.textContent = 'Kitchen board synced; pre-order review unavailable: ' + (error.message || 'retrying'); }
+			});
 		}).catch(function () {
 			offline = true;
 			updateHeartbeat();
+			// Preserve the connection warning below, then replace it with the
+			// actionable offline state after this error callback completes.
+			setTimeout(applyConnectionState, 0);
 			if (statusEl) { statusEl.textContent = 'Connection problem — retrying…'; }
 		});
 	}
@@ -649,7 +837,16 @@
 	if (statusEl) {
 		heartbeatEl = el('span', { class: 'db-heartbeat db-heartbeat-polling' }, []);
 		statusEl.parentNode.insertBefore(heartbeatEl, statusEl.nextSibling);
+		if (actionsEl) {
+			retryBtn = el('button', {
+				class: 'button db-board-retry', type: 'button', hidden: 'hidden',
+				'aria-label': 'Retry loading the live order board now',
+				onclick: function () { load(); }
+			}, ['Retry now']);
+			actionsEl.insertBefore(retryBtn, statusEl.nextSibling);
+		}
 		updateHeartbeat();
+		applyConnectionState();
 	}
 
 	// The KDS may review the precise current line list, but it must never become

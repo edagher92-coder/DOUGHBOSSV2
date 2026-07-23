@@ -201,9 +201,12 @@ class DoughBoss_Printer {
 
 	/**
 	 * The next order waiting to print: the OLDEST order with id above the
-	 * watermark, so a backlog prints in arrival order. Cancelled orders are
-	 * skipped (no point printing a ticket the kitchen shouldn't make), but the
-	 * watermark still advances past them so they never block the queue.
+	 * watermark, so a backlog prints in arrival order. Cancelled orders and
+	 * unreviewed after-hours pre-order requests are skipped (neither is a ticket
+	 * the kitchen should make), but the watermark still advances past them so
+	 * they never block the queue. A staff-accepted request appears on the KDS;
+	 * because its original id may already be below this watermark, the acceptance
+	 * response explicitly requires staff to issue the kitchen ticket manually.
 	 *
 	 * @return object|null The order row, or null when the queue is empty.
 	 */
@@ -221,7 +224,7 @@ class DoughBoss_Printer {
 		);
 
 		foreach ( (array) $rows as $row ) {
-			if ( 'cancelled' === $row->status ) {
+			if ( 'cancelled' === $row->status || 'preorder_request' === ( isset( $row->order_source ) ? $row->order_source : 'web' ) ) {
 				// Don't print cancellations; step the watermark past them so the
 				// queue keeps moving to the next genuine order.
 				self::advance_watermark( (int) $row->id );

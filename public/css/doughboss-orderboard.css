@@ -129,8 +129,44 @@ body.db-alerting .db-board-bar h1::after {
 	align-items: start;
 }
 
-@media (max-width: 1100px) {
+.db-preorder-review {
+	margin: 0 0 1rem;
+	padding: 1rem;
+	border: 2px solid var(--dbb-amber);
+	border-radius: var(--r-md);
+	background: #fff8e7;
+	box-shadow: var(--sh-1);
+}
+
+.db-preorder-review > h2 { margin: 0 0 0.35rem; }
+.db-preorder-review > p { margin: 0 0 0.8rem; color: var(--dbb-ink-soft); }
+.db-preorder-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.db-preorder-card { border-top: 5px solid var(--dbb-amber); }
+
+.db-preorder-contact-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.55rem;
+	margin: 0.75rem 0;
+	padding: 0.7rem;
+	border-radius: var(--r-sm);
+	background: #fff1c7;
+	font-weight: 700;
+}
+
+.db-preorder-contact-check input { margin-top: 0.2rem; }
+.db-preorder-eta { min-height: 40px; max-width: 13rem; }
+
+/* Kitchen tablets are commonly 768-1100px wide. Keep two live queues in
+   view there; collapsing every lane to one vertical list makes a busy service
+   needlessly slow. Only phones get the single-column fallback. */
+@media (min-width: 641px) and (max-width: 1100px) {
+	.db-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
 	.db-lanes { grid-template-columns: 1fr; }
+	.db-preorder-review { padding: 0.75rem; }
 }
 
 .db-lane {
@@ -379,6 +415,22 @@ body.db-alerting .db-board-bar h1::after {
 .db-heartbeat-live { color: var(--dbb-green); }
 .db-heartbeat-polling { color: var(--dbb-amber); }
 .db-heartbeat-offline { color: var(--dbb-danger); }
+
+.db-board-retry {
+	min-height: 40px;
+	border-color: var(--dbb-danger);
+	color: var(--dbb-danger);
+	font-weight: 800;
+}
+
+/* A stale board must remain readable, but it must not look operable. */
+.db-board-offline .db-card { opacity: 0.72; }
+.db-board-offline .db-card-actions .button:disabled,
+.db-board-offline .db-banner .button:disabled {
+	cursor: not-allowed;
+	filter: grayscale(1);
+	opacity: 0.68;
+}
 
 /* --- All-day strip ------------------------------------------------------ */
 

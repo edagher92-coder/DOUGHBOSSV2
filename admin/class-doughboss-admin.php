@@ -253,6 +253,10 @@ class DoughBoss_Admin {
 		$clean['ordering_closed_message'] = isset( $input['ordering_closed_message'] )
 			? sanitize_textarea_field( $input['ordering_closed_message'] )
 			: DoughBoss_Settings::ordering_closed_message();
+		$clean['after_hours_preorders_enabled'] = empty( $input['after_hours_preorders_enabled'] ) ? 0 : 1;
+		$clean['after_hours_preorders_message'] = isset( $input['after_hours_preorders_message'] )
+			? sanitize_textarea_field( $input['after_hours_preorders_message'] )
+			: DoughBoss_Settings::after_hours_preorders_message();
 		$active_locations         = DoughBoss_Locations::all( true );
 		$clean['single_location_mode'] = ! empty( $input['single_location_mode'] ) && 1 === count( $active_locations ) ? 1 : 0;
 		if ( $clean['single_location_mode'] ) {
@@ -1784,6 +1788,7 @@ JS;
 					</button>
 				</div>
 			</div>
+			<section id="db-preorder-review" class="db-preorder-review" hidden aria-labelledby="db-preorder-review-title"></section>
 			<div id="db-board" class="db-board">
 				<p class="db-board-loading"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
 			</div>
@@ -2868,6 +2873,16 @@ JS;
 						<th><label for="db-ordering-closed-message"><?php esc_html_e( 'Coming Soon message', 'doughboss' ); ?></label></th>
 						<td><textarea id="db-ordering-closed-message" class="large-text" rows="3" name="<?php echo esc_attr( $opt ); ?>[ordering_closed_message]"><?php echo esc_textarea( $settings['ordering_closed_message'] ); ?></textarea>
 							<p class="description"><?php esc_html_e( 'Shown above the cart and by the [doughboss_ordering_status] shortcode while ordering is paused.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-after-hours-preorders"><?php esc_html_e( 'After-hours pre-order requests', 'doughboss' ); ?></label></th>
+						<td><label><input type="checkbox" id="db-after-hours-preorders" name="<?php echo esc_attr( $opt ); ?>[after_hours_preorders_enabled]" value="1" <?php checked( ! empty( $settings['after_hours_preorders_enabled'] ), true ); ?> /> <?php esc_html_e( 'Let customers send an unpaid Revesby pre-order request while normal checkout is closed', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Requests are not confirmed, do not reserve a time or capacity, do not enter the kitchen queue, and never open Stripe or Tyro. Staff must accept or reject each request first.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-after-hours-preorders-message"><?php esc_html_e( 'Pre-order request confirmation', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-after-hours-preorders-message" class="large-text" rows="3" name="<?php echo esc_attr( $opt ); ?>[after_hours_preorders_message]"><?php echo esc_textarea( $settings['after_hours_preorders_message'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'Shown after the request is saved. Keep the wording clear that it is unconfirmed and unpaid until Revesby reviews it.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>

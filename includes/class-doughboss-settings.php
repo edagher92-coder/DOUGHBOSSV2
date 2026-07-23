@@ -80,6 +80,12 @@ class DoughBoss_Settings {
 			// open ordering after the WordPress staging checklist has passed.
 			'ordering_open'   => 0,
 			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
+			// A deliberately separate, unpaid fallback for the Revesby launch.
+			// It captures a customer request while normal checkout is closed; it
+			// does not promise a time, reserve capacity, create a payment attempt,
+			// or enter the kitchen queue until a staff member accepts it.
+			'after_hours_preorders_enabled' => 0,
+			'after_hours_preorders_message' => 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.',
 			// Single-shop mode: the storefront JS (getConfig/getLocations in
 			// public/js/doughboss.js) hides the delivery toggle and pins the shop
 			// picker to the first active location while this is 1. Display-only —
@@ -386,6 +392,31 @@ class DoughBoss_Settings {
 		return '' !== $message
 			? $message
 			: __( 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.', 'doughboss' );
+	}
+
+	/**
+	 * Whether unpaid after-hours pre-order requests are available.
+	 *
+	 * This remains opt-in so a fresh browse-only install cannot silently start
+	 * collecting customer requests. It is intentionally independent from
+	 * ordering_open(): it is only meaningful while standard checkout is closed.
+	 *
+	 * @return bool
+	 */
+	public static function after_hours_preorders_enabled() {
+		return (bool) self::get( 'after_hours_preorders_enabled', 0 );
+	}
+
+	/**
+	 * Customer-facing copy for an accepted after-hours request.
+	 *
+	 * @return string
+	 */
+	public static function after_hours_preorders_message() {
+		$message = trim( (string) self::get( 'after_hours_preorders_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.', 'doughboss' );
 	}
 
 	/**

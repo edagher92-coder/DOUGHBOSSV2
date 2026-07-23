@@ -39,6 +39,9 @@ class DoughBoss_Order {
 	 * @return string
 	 */
 	public static function status_label_for( $order ) {
+		if ( self::is_preorder_request( $order ) ) {
+			return __( 'Pre-order request — pending morning review', 'doughboss' );
+		}
 		if ( isset( $order->order_type ) && 'dine_in' === $order->order_type ) {
 			if ( 'ready' === $order->status ) {
 				return __( 'Ready to Serve', 'doughboss' );
@@ -49,6 +52,19 @@ class DoughBoss_Order {
 		}
 		$statuses = self::statuses();
 		return isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status;
+	}
+
+	/**
+	 * Whether an order row is an unpaid after-hours request awaiting staff review.
+	 *
+	 * @param object|array $order Order row.
+	 * @return bool
+	 */
+	public static function is_preorder_request( $order ) {
+		$row = (array) $order;
+		return isset( $row['order_source'], $row['status'] )
+			&& 'preorder_request' === $row['order_source']
+			&& 'pending' === $row['status'];
 	}
 
 	/**
@@ -115,6 +131,12 @@ class DoughBoss_Order {
 		$row        = (array) $order;
 		$status     = isset( $row['status'] ) ? $row['status'] : 'pending';
 		$order_type = isset( $row['order_type'] ) ? $row['order_type'] : 'pickup';
+		if ( self::is_preorder_request( $row ) ) {
+			return array(
+				'preorder_pending_review',
+				__( 'Pre-order request received — Revesby will review it first thing in the morning. It is not confirmed or paid.', 'doughboss' )
+			);
+		}
 		$map        = array(
 			'pending'          => array( 'received', __( 'Order received — waiting for the shop to accept', 'doughboss' ) ),
 			'confirmed'        => array( 'confirmed', __( 'Accepted by the shop', 'doughboss' ) ),
@@ -160,6 +182,9 @@ class DoughBoss_Order {
 			return array( 'status' => 'ready', 'label' => __( 'Ready', 'doughboss' ) );
 		}
 		if ( 'pending' === $status ) {
+			if ( self::is_preorder_request( $row ) ) {
+				return array( 'status' => 'preorder_pending_review', 'label' => __( 'Pre-order request pending morning review', 'doughboss' ) );
+			}
 			return array( 'status' => 'awaiting_acceptance', 'label' => __( 'Awaiting staff acceptance', 'doughboss' ) );
 		}
 
@@ -252,6 +277,14 @@ class DoughBoss_Order {
 		}
 		$payment_intent_id = isset( $data['payment_intent_id'] ) ? sanitize_text_field( $data['payment_intent_id'] ) : '';
 		$payment_intent_id = '' === $payment_intent_id ? null : $payment_intent_id;
+		$is_preorder_request = isset( $data['order_source'] ) && 'preorder_request' === sanitize_key( $data['order_source'] );
+		if ( $is_preorder_request ) {
+			$payment_status = isset( $data['payment_status'] ) ? sanitize_key( $data['payment_status'] ) : 'unpaid';
+			$payment_method = isset( $data['payment_method'] ) ? sanitize_text_field( $data['payment_method'] ) : '';
+			if ( 'unpaid' !== $payment_status || '' !== $payment_method || null !== $payment_intent_id || ! empty( $data['capacity_hold_token'] ) ) {
+				return new WP_Error( 'doughboss_preorder_payment_forbidden', __( 'Pre-order requests are not confirmed orders and cannot take payment or reserve capacity.', 'doughboss' ), array( 'status' => 400 ) );
+			}
+		}
 
 		$now    = current_time( 'mysql', true );
 		$orders = self::orders_table();
@@ -458,7 +491,7 @@ class DoughBoss_Order {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) AND location_id = %d ORDER BY created_at ASC LIMIT %d",
+					"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) AND order_source <> 'preorder_request' AND location_id = %d ORDER BY created_at ASC LIMIT %d",
 					$location_id,
 					$limit
 				)
@@ -467,7 +500,7 @@ class DoughBoss_Order {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) ORDER BY created_at ASC LIMIT %d",
+					"SELECT * FROM {$table} WHERE status NOT IN ( 'completed', 'cancelled' ) AND order_source <> 'preorder_request' ORDER BY created_at ASC LIMIT %d",
 					$limit
 				)
 			);
@@ -476,6 +509,52 @@ class DoughBoss_Order {
 		$items_by_order = self::get_items_for_orders( wp_list_pluck( (array) $rows, 'id' ) );
 
 		$out = array();
+		foreach ( (array) $rows as $order ) {
+			$out[] = self::shape_board_row( $order, $items_by_order, $statuses );
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Pending after-hours requests for the staff morning-review queue.
+	 *
+	 * Accepted requests change to the normal web channel atomically in
+	 * transition(), so they disappear from this queue and enter the KDS only
+	 * after staff action.
+	 *
+	 * @param int $limit       Maximum rows to return.
+	 * @param int $location_id Optional shop filter (0 = all shops).
+	 * @return array[]
+	 */
+	public static function preorder_requests( $limit = 100, $location_id = 0 ) {
+		global $wpdb;
+		$table       = self::orders_table();
+		$limit       = max( 1, min( 200, (int) $limit ) );
+		$location_id = absint( $location_id );
+		$statuses    = self::statuses();
+
+		if ( $location_id ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} WHERE status = 'pending' AND order_source = 'preorder_request' AND payment_status = 'unpaid' AND location_id = %d ORDER BY created_at ASC LIMIT %d",
+					$location_id,
+					$limit
+				)
+			);
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} WHERE status = 'pending' AND order_source = 'preorder_request' AND payment_status = 'unpaid' ORDER BY created_at ASC LIMIT %d",
+					$limit
+				)
+			);
+		}
+
+		$items_by_order = self::get_items_for_orders( wp_list_pluck( (array) $rows, 'id' ) );
+		$out            = array();
 		foreach ( (array) $rows as $order ) {
 			$out[] = self::shape_board_row( $order, $items_by_order, $statuses );
 		}
@@ -692,6 +771,13 @@ class DoughBoss_Order {
 			'updated_at'        => $now,
 		);
 		$formats      = array( '%s', '%d', '%s', '%s' );
+		if ( self::is_preorder_request( $order ) && 'confirmed' === $status ) {
+			// A request becomes an operational order only after a staff acceptance.
+			// The status-change event preserves that audit trail; the regular source
+			// then lets normal KDS and POS flows process it without a parallel path.
+			$data['order_source'] = 'web';
+			$formats[]            = '%s';
+		}
 
 		if ( 'confirmed' === $status ) {
 			$data['accepted_at']     = $now;

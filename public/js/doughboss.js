@@ -634,9 +634,19 @@
 			// Totals.
 			cartRegion.appendChild(totalsBlock(cart.totals, cfg));
 
-			// Browse-only launch mode keeps the menu and cart useful for customer
-			// discovery, but never renders voucher or checkout/payment controls.
-			if (!orderingOpen) { return; }
+			// Closed-hours Revesby requests intentionally use a separate unpaid path.
+			// It never renders card controls or calls /payment-intent; the server
+			// independently checks the same owner flag before saving anything.
+			if (!orderingOpen) {
+				if (cfg.after_hours_preorders_enabled && !tableContext) {
+					checkoutEl = preorderRequestForm(cfg, function () { return locationId; }, function () {
+						orderComplete = true;
+						cartRegion.innerHTML = '';
+					});
+					checkoutRegion.appendChild(checkoutEl.form);
+				}
+				return;
+			}
 
 			// Voucher code (apply/remove — preview only; redeemed at checkout).
 			cartRegion.appendChild(voucherBox(cart.totals, orderType, load));
@@ -853,6 +863,74 @@
 				});
 			}
 		};
+	}
+
+	// Closed-hours request form. It deliberately does not share checkoutForm():
+	// checkoutForm can mount Stripe/Tyro fields, while this path must remain
+	// payment-free even if a gateway is configured for normal trading hours.
+	function preorderRequestForm(cfg, getLocationId, onRequestComplete) {
+		var form = el('form', { class: 'db-checkout db-preorder-request' });
+		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
+		var name = field('text', 'customer_name', 'Name', true);
+		var email = field('email', 'customer_email', 'Email', true);
+		var phone = field('tel', 'customer_phone', 'Phone', true);
+		var notes = field('textarea', 'notes', 'Notes (optional)', false);
+		var acknowledgementInput = el('input', { type: 'checkbox', required: true });
+		var acknowledgement = el('label', { class: 'db-option' }, [
+			acknowledgementInput,
+			el('span', { text: 'I understand this is an unconfirmed, unpaid request. Revesby will call to arrange pickup timing before confirming.' })
+		]);
+		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: 'Send pre-order request' });
+		var requestAttemptId = null;
+
+		form.appendChild(el('h3', { text: 'Send a Revesby pre-order request' }));
+		form.appendChild(el('p', { class: 'db-ordering-status', text: (cfg && cfg.after_hours_preorders_message) || 'Your request is not confirmed or paid. Revesby will review it first thing in the morning.' }));
+		form.appendChild(el('p', { class: 'db-ordering-status', text: 'Pickup timing will be arranged by phone before Revesby confirms your request.' }));
+		[name, email, phone, notes, acknowledgement, submit, msg].forEach(function (node) { form.appendChild(node); });
+
+		form.addEventListener('submit', function (e) {
+			e.preventDefault();
+			if (!acknowledgementInput.checked) { return; }
+			submit.disabled = true;
+			submit.textContent = 'Sending request…';
+			msg.textContent = '';
+			msg.className = 'db-checkout-msg';
+			if (!requestAttemptId) {
+				requestAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+			}
+			request('/preorder-request', {
+				method: 'POST',
+				headers: { 'Idempotency-Key': requestAttemptId },
+				body: {
+					location_id: getLocationId ? getLocationId() : storedLocationId(),
+					customer_name: name.querySelector('input,textarea').value,
+					customer_email: email.querySelector('input,textarea').value,
+					customer_phone: phone.querySelector('input,textarea').value,
+					notes: notes.querySelector('input,textarea').value
+				}
+			}).then(function (res) {
+				requestAttemptId = null;
+				var parent = form.parentNode;
+				if (parent) {
+					parent.innerHTML = '';
+					parent.appendChild(el('div', { class: 'db-order-confirm' }, [
+						el('h3', { text: 'Pre-order request received' }),
+						el('p', { text: res.message || 'Revesby will review your request first thing in the morning.' }),
+						el('p', { text: 'Request ' + (res.order_number || '') + ' is unconfirmed and unpaid. No payment has been taken.' }),
+						el('p', { text: 'Revesby will call to arrange pickup timing before confirming.' })
+					]));
+				}
+				if (onRequestComplete) { onRequestComplete(); }
+				notifyCartChanged();
+			}).catch(function (err) {
+				msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
+				msg.className = 'db-checkout-msg db-error';
+				submit.disabled = false;
+				submit.textContent = 'Send pre-order request';
+			});
+		});
+
+		return { form: form };
 	}
 
 	function checkoutForm(cfg, initialOrderType, getLocationId, initialTotals, onOrderComplete) {
