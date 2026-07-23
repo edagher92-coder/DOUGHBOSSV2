@@ -328,6 +328,9 @@ class DoughBoss_Admin {
 		} else {
 			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'hello@doughboss.com.au';
 		}
+		$clean['tracking_page_url'] = isset( $input['tracking_page_url'] )
+			? DoughBoss_Settings::sanitize_tracking_page_url( $input['tracking_page_url'] )
+			: ( isset( $existing['tracking_page_url'] ) ? DoughBoss_Settings::sanitize_tracking_page_url( $existing['tracking_page_url'] ) : '' );
 		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? max( 0, absint( $input['staff_session_days'] ) ) : 0;
 
 		// Order Board access key is intentionally NOT part of this form — it is
@@ -2454,7 +2457,7 @@ JS;
 				<h2><?php esc_html_e( 'Order confirmation email', 'doughboss' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'Sent to the customer (and a copy to your shop inbox) the moment an order is placed.', 'doughboss' ); ?>
 					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
-					<code>{site_name}</code> <code>{order_number}</code> <code>{customer_name}</code> <code>{items}</code> <code>{total}</code>
+					<code>{site_name}</code> <code>{order_number}</code> <code>{customer_name}</code> <code>{items}</code> <code>{total}</code> <code>{tracking_url}</code> <code>{tracking_instructions}</code>
 				</p>
 				<table class="form-table" role="presentation">
 					<tr>
@@ -2470,7 +2473,7 @@ JS;
 				<h2><?php esc_html_e( '"Order accepted" email', 'doughboss' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'Sent to the customer when the kitchen accepts their order (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
 					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
-					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code>
+					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code> <code>{tracking_url}</code> <code>{tracking_instructions}</code>
 				</p>
 				<table class="form-table" role="presentation">
 					<tr>
@@ -2487,7 +2490,7 @@ JS;
 				<h2><?php esc_html_e( '"Order ready" email', 'doughboss' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'Sent when an order is ready for pickup, delivery, or table service (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
 					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
-					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code>
+					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code> <code>{tracking_url}</code> <code>{tracking_instructions}</code>
 				</p>
 				<table class="form-table" role="presentation">
 					<tr>
@@ -2927,6 +2930,11 @@ JS;
 						<th><label for="db-orders-email"><?php esc_html_e( 'Order notification email', 'doughboss' ); ?></label></th>
 						<td><input type="email" id="db-orders-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[orders_email]" value="<?php echo esc_attr( isset( $settings['orders_email'] ) ? $settings['orders_email'] : '' ); ?>" />
 							<span class="description"><?php esc_html_e( 'Where new order and catering enquiry emails are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-tracking-page-url"><?php esc_html_e( 'Track My Order page', 'doughboss' ); ?></label></th>
+						<td><input type="url" id="db-tracking-page-url" class="regular-text code" name="<?php echo esc_attr( $opt ); ?>[tracking_page_url]" value="<?php echo esc_attr( isset( $settings['tracking_page_url'] ) ? $settings['tracking_page_url'] : '' ); ?>" placeholder="https://doughboss.com.au/track-order/" />
+							<p class="description"><?php esc_html_e( 'Publish a page on this WordPress site containing [doughboss_order_tracking], then paste its URL here. External URLs are rejected. Customer confirmation, accepted and ready emails will link to it with only the order number prefilled; the customer must still enter the matching email.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
 						<th><label for="db-staff-session"><?php esc_html_e( 'Staff session (days)', 'doughboss' ); ?></label></th>

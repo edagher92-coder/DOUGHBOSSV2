@@ -226,6 +226,10 @@ $checkout_args = isset( $GLOBALS['__db_rest_args']['doughboss/v1/checkout']['arg
 ok( isset( $checkout_args['payment_attempt_key'] ), 'POST /checkout accepts the matching durable payment attempt key' );
 ok( in_array( 'doughboss/v1/payments/tyro/webhook', $routes, true ), 'canonical Tyro Connect webhook is registered' );
 ok( in_array( 'doughboss/v1/table/context', $GLOBALS['__db_rest'], true ), 'GET /table/context is registered' );
+$tracking_route      = $GLOBALS['__db_rest_args']['doughboss/v1/order/track'] ?? array();
+$tracking_permission = isset( $tracking_route['permission_callback'] ) ? $tracking_route['permission_callback'] : null;
+ok( WP_REST_Server::CREATABLE === ( $tracking_route['methods'] ?? null ), 'tracking lookup is POST-only so customer email never enters the URL' );
+ok( is_array( $tracking_permission ) && isset( $tracking_permission[1] ) && 'verify_nonce' === $tracking_permission[1], 'POST /order/track requires the storefront nonce verifier' );
 $preorder_route = $GLOBALS['__db_rest_args']['doughboss/v1/preorder-request'] ?? array();
 $preorder_permission = isset( $preorder_route['permission_callback'] ) ? $preorder_route['permission_callback'] : null;
 ok( is_array( $preorder_permission ) && isset( $preorder_permission[1] ) && 'verify_nonce' === $preorder_permission[1], 'POST /preorder-request requires the storefront nonce verifier' );

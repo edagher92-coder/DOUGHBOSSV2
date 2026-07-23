@@ -7,7 +7,7 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
 - **Primary integration branch:** `claude/doughboss-website-design-fixes-li6dqa` (PR #17; staging/integration, not a production release by default).
 - **Current release branch:** `codex/doughboss-post-v2.22.2` (draft PR #34), verified at commit `7aa0298` before the 24 July acceptance follow-up.
-- **Current code release:** plugin `2.23.1` / DB `1.16.0`. This is code-verified pending final CI; do not infer that production WordPress is running it until the live site responds and the installed version is checked.
+- **Current code release:** plugin `2.23.2` / DB `1.16.0`. This is code-verified pending final CI; do not infer that production WordPress is running it until the live site responds and the installed version is checked.
 - **Payments:** Stripe and Tyro remain disabled until their respective test credentials, webhook recovery, reconciliation, and provider certification checks pass.
 - **Requires:** WordPress 6.0+, PHP 7.4+
 - **REST namespace:** `doughboss/v1`
@@ -37,7 +37,7 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 
 ## Release discipline
 
-Current consolidated release contract: plugin `2.23.1`, database schema `1.16.0`.
+Current consolidated release contract: plugin `2.23.2`, database schema `1.16.0`.
 
 Fresh WordPress installs are browse-only by default. The public menu remains
 available, `[doughboss_ordering_status]` displays the owner-editable Coming Soon

@@ -261,16 +261,16 @@ class DoughBoss_Shortcodes {
 	public function order_tracking() {
 		ob_start();
 		?>
-		<div class="db-app db-tracking" data-doughboss-tracking>
+		<div id="track-order" class="db-app db-tracking" data-doughboss-tracking>
 			<form class="db-track-form">
 				<h3><?php esc_html_e( 'Track your order', 'doughboss' ); ?></h3>
 				<label>
 					<?php esc_html_e( 'Order number', 'doughboss' ); ?>
-					<input type="text" name="number" required placeholder="DB-000000-XXXX" />
+					<input type="text" name="number" required maxlength="64" autocapitalize="characters" spellcheck="false" placeholder="DB-000000-XXXX" />
 				</label>
 				<label>
 					<?php esc_html_e( 'Email used on the order', 'doughboss' ); ?>
-					<input type="email" name="email" required />
+					<input type="email" name="email" required autocomplete="email" autocapitalize="none" spellcheck="false" />
 				</label>
 				<button type="submit" class="db-btn"><?php esc_html_e( 'Check status', 'doughboss' ); ?></button>
 			</form>

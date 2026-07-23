@@ -6,7 +6,7 @@
 - Branch: `codex/doughboss-post-v2.22.2`
 - Draft pull request: #34
 - Published baseline: `7aa0298`
-- Plugin: `2.23.1`
+- Plugin: `2.23.2`
 - Database schema: `1.16.0`
 
 The baseline passed the complete GitHub PHP, WordPress, MariaDB, ZIP and secret

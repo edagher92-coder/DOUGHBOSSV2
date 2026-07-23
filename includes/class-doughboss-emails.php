@@ -13,8 +13,8 @@
  * Idempotency: kitchen board undo/redo can re-fire the accept/status hooks for
  * the same order, so a small stage log (option `doughboss_email_stage_log`,
  * autoload off) records which stages have already been emailed per order and
- * is pruned to the most recent orders. The same stage is never emailed twice
- * for one order.
+ * is pruned to the most recent orders. A short atomic dispatch lock also
+ * suppresses two concurrent PHP workers for the same order and stage.
  *
  * Privacy: log lines carry only the order id and the stage — never the
  * customer email address, name or message body.
@@ -42,6 +42,17 @@ class DoughBoss_Emails {
 	 * are pruned.
 	 */
 	const STAGE_LOG_MAX = 300;
+
+	/**
+	 * Short atomic option lock used to stop two PHP workers from dispatching
+	 * the same order/stage email at the same time.
+	 */
+	const DELIVERY_LOCK_PREFIX = 'doughboss_email_delivery_lock_';
+
+	/**
+	 * A crashed worker's lock can be reclaimed after five minutes.
+	 */
+	const DELIVERY_LOCK_TTL = 300;
 
 	/**
 	 * Register the email hooks. Always safe to call — every handler self-gates
@@ -158,6 +169,8 @@ class DoughBoss_Emails {
 			'total'         => DoughBoss_Settings::format_price( isset( $order->total ) ? $order->total : 0 ),
 			'status_label'  => (string) $status_label,
 			'table_label'   => isset( $order->table_label ) ? (string) $order->table_label : '',
+			'tracking_url'  => DoughBoss_Settings::tracking_page_url( isset( $order->order_number ) ? $order->order_number : $order->id ),
+			'tracking_instructions' => DoughBoss_Settings::tracking_instructions( isset( $order->order_number ) ? $order->order_number : $order->id ),
 			'handoff_message' => isset( $order->order_type ) && 'dine_in' === $order->order_type
 				? __( 'We will bring it to your table.', 'doughboss' )
 				: ( isset( $order->order_type ) && 'delivery' === $order->order_type ? __( 'It is ready for delivery.', 'doughboss' ) : __( 'Please collect it from the shop.', 'doughboss' ) ),
@@ -188,20 +201,81 @@ class DoughBoss_Emails {
 			return;
 		}
 
-		if ( false === wp_mail( $email, $subject, $body ) ) {
-			self::log( $stage . ': customer email failed for order #' . $order_id );
+		if ( ! self::claim_delivery( $order_id, $stage ) ) {
 			return;
 		}
 
-		self::mark_sent( $order_id, $stage );
-		self::log( $stage . ': customer email dispatched for order #' . $order_id );
-
-		if ( DoughBoss_Settings::email_staff_copy() ) {
-			$staff = DoughBoss_Settings::orders_email();
-			if ( is_email( $staff ) && false === wp_mail( $staff, $subject, $body ) ) {
-				self::log( $stage . ': staff copy failed for order #' . $order_id );
+		try {
+			// A concurrent handler may have passed its earlier already_sent()
+			// check before this worker won the lock. Re-check inside the lock.
+			if ( self::already_sent( $order_id, $stage ) ) {
+				return;
 			}
+
+			if ( false === wp_mail( $email, $subject, $body ) ) {
+				self::log( $stage . ': customer email failed for order #' . $order_id );
+				return;
+			}
+
+			self::mark_sent( $order_id, $stage );
+			self::log( $stage . ': customer email dispatched for order #' . $order_id );
+
+			if ( DoughBoss_Settings::email_staff_copy() ) {
+				$staff = DoughBoss_Settings::orders_email();
+				if ( is_email( $staff ) && false === wp_mail( $staff, $subject, $body ) ) {
+					self::log( $stage . ': staff copy failed for order #' . $order_id );
+				}
+			}
+		} finally {
+			self::release_delivery( $order_id, $stage );
 		}
+	}
+
+	/**
+	 * Atomically reserve one order/stage email dispatch.
+	 *
+	 * WordPress's add_option() uses a unique option-name insert, so only one
+	 * concurrent PHP worker can win. A stale lock is reclaimed after
+	 * DELIVERY_LOCK_TTL to recover from a crashed request.
+	 *
+	 * @param int    $order_id Order id.
+	 * @param string $stage    Stage key.
+	 * @return bool
+	 */
+	private static function claim_delivery( $order_id, $stage ) {
+		$key = self::delivery_lock_key( $order_id, $stage );
+		if ( add_option( $key, time(), '', 'no' ) ) {
+			return true;
+		}
+
+		$started = (int) get_option( $key, 0 );
+		if ( $started > 0 && ( time() - $started ) > self::DELIVERY_LOCK_TTL ) {
+			delete_option( $key );
+			return add_option( $key, time(), '', 'no' );
+		}
+		return false;
+	}
+
+	/**
+	 * Release a completed or failed dispatch reservation.
+	 *
+	 * @param int    $order_id Order id.
+	 * @param string $stage    Stage key.
+	 * @return void
+	 */
+	private static function release_delivery( $order_id, $stage ) {
+		delete_option( self::delivery_lock_key( $order_id, $stage ) );
+	}
+
+	/**
+	 * Build a bounded, non-PII lock option name.
+	 *
+	 * @param int    $order_id Order id.
+	 * @param string $stage    Stage key.
+	 * @return string
+	 */
+	private static function delivery_lock_key( $order_id, $stage ) {
+		return self::DELIVERY_LOCK_PREFIX . absint( $order_id ) . '_' . sanitize_key( $stage );
 	}
 
 	/**

@@ -52,7 +52,11 @@ function untrailingslashit( $s ) { return rtrim( $s, '/' ); }
 /* ---- Options / transients ---- */
 function get_option( $k, $d = false ) { return $GLOBALS['__db_options'][ $k ] ?? $d; }
 function update_option( $k, $v, $a = null ) { $GLOBALS['__db_options'][ $k ] = $v; return true; }
-function add_option( $k, $v = '', $x = '', $a = null ) { $GLOBALS['__db_options'][ $k ] = $v; return true; }
+function add_option( $k, $v = '', $x = '', $a = null ) {
+	if ( array_key_exists( $k, $GLOBALS['__db_options'] ) ) { return false; }
+	$GLOBALS['__db_options'][ $k ] = $v;
+	return true;
+}
 function delete_option( $k ) { unset( $GLOBALS['__db_options'][ $k ] ); return true; }
 function get_transient( $k ) { return false; }
 function set_transient( $k, $v, $t = 0 ) { return true; }
@@ -83,7 +87,15 @@ class WP_Error {
 		return isset( $this->error_data[ $c ] ) ? $this->error_data[ $c ] : null;
 	}
 }
-class WP_REST_Response { public $data; public $status; public function __construct( $d = null, $s = 200 ) { $this->data = $d; $this->status = $s; } public function set_status( $s ) { $this->status = $s; } }
+class WP_REST_Response {
+	public $data;
+	public $status;
+	public $headers = array();
+	public function __construct( $d = null, $s = 200 ) { $this->data = $d; $this->status = $s; }
+	public function set_status( $s ) { $this->status = $s; }
+	public function header( $key, $value, $replace = true ) { $this->headers[ $key ] = $value; }
+	public function get_headers() { return $this->headers; }
+}
 class WP_REST_Request implements ArrayAccess {
 	private $p = array();
 	private $headers = array();
@@ -95,6 +107,7 @@ class WP_REST_Request implements ArrayAccess {
 	public function get_params() { return $this->p; }
 	public function get_json_params() { return $this->p; }
 	public function get_header( $k ) { return $this->headers[ strtolower( $k ) ] ?? ''; }
+	public function get_route() { return isset( $this->p['_route'] ) ? (string) $this->p['_route'] : ''; }
 	// No return types + E_DEPRECATED suppressed → works on PHP 7.4 and 8.x alike.
 	public function offsetExists( $o ) { return isset( $this->p[ $o ] ); }
 	public function offsetGet( $o ) { return $this->p[ $o ] ?? null; }
@@ -187,6 +200,11 @@ function esc_html( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); }
 function esc_attr( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); }
 function esc_url( $t ) { return (string) $t; }
 function esc_url_raw( $t ) { return (string) $t; }
+function add_query_arg( $key, $value, $url ) {
+	$separator = false === strpos( (string) $url, '?' ) ? '?' : '&';
+	return (string) $url . $separator . rawurlencode( (string) $key ) . '=' . rawurlencode( (string) $value );
+}
+function wp_parse_url( $url ) { return parse_url( (string) $url ); }
 function esc_js( $t ) { return (string) $t; }
 function esc_textarea( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); }
 function wp_kses_post( $t ) { return (string) $t; }

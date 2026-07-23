@@ -13,6 +13,10 @@
 
 require __DIR__ . '/wp-stubs.php';
 
+if ( ! defined( 'DOUGHBOSS_REST_NAMESPACE' ) ) {
+	define( 'DOUGHBOSS_REST_NAMESPACE', 'doughboss/v1' );
+}
+
 if ( ! function_exists( 'rest_ensure_response' ) ) {
 	function rest_ensure_response( $data ) {
 		return $data instanceof WP_REST_Response ? $data : new WP_REST_Response( $data );
@@ -147,6 +151,18 @@ $tracked = $controller->track_order( new WP_REST_Request( array( 'number' => $or
 customer_kds_ok( $tracked instanceof WP_REST_Response && 'received' === $tracked->data['customer_status'], 'email-bound tracking returns the received customer projection' );
 $denied = $controller->track_order( new WP_REST_Request( array( 'number' => $order->order_number, 'email' => 'other@example.test' ) ) );
 customer_kds_ok( is_wp_error( $denied ) && 'doughboss_not_found' === $denied->get_error_code(), 'tracking rejects a mismatched customer email' );
+$tracking_response = $controller->protect_tracking_response(
+	new WP_REST_Response( array( 'ok' => true ) ),
+	null,
+	new WP_REST_Request( array( '_route' => '/doughboss/v1/order/track' ) )
+);
+$tracking_headers = $tracking_response->get_headers();
+customer_kds_ok(
+	isset( $tracking_headers['Cache-Control'], $tracking_headers['Referrer-Policy'] )
+		&& 'no-store, private' === $tracking_headers['Cache-Control']
+		&& 'no-referrer' === $tracking_headers['Referrer-Policy'],
+	'tracking responses are private, non-cacheable and never used as a referrer'
+);
 
 $accepted = $controller->admin_accept(
 	new WP_REST_Request(

@@ -42,6 +42,7 @@ class DoughBoss_REST_Controller {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 		// Allow the standalone staff console (separate origin) to call our routes.
 		add_action( 'rest_api_init', array( $this, 'enable_cors' ), 15 );
+		add_filter( 'rest_post_dispatch', array( $this, 'protect_tracking_response' ), 10, 3 );
 	}
 
 	/**
@@ -709,12 +710,16 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
-			'/order/(?P<number>[A-Za-z0-9\-]+)',
+			'/order/track',
 			array(
-				'methods'             => WP_REST_Server::READABLE,
+				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'track_order' ),
-				'permission_callback' => '__return_true',
+				'permission_callback' => array( $this, 'verify_nonce' ),
 				'args'                => array(
+					'number' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 					'email' => array(
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_email',
@@ -3129,6 +3134,7 @@ class DoughBoss_REST_Controller {
 			'total'        => (float) $order->total,
 			'replayed'     => (bool) $replayed,
 			'message'      => __( 'Thanks! Your order has been received.', 'doughboss' ),
+			'tracking_url' => DoughBoss_Settings::tracking_page_url( $order->order_number ),
 		);
 		if ( isset( $order->order_type ) && 'dine_in' === $order->order_type ) {
 			$location                 = isset( $order->location_id ) ? DoughBoss_Locations::get( (int) $order->location_id ) : null;
@@ -3295,7 +3301,10 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
-	 * GET /order/{number} — customer order tracking (email must match).
+	 * POST /order/track — customer order tracking (email must match).
+	 *
+	 * The email travels in the JSON body, never a URL query string that can be
+	 * retained in browser, proxy or access logs.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
@@ -3311,6 +3320,30 @@ class DoughBoss_REST_Controller {
 		}
 
 		return rest_ensure_response( DoughBoss_Order::public_view( $order ) );
+	}
+
+	/**
+	 * Prevent tracking responses from being cached or used as a referrer.
+	 *
+	 * Runs after WordPress converts both successful values and WP_Error
+	 * failures into a response, so valid and anti-enumeration responses receive
+	 * the same privacy headers.
+	 *
+	 * @param WP_HTTP_Response $response REST response.
+	 * @param WP_REST_Server   $server   REST server.
+	 * @param WP_REST_Request  $request  REST request.
+	 * @return WP_HTTP_Response
+	 */
+	public function protect_tracking_response( $response, $server, $request ) {
+		unset( $server );
+		if ( '/' . DOUGHBOSS_REST_NAMESPACE . '/order/track' !== (string) $request->get_route() ) {
+			return $response;
+		}
+		if ( is_object( $response ) && method_exists( $response, 'header' ) ) {
+			$response->header( 'Cache-Control', 'no-store, private' );
+			$response->header( 'Referrer-Policy', 'no-referrer' );
+		}
+		return $response;
 	}
 
 	/**
@@ -4279,6 +4312,8 @@ class DoughBoss_REST_Controller {
 			'customer_name' => $order->customer_name,
 			'items'        => implode( "\n", $lines ),
 			'total'        => DoughBoss_Settings::format_price( $order->total ),
+			'tracking_url' => DoughBoss_Settings::tracking_page_url( $order->order_number ),
+			'tracking_instructions' => DoughBoss_Settings::tracking_instructions( $order->order_number ),
 		);
 		$subject = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_subject(), $vars );
 		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_body(), $vars );
