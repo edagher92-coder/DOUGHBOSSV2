@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.22.2
+Stable tag: 2.23.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,12 @@ include merchant credentials or make a shop payment-ready.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.23.0 =
+* Add a live-data WordPress SEO fallback, full social previews, and crawlable Menu and Catering landing pages.
+* Add a consent-gated Meta/TikTok commerce event bridge with a strict no-PII allowlist and simulated-demo isolation.
+* Replace the catering artwork with real-alpha menu-based mini manoush and pie compositions shared by the demo and WordPress.
+* Refine product motion into a replayable lift/explode/assemble sequence without scroll-direction reversal.
 
 = 2.22.2 =
 * Add the complete item-specific WordPress menu options from the reviewed demo, including Zaatar styles and mix, pizza sauces and crusts, pie sesame defaults, extras, removals, lemon and chilli.

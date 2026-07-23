@@ -17,7 +17,7 @@
 				hero._dbManoushTimer = window.setTimeout(function () {
 					hero.classList.remove('is-exploded');
 					hero.classList.add('is-assembled');
-				}, 1200);
+				}, 2050);
 			});
 		});
 	}
@@ -50,11 +50,8 @@
 	for (var i = 0; i < heroes.length; i += 1) { wire(heroes[i]); }
 
 	if (!reduceMotion && heroes.length) {
-		var previousY = window.pageYOffset || 0;
 		var queued = false;
 		function renderScrollScenes() {
-			var currentY = window.pageYOffset || 0;
-			var direction = currentY > previousY ? 1 : currentY < previousY ? -1 : 0;
 			var viewport = window.innerHeight || 800;
 			for (var index = 0; index < heroes.length; index += 1) {
 				var hero = heroes[index];
@@ -63,12 +60,7 @@
 				var progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(viewport + rect.height, 1)));
 				hero.style.setProperty('--db-mh-scene-y', (centre * -34).toFixed(1) + 'px');
 				hero.style.setProperty('--db-mh-scene-scale', (1.055 + Math.sin(progress * Math.PI) * .035).toFixed(3));
-				if (!direction || rect.bottom < 0 || rect.top > viewport) { continue; }
-				if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); }
-				hero.classList.toggle('is-exploded', direction < 0);
-				hero.classList.toggle('is-assembled', direction > 0);
 			}
-			previousY = currentY;
 			queued = false;
 		}
 		function requestScrollScene() {

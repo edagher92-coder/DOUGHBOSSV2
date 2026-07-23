@@ -24,6 +24,11 @@
 	function total() { var t = 0; for (var k in cart) { t += cart[k].price * cart[k].qty; } return t; }
 	function discount() { return voucher ? Math.min(voucher.amount, total()) : 0; }
 	function netTotal() { return Math.max(0, total() - discount()); }
+	function trackCommerce(name, properties) {
+		if (window.DoughBossMarketing && typeof window.DoughBossMarketing.track === 'function') {
+			window.DoughBossMarketing.track(name, properties || {});
+		}
+	}
 	function onMenuView() { var k = (location.hash || '#about').replace('#', ''); return k === 'menu' || k === 'order'; }
 	function itemQty(name) { var q = 0; for (var k in cart) { if (cart[k].name === name) { q += cart[k].qty; } } return q; }
 	function newestLine(name) { var best = null; for (var k in cart) { if (cart[k].name === name && (!best || cart[k].seq > best.seq)) { best = cart[k]; } } return best; }
@@ -180,6 +185,16 @@
 			cart[key] = { key: key, name: name, catId: c.catId, basePrice: c.price, price: unit, opts: opts, summary: summary, qty: 0, seq: 0 };
 		}
 		bumpLine(key, 1);
+		trackCommerce('add_to_cart', {
+			content_ids: [name],
+			content_name: name,
+			content_category: c.catId.replace(/^cat-/, ''),
+			content_type: 'product',
+			currency: 'AUD',
+			value: cart[key].price,
+			quantity: 1,
+			simulated: true
+		});
 		flashAdded(name);
 	}
 	function bumpLine(key, delta) {
@@ -467,6 +482,16 @@
 		   and above the on-screen keyboard (see the visualViewport handler below). */
 		var orderStatus = storeStatus(DEFAULT_LOCATION);
 		var open = orderStatus.open;
+		trackCommerce('begin_checkout', {
+			content_ids: Object.keys(cart).map(function (key) { return cart[key].name; }),
+			currency: 'AUD',
+			value: netTotal(),
+			num_items: count(),
+			order_type: 'pickup',
+			location_id: DEFAULT_LOCATION.id,
+			channel: 'demo',
+			simulated: true
+		});
 		var hoursHtml = open
 			? '<div class="cd-hours cd-hours--open">Open now &middot; pickup from Revesby</div>'
 			: '<div class="cd-hours cd-hours--shut">We&rsquo;re closed now. You can still send a <strong>Revesby preorder request</strong> &mdash; we&rsquo;ll review it first thing in the morning before confirming it. No payment is taken until then. Regular ordering hours: <strong>' + esc(orderStatus.display) + '</strong>.</div>';
@@ -617,6 +642,18 @@
 		var journey = afterHours
 			? '<div class="cd-receipt" aria-label="Preorder request journey"><div class="cd-receipt__head"><span>Preorder request</span><span class="cd-receipt__state">Awaiting morning review</span></div><ol class="cd-track"><li class="is-now">Request received</li><li>Revesby review</li><li>Confirmation before payment</li></ol></div>'
 			: '<div class="cd-receipt" aria-label="Demo order journey"><div class="cd-receipt__head"><span>Payment confirmation</span><span class="cd-receipt__state">Confirmed in demo</span></div><ol class="cd-track"><li class="is-now">Order received</li><li>In the oven</li><li>Ready for pickup</li></ol></div>';
+		trackCommerce(afterHours ? 'generate_lead' : 'purchase_simulated', {
+			content_ids: Object.keys(cart).map(function (key) { return cart[key].name; }),
+			content_name: afterHours ? 'After-hours preorder request' : 'Demo order',
+			content_category: afterHours ? 'Preorder' : 'Order',
+			currency: 'AUD',
+			value: netTotal(),
+			num_items: count(),
+			order_type: pendingOrder.fulfilment,
+			location_id: pendingOrder.locationId,
+			channel: 'demo',
+			simulated: true
+		});
 		drawer.innerHTML = '<div class="cd-head"><h3>' + (afterHours ? 'Preorder request' : 'Order placed') + '</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>' + (afterHours ? 'Preorder request received, ' : 'Thanks, ') + esc(name) + '!</h3><p>' + (afterHours ? 'Unconfirmed preorder request' : 'Demo order') + ' <strong>' + esc(ref) + '</strong>' + (afterHours ? '' : ' &middot; ' + amt) + vline + '</p>' +
 			'<p class="cd-eta">' + (afterHours ? 'We&rsquo;ll review this with <strong>Revesby</strong> first thing in the morning and contact you to confirm it. For now, preorders can be arranged from Revesby or the night before. <strong>No payment has been taken.</strong>' : esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated') + '</p>' + journey +

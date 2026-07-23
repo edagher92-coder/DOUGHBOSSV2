@@ -117,6 +117,38 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION
 		);
 
+		/*
+		 * Consent-gated measurement bridge. It contains no tracker IDs, customer
+		 * data or vendor network calls by default. A consent manager must call
+		 * DoughBossMarketing.setConsent() before configured Meta/TikTok globals
+		 * can receive an event. AdPilot remains server-to-server and is exposed
+		 * here only as a readiness flag, never as a browser endpoint or secret.
+		 */
+		$marketing_env     = getenv( 'DOUGHBOSS_MARKETING_ENABLED' );
+		$marketing_enabled = defined( 'DOUGHBOSS_MARKETING_ENABLED' )
+			? (bool) DOUGHBOSS_MARKETING_ENABLED
+			: ( false !== $marketing_env && filter_var( $marketing_env, FILTER_VALIDATE_BOOLEAN ) );
+		$meta_pixel_id     = defined( 'DOUGHBOSS_META_PIXEL_ID' ) ? (string) DOUGHBOSS_META_PIXEL_ID : (string) getenv( 'DOUGHBOSS_META_PIXEL_ID' );
+		$tiktok_pixel_id   = defined( 'DOUGHBOSS_TIKTOK_PIXEL_ID' ) ? (string) DOUGHBOSS_TIKTOK_PIXEL_ID : (string) getenv( 'DOUGHBOSS_TIKTOK_PIXEL_ID' );
+		$marketing_config  = apply_filters(
+			'doughboss_marketing_config',
+			array(
+				'enabled'            => (bool) $marketing_enabled,
+				'metaPixelId'        => sanitize_text_field( $meta_pixel_id ),
+				'tiktokPixelId'      => sanitize_text_field( $tiktok_pixel_id ),
+				'consentVersion'     => '2026-07',
+				'adpilotServerReady' => false,
+			)
+		);
+		wp_enqueue_script(
+			'doughboss-marketing',
+			DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-marketing.js',
+			array(),
+			DOUGHBOSS_VERSION,
+			true
+		);
+		wp_localize_script( 'doughboss-marketing', 'DoughBossMarketingConfig', $marketing_config );
+
 		// Load the ACTIVE gateway's official card-capture library (from the
 		// gateway's own host, as both require) only when card payments are
 		// switched on and configured. Gating goes through the gateway-agnostic
@@ -124,7 +156,7 @@ class DoughBoss_Assets {
 		// never DoughBoss_Stripe directly: checking only Stripe here while the
 		// `payment_gateway` setting selects Tyro would leave checkout demanding
 		// a payment the storefront renders no card UI for.
-		$deps        = array();
+		$deps        = array( 'doughboss-marketing' );
 		// A configured gateway must not initialize browser payment fields while
 		// the store is intentionally in browse-only / Coming Soon mode.
 		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();

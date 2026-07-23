@@ -3,7 +3,7 @@
 	var stages = Array.prototype.slice.call(document.querySelectorAll('[data-manoush-stage]'));
 	if (!stages.length) { return; }
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	var explodeHoldMs = 1150;
+	var explodeHoldMs = 2050;
 	document.documentElement.classList.add('motion-ready');
 
 	function clearStageTimer(stage) {
@@ -134,11 +134,8 @@
 	function wireScrollScenes() {
 		var scenes = Array.prototype.slice.call(document.querySelectorAll('[data-scroll-scene]'));
 		if (!scenes.length || reduce) { return; }
-		var previousY = window.pageYOffset || 0;
 		var queued = false;
 		function render() {
-			var currentY = window.pageYOffset || 0;
-			var direction = currentY > previousY ? 1 : currentY < previousY ? -1 : 0;
 			var viewport = window.innerHeight || 800;
 			scenes.forEach(function (scene) {
 				if (scene.closest('.view') && !scene.closest('.view').classList.contains('active')) { return; }
@@ -147,13 +144,7 @@
 				var progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(viewport + rect.height, 1)));
 				scene.style.setProperty('--scene-y', (centre * -34).toFixed(1) + 'px');
 				scene.style.setProperty('--scene-scale', (1.055 + Math.sin(progress * Math.PI) * 0.035).toFixed(3));
-				var stage = scene.querySelector('[data-manoush-stage]');
-				if (!stage || !direction || rect.bottom < 0 || rect.top > viewport) { return; }
-				clearStageTimer(stage);
-				stage.classList.toggle('is-exploded', direction < 0);
-				stage.classList.toggle('is-assembled', direction > 0);
 			});
-			previousY = currentY;
 			queued = false;
 		}
 		function requestRender() {

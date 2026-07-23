@@ -37,7 +37,7 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 
 ## Release discipline
 
-Current consolidated release contract: plugin `2.22.2`, database schema `1.15.0`.
+Current consolidated release contract: plugin `2.23.0`, database schema `1.15.0`.
 
 Fresh WordPress installs are browse-only by default. The public menu remains
 available, `[doughboss_ordering_status]` displays the owner-editable Coming Soon

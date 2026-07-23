@@ -29,7 +29,15 @@
 		var schema = document.createElement('script');
 		schema.id = 'doughboss-menu-schema';
 		schema.type = 'application/ld+json';
-		schema.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'Menu', 'name': 'Dough Boss Menu', 'inLanguage': 'en-AU', 'hasMenuSection': sections });
+		schema.textContent = JSON.stringify({
+			'@context': 'https://schema.org',
+			'@id': 'https://edagher92-coder.github.io/DOUGHBOSSV2/#menu',
+			'@type': 'Menu',
+			'name': 'Dough Boss Menu',
+			'url': 'https://edagher92-coder.github.io/DOUGHBOSSV2/menu.html',
+			'inLanguage': 'en-AU',
+			'hasMenuSection': sections
+		});
 		document.head.appendChild(schema);
 	}
 	if ('loading' === document.readyState) { document.addEventListener('DOMContentLoaded', build); }

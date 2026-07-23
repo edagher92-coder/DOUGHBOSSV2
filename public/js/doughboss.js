@@ -177,6 +177,12 @@
 		document.dispatchEvent(new CustomEvent('doughboss:cart-updated'));
 	}
 
+	function trackCommerce(name, properties) {
+		if (window.DoughBossMarketing && typeof window.DoughBossMarketing.track === 'function') {
+			window.DoughBossMarketing.track(name, properties || {});
+		}
+	}
+
 	/* ------------------------------------------------------------------ */
 	/* Shops (multi-location)                                             */
 	/* ------------------------------------------------------------------ */
@@ -423,6 +429,15 @@
 						action.textContent = I18N.added || 'Added!';
 						dbPop(action);
 						dbToast((item.name ? item.name + ' — ' : '') + (I18N.addedToCart || 'added to cart'), true);
+						trackCommerce('add_to_cart', {
+							content_ids: [String(item.id)],
+							content_name: item.name || 'Menu item',
+							content_category: item.category || 'Menu',
+							content_type: 'product',
+							currency: 'AUD',
+							value: Number(item.price || 0),
+							quantity: 1
+						});
 						notifyCartChanged();
 						setTimeout(function () { action.textContent = I18N.addToCart || 'Add to cart'; action.disabled = false; }, 1200);
 					})
@@ -510,6 +525,17 @@
 					addBtn.textContent = I18N.added || 'Added!';
 					dbPop(addBtn);
 					dbToast(I18N.addedToCart || 'Added to cart', true);
+					var customValue = Number(state.size.price || 0);
+					Object.keys(state.toppings).forEach(function (slug) { customValue += Number(state.toppings[slug].price || 0); });
+					trackCommerce('add_to_cart', {
+						content_ids: ['custom-pizza'],
+						content_name: 'Custom pizza',
+						content_category: 'Pizza',
+						content_type: 'product',
+						currency: 'AUD',
+						value: customValue,
+						quantity: 1
+					});
 					notifyCartChanged();
 					setTimeout(function () { addBtn.textContent = I18N.addToCart || 'Add to cart'; addBtn.disabled = false; }, 1200);
 				}).catch(function (err) { dbToast(err.message); addBtn.disabled = false; });
@@ -920,6 +946,13 @@
 						el('p', { text: 'Revesby will call to arrange pickup timing before confirming.' })
 					]));
 				}
+				trackCommerce('generate_lead', {
+					content_name: 'After-hours preorder request',
+					content_category: 'Preorder',
+					currency: 'AUD',
+					location_id: getLocationId ? getLocationId() : storedLocationId(),
+					channel: 'web'
+				});
 				if (onRequestComplete) { onRequestComplete(); }
 				notifyCartChanged();
 			}).catch(function (err) {
@@ -994,6 +1027,14 @@
 
 		form.appendChild(submit);
 		form.appendChild(msg);
+		trackCommerce('begin_checkout', {
+			currency: 'AUD',
+			value: Number(totals && totals.total || 0),
+			num_items: Number(totals && (totals.item_count || totals.quantity) || 0),
+			order_type: orderType,
+			location_id: getLocationId ? getLocationId() : storedLocationId(),
+			channel: activeTableContext() ? 'table_qr' : 'web'
+		});
 		// One browser attempt keeps one checkout key and, after payment succeeds,
 		// one provider reference until the server confirms the order. A lost HTTP
 		// response can therefore be retried without charging or ordering twice.
@@ -1031,6 +1072,14 @@
 				confirmation.appendChild(el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }));
 				confirmation.appendChild(el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) }));
 				parent.appendChild(confirmation);
+				trackCommerce('purchase', {
+					currency: 'AUD',
+					value: Number(res.total || 0),
+					num_items: Number(totals && (totals.item_count || totals.quantity) || 0),
+					order_type: payload.order_type,
+					location_id: payload.location_id,
+					channel: activeTableContext() ? 'table_qr' : 'web'
+				});
 				// Mark this cart widget done BEFORE notifying — the notification
 				// triggers this same widget's own reload listener, which must not
 				// overwrite the confirmation just shown with an "empty cart" render.
