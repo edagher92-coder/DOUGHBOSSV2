@@ -36,12 +36,20 @@
 		{ label: 'Flat', delta: 0, def: true },
 		{ label: 'Folded', delta: 0 }
 	] };
+	var OPT_ZAATAR_STYLE = { id: 'style', label: 'Style', type: 'radio', choices: [
+		{ label: 'Flat', delta: 0.5 },
+		{ label: 'Folded', delta: 0, def: true }
+	] };
+	var OPT_ZAATAR_MIX = { id: 'mix', label: 'Zaatar mix', type: 'radio', choices: [
+		{ label: 'Classic zaatar', delta: 0, def: true },
+		{ label: 'Mixed zaatar & cheese', sum: 'Zaatar & cheese mixed', delta: 0.5 }
+	] };
 	/* Crust (ex "Base") — Domino's/Pizza Hut say "crust". Prices per the owner's
-	   in-store POS (V23 photos, confirmed): Crispy & Thin free, Wholemeal +$2.50,
+	   in-store POS (V23 photos, confirmed): Crispy & Classic free, Wholemeal +$2.50,
 	   Gluten-free +$3.50. */
 	var OPT_PIZZA_BASE = { id: 'base', label: 'Crust', type: 'radio', choices: [
 		{ label: 'Crispy', delta: 0, def: true },
-		{ label: 'Thin', delta: 0 },
+		{ label: 'Classic', delta: 0 },
 		{ label: 'Wholemeal', delta: 2.5 },
 		{ label: 'Gluten-free', delta: 3.5 }
 	] };
@@ -49,10 +57,11 @@
 		{ label: 'Add labneh (Mediterranean yoghurt)', sum: 'Labneh', delta: 2.5 },
 		{ label: 'Add cheese', sum: 'Cheese', delta: 2.5 }
 	] };
-	/* Pies take the same add-ons as pizza; sesame seeds are a free removable. */
+	/* Pies do not use pizza sauce or extra-topping controls. Sesame is optional
+	   and is removed by default. */
 	var OPT_SESAME = { id: 'sesame', label: 'Sesame seeds', type: 'radio', choices: [
-		{ label: 'With sesame seeds', delta: 0, def: true },
-		{ label: 'No sesame seeds', sum: 'No sesame', delta: 0 }
+		{ label: 'No sesame seeds', sum: 'No sesame', delta: 0, def: true },
+		{ label: 'With sesame seeds', delta: 0 }
 	] };
 	/* Pizza builder groups from the owner's in-store POS screens (V23 photos).
 	   Base Sauce is free (pick one); Sauce on Top is +$1.50 each; extra toppings
@@ -88,6 +97,19 @@
 		{ label: 'Halloumi', delta: 3 },
 		{ label: 'Pepperoni', delta: 3 }
 	] };
+	var OPT_REMOVE_TOPPINGS = { id: 'remove', label: 'Remove ingredients', type: 'check', choices: [
+		{ label: 'No cheese', delta: 0 },
+		{ label: 'No tomato', delta: 0 },
+		{ label: 'No olives', delta: 0 },
+		{ label: 'No onion', delta: 0 },
+		{ label: 'No mushroom', delta: 0 },
+		{ label: 'No capsicum', delta: 0 },
+		{ label: 'No cucumber', delta: 0 },
+		{ label: 'No lettuce', delta: 0 },
+		{ label: 'No pickles', delta: 0 },
+		{ label: 'No meat', delta: 0 },
+		{ label: 'No sujuk', delta: 0 }
+	] };
 	/* Lemon & chilli (free) — now SEPARATE so a customer can pick lemon, chilli,
 	   both or neither on any order. Both default to off; a cart line shows "Lemon"
 	   and/or "Chilli" only when ticked — per-item kitchen accuracy. Offered on all
@@ -97,12 +119,20 @@
 		{ label: 'Chilli', sum: 'Chilli', delta: 0 }
 	] };
 	function optionGroups(catId, name) {
-		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_LEMON]; }
+		if (catId === 'cat-pizza') {
+			var pizzaGroups = [OPT_PIZZA_BASE, OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_REMOVE_TOPPINGS, OPT_LEMON];
+			if (name === 'Zaatar Veggie Pizza' || name === 'Labneh Veggie Pizza') { pizzaGroups.splice(4, 0, OPT_WRAP_EXTRAS); }
+			return pizzaGroups;
+		}
 		/* Pies (and minis) take the same add-ons as pizza, plus a free "no sesame"
 		   removable. Minis aren't a separate category in the demo yet — flagged. */
-		if (catId === 'cat-pies') { return [OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_SESAME, OPT_LEMON]; }
-		if (catId === 'cat-manoush') { return [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON]; }
-		if (catId === 'cat-wraps') { return name === 'Zaatar & Veggie' ? [OPT_WRAP_EXTRAS, OPT_LEMON] : [OPT_LEMON]; }
+		if (catId === 'cat-pies') { return [OPT_SAUCE_TOP, OPT_SESAME, OPT_LEMON]; }
+		if (catId === 'cat-manoush') {
+			if (name === 'Zaatar') { return [OPT_ZAATAR_STYLE, OPT_ZAATAR_MIX, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
+			if (name === 'Zaatar & Cheese') { return [OPT_ZAATAR_STYLE, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
+			return [OPT_STYLE, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON];
+		}
+		if (catId === 'cat-wraps') { return (name === 'Zaatar & Veggie' || name === 'Labneh Veggie Wrap') ? [OPT_WRAP_EXTRAS, OPT_REMOVE_TOPPINGS, OPT_LEMON] : [OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
 		return null;
 	}
 
@@ -549,11 +579,13 @@
 		var ref = CFG.brand.orderReferencePrefix + '-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
 		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
+		var saving = voucher ? '<p class="cd-reward-note"><b>Discount applied:</b> you saved ' + money(discount()) + ' with ' + esc(voucher.code) + '. The final system will show only verified member or VIP savings here.</p>' : '<p class="cd-reward-note"><b>Member benefits:</b> loyalty and VIP savings are not active in this demo. When connected, eligible benefits will be checked before payment and shown clearly here.</p>';
+		var journey = '<div class="cd-receipt" aria-label="Demo order journey"><div class="cd-receipt__head"><span>Payment confirmation</span><span class="cd-receipt__state">Confirmed in demo</span></div><ol class="cd-track"><li class="is-now">Order received</li><li>In the oven</li><li>Ready for pickup</li></ol></div>';
 		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p>' +
-			'<p class="cd-eta">' + esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated</p>' +
+			'<p class="cd-eta">' + esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated</p>' + journey +
 			'<div class="cd-summary cd-donesum">' + summaryLines() + '</div>' +
-			'<p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
+			saving + '<button type="button" class="cd-copyref" data-copyref="' + esc(ref) + '">Copy order number</button><p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
 		cart = {};
 		voucher = null;
 		pendingOrder = null;
@@ -578,6 +610,18 @@
 		if (e.target.closest('.cd-back')) { renderDrawer(); return; }
 		if (e.target.closest('.cd-vapply')) { applyVoucher(); return; }
 		if (e.target.closest('.cd-vremove')) { voucher = null; renderCheckout(); return; }
+		var copy = e.target.closest('[data-copyref]');
+		if (copy) {
+			var reference = copy.getAttribute('data-copyref') || '';
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(reference).then(function () { copy.textContent = 'Order number copied'; }, function () { copy.textContent = 'Order number: ' + reference; });
+			} else {
+				/* A local file preview may not grant clipboard access. Show the value instead
+				   of claiming a copy action that the browser could not perform. */
+				copy.textContent = 'Order number: ' + reference;
+			}
+			return;
+		}
 		var xs = e.target.closest('[data-xsell]'); if (xs) { addLine(xs.getAttribute('data-xsell')); renderDrawer(); return; }
 		var inc = e.target.closest('[data-kinc]'); if (inc) { bumpLine(inc.getAttribute('data-kinc'), 1); return; }
 		var dec = e.target.closest('[data-kdec]'); if (dec) { bumpLine(dec.getAttribute('data-kdec'), -1); return; }

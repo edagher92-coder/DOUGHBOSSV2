@@ -74,6 +74,8 @@ class DoughBoss_Migrations {
 				'1.11.0' => 'upgrade_to_1_11_0',
 				'1.12.0' => 'upgrade_to_1_12_0',
 				'1.13.0' => 'upgrade_to_1_13_0',
+				'1.14.0' => 'upgrade_to_1_14_0',
+				'1.15.0' => 'upgrade_to_1_15_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -414,6 +416,30 @@ class DoughBoss_Migrations {
 
 		if ( ! DoughBoss_Activator::checkout_storage_ready() ) {
 			throw new RuntimeException( 'Checkout-integrity columns or unique indexes are incomplete.' );
+		}
+	}
+
+	/**
+	 * 1.14.0 — server-bound store/table QR ordering.
+	 *
+	 * Existing orders deliberately remain ordinary web orders with no table.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_14_0() {
+		if ( ! DoughBoss_Activator::table_qr_storage_ready() ) {
+			throw new RuntimeException( 'Store/table QR tables, order columns, or unique indexes are incomplete.' );
+		}
+	}
+
+	/**
+	 * 1.15.0 — Tyro Connect Pay attempts, webhook events and store mappings.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_15_0() {
+		if ( ! DoughBoss_Activator::payment_storage_ready() ) {
+			throw new RuntimeException( 'Payment attempt, event, or store-mapping storage is incomplete or is not using InnoDB.' );
 		}
 	}
 }

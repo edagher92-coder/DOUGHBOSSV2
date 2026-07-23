@@ -86,6 +86,25 @@ class DoughBoss_Assets {
 	 * @return void
 	 */
 	public function enqueue() {
+		// The hero has deliberately separate, dependency-free assets. Load it
+		// before considering the storefront app, so a hero-only landing page
+		// stays free of checkout and payment code.
+		if ( $this->current_post_has( 'doughboss_manoush_hero' ) || apply_filters( 'doughboss_load_manoush_hero_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-manoush-hero',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-manoush-hero.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-manoush-hero',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-manoush-hero.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
 		if ( ! $this->should_load() ) {
 			return;
 		}
@@ -109,17 +128,10 @@ class DoughBoss_Assets {
 		$gateway     = DoughBoss_Settings::payment_gateway();
 		if ( $payments_on ) {
 			if ( 'tyro' === $gateway ) {
-				// Tyro (MPGS) Hosted Session library. Per MPGS's integration
-				// docs the script is served by the merchant's own gateway host
-				// — the same configurable host the server-side API client uses
-				// (DoughBoss_Settings::tyro_host()) — with the API version and
-				// merchant id embedded in the URL.
-				$session_js = DoughBoss_Settings::tyro_host()
-					. '/form/version/' . rawurlencode( DoughBoss_Settings::tyro_api_version() )
-					. '/merchant/' . rawurlencode( DoughBoss_Settings::tyro_merchant_id() )
-					. '/session.js';
-				wp_enqueue_script( 'tyro-session-js', $session_js, array(), null, true );
-				$deps[] = 'tyro-session-js';
+				// Tyro requires its PCI-scoped browser library to be loaded directly
+				// from Tyro. Never bundle, proxy or self-host this file.
+				wp_enqueue_script( 'tyro-js', 'https://pay.connect.tyro.com/v1/tyro.js', array(), null, true );
+				$deps[] = 'tyro-js';
 			} else {
 				wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
 				$deps[] = 'stripe-js';
@@ -144,11 +156,12 @@ class DoughBoss_Assets {
 				'payments' => array(
 					'enabled' => $payments_on,
 					// Public-safe browser identifier for the ACTIVE gateway:
-					// Stripe's publishable key, or Tyro's merchant id.
+					// Stripe's publishable key, or Tyro Connect's harmless bootstrap marker.
 					'pk'      => $payments_on ? DoughBoss_Payment::publishable_key() : '',
 					// Which gateway the storefront JS should drive (Stripe.js
-					// Elements vs Tyro's Session.js hosted fields).
+					// Elements vs Tyro Connect's hosted pay form).
 					'gateway' => $gateway,
+					'liveMode'=> 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode(),
 				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),

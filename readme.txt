@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.20.0
+Stable tag: 2.22.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,7 +16,7 @@ DoughBoss turns any WordPress site into a pizza/food ordering storefront. It add
 
 * A **Menu Items** custom post type with categories, prices and images.
 * A **custom pizza builder** where customers choose a size and toppings with live pricing.
-* A **cart and checkout** for pickup or delivery, with configurable tax and delivery fees.
+* A **cart and checkout** for pickup, delivery, or secure QR-bound table ordering, with configurable tax and delivery fees. Payment-provider activation remains optional and is not live until its own onboarding and verification gates pass.
 * **Order tracking** so customers can check their order status by order number + email.
 * An **Orders** admin screen with live status updates, plus a settings page for sizes, toppings, currency and fees.
 
@@ -48,11 +48,32 @@ are also built in and can be switched on under **DoughBoss → Settings →
 Payments** (off by default); once configured, checkout collects a card and the
 order is verified server-side before it's accepted.
 
+Tyro Connect Pay is also available as a **pre-final, disabled-by-default**
+integration. It needs Tyro-provided sandbox credentials, a confirmed per-shop
+`locationId`, a signed webhook, sandbox evidence and Tyro production approval
+before live payments may be enabled. The installed code and this readme do not
+include merchant credentials or make a shop payment-ready.
+
 = Does it need an account system? =
 
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.22.0 =
+* Replace the unverified legacy MPGS Tyro path with current Tyro Connect Pay: OAuth, Pay Requests, direct Tyro.js, 3DS-ready browser flow, signed thin webhooks, and refunds.
+* Add durable payment attempts and webhook event de-duplication without storing card data, OAuth tokens, raw webhook payloads, or Tyro pay secrets.
+* Add fail-closed per-shop Tyro Connect location and POSPal store mapping plus a live certification gate.
+* Add universal Tyro checkout for storefront/table QR and catering deposit/balance payments.
+* Add an original, reduced-motion-aware manoush and catering Bites/mini-manoush ingredient assembly experience to the viewable demo.
+* Add schema 1.15.0 and payment integration readiness checks.
+
+= 2.21.0 =
+* Add per-store dining tables with opaque, rotatable QR bearer codes stored only as hashes.
+* Bind a scanned table to a fresh cart and expiring HttpOnly session; revalidate store, table, and QR state before payment and checkout.
+* Add locked dine-in customer flow, required customer name, prominent KDS/table ticket display, and immutable order snapshots.
+* Add a manager-only Tables & QR screen with same-site menu links and locally rendered printable QR labels.
+* Add schema 1.14.0 and MariaDB coverage for hash-only storage, authoritative routing, and rotation invalidation.
 
 = 2.20.0 =
 * Make checkout replay durable with server-bound idempotency keys and database-enforced uniqueness.

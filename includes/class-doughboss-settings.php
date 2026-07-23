@@ -132,22 +132,16 @@ class DoughBoss_Settings {
 			'stripe_live_sk'   => '',
 			'stripe_test_whsec' => '',
 			'stripe_live_whsec' => '',
-			// Tyro eCommerce (Mastercard Payment Gateway Services). Off/dormant
-			// until 'payment_gateway' is switched to 'tyro' AND merchant id +
-			// integration password are set for the active mode. 'tyro_host' and
-			// 'tyro_api_version' are blank-defaults-to-documented-value fields
-			// (see DoughBoss_Settings::tyro_host()/tyro_api_version()) rather than
-			// hardcoded constants, since Tyro provisions the gateway hostname per
-			// merchant in some cases — confirm the real values once sandbox
-			// credentials are issued rather than assuming ours match every account.
+			// Tyro Connect Pay. Secrets are read env-first and each shop also needs
+			// its own Tyro Connect locationId on the location record.
 			'tyro_mode'                => 'test',
-			'tyro_merchant_id'         => '',
-			'tyro_host'                => '',
-			'tyro_api_version'         => '',
-			'tyro_test_password'       => '',
-			'tyro_live_password'       => '',
+			'tyro_test_client_id'       => '',
+			'tyro_live_client_id'       => '',
+			'tyro_test_client_secret'   => '',
+			'tyro_live_client_secret'   => '',
 			'tyro_test_webhook_secret' => '',
 			'tyro_live_webhook_secret' => '',
+			'tyro_live_certified'       => 0,
 			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
 			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
 			// this option is only a fallback and is best left blank where env is set.
@@ -520,62 +514,46 @@ class DoughBoss_Settings {
 	}
 
 	/**
-	 * Tyro merchant id (public-safe — this is what the browser's Session.js
-	 * needs, analogous to Stripe's publishable key).
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect authenticates with an OAuth client ID, not a merchant ID.
 	 *
 	 * @return string
 	 */
 	public static function tyro_merchant_id() {
-		return trim( (string) self::get( 'tyro_merchant_id', '' ) );
+		return self::tyro_client_id();
 	}
 
 	/**
-	 * Tyro (MPGS) gateway host, trailing slash removed. Blank restores the
-	 * documented default gateway host — see the note in defaults() on why this
-	 * is configurable rather than a hardcoded constant.
+	 * Tyro Connect OAuth client ID for the active mode. It is used server-side
+	 * to obtain an access token and is never a browser card-field credential.
 	 *
 	 * @return string
 	 */
-	public static function tyro_host() {
-		$default = 'https://tyro.gateway.mastercard.com';
-		$host    = trim( (string) self::get( 'tyro_host', '' ) );
-		if ( '' === $host ) {
-			return $default;
-		}
-		// The merchant password goes out as HTTP Basic auth on every request to
-		// this host — never allow a plain-http override to send it in cleartext.
-		if ( 0 !== stripos( $host, 'https://' ) ) {
-			return $default;
-		}
-		return untrailingslashit( $host );
+	public static function tyro_client_id() {
+		$key = 'live' === self::tyro_mode() ? 'tyro_live_client_id' : 'tyro_test_client_id';
+		return trim( (string) self::get( $key, '' ) );
 	}
 
 	/**
-	 * MPGS REST API version segment (e.g. '74'). Blank restores a documented
-	 * default; confirm the real value against Tyro's onboarding docs once
-	 * sandbox access exists — see the class docblock on DoughBoss_Tyro.
+	 * Tyro Connect OAuth client secret for the active mode. It is read env-first
+	 * and used only server-side to obtain an access token.
 	 *
 	 * @return string
 	 */
-	public static function tyro_api_version() {
-		$v = trim( (string) self::get( 'tyro_api_version', '' ) );
-		return '' !== $v ? $v : '74';
+	public static function tyro_client_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET', 'tyro_live_client_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_CLIENT_SECRET', 'tyro_test_client_secret' );
 	}
 
 	/**
-	 * Tyro integration password for the active mode. Read env-first — the
-	 * constant DOUGHBOSS_TYRO_TEST_PASSWORD/DOUGHBOSS_TYRO_LIVE_PASSWORD or the
-	 * matching environment variable take precedence over the stored option, so
-	 * the secret can be kept out of the database (and therefore out of
-	 * backups). Only ever used server-side to sign the Basic-auth header;
-	 * never echoed to a client.
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect uses an OAuth client secret, not a merchant password.
 	 *
 	 * @return string
 	 */
 	public static function tyro_password() {
-		return 'live' === self::tyro_mode()
-			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_PASSWORD', 'tyro_live_password' )
-			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_PASSWORD', 'tyro_test_password' );
+		return self::tyro_client_secret();
 	}
 
 	/**
@@ -602,21 +580,24 @@ class DoughBoss_Settings {
 	public static function tyro_ready() {
 		return self::payments_enabled()
 			&& 'tyro' === self::payment_gateway()
-			&& '' !== self::tyro_merchant_id()
-			&& '' !== self::tyro_password();
+			&& '' !== self::tyro_client_id()
+			&& '' !== self::tyro_client_secret()
+			&& ( 'test' === self::tyro_mode() || (bool) self::get( 'tyro_live_certified', 0 ) );
 	}
 
 	/**
-	 * HTTP header name Tyro sends its webhook signature in. Configurable
-	 * because the real header name has not been confirmed against Tyro's live
-	 * webhook docs (see DoughBoss_Tyro's class docblock) — filterable via
-	 * 'doughboss_tyro_webhook_signature_header' so a site can correct it
-	 * without a plugin update once the real value is known.
+	 * WordPress-normalized form of Tyro Connect's Tyro-Connect-Signature
+	 * webhook header. The raw request body is verified by DoughBoss_Tyro.
 	 *
 	 * @return string
 	 */
 	public static function tyro_webhook_signature_header() {
-		return (string) apply_filters( 'doughboss_tyro_webhook_signature_header', 'x_tyro_signature' );
+		return 'tyro_connect_signature';
+	}
+
+	/** @return bool */
+	public static function tyro_live_mode() {
+		return 'live' === self::tyro_mode();
 	}
 
 	/**
@@ -1202,7 +1183,7 @@ class DoughBoss_Settings {
 	 */
 	public static function tpl_sms_ready() {
 		$v = trim( (string) self::get( 'tpl_sms_ready', '' ) );
-		return '' !== $v ? $v : 'Your DoughBoss order #{order_number} is ready for pickup.';
+		return '' !== $v ? $v : 'DoughBoss order #{order_number}: {status_label}. {handoff_message}';
 	}
 
 	/**
@@ -1257,7 +1238,7 @@ class DoughBoss_Settings {
 	 */
 	public static function tpl_ready_email_subject() {
 		$v = trim( (string) self::get( 'tpl_ready_email_subject', '' ) );
-		return '' !== $v ? $v : 'Order {order_number} is ready for pickup!';
+		return '' !== $v ? $v : 'Order {order_number}: {status_label}';
 	}
 
 	/**
@@ -1270,7 +1251,7 @@ class DoughBoss_Settings {
 		$v = (string) self::get( 'tpl_ready_email_body', '' );
 		return '' !== trim( $v )
 			? $v
-			: "Hi {customer_name},\n\nYour order {order_number} is fresh out of the oven and ready for pickup. Come grab it while it's warm!\n\nOrder total: {total}\n\nSee you soon!\n";
+			: "Hi {customer_name},\n\nYour order {order_number} is {status_label}. {handoff_message}\n\nOrder total: {total}\n\nSee you soon!\n";
 	}
 
 	/**

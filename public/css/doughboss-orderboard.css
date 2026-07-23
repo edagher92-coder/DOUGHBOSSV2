@@ -213,6 +213,23 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-type-delivery { background: var(--dbb-chip-delivery-bg); color: var(--dbb-chip-delivery-ink); }
 
+.db-type-dine_in {
+	background: #fff0c2;
+	color: #6d4a00;
+}
+
+.db-card-table {
+	padding: 0.2rem 0.5rem;
+	border: 2px solid #5d3600;
+	border-radius: 4px;
+	background: #ffda62;
+	color: #2d1a00;
+	font-size: 0.78rem;
+	font-weight: 900;
+	letter-spacing: 0.06em;
+	line-height: 1;
+}
+
 .db-card-shop {
 	font-size: 0.7rem;
 	text-transform: uppercase;
@@ -221,6 +238,17 @@ body.db-alerting .db-board-bar h1::after {
 	border-radius: 4px;
 	background: var(--dbb-chip-shop-bg);
 	color: var(--dbb-chip-shop-ink);
+}
+
+.db-card-source {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+	background: #f2e9ff;
+	color: #542a7a;
+	font-weight: 700;
 }
 
 .db-shop-select { min-height: 40px; }
@@ -249,14 +277,50 @@ body.db-alerting .db-board-bar h1::after {
 	border-radius: 6px;
 }
 
-.db-card-item { padding: 0.15rem 0; }
-.db-card-item-name { font-weight: 600; }
+.db-card-item {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 0.5rem;
+	padding: 0.3rem 0;
+	border-bottom: 1px solid #ececec;
+}
+.db-card-item:last-child { border-bottom: 0; }
+.db-card-item-quantity {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: start;
+	min-width: 2rem;
+	min-height: 1.6rem;
+	padding: 0 0.35rem;
+	border-radius: 999px;
+	background: var(--dbb-ink);
+	color: var(--dbb-paper);
+	font-size: 0.78rem;
+	font-weight: 800;
+}
+.db-card-item-body { min-width: 0; }
+.db-card-item-name { display: block; font-weight: 700; }
+.db-card-item-size,
 .db-card-item-toppings { display: block; font-size: 0.8rem; color: var(--dbb-muted); }
+.db-card-item-toppings { color: #743d00; font-weight: 600; }
 
 .db-card-meta { font-size: 0.85rem; color: var(--dbb-ink-soft); margin-bottom: 0.5rem; }
 .db-card-meta > div { margin: 0.15rem 0; }
 .db-card-total { font-weight: 700; color: var(--dbb-ink); }
 .db-card-eta { color: var(--dbb-green); font-weight: 600; }
+.db-card-payment { font-weight: 700; }
+.db-payment-paid { color: var(--dbb-green-dark); }
+.db-payment-unpaid { color: var(--dbb-amber); }
+.db-payment-refunded { color: var(--dbb-danger); }
+.db-card-exception {
+	border-left: 4px solid var(--dbb-danger);
+	background: #fff0f0;
+	color: #7b1718;
+	padding: 0.4rem 0.55rem;
+	border-radius: 4px;
+	font-weight: 800;
+}
 .db-card-timing-passed {
 	border: 2px solid var(--dbb-danger);
 	border-radius: 4px;
@@ -293,68 +357,6 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-card-due { color: var(--dbb-green); font-weight: 600; }
 .db-card-due-over { color: var(--dbb-danger); font-weight: 700; }
-
-/* --- Undo toast -------------------------------------------------------- */
-
-.db-toast {
-	position: fixed;
-	left: 50%;
-	bottom: 1.25rem;
-	transform: translateX(-50%);
-	z-index: 100000;
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	background: var(--dbb-ink);
-	color: var(--dbb-paper);
-	font-size: 1rem;
-	font-weight: 600;
-	padding: 0.6rem 0.9rem;
-	border-radius: var(--r-md);
-	box-shadow: var(--sh-2);
-	max-width: calc(100vw - 2rem);
-}
-
-.db-toast .db-toast-undo {
-	min-height: 44px;
-	min-width: 44px;
-	font-weight: 700;
-	border-radius: var(--r-sm);
-}
-
-/* --- Recall ("Recent") panel ------------------------------------------- */
-
-.db-recall-toggle { min-height: 44px; }
-
-.db-recall-panel {
-	background: var(--dbb-paper);
-	border: 1px solid var(--dbb-line);
-	border-radius: var(--r-md);
-	box-shadow: var(--sh-1);
-	padding: 0.5rem 0.75rem;
-	margin-bottom: 1rem;
-}
-
-.db-recall-empty {
-	margin: 0.25rem 0;
-	color: var(--dbb-muted-2);
-	font-style: italic;
-}
-
-.db-recall-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.75rem;
-	padding: 0.35rem 0;
-	border-bottom: 1px solid var(--dbb-line);
-}
-
-.db-recall-row:last-child { border-bottom: 0; }
-
-.db-recall-info { font-size: 0.9rem; color: var(--dbb-ink-soft); }
-
-.db-recall-restore { min-height: 44px; }
 
 /* --- Heartbeat badge ---------------------------------------------------- */
 
@@ -436,6 +438,44 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-eta { min-width: 52px; justify-content: center; }
 .db-cancel { color: var(--dbb-danger); margin-left: auto; }
+.db-review-change { margin-left: auto; }
+.db-no-next-action { margin: 0 0 0.4rem; color: var(--dbb-muted); font-size: 0.85rem; }
+.db-card-busy { opacity: 0.72; }
+.db-card-busy::after {
+	content: "Updating...";
+	display: block;
+	margin-top: 0.45rem;
+	color: var(--dbb-blue);
+	font-size: 0.82rem;
+	font-weight: 800;
+}
+
+/* A review surface, rather than an unsafe in-place order editor. The KDS has
+   no authority to reprice paid orders or issue refunds; that remains a manager
+   workflow. */
+.db-amendment-panel {
+	background: #fffdf8;
+	border: 2px solid #c87d00;
+	border-radius: var(--r-lg);
+	box-shadow: var(--sh-2);
+	padding: 1rem;
+	margin: 0 0 1rem;
+	max-width: 860px;
+}
+.db-amendment-panel:focus { outline: 3px solid var(--dbb-blue); outline-offset: 2px; }
+.db-amendment-head,
+.db-amendment-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.db-amendment-head h2 { margin: 0; font-size: 1.15rem; }
+.db-amendment-context { color: var(--dbb-muted); font-weight: 700; }
+.db-amendment-items { margin: 0.5rem 0; padding: 0.55rem; background: var(--dbb-paper); border-radius: var(--r-sm); }
+.db-amendment-boundary { margin: 0.75rem 0; padding: 0.7rem; background: #fff0c2; border-radius: var(--r-sm); color: #5d3600; font-weight: 600; }
+.db-amendment-feedback { min-height: 1.2rem; margin: 0.75rem 0 0; color: var(--dbb-green-dark); font-weight: 700; }
 
 /* Visible keyboard focus for accessibility. */
 .doughboss-board-wrap .button:focus-visible {
@@ -462,4 +502,12 @@ body.db-alerting .db-board-bar h1::after {
 	.db-card-actions .button:active {
 		transform: none;
 	}
+}
+
+@media (max-width: 600px) {
+	.doughboss-board-wrap { margin-right: 0; }
+	.db-board-actions { width: 100%; }
+	.db-card-time { margin-left: 0; }
+	.db-review-change { margin-left: 0; }
+	.db-amendment-panel { padding: 0.75rem; }
 }

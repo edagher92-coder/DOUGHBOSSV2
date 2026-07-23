@@ -17,6 +17,11 @@
 	var PAY = DATA.payments || { enabled: false, pk: '' };
 	var configCache = null;
 	var locationsCache = null;
+	// A table QR opens the ordering page with a server-issued, HttpOnly context
+	// cookie. The browser deliberately receives only the safe display context;
+	// it never gets a table token or an editable table/store authority.
+	var tableContextCache = null;
+	var tableContextRequest = null;
 
 	// Which gateway the server enqueued a card library for ('stripe' or 'tyro').
 	// Defaults to 'stripe' so older localized data behaves exactly as before.
@@ -27,14 +32,9 @@
 	// to Tyro (below) or to no payment.
 	var stripe = (PAY.enabled && PAY.pk && GATEWAY === 'stripe' && typeof window.Stripe === 'function') ? window.Stripe(PAY.pk) : null;
 
-	// Tyro (MPGS) hosted-session payments: true when Tyro is the active gateway
-	// and its Session.js library loaded. The library is a page-global singleton
-	// (window.PaymentSession), not an instance like Stripe's.
-	var tyroPay = !!(PAY.enabled && GATEWAY === 'tyro' && window.PaymentSession && typeof window.PaymentSession.configure === 'function');
+	// Current Tyro Connect Pay browser library. It owns all card fields and 3DS.
+	var tyroPay = !!(PAY.enabled && GATEWAY === 'tyro' && typeof window.Tyro === 'function');
 
-	// PaymentSession.configure() may only run once per page load — this guard
-	// keeps a second checkout widget on the same page from breaking the first.
-	var tyroConfigured = false;
 
 	/* ------------------------------------------------------------------ */
 	/* Helpers                                                            */
@@ -137,6 +137,42 @@
 		});
 	}
 
+	function getTableContext() {
+		if (tableContextRequest) {
+			return tableContextRequest;
+		}
+		tableContextRequest = request('/table/context').then(function (context) {
+			if (!context || !context.active || !context.location || !context.table) {
+				tableContextCache = null;
+				return null;
+			}
+			tableContextCache = context;
+			return tableContextCache;
+		});
+		return tableContextRequest;
+	}
+
+	function activeTableContext() {
+		return tableContextCache && tableContextCache.active ? tableContextCache : null;
+	}
+
+	function tableContextBanner(context, compact) {
+		if (!context) { return null; }
+		var locationName = context.location.name || 'this store';
+		var tableLabel = context.table.label || 'your table';
+		return el('div', {
+			class: 'db-table-context' + (compact ? ' db-table-context--compact' : ''),
+			role: 'status',
+			'aria-live': 'polite'
+		}, [
+			el('span', { class: 'db-table-context-icon', 'aria-hidden': 'true', text: '\u2713' }),
+			el('div', { class: 'db-table-context-copy' }, [
+				el('strong', { text: 'You are ordering for ' + locationName }),
+				el('span', { text: 'Table ' + tableLabel + ' \u00b7 dine in' })
+			])
+		]);
+	}
+
 	function notifyCartChanged() {
 		document.dispatchEvent(new CustomEvent('doughboss:cart-updated'));
 	}
@@ -218,6 +254,13 @@
 	function renderShopPicker(root) {
 		getLocations().then(function (locs) {
 			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) {
+				// QR table context is fixed on the server. Do not show an editable
+				// shop picker that suggests a customer can change its destination.
+				root.appendChild(tableContextBanner(tableContext, true));
+				return;
+			}
 			if (!locs.length) { root.style.display = 'none'; return; }
 
 			// Single shop: remember it silently and just show its details.
@@ -255,6 +298,8 @@
 	function renderMenu(root) {
 		request('/menu').then(function (items) {
 			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!items.length) {
 				root.appendChild(el('p', { class: 'db-empty', text: 'No menu items yet.' }));
 				return;
@@ -351,6 +396,8 @@
 	function renderBuilder(root) {
 		getConfig().then(function (cfg) {
 			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!cfg.sizes.length) {
 				root.appendChild(el('p', { class: 'db-empty', text: 'No pizza sizes configured yet.' }));
 				return;
@@ -432,8 +479,9 @@
 	/* ------------------------------------------------------------------ */
 
 	function renderCart(root) {
-		var orderType = 'pickup';
-		var locationId = 0;
+		var initialTableContext = activeTableContext();
+		var orderType = initialTableContext ? 'dine_in' : 'pickup';
+		var locationId = initialTableContext ? Number(initialTableContext.location.id) : 0;
 		// The cart lines/totals region is rebuilt freely on every reload. The
 		// checkout region is NOT — once a checkout form exists it is updated in
 		// place (see checkoutEl.update below) rather than torn down. Rebuilding it
@@ -467,8 +515,10 @@
 		function draw(cfg, cart, locs) {
 			if (orderComplete) { return; }
 			cartRegion.innerHTML = '';
+			var tableContext = activeTableContext();
 
 			if (!cart.items.length) {
+				if (tableContext) { cartRegion.appendChild(tableContextBanner(tableContext)); }
 				cartRegion.appendChild(el('p', { class: 'db-empty', text: I18N.emptyCart || 'Your cart is empty.' }));
 				// Nothing to check out — drop any previous checkout form so a later
 				// non-empty cart starts with a fresh one (and a fresh card mount).
@@ -477,7 +527,12 @@
 				return;
 			}
 
-			if (cfg.single_location_mode && cfg.single_location_id) {
+			if (tableContext) {
+				// The server resolves and enforces this QR context again on payment
+				// and checkout. These values are display-only client state.
+				locationId = Number(tableContext.location.id);
+				orderType = 'dine_in';
+			} else if (cfg.single_location_mode && cfg.single_location_id) {
 				locationId = Number(cfg.single_location_id);
 				orderType = 'pickup';
 			} else if (!locationId) { locationId = currentLocationId(locs); }
@@ -488,26 +543,29 @@
 				list.appendChild(cartLine(line, load));
 			});
 			cartRegion.appendChild(list);
+			if (tableContext) { cartRegion.appendChild(tableContextBanner(tableContext)); }
 
 			// Shop selector — routes the order to the right kitchen board. Only
 			// shown when more than one shop exists; otherwise the single shop is
 			// remembered silently.
-			if (!cfg.single_location_mode && locs.length > 1) {
+			if (!tableContext && !cfg.single_location_mode && locs.length > 1) {
 				setLocation(locationId, true);
 				cartRegion.appendChild(el('div', { class: 'db-cart-shop' }, [
 					el('span', { class: 'db-cart-shop-label', text: I18N.chooseShop || 'Choose your shop' }),
 					shopSelect(locs, locationId, function (id) { locationId = id; setLocation(id); })
 				]));
-			} else if (locs.length === 1) {
+			} else if (!tableContext && locs.length === 1) {
 				locationId = Number(locs[0].id);
 				setLocation(locationId, true);
 			}
 
 			// Fulfilment selector.
-			var typeWrap = el('div', { class: 'db-fulfilment' });
-			if (cfg.enable_pickup) { typeWrap.appendChild(typeRadio('pickup', 'Pickup', orderType, onType)); }
-			if (cfg.enable_delivery) { typeWrap.appendChild(typeRadio('delivery', 'Delivery', orderType, onType)); }
-			cartRegion.appendChild(typeWrap);
+			if (!tableContext) {
+				var typeWrap = el('div', { class: 'db-fulfilment' });
+				if (cfg.enable_pickup) { typeWrap.appendChild(typeRadio('pickup', 'Pickup', orderType, onType)); }
+				if (cfg.enable_delivery) { typeWrap.appendChild(typeRadio('delivery', 'Delivery', orderType, onType)); }
+				cartRegion.appendChild(typeWrap);
+			}
 
 			// Totals.
 			cartRegion.appendChild(totalsBlock(cart.totals, cfg));
@@ -646,201 +704,77 @@
 		return wrap;
 	}
 
-	// Tyro (MPGS) hosted-session card capture for the checkout form.
-	//
-	// Card-data isolation — the same guarantee as Stripe Elements, different
-	// mechanics: the four inputs built here start readOnly and are handed over
-	// to Tyro's Session.js, which replaces them with gateway-controlled proxied
-	// fields the moment configure() succeeds. What the customer types goes
-	// straight from the browser to Tyro's gateway host and lands in a Hosted
-	// Session there; this script (and every DoughBoss REST call) only ever sees
-	// the opaque session id — never a card number, expiry or security code.
-	//
-	// Flow (mirrors the Stripe branch's create → confirm → checkout shape):
-	//   mount:  POST /payment-intent  → PaymentSession.configure(session id)
-	//           so the hosted fields are live before the customer types.
-	//   submit: POST /payment-intent again for a FRESH order reference — the
-	//           amount and pickup/delivery/shop details the server stashes for
-	//           the PAY call must reflect the cart as it is NOW, not as it was
-	//           when the form mounted (the hosted session itself only carries
-	//           card details, so it is safely reused) — then
-	//           PaymentSession.updateSessionFromForm('card') to push the hosted
-	//           fields into the session, then POST /checkout with the composite
-	//           "{order_id}.{session_id}" reference. The server submits and
-	//           verifies the actual charge before trusting the order as paid.
-	function tyroCheckout(form, msg, getState) {
-		var uid = 'db-tyro-' + String(Date.now()) + String(Math.floor(Math.random() * 1000));
-		var ids = {
-			number: uid + '-number',
-			month: uid + '-month',
-			year: uid + '-year',
-			csc: uid + '-csc'
-		};
 
-		// readOnly until Session.js takes the field over (so nothing typed early
-		// can sit in a page-readable input); autocomplete off so the browser
-		// never offers to store card data against our own DOM.
-		function cardInput(id, ariaLabel, placeholder, extraClass) {
-			return el('input', {
-				type: 'text',
-				id: id,
-				class: 'db-card-input' + (extraClass ? ' ' + extraClass : ''),
-				readOnly: true,
-				autocomplete: 'off',
-				placeholder: placeholder,
-				'aria-label': ariaLabel
-			});
-		}
-
-		form.appendChild(el('div', { class: 'db-cardfield db-cardfield--tyro' }, [
+	// Tyro Connect Pay sheet. The Pay Secret is kept only in this closure and is
+	// never placed in storage, URLs or logs. Server verification remains the
+	// authority before an order reaches the kitchen.
+	function tyroConnectCheckout(form, msg, getState, clientKey) {
+		var mount = el('div', { class: 'db-tyro-pay-form', id: 'db-tyro-pay-' + String(Date.now()) });
+		var status = el('p', { class: 'db-pay-secure', text: 'Secure payment by Tyro · Bank verification may appear here.' });
+		form.appendChild(el('div', { class: 'db-cardfield db-cardfield--tyro-connect' }, [
 			el('span', { class: 'db-field-label', text: I18N.cardDetails || 'Card details' }),
-			el('div', { class: 'db-card-fields' }, [
-				cardInput(ids.number, I18N.cardNumber || 'Card number', '1234 1234 1234 1234'),
-				el('div', { class: 'db-card-row' }, [
-					cardInput(ids.month, I18N.cardExpiryMonth || 'Expiry month (MM)', 'MM', 'db-card-input--sm'),
-					cardInput(ids.year, I18N.cardExpiryYear || 'Expiry year (YY)', 'YY', 'db-card-input--sm'),
-					cardInput(ids.csc, I18N.cardCsc || 'Security code (CVC)', 'CVC', 'db-card-input--sm')
-				])
-			])
+			mount,
+			status
 		]));
-
-		var state = {
-			sessionId: '',   // the Hosted Session the fields are bound to
-			initPromise: null,
-			pending: null    // in-flight updateSessionFromForm resolver
-		};
+		var state = { initPromise: null, paymentId: '' };
 
 		function createIntent() {
 			var s = getState();
-			return request('/payment-intent', { method: 'POST', body: { order_type: s.orderType, location_id: s.locationId } });
+			return request('/payment-intent', {
+				method: 'POST',
+				body: { order_type: s.orderType, location_id: s.locationId, payment_attempt_key: clientKey }
+			});
 		}
 
-		function fieldErrorMessage(errors) {
-			errors = errors || {};
-			if (errors.cardNumber) { return I18N.cardNumberError || 'Please check the card number.'; }
-			if (errors.expiryMonth || errors.expiryYear) { return I18N.cardExpiryError || 'Please check the card expiry date.'; }
-			if (errors.securityCode) { return I18N.cardCscError || 'Please check the card security code.'; }
-			return I18N.cardError || 'Please check your card details and try again.';
-		}
-
-		function configureSession(sessionId) {
-			return new Promise(function (resolve, reject) {
-				if (tyroConfigured) {
-					reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
-					return;
+		function waitForResult(tyro, remaining) {
+			return tyro.fetchPayRequest().then(function (result) {
+				var payRequest = result && result.payRequest ? result.payRequest : result;
+				var providerStatus = payRequest && payRequest.status ? String(payRequest.status).toUpperCase() : '';
+				if (providerStatus === 'SUCCESS') { return payRequest; }
+				if (providerStatus === 'FAILED' || providerStatus === 'VOIDED') {
+					throw new Error(I18N.cardError || 'The payment was not approved. Please check your details and try again.');
 				}
-				tyroConfigured = true;
-				state.sessionId = sessionId;
-				// Session.js is expected to call initialized(); if it never does
-				// (bad merchant id / wrong host / blocked script), surface that
-				// instead of leaving the form silently dead.
-				var timer = setTimeout(function () {
-					reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
-				}, 20000);
-				window.PaymentSession.configure({
-					session: sessionId,
-					fields: {
-						card: {
-							number: '#' + ids.number,
-							expiryMonth: '#' + ids.month,
-							expiryYear: '#' + ids.year,
-							securityCode: '#' + ids.csc
-						}
-					},
-					frameEmbeddingMitigation: ['javascript'],
-					interaction: {
-						displayControl: {
-							formatCard: 'EMBOSSED',
-							invalidFieldCharacters: 'REJECT'
-						}
-					},
-					callbacks: {
-						initialized: function (response) {
-							clearTimeout(timer);
-							if (response && response.status && response.status !== 'ok') {
-								reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
-							} else {
-								resolve(sessionId);
-							}
-						},
-						formSessionUpdate: function (response) {
-							var pending = state.pending;
-							state.pending = null;
-							if (!pending) { return; }
-							clearTimeout(pending.timer);
-							if (response && response.status === 'ok') {
-								pending.resolve((response.session && response.session.id) || state.sessionId);
-							} else if (response && response.status === 'fields_in_error') {
-								pending.reject(new Error(fieldErrorMessage(response.errors)));
-							} else {
-								pending.reject(new Error(I18N.cardError || 'Please check your card details and try again.'));
-							}
-						}
-					}
-				});
+				if (remaining < 1) {
+					throw new Error('Your payment is still being checked. Do not pay again; please wait a moment and retry confirmation.');
+				}
+				return new Promise(function (resolve) { setTimeout(resolve, 1200); }).then(function () { return waitForResult(tyro, remaining - 1); });
 			});
 		}
 
 		function init() {
-			if (!state.initPromise) {
-				state.initPromise = createIntent().then(function (pi) {
-					// client_secret carries the bare Hosted Session id.
-					return configureSession(pi.client_secret);
-				}).catch(function (err) {
-					// Allow the next submit to retry a failed initialization
-					// (unless configure() itself already ran — that is one-shot).
-					if (!tyroConfigured) { state.initPromise = null; }
-					throw err;
+			if (state.initPromise) { return state.initPromise; }
+			state.initPromise = createIntent().then(function (pi) {
+				state.paymentId = pi.payment_intent;
+				var tyro = window.Tyro({ liveMode: !!PAY.liveMode });
+				return tyro.init(pi.client_secret).then(function () {
+					var payForm = tyro.createPayForm({
+						theme: 'minimal',
+						options: { creditCardForm: { enabled: true }, applePay: { enabled: false }, googlePay: { enabled: false } }
+					});
+					return payForm.inject('#' + mount.id).then(function () { return tyro; });
 				});
-			}
+			}).catch(function (err) {
+				state.initPromise = null;
+				throw err;
+			});
 			return state.initPromise;
 		}
 
-		function updateSession() {
-			return new Promise(function (resolve, reject) {
-				if (state.pending) {
-					reject(new Error(I18N.payProcessing || 'Processing payment…'));
-					return;
-				}
-				var pending = { resolve: resolve, reject: reject, timer: 0 };
-				pending.timer = setTimeout(function () {
-					if (state.pending === pending) {
-						state.pending = null;
-						reject(new Error(I18N.cardError || 'Please check your card details and try again.'));
-					}
-				}, 30000);
-				state.pending = pending;
-				try {
-					window.PaymentSession.updateSessionFromForm('card');
-				} catch (e) {
-					state.pending = null;
-					clearTimeout(pending.timer);
-					reject(new Error(I18N.cardInitError || 'The secure card form could not be loaded. Please refresh the page and try again.'));
-				}
-			});
-		}
-
-		// Kick the hosted fields off once the form is in the DOM (it is appended
-		// synchronously by draw() — same deferral as the Stripe card mount).
 		setTimeout(function () {
 			init().catch(function (err) {
-				msg.textContent = err.message || (I18N.cardInitError || 'The secure card form could not be loaded.');
+				msg.textContent = err.message || (I18N.cardInitError || 'The secure payment form could not be loaded.');
 				msg.className = 'db-checkout-msg db-error';
 			});
 		}, 0);
 
 		return {
 			pay: function () {
-				return init().then(function () {
-					return createIntent();
-				}).then(function (pi) {
-					return updateSession().then(function (sessionId) {
-						// Fresh order-reference half + the (card-carrying) hosted
-						// session half. On MPGS both halves are plugin-generated
-						// alnum ids, so splitting on the first '.' is safe — see
-						// DoughBoss_Tyro::ID_DELIM.
-						return String(pi.payment_intent).split('.')[0] + '.' + sessionId;
-					});
+				status.textContent = 'Securely submitting your payment…';
+				return init().then(function (tyro) {
+					return tyro.submitPay().then(function () { return waitForResult(tyro, 10); });
+				}).then(function () {
+					status.textContent = 'Payment confirmed · sending your order to DoughBoss.';
+					return state.paymentId;
 				});
 			}
 		};
@@ -876,6 +810,7 @@
 		}
 		var payLabel = payLabelFor(totals);
 		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
+		var paymentAttemptKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
 
 		form.appendChild(el('h3', { text: 'Checkout' }));
 		[name, email, phone, address, notes].forEach(function (f) { form.appendChild(f); });
@@ -893,15 +828,15 @@
 			setTimeout(function () { try { card.mount(cardMount); } catch (e) {} }, 0);
 		}
 
-		// Tyro (MPGS): hosted-session card fields — see tyroCheckout() above.
+		// Tyro Connect: hosted payment form and automatic 3DS.
 		var tyro = null;
 		if (tyroPay) {
-			tyro = tyroCheckout(form, msg, function () {
+			tyro = tyroConnectCheckout(form, msg, function () {
 				return {
 					orderType: orderType,
 					locationId: getLocationId ? getLocationId() : storedLocationId()
 				};
-			});
+			}, paymentAttemptKey);
 		}
 
 		form.appendChild(submit);
@@ -932,13 +867,17 @@
 				// would throw against null.
 				var parent = form.parentNode;
 				parent.innerHTML = '';
-				parent.appendChild(el('div', { class: 'db-confirm' }, [
+				var confirmation = el('div', { class: 'db-confirm' }, [
 					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
 					el('h3', { text: 'Order received' }),
 					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
-					el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }),
-					el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) })
-				]));
+				]);
+				if (res.table_label) {
+					confirmation.appendChild(el('p', { class: 'db-table-context', text: 'Dine in · ' + (res.location_name ? res.location_name + ' · ' : '') + 'Table ' + res.table_label + ' · We will bring it to you.' }));
+				}
+				confirmation.appendChild(el('p', { text: 'The shop has not accepted it yet. Keep this order number and your email to check the latest status.' }));
+				confirmation.appendChild(el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) }));
+				parent.appendChild(confirmation);
 				// Mark this cart widget done BEFORE notifying — the notification
 				// triggers this same widget's own reload listener, which must not
 				// overwrite the confirmation just shown with an "empty cart" render.
@@ -962,6 +901,7 @@
 				address: address.querySelector('input,textarea').value,
 				notes: notes.querySelector('input,textarea').value
 			};
+			if (paying) { payload.payment_attempt_key = paymentAttemptKey; }
 
 			if (stripe && card) {
 				// 1) create a PaymentIntent for the current cart, 2) confirm the card
@@ -973,7 +913,7 @@
 					placeOrder(payload).catch(fail);
 					return;
 				}
-				request('/payment-intent', { method: 'POST', body: { order_type: orderType, location_id: payload.location_id } }).then(function (pi) {
+				request('/payment-intent', { method: 'POST', body: { order_type: orderType, location_id: payload.location_id, payment_attempt_key: paymentAttemptKey } }).then(function (pi) {
 					return stripe.confirmCardPayment(pi.client_secret, {
 						payment_method: {
 							card: card,
@@ -1123,11 +1063,12 @@
 		// 4-stage horizontal progress tracker (pickup vs delivery wording).
 		function buildTracker(order) {
 			var isDelivery = order.order_type === 'delivery';
+			var isDineIn = order.order_type === 'dine_in';
 			var labels = [
 				'Order placed',
 				'Being prepared',
-				isDelivery ? 'On its way' : 'Ready for pickup',
-				isDelivery ? 'Delivered' : 'Picked up'
+				isDelivery ? 'On its way' : (isDineIn ? 'Ready to serve' : 'Ready for pickup'),
+				isDelivery ? 'Delivered' : (isDineIn ? 'Served' : 'Picked up')
 			];
 			var current = TRACK_STAGE_MAP.hasOwnProperty(order.status) ? TRACK_STAGE_MAP[order.status] : 0;
 			var list = el('ol', { class: 'db-stage-tracker', 'aria-label': 'Order progress' });
@@ -1205,6 +1146,8 @@
 				if (eta) { card.appendChild(eta); }
 				if (order.customer_status === 'ready_for_pickup') {
 					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready — please collect it from the shop.' }));
+				} else if (order.customer_status === 'ready_to_serve') {
+					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready. We will bring it to your table.' }));
 				} else if (order.customer_status === 'ready_for_delivery') {
 					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready for delivery.' }));
 				}
@@ -1255,11 +1198,23 @@
 	/* ------------------------------------------------------------------ */
 
 	function boot() {
-		document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
-		document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
-		document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
-		document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);
-		document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
+		// Resolve a scanned-table session before any ordering controls render, so
+		// there is no moment where a customer sees a switchable shop or fulfilment
+		// option. Non-QR pages simply continue with a null context.
+		getTableContext().then(function () {
+			document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
+			document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
+			document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
+			document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);
+			document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
+		}).catch(function (err) {
+			// A claimed but expired/revoked table session must never silently become
+			// a switchable pickup order. Stop ordering and direct the guest to staff.
+			document.querySelectorAll('[data-doughboss-shop], [data-doughboss-menu], [data-doughboss-builder], [data-doughboss-cart]').forEach(function (root) {
+				root.innerHTML = '';
+				root.appendChild(el('div', { class: 'db-error', role: 'alert', text: (err && err.message ? err.message : 'This table session is no longer active.') + ' Please scan the table QR again or ask a staff member for help.' }));
+			});
+		});
 	}
 
 	if (document.readyState === 'loading') {

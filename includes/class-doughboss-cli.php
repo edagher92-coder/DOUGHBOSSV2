@@ -240,47 +240,9 @@ class DoughBoss_CLI {
 	 * @return array<string,array<int,array>>
 	 */
 	private static function menu_data() {
-		return array(
-			'Manoush'  => array(
-				array( 'Zaatar', 4.50, 'standard', array( 'vegan', 'halal' ), 'Dried thyme, sumac & toasted sesame mixed with olive oil — served flat or folded.' ),
-				array( 'Zaatar & Cheese', 8.50, 'standard', array( 'vegetarian', 'halal' ), 'Zaatar on one half, blended cheese on the other — flat or folded.' ),
-				array( 'Cheese', 9.50, 'standard', array( 'vegetarian', 'halal' ), 'A beautiful mix of our blended cheese, baked golden.' ),
-				array( 'Meat', 9.00, 'standard', array( 'halal' ), 'Minced lamb blended with spices, onions & tomatoes — flat or folded.' ),
-				array( 'Meat & Cheese', 11.00, 'standard', array( 'halal' ), 'Minced lamb with spices, topped with melted cheese.' ),
-			),
-			'Pizza'    => array(
-				array( 'All Meat', 15.00, 'pizza', array( 'halal' ), 'Pepperoni, sujuk, chicken & cheese on a BBQ sauce base.' ),
-				array( 'Sujuk Deluxe', 14.00, 'pizza', array( 'halal' ), 'Spiced beef sausage with tomato, capsicum, mushroom, olives & cheese.' ),
-				array( 'Spinach Deluxe', 13.00, 'pizza', array( 'vegetarian', 'halal' ), 'Spinach mix, mushroom, tomato, olives & cheese.' ),
-				array( 'Veggie Plus', 13.00, 'pizza', array( 'vegetarian', 'halal' ), 'Cheese, tomato, olives, capsicum, onion & mushroom on a garlic sauce base.' ),
-				array( 'Pepperoni & Cheese', 13.00, 'pizza', array( 'halal' ), 'A perfect blend of pepperoni & cheese on a tomato sauce base.' ),
-				array( 'Dough Boss Special', 15.00, 'pizza', array( 'halal' ), 'Pepperoni, tomato, mushroom, capsicum, onion, black olives & cheese on a tomato base.' ),
-				array( 'Chicken & Cheese', 14.00, 'pizza', array( 'halal' ), 'Grilled chicken & mushroom on garlic sauce, topped with cheese.' ),
-				array( 'BBQ Chicken', 14.00, 'pizza', array( 'halal' ), 'BBQ sauce base with chicken, onion, capsicum, mushroom & cheese.' ),
-				array( 'Peri Peri Chicken', 14.00, 'pizza', array( 'halal' ), 'Grilled chicken, mushroom, capsicum, onion & cheese, finished with peri peri sauce.' ),
-				array( 'Garlic Prawns', 15.00, 'pizza', array( 'halal' ), 'Prawns, mushroom, onion, capsicum & cheese on a garlic-tomato base.' ),
-			),
-			'Pies'     => array(
-				array( 'Spinach & Cheese', 10.00, 'standard', array( 'vegetarian', 'halal' ), 'A triangular turnover of spinach, onion, lemon, spices & cheese.' ),
-				array( 'Haloumi', 11.00, 'standard', array( 'vegetarian', 'halal' ), 'Delicious haloumi cheese baked in a pie.' ),
-				array( 'Chicken Pie', 11.00, 'standard', array( 'halal' ), 'Grilled chicken, capsicum, mushroom & cheese.' ),
-				array( 'Aged Cheese', 10.00, 'standard', array( 'vegetarian', 'halal' ), 'Aged white cheese (shanklish) with diced tomatoes & onions.' ),
-			),
-			'Wraps'    => array(
-				array( 'Zaatar & Veggie', 8.50, 'standard', array( 'vegan', 'halal' ), 'Zaatar with fresh tomato, cucumber, olives & mint. Add labneh or cheese +$2.50 each.' ),
-				array( 'Chicken Delight', 14.00, 'standard', array( 'halal' ), 'Grilled chicken, fresh tomato, lettuce, pickled cucumber & garlic mayo.' ),
-				array( 'Ultimate Chicken', 14.00, 'standard', array( 'halal' ), 'Grilled chicken, melted cheese, mushroom, capsicum & lettuce, topped with mayo.' ),
-				array( 'Dough Boss Wrap', 14.00, 'standard', array( 'halal' ), 'Sujuk, fresh tomato, pickled cucumber, lettuce & cheese, topped with mayo.' ),
-			),
-			'Desserts' => array(
-				array( 'Choco Banana', 13.00, 'standard', array( 'vegetarian', 'halal' ), 'Nutella chocolate & banana baked in a pie.' ),
-			),
-			'Drinks'   => array(
-				array( 'Spring Water', 3.50, 'drink', array(), 'Still, chilled.' ),
-				array( 'Soft Drinks 600ml', 5.00, 'drink', array(), 'Coke, Sprite, Fanta or Solo — ice-cold.' ),
-				array( 'Juice', 4.50, 'drink', array(), 'Chilled fruit juice.' ),
-			),
-		);
+		// The admin importer and WP-CLI must seed the same menu; keep this
+		// compatibility wrapper rather than maintaining a second catalogue.
+		return DoughBoss_Menu_Seeder::menu_data();
 	}
 
 	/**

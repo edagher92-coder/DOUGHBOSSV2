@@ -33,3 +33,17 @@
 	font-size: 1rem;
 	cursor: pointer;
 }
+@media print {
+	body:has(#doughboss-qr-print) * {
+		visibility: hidden;
+	}
+	body:has(#doughboss-qr-print) #doughboss-qr-print,
+	body:has(#doughboss-qr-print) #doughboss-qr-print * {
+		visibility: visible;
+	}
+	body:has(#doughboss-qr-print) #doughboss-qr-print {
+		position: absolute;
+		left: 0;
+		top: 0;
+	}
+}

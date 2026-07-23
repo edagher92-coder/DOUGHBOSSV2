@@ -1,6 +1,8 @@
-# UPLIFT-2 — Staging Verification Runbook
+# UPLIFT-2 - Staging Verification Runbook (pre-final)
 
-**Goal:** take DoughBoss v2.17.0 (DB schema 1.10.0) from *code-verified* (lint + review pass) to *staging-verified* (a real order and a real test payment observed end to end on a real WordPress install). This is the gap between 6/10 and 9.5/10 production readiness.
+**Applies to:** DoughBoss `2.22.0`, database schema `1.15.0`.
+
+**Goal:** take the reviewed build from *code-verified* to *staging-verified*: a real order, its customer tracking, its kitchen lifecycle, and the selected provider's sandbox payment flow observed end to end on a real WordPress installation. This is a staging guide, not permission to enable production payments.
 
 **Companions — do not duplicate them, use them:**
 - `RELEASE_CHECKLIST.md` — per-release gate; §3 (manual smoke) and §4 (payments) are executed *by* this runbook.
@@ -35,9 +37,9 @@ unzip -l dist/doughboss.zip | head   # expect top-level doughboss/ with includes
 ```bash
 wp db query "SHOW TABLES LIKE '%doughboss%'"
 ```
-Expect all seven plugin tables: `doughboss_orders`, `doughboss_order_items`, `doughboss_locations`, `doughboss_catering_enquiries`, `doughboss_vouchers`, `doughboss_voucher_redemptions`, `doughboss_pospal_outbox` (with your table prefix).
+Confirm the current schema's tables are present, including the order, location, QR/table, payment-attempt, webhook-event and POSPal-outbox storage needed by the enabled features. Do not use the old seven-table inventory as a release check: it predates schema `1.15.0`.
 ```bash
-wp option get doughboss_db_version        # expect 1.10.0
+wp option get doughboss_db_version        # expect 1.15.0
 wp role list | grep doughboss             # expect doughboss_kitchen and doughboss_manager
 ```
 - Menu items are **not** auto-seeded on activation. Seed the demo/starter menu explicitly:
@@ -104,30 +106,43 @@ Confirm each page renders its app container and assets load (no 404s in devtools
 
 **Pass:** one full card payment, webhook 200s, decline + replay rejected, refund round-trips.
 
-## 4. Tyro sandbox verification (when credentials arrive)
+## 4. Tyro Connect sandbox verification (when credentials arrive)
 
-Tyro rides Mastercard MPGS hosted sessions (`includes/class-doughboss-tyro.php`).
+> **Do not use the retired MPGS adapter.** Merchant passwords, Mastercard-hosted
+> sessions, `Session.js`, configured gateway-host URLs, server-side `PAY`, and
+> the old `/tyro-webhook` route are not part of DoughBoss `2.22.0`.
 
-1. Settings → Payments: gateway = **Tyro**, mode = **Sandbox/test**. Fill: Merchant ID, API version, and **Host** = `https://test-tyro.mtf.gateway.mastercard.com` (the MTF sandbox host). Password env-first: `DOUGHBOSS_TYRO_TEST_PASSWORD`; webhook secret in `DOUGHBOSS_TYRO_TEST_WHSEC`. `tyro_ready()` requires gateway=tyro + merchant id + password.
-2. Click **Test Connection** on the settings page. It authenticates merchant id + password against the gateway without moving money. Fix a 502 "could not authenticate" before proceeding.
-3. Place one pickup order via the hosted-session card form with an MPGS sandbox test card. Verify: server-side PAY completes (Tyro requires the merchant server to submit PAY — success is confirmed server-side, not by the browser), order records `payment_method = tyro` and the gateway order reference, amount matches server total.
-4. Webhook endpoint (if Tyro notifications are configured): `https://<staging>/wp-json/doughboss/v1/tyro-webhook` — signature-gated, expect 200 on delivery.
-5. **If session.js fails to load** (blank/broken card fields): check devtools Console/Network for the script URL — it is served from the configured Tyro host, so verify the Host setting is exactly the MTF URL above (https, no trailing path typo), no CSP/adblock/proxy is blocking `*.mastercard.com`, and the configured API version exists on that host. Re-run Test Connection to separate credential failures from asset-load failures.
+Follow the complete
+[`Tyro-Connect-Acceptance-Runbook-PreFinal.md`](Tyro-Connect-Acceptance-Runbook-PreFinal.md).
+The short staging sequence is:
 
-**Pass:** Test Connection OK, one sandbox hosted-session payment confirmed server-side.
+1. Configure Tyro **Sandbox**, the sandbox client ID, server-side client
+   secret and webhook signing key; map every enabled shop to its Tyro Connect
+   `locationId`.
+2. Use the canonical webhook URL:
+   `https://<staging>/wp-json/doughboss/v1/payments/tyro/webhook`.
+3. Run the Tyro acceptance matrix for pickup, table QR and catering only where
+   those flows are enabled. A browser success indication is not enough: retain
+   the signed webhook and server-side Pay Request retrieval evidence.
+4. Prove declines, 3DS cancellation, duplicate submission, refresh and
+   out-of-order webhook events do not release an order to KDS or POSPal.
+5. Run refund/void tests only with the provider's supplied sandbox scenarios;
+   do not guess card numbers or provider fields.
 
+**Pass:** the applicable Tyro Connect matrix passes with evidence, including
+per-store `locationId` binding and the canonical signed-webhook route.
 ## 5. Go-live gate checklist
 
 Do not touch production until every box is checked. This executes RELEASE_CHECKLIST §6 with DoughBoss specifics; mechanics are in the Deployment Manual §2–5.
 
-- [ ] Sections 1–3 above passed on staging (and §4 if launching with Tyro).
+- [ ] Sections 1-2 and the selected provider flow (section 3 for Stripe and/or section 4 for Tyro) passed on staging. Table QR and catering flows are included only when they are being released.
 - [ ] Fresh production backup exists — database **and** files (UpdraftPlus per Deployment Manual §1.4) — and the restore path has been read.
-- [ ] All secrets are env-vars/constants, none pasted into the DB where avoidable, none committed: `DOUGHBOSS_STRIPE_LIVE_SK`, `DOUGHBOSS_STRIPE_LIVE_WHSEC` (or `DOUGHBOSS_TYRO_LIVE_PASSWORD`, `DOUGHBOSS_TYRO_LIVE_WHSEC`).
-- [ ] `payment_gateway` deliberately chosen (stripe or tyro), mode flipped to **live**, live webhook endpoint registered against the production URL with the live signing secret.
+- [ ] All secrets are env-vars/constants, none pasted into the DB where avoidable, none committed: `DOUGHBOSS_STRIPE_LIVE_SK`, `DOUGHBOSS_STRIPE_LIVE_WHSEC` (or `DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET`, `DOUGHBOSS_TYRO_LIVE_WHSEC`).
+- [ ] `payment_gateway` deliberately chosen (Stripe or Tyro), live mode is still off until provider approval, and the production webhook endpoint and signing secret have been verified in a controlled activation.
 - [ ] Notifications deliberately decided (see §6 table): each integration either configured and smoke-tested, or intentionally left dormant. `email_on_ready` / `sms_on_ready` toggles set as the owner wants.
 - [ ] Zip built from the reviewed commit SHA; deployment has explicit owner approval; rollback owner named.
 - [ ] **Rollback plan agreed:** deactivate the plugin (wp-admin or `wp plugin deactivate doughboss`). Deactivation **keeps all data** — tables, orders, settings survive; only `uninstall.php` (full delete) removes data, so never uninstall as a rollback. Reactivating the previous zip restores service.
-- [ ] Post-deploy: one safe production test order + payment, then check logs for fatals, webhook failures, and duplicate orders.
+- [ ] Post-deploy: one owner-approved, controlled production order only after the provider's production approval, then check logs for fatals, webhook failures and duplicate orders. Never use sandbox credentials or test cards in production.
 
 ## 6. Dormant integrations — activation switches
 
@@ -136,7 +151,7 @@ Every integration is off until its `*_ready()` gate (in `includes/class-doughbos
 | Integration | Ready gate | What switches it on |
 |---|---|---|
 | Stripe payments | `stripe_ready()` | `payment_gateway=stripe` + secret key: `DOUGHBOSS_STRIPE_TEST_SK` / `DOUGHBOSS_STRIPE_LIVE_SK` (webhooks: `DOUGHBOSS_STRIPE_TEST_WHSEC` / `DOUGHBOSS_STRIPE_LIVE_WHSEC`) |
-| Tyro payments | `tyro_ready()` | `payment_gateway=tyro` + merchant id + password: `DOUGHBOSS_TYRO_TEST_PASSWORD` / `DOUGHBOSS_TYRO_LIVE_PASSWORD` (webhooks: `DOUGHBOSS_TYRO_TEST_WHSEC` / `DOUGHBOSS_TYRO_LIVE_WHSEC`) |
+| Tyro payments | `tyro_ready()` | `payment_gateway=tyro` + client ID + `DOUGHBOSS_TYRO_TEST_CLIENT_SECRET` / `DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET`, per-shop Tyro location mapping and live certification gate (webhooks: `DOUGHBOSS_TYRO_TEST_WHSEC` / `DOUGHBOSS_TYRO_LIVE_WHSEC`) |
 | POSPal mirroring | `pospal_ready()` | POSPal base URL/appid settings + app key: `DOUGHBOSS_POSPAL_APPKEY`; verify with its own Test Connection |
 | Mercure real-time | `mercure_ready()` | Mercure hub URL setting + publish JWT: `DOUGHBOSS_MERCURE_PUBLISH_JWT` (board falls back to polling when off) |
 | ntfy push notifications | `ntfy_ready()` | ntfy server/topic settings + token: `DOUGHBOSS_NTFY_TOKEN` |
@@ -148,4 +163,4 @@ For any integration you enable at go-live, re-run the relevant slice of §2–4 
 
 ---
 
-**Definition of staging-verified:** §1–3 pass on a staging install (plus §4 if shipping Tyro), evidence captured (order numbers, Stripe dashboard screenshots, webhook delivery logs), and the §5 gate is checkable without hand-waving.
+**Definition of staging-verified:** sections 1-2 and every selected provider flow pass on a staging install; evidence includes order references, provider sandbox records and signed-webhook delivery logs. The section 5 production gate must then be checkable without assumptions. Staging verification does not make payments live or replace Tyro certification.

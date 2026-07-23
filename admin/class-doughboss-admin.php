@@ -135,6 +135,15 @@ class DoughBoss_Admin {
 
 		add_submenu_page(
 			'doughboss',
+			__( 'Dining Tables & QR Codes', 'doughboss' ),
+			__( 'Tables & QR', 'doughboss' ),
+			$this->cap(),
+			'doughboss-tables',
+			array( $this, 'render_tables_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
 			__( 'Vouchers', 'doughboss' ),
 			__( 'Vouchers', 'doughboss' ),
 			$this->cap(),
@@ -264,16 +273,16 @@ class DoughBoss_Admin {
 		$clean['stripe_test_whsec'] = $this->keep_secret( $input, $existing, 'stripe_test_whsec' );
 		$clean['stripe_live_whsec'] = $this->keep_secret( $input, $existing, 'stripe_live_whsec' );
 
-		// Tyro eCommerce. Same write-only pattern as Stripe above: the merchant
-		// id is public-safe (echoed back), the password/webhook secrets are not.
+		// Tyro Connect Pay. Client secrets and signing keys are write-only and
+		// env-first; the live certification switch is an explicit operator gate.
 		$clean['tyro_mode']                = ( isset( $input['tyro_mode'] ) && 'live' === $input['tyro_mode'] ) ? 'live' : 'test';
-		$clean['tyro_merchant_id']         = isset( $input['tyro_merchant_id'] ) ? sanitize_text_field( $input['tyro_merchant_id'] ) : '';
-		$clean['tyro_host']                = isset( $input['tyro_host'] ) ? esc_url_raw( trim( (string) $input['tyro_host'] ) ) : '';
-		$clean['tyro_api_version']         = isset( $input['tyro_api_version'] ) ? sanitize_text_field( $input['tyro_api_version'] ) : '';
-		$clean['tyro_test_password']       = $this->keep_secret( $input, $existing, 'tyro_test_password' );
-		$clean['tyro_live_password']       = $this->keep_secret( $input, $existing, 'tyro_live_password' );
+		$clean['tyro_test_client_id']       = isset( $input['tyro_test_client_id'] ) ? sanitize_text_field( $input['tyro_test_client_id'] ) : '';
+		$clean['tyro_live_client_id']       = isset( $input['tyro_live_client_id'] ) ? sanitize_text_field( $input['tyro_live_client_id'] ) : '';
+		$clean['tyro_test_client_secret']   = $this->keep_secret( $input, $existing, 'tyro_test_client_secret' );
+		$clean['tyro_live_client_secret']   = $this->keep_secret( $input, $existing, 'tyro_live_client_secret' );
 		$clean['tyro_test_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_test_webhook_secret' );
 		$clean['tyro_live_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_live_webhook_secret' );
+		$clean['tyro_live_certified']       = empty( $input['tyro_live_certified'] ) ? 0 : 1;
 
 		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
 		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback, and
@@ -455,6 +464,16 @@ class DoughBoss_Admin {
 			)
 		);
 		wp_add_inline_script( 'doughboss-admin', $this->inline_admin_js() );
+
+		if ( false !== strpos( $hook, 'doughboss-tables' ) ) {
+			wp_enqueue_script(
+				'doughboss-qrcode-generator',
+				DOUGHBOSS_PLUGIN_URL . 'public/vendor/qrcode-generator/qrcode.js',
+				array(),
+				'2.0.4',
+				true
+			);
+		}
 
 		// The voucher scanner ships its own modern dashboard app + styles, loaded
 		// only on its screen.
@@ -1052,7 +1071,10 @@ JS;
 										<?php foreach ( $statuses as $key => $label ) : ?>
 											<?php if ( ! in_array( $key, $available_statuses, true ) ) { continue; } ?>
 											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $order->status, $key ); ?>>
-												<?php echo esc_html( $label ); ?>
+												<?php
+												$display_label = 'dine_in' === $order->order_type && 'ready' === $key ? __( 'Ready to Serve', 'doughboss' ) : ( 'dine_in' === $order->order_type && 'completed' === $key ? __( 'Served', 'doughboss' ) : $label );
+												echo esc_html( $display_label );
+												?>
 											</option>
 										<?php endforeach; ?>
 									</select>
@@ -1904,6 +1926,18 @@ JS;
 						</td>
 					</tr>
 					<tr>
+						<th><label for="db-loc-tyro-location"><?php esc_html_e( 'Tyro Connect location ID', 'doughboss' ); ?></label></th>
+						<td><input name="tyro_location_id" id="db-loc-tyro-location" type="text" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $f( 'tyro_location_id' ) ); ?>" /><p class="description"><?php esc_html_e( 'Tyro supplies this per shop. It binds QR, pickup, delivery and catering payments to the correct merchant location.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-pospal-store"><?php esc_html_e( 'POSPal store mapping', 'doughboss' ); ?></label></th>
+						<td><select name="pospal_store_index" id="db-loc-pospal-store"><option value="0" <?php selected( (int) $f( 'pospal_store_index', 0 ), 0 ); ?>><?php esc_html_e( 'Not mapped', 'doughboss' ); ?></option><option value="1" <?php selected( (int) $f( 'pospal_store_index', 0 ), 1 ); ?>><?php esc_html_e( 'POSPal store 1', 'doughboss' ); ?></option><option value="2" <?php selected( (int) $f( 'pospal_store_index', 0 ), 2 ); ?>><?php esc_html_e( 'POSPal store 2', 'doughboss' ); ?></option><option value="3" <?php selected( (int) $f( 'pospal_store_index', 0 ), 3 ); ?>><?php esc_html_e( 'POSPal store 3', 'doughboss' ); ?></option></select></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Online payment at this shop', 'doughboss' ); ?></th>
+						<td><label><input type="checkbox" name="online_payment_enabled" value="1" <?php checked( (int) $f( 'online_payment_enabled', 0 ), 1 ); ?> /> <?php esc_html_e( 'Allow card payment only when this shop has been mapped and tested', 'doughboss' ); ?></label></td>
+					</tr>
+					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
 						<td>
 							<label><input type="checkbox" name="pickup_enabled" value="1" <?php checked( $editing ? $editing->pickup_enabled : 1, 1 ); ?> /> <?php esc_html_e( 'Pickup', 'doughboss' ); ?></label><br />
@@ -1961,6 +1995,9 @@ JS;
 			'hold_minutes'      => isset( $_POST['hold_minutes'] ) ? (int) $_POST['hold_minutes'] : 10,
 			'slot_order_capacity' => isset( $_POST['slot_order_capacity'] ) ? (int) $_POST['slot_order_capacity'] : 4,
 			'slot_unit_capacity' => isset( $_POST['slot_unit_capacity'] ) ? (int) $_POST['slot_unit_capacity'] : 12,
+			'tyro_location_id'   => isset( $_POST['tyro_location_id'] ) ? wp_unslash( $_POST['tyro_location_id'] ) : '',
+			'pospal_store_index'  => isset( $_POST['pospal_store_index'] ) ? (int) $_POST['pospal_store_index'] : 0,
+			'online_payment_enabled' => isset( $_POST['online_payment_enabled'] ) ? 1 : 0,
 			'pickup_enabled'    => isset( $_POST['pickup_enabled'] ) ? 1 : 0,
 			'delivery_enabled'  => isset( $_POST['delivery_enabled'] ) ? 1 : 0,
 			'is_active'         => isset( $_POST['is_active'] ) ? 1 : 0,
@@ -2437,18 +2474,18 @@ JS;
 				</table>
 
 				<h2><?php esc_html_e( '"Order ready" email', 'doughboss' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Sent to the customer when their order is marked ready for pickup (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
+				<p class="description"><?php esc_html_e( 'Sent when an order is ready for pickup, delivery, or table service (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
 					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
 					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code>
 				</p>
 				<table class="form-table" role="presentation">
 					<tr>
 						<th><label for="db-tpl-ready-subject"><?php esc_html_e( 'Subject', 'doughboss' ); ?></label></th>
-						<td><input type="text" id="db-tpl-ready-subject" class="large-text" name="tpl_ready_email_subject" value="<?php echo esc_attr( $t['tpl_ready_email_subject'] ); ?>" placeholder="Order {order_number} is ready for pickup!" /></td>
+						<td><input type="text" id="db-tpl-ready-subject" class="large-text" name="tpl_ready_email_subject" value="<?php echo esc_attr( $t['tpl_ready_email_subject'] ); ?>" placeholder="Order {order_number}: {status_label}" /></td>
 					</tr>
 					<tr>
 						<th><label for="db-tpl-ready-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
-						<td><textarea id="db-tpl-ready-body" class="large-text" rows="8" name="tpl_ready_email_body" placeholder="Hi {customer_name}, your order {order_number} is ready for pickup!&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_ready_email_body'] ); ?></textarea></td>
+						<td><textarea id="db-tpl-ready-body" class="large-text" rows="8" name="tpl_ready_email_body" placeholder="Hi {customer_name}, your order {order_number} is {status_label}. {handoff_message}&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_ready_email_body'] ); ?></textarea></td>
 					</tr>
 				</table>
 
@@ -2457,7 +2494,7 @@ JS;
 				<table class="form-table" role="presentation">
 					<tr>
 						<th><label for="db-tpl-sms-ready"><?php esc_html_e( '"Order ready" text', 'doughboss' ); ?></label></th>
-						<td><input type="text" id="db-tpl-sms-ready" class="large-text" name="tpl_sms_ready" value="<?php echo esc_attr( $t['tpl_sms_ready'] ); ?>" placeholder="Your DoughBoss order #{order_number} is ready for pickup." />
+						<td><input type="text" id="db-tpl-sms-ready" class="large-text" name="tpl_sms_ready" value="<?php echo esc_attr( $t['tpl_sms_ready'] ); ?>" placeholder="Order #{order_number}: {status_label}. {handoff_message}" />
 							<p class="description"><?php esc_html_e( 'Placeholder:', 'doughboss' ); ?> <code>{order_number}</code></p></td>
 					</tr>
 					<tr>
@@ -2748,7 +2785,7 @@ JS;
 		$out = fopen( 'php://output', 'w' );
 		fputcsv(
 			$out,
-			array( 'Order #', 'Placed (UTC)', 'Type', 'Status', 'Shop', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
+			array( 'Order #', 'Placed (UTC)', 'Type', 'Source', 'Table', 'Status', 'Shop', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
 		);
 		foreach ( $rows as $row ) {
 			$row_loc = isset( $row->location_id ) ? (int) $row->location_id : 0;
@@ -2758,6 +2795,8 @@ JS;
 					$this->csv_cell( $row->order_number ),
 					$this->csv_cell( $row->created_at ),
 					$this->csv_cell( $row->order_type ),
+					$this->csv_cell( isset( $row->order_source ) ? $row->order_source : 'web' ),
+					$this->csv_cell( isset( $row->table_label ) ? $row->table_label : '' ),
 					$this->csv_cell( $row->status ),
 					$this->csv_cell( isset( $location_names[ $row_loc ] ) ? $location_names[ $row_loc ] : '' ),
 					$this->csv_cell( $row->customer_name ),
@@ -2996,39 +3035,32 @@ JS;
 							</td>
 						</tr>
 						<tr>
-							<th><label for="db-tyro-merchant-id"><?php esc_html_e( 'Merchant ID', 'doughboss' ); ?></label></th>
-							<td><input type="text" id="db-tyro-merchant-id" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_merchant_id]" value="<?php echo esc_attr( isset( $settings['tyro_merchant_id'] ) ? $settings['tyro_merchant_id'] : '' ); ?>" />
-								<p class="description"><?php esc_html_e( 'From your Tyro / Mastercard Payment Gateway Services merchant portal. Used for both sandbox and live — the Mode above selects which password is used against it.', 'doughboss' ); ?></p></td>
+							<th><label for="db-tyro-test-client-id"><?php esc_html_e( 'Sandbox client ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-tyro-test-client-id" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_client_id]" value="<?php echo esc_attr( isset( $settings['tyro_test_client_id'] ) ? $settings['tyro_test_client_id'] : '' ); ?>" /><p class="description"><?php esc_html_e( 'OAuth client ID supplied by Tyro Connect Engineering.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
-							<th><label for="db-tyro-host"><?php esc_html_e( 'API host (optional)', 'doughboss' ); ?></label></th>
-							<td><input type="text" id="db-tyro-host" class="regular-text" autocomplete="off" placeholder="https://tyro.gateway.mastercard.com" name="<?php echo esc_attr( $opt ); ?>[tyro_host]" value="<?php echo esc_attr( isset( $settings['tyro_host'] ) ? $settings['tyro_host'] : '' ); ?>" />
-								<p class="description"><?php esc_html_e( 'Leave blank to use the default gateway host shown above.', 'doughboss' ); ?></p></td>
+							<th><label for="db-tyro-live-client-id"><?php esc_html_e( 'Live client ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-tyro-live-client-id" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_client_id]" value="<?php echo esc_attr( isset( $settings['tyro_live_client_id'] ) ? $settings['tyro_live_client_id'] : '' ); ?>" /><p class="description"><?php esc_html_e( 'Production OAuth client ID supplied after onboarding and technical review.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
-							<th><label for="db-tyro-api-version"><?php esc_html_e( 'API version (optional)', 'doughboss' ); ?></label></th>
-							<td><input type="text" id="db-tyro-api-version" class="small-text" autocomplete="off" placeholder="74" name="<?php echo esc_attr( $opt ); ?>[tyro_api_version]" value="<?php echo esc_attr( isset( $settings['tyro_api_version'] ) ? $settings['tyro_api_version'] : '' ); ?>" />
-								<p class="description"><?php esc_html_e( 'Leave blank to use the default API version shown above.', 'doughboss' ); ?></p></td>
+							<th><?php esc_html_e( 'Production approval', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[tyro_live_certified]" value="1" <?php checked( ! empty( $settings['tyro_live_certified'] ), true ); ?> /> <?php esc_html_e( 'Tyro has approved this integration for live use', 'doughboss' ); ?></label><p class="description"><?php esc_html_e( 'Live mode remains fail-closed until this explicit certification gate is checked.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
-							<th><label for="db-tyro-test-password"><?php esc_html_e( 'Sandbox integration password', 'doughboss' ); ?></label></th>
-							<td><input type="password" id="db-tyro-test-password" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_password]" value="" />
-								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_TYRO_TEST_PASSWORD environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_test_password'] ) && '' !== $settings['tyro_test_password'] ? esc_html__( 'A password is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+							<th><label for="db-tyro-test-client-secret"><?php esc_html_e( 'Sandbox client secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-test-client-secret" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_client_secret]" value="" /><p class="description"><?php esc_html_e( 'Prefer the DOUGHBOSS_TYRO_TEST_CLIENT_SECRET environment variable; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_test_client_secret'] ) && '' !== $settings['tyro_test_client_secret'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
-							<th><label for="db-tyro-live-password"><?php esc_html_e( 'Live integration password', 'doughboss' ); ?></label></th>
-							<td><input type="password" id="db-tyro-live-password" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_password]" value="" />
-								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_TYRO_LIVE_PASSWORD environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_live_password'] ) && '' !== $settings['tyro_live_password'] ? esc_html__( 'A password is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+							<th><label for="db-tyro-live-client-secret"><?php esc_html_e( 'Live client secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-live-client-secret" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_client_secret]" value="" /><p class="description"><?php esc_html_e( 'Prefer the DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET environment variable; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_live_client_secret'] ) && '' !== $settings['tyro_live_client_secret'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><label for="db-tyro-test-whsec"><?php esc_html_e( 'Sandbox webhook secret', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-tyro-test-whsec" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_webhook_secret]" value="" />
 								<p class="description">
 									<?php esc_html_e( 'Register a webhook in your Tyro sandbox account pointing to:', 'doughboss' ); ?>
-									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/tyro-webhook' ) ); ?></code>
-									<?php esc_html_e( 'Catering deposits use:', 'doughboss' ); ?>
-									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/tyro-webhook' ) ); ?></code>
-									<?php esc_html_e( 'then paste its signing secret here. For best security set it as the DOUGHBOSS_TYRO_TEST_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
+									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/payments/tyro/webhook' ) ); ?></code>
+									<?php esc_html_e( 'This single signed endpoint covers storefront, QR and catering Pay Requests. Ask Tyro to register it, then set the signing key as DOUGHBOSS_TYRO_TEST_WHSEC; this field is a fallback.', 'doughboss' ); ?>
 									<?php echo isset( $settings['tyro_test_webhook_secret'] ) && '' !== $settings['tyro_test_webhook_secret'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
 								</p></td>
 						</tr>
@@ -3324,7 +3356,7 @@ JS;
 							<th scope="row"><?php esc_html_e( 'When to email', 'doughboss' ); ?></th>
 							<td>
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_accepted]" value="1" <?php checked( ! empty( $settings['email_on_accepted'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is accepted', 'doughboss' ); ?></label><br />
-								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_ready]" value="1" <?php checked( ! empty( $settings['email_on_ready'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is ready for pickup', 'doughboss' ); ?></label><br />
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_ready]" value="1" <?php checked( ! empty( $settings['email_on_ready'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is ready', 'doughboss' ); ?></label><br />
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_staff_copy]" value="1" <?php checked( ! empty( $settings['email_staff_copy'] ), true ); ?> /> <?php esc_html_e( 'Send staff a copy of stage emails', 'doughboss' ); ?></label>
 							</td>
 						</tr>
@@ -3396,6 +3428,101 @@ JS;
 			</tbody>
 		</table>
 		<p><button class="button db-add-row" data-target="<?php echo esc_attr( $table_id ); ?>"><?php esc_html_e( '+ Add row', 'doughboss' ); ?></button></p>
+		<?php
+	}
+
+	/**
+	 * Manage store tables and issue one-time printable QR payloads.
+	 *
+	 * @return void
+	 */
+	public function render_tables_page() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage table QR codes.', 'doughboss' ) );
+		}
+
+		$issued = null;
+		$error  = null;
+		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : '';
+		if ( 'POST' === $request_method ) {
+			check_admin_referer( 'doughboss_table_qr' );
+			$action = isset( $_POST['table_action'] ) ? sanitize_key( wp_unslash( $_POST['table_action'] ) ) : '';
+			if ( 'create' === $action ) {
+				$issued = DoughBoss_Table_QR::create_table(
+					isset( $_POST['location_id'] ) ? absint( $_POST['location_id'] ) : 0,
+					isset( $_POST['table_label'] ) ? sanitize_text_field( wp_unslash( $_POST['table_label'] ) ) : '',
+					isset( $_POST['table_zone'] ) ? sanitize_text_field( wp_unslash( $_POST['table_zone'] ) ) : '',
+					isset( $_POST['ordering_url'] ) ? esc_url_raw( wp_unslash( $_POST['ordering_url'] ) ) : ''
+				);
+			} elseif ( 'rotate' === $action ) {
+				$issued = DoughBoss_Table_QR::issue_code( isset( $_POST['table_id'] ) ? absint( $_POST['table_id'] ) : 0 );
+			} elseif ( 'activate' === $action || 'deactivate' === $action ) {
+				$result = DoughBoss_Table_QR::set_active( isset( $_POST['table_id'] ) ? absint( $_POST['table_id'] ) : 0, 'activate' === $action );
+				if ( is_wp_error( $result ) ) {
+					$error = $result;
+				}
+			}
+			if ( is_wp_error( $issued ) ) {
+				$error  = $issued;
+				$issued = null;
+			}
+		}
+
+		$locations = DoughBoss_Locations::all( true );
+		$tables    = DoughBoss_Table_QR::all_tables();
+		?>
+		<div class="wrap doughboss-admin">
+			<h1><?php esc_html_e( 'Dining Tables & QR Codes', 'doughboss' ); ?></h1>
+			<p><?php esc_html_e( 'Each printed code is permanently tied to one store and table. The customer scans it, enters their name at checkout, and the kitchen receives both their name and table.', 'doughboss' ); ?></p>
+			<?php if ( $error ) : ?>
+				<div class="notice notice-error"><p><?php echo esc_html( $error->get_error_message() ); ?></p></div>
+			<?php endif; ?>
+
+			<?php if ( $issued ) : ?>
+				<div class="notice notice-warning"><p><strong><?php esc_html_e( 'Print this QR now.', 'doughboss' ); ?></strong> <?php esc_html_e( 'For security, its bearer code is not stored and cannot be shown again. Rotating creates a replacement and immediately invalidates the old print.', 'doughboss' ); ?></p></div>
+				<section id="doughboss-qr-print" style="background:#fff;border:2px solid #111;max-width:440px;padding:28px;text-align:center;">
+					<h2 style="font-size:30px;margin:0 0 8px;"><?php echo esc_html( sprintf( __( 'TABLE %s', 'doughboss' ), $issued['label'] ) ); ?></h2>
+					<p style="font-size:18px;"><?php esc_html_e( 'Scan to order. Enter your name and we will bring your order to this table.', 'doughboss' ); ?></p>
+					<div id="doughboss-qr-code" data-url="<?php echo esc_attr( $issued['url'] ); ?>" style="display:flex;justify-content:center;margin:18px;"></div>
+					<p><code><?php echo esc_html( $issued['url'] ); ?></code></p>
+				</section>
+				<p><button type="button" class="button button-primary" onclick="window.print()"><?php esc_html_e( 'Print QR label', 'doughboss' ); ?></button></p>
+				<script>
+				document.addEventListener('DOMContentLoaded', function () {
+					var mount = document.getElementById('doughboss-qr-code');
+					if (!mount || typeof qrcode !== 'function') return;
+					var code = qrcode(0, 'M');
+					code.addData(mount.getAttribute('data-url'), 'Byte');
+					code.make();
+					mount.innerHTML = code.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
+				});
+				</script>
+			<?php endif; ?>
+
+			<h2><?php esc_html_e( 'Add a table', 'doughboss' ); ?></h2>
+			<form method="post">
+				<?php wp_nonce_field( 'doughboss_table_qr' ); ?>
+				<input type="hidden" name="table_action" value="create" />
+				<table class="form-table"><tbody>
+				<tr><th><label for="db-table-location"><?php esc_html_e( 'Store', 'doughboss' ); ?></label></th><td><select id="db-table-location" name="location_id" required><option value=""><?php esc_html_e( 'Choose store', 'doughboss' ); ?></option><?php foreach ( $locations as $location ) : ?><option value="<?php echo esc_attr( $location->id ); ?>"><?php echo esc_html( $location->name ); ?></option><?php endforeach; ?></select></td></tr>
+				<tr><th><label for="db-table-label"><?php esc_html_e( 'Table number / label', 'doughboss' ); ?></label></th><td><input id="db-table-label" name="table_label" type="text" maxlength="80" required placeholder="12" /></td></tr>
+				<tr><th><label for="db-table-zone"><?php esc_html_e( 'Zone (optional)', 'doughboss' ); ?></label></th><td><input id="db-table-zone" name="table_zone" type="text" maxlength="80" placeholder="Courtyard" /></td></tr>
+				<tr><th><label for="db-ordering-url"><?php esc_html_e( 'Menu page URL', 'doughboss' ); ?></label></th><td><input id="db-ordering-url" name="ordering_url" type="url" class="regular-text" required value="<?php echo esc_attr( home_url( '/' ) ); ?>" /><p class="description"><?php esc_html_e( 'Must be a page on this WordPress site containing the DoughBoss menu/cart.', 'doughboss' ); ?></p></td></tr>
+				</tbody></table>
+				<?php submit_button( __( 'Create table and QR', 'doughboss' ) ); ?>
+			</form>
+
+			<h2><?php esc_html_e( 'Existing tables', 'doughboss' ); ?></h2>
+			<table class="widefat striped"><thead><tr><th><?php esc_html_e( 'Store', 'doughboss' ); ?></th><th><?php esc_html_e( 'Table', 'doughboss' ); ?></th><th><?php esc_html_e( 'Zone', 'doughboss' ); ?></th><th><?php esc_html_e( 'State', 'doughboss' ); ?></th><th><?php esc_html_e( 'Last scan', 'doughboss' ); ?></th><th><?php esc_html_e( 'Actions', 'doughboss' ); ?></th></tr></thead><tbody>
+			<?php if ( ! $tables ) : ?><tr><td colspan="6"><?php esc_html_e( 'No dining tables have been created.', 'doughboss' ); ?></td></tr><?php endif; ?>
+			<?php foreach ( $tables as $table ) : ?>
+			<tr><td><?php echo esc_html( $table->location_name ); ?></td><td><strong><?php echo esc_html( $table->label ); ?></strong></td><td><?php echo esc_html( $table->zone ); ?></td><td><?php echo $table->is_active ? esc_html__( 'Active', 'doughboss' ) : esc_html__( 'Inactive', 'doughboss' ); ?></td><td><?php echo $table->last_scanned_at ? esc_html( $table->last_scanned_at ) : esc_html__( 'Never', 'doughboss' ); ?></td><td>
+				<form method="post" style="display:inline;"><?php wp_nonce_field( 'doughboss_table_qr' ); ?><input type="hidden" name="table_id" value="<?php echo esc_attr( $table->id ); ?>" /><input type="hidden" name="table_action" value="<?php echo $table->is_active ? 'deactivate' : 'activate'; ?>" /><button class="button"><?php echo $table->is_active ? esc_html__( 'Deactivate', 'doughboss' ) : esc_html__( 'Activate', 'doughboss' ); ?></button></form>
+				<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Rotate this QR? Every old print and active table session will stop working immediately.', 'doughboss' ) ); ?>');"><?php wp_nonce_field( 'doughboss_table_qr' ); ?><input type="hidden" name="table_id" value="<?php echo esc_attr( $table->id ); ?>" /><input type="hidden" name="table_action" value="rotate" /><button class="button"><?php esc_html_e( 'Rotate & print', 'doughboss' ); ?></button></form>
+			</td></tr>
+			<?php endforeach; ?>
+			</tbody></table>
+		</div>
 		<?php
 	}
 }

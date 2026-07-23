@@ -132,8 +132,9 @@ class DoughBoss_Emails {
 			return;
 		}
 
-		$eta  = isset( $order->eta_minutes ) ? max( 0, (int) $order->eta_minutes ) : 0;
-		$vars = self::template_vars( $order, $eta, __( 'Ready for Pickup', 'doughboss' ) );
+		$eta        = isset( $order->eta_minutes ) ? max( 0, (int) $order->eta_minutes ) : 0;
+		$projection = DoughBoss_Order::customer_projection( $order );
+		$vars       = self::template_vars( $order, $eta, $projection['label'] );
 
 		$subject = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_ready_email_subject(), $vars );
 		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_ready_email_body(), $vars );
@@ -156,6 +157,10 @@ class DoughBoss_Emails {
 			'eta_minutes'   => (string) max( 0, (int) $eta_minutes ),
 			'total'         => DoughBoss_Settings::format_price( isset( $order->total ) ? $order->total : 0 ),
 			'status_label'  => (string) $status_label,
+			'table_label'   => isset( $order->table_label ) ? (string) $order->table_label : '',
+			'handoff_message' => isset( $order->order_type ) && 'dine_in' === $order->order_type
+				? __( 'We will bring it to your table.', 'doughboss' )
+				: ( isset( $order->order_type ) && 'delivery' === $order->order_type ? __( 'It is ready for delivery.', 'doughboss' ) : __( 'Please collect it from the shop.', 'doughboss' ) ),
 		);
 	}
 

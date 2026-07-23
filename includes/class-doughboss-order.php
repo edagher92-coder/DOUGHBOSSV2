@@ -33,13 +33,32 @@ class DoughBoss_Order {
 	}
 
 	/**
+	 * Order-aware staff label for fulfilment-sensitive lifecycle states.
+	 *
+	 * @param object $order Order row.
+	 * @return string
+	 */
+	public static function status_label_for( $order ) {
+		if ( isset( $order->order_type ) && 'dine_in' === $order->order_type ) {
+			if ( 'ready' === $order->status ) {
+				return __( 'Ready to Serve', 'doughboss' );
+			}
+			if ( 'completed' === $order->status ) {
+				return __( 'Served', 'doughboss' );
+			}
+		}
+		$statuses = self::statuses();
+		return isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status;
+	}
+
+	/**
 	 * Valid next states for an order.
 	 *
 	 * The persisted legacy status names remain in place for compatibility, but
 	 * every write now follows this single forward-only graph.
 	 *
 	 * @param string $status     Current status.
-	 * @param string $order_type pickup or delivery.
+	 * @param string $order_type pickup, delivery, or dine_in.
 	 * @return string[]
 	 */
 	public static function allowed_transitions( $status, $order_type = 'pickup' ) {
@@ -103,11 +122,15 @@ class DoughBoss_Order {
 			'baking'           => array( 'preparing', __( 'Being prepared', 'doughboss' ) ),
 			'ready'            => 'delivery' === $order_type
 				? array( 'ready_for_delivery', __( 'Ready for delivery', 'doughboss' ) )
-				: array( 'ready_for_pickup', __( 'Ready for pickup', 'doughboss' ) ),
+				: ( 'dine_in' === $order_type
+					? array( 'ready_to_serve', __( 'Ready to be served', 'doughboss' ) )
+					: array( 'ready_for_pickup', __( 'Ready for pickup', 'doughboss' ) ) ),
 			'out_for_delivery' => array( 'out_for_delivery', __( 'On its way', 'doughboss' ) ),
 			'completed'        => 'delivery' === $order_type
 				? array( 'delivered', __( 'Delivered', 'doughboss' ) )
-				: array( 'collected', __( 'Collected', 'doughboss' ) ),
+				: ( 'dine_in' === $order_type
+					? array( 'served', __( 'Served', 'doughboss' ) )
+					: array( 'collected', __( 'Collected', 'doughboss' ) ) ),
 			'cancelled'        => array( 'cancelled', __( 'Cancelled', 'doughboss' ) ),
 		);
 		$value = isset( $map[ $status ] ) ? $map[ $status ] : array( 'received', __( 'Order received', 'doughboss' ) );
@@ -288,6 +311,11 @@ class DoughBoss_Order {
 					'location_id'   => isset( $data['location_id'] ) ? (int) $data['location_id'] : 0,
 					'status'        => 'pending',
 					'order_type'    => $data['order_type'],
+					'table_id'      => isset( $data['table_id'] ) ? (int) $data['table_id'] : 0,
+					'table_label'   => isset( $data['table_label'] ) ? sanitize_text_field( $data['table_label'] ) : '',
+					'table_qr_code_id' => isset( $data['table_qr_code_id'] ) ? (int) $data['table_qr_code_id'] : 0,
+					'table_session_id' => isset( $data['table_session_id'] ) ? (int) $data['table_session_id'] : 0,
+					'order_source'  => isset( $data['order_source'] ) ? sanitize_key( $data['order_source'] ) : 'web',
 					'customer_name' => $data['customer_name'],
 					'customer_email'=> $data['customer_email'],
 					'customer_phone'=> $data['customer_phone'],
@@ -314,7 +342,7 @@ class DoughBoss_Order {
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
@@ -467,15 +495,19 @@ class DoughBoss_Order {
 	 */
 	private static function shape_board_row( $order, array $items_by_order, array $statuses ) {
 		$timing = self::timing_projection( $order );
+		$status_label = self::status_label_for( $order );
 		return array(
 			'id'             => (int) $order->id,
 			'order_number'   => $order->order_number,
 			'location_id'    => (int) $order->location_id,
 			'status'         => $order->status,
-			'status_label'   => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+			'status_label'   => $status_label,
 			'version'        => isset( $order->version ) ? (int) $order->version : 1,
 			'allowed_next_statuses' => self::available_transitions( $order ),
 			'order_type'     => $order->order_type,
+			'table_id'       => isset( $order->table_id ) ? (int) $order->table_id : 0,
+			'table_label'    => isset( $order->table_label ) ? $order->table_label : '',
+			'order_source'   => isset( $order->order_source ) ? $order->order_source : 'web',
 			'customer_name'  => $order->customer_name,
 			'customer_phone' => $order->customer_phone,
 			'address'        => $order->address,
@@ -786,7 +818,6 @@ class DoughBoss_Order {
 	 * @return array
 	 */
 	private static function transition_result( $order, $replayed ) {
-		$statuses = self::statuses();
 		$customer = self::customer_projection( $order );
 		$timing   = self::timing_projection( $order );
 		return array(
@@ -794,7 +825,7 @@ class DoughBoss_Order {
 			'replayed'                  => (bool) $replayed,
 			'id'                        => (int) $order->id,
 			'status'                    => $order->status,
-			'status_label'              => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+			'status_label'              => self::status_label_for( $order ),
 			'version'                   => isset( $order->version ) ? (int) $order->version : 1,
 			'allowed_next_statuses'     => self::available_transitions( $order ),
 			'customer_status'           => $customer['status'],
@@ -1109,16 +1140,18 @@ class DoughBoss_Order {
 	 * @return array
 	 */
 	public static function public_view( $order ) {
-		$statuses = self::statuses();
 		$customer = self::customer_projection( $order );
 		$timing   = self::timing_projection( $order );
 		return array(
 			'order_number' => $order->order_number,
 			'status'       => $order->status,
-			'status_label' => isset( $statuses[ $order->status ] ) ? $statuses[ $order->status ] : $order->status,
+			'status_label' => self::status_label_for( $order ),
 			'customer_status'       => $customer['status'],
 			'customer_status_label' => $customer['label'],
 			'order_type'   => $order->order_type,
+			'table_id'     => isset( $order->table_id ) ? (int) $order->table_id : 0,
+			'table_label'  => isset( $order->table_label ) ? $order->table_label : '',
+			'order_source' => isset( $order->order_source ) ? $order->order_source : 'web',
 			'total'        => (float) $order->total,
 			'discount'     => isset( $order->discount ) ? (float) $order->discount : 0,
 			'voucher_code' => isset( $order->voucher_code ) ? $order->voucher_code : '',
