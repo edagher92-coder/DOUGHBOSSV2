@@ -33,6 +33,11 @@
 	var currentLocation = 0; // 0 = all shops
 
 	var localAck = {};      // Optimistically-acknowledged order IDs.
+	// A tablet can be tapped twice before the server response arrives. Keep one
+	// command per order in flight, rather than relying on the browser or a later
+	// refresh to discover the duplicate. The server-side event key/version check
+	// is still the source of truth.
+	var inFlight = {};
 	var audio = { ctx: null, on: false, timer: null };
 	var pollTimer = null;
 
@@ -177,134 +182,62 @@
 		});
 	}
 
+	function setBusy(o, action, busy) {
+		var key = String(o.id);
+		if (busy) {
+			if (inFlight[key]) { return false; }
+			inFlight[key] = action;
+		} else {
+			delete inFlight[key];
+		}
+		var cardEl = boardEl && boardEl.querySelector('[data-order-id="' + key + '"]');
+		if (cardEl) {
+			cardEl.classList.toggle('db-card-busy', !!busy);
+			cardEl.setAttribute('aria-busy', busy ? 'true' : 'false');
+			var buttons = cardEl.querySelectorAll('button');
+			for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = !!busy; }
+		}
+		return true;
+	}
+
 	function accept(o, eta) {
+		if (!setBusy(o, 'accept', true)) { return; }
 		localAck[o.id] = true;
 		api('/admin/order/' + o.id + '/accept', 'POST', {
 			eta: eta || 0,
 			expected_version: o.version,
 			event_key: eventKey(o, 'confirmed')
-		}).then(load).catch(function (error) {
+		}).then(function () {
+			return load();
+		}).catch(function (error) {
 			delete localAck[o.id];
 			var message = error.message || 'Could not accept the order.';
 			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		}).then(function () {
+			setBusy(o, 'accept', false);
 		});
 	}
 
 	function setStatus(o, status) {
+		if (!setBusy(o, status, true)) { return Promise.resolve(); }
 		return api('/admin/order/' + o.id + '/status', 'POST', {
 			status: status,
 			expected_version: o.version,
 			event_key: eventKey(o, status),
 			reason_code: status === 'cancelled' ? 'staff_cancelled' : ''
-		}).then(load).catch(function (error) {
-			var message = error.message || 'Could not update the order.';
-			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
-		});
-	}
-
-	// Status change initiated from a card button: on success, offer a 10s UNDO
-	// toast and (for completed/cancelled) remember the order for the Recent
-	// recall panel. Server already allows any→any transitions.
-	function changeStatus(o, status) {
-		var prev = o.status;
-		api('/admin/order/' + o.id + '/status', 'POST', { status: status }).then(function () {
-			if (status === 'completed' || status === 'cancelled') {
-				recallRemember(o, prev);
-			}
-			showUndoToast(o, status, prev);
+		}).then(function () {
 			return load();
 		}).catch(function (error) {
 			var message = error.message || 'Could not update the order.';
 			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		}).then(function () {
+			setBusy(o, status, false);
 		});
 	}
-
-	/* ------------------------------------------------- Undo toast + recall */
-
-	var toast = { el: null, timer: null };
-	var recall = []; // { id, order_number, prev, time } — this tablet only.
-	var RECALL_MAX = 20;
-	var RECALL_TTL = 60 * 60000; // 60 min.
-	var recallOpen = false;
 
 	function orderTag(o) {
 		var n = String(o.order_number || o.id);
 		return n.charAt(0) === '#' ? n : '#' + n;
-	}
-
-	function hideToast() {
-		if (toast.timer) { clearTimeout(toast.timer); toast.timer = null; }
-		if (toast.el && toast.el.parentNode) { toast.el.parentNode.removeChild(toast.el); }
-		toast.el = null;
-	}
-
-	function showUndoToast(o, status, prev) {
-		hideToast(); // One toast at a time — replace the previous one.
-		toast.el = el('div', { class: 'db-toast', role: 'status' }, [
-			el('span', { class: 'db-toast-text', text: orderTag(o) + ' → ' + label(status) }),
-			el('button', {
-				class: 'button db-toast-undo', type: 'button',
-				onclick: function () {
-					hideToast();
-					recallForget(o.id);
-					setStatus(o.id, prev);
-				}
-			}, ['UNDO'])
-		]);
-		document.body.appendChild(toast.el);
-		toast.timer = setTimeout(hideToast, 10000);
-	}
-
-	function recallPrune() {
-		var cutoff = Date.now() - RECALL_TTL;
-		recall = recall.filter(function (r) { return r.time >= cutoff; });
-	}
-
-	function recallRemember(o, prev) {
-		recallForget(o.id);
-		recall.unshift({ id: o.id, order_number: o.order_number, prev: prev, time: Date.now() });
-		if (recall.length > RECALL_MAX) { recall.length = RECALL_MAX; }
-		renderRecall();
-	}
-
-	function recallForget(id) {
-		recall = recall.filter(function (r) { return r.id !== id; });
-		renderRecall();
-	}
-
-	var recallBtn = null;
-	var recallPanel = null;
-
-	function renderRecall() {
-		recallPrune();
-		if (recallBtn) {
-			recallBtn.textContent = 'Recent (' + recall.length + ')';
-			recallBtn.setAttribute('aria-expanded', recallOpen ? 'true' : 'false');
-		}
-		if (!recallPanel) { return; }
-		recallPanel.textContent = '';
-		recallPanel.hidden = !recallOpen;
-		if (!recallOpen) { return; }
-		if (!recall.length) {
-			recallPanel.appendChild(el('p', { class: 'db-recall-empty', text: 'No recently completed or cancelled orders from this tablet.' }));
-			return;
-		}
-		recall.forEach(function (r) {
-			recallPanel.appendChild(el('div', { class: 'db-recall-row' }, [
-				el('span', { class: 'db-recall-info', text: orderTag(r) + ' · ' + Math.max(0, Math.floor((Date.now() - r.time) / 60000)) + 'm ago → back to ' + label(r.prev) }),
-				el('button', {
-					class: 'button db-recall-restore', type: 'button',
-					onclick: function () {
-						api('/admin/order/' + r.id + '/status', 'POST', { status: r.prev }).then(function () {
-							recallForget(r.id);
-							return load();
-						}).catch(function (error) {
-							if (statusEl) { statusEl.textContent = error.message || 'Could not restore the order.'; }
-						});
-					}
-				}, ['Restore'])
-			]));
-		});
 	}
 
 	function acknowledgeAll(ids) {
@@ -334,16 +267,104 @@
 		return (o.allowed_next_statuses || []).filter(function (status) { return status !== 'cancelled'; });
 	}
 
+	function serviceLabel(o) {
+		if (o.order_source === 'catering' || o.order_type === 'catering') { return 'Catering'; }
+		if (o.order_type === 'delivery') { return 'Delivery'; }
+		if (o.order_type === 'dine_in') { return o.table_label ? 'Table service' : 'Dine in'; }
+		if (o.order_source === 'store_qr' || o.order_source === 'counter_qr') { return 'Counter pickup'; }
+		return 'Pickup';
+	}
+
+	function sourceLabel(source) {
+		var labels = {
+			'table_qr': 'Table QR',
+			'store_qr': 'Store QR',
+			'counter_qr': 'Counter QR',
+			'web': 'Online',
+			'staff': 'Staff',
+			'catering': 'Catering'
+		};
+		return labels[source] || '';
+	}
+
+	function paymentLabel(status) {
+		var labels = { 'paid': 'Paid', 'unpaid': 'Pay at counter', 'refunded': 'Refunded' };
+		return labels[status] || 'Payment check';
+	}
+
+	function toppingLabel(value) {
+		if (value && typeof value === 'object') { return value.label || value.name || value.slug || ''; }
+		return String(value || '');
+	}
+
+	function exceptionMessages(o) {
+		var messages = [];
+		if (o.timing_status === 'estimate_passed') { messages.push(o.timing_label || 'Estimate passed - check this order.'); }
+		if (o.payment_status === 'refunded') { messages.push('Refunded - pause preparation and check with a manager.'); }
+		if (!Array.isArray(o.allowed_next_statuses)) { messages.push('Status controls are unavailable - refresh before acting.'); }
+		return messages;
+	}
+
+	function buildAmendmentSummary(o) {
+		var lines = (o.items || []).map(function (it) {
+			var toppings = (it.toppings && it.toppings.length) ? ' (' + it.toppings.map(toppingLabel).filter(Boolean).join(', ') + ')' : '';
+			return (parseInt(it.quantity, 10) || 1) + 'x ' + (it.name || 'Menu item') + toppings;
+		});
+		return orderTag(o) + ' - ' + serviceLabel(o) + '\n' + lines.join('\n');
+	}
+
+	var amendmentPanel = null;
+	function closeAmendmentReview() {
+		if (amendmentPanel) { amendmentPanel.hidden = true; amendmentPanel.textContent = ''; }
+	}
+
+	function copyAmendmentSummary(o, feedback) {
+		var summary = buildAmendmentSummary(o);
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			navigator.clipboard.writeText(summary).then(function () {
+				feedback.textContent = 'Order summary copied. Use it when confirming the change with a manager or customer.';
+			}).catch(function () {
+				feedback.textContent = 'Copy is unavailable in this browser. Read the line list above to the manager.';
+			});
+		} else {
+			feedback.textContent = 'Copy is unavailable in this browser. Read the line list above to the manager.';
+		}
+	}
+
+	function openAmendmentReview(o) {
+		if (!amendmentPanel) { return; }
+		amendmentPanel.hidden = false;
+		amendmentPanel.textContent = '';
+		var feedback = el('p', { class: 'db-amendment-feedback', role: 'status' }, []);
+		var currentItems = el('ul', { class: 'db-amendment-items' }, (o.items || []).map(itemLine));
+		amendmentPanel.appendChild(el('div', { class: 'db-amendment-head' }, [
+			el('h2', { text: 'Review change for ' + orderTag(o) }),
+			el('button', { class: 'button db-amendment-close', type: 'button', onclick: closeAmendmentReview }, ['Close'])
+		]));
+		amendmentPanel.appendChild(el('p', { class: 'db-amendment-context', text: serviceLabel(o) + ' - ' + paymentLabel(o.payment_status) + ' - ' + label(o.status) }));
+		amendmentPanel.appendChild(el('h3', { text: 'Current items' }));
+		amendmentPanel.appendChild(currentItems);
+		amendmentPanel.appendChild(el('p', { class: 'db-amendment-boundary', text: 'This kitchen board is intentionally review-only for add/remove requests. It never changes a live or paid order total. Confirm the exact request, then use the manager-safe reprice and payment-adjustment workflow when it is available.' }));
+		amendmentPanel.appendChild(el('div', { class: 'db-amendment-actions' }, [
+			el('button', { class: 'button', type: 'button', onclick: function () { copyAmendmentSummary(o, feedback); } }, ['Copy order summary']),
+			el('button', { class: 'button', type: 'button', onclick: closeAmendmentReview }, ['Done'])
+		]));
+		amendmentPanel.appendChild(feedback);
+		amendmentPanel.focus();
+	}
+
 	function itemLine(it) {
-		var bits = [it.quantity + '× ' + it.name];
-		if (it.size) { bits.push(it.size); }
-		var text = bits.join(' · ');
+		var quantity = Math.max(1, parseInt(it.quantity, 10) || 1);
 		var toppings = (it.toppings && it.toppings.length)
-			? it.toppings.map(function (t) { return t.label || t.slug || t; }).join(', ')
+			? it.toppings.map(toppingLabel).filter(Boolean).join(', ')
 			: '';
 		return el('li', { class: 'db-card-item' }, [
-			el('span', { class: 'db-card-item-name', text: text }),
-			toppings ? el('span', { class: 'db-card-item-toppings', text: toppings }) : null
+			el('span', { class: 'db-card-item-quantity', text: quantity + 'x' }),
+			el('span', { class: 'db-card-item-body' }, [
+				el('span', { class: 'db-card-item-name', text: it.name || 'Menu item' }),
+				it.size ? el('span', { class: 'db-card-item-size', text: it.size }) : null,
+				toppings ? el('span', { class: 'db-card-item-toppings', text: 'Custom: ' + toppings }) : null
+			])
 		]);
 	}
 
@@ -351,11 +372,13 @@
 		var isNew = o.status === 'pending';
 		var showShop = LOCATIONS.length > 1 && !currentLocation && o.location_id && locationsById[o.location_id];
 		var tableLabel = o.dining_table_label || o.table_label || (o.table && o.table.label) || '';
-		var typeLabel = o.order_type === 'delivery' ? 'Delivery' : (o.order_type === 'dine_in' ? 'Dine in' : 'Pickup');
+		var typeLabel = serviceLabel(o);
+		var source = sourceLabel(o.order_source);
 		var head = el('div', { class: 'db-card-head' }, [
 			el('span', { class: 'db-card-number', text: o.order_number }),
 			el('span', { class: 'db-card-type db-type-' + o.order_type, text: typeLabel }),
 			tableLabel ? el('span', { class: 'db-card-table', text: 'TABLE ' + tableLabel }) : null,
+			source ? el('span', { class: 'db-card-source', text: source }) : null,
 			showShop ? el('span', { class: 'db-card-shop', text: locationsById[o.location_id] }) : null,
 			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
 		]);
@@ -365,9 +388,12 @@
 			o.customer_phone ? el('span', { text: ' · ' + o.customer_phone }) : null
 		]);
 
-		var items = el('ul', { class: 'db-card-items' }, o.items.map(itemLine));
+		var items = el('ul', { class: 'db-card-items', 'aria-label': (o.items || []).length + ' items' }, (o.items || []).map(itemLine));
 
 		var meta = [];
+		exceptionMessages(o).forEach(function (message) {
+			meta.push(el('div', { class: 'db-card-exception', role: 'alert', text: message }));
+		});
 		if (o.order_type === 'delivery' && o.address) {
 			meta.push(el('div', { class: 'db-card-addr', text: '🛵 ' + o.address }));
 		}
@@ -381,6 +407,7 @@
 		if (o.timing_status === 'estimate_passed') {
 			meta.push(el('div', { class: 'db-card-timing db-card-timing-passed', text: o.timing_label || 'Estimate passed — check this order' }));
 		}
+		meta.push(el('div', { class: 'db-card-payment db-payment-' + (o.payment_status || 'unknown'), text: 'Payment: ' + paymentLabel(o.payment_status) }));
 		meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
 
 		var actions;
@@ -392,6 +419,7 @@
 				el('div', { class: 'db-accept-label', text: 'Accept — ready in:' }),
 				el('div', { class: 'db-eta-row' }, etaRow),
 				el('div', { class: 'db-card-actions-row' }, [
+					el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change']),
 					el('button', { class: 'button button-primary db-accept', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ' without an estimate', onclick: function () { accept(o, 0); } }, ['Accept'])
 				])
 			]);
@@ -405,7 +433,13 @@
 					onclick: function () { setStatus(o, st); }
 				}, [orderLabel(o, st)]);
 			});
-			actions = el('div', { class: 'db-card-actions' }, [el('div', { class: 'db-card-actions-row' }, advBtns)]);
+			var actionRow = [
+				el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change'])
+			].concat(advBtns);
+			actions = el('div', { class: 'db-card-actions' }, [
+				!advBtns.length ? el('p', { class: 'db-no-next-action', text: 'No next kitchen step is available. Refresh or ask a manager before changing this order.' }) : null,
+				el('div', { class: 'db-card-actions-row' }, actionRow)
+			]);
 		}
 
 		// SLA aging — accepted orders still in an active state get amber at 5 min
@@ -417,7 +451,7 @@
 			else if (ageMins !== null && ageMins >= 5) { ageClass = ' db-age-warn'; }
 		}
 
-		return el('div', { class: 'db-card db-card-' + o.status + ageClass + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : '') }, [
+		return el('div', { class: 'db-card db-card-' + o.status + ageClass + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : ''), 'data-order-id': String(o.id), 'aria-busy': inFlight[String(o.id)] ? 'true' : 'false' }, [
 			head,
 			el('div', { class: 'db-card-status', text: orderLabel(o, o.status) }),
 			contact,
@@ -591,6 +625,11 @@
 			audio.ctx.resume();
 		}
 	});
+	document.addEventListener('keydown', function (event) {
+		if (event.key === 'Escape' && amendmentPanel && !amendmentPanel.hidden) {
+			closeAmendmentReview();
+		}
+	});
 
 	// Shop filter — only shown when more than one shop exists.
 	if (actionsEl && LOCATIONS.length > 1) {
@@ -613,20 +652,17 @@
 		updateHeartbeat();
 	}
 
-	// Recall ("Recent") panel — restore orders this tablet completed/cancelled
-	// in the last 60 minutes.
-	if (actionsEl) {
-		recallBtn = el('button', {
-			class: 'button db-recall-toggle', type: 'button', 'aria-expanded': 'false',
-			onclick: function () { recallOpen = !recallOpen; renderRecall(); }
-		}, ['Recent (0)']);
-		actionsEl.appendChild(recallBtn);
-		recallPanel = el('div', { class: 'db-recall-panel' }, []);
-		recallPanel.hidden = true;
-		if (boardEl && boardEl.parentNode) {
-			boardEl.parentNode.insertBefore(recallPanel, boardEl);
-		}
-		renderRecall();
+	// The KDS may review the precise current line list, but it must never become
+	// a back door for repricing or refunding an order. The panel is created once
+	// outside the refreshed board so focus and the review remain stable.
+	if (boardEl && boardEl.parentNode) {
+		amendmentPanel = el('section', {
+			class: 'db-amendment-panel',
+			tabindex: '-1',
+			'aria-label': 'Order change review'
+		}, []);
+		amendmentPanel.hidden = true;
+		boardEl.parentNode.insertBefore(amendmentPanel, boardEl);
 	}
 
 	// Refresh "x ago" labels even between polls.

@@ -147,6 +147,9 @@ class DoughBoss_Locations {
 			'hold_minutes'      => isset( $data['hold_minutes'] ) ? max( 1, min( 30, (int) $data['hold_minutes'] ) ) : 10,
 			'slot_order_capacity' => isset( $data['slot_order_capacity'] ) ? max( 1, min( 10000, (int) $data['slot_order_capacity'] ) ) : 4,
 			'slot_unit_capacity' => isset( $data['slot_unit_capacity'] ) ? max( 1, min( 10000, (int) $data['slot_unit_capacity'] ) ) : 12,
+			'tyro_location_id'   => isset( $data['tyro_location_id'] ) ? substr( sanitize_text_field( $data['tyro_location_id'] ), 0, 191 ) : '',
+			'pospal_store_index'  => isset( $data['pospal_store_index'] ) ? max( 0, min( 3, (int) $data['pospal_store_index'] ) ) : 0,
+			'online_payment_enabled' => empty( $data['online_payment_enabled'] ) ? 0 : 1,
 			'pickup_enabled'    => empty( $data['pickup_enabled'] ) ? 0 : 1,
 			'delivery_enabled'  => empty( $data['delivery_enabled'] ) ? 0 : 1,
 			'is_active'         => empty( $data['is_active'] ) ? 0 : 1,
@@ -195,7 +198,7 @@ class DoughBoss_Locations {
 		$ok = $wpdb->insert(
 			self::table(),
 			$row,
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' )
 		);
 		return $ok ? (int) $wpdb->insert_id : 0;
 	}
@@ -222,7 +225,7 @@ class DoughBoss_Locations {
 			self::table(),
 			$row,
 			array( 'id' => $id ),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d' ),
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' ),
 			array( '%d' )
 		);
 		if ( false !== $updated ) {
@@ -437,5 +440,23 @@ class DoughBoss_Locations {
 			'timezone'         => isset( $loc->timezone ) ? $loc->timezone : 'Australia/Sydney',
 			'capacity_preview' => isset( $loc->capacity_mode ) && 'shadow' === $loc->capacity_mode,
 		);
+	}
+
+	/**
+	 * Resolve the server-side Tyro Connect location for an active shop.
+	 *
+	 * @param int $location_id DoughBoss location id.
+	 * @return string|WP_Error
+	 */
+	public static function tyro_location_id( $location_id ) {
+		$location = self::get( $location_id );
+		if ( ! $location || empty( $location->is_active ) || empty( $location->online_payment_enabled ) ) {
+			return new WP_Error( 'doughboss_pay_location_off', __( 'Online payment is not enabled for this shop.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$provider_id = isset( $location->tyro_location_id ) ? trim( (string) $location->tyro_location_id ) : '';
+		if ( '' === $provider_id ) {
+			return new WP_Error( 'doughboss_pay_location_unmapped', __( 'This shop is not mapped to a Tyro payment location.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return $provider_id;
 	}
 }

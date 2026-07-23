@@ -26,7 +26,7 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 - Admin orders/settings.
 - Multi-shop locations and order routing.
 - Live kitchen order board / KDS.
-- Payment abstraction (`DoughBoss_Payment`) with Stripe and Tyro (MPGS hosted session) gateways, both off by default until configured; Tyro is the pilot launch gateway (pickup-only Revesby pilot) but remains dormant until sandbox-verified.
+- Payment abstraction (`DoughBoss_Payment`) with Stripe and Tyro Connect Pay gateways, both off by default until configured; Tyro is the pilot launch gateway (pickup-only Revesby pilot) but remains dormant until sandbox-verified and certified.
 - Stage emails module (`DoughBoss_Emails`) and customer order tracker.
 - Management oversight: Today strip, per-shop reports, paid-vs-gross.
 - Voucher/coupon system with staff scan tools.
@@ -37,7 +37,7 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 
 ## Release discipline
 
-Current consolidated release contract: plugin `2.21.0`, database schema `1.14.0`.
+Current consolidated release contract: plugin `2.22.0`, database schema `1.15.0`.
 
 The Phase 2 branch is intentionally broad. Stabilize it by splitting future work into small release PRs:
 

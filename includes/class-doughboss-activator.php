@@ -31,11 +31,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, or table-QR storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, or payment-attempt storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -68,6 +68,8 @@ class DoughBoss_Activator {
 		$dining_tables   = $wpdb->prefix . 'doughboss_dining_tables';
 		$table_qr_codes  = $wpdb->prefix . 'doughboss_table_qr_codes';
 		$table_sessions  = $wpdb->prefix . 'doughboss_table_sessions';
+		$payment_attempts = $wpdb->prefix . 'doughboss_payment_attempts';
+		$payment_events   = $wpdb->prefix . 'doughboss_payment_events';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -178,6 +180,9 @@ class DoughBoss_Activator {
 			slot_order_capacity smallint(5) unsigned NOT NULL DEFAULT 4,
 			slot_unit_capacity smallint(5) unsigned NOT NULL DEFAULT 12,
 			planning_version bigint(20) unsigned NOT NULL DEFAULT 1,
+			tyro_location_id varchar(191) NOT NULL DEFAULT '',
+			pospal_store_index tinyint(3) unsigned NOT NULL DEFAULT 0,
+			online_payment_enabled tinyint(1) NOT NULL DEFAULT 0,
 			pickup_enabled tinyint(1) NOT NULL DEFAULT 1,
 			delivery_enabled tinyint(1) NOT NULL DEFAULT 0,
 			is_active tinyint(1) NOT NULL DEFAULT 1,
@@ -403,6 +408,49 @@ class DoughBoss_Activator {
 			KEY entity_id (entity_id)
 		) {$charset_collate};";
 
+		$sql_payment_attempts = "CREATE TABLE {$payment_attempts} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			attempt_key char(64) NOT NULL,
+			provider varchar(20) NOT NULL DEFAULT 'tyro',
+			provider_reference varchar(191) NULL DEFAULT NULL,
+			checkout_key char(64) NOT NULL,
+			purpose varchar(32) NOT NULL DEFAULT 'order',
+			context varchar(32) NOT NULL DEFAULT 'web',
+			local_reference varchar(191) NOT NULL DEFAULT '',
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			table_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			qr_code_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			amount_minor bigint(20) unsigned NOT NULL DEFAULT 0,
+			currency char(3) NOT NULL DEFAULT 'AUD',
+			status varchar(32) NOT NULL DEFAULT 'created',
+			provider_status varchar(32) NOT NULL DEFAULT '',
+			safe_metadata_json longtext NULL,
+			last_error varchar(64) NOT NULL DEFAULT '',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			verified_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY attempt_key (attempt_key),
+			UNIQUE KEY provider_reference (provider_reference),
+			UNIQUE KEY checkout_key (checkout_key),
+			KEY status_updated (status,updated_at),
+			KEY local_reference (local_reference)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_payment_events = "CREATE TABLE {$payment_events} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			event_key char(64) NOT NULL,
+			provider varchar(20) NOT NULL DEFAULT 'tyro',
+			provider_reference varchar(191) NOT NULL DEFAULT '',
+			event_type varchar(64) NOT NULL DEFAULT '',
+			outcome varchar(32) NOT NULL DEFAULT 'processing',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY event_key (event_key),
+			KEY provider_reference (provider_reference)
+		) ENGINE=InnoDB {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
 		dbDelta( $sql_events );
@@ -418,6 +466,51 @@ class DoughBoss_Activator {
 		dbDelta( $sql_dining_tables );
 		dbDelta( $sql_table_qr_codes );
 		dbDelta( $sql_table_sessions );
+		dbDelta( $sql_payment_attempts );
+		dbDelta( $sql_payment_events );
+	}
+
+	/**
+	 * Verify durable payment attempts, webhook de-duplication and store mappings.
+	 *
+	 * @return bool
+	 */
+	public static function payment_storage_ready() {
+		global $wpdb;
+		$attempts  = $wpdb->prefix . 'doughboss_payment_attempts';
+		$events    = $wpdb->prefix . 'doughboss_payment_events';
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		foreach ( array( $attempts, $events, $locations ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		return self::column_contract_ready(
+			$attempts,
+			array(
+				'attempt_key'        => array( 'type' => 'char(64)', 'null' => 'NO' ),
+				'provider_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+				'checkout_key'       => array( 'type' => 'char(64)', 'null' => 'NO' ),
+				'amount_minor'       => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'status'             => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'created' ),
+			)
+		)
+			&& self::column_contract_ready( $events, array( 'event_key' => array( 'type' => 'char(64)', 'null' => 'NO' ) ) )
+			&& self::column_contract_ready(
+				$locations,
+				array(
+					'tyro_location_id'      => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
+					'pospal_store_index'     => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => '0' ),
+					'online_payment_enabled' => array( 'type' => 'tinyint(1)', 'null' => 'NO', 'default' => '0' ),
+				)
+			)
+			&& self::index_contract_ready( $attempts, 'attempt_key', array( 'attempt_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $attempts, 'provider_reference', array( 'provider_reference' ), true, array( 191 ) )
+			&& self::index_contract_ready( $attempts, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) );
 	}
 
 	/**

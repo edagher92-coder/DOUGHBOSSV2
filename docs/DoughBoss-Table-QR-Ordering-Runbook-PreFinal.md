@@ -2,7 +2,7 @@
 
 Status: **Pre-final. Do not treat this feature as production-ready until the payment-provider, POSPal and physical-store staging gates in this runbook pass.**
 
-Applies to DoughBoss plugin `2.21.0`, database schema `1.14.0`.
+Applies to DoughBoss plugin `2.22.0`, database schema `1.15.0`.
 
 ## What the feature does
 
@@ -19,6 +19,7 @@ Printed table QR
   -> new table session plus clean cart
   -> clean menu URL with store/table banner
   -> server-priced checkout with order_type=dine_in
+  -> provider attempt bound to the verified store/table context (when payment is enabled)
   -> order snapshot: store, table, QR and session
   -> KDS / kitchen ticket / notifications / reporting / POSPal outbox
 ```
@@ -28,7 +29,7 @@ Only a SHA-256 hash of the QR code is stored. The raw code is displayed when it 
 ## Owner setup for each store
 
 1. Back up the WordPress database and plugin files.
-2. Install the review build on staging and confirm the plugin reports version `2.21.0` and schema `1.14.0`.
+2. Install the review build on staging and confirm the plugin reports version `2.22.0` and schema `1.15.0`.
 3. Open **WordPress Admin -> DoughBoss -> Tables & QR**.
 4. Add a table and choose its store.
 5. Enter the customer-facing table label, such as `12`, and an optional zone, such as `Dining Room`.
@@ -36,6 +37,7 @@ Only a SHA-256 hash of the QR code is stored. The raw code is displayed when it 
 7. Issue the QR and immediately print the displayed label.
 8. Mark the physical label with both the store and table name and attach it permanently to the matching table.
 9. Repeat for every table. Never reuse one QR at two tables or across stores.
+10. If using Tyro, map the same DoughBoss store to its confirmed Tyro Connect `locationId` before enabling online payment. Keep the shop disabled for online payment if that mapping has not been supplied and verified.
 
 [SCREENSHOT: DoughBoss Tables & QR page with store, table label, zone and menu URL]
 
@@ -49,12 +51,14 @@ Only a SHA-256 hash of the QR code is stored. The raw code is displayed when it 
 4. The menu displays **Ordering at: Store, Table** and hides store and pickup/delivery selection.
 5. The customer chooses items and modifiers, then enters their name and the existing required contact details.
 6. Checkout is recalculated and validated by the server.
-7. Confirmation repeats the verified store and table and tells the customer the order will be brought to them.
+7. If online payment is enabled, the provider attempt is bound to the verified store/table context; the browser cannot switch it after the Pay Request or checkout attempt begins.
+8. Confirmation repeats the verified store and table and tells the customer the order will be brought to them. A provider status shown in the browser is provisional until DoughBoss verifies the authoritative provider result.
 
 If the QR is invalid, expired, rotated, revoked, or belongs to an inactive table/store, ordering fails closed. The customer must not be silently changed to pickup or routed to another store.
 
 ## Kitchen and staff flow
 
+- The KDS receives the order only after the selected payment or unpaid-order rule accepts it; it must not be released solely from a browser callback.
 - The KDS shows a prominent **TABLE** badge before the customer name.
 - Dine-in lifecycle wording uses **Ready to serve** and **Served**.
 - Kitchen tickets print **DINE IN** and the table label prominently.
@@ -100,7 +104,7 @@ For every store and a representative sample of every table zone:
 7. Rotate the QR and prove the old label and existing old session both fail before payment and checkout.
 8. Deactivate the table and prove its current session fails.
 9. Attempt a forged store, table and order type in the request; verify the server retains the QR-bound values.
-10. Run payment-provider sandbox tests for amount, currency, metadata binding, retry/idempotency, webhook and recovery behaviour.
+10. Run payment-provider sandbox tests for amount, currency, store/table binding, retry/idempotency, signed webhook and recovery behaviour. For Tyro, use the Tyro Connect runbook and its canonical webhook route; do not use legacy MPGS/Session.js instructions.
 11. Confirm the POSPal test order reaches the intended store and visibly carries the correct table remark. Confirm the supported dine-in/delivery-type value with POSPal before enabling live push.
 
 Record device, browser, store, table, timestamp, expected result, actual result and evidence for every test.
@@ -110,14 +114,14 @@ Record device, browser, store, table, timestamp, expected result, actual result 
 Do not enable production table ordering until all of these are complete:
 
 - GitHub CI passes for supported PHP and MariaDB versions.
-- The `1.13.0 -> 1.14.0` staging migration succeeds against a production-like backup.
+- The `1.14.0 -> 1.15.0` staging migration succeeds against a production-like backup.
 - Physical QR-to-table mapping is independently checked at every store.
-- Stripe or Tyro sandbox checkout and webhook binding pass for table orders.
+- The chosen provider's sandbox checkout and webhook binding pass for table orders. Tyro must use Tyro Connect, a confirmed per-store `locationId` and the canonical `/payments/tyro/webhook` route.
 - POSPal confirms the live payload and dine-in mapping, or POSPal push remains disabled.
 - Staff complete a peak-hour KDS rehearsal and incident drill.
 - Final customer, kitchen and manager screenshots replace all placeholders.
 
-Stripe and Tyro remain open integration options. Their activation, credentials and merchant onboarding are outside this pre-final QR release and must stay disabled until certified.
+Stripe and Tyro remain open integration options. Their activation, credentials and merchant onboarding are outside this pre-final QR release and must stay disabled until the chosen provider's staging evidence and production approval are complete. Tyro additionally requires its technical review and per-store eCommerce mapping.
 
 ## Rollback
 

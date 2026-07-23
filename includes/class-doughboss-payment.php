@@ -65,8 +65,8 @@ class DoughBoss_Payment {
 	}
 
 	/**
-	 * Public-safe key/identifier the browser needs (Stripe publishable key /
-	 * Tyro merchant id).
+	 * Browser bootstrap identifier (Stripe publishable key / Tyro Connect marker).
+	 * Tyro Connect returns the per-payment paySecret only after server creation.
 	 *
 	 * @return string
 	 */

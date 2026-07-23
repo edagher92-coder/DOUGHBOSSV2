@@ -49,7 +49,7 @@ try {
 // 2. Per-slice class presence. Each slice must contribute its classes.
 $slices = array(
 	'1 · core plugin'          => array( 'DoughBoss', 'DoughBoss_Activator', 'DoughBoss_Settings', 'DoughBoss_Post_Types', 'DoughBoss_Cart', 'DoughBoss_Order', 'DoughBoss_REST_Controller', 'DoughBoss_Shortcodes', 'DoughBoss_Assets', 'DoughBoss_Migrations' ),
-	'2 · Stripe'               => array( 'DoughBoss_Stripe' ),
+	'2 · payments'             => array( 'DoughBoss_Stripe', 'DoughBoss_Tyro', 'DoughBoss_Payment', 'DoughBoss_Payment_Attempts' ),
 	'3 · vouchers'             => array( 'DoughBoss_Voucher', 'DoughBoss_Coupon_Code' ),
 	'4 · POSPal'               => array( 'DoughBoss_POSPal', 'DoughBoss_POSPal_Sync', 'DoughBoss_POSPal_Orders' ),
 	'5 · catering'             => array( 'DoughBoss_Catering', 'DoughBoss_Catering_Package' ),
@@ -83,9 +83,11 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.14.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.14.0' );
+ok( '1.15.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.15.0' );
 ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
+ok( method_exists( 'DoughBoss_Activator', 'payment_storage_ready' ), 'payment attempt storage readiness gate exists' );
+ok( method_exists( 'DoughBoss_Tyro', 'retrieve_pay_request' ), 'Tyro Connect Pay Request retrieval exists' );
 ok( method_exists( 'DoughBoss_Order', 'transition' ), 'DoughBoss_Order::transition() exists' );
 ok( method_exists( 'DoughBoss_Order', 'events' ), 'DoughBoss_Order::events() exists' );
 ok( DoughBoss_Order::can_transition( 'pending', 'confirmed' ), 'pending can be accepted' );
@@ -216,6 +218,10 @@ ok( (bool) preg_grep( '#doughboss/v1/admin/catering$#', $routes ), 'GET /admin/c
 $payment_route = $GLOBALS['__db_rest_args']['doughboss/v1/payment-intent'] ?? array();
 $payment_args  = isset( $payment_route['args'] ) ? $payment_route['args'] : array();
 ok( isset( $payment_args['location_id'] ), 'POST /payment-intent declares location_id validation' );
+ok( ! empty( $payment_args['payment_attempt_key']['required'] ), 'POST /payment-intent requires a durable attempt key' );
+$checkout_args = isset( $GLOBALS['__db_rest_args']['doughboss/v1/checkout']['args'] ) ? $GLOBALS['__db_rest_args']['doughboss/v1/checkout']['args'] : array();
+ok( isset( $checkout_args['payment_attempt_key'] ), 'POST /checkout accepts the matching durable payment attempt key' );
+ok( in_array( 'doughboss/v1/payments/tyro/webhook', $routes, true ), 'canonical Tyro Connect webhook is registered' );
 ok( in_array( 'doughboss/v1/table/context', $GLOBALS['__db_rest'], true ), 'GET /table/context is registered' );
 $remove_voucher_route = $GLOBALS['__db_rest_args']['doughboss/v1/cart/remove-voucher'] ?? array();
 $remove_voucher_args  = isset( $remove_voucher_route['args'] ) ? $remove_voucher_route['args'] : array();
@@ -248,7 +254,7 @@ foreach ( $board_routes as $board_route ) {
 }
 // A real count check, not just ">0", so a route silently failing to register
 // would fail this. Includes the public, cookie-gated /table/context route.
-ok( 48 === count( $routes ), 'REST route count includes table context (' . count( $routes ) . ' routes, expected 48)' );
+ok( 49 === count( $routes ), 'REST route count includes table context and canonical Tyro webhook (' . count( $routes ) . ' routes, expected 49)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
@@ -297,6 +303,7 @@ if ( $manager ) {
 section( 'Integrations dormant-by-default (security gate)' );
 $gates = array(
 	'DoughBoss_Stripe'  => 'is_ready',
+	'DoughBoss_Tyro'    => 'ready',
 	'DoughBoss_Mercure' => 'is_ready',
 	'DoughBoss_Ntfy'    => 'is_ready',
 	'DoughBoss_SMS'     => 'is_ready',
@@ -314,6 +321,21 @@ foreach ( $gates as $class => $method ) {
 		ok( false, "$class::$m() threw: " . $e->getMessage() );
 	}
 }
+
+section( 'Tyro Connect payment contract' );
+$tyro_source = file_get_contents( DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-tyro.php' );
+$asset_source = file_get_contents( DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-assets.php' );
+ok( false !== strpos( $tyro_source, 'https://auth.connect.tyro.com/oauth/token' ), 'Tyro uses Connect OAuth' );
+ok( false !== strpos( $tyro_source, 'https://api.tyro.com/connect/pay' ), 'Tyro uses Connect Pay API' );
+ok( false === strpos( $tyro_source, 'gateway.mastercard.com' ), 'legacy MPGS host removed from active adapter' );
+ok( false !== strpos( $asset_source, 'https://pay.connect.tyro.com/v1/tyro.js' ), 'official Tyro.js loads directly from Tyro' );
+ok( false === strpos( $asset_source, 'session.js' ), 'legacy Session.js is not enqueued' );
+$GLOBALS['__db_options'][ DoughBoss_Settings::OPTION_KEY ] = array( 'tyro_mode' => 'test', 'tyro_test_webhook_secret' => 'smoke-signing-key' );
+$wh_body = '{"type":"PAY_REQUEST_SUCCESS","data":{"id":"pay-1","resource":"payrequest"}}';
+$wh_sig  = hash_hmac( 'sha256', $wh_body, 'smoke-signing-key' );
+ok( DoughBoss_Tyro::verify_webhook_signature( $wh_body, $wh_sig ), 'Tyro webhook accepts exact HMAC-SHA256 signature' );
+ok( ! DoughBoss_Tyro::verify_webhook_signature( $wh_body . 'x', $wh_sig ), 'Tyro webhook rejects a changed raw body' );
+$GLOBALS['__db_options'][ DoughBoss_Settings::OPTION_KEY ] = array();
 
 // 7b. Single-location / pickup-only mode default (1.10.0). This asserts the
 // new setting exists in defaults and defaults on — the money-path invariant
