@@ -19,8 +19,8 @@
 	<meta name="twitter:image" content="https://edagher92-coder.github.io/DOUGHBOSSV2/assets/logo.png">
 	<link rel="canonical" href="https://edagher92-coder.github.io/DOUGHBOSSV2/">
 	<link rel="icon" href="assets/logo.png" type="image/png">
-	<link rel="preload" as="image" href="assets/banners/Zaatar-768x432.jpg" fetchpriority="high">
-	<link rel="stylesheet" href="demo.css?v=20260723v30">
+	<link rel="preload" as="image" href="assets/scene/doughboss-hero-premium-v1.webp" type="image/webp" fetchpriority="high">
+	<link rel="stylesheet" href="demo.css?v=20260723v31">
 	<style>
 	.skip{position:absolute;top:-999px;left:12px;background:var(--ember);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 	.skip:focus{top:0;}
@@ -168,20 +168,8 @@
 
 <!-- ============ ABOUT (landing) ============ -->
 <section class="view" id="view-about">
-	<section class="hero hero-manoush grain">
-		<div class="hero-bg" style="background-image:url('assets/banners/Zaatar-768x432.jpg');"></div>
-		<!-- Decorative, code-native ingredient composition. It deliberately uses existing
-		     menu imagery instead of a heavy auto-playing video; see the customer journey
-		     pre-final note for the future catering/Bites variation. -->
-		<div class="ingredient-burst" data-manoush-stage data-manoush-variant="full" aria-hidden="true">
-			<div class="ingredient-burst__glow"></div>
-			<img class="ingredient-burst__manoush" src="assets/menu/zaatar-cheese.jpg" alt="" loading="eager" decoding="async">
-			<img class="ingredient ingredient--zaatar" src="assets/menu/zaatar.jpg" alt="" loading="eager" decoding="async">
-			<img class="ingredient ingredient--cheese" src="assets/menu/cheese.jpg" alt="" loading="lazy" decoding="async">
-			<img class="ingredient ingredient--meat" src="assets/menu/meat.jpg" alt="" loading="lazy" decoding="async">
-			<img class="ingredient ingredient--spinach" src="assets/menu/spinach-deluxe.jpg" alt="" loading="lazy" decoding="async">
-			<span class="ingredient-burst__stamp">Made<br>to order</span>
-		</div>
+	<section class="hero hero-manoush grain" data-scroll-scene>
+		<div class="hero-bg" style="background-image:url('assets/scene/doughboss-hero-premium-v1.webp');"></div>
 		<div class="hero-main"><div class="wrap">
 			<p class="eyebrow">In the industry since 2009</p>
 			<h1 class="disp">A taste of the<br><em>Mediterranean.</em></h1>
@@ -193,10 +181,6 @@
 			</div>
 			<div class="hero-live-row">
 				<span class="hero-live" data-store-status role="status"><span class="hero-live__dot" aria-hidden="true"></span><span data-store-status-text>Fresh-baked daily · Revesby</span></span>
-				<button class="hero-replay" type="button" data-manoush-replay="full" aria-label="Replay the manoush ingredient animation">
-					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 7.68"/><path d="M20 3v4.68h-4.68"/></svg>
-					Build the manoush
-				</button>
 			</div>
 		</div></div>
 		<div class="hero-foot"><div class="wrap">
@@ -253,22 +237,27 @@
 
 <!-- ============ CATERING (contact-only while catering is not yet operational) ============ -->
 <section class="view" id="view-catering">
-	<section class="hero compact hero-catering-bites grain">
-		<div class="hero-bg" style="background-image:url('assets/banners/Dough-Boss-Pie-768x432.jpg');"></div>
-		<!-- Same reusable visual system as the homepage, tuned for the bites and
-		     mini-manoush that make the catering table feel generous. -->
+	<section class="hero compact hero-catering-bites grain" data-scroll-scene>
+		<div class="hero-bg" style="background-image:url('assets/scene/doughboss-catering-premium-v1.webp');"></div>
+		<!-- Purpose-made transparent WebP layers share one lighting direction and
+		     commercial-bakery bake, avoiding the old circular menu thumbnails. -->
 		<div class="ingredient-burst ingredient-burst--bites" data-manoush-stage data-manoush-variant="bites" aria-hidden="true">
 			<div class="ingredient-burst__glow"></div>
-			<img class="ingredient-burst__manoush" src="assets/banners/Dough-Boss-Pie-768x432.jpg" alt="" loading="lazy" decoding="async">
-			<img class="ingredient ingredient--zaatar" src="assets/menu/zaatar.jpg" alt="" loading="lazy" decoding="async">
-			<img class="ingredient ingredient--cheese" src="assets/menu/cheese.jpg" alt="" loading="lazy" decoding="async">
-			<img class="ingredient ingredient--meat" src="assets/menu/meat-cheese.jpg" alt="" loading="lazy" decoding="async">
+			<img class="ingredient-burst__manoush" src="assets/scene/catering-fresh-v1.webp" alt="" width="442" height="309" loading="lazy" decoding="async" fetchpriority="low">
+			<img class="ingredient ingredient--zaatar" src="assets/scene/catering-zaatar-v1.webp" alt="" width="500" height="419" loading="lazy" decoding="async" fetchpriority="low">
+			<img class="ingredient ingredient--cheese" src="assets/scene/catering-cheese-v1.webp" alt="" width="462" height="315" loading="lazy" decoding="async" fetchpriority="low">
 			<span class="ingredient-burst__stamp">Bites<br>&amp; minis</span>
 		</div>
 		<div class="hero-main"><div class="wrap">
 			<p class="eyebrow">Catering</p>
 			<h1 class="disp">Talk to us about<br><em>catering.</em></h1>
 			<p class="lead">Office runs, footy nights, birthdays and functions &mdash; drop us a line and we&rsquo;ll put together what you need. Online catering ordering is on the way; for now, email or call and we&rsquo;ll take it from there.</p>
+			<div class="hero-live-row">
+				<button class="hero-replay" type="button" data-manoush-replay="bites" aria-label="Replay the catering bites animation">
+					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 7.68"/><path d="M20 3v4.68h-4.68"/></svg>
+					Explode the bites
+				</button>
+			</div>
 		</div></div>
 	</section>
 	<section class="app-slot"><div class="wrap">
@@ -464,7 +453,7 @@
 <script src="config/i18n/en-AU.js"></script>
 <script src="demo-runtime.js"></script>
 <script src="menu-order.js?v=20260723v29"></script>
-<script src="manoush-hero.js?v=20260723v3"></script>
+<script src="manoush-hero.js?v=20260723v4"></script>
 <!-- catering-demo.js + snowboss.js removed with the S1 rebrand (catering is
      contact-only until the online quote flow ships; Snow Boss falling-snow
      effect belonged to the retired dual-brand section). -->

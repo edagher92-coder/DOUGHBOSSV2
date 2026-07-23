@@ -53,8 +53,9 @@ class DoughBoss_Shortcodes {
 
 	/**
 	 * [doughboss_manoush_hero] â€” a self-contained decorative hero for classic,
-	 * block and template-rendered pages. Image URLs are intentionally supplied
-	 * by the site owner from the Media Library; no demo photography is packaged.
+	 * block and template-rendered pages. Optimised local defaults make the
+	 * shortcode production-presentable; every image can still be replaced with
+	 * a Media Library URL through shortcode attributes.
 	 *
 	 * @param array<string, string> $atts Shortcode attributes.
 	 * @return string
@@ -65,9 +66,10 @@ class DoughBoss_Shortcodes {
 				'kicker'        => __( 'Made fresh, every morning', 'doughboss' ),
 				'title'         => __( 'The manoush comes together here.', 'doughboss' ),
 				'description'   => __( 'Warm bread, generous toppings and the little details that make a bakery visit feel like home.', 'doughboss' ),
-				'central_image' => '',
-				'zaatar_image'  => '',
-				'cheese_image'  => '',
+				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
+				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-fresh-v1.webp',
+				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-zaatar-v1.webp',
+				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-cheese-v1.webp',
 				'meat_image'    => '',
 				'spinach_image' => '',
 			),
@@ -75,21 +77,27 @@ class DoughBoss_Shortcodes {
 			'doughboss_manoush_hero'
 		);
 
-		$ingredients = array(
+		$ingredients = array_filter(
+			array(
 			'zaatar'  => array( 'label' => __( 'Zaatar', 'doughboss' ), 'url' => $atts['zaatar_image'] ),
 			'cheese'  => array( 'label' => __( 'Cheese', 'doughboss' ), 'url' => $atts['cheese_image'] ),
 			'meat'    => array( 'label' => __( 'Meat', 'doughboss' ), 'url' => $atts['meat_image'] ),
 			'spinach' => array( 'label' => __( 'Spinach', 'doughboss' ), 'url' => $atts['spinach_image'] ),
+			),
+			static function ( $ingredient ) {
+				return '' !== $ingredient['url'];
+			}
 		);
 
 		ob_start();
 		?>
-		<section class="db-manoush-hero is-assembled" data-db-manoush-hero>
+		<section class="db-manoush-hero is-assembled" data-db-manoush-hero data-db-scroll-scene>
+			<div class="db-mh-backdrop" style="background-image:url('<?php echo esc_url( $atts['background_image'] ); ?>')" aria-hidden="true"></div>
 			<div class="db-mh-copy">
 				<p class="db-mh-kicker"><?php echo esc_html( $atts['kicker'] ); ?></p>
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
 				<p><?php echo esc_html( $atts['description'] ); ?></p>
-				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php esc_html_e( 'Replay burst', 'doughboss' ); ?></button>
+				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php esc_html_e( 'Explode the bites', 'doughboss' ); ?></button>
 			</div>
 			<div class="db-mh-stage" aria-hidden="true">
 				<div class="db-mh-world">
