@@ -72,7 +72,7 @@ Activation also creates a dedicated low-privilege WordPress role called **DoughB
 Go to **DoughBoss → Settings**. The screen is one long form, saved with a single **Save Changes** button at the bottom (standard WordPress Settings API — all sections save together).
 
 ### 4.0 Menu import (top of the page)
-Before the settings form itself, there's a **Menu** card with an **"Import standard menu"** button. This one-click-imports the standard Dough Boss menu (Manoush, Pizza, Pies, Wraps, Desserts, Drinks — 27 items with prices, categories and dietary flags). It's safe to re-run: matching items are updated in place, never duplicated.
+Before the settings form itself, there's a **Menu** card with an **"Import standard menu"** button. This one-click-imports the standard Dough Boss menu (Manoush, Pizza, Pies, Wraps, Desserts, Drinks — 33 items with prices, categories and dietary flags). It's safe to re-run: matching items are updated in place, never duplicated.
 
 ### 4.1 Store
 General shop configuration:

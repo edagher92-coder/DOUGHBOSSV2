@@ -24,6 +24,14 @@ class DoughBoss_Activator {
 		self::add_default_options();
 		self::add_capabilities();
 
+		// Fresh activations are immediately stamped with the current database
+		// version below, so versioned migrations do not run first. Seed the
+		// default shop here as well as in the 1.2 migration to ensure a brand-new
+		// single-shop install never starts with an empty location table.
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-settings.php';
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-locations.php';
+		DoughBoss_Locations::ensure_default();
+
 		// Register post types so rewrite rules exist, then flush them.
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-post-types.php';
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-catering-package.php';

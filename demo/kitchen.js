@@ -136,7 +136,7 @@
 			customer_name: 'Jess Taylor', customer_phone: '0401 555 664',
 			items: [
 				{ name: 'Meat & Cheese', quantity: 2 },
-				{ name: 'Spinach & Cheese Pie', quantity: 1 }
+				{ name: 'Spinach Pie', quantity: 1 }
 			],
 			eta_minutes: 15, total: 32.00, payment: 'paid',
 			created_at: simMinutesAgo(4), accepted_at: simMinutesAgo(3), acknowledged: true

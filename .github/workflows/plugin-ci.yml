@@ -7,6 +7,7 @@ on:
       - main
       - "claude/**"
       - "chatgpt/**"
+      - "codex/**"
   workflow_dispatch:
 
 permissions:
@@ -66,7 +67,10 @@ jobs:
         run: |
           php tests/tyro-contract.php
           php tests/manoush-hero-contract.php
+          php tests/menu-options.php
+          php tests/activation-location-seed.php
           node --test tests/menu-photo-contract.test.js
+          node --test tests/storefront-options-contract.test.js
 
   build-zip:
     name: Build installable plugin zip
@@ -75,14 +79,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup PHP with ZIP support
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zip
+          coverage: none
+
       - name: Build zip
-        run: bash build-zip.sh
+        run: php scripts/build-zip.php
 
       - name: Validate zip contents
-        run: |
-          test -f dist/doughboss.zip
-          unzip -l dist/doughboss.zip | grep -q "doughboss/doughboss.php"
-          unzip -l dist/doughboss.zip | grep -q "doughboss/includes/class-doughboss.php"
+        run: php scripts/validate-zip.php dist/doughboss.zip
+
+      - name: Publish verified plugin archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: doughboss-plugin-zip
+          path: dist/doughboss.zip
+          if-no-files-found: error
 
   secret-scan:
     name: Static secret pattern scan

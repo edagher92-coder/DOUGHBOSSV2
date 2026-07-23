@@ -293,6 +293,38 @@
 	font-size: 0.9rem;
 }
 
+.db-menu-options {
+	display: grid;
+	gap: 0.65rem;
+	margin: 0.9rem 0;
+}
+
+.db-menu-option-group {
+	min-width: 0;
+	margin: 0;
+	padding: 0.65rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-md);
+}
+
+.db-menu-option-group legend {
+	padding: 0 0.25rem;
+	font-size: 0.9rem;
+	font-weight: 700;
+}
+
+.db-menu-option {
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+	padding: 0.25rem 0;
+	cursor: pointer;
+}
+
+.db-menu-option span:nth-of-type(1) {
+	flex: 1;
+}
+
 .db-builder-foot {
 	display: flex;
 	align-items: center;

@@ -2845,7 +2845,7 @@ JS;
 				<h2><?php esc_html_e( 'Menu', 'doughboss' ); ?></h2>
 				<p class="description"><?php
 					/* translators: %d: number of published menu items. */
-					echo esc_html( sprintf( __( 'There are currently %d published menu item(s). Import the standard Dough Boss menu — Manoush, Pizza, Pies, Wraps, Desserts, Drinks (27 items, with prices, categories and dietary flags). Safe to re-run: matching items are updated, never duplicated.', 'doughboss' ), $db_item_count ) );
+					echo esc_html( sprintf( __( 'There are currently %d published menu item(s). Import the standard Dough Boss menu — Manoush, Pizza, Pies, Wraps, Desserts, Drinks (33 items, with prices, categories and dietary flags). Safe to re-run: matching items are updated, never duplicated.', 'doughboss' ), $db_item_count ) );
 				?></p>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 					<input type="hidden" name="action" value="doughboss_seed_menu" />
