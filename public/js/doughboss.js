@@ -349,6 +349,60 @@
 
 	function menuCard(item) {
 		var soldOut = item.available === false;
+		var options = Array.isArray(item.options) ? item.options : [];
+		var selections = {};
+		var priceEl = el('span', { class: 'db-price', text: money(item.price) });
+
+		function selectedOptions() {
+			var selected = {};
+			options.forEach(function (group) {
+				var values = selections[group.id] || [];
+				if (group.type === 'radio') {
+					selected[group.id] = values.length ? values[0] : '';
+				} else if (values.length) {
+					selected[group.id] = values.slice();
+				}
+			});
+			return selected;
+		}
+
+		function refreshPrice() {
+			var total = Number(item.price || 0);
+			options.forEach(function (group) {
+				var values = selections[group.id] || [];
+				(group.choices || []).forEach(function (choice) {
+					if (values.indexOf(choice.slug) !== -1) { total += Number(choice.price || 0); }
+				});
+			});
+			priceEl.textContent = money(total);
+		}
+
+		function optionControls() {
+			if (!options.length) { return null; }
+			var controls = el('div', { class: 'db-menu-options' });
+			options.forEach(function (group, groupIndex) {
+				var choices = Array.isArray(group.choices) ? group.choices : [];
+				var defaultChoice = choices.filter(function (choice) { return choice.default; })[0];
+				selections[group.id] = group.type === 'radio' && defaultChoice ? [defaultChoice.slug] : [];
+				var fieldset = el('fieldset', { class: 'db-menu-option-group' });
+				fieldset.appendChild(el('legend', { text: group.label || 'Options' }));
+				choices.forEach(function (choice, choiceIndex) {
+					var input = el('input', { type: group.type === 'check' ? 'checkbox' : 'radio', name: 'db-option-' + item.id + '-' + groupIndex, value: choice.slug });
+					input.checked = group.type === 'radio' ? choiceIndex === choices.indexOf(defaultChoice || choices[0]) : false;
+					input.addEventListener('change', function () {
+						var values = selections[group.id] || [];
+						if (group.type === 'radio') { selections[group.id] = input.checked ? [choice.slug] : []; }
+						else if (input.checked && values.indexOf(choice.slug) === -1) { values.push(choice.slug); selections[group.id] = values; }
+						else if (!input.checked) { selections[group.id] = values.filter(function (value) { return value !== choice.slug; }); }
+						refreshPrice();
+					});
+					var suffix = Number(choice.price || 0) ? (Number(choice.price) > 0 ? '+' : '') + money(choice.price) : '';
+					fieldset.appendChild(el('label', { class: 'db-menu-option' }, [ input, el('span', { text: choice.label }), suffix ? el('span', { class: 'db-option-price', text: suffix }) : null ]));
+				});
+				controls.appendChild(fieldset);
+			});
+			return controls;
+		}
 
 		var media = item.image
 			? el('div', { class: 'db-card-img', style: 'background-image:url(' + item.image + ')' })
@@ -364,7 +418,7 @@
 			action = el('button', { class: 'db-btn', text: I18N.addToCart || 'Add to cart' });
 			action.addEventListener('click', function () {
 				action.disabled = true;
-				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, quantity: 1 } })
+				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, options: selectedOptions(), quantity: 1 } })
 					.then(function () {
 						action.textContent = I18N.added || 'Added!';
 						dbPop(action);
@@ -376,13 +430,16 @@
 			});
 		}
 
+		var controls = optionControls();
+		refreshPrice();
 		return el('div', { class: soldOut ? 'db-card db-card--soldout' : 'db-card' }, [
 			media,
 			el('div', { class: 'db-card-body' }, [
 				el('h4', { text: item.name }),
 				item.description ? el('p', { class: 'db-card-desc', text: item.description }) : null,
+				controls,
 				el('div', { class: 'db-card-foot' }, [
-					el('span', { class: 'db-price', text: money(item.price) }),
+					priceEl,
 					action
 				])
 			])

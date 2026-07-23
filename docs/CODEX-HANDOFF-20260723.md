@@ -36,20 +36,20 @@ could not install a custom ZIP URL, so helper activation remains outstanding.
 - Updated the admin/manual catalogue count from 27 to 33.
 - Corrected remaining demo/document references to Dough Boss Pie and Spinach
   Pie.
-- Live storefront wiring for the new option groups is not finished yet.
-- Windows-safe ZIP build and CI archive-path validation are not finished yet.
+- Storefront option controls, server-side resolver coverage, fresh-location
+  seed coverage, and Windows-safe archive validation are completed in the
+  follow-up change on `codex/wordpress-front-to-back-integration`.
+- The CI build publishes the validated canonical plugin ZIP as an artifact.
 
 ## Safe continuation order
 
-1. Finish REST/client wiring and tests for menu options.
-2. Add Windows-safe packaging and CI path validation.
-3. Run the complete test suite and GitHub Actions.
-4. Build a new canonical ZIP.
-5. Upload/activate the new ZIP or the launch helper in WordPress.
-6. Verify live config, all 33 menu items, the Revesby location and closed
+1. Run the complete test suite and GitHub Actions.
+2. Build or download the new canonical ZIP from the verified CI artifact.
+3. Upload/activate the new ZIP or the launch helper in WordPress.
+4. Verify live config, all 33 menu items, the Revesby location and closed
    checkout. Do not create a real order or payment.
-7. Remove helper plugins only after verification; keep quarantine for rollback.
-8. Merge the verified PR and upload a fresh full-folder backup to the shared
+5. Remove helper plugins only after verification; keep quarantine for rollback.
+6. Merge the verified PR and upload a fresh full-folder backup to the shared
    Google Drive folder.
 
 Do not expose or copy any credentials from WordPress settings or prior
