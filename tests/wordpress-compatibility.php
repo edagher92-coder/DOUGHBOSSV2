@@ -45,7 +45,13 @@ doughboss_wp_compat_assert( empty( $config_data['ordering_open'] ), 'REST config
 doughboss_wp_compat_assert( empty( $config_data['payments_enabled'] ), 'REST configuration keeps payments unavailable while closed' );
 doughboss_wp_compat_assert( false !== stripos( $config_data['ordering_closed_message'], 'coming soon' ), 'REST configuration supplies customer launch copy' );
 
-$checkout = rest_do_request( new WP_REST_Request( 'POST', '/doughboss/v1/checkout' ) );
+$admin_user = get_user_by( 'login', 'admin' );
+doughboss_wp_compat_assert( $admin_user instanceof WP_User, 'temporary WordPress administrator exists' );
+wp_set_current_user( $admin_user->ID );
+$checkout_request = new WP_REST_Request( 'POST', '/doughboss/v1/checkout' );
+$checkout_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$checkout_request->set_header( 'Idempotency-Key', wp_generate_uuid4() );
+$checkout = rest_do_request( $checkout_request );
 doughboss_wp_compat_assert( 503 === $checkout->get_status(), 'direct checkout is blocked while ordering is closed' );
 doughboss_wp_compat_assert( 'doughboss_closed' === $checkout->get_data()['code'], 'closed checkout returns the expected safe error' );
 
