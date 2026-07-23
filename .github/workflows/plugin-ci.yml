@@ -45,6 +45,12 @@ jobs:
       - name: Versioned lifecycle transaction test
         run: php tests/lifecycle.php
 
+      - name: Customer to KDS REST contract
+        run: php tests/customer-kds-e2e-contract.php
+
+      - name: After-hours pre-order request contract
+        run: php tests/preorder-backend.php
+
       - name: Capacity window and timezone test
         run: php tests/capacity.php
 

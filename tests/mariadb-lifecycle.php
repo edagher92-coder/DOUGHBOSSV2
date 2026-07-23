@@ -73,6 +73,7 @@ delete_option( 'doughboss_migration_error' );
 DoughBoss_Migrations::run();
 lifecycle_db_ok( DOUGHBOSS_DB_VERSION === get_option( 'doughboss_db_version' ), '1.10 fixture migrates through lifecycle contract 1.11 to the current database version' );
 lifecycle_db_ok( DoughBoss_Activator::lifecycle_storage_ready(), 'orders, items and events satisfy lifecycle storage invariants' );
+lifecycle_db_ok( DoughBoss_Activator::pospal_outbox_storage_ready(), 'migration creates indexed POSPal remote-reference storage' );
 $after = $wpdb->get_row( $wpdb->prepare( "SELECT order_number,location_id,status,order_type,customer_name,customer_email,customer_phone,subtotal,tax,total,payment_status,payment_method,payment_intent_id,created_at,updated_at FROM {$orders} WHERE id = %d", $order_id ), ARRAY_A );
 $item_after = $wpdb->get_row( $wpdb->prepare( "SELECT item_id,name,quantity,unit_price,line_total FROM {$items} WHERE order_id = %d", $order_id ), ARRAY_A );
 lifecycle_db_ok( $snapshot === $after, 'existing order, customer, totals and payment reference remain byte-for-byte unchanged' );

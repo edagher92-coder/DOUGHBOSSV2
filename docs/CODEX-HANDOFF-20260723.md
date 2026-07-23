@@ -1,5 +1,10 @@
 # DoughBoss Codex handoff — 23 July 2026
 
+> **Historical checkpoint only.** The live-state observations below were made
+> on 23 July and must not be treated as current. Source has since advanced to
+> plugin `2.23.1` / schema `1.16.0` on draft PR #34. Continue from
+> `DoughBoss-Completion-Handoff-2026-07-24.md`.
+
 This is a restart-safe checkpoint for continuing the WordPress integration
 from another computer.
 

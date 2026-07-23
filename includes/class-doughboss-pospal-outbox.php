@@ -19,8 +19,9 @@
  * Idempotency: each row carries an `idempotency_key` derived from the WP order id
  * plus the store index. A duplicate enqueue for the same key is rejected at insert
  * time (UNIQUE), so duplicate local enqueue calls share the same row. It does
- * not prove that an ambiguous remote timeout was rejected by POSPal; a stable
- * remote order identifier is still required for safe reconciliation.
+ * does not prove that an ambiguous remote timeout was rejected by POSPal.
+ * Identified successes retain POSPal's stable order number for later positive
+ * reconciliation; ambiguous responses remain quarantined for operator review.
  *
  * Fully dormant unless `DoughBoss_Settings::pospal_push_enabled()` is true — the
  * cron worker no-ops, and callers are simply free to skip enqueue when it's off.
@@ -64,9 +65,9 @@ class DoughBoss_POSPal_Outbox {
 	const CRON_HOOK = 'doughboss_pospal_outbox_dispatch';
 
 	/**
-	 * Hourly maintenance hook. It prunes old successful rows and reports the
-	 * reconciliation gap. It deliberately performs no automatic remote re-push
-	 * until dispatch persists POSPal's returned orderNo.
+	 * Hourly maintenance hook. It prunes old successful rows and positively
+	 * verifies recent identified pushes. It never automatically re-pushes an
+	 * absent, mismatched or otherwise inconclusive lookup.
 	 */
 	const RECONCILE_HOOK = 'doughboss_pospal_outbox_reconcile';
 
@@ -434,23 +435,30 @@ class DoughBoss_POSPal_Outbox {
 		$attempts = (int) $row->attempts + 1;
 
 		if ( ! is_wp_error( $result ) ) {
+			$pospal_no = ( is_array( $result ) && isset( $result['orderNo'] ) ) ? sanitize_text_field( (string) $result['orderNo'] ) : '';
+			if ( ! preg_match( '/^[A-Za-z0-9._:-]{1,64}$/', $pospal_no ) ) {
+				// A success response without POSPal's stable identifier is ambiguous:
+				// it must be checked at the till before any manual resend.
+				self::mark_terminal( $id, 'ambiguous_missing_order_no', $attempts );
+				return 0;
+			}
 			$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$table,
 				array(
 					'status'      => 'succeeded',
 					'attempts'    => $attempts,
 					'last_error'  => '',
+					'remote_reference' => $pospal_no,
 					'updated_at'  => $now_utc,
 				),
 				array( 'id' => $id ),
-				array( '%s', '%d', '%s', '%s' ),
+				array( '%s', '%d', '%s', '%s', '%s' ),
 				array( '%d' )
 			);
 			// Log the POSPal-assigned orderNo (its own identifier, not ours): this is
 			// the key reconciliation needs to persist and query by — see the
 			// re-enable contract on reconcile_recent(). Safe to log: a till sequence
 			// number, no PII.
-			$pospal_no = ( is_array( $result ) && isset( $result['orderNo'] ) ) ? (string) $result['orderNo'] : '';
 			self::log(
 				'#' . $id . ' pushed (attempt ' . $attempts . ')'
 				. ( '' !== $pospal_no ? ' — POSPal orderNo ' . $pospal_no : '' )
@@ -532,7 +540,7 @@ class DoughBoss_POSPal_Outbox {
 			"SELECT COUNT(*) FROM {$table} WHERE status = 'failed_terminal'"
 		);
 		$ambiguous = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			"SELECT COUNT(*) FROM {$table} WHERE status = 'failed_terminal' AND last_error IN ('ambiguous_network', 'ambiguous_in_flight')"
+			"SELECT COUNT(*) FROM {$table} WHERE status = 'failed_terminal' AND last_error IN ('ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no')"
 		);
 		$retrying = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			"SELECT COUNT(*) FROM {$table} WHERE status = 'pending' AND attempts >= 3"
@@ -582,7 +590,7 @@ class DoughBoss_POSPal_Outbox {
 			$wpdb->prepare(
 				"SELECT * FROM {$table}
 				 WHERE status = 'failed_terminal'
-				   AND last_error IN ('ambiguous_network', 'ambiguous_in_flight')
+				   AND last_error IN ('ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no')
 				 ORDER BY updated_at ASC
 				 LIMIT %d",
 				$limit
@@ -618,7 +626,7 @@ class DoughBoss_POSPal_Outbox {
 				$payload = $row ? json_decode( (string) $row->payload_json, true ) : null;
 				if (
 					! $row
-					|| ! in_array( (string) $row->last_error, array( 'ambiguous_network', 'ambiguous_in_flight' ), true )
+					|| ! in_array( (string) $row->last_error, array( 'ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no' ), true )
 					|| ! is_array( $payload )
 					|| empty( $payload['daySeq'] )
 					|| (string) $row->updated_at !== (string) $expected_updated_at
@@ -627,7 +635,7 @@ class DoughBoss_POSPal_Outbox {
 					return 0;
 				}
 			}
-			$ambiguity_guard = $allow_ambiguous ? ' AND last_error = %s AND updated_at = %s' : " AND last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight')";
+			$ambiguity_guard = $allow_ambiguous ? ' AND last_error = %s AND updated_at = %s' : " AND last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no')";
 			$prepare_args    = array( $now, $now, (int) $id );
 			if ( $allow_ambiguous ) {
 				$prepare_args[] = (string) $expected_error;
@@ -650,7 +658,7 @@ class DoughBoss_POSPal_Outbox {
 					   SET status = 'pending', attempts = 0, last_error = '',
 					       next_attempt_at = %s, updated_at = %s
 					 WHERE status = 'failed_terminal'
-					   AND last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight')",
+					   AND last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no')",
 					$now,
 					$now
 				)
@@ -669,10 +677,8 @@ class DoughBoss_POSPal_Outbox {
 	/**
 	 * Hourly maintenance for recent successful rows.
 	 *
-	 * Dispatch does not yet persist POSPal's stable orderNo, so a positive remote
-	 * reconciliation lookup is not possible. This method prunes the audit window
-	 * and logs that gap only. Treating an empty lookup as proof of absence can
-	 * create duplicate till orders after an ambiguous network response.
+	 * Reconcile only rows that retain POSPal's stable orderNo. An absent or
+	 * inconclusive lookup is never treated as absence and never triggers a re-push.
 	 *
 	 * @return void
 	 */
@@ -701,6 +707,7 @@ class DoughBoss_POSPal_Outbox {
 			$wpdb->prepare(
 				"SELECT * FROM {$table}
 				 WHERE status = 'succeeded'
+				   AND remote_reference <> ''
 				   AND updated_at >= %s
 				 ORDER BY updated_at ASC
 				 LIMIT 25",
@@ -711,13 +718,19 @@ class DoughBoss_POSPal_Outbox {
 			return;
 		}
 
-		// Verification is intentionally fail-closed until dispatch persists the
-		// POSPal-generated orderNo. The push payload only contains DoughBoss's
-		// daySeq, and queryOrderByNo cannot safely query by that value. The former
-		// implementation treated an empty response as proof of absence and could
-		// duplicate a successful till order. Keep the hourly job for pruning and
-		// record the visibility gap without making another remote write.
-		self::log( 'reconcile deferred for ' . count( $rows ) . ' recent row(s): POSPal orderNo was not persisted; no automatic re-push performed' );
+		foreach ( $rows as $row ) {
+			$store = DoughBoss_Settings::pospal_store( max( 1, (int) $row->store_index ) );
+			$creds = array( 'host' => (string) $store['host'], 'app_id' => (string) $store['app_id'], 'app_key' => (string) $store['app_key'] );
+			if ( '' === $creds['host'] || '' === $creds['app_id'] || '' === $creds['app_key'] ) {
+				continue;
+			}
+			$check = DoughBoss_POSPal::query_order_by_no( (string) $row->remote_reference, $creds );
+			if ( is_wp_error( $check ) || ! is_array( $check ) || (string) ( $check['orderNo'] ?? '' ) !== (string) $row->remote_reference ) {
+				self::log( '#' . (int) $row->id . ' reconciliation inconclusive; no re-push performed' );
+				continue;
+			}
+			self::log( '#' . (int) $row->id . ' reconciliation confirmed' );
+		}
 	}
 
 	/**

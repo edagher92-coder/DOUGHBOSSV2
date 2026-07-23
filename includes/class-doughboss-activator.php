@@ -39,11 +39,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::pospal_outbox_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, or payment-attempt storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, or POSPal outbox storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -404,6 +404,7 @@ class DoughBoss_Activator {
 			store_index tinyint(3) unsigned NOT NULL DEFAULT 1,
 			payload_json longtext NULL,
 			idempotency_key varchar(191) NOT NULL DEFAULT '',
+			remote_reference varchar(64) NOT NULL DEFAULT '',
 			attempts tinyint(3) unsigned NOT NULL DEFAULT 0,
 			status varchar(20) NOT NULL DEFAULT 'pending',
 			last_error varchar(64) NOT NULL DEFAULT '',
@@ -413,6 +414,7 @@ class DoughBoss_Activator {
 			PRIMARY KEY  (id),
 			UNIQUE KEY idempotency_key (idempotency_key),
 			KEY status_next (status,next_attempt_at),
+			KEY remote_reference (remote_reference),
 			KEY entity_id (entity_id)
 		) {$charset_collate};";
 
@@ -519,6 +521,28 @@ class DoughBoss_Activator {
 			&& self::index_contract_ready( $attempts, 'provider_reference', array( 'provider_reference' ), true, array( 191 ) )
 			&& self::index_contract_ready( $attempts, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) );
+	}
+
+	/**
+	 * Verify that POSPal pushes retain a stable remote reference for positive
+	 * reconciliation instead of relying on the local day sequence.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_outbox_storage_ready() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_pospal_outbox';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+		if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+			return false;
+		}
+
+		return self::column_contract_ready(
+			$table,
+			array( 'remote_reference' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ) )
+		)
+			&& self::index_contract_ready( $table, 'remote_reference', array( 'remote_reference' ), false, array( 64 ) );
 	}
 
 	/**

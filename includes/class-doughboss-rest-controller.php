@@ -686,6 +686,27 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		// Unpaid, staff-reviewed fallback while normal checkout is closed. This is
+		// intentionally a separate endpoint: it never creates a PaymentIntent,
+		// never reserves capacity and never enters the KDS before acceptance.
+		register_rest_route(
+			$ns,
+			'/preorder-request',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'preorder_request' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'customer_name'  => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+					'customer_email' => array( 'required' => true, 'sanitize_callback' => 'sanitize_email' ),
+					'customer_phone' => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+					'notes'          => array( 'default' => '', 'sanitize_callback' => 'sanitize_textarea_field' ),
+					'location_id'    => array( 'sanitize_callback' => 'absint' ),
+					'idempotency_key'=> array( 'sanitize_callback' => 'sanitize_text_field' ),
+				),
+			)
+		);
+
 		register_rest_route(
 			$ns,
 			'/order/(?P<number>[A-Za-z0-9\-]+)',
@@ -797,6 +818,42 @@ class DoughBoss_REST_Controller {
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_text_field',
 					),
+				),
+			)
+		);
+
+		// The morning-review queue is intentionally separate from the KDS. It
+		// contains only unpaid, unconfirmed Revesby requests; accepting moves a
+		// row into the regular order channel, rejecting cancels it with an audit
+		// reason. Board-authorised staff can make either decision because no money
+		// has been captured and no capacity has been committed.
+		register_rest_route(
+			$ns,
+			'/admin/preorder-requests',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_preorder_requests' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
+				'args'                => array(
+					'location_id' => array( 'default' => 0, 'sanitize_callback' => 'absint' ),
+					'per_page'    => array( 'default' => 100, 'sanitize_callback' => 'absint' ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/admin/preorder/(?P<id>\d+)/decision',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_preorder_decision' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
+				'args'                => array(
+					'decision'         => array( 'required' => true, 'sanitize_callback' => 'sanitize_key' ),
+					'eta'              => array( 'default' => 0, 'sanitize_callback' => 'absint' ),
+					'contact_confirmed'=> array( 'default' => false, 'sanitize_callback' => 'rest_sanitize_boolean' ),
+					'expected_version' => array( 'required' => true, 'sanitize_callback' => 'absint' ),
+					'event_key'        => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
 				),
 			)
 		);
@@ -2202,6 +2259,11 @@ class DoughBoss_REST_Controller {
 				'single_location_id'   => $single_location_id,
 				'ordering_open'   => DoughBoss_Settings::ordering_open(),
 				'ordering_closed_message' => DoughBoss_Settings::ordering_closed_message(),
+				// Public copy only; this does not expose, initialise or imply any
+				// payment capability. The browser may offer the request form only
+				// while normal checkout is closed and this explicit owner gate is on.
+				'after_hours_preorders_enabled' => ! DoughBoss_Settings::ordering_open() && DoughBoss_Settings::after_hours_preorders_enabled(),
+				'after_hours_preorders_message' => DoughBoss_Settings::after_hours_preorders_message(),
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
 				'payments_enabled' => DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready(),
@@ -2666,6 +2728,141 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * POST /preorder-request — collect an unpaid, unconfirmed Revesby request.
+	 *
+	 * This route is deliberately unavailable while normal ordering is open, and
+	 * deliberately does not call the payment, capacity or voucher-redemption
+	 * paths. A staff decision is required before the row changes from the
+	 * preorder_request channel to a normal web order.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function preorder_request( WP_REST_Request $request ) {
+		$idem = $this->idempotency_key( $request );
+		if ( is_wp_error( $idem ) ) {
+			return $idem;
+		}
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
+			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Pre-order requests are temporarily unavailable while order storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		if ( DoughBoss_Settings::ordering_open() || ! DoughBoss_Settings::after_hours_preorders_enabled() ) {
+			return new WP_Error( 'doughboss_preorder_unavailable', __( 'Pre-order requests are not available right now.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		if ( $this->rate_limited( 'preorder_request', 4, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+
+		$existing_id = DoughBoss_Order::find_id_by_checkout_key( $idem );
+		if ( $existing_id ) {
+			$existing = DoughBoss_Order::get( $existing_id );
+			if ( $existing && DoughBoss_Order::is_preorder_request( $existing ) ) {
+				return rest_ensure_response( $this->preorder_payload( $existing, true ) );
+			}
+			return new WP_Error( 'doughboss_preorder_conflict', __( 'This request key has already been used for another order. Refresh and try again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		if ( $this->cart->is_empty() ) {
+			return new WP_Error( 'doughboss_empty', __( 'Your cart is empty.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( DoughBoss_Table_QR::has_session_cookie() ) {
+			return new WP_Error( 'doughboss_preorder_table_unavailable', __( 'Table orders need to be placed while the shop is accepting orders.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( '' !== $this->cart->get_voucher_code() ) {
+			return new WP_Error( 'doughboss_preorder_voucher_unavailable', __( 'Vouchers can be applied after Revesby confirms your pre-order request.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		$name  = sanitize_text_field( $request->get_param( 'customer_name' ) );
+		$email = sanitize_email( $request->get_param( 'customer_email' ) );
+		$phone = sanitize_text_field( $request->get_param( 'customer_phone' ) );
+		$notes = sanitize_textarea_field( $request->get_param( 'notes' ) );
+		$errors = array();
+		if ( '' === $name ) {
+			$errors[] = __( 'Name is required.', 'doughboss' );
+		}
+		if ( ! is_email( $email ) ) {
+			$errors[] = __( 'A valid email is required.', 'doughboss' );
+		}
+		if ( '' === $phone ) {
+			$errors[] = __( 'Phone number is required.', 'doughboss' );
+		}
+		if ( $errors ) {
+			return new WP_Error( 'doughboss_invalid', implode( ' ', $errors ), array( 'status' => 400 ) );
+		}
+
+		$location_id = $this->resolve_revesby_preorder_location( $request->get_param( 'location_id' ) );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
+		}
+		$totals  = $this->cart->totals( 'pickup' );
+		$created = DoughBoss_Order::create(
+			array(
+				'order_type'        => 'pickup',
+				'location_id'       => $location_id,
+				'order_source'      => 'preorder_request',
+				'customer_name'     => $name,
+				'customer_email'    => $email,
+				'customer_phone'    => $phone,
+				'address'           => '',
+				'notes'             => $notes,
+				'subtotal'          => $totals['subtotal'],
+				'tax'               => $totals['tax'],
+				'delivery_fee'      => 0,
+				'total'             => $totals['total'],
+				'discount'          => 0,
+				'voucher_code'      => '',
+				'payment_status'    => 'unpaid',
+				'payment_method'    => '',
+				'payment_intent_id' => '',
+				'checkout_key'      => $idem,
+			),
+			$this->cart->get_lines()
+		);
+		if ( is_wp_error( $created ) ) {
+			return $created;
+		}
+
+		$order = DoughBoss_Order::get( (int) $created['order_id'] );
+		if ( ! $order ) {
+			return new WP_Error( 'doughboss_order_replay_missing', __( 'The saved pre-order request could not be loaded. Please contact Revesby before trying again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		$replayed = ! empty( $created['replayed'] );
+		$this->cart->clear();
+		if ( ! $replayed ) {
+			$this->send_preorder_request_notification( $order );
+			do_action( 'doughboss_preorder_request_created', (int) $order->id );
+		}
+
+		return rest_ensure_response( $this->preorder_payload( $order, $replayed ) );
+	}
+
+	/**
+	 * Build the stable, deliberately non-confirming customer response.
+	 *
+	 * @param object $order Order row.
+	 * @param bool   $replayed Whether this is an idempotent replay.
+	 * @return array
+	 */
+	private function preorder_payload( $order, $replayed ) {
+		return array(
+			'success'          => true,
+			'order_number'     => $order->order_number,
+			'total'            => (float) $order->total,
+			'replayed'         => (bool) $replayed,
+			'preorder_request' => true,
+			'confirmed'        => false,
+			'payment_required' => false,
+			'payment_status'   => 'unpaid',
+			'timing'           => array(
+				'mode'             => 'phone',
+				'label'            => __( 'Pickup timing will be arranged by phone before Revesby confirms this request.', 'doughboss' ),
+				'contact_required' => true,
+			),
+			'message'          => DoughBoss_Settings::after_hours_preorders_message(),
+		);
+	}
+
+	/**
 	 * POST /checkout — validate, create the order, clear the cart.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -2959,6 +3156,30 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Resolve the launch-only location for an after-hours request.
+	 *
+	 * The normal location resolver still guards active-store routing. This extra
+	 * name/slug check prevents a closed-site request from silently reaching a
+	 * future location before its own overnight review process is configured.
+	 *
+	 * @param mixed $requested_id Requested location id.
+	 * @return int|WP_Error
+	 */
+	private function resolve_revesby_preorder_location( $requested_id ) {
+		$location_id = $this->resolve_order_location( $requested_id, 'pickup' );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
+		}
+		$location = DoughBoss_Locations::get( $location_id );
+		$slug     = $location && isset( $location->slug ) ? sanitize_title( $location->slug ) : '';
+		$name     = $location && isset( $location->name ) ? sanitize_title( $location->name ) : '';
+		if ( 'revesby' !== $slug && 'revesby' !== $name ) {
+			return new WP_Error( 'doughboss_preorder_location', __( 'After-hours pre-order requests are available from Revesby only.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return $location_id;
+	}
+
+	/**
 	 * Resolve and validate the active shop for a customer order.
 	 *
 	 * A sole active shop is selected automatically. Sites with multiple active
@@ -3101,6 +3322,10 @@ class DoughBoss_REST_Controller {
 	public function admin_update_status( WP_REST_Request $request ) {
 		$order_id = absint( $request->get_param( 'id' ) );
 		$status   = sanitize_key( $request->get_param( 'status' ) );
+		$order    = DoughBoss_Order::get( $order_id );
+		if ( $order && DoughBoss_Order::is_preorder_request( $order ) ) {
+			return new WP_Error( 'doughboss_preorder_decision_required', __( 'Use the pre-order review decision after calling the customer to arrange pickup timing.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 		if ( 'cancelled' === $status && ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
 			return new WP_Error( 'doughboss_cancel_forbidden', __( 'A manager must cancel an order.', 'doughboss' ), array( 'status' => 403 ) );
 		}
@@ -3187,6 +3412,10 @@ class DoughBoss_REST_Controller {
 	 */
 	public function admin_accept( WP_REST_Request $request ) {
 		$order_id = absint( $request->get_param( 'id' ) );
+		$order    = DoughBoss_Order::get( $order_id );
+		if ( $order && DoughBoss_Order::is_preorder_request( $order ) ) {
+			return new WP_Error( 'doughboss_preorder_decision_required', __( 'Use the pre-order review decision after calling the customer to arrange pickup timing.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 		$result   = DoughBoss_Order::transition(
 			$order_id,
 			'confirmed',
@@ -3200,6 +3429,85 @@ class DoughBoss_REST_Controller {
 		);
 
 		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+
+	/**
+	 * GET /admin/preorder-requests — unpaid requests awaiting morning review.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function admin_preorder_requests( WP_REST_Request $request ) {
+		$location_id = absint( $request->get_param( 'location_id' ) );
+		$per_page    = min( 200, max( 1, absint( $request->get_param( 'per_page' ) ) ) );
+		$requests = DoughBoss_Order::preorder_requests( $per_page, $location_id );
+		foreach ( $requests as &$preorder ) {
+			$preorder['timing'] = array(
+				'mode'             => 'phone',
+				'label'            => __( 'Call the customer to agree pickup timing before accepting.', 'doughboss' ),
+				'contact_required' => true,
+			);
+			$preorder['payment_action_required'] = true;
+			$preorder['pospal_sync_deferred']     = true;
+		}
+		unset( $preorder );
+		return rest_ensure_response(
+			array(
+				'data'        => $requests,
+				'server_time' => current_time( 'mysql', true ),
+			)
+		);
+	}
+
+	/**
+	 * POST /admin/preorder/{id}/decision — accept or reject a request.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_preorder_decision( WP_REST_Request $request ) {
+		$order_id = absint( $request->get_param( 'id' ) );
+		$decision = sanitize_key( $request->get_param( 'decision' ) );
+		$order    = DoughBoss_Order::get( $order_id );
+		if ( ! $order || ! DoughBoss_Order::is_preorder_request( $order ) ) {
+			return new WP_Error( 'doughboss_preorder_not_found', __( 'That pre-order request is no longer awaiting review.', 'doughboss' ), array( 'status' => 404 ) );
+		}
+		if ( ! in_array( $decision, array( 'accept', 'reject' ), true ) ) {
+			return new WP_Error( 'doughboss_preorder_decision_invalid', __( 'Choose whether to accept or reject the pre-order request.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$accepted = 'accept' === $decision;
+		if ( $accepted && ! rest_sanitize_boolean( $request->get_param( 'contact_confirmed' ) ) ) {
+			return new WP_Error( 'doughboss_preorder_contact_required', __( 'Call the customer and agree pickup timing before accepting this unpaid pre-order request.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$result   = DoughBoss_Order::transition(
+			$order_id,
+			$accepted ? 'confirmed' : 'cancelled',
+			array(
+				'expected_version' => absint( $request->get_param( 'expected_version' ) ),
+				'event_key'       => sanitize_text_field( $request->get_param( 'event_key' ) ),
+				'actor_type'      => 'staff',
+				'actor_id'        => get_current_user_id(),
+				'eta_minutes'     => $accepted ? absint( $request->get_param( 'eta' ) ) : 0,
+				'reason_code'     => $accepted ? 'preorder_phone_confirmed' : 'preorder_rejected',
+			)
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response(
+			array(
+				'success'  => true,
+				'decision' => $decision,
+				'order'    => $result,
+				'payment_action_required' => $accepted,
+				'kitchen_ticket_required' => $accepted,
+				'pospal_sync_deferred'    => $accepted,
+				'message'  => $accepted
+					? __( 'Pre-order request accepted after phone confirmation and moved into the normal order queue. It remains unpaid until the agreed payment method is completed.', 'doughboss' )
+					: __( 'Pre-order request rejected. No payment was taken.', 'doughboss' ),
+			)
+		);
 	}
 
 	/**
@@ -3908,6 +4216,36 @@ class DoughBoss_REST_Controller {
 		$orders_email = DoughBoss_Settings::orders_email();
 		if ( is_email( $orders_email ) && false === wp_mail( $orders_email, $subject, $body ) ) {
 			error_log( 'DoughBoss mail: catering enquiry email to shop failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+	}
+
+	/**
+	 * Send the deliberately non-confirming after-hours request email.
+	 *
+	 * This has separate wording from send_confirmation(): a request must never
+	 * sound like a paid, timed or kitchen-accepted order.
+	 *
+	 * @param object $order Request row.
+	 * @return void
+	 */
+	private function send_preorder_request_notification( $order ) {
+		$blog    = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
+		$subject = sprintf( __( '[%1$s] Revesby pre-order request received — pending confirmation', 'doughboss' ), $blog );
+		$body    = sprintf(
+			/* translators: 1: customer name, 2: order number, 3: formatted amount. */
+			__( "Hi %1\$s,\n\nWe received your Revesby pre-order request (%2\$s) for %3\$s. This is not a confirmed order and no payment has been taken.\n\nRevesby will review it first thing in the morning and call you to agree pickup timing before confirming availability. Please do not travel to the shop until it is confirmed.\n\nThank you,\nDough Boss", 'doughboss' ),
+			$order->customer_name,
+			$order->order_number,
+			DoughBoss_Settings::format_price( $order->total )
+		);
+
+		if ( is_email( $order->customer_email ) && false === wp_mail( $order->customer_email, $subject, $body ) ) {
+			error_log( 'DoughBoss mail: preorder request email to customer failed for #' . $order->order_number ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+
+		$orders_email = DoughBoss_Settings::orders_email();
+		if ( is_email( $orders_email ) && false === wp_mail( $orders_email, $subject, $body ) ) {
+			error_log( 'DoughBoss mail: preorder request email to shop failed for #' . $order->order_number ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 	}
 

@@ -22,7 +22,8 @@ function doughboss_wp_compat_assert( $condition, $label ) {
 }
 
 doughboss_wp_compat_assert( defined( 'DOUGHBOSS_VERSION' ), 'plugin bootstrap is active' );
-doughboss_wp_compat_assert( '1.15.0' === get_option( 'doughboss_db_version' ), 'database schema activated at 1.15.0' );
+doughboss_wp_compat_assert( '1.16.0' === get_option( 'doughboss_db_version' ), 'database schema activated at 1.16.0' );
+doughboss_wp_compat_assert( DoughBoss_Activator::pospal_outbox_storage_ready(), 'POSPal remote-reference reconciliation storage is ready' );
 doughboss_wp_compat_assert( ! DoughBoss_Settings::ordering_open(), 'fresh WordPress install starts in browse-only mode' );
 doughboss_wp_compat_assert( false !== stripos( DoughBoss_Settings::ordering_closed_message(), 'coming soon' ), 'Coming Soon copy is available' );
 doughboss_wp_compat_assert( shortcode_exists( 'doughboss_ordering_status' ), 'ordering-status shortcode is registered' );

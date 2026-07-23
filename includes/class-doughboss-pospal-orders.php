@@ -58,6 +58,14 @@ class DoughBoss_POSPal_Orders {
 		if ( ! $order ) {
 			return;
 		}
+		if ( DoughBoss_Order::is_preorder_request( $order ) ) {
+			// A closed-hours request is neither a confirmed order nor a payment.
+			// Never mirror it to a till before the staff review/phone-confirmation
+			// gate has completed. Accepted requests intentionally need an explicit
+			// POS/payment action; do not infer one from the customer submission.
+			self::log( 'push deferred for unpaid pre-order request #' . $order_id );
+			return;
+		}
 
 		$items = DoughBoss_Order::get_items( $order_id );
 		if ( empty( $items ) ) {

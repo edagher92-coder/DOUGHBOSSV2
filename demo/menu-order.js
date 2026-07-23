@@ -24,6 +24,11 @@
 	function total() { var t = 0; for (var k in cart) { t += cart[k].price * cart[k].qty; } return t; }
 	function discount() { return voucher ? Math.min(voucher.amount, total()) : 0; }
 	function netTotal() { return Math.max(0, total() - discount()); }
+	function trackCommerce(name, properties) {
+		if (window.DoughBossMarketing && typeof window.DoughBossMarketing.track === 'function') {
+			window.DoughBossMarketing.track(name, properties || {});
+		}
+	}
 	function onMenuView() { var k = (location.hash || '#about').replace('#', ''); return k === 'menu' || k === 'order'; }
 	function itemQty(name) { var q = 0; for (var k in cart) { if (cart[k].name === name) { q += cart[k].qty; } } return q; }
 	function newestLine(name) { var best = null; for (var k in cart) { if (cart[k].name === name && (!best || cart[k].seq > best.seq)) { best = cart[k]; } } return best; }
@@ -180,6 +185,16 @@
 			cart[key] = { key: key, name: name, catId: c.catId, basePrice: c.price, price: unit, opts: opts, summary: summary, qty: 0, seq: 0 };
 		}
 		bumpLine(key, 1);
+		trackCommerce('add_to_cart', {
+			content_ids: [name],
+			content_name: name,
+			content_category: c.catId.replace(/^cat-/, ''),
+			content_type: 'product',
+			currency: 'AUD',
+			value: cart[key].price,
+			quantity: 1,
+			simulated: true
+		});
 		flashAdded(name);
 	}
 	function bumpLine(key, delta) {
@@ -413,15 +428,41 @@
 		return html;
 	}
 
-	/* Revesby ordering hours (minutes from midnight). Mon–Wed & Sun 6:30am–2pm;
-	   Thu/Fri/Sat 6:30am–8:30pm. NOTE: the Thu–Sat evening close (8:30pm) is an
-	   assumption from the brief — CONFIRM with the owner. day: 0=Sun … 6=Sat. */
-	var ORDER_HOURS = { 0: [390, 840], 1: [390, 840], 2: [390, 840], 3: [390, 840], 4: [390, 1230], 5: [390, 1230], 6: [390, 1230] };
-	function storeStatus() {
+	/* Opening windows are profile data, not duplicated customer-facing rules.
+	   day: 0=Sun … 6=Sat; values are minutes from midnight in the profile's
+	   configured local timezone. */
+	function orderingHours(location) {
+		return (location && location.orderingHours) || { display: location && location.hours ? location.hours : 'See store hours', days: {} };
+	}
+	function storeStatus(location) {
 		var now = new Date();
-		var span = ORDER_HOURS[now.getDay()];
-		var mins = now.getHours() * 60 + now.getMinutes();
-		return { open: !!span && mins >= span[0] && mins < span[1] };
+		var day = now.getDay();
+		var hour = now.getHours();
+		var minute = now.getMinutes();
+		var timezone = CFG.region && CFG.region.timezone;
+		if (timezone && typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+			try {
+				var parts = new Intl.DateTimeFormat('en-AU', {
+					timeZone: timezone,
+					weekday: 'short',
+					hour: '2-digit',
+					minute: '2-digit',
+					hourCycle: 'h23'
+				}).formatToParts(now);
+				var values = {};
+				parts.forEach(function (part) { values[part.type] = part.value; });
+				var dayIndex = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+				if (Object.prototype.hasOwnProperty.call(dayIndex, values.weekday)) { day = dayIndex[values.weekday]; }
+				hour = parseInt(values.hour, 10);
+				minute = parseInt(values.minute, 10);
+			} catch (ignore) {
+				/* Older browsers fall back to the device timezone. */
+			}
+		}
+		var hours = orderingHours(location || DEFAULT_LOCATION);
+		var span = hours.days[day];
+		var mins = hour * 60 + minute;
+		return { open: !!span && mins >= span[0] && mins < span[1], display: hours.display };
 	}
 
 	function renderCheckout() {
@@ -439,12 +480,30 @@
 		/* The form is a flex column: everything scrolls inside .cd-scroll while the
 		   submit CTA stays pinned in .cd-cta — reachable on short/landscape screens
 		   and above the on-screen keyboard (see the visualViewport handler below). */
-		var open = storeStatus().open;
+		var orderStatus = storeStatus(DEFAULT_LOCATION);
+		var open = orderStatus.open;
+		trackCommerce('begin_checkout', {
+			content_ids: Object.keys(cart).map(function (key) { return cart[key].name; }),
+			currency: 'AUD',
+			value: netTotal(),
+			num_items: count(),
+			order_type: 'pickup',
+			location_id: DEFAULT_LOCATION.id,
+			channel: 'demo',
+			simulated: true
+		});
 		var hoursHtml = open
 			? '<div class="cd-hours cd-hours--open">Open now &middot; pickup from Revesby</div>'
-			: '<div class="cd-hours cd-hours--shut">We&rsquo;re closed right now. Revesby ordering hours are <strong>6:30am&ndash;2pm</strong> (Thu&ndash;Sat to 8:30pm). Please order during opening hours.</div>';
+			: '<div class="cd-hours cd-hours--shut">We&rsquo;re closed now. You can still send a <strong>Revesby preorder request</strong> &mdash; we&rsquo;ll review it first thing in the morning before confirming it. No payment is taken until then. Regular ordering hours: <strong>' + esc(orderStatus.display) + '</strong>.</div>';
 		var anyDelivery = window.DBDemo.activeLocations().some(function (location) { return window.DBDemo.enabledFulfilments(location.id).indexOf('delivery') !== -1; });
 		var paymentProvider = CFG.payments.enabled ? CFG.payments.selectedProvider : null;
+		var paymentHtml = open
+			? '<fieldset class="cd-f cd-pay"><legend>Payment</legend><p class="cd-privacy cd-carddemo">Interactive demo only &mdash; use made-up test details, never a real card. ' + (paymentProvider ? esc(paymentProvider.toUpperCase()) + ' is selected by this profile.' : 'Payments are disabled; Tyro and Stripe remain available adapters.') + '</p></fieldset>'
+			: '<div class="cd-f cd-pay"><strong>No payment now</strong><p class="cd-privacy cd-carddemo">This only sends an unconfirmed request to Revesby. Payment is discussed after the team confirms availability and timing.</p></div>';
+		var reviewHtml = open
+			? '<p class="cd-privacy cd-modnote">Once your order is placed only small changes can be made &mdash; please check it over before you pay.</p>'
+			: '<p class="cd-privacy cd-modnote">Please check the items and contact details. Revesby will confirm the pickup timing before this becomes an order.</p>';
+		var submitLabel = open ? 'Place demo order' : 'Send preorder request';
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<form class="cd-form" novalidate>' +
 			'<div class="cd-scroll">' +
@@ -455,18 +514,15 @@
 			'<label class="cd-f"><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required></label>' +
 			'<label class="cd-f"><span>Location and fulfilment</span><select name="route" required>' + routeOptions() + '</select></label>' +
 			(anyDelivery ? '<label class="cd-f"><span>Delivery address <small>(required for delivery)</small></span><input name="address" type="text" autocomplete="street-address"></label>' : '') +
-			'<fieldset class="cd-f cd-pay">' +
-			'<legend>Payment</legend>' +
-			'<p class="cd-privacy cd-carddemo">Interactive demo only — use made-up test details, never a real card. ' + (paymentProvider ? esc(paymentProvider.toUpperCase()) + ' is selected by this profile.' : 'Payments are disabled; Tyro and Stripe remain available adapters.') + '</p>' +
-			'</fieldset>' +
-			'<p class="cd-privacy cd-modnote">Once your order is placed only small changes can be made &mdash; please check it over before you pay.</p>' +
+			paymentHtml +
+			reviewHtml +
 			'<p class="cd-privacy">We use your name and phone only to process your order. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
-			'<label class="cd-agree"><input type="checkbox" name="agree" class="cd-agree-cb"><span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>, and to Dough Boss contacting me about this order and occasional offers.</span></label>' +
+			'<label class="cd-agree"><input type="checkbox" name="agree" class="cd-agree-cb"><span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a> and to Dough Boss contacting me about this order.</span></label>' +
 			'</div>' +
 			'<div class="cd-cta">' +
 			'<div class="cd-tots">' + totsHtml + '</div>' +
 			'<div class="cd-err" role="alert"></div>' +
-			'<button type="submit" class="vb-btn vb-btn-ember">Place demo order</button>' +
+			'<button type="submit" class="vb-btn vb-btn-ember">' + submitLabel + '</button>' +
 			'<button type="button" class="vb-btn vb-btn-dark cd-back">Back to order</button>' +
 			'</div>' +
 			'</form>';
@@ -520,11 +576,11 @@
 			if (agree) { agree.focus(); }
 			return;
 		}
-		if (!storeStatus().open) {
-			err.textContent = 'Sorry, we’re closed right now — please order during opening hours (6:30am–2pm).';
-			return;
-		}
-		pendingOrder = { name: name, phone: phone, locationId: locationId, fulfilment: fulfilment, address: address };
+		var afterHours = !storeStatus(window.DBDemo.getLocation(locationId)).open;
+		pendingOrder = { name: name, phone: phone, locationId: locationId, fulfilment: fulfilment, address: address, afterHours: afterHours };
+		/* After-hours requests are intentionally not sent into the simulated payment
+		   step. They stay unconfirmed until the Revesby team reviews them. */
+		if (afterHours) { renderDone(); return; }
 		renderCardSheet();
 	}
 
@@ -573,17 +629,34 @@
 
 	function renderDone() {
 		if (!pendingOrder || !drawerOpen) { pendingOrder = null; return; }
-		drawer.setAttribute('aria-label', 'Order placed');
+		var afterHours = !!pendingOrder.afterHours;
+		drawer.setAttribute('aria-label', afterHours ? 'Preorder request' : 'Order placed');
 		var name = pendingOrder.name;
 		var location = window.DBDemo.getLocation(pendingOrder.locationId) || DEFAULT_LOCATION;
 		var ref = CFG.brand.orderReferencePrefix + '-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
-		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
-		var saving = voucher ? '<p class="cd-reward-note"><b>Discount applied:</b> you saved ' + money(discount()) + ' with ' + esc(voucher.code) + '. The final system will show only verified member or VIP savings here.</p>' : '<p class="cd-reward-note"><b>Member benefits:</b> loyalty and VIP savings are not active in this demo. When connected, eligible benefits will be checked before payment and shown clearly here.</p>';
-		var journey = '<div class="cd-receipt" aria-label="Demo order journey"><div class="cd-receipt__head"><span>Payment confirmation</span><span class="cd-receipt__state">Confirmed in demo</span></div><ol class="cd-track"><li class="is-now">Order received</li><li>In the oven</li><li>Ready for pickup</li></ol></div>';
-		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p>' +
-			'<p class="cd-eta">' + esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated</p>' + journey +
+		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (' + (afterHours ? 'to be checked after confirmation' : '&minus;' + money(discount())) + ')' : '';
+		var saving = afterHours
+			? '<p class="cd-reward-note"><b>No payment has been taken.</b> Any voucher, member or VIP benefit will be checked when the preorder is confirmed.</p>'
+			: (voucher ? '<p class="cd-reward-note"><b>Discount applied:</b> you saved ' + money(discount()) + ' with ' + esc(voucher.code) + '. The final system will show only verified member or VIP savings here.</p>' : '<p class="cd-reward-note"><b>Member benefits:</b> loyalty and VIP savings are not active in this demo. When connected, eligible benefits will be checked before payment and shown clearly here.</p>');
+		var journey = afterHours
+			? '<div class="cd-receipt" aria-label="Preorder request journey"><div class="cd-receipt__head"><span>Preorder request</span><span class="cd-receipt__state">Awaiting morning review</span></div><ol class="cd-track"><li class="is-now">Request received</li><li>Revesby review</li><li>Confirmation before payment</li></ol></div>'
+			: '<div class="cd-receipt" aria-label="Demo order journey"><div class="cd-receipt__head"><span>Payment confirmation</span><span class="cd-receipt__state">Confirmed in demo</span></div><ol class="cd-track"><li class="is-now">Order received</li><li>In the oven</li><li>Ready for pickup</li></ol></div>';
+		trackCommerce(afterHours ? 'generate_lead' : 'purchase_simulated', {
+			content_ids: Object.keys(cart).map(function (key) { return cart[key].name; }),
+			content_name: afterHours ? 'After-hours preorder request' : 'Demo order',
+			content_category: afterHours ? 'Preorder' : 'Order',
+			currency: 'AUD',
+			value: netTotal(),
+			num_items: count(),
+			order_type: pendingOrder.fulfilment,
+			location_id: pendingOrder.locationId,
+			channel: 'demo',
+			simulated: true
+		});
+		drawer.innerHTML = '<div class="cd-head"><h3>' + (afterHours ? 'Preorder request' : 'Order placed') + '</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>' + (afterHours ? 'Preorder request received, ' : 'Thanks, ') + esc(name) + '!</h3><p>' + (afterHours ? 'Unconfirmed preorder request' : 'Demo order') + ' <strong>' + esc(ref) + '</strong>' + (afterHours ? '' : ' &middot; ' + amt) + vline + '</p>' +
+			'<p class="cd-eta">' + (afterHours ? 'We&rsquo;ll review this with <strong>Revesby</strong> first thing in the morning and contact you to confirm it. For now, preorders can be arranged from Revesby or the night before. <strong>No payment has been taken.</strong>' : esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated') + '</p>' + journey +
 			'<div class="cd-summary cd-donesum">' + summaryLines() + '</div>' +
 			saving + '<button type="button" class="cd-copyref" data-copyref="' + esc(ref) + '">Copy order number</button><p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
 		cart = {};

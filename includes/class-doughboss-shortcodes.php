@@ -53,8 +53,9 @@ class DoughBoss_Shortcodes {
 
 	/**
 	 * [doughboss_manoush_hero] â€” a self-contained decorative hero for classic,
-	 * block and template-rendered pages. Image URLs are intentionally supplied
-	 * by the site owner from the Media Library; no demo photography is packaged.
+	 * block and template-rendered pages. Optimised local defaults make the
+	 * shortcode production-presentable; every image can still be replaced with
+	 * a Media Library URL through shortcode attributes.
 	 *
 	 * @param array<string, string> $atts Shortcode attributes.
 	 * @return string
@@ -62,40 +63,50 @@ class DoughBoss_Shortcodes {
 	public function manoush_hero( $atts = array() ) {
 		$atts = shortcode_atts(
 			array(
-				'kicker'        => __( 'Made fresh, every morning', 'doughboss' ),
-				'title'         => __( 'The manoush comes together here.', 'doughboss' ),
-				'description'   => __( 'Warm bread, generous toppings and the little details that make a bakery visit feel like home.', 'doughboss' ),
-				'central_image' => '',
-				'zaatar_image'  => '',
-				'cheese_image'  => '',
-				'meat_image'    => '',
-				'spinach_image' => '',
+				'variant'       => 'bites',
+				'kicker'        => __( 'Catering, made fresh', 'doughboss' ),
+				'title'         => __( 'The menu comes together here.', 'doughboss' ),
+				'description'   => __( 'Mini zaatar, cheese and meat manoush with spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
+				'replay_label'  => __( 'See the spread come together', 'doughboss' ),
+				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
+				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-menu-platter-v3.webp',
+				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-zaatar-cutout-v2.webp',
+				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-cheese-cutout-v2.webp',
+				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-pies-v3.webp',
+				'spinach_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-fresh-cutout-v2.webp',
 			),
 			$atts,
 			'doughboss_manoush_hero'
 		);
+		$variant = in_array( $atts['variant'], array( 'manoush', 'bites' ), true ) ? $atts['variant'] : 'bites';
 
-		$ingredients = array(
+		$ingredients = array_filter(
+			array(
 			'zaatar'  => array( 'label' => __( 'Zaatar', 'doughboss' ), 'url' => $atts['zaatar_image'] ),
 			'cheese'  => array( 'label' => __( 'Cheese', 'doughboss' ), 'url' => $atts['cheese_image'] ),
 			'meat'    => array( 'label' => __( 'Meat', 'doughboss' ), 'url' => $atts['meat_image'] ),
 			'spinach' => array( 'label' => __( 'Spinach', 'doughboss' ), 'url' => $atts['spinach_image'] ),
+			),
+			static function ( $ingredient ) {
+				return '' !== $ingredient['url'];
+			}
 		);
 
 		ob_start();
 		?>
-		<section class="db-manoush-hero is-assembled" data-db-manoush-hero>
+		<section class="db-manoush-hero db-manoush-hero--<?php echo esc_attr( $variant ); ?> is-assembled" data-db-manoush-hero data-db-manoush-variant="<?php echo esc_attr( $variant ); ?>" data-db-scroll-scene>
+			<div class="db-mh-backdrop" style="background-image:url('<?php echo esc_url( $atts['background_image'] ); ?>')" aria-hidden="true"></div>
 			<div class="db-mh-copy">
 				<p class="db-mh-kicker"><?php echo esc_html( $atts['kicker'] ); ?></p>
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
 				<p><?php echo esc_html( $atts['description'] ); ?></p>
-				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php esc_html_e( 'Replay burst', 'doughboss' ); ?></button>
+				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php echo esc_html( $atts['replay_label'] ); ?></button>
 			</div>
 			<div class="db-mh-stage" aria-hidden="true">
 				<div class="db-mh-world">
 					<div class="db-mh-central">
 						<?php if ( '' !== $atts['central_image'] ) : ?>
-							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" />
+							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" width="900" height="716" loading="eager" decoding="async" fetchpriority="high" />
 						<?php else : ?>
 							<span><?php esc_html_e( 'Manoush', 'doughboss' ); ?></span>
 						<?php endif; ?>
@@ -103,7 +114,7 @@ class DoughBoss_Shortcodes {
 					<?php foreach ( $ingredients as $name => $ingredient ) : ?>
 						<div class="db-mh-ingredient db-mh-ingredient--<?php echo esc_attr( $name ); ?>">
 							<?php if ( '' !== $ingredient['url'] ) : ?>
-								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" />
+								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" width="240" height="180" loading="lazy" decoding="async" />
 							<?php else : ?>
 								<span><?php echo esc_html( $ingredient['label'] ); ?></span>
 							<?php endif; ?>

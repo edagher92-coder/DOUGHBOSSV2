@@ -25,7 +25,14 @@
 				address: '12/25 Selems Parade, Revesby NSW 2212',
 				phone: '+61297742286',
 				displayPhone: '(02) 9774 2286',
-				hours: '7 days 6:30am–2:30pm',
+				hours: 'Daily 6:30am–2:30pm',
+				/* The checkout reads this field directly. Keep the public display copy and
+				   the operational window together so the customer never sees two sets
+				   of Revesby hours. Minutes are measured from midnight, local time. */
+				orderingHours: {
+					display: 'Daily 6:30am–2:30pm',
+					days: { 0: [390, 870], 1: [390, 870], 2: [390, 870], 3: [390, 870], 4: [390, 870], 5: [390, 870], 6: [390, 870] }
+				},
 				active: true,
 				fulfilment: {
 					pickup: { enabled: true, labelKey: 'fulfilment.pickup' },

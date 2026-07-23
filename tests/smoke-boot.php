@@ -83,10 +83,11 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.15.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.15.0' );
+ok( '1.16.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.16.0' );
 ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Activator', 'payment_storage_ready' ), 'payment attempt storage readiness gate exists' );
+ok( method_exists( 'DoughBoss_Activator', 'pospal_outbox_storage_ready' ), 'POSPal remote-reference storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Tyro', 'retrieve_pay_request' ), 'Tyro Connect Pay Request retrieval exists' );
 ok( method_exists( 'DoughBoss_Order', 'transition' ), 'DoughBoss_Order::transition() exists' );
 ok( method_exists( 'DoughBoss_Order', 'events' ), 'DoughBoss_Order::events() exists' );
@@ -225,6 +226,9 @@ $checkout_args = isset( $GLOBALS['__db_rest_args']['doughboss/v1/checkout']['arg
 ok( isset( $checkout_args['payment_attempt_key'] ), 'POST /checkout accepts the matching durable payment attempt key' );
 ok( in_array( 'doughboss/v1/payments/tyro/webhook', $routes, true ), 'canonical Tyro Connect webhook is registered' );
 ok( in_array( 'doughboss/v1/table/context', $GLOBALS['__db_rest'], true ), 'GET /table/context is registered' );
+$preorder_route = $GLOBALS['__db_rest_args']['doughboss/v1/preorder-request'] ?? array();
+$preorder_permission = isset( $preorder_route['permission_callback'] ) ? $preorder_route['permission_callback'] : null;
+ok( is_array( $preorder_permission ) && isset( $preorder_permission[1] ) && 'verify_nonce' === $preorder_permission[1], 'POST /preorder-request requires the storefront nonce verifier' );
 $remove_voucher_route = $GLOBALS['__db_rest_args']['doughboss/v1/cart/remove-voucher'] ?? array();
 $remove_voucher_args  = isset( $remove_voucher_route['args'] ) ? $remove_voucher_route['args'] : array();
 ok( ! isset( $remove_voucher_args['location_id'] ), 'POST /cart/remove-voucher does not expose unrelated location_id' );
@@ -249,14 +253,17 @@ $board_routes = array(
 	'doughboss/v1/admin/order/(?P<id>\d+)/status',
 	'doughboss/v1/admin/order/(?P<id>\d+)/ack',
 	'doughboss/v1/admin/order/(?P<id>\d+)/accept',
+	'doughboss/v1/admin/preorder-requests',
+	'doughboss/v1/admin/preorder/(?P<id>\d+)/decision',
 );
 foreach ( $board_routes as $board_route ) {
 	$permission = $GLOBALS['__db_rest_args'][ $board_route ]['permission_callback'] ?? null;
 	ok( is_array( $permission ) && isset( $permission[1] ) && 'verify_board_access' === $permission[1], $board_route . ' requires the board key verifier' );
 }
 // A real count check, not just ">0", so a route silently failing to register
-// would fail this. Includes the public, cookie-gated /table/context route.
-ok( 49 === count( $routes ), 'REST route count includes table context and canonical Tyro webhook (' . count( $routes ) . ' routes, expected 49)' );
+// would fail this. Includes table context plus the public request and two
+// board-authorised morning-review routes.
+ok( 52 === count( $routes ), 'REST route count includes table context, Tyro webhook, and pre-order review (' . count( $routes ) . ' routes, expected 52)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
@@ -379,7 +386,10 @@ ok( class_exists( 'DoughBoss_POSPal_Outbox' ), 'DoughBoss_POSPal_Outbox class ex
 ok( method_exists( 'DoughBoss_POSPal_Outbox', 'ensure_dispatch_scheduled' ), 'POSPal outbox can re-arm durable dispatch after activation' );
 ok( method_exists( 'DoughBoss_POSPal_Outbox', 'list_ambiguous_rows' ), 'ambiguous POSPal outcomes have a dedicated operator review query' );
 $outbox_source = file_get_contents( DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-pospal-outbox.php' );
-ok( false !== strpos( $outbox_source, "last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight')" ), 'bulk POSPal retry excludes ambiguous remote outcomes' );
+ok(
+	false !== strpos( $outbox_source, "last_error NOT IN ('ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no')" ),
+	'bulk POSPal retry excludes every ambiguous remote outcome'
+);
 ok( false !== strpos( $outbox_source, 'allow_ambiguous' ), 'ambiguous POSPal retry requires an explicit per-row release path' );
 ok( false !== strpos( $outbox_source, 'expected_updated_at' ), 'ambiguous POSPal retry is bound to the reviewed attempt state' );
 ok( defined( 'DoughBoss_POSPal_Outbox::MAX_ATTEMPTS' ) && 5 === DoughBoss_POSPal_Outbox::MAX_ATTEMPTS, 'MAX_ATTEMPTS === 5' );

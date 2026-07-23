@@ -58,6 +58,20 @@ done < <(find . -type d \( -name .git -o -name vendor -o -name node_modules -o -
 
 echo "--- php summary: $((php_total - php_failed))/$php_total passed · $php_failed failed ---"
 
+# In-memory REST/lifecycle contract: never loads a real WordPress install,
+# database, payment gateway, or network service, so it is safe here and in CI.
+echo "--- customer to KDS contract ---"
+if ! "$PHP_BIN" tests/customer-kds-e2e-contract.php; then
+	failed=$((failed + 1))
+fi
+
+echo "--- offline provider contracts ---"
+for contract in tests/tyro-contract.php tests/provider-readiness-contract.php tests/pospal-outbox-contract.php; do
+	if ! "$PHP_BIN" "$contract"; then
+		failed=$((failed + 1))
+	fi
+done
+
 echo "--- release version consistency ---"
 header_version="$(sed -n 's/^ \* Version:[[:space:]]*//p' doughboss.php | head -n 1 | tr -d '\r')"
 constant_version="$(sed -n "s/^define( 'DOUGHBOSS_VERSION', '\([^']*\)' );/\1/p" doughboss.php | head -n 1 | tr -d '\r')"
