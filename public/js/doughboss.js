@@ -516,6 +516,13 @@
 			if (orderComplete) { return; }
 			cartRegion.innerHTML = '';
 			var tableContext = activeTableContext();
+			var orderingOpen = !!cfg.ordering_open;
+
+			if (!orderingOpen) {
+				cartRegion.appendChild(orderingClosedNotice(cfg.ordering_closed_message));
+				checkoutRegion.innerHTML = '';
+				checkoutEl = null;
+			}
 
 			if (!cart.items.length) {
 				if (tableContext) { cartRegion.appendChild(tableContextBanner(tableContext)); }
@@ -570,6 +577,10 @@
 			// Totals.
 			cartRegion.appendChild(totalsBlock(cart.totals, cfg));
 
+			// Browse-only launch mode keeps the menu and cart useful for customer
+			// discovery, but never renders voucher or checkout/payment controls.
+			if (!orderingOpen) { return; }
+
 			// Voucher code (apply/remove — preview only; redeemed at checkout).
 			cartRegion.appendChild(voucherBox(cart.totals, orderType, load));
 
@@ -597,6 +608,13 @@
 
 		load();
 		document.addEventListener('doughboss:cart-updated', load);
+	}
+
+	function orderingClosedNotice(message) {
+		return el('aside', { class: 'db-ordering-status', role: 'status' }, [
+			el('strong', { text: I18N.orderingComingSoon || 'Online ordering coming soon' }),
+			el('p', { text: message || 'You can browse the menu now, and we will let you know when checkout opens.' })
+		]);
 	}
 
 	function typeRadio(value, label, current, onChange) {

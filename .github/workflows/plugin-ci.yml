@@ -59,6 +59,15 @@ jobs:
       - name: Verify universal demo profiles
         run: node tests/demo-config.test.js
 
+      - name: Verify WordPress Coming Soon launch gate
+        run: php tests/coming-soon-contract.php
+
+      - name: Verify Tyro, menu and hero acceptance contracts
+        run: |
+          php tests/tyro-contract.php
+          php tests/manoush-hero-contract.php
+          node --test tests/menu-photo-contract.test.js
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
@@ -260,3 +269,51 @@ jobs:
 
       - name: Migration and checkout races
         run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-checkout-integrity.php" --path=/tmp/wp --skip-plugins --allow-root
+
+  wordpress-compatibility:
+    name: WordPress ${{ matrix.wordpress }} / PHP ${{ matrix.php }} live plugin smoke
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - wordpress: "6.0.9"
+            php: "7.4"
+          - wordpress: "7.0.2"
+            php: "8.4"
+    services:
+      db:
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: wordpress
+          MARIADB_USER: wordpress
+          MARIADB_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP and WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli
+          coverage: none
+          tools: wp-cli
+
+      - name: Install and activate on real WordPress
+        shell: bash
+        run: |
+          wp core download --path=/tmp/wp --version=${{ matrix.wordpress }} --allow-root
+          wp config create --path=/tmp/wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1:3306 --skip-check --allow-root
+          wp core install --path=/tmp/wp --url=http://doughboss.test --title=DoughBoss --admin_user=admin --admin_password=test-only-password --admin_email=test@example.invalid --skip-email --allow-root
+          ln -s "$GITHUB_WORKSPACE" /tmp/wp/wp-content/plugins/doughboss
+          wp plugin activate doughboss --path=/tmp/wp --allow-root
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-compatibility.php" --path=/tmp/wp --allow-root

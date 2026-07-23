@@ -831,7 +831,8 @@ class DoughBoss_Activator {
 			'delivery_fee'    => 5.00,
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
-			'ordering_open'   => 1,
+			'ordering_open'   => 0,
+			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
 			'sizes'           => array(
 				array(
 					'slug'  => 'small',

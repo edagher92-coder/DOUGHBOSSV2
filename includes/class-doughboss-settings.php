@@ -76,7 +76,10 @@ class DoughBoss_Settings {
 			'delivery_fee'    => 0,
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
-			'ordering_open'   => 1,
+			// Fresh installs launch in browse-only mode. The owner must explicitly
+			// open ordering after the WordPress staging checklist has passed.
+			'ordering_open'   => 0,
+			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
 			// Single-shop mode: the storefront JS (getConfig/getLocations in
 			// public/js/doughboss.js) hides the delivery toggle and pins the shop
 			// picker to the first active location while this is 1. Display-only —
@@ -370,7 +373,19 @@ class DoughBoss_Settings {
 	 * @return bool
 	 */
 	public static function ordering_open() {
-		return (bool) self::get( 'ordering_open', 1 );
+		return (bool) self::get( 'ordering_open', 0 );
+	}
+
+	/**
+	 * Customer-facing copy shown while checkout is paused.
+	 *
+	 * @return string
+	 */
+	public static function ordering_closed_message() {
+		$message = trim( (string) self::get( 'ordering_closed_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.', 'doughboss' );
 	}
 
 	/**

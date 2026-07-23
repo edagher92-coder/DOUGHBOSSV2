@@ -27,6 +27,7 @@ class DoughBoss_Assets {
 		'doughboss_shop_picker',
 		'doughboss_catering',
 		'doughboss_voucher_claim',
+		'doughboss_ordering_status',
 	);
 
 	/**
@@ -124,7 +125,9 @@ class DoughBoss_Assets {
 		// `payment_gateway` setting selects Tyro would leave checkout demanding
 		// a payment the storefront renders no card UI for.
 		$deps        = array();
-		$payments_on = DoughBoss_Payment::ready();
+		// A configured gateway must not initialize browser payment fields while
+		// the store is intentionally in browse-only / Coming Soon mode.
+		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
 		$gateway     = DoughBoss_Settings::payment_gateway();
 		if ( $payments_on ) {
 			if ( 'tyro' === $gateway ) {
@@ -175,6 +178,7 @@ class DoughBoss_Assets {
 					'delivery'     => __( 'Delivery', 'doughboss' ),
 					'total'        => __( 'Total', 'doughboss' ),
 					'placeOrder'   => __( 'Place order', 'doughboss' ),
+					'orderingComingSoon' => __( 'Online ordering coming soon', 'doughboss' ),
 					'placing'      => __( 'Placing order…', 'doughboss' ),
 					'soldOut'      => __( 'Sold out', 'doughboss' ),
 					'chooseShop'   => __( 'Choose your shop', 'doughboss' ),

@@ -2,9 +2,9 @@
 Contributors: doughboss
 Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
-Tested up to: 6.5
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.22.0
+Stable tag: 2.22.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,12 +29,13 @@ Everything is rendered through shortcodes and a small REST API; no theme changes
 * `[doughboss_cart]` — the cart and checkout.
 * `[doughboss_order_tracking]` — the order status lookup form.
 * `[doughboss_shop_picker]` — choose which shop to order from (multi-shop sites).
+* `[doughboss_ordering_status]` — accessible Coming Soon copy while checkout is paused.
 
 == Installation ==
 
 1. In wp-admin go to **Plugins → Add New → Upload Plugin**.
 2. Upload `doughboss.zip` and click **Install Now**, then **Activate**.
-3. Go to **DoughBoss → Settings** to configure sizes, toppings, currency, tax and fees.
+3. Go to **DoughBoss → Settings** to configure sizes, toppings, currency, tax and fees. Fresh installs begin in safe browse-only mode; leave **Accept orders** off until staging is complete.
 4. Add menu items under **DoughBoss → Menu Items**.
 5. Place the shortcodes above on your pages.
 
@@ -59,6 +60,13 @@ include merchant credentials or make a shop payment-ready.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.22.1 =
+* Add a WordPress-native browse-only launch mode with configurable "Online ordering coming soon" copy.
+* Keep menus and carts viewable while removing checkout, vouchers and browser payment initialization whenever ordering is closed.
+* Default fresh installations to ordering closed and require an explicit owner action to accept orders.
+* Add `[doughboss_ordering_status]` for page builders, block pages and theme templates.
+* Add real plugin activation, menu import, shortcode, REST and checkout-gate tests on WordPress 6.0.9/PHP 7.4 and WordPress 7.0.2/PHP 8.4.
 
 = 2.22.0 =
 * Replace the unverified legacy MPGS Tyro path with current Tyro Connect Pay: OAuth, Pay Requests, direct Tyro.js, 3DS-ready browser flow, signed thin webhooks, and refunds.

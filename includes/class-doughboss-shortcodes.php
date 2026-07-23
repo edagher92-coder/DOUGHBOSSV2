@@ -31,6 +31,24 @@ class DoughBoss_Shortcodes {
 		add_shortcode( 'doughboss_catering', array( $this, 'catering' ) );
 		add_shortcode( 'doughboss_voucher_claim', array( $this, 'voucher_claim' ) );
 		add_shortcode( 'doughboss_manoush_hero', array( $this, 'manoush_hero' ) );
+		add_shortcode( 'doughboss_ordering_status', array( $this, 'ordering_status' ) );
+	}
+
+	/**
+	 * [doughboss_ordering_status] — server-rendered launch/availability notice.
+	 *
+	 * @return string
+	 */
+	public function ordering_status() {
+		if ( DoughBoss_Settings::ordering_open() ) {
+			return '';
+		}
+
+		return sprintf(
+			'<aside class="db-app db-ordering-status" role="status"><strong>%1$s</strong><p>%2$s</p></aside>',
+			esc_html__( 'Online ordering coming soon', 'doughboss' ),
+			esc_html( DoughBoss_Settings::ordering_closed_message() )
+		);
 	}
 
 	/**

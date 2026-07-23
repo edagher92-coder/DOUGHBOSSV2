@@ -95,6 +95,27 @@
 	font-weight: 600;
 }
 
+.db-ordering-status {
+	margin: 0 0 1.25rem;
+	padding: 1.1rem 1.25rem;
+	border: 1px solid color-mix(in srgb, var(--db-accent) 35%, var(--db-border));
+	border-left: 4px solid var(--db-accent);
+	border-radius: var(--db-r-md);
+	background: color-mix(in srgb, var(--db-accent) 7%, var(--db-surface));
+	color: var(--db-text);
+}
+
+.db-ordering-status strong {
+	display: block;
+	font-size: 1.05rem;
+	margin-bottom: 0.2rem;
+}
+
+.db-ordering-status p {
+	margin: 0;
+	color: var(--db-muted);
+}
+
 /* Buttons ----------------------------------------------------------- */
 .db-btn {
 	background: var(--db-accent);
