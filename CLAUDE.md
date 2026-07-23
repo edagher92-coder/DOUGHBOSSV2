@@ -7,7 +7,7 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
 - **Primary integration branch:** `claude/doughboss-website-design-fixes-li6dqa` (PR #17; staging/integration, not a production release by default).
 - **Consolidation branch:** `codex/doughboss-p0-integrity`, based on the current integration tip and incorporating the lifecycle/capacity work from draft PRs #22/#23 for combined verification.
-- **Lifecycle release:** plugin `2.18.0` / DB `1.11.0`. Keep it in staging until the sanitised-backup migration/restore rehearsal is recorded.
+- **Consolidated staging release:** plugin `2.20.0` / DB `1.13.0`, including lifecycle, capacity foundations and atomic checkout identity. Keep it in staging until the sanitised-backup migration/restore and payment-provider certification evidence are recorded.
 - **Payments:** Stripe and Tyro remain disabled until their respective test credentials, webhook recovery, reconciliation, and provider certification checks pass.
 - **Requires:** WordPress 6.0+, PHP 7.4+
 - **REST namespace:** `doughboss/v1`
