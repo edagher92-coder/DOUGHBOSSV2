@@ -24,6 +24,9 @@ if ($customer === false || $staff === false || $owner === false || $ordering ===
 
 $checks = array(
 	'customer copy names Revesby pickup' => strpos($customer, 'Pickup from Revesby') !== false,
+	'customer copy names all three operating shops' => strpos($customer, 'Now baking across Revesby, Bankstown and Roselands') !== false,
+	'customer copy limits online ordering to Revesby' => strpos($customer, 'online pickup ordering is launching from Revesby only for now') !== false,
+	'Bankstown and Roselands remain visit or call only' => substr_count($customer, 'visit or call &middot; online ordering later') === 2,
 	'customer primary navigation uses Offers and News' => strpos($customer, 'href="#offers">Offers &amp; News</a>') !== false,
 	'customer primary navigation does not expose Snow Boss' => strpos($customer, '>Snow Boss</a>') === false,
 	'launch profile is explicitly versioned' => strpos($profile, "profileId: 'doughboss-revesby-launch'") !== false,

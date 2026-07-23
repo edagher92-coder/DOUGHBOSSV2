@@ -104,9 +104,9 @@
 			var minutes = Number(values.hour) * 60 + Number(values.minute);
 			var open = minutes >= 390 && minutes < 870;
 			status.classList.toggle('is-closed', !open);
-			label.textContent = open ? 'Baking now · Revesby' : 'Preorders welcome · Revesby';
+			label.textContent = open ? 'Revesby online pickup open · three shops baking daily' : 'Revesby preorders welcome · three shops baking daily';
 		} catch (error) {
-			label.textContent = 'Fresh-baked daily · Revesby';
+			label.textContent = 'Revesby online pickup · three shops baking daily';
 		}
 	}
 
