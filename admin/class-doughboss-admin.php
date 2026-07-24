@@ -343,6 +343,9 @@ class DoughBoss_Admin {
 		$clean['tracking_page_url'] = isset( $input['tracking_page_url'] )
 			? DoughBoss_Settings::sanitize_tracking_page_url( $input['tracking_page_url'] )
 			: ( isset( $existing['tracking_page_url'] ) ? DoughBoss_Settings::sanitize_tracking_page_url( $existing['tracking_page_url'] ) : '' );
+		$clean['google_review_url'] = isset( $input['google_review_url'] )
+			? DoughBoss_Settings::sanitize_google_review_url( $input['google_review_url'] )
+			: ( isset( $existing['google_review_url'] ) ? DoughBoss_Settings::sanitize_google_review_url( $existing['google_review_url'] ) : '' );
 		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? max( 0, absint( $input['staff_session_days'] ) ) : 0;
 
 		// Order Board access key is intentionally NOT part of this form — it is
@@ -2950,6 +2953,11 @@ JS;
 						<th><label for="db-tracking-page-url"><?php esc_html_e( 'Track My Order page', 'doughboss' ); ?></label></th>
 						<td><input type="url" id="db-tracking-page-url" class="regular-text code" name="<?php echo esc_attr( $opt ); ?>[tracking_page_url]" value="<?php echo esc_attr( isset( $settings['tracking_page_url'] ) ? $settings['tracking_page_url'] : '' ); ?>" placeholder="https://doughboss.com.au/track-order/" />
 							<p class="description"><?php esc_html_e( 'Publish a page on this WordPress site containing [doughboss_order_tracking], then paste its URL here. External URLs are rejected. Customer confirmation, accepted and ready emails will link to it with only the order number prefilled; the customer must still enter the matching email.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-google-review-url"><?php esc_html_e( 'Google review link', 'doughboss' ); ?></label></th>
+						<td><input type="url" id="db-google-review-url" class="regular-text code" name="<?php echo esc_attr( $opt ); ?>[google_review_url]" value="<?php echo esc_attr( isset( $settings['google_review_url'] ) ? $settings['google_review_url'] : '' ); ?>" placeholder="https://g.page/r/your-business/review" />
+							<p class="description"><?php esc_html_e( 'Paste the exact “Ask for reviews” link from your verified Google Business Profile. Leave blank to hide review invitations. Only secure Google links are accepted.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
 						<th><label for="db-staff-session"><?php esc_html_e( 'Staff session (days)', 'doughboss' ); ?></label></th>

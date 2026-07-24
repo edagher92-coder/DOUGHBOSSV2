@@ -352,6 +352,21 @@
 	margin: 10px 0 0;
 }
 
+.db-catering .dbc-review-invite {
+	display: grid;
+	gap: 6px;
+	max-width: 430px;
+	margin: 20px auto 0;
+	padding: 16px;
+	text-align: left;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-md);
+	background: #f4f0e8;
+}
+.db-catering .dbc-review-invite span { color: var(--dbc-muted); font-size: 14px; }
+.db-catering .dbc-review-invite__actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.db-catering .dbc-review-invite a { width: fit-content; color: var(--dbc-ember); font-weight: 800; text-underline-offset: 3px; }
+
 @media (max-width: 540px) {
 	.db-catering .dbc-submit {
 		align-self: stretch;

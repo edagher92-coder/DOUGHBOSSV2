@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.1
+Stable tag: 2.24.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.2 =
+* Add optional, owner-configurable Google review invitations to the homepage and successful customer flows.
+* Put Instagram first in the social follow-up and emit privacy-safe first-party engagement events for later AdPilot reporting.
+* Add Google Maps links to local-business schema without publishing self-awarded ratings.
+* Restrict review destinations to secure Google-owned URLs and keep after-hours requests free of premature review prompts.
 
 = 2.24.1 =
 * Replace the tilted circular photo collage with transparent, menu-accurate food cutouts.

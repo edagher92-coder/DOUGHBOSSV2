@@ -77,6 +77,9 @@ jobs:
           php tests/activation-location-seed.php
           node --test tests/menu-photo-contract.test.js
           node --test tests/storefront-options-contract.test.js
+          node --test tests/seo-contract.test.js
+          node --test tests/wordpress-seo-marketing-contract.test.js
+          node --test tests/google-review-contract.test.js
 
   build-zip:
     name: Build installable plugin zip

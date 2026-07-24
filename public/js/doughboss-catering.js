@@ -290,6 +290,39 @@
 		} else {
 			box.appendChild(el('<p class="dbc-sub">' + esc(data.message || 'We\'ll be in touch shortly to confirm your quote and deposit link.') + '</p>'));
 		}
+		var reviewUrl = window.DoughBossData && window.DoughBossData.googleReviewUrl;
+		var review = document.createElement('div');
+		review.className = 'dbc-review-invite';
+		var title = document.createElement('strong');
+		title.textContent = 'Stay close to the bake.';
+		var copy = document.createElement('span');
+		copy.textContent = 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.';
+		var actions = document.createElement('div');
+		actions.className = 'dbc-review-invite__actions';
+		var instagram = document.createElement('a');
+		instagram.href = 'https://instagram.com/doughboss';
+		instagram.target = '_blank';
+		instagram.rel = 'noopener noreferrer';
+		instagram.setAttribute('data-doughboss-engagement', 'social_engagement');
+		instagram.setAttribute('data-content-name', 'Instagram');
+		instagram.setAttribute('data-channel', 'catering_success');
+		instagram.textContent = 'Follow @doughboss ↗';
+		actions.appendChild(instagram);
+		if (reviewUrl) {
+			var link = document.createElement('a');
+			link.href = reviewUrl;
+			link.target = '_blank';
+			link.rel = 'noopener noreferrer';
+			link.setAttribute('data-doughboss-engagement', 'review_engagement');
+			link.setAttribute('data-content-name', 'Google review');
+			link.setAttribute('data-channel', 'catering_success');
+			link.textContent = 'Leave a Google review ↗';
+			actions.appendChild(link);
+		}
+		review.appendChild(title);
+		review.appendChild(copy);
+		review.appendChild(actions);
+		box.appendChild(review);
 
 		if (root.scrollIntoView) { root.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 	}

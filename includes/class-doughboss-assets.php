@@ -193,6 +193,7 @@ class DoughBoss_Assets {
 				'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+				'googleReviewUrl' => DoughBoss_Settings::google_review_url(),
 				'payments' => array(
 					'enabled' => $payments_on,
 					// Public-safe browser identifier for the ACTIVE gateway:

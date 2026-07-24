@@ -6,6 +6,7 @@
 	var menuView = document.getElementById('view-menu');
 	if (!menuView) { return; }
 	var CFG = window.DBDemo.config;
+	var GOOGLE_REVIEW_URL = 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+12+25+Selems+Parade+Revesby+NSW+2212';
 	var DEFAULT_LOCATION = window.DBDemo.getLocation(CFG.defaultLocationId);
 	document.documentElement.lang = CFG.region.language;
 	document.documentElement.dir = CFG.region.direction;
@@ -642,6 +643,11 @@
 		var journey = afterHours
 			? '<div class="cd-receipt" aria-label="Preorder request journey"><div class="cd-receipt__head"><span>Preorder request</span><span class="cd-receipt__state">Awaiting morning review</span></div><ol class="cd-track"><li class="is-now">Request received</li><li>Revesby review</li><li>Confirmation before payment</li></ol></div>'
 			: '<div class="cd-receipt" aria-label="Demo order journey"><div class="cd-receipt__head"><span>Payment confirmation</span><span class="cd-receipt__state">Confirmed in demo</span></div><ol class="cd-track"><li class="is-now">Order received</li><li>In the oven</li><li>Ready for pickup</li></ol></div>';
+		var reviewInvite =
+			'<div class="cd-review-invite"><b>Stay close to the bake.</b><span>Follow Dough Boss for fresh drops, offers and what&rsquo;s coming out of the oven.</span><div class="cd-review-invite__actions">' +
+			'<a href="https://instagram.com/doughboss" target="_blank" rel="noopener noreferrer" data-doughboss-engagement="social_engagement" data-content-name="Instagram" data-channel="order_success">Follow @doughboss &nearr;</a>' +
+			(afterHours ? '' : '<a href="' + GOOGLE_REVIEW_URL + '" target="_blank" rel="noopener noreferrer" data-doughboss-engagement="review_engagement" data-content-name="Google review" data-channel="order_success">Leave a Google review &nearr;</a>') +
+			'</div></div>';
 		trackCommerce(afterHours ? 'generate_lead' : 'purchase_simulated', {
 			content_ids: Object.keys(cart).map(function (key) { return cart[key].name; }),
 			content_name: afterHours ? 'After-hours preorder request' : 'Demo order',
@@ -658,7 +664,7 @@
 			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>' + (afterHours ? 'Preorder request received, ' : 'Thanks, ') + esc(name) + '!</h3><p>' + (afterHours ? 'Unconfirmed preorder request' : 'Demo order') + ' <strong>' + esc(ref) + '</strong>' + (afterHours ? '' : ' &middot; ' + amt) + vline + '</p>' +
 			'<p class="cd-eta">' + (afterHours ? 'We&rsquo;ll review this with <strong>Revesby</strong> first thing in the morning and contact you to confirm it. For now, preorders can be arranged from Revesby or the night before. <strong>No payment has been taken.</strong>' : esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated') + '</p>' + journey +
 			'<div class="cd-summary cd-donesum">' + summaryLines() + '</div>' +
-			saving + '<button type="button" class="cd-copyref" data-copyref="' + esc(ref) + '">Copy order number</button><p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
+			saving + '<button type="button" class="cd-copyref" data-copyref="' + esc(ref) + '">Copy order number</button>' + reviewInvite + '<p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
 		cart = {};
 		voucher = null;
 		pendingOrder = null;

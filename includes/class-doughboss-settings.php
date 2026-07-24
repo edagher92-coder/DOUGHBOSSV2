@@ -102,6 +102,9 @@ class DoughBoss_Settings {
 			// Blank is safe: emails still include the order number and matching-
 			// email instructions, but no potentially broken tracking link.
 			'tracking_page_url' => '',
+			// Public Google Business review destination. The Maps listing is a safe
+			// fallback until the owner pastes the exact "Ask for reviews" short link.
+			'google_review_url' => 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+12+25+Selems+Parade+Revesby+NSW+2212',
 			// Keep logged-in sessions for this many days (0 = WordPress default).
 			// Set high (e.g. 3650) so shop tablets stay signed in; off by default.
 			'staff_session_days' => 0,
@@ -348,6 +351,35 @@ class DoughBoss_Settings {
 			$url = add_query_arg( 'order', (string) $order_number, $url );
 		}
 		return (string) apply_filters( 'doughboss_tracking_page_url', $url, $order_number );
+	}
+
+	/**
+	 * Public Google Business review destination.
+	 *
+	 * @return string HTTPS Google URL, or empty when the invitation is disabled.
+	 */
+	public static function google_review_url() {
+		$url = self::sanitize_google_review_url( self::get( 'google_review_url', '' ) );
+		return (string) apply_filters( 'doughboss_google_review_url', $url );
+	}
+
+	/**
+	 * Only allow HTTPS destinations owned by Google.
+	 *
+	 * @param string $url Candidate review URL.
+	 * @return string
+	 */
+	public static function sanitize_google_review_url( $url ) {
+		$url    = esc_url_raw( trim( (string) $url ) );
+		$target = wp_parse_url( $url );
+		if ( ! is_array( $target ) || 'https' !== strtolower( (string) ( isset( $target['scheme'] ) ? $target['scheme'] : '' ) ) ) {
+			return '';
+		}
+		$host = strtolower( (string) ( isset( $target['host'] ) ? $target['host'] : '' ) );
+		if ( ! preg_match( '/(^|\.)google\.(com|com\.au)$/', $host ) && 'g.page' !== $host ) {
+			return '';
+		}
+		return $url;
 	}
 
 	/**

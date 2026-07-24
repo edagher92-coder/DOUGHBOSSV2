@@ -89,4 +89,20 @@ window.DoughBossMarketing.track('purchase_simulated', { value: 10, currency: 'AU
 assert.strictEqual(meta.length, 1, 'simulated purchase never reaches Meta');
 assert.strictEqual(tiktok.length, 1, 'simulated purchase never reaches TikTok');
 
+const socialLink = {
+	getAttribute(name) {
+		return {
+			'data-doughboss-engagement': 'social_engagement',
+			'data-content-name': 'Instagram',
+			'data-channel': 'homepage',
+		}[name] || '';
+	},
+};
+listeners.click({ target: { closest() { return socialLink; } } });
+const socialEnvelope = dispatched.find((event) => event.type === 'doughboss:marketing-event' && event.detail.event_type === 'social_engagement').detail;
+assert.strictEqual(socialEnvelope.properties.content_name, 'Instagram');
+assert.strictEqual(socialEnvelope.properties.channel, 'homepage');
+assert.strictEqual(meta.length, 1, 'social engagement stays first-party and never becomes a misleading Meta commerce event');
+assert.strictEqual(tiktok.length, 1, 'social engagement stays first-party and never becomes a misleading TikTok commerce event');
+
 console.log('Marketing consent contract: PII allowlist, consent gates, attribution, and demo isolation passed.');

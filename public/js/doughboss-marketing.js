@@ -33,7 +33,9 @@
 		begin_checkout: { meta: 'InitiateCheckout', tiktok: 'InitiateCheckout' },
 		purchase: { meta: 'Purchase', tiktok: 'CompletePayment' },
 		purchase_simulated: { meta: '', tiktok: '' },
-		generate_lead: { meta: 'Lead', tiktok: 'SubmitForm' }
+		generate_lead: { meta: 'Lead', tiktok: 'SubmitForm' },
+		social_engagement: { meta: '', tiktok: '' },
+		review_engagement: { meta: '', tiktok: '' }
 	};
 
 	function clipped(value, max) {
@@ -143,6 +145,15 @@
 		getAttribution: function () { return Object.assign({}, attribution); },
 		getConsent: function () { return Object.assign({}, consent); }
 	};
+	document.addEventListener('click', function (event) {
+		var link = event && event.target && event.target.closest ? event.target.closest('[data-doughboss-engagement]') : null;
+		if (!link) { return; }
+		track(link.getAttribute('data-doughboss-engagement'), {
+			content_name: link.getAttribute('data-content-name') || '',
+			content_category: 'social',
+			channel: link.getAttribute('data-channel') || 'website'
+		});
+	});
 
 	// A host consent manager may provide already-resolved consent at page load.
 	if (config.initialConsent) { setConsent(config.initialConsent); }

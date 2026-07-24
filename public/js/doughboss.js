@@ -1097,6 +1097,32 @@
 						}
 					}));
 				}
+				var review = el('div', { class: 'db-review-invite' });
+				review.appendChild(el('strong', { text: 'Stay close to the bake.' }));
+				review.appendChild(el('span', { text: 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.' }));
+				var reviewActions = el('div', { class: 'db-review-invite__actions' });
+				reviewActions.appendChild(el('a', {
+					href: 'https://instagram.com/doughboss',
+					target: '_blank',
+					rel: 'noopener noreferrer',
+					'data-doughboss-engagement': 'social_engagement',
+					'data-content-name': 'Instagram',
+					'data-channel': 'order_success',
+					text: 'Follow @doughboss ↗'
+				}));
+				if (DATA.googleReviewUrl) {
+					reviewActions.appendChild(el('a', {
+						href: DATA.googleReviewUrl,
+						target: '_blank',
+						rel: 'noopener noreferrer',
+						'data-doughboss-engagement': 'review_engagement',
+						'data-content-name': 'Google review',
+						'data-channel': 'order_success',
+						text: 'Leave a Google review ↗'
+					}));
+				}
+				review.appendChild(reviewActions);
+				confirmation.appendChild(review);
 				parent.appendChild(confirmation);
 				trackCommerce('purchase', {
 					currency: 'AUD',

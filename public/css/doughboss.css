@@ -1092,6 +1092,19 @@
 /* Land category headings below the sticky bar on jump. */
 .db-app .db-category { scroll-margin-top: 64px; }
 
+.db-app .db-review-invite {
+	display: grid;
+	gap: .35rem;
+	margin-top: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-md);
+	background: var(--db-paper, #f7f5f0);
+}
+.db-app .db-review-invite span { color: var(--db-muted); font-size: .92rem; }
+.db-app .db-review-invite__actions { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.db-app .db-review-invite a { width: fit-content; color: var(--db-ember); font-weight: 800; text-underline-offset: 3px; }
+
 /* Success toast springs up from the bottom. */
 @keyframes db-toastin {
 	from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.96); }

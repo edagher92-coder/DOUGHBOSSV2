@@ -199,6 +199,9 @@ class DoughBoss_SEO {
 					'addressRegion'   => 'NSW',
 					'addressCountry'  => 'AU',
 				),
+				'hasMap'             => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode(
+					'Dough Boss ' . preg_replace( '/\s+/', ' ', (string) $location->address ) . ' ' . (string) $location->suburb . ' NSW'
+				),
 			);
 			$opening = $this->opening_hours( (int) $location->id );
 			if ( $opening ) {

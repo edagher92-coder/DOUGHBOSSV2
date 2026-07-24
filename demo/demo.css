@@ -798,3 +798,17 @@ body.cart-on{padding-bottom:114px;}
 .mn-it-n{font-size:25px;}
 .mn-it-p{font-size:25px;}
 body{font-size:17.5px;}
+
+/* Google review invitation: visible but quieter than the ordering CTA. */
+.review-invite{padding:clamp(54px,7vw,88px) 0;background:#f2eee6;border-top:1px solid rgba(17,17,17,.12);}
+.review-invite__inner{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:clamp(28px,6vw,80px);}
+.review-invite h2{font-size:clamp(42px,5.5vw,76px);margin:.08em 0 .12em;}
+.review-invite p:not(.eyebrow){max-width:670px;margin:0;color:#514d46;line-height:1.65;}
+.review-invite__button{white-space:nowrap;}
+.review-invite__actions{display:grid;justify-items:stretch;gap:12px;min-width:min(100%,280px);}
+.review-invite__secondary{color:var(--ink);font-weight:800;text-align:center;text-underline-offset:4px;}
+.cd-review-invite{display:grid;gap:5px;margin:14px 0 2px;padding:15px;border:1px solid var(--linel);border-radius:var(--r-md);background:#f2eee6;color:var(--ink);}
+.cd-review-invite span{font-size:13px;line-height:1.45;color:#5e594f;}
+.cd-review-invite__actions{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:5px;}
+.cd-review-invite a{width:max-content;color:var(--ember);font-weight:800;text-underline-offset:3px;}
+@media(max-width:720px){.review-invite__inner{grid-template-columns:1fr;}.review-invite__button{width:100%;justify-content:center;}}
