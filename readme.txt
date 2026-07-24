@@ -71,6 +71,7 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 * Replace the tilted circular photo collage with transparent, menu-accurate food cutouts.
 * Reduce the 3D tilt so manoush, minis and pies retain their natural shape on desktop and mobile.
 * Keep replay, reduced-motion fallback and WordPress hero behaviour aligned.
+* Record MPGS Hosted Checkout as the Revesby Visa/Mastercard acceptance path while keeping payments disabled until sandbox approval.
 
 = 2.24.0 =
 * Add Mastercard Payment Gateway Services as a separate Hosted Checkout gateway.

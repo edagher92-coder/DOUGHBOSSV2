@@ -45,8 +45,8 @@
 		],
 		payments: {
 			enabled: false,
-			allowedProviders: ['stripe', 'tyro'],
-			selectedProvider: null,
+			allowedProviders: ['mpgs', 'stripe', 'tyro'],
+			selectedProvider: 'mpgs',
 			allowPayOnPickup: true
 		},
 		promotions: { studentVoucher: { enabled: true, amount: 5 } },

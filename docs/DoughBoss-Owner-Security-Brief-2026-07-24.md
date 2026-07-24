@@ -19,6 +19,11 @@ Payment Gateway Services through Tyro, and Stripe. Only one is selected for a
 given checkout. Live payment mode remains locked until its provider credentials,
 staging tests and production approval have all been completed.
 
+**Owner decision recorded 24 July 2026:** Revesby will use Mastercard Payment
+Gateway Services through Tyro for online Visa and Mastercard acceptance. Tyro
+Connect and Stripe remain dormant fallbacks and are not mixed into the same
+payment attempt.
+
 **Owner position:** the important controls are built, but the system should
 still be described as **acceptance-ready**, not “live” or “fully certified”.
 

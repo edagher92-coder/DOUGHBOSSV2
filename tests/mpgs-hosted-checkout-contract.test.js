@@ -17,6 +17,7 @@ var assets = read('includes/class-doughboss-assets.php');
 var client = read('public/js/doughboss.js');
 var rest = read('includes/class-doughboss-rest-controller.php');
 var admin = read('admin/class-doughboss-admin.php');
+var launch = read('demo/config/profiles/doughboss-revesby-launch.js');
 
 test('MPGS is a separate gateway and never aliases Tyro Connect credentials', function () {
 	assert.match(payment, /'mpgs'\s*=>\s*'DoughBoss_MPGS'/);
@@ -55,4 +56,10 @@ test('public ordering stays independently gated and live MPGS is fail-closed', f
 	assert.match(rest, /DoughBoss_Settings::ordering_open\(\)/);
 	assert.match(settings, /'test'\s*===\s*self::mpgs_mode\(\)\s*\|\|\s*\(bool\) self::get\( 'mpgs_live_approved'/);
 	assert.match(rest, /\/pay\/mpgs-test/);
+});
+
+test('Revesby acceptance profile selects MPGS while real payments remain disabled', function () {
+	assert.match(launch, /allowedProviders:\s*\['mpgs', 'stripe', 'tyro'\]/);
+	assert.match(launch, /selectedProvider:\s*'mpgs'/);
+	assert.match(launch, /payments:\s*\{\s*enabled:\s*false/);
 });
