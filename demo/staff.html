@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dough Boss — Staff &amp; Kitchen Sign-in</title>
+<meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self';">
+<!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
+     For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
+     Content-Security-Policy: frame-ancestors 'none'
+     X-Frame-Options: DENY -->
+<style>
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/bebasneue-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/barlow-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;src:url('assets/fonts/barlow-500.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;src:url('assets/fonts/barlow-600.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;src:url('assets/fonts/barlow-700.woff2') format('woff2');}
+:root{--paper:#f7f5f0;--ink:#0a0807;}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;background:var(--ink);-webkit-font-smoothing:antialiased;}
+.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
+.skip{position:absolute;top:-999px;left:12px;background:var(--paper);color:#0d0d0d;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+.skip:focus{top:0;}
+:focus-visible{outline:3px solid var(--paper);outline-offset:3px;border-radius:3px;}
+
+/* cinematic scene */
+.scene{position:relative;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:44px 18px 60px;}
+.scene-art{position:absolute;inset:0;width:100%;height:100%;z-index:0;animation:breathe 16s ease-in-out infinite alternate;will-change:transform;}
+.scene-art svg{position:absolute;inset:0;width:100%;height:100%;}
+.scene-tint{position:absolute;inset:0;z-index:1;background:
+   radial-gradient(120% 95% at 50% 16%, rgba(10,8,7,.10), rgba(10,8,7,.72) 80%),
+   linear-gradient(180deg, rgba(10,8,7,.42) 0%, rgba(10,8,7,.30) 40%, rgba(10,8,7,.86) 100%);}
+.scene-grain{position:absolute;inset:0;z-index:1;opacity:.05;pointer-events:none;
+   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+.flour{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;}
+.fleck{position:absolute;top:-14px;border-radius:50%;background:#f6efe2;opacity:.6;filter:blur(.4px);animation:fall linear infinite;}
+@keyframes breathe{from{transform:scale(1.02);}to{transform:scale(1.08);}}
+@keyframes fall{0%{transform:translateY(0) translateX(0);opacity:0;}10%{opacity:.7;}100%{transform:translateY(108svh) translateX(22px);opacity:0;}}
+
+/* the rolling-dough animation (all self-contained SVG) */
+.arms{transform-box:fill-box;transform-origin:left center;animation:roll 2.6s ease-in-out infinite alternate;will-change:transform;}
+.torso{transform-box:fill-box;transform-origin:bottom center;animation:lean 2.6s ease-in-out infinite alternate;will-change:transform;}
+.dough{transform-box:fill-box;transform-origin:center;animation:squash 2.6s ease-in-out infinite alternate;will-change:transform;}
+.bokeh{transform-box:fill-box;transform-origin:center;animation:drift 11s ease-in-out infinite alternate;}
+.bokeh.b2{animation-duration:15s;animation-direction:alternate-reverse;}
+.puff{opacity:0;transform-box:fill-box;transform-origin:center;animation:puff 3s ease-out infinite;}
+.puff.p2{animation-delay:1s;} .puff.p3{animation-delay:2.1s;}
+@keyframes roll{from{transform:translateX(-16px) translateY(2px);}to{transform:translateX(15px) translateY(0);}}
+@keyframes lean{from{transform:rotate(-1.4deg);}to{transform:rotate(1.8deg);}}
+@keyframes squash{from{transform:scaleX(1) scaleY(1.04);}to{transform:scaleX(1.2) scaleY(.94);}}
+@keyframes drift{from{transform:translateY(0);}to{transform:translateY(-16px);}}
+@keyframes puff{0%{opacity:0;transform:translateY(0) scale(.5);}20%{opacity:.55;}100%{opacity:0;transform:translateY(-50px) scale(1.5);}}
+
+/* foreground */
+.stage{position:relative;z-index:2;width:100%;max-width:440px;text-align:center;}
+.brand-mark{display:inline-flex;flex-direction:column;align-items:center;gap:6px;line-height:1;text-shadow:0 4px 30px rgba(0,0,0,.55);}
+.brand-mark .bm-box{font-family:'Bebas Neue',sans-serif;font-size:clamp(24px,6vw,34px);letter-spacing:4px;color:#fff;border:3px solid #fff;padding:9px 11px 8px 15px;white-space:nowrap;}
+.brand-mark .bm-dot{letter-spacing:0;}
+.brand-mark .bm-sub{font-family:'Barlow',sans-serif;font-weight:600;font-size:10px;letter-spacing:.4em;text-transform:uppercase;color:#d7d1c6;padding-left:.4em;white-space:nowrap;}
+.eyebrow{font-family:'Bebas Neue',sans-serif;letter-spacing:.32em;text-transform:uppercase;font-size:14px;color:var(--paper);margin-top:6px;}
+.tagline{color:#e7ddcd;font-size:14.5px;margin:6px 0 24px;text-shadow:0 2px 14px rgba(0,0,0,.65);}
+
+/* login card */
+.card{background:rgba(18,15,12,.64);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:26px 24px;box-shadow:0 24px 60px rgba(0,0,0,.55);text-align:left;}
+.card h2{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:24px;margin:0 0 4px;color:#fff;}
+.card .hint{font-size:12.5px;color:#b8b1a4;margin:0 0 18px;}
+.fld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.fld label{font-family:'Bebas Neue',sans-serif;letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:#cfc9bd;}
+.fld input{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:12px 14px;font:inherit;font-size:15px;}
+.fld input:focus-visible{outline:3px solid var(--paper);outline-offset:2px;border-color:var(--paper);}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#0d0d0d;background:var(--paper);box-shadow:0 12px 30px rgba(0,0,0,.35);transition:filter .15s,transform .1s;text-decoration:none;}
+.btn:hover{filter:brightness(1.07);}
+.btn:active{transform:scale(.98);}
+.err{color:#ffb38a;font-size:13px;min-height:1em;margin:4px 0 0;}
+.signed{text-align:center;}
+.signed-t{color:#e7ddcd;font-size:15px;margin:0 0 14px;}
+.signed-t small{color:#b8b1a4;}
+.signed .btn{margin-bottom:10px;}
+.signout{width:100%;background:transparent;border:1px solid rgba(255,255,255,.18);color:#cfc9bd;border-radius:11px;padding:11px;font:inherit;font-size:14px;cursor:pointer;}
+.signout:hover{background:rgba(255,255,255,.06);}
+.divider{display:flex;align-items:center;gap:12px;color:#8d877c;font-size:12px;letter-spacing:.08em;margin:20px 0 16px;}
+.divider::before,.divider::after{content:"";height:1px;flex:1;background:rgba(255,255,255,.14);}
+.backend{display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:13px 15px;text-decoration:none;color:#f3efe8;transition:background .15s;}
+.backend:hover{background:rgba(0,0,0,.42);}
+.backend b{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:17px;display:block;}
+.backend small{color:#b8b1a4;font-size:12px;}
+.backend .arr{color:var(--paper);font-size:20px;}
+.foot{position:relative;z-index:2;margin-top:24px;font-size:11.5px;color:#a89f90;text-align:center;}
+.foot a{color:#cbbfaf;}
+
+/* role tabs */
+.roletabs{display:flex;gap:4px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:4px;margin-bottom:18px;}
+.roletab{flex:1;border:0;background:transparent;color:#cfc9bd;font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;font-size:15px;padding:10px 8px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s;}
+.roletab.is-active{background:var(--paper);color:#0d0d0d;}
+.roletab:not(.is-active):hover{background:rgba(255,255,255,.06);}
+.rolepanel{display:none;}
+.rolepanel.is-active{display:block;}
+.role-note{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:10px 12px;font-size:12px;color:#e7ddcd;margin:0 0 16px;}
+@media(prefers-reduced-motion:reduce){
+	.scene-art,.arms,.torso,.dough,.bokeh{animation:none;}
+	.puff,.fleck{display:none;}
+}
+.demo-ribbon{position:fixed;bottom:0;left:0;right:0;z-index:80;background:#0d0d0d;color:#cfc9bf;text-align:center;font-size:12px;padding:7px 12px;letter-spacing:.02em;}
+.demo-ribbon b{color:#fff;}
+</style>
+</head>
+<body>
+<a class="skip" href="#staff-form">Skip to sign-in</a>
+<main class="scene">
+  <!-- Self-contained cinematic scene: a teta (grandmother) rolling dough by the
+       stone oven. Fully drawn in SVG + CSS so it always renders, stays light,
+       and needs no external image or video. -->
+  <div class="scene-art" aria-hidden="true">
+    <svg viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#241407"/>
+          <stop offset="0.5" stop-color="#1c1109"/>
+          <stop offset="1" stop-color="#100a06"/>
+        </linearGradient>
+        <radialGradient id="oven" cx="0.78" cy="0.28" r="0.55">
+          <stop offset="0" stop-color="#ff9b3d" stop-opacity="0.55"/>
+          <stop offset="0.45" stop-color="#d9701f" stop-opacity="0.22"/>
+          <stop offset="1" stop-color="#d9701f" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="table" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#5a3a20"/>
+          <stop offset="0.12" stop-color="#46291599"/>
+          <stop offset="1" stop-color="#2c190c"/>
+        </linearGradient>
+        <radialGradient id="dough" cx="0.4" cy="0.32" r="0.8">
+          <stop offset="0" stop-color="#f7eccf"/>
+          <stop offset="1" stop-color="#e2cda3"/>
+        </radialGradient>
+        <filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+        <filter id="soft2"><feGaussianBlur stdDeviation="3"/></filter>
+      </defs>
+
+      <!-- backdrop + oven glow -->
+      <rect width="600" height="460" fill="url(#sky)"/>
+      <rect width="600" height="460" fill="url(#oven)"/>
+
+      <!-- oven mouth, warm, top-right -->
+      <g opacity="0.85">
+        <ellipse cx="500" cy="150" rx="78" ry="62" fill="#0c0805"/>
+        <ellipse cx="500" cy="150" rx="60" ry="46" fill="#7a3a12"/>
+        <ellipse cx="500" cy="158" rx="44" ry="30" fill="#e07a1e"/>
+        <ellipse cx="500" cy="166" rx="30" ry="18" fill="#ffb24d"/>
+      </g>
+
+      <!-- hanging-bulb bokeh -->
+      <circle class="bokeh" cx="120" cy="90" r="34" fill="#ffcf8a" opacity="0.10" filter="url(#soft)"/>
+      <circle class="bokeh b2" cx="300" cy="60" r="22" fill="#ffd79a" opacity="0.08" filter="url(#soft)"/>
+
+      <!-- flour puffs rising off the dough -->
+      <g>
+        <circle class="puff" cx="300" cy="350" r="9" fill="#f4ead2" filter="url(#soft2)"/>
+        <circle class="puff p2" cx="330" cy="352" r="7" fill="#f4ead2" filter="url(#soft2)"/>
+        <circle class="puff p3" cx="360" cy="350" r="8" fill="#f4ead2" filter="url(#soft2)"/>
+      </g>
+
+      <!-- work table -->
+      <rect x="150" y="362" width="450" height="60" fill="url(#table)"/>
+      <rect x="150" y="362" width="450" height="4" fill="#6b4424" opacity="0.7"/>
+
+      <!-- dough on the table -->
+      <ellipse class="dough" cx="332" cy="356" rx="50" ry="13" fill="url(#dough)"/>
+      <ellipse cx="332" cy="354" rx="34" ry="7" fill="#fff4dd" opacity="0.5"/>
+
+      <!-- the teta (grandmother), side profile, facing the dough -->
+      <g class="torso">
+        <!-- stool -->
+        <rect x="150" y="356" width="14" height="60" rx="4" fill="#15100a"/>
+        <!-- skirt / lower body -->
+        <path d="M132 360 q-14 -70 36 -96 q40 -18 58 16 q14 26 2 70 q-8 28 -48 28 q-40 0 -48 -18 z" fill="#160d06"/>
+        <!-- apron highlight -->
+        <path d="M150 300 q26 -16 52 4 q6 36 -6 64 q-26 12 -48 -2 q-6 -34 2 -66 z" fill="#241710" opacity="0.85"/>
+        <!-- hunched back + shoulder -->
+        <path d="M150 286 q-18 -54 24 -86 q22 -16 44 -8 q-30 6 -40 34 q-10 28 -2 64 z" fill="#120b06"/>
+        <!-- head -->
+        <circle cx="206" cy="196" r="27" fill="#1a1009"/>
+        <!-- headscarf (mandeel) draping down the back -->
+        <path d="M182 188 q22 -34 56 -16 q14 10 12 30 q-2 16 -14 22 q4 -26 -14 -38 q-22 -14 -40 2 z" fill="#2a1a10"/>
+        <path d="M196 214 q22 6 34 -4 q4 30 -10 58 q-18 8 -34 -2 q2 -28 10 -52 z" fill="#221409"/>
+        <!-- warm rim light on head + back, toward the oven -->
+        <path d="M228 186 q10 12 6 30" stroke="#e9923c" stroke-width="2.4" fill="none" opacity="0.6" stroke-linecap="round"/>
+        <path d="M196 172 q22 -10 38 6" stroke="#e9923c" stroke-width="2.2" fill="none" opacity="0.45" stroke-linecap="round"/>
+
+        <!-- arms + rolling pin (the rolling motion) -->
+        <g class="arms">
+          <!-- far arm -->
+          <path d="M210 250 q44 6 92 70" stroke="#160d06" stroke-width="20" fill="none" stroke-linecap="round"/>
+          <!-- near arm -->
+          <path d="M206 258 q40 18 78 64" stroke="#1d120a" stroke-width="22" fill="none" stroke-linecap="round"/>
+          <!-- rolling pin -->
+          <rect x="286" y="330" width="92" height="18" rx="9" fill="#caa06a"/>
+          <rect x="286" y="330" width="92" height="6" rx="3" fill="#e8caa0" opacity="0.8"/>
+          <rect x="276" y="334" width="14" height="10" rx="5" fill="#8a6a40"/>
+          <rect x="374" y="334" width="14" height="10" rx="5" fill="#8a6a40"/>
+          <!-- hands -->
+          <circle cx="296" cy="339" r="10" fill="#1d120a"/>
+          <circle cx="368" cy="339" r="10" fill="#1d120a"/>
+        </g>
+      </g>
+
+      <!-- soft floor shadow -->
+      <ellipse cx="300" cy="430" rx="220" ry="20" fill="#000" opacity="0.35" filter="url(#soft)"/>
+    </svg>
+  </div>
+  <div class="scene-tint" aria-hidden="true"></div>
+  <div class="scene-grain" aria-hidden="true"></div>
+  <div class="flour" id="flour" aria-hidden="true"></div>
+
+  <div class="stage">
+    <h1 class="vh">Dough Boss &mdash; Staff &amp; Kitchen sign-in</h1>
+    <div class="brand-mark"><span class="bm-box">DOUGH BOSS<span class="bm-dot">.</span></span><span class="bm-sub">Lebanese Bakery</span></div>
+    <div class="eyebrow">Kitchen &amp; Staff</div>
+    <p class="tagline">Fresh from the stone oven &middot; since 2009</p>
+
+    <div class="card">
+      <div class="roletabs" role="tablist" aria-label="Sign-in role">
+        <button type="button" class="roletab is-active" id="tab-staff" role="tab" aria-selected="true" aria-controls="panel-staff">Staff</button>
+        <button type="button" class="roletab" id="tab-owner" role="tab" aria-selected="false" aria-controls="panel-owner">Owner / Manager</button>
+      </div>
+
+      <div class="signed" id="signed" hidden></div>
+
+      <div class="rolepanel is-active" id="panel-staff" role="tabpanel" aria-labelledby="tab-staff">
+        <h2>Staff sign-in</h2>
+        <p class="hint">Sign in to open the orders platform for your shop. <span style="color:#b8b1a4">Demo: any staff ID and passcode work.</span></p>
+        <form id="staff-form" novalidate>
+          <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required aria-describedby="su-err"></div>
+          <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
+          <p class="vh" role="status" aria-live="polite" id="form-status"></p>
+          <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
+          <p class="err" id="su-err" role="alert" aria-live="assertive"></p>
+        </form>
+      </div>
+
+      <div class="rolepanel" id="panel-owner" role="tabpanel" aria-labelledby="tab-owner" hidden>
+        <h2>Owner / Manager sign-in</h2>
+        <p class="hint">Sales &amp; revenue, stores, catering pipeline and all orders. <span style="color:#b8b1a4">Demo: any owner ID and passcode work.</span></p>
+        <div class="role-note" aria-hidden="true">In production this authenticates against the full WordPress admin, not the staff orders platform.</div>
+        <form id="owner-form" novalidate>
+          <div class="fld"><label for="ou">Owner / Manager ID</label><input id="ou" name="user" type="text" autocomplete="username" placeholder="Owner ID" required aria-describedby="ou-err"></div>
+          <div class="fld"><label for="op">Passcode</label><input id="op" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="ou-err"></div>
+          <p class="vh" role="status" aria-live="polite" id="owner-form-status"></p>
+          <button type="submit" class="btn">Open owner dashboard <span aria-hidden="true">→</span></button>
+          <p class="err" id="ou-err" role="alert" aria-live="assertive"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">Demo &middot; in production this authenticates staff to the orders platform and owners to the full WordPress admin. &middot; <a href="index.html">Main site</a></div>
+</main>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var field = document.getElementById('flour');
+  if (field && !reduce) {
+    var n = window.innerWidth < 640 ? 22 : 40, frag = document.createDocumentFragment();
+    for (var i=0;i<n;i++){
+      var s = document.createElement('span'); s.className='fleck';
+      var sz=(Math.random()*4+2).toFixed(1), dur=(Math.random()*10+10).toFixed(1);
+      s.style.left=(Math.random()*100).toFixed(2)+'%';
+      s.style.width=sz+'px'; s.style.height=sz+'px';
+      s.style.opacity=(Math.random()*0.5+0.25).toFixed(2);
+      s.style.animationDuration=dur+'s';
+      s.style.animationDelay=(-Math.random()*dur).toFixed(1)+'s';
+      frag.appendChild(s);
+    }
+    field.appendChild(frag);
+  }
+  var KEY='db_staff';
+  var tabs = document.getElementById('signed').parentElement;
+  var tabStaff = document.getElementById('tab-staff'), tabOwner = document.getElementById('tab-owner'),
+      panelStaff = document.getElementById('panel-staff'), panelOwner = document.getElementById('panel-owner'),
+      roletabs = document.querySelector('.roletabs');
+  var staffForm = document.getElementById('staff-form'), staffErr = document.getElementById('su-err'),
+      ownerForm = document.getElementById('owner-form'), ownerErr = document.getElementById('ou-err'),
+      signed = document.getElementById('signed');
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+  function selectTab(role){
+    var toStaff = role==='staff';
+    tabStaff.classList.toggle('is-active', toStaff);
+    tabOwner.classList.toggle('is-active', !toStaff);
+    tabStaff.setAttribute('aria-selected', toStaff ? 'true' : 'false');
+    tabOwner.setAttribute('aria-selected', !toStaff ? 'true' : 'false');
+    tabStaff.setAttribute('tabindex', toStaff ? '0' : '-1');
+    tabOwner.setAttribute('tabindex', !toStaff ? '0' : '-1');
+    panelStaff.classList.toggle('is-active', toStaff);
+    panelOwner.classList.toggle('is-active', !toStaff);
+    panelStaff.hidden = !toStaff;
+    panelOwner.hidden = toStaff;
+  }
+  var roleTabs = [tabStaff, tabOwner];
+  roleTabs.forEach(function(t){ t.setAttribute('tabindex', t.getAttribute('aria-selected')==='true' ? '0' : '-1'); });
+  tabStaff.addEventListener('click', function(){ selectTab('staff'); tabStaff.focus(); });
+  tabOwner.addEventListener('click', function(){ selectTab('owner'); tabOwner.focus(); });
+  roletabs.addEventListener('keydown', function(e){
+    if (e.key!=='ArrowRight' && e.key!=='ArrowLeft') return;
+    var idx = roleTabs.indexOf(document.activeElement); if (idx===-1) return;
+    e.preventDefault();
+    var next = e.key==='ArrowRight' ? (idx+1)%roleTabs.length : (idx-1+roleTabs.length)%roleTabs.length;
+    roleTabs[next].focus(); roleTabs[next].click();
+  });
+
+  // Persistent session: localStorage has no expiry, so a signed-in staffer stays
+  // signed in indefinitely (no timeout) until they explicitly sign out.
+  function showSigned(name, role){
+    roletabs.style.display='none';
+    panelStaff.hidden=true; panelOwner.hidden=true;
+    signed.hidden=false;
+    var isOwner = role==='owner';
+    var dest = isOwner ? 'owner.html' : 'backend.html';
+    var label = isOwner ? 'Open owner dashboard' : 'Open orders &amp; kitchen';
+    signed.innerHTML='<p class="signed-t">&#10003; Signed in as <b>'+esc(name)+'</b> <small>('+(isOwner?'Owner/Manager':'Staff')+')</small><br><small>Staying signed in &mdash; no timeout.</small></p>'+
+      '<a class="btn" href="'+dest+'">'+label+'</a>'+
+      '<button type="button" class="signout" id="signout">Sign out</button>';
+    var so=document.getElementById('signout');
+    if(so){ so.addEventListener('click', function(){ try{localStorage.removeItem(KEY); localStorage.removeItem('db_role');}catch(_){} window.location.reload(); }); }
+  }
+  try{
+    var existing=localStorage.getItem(KEY);
+    if(existing){ showSigned(existing, localStorage.getItem('db_role')||'staff'); }
+  }catch(_){}
+
+  staffForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var u=document.getElementById('su').value.trim(), p=document.getElementById('sp').value;
+    if(!u||!p){ staffErr.textContent='Enter your staff ID and passcode.'; return; }
+    staffErr.textContent='';
+    var btn=staffForm.querySelector('.btn');
+    try{ localStorage.setItem(KEY, u); localStorage.setItem('db_role', 'staff'); }catch(_){
+      staffErr.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
+      return;
+    }
+    btn.setAttribute('aria-busy','true');
+    btn.disabled=true;
+    btn.innerHTML='Signing in…';
+    document.getElementById('form-status').textContent='Signing in…';
+    setTimeout(function(){ window.location.href='backend.html'; }, 650);
+  });
+
+  ownerForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var u=document.getElementById('ou').value.trim(), p=document.getElementById('op').value;
+    if(!u||!p){ ownerErr.textContent='Enter your owner/manager ID and passcode.'; return; }
+    ownerErr.textContent='';
+    var btn=ownerForm.querySelector('.btn');
+    try{ localStorage.setItem(KEY, u); localStorage.setItem('db_role', 'owner'); }catch(_){
+      ownerErr.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
+      return;
+    }
+    btn.setAttribute('aria-busy','true');
+    btn.disabled=true;
+    btn.innerHTML='Signing in…';
+    document.getElementById('owner-form-status').textContent='Signing in…';
+    setTimeout(function(){ window.location.href='owner.html'; }, 650);
+  });
+}());
+</script>
+
+<div class="demo-ribbon">Concept demo · <b>sign-in &amp; staff accounts are simulated</b> · no real credentials or customer data.</div>
+</body>
+</html>
