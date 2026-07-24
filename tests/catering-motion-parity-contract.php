@@ -64,6 +64,13 @@ catering_parity_ok(
 		&& false !== strpos( $demo_js, "if (view === 'menu') { return 'menu'; }" ),
 	'homepage and menu both contain replayable, route-bound food build stages'
 );
+catering_parity_ok(
+	false !== strpos( $demo, 'ingredient-burst--signature' )
+		&& false === strpos( $demo, '<img class="ingredient-burst__manoush" src="assets/menu/zaatar-cheese.jpg"' )
+		&& false !== strpos( $demo_css, '.ingredient-burst--signature .ingredient-burst__manoush' )
+		&& false !== strpos( $demo_css, 'rotateX(14deg)' ),
+	'homepage uses natural-shape transparent food assets instead of the tilted oval photo collage'
+);
 catering_parity_ok( false !== strpos( $wp, 'data-db-manoush-replay' ) && false !== strpos( $wp_js, "replay.addEventListener('click'" ), 'WordPress provides an accessible replay control' );
 catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce)' ) && false !== strpos( $demo_css, '.hero-replay{display:none;}' ) && false !== strpos( $demo_js, "stage.classList.add('is-assembled')" ), 'demo has reduced-motion still-state and hides replay' );
 catering_parity_ok( false !== strpos( $wp_css, '@media (prefers-reduced-motion:reduce)' ) && false !== strpos( $wp_css, '.db-mh-replay { display: none; }' ) && false !== strpos( $wp_js, "hero.classList.add('is-assembled')" ), 'WordPress has reduced-motion still-state and hides replay' );

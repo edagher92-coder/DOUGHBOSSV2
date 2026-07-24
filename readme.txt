@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.0
+Stable tag: 2.24.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.1 =
+* Replace the tilted circular photo collage with transparent, menu-accurate food cutouts.
+* Reduce the 3D tilt so manoush, minis and pies retain their natural shape on desktop and mobile.
+* Keep replay, reduced-motion fallback and WordPress hero behaviour aligned.
 
 = 2.24.0 =
 * Add Mastercard Payment Gateway Services as a separate Hosted Checkout gateway.

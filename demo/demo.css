@@ -66,7 +66,8 @@ a{text-decoration:none;color:inherit;}
 .hero-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,rgba(10,8,7,.93) 0%,rgba(10,8,7,.74) 42%,rgba(10,8,7,.30) 72%,rgba(226,35,26,.12) 100%);}
 .hero[data-scroll-scene]{--scene-y:0px;--scene-scale:1.055;}
 .hero[data-scroll-scene] .hero-bg{inset:-5%;transform:translate3d(0,var(--scene-y),0) scale(var(--scene-scale));transform-origin:55% 50%;transition:transform 90ms linear;will-change:transform;}
-.hero-manoush .hero-bg{background-position:58% center;filter:saturate(1.01) contrast(1.05) brightness(.83);}
+.hero-manoush .hero-bg{background-position:60% center;filter:saturate(.9) contrast(1.08) brightness(.66);}
+.hero-manoush .hero-bg::after{background:linear-gradient(100deg,rgba(10,8,7,.96) 0%,rgba(10,8,7,.82) 42%,rgba(10,8,7,.47) 72%,rgba(10,8,7,.38) 100%);}
 .hero-menu-motion .hero-bg{background-position:52% center;filter:saturate(.94) contrast(1.07) brightness(.66);}
 .hero-catering-bites .hero-bg{background-position:60% center;filter:saturate(.82) contrast(1.08) brightness(.52);}
 .grain::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;opacity:.07;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
@@ -99,7 +100,7 @@ a{text-decoration:none;color:inherit;}
 /* Homepage ingredient burst: an understated, code-native motion layer rather
    than a large autoplaying film. It stays decorative, never competes with the
    first-order CTA, and respects reduced-motion preferences. */
-.ingredient-burst{position:absolute;z-index:2;right:clamp(1vw,3vw,5vw);top:50%;width:min(35vw,450px);aspect-ratio:1;perspective:1100px;transform:translateY(-48%) rotateX(4deg) rotateY(-5deg);transform-style:preserve-3d;pointer-events:none;}
+.ingredient-burst{position:absolute;z-index:2;right:clamp(1vw,3vw,5vw);top:50%;width:min(35vw,450px);aspect-ratio:1;perspective:1100px;transform:translateY(-48%) rotateX(1deg) rotateY(-2deg);transform-style:preserve-3d;pointer-events:none;}
 .ingredient-burst__glow{position:absolute;inset:17%;border-radius:50%;background:radial-gradient(circle,rgba(206,107,43,.31),rgba(206,107,43,.06) 45%,transparent 70%);filter:blur(2px);transform:translateZ(-120px);}
 .ingredient{position:absolute;width:clamp(82px,12vw,162px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.83);box-shadow:0 18px 42px rgba(0,0,0,.36);animation:ingredient-drift 7s var(--ease) infinite alternate;}
 .ingredient--zaatar{left:12%;top:12%;animation-delay:-1.4s;}
@@ -114,36 +115,40 @@ a{text-decoration:none;color:inherit;}
 /* Reusable full-manoush / catering-bites assembly states. `is-exploded` is
  * deliberately brief and quiet: it gives food a sense of craft without making
  * a customer wait for, or need to understand, an animation. */
-.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{position:absolute;z-index:2;left:50%;top:50%;width:clamp(126px,19vw,238px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.86);box-shadow:0 22px 48px rgba(0,0,0,.44);backface-visibility:hidden;opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(51deg) rotateZ(-5deg) scale(1);transform-style:preserve-3d;transition:opacity 380ms ease,transform 1000ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
-.ingredient-burst[data-manoush-stage] .ingredient{z-index:1;left:50%;top:50%;right:auto;bottom:auto;margin:0;animation:none;backface-visibility:hidden;opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(48deg) rotateZ(var(--near-r)) scale(1);transform-style:preserve-3d;transition:opacity 300ms ease,transform 920ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
-.ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-128px;--scatter-y:-84px;--scatter-z:230px;--scatter-r:-20deg;--scatter-rx:68deg;--scatter-ry:-18deg;--near-x:-102px;--near-y:-61px;--near-z:42px;--near-r:-9deg;}
-.ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:145px;--scatter-y:-50px;--scatter-z:285px;--scatter-r:18deg;--scatter-rx:74deg;--scatter-ry:22deg;--near-x:108px;--near-y:-47px;--near-z:62px;--near-r:8deg;}
-.ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-92px;--scatter-y:125px;--scatter-z:205px;--scatter-r:-13deg;--scatter-rx:64deg;--scatter-ry:-20deg;--near-x:-82px;--near-y:88px;--near-z:48px;--near-r:-6deg;}
-.ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:124px;--scatter-y:104px;--scatter-z:260px;--scatter-r:16deg;--scatter-rx:70deg;--scatter-ry:19deg;--near-x:90px;--near-y:80px;--near-z:58px;--near-r:7deg;}
+.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{position:absolute;z-index:2;left:50%;top:50%;width:clamp(126px,19vw,238px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.86);box-shadow:0 22px 48px rgba(0,0,0,.44);backface-visibility:hidden;opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(14deg) rotateZ(-3deg) scale(1);transform-style:preserve-3d;transition:opacity 380ms ease,transform 1000ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage] .ingredient{z-index:1;left:50%;top:50%;right:auto;bottom:auto;margin:0;animation:none;backface-visibility:hidden;opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(10deg) rotateZ(var(--near-r)) scale(1);transform-style:preserve-3d;transition:opacity 300ms ease,transform 920ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-128px;--scatter-y:-84px;--scatter-z:230px;--scatter-r:-20deg;--scatter-rx:18deg;--scatter-ry:-12deg;--near-x:-102px;--near-y:-61px;--near-z:42px;--near-r:-9deg;}
+.ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:145px;--scatter-y:-50px;--scatter-z:285px;--scatter-r:18deg;--scatter-rx:21deg;--scatter-ry:14deg;--near-x:108px;--near-y:-47px;--near-z:62px;--near-r:8deg;}
+.ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-92px;--scatter-y:125px;--scatter-z:205px;--scatter-r:-13deg;--scatter-rx:16deg;--scatter-ry:-13deg;--near-x:-82px;--near-y:88px;--near-z:48px;--near-r:-6deg;}
+.ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:124px;--scatter-y:104px;--scatter-z:260px;--scatter-r:16deg;--scatter-rx:19deg;--scatter-ry:12deg;--near-x:90px;--near-y:80px;--near-z:58px;--near-r:7deg;}
 .ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{z-index:3;opacity:1;transition:opacity 280ms ease 430ms,transform 900ms cubic-bezier(.2,.88,.2,1);transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);transform-style:preserve-3d;will-change:opacity,transform;}
-.ingredient-burst[data-manoush-stage].is-resetting .ingredient-burst__manoush{opacity:0;transform:translate3d(-50%,-50%,-140px) rotateX(58deg) rotateZ(-8deg) scale(.62);}
-.ingredient-burst[data-manoush-stage].is-resetting .ingredient{opacity:0;transform:translate3d(-50%,-50%,-180px) rotateX(72deg) scale(.58);}
+.ingredient-burst[data-manoush-stage].is-resetting .ingredient-burst__manoush{opacity:0;transform:translate3d(-50%,-50%,-140px) rotateX(24deg) rotateZ(-8deg) scale(.62);}
+.ingredient-burst[data-manoush-stage].is-resetting .ingredient{opacity:0;transform:translate3d(-50%,-50%,-180px) rotateX(28deg) scale(.58);}
 .ingredient-burst[data-manoush-stage].is-resetting .ingredient-burst__stamp{opacity:0;transform:translate3d(-50%,-50%,-100px) rotateX(62deg) rotateZ(-9deg) scale(.7);}
-.ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__manoush{opacity:.7;transform:translate3d(-50%,calc(-50% + 14px),-95px) rotateX(64deg) rotateY(-8deg) rotateZ(6deg) scale(.86);}
+.ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__manoush{opacity:.7;transform:translate3d(-50%,calc(-50% + 14px),-95px) rotateX(18deg) rotateY(-8deg) rotateZ(6deg) scale(.86);}
 .ingredient-burst[data-manoush-stage].is-exploded .ingredient{opacity:1;transform:translate3d(calc(-50% + var(--scatter-x)),calc(-50% + var(--scatter-y)),var(--scatter-z)) rotateX(var(--scatter-rx)) rotateY(var(--scatter-ry)) rotateZ(var(--scatter-r)) scale(1.08);}
 .ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__stamp{opacity:.94;transform:translate3d(-50%,-50%,170px) rotateX(48deg) rotateY(-10deg) rotateZ(7deg) scale(1.06);}
-.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(51deg) rotateZ(-5deg) scale(1);}
-.ingredient-burst[data-manoush-stage].is-assembled .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(48deg) rotateZ(var(--near-r)) scale(1);}
+.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(14deg) rotateZ(-3deg) scale(1);}
+.ingredient-burst[data-manoush-stage].is-assembled .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(10deg) rotateZ(var(--near-r)) scale(1);}
 .ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);}
 .ingredient-burst[data-manoush-stage].is-assembled{animation:db-stage-breathe 8s ease-in-out infinite alternate;}
 .ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:db-glow-breathe 4.8s ease-in-out infinite alternate;}
-@keyframes db-stage-breathe{from{transform:translateY(-48%) rotateX(4deg) rotateY(-5deg);}to{transform:translateY(calc(-48% - 5px)) rotateX(5.5deg) rotateY(-2deg);}}
+@keyframes db-stage-breathe{from{transform:translateY(-48%) rotateX(1deg) rotateY(-2deg);}to{transform:translateY(calc(-48% - 5px)) rotateX(2deg) rotateY(1deg);}}
 @keyframes db-glow-breathe{from{opacity:.68;transform:translateZ(-120px) scale(.94);}to{opacity:1;transform:translateZ(-120px) scale(1.08);}}
 .ingredient-burst--bites .ingredient-burst__manoush{width:clamp(230px,27vw,355px);height:auto;aspect-ratio:auto;object-fit:contain;border:0;border-radius:0;box-shadow:none;filter:drop-shadow(0 24px 25px rgba(0,0,0,.42)) saturate(1.03) contrast(1.02);}
 .ingredient-burst--bites .ingredient{width:clamp(112px,14vw,178px);height:auto;aspect-ratio:auto;object-fit:contain;border:0;border-radius:0;box-shadow:none;filter:drop-shadow(0 18px 18px rgba(0,0,0,.38));}
 .ingredient-burst--bites .ingredient--meat{width:clamp(150px,18vw,230px);}
 .ingredient-burst--bites .ingredient-burst__stamp{display:none;}
 .ingredient-burst--bites.is-exploded .ingredient,.ingredient-burst--bites.is-assembled .ingredient{filter:drop-shadow(0 20px 20px rgba(0,0,0,.4)) saturate(1.04);}
+.ingredient-burst--signature .ingredient-burst__manoush{width:clamp(250px,30vw,390px);}
+.ingredient-burst--signature .ingredient{width:clamp(102px,13vw,164px);}
+.ingredient-burst--signature .ingredient--meat{width:clamp(138px,17vw,215px);}
 .ingredient-burst--bites .ingredient--zaatar{--scatter-x:-145px;--scatter-y:-92px;--near-x:-92px;--near-y:-64px;}
 .ingredient-burst--bites .ingredient--cheese{--scatter-x:148px;--scatter-y:-92px;--near-x:94px;--near-y:-62px;}
 .ingredient-burst--bites .ingredient--meat{--scatter-x:-128px;--scatter-y:142px;--near-x:-84px;--near-y:88px;}
 .ingredient-burst--bites .ingredient--spinach{--scatter-x:136px;--scatter-y:128px;--near-x:88px;--near-y:82px;}
 .hero-manoush .hero-main .wrap,.hero-menu-motion .hero-main .wrap{width:100%;padding-right:clamp(310px,39vw,510px);}
+.hero-manoush .ingredient-burst{right:clamp(1vw,3vw,4vw);width:min(34vw,440px);}
 .hero-menu-motion .ingredient-burst{right:clamp(-1vw,2vw,3vw);width:min(36vw,480px);}
 .hero-catering-bites .ingredient-burst{right:-1vw;width:min(34vw,470px);}
 @media(max-width:800px){.ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-80px;--scatter-y:-64px;--near-x:-65px;--near-y:-42px;}.ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:80px;--scatter-y:-52px;--near-x:64px;--near-y:-36px;}.ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-62px;--scatter-y:76px;--near-x:-48px;--near-y:60px;}.ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:68px;--scatter-y:66px;--near-x:50px;--near-y:53px;}}
@@ -156,7 +161,7 @@ a{text-decoration:none;color:inherit;}
 	.hero-manoush .ingredient-burst{bottom:108px;}
 	.hero-menu-motion .ingredient-burst.is-assembled,.hero-manoush .ingredient-burst.is-assembled{animation:none;}
 }
-@media(prefers-reduced-motion:reduce){.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(51deg) rotateZ(-5deg) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(48deg) rotateZ(var(--near-r)) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);transition:none;}}
+@media(prefers-reduced-motion:reduce){.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(14deg) rotateZ(-3deg) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(10deg) rotateZ(var(--near-r)) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(12deg) rotateZ(-9deg) scale(1);transition:none;}}
 
 /* Content enters as the customer reaches it. The page remains fully visible if
    JavaScript is unavailable, and motion is removed for reduced-motion users. */

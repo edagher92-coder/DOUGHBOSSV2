@@ -28,6 +28,8 @@ test('MPGS is a separate gateway and never aliases Tyro Connect credentials', fu
 test('MPGS endpoints are HTTPS Mastercard hosts and credentials stay server-side', function () {
 	assert.match(settings, /'https'\s*!==\s*strtolower/);
 	assert.match(settings, /gateway\\\.mastercard\\\.com/);
+	assert.match(settings, /https:\/\/test-tyro\.mtf\.gateway\.mastercard\.com/);
+	assert.match(settings, /'mpgs_api_version'\s*=>\s*100/);
 	assert.match(mpgs, /'Authorization'\s*=>\s*'Basic '/);
 	assert.doesNotMatch(client, /api_password|API password|merchant\./i);
 	assert.doesNotMatch(assets, /mpgs_api_password|DOUGHBOSS_MPGS/);
