@@ -57,7 +57,7 @@
 		},
 		payments: {
 			enabled: false,
-			allowedProviders: ['stripe', 'tyro'],
+			allowedProviders: ['mpgs', 'stripe', 'tyro'],
 			selectedProvider: null,
 			allowPayOnPickup: true
 		},

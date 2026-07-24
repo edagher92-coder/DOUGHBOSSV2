@@ -19,7 +19,8 @@ assert.strictEqual(launch.locations[0].orderingHours.display, launch.locations[0
 assert.deepStrictEqual(launch.locations[0].orderingHours.days[0], [390, 870]);
 assert.deepStrictEqual(launch.locations[0].orderingHours.days[6], [390, 870]);
 assert.strictEqual(launch.payments.enabled, false);
-assert.deepStrictEqual(launch.payments.allowedProviders, ['stripe', 'tyro']);
+assert.deepStrictEqual(launch.payments.allowedProviders, ['mpgs', 'stripe', 'tyro']);
+assert.strictEqual(launch.payments.selectedProvider, 'mpgs');
 assert.strictEqual(launch.demo.noExternalWrites, true);
 
 const launchFixtures = globalThis.DBDemoFixtures.build(new Date('2026-07-16T09:00:00+10:00'));

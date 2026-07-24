@@ -34,7 +34,7 @@ $checks = array(
 	'launch profile enables pickup' => preg_match('/pickup:\s*\{\s*enabled:\s*true/', $profile) === 1,
 	'launch profile disables direct delivery' => preg_match('/delivery:\s*\{\s*enabled:\s*false/', $profile) === 1,
 	'launch profile disables online payments' => preg_match('/payments:\s*\{\s*enabled:\s*false/', $profile) === 1,
-	'launch profile keeps Stripe and Tyro available' => strpos($profile, "allowedProviders: ['stripe', 'tyro']") !== false,
+	'launch profile selects MPGS and keeps Stripe and Tyro available as fallbacks' => strpos($profile, "allowedProviders: ['mpgs', 'stripe', 'tyro']") !== false && strpos($profile, "selectedProvider: 'mpgs'") !== false,
 	'staff consumes the universal runtime' => strpos($staff, 'demo-runtime.js') !== false && strpos($staff, 'demo-fixtures.js') !== false,
 	'owner consumes the universal runtime' => strpos($owner, 'demo-runtime.js') !== false && strpos($owner, 'demo-fixtures.js') !== false,
 	'staff does not duplicate an inline fixture array' => strpos($staff, 'var ORDERS = [') === false,
