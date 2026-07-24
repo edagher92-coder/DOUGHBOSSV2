@@ -421,6 +421,16 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/pay/mpgs-test',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'mpgs_test' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/pospal/products',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1649,6 +1659,43 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * GET /pay/mpgs-test — owner-only, read-only MPGS authentication check.
+	 * No session, payment, card data or order is created.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function mpgs_test( WP_REST_Request $request ) {
+		unset( $request );
+		if ( ! class_exists( 'DoughBoss_MPGS' ) || '' === DoughBoss_Settings::mpgs_merchant_id() || '' === DoughBoss_Settings::mpgs_api_password() || '' === DoughBoss_Settings::mpgs_host() ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => false,
+					'ok'      => false,
+					'message' => __( 'Mastercard Gateway is not fully configured for the active mode.', 'doughboss' ),
+				)
+			);
+		}
+		$result = DoughBoss_MPGS::test_connection();
+		if ( is_wp_error( $result ) ) {
+			return rest_ensure_response(
+				array(
+					'ready'   => true,
+					'ok'      => false,
+					'message' => $result->get_error_message(),
+				)
+			);
+		}
+		return rest_ensure_response(
+			array(
+				'ready'   => true,
+				'ok'      => true,
+				'message' => __( 'Mastercard Gateway is reachable and the credentials were accepted.', 'doughboss' ),
+			)
+		);
+	}
+
+	/**
 	 * GET /pospal/verify-coupons — owner action: read-only check that the connection
 	 * works and that the configured $5 coupon-rule UID matches a real rule
 	 * in the POSPal account. No side effects (no member or coupon is created).
@@ -2375,6 +2422,7 @@ class DoughBoss_REST_Controller {
 				'table_id'    => $table_context ? (int) $table_context['table_id'] : 0,
 				'qr_code_id'  => $table_context ? (int) $table_context['qr_code_id'] : 0,
 				'site'        => home_url(),
+				'return_url'  => $this->same_site_return_url( $request->get_param( 'return_url' ) ),
 			)
 		);
 
@@ -2390,10 +2438,31 @@ class DoughBoss_REST_Controller {
 				'amount'          => $intent['amount'],
 				'currency'        => $intent['currency'],
 				'gateway'         => DoughBoss_Settings::payment_gateway(),
-				'live_mode'       => 'tyro' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::tyro_live_mode(),
+				'live_mode'       => ( 'tyro' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::mpgs_live_mode() ),
 				'attempt_id'      => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
 			)
 		);
+	}
+
+	/**
+	 * Keep Hosted Checkout returns on this WordPress site. Query/fragment are
+	 * stripped because MPGS adds its own result parameters.
+	 *
+	 * @param mixed $candidate Browser-provided current URL.
+	 * @return string
+	 */
+	private function same_site_return_url( $candidate ) {
+		$candidate = esc_url_raw( (string) $candidate );
+		$home      = wp_parse_url( home_url( '/' ) );
+		$parts     = wp_parse_url( $candidate );
+		if ( ! is_array( $parts ) || ! is_array( $home ) || empty( $parts['host'] ) || empty( $home['host'] ) || strtolower( $parts['host'] ) !== strtolower( $home['host'] ) ) {
+			return home_url( '/' );
+		}
+		$scheme = isset( $parts['scheme'] ) ? strtolower( $parts['scheme'] ) : '';
+		if ( 'https' !== $scheme ) {
+			return home_url( '/' );
+		}
+		return 'https://' . strtolower( $parts['host'] ) . ( isset( $parts['path'] ) ? $parts['path'] : '/' );
 	}
 
 	/**
@@ -3722,6 +3791,9 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function catering_payment_intent( WP_REST_Request $request ) {
+		if ( 'mpgs' === DoughBoss_Settings::payment_gateway() ) {
+			return new WP_Error( 'doughboss_mpgs_catering_unavailable', __( 'Mastercard Hosted Checkout is currently available for menu orders only.', 'doughboss' ), array( 'status' => 400 ) );
+		}
 		if ( ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
@@ -3793,7 +3865,7 @@ class DoughBoss_REST_Controller {
 				'currency'        => $intent['currency'],
 				'leg'             => $leg,
 				'gateway'         => DoughBoss_Settings::payment_gateway(),
-				'live_mode'       => 'tyro' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::tyro_live_mode(),
+				'live_mode'       => ( 'tyro' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::mpgs_live_mode() ),
 				'attempt_id'      => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
 			)
 		);

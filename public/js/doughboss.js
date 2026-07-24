@@ -34,6 +34,9 @@
 
 	// Current Tyro Connect Pay browser library. It owns all card fields and 3DS.
 	var tyroPay = !!(PAY.enabled && GATEWAY === 'tyro' && typeof window.Tyro === 'function');
+	// Mastercard Hosted Checkout redirects card entry to the gateway page. No
+	// PAN/CVV fields are ever rendered or handled by DoughBoss.
+	var mpgsHosted = !!(PAY.enabled && GATEWAY === 'mpgs' && window.Checkout && typeof window.Checkout.configure === 'function');
 
 
 	/* ------------------------------------------------------------------ */
@@ -987,7 +990,7 @@
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
 		// Whether this checkout takes a card payment (either gateway).
-		var paying = !!(stripe || tyroPay);
+		var paying = !!(stripe || tyroPay || mpgsHosted);
 
 		// When a gateway is active, mount card fields and label the button "Pay $X".
 		function payLabelFor(t) {
@@ -1023,6 +1026,12 @@
 					locationId: getLocationId ? getLocationId() : storedLocationId()
 				};
 			}, paymentAttemptKey);
+		}
+		if (mpgsHosted) {
+			form.appendChild(el('p', {
+				class: 'db-cardfield db-mpgs-notice',
+				text: 'Card details will be entered securely on the Mastercard payment page.'
+			}));
 		}
 
 		form.appendChild(submit);
@@ -1166,11 +1175,69 @@
 					payload.payment_intent_id = checkoutPaymentId;
 					return placeOrder(payload);
 				}).catch(fail);
+			} else if (mpgsHosted) {
+				// Create a server-bound Hosted Checkout session, save only the
+				// non-card checkout form in this tab, then redirect to Mastercard.
+				// On return the server retrieves and verifies the MPGS order before
+				// DoughBoss records the order as paid.
+				submit.textContent = I18N.payProcessing || 'Processing payment…';
+				if (!checkoutAttemptId) {
+					checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+				}
+				request('/payment-intent', {
+					method: 'POST',
+					body: {
+						order_type: orderType,
+						location_id: payload.location_id,
+						payment_attempt_key: paymentAttemptKey,
+						return_url: window.location.origin + window.location.pathname
+					}
+				}).then(function (pi) {
+					payload.payment_intent_id = pi.payment_intent;
+					try {
+						window.sessionStorage.setItem('doughbossMpgsPending', JSON.stringify({
+							orderId: pi.payment_intent,
+							payload: payload,
+							checkoutAttemptId: checkoutAttemptId,
+							savedAt: Date.now()
+						}));
+					} catch (storageError) {
+						throw new Error('Your browser could not preserve the order for the secure payment return.');
+					}
+					window.Checkout.configure({ session: { id: pi.client_secret } });
+					window.Checkout.showPaymentPage();
+				}).catch(fail);
 			} else {
 				submit.textContent = I18N.placing || 'Placing order…';
 				placeOrder(payload).catch(fail);
 			}
 		});
+
+		// Complete the server-verified order after Mastercard returns to this
+		// same checkout page. The resultIndicator alone is never trusted.
+		if (mpgsHosted && typeof window.URLSearchParams === 'function') {
+			var returnParams = new URLSearchParams(window.location.search);
+			if (returnParams.get('doughboss_mpgs_return') === '1') {
+				var pending = null;
+				try {
+					pending = JSON.parse(window.sessionStorage.getItem('doughbossMpgsPending') || 'null');
+				} catch (ignorePending) {}
+				var returnedOrder = returnParams.get('doughboss_mpgs_order') || '';
+				if (pending && pending.orderId === returnedOrder && pending.payload && (Date.now() - Number(pending.savedAt || 0)) < 30 * 60 * 1000) {
+					checkoutAttemptId = pending.checkoutAttemptId;
+					submit.disabled = true;
+					submit.textContent = 'Verifying Mastercard payment…';
+					placeOrder(pending.payload).then(function () {
+						window.sessionStorage.removeItem('doughbossMpgsPending');
+						var cleanUrl = new URL(window.location.href);
+						['doughboss_mpgs_return', 'doughboss_mpgs_order', 'resultIndicator', 'sessionVersion'].forEach(function (key) { cleanUrl.searchParams.delete(key); });
+						window.history.replaceState({}, document.title, cleanUrl.toString());
+					}).catch(fail);
+				} else {
+					fail(new Error('The Mastercard payment return could not be matched to this cart. No order was placed.'));
+				}
+			}
+		}
 
 		// Called by draw() when the cart reloads (quantity change, voucher applied,
 		// pickup/delivery switch, ...) instead of recreating this form. Only
