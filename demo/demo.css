@@ -133,6 +133,10 @@ a{text-decoration:none;color:inherit;}
 .ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);}
 .ingredient-burst[data-manoush-stage].is-assembled{animation:db-stage-breathe 8s ease-in-out infinite alternate;}
 .ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:db-glow-breathe 4.8s ease-in-out infinite alternate;}
+/* Scroll-controlled scenes paint the layers directly every animation frame.
+   Keeping transitions off here prevents the composition lagging behind a mouse
+   wheel or touch scroll. */
+.ingredient-burst[data-manoush-stage].is-scroll-driven .ingredient-burst__manoush,.ingredient-burst[data-manoush-stage].is-scroll-driven .ingredient,.ingredient-burst[data-manoush-stage].is-scroll-driven .ingredient-burst__stamp{animation:none!important;transition:none!important;will-change:transform,opacity;}
 @keyframes db-stage-breathe{from{transform:translateY(-48%) rotateX(1deg) rotateY(-2deg);}to{transform:translateY(calc(-48% - 5px)) rotateX(2deg) rotateY(1deg);}}
 @keyframes db-glow-breathe{from{opacity:.68;transform:translateZ(-120px) scale(.94);}to{opacity:1;transform:translateZ(-120px) scale(1.08);}}
 .ingredient-burst--bites .ingredient-burst__manoush{width:clamp(230px,27vw,355px);height:auto;aspect-ratio:auto;object-fit:contain;border:0;border-radius:0;box-shadow:none;filter:drop-shadow(0 24px 25px rgba(0,0,0,.42)) saturate(1.03) contrast(1.02);}
@@ -140,7 +144,7 @@ a{text-decoration:none;color:inherit;}
 .ingredient-burst--bites .ingredient--meat{width:clamp(150px,18vw,230px);}
 .ingredient-burst--bites .ingredient-burst__stamp{display:none;}
 .ingredient-burst--bites.is-exploded .ingredient,.ingredient-burst--bites.is-assembled .ingredient{filter:drop-shadow(0 20px 20px rgba(0,0,0,.4)) saturate(1.04);}
-.ingredient-burst--signature .ingredient-burst__manoush{width:clamp(250px,30vw,390px);}
+.ingredient-burst--signature .ingredient-burst__manoush{width:clamp(220px,26vw,335px);}
 .ingredient-burst--signature .ingredient{width:clamp(102px,13vw,164px);}
 .ingredient-burst--signature .ingredient--meat{width:clamp(138px,17vw,215px);}
 .ingredient-burst--bites .ingredient--zaatar{--scatter-x:-145px;--scatter-y:-92px;--near-x:-92px;--near-y:-64px;}

@@ -69,7 +69,9 @@ class DoughBoss_Shortcodes {
 				'description'   => __( 'Mini zaatar, cheese and meat manoush with spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
 				'replay_label'  => __( 'See the spread come together', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
-				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-menu-platter-v3.webp',
+				// A single authentic manoush sits at the centre. The former full platter
+				// looked like a floating plate when the surrounding layers separated.
+				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-fresh-cutout-v2.webp',
 				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-zaatar-cutout-v2.webp',
 				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-cheese-cutout-v2.webp',
 				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-pies-v3.webp',
