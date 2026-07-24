@@ -33,7 +33,13 @@ class DoughBoss_Payment {
 	 * @return string Fully-qualified class name.
 	 */
 	public static function active_class() {
-		return 'tyro' === DoughBoss_Settings::payment_gateway() ? 'DoughBoss_Tyro' : 'DoughBoss_Stripe';
+		$classes = array(
+			'stripe' => 'DoughBoss_Stripe',
+			'tyro'   => 'DoughBoss_Tyro',
+			'mpgs'   => 'DoughBoss_MPGS',
+		);
+		$gateway = DoughBoss_Settings::payment_gateway();
+		return isset( $classes[ $gateway ] ) ? $classes[ $gateway ] : $classes['stripe'];
 	}
 
 	/**
@@ -42,7 +48,13 @@ class DoughBoss_Payment {
 	 * @return string
 	 */
 	public static function gateway_label() {
-		return 'tyro' === DoughBoss_Settings::payment_gateway() ? 'Tyro' : 'Stripe';
+		$labels = array(
+			'stripe' => 'Stripe',
+			'tyro'   => 'Tyro Connect',
+			'mpgs'   => 'Mastercard Payment Gateway',
+		);
+		$gateway = DoughBoss_Settings::payment_gateway();
+		return isset( $labels[ $gateway ] ) ? $labels[ $gateway ] : $labels['stripe'];
 	}
 
 	/**
@@ -138,7 +150,12 @@ class DoughBoss_Payment {
 	 * @return array|WP_Error
 	 */
 	public static function refund_via( $gateway, $id, $amount_minor = null ) {
-		$class = 'tyro' === $gateway ? 'DoughBoss_Tyro' : 'DoughBoss_Stripe';
+		$classes = array(
+			'stripe' => 'DoughBoss_Stripe',
+			'tyro'   => 'DoughBoss_Tyro',
+			'mpgs'   => 'DoughBoss_MPGS',
+		);
+		$class = isset( $classes[ $gateway ] ) ? $classes[ $gateway ] : '';
 		if ( ! class_exists( $class ) ) {
 			return new WP_Error( 'doughboss_pay_gateway', __( 'Unknown payment gateway.', 'doughboss' ), array( 'status' => 500 ) );
 		}

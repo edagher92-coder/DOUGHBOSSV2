@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.23.3
+Stable tag: 2.24.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -55,11 +55,23 @@ integration. It needs Tyro-provided sandbox credentials, a confirmed per-shop
 before live payments may be enabled. The installed code and this readme do not
 include merchant credentials or make a shop payment-ready.
 
+Mastercard Payment Gateway Services (MPGS) Hosted Checkout is available as a
+separate gateway. Card entry and 3-D Secure happen on Mastercard's hosted page;
+DoughBoss retrieves and verifies the gateway order amount, currency, checkout
+binding and captured state before saving a paid order. Test and live API
+passwords are environment-first, and live mode has an additional approval gate.
+
 = Does it need an account system? =
 
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.0 =
+* Add Mastercard Payment Gateway Services as a separate Hosted Checkout gateway.
+* Keep card numbers and CVV off WordPress by redirecting card entry to Mastercard.
+* Add server-side amount, currency, cart, location and captured-payment verification.
+* Add environment-first API passwords, allowlisted Mastercard hosts and a live approval lock.
 
 = 2.23.3 =
 * Restore visible replayable food-build animation to the demo homepage and Menu view.

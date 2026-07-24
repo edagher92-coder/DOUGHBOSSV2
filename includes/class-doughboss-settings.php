@@ -155,6 +155,19 @@ class DoughBoss_Settings {
 			'tyro_test_webhook_secret' => '',
 			'tyro_live_webhook_secret' => '',
 			'tyro_live_certified'       => 0,
+			// Mastercard Payment Gateway Services (MPGS) Hosted Checkout. This is
+			// deliberately separate from Tyro Connect: MPGS authenticates with a
+			// merchant ID + API password and redirects card entry to Mastercard's
+			// hosted page. The API password is env-first and never exposed to JS.
+			'mpgs_mode'              => 'test',
+			'mpgs_test_merchant_id'  => '',
+			'mpgs_live_merchant_id'  => '',
+			'mpgs_test_api_password' => '',
+			'mpgs_live_api_password' => '',
+			'mpgs_test_host'         => 'https://test-tyro.mtf.gateway.mastercard.com',
+			'mpgs_live_host'         => '',
+			'mpgs_api_version'       => 100,
+			'mpgs_live_approved'     => 0,
 			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
 			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
 			// this option is only a fallback and is best left blank where env is set.
@@ -614,14 +627,75 @@ class DoughBoss_Settings {
 	}
 
 	/**
-	 * Which payment gateway is active: 'stripe' or 'tyro'. Defaults to
+	 * Which payment gateway is active: 'stripe', 'tyro' or 'mpgs'. Defaults to
 	 * 'stripe' so existing sites are unaffected until an owner deliberately
 	 * switches this.
 	 *
 	 * @return string
 	 */
 	public static function payment_gateway() {
-		return 'tyro' === self::get( 'payment_gateway', 'stripe' ) ? 'tyro' : 'stripe';
+		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'stripe' ) );
+		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $gateway : 'stripe';
+	}
+
+	/** @return string */
+	public static function mpgs_mode() {
+		return 'live' === self::get( 'mpgs_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/** @return string */
+	public static function mpgs_merchant_id() {
+		$key = 'live' === self::mpgs_mode() ? 'mpgs_live_merchant_id' : 'mpgs_test_merchant_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		return preg_match( '/^[A-Za-z0-9_-]{1,40}$/', $value ) ? $value : '';
+	}
+
+	/** @return string */
+	public static function mpgs_api_password() {
+		return 'live' === self::mpgs_mode()
+			? self::env_first_secret( 'DOUGHBOSS_MPGS_LIVE_API_PASSWORD', 'mpgs_live_api_password' )
+			: self::env_first_secret( 'DOUGHBOSS_MPGS_TEST_API_PASSWORD', 'mpgs_test_api_password' );
+	}
+
+	/**
+	 * Return a tightly validated MPGS API origin. Arbitrary hosts are rejected
+	 * so a settings change cannot turn authenticated requests into SSRF.
+	 *
+	 * @return string
+	 */
+	public static function mpgs_host() {
+		$key  = 'live' === self::mpgs_mode() ? 'mpgs_live_host' : 'mpgs_test_host';
+		$host = untrailingslashit( esc_url_raw( trim( (string) self::get( $key, '' ) ) ) );
+		$parts = wp_parse_url( $host );
+		if ( ! is_array( $parts ) || 'https' !== strtolower( isset( $parts['scheme'] ) ? $parts['scheme'] : '' ) || empty( $parts['host'] ) ) {
+			return '';
+		}
+		$name = strtolower( (string) $parts['host'] );
+		if ( ! preg_match( '/(^|\.)gateway\.mastercard\.com$/', $name ) ) {
+			return '';
+		}
+		return 'https://' . $name;
+	}
+
+	/** @return int */
+	public static function mpgs_api_version() {
+		$version = absint( self::get( 'mpgs_api_version', 100 ) );
+		return min( 100, max( 63, $version ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_ready() {
+		return self::payments_enabled()
+			&& 'mpgs' === self::payment_gateway()
+			&& '' !== self::mpgs_merchant_id()
+			&& '' !== self::mpgs_api_password()
+			&& '' !== self::mpgs_host()
+			&& ( 'test' === self::mpgs_mode() || (bool) self::get( 'mpgs_live_approved', 0 ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_live_mode() {
+		return 'live' === self::mpgs_mode();
 	}
 
 	/**

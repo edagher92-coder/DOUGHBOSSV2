@@ -167,6 +167,11 @@ class DoughBoss_Assets {
 				// from Tyro. Never bundle, proxy or self-host this file.
 				wp_enqueue_script( 'tyro-js', 'https://pay.connect.tyro.com/v1/tyro.js', array(), null, true );
 				$deps[] = 'tyro-js';
+			} elseif ( 'mpgs' === $gateway ) {
+				// Mastercard Hosted Checkout owns card entry and 3-D Secure. The
+				// script origin is derived from the allowlisted API host.
+				wp_enqueue_script( 'mpgs-checkout', DoughBoss_MPGS::checkout_script_url(), array(), null, true );
+				$deps[] = 'mpgs-checkout';
 			} else {
 				wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
 				$deps[] = 'stripe-js';
@@ -196,7 +201,7 @@ class DoughBoss_Assets {
 					// Which gateway the storefront JS should drive (Stripe.js
 					// Elements vs Tyro Connect's hosted pay form).
 					'gateway' => $gateway,
-					'liveMode'=> 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode(),
+					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ),
 				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),

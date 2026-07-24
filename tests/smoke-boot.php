@@ -267,7 +267,7 @@ foreach ( $board_routes as $board_route ) {
 // A real count check, not just ">0", so a route silently failing to register
 // would fail this. Includes table context plus the public request and two
 // board-authorised morning-review routes.
-ok( 52 === count( $routes ), 'REST route count includes table context, Tyro webhook, and pre-order review (' . count( $routes ) . ' routes, expected 52)' );
+ok( 53 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, and pre-order review (' . count( $routes ) . ' routes, expected 53)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
@@ -317,6 +317,7 @@ section( 'Integrations dormant-by-default (security gate)' );
 $gates = array(
 	'DoughBoss_Stripe'  => 'is_ready',
 	'DoughBoss_Tyro'    => 'ready',
+	'DoughBoss_MPGS'    => 'ready',
 	'DoughBoss_Mercure' => 'is_ready',
 	'DoughBoss_Ntfy'    => 'is_ready',
 	'DoughBoss_SMS'     => 'is_ready',

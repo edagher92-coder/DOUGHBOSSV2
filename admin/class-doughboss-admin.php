@@ -271,7 +271,8 @@ class DoughBoss_Admin {
 		// below) and use keep_secret() so a routine save without re-entering them
 		// preserves the stored value instead of wiping it.
 		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
-		$clean['payment_gateway']   = ( isset( $input['payment_gateway'] ) && 'tyro' === $input['payment_gateway'] ) ? 'tyro' : 'stripe';
+		$requested_gateway = isset( $input['payment_gateway'] ) ? sanitize_key( $input['payment_gateway'] ) : 'stripe';
+		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $requested_gateway : 'stripe';
 		$clean['stripe_mode']       = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
 		$clean['stripe_test_pk']    = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
 		$clean['stripe_test_sk']    = $this->keep_secret( $input, $existing, 'stripe_test_sk' );
@@ -290,6 +291,17 @@ class DoughBoss_Admin {
 		$clean['tyro_test_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_test_webhook_secret' );
 		$clean['tyro_live_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_live_webhook_secret' );
 		$clean['tyro_live_certified']       = empty( $input['tyro_live_certified'] ) ? 0 : 1;
+
+		// Mastercard Payment Gateway Services (MPGS) Hosted Checkout.
+		$clean['mpgs_mode']              = ( isset( $input['mpgs_mode'] ) && 'live' === $input['mpgs_mode'] ) ? 'live' : 'test';
+		$clean['mpgs_test_merchant_id']  = isset( $input['mpgs_test_merchant_id'] ) ? sanitize_text_field( $input['mpgs_test_merchant_id'] ) : '';
+		$clean['mpgs_live_merchant_id']  = isset( $input['mpgs_live_merchant_id'] ) ? sanitize_text_field( $input['mpgs_live_merchant_id'] ) : '';
+		$clean['mpgs_test_api_password'] = $this->keep_secret( $input, $existing, 'mpgs_test_api_password' );
+		$clean['mpgs_live_api_password'] = $this->keep_secret( $input, $existing, 'mpgs_live_api_password' );
+		$clean['mpgs_test_host']         = isset( $input['mpgs_test_host'] ) ? esc_url_raw( trim( (string) $input['mpgs_test_host'] ) ) : '';
+		$clean['mpgs_live_host']         = isset( $input['mpgs_live_host'] ) ? esc_url_raw( trim( (string) $input['mpgs_live_host'] ) ) : '';
+		$clean['mpgs_api_version']       = min( 100, max( 63, absint( isset( $input['mpgs_api_version'] ) ? $input['mpgs_api_version'] : 100 ) ) );
+		$clean['mpgs_live_approved']     = empty( $input['mpgs_live_approved'] ) ? 0 : 1;
 
 		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
 		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback, and
@@ -1058,11 +1070,14 @@ JS;
 										?>
 										</small>
 									<?php endif; ?>
-									<?php if ( isset( $order->payment_method ) && in_array( $order->payment_method, array( 'stripe', 'tyro' ), true ) && ! empty( $order->payment_intent_id ) ) : ?>
+									<?php if ( isset( $order->payment_method ) && in_array( $order->payment_method, array( 'stripe', 'tyro', 'mpgs' ), true ) && ! empty( $order->payment_intent_id ) ) : ?>
 										<?php if ( 'paid' === $order->payment_status ) : ?>
 											<br /><small>
-												<?php esc_html_e( 'Paid by card', 'doughboss' ); ?> ·
-												<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
+												<?php esc_html_e( 'Paid by card', 'doughboss' ); ?>
+												<?php if ( in_array( $order->payment_method, array( 'stripe', 'tyro' ), true ) ) : ?> ·
+													<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
+												<?php else : ?> · <?php esc_html_e( 'Refund from the Mastercard gateway portal', 'doughboss' ); ?>
+												<?php endif; ?>
 											</small>
 										<?php elseif ( 'refunded' === $order->payment_status ) : ?>
 											<br /><small style="color:#b32d2e;"><?php esc_html_e( 'Refunded', 'doughboss' ); ?></small>
@@ -3002,9 +3017,10 @@ JS;
 						<tr>
 							<th><?php esc_html_e( 'Active gateway', 'doughboss' ); ?></th>
 							<td>
-								<?php $gateway = isset( $settings['payment_gateway'] ) && 'tyro' === $settings['payment_gateway'] ? 'tyro' : 'stripe'; ?>
+								<?php $gateway = isset( $settings['payment_gateway'] ) && in_array( $settings['payment_gateway'], array( 'stripe', 'tyro', 'mpgs' ), true ) ? $settings['payment_gateway'] : 'stripe'; ?>
 								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="stripe" <?php checked( 'stripe' === $gateway, true ); ?> /> <?php esc_html_e( 'Stripe', 'doughboss' ); ?></label>&nbsp;&nbsp;
-								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="tyro" <?php checked( 'tyro' === $gateway, true ); ?> /> <?php esc_html_e( 'Tyro', 'doughboss' ); ?></label>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="tyro" <?php checked( 'tyro' === $gateway, true ); ?> /> <?php esc_html_e( 'Tyro Connect', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="mpgs" <?php checked( 'mpgs' === $gateway, true ); ?> /> <?php esc_html_e( 'Mastercard Gateway', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Existing paid orders always refund correctly against whichever gateway actually processed them, even after you switch this.', 'doughboss' ); ?></p>
 							</td>
 						</tr>
@@ -3105,6 +3121,55 @@ JS;
 									<?php esc_html_e( 'Same endpoints as above, registered against your live Tyro account. For best security set it as the DOUGHBOSS_TYRO_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
 									<?php echo isset( $settings['tyro_live_webhook_secret'] ) && '' !== $settings['tyro_live_webhook_secret'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
 								</p></td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Mastercard Payment Gateway (MPGS)', 'doughboss' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'Uses Mastercard Hosted Checkout. Customers enter card details on Mastercard’s secure page; DoughBoss never receives or stores the card number or CVV.', 'doughboss' ); ?></p>
+					<?php $mpgs_mode = isset( $settings['mpgs_mode'] ) && 'live' === $settings['mpgs_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[mpgs_mode]" value="test" <?php checked( 'test' === $mpgs_mode, true ); ?> /> <?php esc_html_e( 'Test', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[mpgs_mode]" value="live" <?php checked( 'live' === $mpgs_mode, true ); ?> /> <?php esc_html_e( 'Live', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-test-merchant"><?php esc_html_e( 'Test merchant ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-mpgs-test-merchant" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_test_merchant_id]" value="<?php echo esc_attr( isset( $settings['mpgs_test_merchant_id'] ) ? $settings['mpgs_test_merchant_id'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-test-password"><?php esc_html_e( 'Test API password', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-mpgs-test-password" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[mpgs_test_api_password]" value="" />
+								<p class="description"><?php esc_html_e( 'Prefer DOUGHBOSS_MPGS_TEST_API_PASSWORD in the server environment; this write-only field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['mpgs_test_api_password'] ) && '' !== $settings['mpgs_test_api_password'] ? esc_html__( 'A password is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'No password is stored yet.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-test-host"><?php esc_html_e( 'Test API host', 'doughboss' ); ?></label></th>
+							<td><input type="url" id="db-mpgs-test-host" class="regular-text code" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_test_host]" value="<?php echo esc_attr( isset( $settings['mpgs_test_host'] ) ? $settings['mpgs_test_host'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'HTTPS Mastercard gateway hosts only; paths and non-Mastercard hosts are rejected.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-version"><?php esc_html_e( 'API version', 'doughboss' ); ?></label></th>
+							<td><input type="number" min="63" max="100" id="db-mpgs-version" class="small-text" name="<?php echo esc_attr( $opt ); ?>[mpgs_api_version]" value="<?php echo esc_attr( isset( $settings['mpgs_api_version'] ) ? $settings['mpgs_api_version'] : 100 ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-live-merchant"><?php esc_html_e( 'Live merchant ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-mpgs-live-merchant" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_merchant_id]" value="<?php echo esc_attr( isset( $settings['mpgs_live_merchant_id'] ) ? $settings['mpgs_live_merchant_id'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-live-password"><?php esc_html_e( 'Live API password', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-mpgs-live-password" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_api_password]" value="" />
+								<p class="description"><?php esc_html_e( 'Prefer DOUGHBOSS_MPGS_LIVE_API_PASSWORD in the server environment; this write-only field is a fallback.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-live-host"><?php esc_html_e( 'Live API host', 'doughboss' ); ?></label></th>
+							<td><input type="url" id="db-mpgs-live-host" class="regular-text code" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_host]" value="<?php echo esc_attr( isset( $settings['mpgs_live_host'] ) ? $settings['mpgs_live_host'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Production approval', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_approved]" value="1" <?php checked( ! empty( $settings['mpgs_live_approved'] ), true ); ?> /> <?php esc_html_e( 'The acquirer has approved this Hosted Checkout integration for live use', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Live mode remains fail-closed until this is explicitly checked.', 'doughboss' ); ?></p></td>
 						</tr>
 					</table>
 
