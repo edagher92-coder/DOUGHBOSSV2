@@ -70,6 +70,20 @@ class DoughBoss_Stripe {
 	}
 
 	/**
+	 * The id that should be persisted (order row / dedup lookups). Stripe's
+	 * PaymentIntent id already IS the canonical, storable reference — no
+	 * composite-id scheme like Tyro's — so this is a passthrough. Exists so
+	 * DoughBoss_Payment::canonical_id() can dispatch identically regardless of
+	 * the active gateway.
+	 *
+	 * @param string $id PaymentIntent id.
+	 * @return string
+	 */
+	public static function canonical_id( $id ) {
+		return sanitize_text_field( (string) $id );
+	}
+
+	/**
 	 * Create a PaymentIntent for the given amount.
 	 *
 	 * @param int    $amount_minor Amount in the smallest currency unit (cents).
@@ -242,9 +256,22 @@ class DoughBoss_Stripe {
 			? $data['error']['message']
 			: __( 'The payment service returned an error.', 'doughboss' );
 
-		// Log the detail for the operator; return a clean message to the customer.
+		// Log only the status + Stripe's short error type/code for the operator —
+		// never the response body or 'message' (both can carry customer PII such
+		// as receipt_email, name, address, or decline details).
 		if ( function_exists( 'error_log' ) ) {
-			error_log( 'DoughBoss Stripe error (' . $code . '): ' . wp_remote_retrieve_body( $response ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			$error_type = ( is_array( $data ) && isset( $data['error']['type'] ) && is_scalar( $data['error']['type'] ) )
+				? (string) $data['error']['type']
+				: '';
+			$error_code = ( is_array( $data ) && isset( $data['error']['code'] ) && is_scalar( $data['error']['code'] ) )
+				? (string) $data['error']['code']
+				: '';
+
+			if ( '' !== $error_type || '' !== $error_code ) {
+				error_log( 'DoughBoss Stripe error: HTTP ' . $code . ' type=' . $error_type . ' code=' . $error_code ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			} else {
+				error_log( 'DoughBoss Stripe error: HTTP ' . $code ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
 		}
 
 		return new WP_Error( 'doughboss_pay_api', $message, array( 'status' => 502 ) );

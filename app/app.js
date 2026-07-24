@@ -15,19 +15,52 @@
 
 	var root = document.getElementById( 'app' );
 	var state = load();
+	state.boardKey = boardKeyFromUrl();
 	var pollTimer = null;
 	var clearTimer = null;
 	var camScanner = null;
 	var eventSource = null; // Mercure SSE, when the site advertises it on /config.
+	var fieldSeq = 0;
+
+	function boardKeyFromUrl() {
+		try { return new URLSearchParams( window.location.search ).get( 'key' ) || ''; }
+		catch ( e ) { return ''; }
+	}
 
 	/* ---------- storage ---------- */
 	function load() {
 		try {
-			return JSON.parse( localStorage.getItem( STORE ) ) || {};
-		} catch ( e ) { return {}; }
+			var stored = JSON.parse( localStorage.getItem( STORE ) ) || {};
+			// Never restore a reusable Application Password (or server-provided
+			// capability/config data) from persistent browser storage. This also
+			// removes credentials written by older Console versions on first load.
+			var safe = {
+				site: typeof stored.site === 'string' ? stored.site : '',
+				user: typeof stored.user === 'string' ? stored.user : '',
+				tab: typeof stored.tab === 'string' ? stored.tab : ''
+			};
+			localStorage.setItem( STORE, JSON.stringify( safe ) );
+			return safe;
+		} catch ( e ) {
+			try { localStorage.removeItem( STORE ); } catch ( ignored ) {}
+			return {};
+		}
 	}
-	function save() { localStorage.setItem( STORE, JSON.stringify( state ) ); }
-	function wipe() { localStorage.removeItem( STORE ); state = {}; }
+	function save() {
+		// Preferences only. The Application Password and capabilities live in
+		// memory and are cleared by sign-out, reload, tab close or browser restart.
+		localStorage.setItem( STORE, JSON.stringify( {
+			site: state.site || '',
+			user: state.user || '',
+			tab: state.tab || ''
+		} ) );
+	}
+	function wipe() { localStorage.removeItem( STORE ); state = { boardKey: boardKeyFromUrl() }; }
+
+	// Single sign-out path: wipe the stored credential and return to the login
+	// screen. Used by both the explicit "Sign out" button and the inactivity
+	// auto sign-out below — never duplicate this logic elsewhere.
+	function signOut( msg ) { wipe(); renderLogin( msg ); }
 
 	/* ---------- dom ---------- */
 	function el( tag, cls, text ) {
@@ -92,12 +125,14 @@
 
 	/* ---------- api ---------- */
 	function api( path, method, body ) {
+		var headers = {
+			'Content-Type': 'application/json',
+			'Authorization': 'Basic ' + btoa( state.user + ':' + state.pass )
+		};
+		if ( state.boardKey ) { headers['X-DoughBoss-Board-Key'] = state.boardKey; }
 		return fetch( state.site + '/wp-json/' + NS + path, {
 			method: method,
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': 'Basic ' + btoa( state.user + ':' + state.pass )
-			},
+			headers: headers,
 			body: body ? JSON.stringify( body ) : undefined
 		} ).then( function ( res ) {
 			return res.json().then( function ( data ) {
@@ -149,9 +184,44 @@
 		return true;
 	}
 
+	/* ---------- inactivity auto sign-out ---------- */
+
+	// A lost/shared/kiosk device would otherwise hold a live, reusable REST
+	// credential indefinitely — sign out automatically after 30 minutes with
+	// no user activity. Only armed while signed in (see renderApp/renderLogin).
+	var IDLE_LIMIT_MS = 30 * 60 * 1000;
+	var idleTimer = null;
+	var idleWatching = false;
+	var IDLE_EVENTS = [ 'click', 'keydown', 'touchstart' ];
+
+	function idleTimeout() {
+		signOut( 'Signed out after 30 minutes of inactivity for security.' );
+	}
+	// Debounced: each tracked event just restarts the 30-minute countdown
+	// rather than reacting on every event (e.g. we deliberately skip mousemove).
+	function resetIdleTimer() {
+		clearTimeout( idleTimer );
+		idleTimer = setTimeout( idleTimeout, IDLE_LIMIT_MS );
+	}
+	function startIdleWatch() {
+		if ( idleWatching ) { return; }
+		idleWatching = true;
+		IDLE_EVENTS.forEach( function ( evt ) { document.addEventListener( evt, resetIdleTimer, { passive: true } ); } );
+		resetIdleTimer();
+	}
+	function stopIdleWatch() {
+		if ( idleWatching ) {
+			IDLE_EVENTS.forEach( function ( evt ) { document.removeEventListener( evt, resetIdleTimer, { passive: true } ); } );
+		}
+		idleWatching = false;
+		clearTimeout( idleTimer );
+		idleTimer = null;
+	}
+
 	/* ---------- login ---------- */
 	function renderLogin( err ) {
 		stopPoll();
+		stopIdleWatch();
 		root.innerHTML = '';
 		var wrap = el( 'div', 'login' );
 		var card = el( 'div', 'login__card' );
@@ -177,7 +247,7 @@
 		if ( err ) { card.appendChild( el( 'div', 'login__err', err ) ); }
 
 		var help = el( 'div', 'login__help' );
-		help.innerHTML = 'Create an <strong>Application Password</strong> in WordPress: Users → Profile → Application Passwords. Use your WordPress username and that generated password here. Your login is stored only on this device.';
+		help.innerHTML = 'Create an <strong>Application Password</strong> in WordPress: Users → Profile → Application Passwords. Your site and username are remembered on this device; the Application Password is kept only in memory and is cleared when this page reloads or closes.';
 		card.appendChild( help );
 
 		function go() {
@@ -185,6 +255,16 @@
 			var user = ( fUser.input.value || '' ).trim();
 			var pass = ( fPass.input.value || '' ).trim();
 			if ( ! site || ! user || ! pass ) { return renderLogin( 'Please fill in every field.' ); }
+			try {
+				var siteUrl = new URL( site );
+				var localDev = siteUrl.hostname === 'localhost' || siteUrl.hostname === '127.0.0.1';
+				if ( siteUrl.protocol !== 'https:' && ! localDev ) {
+					return renderLogin( 'Use an HTTPS site address so the Application Password is encrypted in transit.' );
+				}
+				site = siteUrl.origin + siteUrl.pathname.replace( /\/$/, '' );
+			} catch ( e ) {
+				return renderLogin( 'Enter a valid site address, including https://.' );
+			}
 			btn.disabled = true; btn.textContent = 'Signing in…';
 			state.site = site; state.user = user; state.pass = pass;
 			api( '/auth/me', 'GET' ).then( function ( r ) {
@@ -213,8 +293,12 @@
 	}
 	function field( label, type, value ) {
 		var row = el( 'div' );
-		row.appendChild( el( 'label', null, label ) );
+		var id = 'db-console-field-' + ( ++fieldSeq );
+		var labelEl = el( 'label', null, label );
+		labelEl.setAttribute( 'for', id );
+		row.appendChild( labelEl );
 		var input = el( 'input' );
+		input.id = id;
 		input.type = type;
 		input.value = value || '';
 		row.appendChild( input );
@@ -231,7 +315,7 @@
 		var right = el( 'div', 'topbar__right' );
 		right.appendChild( el( 'span', null, state.name || '' ) );
 		var out = el( 'button', 'topbar__out', 'Sign out' );
-		out.addEventListener( 'click', function () { wipe(); renderLogin(); } );
+		out.addEventListener( 'click', function () { signOut(); } );
 		right.appendChild( out );
 		bar.appendChild( right );
 		root.appendChild( bar );
@@ -265,6 +349,8 @@
 
 		var active = tabs.filter( function ( t ) { return t.key === current; } )[0];
 		if ( active ) { active.render( screen ); }
+
+		startIdleWatch();
 	}
 
 	/* ---------- Scan screen ---------- */
@@ -275,7 +361,7 @@
 		var c1 = el( 'div', 'card' );
 		c1.appendChild( el( 'h2', null, 'Redeem a voucher' ) );
 		s.input = el( 'input', 'scan__input' );
-		s.input.placeholder = 'SNOW-XXXXXXXX';
+		s.input.placeholder = 'DOUGH-XXXXXXXX';
 		s.input.setAttribute( 'autocomplete', 'off' );
 		c1.appendChild( s.input );
 
@@ -457,7 +543,7 @@
 			var op = el( 'option', null, o[1] ); op.value = o[0]; type.appendChild( op );
 		} );
 		var value = el( 'input' ); value.type = 'number'; value.min = '0'; value.step = '0.01'; value.placeholder = 'Value';
-		var prefix = el( 'input' ); prefix.type = 'text'; prefix.value = 'SNOW'; prefix.placeholder = 'Prefix';
+		var prefix = el( 'input' ); prefix.type = 'text'; prefix.value = 'DOUGH'; prefix.placeholder = 'Prefix';
 		var phone = el( 'input' ); phone.type = 'text'; phone.placeholder = 'Customer phone (optional)';
 		fr.appendChild( labelled( 'Type', type ) );
 		fr.appendChild( labelled( 'Value', value ) );
@@ -532,7 +618,10 @@
 	}
 	function labelled( label, input ) {
 		var w = el( 'div' );
-		w.appendChild( el( 'label', null, label ) );
+		if ( ! input.id ) { input.id = 'db-console-field-' + ( ++fieldSeq ); }
+		var labelEl = el( 'label', null, label );
+		labelEl.setAttribute( 'for', input.id );
+		w.appendChild( labelEl );
 		w.appendChild( input );
 		return w;
 	}
@@ -546,8 +635,16 @@
 		var wrap = el( 'div', 'orders' );
 		screen.appendChild( wrap );
 
-		function act( id, path, body, msg ) {
-			return api( '/admin/order/' + id + path, 'POST', body ).then( function ( r ) {
+		function eventKey( o, target ) {
+			return [ 'console', o.id, o.version, target, Date.now(), Math.random().toString( 36 ).slice( 2 ) ].join( ':' );
+		}
+		function act( o, path, body, msg ) {
+			body = body || {};
+			if ( path !== '/ack' ) {
+				body.expected_version = o.version;
+				body.event_key = eventKey( o, body.status || 'confirmed' );
+			}
+			return api( '/admin/order/' + o.id + path, 'POST', body ).then( function ( r ) {
 				if ( r.ok ) { toast( msg ); refresh(); } else { toast( ( r.data && r.data.message ) || 'Action failed.' ); }
 			} ).catch( function () { toast( 'Network error.' ); } );
 		}
@@ -563,26 +660,34 @@
 					var card = el( 'div', 'order' + ( isNew ? ' is-new' : '' ) );
 					var h = el( 'div', 'order__h' );
 					h.appendChild( el( 'span', 'order__no', '#' + ( o.order_number || o.id ) ) );
-					h.appendChild( el( 'span', 'badge badge--' + ( o.status || 'new' ), o.status || 'new' ) );
+					h.appendChild( el( 'span', 'badge badge--' + ( o.status || 'new' ), o.status_label || o.status || 'new' ) );
 					card.appendChild( h );
 					card.appendChild( el( 'div', 'sub', ( o.order_type || '' ) + ' · ' + ( o.customer_name || '' ) + ( o.total ? ' · ' + money( o.total ) : '' ) ) );
 					if ( o.items_summary || o.items ) {
 						card.appendChild( el( 'div', 'order__items', o.items_summary || ( Array.isArray( o.items ) ? o.items.map( function ( i ) { return ( i.quantity || 1 ) + '× ' + ( i.name || '' ); } ).join( ', ' ) : '' ) ) );
 					}
+					if ( o.timing_label ) { card.appendChild( el( 'div', 'sub', o.timing_label ) ); }
 					var actions = el( 'div', 'order__actions' );
-					var ack = el( 'button', 'btn--ghost', 'Acknowledge' );
-					ack.addEventListener( 'click', function () { act( o.id, '/ack', {}, 'Acknowledged' ); } );
-					var acc = el( 'button', 'btn--ghost', 'Accept + ETA' );
-					acc.addEventListener( 'click', function () {
-						var eta = prompt( 'ETA in minutes?', '20' );
-						if ( eta !== null ) { act( o.id, '/accept', { eta: parseInt( eta, 10 ) || 0 }, 'Accepted' ); }
-					} );
-					actions.appendChild( ack ); actions.appendChild( acc );
-					[ 'preparing', 'ready', 'completed' ].forEach( function ( st ) {
-						var b = el( 'button', 'btn--ghost', st.charAt( 0 ).toUpperCase() + st.slice( 1 ) );
-						b.addEventListener( 'click', function () { act( o.id, '/status', { status: st }, 'Marked ' + st ); } );
-						actions.appendChild( b );
-					} );
+					if ( o.status === 'pending' ) {
+						var ack = el( 'button', 'btn--ghost', 'Acknowledge' );
+						ack.setAttribute( 'aria-label', 'Acknowledge order ' + o.order_number );
+						ack.addEventListener( 'click', function () { act( o, '/ack', {}, 'Acknowledged' ); } );
+						actions.appendChild( ack );
+						[ 10, 15, 20, 30 ].forEach( function ( eta ) {
+							var acceptButton = el( 'button', 'btn--ghost', 'Accept ' + eta + 'm' );
+							acceptButton.setAttribute( 'aria-label', 'Accept order ' + o.order_number + ', ready in ' + eta + ' minutes' );
+							acceptButton.addEventListener( 'click', function () { act( o, '/accept', { eta: eta }, 'Order accepted' ); } );
+							actions.appendChild( acceptButton );
+						} );
+					} else {
+						( o.allowed_next_statuses || [] ).filter( function ( st ) { return st !== 'cancelled'; } ).forEach( function ( st ) {
+							var text = ( o.status_label && st === 'preparing' ) ? 'Start cooking' : ( st === 'completed' ? 'Complete' : st.replace( /_/g, ' ' ) );
+							var b = el( 'button', 'btn--ghost', text.charAt( 0 ).toUpperCase() + text.slice( 1 ) );
+							b.setAttribute( 'aria-label', text + ' order ' + o.order_number );
+							b.addEventListener( 'click', function () { act( o, '/status', { status: st }, 'Order updated' ); } );
+							actions.appendChild( b );
+						} );
+					}
 					card.appendChild( actions );
 					wrap.appendChild( card );
 				} );

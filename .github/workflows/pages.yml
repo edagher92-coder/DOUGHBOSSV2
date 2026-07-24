@@ -2,9 +2,14 @@ name: Deploy demo to GitHub Pages
 
 on:
   push:
-    branches: [ "claude/funny-goodall-gsoog4" ]
+    branches: [ "claude/doughboss-website-design-fixes-li6dqa" ]
     paths:
       - "demo/**"
+      - "docs/DoughBoss-Staff-Management-Quick-Guide-2026-07-24.html"
+      - "docs/DoughBoss-Staff-Management-Quick-Guide-2026-07-24.pdf"
+      - "docs/walkthrough/DB-06-order-tracking.png"
+      - "docs/walkthrough/DB-08-kitchen-ipad.png"
+      - "docs/walkthrough/DB-10-dashboard.png"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -25,15 +30,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           enablement: true
-      - name: Upload demo as Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Prepare public demo and noindex operations guide
+        run: |
+          mkdir -p _site/docs/walkthrough
+          cp -R demo/. _site/
+          cp docs/DoughBoss-Staff-Management-Quick-Guide-2026-07-24.html _site/docs/
+          cp docs/DoughBoss-Staff-Management-Quick-Guide-2026-07-24.pdf _site/docs/
+          cp docs/walkthrough/DB-06-order-tracking.png _site/docs/walkthrough/
+          cp docs/walkthrough/DB-08-kitchen-ipad.png _site/docs/walkthrough/
+          cp docs/walkthrough/DB-10-dashboard.png _site/docs/walkthrough/
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
         with:
-          path: demo
+          path: _site
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

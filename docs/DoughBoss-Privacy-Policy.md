@@ -84,7 +84,7 @@ Depending on how you interact with us, we may collect:
 - your **name**, **email address** and **phone number**; and
 - the **details of your catering enquiry** (event, date, numbers, menu preferences and any message you include).
 
-Submitting this form sends your enquiry by email to **`[orders@doughboss.com.au ___]`** so we can prepare a quote and contact you.
+Submitting this form sends your enquiry by email to **`[hello@doughboss.com.au ___]`** so we can prepare a quote and contact you.
 
 ### 3.3 Snow Boss student voucher form
 
@@ -152,7 +152,7 @@ Order and transaction information may be entered into or synchronised with our *
 
 ### 6.4 Email and website hosting providers
 
-We use **email service providers** (to send and receive order and catering emails, e.g. to `[orders@doughboss.com.au ___]`) and **website / hosting providers** (to host and operate our ordering and marketing websites). These providers may store data on our behalf, including on servers located overseas. *[Guidance: insert the actual providers, e.g. the email host, WordPress host/CDN, and any marketing-email platform such as Mailchimp/Campaign Monitor if used. Name each and its data location.]*
+We use **email service providers** (to send and receive order and catering emails, e.g. to `[hello@doughboss.com.au ___]`) and **website / hosting providers** (to host and operate our ordering and marketing websites). These providers may store data on our behalf, including on servers located overseas. *[Guidance: insert the actual providers, e.g. the email host, WordPress host/CDN, and any marketing-email platform such as Mailchimp/Campaign Monitor if used. Name each and its data location.]*
 
 ### 6.5 Other disclosures
 

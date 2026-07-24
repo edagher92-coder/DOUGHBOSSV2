@@ -36,6 +36,37 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_clear_payment_issues', array( $this, 'handle_clear_payment_issues' ) );
 		add_action( 'admin_post_doughboss_refund_order', array( $this, 'handle_refund_order' ) );
 		add_action( 'admin_post_doughboss_export_report', array( $this, 'handle_export_report' ) );
+		add_action( 'admin_post_doughboss_clear_pospal_alerts', array( $this, 'handle_clear_pospal_alerts' ) );
+		add_action( 'admin_notices', array( $this, 'render_pospal_unmapped_notice' ) );
+		add_action( 'admin_post_doughboss_pospal_outbox_resend', array( $this, 'handle_pospal_outbox_resend' ) );
+		add_action( 'admin_notices', array( $this, 'render_pospal_outbox_notice' ) );
+		add_action( 'admin_post_doughboss_generate_board_key', array( $this, 'handle_generate_board_key' ) );
+		add_action( 'admin_post_doughboss_clear_board_key', array( $this, 'handle_clear_board_key' ) );
+		add_action( 'admin_notices', array( $this, 'render_board_key_reveal_notice' ) );
+		add_action( 'admin_post_doughboss_clear_delivery_notice', array( $this, 'handle_clear_delivery_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_delivery_autodisabled_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_migration_notice' ) );
+	}
+
+	/**
+	 * Tell owners when the lifecycle migration failed closed.
+	 *
+	 * @return void
+	 */
+	public function render_migration_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$error = (string) get_option( 'doughboss_migration_error', '' );
+		if ( '' === $error ) {
+			return;
+		}
+		?>
+		<div class="notice notice-error">
+			<p><strong><?php esc_html_e( 'DoughBoss order upgrade needs attention.', 'doughboss' ); ?></strong></p>
+			<p><?php echo esc_html( $error ); ?> <?php esc_html_e( 'Online checkout and staff order changes are paused to protect order history. Ask the site administrator to verify the DoughBoss Orders, Order Items and Order Events tables use InnoDB, then retry the plugin upgrade.', 'doughboss' ); ?></p>
+		</div>
+		<?php
 	}
 
 	/**
@@ -100,6 +131,15 @@ class DoughBoss_Admin {
 			$this->cap(),
 			'doughboss-locations',
 			array( $this, 'render_locations_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
+			__( 'Dining Tables & QR Codes', 'doughboss' ),
+			__( 'Tables & QR', 'doughboss' ),
+			$this->cap(),
+			'doughboss-tables',
+			array( $this, 'render_tables_page' )
 		);
 
 		add_submenu_page(
@@ -210,6 +250,20 @@ class DoughBoss_Admin {
 		$clean['enable_pickup']   = empty( $input['enable_pickup'] ) ? 0 : 1;
 		$clean['enable_delivery'] = empty( $input['enable_delivery'] ) ? 0 : 1;
 		$clean['ordering_open']   = empty( $input['ordering_open'] ) ? 0 : 1;
+		$clean['ordering_closed_message'] = isset( $input['ordering_closed_message'] )
+			? sanitize_textarea_field( $input['ordering_closed_message'] )
+			: DoughBoss_Settings::ordering_closed_message();
+		$clean['after_hours_preorders_enabled'] = empty( $input['after_hours_preorders_enabled'] ) ? 0 : 1;
+		$clean['after_hours_preorders_message'] = isset( $input['after_hours_preorders_message'] )
+			? sanitize_textarea_field( $input['after_hours_preorders_message'] )
+			: DoughBoss_Settings::after_hours_preorders_message();
+		$active_locations         = DoughBoss_Locations::all( true );
+		$clean['single_location_mode'] = ! empty( $input['single_location_mode'] ) && 1 === count( $active_locations ) ? 1 : 0;
+		if ( $clean['single_location_mode'] ) {
+			// Single-location launch mode is deliberately pickup-only.
+			$clean['enable_pickup']   = 1;
+			$clean['enable_delivery'] = 0;
+		}
 
 		// Payments (Stripe). Keys are stored for the active mode; secret keys are
 		// only ever used in server-side calls and are never sent to the browser.
@@ -217,6 +271,8 @@ class DoughBoss_Admin {
 		// below) and use keep_secret() so a routine save without re-entering them
 		// preserves the stored value instead of wiping it.
 		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
+		$requested_gateway = isset( $input['payment_gateway'] ) ? sanitize_key( $input['payment_gateway'] ) : 'stripe';
+		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $requested_gateway : 'stripe';
 		$clean['stripe_mode']       = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
 		$clean['stripe_test_pk']    = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
 		$clean['stripe_test_sk']    = $this->keep_secret( $input, $existing, 'stripe_test_sk' );
@@ -224,6 +280,28 @@ class DoughBoss_Admin {
 		$clean['stripe_live_sk']    = $this->keep_secret( $input, $existing, 'stripe_live_sk' );
 		$clean['stripe_test_whsec'] = $this->keep_secret( $input, $existing, 'stripe_test_whsec' );
 		$clean['stripe_live_whsec'] = $this->keep_secret( $input, $existing, 'stripe_live_whsec' );
+
+		// Tyro Connect Pay. Client secrets and signing keys are write-only and
+		// env-first; the live certification switch is an explicit operator gate.
+		$clean['tyro_mode']                = ( isset( $input['tyro_mode'] ) && 'live' === $input['tyro_mode'] ) ? 'live' : 'test';
+		$clean['tyro_test_client_id']       = isset( $input['tyro_test_client_id'] ) ? sanitize_text_field( $input['tyro_test_client_id'] ) : '';
+		$clean['tyro_live_client_id']       = isset( $input['tyro_live_client_id'] ) ? sanitize_text_field( $input['tyro_live_client_id'] ) : '';
+		$clean['tyro_test_client_secret']   = $this->keep_secret( $input, $existing, 'tyro_test_client_secret' );
+		$clean['tyro_live_client_secret']   = $this->keep_secret( $input, $existing, 'tyro_live_client_secret' );
+		$clean['tyro_test_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_test_webhook_secret' );
+		$clean['tyro_live_webhook_secret'] = $this->keep_secret( $input, $existing, 'tyro_live_webhook_secret' );
+		$clean['tyro_live_certified']       = empty( $input['tyro_live_certified'] ) ? 0 : 1;
+
+		// Mastercard Payment Gateway Services (MPGS) Hosted Checkout.
+		$clean['mpgs_mode']              = ( isset( $input['mpgs_mode'] ) && 'live' === $input['mpgs_mode'] ) ? 'live' : 'test';
+		$clean['mpgs_test_merchant_id']  = isset( $input['mpgs_test_merchant_id'] ) ? sanitize_text_field( $input['mpgs_test_merchant_id'] ) : '';
+		$clean['mpgs_live_merchant_id']  = isset( $input['mpgs_live_merchant_id'] ) ? sanitize_text_field( $input['mpgs_live_merchant_id'] ) : '';
+		$clean['mpgs_test_api_password'] = $this->keep_secret( $input, $existing, 'mpgs_test_api_password' );
+		$clean['mpgs_live_api_password'] = $this->keep_secret( $input, $existing, 'mpgs_live_api_password' );
+		$clean['mpgs_test_host']         = isset( $input['mpgs_test_host'] ) ? esc_url_raw( trim( (string) $input['mpgs_test_host'] ) ) : '';
+		$clean['mpgs_live_host']         = isset( $input['mpgs_live_host'] ) ? esc_url_raw( trim( (string) $input['mpgs_live_host'] ) ) : '';
+		$clean['mpgs_api_version']       = min( 100, max( 63, absint( isset( $input['mpgs_api_version'] ) ? $input['mpgs_api_version'] : 100 ) ) );
+		$clean['mpgs_live_approved']     = empty( $input['mpgs_live_approved'] ) ? 0 : 1;
 
 		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
 		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback, and
@@ -260,9 +338,24 @@ class DoughBoss_Admin {
 		if ( isset( $input['orders_email'] ) ) {
 			$clean['orders_email'] = is_email( $input['orders_email'] ) ? sanitize_email( $input['orders_email'] ) : '';
 		} else {
-			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
+			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'hello@doughboss.com.au';
 		}
+		$clean['tracking_page_url'] = isset( $input['tracking_page_url'] )
+			? DoughBoss_Settings::sanitize_tracking_page_url( $input['tracking_page_url'] )
+			: ( isset( $existing['tracking_page_url'] ) ? DoughBoss_Settings::sanitize_tracking_page_url( $existing['tracking_page_url'] ) : '' );
+		$clean['google_review_url'] = isset( $input['google_review_url'] )
+			? DoughBoss_Settings::sanitize_google_review_url( $input['google_review_url'] )
+			: ( isset( $existing['google_review_url'] ) ? DoughBoss_Settings::sanitize_google_review_url( $existing['google_review_url'] ) : '' );
 		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? max( 0, absint( $input['staff_session_days'] ) ) : 0;
+
+		// Order Board access key is intentionally NOT part of this form — it is
+		// only ever set by handle_generate_board_key() (a random, URL-safe value)
+		// or cleared by handle_clear_board_key(), so the settings POST handler
+		// preserves whatever is already stored rather than accepting free text.
+		// This keeps it out of reach of a general form submission and guarantees
+		// the stored value always comes from the safe-alphabet generator below.
+		$existing_settings              = DoughBoss_Settings::all();
+		$clean['board_access_key']      = isset( $existing_settings['board_access_key'] ) ? $existing_settings['board_access_key'] : '';
 
 		// POSPal order push (mirror online orders to the till). The product map is
 		// managed via WP-CLI (`wp doughboss pospal-map`), not this form, so it is
@@ -294,6 +387,11 @@ class DoughBoss_Admin {
 		$clean['sms_from']             = isset( $input['sms_from'] ) ? sanitize_text_field( $input['sms_from'] ) : '';
 		$clean['sms_on_ready']         = empty( $input['sms_on_ready'] ) ? 0 : 1;
 		$clean['sms_on_voucher_claim'] = empty( $input['sms_on_voucher_claim'] ) ? 0 : 1;
+
+		// Customer stage-transition emails (native wp_mail).
+		$clean['email_on_accepted'] = empty( $input['email_on_accepted'] ) ? 0 : 1;
+		$clean['email_on_ready']    = empty( $input['email_on_ready'] ) ? 0 : 1;
+		$clean['email_staff_copy']  = empty( $input['email_staff_copy'] ) ? 0 : 1;
 
 		// Receipt printer (CloudPRNT / ePOS).
 		$clean['printer_enabled']  = empty( $input['printer_enabled'] ) ? 0 : 1;
@@ -392,6 +490,16 @@ class DoughBoss_Admin {
 		);
 		wp_add_inline_script( 'doughboss-admin', $this->inline_admin_js() );
 
+		if ( false !== strpos( $hook, 'doughboss-tables' ) ) {
+			wp_enqueue_script(
+				'doughboss-qrcode-generator',
+				DOUGHBOSS_PLUGIN_URL . 'public/vendor/qrcode-generator/qrcode.js',
+				array(),
+				'2.0.4',
+				true
+			);
+		}
+
 		// The voucher scanner ships its own modern dashboard app + styles, loaded
 		// only on its screen.
 		if ( false !== strpos( $hook, 'doughboss-scan' ) ) {
@@ -422,6 +530,12 @@ class DoughBoss_Admin {
 		// The live order board ships its own (larger) app + styles, loaded only
 		// on its screen.
 		if ( false !== strpos( $hook, 'doughboss-board' ) ) {
+			// Only pass a raw board key to the board JavaScript after it has passed
+			// the same verifier used by the page and REST API. The key is held in
+			// memory for this page load and sent on each protected KDS request.
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page gate, verified against the stored secret.
+			$supplied_board_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
+			$board_key_for_js    = DoughBoss_Settings::verify_board_access_key( $supplied_board_key ) ? $supplied_board_key : '';
 			wp_enqueue_style(
 				'doughboss-orderboard',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-orderboard.css',
@@ -441,6 +555,7 @@ class DoughBoss_Admin {
 				array(
 					'restUrl'   => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 					'nonce'     => wp_create_nonce( 'wp_rest' ),
+					'boardKey'  => $board_key_for_js,
 					'currency'  => DoughBoss_Settings::get( 'currency_symbol', '$' ),
 					'pollMs'    => 7000,
 					'statuses'  => DoughBoss_Order::statuses(),
@@ -467,6 +582,19 @@ class DoughBoss_Admin {
 	}
 
 	/**
+	 * Shop names keyed by location ID, for oversight filters/columns.
+	 *
+	 * @return array<int,string>
+	 */
+	private function location_names() {
+		$out = array();
+		foreach ( DoughBoss_Locations::all() as $loc ) {
+			$out[ (int) $loc->id ] = (string) $loc->name;
+		}
+		return $out;
+	}
+
+	/**
 	 * Inline JS powering the orders status dropdowns and settings repeaters.
 	 *
 	 * @return string
@@ -480,6 +608,7 @@ class DoughBoss_Admin {
 		var isCatering = sel.matches('.db-catering-status');
 		if (!isOrder && !isCatering) { return; }
 		var id = sel.getAttribute(isOrder ? 'data-order' : 'data-enquiry');
+		var previous = sel.getAttribute('data-current') || '';
 		var endpoint = isOrder
 			? DoughBossAdmin.restUrl + '/admin/order/' + id + '/status'
 			: DoughBossAdmin.restUrl + '/admin/catering/' + id + '/status';
@@ -487,12 +616,25 @@ class DoughBoss_Admin {
 		fetch(endpoint, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
-			body: JSON.stringify({ status: sel.value })
-		}).then(function (r) { return r.json(); }).then(function () {
+			body: JSON.stringify(isOrder ? {
+				status: sel.value,
+				expected_version: parseInt(sel.getAttribute('data-version'), 10) || 1,
+				event_key: ['admin', id, sel.getAttribute('data-version') || '1', sel.value, Date.now(), Math.random().toString(36).slice(2)].join(':'),
+				reason_code: sel.value === 'cancelled' ? 'staff_cancelled' : ''
+			} : { status: sel.value })
+		}).then(function (r) {
+			return r.json().catch(function () { return {}; }).then(function (data) {
+				if (!r.ok) { throw new Error(data.message || 'Request failed.'); }
+				return data;
+			});
+		}).then(function (data) {
 			sel.disabled = false;
+			if (isOrder && data.version) { sel.setAttribute('data-version', data.version); }
+			sel.setAttribute('data-current', sel.value);
 			var row = sel.closest('tr');
 			if (row) { row.style.transition = 'background .6s'; row.style.background = '#eaffea'; setTimeout(function(){ row.style.background=''; }, 800); }
-		}).catch(function () { sel.disabled = false; alert('Could not update status.'); });
+			if (isOrder) { window.location.reload(); }
+		}).catch(function (error) { sel.disabled = false; sel.value = previous; alert(error.message || 'Could not update status.'); });
 	});
 
 	document.addEventListener('click', function (e) {
@@ -625,6 +767,90 @@ class DoughBoss_Admin {
 				if (trOut) { trOut.textContent = 'Request failed.'; trOut.style.color = '#b32d2e'; }
 			});
 		}
+
+		var pmLoadBtn = e.target.closest('#db-pospal-map-load');
+		if (pmLoadBtn) {
+			e.preventDefault();
+			var pmLoadOut = document.getElementById('db-pospal-map-result');
+			var pmStore = (document.getElementById('db-pospal-map-store') || {}).value || '1';
+			pmLoadBtn.disabled = true;
+			if (pmLoadOut) { pmLoadOut.textContent = 'Loading…'; pmLoadOut.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/pospal/products?store=' + encodeURIComponent(pmStore), {
+				headers: { 'X-WP-Nonce': DoughBossAdmin.nonce }
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				pmLoadBtn.disabled = false;
+				if (!d || !d.ok) {
+					if (pmLoadOut) { pmLoadOut.textContent = (d && d.message) ? d.message : 'Could not load products.'; pmLoadOut.style.color = '#b32d2e'; }
+					return;
+				}
+				var norm = function (s) { return String(s == null ? '' : s).toLowerCase().trim().replace(/\s+/g, ' '); };
+				var byName = {};
+				(d.products || []).forEach(function (p) { byName[norm(p.name)] = p; });
+				var selects = document.querySelectorAll('.db-pospal-map-select');
+				var matched = 0;
+				selects.forEach(function (sel) {
+					var key = sel.getAttribute('data-key');
+					var current = sel.getAttribute('data-current') || '';
+					var keep = sel.value; // Preserve "not mapped" vs the placeholder "currently mapped" option if no fresh match is found below.
+					sel.innerHTML = '';
+					var blank = document.createElement('option');
+					blank.value = '';
+					blank.textContent = '— not mapped —';
+					sel.appendChild(blank);
+					(d.products || []).forEach(function (p) {
+						var opt = document.createElement('option');
+						opt.value = p.uid;
+						opt.textContent = p.name + (p.price != null ? ' ($' + p.price + ')' : '');
+						sel.appendChild(opt);
+					});
+					var hit = byName[key];
+					if (hit) {
+						sel.value = String(hit.uid);
+						matched++;
+					} else if (current && !sel.querySelector('option[value="' + CSS.escape(current) + '"]')) {
+						// Kept mapping doesn't match any fetched product by name — surface it
+						// rather than silently dropping it so the operator can decide.
+						var keepOpt = document.createElement('option');
+						keepOpt.value = current;
+						keepOpt.textContent = 'Currently mapped (uid ' + current + ') — no name match found';
+						keepOpt.selected = true;
+						sel.appendChild(keepOpt);
+					} else {
+						sel.value = current || '';
+					}
+				});
+				if (pmLoadOut) {
+					pmLoadOut.textContent = (d.message || '') + ' — ' + matched + ' of ' + selects.length + ' menu items auto-matched by name. Review below, then Save.';
+					pmLoadOut.style.color = '#1f7a37';
+				}
+			}).catch(function () {
+				pmLoadBtn.disabled = false;
+				if (pmLoadOut) { pmLoadOut.textContent = 'Request failed.'; pmLoadOut.style.color = '#b32d2e'; }
+			});
+		}
+
+		var pmSaveBtn = e.target.closest('#db-pospal-map-save');
+		if (pmSaveBtn) {
+			e.preventDefault();
+			var pmSaveOut = document.getElementById('db-pospal-map-result');
+			var map = {};
+			document.querySelectorAll('.db-pospal-map-select').forEach(function (sel) {
+				if (sel.value) { map[sel.getAttribute('data-key')] = sel.value; }
+			});
+			pmSaveBtn.disabled = true;
+			if (pmSaveOut) { pmSaveOut.textContent = 'Saving…'; pmSaveOut.style.color = ''; }
+			fetch(DoughBossAdmin.restUrl + '/pospal/product-map', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
+				body: JSON.stringify({ map: map })
+			}).then(function (r) { return r.json(); }).then(function (d) {
+				pmSaveBtn.disabled = false;
+				if (pmSaveOut) { pmSaveOut.textContent = (d && d.message) ? d.message : 'Done.'; pmSaveOut.style.color = (d && d.ok) ? '#1f7a37' : '#b32d2e'; }
+			}).catch(function () {
+				pmSaveBtn.disabled = false;
+				if (pmSaveOut) { pmSaveOut.textContent = 'Request failed.'; pmSaveOut.style.color = '#b32d2e'; }
+			});
+		}
 	});
 }());
 JS;
@@ -640,17 +866,19 @@ JS;
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
 		}
 
-		$paged  = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$status = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$paged    = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$status   = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$search   = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$location = isset( $_GET['location'] ) ? absint( $_GET['location'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 		$per_page = 20;
 		$result   = DoughBoss_Order::query(
 			array(
-				'status'   => $status,
-				'search'   => $search,
-				'per_page' => $per_page,
-				'page'     => $paged,
+				'status'      => $status,
+				'search'      => $search,
+				'location_id' => $location,
+				'per_page'    => $per_page,
+				'page'        => $paged,
 			)
 		);
 
@@ -658,19 +886,67 @@ JS;
 		$total_pages    = (int) ceil( $result['total'] / $per_page );
 		$pay_issues     = $this->unreconciled_payments();
 		$items_by_order = DoughBoss_Order::get_items_for_orders( wp_list_pluck( $result['items'], 'id' ) );
+		$location_names = $this->location_names();
+		$multi_shop     = count( $location_names ) > 1;
+		$colspan        = $multi_shop ? 8 : 7;
+
+		// Today-at-a-glance strip (site-local day, respects the shop filter).
+		list( $t_start, $t_end ) = DoughBoss_Reports::today_bounds();
+		$today     = DoughBoss_Reports::summary( $t_start, $t_end, $location );
+		$today_pay = DoughBoss_Reports::payment_mix( $t_start, $t_end, $location );
+		$today_unpaid   = isset( $today_pay['unpaid'] ) ? $today_pay['unpaid'] : array( 'orders' => 0, 'revenue' => 0.0 );
+		$today_refunded = isset( $today_pay['refunded'] ) ? $today_pay['refunded'] : array( 'orders' => 0, 'revenue' => 0.0 );
 		?>
 		<div class="wrap doughboss-orders">
 			<h1><?php esc_html_e( 'Orders', 'doughboss' ); ?></h1>
+
+			<h2 style="margin:14px 0 6px;">
+				<?php
+				if ( $location > 0 && isset( $location_names[ $location ] ) ) {
+					/* translators: %s: shop/location name. */
+					echo esc_html( sprintf( __( 'Today — %s', 'doughboss' ), $location_names[ $location ] ) );
+				} else {
+					esc_html_e( 'Today — all shops', 'doughboss' );
+				}
+				?>
+			</h2>
+			<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px;">
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'Orders', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( number_format_i18n( $today['orders'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'Gross sales', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today['revenue'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'Paid by card', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today['paid_revenue'] ) ); ?></strong>
+						<small><?php echo esc_html( sprintf( /* translators: %s: order count. */ _n( '%s order', '%s orders', $today['paid_orders'], 'doughboss' ), number_format_i18n( $today['paid_orders'] ) ) ); ?></small></p>
+				</div>
+				<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+					<p style="margin:0;color:#646970;"><?php esc_html_e( 'To collect in store', 'doughboss' ); ?></p>
+					<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today_unpaid['revenue'] ) ); ?></strong>
+						<small><?php echo esc_html( sprintf( /* translators: %s: order count. */ _n( '%s order', '%s orders', $today_unpaid['orders'], 'doughboss' ), number_format_i18n( $today_unpaid['orders'] ) ) ); ?></small></p>
+				</div>
+				<?php if ( $today_refunded['orders'] > 0 ) : ?>
+					<div class="card" style="min-width:140px;margin:0;padding:10px 16px;">
+						<p style="margin:0;color:#b32d2e;"><?php esc_html_e( 'Refunded', 'doughboss' ); ?></p>
+						<p style="font-size:1.5em;margin:2px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $today_refunded['revenue'] ) ); ?></strong>
+							<small><?php echo esc_html( sprintf( /* translators: %s: order count. */ _n( '%s order', '%s orders', $today_refunded['orders'], 'doughboss' ), number_format_i18n( $today_refunded['orders'] ) ) ); ?></small></p>
+					</div>
+				<?php endif; ?>
+			</div>
 
 			<?php
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
 			$flash = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
 			if ( 'refunded' === $flash ) {
-				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Refund issued via Stripe. Note: a voucher used on the order is NOT automatically reissued — issue a new one from the Vouchers page if needed.', 'doughboss' ) . '</p></div>';
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Refund issued. Note: a voucher used on the order is NOT automatically reissued — issue a new one from the Vouchers page if needed.', 'doughboss' ) . '</p></div>';
 			} elseif ( 'refund_already' === $flash ) {
 				echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'That order has already been refunded.', 'doughboss' ) . '</p></div>';
 			} elseif ( 'refund_ineligible' === $flash ) {
-				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That order cannot be refunded here — it has no verified Stripe card payment.', 'doughboss' ) . '</p></div>';
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That order cannot be refunded here — it has no verified card payment.', 'doughboss' ) . '</p></div>';
 			} elseif ( 'refund_error' === $flash ) {
 				// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flash after a nonce-checked redirect.
 				$detail = isset( $_GET['detail'] ) ? sanitize_text_field( wp_unslash( $_GET['detail'] ) ) : '';
@@ -681,7 +957,7 @@ JS;
 			<?php if ( ! empty( $pay_issues ) ) : ?>
 				<div class="notice notice-error" style="padding:12px 16px;">
 					<h2 style="margin-top:0;"><?php esc_html_e( 'Payment issues — money taken, no order created', 'doughboss' ); ?></h2>
-					<p><?php esc_html_e( 'Stripe reported these payments as succeeded, but no matching order was ever created (the customer paid and then their checkout never completed). Look each one up in the Stripe Dashboard for the card-holder details, then contact the customer or refund the payment. Clear the list once every payment has been dealt with.', 'doughboss' ); ?></p>
+					<p><?php esc_html_e( 'The payment gateway reported these payments as succeeded, but no matching order was ever created (the customer paid and then their checkout never completed). Look each one up in your payment gateway\'s dashboard for the card-holder details, then contact the customer or refund the payment. Clear the list once every payment has been dealt with.', 'doughboss' ); ?></p>
 					<table class="widefat striped" style="max-width:720px;">
 						<thead>
 							<tr>
@@ -720,6 +996,16 @@ JS;
 						</option>
 					<?php endforeach; ?>
 				</select>
+				<?php if ( $multi_shop ) : ?>
+					<select name="location">
+						<option value="0"><?php esc_html_e( 'All shops', 'doughboss' ); ?></option>
+						<?php foreach ( $location_names as $loc_id => $loc_name ) : ?>
+							<option value="<?php echo esc_attr( $loc_id ); ?>" <?php selected( $location, $loc_id ); ?>>
+								<?php echo esc_html( $loc_name ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				<?php endif; ?>
 				<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php esc_attr_e( 'Search orders…', 'doughboss' ); ?>" />
 				<button class="button"><?php esc_html_e( 'Filter', 'doughboss' ); ?></button>
 			</form>
@@ -729,6 +1015,9 @@ JS;
 					<tr>
 						<th><?php esc_html_e( 'Order #', 'doughboss' ); ?></th>
 						<th><?php esc_html_e( 'Customer', 'doughboss' ); ?></th>
+						<?php if ( $multi_shop ) : ?>
+							<th><?php esc_html_e( 'Shop', 'doughboss' ); ?></th>
+						<?php endif; ?>
 						<th><?php esc_html_e( 'Type', 'doughboss' ); ?></th>
 						<th><?php esc_html_e( 'Items', 'doughboss' ); ?></th>
 						<th><?php esc_html_e( 'Total', 'doughboss' ); ?></th>
@@ -738,7 +1027,7 @@ JS;
 				</thead>
 				<tbody>
 					<?php if ( empty( $result['items'] ) ) : ?>
-						<tr><td colspan="7"><?php esc_html_e( 'No orders yet.', 'doughboss' ); ?></td></tr>
+						<tr><td colspan="<?php echo esc_attr( $colspan ); ?>"><?php esc_html_e( 'No orders yet.', 'doughboss' ); ?></td></tr>
 					<?php else : ?>
 						<?php foreach ( $result['items'] as $order ) : ?>
 							<?php $items = isset( $items_by_order[ (int) $order->id ] ) ? $items_by_order[ (int) $order->id ] : array(); ?>
@@ -749,6 +1038,14 @@ JS;
 									<small><?php echo esc_html( $order->customer_email ); ?></small><br />
 									<small><?php echo esc_html( $order->customer_phone ); ?></small>
 								</td>
+								<?php if ( $multi_shop ) : ?>
+									<td>
+										<?php
+										$loc_id = isset( $order->location_id ) ? (int) $order->location_id : 0;
+										echo esc_html( isset( $location_names[ $loc_id ] ) ? $location_names[ $loc_id ] : __( '—', 'doughboss' ) );
+										?>
+									</td>
+								<?php endif; ?>
 								<td><?php echo esc_html( ucfirst( $order->order_type ) ); ?></td>
 								<td>
 									<ul class="db-item-list">
@@ -776,11 +1073,14 @@ JS;
 										?>
 										</small>
 									<?php endif; ?>
-									<?php if ( isset( $order->payment_method ) && 'stripe' === $order->payment_method && ! empty( $order->payment_intent_id ) ) : ?>
+									<?php if ( isset( $order->payment_method ) && in_array( $order->payment_method, array( 'stripe', 'tyro', 'mpgs' ), true ) && ! empty( $order->payment_intent_id ) ) : ?>
 										<?php if ( 'paid' === $order->payment_status ) : ?>
 											<br /><small>
-												<?php esc_html_e( 'Paid by card', 'doughboss' ); ?> ·
-												<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full via Stripe? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
+												<?php esc_html_e( 'Paid by card', 'doughboss' ); ?>
+												<?php if ( in_array( $order->payment_method, array( 'stripe', 'tyro' ), true ) ) : ?> ·
+													<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
+												<?php else : ?> · <?php esc_html_e( 'Refund from the Mastercard gateway portal', 'doughboss' ); ?>
+												<?php endif; ?>
 											</small>
 										<?php elseif ( 'refunded' === $order->payment_status ) : ?>
 											<br /><small style="color:#b32d2e;"><?php esc_html_e( 'Refunded', 'doughboss' ); ?></small>
@@ -789,10 +1089,20 @@ JS;
 								</td>
 								<td><?php echo esc_html( mysql2date( 'M j, g:i a', $order->created_at ) ); ?></td>
 								<td>
-									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>">
+									<?php
+									$available_statuses = array_merge( array( $order->status ), DoughBoss_Order::allowed_transitions( $order->status, $order->order_type ) );
+									if ( isset( $order->payment_status ) && 'paid' === $order->payment_status ) {
+										$available_statuses = array_values( array_diff( $available_statuses, array( 'cancelled' ) ) );
+									}
+									?>
+									<select class="db-status-select" data-order="<?php echo esc_attr( $order->id ); ?>" data-version="<?php echo esc_attr( isset( $order->version ) ? (int) $order->version : 1 ); ?>" data-current="<?php echo esc_attr( $order->status ); ?>">
 										<?php foreach ( $statuses as $key => $label ) : ?>
+											<?php if ( ! in_array( $key, $available_statuses, true ) ) { continue; } ?>
 											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $order->status, $key ); ?>>
-												<?php echo esc_html( $label ); ?>
+												<?php
+												$display_label = 'dine_in' === $order->order_type && 'ready' === $key ? __( 'Ready to Serve', 'doughboss' ) : ( 'dine_in' === $order->order_type && 'completed' === $key ? __( 'Served', 'doughboss' ) : $label );
+												echo esc_html( $display_label );
+												?>
 											</option>
 										<?php endforeach; ?>
 									</select>
@@ -923,12 +1233,389 @@ JS;
 	}
 
 	/**
-	 * Admin-post handler: refund a Stripe-paid order in full.
+	 * Admin-post handler: clear the POSPal unmapped-item alert queue.
 	 *
-	 * The PaymentIntent id is always read from the stored order row (never from
-	 * the request), and only orders verified as paid by card are eligible. A
-	 * voucher redeemed on the order is deliberately NOT reissued here — the
-	 * owner reissues one manually from the Vouchers page if they want to.
+	 * @return void
+	 */
+	public function handle_clear_pospal_alerts() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_clear_pospal_alerts' );
+
+		delete_option( DoughBoss_POSPal_Orders::UNMAPPED_ALERTS_OPTION );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * admin_notices: surface recent POSPal order-push skips (unmapped menu items)
+	 * so they're visible in wp-admin rather than only in the server error log.
+	 * Shown to anyone who can manage DoughBoss, on every admin screen, until
+	 * dismissed — a skipped till push is easy to miss otherwise.
+	 *
+	 * @return void
+	 */
+	public function render_pospal_unmapped_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$alerts = get_option( DoughBoss_POSPal_Orders::UNMAPPED_ALERTS_OPTION, array() );
+		if ( empty( $alerts ) || ! is_array( $alerts ) ) {
+			return;
+		}
+
+		$names = array();
+		foreach ( $alerts as $a ) {
+			foreach ( (array) ( isset( $a['items'] ) ? $a['items'] : array() ) as $n ) {
+				$names[ $n ] = true;
+			}
+		}
+		$names = array_keys( $names );
+
+		$clear_url = wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_clear_pospal_alerts' ), 'doughboss_clear_pospal_alerts' );
+		?>
+		<div class="notice notice-warning is-dismissible">
+			<p>
+				<?php
+				printf(
+					/* translators: 1: number of orders, 2: comma-separated item names. */
+					esc_html( _n( '%1$d recent order didn\'t reach the POSPal till — unmapped menu item(s): %2$s.', '%1$d recent orders didn\'t reach the POSPal till — unmapped menu item(s): %2$s.', count( $alerts ), 'doughboss' ) ),
+					count( $alerts ),
+					esc_html( implode( ', ', array_slice( $names, 0, 8 ) ) . ( count( $names ) > 8 ? '…' : '' ) )
+				);
+				?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>#db-pospal-map-load"><?php esc_html_e( 'Map them in Settings', 'doughboss' ); ?></a>
+				&middot;
+				<a href="<?php echo esc_url( $clear_url ); ?>"><?php esc_html_e( 'Dismiss', 'doughboss' ); ?></a>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * admin_notices: tell the owner that the 1.10.0 migration turned delivery
+	 * off (single-location pickup-only scope). The migration is a one-shot and
+	 * deliberately conservative, but it must never be silent — this notice
+	 * stays until dismissed so the owner knows delivery can be re-enabled in
+	 * Settings at any time.
+	 *
+	 * @return void
+	 */
+	public function render_delivery_autodisabled_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( ! get_option( 'doughboss_delivery_autodisabled' ) ) {
+			return;
+		}
+		$dismiss_url = wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_clear_delivery_notice' ), 'doughboss_clear_delivery_notice' );
+		?>
+		<div class="notice notice-info">
+			<p>
+				<?php esc_html_e( 'DoughBoss update: delivery ordering was switched off as part of the pickup-only launch scope (single-location mode). Pickup ordering is unaffected.', 'doughboss' ); ?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>"><?php esc_html_e( 'Re-enable delivery in Settings', 'doughboss' ); ?></a>
+				&middot;
+				<a href="<?php echo esc_url( $dismiss_url ); ?>"><?php esc_html_e( 'Dismiss', 'doughboss' ); ?></a>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Handle the dismiss link on the delivery-autodisabled notice.
+	 *
+	 * @return void
+	 */
+	public function handle_clear_delivery_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_clear_delivery_notice' );
+
+		delete_option( 'doughboss_delivery_autodisabled' );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * Handle POSPal outbox retries. Bulk retry excludes ambiguous outcomes. A
+	 * selected ambiguous row requires an explicit confirmation that staff checked
+	 * the till and found no matching order.
+	 *
+	 * @return void
+	 */
+	public function handle_pospal_outbox_resend() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		$id = isset( $_REQUEST['outbox_id'] ) ? absint( $_REQUEST['outbox_id'] ) : 0;
+		if ( $id ) {
+			$expected_updated_at = isset( $_POST['outbox_updated_at'] ) ? sanitize_text_field( wp_unslash( $_POST['outbox_updated_at'] ) ) : '';
+			$expected_error      = isset( $_POST['outbox_error'] ) ? sanitize_key( wp_unslash( $_POST['outbox_error'] ) ) : '';
+			if (
+				'' === $expected_updated_at
+				|| ! in_array( $expected_error, array( 'ambiguous_network', 'ambiguous_in_flight', 'ambiguous_missing_order_no' ), true )
+			) {
+				wp_die( esc_html__( 'This POSPal review form is incomplete. Refresh the page and try again.', 'doughboss' ) );
+			}
+			$state_token = md5( $expected_updated_at . '|' . $expected_error );
+			check_admin_referer( 'doughboss_pospal_outbox_resend_' . $id . '_' . $state_token );
+			if ( empty( $_POST['confirm_missing'] ) ) {
+				wp_die( esc_html__( 'Check the POSPal till and confirm that the order is missing before re-sending it.', 'doughboss' ) );
+			}
+			$released = DoughBoss_POSPal_Outbox::reset_for_retry( $id, true, $expected_updated_at, $expected_error );
+			if ( 1 !== (int) $released ) {
+				wp_die( esc_html__( 'This POSPal outcome changed after you opened the page. Nothing was re-sent; refresh and review the current state.', 'doughboss' ) );
+			}
+		} else {
+			check_admin_referer( 'doughboss_pospal_outbox_resend' );
+			DoughBoss_POSPal_Outbox::reset_for_retry();
+		}
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * admin_notices: surface POSPal outbox rows that either exhausted their retry
+	 * budget (terminal) or are still retrying after 3+ attempts (borderline).
+	 * Explicit remote failures may be bulk-retried. Ambiguous outcomes are listed
+	 * individually and require a confirmed till check before release.
+	 * Silent when the outbox is clean — no notice noise on a healthy site.
+	 *
+	 * @return void
+	 */
+	public function render_pospal_outbox_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( ! class_exists( 'DoughBoss_POSPal_Outbox' ) ) {
+			return;
+		}
+		$counts = DoughBoss_POSPal_Outbox::counts_for_alert();
+		if ( 0 === (int) $counts['terminal'] && 0 === (int) $counts['retrying'] ) {
+			return;
+		}
+
+		$resend_url = wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_pospal_outbox_resend' ), 'doughboss_pospal_outbox_resend' );
+		$rows       = DoughBoss_POSPal_Outbox::list_ambiguous_rows( 100 );
+		?>
+		<div class="notice notice-warning">
+			<p>
+				<?php
+				if ( $counts['retryable_terminal'] > 0 ) {
+					printf(
+						/* translators: %d: number of explicit POSPal failures. */
+						esc_html( _n( '%d order received repeated explicit POSPal errors.', '%d orders received repeated explicit POSPal errors.', $counts['retryable_terminal'], 'doughboss' ) ),
+						(int) $counts['retryable_terminal']
+					);
+				}
+				if ( $counts['ambiguous'] > 0 ) {
+					if ( $counts['retryable_terminal'] > 0 ) {
+						echo ' ';
+					}
+					printf(
+						/* translators: %d: number of orders whose remote outcome is unknown. */
+						esc_html( _n( '%d order may already be on the till and needs a manual check.', '%d orders may already be on the till and need a manual check.', $counts['ambiguous'], 'doughboss' ) ),
+						(int) $counts['ambiguous']
+					);
+				}
+				if ( $counts['retrying'] > 0 ) {
+					if ( $counts['terminal'] > 0 ) {
+						echo ' ';
+					}
+					printf(
+						/* translators: %d: number of POSPal push rows still retrying. */
+						esc_html( _n( '%d order is still retrying.', '%d orders are still retrying.', $counts['retrying'], 'doughboss' ) ),
+						(int) $counts['retrying']
+					);
+				}
+				if ( $counts['retryable_terminal'] > 0 ) {
+					echo ' ';
+				?>
+				<a href="<?php echo esc_url( $resend_url ); ?>"><?php esc_html_e( 'Retry explicit failures', 'doughboss' ); ?></a>
+				<?php } ?>
+			</p>
+			<?php if ( (int) $counts['ambiguous'] > count( $rows ) ) : ?>
+				<p><?php echo esc_html( sprintf( __( 'Showing the oldest %1$d of %2$d ambiguous orders. Resolve these and refresh to review the remainder.', 'doughboss' ), count( $rows ), (int) $counts['ambiguous'] ) ); ?></p>
+			<?php endif; ?>
+			<?php foreach ( $rows as $row ) : ?>
+				<?php
+				$payload = json_decode( (string) $row->payload_json, true );
+				$day_seq = is_array( $payload ) && ! empty( $payload['daySeq'] ) ? sanitize_text_field( (string) $payload['daySeq'] ) : '';
+				$state_token = md5( (string) $row->updated_at . '|' . (string) $row->last_error );
+				?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:8px 0 12px;">
+					<input type="hidden" name="action" value="doughboss_pospal_outbox_resend" />
+					<input type="hidden" name="outbox_id" value="<?php echo esc_attr( (int) $row->id ); ?>" />
+					<input type="hidden" name="outbox_updated_at" value="<?php echo esc_attr( (string) $row->updated_at ); ?>" />
+					<input type="hidden" name="outbox_error" value="<?php echo esc_attr( (string) $row->last_error ); ?>" />
+					<?php wp_nonce_field( 'doughboss_pospal_outbox_resend_' . (int) $row->id . '_' . $state_token ); ?>
+					<strong><?php echo esc_html( $day_seq ? sprintf( __( 'POSPal order %s', 'doughboss' ), $day_seq ) : __( 'POSPal order number unavailable', 'doughboss' ) ); ?></strong>
+					&mdash; <?php echo esc_html( sprintf( __( 'store %1$d, outbox #%2$d, %3$s, %4$s', 'doughboss' ), (int) $row->store_index, (int) $row->id, (string) $row->updated_at, (string) $row->last_error ) ); ?><br />
+					<?php if ( $day_seq ) : ?>
+						<label><input type="checkbox" name="confirm_missing" value="1" required /> <?php echo esc_html( sprintf( __( 'I searched POSPal for %s and confirmed this order is missing.', 'doughboss' ), $day_seq ) ); ?></label>
+						<button type="submit" class="button button-secondary"><?php esc_html_e( 'Re-send this order', 'doughboss' ); ?></button>
+					<?php else : ?>
+						<?php esc_html_e( 'Do not re-send from this screen. Match the customer, store and time with POSPal, then escalate for manual recovery.', 'doughboss' ); ?>
+					<?php endif; ?>
+				</form>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Generate a fresh random Order Board access key and store its verifier. Only ever
+	 * called from this dedicated, nonce-protected action — never accepted as
+	 * free text from the general settings form — so the stored key is always
+	 * drawn from generate_board_key()'s URL-safe alphabet. Redirects back with
+	 * a one-time reveal transient so the plaintext key can be shown exactly
+	 * once (see render_board_key_reveal_notice()).
+	 *
+	 * @return void
+	 */
+	public function handle_generate_board_key() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_generate_board_key' );
+
+		$key = self::generate_board_key();
+		// Store only a sha256 digest — a DB read/dump/backup can no longer
+		// disclose the working key. The one-time reveal below is the only place
+		// the plaintext exists, and verification hashes the supplied ?key=
+		// before comparing (see render_board_page()).
+		DoughBoss_Settings::update( array( 'board_access_key' => hash( 'sha256', $key ) ) );
+
+		// One-time reveal: a short-lived transient keyed to this user so only
+		// the person who just generated it sees the plaintext, and only once —
+		// the settings form itself never echoes the raw key back into HTML. The
+		// persistent option contains only a SHA-256 verifier.
+		set_transient( 'doughboss_board_key_reveal_' . get_current_user_id(), $key, MINUTE_IN_SECONDS );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * Turn the Order Board access key off — the board falls back to being
+	 * gated by login + the manage_doughboss_kds capability only.
+	 *
+	 * @return void
+	 */
+	public function handle_clear_board_key() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_clear_board_key' );
+
+		DoughBoss_Settings::update( array( 'board_access_key' => '' ) );
+		delete_transient( 'doughboss_board_key_reveal_' . get_current_user_id() );
+
+		$base = wp_get_referer();
+		if ( ! $base ) {
+			$base = admin_url( 'admin.php?page=doughboss-settings' );
+		}
+		wp_safe_redirect( $base );
+		exit;
+	}
+
+	/**
+	 * admin_notices: show the just-generated Order Board key + bookmark URL
+	 * exactly once, immediately after handle_generate_board_key() redirects
+	 * back. The transient is deleted on read, so refreshing the page (or any
+	 * later page load) never re-shows the plaintext key — the settings form
+	 * itself only ever renders a masked "a key is set" state.
+	 *
+	 * @return void
+	 */
+	public function render_board_key_reveal_notice() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$uid = get_current_user_id();
+		$key = get_transient( 'doughboss_board_key_reveal_' . $uid );
+		if ( ! $key ) {
+			return;
+		}
+		delete_transient( 'doughboss_board_key_reveal_' . $uid );
+
+		$board_url = add_query_arg(
+			array(
+				'page' => 'doughboss-board',
+				'key'  => $key,
+			),
+			admin_url( 'admin.php' )
+		);
+		?>
+		<div class="notice notice-success is-dismissible">
+			<p>
+				<strong><?php esc_html_e( 'New Order Board link generated.', 'doughboss' ); ?></strong>
+				<?php esc_html_e( "Copy it now — for your security it won't be shown again. Bookmark it on the kitchen device.", 'doughboss' ); ?>
+			</p>
+			<p>
+				<input type="text" class="large-text" readonly onclick="this.select();" value="<?php echo esc_url( $board_url ); ?>" style="max-width:560px;" />
+			</p>
+			<p class="description">
+				<?php esc_html_e( "This link contains a secret key in the URL. Anyone who sees the URL — a screen-share, browser history, a shared device, or your web host's access logs — could use it, so only bookmark it on the kitchen device itself and don't share it anywhere else.", 'doughboss' ); ?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * A random, URL-safe Order Board access key. Restricting the alphabet to
+	 * unambiguous alphanumerics (no 0/O/1/l/I confusion, and critically no &,
+	 * +, #, space, or / — characters that would otherwise corrupt the
+	 * generated bookmark URL's query string or fall foul of PHP's '+' -> space
+	 * GET-decoding) means the value is always safe to embed in a URL by
+	 * construction, rather than relying on sanitizing free-text input after
+	 * the fact.
+	 *
+	 * @return string 24-character key.
+	 */
+	private static function generate_board_key() {
+		$alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+		$max      = strlen( $alphabet ) - 1;
+		$key      = '';
+		for ( $i = 0; $i < 24; $i++ ) {
+			$key .= $alphabet[ random_int( 0, $max ) ];
+		}
+		return $key;
+	}
+
+	/**
+	 * Admin-post handler: refund a card-paid order in full.
+	 *
+	 * The payment reference id is always read from the stored order row (never
+	 * from the request), and only orders verified as paid by card are
+	 * eligible. The refund is routed to whichever gateway the order's own
+	 * `payment_method` column records ('stripe' or 'tyro') — NOT whichever
+	 * gateway is active in Settings today — so refunding an old order still
+	 * works correctly even after the owner switches the active gateway. See
+	 * DoughBoss_Payment::refund_via(). A voucher redeemed on the order is
+	 * deliberately NOT reissued here — the owner reissues one manually from
+	 * the Vouchers page if they want to.
 	 *
 	 * @return void
 	 */
@@ -939,17 +1626,19 @@ JS;
 		}
 		check_admin_referer( 'doughboss_refund_order_' . $id );
 
-		$args  = array( 'page' => 'doughboss' );
-		$order = $id ? DoughBoss_Order::get( $id ) : null;
+		$args      = array( 'page' => 'doughboss' );
+		$order     = $id ? DoughBoss_Order::get( $id ) : null;
+		$gateway   = $order && isset( $order->payment_method ) ? (string) $order->payment_method : '';
+		$is_paid_by_gateway = in_array( $gateway, array( 'stripe', 'tyro' ), true );
 
 		if ( ! $order ) {
 			$args['msg'] = 'refund_error';
 		} elseif ( isset( $order->payment_status ) && 'refunded' === $order->payment_status ) {
 			$args['msg'] = 'refund_already';
-		} elseif ( ! isset( $order->payment_status, $order->payment_method ) || 'paid' !== $order->payment_status || 'stripe' !== $order->payment_method || empty( $order->payment_intent_id ) ) {
+		} elseif ( ! isset( $order->payment_status ) || 'paid' !== $order->payment_status || ! $is_paid_by_gateway || empty( $order->payment_intent_id ) ) {
 			$args['msg'] = 'refund_ineligible';
 		} else {
-			$refund = DoughBoss_Stripe::create_refund( (string) $order->payment_intent_id );
+			$refund = DoughBoss_Payment::refund_via( $gateway, (string) $order->payment_intent_id );
 			if ( is_wp_error( $refund ) ) {
 				$args['msg']    = 'refund_error';
 				$args['detail'] = rawurlencode( $refund->get_error_message() );
@@ -1093,8 +1782,24 @@ JS;
 	 * @return void
 	 */
 	public function render_board_page() {
+		// Primary gate: WP login + the kitchen capability. This is the real
+		// security boundary and is never weakened by the optional key below.
 		if ( ! current_user_can( 'manage_doughboss_kds' ) ) {
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+
+		// Optional secondary gate: if the owner has set a board access key in
+		// Settings, this authenticated + capable user must ALSO supply it via
+		// ?key= — giving kitchen staff a specific, bookmarkable URL per the
+		// owner's request, in addition to (not instead of) the login above.
+		$required_key = DoughBoss_Settings::board_access_key();
+		$kds_only     = ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' );
+		if ( $kds_only && '' !== $required_key ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page gate, not a state change; compared with hash_equals() below.
+			$supplied_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
+			if ( ! DoughBoss_Settings::verify_board_access_key( $supplied_key ) ) {
+				wp_die( esc_html__( 'This Order Board link is missing or has an incorrect access key. Ask an owner/manager for the bookmarked board URL from DoughBoss Settings.', 'doughboss' ) );
+			}
 		}
 		?>
 		<div class="wrap doughboss-board-wrap">
@@ -1107,7 +1812,8 @@ JS;
 					</button>
 				</div>
 			</div>
-			<div id="db-board" class="db-board" aria-live="polite">
+			<section id="db-preorder-review" class="db-preorder-review" hidden aria-labelledby="db-preorder-review-title"></section>
+			<div id="db-board" class="db-board">
 				<p class="db-board-loading"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
 			</div>
 		</div>
@@ -1127,6 +1833,9 @@ JS;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$edit_id = isset( $_GET['edit'] ) ? absint( $_GET['edit'] ) : 0;
 		$editing = $edit_id ? DoughBoss_Locations::get( $edit_id ) : null;
+		$hours  = $editing ? DoughBoss_Locations::weekly_hours( $edit_id ) : array_fill_keys( array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' ), '' );
+		$preview_config = $editing ? DoughBoss_Locations::capacity_preview_config( $edit_id ) : null;
+		$preview_windows = $preview_config ? DoughBoss_Capacity::windows( $preview_config, 1 ) : array();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$msg     = isset( $_GET['msg'] ) ? sanitize_key( wp_unslash( $_GET['msg'] ) ) : '';
 
@@ -1140,6 +1849,8 @@ JS;
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop saved.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'deleted' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop deleted.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'hours_invalid' === $msg ) : ?>
+				<div class="notice notice-error"><p><?php esc_html_e( 'The shop was saved, but its pickup hours were invalid. Use 24-hour ranges such as 11:00-21:00.', 'doughboss' ); ?></p></div>
 			<?php endif; ?>
 
 			<table class="wp-list-table widefat fixed striped" style="margin-bottom:1.5rem;">
@@ -1213,6 +1924,52 @@ JS;
 						<td><input name="prep_time_default" id="db-loc-prep" type="number" min="0" class="small-text" value="<?php echo esc_attr( $f( 'prep_time_default', 20 ) ); ?>" /></td>
 					</tr>
 					<tr>
+						<th><label for="db-loc-timezone"><?php esc_html_e( 'Shop timezone', 'doughboss' ); ?></label></th>
+						<td><input name="timezone" id="db-loc-timezone" type="text" class="regular-text" value="<?php echo esc_attr( $f( 'timezone', 'Australia/Sydney' ) ); ?>" /><p class="description"><?php esc_html_e( 'IANA timezone used for opening hours and daylight saving, normally Australia/Sydney.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-capacity-mode"><?php esc_html_e( 'Capacity rollout', 'doughboss' ); ?></label></th>
+						<td><select name="capacity_mode" id="db-capacity-mode"><option value="off" <?php selected( $f( 'capacity_mode', 'off' ), 'off' ); ?>><?php esc_html_e( 'Off — current checkout', 'doughboss' ); ?></option><option value="shadow" <?php selected( $f( 'capacity_mode', 'off' ), 'shadow' ); ?>><?php esc_html_e( 'Shadow — staff preview only', 'doughboss' ); ?></option></select><p class="description"><?php esc_html_e( 'Shadow mode calculates proposed windows without restricting customers or changing payments. Customer enforcement stays locked until the concurrency rehearsal passes.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Slot rules', 'doughboss' ); ?></th>
+						<td>
+							<label><?php esc_html_e( 'Window', 'doughboss' ); ?> <input name="slot_minutes" type="number" min="5" max="120" value="<?php echo esc_attr( $f( 'slot_minutes', 15 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Notice', 'doughboss' ); ?> <input name="minimum_notice_minutes" type="number" min="0" max="1440" value="<?php echo esc_attr( $f( 'minimum_notice_minutes', 30 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Horizon', 'doughboss' ); ?> <input name="booking_horizon_days" type="number" min="1" max="31" value="<?php echo esc_attr( $f( 'booking_horizon_days', 7 ) ); ?>" class="small-text" /> <?php esc_html_e( 'days', 'doughboss' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Conservative limits', 'doughboss' ); ?></th>
+						<td>
+							<label><?php esc_html_e( 'Orders per window', 'doughboss' ); ?> <input name="slot_order_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_order_capacity', 4 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Item units per window', 'doughboss' ); ?> <input name="slot_unit_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_unit_capacity', 12 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Hold', 'doughboss' ); ?> <input name="hold_minutes" type="number" min="1" max="30" value="<?php echo esc_attr( $f( 'hold_minutes', 10 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Item units currently mean cart quantity, not prep minutes or oven load. Tune from real Revesby observations before customer use.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Weekly pickup hours', 'doughboss' ); ?></th>
+						<td>
+							<?php foreach ( array( 'mon' => __( 'Mon', 'doughboss' ), 'tue' => __( 'Tue', 'doughboss' ), 'wed' => __( 'Wed', 'doughboss' ), 'thu' => __( 'Thu', 'doughboss' ), 'fri' => __( 'Fri', 'doughboss' ), 'sat' => __( 'Sat', 'doughboss' ), 'sun' => __( 'Sun', 'doughboss' ) ) as $day_key => $day_label ) : ?>
+								<label style="display:inline-block;margin:0 .75rem .5rem 0;"><?php echo esc_html( $day_label ); ?> <input name="capacity_hours[<?php echo esc_attr( $day_key ); ?>]" type="text" size="16" value="<?php echo esc_attr( $hours[ $day_key ] ); ?>" placeholder="11:00-21:00" /></label>
+							<?php endforeach; ?>
+							<p class="description"><?php esc_html_e( 'Leave closed days blank. Split service is supported with comma-separated ranges, for example 11:00-14:00, 17:00-21:00.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-tyro-location"><?php esc_html_e( 'Tyro Connect location ID', 'doughboss' ); ?></label></th>
+						<td><input name="tyro_location_id" id="db-loc-tyro-location" type="text" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $f( 'tyro_location_id' ) ); ?>" /><p class="description"><?php esc_html_e( 'Tyro supplies this per shop. It binds QR, pickup, delivery and catering payments to the correct merchant location.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-loc-pospal-store"><?php esc_html_e( 'POSPal store mapping', 'doughboss' ); ?></label></th>
+						<td><select name="pospal_store_index" id="db-loc-pospal-store"><option value="0" <?php selected( (int) $f( 'pospal_store_index', 0 ), 0 ); ?>><?php esc_html_e( 'Not mapped', 'doughboss' ); ?></option><option value="1" <?php selected( (int) $f( 'pospal_store_index', 0 ), 1 ); ?>><?php esc_html_e( 'POSPal store 1', 'doughboss' ); ?></option><option value="2" <?php selected( (int) $f( 'pospal_store_index', 0 ), 2 ); ?>><?php esc_html_e( 'POSPal store 2', 'doughboss' ); ?></option><option value="3" <?php selected( (int) $f( 'pospal_store_index', 0 ), 3 ); ?>><?php esc_html_e( 'POSPal store 3', 'doughboss' ); ?></option></select></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Online payment at this shop', 'doughboss' ); ?></th>
+						<td><label><input type="checkbox" name="online_payment_enabled" value="1" <?php checked( (int) $f( 'online_payment_enabled', 0 ), 1 ); ?> /> <?php esc_html_e( 'Allow card payment only when this shop has been mapped and tested', 'doughboss' ); ?></label></td>
+					</tr>
+					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
 						<td>
 							<label><input type="checkbox" name="pickup_enabled" value="1" <?php checked( $editing ? $editing->pickup_enabled : 1, 1 ); ?> /> <?php esc_html_e( 'Pickup', 'doughboss' ); ?></label><br />
@@ -1226,6 +1983,19 @@ JS;
 				</table>
 				<?php submit_button( $editing ? __( 'Update shop', 'doughboss' ) : __( 'Add shop', 'doughboss' ) ); ?>
 			</form>
+			<?php if ( $editing && 'shadow' === $f( 'capacity_mode', 'off' ) ) : ?>
+				<h2><?php esc_html_e( 'Shadow pickup preview', 'doughboss' ); ?></h2>
+				<p><?php esc_html_e( 'Schedule-only planning for one item unit. These times are not shown to customers, do not include existing order load, and reserve nothing.', 'doughboss' ); ?></p>
+				<?php if ( ! $preview_windows ) : ?>
+					<div class="notice notice-warning inline"><p><?php esc_html_e( 'No proposed windows are available. Check the timezone, weekly hours, notice period and dated exceptions.', 'doughboss' ); ?></p></div>
+				<?php else : ?>
+					<table class="widefat striped" style="max-width:720px;"><thead><tr><th><?php esc_html_e( 'Local date', 'doughboss' ); ?></th><th><?php esc_html_e( 'Proposed ready window', 'doughboss' ); ?></th><th><?php esc_html_e( 'UTC reference', 'doughboss' ); ?></th></tr></thead><tbody>
+					<?php foreach ( array_slice( $preview_windows, 0, 12 ) as $window ) : ?>
+						<tr><td><?php echo esc_html( $window['local_date'] ); ?></td><td><?php echo esc_html( $window['local_from'] . '–' . $window['local_by'] . ' ' . $window['utc_offset'] ); ?></td><td><code><?php echo esc_html( $window['ready_from_utc'] ); ?></code></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				<?php endif; ?>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -1249,6 +2019,17 @@ JS;
 			'phone'             => isset( $_POST['phone'] ) ? wp_unslash( $_POST['phone'] ) : '',
 			'postcodes'         => isset( $_POST['postcodes'] ) ? wp_unslash( $_POST['postcodes'] ) : '',
 			'prep_time_default' => isset( $_POST['prep_time_default'] ) ? (int) $_POST['prep_time_default'] : 20,
+			'timezone'          => isset( $_POST['timezone'] ) ? wp_unslash( $_POST['timezone'] ) : 'Australia/Sydney',
+			'capacity_mode'     => isset( $_POST['capacity_mode'] ) ? wp_unslash( $_POST['capacity_mode'] ) : 'off',
+			'slot_minutes'      => isset( $_POST['slot_minutes'] ) ? (int) $_POST['slot_minutes'] : 15,
+			'minimum_notice_minutes' => isset( $_POST['minimum_notice_minutes'] ) ? (int) $_POST['minimum_notice_minutes'] : 30,
+			'booking_horizon_days' => isset( $_POST['booking_horizon_days'] ) ? (int) $_POST['booking_horizon_days'] : 7,
+			'hold_minutes'      => isset( $_POST['hold_minutes'] ) ? (int) $_POST['hold_minutes'] : 10,
+			'slot_order_capacity' => isset( $_POST['slot_order_capacity'] ) ? (int) $_POST['slot_order_capacity'] : 4,
+			'slot_unit_capacity' => isset( $_POST['slot_unit_capacity'] ) ? (int) $_POST['slot_unit_capacity'] : 12,
+			'tyro_location_id'   => isset( $_POST['tyro_location_id'] ) ? wp_unslash( $_POST['tyro_location_id'] ) : '',
+			'pospal_store_index'  => isset( $_POST['pospal_store_index'] ) ? (int) $_POST['pospal_store_index'] : 0,
+			'online_payment_enabled' => isset( $_POST['online_payment_enabled'] ) ? 1 : 0,
 			'pickup_enabled'    => isset( $_POST['pickup_enabled'] ) ? 1 : 0,
 			'delivery_enabled'  => isset( $_POST['delivery_enabled'] ) ? 1 : 0,
 			'is_active'         => isset( $_POST['is_active'] ) ? 1 : 0,
@@ -1257,10 +2038,13 @@ JS;
 		if ( $id ) {
 			DoughBoss_Locations::update( $id, $data );
 		} else {
-			DoughBoss_Locations::create( $data );
+			$id = DoughBoss_Locations::create( $data );
 		}
+		$raw_hours = isset( $_POST['capacity_hours'] ) && is_array( $_POST['capacity_hours'] ) ? wp_unslash( $_POST['capacity_hours'] ) : array();
+		$hours_saved = $id ? DoughBoss_Locations::save_weekly_hours( $id, $raw_hours ) : new WP_Error( 'doughboss_location_save', __( 'The shop could not be saved.', 'doughboss' ) );
+		$msg = is_wp_error( $hours_saved ) ? 'hours_invalid' : 'saved';
 
-		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'msg' => 'saved' ), admin_url( 'admin.php' ) ) );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'edit' => $id, 'msg' => $msg ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
@@ -1437,7 +2221,7 @@ JS;
 					</tr>
 					<tr>
 						<th><label for="db-v-prefix"><?php esc_html_e( 'Code prefix', 'doughboss' ); ?></label></th>
-						<td><input name="prefix" id="db-v-prefix" type="text" class="regular-text" value="SNOW" /></td>
+						<td><input name="prefix" id="db-v-prefix" type="text" class="regular-text" value="DOUGH" /></td>
 					</tr>
 					<tr>
 						<th><label for="db-v-min"><?php esc_html_e( 'Minimum spend', 'doughboss' ); ?></label></th>
@@ -1640,6 +2424,10 @@ JS;
 				'tpl_order_email_body'    => isset( $_POST['tpl_order_email_body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_order_email_body'] ) ) : '',
 				'tpl_sms_ready'           => isset( $_POST['tpl_sms_ready'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_sms_ready'] ) ) : '',
 				'tpl_sms_voucher'         => isset( $_POST['tpl_sms_voucher'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_sms_voucher'] ) ) : '',
+				'tpl_accepted_email_subject' => isset( $_POST['tpl_accepted_email_subject'] ) ? sanitize_text_field( wp_unslash( $_POST['tpl_accepted_email_subject'] ) ) : '',
+				'tpl_accepted_email_body'    => isset( $_POST['tpl_accepted_email_body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_accepted_email_body'] ) ) : '',
+				'tpl_ready_email_subject'    => isset( $_POST['tpl_ready_email_subject'] ) ? sanitize_text_field( wp_unslash( $_POST['tpl_ready_email_subject'] ) ) : '',
+				'tpl_ready_email_body'       => isset( $_POST['tpl_ready_email_body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tpl_ready_email_body'] ) ) : '',
 			)
 		);
 
@@ -1662,6 +2450,10 @@ JS;
 			'tpl_order_email_body'    => DoughBoss_Settings::tpl_order_email_body(),
 			'tpl_sms_ready'           => DoughBoss_Settings::tpl_sms_ready(),
 			'tpl_sms_voucher'         => DoughBoss_Settings::tpl_sms_voucher(),
+			'tpl_accepted_email_subject' => DoughBoss_Settings::tpl_accepted_email_subject(),
+			'tpl_accepted_email_body'    => DoughBoss_Settings::tpl_accepted_email_body(),
+			'tpl_ready_email_subject'    => DoughBoss_Settings::tpl_ready_email_subject(),
+			'tpl_ready_email_body'       => DoughBoss_Settings::tpl_ready_email_body(),
 		);
 		?>
 		<div class="wrap doughboss-templates">
@@ -1683,7 +2475,7 @@ JS;
 				<h2><?php esc_html_e( 'Order confirmation email', 'doughboss' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'Sent to the customer (and a copy to your shop inbox) the moment an order is placed.', 'doughboss' ); ?>
 					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
-					<code>{site_name}</code> <code>{order_number}</code> <code>{customer_name}</code> <code>{items}</code> <code>{total}</code>
+					<code>{site_name}</code> <code>{order_number}</code> <code>{customer_name}</code> <code>{items}</code> <code>{total}</code> <code>{tracking_url}</code> <code>{tracking_instructions}</code>
 				</p>
 				<table class="form-table" role="presentation">
 					<tr>
@@ -1696,12 +2488,45 @@ JS;
 					</tr>
 				</table>
 
+				<h2><?php esc_html_e( '"Order accepted" email', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Sent to the customer when the kitchen accepts their order (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
+					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
+					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code> <code>{tracking_url}</code> <code>{tracking_instructions}</code>
+				</p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-tpl-accepted-subject"><?php esc_html_e( 'Subject', 'doughboss' ); ?></label></th>
+						<td><input type="text" id="db-tpl-accepted-subject" class="large-text" name="tpl_accepted_email_subject" value="<?php echo esc_attr( $t['tpl_accepted_email_subject'] ); ?>" placeholder="We're on it! Order {order_number} is being prepared" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-tpl-accepted-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-tpl-accepted-body" class="large-text" rows="8" name="tpl_accepted_email_body" placeholder="Hi {customer_name}, we've started on your order {order_number}...&#10;&#10;Ready in about {eta_minutes} minutes.&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_accepted_email_body'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'When no ETA is given the built-in default switches to wording without the minutes line.', 'doughboss' ); ?></p></td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( '"Order ready" email', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Sent when an order is ready for pickup, delivery, or table service (if enabled under Settings → Real-time & Notifications).', 'doughboss' ); ?>
+					<?php esc_html_e( 'Placeholders:', 'doughboss' ); ?>
+					<code>{customer_name}</code> <code>{order_number}</code> <code>{eta_minutes}</code> <code>{total}</code> <code>{status_label}</code> <code>{tracking_url}</code> <code>{tracking_instructions}</code>
+				</p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-tpl-ready-subject"><?php esc_html_e( 'Subject', 'doughboss' ); ?></label></th>
+						<td><input type="text" id="db-tpl-ready-subject" class="large-text" name="tpl_ready_email_subject" value="<?php echo esc_attr( $t['tpl_ready_email_subject'] ); ?>" placeholder="Order {order_number}: {status_label}" /></td>
+					</tr>
+					<tr>
+						<th><label for="db-tpl-ready-body"><?php esc_html_e( 'Body', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-tpl-ready-body" class="large-text" rows="8" name="tpl_ready_email_body" placeholder="Hi {customer_name}, your order {order_number} is {status_label}. {handoff_message}&#10;&#10;Order total: {total}"><?php echo esc_textarea( $t['tpl_ready_email_body'] ); ?></textarea></td>
+					</tr>
+				</table>
+
 				<h2><?php esc_html_e( 'SMS messages', 'doughboss' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'Only sent when SMS is switched on under Settings → Real-time & Notifications.', 'doughboss' ); ?></p>
 				<table class="form-table" role="presentation">
 					<tr>
 						<th><label for="db-tpl-sms-ready"><?php esc_html_e( '"Order ready" text', 'doughboss' ); ?></label></th>
-						<td><input type="text" id="db-tpl-sms-ready" class="large-text" name="tpl_sms_ready" value="<?php echo esc_attr( $t['tpl_sms_ready'] ); ?>" placeholder="Your DoughBoss order #{order_number} is ready for pickup." />
+						<td><input type="text" id="db-tpl-sms-ready" class="large-text" name="tpl_sms_ready" value="<?php echo esc_attr( $t['tpl_sms_ready'] ); ?>" placeholder="Order #{order_number}: {status_label}. {handoff_message}" />
 							<p class="description"><?php esc_html_e( 'Placeholder:', 'doughboss' ); ?> <code>{order_number}</code></p></td>
 					</tr>
 					<tr>
@@ -1752,19 +2577,31 @@ JS;
 		}
 
 		list( $from, $to ) = $this->report_range();
+		$location = isset( $_GET['location'] ) ? absint( $_GET['location'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter form.
 
-		$summary   = DoughBoss_Reports::summary( $from, $to );
-		$mix       = DoughBoss_Reports::order_type_mix( $from, $to );
-		$top_items = DoughBoss_Reports::top_items( $from, $to, 10 );
+		$summary     = DoughBoss_Reports::summary( $from, $to, $location );
+		$mix         = DoughBoss_Reports::order_type_mix( $from, $to, $location );
+		$top_items   = DoughBoss_Reports::top_items( $from, $to, 10, $location );
+		$payment_mix = DoughBoss_Reports::payment_mix( $from, $to, $location );
+
+		$location_names = $this->location_names();
+		$multi_shop     = count( $location_names ) > 1;
+		$by_location    = $multi_shop ? DoughBoss_Reports::location_breakdown( $from, $to ) : array();
 
 		$type_labels = array(
 			'pickup'   => __( 'Pickup', 'doughboss' ),
 			'delivery' => __( 'Delivery', 'doughboss' ),
 		);
+
+		$payment_labels = array(
+			'paid'     => __( 'Paid by card', 'doughboss' ),
+			'unpaid'   => __( 'Unpaid — collected in store', 'doughboss' ),
+			'refunded' => __( 'Refunded', 'doughboss' ),
+		);
 		?>
 		<div class="wrap doughboss-reports">
 			<h1><?php esc_html_e( 'Reports', 'doughboss' ); ?></h1>
-			<p class="description"><?php esc_html_e( 'Sales for the selected period. Cancelled orders are excluded.', 'doughboss' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Sales for the selected period. Cancelled orders are excluded. Gross sales include unpaid (pay-in-store) and refunded orders — see the payments breakdown for money actually collected by card.', 'doughboss' ); ?></p>
 
 			<form method="get" style="margin:12px 0 20px;">
 				<input type="hidden" name="page" value="doughboss-reports" />
@@ -1772,13 +2609,43 @@ JS;
 				<input type="date" id="db-report-from" name="from" value="<?php echo esc_attr( $from ); ?>" />
 				<label for="db-report-to"><?php esc_html_e( 'To', 'doughboss' ); ?></label>
 				<input type="date" id="db-report-to" name="to" value="<?php echo esc_attr( $to ); ?>" />
+				<?php if ( $multi_shop ) : ?>
+					<label for="db-report-location"><?php esc_html_e( 'Shop', 'doughboss' ); ?></label>
+					<select id="db-report-location" name="location">
+						<option value="0"><?php esc_html_e( 'All shops', 'doughboss' ); ?></option>
+						<?php foreach ( $location_names as $loc_id => $loc_name ) : ?>
+							<option value="<?php echo esc_attr( $loc_id ); ?>" <?php selected( $location, $loc_id ); ?>>
+								<?php echo esc_html( $loc_name ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				<?php endif; ?>
 				<button class="button"><?php esc_html_e( 'Apply', 'doughboss' ); ?></button>
 			</form>
 
+			<?php if ( $location > 0 && isset( $location_names[ $location ] ) ) : ?>
+				<p><strong>
+					<?php
+					/* translators: %s: shop/location name. */
+					echo esc_html( sprintf( __( 'Showing: %s only.', 'doughboss' ), $location_names[ $location ] ) );
+					?>
+				</strong></p>
+			<?php endif; ?>
+
 			<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
 				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
-					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Revenue', 'doughboss' ); ?></h2>
+					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Gross sales', 'doughboss' ); ?></h2>
 					<p style="font-size:1.8em;margin:0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $summary['revenue'] ) ); ?></strong></p>
+				</div>
+				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
+					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Paid by card', 'doughboss' ); ?></h2>
+					<p style="font-size:1.8em;margin:0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $summary['paid_revenue'] ) ); ?></strong></p>
+					<p class="description" style="margin:2px 0 0;">
+						<?php
+						/* translators: %s: order count. */
+						echo esc_html( sprintf( _n( '%s order', '%s orders', $summary['paid_orders'], 'doughboss' ), number_format_i18n( $summary['paid_orders'] ) ) );
+						?>
+					</p>
 				</div>
 				<div class="card" style="min-width:180px;margin:0;padding:12px 18px;">
 					<h2 style="margin:0 0 4px;"><?php esc_html_e( 'Orders', 'doughboss' ); ?></h2>
@@ -1790,7 +2657,60 @@ JS;
 				</div>
 			</div>
 
-			<h2><?php esc_html_e( 'Pickup vs delivery', 'doughboss' ); ?></h2>
+			<h2><?php esc_html_e( 'Payments', 'doughboss' ); ?></h2>
+			<table class="widefat striped" style="max-width:560px;">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Payment status', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Orders', 'doughboss' ); ?></th>
+						<th><?php esc_html_e( 'Amount', 'doughboss' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( empty( $payment_mix ) ) : ?>
+						<tr><td colspan="3"><?php esc_html_e( 'No orders in this period.', 'doughboss' ); ?></td></tr>
+					<?php else : ?>
+						<?php foreach ( $payment_mix as $pay_status => $stats ) : ?>
+							<tr>
+								<td><?php echo esc_html( isset( $payment_labels[ $pay_status ] ) ? $payment_labels[ $pay_status ] : ucfirst( $pay_status ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $stats['orders'] ) ); ?></td>
+								<td><?php echo esc_html( DoughBoss_Settings::format_price( $stats['revenue'] ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+			<?php if ( $multi_shop ) : ?>
+				<h2 style="margin-top:24px;"><?php esc_html_e( 'By shop', 'doughboss' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'All shops for the selected period, regardless of the shop filter above.', 'doughboss' ); ?></p>
+				<table class="widefat striped" style="max-width:560px;">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Shop', 'doughboss' ); ?></th>
+							<th><?php esc_html_e( 'Orders', 'doughboss' ); ?></th>
+							<th><?php esc_html_e( 'Gross sales', 'doughboss' ); ?></th>
+							<th><?php esc_html_e( 'Paid by card', 'doughboss' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php if ( empty( $by_location ) ) : ?>
+							<tr><td colspan="4"><?php esc_html_e( 'No orders in this period.', 'doughboss' ); ?></td></tr>
+						<?php else : ?>
+							<?php foreach ( $by_location as $loc_row ) : ?>
+								<tr>
+									<td><?php echo esc_html( isset( $location_names[ $loc_row['location_id'] ] ) ? $location_names[ $loc_row['location_id'] ] : __( 'Unassigned', 'doughboss' ) ); ?></td>
+									<td><?php echo esc_html( number_format_i18n( $loc_row['orders'] ) ); ?></td>
+									<td><?php echo esc_html( DoughBoss_Settings::format_price( $loc_row['revenue'] ) ); ?></td>
+									<td><?php echo esc_html( DoughBoss_Settings::format_price( $loc_row['paid_revenue'] ) ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+
+			<h2 style="margin-top:24px;"><?php esc_html_e( 'Pickup vs delivery', 'doughboss' ); ?></h2>
 			<table class="widefat striped" style="max-width:560px;">
 				<thead>
 					<tr>
@@ -1843,6 +2763,7 @@ JS;
 				<?php wp_nonce_field( 'doughboss_export_report' ); ?>
 				<input type="hidden" name="from" value="<?php echo esc_attr( $from ); ?>" />
 				<input type="hidden" name="to" value="<?php echo esc_attr( $to ); ?>" />
+				<input type="hidden" name="location" value="<?php echo esc_attr( $location ); ?>" />
 				<button type="submit" class="button button-primary"><?php esc_html_e( 'Download CSV', 'doughboss' ); ?></button>
 			</form>
 		</div>
@@ -1883,8 +2804,10 @@ JS;
 		$from_default = gmdate( 'Y-m-d', time() - 6 * DAY_IN_SECONDS );
 		$from         = DoughBoss_Reports::sanitize_date( isset( $_POST['from'] ) ? wp_unslash( $_POST['from'] ) : '', $from_default );
 		$to           = DoughBoss_Reports::sanitize_date( isset( $_POST['to'] ) ? wp_unslash( $_POST['to'] ) : '', $to_default );
+		$location     = isset( $_POST['location'] ) ? absint( $_POST['location'] ) : 0;
 
-		$rows = DoughBoss_Reports::orders_for_export( $from, $to );
+		$rows           = DoughBoss_Reports::orders_for_export( $from, $to, $location );
+		$location_names = $this->location_names();
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
@@ -1894,16 +2817,20 @@ JS;
 		$out = fopen( 'php://output', 'w' );
 		fputcsv(
 			$out,
-			array( 'Order #', 'Placed (UTC)', 'Type', 'Status', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
+			array( 'Order #', 'Placed (UTC)', 'Type', 'Source', 'Table', 'Status', 'Shop', 'Customer', 'Email', 'Subtotal', 'Tax', 'Delivery fee', 'Discount', 'Voucher', 'Total', 'Currency', 'Payment status' )
 		);
 		foreach ( $rows as $row ) {
+			$row_loc = isset( $row->location_id ) ? (int) $row->location_id : 0;
 			fputcsv(
 				$out,
 				array(
 					$this->csv_cell( $row->order_number ),
 					$this->csv_cell( $row->created_at ),
 					$this->csv_cell( $row->order_type ),
+					$this->csv_cell( isset( $row->order_source ) ? $row->order_source : 'web' ),
+					$this->csv_cell( isset( $row->table_label ) ? $row->table_label : '' ),
 					$this->csv_cell( $row->status ),
+					$this->csv_cell( isset( $location_names[ $row_loc ] ) ? $location_names[ $row_loc ] : '' ),
 					$this->csv_cell( $row->customer_name ),
 					$this->csv_cell( $row->customer_email ),
 					number_format( (float) $row->subtotal, 2, '.', '' ),
@@ -1947,7 +2874,7 @@ JS;
 				<h2><?php esc_html_e( 'Menu', 'doughboss' ); ?></h2>
 				<p class="description"><?php
 					/* translators: %d: number of published menu items. */
-					echo esc_html( sprintf( __( 'There are currently %d published menu item(s). Import the standard Dough Boss menu — Manoush, Pizza, Pies, Wraps, Desserts, Drinks (27 items, with prices, categories and dietary flags). Safe to re-run: matching items are updated, never duplicated.', 'doughboss' ), $db_item_count ) );
+					echo esc_html( sprintf( __( 'There are currently %d published menu item(s). Import the standard Dough Boss menu — Manoush, Pizza, Pies, Wraps, Desserts, Drinks (33 items, with prices, categories and dietary flags). Safe to re-run: matching items are updated, never duplicated.', 'doughboss' ), $db_item_count ) );
 				?></p>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 					<input type="hidden" name="action" value="doughboss_seed_menu" />
@@ -1964,13 +2891,35 @@ JS;
 					<tr>
 						<th><label for="db-ordering-open"><?php esc_html_e( 'Accept orders', 'doughboss' ); ?></label></th>
 						<td><input type="checkbox" id="db-ordering-open" name="<?php echo esc_attr( $opt ); ?>[ordering_open]" value="1" <?php checked( $settings['ordering_open'], 1 ); ?> />
-							<span class="description"><?php esc_html_e( 'Uncheck to temporarily pause online ordering.', 'doughboss' ); ?></span></td>
+							<span class="description"><?php esc_html_e( 'Leave this off for the Coming Soon launch. Menu browsing stays live, while checkout, payments and new orders remain blocked.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-ordering-closed-message"><?php esc_html_e( 'Coming Soon message', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-ordering-closed-message" class="large-text" rows="3" name="<?php echo esc_attr( $opt ); ?>[ordering_closed_message]"><?php echo esc_textarea( $settings['ordering_closed_message'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'Shown above the cart and by the [doughboss_ordering_status] shortcode while ordering is paused.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-after-hours-preorders"><?php esc_html_e( 'After-hours pre-order requests', 'doughboss' ); ?></label></th>
+						<td><label><input type="checkbox" id="db-after-hours-preorders" name="<?php echo esc_attr( $opt ); ?>[after_hours_preorders_enabled]" value="1" <?php checked( ! empty( $settings['after_hours_preorders_enabled'] ), true ); ?> /> <?php esc_html_e( 'Let customers send an unpaid Revesby pre-order request while normal checkout is closed', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Requests are not confirmed, do not reserve a time or capacity, do not enter the kitchen queue, and never open Stripe or Tyro. Staff must accept or reject each request first.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-after-hours-preorders-message"><?php esc_html_e( 'Pre-order request confirmation', 'doughboss' ); ?></label></th>
+						<td><textarea id="db-after-hours-preorders-message" class="large-text" rows="3" name="<?php echo esc_attr( $opt ); ?>[after_hours_preorders_message]"><?php echo esc_textarea( $settings['after_hours_preorders_message'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'Shown after the request is saved. Keep the wording clear that it is unconfirmed and unpaid until Revesby reviews it.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
 						<td>
 							<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[enable_pickup]" value="1" <?php checked( $settings['enable_pickup'], 1 ); ?> /> <?php esc_html_e( 'Pickup', 'doughboss' ); ?></label><br />
 							<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[enable_delivery]" value="1" <?php checked( $settings['enable_delivery'], 1 ); ?> /> <?php esc_html_e( 'Delivery', 'doughboss' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="db-single-location-mode"><?php esc_html_e( 'Single-location launch', 'doughboss' ); ?></label></th>
+						<td>
+							<label><input type="checkbox" id="db-single-location-mode" name="<?php echo esc_attr( $opt ); ?>[single_location_mode]" value="1" <?php checked( ! empty( $settings['single_location_mode'] ), true ); ?> <?php disabled( 1 !== count( DoughBoss_Locations::all( true ) ) ); ?> /> <?php esc_html_e( 'Pin ordering to the sole active shop and allow pickup only', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Available only when exactly one shop is active. This prevents accidental routing to the wrong shop on multi-location sites.', 'doughboss' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -2001,9 +2950,41 @@ JS;
 							<span class="description"><?php esc_html_e( 'Where new order and catering enquiry emails are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
+						<th><label for="db-tracking-page-url"><?php esc_html_e( 'Track My Order page', 'doughboss' ); ?></label></th>
+						<td><input type="url" id="db-tracking-page-url" class="regular-text code" name="<?php echo esc_attr( $opt ); ?>[tracking_page_url]" value="<?php echo esc_attr( isset( $settings['tracking_page_url'] ) ? $settings['tracking_page_url'] : '' ); ?>" placeholder="https://doughboss.com.au/track-order/" />
+							<p class="description"><?php esc_html_e( 'Publish a page on this WordPress site containing [doughboss_order_tracking], then paste its URL here. External URLs are rejected. Customer confirmation, accepted and ready emails will link to it with only the order number prefilled; the customer must still enter the matching email.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-google-review-url"><?php esc_html_e( 'Google review link', 'doughboss' ); ?></label></th>
+						<td><input type="url" id="db-google-review-url" class="regular-text code" name="<?php echo esc_attr( $opt ); ?>[google_review_url]" value="<?php echo esc_attr( isset( $settings['google_review_url'] ) ? $settings['google_review_url'] : '' ); ?>" placeholder="https://g.page/r/your-business/review" />
+							<p class="description"><?php esc_html_e( 'Paste the exact “Ask for reviews” link from your verified Google Business Profile. Leave blank to hide review invitations. Only secure Google links are accepted.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
 						<th><label for="db-staff-session"><?php esc_html_e( 'Staff session (days)', 'doughboss' ); ?></label></th>
 						<td><input type="number" min="0" step="1" id="db-staff-session" class="small-text" name="<?php echo esc_attr( $opt ); ?>[staff_session_days]" value="<?php echo esc_attr( isset( $settings['staff_session_days'] ) ? $settings['staff_session_days'] : 0 ); ?>" />
 							<span class="description"><?php esc_html_e( 'Keep logged-in users signed in for this many days (0 = WordPress default ~2 days). Set high, e.g. 3650, so shop tablets stay signed in and never time out.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Order Board access key', 'doughboss' ); ?></th>
+						<td>
+							<?php $has_board_key = '' !== trim( (string) ( isset( $settings['board_access_key'] ) ? $settings['board_access_key'] : '' ) ); ?>
+							<p>
+								<?php if ( $has_board_key ) : ?>
+									<span class="description"><strong><?php esc_html_e( 'A key is set.', 'doughboss' ); ?></strong> <?php esc_html_e( "The key itself isn't shown again here for security — generate a new link below if you need it again.", 'doughboss' ); ?></span>
+								<?php else : ?>
+									<span class="description"><?php esc_html_e( 'No key set — the board is reachable at the normal address for anyone who signs in with kitchen access.', 'doughboss' ); ?></span>
+								<?php endif; ?>
+							</p>
+							<p class="description">
+								<?php esc_html_e( 'Optional. KDS-only kitchen staff still sign in with their own WordPress username and password — this does not replace that. When set, it adds a specific bookmarkable link and protects the order feed/actions: kitchen accounts must also have the matching key, while owner/manager accounts retain their broader wp-admin access. The link is shown once after generation and only a verifier is stored.', 'doughboss' ); ?>
+							</p>
+							<p>
+								<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_generate_board_key' ), 'doughboss_generate_board_key' ) ); ?>"><?php echo $has_board_key ? esc_html__( 'Generate new link (invalidates the old one)', 'doughboss' ) : esc_html__( 'Generate a board link', 'doughboss' ); ?></a>
+								<?php if ( $has_board_key ) : ?>
+									<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_clear_board_key' ), 'doughboss_clear_board_key' ) ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Turn off the board link key? The board will go back to being reachable by login + capability only.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Turn off', 'doughboss' ); ?></a>
+								<?php endif; ?>
+							</p>
+						</td>
 					</tr>
 				</table>
 
@@ -2015,25 +2996,47 @@ JS;
 				<p class="description"><?php esc_html_e( 'Each topping and the price added when selected in the builder.', 'doughboss' ); ?></p>
 				<?php $this->render_repeater( 'toppings', $settings['toppings'], $opt ); ?>
 
-				<h2><?php esc_html_e( 'Payments (Stripe)', 'doughboss' ); ?></h2>
+				<h2><?php esc_html_e( 'Payments', 'doughboss' ); ?></h2>
 					<p class="description">
-						<?php esc_html_e( 'Optional. Take card payments at checkout via Stripe. Off by default — start in Test mode with your test keys, then switch to Live. Card payments apply only once payments are on AND keys are set for the active mode.', 'doughboss' ); ?>
+						<?php esc_html_e( 'Optional. Take card payments at checkout via Stripe or Tyro — pick one active gateway below. Off by default — start in Test/Sandbox mode with your test keys, then switch to Live. Card payments apply only once payments are on AND the active gateway is fully configured for its mode.', 'doughboss' ); ?>
 						<?php
-						if ( ! class_exists( 'DoughBoss_Stripe' ) || ! DoughBoss_Stripe::ready() ) {
+						if ( ! class_exists( 'DoughBoss_Payment' ) || ! DoughBoss_Payment::ready() ) {
 							echo ' <strong>' . esc_html__( 'Status: card payments are OFF.', 'doughboss' ) . '</strong>';
 						} else {
-							/* translators: %s: Stripe mode (Test or Live). */
-							echo ' <strong style="color:#1f8a54;">' . esc_html( sprintf( __( 'Status: card payments are ON (%s mode).', 'doughboss' ), DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' ) ) ) . '</strong>';
+							/* translators: 1: gateway name (Stripe or Tyro), 2: mode (Test/Sandbox or Live). */
+							echo ' <strong style="color:#1f8a54;">' . esc_html(
+								sprintf(
+									__( 'Status: card payments are ON via %1$s (%2$s mode).', 'doughboss' ),
+									DoughBoss_Payment::gateway_label(),
+									'tyro' === DoughBoss_Settings::payment_gateway()
+										? ( DoughBoss_Settings::tyro_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Sandbox', 'doughboss' ) )
+										: ( DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' ) )
+								)
+							) . '</strong>';
 						}
 						?>
 					</p>
-					<?php $mode = isset( $settings['stripe_mode'] ) && 'live' === $settings['stripe_mode'] ? 'live' : 'test'; ?>
 					<table class="form-table" role="presentation">
 						<tr>
 							<th><label for="db-payments-enabled"><?php esc_html_e( 'Accept card payments', 'doughboss' ); ?></label></th>
 							<td><input type="checkbox" id="db-payments-enabled" name="<?php echo esc_attr( $opt ); ?>[payments_enabled]" value="1" <?php checked( ! empty( $settings['payments_enabled'] ), true ); ?> />
-								<span class="description"><?php esc_html_e( 'When on (and keys are set for the active mode), customers pay by card before the order is placed.', 'doughboss' ); ?></span></td>
+								<span class="description"><?php esc_html_e( 'When on (and the active gateway is fully configured), customers pay by card before the order is placed.', 'doughboss' ); ?></span></td>
 						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Active gateway', 'doughboss' ); ?></th>
+							<td>
+								<?php $gateway = isset( $settings['payment_gateway'] ) && in_array( $settings['payment_gateway'], array( 'stripe', 'tyro', 'mpgs' ), true ) ? $settings['payment_gateway'] : 'stripe'; ?>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="stripe" <?php checked( 'stripe' === $gateway, true ); ?> /> <?php esc_html_e( 'Stripe', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="tyro" <?php checked( 'tyro' === $gateway, true ); ?> /> <?php esc_html_e( 'Tyro Connect', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="mpgs" <?php checked( 'mpgs' === $gateway, true ); ?> /> <?php esc_html_e( 'Mastercard Gateway', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Existing paid orders always refund correctly against whichever gateway actually processed them, even after you switch this.', 'doughboss' ); ?></p>
+							</td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Stripe', 'doughboss' ); ?></h3>
+					<?php $mode = isset( $settings['stripe_mode'] ) && 'live' === $settings['stripe_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
 						<tr>
 							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
 							<td>
@@ -2076,6 +3079,105 @@ JS;
 									<?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
 									<?php echo isset( $settings['stripe_live_whsec'] ) && '' !== $settings['stripe_live_whsec'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
 								</p></td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Tyro', 'doughboss' ); ?></h3>
+					<?php $tyro_mode = isset( $settings['tyro_mode'] ) && 'live' === $settings['tyro_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[tyro_mode]" value="test" <?php checked( 'test' === $tyro_mode, true ); ?> /> <?php esc_html_e( 'Sandbox', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[tyro_mode]" value="live" <?php checked( 'live' === $tyro_mode, true ); ?> /> <?php esc_html_e( 'Live', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-test-client-id"><?php esc_html_e( 'Sandbox client ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-tyro-test-client-id" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_client_id]" value="<?php echo esc_attr( isset( $settings['tyro_test_client_id'] ) ? $settings['tyro_test_client_id'] : '' ); ?>" /><p class="description"><?php esc_html_e( 'OAuth client ID supplied by Tyro Connect Engineering.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-live-client-id"><?php esc_html_e( 'Live client ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-tyro-live-client-id" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_client_id]" value="<?php echo esc_attr( isset( $settings['tyro_live_client_id'] ) ? $settings['tyro_live_client_id'] : '' ); ?>" /><p class="description"><?php esc_html_e( 'Production OAuth client ID supplied after onboarding and technical review.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Production approval', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[tyro_live_certified]" value="1" <?php checked( ! empty( $settings['tyro_live_certified'] ), true ); ?> /> <?php esc_html_e( 'Tyro has approved this integration for live use', 'doughboss' ); ?></label><p class="description"><?php esc_html_e( 'Live mode remains fail-closed until this explicit certification gate is checked.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-test-client-secret"><?php esc_html_e( 'Sandbox client secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-test-client-secret" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_client_secret]" value="" /><p class="description"><?php esc_html_e( 'Prefer the DOUGHBOSS_TYRO_TEST_CLIENT_SECRET environment variable; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_test_client_secret'] ) && '' !== $settings['tyro_test_client_secret'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-live-client-secret"><?php esc_html_e( 'Live client secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-live-client-secret" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_client_secret]" value="" /><p class="description"><?php esc_html_e( 'Prefer the DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET environment variable; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['tyro_live_client_secret'] ) && '' !== $settings['tyro_live_client_secret'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-test-whsec"><?php esc_html_e( 'Sandbox webhook secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-test-whsec" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_test_webhook_secret]" value="" />
+								<p class="description">
+									<?php esc_html_e( 'Register a webhook in your Tyro sandbox account pointing to:', 'doughboss' ); ?>
+									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/payments/tyro/webhook' ) ); ?></code>
+									<?php esc_html_e( 'This single signed endpoint covers storefront, QR and catering Pay Requests. Ask Tyro to register it, then set the signing key as DOUGHBOSS_TYRO_TEST_WHSEC; this field is a fallback.', 'doughboss' ); ?>
+									<?php echo isset( $settings['tyro_test_webhook_secret'] ) && '' !== $settings['tyro_test_webhook_secret'] ? esc_html__( 'A secret is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
+								</p></td>
+						</tr>
+						<tr>
+							<th><label for="db-tyro-live-whsec"><?php esc_html_e( 'Live webhook secret', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-tyro-live-whsec" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[tyro_live_webhook_secret]" value="" />
+								<p class="description">
+									<?php esc_html_e( 'Same endpoints as above, registered against your live Tyro account. For best security set it as the DOUGHBOSS_TYRO_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>
+									<?php echo isset( $settings['tyro_live_webhook_secret'] ) && '' !== $settings['tyro_live_webhook_secret'] ? esc_html__( 'A secret is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?>
+								</p></td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Mastercard Payment Gateway (MPGS)', 'doughboss' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'Uses Mastercard Hosted Checkout. Customers enter card details on Mastercard’s secure page; DoughBoss never receives or stores the card number or CVV.', 'doughboss' ); ?></p>
+					<?php $mpgs_mode = isset( $settings['mpgs_mode'] ) && 'live' === $settings['mpgs_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[mpgs_mode]" value="test" <?php checked( 'test' === $mpgs_mode, true ); ?> /> <?php esc_html_e( 'Test', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[mpgs_mode]" value="live" <?php checked( 'live' === $mpgs_mode, true ); ?> /> <?php esc_html_e( 'Live', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-test-merchant"><?php esc_html_e( 'Test merchant ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-mpgs-test-merchant" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_test_merchant_id]" value="<?php echo esc_attr( isset( $settings['mpgs_test_merchant_id'] ) ? $settings['mpgs_test_merchant_id'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-test-password"><?php esc_html_e( 'Test API password', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-mpgs-test-password" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[mpgs_test_api_password]" value="" />
+								<p class="description"><?php esc_html_e( 'Prefer DOUGHBOSS_MPGS_TEST_API_PASSWORD in the server environment; this write-only field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['mpgs_test_api_password'] ) && '' !== $settings['mpgs_test_api_password'] ? esc_html__( 'A password is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'No password is stored yet.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-test-host"><?php esc_html_e( 'Test API host', 'doughboss' ); ?></label></th>
+							<td><input type="url" id="db-mpgs-test-host" class="regular-text code" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_test_host]" value="<?php echo esc_attr( isset( $settings['mpgs_test_host'] ) ? $settings['mpgs_test_host'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'HTTPS Mastercard gateway hosts only; paths and non-Mastercard hosts are rejected.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-version"><?php esc_html_e( 'API version', 'doughboss' ); ?></label></th>
+							<td><input type="number" min="63" max="100" id="db-mpgs-version" class="small-text" name="<?php echo esc_attr( $opt ); ?>[mpgs_api_version]" value="<?php echo esc_attr( isset( $settings['mpgs_api_version'] ) ? $settings['mpgs_api_version'] : 100 ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-live-merchant"><?php esc_html_e( 'Live merchant ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-mpgs-live-merchant" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_merchant_id]" value="<?php echo esc_attr( isset( $settings['mpgs_live_merchant_id'] ) ? $settings['mpgs_live_merchant_id'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-live-password"><?php esc_html_e( 'Live API password', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-mpgs-live-password" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_api_password]" value="" />
+								<p class="description"><?php esc_html_e( 'Prefer DOUGHBOSS_MPGS_LIVE_API_PASSWORD in the server environment; this write-only field is a fallback.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-mpgs-live-host"><?php esc_html_e( 'Live API host', 'doughboss' ); ?></label></th>
+							<td><input type="url" id="db-mpgs-live-host" class="regular-text code" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_host]" value="<?php echo esc_attr( isset( $settings['mpgs_live_host'] ) ? $settings['mpgs_live_host'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Production approval', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_approved]" value="1" <?php checked( ! empty( $settings['mpgs_live_approved'] ), true ); ?> /> <?php esc_html_e( 'The acquirer has approved this Hosted Checkout integration for live use', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Live mode remains fail-closed until this is explicitly checked.', 'doughboss' ); ?></p></td>
 						</tr>
 					</table>
 
@@ -2187,6 +3289,62 @@ JS;
 						</table>
 					<?php endforeach; ?>
 
+					<h3><?php esc_html_e( 'Product mapping (for order push)', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Only needed if you switch on "Push online orders" above. Each menu item below needs a matching POSPal product before an order containing it can reach the till — an unmapped item is safely skipped from the push rather than sent broken, but it won\'t show up on the till until it\'s mapped here.', 'doughboss' ); ?>
+					</p>
+					<?php
+					$map_items = get_posts(
+						array(
+							'post_type'      => DoughBoss_Post_Types::POST_TYPE,
+							'post_status'    => 'publish',
+							'posts_per_page' => -1,
+							'orderby'        => 'title',
+							'order'          => 'ASC',
+						)
+					);
+					$saved_map = isset( $settings['pospal_product_map'] ) && is_array( $settings['pospal_product_map'] ) ? $settings['pospal_product_map'] : array();
+					?>
+					<p>
+						<select id="db-pospal-map-store" style="margin-right:6px;">
+							<option value="1"><?php esc_html_e( 'Store 1', 'doughboss' ); ?></option>
+							<option value="2"><?php esc_html_e( 'Store 2', 'doughboss' ); ?></option>
+							<option value="3"><?php esc_html_e( 'Store 3', 'doughboss' ); ?></option>
+						</select>
+						<button type="button" class="button" id="db-pospal-map-load"><?php esc_html_e( 'Load POSPal products &amp; auto-match', 'doughboss' ); ?></button>
+						<button type="button" class="button button-primary" id="db-pospal-map-save"><?php esc_html_e( 'Save mapping', 'doughboss' ); ?></button>
+						<span id="db-pospal-map-result" class="description" style="margin-left:8px;"></span>
+					</p>
+					<?php if ( empty( $map_items ) ) : ?>
+						<p class="description"><?php esc_html_e( 'No published menu items yet — import the standard menu above first.', 'doughboss' ); ?></p>
+					<?php else : ?>
+						<table class="wp-list-table widefat striped" style="max-width:760px;">
+							<thead><tr>
+								<th><?php esc_html_e( 'Menu item', 'doughboss' ); ?></th>
+								<th><?php esc_html_e( 'POSPal product', 'doughboss' ); ?></th>
+							</tr></thead>
+							<tbody id="db-pospal-map-body">
+								<?php foreach ( $map_items as $mi ) :
+									$key         = DoughBoss_POSPal_Orders::norm( $mi->post_title );
+									$current_uid = isset( $saved_map[ $key ] ) ? (string) $saved_map[ $key ] : '';
+									?>
+									<tr>
+										<td><?php echo esc_html( $mi->post_title ); ?></td>
+										<td>
+											<select class="db-pospal-map-select" data-key="<?php echo esc_attr( $key ); ?>" data-current="<?php echo esc_attr( $current_uid ); ?>" style="min-width:280px;">
+												<option value=""><?php esc_html_e( '— not mapped —', 'doughboss' ); ?></option>
+												<?php if ( '' !== $current_uid ) : ?>
+													<option value="<?php echo esc_attr( $current_uid ); ?>" selected="selected"><?php echo esc_html( sprintf( /* translators: %s: POSPal product uid. */ __( 'Currently mapped (uid %s) — load products to see its name', 'doughboss' ), $current_uid ) ); ?></option>
+												<?php endif; ?>
+											</select>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+						<p class="description"><?php esc_html_e( '"Load POSPal products" fetches your catalogue and auto-selects the closest name match for every item below — review each one, adjust anything wrong, then Save mapping. Nothing is saved until you click Save.', 'doughboss' ); ?></p>
+					<?php endif; ?>
+
 					<h2><?php esc_html_e( 'Real-time &amp; Notifications', 'doughboss' ); ?></h2>
 					<p class="description" style="max-width:760px;">
 						<?php esc_html_e( 'Optional push, SMS and printing channels. Each group is off by default and stays fully dormant until you enable it and supply its settings. Secret fields (the JWT, token and API key below) are write-only: they show blank and are kept as-is unless you type a new value.', 'doughboss' ); ?>
@@ -2296,6 +3454,21 @@ JS;
 						</tr>
 					</table>
 
+					<h3><?php esc_html_e( 'Customer stage emails', 'doughboss' ); ?></h3>
+					<p class="description" style="max-width:760px;">
+						<?php esc_html_e( 'Email the customer as their order moves through the kitchen. Sent with the site\'s built-in mail — no external service needed. Wording is editable under DoughBoss → Message Templates.', 'doughboss' ); ?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'When to email', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_accepted]" value="1" <?php checked( ! empty( $settings['email_on_accepted'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is accepted', 'doughboss' ); ?></label><br />
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_ready]" value="1" <?php checked( ! empty( $settings['email_on_ready'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is ready', 'doughboss' ); ?></label><br />
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_staff_copy]" value="1" <?php checked( ! empty( $settings['email_staff_copy'] ), true ); ?> /> <?php esc_html_e( 'Send staff a copy of stage emails', 'doughboss' ); ?></label>
+							</td>
+						</tr>
+					</table>
+
 					<h3><?php esc_html_e( 'Receipt printer', 'doughboss' ); ?></h3>
 					<p class="description" style="max-width:760px;">
 						<?php esc_html_e( 'Print kitchen/customer dockets to a network receipt printer. For best security set the shared token as the DOUGHBOSS_PRINTER_TOKEN environment variable; the field below is a fallback.', 'doughboss' ); ?>
@@ -2362,6 +3535,101 @@ JS;
 			</tbody>
 		</table>
 		<p><button class="button db-add-row" data-target="<?php echo esc_attr( $table_id ); ?>"><?php esc_html_e( '+ Add row', 'doughboss' ); ?></button></p>
+		<?php
+	}
+
+	/**
+	 * Manage store tables and issue one-time printable QR payloads.
+	 *
+	 * @return void
+	 */
+	public function render_tables_page() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage table QR codes.', 'doughboss' ) );
+		}
+
+		$issued = null;
+		$error  = null;
+		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : '';
+		if ( 'POST' === $request_method ) {
+			check_admin_referer( 'doughboss_table_qr' );
+			$action = isset( $_POST['table_action'] ) ? sanitize_key( wp_unslash( $_POST['table_action'] ) ) : '';
+			if ( 'create' === $action ) {
+				$issued = DoughBoss_Table_QR::create_table(
+					isset( $_POST['location_id'] ) ? absint( $_POST['location_id'] ) : 0,
+					isset( $_POST['table_label'] ) ? sanitize_text_field( wp_unslash( $_POST['table_label'] ) ) : '',
+					isset( $_POST['table_zone'] ) ? sanitize_text_field( wp_unslash( $_POST['table_zone'] ) ) : '',
+					isset( $_POST['ordering_url'] ) ? esc_url_raw( wp_unslash( $_POST['ordering_url'] ) ) : ''
+				);
+			} elseif ( 'rotate' === $action ) {
+				$issued = DoughBoss_Table_QR::issue_code( isset( $_POST['table_id'] ) ? absint( $_POST['table_id'] ) : 0 );
+			} elseif ( 'activate' === $action || 'deactivate' === $action ) {
+				$result = DoughBoss_Table_QR::set_active( isset( $_POST['table_id'] ) ? absint( $_POST['table_id'] ) : 0, 'activate' === $action );
+				if ( is_wp_error( $result ) ) {
+					$error = $result;
+				}
+			}
+			if ( is_wp_error( $issued ) ) {
+				$error  = $issued;
+				$issued = null;
+			}
+		}
+
+		$locations = DoughBoss_Locations::all( true );
+		$tables    = DoughBoss_Table_QR::all_tables();
+		?>
+		<div class="wrap doughboss-admin">
+			<h1><?php esc_html_e( 'Dining Tables & QR Codes', 'doughboss' ); ?></h1>
+			<p><?php esc_html_e( 'Each printed code is permanently tied to one store and table. The customer scans it, enters their name at checkout, and the kitchen receives both their name and table.', 'doughboss' ); ?></p>
+			<?php if ( $error ) : ?>
+				<div class="notice notice-error"><p><?php echo esc_html( $error->get_error_message() ); ?></p></div>
+			<?php endif; ?>
+
+			<?php if ( $issued ) : ?>
+				<div class="notice notice-warning"><p><strong><?php esc_html_e( 'Print this QR now.', 'doughboss' ); ?></strong> <?php esc_html_e( 'For security, its bearer code is not stored and cannot be shown again. Rotating creates a replacement and immediately invalidates the old print.', 'doughboss' ); ?></p></div>
+				<section id="doughboss-qr-print" style="background:#fff;border:2px solid #111;max-width:440px;padding:28px;text-align:center;">
+					<h2 style="font-size:30px;margin:0 0 8px;"><?php echo esc_html( sprintf( __( 'TABLE %s', 'doughboss' ), $issued['label'] ) ); ?></h2>
+					<p style="font-size:18px;"><?php esc_html_e( 'Scan to order. Enter your name and we will bring your order to this table.', 'doughboss' ); ?></p>
+					<div id="doughboss-qr-code" data-url="<?php echo esc_attr( $issued['url'] ); ?>" style="display:flex;justify-content:center;margin:18px;"></div>
+					<p><code><?php echo esc_html( $issued['url'] ); ?></code></p>
+				</section>
+				<p><button type="button" class="button button-primary" onclick="window.print()"><?php esc_html_e( 'Print QR label', 'doughboss' ); ?></button></p>
+				<script>
+				document.addEventListener('DOMContentLoaded', function () {
+					var mount = document.getElementById('doughboss-qr-code');
+					if (!mount || typeof qrcode !== 'function') return;
+					var code = qrcode(0, 'M');
+					code.addData(mount.getAttribute('data-url'), 'Byte');
+					code.make();
+					mount.innerHTML = code.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
+				});
+				</script>
+			<?php endif; ?>
+
+			<h2><?php esc_html_e( 'Add a table', 'doughboss' ); ?></h2>
+			<form method="post">
+				<?php wp_nonce_field( 'doughboss_table_qr' ); ?>
+				<input type="hidden" name="table_action" value="create" />
+				<table class="form-table"><tbody>
+				<tr><th><label for="db-table-location"><?php esc_html_e( 'Store', 'doughboss' ); ?></label></th><td><select id="db-table-location" name="location_id" required><option value=""><?php esc_html_e( 'Choose store', 'doughboss' ); ?></option><?php foreach ( $locations as $location ) : ?><option value="<?php echo esc_attr( $location->id ); ?>"><?php echo esc_html( $location->name ); ?></option><?php endforeach; ?></select></td></tr>
+				<tr><th><label for="db-table-label"><?php esc_html_e( 'Table number / label', 'doughboss' ); ?></label></th><td><input id="db-table-label" name="table_label" type="text" maxlength="80" required placeholder="12" /></td></tr>
+				<tr><th><label for="db-table-zone"><?php esc_html_e( 'Zone (optional)', 'doughboss' ); ?></label></th><td><input id="db-table-zone" name="table_zone" type="text" maxlength="80" placeholder="Courtyard" /></td></tr>
+				<tr><th><label for="db-ordering-url"><?php esc_html_e( 'Menu page URL', 'doughboss' ); ?></label></th><td><input id="db-ordering-url" name="ordering_url" type="url" class="regular-text" required value="<?php echo esc_attr( home_url( '/' ) ); ?>" /><p class="description"><?php esc_html_e( 'Must be a page on this WordPress site containing the DoughBoss menu/cart.', 'doughboss' ); ?></p></td></tr>
+				</tbody></table>
+				<?php submit_button( __( 'Create table and QR', 'doughboss' ) ); ?>
+			</form>
+
+			<h2><?php esc_html_e( 'Existing tables', 'doughboss' ); ?></h2>
+			<table class="widefat striped"><thead><tr><th><?php esc_html_e( 'Store', 'doughboss' ); ?></th><th><?php esc_html_e( 'Table', 'doughboss' ); ?></th><th><?php esc_html_e( 'Zone', 'doughboss' ); ?></th><th><?php esc_html_e( 'State', 'doughboss' ); ?></th><th><?php esc_html_e( 'Last scan', 'doughboss' ); ?></th><th><?php esc_html_e( 'Actions', 'doughboss' ); ?></th></tr></thead><tbody>
+			<?php if ( ! $tables ) : ?><tr><td colspan="6"><?php esc_html_e( 'No dining tables have been created.', 'doughboss' ); ?></td></tr><?php endif; ?>
+			<?php foreach ( $tables as $table ) : ?>
+			<tr><td><?php echo esc_html( $table->location_name ); ?></td><td><strong><?php echo esc_html( $table->label ); ?></strong></td><td><?php echo esc_html( $table->zone ); ?></td><td><?php echo $table->is_active ? esc_html__( 'Active', 'doughboss' ) : esc_html__( 'Inactive', 'doughboss' ); ?></td><td><?php echo $table->last_scanned_at ? esc_html( $table->last_scanned_at ) : esc_html__( 'Never', 'doughboss' ); ?></td><td>
+				<form method="post" style="display:inline;"><?php wp_nonce_field( 'doughboss_table_qr' ); ?><input type="hidden" name="table_id" value="<?php echo esc_attr( $table->id ); ?>" /><input type="hidden" name="table_action" value="<?php echo $table->is_active ? 'deactivate' : 'activate'; ?>" /><button class="button"><?php echo $table->is_active ? esc_html__( 'Deactivate', 'doughboss' ) : esc_html__( 'Activate', 'doughboss' ); ?></button></form>
+				<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Rotate this QR? Every old print and active table session will stop working immediately.', 'doughboss' ) ); ?>');"><?php wp_nonce_field( 'doughboss_table_qr' ); ?><input type="hidden" name="table_id" value="<?php echo esc_attr( $table->id ); ?>" /><input type="hidden" name="table_action" value="rotate" /><button class="button"><?php esc_html_e( 'Rotate & print', 'doughboss' ); ?></button></form>
+			</td></tr>
+			<?php endforeach; ?>
+			</tbody></table>
+		</div>
 		<?php
 	}
 }

@@ -76,18 +76,71 @@ class DoughBoss_Settings {
 			'delivery_fee'    => 0,
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
-			'ordering_open'   => 1,
+			// Fresh installs launch in browse-only mode. The owner must explicitly
+			// open ordering after the WordPress staging checklist has passed.
+			'ordering_open'   => 0,
+			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
+			// A deliberately separate, unpaid fallback for the Revesby launch.
+			// It captures a customer request while normal checkout is closed; it
+			// does not promise a time, reserve capacity, create a payment attempt,
+			// or enter the kitchen queue until a staff member accepts it.
+			'after_hours_preorders_enabled' => 0,
+			'after_hours_preorders_message' => 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.',
+			// Single-shop mode: the storefront JS (getConfig/getLocations in
+			// public/js/doughboss.js) hides the delivery toggle and pins the shop
+			// picker to the first active location while this is 1. Display-only —
+			// the checkout endpoint's enable_delivery gate is the server-side
+			// enforcement. Seeded to 1 by the 1.10.0 migration ("Revesby-only
+			// pickup for now"). Flipping to 0 restores the multi-shop picker;
+			// delivery additionally needs enable_delivery back on.
+			'single_location_mode' => 1,
 			// Shop inbox: where order + catering notifications are emailed. Blank falls
 			// back to the WordPress admin email (see orders_email()). Defaults to the
 			// Dough Boss orders inbox so the shop is notified out of the box.
-			'orders_email'    => 'orders@doughboss.com.au',
+			'orders_email'    => 'hello@doughboss.com.au',
+			// Public WordPress page containing [doughboss_order_tracking].
+			// Blank is safe: emails still include the order number and matching-
+			// email instructions, but no potentially broken tracking link.
+			'tracking_page_url' => '',
+			// Public Google Business review destination. The Maps listing is a safe
+			// fallback until the owner pastes the exact "Ask for reviews" short link.
+			'google_review_url' => 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+12+25+Selems+Parade+Revesby+NSW+2212',
 			// Keep logged-in sessions for this many days (0 = WordPress default).
 			// Set high (e.g. 3650) so shop tablets stay signed in; off by default.
 			'staff_session_days' => 0,
+			// Kitchen Order Board — optional extra access-key layer. Blank (default)
+			// means the board is reachable at the normal wp-admin URL, gated only by
+			// login + the manage_doughboss_kds capability (the real security
+			// boundary). When set, render_board_page() ALSO requires a matching
+			// ?key= query arg — a memorable, bookmarkable "specific URL" for
+			// kitchen staff, layered on top of (never instead of) the WP login +
+			// capability check. Only ever written by the random generator in
+			// DoughBoss_Admin::generate_board_key() (admin-post actions
+			// doughboss_generate_board_key / doughboss_clear_board_key) — never
+			// accepted as free text. New keys are stored only as a SHA-256 hex
+			// digest; the raw value exists only in the one-time owner reveal and
+			// the staff URL. Legacy plaintext values from before hashing still
+			// verify until regenerated. See verify_board_access_key() below and
+			// admin/class-doughboss-admin.php render_board_page().
+			'board_access_key' => '',
+			// Rate-limiter client-IP resolution. Off by default so REMOTE_ADDR is used
+			// verbatim (zero behaviour change). Only enable 'behind_reverse_proxy' when
+			// the site sits behind a reverse proxy/CDN/load balancer that you have
+			// confirmed strips or overwrites any client-supplied forwarded header
+			// before appending its own — otherwise a caller could spoof the header and
+			// evade the checkout/voucher rate limiter. 'trusted_proxy_header' names the
+			// header the proxy sets (its first comma-separated entry is the client IP).
+			// See DoughBoss_REST_Controller::client_ip().
+			'behind_reverse_proxy' => 0,
+			'trusted_proxy_header' => 'X-Forwarded-For',
 			'sizes'           => array(),
 			'toppings'        => array(),
-			// Payments (Stripe) — off by default; keys added later.
+			// Payments — off by default; keys added later. 'payment_gateway' picks
+			// which of the two clients below (DoughBoss_Stripe / DoughBoss_Tyro)
+			// DoughBoss_Payment routes to; default 'stripe' preserves the exact
+			// pre-existing behaviour on every site that never touches this setting.
 			'payments_enabled' => 0,
+			'payment_gateway'  => 'stripe',
 			'stripe_mode'      => 'test',
 			'stripe_test_pk'   => '',
 			'stripe_test_sk'   => '',
@@ -95,6 +148,29 @@ class DoughBoss_Settings {
 			'stripe_live_sk'   => '',
 			'stripe_test_whsec' => '',
 			'stripe_live_whsec' => '',
+			// Tyro Connect Pay. Secrets are read env-first and each shop also needs
+			// its own Tyro Connect locationId on the location record.
+			'tyro_mode'                => 'test',
+			'tyro_test_client_id'       => '',
+			'tyro_live_client_id'       => '',
+			'tyro_test_client_secret'   => '',
+			'tyro_live_client_secret'   => '',
+			'tyro_test_webhook_secret' => '',
+			'tyro_live_webhook_secret' => '',
+			'tyro_live_certified'       => 0,
+			// Mastercard Payment Gateway Services (MPGS) Hosted Checkout. This is
+			// deliberately separate from Tyro Connect: MPGS authenticates with a
+			// merchant ID + API password and redirects card entry to Mastercard's
+			// hosted page. The API password is env-first and never exposed to JS.
+			'mpgs_mode'              => 'test',
+			'mpgs_test_merchant_id'  => '',
+			'mpgs_live_merchant_id'  => '',
+			'mpgs_test_api_password' => '',
+			'mpgs_live_api_password' => '',
+			'mpgs_test_host'         => 'https://test-tyro.mtf.gateway.mastercard.com',
+			'mpgs_live_host'         => '',
+			'mpgs_api_version'       => 100,
+			'mpgs_live_approved'     => 0,
 			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
 			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
 			// this option is only a fallback and is best left blank where env is set.
@@ -155,6 +231,11 @@ class DoughBoss_Settings {
 			'sms_from'              => '',
 			'sms_on_ready'          => 1,
 			'sms_on_voucher_claim'  => 0,
+			// Customer stage-transition emails — sent via native wp_mail, so no
+			// external configuration is needed; the toggles are the whole gate.
+			'email_on_accepted' => 1,
+			'email_on_ready'    => 1,
+			'email_staff_copy'  => 0,
 			// Receipt printer (CloudPRNT / ePOS) — off by default. The shared token
 			// is a secret, read env-first (DOUGHBOSS_PRINTER_TOKEN); this option is
 			// only a fallback.
@@ -171,6 +252,10 @@ class DoughBoss_Settings {
 			'tpl_order_email_body'    => '',
 			'tpl_sms_ready'           => '',
 			'tpl_sms_voucher'         => '',
+			'tpl_accepted_email_subject' => '',
+			'tpl_accepted_email_body'    => '',
+			'tpl_ready_email_subject'    => '',
+			'tpl_ready_email_body'       => '',
 		);
 	}
 
@@ -182,6 +267,47 @@ class DoughBoss_Settings {
 	 */
 	public static function app_origin() {
 		return untrailingslashit( (string) apply_filters( 'doughboss_app_origin', self::get( 'app_origin', '' ) ) );
+	}
+
+	/**
+	 * Optional extra access-key verifier for the Order Board. Blank (default)
+	 * means the board relies solely on WP login + the manage_doughboss_kds
+	 * capability. When set, render_board_page() requires a matching ?key=
+	 * query argument in addition to that login + capability check — a
+	 * bookmarkable "specific URL" for kitchen staff, layered on top of the
+	 * real auth boundary and enforced again on KDS REST calls. New values are
+	 * SHA-256 verifiers rather than recoverable plaintext.
+	 *
+	 * @return string
+	 */
+	public static function board_access_key() {
+		return trim( (string) self::get( 'board_access_key', '' ) );
+	}
+
+	/**
+	 * Verify a presented Order Board key against the stored verifier.
+	 *
+	 * New keys are stored as SHA-256 verifiers so database/config backups cannot
+	 * reveal the bookmark secret. A 24-character legacy plaintext value is still
+	 * accepted for a safe upgrade path and is replaced the next time the owner
+	 * generates a key.
+	 *
+	 * @param string $supplied Raw key supplied by the staff client.
+	 * @return bool
+	 */
+	public static function verify_board_access_key( $supplied ) {
+		$stored   = self::board_access_key();
+		$supplied = trim( (string) $supplied );
+		if ( '' === $stored ) {
+			return true;
+		}
+		if ( '' === $supplied ) {
+			return false;
+		}
+		if ( 64 === strlen( $stored ) && ctype_xdigit( $stored ) ) {
+			return hash_equals( strtolower( $stored ), hash( 'sha256', $supplied ) );
+		}
+		return hash_equals( $stored, $supplied );
 	}
 
 	/**
@@ -206,6 +332,105 @@ class DoughBoss_Settings {
 			$email = (string) get_option( 'admin_email' );
 		}
 		return (string) apply_filters( 'doughboss_orders_email', $email );
+	}
+
+	/**
+	 * Customer-facing tracking page URL, optionally prefilled with an order
+	 * number. The matching email is deliberately never placed in the URL.
+	 *
+	 * @param string $order_number Order number to prefill.
+	 * @return string Empty until an owner configures a published tracking page.
+	 */
+	public static function tracking_page_url( $order_number = '' ) {
+		$url = self::sanitize_tracking_page_url( self::get( 'tracking_page_url', '' ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		if ( '' !== trim( (string) $order_number ) ) {
+			$url = add_query_arg( 'order', (string) $order_number, $url );
+		}
+		return (string) apply_filters( 'doughboss_tracking_page_url', $url, $order_number );
+	}
+
+	/**
+	 * Public Google Business review destination.
+	 *
+	 * @return string HTTPS Google URL, or empty when the invitation is disabled.
+	 */
+	public static function google_review_url() {
+		$url = self::sanitize_google_review_url( self::get( 'google_review_url', '' ) );
+		return (string) apply_filters( 'doughboss_google_review_url', $url );
+	}
+
+	/**
+	 * Only allow HTTPS destinations owned by Google.
+	 *
+	 * @param string $url Candidate review URL.
+	 * @return string
+	 */
+	public static function sanitize_google_review_url( $url ) {
+		$url    = esc_url_raw( trim( (string) $url ) );
+		$target = wp_parse_url( $url );
+		if ( ! is_array( $target ) || 'https' !== strtolower( (string) ( isset( $target['scheme'] ) ? $target['scheme'] : '' ) ) ) {
+			return '';
+		}
+		$host = strtolower( (string) ( isset( $target['host'] ) ? $target['host'] : '' ) );
+		if ( ! preg_match( '/(^|\.)google\.(com|com\.au)$/', $host ) && 'g.page' !== $host ) {
+			return '';
+		}
+		return $url;
+	}
+
+	/**
+	 * Keep tracking links on the current WordPress host.
+	 *
+	 * @param string $url Candidate page URL.
+	 * @return string Valid first-party URL, or an empty string.
+	 */
+	public static function sanitize_tracking_page_url( $url ) {
+		$url = esc_url_raw( trim( (string) $url ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$site   = wp_parse_url( home_url( '/' ) );
+		$target = wp_parse_url( $url );
+		if (
+			! is_array( $site )
+			|| ! is_array( $target )
+			|| empty( $site['host'] )
+			|| empty( $target['host'] )
+			|| strtolower( (string) $site['host'] ) !== strtolower( (string) $target['host'] )
+			|| empty( $target['scheme'] )
+			|| ! in_array( strtolower( (string) $target['scheme'] ), array( 'http', 'https' ), true )
+			|| ! empty( $target['user'] )
+			|| ! empty( $target['pass'] )
+		) {
+			return '';
+		}
+		return $url;
+	}
+
+	/**
+	 * Plain-text tracking instructions shared by customer emails.
+	 *
+	 * @param string $order_number Order number.
+	 * @return string
+	 */
+	public static function tracking_instructions( $order_number ) {
+		$url = self::tracking_page_url( $order_number );
+		if ( '' !== $url ) {
+			return sprintf(
+				"Track your order: %s\nUse order %s and the same email address used at checkout.",
+				$url,
+				(string) $order_number
+			);
+		}
+		return sprintf(
+			'Keep order %s and use it with the same email address on the Track My Order page.',
+			(string) $order_number
+		);
 	}
 
 	/**
@@ -273,7 +498,67 @@ class DoughBoss_Settings {
 	 * @return bool
 	 */
 	public static function ordering_open() {
-		return (bool) self::get( 'ordering_open', 1 );
+		return (bool) self::get( 'ordering_open', 0 );
+	}
+
+	/**
+	 * Customer-facing copy shown while checkout is paused.
+	 *
+	 * @return string
+	 */
+	public static function ordering_closed_message() {
+		$message = trim( (string) self::get( 'ordering_closed_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.', 'doughboss' );
+	}
+
+	/**
+	 * Whether unpaid after-hours pre-order requests are available.
+	 *
+	 * This remains opt-in so a fresh browse-only install cannot silently start
+	 * collecting customer requests. It is intentionally independent from
+	 * ordering_open(): it is only meaningful while standard checkout is closed.
+	 *
+	 * @return bool
+	 */
+	public static function after_hours_preorders_enabled() {
+		return (bool) self::get( 'after_hours_preorders_enabled', 0 );
+	}
+
+	/**
+	 * Customer-facing copy for an accepted after-hours request.
+	 *
+	 * @return string
+	 */
+	public static function after_hours_preorders_message() {
+		$message = trim( (string) self::get( 'after_hours_preorders_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.', 'doughboss' );
+	}
+
+	/**
+	 * Whether the site sits behind a trusted reverse proxy/CDN, so the rate
+	 * limiter should read the client IP from a forwarded header instead of
+	 * REMOTE_ADDR. Off by default. See the note in defaults() and
+	 * DoughBoss_REST_Controller::client_ip() for the trust assumption.
+	 *
+	 * @return bool
+	 */
+	public static function behind_reverse_proxy() {
+		return (bool) self::get( 'behind_reverse_proxy', 0 );
+	}
+
+	/**
+	 * The forwarded header the trusted proxy sets the real client IP in (e.g.
+	 * 'X-Forwarded-For'). Only consulted when behind_reverse_proxy() is true.
+	 *
+	 * @return string
+	 */
+	public static function trusted_proxy_header() {
+		$header = trim( (string) self::get( 'trusted_proxy_header', 'X-Forwarded-For' ) );
+		return '' !== $header ? $header : 'X-Forwarded-For';
 	}
 
 	/**
@@ -371,6 +656,174 @@ class DoughBoss_Settings {
 	 */
 	public static function stripe_ready() {
 		return self::payments_enabled() && '' !== self::stripe_publishable_key() && '' !== self::stripe_secret_key();
+	}
+
+	/**
+	 * Which payment gateway is active: 'stripe', 'tyro' or 'mpgs'. Defaults to
+	 * 'stripe' so existing sites are unaffected until an owner deliberately
+	 * switches this.
+	 *
+	 * @return string
+	 */
+	public static function payment_gateway() {
+		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'stripe' ) );
+		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $gateway : 'stripe';
+	}
+
+	/** @return string */
+	public static function mpgs_mode() {
+		return 'live' === self::get( 'mpgs_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/** @return string */
+	public static function mpgs_merchant_id() {
+		$key = 'live' === self::mpgs_mode() ? 'mpgs_live_merchant_id' : 'mpgs_test_merchant_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		return preg_match( '/^[A-Za-z0-9_-]{1,40}$/', $value ) ? $value : '';
+	}
+
+	/** @return string */
+	public static function mpgs_api_password() {
+		return 'live' === self::mpgs_mode()
+			? self::env_first_secret( 'DOUGHBOSS_MPGS_LIVE_API_PASSWORD', 'mpgs_live_api_password' )
+			: self::env_first_secret( 'DOUGHBOSS_MPGS_TEST_API_PASSWORD', 'mpgs_test_api_password' );
+	}
+
+	/**
+	 * Return a tightly validated MPGS API origin. Arbitrary hosts are rejected
+	 * so a settings change cannot turn authenticated requests into SSRF.
+	 *
+	 * @return string
+	 */
+	public static function mpgs_host() {
+		$key  = 'live' === self::mpgs_mode() ? 'mpgs_live_host' : 'mpgs_test_host';
+		$host = untrailingslashit( esc_url_raw( trim( (string) self::get( $key, '' ) ) ) );
+		$parts = wp_parse_url( $host );
+		if ( ! is_array( $parts ) || 'https' !== strtolower( isset( $parts['scheme'] ) ? $parts['scheme'] : '' ) || empty( $parts['host'] ) ) {
+			return '';
+		}
+		$name = strtolower( (string) $parts['host'] );
+		if ( ! preg_match( '/(^|\.)gateway\.mastercard\.com$/', $name ) ) {
+			return '';
+		}
+		return 'https://' . $name;
+	}
+
+	/** @return int */
+	public static function mpgs_api_version() {
+		$version = absint( self::get( 'mpgs_api_version', 100 ) );
+		return min( 100, max( 63, $version ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_ready() {
+		return self::payments_enabled()
+			&& 'mpgs' === self::payment_gateway()
+			&& '' !== self::mpgs_merchant_id()
+			&& '' !== self::mpgs_api_password()
+			&& '' !== self::mpgs_host()
+			&& ( 'test' === self::mpgs_mode() || (bool) self::get( 'mpgs_live_approved', 0 ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_live_mode() {
+		return 'live' === self::mpgs_mode();
+	}
+
+	/**
+	 * Active Tyro mode: 'test' or 'live'.
+	 *
+	 * @return string
+	 */
+	public static function tyro_mode() {
+		return 'live' === self::get( 'tyro_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect authenticates with an OAuth client ID, not a merchant ID.
+	 *
+	 * @return string
+	 */
+	public static function tyro_merchant_id() {
+		return self::tyro_client_id();
+	}
+
+	/**
+	 * Tyro Connect OAuth client ID for the active mode. It is used server-side
+	 * to obtain an access token and is never a browser card-field credential.
+	 *
+	 * @return string
+	 */
+	public static function tyro_client_id() {
+		$key = 'live' === self::tyro_mode() ? 'tyro_live_client_id' : 'tyro_test_client_id';
+		return trim( (string) self::get( $key, '' ) );
+	}
+
+	/**
+	 * Tyro Connect OAuth client secret for the active mode. It is read env-first
+	 * and used only server-side to obtain an access token.
+	 *
+	 * @return string
+	 */
+	public static function tyro_client_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET', 'tyro_live_client_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_CLIENT_SECRET', 'tyro_test_client_secret' );
+	}
+
+	/**
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect uses an OAuth client secret, not a merchant password.
+	 *
+	 * @return string
+	 */
+	public static function tyro_password() {
+		return self::tyro_client_secret();
+	}
+
+	/**
+	 * Tyro webhook signing secret for the active mode (server-side only).
+	 * Read env-first — the constant DOUGHBOSS_TYRO_TEST_WHSEC/
+	 * DOUGHBOSS_TYRO_LIVE_WHSEC or the matching environment variable take
+	 * precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_WHSEC', 'tyro_live_webhook_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_WHSEC', 'tyro_test_webhook_secret' );
+	}
+
+	/**
+	 * Whether Tyro is both the active gateway and fully configured for the
+	 * active mode (so the storefront should actually route card payments to
+	 * it instead of Stripe).
+	 *
+	 * @return bool
+	 */
+	public static function tyro_ready() {
+		return self::payments_enabled()
+			&& 'tyro' === self::payment_gateway()
+			&& '' !== self::tyro_client_id()
+			&& '' !== self::tyro_client_secret()
+			&& ( 'test' === self::tyro_mode() || (bool) self::get( 'tyro_live_certified', 0 ) );
+	}
+
+	/**
+	 * WordPress-normalized form of Tyro Connect's Tyro-Connect-Signature
+	 * webhook header. The raw request body is verified by DoughBoss_Tyro.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_signature_header() {
+		return 'tyro_connect_signature';
+	}
+
+	/** @return bool */
+	public static function tyro_live_mode() {
+		return 'live' === self::tyro_mode();
 	}
 
 	/**
@@ -828,6 +1281,35 @@ class DoughBoss_Settings {
 	}
 
 	/**
+	 * Whether to email the customer when their order is accepted (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_accepted() {
+		return (bool) self::get( 'email_on_accepted', 1 );
+	}
+
+	/**
+	 * Whether to email the customer when their order is marked ready for
+	 * pickup (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_ready() {
+		return (bool) self::get( 'email_on_ready', 1 );
+	}
+
+	/**
+	 * Whether to send the shop inbox (orders_email()) a copy of each stage
+	 * email (default off).
+	 *
+	 * @return bool
+	 */
+	public static function email_staff_copy() {
+		return (bool) self::get( 'email_staff_copy', 0 );
+	}
+
+	/**
 	 * Whether SMS is both enabled and fully configured (username + API key), so
 	 * the server should actually send messages.
 	 *
@@ -908,7 +1390,8 @@ class DoughBoss_Settings {
 
 	/**
 	 * Order-confirmation email body. Owner-editable; blank restores the
-	 * built-in default. Supports {customer_name}/{order_number}/{items}/{total}.
+	 * built-in default. Supports {customer_name}/{order_number}/{items}/{total}/
+	 * {tracking_url}/{tracking_instructions}.
 	 *
 	 * @return string
 	 */
@@ -916,7 +1399,7 @@ class DoughBoss_Settings {
 		$v = (string) self::get( 'tpl_order_email_body', '' );
 		return '' !== trim( $v )
 			? $v
-			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\nWe'll let you know as it progresses.\n";
+			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\n{tracking_instructions}\n";
 	}
 
 	/**
@@ -927,7 +1410,7 @@ class DoughBoss_Settings {
 	 */
 	public static function tpl_sms_ready() {
 		$v = trim( (string) self::get( 'tpl_sms_ready', '' ) );
-		return '' !== $v ? $v : 'Your DoughBoss order #{order_number} is ready for pickup.';
+		return '' !== $v ? $v : 'DoughBoss order #{order_number}: {status_label}. {handoff_message}';
 	}
 
 	/**
@@ -939,6 +1422,63 @@ class DoughBoss_Settings {
 	public static function tpl_sms_voucher() {
 		$v = trim( (string) self::get( 'tpl_sms_voucher', '' ) );
 		return '' !== $v ? $v : 'Your DoughBoss voucher is ready: {code}. Show this code to redeem.';
+	}
+
+	/**
+	 * "Order accepted" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports {customer_name}/{order_number}/{eta_minutes}/
+	 * {total}/{status_label}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_accepted_email_subject() {
+		$v = trim( (string) self::get( 'tpl_accepted_email_subject', '' ) );
+		return '' !== $v ? $v : "We're on it! Order {order_number} is being prepared";
+	}
+
+	/**
+	 * "Order accepted" stage email body. Owner-editable; blank restores the
+	 * built-in default. The built-in default has two variants: one with the
+	 * "ready in about {eta_minutes} minutes" line and a neutral one used when
+	 * no ETA was given (eta 0), so the customer never reads "in about 0
+	 * minutes". A custom template is returned as-is either way.
+	 *
+	 * @param bool $with_eta Whether an ETA was given (selects the default variant).
+	 * @return string
+	 */
+	public static function tpl_accepted_email_body( $with_eta = true ) {
+		$v = (string) self::get( 'tpl_accepted_email_body', '' );
+		if ( '' !== trim( $v ) ) {
+			return $v;
+		}
+		if ( $with_eta ) {
+			return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. It should be ready in about {eta_minutes} minutes.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
+		}
+		return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. We'll let you know the moment it's ready.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
+	}
+
+	/**
+	 * "Order ready" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports the same placeholders as the accepted email.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_subject() {
+		$v = trim( (string) self::get( 'tpl_ready_email_subject', '' ) );
+		return '' !== $v ? $v : 'Order {order_number}: {status_label}';
+	}
+
+	/**
+	 * "Order ready" stage email body. Owner-editable; blank restores the
+	 * built-in default.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_body() {
+		$v = (string) self::get( 'tpl_ready_email_body', '' );
+		return '' !== trim( $v )
+			? $v
+			: "Hi {customer_name},\n\nYour order {order_number} is {status_label}. {handoff_message}\n\nOrder total: {total}\n\n{tracking_instructions}\n\nSee you soon!\n";
 	}
 
 	/**

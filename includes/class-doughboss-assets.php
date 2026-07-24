@@ -27,6 +27,7 @@ class DoughBoss_Assets {
 		'doughboss_shop_picker',
 		'doughboss_catering',
 		'doughboss_voucher_claim',
+		'doughboss_ordering_status',
 	);
 
 	/**
@@ -86,6 +87,25 @@ class DoughBoss_Assets {
 	 * @return void
 	 */
 	public function enqueue() {
+		// The hero has deliberately separate, dependency-free assets. Load it
+		// before considering the storefront app, so a hero-only landing page
+		// stays free of checkout and payment code.
+		if ( $this->current_post_has( 'doughboss_manoush_hero' ) || apply_filters( 'doughboss_load_manoush_hero_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-manoush-hero',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-manoush-hero.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-manoush-hero',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-manoush-hero.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
 		if ( ! $this->should_load() ) {
 			return;
 		}
@@ -97,13 +117,65 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION
 		);
 
-		// Load Stripe.js (from Stripe's CDN, as they require) only when card
-		// payments are switched on and configured. Our script then depends on it.
-		$deps         = array();
-		$payments_on  = DoughBoss_Stripe::ready();
+		/*
+		 * Consent-gated measurement bridge. It contains no tracker IDs, customer
+		 * data or vendor network calls by default. A consent manager must call
+		 * DoughBossMarketing.setConsent() before configured Meta/TikTok globals
+		 * can receive an event. AdPilot remains server-to-server and is exposed
+		 * here only as a readiness flag, never as a browser endpoint or secret.
+		 */
+		$marketing_env     = getenv( 'DOUGHBOSS_MARKETING_ENABLED' );
+		$marketing_enabled = defined( 'DOUGHBOSS_MARKETING_ENABLED' )
+			? (bool) DOUGHBOSS_MARKETING_ENABLED
+			: ( false !== $marketing_env && filter_var( $marketing_env, FILTER_VALIDATE_BOOLEAN ) );
+		$meta_pixel_id     = defined( 'DOUGHBOSS_META_PIXEL_ID' ) ? (string) DOUGHBOSS_META_PIXEL_ID : (string) getenv( 'DOUGHBOSS_META_PIXEL_ID' );
+		$tiktok_pixel_id   = defined( 'DOUGHBOSS_TIKTOK_PIXEL_ID' ) ? (string) DOUGHBOSS_TIKTOK_PIXEL_ID : (string) getenv( 'DOUGHBOSS_TIKTOK_PIXEL_ID' );
+		$marketing_config  = apply_filters(
+			'doughboss_marketing_config',
+			array(
+				'enabled'            => (bool) $marketing_enabled,
+				'metaPixelId'        => sanitize_text_field( $meta_pixel_id ),
+				'tiktokPixelId'      => sanitize_text_field( $tiktok_pixel_id ),
+				'consentVersion'     => '2026-07',
+				'adpilotServerReady' => false,
+			)
+		);
+		wp_enqueue_script(
+			'doughboss-marketing',
+			DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-marketing.js',
+			array(),
+			DOUGHBOSS_VERSION,
+			true
+		);
+		wp_localize_script( 'doughboss-marketing', 'DoughBossMarketingConfig', $marketing_config );
+
+		// Load the ACTIVE gateway's official card-capture library (from the
+		// gateway's own host, as both require) only when card payments are
+		// switched on and configured. Gating goes through the gateway-agnostic
+		// DoughBoss_Payment facade — the same gate the REST checkout enforces —
+		// never DoughBoss_Stripe directly: checking only Stripe here while the
+		// `payment_gateway` setting selects Tyro would leave checkout demanding
+		// a payment the storefront renders no card UI for.
+		$deps        = array( 'doughboss-marketing' );
+		// A configured gateway must not initialize browser payment fields while
+		// the store is intentionally in browse-only / Coming Soon mode.
+		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
+		$gateway     = DoughBoss_Settings::payment_gateway();
 		if ( $payments_on ) {
-			wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
-			$deps[] = 'stripe-js';
+			if ( 'tyro' === $gateway ) {
+				// Tyro requires its PCI-scoped browser library to be loaded directly
+				// from Tyro. Never bundle, proxy or self-host this file.
+				wp_enqueue_script( 'tyro-js', 'https://pay.connect.tyro.com/v1/tyro.js', array(), null, true );
+				$deps[] = 'tyro-js';
+			} elseif ( 'mpgs' === $gateway ) {
+				// Mastercard Hosted Checkout owns card entry and 3-D Secure. The
+				// script origin is derived from the allowlisted API host.
+				wp_enqueue_script( 'mpgs-checkout', DoughBoss_MPGS::checkout_script_url(), array(), null, true );
+				$deps[] = 'mpgs-checkout';
+			} else {
+				wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
+				$deps[] = 'stripe-js';
+			}
 		}
 
 		wp_enqueue_script(
@@ -121,13 +193,22 @@ class DoughBoss_Assets {
 				'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+				'googleReviewUrl' => DoughBoss_Settings::google_review_url(),
 				'payments' => array(
 					'enabled' => $payments_on,
-					'pk'      => $payments_on ? DoughBoss_Stripe::publishable_key() : '',
+					// Public-safe browser identifier for the ACTIVE gateway:
+					// Stripe's publishable key, or Tyro Connect's harmless bootstrap marker.
+					'pk'      => $payments_on ? DoughBoss_Payment::publishable_key() : '',
+					// Which gateway the storefront JS should drive (Stripe.js
+					// Elements vs Tyro Connect's hosted pay form).
+					'gateway' => $gateway,
+					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ),
 				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),
 					'added'        => __( 'Added!', 'doughboss' ),
+					'addedToCart'  => __( 'added to cart', 'doughboss' ),
+					'menuCategories' => __( 'Menu categories', 'doughboss' ),
 					'emptyCart'    => __( 'Your cart is empty.', 'doughboss' ),
 					'remove'       => __( 'Remove', 'doughboss' ),
 					'subtotal'     => __( 'Subtotal', 'doughboss' ),
@@ -135,6 +216,7 @@ class DoughBoss_Assets {
 					'delivery'     => __( 'Delivery', 'doughboss' ),
 					'total'        => __( 'Total', 'doughboss' ),
 					'placeOrder'   => __( 'Place order', 'doughboss' ),
+					'orderingComingSoon' => __( 'Online ordering coming soon', 'doughboss' ),
 					'placing'      => __( 'Placing order…', 'doughboss' ),
 					'soldOut'      => __( 'Sold out', 'doughboss' ),
 					'chooseShop'   => __( 'Choose your shop', 'doughboss' ),
@@ -143,6 +225,14 @@ class DoughBoss_Assets {
 					'cardDetails'  => __( 'Card details', 'doughboss' ),
 					'payProcessing'=> __( 'Processing payment…', 'doughboss' ),
 					'cardError'    => __( 'Please check your card details and try again.', 'doughboss' ),
+					'cardNumber'   => __( 'Card number', 'doughboss' ),
+					'cardExpiryMonth' => __( 'Expiry month (MM)', 'doughboss' ),
+					'cardExpiryYear'  => __( 'Expiry year (YY)', 'doughboss' ),
+					'cardCsc'         => __( 'Security code (CVC)', 'doughboss' ),
+					'cardNumberError' => __( 'Please check the card number.', 'doughboss' ),
+					'cardExpiryError' => __( 'Please check the card expiry date.', 'doughboss' ),
+					'cardCscError'    => __( 'Please check the card security code.', 'doughboss' ),
+					'cardInitError'   => __( 'The secure card form could not be loaded. Please refresh the page and try again.', 'doughboss' ),
 					'vClaiming'    => __( 'Getting your code…', 'doughboss' ),
 					'vYourCode'    => __( 'Your code', 'doughboss' ),
 					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),

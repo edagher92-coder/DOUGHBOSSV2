@@ -3,11 +3,35 @@
  * the active theme.
  */
 
+/* Self-hosted brand fonts (woff2, latin) — no third-party request, no CLS
+ * (Impact/Arial fallbacks in the stack). Files live in public/fonts/, served
+ * directly by WordPress; url() is relative to this stylesheet (css/ -> ../fonts/). */
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:swap;
+	src:url('../fonts/bebasneue-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;
+	src:url('../fonts/barlow-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;
+	src:url('../fonts/barlow-500.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;
+	src:url('../fonts/barlow-600.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;
+	src:url('../fonts/barlow-700.woff2') format('woff2');}
+
 .db-app {
-	--db-accent: #e2231a;
-	--db-accent-dark: #c41c14;
+	--db-accent: #111111; /* mono brand accent (ex-red) — matches the 2026 ink/paper logo */
+	--db-accent-dark: #000000;
 	--db-border: #e6e1da;
 	--db-muted: #6b6b6b;
+	--db-r-sm: 10px;
+	--db-r-md: 14px;
+	--db-r-lg: 18px;
+	--db-r-xl: 24px;
+	--db-r-pill: 999px;
+	--db-shadow-1: 0 1px 2px rgba(20, 16, 12, 0.05), 0 4px 12px rgba(20, 16, 12, 0.06);
+	--db-shadow-2: 0 2px 6px rgba(20, 16, 12, 0.07), 0 12px 28px rgba(20, 16, 12, 0.10);
+	--db-ease: cubic-bezier(0.32, 0.72, 0.33, 1);
+	--db-t-fast: 150ms;
+	--db-t-med: 220ms;
 	font-size: 16px;
 	line-height: 1.5;
 	color: #2b2b2b;
@@ -40,11 +64,19 @@
 	background: #0d0d0d;
 	color: #fff;
 	padding: 13px 20px;
-	border-radius: 8px;
+	border-radius: 14px;
 	font-size: 14px;
 	max-width: 90vw;
 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-	border-left: 3px solid #e2231a;
+	border-left: 3px solid var(--db-accent);
+}
+
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+	.db-toast {
+		background: rgba(13, 13, 13, 0.78);
+		backdrop-filter: blur(12px) saturate(1.4);
+		-webkit-backdrop-filter: blur(12px) saturate(1.4);
+	}
 }
 
 .db-app * {
@@ -59,8 +91,29 @@
 }
 
 .db-error {
-	color: var(--db-accent-dark);
+	color: #c41c14; /* stays red — errors must not blend into the mono accent */
 	font-weight: 600;
+}
+
+.db-ordering-status {
+	margin: 0 0 1.25rem;
+	padding: 1.1rem 1.25rem;
+	border: 1px solid color-mix(in srgb, var(--db-accent) 35%, var(--db-border));
+	border-left: 4px solid var(--db-accent);
+	border-radius: var(--db-r-md);
+	background: color-mix(in srgb, var(--db-accent) 7%, var(--db-surface));
+	color: var(--db-text);
+}
+
+.db-ordering-status strong {
+	display: block;
+	font-size: 1.05rem;
+	margin-bottom: 0.2rem;
+}
+
+.db-ordering-status p {
+	margin: 0;
+	color: var(--db-muted);
 }
 
 /* Buttons ----------------------------------------------------------- */
@@ -68,12 +121,16 @@
 	background: var(--db-accent);
 	color: #fff;
 	border: 0;
-	border-radius: 6px;
-	padding: 0.55rem 1rem;
+	border-radius: var(--db-r-pill);
+	padding: 0.6rem 1.25rem;
 	font-size: 0.95rem;
-	font-weight: 600;
+	font-weight: 700;
 	cursor: pointer;
-	transition: background 0.15s ease;
+	transition: background var(--db-t-fast) var(--db-ease), transform var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+}
+
+.db-btn:active:not(:disabled) {
+	transform: scale(0.98);
 }
 
 .db-btn:hover:not(:disabled) {
@@ -88,6 +145,7 @@
 .db-btn--lg {
 	width: 100%;
 	padding: 0.8rem 1rem;
+	min-height: 44px;
 	font-size: 1.05rem;
 	margin-top: 0.75rem;
 }
@@ -104,24 +162,47 @@
 
 /* Menu -------------------------------------------------------------- */
 .db-category {
-	margin: 1.5rem 0 0.75rem;
-	border-bottom: 2px solid var(--db-accent);
-	padding-bottom: 0.25rem;
+	position: relative;
+	margin: 1.75rem 0 1rem;
+	padding-bottom: 0.55rem;
+	font-size: 1.35em;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+}
+
+.db-category::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 44px;
+	height: 4px;
+	border-radius: var(--db-r-pill);
+	background: var(--db-accent);
 }
 
 .db-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: 1rem;
+	gap: 1.25rem;
 }
 
 .db-card {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	background: #fff;
+	box-shadow: var(--db-shadow-1);
+	transition: transform var(--db-t-med) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+}
+
+@media (hover: hover) {
+	.db-card:not(.db-card--soldout):hover {
+		transform: translateY(-2px);
+		box-shadow: var(--db-shadow-2);
+	}
 }
 
 .db-card-img {
@@ -138,7 +219,7 @@
 }
 
 .db-card-body {
-	padding: 0.85rem;
+	padding: 1rem;
 	display: flex;
 	flex-direction: column;
 	flex: 1;
@@ -168,10 +249,11 @@
 
 /* Builder ----------------------------------------------------------- */
 .db-builder-inner {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
 	padding: 1.25rem;
 	background: #fff;
+	box-shadow: var(--db-shadow-1);
 	max-width: 560px;
 }
 
@@ -189,10 +271,17 @@
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
-	padding: 0.5rem 0.6rem;
+	padding: 0.6rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-md);
 	cursor: pointer;
+	transition: border-color var(--db-t-fast) var(--db-ease), background-color var(--db-t-fast) var(--db-ease);
+}
+
+@media (hover: hover) {
+	.db-option:hover {
+		border-color: var(--db-accent);
+	}
 }
 
 .db-option span:nth-of-type(1) {
@@ -204,11 +293,44 @@
 	font-size: 0.9rem;
 }
 
+.db-menu-options {
+	display: grid;
+	gap: 0.65rem;
+	margin: 0.9rem 0;
+}
+
+.db-menu-option-group {
+	min-width: 0;
+	margin: 0;
+	padding: 0.65rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-md);
+}
+
+.db-menu-option-group legend {
+	padding: 0 0.25rem;
+	font-size: 0.9rem;
+	font-weight: 700;
+}
+
+.db-menu-option {
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+	padding: 0.25rem 0;
+	cursor: pointer;
+}
+
+.db-menu-option span:nth-of-type(1) {
+	flex: 1;
+}
+
 .db-builder-foot {
 	display: flex;
 	align-items: center;
 	gap: 1rem;
 	margin-top: 1.25rem;
+	flex-wrap: wrap;
 	border-top: 1px dashed var(--db-border);
 	padding-top: 1rem;
 }
@@ -217,17 +339,23 @@
 	font-size: 1.5rem;
 	font-weight: 800;
 	color: var(--db-accent-dark);
+	flex: 0 0 auto;
 }
 
 .db-builder-foot .db-btn--lg {
 	margin-top: 0;
+	flex: 1 1 12rem;
+	min-width: 0;
+	width: auto;
 }
 
 /* Cart -------------------------------------------------------------- */
 .db-cart-lines {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
 	overflow: hidden;
+	background: #fff;
+	box-shadow: var(--db-shadow-1);
 }
 
 .db-cart-line {
@@ -246,17 +374,48 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
+	min-width: 0;
 }
 
 .db-cart-line-info small {
 	color: var(--db-muted);
+	overflow-wrap: anywhere;
 }
 
 .db-qty {
 	width: 60px;
-	padding: 0.35rem;
+	padding: 0.45rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-qty:focus {
+	border-color: var(--db-accent);
+}
+
+@media (max-width: 480px) {
+	.db-builder-foot {
+		align-items: stretch;
+	}
+
+	.db-builder-price {
+		flex-basis: 100%;
+	}
+
+	.db-builder-foot .db-btn--lg {
+		width: 100%;
+	}
+
+	.db-cart-line {
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.db-cart-line-info {
+		flex-basis: 100%;
+		width: 100%;
+	}
 }
 
 .db-fulfilment {
@@ -285,12 +444,53 @@
 	padding-top: 0.5rem;
 }
 
+.db-total-note {
+	color: var(--db-muted);
+	font-size: 0.85rem;
+	margin-top: 0.25rem;
+}
+
+/* Verified QR table context ----------------------------------------- */
+.db-table-context {
+	display: flex;
+	align-items: center;
+	gap: 0.7rem;
+	margin: 0 0 1rem;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid var(--db-accent);
+	border-radius: var(--db-r-sm);
+	background: #fff8e8;
+	color: var(--db-ink);
+}
+
+.db-table-context-icon {
+	display: grid;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--db-accent);
+	color: #fff;
+	font-weight: 800;
+}
+
+.db-table-context-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 0.08rem;
+}
+
+.db-table-context-copy strong { font-size: 0.95rem; }
+.db-table-context-copy span { color: var(--db-muted); font-size: 0.85rem; }
+.db-table-context--compact { margin-bottom: 0; }
+
 /* Checkout ---------------------------------------------------------- */
 .db-checkout {
 	margin-top: 1.5rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.75rem;
+	gap: 0.9rem;
 }
 
 .db-field {
@@ -306,10 +506,16 @@
 
 .db-field input,
 .db-field textarea {
-	padding: 0.55rem;
+	padding: 0.65rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	font: inherit;
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-field input:focus,
+.db-field textarea:focus {
+	border-color: var(--db-accent);
 }
 
 .db-checkout-msg {
@@ -331,16 +537,27 @@
 .db-card-element {
 	padding: 0.7rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	background: #fff;
 }
 
+
 .db-confirm {
 	border: 2px solid var(--db-accent);
-	border-radius: 10px;
-	padding: 1.5rem;
+	border-radius: var(--db-r-xl);
+	padding: 1.75rem 1.5rem;
 	text-align: center;
 	background: #fff8f5;
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-confirm .db-btn--track {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-top: 0.4rem;
+	min-height: 44px;
+	text-decoration: none;
 }
 
 /* Tracking ---------------------------------------------------------- */
@@ -360,33 +577,179 @@
 }
 
 .db-track-form input {
-	padding: 0.55rem;
+	padding: 0.65rem 0.75rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	font: inherit;
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-track-form input:focus {
+	border-color: var(--db-accent);
 }
 
 .db-track-card {
 	margin-top: 1rem;
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
-	padding: 1rem;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	padding: 1.25rem;
 	max-width: 380px;
+	background: #fff;
+	box-shadow: var(--db-shadow-1);
 }
 
 .db-status-badge {
 	display: inline-block;
 	background: var(--db-accent);
 	color: #fff;
-	border-radius: 20px;
-	padding: 0.25rem 0.85rem;
-	font-weight: 600;
-	font-size: 0.9rem;
+	border-radius: var(--db-r-pill);
+	padding: 0.3rem 0.9rem;
+	font-weight: 700;
+	font-size: 0.85rem;
+	letter-spacing: 0.02em;
 }
+
+.db-track-timing,
+.db-track-collection,
+.db-track-note {
+	border-left: 4px solid var(--db-accent);
+	padding: 0.55rem 0.7rem;
+	background: #fff8f5;
+}
+
+.db-track-collection {
+	border-color: #137333;
+	font-weight: 700;
+}
+
+.db-track-payment,
+.db-track-checked {
+	color: #5f6368;
+	font-size: 0.85rem;
+}
+
+.db-track-checked { margin-bottom: 0; }
 
 .db-item-list {
 	margin: 0.5rem 0;
 	padding-left: 1.1rem;
+}
+
+/* Order progress tracker -------------------------------------------- */
+.db-stage-tracker {
+	list-style: none;
+	display: flex;
+	margin: 1rem 0 0.75rem;
+	padding: 0;
+}
+
+.db-stage {
+	flex: 1;
+	position: relative;
+	padding-top: 1.7rem;
+	text-align: center;
+	font-size: 0.72rem;
+	line-height: 1.25;
+	color: var(--db-muted);
+}
+
+/* Connector line between dots (none before the first stage). */
+.db-stage::before {
+	content: '';
+	position: absolute;
+	top: 0.65rem;
+	left: -50%;
+	width: 100%;
+	height: 2px;
+	background: var(--db-border);
+}
+
+.db-stage:first-child::before {
+	display: none;
+}
+
+.db-stage--done::before,
+.db-stage--current::before {
+	background: var(--db-accent);
+}
+
+.db-stage-dot {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	box-sizing: border-box;
+	width: 1.35rem;
+	height: 1.35rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 2px solid var(--db-border);
+	border-radius: var(--db-r-pill);
+	background: #fff;
+	color: #fff;
+	font-size: 0.7rem;
+	font-weight: 700;
+	z-index: 1;
+}
+
+.db-stage--done .db-stage-dot {
+	background: var(--db-accent);
+	border-color: var(--db-accent);
+}
+
+.db-stage--current .db-stage-dot {
+	border-color: var(--db-accent);
+	box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 8px var(--db-accent);
+}
+
+.db-stage--current {
+	color: var(--db-accent-dark);
+	font-weight: 700;
+}
+
+/* Animated only when the visitor hasn't asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+	.db-stage-dot {
+		transition: background var(--db-t-med) var(--db-ease), border-color var(--db-t-med) var(--db-ease);
+	}
+
+	.db-stage::before {
+		transition: background var(--db-t-med) var(--db-ease);
+	}
+}
+
+.db-track-eta {
+	margin: 0.25rem 0 0.75rem;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+.db-track-eta--ready {
+	color: var(--db-accent-dark);
+}
+
+.db-track-cancelled {
+	margin: 0.75rem 0;
+	padding: 0.6rem 0.9rem;
+	border: 1px solid #c41c14; /* stays red — must not blend into the mono accent */
+	border-radius: var(--db-r-sm);
+	color: #c41c14;
+	font-weight: 700;
+	font-size: 0.9rem;
+}
+
+.db-track-pay-hint {
+	margin: 0.5rem 0 0;
+	font-size: 0.85rem;
+	color: var(--db-muted);
+}
+
+.db-track-paid {
+	margin: 0.5rem 0 0;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--db-muted);
 }
 
 /* Sold out --------------------------------------------------------- */
@@ -404,12 +767,12 @@
 	left: 0.5rem;
 	background: #2b2b2b;
 	color: #fff;
-	border-radius: 4px;
-	padding: 0.2rem 0.55rem;
+	border-radius: var(--db-r-pill);
+	padding: 0.25rem 0.65rem;
 	font-size: 0.72rem;
 	font-weight: 700;
 	text-transform: uppercase;
-	letter-spacing: 0.03em;
+	letter-spacing: 0.06em;
 }
 
 /* Shop picker ------------------------------------------------------ */
@@ -417,10 +780,11 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.4rem;
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
-	padding: 0.9rem 1rem;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	padding: 1rem 1.1rem;
 	background: #fff;
+	box-shadow: var(--db-shadow-1);
 	max-width: 420px;
 }
 
@@ -435,11 +799,16 @@
 
 .db-shop-select,
 .db-cart-shop .db-shop-select {
-	padding: 0.55rem;
+	padding: 0.6rem 0.7rem;
 	border: 1px solid var(--db-border);
-	border-radius: 6px;
+	border-radius: var(--db-r-sm);
 	font: inherit;
 	background: #fff;
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+
+.db-shop-select:focus {
+	border-color: var(--db-accent);
 }
 
 .db-shop-info {
@@ -468,11 +837,12 @@
 .db-voucher-row { display: flex; gap: 0.5rem; }
 .db-voucher-input {
 	flex: 1;
-	padding: 0.6rem 0.75rem;
+	padding: 0.65rem 0.8rem;
 	border: 1px solid #d8d8d8;
-	border-radius: 8px;
+	border-radius: var(--db-r-sm);
 	font-size: 0.95rem;
 	text-transform: uppercase;
+	transition: border-color var(--db-t-fast) var(--db-ease);
 }
 .db-voucher-input:focus { outline: none; border-color: #111; }
 .db-btn--sm { padding: 0.6rem 1rem; font-size: 0.9rem; }
@@ -481,11 +851,274 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 0.75rem;
-	padding: 0.6rem 0.85rem;
+	padding: 0.65rem 0.9rem;
 	background: #f0f9f3;
 	border: 1px solid #bfe6cf;
-	border-radius: 8px;
+	border-radius: var(--db-r-md);
 	font-size: 0.9rem;
 	font-weight: 600;
+	box-shadow: var(--db-shadow-1);
 }
 .db-voucher-msg { margin-top: 0.4rem; font-size: 0.85rem; color: #d4351c; }
+
+/* ===== UPLIFT-1 Phase 1: storefront design parity (appended, CSS-only) ===== */
+/* Pure visual/UX port of the demo tone onto the real storefront. Every selector
+ * stays under .db-app; no markup/JS/money-path change. Selectors verified against
+ * public/js/doughboss.js renderMenu + builder output. */
+
+/* Paper-tone tokens + brand body font. */
+.db-app {
+	--db-ink: #0d0d0d;
+	--db-paper: #f7f5f0;
+	--db-linel: #e6e2da;
+	font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Bebas display utility (opt-in on headings). */
+.db-app .db-disp {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .02em;
+	line-height: .9;
+	text-transform: uppercase;
+	font-weight: 400;
+}
+
+/* Buttons: boxy demo geometry + Bebas label + tap affordance. Colour/hover/active
+ * already defined above — not restated (no !important, no duplicate :active). */
+.db-app .db-btn {
+	border-radius: var(--db-r-md);
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+	.db-app .db-btn { min-height: 44px; }
+}
+
+/* Menu cards: Bebas item name + mono tabular price + softened media. */
+.db-app .db-card-body h4 {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .02em;
+	line-height: 1.05;
+	text-transform: uppercase;
+	font-weight: 400;
+}
+.db-app .db-price {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.25rem;
+	font-variant-numeric: tabular-nums;
+}
+.db-app .db-card-img {
+	border-radius: var(--db-r-md) var(--db-r-md) 0 0;
+	box-shadow: var(--db-shadow-1);
+}
+
+/* Branded placeholder tile (boxed mono wordmark) for photo-less items —
+ * .db-card-img--placeholder is emitted by renderMenu when item.image is absent. */
+.db-app .db-card-img--placeholder {
+	background-image: none;
+	background: #fff;
+	border: 2px solid var(--db-ink);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	box-shadow: var(--db-shadow-1);
+}
+.db-app .db-card-img--placeholder::before {
+	content: "DB";
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 34px;
+	letter-spacing: .1em;
+	color: var(--db-ink);
+	line-height: 1;
+}
+.db-app .db-card-img--placeholder::after {
+	content: "DOUGH BOSS";
+	font-weight: 600;
+	font-size: 8px;
+	letter-spacing: .4em;
+	text-transform: uppercase;
+	color: var(--db-muted);
+	padding-left: .4em;
+}
+
+/* Builder option rows (<label class="db-option"><input>…</label>): soft shadow,
+ * ink accent on the control, and a selected-state ring via :has (2020+ browsers;
+ * old Safari simply shows no ring — the native radio/checkbox still indicates). */
+.db-app .db-option {
+	box-shadow: var(--db-shadow-1);
+	touch-action: manipulation;
+}
+.db-app .db-option input { accent-color: var(--db-ink); }
+.db-app .db-option:has(input:checked) {
+	border-color: var(--db-ink);
+	box-shadow: 0 0 0 1px var(--db-ink), var(--db-shadow-1);
+}
+
+/* Confirmation: mono border + optional pop-in check badge (badge markup is a
+ * Phase-2 JS addition; the styles are dormant until then, harmless if unused). */
+.db-app .db-confirm {
+	border: 2px solid var(--db-ink);
+	border-radius: var(--db-r-xl);
+	background: var(--db-paper);
+}
+.db-app .db-confirm-check {
+	width: 54px;
+	height: 54px;
+	margin: 0 auto 12px;
+	border-radius: 50%;
+	background: #1f8a54;
+	color: #fff;
+	font-size: 27px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+	.db-app .db-confirm-check { animation: db-checkpop .42s var(--db-ease) both; }
+}
+@keyframes db-checkpop {
+	0% { transform: scale(.4); opacity: 0; }
+	60% { transform: scale(1.12); }
+	100% { transform: scale(1); opacity: 1; }
+}
+
+/* Success toast variant (Phase-2 JS calls showToast(msg, ok); dormant until then). */
+.db-app .db-toast--ok {
+	background: var(--db-ink);
+	color: #fff;
+}
+.db-app .db-toast--ok::before {
+	content: "";
+	display: inline-block;
+	width: 18px;
+	height: 18px;
+	margin-right: 10px;
+	border-radius: 50%;
+	background: #1f8a54;
+	vertical-align: middle;
+}
+
+/* ===== UPLIFT-1 Phase 2: motion "heart" — spring physics + tactile feedback ===== */
+/* Brings back the bouncy, alive feel: a spring easing curve with overshoot,
+ * staggered card entrance, tap bounce, a sticky category jump-bar, and a
+ * celebratory confirmation. All fully disabled under prefers-reduced-motion. */
+
+.db-app {
+	--db-spring: cubic-bezier(.34, 1.56, .64, 1);       /* overshoots ~1.1 — the "bounce" */
+	--db-spring-soft: cubic-bezier(.22, 1.2, .36, 1);   /* gentler overshoot */
+}
+
+/* Tap bounce on buttons (springier press than the base scale). */
+.db-app .db-btn {
+	transition: background var(--db-t-fast) var(--db-ease),
+		transform var(--db-t-fast) var(--db-spring),
+		box-shadow var(--db-t-med) var(--db-ease);
+}
+.db-app .db-btn:active:not(:disabled) { transform: scale(.94); }
+
+/* Reusable "pop" (dbPop() adds .db-pop on add-to-cart, etc.). */
+@keyframes db-pop {
+	0% { transform: scale(1); }
+	35% { transform: scale(1.14); }
+	70% { transform: scale(.97); }
+	100% { transform: scale(1); }
+}
+.db-app .db-pop { animation: db-pop .4s var(--db-spring); }
+
+/* Staggered card entrance — the menu cascades in instead of snapping. --db-i is
+ * set per-card in renderMenu (capped), so the delay stays snappy on long menus. */
+@keyframes db-cardin {
+	from { opacity: 0; transform: translateY(16px) scale(.98); }
+	to { opacity: 1; transform: none; }
+}
+.db-app .db-grid .db-card {
+	animation: db-cardin .5s var(--db-spring) both;
+	animation-delay: calc(var(--db-i, 0) * 45ms);
+	transition: transform var(--db-t-med) var(--db-spring), box-shadow var(--db-t-med) var(--db-ease);
+}
+@media (hover: hover) {
+	.db-app .db-card:not(.db-card--soldout):hover { transform: translateY(-4px); }
+}
+
+/* Builder option rows: subtle spring on press + selected lift. */
+.db-app .db-option {
+	transition: border-color var(--db-t-fast) var(--db-ease),
+		background-color var(--db-t-fast) var(--db-ease),
+		transform var(--db-t-fast) var(--db-spring),
+		box-shadow var(--db-t-fast) var(--db-ease);
+}
+.db-app .db-option:active { transform: scale(.98); }
+.db-app .db-option:has(input:checked) { transform: scale(1.015); }
+
+/* Sticky category jump-bar (rendered by renderMenu when >1 category). */
+.db-app .db-jumpbar {
+	position: sticky;
+	top: var(--db-sticky-top, 0px);
+	z-index: 20;
+	display: flex;
+	gap: .5rem;
+	overflow-x: auto;
+	padding: .6rem 0;
+	margin: .25rem 0 1rem;
+	background: var(--db-paper, #f7f5f0);
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+.db-app .db-jumpbar::-webkit-scrollbar { display: none; }
+.db-app .db-jump {
+	flex: 0 0 auto;
+	border: 1px solid var(--db-border);
+	background: #fff;
+	color: inherit;
+	border-radius: var(--db-r-pill);
+	padding: .4rem .9rem;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	cursor: pointer;
+	white-space: nowrap;
+	touch-action: manipulation;
+	transition: transform var(--db-t-fast) var(--db-spring),
+		border-color var(--db-t-fast) var(--db-ease),
+		background var(--db-t-fast) var(--db-ease);
+}
+@media (hover: hover) { .db-app .db-jump:hover { border-color: var(--db-ink); } }
+.db-app .db-jump:active { transform: scale(.92); }
+/* Land category headings below the sticky bar on jump. */
+.db-app .db-category { scroll-margin-top: 64px; }
+
+.db-app .db-review-invite {
+	display: grid;
+	gap: .35rem;
+	margin-top: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-md);
+	background: var(--db-paper, #f7f5f0);
+}
+.db-app .db-review-invite span { color: var(--db-muted); font-size: .92rem; }
+.db-app .db-review-invite__actions { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.db-app .db-review-invite a { width: fit-content; color: var(--db-ember); font-weight: 800; text-underline-offset: 3px; }
+
+/* Success toast springs up from the bottom. */
+@keyframes db-toastin {
+	from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.96); }
+	to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+.db-app .db-toast,
+.db-toast { animation: db-toastin .34s var(--db-spring, cubic-bezier(.34,1.56,.64,1)) both; }
+
+/* Reduced-motion: kill entrance/pop so nothing flashes or lingers hidden
+ * (the global guard zeroes duration but not delay — be explicit here). */
+@media (prefers-reduced-motion: reduce) {
+	.db-app .db-grid .db-card,
+	.db-app .db-pop,
+	.db-app .db-toast,
+	.db-toast { animation: none !important; }
+	.db-app .db-grid .db-card { opacity: 1 !important; transform: none !important; }
+}

@@ -7,6 +7,7 @@ on:
       - main
       - "claude/**"
       - "chatgpt/**"
+      - "codex/**"
   workflow_dispatch:
 
 permissions:
@@ -19,10 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ["7.4", "8.2"]
+        php-version: ["7.4", "8.2", "8.3", "8.4", "8.5"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -31,7 +32,7 @@ jobs:
           coverage: none
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -41,28 +42,78 @@ jobs:
       - name: Boot smoke test (WP-stub — proves the plugin boots, routes register, integrations dormant)
         run: php tests/smoke-boot.php
 
+      - name: Versioned lifecycle transaction test
+        run: php tests/lifecycle.php
+
+      - name: Customer to KDS REST contract
+        run: php tests/customer-kds-e2e-contract.php
+
+      - name: After-hours pre-order request contract
+        run: php tests/preorder-backend.php
+
+      - name: Capacity window and timezone test
+        run: php tests/capacity.php
+
+      - name: Capacity hold transaction test
+        run: php tests/capacity-holds.php
+
+      - name: Atomic hold-to-order conversion test
+        run: php tests/order-capacity.php
+
+      - name: Verify demo launch scope
+        run: php tests/demo-scope.php
+
+      - name: Verify universal demo profiles
+        run: node tests/demo-config.test.js
+
+      - name: Verify WordPress Coming Soon launch gate
+        run: php tests/coming-soon-contract.php
+
+      - name: Verify Tyro, menu and hero acceptance contracts
+        run: |
+          php tests/tyro-contract.php
+          php tests/manoush-hero-contract.php
+          php tests/menu-options.php
+          php tests/activation-location-seed.php
+          node --test tests/menu-photo-contract.test.js
+          node --test tests/storefront-options-contract.test.js
+          node --test tests/seo-contract.test.js
+          node --test tests/wordpress-seo-marketing-contract.test.js
+          node --test tests/google-review-contract.test.js
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Setup PHP with ZIP support
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zip
+          coverage: none
 
       - name: Build zip
-        run: bash build-zip.sh
+        run: php scripts/build-zip.php
 
       - name: Validate zip contents
-        run: |
-          test -f dist/doughboss.zip
-          unzip -l dist/doughboss.zip | grep -q "doughboss/doughboss.php"
-          unzip -l dist/doughboss.zip | grep -q "doughboss/includes/class-doughboss.php"
+        run: php scripts/validate-zip.php dist/doughboss.zip
+
+      - name: Publish verified plugin archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: doughboss-plugin-zip
+          path: dist/doughboss.zip
+          if-no-files-found: error
 
   secret-scan:
     name: Static secret pattern scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Scan for high-confidence committed secrets
         run: |
@@ -104,3 +155,189 @@ jobs:
 
           print('No high-confidence committed secrets found.')
           PY
+
+  mariadb-lifecycle:
+    name: MariaDB ${{ matrix.mariadb }} lifecycle migration
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mariadb: ["10.6", "11.4"]
+    services:
+      db:
+        image: mariadb:${{ matrix.mariadb }}
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: wordpress
+          MARIADB_USER: wordpress
+          MARIADB_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PHP and WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mysqli
+          coverage: none
+          tools: wp-cli
+
+      - name: Install temporary WordPress
+        shell: bash
+        run: |
+          wp core download --path=/tmp/wp --version=6.5.5 --allow-root
+          wp config create --path=/tmp/wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1:3306 --skip-check --allow-root
+          wp db check --path=/tmp/wp --allow-root
+          wp core install --path=/tmp/wp --url=http://doughboss.test --title=DoughBoss --admin_user=admin --admin_password=test-only-password --admin_email=test@example.invalid --skip-email --allow-root
+          ln -s "$GITHUB_WORKSPACE" /tmp/wp/wp-content/plugins/doughboss
+
+      - name: Rehearse lifecycle migration and rollback
+        run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-lifecycle.php" --path=/tmp/wp --skip-plugins --allow-root
+
+  mariadb-capacity:
+    name: MariaDB ${{ matrix.mariadb }} capacity integration
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mariadb: ["10.6", "11.4"]
+    services:
+      db:
+        image: mariadb:${{ matrix.mariadb }}
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: wordpress
+          MARIADB_USER: wordpress
+          MARIADB_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PHP and WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mysqli, pcntl
+          coverage: none
+          tools: wp-cli
+
+      - name: Install temporary WordPress
+        shell: bash
+        run: |
+          wp core download --path=/tmp/wp --version=6.5.5 --allow-root
+          wp config create --path=/tmp/wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1:3306 --skip-check --allow-root
+          wp db check --path=/tmp/wp --allow-root
+          wp core install --path=/tmp/wp --url=http://doughboss.test --title=DoughBoss --admin_user=admin --admin_password=test-only-password --admin_email=test@example.invalid --skip-email --allow-root
+          ln -s "$GITHUB_WORKSPACE" /tmp/wp/wp-content/plugins/doughboss
+
+      - name: Migration and final-slot race
+        run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-capacity.php" --path=/tmp/wp --skip-plugins --allow-root
+
+  mariadb-checkout-integrity:
+    name: MariaDB ${{ matrix.mariadb }} checkout integrity
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mariadb: ["10.6", "11.4"]
+    services:
+      db:
+        image: mariadb:${{ matrix.mariadb }}
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: wordpress
+          MARIADB_USER: wordpress
+          MARIADB_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PHP and WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mysqli, pcntl
+          coverage: none
+          tools: wp-cli
+
+      - name: Install temporary WordPress
+        shell: bash
+        run: |
+          wp core download --path=/tmp/wp --version=6.5.5 --allow-root
+          wp config create --path=/tmp/wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1:3306 --skip-check --allow-root
+          wp db check --path=/tmp/wp --allow-root
+          wp core install --path=/tmp/wp --url=http://doughboss.test --title=DoughBoss --admin_user=admin --admin_password=test-only-password --admin_email=test@example.invalid --skip-email --allow-root
+          ln -s "$GITHUB_WORKSPACE" /tmp/wp/wp-content/plugins/doughboss
+
+      - name: Migration and checkout races
+        run: wp eval-file "$GITHUB_WORKSPACE/tests/mariadb-checkout-integrity.php" --path=/tmp/wp --skip-plugins --allow-root
+
+  wordpress-compatibility:
+    name: WordPress ${{ matrix.wordpress }} / PHP ${{ matrix.php }} live plugin smoke
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - wordpress: "6.0.9"
+            php: "7.4"
+          - wordpress: "7.0.2"
+            php: "8.4"
+    services:
+      db:
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: wordpress
+          MARIADB_USER: wordpress
+          MARIADB_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PHP and WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli
+          coverage: none
+          tools: wp-cli
+
+      - name: Install and activate on real WordPress
+        shell: bash
+        run: |
+          wp core download --path=/tmp/wp --version=${{ matrix.wordpress }} --allow-root
+          wp config create --path=/tmp/wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1:3306 --skip-check --allow-root
+          wp core install --path=/tmp/wp --url=http://doughboss.test --title=DoughBoss --admin_user=admin --admin_password=test-only-password --admin_email=test@example.invalid --skip-email --allow-root
+          ln -s "$GITHUB_WORKSPACE" /tmp/wp/wp-content/plugins/doughboss
+          wp plugin activate doughboss --path=/tmp/wp --allow-root
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-compatibility.php" --path=/tmp/wp --allow-root

@@ -93,6 +93,23 @@ class DoughBoss_Locations {
 	}
 
 	/**
+	 * Effective single-location mode.
+	 *
+	 * The stored toggle is only honoured when exactly one active shop exists.
+	 * This fail-closed rule prevents a stale migration/default from silently
+	 * routing a multi-shop order to whichever row happens to sort first.
+	 *
+	 * @return int The sole active location id, or 0 when the mode is not effective.
+	 */
+	public static function single_location_id() {
+		if ( ! DoughBoss_Settings::get( 'single_location_mode', 1 ) ) {
+			return 0;
+		}
+		$active = self::all( true );
+		return 1 === count( $active ) ? (int) $active[0]->id : 0;
+	}
+
+	/**
 	 * Sanitize a raw input row into a storable record.
 	 *
 	 * @param array $data Raw input.
@@ -101,6 +118,18 @@ class DoughBoss_Locations {
 	private static function sanitize( array $data ) {
 		$name = isset( $data['name'] ) ? sanitize_text_field( $data['name'] ) : '';
 		$slug = isset( $data['slug'] ) && '' !== $data['slug'] ? sanitize_title( $data['slug'] ) : sanitize_title( $name );
+		$timezone = isset( $data['timezone'] ) ? sanitize_text_field( $data['timezone'] ) : 'Australia/Sydney';
+		try {
+			new DateTimeZone( $timezone );
+		} catch ( Exception $e ) {
+			$timezone = 'Australia/Sydney';
+		}
+		$capacity_mode = isset( $data['capacity_mode'] ) ? sanitize_key( $data['capacity_mode'] ) : 'off';
+		// Customer enforcement is intentionally not exposed until checkout hold
+		// conversion and the real MariaDB race suite are both green.
+		if ( ! in_array( $capacity_mode, array( 'off', 'shadow' ), true ) ) {
+			$capacity_mode = 'off';
+		}
 
 		return array(
 			'name'              => $name,
@@ -110,6 +139,17 @@ class DoughBoss_Locations {
 			'phone'             => isset( $data['phone'] ) ? sanitize_text_field( $data['phone'] ) : '',
 			'postcodes'         => isset( $data['postcodes'] ) ? sanitize_text_field( $data['postcodes'] ) : '',
 			'prep_time_default' => isset( $data['prep_time_default'] ) ? max( 0, (int) $data['prep_time_default'] ) : 20,
+			'timezone'          => $timezone,
+			'capacity_mode'     => $capacity_mode,
+			'slot_minutes'      => isset( $data['slot_minutes'] ) ? max( 5, min( 120, (int) $data['slot_minutes'] ) ) : 15,
+			'minimum_notice_minutes' => isset( $data['minimum_notice_minutes'] ) ? max( 0, min( 1440, (int) $data['minimum_notice_minutes'] ) ) : 30,
+			'booking_horizon_days' => isset( $data['booking_horizon_days'] ) ? max( 1, min( 31, (int) $data['booking_horizon_days'] ) ) : 7,
+			'hold_minutes'      => isset( $data['hold_minutes'] ) ? max( 1, min( 30, (int) $data['hold_minutes'] ) ) : 10,
+			'slot_order_capacity' => isset( $data['slot_order_capacity'] ) ? max( 1, min( 10000, (int) $data['slot_order_capacity'] ) ) : 4,
+			'slot_unit_capacity' => isset( $data['slot_unit_capacity'] ) ? max( 1, min( 10000, (int) $data['slot_unit_capacity'] ) ) : 12,
+			'tyro_location_id'   => isset( $data['tyro_location_id'] ) ? substr( sanitize_text_field( $data['tyro_location_id'] ), 0, 191 ) : '',
+			'pospal_store_index'  => isset( $data['pospal_store_index'] ) ? max( 0, min( 3, (int) $data['pospal_store_index'] ) ) : 0,
+			'online_payment_enabled' => empty( $data['online_payment_enabled'] ) ? 0 : 1,
 			'pickup_enabled'    => empty( $data['pickup_enabled'] ) ? 0 : 1,
 			'delivery_enabled'  => empty( $data['delivery_enabled'] ) ? 0 : 1,
 			'is_active'         => empty( $data['is_active'] ) ? 0 : 1,
@@ -158,7 +198,7 @@ class DoughBoss_Locations {
 		$ok = $wpdb->insert(
 			self::table(),
 			$row,
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%d' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' )
 		);
 		return $ok ? (int) $wpdb->insert_id : 0;
 	}
@@ -185,10 +225,152 @@ class DoughBoss_Locations {
 			self::table(),
 			$row,
 			array( 'id' => $id ),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%d' ),
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' ),
 			array( '%d' )
 		);
+		if ( false !== $updated ) {
+			$table = self::table();
+			// A changed location plan only affects newly materialised slots. Existing
+			// promises retain their slot snapshot and planning version.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->query( $wpdb->prepare( "UPDATE {$table} SET planning_version = planning_version + 1 WHERE id = %d", $id ) );
+		}
 		return false !== $updated;
+	}
+
+	/**
+	 * Read weekly pickup hours as admin-friendly comma-separated ranges.
+	 *
+	 * @param int $location_id Location id.
+	 * @return array<string,string>
+	 */
+	public static function weekly_hours( $location_id ) {
+		global $wpdb;
+		$keys = array( 1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 7 => 'sun' );
+		$out  = array_fill_keys( array_values( $keys ), '' );
+		$table = $wpdb->prefix . 'doughboss_location_hours';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT weekday, opens_at, closes_at FROM {$table} WHERE location_id = %d AND order_type = 'pickup' AND is_active = 1 ORDER BY weekday, segment", absint( $location_id ) ) );
+		foreach ( (array) $rows as $row ) {
+			$weekday = isset( $keys[ (int) $row->weekday ] ) ? $keys[ (int) $row->weekday ] : '';
+			if ( ! $weekday ) { continue; }
+			$range = substr( (string) $row->opens_at, 0, 5 ) . '-' . substr( (string) $row->closes_at, 0, 5 );
+			$out[ $weekday ] = $out[ $weekday ] ? $out[ $weekday ] . ', ' . $range : $range;
+		}
+		return $out;
+	}
+
+	/**
+	 * Atomically replace a location's weekly pickup-hour segments.
+	 *
+	 * @param int   $location_id Location id.
+	 * @param array $input       mon..sun comma-separated HH:MM-HH:MM ranges.
+	 * @return true|WP_Error
+	 */
+	public static function save_weekly_hours( $location_id, array $input ) {
+		global $wpdb;
+		$map = array( 'mon' => 1, 'tue' => 2, 'wed' => 3, 'thu' => 4, 'fri' => 5, 'sat' => 6, 'sun' => 7 );
+		$rows = array();
+		foreach ( $map as $key => $weekday ) {
+			$raw = isset( $input[ $key ] ) ? trim( sanitize_text_field( $input[ $key ] ) ) : '';
+			if ( '' === $raw ) { continue; }
+			$segment = 0;
+			foreach ( explode( ',', $raw ) as $range ) {
+				++$segment;
+				$range = trim( $range );
+				if ( ! preg_match( '/^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/', $range, $match ) || ! self::valid_clock( $match[1] ) || ! self::valid_clock( $match[2] ) || $match[1] === $match[2] ) {
+					return new WP_Error( 'doughboss_hours_invalid', sprintf( __( 'Invalid %s hours. Use HH:MM-HH:MM, for example 11:00-21:00.', 'doughboss' ), strtoupper( $key ) ) );
+				}
+				$rows[] = array( 'weekday' => $weekday, 'segment' => $segment, 'opens_at' => $match[1] . ':00', 'closes_at' => $match[2] . ':00' );
+			}
+		}
+
+		$table = $wpdb->prefix . 'doughboss_location_hours';
+		$wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE location_id = %d AND order_type = 'pickup'", absint( $location_id ) ) ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_hours_storage', __( 'Pickup hours could not be saved.', 'doughboss' ) );
+		}
+		foreach ( $rows as $row ) {
+			$row = array(
+				'location_id' => absint( $location_id ),
+				'order_type'  => 'pickup',
+				'weekday'     => $row['weekday'],
+				'segment'     => $row['segment'],
+				'opens_at'    => $row['opens_at'],
+				'closes_at'   => $row['closes_at'],
+				'is_active'   => 1,
+			);
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			if ( false === $wpdb->insert( $table, $row, array( '%d', '%s', '%d', '%d', '%s', '%s', '%d' ) ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_hours_storage', __( 'Pickup hours could not be saved.', 'doughboss' ) );
+			}
+		}
+		$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		return true;
+	}
+
+	/**
+	 * Build a read-only, schedule-only capacity configuration for staff shadowing.
+	 *
+	 * Dated overrides are not interpreted as live capacity yet. Closed dates and
+	 * every unsupported override date are blacked out so the preview fails closed.
+	 *
+	 * @param int $location_id Location id.
+	 * @return array|null
+	 */
+	public static function capacity_preview_config( $location_id ) {
+		global $wpdb;
+		$loc = self::get( $location_id );
+		if ( ! $loc || ! isset( $loc->capacity_mode ) || 'shadow' !== (string) $loc->capacity_mode || empty( $loc->is_active ) || empty( $loc->pickup_enabled ) ) {
+			return null;
+		}
+		$hours_raw = self::weekly_hours( $location_id );
+		$hours = array();
+		foreach ( array( 'sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat' ) as $day ) {
+			$hours[ $day ] = array();
+			if ( empty( $hours_raw[ $day ] ) ) { continue; }
+			foreach ( explode( ',', $hours_raw[ $day ] ) as $range ) {
+				if ( preg_match( '/^(\d{2}:\d{2})-(\d{2}:\d{2})$/', trim( $range ), $match ) ) {
+					$hours[ $day ][] = array( $match[1], $match[2] );
+				}
+			}
+		}
+
+		$exceptions = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		try {
+			$local_today = new DateTimeImmutable( 'today', new DateTimeZone( (string) $loc->timezone ) );
+		} catch ( Exception $e ) {
+			return null;
+		}
+		$today   = $local_today->format( 'Y-m-d' );
+		$through = $local_today->modify( '+' . max( 1, min( 31, (int) $loc->booking_horizon_days ) ) . ' days' )->format( 'Y-m-d' );
+		// Until dated hours/capacity overrides are implemented end-to-end, omit
+		// every exception date rather than showing a potentially false promise.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$blackouts = (array) $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT service_date FROM {$exceptions} WHERE location_id = %d AND order_type = 'pickup' AND service_date BETWEEN %s AND %s", absint( $location_id ), $today, $through ) );
+
+		return array(
+			'location_id'      => (int) $loc->id,
+			'planning_version' => (int) $loc->planning_version,
+			'enabled'          => true,
+			'active'           => true,
+			'pickup_enabled'   => true,
+			'timezone'         => (string) $loc->timezone,
+			'slot_minutes'     => (int) $loc->slot_minutes,
+			'notice_minutes'   => (int) $loc->minimum_notice_minutes,
+			'horizon_days'     => (int) $loc->booking_horizon_days,
+			'capacity_units'   => (int) $loc->slot_unit_capacity,
+			'blackout_dates'   => $blackouts,
+			'hours'            => $hours,
+		);
+	}
+
+	/** @return bool */
+	private static function valid_clock( $time ) {
+		return (bool) preg_match( '/^(?:[01]\d|2[0-3]):[0-5]\d$/', (string) $time );
 	}
 
 	/**
@@ -217,15 +399,25 @@ class DoughBoss_Locations {
 		if ( self::count() > 0 ) {
 			return;
 		}
-		$name = get_option( 'blogname' );
-		self::create(
-			array(
-				'name'             => $name ? $name : __( 'Main Shop', 'doughboss' ),
-				'pickup_enabled'   => DoughBoss_Settings::get( 'enable_pickup', 1 ),
-				'delivery_enabled' => DoughBoss_Settings::get( 'enable_delivery', 0 ),
-				'is_active'        => 1,
-			)
+		// If the blogname looks like a Dough Boss install, seed the primary
+		// Revesby shop with real address + phone so the storefront works out of
+		// the box. Any other install falls back to the WP site name (previous
+		// behaviour). Owners can edit or rename the seed row afterwards.
+		$blog       = (string) get_option( 'blogname' );
+		$is_dough   = '' !== $blog && false !== stripos( $blog, 'dough boss' );
+		$seed_name  = $is_dough ? __( 'Revesby', 'doughboss' ) : ( '' !== $blog ? $blog : __( 'Main Shop', 'doughboss' ) );
+		$seed = array(
+			'name'             => $seed_name,
+			'pickup_enabled'   => DoughBoss_Settings::get( 'enable_pickup', 1 ),
+			'delivery_enabled' => DoughBoss_Settings::get( 'enable_delivery', 0 ),
+			'is_active'        => 1,
 		);
+		if ( $is_dough ) {
+			$seed['suburb']  = 'Revesby';
+			$seed['address'] = "12/25 Selems Parade\nRevesby NSW 2212";
+			$seed['phone']   = '(02) 9774 2286';
+		}
+		self::create( $seed );
 	}
 
 	/**
@@ -245,6 +437,26 @@ class DoughBoss_Locations {
 			'pickup_enabled'   => (bool) $loc->pickup_enabled,
 			'delivery_enabled' => (bool) $loc->delivery_enabled,
 			'prep_time'        => (int) $loc->prep_time_default,
+			'timezone'         => isset( $loc->timezone ) ? $loc->timezone : 'Australia/Sydney',
+			'capacity_preview' => isset( $loc->capacity_mode ) && 'shadow' === $loc->capacity_mode,
 		);
+	}
+
+	/**
+	 * Resolve the server-side Tyro Connect location for an active shop.
+	 *
+	 * @param int $location_id DoughBoss location id.
+	 * @return string|WP_Error
+	 */
+	public static function tyro_location_id( $location_id ) {
+		$location = self::get( $location_id );
+		if ( ! $location || empty( $location->is_active ) || empty( $location->online_payment_enabled ) ) {
+			return new WP_Error( 'doughboss_pay_location_off', __( 'Online payment is not enabled for this shop.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$provider_id = isset( $location->tyro_location_id ) ? trim( (string) $location->tyro_location_id ) : '';
+		if ( '' === $provider_id ) {
+			return new WP_Error( 'doughboss_pay_location_unmapped', __( 'This shop is not mapped to a Tyro payment location.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return $provider_id;
 	}
 }

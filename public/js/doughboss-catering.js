@@ -264,7 +264,7 @@
 
 	function showSuccess(data) {
 		var pay = (window.DoughBossData && window.DoughBossData.payments) || {};
-		var canPay = pay.enabled && pay.pk && window.Stripe && data.deposit > 0;
+		var canPay = pay.enabled && data.deposit > 0 && ((pay.gateway === 'tyro' && typeof window.Tyro === 'function') || (pay.gateway !== 'tyro' && pay.pk && typeof window.Stripe === 'function'));
 
 		root.innerHTML = '';
 		var box = el('<div class="dbc-success" role="status"></div>');
@@ -282,7 +282,7 @@
 					'<div class="dbc-card-element"></div>' +
 					'<div class="dbc-error" role="alert" aria-live="assertive"></div>' +
 					'<button type="button" class="dbc-submit dbc-pay-btn">Pay ' + money(data.deposit) + ' deposit</button>' +
-					'<p class="dbc-sub dbc-pay-secure">Secured by Stripe · balance payable later.</p>' +
+					'<p class="dbc-sub dbc-pay-secure">Secure provider-hosted payment · balance payable later.</p>' +
 				'</div>'
 			);
 			box.appendChild(panel);
@@ -290,6 +290,39 @@
 		} else {
 			box.appendChild(el('<p class="dbc-sub">' + esc(data.message || 'We\'ll be in touch shortly to confirm your quote and deposit link.') + '</p>'));
 		}
+		var reviewUrl = window.DoughBossData && window.DoughBossData.googleReviewUrl;
+		var review = document.createElement('div');
+		review.className = 'dbc-review-invite';
+		var title = document.createElement('strong');
+		title.textContent = 'Stay close to the bake.';
+		var copy = document.createElement('span');
+		copy.textContent = 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.';
+		var actions = document.createElement('div');
+		actions.className = 'dbc-review-invite__actions';
+		var instagram = document.createElement('a');
+		instagram.href = 'https://instagram.com/doughboss';
+		instagram.target = '_blank';
+		instagram.rel = 'noopener noreferrer';
+		instagram.setAttribute('data-doughboss-engagement', 'social_engagement');
+		instagram.setAttribute('data-content-name', 'Instagram');
+		instagram.setAttribute('data-channel', 'catering_success');
+		instagram.textContent = 'Follow @doughboss ↗';
+		actions.appendChild(instagram);
+		if (reviewUrl) {
+			var link = document.createElement('a');
+			link.href = reviewUrl;
+			link.target = '_blank';
+			link.rel = 'noopener noreferrer';
+			link.setAttribute('data-doughboss-engagement', 'review_engagement');
+			link.setAttribute('data-content-name', 'Google review');
+			link.setAttribute('data-channel', 'catering_success');
+			link.textContent = 'Leave a Google review ↗';
+			actions.appendChild(link);
+		}
+		review.appendChild(title);
+		review.appendChild(copy);
+		review.appendChild(actions);
+		box.appendChild(review);
 
 		if (root.scrollIntoView) { root.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 	}
@@ -297,14 +330,33 @@
 	function mountPayment(panel, data) {
 		var pay = window.DoughBossData.payments;
 		var errBox = panel.querySelector('.dbc-error');
-		var stripe, card;
-		try {
-			stripe = window.Stripe(pay.pk);
-			card = stripe.elements().create('card');
-			card.mount(panel.querySelector('.dbc-card-element'));
-		} catch (e) {
-			errBox.textContent = 'Card payments are unavailable right now.';
-			return;
+		var stripe, card, tyro, paymentId = '';
+		var attemptKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+		var cardMount = panel.querySelector('.dbc-card-element');
+		cardMount.id = 'dbc-tyro-' + String(Date.now());
+		if (pay.gateway === 'tyro') {
+			panel.querySelector('.dbc-pay-btn').disabled = true;
+			post('/catering/payment-intent', { enquiry_number: data.enquiry_number, email: state.email, leg: 'deposit', payment_attempt_key: attemptKey }).then(function (res) {
+				if (!res.ok || !res.data || !res.data.client_secret) { throw new Error((res.data && res.data.message) || 'Could not start the payment.'); }
+				paymentId = res.data.payment_intent;
+				tyro = window.Tyro({ liveMode: !!pay.liveMode });
+				return tyro.init(res.data.client_secret);
+			}).then(function () {
+				var form = tyro.createPayForm({ theme: 'minimal', options: { creditCardForm: { enabled: true }, applePay: { enabled: false }, googlePay: { enabled: false } } });
+				return form.inject('#' + cardMount.id);
+			}).then(function () {
+				panel.querySelector('.dbc-pay-btn').disabled = false;
+				panel.querySelector('.dbc-pay-secure').textContent = 'Secure payment by Tyro · bank verification may appear here.';
+			}).catch(function (err) { errBox.textContent = err.message || 'Card payments are unavailable right now.'; });
+		} else {
+			try {
+				stripe = window.Stripe(pay.pk);
+				card = stripe.elements().create('card');
+				card.mount(cardMount);
+			} catch (e) {
+				errBox.textContent = 'Card payments are unavailable right now.';
+				return;
+			}
 		}
 
 		panel.querySelector('.dbc-pay-btn').addEventListener('click', function () {
@@ -314,22 +366,32 @@
 			var prev = btn.textContent;
 			btn.textContent = 'Processing…';
 
-			post('/catering/payment-intent', {
+			var payment = pay.gateway === 'tyro' ? tyro.submitPay().then(function () {
+				return tyro.fetchPayRequest();
+			}).then(function (result) {
+				var req = result && result.payRequest ? result.payRequest : result;
+				if (!req || String(req.status).toUpperCase() !== 'SUCCESS') { throw new Error('Your payment is still being checked. Do not pay again; please wait and retry confirmation.'); }
+				return paymentId;
+			}) : post('/catering/payment-intent', {
 				enquiry_number: data.enquiry_number,
 				email: state.email,
-				leg: 'deposit'
+				leg: 'deposit',
+				payment_attempt_key: attemptKey
 			}).then(function (res) {
 				if (!res.ok || !res.data || !res.data.client_secret) {
 					throw new Error((res.data && res.data.message) || 'Could not start the payment.');
 				}
 				return stripe.confirmCardPayment(res.data.client_secret, { payment_method: { card: card } }).then(function (result) {
 					if (result.error) { throw new Error(result.error.message || 'Your card was declined.'); }
-					return post('/catering/confirm-payment', {
-						enquiry_number: data.enquiry_number,
-						email: state.email,
-						leg: 'deposit',
-						payment_intent_id: result.paymentIntent.id
-					});
+					return result.paymentIntent.id;
+				});
+			});
+			payment.then(function (confirmedId) {
+				return post('/catering/confirm-payment', {
+					enquiry_number: data.enquiry_number,
+					email: state.email,
+					leg: 'deposit',
+					payment_intent_id: confirmedId
 				});
 			}).then(function (conf) {
 				if (!conf.ok || !conf.data || !conf.data.success) {

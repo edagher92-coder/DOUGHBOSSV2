@@ -70,28 +70,38 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-settings.php';
 		require_once $dir . 'class-doughboss-migrations.php';
 		require_once $dir . 'class-doughboss-locations.php';
+		require_once $dir . 'class-doughboss-table-qr.php';
+		require_once $dir . 'class-doughboss-capacity.php';
 		require_once $dir . 'class-doughboss-post-types.php';
 		require_once $dir . 'class-doughboss-menu-seeder.php';
+		require_once $dir . 'class-doughboss-menu-options.php';
 		require_once $dir . 'class-doughboss-cart.php';
 		require_once $dir . 'class-doughboss-order.php';
 		require_once $dir . 'class-doughboss-reports.php';
 		require_once $dir . 'class-doughboss-catering-package.php';
 		require_once $dir . 'class-doughboss-catering.php';
 		require_once $dir . 'class-doughboss-stripe.php';
+		require_once $dir . 'class-doughboss-tyro.php';
+		require_once $dir . 'class-doughboss-mpgs.php';
+		require_once $dir . 'class-doughboss-payment.php';
+		require_once $dir . 'class-doughboss-payment-attempts.php';
 		require_once $dir . 'class-doughboss-pospal.php';
 		require_once $dir . 'class-doughboss-coupon-code.php';
 		require_once $dir . 'class-doughboss-voucher.php';
+		require_once $dir . 'class-doughboss-pospal-outbox.php';
 		require_once $dir . 'class-doughboss-pospal-sync.php';
 		require_once $dir . 'class-doughboss-pospal-orders.php';
 		require_once $dir . 'class-doughboss-mercure.php';
 		require_once $dir . 'class-doughboss-ntfy.php';
 		require_once $dir . 'class-doughboss-sms.php';
+		require_once $dir . 'class-doughboss-emails.php';
 		require_once $dir . 'class-doughboss-printer.php';
 		require_once $dir . 'class-doughboss-privacy.php';
 		require_once $dir . 'class-doughboss-cli.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
 		require_once $dir . 'class-doughboss-assets.php';
+		require_once $dir . 'class-doughboss-seo.php';
 
 		if ( is_admin() ) {
 			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
@@ -122,12 +132,19 @@ final class DoughBoss {
 		( new DoughBoss_Catering_Package() )->init();
 		( new DoughBoss_Shortcodes() )->init();
 		( new DoughBoss_Assets() )->init();
+		( new DoughBoss_SEO() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
 		( new DoughBoss_Privacy() )->init();
+		DoughBoss_Table_QR::init( $this->cart );
 
 		// POSPal voucher mirror (grant on claim, revoke on redeem). Static hooks;
 		// fully dormant until POSPal + a coupon-rule UID are configured.
 		DoughBoss_POSPal_Sync::init();
+
+		// Durable POSPal push outbox — the cron worker that owns retries. Must
+		// register before Orders::init() so its cron hook is bound before any
+		// enqueue schedules a sweep.
+		DoughBoss_POSPal_Outbox::init();
 
 		// POSPal order push (mirror placed online orders onto the till). Off by
 		// default; dormant until "push orders" is on AND a product map exists.
@@ -152,6 +169,7 @@ final class DoughBoss {
 		DoughBoss_Mercure::init();
 		DoughBoss_Ntfy::init();
 		DoughBoss_SMS::init();
+		DoughBoss_Emails::init();
 		DoughBoss_Printer::init();
 
 		if ( is_admin() ) {

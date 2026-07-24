@@ -5,10 +5,10 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 ## Current repo state
 
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
-- **Primary platform branch under review:** `claude/funny-goodall-gsoog4`
-- **Open platform PR:** PR #2, draft, large Phase 2 branch. Treat it as a staging/integration branch, not a production release by default.
-- **Plugin version on the platform branch:** `2.15.0` (`DOUGHBOSS_VERSION`)
-- **DB schema version on the platform branch:** `1.8.0` (`DOUGHBOSS_DB_VERSION` / `doughboss_db_version`)
+- **Primary integration branch:** `claude/doughboss-website-design-fixes-li6dqa` (PR #17; staging/integration, not a production release by default).
+- **Current release branch:** `codex/doughboss-post-v2.22.2` (draft PR #34), verified at commit `7aa0298` before the 24 July acceptance follow-up.
+- **Current code release:** plugin `2.23.3` / DB `1.16.0`. This is code-verified pending final CI; do not infer that production WordPress is running it until the live site responds and the installed version is checked.
+- **Payments:** Stripe and Tyro remain disabled until their respective test credentials, webhook recovery, reconciliation, and provider certification checks pass.
 - **Requires:** WordPress 6.0+, PHP 7.4+
 - **REST namespace:** `doughboss/v1`
 - **Text domain:** `doughboss`
@@ -26,7 +26,9 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 - Admin orders/settings.
 - Multi-shop locations and order routing.
 - Live kitchen order board / KDS.
-- Stripe payment scaffolding/integration, off by default until configured.
+- Payment abstraction (`DoughBoss_Payment`) with Stripe and Tyro Connect Pay gateways, both off by default until configured; Tyro is the pilot launch gateway (pickup-only Revesby pilot) but remains dormant until sandbox-verified and certified.
+- Stage emails module (`DoughBoss_Emails`) and customer order tracker.
+- Management oversight: Today strip, per-shop reports, paid-vs-gross.
 - Voucher/coupon system with staff scan tools.
 - POSPal integration work for POS mirroring.
 - Catering packages/enquiries/quote/deposit workflow.
@@ -34,6 +36,13 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 - Static demo/marketing site and standalone staff console assets.
 
 ## Release discipline
+
+Current consolidated release contract: plugin `2.23.3`, database schema `1.16.0`.
+
+Fresh WordPress installs are browse-only by default. The public menu remains
+available, `[doughboss_ordering_status]` displays the owner-editable Coming Soon
+copy, and checkout/payment browser code stays disabled until **Accept orders**
+is explicitly enabled after staging verification.
 
 The Phase 2 branch is intentionally broad. Stabilize it by splitting future work into small release PRs:
 
@@ -43,7 +52,7 @@ The Phase 2 branch is intentionally broad. Stabilize it by splitting future work
 4. POSPal integration.
 5. Catering workflow.
 6. Notifications, printer, SMS, Mercure/real-time.
-7. Demo/static marketing site and Snow Boss content.
+7. Demo/static marketing site and Offers & News content (Snow Boss brand retired in S1).
 
 Every release should use `RELEASE_CHECKLIST.md`.
 
@@ -66,7 +75,7 @@ Every release should use `RELEASE_CHECKLIST.md`.
 - `admin/class-doughboss-admin.php` — wp-admin screens/settings/order board/admin JS hooks.
 - `public/js/` and `public/css/` — storefront, voucher, order board, and catering front-end assets.
 - `app/` — standalone staff console assets.
-- `demo/` — static demo/marketing site and Snow Boss view.
+- `demo/` — static demo/marketing site, including the Offers & News view (ex Snow Boss; brand retired in S1, `#view-snow` id kept for deep-links).
 - `docs/` — owner/dev/product documentation, reports, proposals, PDFs, and assets.
 - `scripts/dev-check.sh` — session-safe verifier; use `--strict` in CI.
 - `.github/workflows/plugin-ci.yml` — plugin verification/build/secret-pattern workflow.
@@ -159,19 +168,18 @@ When agents disagree, choose the smallest safe release that preserves the abilit
 
 ## Current priorities
 
-1. Stabilize the Phase 2 branch with CI, release checklist, and refreshed agent memory.
-2. Split the large draft PR into smaller domain PRs.
-3. Fix remaining high-priority audit items, especially proxy-aware/atomic rate limiting.
-4. Add a minimal money-path test harness.
-5. Complete and verify Stripe on staging before claiming revenue readiness.
-6. Harden kitchen operations: chime, heartbeat, SLA timers, undo, and printer reprint.
-7. Keep demo/Snow Boss marketing pages clean without duplicating shared nav/footer logic.
+1. Build `dist/doughboss.zip` and execute `docs/UPLIFT-2-Staging-Verification-Runbook.md` on a staging WordPress.
+2. Sandbox-verify Tyro before enabling any live payment path; Tyro stays dormant until then.
+3. Execute the four UPLIFT specs in `docs/` (UPLIFT-1 storefront design port, UPLIFT-2 staging verification, UPLIFT-3 content completion, UPLIFT-4 performance/SEO) as the forward plan.
+4. Pickup-only Revesby pilot is the launch scope; delivery and other shops come later.
+5. Keep the live demo (https://edagher92-coder.github.io/DOUGHBOSSV2/) as the owner's validation surface; keep brand facts intact (Lebanese Bakery, since 2009, hello@ email, 3 shops, $4 bases, per-item lemon & chilli, no Mixed zaatar).
 
 ## Known gotchas
 
 - The current platform branch is ahead of the default/base branch and includes many off-by-default integrations. Inspect the target branch before making assumptions.
 - `includes/class-doughboss-rest-controller.php` is large. Prefer extracting new REST domains instead of adding more methods to it.
 - Demo assets and docs are useful, but plugin release safety comes first.
-- Static demo deploy workflow is separate from plugin CI.
+- Static demo deploy workflow is separate from plugin CI. Plugin CI now covers PHP/JavaScript verification, an installable zip, secret scanning and MariaDB lifecycle rehearsal.
 - Live-site deployment is not proven by repository state alone. Require explicit approval, backup, and smoke test before production.
+- PR #22's MariaDB jobs are synthetic evidence; they do not replace `docs/DoughBoss-Phase-2-Staging-Rehearsal-Runbook.md` on a recent sanitised production copy.
 - Keep this file current. A stale `CLAUDE.md` creates cascading agent errors.

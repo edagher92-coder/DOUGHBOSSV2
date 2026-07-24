@@ -24,6 +24,7 @@ define( 'OBJECT', 'OBJECT' );
 /** Recorded runtime state the smoke test inspects. */
 $GLOBALS['__db_hooks']      = array();
 $GLOBALS['__db_rest']       = array();
+$GLOBALS['__db_rest_args']  = array();
 $GLOBALS['__db_shortcodes'] = array();
 $GLOBALS['__db_posttypes']  = array();
 $GLOBALS['__db_options']    = array();
@@ -51,7 +52,11 @@ function untrailingslashit( $s ) { return rtrim( $s, '/' ); }
 /* ---- Options / transients ---- */
 function get_option( $k, $d = false ) { return $GLOBALS['__db_options'][ $k ] ?? $d; }
 function update_option( $k, $v, $a = null ) { $GLOBALS['__db_options'][ $k ] = $v; return true; }
-function add_option( $k, $v = '', $x = '', $a = null ) { $GLOBALS['__db_options'][ $k ] = $v; return true; }
+function add_option( $k, $v = '', $x = '', $a = null ) {
+	if ( array_key_exists( $k, $GLOBALS['__db_options'] ) ) { return false; }
+	$GLOBALS['__db_options'][ $k ] = $v;
+	return true;
+}
 function delete_option( $k ) { unset( $GLOBALS['__db_options'][ $k ] ); return true; }
 function get_transient( $k ) { return false; }
 function set_transient( $k, $v, $t = 0 ) { return true; }
@@ -60,18 +65,49 @@ function wp_using_ext_object_cache() { return false; }
 
 /* ---- REST ---- */
 class WP_REST_Server { const READABLE = 'GET'; const CREATABLE = 'POST'; const EDITABLE = 'POST, PUT, PATCH'; const DELETABLE = 'DELETE'; const ALLMETHODS = 'GET, POST, PUT, PATCH, DELETE'; }
-function register_rest_route( $ns, $route, $args = array(), $override = false ) { $GLOBALS['__db_rest'][] = rtrim( $ns, '/' ) . '/' . ltrim( $route, '/' ); return true; }
+function register_rest_route( $ns, $route, $args = array(), $override = false ) { $key = rtrim( $ns, '/' ) . '/' . ltrim( $route, '/' ); $GLOBALS['__db_rest'][] = $key; $GLOBALS['__db_rest_args'][ $key ] = $args; return true; }
 function rest_url( $p = '' ) { return 'http://example.test/wp-json/' . ltrim( $p, '/' ); }
 function is_wp_error( $t ) { return $t instanceof WP_Error; }
-class WP_Error { public $errors = array(); public function __construct( $c = '', $m = '', $d = null ) { if ( $c ) { $this->errors[ $c ][] = $m; } } public function get_error_message() { return ''; } public function get_error_code() { return ''; } }
-class WP_REST_Response { public $data; public $status; public function __construct( $d = null, $s = 200 ) { $this->data = $d; $this->status = $s; } public function set_status( $s ) { $this->status = $s; } }
+class WP_Error {
+	public $errors = array();
+	public $error_data = array();
+	public function __construct( $c = '', $m = '', $d = null ) {
+		if ( $c ) {
+			$this->errors[ $c ][] = $m;
+			if ( null !== $d ) { $this->error_data[ $c ] = $d; }
+		}
+	}
+	public function get_error_message( $c = '' ) {
+		$c = $c ?: $this->get_error_code();
+		return isset( $this->errors[ $c ][0] ) ? $this->errors[ $c ][0] : '';
+	}
+	public function get_error_code() { return $this->errors ? array_key_first( $this->errors ) : ''; }
+	public function get_error_data( $c = '' ) {
+		$c = $c ?: $this->get_error_code();
+		return isset( $this->error_data[ $c ] ) ? $this->error_data[ $c ] : null;
+	}
+}
+class WP_REST_Response {
+	public $data;
+	public $status;
+	public $headers = array();
+	public function __construct( $d = null, $s = 200 ) { $this->data = $d; $this->status = $s; }
+	public function set_status( $s ) { $this->status = $s; }
+	public function header( $key, $value, $replace = true ) { $this->headers[ $key ] = $value; }
+	public function get_headers() { return $this->headers; }
+}
 class WP_REST_Request implements ArrayAccess {
 	private $p = array();
-	public function __construct( $p = array() ) { $this->p = $p; }
+	private $headers = array();
+	public function __construct( $p = array(), $headers = array() ) {
+		$this->p = $p;
+		foreach ( (array) $headers as $name => $value ) { $this->headers[ strtolower( $name ) ] = $value; }
+	}
 	public function get_param( $k ) { return $this->p[ $k ] ?? null; }
 	public function get_params() { return $this->p; }
 	public function get_json_params() { return $this->p; }
-	public function get_header( $k ) { return ''; }
+	public function get_header( $k ) { return $this->headers[ strtolower( $k ) ] ?? ''; }
+	public function get_route() { return isset( $this->p['_route'] ) ? (string) $this->p['_route'] : ''; }
 	// No return types + E_DEPRECATED suppressed → works on PHP 7.4 and 8.x alike.
 	public function offsetExists( $o ) { return isset( $this->p[ $o ] ); }
 	public function offsetGet( $o ) { return $this->p[ $o ] ?? null; }
@@ -108,13 +144,43 @@ function add_shortcode( $tag, $cb ) { $GLOBALS['__db_shortcodes'][ $tag ] = $cb;
 function shortcode_atts( $defaults, $atts, $sc = '' ) { return array_merge( $defaults, (array) $atts ); }
 
 /* ---- Capabilities / users ---- */
-function current_user_can( $c ) { return true; }
+$GLOBALS['__db_caps_override'] = null;
+function current_user_can( $c ) {
+	if ( is_array( $GLOBALS['__db_caps_override'] ) ) {
+		return in_array( $c, $GLOBALS['__db_caps_override'], true );
+	}
+	return true;
+}
 function is_user_logged_in() { return false; }
 function wp_get_current_user() { return (object) array( 'ID' => 0, 'roles' => array() ); }
 function get_current_user_id() { return 0; }
-function add_role( $r, $d, $c = array() ) { return null; }
-function remove_role( $r ) {}
-function get_role( $r ) { return null; }
+
+/**
+ * Minimal WP_Role stand-in: real capability storage with has_cap()/add_cap()/
+ * remove_cap(), so plugin code that provisions roles (e.g.
+ * DoughBoss_Activator::add_capabilities()) can be exercised and asserted on,
+ * not just "didn't throw".
+ */
+class WP_Role_Stub {
+	public $name;
+	public $capabilities;
+	public function __construct( $name, $capabilities = array() ) {
+		$this->name         = $name;
+		$this->capabilities = $capabilities;
+	}
+	public function has_cap( $cap ) { return ! empty( $this->capabilities[ $cap ] ); }
+	public function add_cap( $cap, $grant = true ) { $this->capabilities[ $cap ] = $grant; }
+	public function remove_cap( $cap ) { unset( $this->capabilities[ $cap ] ); }
+}
+$GLOBALS['__db_roles'] = array();
+function add_role( $r, $d, $c = array() ) {
+	// Real WordPress no-ops (returns null) if the role already exists.
+	if ( isset( $GLOBALS['__db_roles'][ $r ] ) ) { return null; }
+	$GLOBALS['__db_roles'][ $r ] = new WP_Role_Stub( $r, $c );
+	return $GLOBALS['__db_roles'][ $r ];
+}
+function remove_role( $r ) { unset( $GLOBALS['__db_roles'][ $r ] ); }
+function get_role( $r ) { return $GLOBALS['__db_roles'][ $r ] ?? null; }
 function wp_verify_nonce( $n, $a = -1 ) { return 1; }
 function wp_create_nonce( $a = -1 ) { return 'nonce'; }
 function check_ajax_referer( ...$x ) { return true; }
@@ -134,6 +200,11 @@ function esc_html( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); }
 function esc_attr( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); }
 function esc_url( $t ) { return (string) $t; }
 function esc_url_raw( $t ) { return (string) $t; }
+function add_query_arg( $key, $value, $url ) {
+	$separator = false === strpos( (string) $url, '?' ) ? '?' : '&';
+	return (string) $url . $separator . rawurlencode( (string) $key ) . '=' . rawurlencode( (string) $value );
+}
+function wp_parse_url( $url ) { return parse_url( (string) $url ); }
 function esc_js( $t ) { return (string) $t; }
 function esc_textarea( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES ); }
 function wp_kses_post( $t ) { return (string) $t; }
@@ -163,9 +234,23 @@ function site_url( $p = '' ) { return 'http://example.test/' . ltrim( $p, '/' );
 function get_bloginfo( $k = '' ) { return 'DoughBoss Test'; }
 function wp_json_encode( $d, $o = 0, $depth = 512 ) { return json_encode( $d, $o, $depth ); }
 function wp_parse_args( $a, $d = array() ) { return array_merge( (array) $d, (array) $a ); }
+function wp_list_pluck( $list, $field, $index_key = null ) {
+	$plucked = array();
+	foreach ( (array) $list as $item ) {
+		$row = is_object( $item ) ? get_object_vars( $item ) : (array) $item;
+		if ( ! array_key_exists( $field, $row ) ) { continue; }
+		if ( null !== $index_key && isset( $row[ $index_key ] ) ) {
+			$plucked[ $row[ $index_key ] ] = $row[ $field ];
+		} else {
+			$plucked[] = $row[ $field ];
+		}
+	}
+	return $plucked;
+}
 function wp_generate_password( $len = 12, $s = true, $x = false ) { return substr( str_repeat( 'a1B2c3D4', 8 ), 0, $len ); }
 function wp_rand( $min = 0, $max = 0 ) { return $min; }
 function wp_hash( $d, $s = 'auth' ) { return md5( (string) $d ); }
+function wp_salt( $scheme = 'auth' ) { return 'doughboss-test-salt-' . $scheme; }
 function current_time( $type = 'mysql', $gmt = 0 ) { return $type === 'timestamp' ? 1750000000 : '2026-07-06 00:00:00'; }
 function wp_timezone_string() { return 'Australia/Sydney'; }
 function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, $d ); }
@@ -210,6 +295,7 @@ class DB_Stub {
 	public $insert_id = 1;
 	public $last_error = '';
 	public function get_charset_collate() { return ''; }
+	public function esc_like( $t ) { return addcslashes( (string) $t, '_%\\' ); }
 	public function prepare( $q, ...$a ) { return $q; }
 	public function query( $q ) { return 0; }
 	public function get_var( $q = null ) { return null; }

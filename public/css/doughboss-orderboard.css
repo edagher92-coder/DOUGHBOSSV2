@@ -25,6 +25,16 @@
 	--dbb-chip-delivery-ink: #7a4b00;
 	--dbb-chip-shop-bg: #e8eefc;
 	--dbb-chip-shop-ink: #213a6b;
+	--r-sm: 10px;
+	--r-md: 14px;
+	--r-lg: 18px;
+	--r-xl: 24px;
+	--r-pill: 999px;
+	--sh-1: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 14px rgba(0, 0, 0, .06);
+	--sh-2: 0 4px 10px rgba(0, 0, 0, .08), 0 16px 36px rgba(0, 0, 0, .10);
+	--ease: cubic-bezier(.32, .72, .33, 1);
+	--t-fast: 150ms;
+	--t-med: 220ms;
 	margin-right: 20px;
 }
 
@@ -119,13 +129,49 @@ body.db-alerting .db-board-bar h1::after {
 	align-items: start;
 }
 
-@media (max-width: 1100px) {
+.db-preorder-review {
+	margin: 0 0 1rem;
+	padding: 1rem;
+	border: 2px solid var(--dbb-amber);
+	border-radius: var(--r-md);
+	background: #fff8e7;
+	box-shadow: var(--sh-1);
+}
+
+.db-preorder-review > h2 { margin: 0 0 0.35rem; }
+.db-preorder-review > p { margin: 0 0 0.8rem; color: var(--dbb-ink-soft); }
+.db-preorder-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.db-preorder-card { border-top: 5px solid var(--dbb-amber); }
+
+.db-preorder-contact-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.55rem;
+	margin: 0.75rem 0;
+	padding: 0.7rem;
+	border-radius: var(--r-sm);
+	background: #fff1c7;
+	font-weight: 700;
+}
+
+.db-preorder-contact-check input { margin-top: 0.2rem; }
+.db-preorder-eta { min-height: 40px; max-width: 13rem; }
+
+/* Kitchen tablets are commonly 768-1100px wide. Keep two live queues in
+   view there; collapsing every lane to one vertical list makes a busy service
+   needlessly slow. Only phones get the single-column fallback. */
+@media (min-width: 641px) and (max-width: 1100px) {
+	.db-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
 	.db-lanes { grid-template-columns: 1fr; }
+	.db-preorder-review { padding: 0.75rem; }
 }
 
 .db-lane {
 	background: var(--dbb-lane-bg);
-	border-radius: 10px;
+	border-radius: var(--r-lg);
 	padding: 0.75rem;
 	min-height: 120px;
 }
@@ -160,10 +206,10 @@ body.db-alerting .db-board-bar h1::after {
 	background: var(--dbb-paper);
 	border: 1px solid var(--dbb-line);
 	border-left: 6px solid var(--dbb-blue);
-	border-radius: 8px;
+	border-radius: var(--r-md);
 	padding: 0.75rem;
 	margin-bottom: 0.75rem;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+	box-shadow: var(--sh-1);
 }
 
 .db-card-pending { border-left-color: var(--dbb-red); }
@@ -203,6 +249,23 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-type-delivery { background: var(--dbb-chip-delivery-bg); color: var(--dbb-chip-delivery-ink); }
 
+.db-type-dine_in {
+	background: #fff0c2;
+	color: #6d4a00;
+}
+
+.db-card-table {
+	padding: 0.2rem 0.5rem;
+	border: 2px solid #5d3600;
+	border-radius: 4px;
+	background: #ffda62;
+	color: #2d1a00;
+	font-size: 0.78rem;
+	font-weight: 900;
+	letter-spacing: 0.06em;
+	line-height: 1;
+}
+
 .db-card-shop {
 	font-size: 0.7rem;
 	text-transform: uppercase;
@@ -211,6 +274,17 @@ body.db-alerting .db-board-bar h1::after {
 	border-radius: 4px;
 	background: var(--dbb-chip-shop-bg);
 	color: var(--dbb-chip-shop-ink);
+}
+
+.db-card-source {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+	background: #f2e9ff;
+	color: #542a7a;
+	font-weight: 700;
 }
 
 .db-shop-select { min-height: 40px; }
@@ -239,15 +313,154 @@ body.db-alerting .db-board-bar h1::after {
 	border-radius: 6px;
 }
 
-.db-card-item { padding: 0.15rem 0; }
-.db-card-item-name { font-weight: 600; }
+.db-card-item {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 0.5rem;
+	padding: 0.3rem 0;
+	border-bottom: 1px solid #ececec;
+}
+.db-card-item:last-child { border-bottom: 0; }
+.db-card-item-quantity {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: start;
+	min-width: 2rem;
+	min-height: 1.6rem;
+	padding: 0 0.35rem;
+	border-radius: 999px;
+	background: var(--dbb-ink);
+	color: var(--dbb-paper);
+	font-size: 0.78rem;
+	font-weight: 800;
+}
+.db-card-item-body { min-width: 0; }
+.db-card-item-name { display: block; font-weight: 700; }
+.db-card-item-size,
 .db-card-item-toppings { display: block; font-size: 0.8rem; color: var(--dbb-muted); }
+.db-card-item-toppings { color: #743d00; font-weight: 600; }
 
 .db-card-meta { font-size: 0.85rem; color: var(--dbb-ink-soft); margin-bottom: 0.5rem; }
 .db-card-meta > div { margin: 0.15rem 0; }
 .db-card-total { font-weight: 700; color: var(--dbb-ink); }
 .db-card-eta { color: var(--dbb-green); font-weight: 600; }
+.db-card-payment { font-weight: 700; }
+.db-payment-paid { color: var(--dbb-green-dark); }
+.db-payment-unpaid { color: var(--dbb-amber); }
+.db-payment-refunded { color: var(--dbb-danger); }
+.db-card-exception {
+	border-left: 4px solid var(--dbb-danger);
+	background: #fff0f0;
+	color: #7b1718;
+	padding: 0.4rem 0.55rem;
+	border-radius: 4px;
+	font-weight: 800;
+}
+.db-card-timing-passed {
+	border: 2px solid var(--dbb-danger);
+	border-radius: 4px;
+	padding: 0.35rem 0.5rem;
+	color: var(--dbb-danger);
+	font-weight: 700;
+}
 .db-card-addr { color: var(--dbb-chip-delivery-ink); }
+
+/* --- SLA aging --------------------------------------------------------- */
+
+/* Accepted orders still in progress: amber at 5 min, red at 10 min.
+   Colour-only cues — no animation — so they hold under reduced motion. */
+.db-card.db-age-warn {
+	border-left-color: var(--dbb-amber);
+}
+
+.db-card.db-age-warn .db-card-head {
+	background: rgba(180, 83, 9, 0.12);
+	border-radius: 6px;
+	padding: 0.15rem 0.35rem;
+}
+
+.db-card.db-age-late {
+	border-left-color: var(--dbb-danger);
+	border-left-width: 8px;
+}
+
+.db-card.db-age-late .db-card-head {
+	background: rgba(179, 45, 46, 0.16);
+	border-radius: 6px;
+	padding: 0.15rem 0.35rem;
+}
+
+.db-card-due { color: var(--dbb-green); font-weight: 600; }
+.db-card-due-over { color: var(--dbb-danger); font-weight: 700; }
+
+/* --- Heartbeat badge ---------------------------------------------------- */
+
+.db-heartbeat {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-left: 0.5rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.db-heartbeat-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.db-heartbeat-live { color: var(--dbb-green); }
+.db-heartbeat-polling { color: var(--dbb-amber); }
+.db-heartbeat-offline { color: var(--dbb-danger); }
+
+.db-board-retry {
+	min-height: 40px;
+	border-color: var(--dbb-danger);
+	color: var(--dbb-danger);
+	font-weight: 800;
+}
+
+/* A stale board must remain readable, but it must not look operable. */
+.db-board-offline .db-card { opacity: 0.72; }
+.db-board-offline .db-card-actions .button:disabled,
+.db-board-offline .db-banner .button:disabled {
+	cursor: not-allowed;
+	filter: grayscale(1);
+	opacity: 0.68;
+}
+
+/* --- All-day strip ------------------------------------------------------ */
+
+.db-allday {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem 0.75rem;
+	background: var(--dbb-paper);
+	border: 1px solid var(--dbb-line);
+	border-radius: var(--r-md);
+	padding: 0.45rem 0.75rem;
+	margin-bottom: 0.75rem;
+	font-size: 0.95rem;
+}
+
+.db-allday-label {
+	color: var(--dbb-muted);
+	font-size: 0.8rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	font-weight: 700;
+}
+
+.db-allday-item { font-weight: 600; color: var(--dbb-ink); }
+.db-allday-item + .db-allday-item::before {
+	content: "· ";
+	color: var(--dbb-muted-2);
+	font-weight: 400;
+}
 
 /* --- Actions --------------------------------------------------------- */
 
@@ -267,10 +480,54 @@ body.db-alerting .db-board-bar h1::after {
 	font-size: 0.95rem;
 	display: inline-flex;
 	align-items: center;
+	border-radius: var(--r-sm);
+	transition: transform var(--t-fast) var(--ease);
+}
+
+.db-card-actions .button:active {
+	transform: scale(.98);
 }
 
 .db-eta { min-width: 52px; justify-content: center; }
 .db-cancel { color: var(--dbb-danger); margin-left: auto; }
+.db-review-change { margin-left: auto; }
+.db-no-next-action { margin: 0 0 0.4rem; color: var(--dbb-muted); font-size: 0.85rem; }
+.db-card-busy { opacity: 0.72; }
+.db-card-busy::after {
+	content: "Updating...";
+	display: block;
+	margin-top: 0.45rem;
+	color: var(--dbb-blue);
+	font-size: 0.82rem;
+	font-weight: 800;
+}
+
+/* A review surface, rather than an unsafe in-place order editor. The KDS has
+   no authority to reprice paid orders or issue refunds; that remains a manager
+   workflow. */
+.db-amendment-panel {
+	background: #fffdf8;
+	border: 2px solid #c87d00;
+	border-radius: var(--r-lg);
+	box-shadow: var(--sh-2);
+	padding: 1rem;
+	margin: 0 0 1rem;
+	max-width: 860px;
+}
+.db-amendment-panel:focus { outline: 3px solid var(--dbb-blue); outline-offset: 2px; }
+.db-amendment-head,
+.db-amendment-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.db-amendment-head h2 { margin: 0; font-size: 1.15rem; }
+.db-amendment-context { color: var(--dbb-muted); font-weight: 700; }
+.db-amendment-items { margin: 0.5rem 0; padding: 0.55rem; background: var(--dbb-paper); border-radius: var(--r-sm); }
+.db-amendment-boundary { margin: 0.75rem 0; padding: 0.7rem; background: #fff0c2; border-radius: var(--r-sm); color: #5d3600; font-weight: 600; }
+.db-amendment-feedback { min-height: 1.2rem; margin: 0.75rem 0 0; color: var(--dbb-green-dark); font-weight: 700; }
 
 /* Visible keyboard focus for accessibility. */
 .doughboss-board-wrap .button:focus-visible {
@@ -289,4 +546,20 @@ body.db-alerting .db-board-bar h1::after {
 		animation: none;
 		box-shadow: 0 0 0 3px rgba(214, 69, 43, 0.35);
 	}
+
+	.db-card-actions .button {
+		transition: none;
+	}
+
+	.db-card-actions .button:active {
+		transform: none;
+	}
+}
+
+@media (max-width: 600px) {
+	.doughboss-board-wrap { margin-right: 0; }
+	.db-board-actions { width: 100%; }
+	.db-card-time { margin-left: 0; }
+	.db-review-change { margin-left: 0; }
+	.db-amendment-panel { padding: 0.75rem; }
 }

@@ -60,6 +60,24 @@ class DoughBoss_Cart {
 	}
 
 	/**
+	 * Start a clean cart for a newly scanned table QR.
+	 *
+	 * Prevents items selected for pickup or another table leaking into this
+	 * table-bound order. Returns the new token for server-side session binding.
+	 *
+	 * @return string
+	 */
+	public function begin_table_session() {
+		if ( null !== $this->token ) {
+			delete_transient( self::PREFIX . $this->token );
+			delete_transient( self::VOUCHER_PREFIX . $this->token );
+		}
+		$this->token = wp_generate_password( 32, false, false );
+		$this->set_cookie( $this->token );
+		return $this->token;
+	}
+
+	/**
 	 * Send the cart cookie. Safe to call before output in a REST callback.
 	 *
 	 * @param string $token Cart token.
