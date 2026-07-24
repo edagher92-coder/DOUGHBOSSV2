@@ -1,7 +1,7 @@
 # DoughBoss Customer Notifications and Tracking Handoff
 
 Date: 24 July 2026  
-Release: plugin `2.23.2`, database `1.16.0`  
+Release: plugin `2.23.3`, database `1.16.0`
 Scope: code-ready and acceptance-ready; not proof of the installed production WordPress version.
 
 ## Decision
@@ -107,7 +107,7 @@ If the board says Offline, staff must stop acting on stale cards, retry once, th
 
 Code tests cannot prove any of the following:
 
-- the production WordPress plugin is installed at `2.23.2`;
+- the production WordPress plugin is installed at `2.23.3`;
 - Revesby `ordering_open` is intentionally enabled;
 - production hours, menu, sold-out state and pickup settings are correct;
 - authenticated mail reaches real inboxes;

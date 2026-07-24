@@ -67,6 +67,7 @@ a{text-decoration:none;color:inherit;}
 .hero[data-scroll-scene]{--scene-y:0px;--scene-scale:1.055;}
 .hero[data-scroll-scene] .hero-bg{inset:-5%;transform:translate3d(0,var(--scene-y),0) scale(var(--scene-scale));transform-origin:55% 50%;transition:transform 90ms linear;will-change:transform;}
 .hero-manoush .hero-bg{background-position:58% center;filter:saturate(1.01) contrast(1.05) brightness(.83);}
+.hero-menu-motion .hero-bg{background-position:52% center;filter:saturate(.94) contrast(1.07) brightness(.66);}
 .hero-catering-bites .hero-bg{background-position:60% center;filter:saturate(.82) contrast(1.08) brightness(.52);}
 .grain::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;opacity:.07;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
 .hero-main{position:relative;z-index:2;flex:1;display:flex;align-items:center;}
@@ -83,6 +84,7 @@ a{text-decoration:none;color:inherit;}
 .hero-replay{appearance:none;border:0;border-bottom:1px solid rgba(247,245,240,.42);padding:3px 0;background:transparent;color:#f7f5f0;cursor:pointer;transition:border-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .hero-replay:hover,.hero-replay:focus-visible{color:var(--ember2);border-color:var(--ember2);}
 .hero-replay:focus-visible{outline:2px solid var(--ember2);outline-offset:5px;border-color:transparent;}
+.hero-motion-reduced{display:none;font-size:12px;font-weight:700;letter-spacing:.04em;color:#f7cf93;}
 @keyframes db-live-pulse{0%,100%{transform:scale(.92);opacity:.72;}50%{transform:scale(1.12);opacity:1;}}
 .rating{display:flex;align-items:center;gap:10px;margin-top:22px;color:#e8e3da;font-size:15px;}
 .stars{display:inline-flex;gap:2px;color:var(--ember2);font-size:17px;}
@@ -112,13 +114,16 @@ a{text-decoration:none;color:inherit;}
 /* Reusable full-manoush / catering-bites assembly states. `is-exploded` is
  * deliberately brief and quiet: it gives food a sense of craft without making
  * a customer wait for, or need to understand, an animation. */
-.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{position:absolute;z-index:2;left:50%;top:50%;width:clamp(126px,19vw,238px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.86);box-shadow:0 22px 48px rgba(0,0,0,.44);backface-visibility:hidden;opacity:0;transform:translate3d(-50%,-50%,-140px) rotateX(58deg) rotateZ(-8deg) scale(.62);transform-style:preserve-3d;transition:opacity 380ms ease,transform 1000ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
-.ingredient-burst[data-manoush-stage] .ingredient{z-index:1;left:50%;top:50%;right:auto;bottom:auto;margin:0;animation:none;backface-visibility:hidden;opacity:0;transform:translate3d(-50%,-50%,-180px) rotateX(72deg) scale(.58);transform-style:preserve-3d;transition:opacity 300ms ease,transform 920ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{position:absolute;z-index:2;left:50%;top:50%;width:clamp(126px,19vw,238px);aspect-ratio:1;object-fit:cover;border-radius:50%;border:4px solid rgba(247,245,240,.86);box-shadow:0 22px 48px rgba(0,0,0,.44);backface-visibility:hidden;opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(51deg) rotateZ(-5deg) scale(1);transform-style:preserve-3d;transition:opacity 380ms ease,transform 1000ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage] .ingredient{z-index:1;left:50%;top:50%;right:auto;bottom:auto;margin:0;animation:none;backface-visibility:hidden;opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(48deg) rotateZ(var(--near-r)) scale(1);transform-style:preserve-3d;transition:opacity 300ms ease,transform 920ms cubic-bezier(.2,.88,.2,1);will-change:opacity,transform;}
 .ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-128px;--scatter-y:-84px;--scatter-z:230px;--scatter-r:-20deg;--scatter-rx:68deg;--scatter-ry:-18deg;--near-x:-102px;--near-y:-61px;--near-z:42px;--near-r:-9deg;}
 .ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:145px;--scatter-y:-50px;--scatter-z:285px;--scatter-r:18deg;--scatter-rx:74deg;--scatter-ry:22deg;--near-x:108px;--near-y:-47px;--near-z:62px;--near-r:8deg;}
 .ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-92px;--scatter-y:125px;--scatter-z:205px;--scatter-r:-13deg;--scatter-rx:64deg;--scatter-ry:-20deg;--near-x:-82px;--near-y:88px;--near-z:48px;--near-r:-6deg;}
 .ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:124px;--scatter-y:104px;--scatter-z:260px;--scatter-r:16deg;--scatter-rx:70deg;--scatter-ry:19deg;--near-x:90px;--near-y:80px;--near-z:58px;--near-r:7deg;}
-.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{z-index:3;opacity:0;transition:opacity 280ms ease 430ms,transform 900ms cubic-bezier(.2,.88,.2,1);transform:translate3d(-50%,-50%,-100px) rotateX(62deg) rotateZ(-9deg) scale(.7);transform-style:preserve-3d;will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{z-index:3;opacity:1;transition:opacity 280ms ease 430ms,transform 900ms cubic-bezier(.2,.88,.2,1);transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);transform-style:preserve-3d;will-change:opacity,transform;}
+.ingredient-burst[data-manoush-stage].is-resetting .ingredient-burst__manoush{opacity:0;transform:translate3d(-50%,-50%,-140px) rotateX(58deg) rotateZ(-8deg) scale(.62);}
+.ingredient-burst[data-manoush-stage].is-resetting .ingredient{opacity:0;transform:translate3d(-50%,-50%,-180px) rotateX(72deg) scale(.58);}
+.ingredient-burst[data-manoush-stage].is-resetting .ingredient-burst__stamp{opacity:0;transform:translate3d(-50%,-50%,-100px) rotateX(62deg) rotateZ(-9deg) scale(.7);}
 .ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__manoush{opacity:.7;transform:translate3d(-50%,calc(-50% + 14px),-95px) rotateX(64deg) rotateY(-8deg) rotateZ(6deg) scale(.86);}
 .ingredient-burst[data-manoush-stage].is-exploded .ingredient{opacity:1;transform:translate3d(calc(-50% + var(--scatter-x)),calc(-50% + var(--scatter-y)),var(--scatter-z)) rotateX(var(--scatter-rx)) rotateY(var(--scatter-ry)) rotateZ(var(--scatter-r)) scale(1.08);}
 .ingredient-burst[data-manoush-stage].is-exploded .ingredient-burst__stamp{opacity:.94;transform:translate3d(-50%,-50%,170px) rotateX(48deg) rotateY(-10deg) rotateZ(7deg) scale(1.06);}
@@ -138,8 +143,19 @@ a{text-decoration:none;color:inherit;}
 .ingredient-burst--bites .ingredient--cheese{--scatter-x:148px;--scatter-y:-92px;--near-x:94px;--near-y:-62px;}
 .ingredient-burst--bites .ingredient--meat{--scatter-x:-128px;--scatter-y:142px;--near-x:-84px;--near-y:88px;}
 .ingredient-burst--bites .ingredient--spinach{--scatter-x:136px;--scatter-y:128px;--near-x:88px;--near-y:82px;}
+.hero-manoush .hero-main .wrap,.hero-menu-motion .hero-main .wrap{width:100%;padding-right:clamp(310px,39vw,510px);}
+.hero-menu-motion .ingredient-burst{right:clamp(-1vw,2vw,3vw);width:min(36vw,480px);}
 .hero-catering-bites .ingredient-burst{right:-1vw;width:min(34vw,470px);}
 @media(max-width:800px){.ingredient-burst[data-manoush-stage] .ingredient--zaatar{--scatter-x:-80px;--scatter-y:-64px;--near-x:-65px;--near-y:-42px;}.ingredient-burst[data-manoush-stage] .ingredient--cheese{--scatter-x:80px;--scatter-y:-52px;--near-x:64px;--near-y:-36px;}.ingredient-burst[data-manoush-stage] .ingredient--meat{--scatter-x:-62px;--scatter-y:76px;--near-x:-48px;--near-y:60px;}.ingredient-burst[data-manoush-stage] .ingredient--spinach{--scatter-x:68px;--scatter-y:66px;--near-x:50px;--near-y:53px;}}
+@media(max-width:800px){
+	.hero-menu-motion,.hero-manoush{min-height:760px;}
+	.hero-menu-motion .hero-main,.hero-manoush .hero-main{align-items:flex-start;}
+	.hero-menu-motion .hero-main .wrap,.hero-manoush .hero-main .wrap{padding-right:24px;padding-bottom:330px;}
+	.hero-menu-motion .ingredient-burst,.hero-manoush .ingredient-burst{left:50%;right:auto;top:auto;width:min(78vw,350px);transform:translateX(-50%);}
+	.hero-menu-motion .ingredient-burst{bottom:18px;}
+	.hero-manoush .ingredient-burst{bottom:108px;}
+	.hero-menu-motion .ingredient-burst.is-assembled,.hero-manoush .ingredient-burst.is-assembled{animation:none;}
+}
 @media(prefers-reduced-motion:reduce){.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(51deg) rotateZ(-5deg) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(48deg) rotateZ(var(--near-r)) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);transition:none;}}
 
 /* Content enters as the customer reaches it. The page remains fully visible if
@@ -152,7 +168,7 @@ a{text-decoration:none;color:inherit;}
 .motion-ready .db-reveal-group.is-visible>*:nth-child(3){transition-delay:180ms;}
 @keyframes db-stage-breathe-mobile{from{transform:translateY(0) rotateX(3deg) rotateY(-4deg);}to{transform:translateY(-5px) rotateX(4.5deg) rotateY(-1deg);}}
 @media(max-width:560px){.hero-live-row{margin-top:17px;gap:11px 15px;}.hero-live,.hero-replay{font-size:11px;}.hero-replay{min-height:44px;}.hero[data-scroll-scene] .hero-bg{inset:-3%;}.hero-manoush .hero-bg{background-position:64% center;}.hero-catering-bites{justify-content:flex-start;padding-bottom:8px;}.hero-catering-bites .hero-main{flex:0 0 auto;order:1;}.hero-catering-bites .ingredient-burst{margin:-18px auto 6px;opacity:.9;order:2;position:relative;right:auto;top:auto;transform:none;width:min(76vw,300px);}.hero-catering-bites .ingredient-burst.is-assembled{animation:db-stage-breathe-mobile 8s ease-in-out infinite alternate;}.ingredient-burst--bites .ingredient-burst__manoush{width:min(64vw,250px);}.ingredient-burst--bites .ingredient{width:min(30vw,116px);}.ingredient-burst--bites .ingredient--meat{width:min(39vw,150px);}.ingredient-burst--bites .ingredient-burst__stamp{width:78px;font-size:13px;}}
-@media(prefers-reduced-motion:reduce){.hero[data-scroll-scene] .hero-bg{inset:0;transform:none!important;transition:none;will-change:auto;}.hero-replay{display:none;}.hero-live__dot,.ingredient-burst[data-manoush-stage].is-assembled,.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:none!important;}.motion-ready .db-reveal,.motion-ready .db-reveal-group>*{opacity:1;transform:none;transition:none;}}
+@media(prefers-reduced-motion:reduce){.hero[data-scroll-scene] .hero-bg{inset:0;transform:none!important;transition:none;will-change:auto;}.hero-replay{display:none;}.hero-motion-reduced{display:inline-flex;}.hero-live__dot,.ingredient-burst[data-manoush-stage].is-assembled,.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:none!important;}.motion-ready .db-reveal,.motion-ready .db-reveal-group>*{opacity:1;transform:none;transition:none;}}
 
 /* dual engine */
 .dual{display:grid;grid-template-columns:1fr 1fr;}

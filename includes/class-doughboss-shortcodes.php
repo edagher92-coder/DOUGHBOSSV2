@@ -101,6 +101,7 @@ class DoughBoss_Shortcodes {
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
 				<p><?php echo esc_html( $atts['description'] ); ?></p>
 				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php echo esc_html( $atts['replay_label'] ); ?></button>
+				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'Animation paused by your device motion setting.', 'doughboss' ); ?></span>
 			</div>
 			<div class="db-mh-stage" aria-hidden="true">
 				<div class="db-mh-world">

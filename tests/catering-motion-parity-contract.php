@@ -56,10 +56,39 @@ catering_parity_ok( catering_parity_has_all( $wp, $catering_assets ), 'WordPress
 catering_parity_ok( catering_parity_has_all( $demo, $menu_varieties ), 'demo catering copy names the actual mini-manoush and pie varieties' );
 catering_parity_ok( catering_parity_has_all( $wp, $menu_varieties ), 'WordPress catering copy names the actual mini-manoush and pie varieties' );
 catering_parity_ok( false !== strpos( $demo, 'data-manoush-replay="bites"' ) && false !== strpos( $demo_js, "button.setAttribute('aria-pressed', 'true')" ), 'demo provides an accessible Bites replay control' );
+catering_parity_ok(
+	false !== strpos( $demo, 'data-manoush-variant="full"' )
+		&& false !== strpos( $demo, 'data-manoush-variant="menu"' )
+		&& false !== strpos( $demo, 'data-manoush-replay="full"' )
+		&& false !== strpos( $demo, 'data-manoush-replay="menu"' )
+		&& false !== strpos( $demo_js, "if (view === 'menu') { return 'menu'; }" ),
+	'homepage and menu both contain replayable, route-bound food build stages'
+);
 catering_parity_ok( false !== strpos( $wp, 'data-db-manoush-replay' ) && false !== strpos( $wp_js, "replay.addEventListener('click'" ), 'WordPress provides an accessible replay control' );
 catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce)' ) && false !== strpos( $demo_css, '.hero-replay{display:none;}' ) && false !== strpos( $demo_js, "stage.classList.add('is-assembled')" ), 'demo has reduced-motion still-state and hides replay' );
 catering_parity_ok( false !== strpos( $wp_css, '@media (prefers-reduced-motion:reduce)' ) && false !== strpos( $wp_css, '.db-mh-replay { display: none; }' ) && false !== strpos( $wp_js, "hero.classList.add('is-assembled')" ), 'WordPress has reduced-motion still-state and hides replay' );
+catering_parity_ok(
+	false !== strpos( $demo, 'Animation paused by your device motion setting.' )
+		&& false !== strpos( $demo_css, '.hero-motion-reduced{display:inline-flex;}' )
+		&& false !== strpos( $wp, 'Animation paused by your device motion setting.' )
+		&& false !== strpos( $wp_css, '.db-mh-motion-note { display: block; }' ),
+	'demo and WordPress explain when Chrome follows a reduced-motion device setting'
+);
+catering_parity_ok(
+	false !== strpos( $demo_js, "stage.classList.add('is-resetting')" )
+		&& false !== strpos( $demo_css, '.is-resetting .ingredient-burst__manoush' )
+		&& false !== strpos( $wp_js, "hero.classList.add('is-resetting')" )
+		&& false !== strpos( $wp_css, '.db-manoush-hero.is-resetting .db-mh-central' ),
+	'demo and WordPress use a painted reset state so initial and replay animations cannot be coalesced'
+);
 catering_parity_ok( false !== strpos( $demo_css, '@media(max-width:560px)' ) && false !== strpos( $demo_css, '.hero-catering-bites .ingredient-burst{') && false === strpos( $demo_css, '.hero-catering-bites .ingredient-burst{display:none' ), 'demo keeps the catering composition visible on mobile' );
+catering_parity_ok(
+	false !== strpos( $demo_css, '.hero-menu-motion .ingredient-burst' )
+		&& false !== strpos( $demo_css, '.hero-manoush .ingredient-burst' )
+		&& false === strpos( $demo_css, '.hero-menu-motion .ingredient-burst{display:none' )
+		&& false === strpos( $demo_css, '.hero-manoush .ingredient-burst{display:none' ),
+	'homepage and menu food stages remain visible on mobile'
+);
 catering_parity_ok( false !== strpos( $wp_css, '@media (max-width:720px)' ) && false !== strpos( $wp_css, '.db-mh-stage,.db-mh-world { min-height: 285px; }' ) && false === strpos( $wp_css, '.db-mh-stage { display: none' ), 'WordPress keeps the composition visible on mobile' );
 catering_parity_ok( false === strpos( $demo_js, "classList.toggle('is-exploded'") && false === strpos( $demo_js, "classList.toggle('is-assembled'") && false === strpos( $demo_js, 'direction = currentY' ), 'demo scroll handler does not toggle assembly states' );
 catering_parity_ok( false === strpos( $wp_js, "classList.toggle('is-exploded'") && false === strpos( $wp_js, "classList.toggle('is-assembled'") && false === strpos( $wp_js, 'direction = currentY' ), 'WordPress scroll handler does not toggle assembly states' );

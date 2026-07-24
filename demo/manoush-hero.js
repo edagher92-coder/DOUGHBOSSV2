@@ -16,15 +16,18 @@
 	function playReady(stage) {
 		clearStageTimer(stage);
 		if (reduce) {
+			stage.classList.remove('is-resetting');
 			stage.classList.add('is-assembled');
 			stage.classList.remove('is-exploded');
 			return;
 		}
 		stage.classList.remove('is-exploded');
 		stage.classList.remove('is-assembled');
+		stage.classList.add('is-resetting');
 		void stage.offsetWidth;
 		window.requestAnimationFrame(function () {
 			window.requestAnimationFrame(function () {
+				stage.classList.remove('is-resetting');
 				stage.classList.add('is-exploded');
 				stage._dbManoushTimer = window.setTimeout(function () {
 					stage.classList.remove('is-exploded');
@@ -63,6 +66,7 @@
 
 	function stageForView(view) {
 		if (view === 'about') { return 'full'; }
+		if (view === 'menu') { return 'menu'; }
 		if (view === 'catering') { return 'bites'; }
 		return '';
 	}
