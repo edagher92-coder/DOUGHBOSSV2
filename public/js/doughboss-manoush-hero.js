@@ -6,13 +6,16 @@
 
 	function play(hero) {
 		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); }
-		if (reduceMotion) { hero.classList.remove('is-exploded'); hero.classList.add('is-assembled'); return; }
+		if (reduceMotion) { hero.classList.remove('is-resetting'); hero.classList.remove('is-exploded'); hero.classList.add('is-assembled'); return; }
+		hero.classList.remove('is-exploded');
 		hero.classList.remove('is-assembled');
+		hero.classList.add('is-resetting');
 		// Force a paint boundary before re-applying the exploded state. Without
 		// this, a rapid replay can be coalesced by the browser into no animation.
 		void hero.offsetWidth;
 		window.requestAnimationFrame(function () {
 			window.requestAnimationFrame(function () {
+				hero.classList.remove('is-resetting');
 				hero.classList.add('is-exploded');
 				hero._dbManoushTimer = window.setTimeout(function () {
 					hero.classList.remove('is-exploded');

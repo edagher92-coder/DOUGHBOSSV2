@@ -26,7 +26,7 @@
 	<link rel="canonical" href="https://edagher92-coder.github.io/DOUGHBOSSV2/">
 	<link rel="icon" href="assets/logo.png" type="image/png">
 	<link rel="preload" as="image" href="assets/scene/doughboss-hero-premium-v1.webp" type="image/webp" fetchpriority="high">
-	<link rel="stylesheet" href="demo.css?v=20260723v31">
+	<link rel="stylesheet" href="demo.css?v=20260724v32">
 	<style>
 	.skip{position:absolute;top:-999px;left:12px;background:var(--ember);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 	.skip:focus{top:0;}
@@ -61,8 +61,16 @@
 
 <!-- ============ MENU (default order view; About is the landing) ============ -->
 <section class="view" id="view-menu">
-	<section class="hero compact grain">
+	<section class="hero compact hero-menu-motion grain" data-scroll-scene>
 		<div class="hero-bg" style="background-image:url('assets/banners/zaatar-w-jebneh-768x432.jpg');"></div>
+		<div class="ingredient-burst ingredient-burst--bites" data-manoush-stage data-manoush-variant="menu" aria-hidden="true">
+			<div class="ingredient-burst__glow"></div>
+			<img class="ingredient-burst__manoush" src="assets/scene/catering-menu-platter-v3.webp" alt="" width="900" height="716" loading="eager" decoding="async" fetchpriority="high">
+			<img class="ingredient ingredient--zaatar" src="assets/scene/catering-zaatar-cutout-v2.webp" alt="" width="494" height="413" loading="eager" decoding="async">
+			<img class="ingredient ingredient--cheese" src="assets/scene/catering-cheese-cutout-v2.webp" alt="" width="456" height="309" loading="eager" decoding="async">
+			<img class="ingredient ingredient--meat" src="assets/scene/catering-pies-v3.webp" alt="" width="720" height="563" loading="eager" decoding="async">
+			<img class="ingredient ingredient--spinach" src="assets/scene/catering-fresh-cutout-v2.webp" alt="" width="436" height="303" loading="eager" decoding="async">
+		</div>
 		<div class="hero-main"><div class="wrap">
 			<p class="eyebrow">The menu</p>
 			<h1 class="disp">Fresh from the<br><em>stone oven.</em></h1>
@@ -71,6 +79,10 @@
 				<button type="button" class="btn btn-ember" data-cat="cat-manoush">Start your order
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
 				<a class="btn btn-light" href="#catering">Contact us for catering</a>
+			</div>
+			<div class="hero-live-row">
+				<button class="hero-replay" type="button" data-manoush-replay="menu" aria-label="Replay the menu platter animation">Replay the food build</button>
+				<span class="hero-motion-reduced" role="status">Animation paused by your device motion setting.</span>
 			</div>
 		</div></div>
 	</section>
@@ -176,6 +188,15 @@
 <section class="view" id="view-about">
 	<section class="hero hero-manoush grain" data-scroll-scene>
 		<div class="hero-bg" style="background-image:url('assets/scene/doughboss-hero-premium-v1.webp');"></div>
+		<div class="ingredient-burst" data-manoush-stage data-manoush-variant="full" aria-hidden="true">
+			<div class="ingredient-burst__glow"></div>
+			<img class="ingredient-burst__manoush" src="assets/menu/zaatar-cheese.jpg" alt="" width="720" height="720" loading="eager" decoding="async" fetchpriority="high">
+			<img class="ingredient ingredient--zaatar" src="assets/menu/zaatar.jpg" alt="" width="720" height="720" loading="eager" decoding="async">
+			<img class="ingredient ingredient--cheese" src="assets/menu/cheese.jpg" alt="" width="720" height="720" loading="eager" decoding="async">
+			<img class="ingredient ingredient--meat" src="assets/menu/meat.jpg" alt="" width="720" height="720" loading="eager" decoding="async">
+			<img class="ingredient ingredient--spinach" src="assets/menu/spinach-cheese-pie.jpg" alt="" width="720" height="720" loading="eager" decoding="async">
+			<span class="ingredient-burst__stamp">Fresh<br>to order</span>
+		</div>
 		<div class="hero-main"><div class="wrap">
 			<p class="eyebrow">In the industry since 2009</p>
 			<h1 class="disp">A taste of the<br><em>Mediterranean.</em></h1>
@@ -187,6 +208,8 @@
 			</div>
 			<div class="hero-live-row">
 				<span class="hero-live" data-store-status role="status"><span class="hero-live__dot" aria-hidden="true"></span><span data-store-status-text>Revesby online pickup &middot; three shops baking daily</span></span>
+				<button class="hero-replay" type="button" data-manoush-replay="full" aria-label="Replay the manoush ingredient animation">Replay the food build</button>
+				<span class="hero-motion-reduced" role="status">Animation paused by your device motion setting.</span>
 			</div>
 		</div></div>
 		<div class="hero-foot"><div class="wrap">
@@ -265,6 +288,7 @@
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 7.68"/><path d="M20 3v4.68h-4.68"/></svg>
 					See the spread come together
 				</button>
+				<span class="hero-motion-reduced" role="status">Animation paused by your device motion setting.</span>
 			</div>
 		</div></div>
 	</section>
@@ -463,7 +487,7 @@
 <script>window.DoughBossMarketingConfig={enabled:false,metaPixelId:"",tiktokPixelId:"",consentVersion:"2026-07",initialConsent:{measurement:false,advertising:false,version:"2026-07"}};</script>
 <script src="marketing.js?v=20260723v1"></script>
 <script src="menu-order.js?v=20260723v29"></script>
-<script src="manoush-hero.js?v=20260723v4"></script>
+<script src="manoush-hero.js?v=20260724v5"></script>
 <!-- catering-demo.js + snowboss.js removed with the S1 rebrand (catering is
      contact-only until the online quote flow ships; Snow Boss falling-snow
      effect belonged to the retired dual-brand section). -->

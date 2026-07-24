@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.23.2
+Stable tag: 2.23.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,12 @@ include merchant credentials or make a shop payment-ready.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.23.3 =
+* Restore visible replayable food-build animation to the demo homepage and Menu view.
+* Add a static assembled fallback so food artwork remains visible if JavaScript is delayed or unavailable.
+* Strengthen animation replay paint boundaries in both the demo and WordPress hero.
+* Bump demo and WordPress asset versions to prevent stale browser caches.
 
 = 2.23.2 =
 * Add configurable first-party Track My Order links to confirmation, accepted and ready emails.
