@@ -5,6 +5,11 @@
 	'use strict';
 	var menuView = document.getElementById('view-menu');
 	if (!menuView) { return; }
+	var CFG = window.DBDemo.config;
+	var GOOGLE_REVIEW_URL = 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+12+25+Selems+Parade+Revesby+NSW+2212';
+	var DEFAULT_LOCATION = window.DBDemo.getLocation(CFG.defaultLocationId);
+	document.documentElement.lang = CFG.region.language;
+	document.documentElement.dir = CFG.region.direction;
 	var cart = {};       // lineKey -> { key, name, catId, basePrice, price, opts, summary, qty, seq }
 	var controls = {};   // item name -> { el, name, price, catId, groups, lastSel }
 	var seq = 0;         // insertion counter so the tile "−" targets the newest line
@@ -14,12 +19,17 @@
 	var pendingOrder = null; // { name, phone } held during the simulated card-payment step
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-	function money(n) { return '$' + Number(n).toFixed(2); }
+	function money(n) { return window.DBDemo.formatMoney(n); }
 	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 	function count() { var c = 0; for (var k in cart) { c += cart[k].qty; } return c; }
 	function total() { var t = 0; for (var k in cart) { t += cart[k].price * cart[k].qty; } return t; }
 	function discount() { return voucher ? Math.min(voucher.amount, total()) : 0; }
 	function netTotal() { return Math.max(0, total() - discount()); }
+	function trackCommerce(name, properties) {
+		if (window.DoughBossMarketing && typeof window.DoughBossMarketing.track === 'function') {
+			window.DoughBossMarketing.track(name, properties || {});
+		}
+	}
 	function onMenuView() { var k = (location.hash || '#about').replace('#', ''); return k === 'menu' || k === 'order'; }
 	function itemQty(name) { var q = 0; for (var k in cart) { if (cart[k].name === name) { q += cart[k].qty; } } return q; }
 	function newestLine(name) { var best = null; for (var k in cart) { if (cart[k].name === name && (!best || cart[k].seq > best.seq)) { best = cart[k]; } } return best; }
@@ -32,29 +42,103 @@
 		{ label: 'Flat', delta: 0, def: true },
 		{ label: 'Folded', delta: 0 }
 	] };
-	var OPT_PIZZA_BASE = { id: 'base', label: 'Base', type: 'radio', choices: [
-		{ label: 'Normal', delta: 0, def: true },
-		{ label: 'Wholemeal', delta: 4 },
-		{ label: 'Gluten-free', delta: 4 }
+	var OPT_ZAATAR_STYLE = { id: 'style', label: 'Style', type: 'radio', choices: [
+		{ label: 'Flat', delta: 0.5 },
+		{ label: 'Folded', delta: 0, def: true }
+	] };
+	var OPT_ZAATAR_MIX = { id: 'mix', label: 'Zaatar mix', type: 'radio', choices: [
+		{ label: 'Classic zaatar', delta: 0, def: true },
+		{ label: 'Mixed zaatar & cheese', sum: 'Zaatar & cheese mixed', delta: 0.5 }
+	] };
+	/* Crust (ex "Base") — Domino's/Pizza Hut say "crust". Prices per the owner's
+	   in-store POS (V23 photos, confirmed): Crispy & Classic free, Wholemeal +$2.50,
+	   Gluten-free +$3.50. */
+	var OPT_PIZZA_BASE = { id: 'base', label: 'Crust', type: 'radio', choices: [
+		{ label: 'Crispy', delta: 0, def: true },
+		{ label: 'Classic', delta: 0 },
+		{ label: 'Wholemeal', delta: 2.5 },
+		{ label: 'Gluten-free', delta: 3.5 }
 	] };
 	var OPT_WRAP_EXTRAS = { id: 'extras', label: 'Extras', type: 'check', choices: [
-		{ label: 'Add labneh', sum: 'Labneh', delta: 2.5 },
+		{ label: 'Add labneh (Mediterranean yoghurt)', sum: 'Labneh', delta: 2.5 },
 		{ label: 'Add cheese', sum: 'Cheese', delta: 2.5 }
 	] };
-	/* Per-item lemon & chilli (free) — offered on every pizza and on the meat
-	   manoush (traditional with lahme). "No thanks" is the default, so a line only
-	   shows "Lemon & chilli" when the customer said yes — per-item kitchen accuracy. */
-	var OPT_LEMON = { id: 'lc', label: 'Lemon & chilli — free', type: 'radio', choices: [
-		{ label: 'No thanks', delta: 0, def: true },
-		{ label: 'Yes please', sum: 'Lemon & chilli', delta: 0 }
+	/* Pies do not use pizza sauce or extra-topping controls. Sesame is optional
+	   and is removed by default. */
+	var OPT_SESAME = { id: 'sesame', label: 'Sesame seeds', type: 'radio', choices: [
+		{ label: 'No sesame seeds', sum: 'No sesame', delta: 0, def: true },
+		{ label: 'With sesame seeds', delta: 0 }
 	] };
-	var MEAT_MANOUSH = { 'Meat': 1, 'Meat & Cheese': 1 };
+	/* Pizza builder groups from the owner's in-store POS screens (V23 photos).
+	   Base Sauce is free (pick one); Sauce on Top is +$1.50 each; extra toppings
+	   are tiered $1/$2/$3 exactly as the till shows. Crust pricing is intentionally
+	   NOT changed here — the POS shows Wholemeal $2.50 / GF $3.50, which conflicts
+	   with the previously-confirmed flat $4; left for owner confirmation. */
+	var OPT_BASE_SAUCE = { id: 'basesauce', label: 'Base Sauce', type: 'radio', choices: [
+		{ label: 'Tomato (Pizza Sauce)', sum: 'Tomato base', delta: 0, def: true },
+		{ label: 'Garlic', sum: 'Garlic base', delta: 0 },
+		{ label: 'BBQ', sum: 'BBQ base', delta: 0 },
+		{ label: 'No Sauce', sum: 'No base sauce', delta: 0 }
+	] };
+	var OPT_SAUCE_TOP = { id: 'saucetop', label: 'Sauce on Top', type: 'check', choices: [
+		{ label: 'Tomato Ketchup', delta: 1.5 },
+		{ label: 'Smokey BBQ', delta: 1.5 },
+		{ label: 'Mayo Swirl', delta: 1.5 },
+		{ label: 'Peri Peri Sauce', delta: 1.5 },
+		{ label: 'Spicy Siracha', delta: 1.5 }
+	] };
+	var OPT_ADDONS = { id: 'addons', label: 'Add Extra Toppings', type: 'check', choices: [
+		{ label: 'Olives', delta: 1 },
+		{ label: 'Spinach', delta: 2 },
+		{ label: 'Garlic sauce', delta: 2 },
+		{ label: 'Onion', delta: 2 },
+		{ label: 'Mushroom', delta: 2 },
+		{ label: 'Capsicum', delta: 2 },
+		{ label: 'Tomato', delta: 2 },
+		{ label: 'Sujuk', delta: 3 },
+		{ label: 'Chicken', delta: 3 },
+		{ label: 'Meat (lahme)', delta: 3 },
+		{ label: 'Cheese', delta: 3 },
+		{ label: 'Mozzarella', delta: 3 },
+		{ label: 'Halloumi', delta: 3 },
+		{ label: 'Pepperoni', delta: 3 }
+	] };
+	var OPT_REMOVE_TOPPINGS = { id: 'remove', label: 'Remove ingredients', type: 'check', choices: [
+		{ label: 'No cheese', delta: 0 },
+		{ label: 'No tomato', delta: 0 },
+		{ label: 'No olives', delta: 0 },
+		{ label: 'No onion', delta: 0 },
+		{ label: 'No mushroom', delta: 0 },
+		{ label: 'No capsicum', delta: 0 },
+		{ label: 'No cucumber', delta: 0 },
+		{ label: 'No lettuce', delta: 0 },
+		{ label: 'No pickles', delta: 0 },
+		{ label: 'No meat', delta: 0 },
+		{ label: 'No sujuk', delta: 0 }
+	] };
+	/* Lemon & chilli (free) — now SEPARATE so a customer can pick lemon, chilli,
+	   both or neither on any order. Both default to off; a cart line shows "Lemon"
+	   and/or "Chilli" only when ticked — per-item kitchen accuracy. Offered on all
+	   savoury orders (manoush, pizza, pies, wraps). */
+	var OPT_LEMON = { id: 'lc', label: 'Lemon & chilli — free', type: 'check', choices: [
+		{ label: 'Lemon', sum: 'Lemon', delta: 0 },
+		{ label: 'Chilli', sum: 'Chilli', delta: 0 }
+	] };
 	function optionGroups(catId, name) {
-		if (catId === 'cat-pizza') { return [OPT_PIZZA_BASE, OPT_LEMON]; }
-		if (catId === 'cat-manoush') {
-			return MEAT_MANOUSH[name] ? [OPT_STYLE, OPT_PIZZA_BASE, OPT_LEMON] : [OPT_STYLE, OPT_PIZZA_BASE];
+		if (catId === 'cat-pizza') {
+			var pizzaGroups = [OPT_PIZZA_BASE, OPT_BASE_SAUCE, OPT_SAUCE_TOP, OPT_ADDONS, OPT_REMOVE_TOPPINGS, OPT_LEMON];
+			if (name === 'Zaatar Veggie Pizza' || name === 'Labneh Veggie Pizza') { pizzaGroups.splice(4, 0, OPT_WRAP_EXTRAS); }
+			return pizzaGroups;
 		}
-		if (catId === 'cat-wraps' && name === 'Zaatar & Veggie') { return [OPT_WRAP_EXTRAS]; }
+		/* Pies (and minis) take the same add-ons as pizza, plus a free "no sesame"
+		   removable. Minis aren't a separate category in the demo yet — flagged. */
+		if (catId === 'cat-pies') { return [OPT_SAUCE_TOP, OPT_SESAME, OPT_LEMON]; }
+		if (catId === 'cat-manoush') {
+			if (name === 'Zaatar') { return [OPT_ZAATAR_STYLE, OPT_ZAATAR_MIX, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
+			if (name === 'Zaatar & Cheese') { return [OPT_ZAATAR_STYLE, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
+			return [OPT_STYLE, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON];
+		}
+		if (catId === 'cat-wraps') { return (name === 'Zaatar & Veggie' || name === 'Labneh Veggie Wrap') ? [OPT_WRAP_EXTRAS, OPT_REMOVE_TOPPINGS, OPT_LEMON] : [OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
 		return null;
 	}
 
@@ -66,13 +150,17 @@
 		var clone = nameEl.cloneNode(true);
 		Array.prototype.forEach.call(clone.querySelectorAll('.mn-tag'), function (t) { t.parentNode.removeChild(t); });
 		var name = clone.textContent.replace(/\s+/g, ' ').trim();
-		var price = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
+		var price = parseFloat(priceEl.getAttribute('data-price') || priceEl.textContent.replace(/[^0-9.]/g, '')) || 0;
+		priceEl.setAttribute('data-price', String(price));
+		priceEl.textContent = money(price);
 		var catEl = el.closest('.mn-cat');
 		var catId = catEl ? catEl.id : '';
+		var imgEl = el.querySelector('.mn-it-img');
 		var act = document.createElement('div');
 		act.className = 'mn-it-act';
 		(el.querySelector('.mn-it-body') || el).appendChild(act);
-		controls[name] = { el: act, name: name, price: price, catId: catId, groups: optionGroups(catId, name), lastSel: null };
+		controls[name] = { el: act, name: name, price: price, catId: catId, groups: optionGroups(catId, name), lastSel: null,
+			img: imgEl ? imgEl.getAttribute('src') : '', imgAlt: imgEl ? (imgEl.getAttribute('alt') || name) : name };
 		paintItem(name);
 	});
 
@@ -98,6 +186,16 @@
 			cart[key] = { key: key, name: name, catId: c.catId, basePrice: c.price, price: unit, opts: opts, summary: summary, qty: 0, seq: 0 };
 		}
 		bumpLine(key, 1);
+		trackCommerce('add_to_cart', {
+			content_ids: [name],
+			content_name: name,
+			content_category: c.catId.replace(/^cat-/, ''),
+			content_type: 'product',
+			currency: 'AUD',
+			value: cart[key].price,
+			quantity: 1,
+			simulated: true
+		});
 		flashAdded(name);
 	}
 	function bumpLine(key, delta) {
@@ -141,6 +239,7 @@
 		sheet.setAttribute('aria-label', 'Choose options for ' + name);
 		var pre = c.lastSel || {};
 		var html = '<div class="opt-head"><h3>' + esc(name) + '</h3><button type="button" class="opt-close" aria-label="Close options">&times;</button></div>' +
+			(c.img ? '<div class="opt-hero"><img src="' + esc(c.img) + '" alt="' + esc(c.imgAlt || name) + '" loading="lazy" decoding="async"></div>' : '') +
 			'<form class="opt-form" novalidate>';
 		c.groups.forEach(function (g) {
 			html += '<fieldset class="opt-g"><legend>' + esc(g.label) + (g.type === 'check' ? ' <span class="opt-optional">(optional)</span>' : '') + '</legend>';
@@ -293,11 +392,30 @@
 			lines += '<div class="cd-line"><span class="cd-n">' + esc(it.name) + (it.summary ? '<small class="cd-opts">' + esc(it.summary) + '</small>' : '') + '</span><span class="cd-qty"><button type="button" data-kdec="' + esc(k) + '" aria-label="Remove one ' + esc(it.name) + '">&minus;</button><b>' + it.qty + '</b><button type="button" data-kinc="' + esc(k) + '" aria-label="Add one ' + esc(it.name) + '">+</button></span><span class="cd-p">' + money(it.price * it.qty) + '</span></div>';
 		}
 		if (!lines) { lines = '<div class="cd-empty">' + bag() + '<p>Your order is empty &mdash; add a few manoush.</p></div>'; }
+		/* One tasteful cross-sell (Pizza Hut pattern): offer a drink once, only when
+		   the cart has food but no drink yet — never a cluttered grid of suggestions. */
+		var hasDrink = false;
+		for (var dk in cart) { if (cart[dk].catId === 'cat-drinks') { hasDrink = true; break; } }
+		var dPrice = controls['Soft Drinks 600ml'] ? controls['Soft Drinks 600ml'].price : 5;
+		var xsell = (!hasDrink && count())
+			? '<div class="cd-xsell"><span class="cd-xsell-t">Fancy a drink with that?</span><button type="button" class="cd-xsell-add" data-xsell="Soft Drinks 600ml">Add a soft drink <b>+' + money(dPrice) + '</b></button></div>'
+			: '';
+		var defaultMethods = window.DBDemo.enabledFulfilments(DEFAULT_LOCATION.id).map(function (key) { return window.DBDemo.t('fulfilment.' + key).toLowerCase(); });
 		drawer.innerHTML = '<div class="cd-head"><h3>Your order</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-body">' + lines + '</div>' +
+			'<div class="cd-body">' + lines + xsell + '</div>' +
 			'<div class="cd-foot"><div class="cd-tot"><span>Total</span><strong>' + money(total()) + '</strong></div>' +
 			'<button type="button" class="vb-btn vb-btn-ember cd-checkout"' + (count() ? '' : ' disabled') + '>Checkout</button>' +
-			'<p class="cd-note">Demo &middot; pickup from Revesby only &middot; no real payment.</p></div>';
+			'<p class="cd-note">Demo &middot; ' + esc(defaultMethods.join(' / ')) + ' from ' + esc(DEFAULT_LOCATION.name) + ' by default &middot; no real payment.</p></div>';
+	}
+
+	function routeOptions() {
+		var options = [];
+		window.DBDemo.activeLocations().forEach(function (location) {
+			window.DBDemo.enabledFulfilments(location.id).forEach(function (method) {
+				options.push('<option value="' + esc(location.id + '|' + method) + '">' + esc(window.DBDemo.t('fulfilment.' + method) + ' · ' + location.name) + '</option>');
+			});
+		});
+		return options.join('');
 	}
 
 	/* Compact read-only line list shown on the checkout step, so options like
@@ -309,6 +427,43 @@
 			html += '<div class="cd-sline"><span class="cd-n">' + it.qty + ' &times; ' + esc(it.name) + (it.summary ? '<small class="cd-opts">' + esc(it.summary) + '</small>' : '') + '</span><span class="cd-p">' + money(it.price * it.qty) + '</span></div>';
 		}
 		return html;
+	}
+
+	/* Opening windows are profile data, not duplicated customer-facing rules.
+	   day: 0=Sun … 6=Sat; values are minutes from midnight in the profile's
+	   configured local timezone. */
+	function orderingHours(location) {
+		return (location && location.orderingHours) || { display: location && location.hours ? location.hours : 'See store hours', days: {} };
+	}
+	function storeStatus(location) {
+		var now = new Date();
+		var day = now.getDay();
+		var hour = now.getHours();
+		var minute = now.getMinutes();
+		var timezone = CFG.region && CFG.region.timezone;
+		if (timezone && typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+			try {
+				var parts = new Intl.DateTimeFormat('en-AU', {
+					timeZone: timezone,
+					weekday: 'short',
+					hour: '2-digit',
+					minute: '2-digit',
+					hourCycle: 'h23'
+				}).formatToParts(now);
+				var values = {};
+				parts.forEach(function (part) { values[part.type] = part.value; });
+				var dayIndex = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+				if (Object.prototype.hasOwnProperty.call(dayIndex, values.weekday)) { day = dayIndex[values.weekday]; }
+				hour = parseInt(values.hour, 10);
+				minute = parseInt(values.minute, 10);
+			} catch (ignore) {
+				/* Older browsers fall back to the device timezone. */
+			}
+		}
+		var hours = orderingHours(location || DEFAULT_LOCATION);
+		var span = hours.days[day];
+		var mins = hour * 60 + minute;
+		return { open: !!span && mins >= span[0] && mins < span[1], display: hours.display };
 	}
 
 	function renderCheckout() {
@@ -326,24 +481,49 @@
 		/* The form is a flex column: everything scrolls inside .cd-scroll while the
 		   submit CTA stays pinned in .cd-cta — reachable on short/landscape screens
 		   and above the on-screen keyboard (see the visualViewport handler below). */
+		var orderStatus = storeStatus(DEFAULT_LOCATION);
+		var open = orderStatus.open;
+		trackCommerce('begin_checkout', {
+			content_ids: Object.keys(cart).map(function (key) { return cart[key].name; }),
+			currency: 'AUD',
+			value: netTotal(),
+			num_items: count(),
+			order_type: 'pickup',
+			location_id: DEFAULT_LOCATION.id,
+			channel: 'demo',
+			simulated: true
+		});
+		var hoursHtml = open
+			? '<div class="cd-hours cd-hours--open">Open now &middot; pickup from Revesby</div>'
+			: '<div class="cd-hours cd-hours--shut">We&rsquo;re closed now. You can still send a <strong>Revesby preorder request</strong> &mdash; we&rsquo;ll review it first thing in the morning before confirming it. No payment is taken until then. Regular ordering hours: <strong>' + esc(orderStatus.display) + '</strong>.</div>';
+		var anyDelivery = window.DBDemo.activeLocations().some(function (location) { return window.DBDemo.enabledFulfilments(location.id).indexOf('delivery') !== -1; });
+		var paymentProvider = CFG.payments.enabled ? CFG.payments.selectedProvider : null;
+		var paymentHtml = open
+			? '<fieldset class="cd-f cd-pay"><legend>Payment</legend><p class="cd-privacy cd-carddemo">Interactive demo only &mdash; use made-up test details, never a real card. ' + (paymentProvider ? esc(paymentProvider.toUpperCase()) + ' is selected by this profile.' : 'Payments are disabled; Tyro and Stripe remain available adapters.') + '</p></fieldset>'
+			: '<div class="cd-f cd-pay"><strong>No payment now</strong><p class="cd-privacy cd-carddemo">This only sends an unconfirmed request to Revesby. Payment is discussed after the team confirms availability and timing.</p></div>';
+		var reviewHtml = open
+			? '<p class="cd-privacy cd-modnote">Once your order is placed only small changes can be made &mdash; please check it over before you pay.</p>'
+			: '<p class="cd-privacy cd-modnote">Please check the items and contact details. Revesby will confirm the pickup timing before this becomes an order.</p>';
+		var submitLabel = open ? 'Place demo order' : 'Send preorder request';
 		drawer.innerHTML = '<div class="cd-head"><h3>Checkout</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
 			'<form class="cd-form" novalidate>' +
 			'<div class="cd-scroll">' +
+			hoursHtml +
 			'<div class="cd-summary">' + summaryLines() + '</div>' +
 			'<div class="cd-vouch">' + vouchHtml + '<p class="cd-verr" role="alert"></p></div>' +
 			'<label class="cd-f"><span>Name</span><input name="name" type="text" autocomplete="name" required></label>' +
 			'<label class="cd-f"><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required></label>' +
-			'<fieldset class="cd-f"><legend>Fulfilment</legend><p>Pickup from <strong>Revesby</strong></p><input type="hidden" name="ful" value="pickup"><input type="hidden" name="shop" value="Revesby"></fieldset>' +
-			'<fieldset class="cd-f cd-pay">' +
-			'<legend>Payment</legend>' +
-			'<p class="cd-privacy cd-carddemo">Card payment (simulated). You&rsquo;ll enter test card details on the next step &mdash; orders &amp; payments are simulated, no real payment is taken.</p>' +
-			'</fieldset>' +
+			'<label class="cd-f"><span>Location and fulfilment</span><select name="route" required>' + routeOptions() + '</select></label>' +
+			(anyDelivery ? '<label class="cd-f"><span>Delivery address <small>(required for delivery)</small></span><input name="address" type="text" autocomplete="street-address"></label>' : '') +
+			paymentHtml +
+			reviewHtml +
 			'<p class="cd-privacy">We use your name and phone only to process your order. See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
+			'<label class="cd-agree"><input type="checkbox" name="agree" class="cd-agree-cb"><span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a> and to Dough Boss contacting me about this order.</span></label>' +
 			'</div>' +
 			'<div class="cd-cta">' +
 			'<div class="cd-tots">' + totsHtml + '</div>' +
 			'<div class="cd-err" role="alert"></div>' +
-			'<button type="submit" class="vb-btn vb-btn-ember">Place demo order</button>' +
+			'<button type="submit" class="vb-btn vb-btn-ember">' + submitLabel + '</button>' +
 			'<button type="button" class="vb-btn vb-btn-dark cd-back">Back to order</button>' +
 			'</div>' +
 			'</form>';
@@ -365,7 +545,7 @@
 			if (input) { input.focus(); }
 			return;
 		}
-		voucher = { code: code, amount: 5 };   // $5 off — the Dough Boss side of the student voucher
+		voucher = { code: code, amount: Number((CFG.promotions.studentVoucher || {}).amount || 0) };
 		renderCheckout();
 	}
 
@@ -373,6 +553,9 @@
 		var fd = new FormData(form);
 		var name = (fd.get('name') || '').toString().trim();
 		var phone = (fd.get('phone') || '').toString().trim();
+		var route = (fd.get('route') || '').toString().split('|');
+		var locationId = route[0], fulfilment = route[1];
+		var address = (fd.get('address') || '').toString().trim();
 		var err = form.querySelector('.cd-err');
 		if (!name || !phone) {
 			err.textContent = 'Please add your name and phone.';
@@ -380,7 +563,25 @@
 			if (miss) { miss.focus(); }
 			return;
 		}
-		pendingOrder = { name: name, phone: phone };
+		if (!window.DBDemo.getLocation(locationId) || window.DBDemo.enabledFulfilments(locationId).indexOf(fulfilment) === -1) {
+			err.textContent = 'Please choose an available location and fulfilment method.';
+			return;
+		}
+		if (fulfilment === 'delivery' && !address) {
+			err.textContent = 'Please add a delivery address.';
+			return;
+		}
+		var agree = form.querySelector('input[name="agree"]');
+		if (!agree || !agree.checked) {
+			err.textContent = 'Please agree to the Terms & Conditions to place your order.';
+			if (agree) { agree.focus(); }
+			return;
+		}
+		var afterHours = !storeStatus(window.DBDemo.getLocation(locationId)).open;
+		pendingOrder = { name: name, phone: phone, locationId: locationId, fulfilment: fulfilment, address: address, afterHours: afterHours };
+		/* After-hours requests are intentionally not sent into the simulated payment
+		   step. They stay unconfirmed until the Revesby team reviews them. */
+		if (afterHours) { renderDone(); return; }
 		renderCardSheet();
 	}
 
@@ -429,16 +630,41 @@
 
 	function renderDone() {
 		if (!pendingOrder || !drawerOpen) { pendingOrder = null; return; }
-		drawer.setAttribute('aria-label', 'Order placed');
+		var afterHours = !!pendingOrder.afterHours;
+		drawer.setAttribute('aria-label', afterHours ? 'Preorder request' : 'Order placed');
 		var name = pendingOrder.name;
-		var ref = 'DB-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+		var location = window.DBDemo.getLocation(pendingOrder.locationId) || DEFAULT_LOCATION;
+		var ref = CFG.brand.orderReferencePrefix + '-' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
 		var amt = money(netTotal());
-		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (&minus;' + money(discount()) + ')' : '';
-		drawer.innerHTML = '<div class="cd-head"><h3>Order placed</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
-			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>Thanks, ' + esc(name) + '!</h3><p>Demo order <strong>' + esc(ref) + '</strong> &middot; ' + amt + vline + '</p>' +
-			'<p class="cd-eta">Ready for pickup in <strong>~15&ndash;20 min</strong> &middot; Revesby</p>' +
+		var vline = voucher ? ' &middot; voucher <strong>' + esc(voucher.code) + '</strong> (' + (afterHours ? 'to be checked after confirmation' : '&minus;' + money(discount())) + ')' : '';
+		var saving = afterHours
+			? '<p class="cd-reward-note"><b>No payment has been taken.</b> Any voucher, member or VIP benefit will be checked when the preorder is confirmed.</p>'
+			: (voucher ? '<p class="cd-reward-note"><b>Discount applied:</b> you saved ' + money(discount()) + ' with ' + esc(voucher.code) + '. The final system will show only verified member or VIP savings here.</p>' : '<p class="cd-reward-note"><b>Member benefits:</b> loyalty and VIP savings are not active in this demo. When connected, eligible benefits will be checked before payment and shown clearly here.</p>');
+		var journey = afterHours
+			? '<div class="cd-receipt" aria-label="Preorder request journey"><div class="cd-receipt__head"><span>Preorder request</span><span class="cd-receipt__state">Awaiting morning review</span></div><ol class="cd-track"><li class="is-now">Request received</li><li>Revesby review</li><li>Confirmation before payment</li></ol></div>'
+			: '<div class="cd-receipt" aria-label="Demo order journey"><div class="cd-receipt__head"><span>Payment confirmation</span><span class="cd-receipt__state">Confirmed in demo</span></div><ol class="cd-track"><li class="is-now">Order received</li><li>In the oven</li><li>Ready for pickup</li></ol></div>';
+		var reviewInvite =
+			'<div class="cd-review-invite"><b>Stay close to the bake.</b><span>Follow Dough Boss for fresh drops, offers and what&rsquo;s coming out of the oven.</span><div class="cd-review-invite__actions">' +
+			'<a href="https://instagram.com/doughboss" target="_blank" rel="noopener noreferrer" data-doughboss-engagement="social_engagement" data-content-name="Instagram" data-channel="order_success">Follow @doughboss &nearr;</a>' +
+			(afterHours ? '' : '<a href="' + GOOGLE_REVIEW_URL + '" target="_blank" rel="noopener noreferrer" data-doughboss-engagement="review_engagement" data-content-name="Google review" data-channel="order_success">Leave a Google review &nearr;</a>') +
+			'</div></div>';
+		trackCommerce(afterHours ? 'generate_lead' : 'purchase_simulated', {
+			content_ids: Object.keys(cart).map(function (key) { return cart[key].name; }),
+			content_name: afterHours ? 'After-hours preorder request' : 'Demo order',
+			content_category: afterHours ? 'Preorder' : 'Order',
+			currency: 'AUD',
+			value: netTotal(),
+			num_items: count(),
+			order_type: pendingOrder.fulfilment,
+			location_id: pendingOrder.locationId,
+			channel: 'demo',
+			simulated: true
+		});
+		drawer.innerHTML = '<div class="cd-head"><h3>' + (afterHours ? 'Preorder request' : 'Order placed') + '</h3><button type="button" class="cd-close" aria-label="Close order">&times;</button></div>' +
+			'<div class="cd-done" role="status" tabindex="-1"><div class="cd-check" aria-hidden="true">&#10003;</div><h3>' + (afterHours ? 'Preorder request received, ' : 'Thanks, ') + esc(name) + '!</h3><p>' + (afterHours ? 'Unconfirmed preorder request' : 'Demo order') + ' <strong>' + esc(ref) + '</strong>' + (afterHours ? '' : ' &middot; ' + amt) + vline + '</p>' +
+			'<p class="cd-eta">' + (afterHours ? 'We&rsquo;ll review this with <strong>Revesby</strong> first thing in the morning and contact you to confirm it. For now, preorders can be arranged from Revesby or the night before. <strong>No payment has been taken.</strong>' : esc(window.DBDemo.t('fulfilment.' + pendingOrder.fulfilment)) + ' from <strong>' + esc(location.name) + '</strong> &middot; timing is simulated') + '</p>' + journey +
 			'<div class="cd-summary cd-donesum">' + summaryLines() + '</div>' +
-			'<p class="cd-note">No payment was taken and no real order was sent.</p></div>';
+			saving + '<button type="button" class="cd-copyref" data-copyref="' + esc(ref) + '">Copy order number</button>' + reviewInvite + '<p class="cd-note">' + esc(window.DBDemo.t('checkout.demoNotice')) + '</p></div>';
 		cart = {};
 		voucher = null;
 		pendingOrder = null;
@@ -463,6 +689,19 @@
 		if (e.target.closest('.cd-back')) { renderDrawer(); return; }
 		if (e.target.closest('.cd-vapply')) { applyVoucher(); return; }
 		if (e.target.closest('.cd-vremove')) { voucher = null; renderCheckout(); return; }
+		var copy = e.target.closest('[data-copyref]');
+		if (copy) {
+			var reference = copy.getAttribute('data-copyref') || '';
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(reference).then(function () { copy.textContent = 'Order number copied'; }, function () { copy.textContent = 'Order number: ' + reference; });
+			} else {
+				/* A local file preview may not grant clipboard access. Show the value instead
+				   of claiming a copy action that the browser could not perform. */
+				copy.textContent = 'Order number: ' + reference;
+			}
+			return;
+		}
+		var xs = e.target.closest('[data-xsell]'); if (xs) { addLine(xs.getAttribute('data-xsell')); renderDrawer(); return; }
 		var inc = e.target.closest('[data-kinc]'); if (inc) { bumpLine(inc.getAttribute('data-kinc'), 1); return; }
 		var dec = e.target.closest('[data-kdec]'); if (dec) { bumpLine(dec.getAttribute('data-kdec'), -1); return; }
 	});

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<meta name="robots" content="noindex,nofollow,noarchive">
+	<title>Dough Boss — Staff &amp; Management Quick Guide</title>
+	<style>
+		@font-face{font-family:Bebas;src:url("../assets/fonts/bebasneue-400.woff2") format("woff2"),url("../demo/assets/fonts/bebasneue-400.woff2") format("woff2");font-display:swap}
+		@font-face{font-family:Barlow;src:url("../assets/fonts/barlow-400.woff2") format("woff2"),url("../demo/assets/fonts/barlow-400.woff2") format("woff2");font-display:swap}
+		@font-face{font-family:Barlow;src:url("../assets/fonts/barlow-700.woff2") format("woff2"),url("../demo/assets/fonts/barlow-700.woff2") format("woff2");font-weight:700;font-display:swap}
+		:root{--ink:#111;--paper:#f5f1e9;--card:#fff;--red:#df372b;--gold:#b5571f;--green:#187c4f;--amber:#a86709;--line:#d8d1c5;--muted:#625d55}
+		*{box-sizing:border-box}
+		html{scroll-behavior:smooth}
+		body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.55 Barlow,Arial,sans-serif}
+		header{background:#111;color:#fff;padding:34px clamp(22px,7vw,90px);border-bottom:8px solid var(--red)}
+		.brand{font:34px/1 Bebas,Impact,sans-serif;letter-spacing:.12em}.brand b{color:var(--red)}
+		header h1{font:clamp(48px,8vw,92px)/.92 Bebas,Impact,sans-serif;letter-spacing:.02em;max-width:900px;margin:52px 0 18px}
+		header p{max-width:760px;font-size:20px;color:#ddd;margin:0}
+		.scope{display:inline-flex;gap:8px;flex-wrap:wrap;margin-top:24px}.scope span{border:1px solid #555;border-radius:999px;padding:7px 12px;font-size:14px}.scope .live{background:var(--green);border-color:var(--green)}
+		nav{position:sticky;top:0;z-index:20;display:flex;gap:8px;overflow:auto;background:#fff;border-bottom:1px solid var(--line);padding:10px clamp(16px,5vw,70px)}
+		nav a{white-space:nowrap;text-decoration:none;color:var(--ink);font-weight:700;border-radius:999px;padding:8px 12px}nav a:hover{background:#eee8de}nav a:focus-visible{outline:3px solid var(--red);outline-offset:2px;background:#fff3ef}
+		main{max-width:1160px;margin:auto;padding:46px clamp(18px,5vw,64px) 80px}
+		section{scroll-margin-top:76px;margin:0 0 64px}
+		h2,h3{font-family:Bebas,Impact,sans-serif;letter-spacing:.025em;line-height:1}
+		h2{font-size:clamp(42px,6vw,66px);margin:0 0 18px}h3{font-size:30px;margin:0 0 10px}
+		.eyebrow{color:var(--gold);font-weight:700;letter-spacing:.16em;text-transform:uppercase;font-size:13px;margin-bottom:8px}
+		.lead{font-size:21px;max-width:840px}
+		.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.grid.two{grid-template-columns:repeat(2,1fr)}
+		.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 10px 30px rgba(17,17,17,.05)}
+		.card p:last-child,.card ul:last-child{margin-bottom:0}
+		.num{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--ink);color:#fff;font-weight:700;margin-bottom:14px}
+		.ok{border-left:5px solid var(--green)}.warn{border-left:5px solid var(--amber)}.stop{border-left:5px solid var(--red)}
+		.flow{display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));align-items:center;gap:8px;margin:28px 0}
+		.flow .box{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:15px 10px;text-align:center;font-weight:700;min-height:82px;display:grid;place-items:center}
+		.flow .arrow{text-align:center;font-size:28px;color:var(--red)}
+		table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line)}
+		.table-scroll{max-width:100%;overflow-x:auto;border-radius:10px}
+		th,td{text-align:left;padding:13px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#171717;color:#fff}tr:last-child td{border-bottom:0}
+		.tag{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}.tag.auto{background:#dff4e8;color:#0b5d38}.tag.owner{background:#fff0ce;color:#704800}
+		.steps{counter-reset:step}.step{position:relative;background:#fff;border:1px solid var(--line);border-radius:14px;margin:0 0 12px;padding:18px 18px 18px 68px}.step:before{counter-increment:step;content:counter(step);position:absolute;left:18px;top:18px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--red);color:#fff;font-weight:700}
+		.photo{position:relative;margin:24px 0;background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;overflow:hidden}.photo img{display:block;width:100%;height:auto;border-radius:10px}.photo .pin{position:absolute;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--red);color:#fff;font-weight:700;border:3px solid #fff;box-shadow:0 3px 14px #0008}
+		.photo .p1{left:78%;top:36%}.photo .p2{left:37%;top:48%}.photo .p3{left:80%;top:52%}
+		.photo.track .p1{left:43%;top:31%}.photo.track .p2{left:43%;top:40%}.photo.track .p3{left:43%;top:50%}
+		.photo.manage .p1{left:23%;top:29%}.photo.manage .p2{left:72%;top:42%}.photo.manage .p3{left:52%;top:56%}
+		.legend{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 0}.legend div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px}.legend b{color:var(--red)}
+		.note{background:#fff5de;border-left:5px solid var(--amber);padding:15px 18px;margin:16px 0}.decision{background:#e7f6ed;border-left:5px solid var(--green);padding:18px;margin:20px 0;font-size:19px}
+		.checks{list-style:none;padding:0}.checks li{position:relative;padding:8px 0 8px 34px;border-bottom:1px dashed var(--line)}.checks li:before{content:"□";position:absolute;left:4px;font-size:23px;line-height:1}
+		code{background:#eee8df;border-radius:5px;padding:2px 6px}.small{font-size:14px;color:var(--muted)}
+		footer{background:#111;color:#bbb;padding:30px clamp(20px,7vw,90px);font-size:14px}
+		.page-break{break-before:page}
+		@media(max-width:800px){.grid,.grid.two,.legend{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.flow .arrow{transform:rotate(90deg)}nav{position:static}.photo .pin{width:30px;height:30px}.photo{padding:6px}.table-scroll table{min-width:680px;font-size:15px}th,td{padding:9px}}
+		@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:#fff;font-size:11pt}header{padding:22mm 18mm}header h1{font-size:50pt;margin-top:24mm}nav{display:none}main{max-width:none;padding:15mm}section{break-inside:auto;margin-bottom:16mm}h2,h3{break-after:avoid}.card,.step,.photo,table{break-inside:avoid;box-shadow:none}.photo{padding:2mm}a{color:#111;text-decoration:none}footer{display:none}.scope .live{color:#fff}.table-scroll{overflow:visible}}
+	</style>
+</head>
+<body>
+<header>
+	<div class="brand">DOUGH BOSS<b>.</b></div>
+	<h1>Staff &amp; Management<br>Quick Guide</h1>
+	<p>A simple guide to customer confirmations, order tracking, the Revesby kitchen board and the controls management uses every day.</p>
+	<div class="scope">
+		<span class="live">Revesby online-ordering rollout — verify in WordPress</span>
+		<span>Bankstown baking — visit or call</span>
+		<span>Roselands baking — visit or call</span>
+		<span>Tyro activation pending</span>
+	</div>
+</header>
+
+<nav aria-label="Guide sections">
+	<a href="#decision">Recommended setup</a>
+	<a href="#flow">How it works</a>
+	<a href="#customer">Customer updates</a>
+	<a href="#staff">Kitchen staff</a>
+	<a href="#management">Management</a>
+	<a href="#trouble">Quick fixes</a>
+	<a href="#launch">Go-live checklist</a>
+</nav>
+
+<main>
+	<section id="decision">
+		<p class="eyebrow">The decision</p>
+		<h2>Use email and tracking together.</h2>
+		<div class="decision"><strong>Recommended:</strong> send an immediate confirmation email with the order number, then—when milestone notifications are enabled—send only two meaningful updates: accepted with ETA and ready. Keep a Track My Order page available using order number plus matching email.</div>
+		<div class="grid">
+			<div class="card ok"><div class="num">1</div><h3>Immediate</h3><p>Confirmation email as soon as the durable order is created. It lists the order number, items, total and tracking instructions.</p></div>
+			<div class="card ok"><div class="num">2</div><h3>Useful updates</h3><p>When enabled: accepted with the kitchen ETA, then ready for pickup/table/delivery. Avoid emailing every small internal kitchen step.</p></div>
+			<div class="card ok"><div class="num">3</div><h3>Self-service</h3><p>The customer can check status at any time with their order number and the exact email used at checkout.</p></div>
+		</div>
+		<div class="note"><strong>Important:</strong> WordPress saying an email was handed to its mail system does not prove inbox delivery. Before launch, configure authenticated transactional email and verify SPF, DKIM and DMARC for the sending domain.</div>
+	</section>
+
+	<section id="flow">
+		<p class="eyebrow">One source of truth</p>
+		<h2>Customer to kitchen, end to end.</h2>
+		<div class="flow" role="img" aria-label="Order lifecycle: customer orders Revesby pickup, WordPress validates the cart and payment, creates the durable order and confirmation, kitchen accepts and sets an ETA, kitchen prepares and marks ready, then the tracker and enabled milestone emails update the customer.">
+			<div class="box">Customer orders<br>Revesby pickup</div><div class="arrow">→</div>
+			<div class="box">WordPress validates<br>cart + payment</div><div class="arrow">→</div>
+			<div class="box">Durable order<br>+ confirmation</div><div class="arrow">→</div>
+			<div class="box">Kitchen accepts<br>and chooses ETA</div><div class="arrow">→</div>
+			<div class="box">Preparing<br>then Ready</div><div class="arrow">→</div>
+			<div class="box">Customer tracker<br>and email update</div>
+		</div>
+		<p>The kitchen status is the customer status. Staff should update the board when the real work changes—not early, and not after the fact.</p>
+	</section>
+
+	<section id="customer">
+		<p class="eyebrow">Customer experience</p>
+		<h2>What customers receive.</h2>
+		<div class="table-scroll" role="region" aria-label="Customer notification timing table" tabindex="0"><table>
+			<thead><tr><th>Moment</th><th>Customer sees</th><th>Who triggers it</th></tr></thead>
+			<tbody>
+				<tr><td><span class="tag auto">Automatic</span> Order received</td><td>Order number, items, total and tracking instructions.</td><td>The checkout creates the durable order.</td></tr>
+				<tr><td><span class="tag owner">Staff action</span> Accepted</td><td>When enabled, confirmation that the kitchen has started, plus ETA when selected.</td><td>Kitchen taps Accept and selects the ETA.</td></tr>
+				<tr><td><span class="tag owner">Staff action</span> Ready</td><td>When enabled, pickup, table-service or delivery handoff wording.</td><td>Kitchen moves the order to Ready.</td></tr>
+				<tr><td><span class="tag auto">Any time</span> Track My Order</td><td>Received, preparing, ready and completed stages, timing and total.</td><td>Customer enters order number plus matching email.</td></tr>
+			</tbody>
+		</table></div>
+
+		<figure class="photo track" aria-describedby="tracking-screen-legend">
+			<img src="walkthrough/DB-06-order-tracking.png" alt="Concept order tracker showing an order number, kitchen-supplied ETA and customer-facing Ready stage; numbered callouts are explained below">
+			<span class="pin p1" aria-hidden="true">1</span><span class="pin p2" aria-hidden="true">2</span><span class="pin p3" aria-hidden="true">3</span>
+		</figure>
+		<div class="legend" id="tracking-screen-legend">
+			<div><b>1.</b> The order number identifies the order.</div>
+			<div><b>2.</b> Accepted and ETA come directly from the kitchen.</div>
+			<div><b>3.</b> Ready changes only when staff mark the order ready.</div>
+		</div>
+		<p class="small">Illustration uses sample data and an older multi-shop concept. Current online ordering rollout is Revesby only.</p>
+
+		<h3>Management setup: Track My Order page</h3>
+		<div class="steps">
+			<div class="step">In WordPress, choose <strong>Pages → Add New</strong>.</div>
+			<div class="step">Name the page <strong>Track My Order</strong>.</div>
+			<div class="step">Add a Shortcode block containing <code>[doughboss_order_tracking]</code>.</div>
+			<div class="step">Publish the page and copy its complete URL.</div>
+			<div class="step">Open <strong>DoughBoss → Settings → Store</strong>. Paste the URL into <strong>Track My Order page</strong>, then save.</div>
+			<div class="step">Place a no-payment test order. Confirm the email link prefills only the order number and still asks for the matching email.</div>
+		</div>
+	</section>
+
+	<section id="staff" class="page-break">
+		<p class="eyebrow">Kitchen staff</p>
+		<h2>Five actions during service.</h2>
+		<div class="steps">
+			<div class="step"><strong>Sign in</strong> with your own kitchen account and open <strong>DoughBoss → Order Board</strong>. Confirm the connection indicator is healthy and sound is on.</div>
+			<div class="step"><strong>Read the complete order.</strong> Check pickup/table/delivery, customer notes, modifiers and quantities before accepting.</div>
+			<div class="step"><strong>Accept and choose a real ETA.</strong> This immediately updates the tracker and, when enabled, sends the accepted email.</div>
+			<div class="step"><strong>Move the card with the food.</strong> Preparing/Baking means it is genuinely being made. Ready means it is genuinely ready to hand over.</div>
+			<div class="step"><strong>Complete only at handoff.</strong> Mark collected/served/delivered after the customer receives it.</div>
+		</div>
+
+		<figure class="photo" aria-describedby="kitchen-screen-legend">
+			<img src="walkthrough/DB-08-kitchen-ipad.png" alt="Concept kitchen board with new, preparing and ready lanes; numbered callouts are explained below">
+			<span class="pin p1" aria-hidden="true">1</span><span class="pin p2" aria-hidden="true">2</span><span class="pin p3" aria-hidden="true">3</span>
+		</figure>
+		<div class="legend" id="kitchen-screen-legend">
+			<div><b>1.</b> Accept the new order and select the ETA.</div>
+			<div><b>2.</b> Work from the New, Preparing and Ready lanes.</div>
+			<div><b>3.</b> Ready is customer-facing—do not tap it early.</div>
+		</div>
+		<p class="small">Illustration uses sample data. The production Revesby board uses the same lifecycle and protected WordPress staff access.</p>
+
+		<div class="grid two">
+			<div class="card warn"><h3>If two tablets disagree</h3><p>The older action is rejected instead of overwriting the newer state. Refresh the board, read the current status, then act once.</p></div>
+			<div class="card stop"><h3>Do not edit the order in KDS</h3><p>The kitchen board is for status and timing. Confirm material item changes with management and preserve the audit trail.</p></div>
+			<div class="card warn"><h3>If the board says Offline</h3><p>Stop changing cards from stale data. Use Retry once, then open DoughBoss → Orders to reconcile. Log the order number, time, contact, total and payment status. Never recreate or recharge a paid order.</p></div>
+			<div class="card stop"><h3>Cancellation or refund</h3><p>A manager decides. Cancel the order state only after checking production progress; refund only with payment-provider evidence, then record the reason and confirm the final customer status.</p></div>
+		</div>
+	</section>
+
+	<section id="management">
+		<p class="eyebrow">Owner and management</p>
+		<h2>Daily controls that matter.</h2>
+		<div class="grid two">
+			<div class="card"><h3>Opening</h3><ul><li>Confirm Revesby is the only online-order location.</li><li>Check menu prices and sold-out items.</li><li>Open the kitchen board and test sound.</li><li>Confirm ordering and the selected payment provider are intentionally on or off.</li></ul></div>
+			<div class="card"><h3>During service</h3><ul><li>Watch aging orders and delayed ETAs.</li><li>Review cancellations/refunds.</li><li>Check ambiguous POSPal items before any retry.</li><li>Keep Bankstown and Roselands visit-or-call only for this rollout.</li></ul></div>
+			<div class="card"><h3>Customer messages</h3><ul><li>Settings → Real-time &amp; Notifications: deliberately choose accepted and ready email toggles.</li><li>Message Templates: confirmation, accepted and ready wording.</li><li>Send a real test to Gmail and Outlook before launch.</li></ul></div>
+			<div class="card"><h3>Closing</h3><ul><li>Clear or explain every active order.</li><li>Reconcile paid orders, cancellations and refunds.</li><li>Review POSPal outbox exceptions.</li><li>Record any issue before staff sign out.</li></ul></div>
+		</div>
+
+		<figure class="photo manage" aria-describedby="management-screen-legend">
+			<img src="walkthrough/DB-10-dashboard.png" alt="Concept management dashboard with reconciliation figures, shop reporting and controls; numbered callouts are explained below">
+			<span class="pin p1" aria-hidden="true">1</span><span class="pin p2" aria-hidden="true">2</span><span class="pin p3" aria-hidden="true">3</span>
+		</figure>
+		<div class="legend" id="management-screen-legend">
+			<div><b>1.</b> Use totals for reconciliation—not as a replacement for payment-provider records.</div>
+			<div><b>2.</b> Multi-shop reporting remains staged while Revesby alone orders online.</div>
+			<div><b>3.</b> Owners control menus, hours, ordering and notifications.</div>
+		</div>
+		<p class="small">Illustration contains sample figures, not live sales. Current online-order data should originate from Revesby only.</p>
+	</section>
+
+	<section id="trouble">
+		<p class="eyebrow">Quick fixes</p>
+		<h2>What to do when something looks wrong.</h2>
+		<div class="table-scroll" role="region" aria-label="Operational troubleshooting table" tabindex="0"><table>
+			<thead><tr><th>Problem</th><th>Do this first</th><th>Do not do</th></tr></thead>
+			<tbody>
+				<tr><td>Customer says no confirmation email</td><td>Confirm the exact checkout email, check spam, then check the WordPress mail log/provider delivery event using the order number.</td><td>Do not ask them to place and pay again until the original order is checked.</td></tr>
+				<tr><td>Tracking says no matching order</td><td>Use the exact order number and exact email used at checkout. Check for spelling or a different family email.</td><td>Do not reveal whether another customer’s order number exists.</td></tr>
+				<tr><td>Order is missing from KDS or board says Offline</td><td>Do not change stale cards. Retry once, then check DoughBoss → Orders and the Revesby filter. Log the order number, time, contact, total and payment status.</td><td>Do not recreate or recharge a paid order.</td></tr>
+				<tr><td>POSPal is offline or ambiguous</td><td>Keep producing from the DoughBoss order. Review the POSPal outbox and verify the till before a manual release.</td><td>Never repeatedly resend an ambiguous order.</td></tr>
+				<tr><td>Customer ordered after hours</td><td>Treat it as an unpaid Revesby preorder request. Call and confirm timing before promoting it.</td><td>Do not promise acceptance or payment until staff confirms it.</td></tr>
+				<tr><td>Wrong status was tapped</td><td>Use the available undo/recall immediately or ask a manager to correct the lifecycle.</td><td>Do not leave a customer-facing Ready state if the food is not ready.</td></tr>
+			</tbody>
+		</table></div>
+	</section>
+
+	<section id="launch">
+		<p class="eyebrow">Acceptance checklist</p>
+		<h2>Before the first live Revesby order.</h2>
+		<div class="grid two">
+			<div class="card">
+				<h3>Customer</h3>
+				<ul class="checks">
+					<li>Track My Order page is published and configured.</li>
+					<li>Revesby location, pickup mode and <code>ordering_open</code> are deliberately verified.</li>
+					<li>Confirmation email arrives with correct items and total.</li>
+					<li>Accepted/ready notification toggles are deliberately on or off.</li>
+					<li>When enabled, accepted email shows the chosen ETA.</li>
+					<li>When enabled, ready email has the correct pickup wording.</li>
+					<li>Wrong email cannot open the order.</li>
+					<li>Mobile tracking page is readable.</li>
+				</ul>
+			</div>
+			<div class="card">
+				<h3>Staff and management</h3>
+				<ul class="checks">
+					<li>Kitchen users have restricted KDS accounts.</li>
+					<li>New-order sound works on the Revesby tablet.</li>
+					<li>Two-tablet stale update is safely rejected.</li>
+					<li>Cancellation and refund procedure is understood.</li>
+					<li>Gateway/payment mode is deliberately verified before ordering opens.</li>
+					<li>Tyro sandbox and webhook checks pass before live keys.</li>
+					<li>POSPal offline test leaves the order on KDS.</li>
+				</ul>
+			</div>
+		</div>
+		<div class="note"><strong>Current rollout:</strong> Revesby is the only location intended for online ordering. Before telling staff or customers that it is live, management must verify the installed WordPress release, <code>ordering_open</code>, location, hours, payment mode, notification toggles and real mail delivery. Bankstown and Roselands remain visit-or-call until their own acceptance checks are completed.</div>
+	</section>
+</main>
+
+<footer>
+	Dough Boss staff and management quick guide · Pre-final operational edition · 24 July 2026 · Screens marked as illustrations contain sample data.
+</footer>
+</body>
+</html>
