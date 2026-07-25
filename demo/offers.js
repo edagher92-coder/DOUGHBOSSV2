@@ -120,14 +120,8 @@
 			claim.textContent = 'Issuing…';
 		}
 
-		var fd = new FormData(form);
-		fd.append('code', code);
-		fetch(form.action, {
-			method: 'POST',
-			body: fd,
-			headers: { 'Accept': 'application/json' }
-		}).catch(function () { /* best-effort lead capture — always issue */ })
-			.then(reveal);
+		// Static concept demo: issue the fictional code without transmitting PII.
+		window.setTimeout(reveal, 350);
 	});
 
 	refresh();
