@@ -185,10 +185,57 @@ class DoughBoss_Shortcodes {
 	 * @return string
 	 */
 	public function catering() {
+		$email         = DoughBoss_Settings::catering_email();
+		$phone         = DoughBoss_Settings::catering_phone();
+		$phone_digits  = preg_replace( '/[^0-9]/', '', $phone );
+		$phone_display = is_string( $phone_digits ) && 10 === strlen( $phone_digits )
+			? substr( $phone_digits, 0, 4 ) . ' ' . substr( $phone_digits, 4, 3 ) . ' ' . substr( $phone_digits, 7, 3 )
+			: $phone;
+		$phone_tel     = is_string( $phone_digits ) && 0 === strpos( $phone_digits, '0' )
+			? '+61' . substr( $phone_digits, 1 )
+			: '+' . ltrim( (string) $phone_digits, '+' );
+		$email_subject = rawurlencode( 'Dough Boss catering enquiry' );
+		$email_body    = rawurlencode( "Event date:\nGuest count:\nPreferred pickup time:\nDietary notes:\n" );
 		ob_start();
 		?>
-		<div class="db-app db-catering" data-doughboss-catering>
-			<div class="db-loading"><?php esc_html_e( 'Loading catering…', 'doughboss' ); ?></div>
+		<div class="db-app db-catering">
+			<section class="dbc-contact" aria-labelledby="dbc-contact-title">
+				<p class="dbc-kicker"><?php esc_html_e( 'Catering enquiries', 'doughboss' ); ?></p>
+				<h2 class="dbc-h2" id="dbc-contact-title"><?php esc_html_e( 'Tell us what you need', 'doughboss' ); ?></h2>
+				<p class="dbc-sub"><?php esc_html_e( 'Share your date, preferred pickup time, guest count and dietary notes. Our catering team will confirm availability, the menu and final price before anything is locked in.', 'doughboss' ); ?></p>
+				<div class="dbc-contact-actions">
+					<a class="dbc-contact-card" href="<?php echo esc_attr( 'mailto:' . $email . '?subject=' . $email_subject . '&body=' . $email_body ); ?>">
+						<strong><?php esc_html_e( 'Email catering', 'doughboss' ); ?></strong>
+						<span><?php echo esc_html( $email ); ?></span>
+					</a>
+					<a class="dbc-contact-card" href="<?php echo esc_attr( 'tel:' . $phone_tel ); ?>">
+						<strong><?php esc_html_e( 'Call catering', 'doughboss' ); ?></strong>
+						<span><?php echo esc_html( $phone_display ); ?></span>
+					</a>
+				</div>
+			</section>
+			<section class="dbc-how" aria-labelledby="dbc-how-title">
+				<p class="dbc-kicker"><?php esc_html_e( 'How it works', 'doughboss' ); ?></p>
+				<h2 class="dbc-h2" id="dbc-how-title"><?php esc_html_e( 'A fresh spread in three steps', 'doughboss' ); ?></h2>
+				<ol class="dbc-how-grid">
+					<li><span>01</span><strong><?php esc_html_e( 'Tell us the occasion', 'doughboss' ); ?></strong><p><?php esc_html_e( 'Send the event date, guest count, preferred pickup time and dietary notes.', 'doughboss' ); ?></p></li>
+					<li><span>02</span><strong><?php esc_html_e( 'Build the right mix', 'doughboss' ); ?></strong><p><?php esc_html_e( 'We will help balance minis, pies and crowd favourites around your needs.', 'doughboss' ); ?></p></li>
+					<li><span>03</span><strong><?php esc_html_e( 'Confirm before we bake', 'doughboss' ); ?></strong><p><?php esc_html_e( 'We confirm availability, final price, collection details and payment first.', 'doughboss' ); ?></p></li>
+				</ol>
+			</section>
+			<div class="dbc-app" data-doughboss-catering>
+				<div class="db-loading"><?php esc_html_e( 'Loading catering…', 'doughboss' ); ?></div>
+			</div>
+			<section class="dbc-faq" aria-labelledby="dbc-faq-title">
+				<p class="dbc-kicker"><?php esc_html_e( 'Catering Q&A', 'doughboss' ); ?></p>
+				<h2 class="dbc-h2" id="dbc-faq-title"><?php esc_html_e( 'Good to know before you order', 'doughboss' ); ?></h2>
+				<details><summary><?php esc_html_e( 'How much notice should I give?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'As early as you can. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', 'doughboss' ); ?></p></details>
+				<details><summary><?php esc_html_e( 'Where is catering prepared?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'Catering is prepared through our Revesby bakery for now. Ask the team what collection or other arrangement is available.', 'doughboss' ); ?></p></details>
+				<details><summary><?php esc_html_e( 'Can you help with dietary requirements?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'Tell us about dietary needs and allergies. We can explain suitable choices, but our kitchen handles common allergens and cannot promise an allergen-free environment.', 'doughboss' ); ?></p></details>
+				<details><summary><?php esc_html_e( 'Is there a minimum order?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'The team will recommend practical quantities for your guest count and explain any package requirement before you confirm.', 'doughboss' ); ?></p></details>
+				<details><summary><?php esc_html_e( 'How do catering payments work?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'The team confirms the price and payment arrangement. Online deposits remain unavailable until the payment gateway completes acceptance.', 'doughboss' ); ?></p></details>
+				<details><summary><?php esc_html_e( 'Can I change or cancel my order?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'Contact the catering team as soon as possible. Changes depend on whether ingredients have already been prepared.', 'doughboss' ); ?></p></details>
+			</section>
 		</div>
 		<?php
 		return ob_get_clean();

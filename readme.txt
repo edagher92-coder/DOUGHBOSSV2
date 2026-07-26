@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.2
+Stable tag: 2.24.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.3 =
+* Add dedicated catering email and phone settings with customer tap-to-contact links.
+* Route catering enquiry notifications to the catering inbox.
+* Add a mobile-friendly three-step catering guide and customer Q&A below the catering experience.
 
 = 2.24.2 =
 * Add optional, owner-configurable Google review invitations to the homepage and successful customer flows.

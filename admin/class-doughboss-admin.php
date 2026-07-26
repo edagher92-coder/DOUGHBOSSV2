@@ -340,6 +340,13 @@ class DoughBoss_Admin {
 		} else {
 			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'hello@doughboss.com.au';
 		}
+		$clean['catering_email'] = isset( $input['catering_email'] ) && is_email( $input['catering_email'] )
+			? sanitize_email( $input['catering_email'] )
+			: ( isset( $existing['catering_email'] ) ? $existing['catering_email'] : 'catering@doughboss.com.au' );
+		$catering_phone = isset( $input['catering_phone'] ) ? preg_replace( '/[^0-9+]/', '', (string) $input['catering_phone'] ) : '';
+		$clean['catering_phone'] = is_string( $catering_phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $catering_phone )
+			? $catering_phone
+			: ( isset( $existing['catering_phone'] ) ? $existing['catering_phone'] : '0422487487' );
 		$clean['tracking_page_url'] = isset( $input['tracking_page_url'] )
 			? DoughBoss_Settings::sanitize_tracking_page_url( $input['tracking_page_url'] )
 			: ( isset( $existing['tracking_page_url'] ) ? DoughBoss_Settings::sanitize_tracking_page_url( $existing['tracking_page_url'] ) : '' );
@@ -2947,7 +2954,17 @@ JS;
 					<tr>
 						<th><label for="db-orders-email"><?php esc_html_e( 'Order notification email', 'doughboss' ); ?></label></th>
 						<td><input type="email" id="db-orders-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[orders_email]" value="<?php echo esc_attr( isset( $settings['orders_email'] ) ? $settings['orders_email'] : '' ); ?>" />
-							<span class="description"><?php esc_html_e( 'Where new order and catering enquiry emails are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
+							<span class="description"><?php esc_html_e( 'Where normal online-order notifications are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-catering-email"><?php esc_html_e( 'Catering email', 'doughboss' ); ?></label></th>
+						<td><input type="email" id="db-catering-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[catering_email]" value="<?php echo esc_attr( isset( $settings['catering_email'] ) ? $settings['catering_email'] : 'catering@doughboss.com.au' ); ?>" />
+							<span class="description"><?php esc_html_e( 'Shown to customers and used for new catering enquiry notifications.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-catering-phone"><?php esc_html_e( 'Catering phone', 'doughboss' ); ?></label></th>
+						<td><input type="tel" id="db-catering-phone" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[catering_phone]" value="<?php echo esc_attr( isset( $settings['catering_phone'] ) ? $settings['catering_phone'] : '0422487487' ); ?>" />
+							<span class="description"><?php esc_html_e( 'Australian mobile or landline shown as a tap-to-call catering contact.', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
 						<th><label for="db-tracking-page-url"><?php esc_html_e( 'Track My Order page', 'doughboss' ); ?></label></th>

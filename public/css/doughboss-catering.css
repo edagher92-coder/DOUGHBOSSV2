@@ -367,10 +367,75 @@
 .db-catering .dbc-review-invite__actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .db-catering .dbc-review-invite a { width: fit-content; color: var(--dbc-ember); font-weight: 800; text-underline-offset: 3px; }
 
+.db-catering .dbc-contact,
+.db-catering .dbc-how,
+.db-catering .dbc-faq {
+	margin: 0 auto 34px;
+	padding: clamp(22px, 4vw, 38px);
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-lg);
+	background: var(--dbc-paper);
+}
+
+.db-catering .dbc-contact-actions,
+.db-catering .dbc-how-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+	margin: 22px 0 0;
+}
+
+.db-catering .dbc-contact-card {
+	display: grid;
+	gap: 5px;
+	padding: 18px;
+	color: var(--dbc-ink);
+	text-decoration: none;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-md);
+	background: #fff;
+}
+
+.db-catering .dbc-contact-card:hover,
+.db-catering .dbc-contact-card:focus-visible {
+	border-color: var(--dbc-ember);
+	box-shadow: 0 8px 24px rgb(17 17 17 / 9%);
+}
+
+.db-catering .dbc-contact-card span { color: var(--dbc-ember); overflow-wrap: anywhere; }
+
+.db-catering .dbc-how-grid {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	padding: 0;
+	list-style: none;
+}
+
+.db-catering .dbc-how-grid li {
+	display: grid;
+	align-content: start;
+	gap: 8px;
+	padding: 18px;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-md);
+	background: #fff;
+}
+
+.db-catering .dbc-how-grid li > span { color: var(--dbc-ember); font-weight: 900; }
+.db-catering .dbc-how-grid p,
+.db-catering .dbc-faq p { margin: 0; color: var(--dbc-muted); }
+.db-catering .dbc-app { margin: 0 0 34px; }
+.db-catering .dbc-faq details { border-top: 1px solid var(--dbc-line); }
+.db-catering .dbc-faq summary { cursor: pointer; padding: 16px 34px 16px 0; font-weight: 800; }
+.db-catering .dbc-faq details p { padding: 0 0 18px; }
+
 @media (max-width: 540px) {
 	.db-catering .dbc-submit {
 		align-self: stretch;
 		text-align: center;
+	}
+	.db-catering .dbc-contact-actions,
+	.db-catering .dbc-how-grid {
+		grid-template-columns: 1fr;
 	}
 }
 
