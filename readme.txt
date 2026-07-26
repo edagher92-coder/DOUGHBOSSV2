@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.3
+Stable tag: 2.24.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.4 =
+* Add a manager-only operations dashboard using stored orders, payment attempts, measured kitchen timestamps, POSPal outbox state and catering records.
+* Show explicit no-data and unavailable states instead of inferring remote integration health.
+* Keep public catering contact-led while online catering ordering is marked coming soon.
+* Align the demo catering contact cards with the dedicated catering email and phone.
 
 = 2.24.3 =
 * Add dedicated catering email and phone settings with customer tap-to-contact links.

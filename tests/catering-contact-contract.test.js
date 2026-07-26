@@ -11,6 +11,7 @@ const admin = read('admin/class-doughboss-admin.php');
 const rest = read('includes/class-doughboss-rest-controller.php');
 const shortcodes = read('includes/class-doughboss-shortcodes.php');
 const css = read('public/css/doughboss-catering.css');
+const demo = read('demo/index.html');
 
 test('official catering contacts are configurable and safe by default', () => {
 	assert.match(settings, /'catering_email'\s*=>\s*'catering@doughboss\.com\.au'/);
@@ -27,9 +28,17 @@ test('catering notifications use the dedicated inbox', () => {
 test('catering shortcode includes contact, how-to and Q&A content', () => {
 	assert.match(shortcodes, /mailto:/);
 	assert.match(shortcodes, /tel:/);
+	assert.match(shortcodes, /Catering online ordering is coming soon/);
+	assert.doesNotMatch(shortcodes, /data-doughboss-catering/);
 	assert.match(shortcodes, /A fresh spread in three steps/);
 	assert.match(shortcodes, /Good to know before you order/);
 	assert.match(shortcodes, /cannot promise an allergen-free environment/);
+});
+
+test('demo catering launch state uses the dedicated contacts', () => {
+	assert.match(demo, /mailto:catering@doughboss\.com\.au/);
+	assert.match(demo, /tel:\+61422487487/);
+	assert.match(demo, /Catering online ordering is coming soon/);
 });
 
 test('catering contact and guide collapse to one column on mobile', () => {

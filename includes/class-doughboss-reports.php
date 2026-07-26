@@ -192,6 +192,177 @@ class DoughBoss_Reports {
 	}
 
 	/**
+	 * Current payment-attempt states updated in a period.
+	 *
+	 * Orders deliberately retain only paid / unpaid / refunded because a failed
+	 * card attempt must never create an order. The durable payment-attempt table
+	 * is therefore the source of truth for failed, unknown and mismatched card
+	 * attempts shown to managers.
+	 *
+	 * @param string $from        Start date (Y-m-d) or datetime.
+	 * @param string $to          End date (Y-m-d) or datetime.
+	 * @param int    $location_id Location ID (0 = all shops).
+	 * @return array{available:bool,statuses:array<string,int>}
+	 */
+	public static function payment_attempt_statuses( $from, $to, $location_id = 0 ) {
+		if ( ! class_exists( 'DoughBoss_Activator' ) || ! DoughBoss_Activator::payment_storage_ready() ) {
+			return array(
+				'available' => false,
+				'statuses'  => array(),
+			);
+		}
+
+		global $wpdb;
+		$table = DoughBoss_Payment_Attempts::table();
+		list( $start, $end ) = self::bounds( $from, $to );
+		$where  = "purpose = 'order' AND updated_at BETWEEN %s AND %s";
+		$params = array( $start, $end );
+		if ( (int) $location_id > 0 ) {
+			$where    .= ' AND location_id = %d';
+			$params[] = (int) $location_id;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- plugin-owned table; all values use placeholders.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT status, COUNT(*) AS attempts FROM {$table} WHERE {$where} GROUP BY status",
+				$params
+			)
+		);
+
+		$statuses = array();
+		foreach ( (array) $rows as $row ) {
+			$statuses[ (string) $row->status ] = (int) $row->attempts;
+		}
+
+		return array(
+			'available' => true,
+			'statuses'  => $statuses,
+		);
+	}
+
+	/**
+	 * Average active cooking duration for orders made ready in a period.
+	 *
+	 * A timing figure is returned only when both timestamps were actually
+	 * written by the kitchen workflow. This avoids presenting an ETA, an order
+	 * age, or a guessed prep time as a measured kitchen result.
+	 *
+	 * @param string $from        Start date (Y-m-d) or datetime.
+	 * @param string $to          End date (Y-m-d) or datetime.
+	 * @param int    $location_id Location ID (0 = all shops).
+	 * @return array{available:bool,samples:int,average_minutes:float}
+	 */
+	public static function kitchen_timing( $from, $to, $location_id = 0 ) {
+		if ( ! class_exists( 'DoughBoss_Activator' ) || ! DoughBoss_Activator::lifecycle_storage_ready() ) {
+			return array(
+				'available'       => false,
+				'samples'         => 0,
+				'average_minutes' => 0.0,
+			);
+		}
+
+		global $wpdb;
+		$table = self::orders_table();
+		list( $start, $end ) = self::bounds( $from, $to );
+		$where  = "status != 'cancelled' AND cooking_started_at IS NOT NULL AND ready_at IS NOT NULL AND ready_at BETWEEN %s AND %s";
+		$params = array( $start, $end );
+		if ( (int) $location_id > 0 ) {
+			$where    .= ' AND location_id = %d';
+			$params[] = (int) $location_id;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- plugin-owned table; all values use placeholders.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT COUNT(*) AS samples, COALESCE( AVG( TIMESTAMPDIFF( SECOND, cooking_started_at, ready_at ) ), 0 ) AS average_seconds FROM {$table} WHERE {$where}",
+				$params
+			)
+		);
+
+		return array(
+			'available'       => true,
+			'samples'         => $row ? (int) $row->samples : 0,
+			'average_minutes' => $row ? max( 0.0, (float) $row->average_seconds / 60 ) : 0.0,
+		);
+	}
+
+	/**
+	 * Active catering work, grouped by its real lifecycle status.
+	 *
+	 * @return array{available:bool,statuses:array<string,int>}
+	 */
+	public static function catering_pipeline() {
+		global $wpdb;
+		$table = DoughBoss_Catering::table();
+
+		// A partial/manual plugin upgrade should show an honest unavailable state
+		// instead of turning an absent table into a misleading zero-enquiry count.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- table name is derived from the site prefix.
+		$exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+		if ( $table !== $exists ) {
+			return array(
+				'available' => false,
+				'statuses'  => array(),
+			);
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- plugin-owned table, no external values.
+		$rows = $wpdb->get_results(
+			"SELECT status, COUNT(*) AS enquiries FROM {$table} WHERE status NOT IN ( 'fulfilled', 'lost' ) GROUP BY status"
+		);
+		$statuses = array();
+		foreach ( (array) $rows as $row ) {
+			$statuses[ (string) $row->status ] = (int) $row->enquiries;
+		}
+
+		return array(
+			'available' => true,
+			'statuses'  => $statuses,
+		);
+	}
+
+	/**
+	 * Read the local POSPal mirror state without calling POSPal.
+	 *
+	 * This intentionally reports configuration and the durable local outbox,
+	 * rather than claiming that a remote till is online from a dashboard load.
+	 *
+	 * @return array{state:string,stores:int,queued:int,terminal:int,retrying:int,ambiguous:int}
+	 */
+	public static function pospal_sync_snapshot() {
+		if ( ! DoughBoss_Settings::pospal_enabled() ) {
+			return array( 'state' => 'not_configured', 'stores' => 0, 'queued' => 0, 'terminal' => 0, 'retrying' => 0, 'ambiguous' => 0 );
+		}
+
+		$stores = DoughBoss_Settings::pospal_stores();
+		if ( empty( $stores ) ) {
+			return array( 'state' => 'not_configured', 'stores' => 0, 'queued' => 0, 'terminal' => 0, 'retrying' => 0, 'ambiguous' => 0 );
+		}
+		if ( ! DoughBoss_Settings::pospal_push_enabled() ) {
+			return array( 'state' => 'push_disabled', 'stores' => count( $stores ), 'queued' => 0, 'terminal' => 0, 'retrying' => 0, 'ambiguous' => 0 );
+		}
+		if ( ! class_exists( 'DoughBoss_Activator' ) || ! DoughBoss_Activator::pospal_outbox_storage_ready() ) {
+			return array( 'state' => 'outbox_unavailable', 'stores' => count( $stores ), 'queued' => 0, 'terminal' => 0, 'retrying' => 0, 'ambiguous' => 0 );
+		}
+
+		global $wpdb;
+		$table = DoughBoss_POSPal_Outbox::table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- plugin-owned table, no external values.
+		$queued = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE status IN ( 'pending', 'in_flight' )" );
+		$alerts = DoughBoss_POSPal_Outbox::counts_for_alert();
+
+		return array(
+			'state'     => ( (int) $alerts['terminal'] > 0 || (int) $alerts['retrying'] > 0 ) ? 'attention' : 'monitoring',
+			'stores'    => count( $stores ),
+			'queued'    => $queued,
+			'terminal'  => (int) $alerts['terminal'],
+			'retrying'  => (int) $alerts['retrying'],
+			'ambiguous' => (int) $alerts['ambiguous'],
+		);
+	}
+
+	/**
 	 * Per-shop order count, gross revenue and collected (paid) revenue.
 	 *
 	 * @param string $from Start date (Y-m-d) or datetime.

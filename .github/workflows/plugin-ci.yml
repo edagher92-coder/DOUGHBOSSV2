@@ -81,6 +81,8 @@ jobs:
           node --test tests/wordpress-seo-marketing-contract.test.js
           node --test tests/google-review-contract.test.js
           node --test tests/catering-contact-contract.test.js
+          node --test tests/admin-dashboard-contract.test.js
+          node --test tests/migration-gate-contract.test.js
 
   build-zip:
     name: Build installable plugin zip

@@ -213,6 +213,7 @@ class DoughBoss_Shortcodes {
 						<span><?php echo esc_html( $phone_display ); ?></span>
 					</a>
 				</div>
+				<p class="dbc-coming-soon" role="status"><strong><?php esc_html_e( 'Catering online ordering is coming soon — stay tuned!', 'doughboss' ); ?></strong></p>
 			</section>
 			<section class="dbc-how" aria-labelledby="dbc-how-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'How it works', 'doughboss' ); ?></p>
@@ -223,9 +224,6 @@ class DoughBoss_Shortcodes {
 					<li><span>03</span><strong><?php esc_html_e( 'Confirm before we bake', 'doughboss' ); ?></strong><p><?php esc_html_e( 'We confirm availability, final price, collection details and payment first.', 'doughboss' ); ?></p></li>
 				</ol>
 			</section>
-			<div class="dbc-app" data-doughboss-catering>
-				<div class="db-loading"><?php esc_html_e( 'Loading catering…', 'doughboss' ); ?></div>
-			</div>
 			<section class="dbc-faq" aria-labelledby="dbc-faq-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'Catering Q&A', 'doughboss' ); ?></p>
 				<h2 class="dbc-h2" id="dbc-faq-title"><?php esc_html_e( 'Good to know before you order', 'doughboss' ); ?></h2>

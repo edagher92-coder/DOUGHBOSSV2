@@ -108,6 +108,15 @@ class DoughBoss_Admin {
 
 		add_submenu_page(
 			'doughboss',
+			__( 'Operations Dashboard', 'doughboss' ),
+			__( 'Dashboard', 'doughboss' ),
+			$this->cap(),
+			'doughboss-dashboard',
+			array( $this, 'render_dashboard_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
 			__( 'Orders', 'doughboss' ),
 			__( 'Orders', 'doughboss' ),
 			$this->cap(),
@@ -208,6 +217,126 @@ class DoughBoss_Admin {
 			'dashicons-tickets-alt',
 			28
 		);
+	}
+
+	/**
+	 * Render an evidence-only operating snapshot for owners and managers.
+	 *
+	 * This intentionally makes no remote payment or POS calls. It is a compact
+	 * view over rows already recorded by DoughBoss, so missing integrations and
+	 * empty histories are displayed as such rather than inferred as success.
+	 *
+	 * @return void
+	 */
+	public function render_dashboard_page() {
+		if ( ! current_user_can( $this->cap() ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
+		}
+
+		$location = isset( $_GET['location'] ) ? absint( $_GET['location'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only dashboard filter.
+		list( $start, $end ) = DoughBoss_Reports::today_bounds();
+		$summary        = DoughBoss_Reports::summary( $start, $end, $location );
+		$payment_mix    = DoughBoss_Reports::payment_mix( $start, $end, $location );
+		$attempts       = DoughBoss_Reports::payment_attempt_statuses( $start, $end, $location );
+		$kitchen_timing = DoughBoss_Reports::kitchen_timing( $start, $end, $location );
+		$pospal         = DoughBoss_Reports::pospal_sync_snapshot();
+		$catering       = DoughBoss_Reports::catering_pipeline();
+		$locations      = $this->location_names();
+		$multi_shop     = count( $locations ) > 1;
+		$unpaid         = isset( $payment_mix['unpaid'] ) ? $payment_mix['unpaid'] : array( 'orders' => 0, 'revenue' => 0.0 );
+		$paid           = isset( $payment_mix['paid'] ) ? $payment_mix['paid'] : array( 'orders' => 0, 'revenue' => 0.0 );
+		$refunded       = isset( $payment_mix['refunded'] ) ? $payment_mix['refunded'] : array( 'orders' => 0, 'revenue' => 0.0 );
+		$attempt_states = isset( $attempts['statuses'] ) ? $attempts['statuses'] : array();
+		$failed_attempts = (int) ( isset( $attempt_states['failed'] ) ? $attempt_states['failed'] : 0 )
+			+ (int) ( isset( $attempt_states['unknown'] ) ? $attempt_states['unknown'] : 0 )
+			+ (int) ( isset( $attempt_states['mismatch'] ) ? $attempt_states['mismatch'] : 0 );
+
+		$pospal_label = __( 'Not connected', 'doughboss' );
+		$pospal_note  = __( 'No POSPal configuration is available to this site.', 'doughboss' );
+		if ( 'push_disabled' === $pospal['state'] ) {
+			$pospal_label = __( 'Configured — mirroring off', 'doughboss' );
+			$pospal_note  = __( 'Voucher settings may be configured, but online orders are not being mirrored to POSPal.', 'doughboss' );
+		} elseif ( 'outbox_unavailable' === $pospal['state'] ) {
+			$pospal_label = __( 'Sync storage unavailable', 'doughboss' );
+			$pospal_note  = __( 'The POSPal outbox needs a completed database upgrade before sync can be measured.', 'doughboss' );
+		} elseif ( 'attention' === $pospal['state'] ) {
+			$pospal_label = __( 'Needs attention', 'doughboss' );
+			$pospal_note  = sprintf(
+				/* translators: 1: queued count, 2: terminal count, 3: retrying count. */
+				__( '%1$d queued, %2$d terminal and %3$d retrying local sync record(s).', 'doughboss' ),
+				(int) $pospal['queued'],
+				(int) $pospal['terminal'],
+				(int) $pospal['retrying']
+			);
+		} elseif ( 'monitoring' === $pospal['state'] ) {
+			$pospal_label = __( 'Local sync monitoring', 'doughboss' );
+			$pospal_note  = sprintf(
+				/* translators: 1: configured stores, 2: queued records. */
+				__( '%1$d configured store(s); %2$d local sync record(s) waiting. This does not claim remote till reachability.', 'doughboss' ),
+				(int) $pospal['stores'],
+				(int) $pospal['queued']
+			);
+		}
+		?>
+		<div class="wrap doughboss-dashboard">
+			<h1><?php esc_html_e( 'Operations Dashboard', 'doughboss' ); ?></h1>
+			<p class="description"><?php esc_html_e( 'Today in the site timezone. Figures use stored DoughBoss records only; this page never calls payment gateways or POSPal.', 'doughboss' ); ?></p>
+
+			<form method="get" style="margin:12px 0 20px;">
+				<input type="hidden" name="page" value="doughboss-dashboard" />
+				<?php if ( $multi_shop ) : ?>
+					<label for="db-dashboard-location"><?php esc_html_e( 'Shop', 'doughboss' ); ?></label>
+					<select id="db-dashboard-location" name="location">
+						<option value="0"><?php esc_html_e( 'All shops', 'doughboss' ); ?></option>
+						<?php foreach ( $locations as $location_id => $location_name ) : ?>
+							<option value="<?php echo esc_attr( $location_id ); ?>" <?php selected( $location, $location_id ); ?>><?php echo esc_html( $location_name ); ?></option>
+						<?php endforeach; ?>
+					</select>
+					<button class="button"><?php esc_html_e( 'Apply', 'doughboss' ); ?></button>
+				<?php endif; ?>
+				<a class="button-link" href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss' ) ); ?>"><?php esc_html_e( 'View orders', 'doughboss' ); ?></a>
+				<a class="button-link" href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-reports' ) ); ?>"><?php esc_html_e( 'Open reports', 'doughboss' ); ?></a>
+			</form>
+
+			<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;">
+				<div class="card" style="min-width:160px;margin:0;padding:12px 16px;"><p style="margin:0;color:#646970;"><?php esc_html_e( 'Orders', 'doughboss' ); ?></p><p style="font-size:1.7em;margin:3px 0 0;"><strong><?php echo esc_html( number_format_i18n( $summary['orders'] ) ); ?></strong></p></div>
+				<div class="card" style="min-width:160px;margin:0;padding:12px 16px;"><p style="margin:0;color:#646970;"><?php esc_html_e( 'Gross sales', 'doughboss' ); ?></p><p style="font-size:1.7em;margin:3px 0 0;"><strong><?php echo esc_html( DoughBoss_Settings::format_price( $summary['revenue'] ) ); ?></strong></p></div>
+				<div class="card" style="min-width:160px;margin:0;padding:12px 16px;"><p style="margin:0;color:#646970;"><?php esc_html_e( 'Average order value', 'doughboss' ); ?></p><p style="font-size:1.7em;margin:3px 0 0;"><strong><?php echo esc_html( $summary['orders'] > 0 ? DoughBoss_Settings::format_price( $summary['aov'] ) : __( 'No data', 'doughboss' ) ); ?></strong></p></div>
+				<div class="card" style="min-width:200px;margin:0;padding:12px 16px;"><p style="margin:0;color:#646970;"><?php esc_html_e( 'Kitchen active cooking time', 'doughboss' ); ?></p><p style="font-size:1.3em;margin:3px 0 0;"><strong><?php echo esc_html( $kitchen_timing['available'] && $kitchen_timing['samples'] > 0 ? sprintf( __( '%1$s min average', 'doughboss' ), number_format_i18n( $kitchen_timing['average_minutes'], 1 ) ) : __( 'No data', 'doughboss' ) ); ?></strong></p><small><?php echo esc_html( $kitchen_timing['available'] && $kitchen_timing['samples'] > 0 ? sprintf( _n( '%s ready order', '%s ready orders', $kitchen_timing['samples'], 'doughboss' ), number_format_i18n( $kitchen_timing['samples'] ) ) : __( 'Requires cooking and ready timestamps.', 'doughboss' ) ); ?></small></div>
+			</div>
+
+			<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:18px;max-width:1100px;">
+				<section class="card" style="margin:0;padding:16px;"><h2 style="margin-top:0;"><?php esc_html_e( 'Payments', 'doughboss' ); ?></h2>
+					<table class="widefat striped"><tbody>
+						<tr><th><?php esc_html_e( 'Paid / captured', 'doughboss' ); ?></th><td><?php echo esc_html( sprintf( __( '%1$s (%2$s orders)', 'doughboss' ), DoughBoss_Settings::format_price( $paid['revenue'] ), number_format_i18n( $paid['orders'] ) ) ); ?></td></tr>
+						<tr><th><?php esc_html_e( 'Unpaid / collect in store', 'doughboss' ); ?></th><td><?php echo esc_html( sprintf( __( '%1$s (%2$s orders)', 'doughboss' ), DoughBoss_Settings::format_price( $unpaid['revenue'] ), number_format_i18n( $unpaid['orders'] ) ) ); ?></td></tr>
+						<tr><th><?php esc_html_e( 'Refunded', 'doughboss' ); ?></th><td><?php echo esc_html( sprintf( __( '%1$s (%2$s orders)', 'doughboss' ), DoughBoss_Settings::format_price( $refunded['revenue'] ), number_format_i18n( $refunded['orders'] ) ) ); ?></td></tr>
+						<tr><th><?php esc_html_e( 'Failed or unresolved card attempts', 'doughboss' ); ?></th><td><?php echo esc_html( $attempts['available'] ? number_format_i18n( $failed_attempts ) : __( 'Not available', 'doughboss' ) ); ?></td></tr>
+					</tbody></table>
+					<p class="description" style="margin-bottom:0;"><?php esc_html_e( 'Failed attempts have no order by design; they are tracked separately from unpaid pay-in-store orders.', 'doughboss' ); ?></p>
+				</section>
+
+				<section class="card" style="margin:0;padding:16px;"><h2 style="margin-top:0;"><?php esc_html_e( 'POSPal order mirror', 'doughboss' ); ?></h2>
+					<p style="font-size:1.2em;"><strong><?php echo esc_html( $pospal_label ); ?></strong></p>
+					<p class="description"><?php echo esc_html( $pospal_note ); ?></p>
+					<?php if ( (int) $pospal['ambiguous'] > 0 ) : ?><p style="color:#b32d2e;"><strong><?php echo esc_html( sprintf( _n( '%s ambiguous record needs a till check before retrying.', '%s ambiguous records need till checks before retrying.', $pospal['ambiguous'], 'doughboss' ), number_format_i18n( $pospal['ambiguous'] ) ) ); ?></strong></p><?php endif; ?>
+					<p style="margin-bottom:0;"><a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>"><?php esc_html_e( 'Open POSPal settings', 'doughboss' ); ?></a></p>
+				</section>
+
+				<section class="card" style="margin:0;padding:16px;"><h2 style="margin-top:0;"><?php esc_html_e( 'Catering pipeline', 'doughboss' ); ?></h2>
+					<?php if ( ! $catering['available'] ) : ?>
+						<p><strong><?php esc_html_e( 'Not available', 'doughboss' ); ?></strong></p>
+						<p class="description"><?php esc_html_e( 'The catering storage has not finished upgrading.', 'doughboss' ); ?></p>
+					<?php elseif ( empty( $catering['statuses'] ) ) : ?>
+						<p><strong><?php esc_html_e( 'No active enquiries', 'doughboss' ); ?></strong></p>
+					<?php else : ?>
+						<ul style="margin:0 0 12px 18px;"><?php foreach ( $catering['statuses'] as $catering_status => $count ) : ?><li><?php echo esc_html( sprintf( __( '%1$s: %2$s', 'doughboss' ), isset( DoughBoss_Catering::statuses()[ $catering_status ] ) ? DoughBoss_Catering::statuses()[ $catering_status ] : ucfirst( $catering_status ), number_format_i18n( $count ) ) ); ?></li><?php endforeach; ?></ul>
+					<?php endif; ?>
+					<p style="margin-bottom:0;"><a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-catering' ) ); ?>"><?php esc_html_e( 'Manage catering enquiries', 'doughboss' ); ?></a></p>
+				</section>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
