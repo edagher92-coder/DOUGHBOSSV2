@@ -1,0 +1,336 @@
+/**
+ * DoughBoss storefront styles. Scoped under .db-app to avoid clashing with
+ * the active theme.
+ */
+
+.db-app {
+	--db-accent: #d6452b;
+	--db-accent-dark: #b8381f;
+	--db-border: #e6e1da;
+	--db-muted: #6b6b6b;
+	font-size: 16px;
+	line-height: 1.5;
+	color: #2b2b2b;
+}
+
+.db-app * {
+	box-sizing: border-box;
+}
+
+.db-loading,
+.db-empty {
+	padding: 1.5rem;
+	text-align: center;
+	color: var(--db-muted);
+}
+
+.db-error {
+	color: var(--db-accent-dark);
+	font-weight: 600;
+}
+
+/* Buttons ----------------------------------------------------------- */
+.db-btn {
+	background: var(--db-accent);
+	color: #fff;
+	border: 0;
+	border-radius: 6px;
+	padding: 0.55rem 1rem;
+	font-size: 0.95rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.db-btn:hover:not(:disabled) {
+	background: var(--db-accent-dark);
+}
+
+.db-btn:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.db-btn--lg {
+	width: 100%;
+	padding: 0.8rem 1rem;
+	font-size: 1.05rem;
+	margin-top: 0.75rem;
+}
+
+.db-link {
+	background: none;
+	border: 0;
+	color: var(--db-accent-dark);
+	cursor: pointer;
+	text-decoration: underline;
+	padding: 0;
+	font-size: 0.85rem;
+}
+
+/* Menu -------------------------------------------------------------- */
+.db-category {
+	margin: 1.5rem 0 0.75rem;
+	border-bottom: 2px solid var(--db-accent);
+	padding-bottom: 0.25rem;
+}
+
+.db-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 1rem;
+}
+
+.db-card {
+	border: 1px solid var(--db-border);
+	border-radius: 10px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+}
+
+.db-card-img {
+	height: 140px;
+	background-size: cover;
+	background-position: center;
+	background-color: #f3efe9;
+}
+
+.db-card-img--placeholder {
+	background-image: linear-gradient(135deg, #f3efe9 25%, #ece6dd 25%, #ece6dd 50%, #f3efe9 50%);
+	background-size: 24px 24px;
+}
+
+.db-card-body {
+	padding: 0.85rem;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+}
+
+.db-card-body h4 {
+	margin: 0 0 0.35rem;
+}
+
+.db-card-desc {
+	color: var(--db-muted);
+	font-size: 0.85rem;
+	margin: 0 0 0.75rem;
+	flex: 1;
+}
+
+.db-card-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.db-price {
+	font-weight: 700;
+}
+
+/* Builder ----------------------------------------------------------- */
+.db-builder-inner {
+	border: 1px solid var(--db-border);
+	border-radius: 10px;
+	padding: 1.25rem;
+	background: #fff;
+	max-width: 560px;
+}
+
+.db-builder-inner h4 {
+	margin: 1rem 0 0.5rem;
+}
+
+.db-options {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.db-option {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.5rem 0.6rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.db-option span:nth-of-type(1) {
+	flex: 1;
+}
+
+.db-option-price {
+	color: var(--db-muted);
+	font-size: 0.9rem;
+}
+
+.db-builder-foot {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	margin-top: 1.25rem;
+	border-top: 1px dashed var(--db-border);
+	padding-top: 1rem;
+}
+
+.db-builder-price {
+	font-size: 1.5rem;
+	font-weight: 800;
+	color: var(--db-accent-dark);
+}
+
+.db-builder-foot .db-btn--lg {
+	margin-top: 0;
+}
+
+/* Cart -------------------------------------------------------------- */
+.db-cart-lines {
+	border: 1px solid var(--db-border);
+	border-radius: 10px;
+	overflow: hidden;
+}
+
+.db-cart-line {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.75rem;
+	border-bottom: 1px solid var(--db-border);
+}
+
+.db-cart-line:last-child {
+	border-bottom: 0;
+}
+
+.db-cart-line-info {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.db-cart-line-info small {
+	color: var(--db-muted);
+}
+
+.db-qty {
+	width: 60px;
+	padding: 0.35rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+}
+
+.db-fulfilment {
+	display: flex;
+	gap: 0.75rem;
+	margin: 1rem 0;
+}
+
+.db-totals {
+	border-top: 1px solid var(--db-border);
+	padding-top: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+.db-total-row {
+	display: flex;
+	justify-content: space-between;
+	padding: 0.2rem 0;
+}
+
+.db-total-row--grand {
+	font-size: 1.2rem;
+	font-weight: 800;
+	border-top: 2px solid var(--db-accent);
+	margin-top: 0.4rem;
+	padding-top: 0.5rem;
+}
+
+/* Checkout ---------------------------------------------------------- */
+.db-checkout {
+	margin-top: 1.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.db-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.db-field span {
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.db-field input,
+.db-field textarea {
+	padding: 0.55rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+	font: inherit;
+}
+
+.db-checkout-msg {
+	min-height: 1rem;
+}
+
+.db-confirm {
+	border: 2px solid var(--db-accent);
+	border-radius: 10px;
+	padding: 1.5rem;
+	text-align: center;
+	background: #fff8f5;
+}
+
+/* Tracking ---------------------------------------------------------- */
+.db-track-form {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	max-width: 380px;
+}
+
+.db-track-form label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.db-track-form input {
+	padding: 0.55rem;
+	border: 1px solid var(--db-border);
+	border-radius: 6px;
+	font: inherit;
+}
+
+.db-track-card {
+	margin-top: 1rem;
+	border: 1px solid var(--db-border);
+	border-radius: 10px;
+	padding: 1rem;
+	max-width: 380px;
+}
+
+.db-status-badge {
+	display: inline-block;
+	background: var(--db-accent);
+	color: #fff;
+	border-radius: 20px;
+	padding: 0.25rem 0.85rem;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+.db-item-list {
+	margin: 0.5rem 0;
+	padding-left: 1.1rem;
+}

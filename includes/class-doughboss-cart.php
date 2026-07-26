@@ -1,0 +1,293 @@
+<?php
+/**
+ * Guest-friendly shopping cart.
+ *
+ * Carts are keyed by a random token stored in a cookie and persisted in a
+ * transient, so customers do not need an account and we never rely on PHP
+ * sessions (which are discouraged in WordPress).
+ *
+ * @package DoughBoss
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * Cart storage and pricing.
+ */
+class DoughBoss_Cart {
+
+	const COOKIE      = 'doughboss_cart';
+	const PREFIX      = 'doughboss_cart_';
+	const TTL         = DAY_IN_SECONDS;
+	const MAX_QTY     = 50;
+	const MAX_LINES   = 50;
+
+	/**
+	 * Cached token for the current request.
+	 *
+	 * @var string|null
+	 */
+	private $token = null;
+
+	/**
+	 * Resolve (and lazily create) the cart token for this visitor.
+	 *
+	 * @return string
+	 */
+	public function get_token() {
+		if ( null !== $this->token ) {
+			return $this->token;
+		}
+
+		if ( isset( $_COOKIE[ self::COOKIE ] ) ) {
+			$candidate = sanitize_key( wp_unslash( $_COOKIE[ self::COOKIE ] ) );
+			if ( strlen( $candidate ) >= 16 ) {
+				$this->token = $candidate;
+				return $this->token;
+			}
+		}
+
+		$this->token = wp_generate_password( 32, false, false );
+		$this->set_cookie( $this->token );
+		return $this->token;
+	}
+
+	/**
+	 * Send the cart cookie. Safe to call before output in a REST callback.
+	 *
+	 * @param string $token Cart token.
+	 * @return void
+	 */
+	private function set_cookie( $token ) {
+		if ( headers_sent() ) {
+			return;
+		}
+		setcookie(
+			self::COOKIE,
+			$token,
+			array(
+				'expires'  => time() + self::TTL,
+				'path'     => defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+				'domain'   => defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '',
+				'secure'   => is_ssl(),
+				'httponly' => true,
+				'samesite' => 'Lax',
+			)
+		);
+		$_COOKIE[ self::COOKIE ] = $token;
+	}
+
+	/**
+	 * Transient key for the current cart.
+	 *
+	 * @return string
+	 */
+	private function transient_key() {
+		return self::PREFIX . $this->get_token();
+	}
+
+	/**
+	 * Read raw cart lines from storage.
+	 *
+	 * @return array
+	 */
+	private function read() {
+		$data = get_transient( $this->transient_key() );
+		return is_array( $data ) ? $data : array();
+	}
+
+	/**
+	 * Persist cart lines to storage.
+	 *
+	 * @param array $lines Cart lines.
+	 * @return void
+	 */
+	private function write( array $lines ) {
+		set_transient( $this->transient_key(), $lines, self::TTL );
+	}
+
+	/**
+	 * Build a stable line key for a configuration so identical items merge.
+	 *
+	 * @param array $line Line data.
+	 * @return string
+	 */
+	private function line_key( array $line ) {
+		$toppings = isset( $line['toppings'] ) ? wp_list_pluck( $line['toppings'], 'slug' ) : array();
+		sort( $toppings );
+		$signature = wp_json_encode(
+			array(
+				$line['type'],
+				$line['item_id'],
+				isset( $line['size'] ) ? $line['size'] : '',
+				$toppings,
+			)
+		);
+		return md5( $signature );
+	}
+
+	/**
+	 * Add an item to the cart.
+	 *
+	 * @param array $line {
+	 *     Line definition.
+	 *
+	 *     @type string $type     'menu' or 'custom'.
+	 *     @type int    $item_id  Menu item post ID (0 for custom builds).
+	 *     @type string $name     Display name.
+	 *     @type string $size     Size label (optional).
+	 *     @type array  $toppings List of array{slug,label,price} (optional).
+	 *     @type float  $unit_price Per-unit price.
+	 *     @type int    $quantity Quantity to add.
+	 * }
+	 * @return array|WP_Error The added/merged line, or an error.
+	 */
+	public function add( array $line ) {
+		$lines    = $this->read();
+		$quantity = max( 1, (int) ( isset( $line['quantity'] ) ? $line['quantity'] : 1 ) );
+		$key      = $this->line_key( $line );
+
+		if ( isset( $lines[ $key ] ) ) {
+			$lines[ $key ]['quantity'] = min( self::MAX_QTY, $lines[ $key ]['quantity'] + $quantity );
+		} else {
+			if ( count( $lines ) >= self::MAX_LINES ) {
+				return new WP_Error( 'doughboss_cart_full', __( 'Your cart is full.', 'doughboss' ), array( 'status' => 400 ) );
+			}
+			$lines[ $key ] = array(
+				'key'        => $key,
+				'type'       => $line['type'],
+				'item_id'    => (int) $line['item_id'],
+				'name'       => $line['name'],
+				'size'       => isset( $line['size'] ) ? $line['size'] : '',
+				'toppings'   => isset( $line['toppings'] ) ? array_values( $line['toppings'] ) : array(),
+				'unit_price' => round( (float) $line['unit_price'], 2 ),
+				'quantity'   => min( self::MAX_QTY, $quantity ),
+			);
+		}
+
+		$this->write( $lines );
+		return $this->decorate_line( $lines[ $key ] );
+	}
+
+	/**
+	 * Update the quantity of a line. A quantity of 0 removes it.
+	 *
+	 * @param string $key      Line key.
+	 * @param int    $quantity New quantity.
+	 * @return bool True when the line existed.
+	 */
+	public function update_quantity( $key, $quantity ) {
+		$lines = $this->read();
+		if ( ! isset( $lines[ $key ] ) ) {
+			return false;
+		}
+
+		$quantity = (int) $quantity;
+		if ( $quantity <= 0 ) {
+			unset( $lines[ $key ] );
+		} else {
+			$lines[ $key ]['quantity'] = min( self::MAX_QTY, $quantity );
+		}
+
+		$this->write( $lines );
+		return true;
+	}
+
+	/**
+	 * Remove a single line.
+	 *
+	 * @param string $key Line key.
+	 * @return bool
+	 */
+	public function remove( $key ) {
+		$lines = $this->read();
+		if ( ! isset( $lines[ $key ] ) ) {
+			return false;
+		}
+		unset( $lines[ $key ] );
+		$this->write( $lines );
+		return true;
+	}
+
+	/**
+	 * Empty the cart.
+	 *
+	 * @return void
+	 */
+	public function clear() {
+		delete_transient( $this->transient_key() );
+	}
+
+	/**
+	 * Decorate a stored line with computed line_total.
+	 *
+	 * @param array $line Stored line.
+	 * @return array
+	 */
+	private function decorate_line( array $line ) {
+		$line['line_total'] = round( $line['unit_price'] * $line['quantity'], 2 );
+		return $line;
+	}
+
+	/**
+	 * Get all decorated cart lines.
+	 *
+	 * @return array[]
+	 */
+	public function get_lines() {
+		return array_map( array( $this, 'decorate_line' ), array_values( $this->read() ) );
+	}
+
+	/**
+	 * Compute cart totals.
+	 *
+	 * @param string $order_type 'pickup' or 'delivery' (affects delivery fee).
+	 * @return array{subtotal:float,tax:float,delivery_fee:float,total:float,item_count:int}
+	 */
+	public function totals( $order_type = 'pickup' ) {
+		$subtotal   = 0.0;
+		$item_count = 0;
+
+		foreach ( $this->get_lines() as $line ) {
+			$subtotal   += $line['line_total'];
+			$item_count += $line['quantity'];
+		}
+
+		$subtotal     = round( $subtotal, 2 );
+		$tax          = round( $subtotal * DoughBoss_Settings::tax_fraction(), 2 );
+		$delivery_fee = ( 'delivery' === $order_type ) ? round( (float) DoughBoss_Settings::get( 'delivery_fee', 0 ), 2 ) : 0.0;
+		$total        = round( $subtotal + $tax + $delivery_fee, 2 );
+
+		return array(
+			'subtotal'     => $subtotal,
+			'tax'          => $tax,
+			'delivery_fee' => $delivery_fee,
+			'total'        => $total,
+			'item_count'   => $item_count,
+		);
+	}
+
+	/**
+	 * Whether the cart has no items.
+	 *
+	 * @return bool
+	 */
+	public function is_empty() {
+		return 0 === count( $this->read() );
+	}
+
+	/**
+	 * Full cart payload for API/template consumption.
+	 *
+	 * @param string $order_type Order type for fee calculation.
+	 * @return array
+	 */
+	public function to_array( $order_type = 'pickup' ) {
+		return array(
+			'items'  => $this->get_lines(),
+			'totals' => $this->totals( $order_type ),
+		);
+	}
+}
