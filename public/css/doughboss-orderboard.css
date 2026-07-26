@@ -55,6 +55,7 @@
 .db-board-actions {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 0.75rem;
 }
 
@@ -124,7 +125,7 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-lanes {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 1rem;
 	align-items: start;
 }
@@ -562,4 +563,19 @@ body.db-alerting .db-board-bar h1::after {
 	.db-card-time { margin-left: 0; }
 	.db-review-change { margin-left: 0; }
 	.db-amendment-panel { padding: 0.75rem; }
+}
+
+@media (max-width: 480px) {
+	.db-board-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.db-board-actions .button,
+	.db-sound-toggle { min-height: 44px; width: 100%; }
+	.db-banner {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.db-banner .button { width: 100%; }
+	.db-preorder-list { grid-template-columns: minmax(0, 1fr); }
 }

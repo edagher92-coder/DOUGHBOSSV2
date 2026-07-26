@@ -52,6 +52,12 @@ function doughboss_hybrid_load_storefront_assets( $load ) {
 }
 add_filter( 'doughboss_load_assets', 'doughboss_hybrid_load_storefront_assets' );
 
+/** Load catering-only assets when its template renders the shortcode. */
+function doughboss_hybrid_load_catering_assets( $load ) {
+	return $load || is_page( 'catering' );
+}
+add_filter( 'doughboss_load_catering_assets', 'doughboss_hybrid_load_catering_assets' );
+
 function doughboss_hybrid_load_hero_assets( $load ) {
 	return $load || is_front_page();
 }

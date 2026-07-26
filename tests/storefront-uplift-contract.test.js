@@ -47,4 +47,21 @@ test('connected WordPress menu is contained and ordered like the approved demo',
 	assert.match(css, /@media \(max-width: 640px\)/);
 	assert.match(css, /\.db-app\.db-menu \{/);
 	assert.match(css, /body\.page-id-402 \.entry-content/);
+	assert.match(css, /body\.page-id-402 \.bgcontent/);
+	assert.match(css, /overflow-x: clip/);
+});
+
+test('small-screen cart, voucher and tracking controls remain usable', function () {
+	assert.match(css, /\.db-fulfilment \{[\s\S]*?flex-wrap: wrap/);
+	assert.match(css, /\.db-voucher-row \{ display: flex; flex-wrap: wrap/);
+	assert.match(css, /\.db-voucher-input \{[\s\S]*?min-width: 0/);
+	assert.match(css, /@media \(max-width: 360px\)[\s\S]*?\.db-stage-tracker/);
+	assert.match(css, /\.db-app\.db-menu--has-cart-fab \{ padding-bottom: calc\(84px/);
+});
+
+test('specialist assets are not loaded by the broad storefront filter', function () {
+	assert.match(assets, /apply_filters\( 'doughboss_load_catering_assets', false \)/);
+	assert.match(assets, /apply_filters\( 'doughboss_load_voucher_assets', false \)/);
+	assert.doesNotMatch(assets, /current_post_has\( 'doughboss_catering' \) \|\| apply_filters\( 'doughboss_load_assets'/);
+	assert.doesNotMatch(assets, /current_post_has\( 'doughboss_voucher_claim' \) \|\| apply_filters\( 'doughboss_load_assets'/);
 });

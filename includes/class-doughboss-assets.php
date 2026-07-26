@@ -249,7 +249,7 @@ class DoughBoss_Assets {
 
 		// Catering page: ship its own self-contained app + styles, loaded only
 		// when the catering shortcode is on the page (it reuses DoughBossData).
-		if ( $this->current_post_has( 'doughboss_catering' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+		if ( $this->current_post_has( 'doughboss_catering' ) || apply_filters( 'doughboss_load_catering_assets', false ) ) {
 			wp_enqueue_style(
 				'doughboss-catering',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-catering.css',
@@ -267,7 +267,7 @@ class DoughBoss_Assets {
 
 		// Voucher claim widget: its own small app + styles, loaded only when the
 		// claim shortcode is on the page (reuses DoughBossData from the main app).
-		if ( $this->current_post_has( 'doughboss_voucher_claim' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+		if ( $this->current_post_has( 'doughboss_voucher_claim' ) || apply_filters( 'doughboss_load_voucher_assets', false ) ) {
 			wp_enqueue_style(
 				'doughboss-voucher',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-voucher.css',

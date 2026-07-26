@@ -241,11 +241,34 @@ body.page-id-402 .menucontent.entry-content {
 	padding-inline: clamp(16px, 4vw, 48px);
 }
 
+/* The current WordPress theme uses content-box containers with percentage
+ * padding on the Order page. Keep the plugin page inside the viewport without
+ * changing the rest of the legacy theme. */
+body.page-id-402 .bgcontent,
+body.page-id-402 .bgtext,
+body.page-id-402 .bgheader {
+	box-sizing: border-box;
+	min-inline-size: 0;
+	max-inline-size: 100%;
+}
+
+body.page-id-402 .bgcontent {
+	inline-size: 100%;
+	overflow-x: clip;
+}
+
+body.page-id-402 .bgtext {
+	inline-size: auto;
+}
+
 @media (max-width: 640px) {
 	.db-app .db-grid { grid-template-columns: minmax(0, 1fr); }
 	.db-app.db-menu { padding: 1rem; }
 	body.page-id-402 .entry-content,
 	body.page-id-402 .menucontent.entry-content { padding: 24px 16px; }
+	body.page-id-402 .bgcontent { padding: 24px 16px; }
+	body.page-id-402 .bgtext { margin-inline: 0; padding: 0; }
+	body.page-id-402 .bgheader { margin: 16px 0 24px; inline-size: 100%; }
 }
 
 .db-card-img--placeholder {
@@ -455,6 +478,7 @@ body.page-id-402 .menucontent.entry-content {
 
 .db-fulfilment {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 0.75rem;
 	margin: 1rem 0;
 }
@@ -869,9 +893,10 @@ body.page-id-402 .menucontent.entry-content {
 .db-total-row--discount span:last-child { color: #1f9d55; font-weight: 600; }
 
 .db-voucher { margin: 0.75rem 0 1rem; }
-.db-voucher-row { display: flex; gap: 0.5rem; }
+.db-voucher-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .db-voucher-input {
 	flex: 1;
+	min-width: 0;
 	padding: 0.65rem 0.8rem;
 	border: 1px solid #d8d8d8;
 	border-radius: var(--db-r-sm);
@@ -881,6 +906,11 @@ body.page-id-402 .menucontent.entry-content {
 }
 .db-voucher-input:focus { outline: none; border-color: #111; }
 .db-btn--sm { padding: 0.6rem 1rem; font-size: 0.9rem; }
+
+@media (max-width: 480px) {
+	.db-voucher-row { align-items: stretch; flex-direction: column; }
+	.db-voucher-row .db-btn--sm { min-height: 44px; width: 100%; }
+}
 .db-voucher-applied {
 	display: flex;
 	align-items: center;
@@ -1162,6 +1192,34 @@ body.page-id-402 .menucontent.entry-content {
 .db-app .db-cart-fab--bump .db-cart-fab-count { animation: db-cart-fab-bump .38s var(--db-spring); }
 @keyframes db-cart-fab-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes db-cart-fab-bump { 0% { transform: scale(1); } 35% { transform: scale(1.13); } 70% { transform: scale(.98); } 100% { transform: scale(1); } }
+
+@media (max-width: 360px) {
+	.db-app.db-menu--has-cart-fab { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+	.db-app .db-cart-fab { gap: .5rem; padding-inline: .75rem; }
+	.db-app .db-cart-fab-copy { overflow: hidden; }
+	.db-app .db-cart-fab-label,
+	.db-app .db-cart-fab-count {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.db-app .db-cart-fab-label { font-size: 1rem; }
+	.db-app .db-cart-fab-count { font-size: .75rem; }
+	.db-app .db-cart-fab-total { flex: 0 0 auto; font-size: 1.35rem; }
+
+	.db-stage-tracker {
+		gap: .25rem;
+		overflow-x: auto;
+		padding-bottom: .35rem;
+		scroll-snap-type: x proximity;
+		-webkit-overflow-scrolling: touch;
+	}
+	.db-stage {
+		flex: 0 0 78px;
+		min-width: 78px;
+		scroll-snap-align: start;
+	}
+}
 
 .db-app .db-review-invite {
 	display: grid;

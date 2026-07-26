@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.9
+Stable tag: 2.25.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.25.0 =
+* Contain the legacy WordPress Order page shell at phone, tablet and desktop widths.
+* Stack voucher, fulfilment, cart, tracking and kitchen controls safely on small screens.
+* Avoid loading catering and voucher-only assets on unrelated storefront pages.
 
 = 2.24.9 =
 * Correct MPGS v100 Retrieve Order parsing, require a full capture, and preserve safe WordPress draft routing on Hosted Checkout return.
