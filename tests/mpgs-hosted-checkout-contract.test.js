@@ -49,8 +49,26 @@ test('paid order creation requires server retrieval and immutable checkout bindi
 	assert.match(mpgs, /'GET', '\/order\/'/);
 	assert.match(mpgs, /DoughBoss_Payment_Attempts::find_by_provider_reference/);
 	assert.match(mpgs, /metadata\['checkout_key'\]/);
+	assert.match(mpgs, /\? \$result\['order'\] : \$result/);
+	assert.match(mpgs, /'CAPTURED' === \$provider_state/);
+	assert.doesNotMatch(mpgs, /'PARTIALLY_CAPTURED'.*'succeeded'/);
 	assert.match(rest, /hash_equals\( \$expected_checkout, \$meta_checkout \)/);
 	assert.match(rest, /'succeeded'\s*!==\s*\$status/);
+});
+
+test('Hosted Checkout return keeps only safe WordPress routing state', function () {
+	assert.match(client, /return_url: mpgsReturnUrl\(\)/);
+	assert.match(client, /\['page_id', 'p'\]/);
+	assert.match(client, /searchParams\.get\('preview'\) === 'true'/);
+	assert.match(rest, /array\( 'page_id', 'p' \)/);
+	assert.match(rest, /\$safe_query\['preview'\] = 'true'/);
+	assert.doesNotMatch(rest, /\$safe_query\['preview_nonce'\]/);
+	assert.match(client, /'checkoutVersion'/);
+});
+
+test('secondary POSPal stores can be deliberately returned to a dormant state', function () {
+	assert.match(admin, /_clear_app_key/);
+	assert.match(admin, /Clear the stored App Key and leave this store dormant/);
 });
 
 test('MPGS enforces per-shop payment permission and reconciles notification callbacks server-side', function () {

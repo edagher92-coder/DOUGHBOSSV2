@@ -450,7 +450,8 @@ class DoughBoss_Admin {
 			$clean[ 'pospal' . $sn . '_label' ]         = isset( $input[ 'pospal' . $sn . '_label' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_label' ] ) : '';
 			$clean[ 'pospal' . $sn . '_host' ]          = isset( $input[ 'pospal' . $sn . '_host' ] ) ? esc_url_raw( trim( (string) $input[ 'pospal' . $sn . '_host' ] ) ) : '';
 			$clean[ 'pospal' . $sn . '_app_id' ]        = isset( $input[ 'pospal' . $sn . '_app_id' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_app_id' ] ) : '';
-			$clean[ 'pospal' . $sn . '_app_key' ]       = $this->keep_secret( $input, $existing, 'pospal' . $sn . '_app_key' );
+			$clear_store_key = ! empty( $input[ 'pospal' . $sn . '_clear_app_key' ] );
+			$clean[ 'pospal' . $sn . '_app_key' ]       = $clear_store_key ? '' : $this->keep_secret( $input, $existing, 'pospal' . $sn . '_app_key' );
 			$clean[ 'pospal' . $sn . '_coupon_uid_5' ]  = isset( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) ? sanitize_text_field( $input[ 'pospal' . $sn . '_coupon_uid_5' ] ) : '';
 			unset( $clean[ 'pospal' . $sn . '_coupon_uid_10' ] );
 		}
@@ -3428,7 +3429,11 @@ JS;
 										echo ' ';
 										echo ( isset( $settings[ 'pospal' . $sn . '_app_key' ] ) && '' !== $settings[ 'pospal' . $sn . '_app_key' ] ) ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' );
 										?>
-									</p></td>
+									</p>
+									<?php if ( ! empty( $settings[ 'pospal' . $sn . '_app_key' ] ) ) : ?>
+										<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[pospal<?php echo (int) $sn; ?>_clear_app_key]" value="1" /> <?php esc_html_e( 'Clear the stored App Key and leave this store dormant', 'doughboss' ); ?></label>
+									<?php endif; ?>
+								</td>
 							</tr>
 							<tr>
 								<th><?php esc_html_e( '$5 coupon rule UID', 'doughboss' ); ?></th>

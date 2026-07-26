@@ -330,6 +330,14 @@
 			});
 
 			var categories = Object.keys(groups);
+			var preferredCategories = ['Manoush', 'Pizza', 'Pies', 'Wraps', 'Desserts', 'Drinks'];
+			categories.sort(function (a, b) {
+				var ai = preferredCategories.indexOf(a);
+				var bi = preferredCategories.indexOf(b);
+				ai = ai < 0 ? preferredCategories.length : ai;
+				bi = bi < 0 ? preferredCategories.length : bi;
+				return ai - bi || a.localeCompare(b);
+			});
 
 			// Sticky category jump-bar: a pill per category that scrolls to its
 			// section. Only worth showing when there's more than one category.
@@ -1294,7 +1302,7 @@
 						order_type: orderType,
 						location_id: payload.location_id,
 						payment_attempt_key: paymentAttemptKey,
-						return_url: window.location.origin + window.location.pathname
+						return_url: mpgsReturnUrl()
 					}
 				}).then(function (pi) {
 					payload.payment_intent_id = pi.payment_intent;
@@ -1334,7 +1342,7 @@
 					placeOrder(pending.payload).then(function () {
 						window.sessionStorage.removeItem('doughbossMpgsPending');
 						var cleanUrl = new URL(window.location.href);
-						['doughboss_mpgs_return', 'doughboss_mpgs_order', 'resultIndicator', 'sessionVersion'].forEach(function (key) { cleanUrl.searchParams.delete(key); });
+						['doughboss_mpgs_return', 'doughboss_mpgs_order', 'resultIndicator', 'sessionVersion', 'checkoutVersion'].forEach(function (key) { cleanUrl.searchParams.delete(key); });
 						window.history.replaceState({}, document.title, cleanUrl.toString());
 					}).catch(fail);
 				} else {
@@ -1360,6 +1368,17 @@
 		}
 
 		return { form: form, update: update };
+	}
+
+	function mpgsReturnUrl() {
+		var cleanUrl = new URL(window.location.href);
+		var safe = new URL(cleanUrl.origin + cleanUrl.pathname);
+		['page_id', 'p'].forEach(function (key) {
+			var value = cleanUrl.searchParams.get(key);
+			if (/^[1-9][0-9]*$/.test(value || '')) { safe.searchParams.set(key, value); }
+		});
+		if (cleanUrl.searchParams.get('preview') === 'true') { safe.searchParams.set('preview', 'true'); }
+		return safe.toString();
 	}
 
 	function field(type, nameAttr, label, required) {

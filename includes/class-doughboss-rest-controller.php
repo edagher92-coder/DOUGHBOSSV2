@@ -2482,8 +2482,9 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
-	 * Keep Hosted Checkout returns on this WordPress site. Query/fragment are
-	 * stripped because MPGS adds its own result parameters.
+	 * Keep Hosted Checkout returns on this WordPress site. Only the minimum
+	 * WordPress routing query is retained for authenticated draft acceptance;
+	 * arbitrary parameters, preview nonces and fragments are discarded.
 	 *
 	 * @param mixed $candidate Browser-provided current URL.
 	 * @return string
@@ -2499,7 +2500,22 @@ class DoughBoss_REST_Controller {
 		if ( 'https' !== $scheme ) {
 			return home_url( '/' );
 		}
-		return 'https://' . strtolower( $parts['host'] ) . ( isset( $parts['path'] ) ? $parts['path'] : '/' );
+		$return_url = 'https://' . strtolower( $parts['host'] ) . ( isset( $parts['path'] ) ? $parts['path'] : '/' );
+		if ( empty( $parts['query'] ) ) {
+			return $return_url;
+		}
+
+		parse_str( $parts['query'], $query );
+		$safe_query = array();
+		foreach ( array( 'page_id', 'p' ) as $numeric_key ) {
+			if ( isset( $query[ $numeric_key ] ) && is_scalar( $query[ $numeric_key ] ) && (int) $query[ $numeric_key ] > 0 ) {
+				$safe_query[ $numeric_key ] = (int) $query[ $numeric_key ];
+			}
+		}
+		if ( isset( $query['preview'] ) && 'true' === (string) $query['preview'] ) {
+			$safe_query['preview'] = 'true';
+		}
+		return $safe_query ? add_query_arg( $safe_query, $return_url ) : $return_url;
 	}
 
 	/**
@@ -2594,7 +2610,7 @@ class DoughBoss_REST_Controller {
 				'description' => wp_strip_all_tags( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
 				'price'       => (float) get_post_meta( $post->ID, DoughBoss_Post_Types::META_PRICE, true ),
 				'type'        => get_post_meta( $post->ID, DoughBoss_Post_Types::META_TYPE, true ),
-				'image'       => $thumb ? $thumb : '',
+				'image'       => $thumb ? $thumb : $this->menu_image_url( $post->post_title, $category ),
 				'category'    => $category,
 				'available'   => DoughBoss_Post_Types::is_available( $post->ID ),
 				'dietary'     => DoughBoss_Post_Types::dietary( $post->ID ),
@@ -2603,6 +2619,71 @@ class DoughBoss_REST_Controller {
 		}
 
 		return rest_ensure_response( $items );
+	}
+
+	/**
+	 * Use the approved, local demo photography when a menu item has not yet
+	 * received a WordPress featured image. A featured image always wins, so
+	 * management can replace these per item without a code release.
+	 *
+	 * @param string $name     Menu item name.
+	 * @param string $category Menu category name.
+	 * @return string
+	 */
+	private function menu_image_url( $name, $category ) {
+		$images = array(
+			'zaatar'                  => 'zaatar.jpg',
+			'zaatar-cheese'           => 'zaatar-cheese.jpg',
+			'cheese'                  => 'cheese.jpg',
+			'meat'                    => 'meat.jpg',
+			'meat-cheese'             => 'meat-cheese.jpg',
+			'sujuk-cheese'            => 'sujuk-deluxe.jpg',
+			'half-meat-cheese'        => 'meat-cheese.jpg',
+			'cheese-tomato-olives'    => 'cheese.jpg',
+			'cheese-kaak'             => 'cheese.jpg',
+			'zaatar-veggie-pizza'     => 'zaatar-veggie-wrap.jpg',
+			'labneh-veggie-pizza'     => 'zaatar-veggie-wrap.jpg',
+			'all-meat'                => 'all-meat.jpg',
+			'sujuk-deluxe'            => 'sujuk-deluxe.jpg',
+			'spinach-deluxe'          => 'spinach-deluxe.jpg',
+			'veggie-plus'             => 'veggie-plus.jpg',
+			'pepperoni-cheese'        => 'pepperoni-cheese.jpg',
+			'dough-boss-special'      => 'dough-boss-special.jpg',
+			'chicken-cheese'          => 'chicken-cheese.jpg',
+			'bbq-chicken'             => 'bbq-chicken.jpg',
+			'peri-peri-chicken'       => 'peri-peri-chicken.jpg',
+			'garlic-prawns'           => 'garlic-prawns.jpg',
+			'spinach-pie'             => 'spinach-cheese-pie.jpg',
+			'spinach-cheese'          => 'spinach-cheese-pie.jpg',
+			'haloumi'                 => 'haloumi-pie.jpg',
+			'halloumi'                => 'haloumi-pie.jpg',
+			'dough-boss-pie'          => 'chicken-pie.jpg',
+			'chicken-pie'             => 'chicken-pie.jpg',
+			'aged-cheese'             => 'aged-cheese-pie.jpg',
+			'shanklish'               => 'aged-cheese-pie.jpg',
+			'zaatar-veggie'           => 'zaatar-veggie-wrap.jpg',
+			'labneh-veggie-wrap'      => 'zaatar-veggie-wrap.jpg',
+			'chicken-delight'         => 'chicken-delight.jpg',
+			'ultimate-chicken'        => 'ultimate-chicken.jpg',
+			'dough-boss-wrap'         => 'dough-boss-wrap.jpg',
+			'choco-banana'            => 'choco-banana.jpg',
+			'spring-water'            => 'spring-water.jpg',
+			'soft-drinks-600ml'       => 'soft-drinks.jpg',
+			'soft-drinks'             => 'soft-drinks.jpg',
+			'juice'                   => 'juice.jpg',
+		);
+		$fallbacks = array(
+			'manoush'  => 'zaatar.jpg',
+			'pizza'    => 'dough-boss-special.jpg',
+			'pies'     => 'spinach-cheese-pie.jpg',
+			'wraps'    => 'zaatar-veggie-wrap.jpg',
+			'desserts' => 'choco-banana.jpg',
+			'drinks'   => 'soft-drinks.jpg',
+		);
+		$key      = sanitize_title( $name );
+		$category = sanitize_title( $category );
+		$file     = isset( $images[ $key ] ) ? $images[ $key ] : ( isset( $fallbacks[ $category ] ) ? $fallbacks[ $category ] : '' );
+		return $file ? DOUGHBOSS_PLUGIN_URL . 'public/images/menu/' . rawurlencode( $file ) : '';
 	}
 
 	/**

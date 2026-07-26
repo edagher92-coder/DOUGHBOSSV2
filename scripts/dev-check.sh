@@ -71,7 +71,7 @@ if ! "$PHP_BIN" tests/customer-notification-tracking-contract.php; then
 fi
 
 echo "--- offline provider contracts ---"
-for contract in tests/tyro-contract.php tests/provider-readiness-contract.php tests/pospal-outbox-contract.php; do
+for contract in tests/tyro-contract.php tests/mpgs-retrieve-contract.php tests/provider-readiness-contract.php tests/pospal-outbox-contract.php; do
 	if ! "$PHP_BIN" "$contract"; then
 		failed=$((failed + 1))
 	fi

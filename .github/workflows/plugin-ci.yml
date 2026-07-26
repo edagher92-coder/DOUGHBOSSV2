@@ -87,6 +87,7 @@ jobs:
           node --test tests/mpgs-hosted-checkout-contract.test.js
           node --test tests/hybrid-theme-contract.test.js
           node --test tests/storefront-uplift-contract.test.js
+          node --test tests/wordpress-menu-images-contract.test.js
 
   build-zip:
     name: Build installable plugin zip

@@ -216,27 +216,67 @@ class DoughBoss_MPGS {
 			return $result;
 		}
 
-		$order          = isset( $result['order'] ) && is_array( $result['order'] ) ? $result['order'] : array();
-		$provider_state = strtoupper( isset( $order['status'] ) ? $order['status'] : ( isset( $result['result'] ) ? $result['result'] : '' ) );
-		$amount_minor   = isset( $order['amount'] ) ? self::to_minor_units( $order['amount'] ) : 0;
-		$currency       = strtoupper( isset( $order['currency'] ) ? $order['currency'] : '' );
-		$paid_states    = array( 'CAPTURED', 'PARTIALLY_CAPTURED', 'FUNDED', 'PURCHASED' );
-		$status         = in_array( $provider_state, $paid_states, true ) ? 'succeeded' : ( 'FAILED' === $provider_state ? 'failed' : 'processing' );
-		$metadata       = json_decode( (string) $attempt['safe_metadata_json'], true );
-		$metadata       = is_array( $metadata ) ? $metadata : array();
-		$metadata['checkout_key'] = (string) $attempt['checkout_key'];
-
-		if ( isset( $order['id'] ) && (string) $order['id'] !== $id ) {
-			return new WP_Error( 'doughboss_pay_mismatch', __( 'The payment did not match this order.', 'doughboss' ), array( 'status' => 409 ) );
+		$normalised = self::normalise_retrieved_order( $result, $attempt, $id );
+		if ( is_wp_error( $normalised ) ) {
+			DoughBoss_Payment_Attempts::update(
+				$attempt['id'],
+				array(
+					'status'     => 'mismatch',
+					'last_error' => $normalised->get_error_code(),
+				)
+			);
+			return $normalised;
 		}
 		DoughBoss_Payment_Attempts::update(
 			$attempt['id'],
 			array(
-				'status'          => $status,
-				'provider_status' => $provider_state,
-				'verified_at'     => 'succeeded' === $status ? current_time( 'mysql', true ) : '',
+				'status'          => $normalised['status'],
+				'provider_status' => $normalised['provider_status'],
+				'last_error'      => 'unknown' === $normalised['status'] ? 'unexpected_provider_state' : '',
+				'verified_at'     => 'succeeded' === $normalised['status'] ? current_time( 'mysql', true ) : '',
 			)
 		);
+		return $normalised;
+	}
+
+	/**
+	 * Normalise both Mastercard REST v100's top-level Retrieve Order response
+	 * and the legacy nested response shape. Only a fully captured PURCHASE is
+	 * accepted as paid; partial or unknown states remain visible for review.
+	 *
+	 * @param array  $result  Raw decoded gateway response.
+	 * @param array  $attempt Durable server-owned payment attempt.
+	 * @param string $id      Canonical provider order reference.
+	 * @return array|WP_Error
+	 */
+	private static function normalise_retrieved_order( array $result, array $attempt, $id ) {
+		$order = isset( $result['order'] ) && is_array( $result['order'] ) ? $result['order'] : $result;
+		if ( isset( $order['id'] ) && (string) $order['id'] !== $id ) {
+			return new WP_Error( 'doughboss_pay_mismatch', __( 'The payment did not match this order.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		$provider_state = strtoupper( isset( $order['status'] ) ? (string) $order['status'] : '' );
+		$amount_minor   = isset( $order['amount'] ) ? self::to_minor_units( $order['amount'] ) : 0;
+		$currency       = strtoupper( isset( $order['currency'] ) ? (string) $order['currency'] : '' );
+		$status         = 'unknown';
+		if ( 'CAPTURED' === $provider_state ) {
+			$status = 'succeeded';
+		} elseif ( in_array( $provider_state, array( 'INITIATED', 'AUTHORIZED' ), true ) ) {
+			$status = 'processing';
+		} elseif ( in_array( $provider_state, array( 'FAILED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_REFUNDED' ), true ) ) {
+			$status = 'failed';
+		}
+
+		if ( 'succeeded' === $status && isset( $order['totalCapturedAmount'] ) ) {
+			$captured_minor = self::to_minor_units( $order['totalCapturedAmount'] );
+			if ( $captured_minor < (int) $attempt['amount_minor'] ) {
+				return new WP_Error( 'doughboss_pay_partial', __( 'The full payment amount was not captured.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+		}
+
+		$metadata = json_decode( (string) $attempt['safe_metadata_json'], true );
+		$metadata = is_array( $metadata ) ? $metadata : array();
+		$metadata['checkout_key'] = (string) $attempt['checkout_key'];
 		return array(
 			'id'              => $id,
 			'status'          => $status,

@@ -40,3 +40,11 @@ test('UPLIFT-1 cart cue preserves scoped reduced-motion behaviour', function () 
 	assert.match(css, /\.db-app \.db-cart-fab--bump \.db-cart-fab-total/);
 	assert.match(css, /\.db-app \.db-cart-fab,\n\t\.db-app \.db-cart-fab--bump/);
 });
+
+test('connected WordPress menu is contained and ordered like the approved demo', function () {
+	assert.match(client, /preferredCategories = \['Manoush', 'Pizza', 'Pies', 'Wraps', 'Desserts', 'Drinks'\]/);
+	assert.match(css, /repeat\(auto-fit, minmax\(min\(220px, 100%\), 1fr\)\)/);
+	assert.match(css, /@media \(max-width: 640px\)/);
+	assert.match(css, /\.db-app\.db-menu \{/);
+	assert.match(css, /body\.page-id-402 \.entry-content/);
+});
