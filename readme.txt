@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.25.2
+Stable tag: 2.25.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.25.3 =
+* Polish the staff sign-in and operational workspaces, refine mobile touch targets, and contain the storefront root on phones for a steadier small-screen ordering flow.
 
 = 2.25.2 =
 * Raise category controls to 44-pixel touch targets and contain the legacy desktop navigation cell on the Order page.
