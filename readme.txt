@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.4
+Stable tag: 2.24.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,10 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.5 =
+* Add a mobile-safe category jump bar and data-backed cart cue to the WordPress ordering experience.
+* Keep storefront motion optional and fully scoped to DoughBoss components so existing themes remain unaffected.
 
 = 2.24.4 =
 * Add a manager-only operations dashboard using stored orders, payment attempts, measured kitchen timestamps, POSPal outbox state and catering records.

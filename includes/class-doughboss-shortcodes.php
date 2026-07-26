@@ -261,10 +261,20 @@ class DoughBoss_Shortcodes {
 	 *
 	 * @return string
 	 */
-	public function menu() {
+	public function menu( $atts = array() ) {
+		$atts = shortcode_atts(
+			array(
+				// Leave this blank when the cart lives on the same page. Set a
+				// site-local URL (for example /cart/) for a dedicated cart page.
+				// It is display/navigation only: cart totals remain server-owned.
+				'cart_url' => '',
+			),
+			$atts,
+			'doughboss_menu'
+		);
 		ob_start();
 		?>
-		<div class="db-app db-menu" data-doughboss-menu>
+		<div class="db-app db-menu" data-doughboss-menu data-cart-url="<?php echo esc_url( $atts['cart_url'] ); ?>">
 			<div class="db-loading"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
 		</div>
 		<?php

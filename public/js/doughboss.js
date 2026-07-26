@@ -99,6 +99,12 @@
 		return 'db-cat-' + String(category).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 	}
 
+	function cartItemCount(cart) {
+		return (cart && Array.isArray(cart.items) ? cart.items : []).reduce(function (count, line) {
+			return count + Number(line.quantity || 0);
+		}, 0);
+	}
+
 	function request(path, options) {
 		options = options || {};
 		var headers = { 'Content-Type': 'application/json' };
@@ -326,10 +332,16 @@
 			if (categories.length > 1) {
 				var jump = el('nav', { class: 'db-jumpbar', 'aria-label': I18N.menuCategories || 'Menu categories' });
 				categories.forEach(function (category) {
-					var pill = el('button', { class: 'db-jump', type: 'button', text: category });
+					var targetId = catId(category);
+					var pill = el('button', { class: 'db-jump', type: 'button', text: category, 'aria-controls': targetId });
 					pill.addEventListener('click', function () {
-						var target = document.getElementById(catId(category));
-						if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+						var target = root.querySelector('#' + targetId);
+						if (target) {
+							target.scrollIntoView({
+								behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+								block: 'start'
+							});
+						}
 					});
 					jump.appendChild(pill);
 				});
@@ -354,6 +366,68 @@
 			root.innerHTML = '';
 			root.appendChild(el('p', { class: 'db-error', text: err.message }));
 		});
+		initCartFab(root);
+	}
+
+	// The cart remains server-owned. This small fixed cue deliberately navigates
+	// to the existing cart shortcode rather than duplicating checkout in a drawer.
+	function initCartFab(root) {
+		var cartUrl = root.getAttribute('data-cart-url') || '';
+		var cartRoot = document.querySelector('[data-doughboss-cart]');
+		var fab = el('a', { class: 'db-cart-fab', href: cartUrl || '#doughboss-cart' });
+		var count = el('span', { class: 'db-cart-fab-count' });
+		var total = el('strong', { class: 'db-cart-fab-total' });
+		var label = el('span', { class: 'db-cart-fab-label', text: I18N.viewCart || 'View cart' });
+		fab.appendChild(el('span', { class: 'db-cart-fab-copy' }, [label, count]));
+		fab.appendChild(total);
+		root.appendChild(fab);
+
+		if (!cartUrl && cartRoot) {
+			fab.addEventListener('click', function (event) {
+				event.preventDefault();
+				cartRoot.scrollIntoView({
+					behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+					block: 'start'
+				});
+				var focusTarget = cartRoot.querySelector('input, button, select, textarea, a[href]');
+				if (focusTarget) { focusTarget.focus({ preventScroll: true }); }
+			});
+		} else if (!cartUrl && !cartRoot) {
+			// A menu-only page without a cart target cannot offer a usable route.
+			// Keep the element hidden until the page author supplies cart_url.
+			fab.remove();
+			return;
+		}
+
+		function update(bump) {
+			request('/cart').then(function (cart) {
+				var itemCount = cartItemCount(cart);
+				if (!itemCount) {
+					fab.classList.remove('is-shown', 'db-cart-fab--bump');
+					root.classList.remove('db-menu--has-cart-fab');
+					return;
+				}
+				var itemLabel = itemCount === 1 ? 'item' : (I18N.cartItems || 'items');
+				count.textContent = itemCount + ' ' + itemLabel;
+				total.textContent = money(cart.totals && cart.totals.total);
+				fab.setAttribute('aria-label', (I18N.viewCart || 'View cart') + ': ' + count.textContent + ', ' + total.textContent);
+				fab.classList.add('is-shown');
+				root.classList.add('db-menu--has-cart-fab');
+				if (bump) {
+					fab.classList.remove('db-cart-fab--bump');
+					void fab.offsetWidth;
+					fab.classList.add('db-cart-fab--bump');
+				}
+			}).catch(function () {
+				// The normal menu/cart renderers show REST errors. A decorative cue
+				// should fail closed and never interrupt ordering.
+				fab.classList.remove('is-shown', 'db-cart-fab--bump');
+				root.classList.remove('db-menu--has-cart-fab');
+			});
+		}
+
+		update(false);
+		document.addEventListener('doughboss:cart-updated', function () { update(true); });
 	}
 
 	function menuCard(item) {
