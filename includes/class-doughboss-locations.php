@@ -449,14 +449,29 @@ class DoughBoss_Locations {
 	 * @return string|WP_Error
 	 */
 	public static function tyro_location_id( $location_id ) {
-		$location = self::get( $location_id );
-		if ( ! $location || empty( $location->is_active ) || empty( $location->online_payment_enabled ) ) {
-			return new WP_Error( 'doughboss_pay_location_off', __( 'Online payment is not enabled for this shop.', 'doughboss' ), array( 'status' => 503 ) );
+		$location = self::online_payment_location( $location_id );
+		if ( is_wp_error( $location ) ) {
+			return $location;
 		}
 		$provider_id = isset( $location->tyro_location_id ) ? trim( (string) $location->tyro_location_id ) : '';
 		if ( '' === $provider_id ) {
 			return new WP_Error( 'doughboss_pay_location_unmapped', __( 'This shop is not mapped to a Tyro payment location.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 		return $provider_id;
+	}
+
+	/**
+	 * Return an active shop that is explicitly allowed to take online card
+	 * payments. This applies to every gateway, not only Tyro Connect.
+	 *
+	 * @param int $location_id DoughBoss location id.
+	 * @return object|WP_Error
+	 */
+	public static function online_payment_location( $location_id ) {
+		$location = self::get( $location_id );
+		if ( ! $location || empty( $location->is_active ) || empty( $location->online_payment_enabled ) ) {
+			return new WP_Error( 'doughboss_pay_location_off', __( 'Online payment is not enabled for this shop.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return $location;
 	}
 }

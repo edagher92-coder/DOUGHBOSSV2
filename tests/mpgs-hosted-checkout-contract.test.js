@@ -52,6 +52,18 @@ test('paid order creation requires server retrieval and immutable checkout bindi
 	assert.match(rest, /'succeeded'\s*!==\s*\$status/);
 });
 
+test('MPGS enforces per-shop payment permission and reconciles notification callbacks server-side', function () {
+	var locations = read('includes/class-doughboss-locations.php');
+	assert.match(locations, /function online_payment_location/);
+	assert.match(rest, /DoughBoss_Locations::online_payment_location\( \$location_id \)/);
+	assert.match(mpgs, /'notificationUrl'\s*=>\s*\$notification_url/);
+	assert.match(mpgs, /function reconcile_notification/);
+	assert.match(mpgs, /DoughBoss_Order::payment_intent_used/);
+	assert.match(rest, /\/mpgs-notification/);
+	assert.match(rest, /function mpgs_notification/);
+	assert.match(admin, /recovery_required|recovery-needed/);
+});
+
 test('public ordering stays independently gated and live MPGS is fail-closed', function () {
 	assert.match(rest, /DoughBoss_Settings::ordering_open\(\)/);
 	assert.match(settings, /'test'\s*===\s*self::mpgs_mode\(\)\s*\|\|\s*\(bool\) self::get\( 'mpgs_live_approved'/);

@@ -249,7 +249,8 @@ class DoughBoss_Admin {
 		$attempt_states = isset( $attempts['statuses'] ) ? $attempts['statuses'] : array();
 		$failed_attempts = (int) ( isset( $attempt_states['failed'] ) ? $attempt_states['failed'] : 0 )
 			+ (int) ( isset( $attempt_states['unknown'] ) ? $attempt_states['unknown'] : 0 )
-			+ (int) ( isset( $attempt_states['mismatch'] ) ? $attempt_states['mismatch'] : 0 );
+			+ (int) ( isset( $attempt_states['mismatch'] ) ? $attempt_states['mismatch'] : 0 )
+			+ (int) ( isset( $attempt_states['recovery_required'] ) ? $attempt_states['recovery_required'] : 0 );
 
 		$pospal_label = __( 'Not connected', 'doughboss' );
 		$pospal_note  = __( 'No POSPal configuration is available to this site.', 'doughboss' );
@@ -311,9 +312,9 @@ class DoughBoss_Admin {
 						<tr><th><?php esc_html_e( 'Paid / captured', 'doughboss' ); ?></th><td><?php echo esc_html( sprintf( __( '%1$s (%2$s orders)', 'doughboss' ), DoughBoss_Settings::format_price( $paid['revenue'] ), number_format_i18n( $paid['orders'] ) ) ); ?></td></tr>
 						<tr><th><?php esc_html_e( 'Unpaid / collect in store', 'doughboss' ); ?></th><td><?php echo esc_html( sprintf( __( '%1$s (%2$s orders)', 'doughboss' ), DoughBoss_Settings::format_price( $unpaid['revenue'] ), number_format_i18n( $unpaid['orders'] ) ) ); ?></td></tr>
 						<tr><th><?php esc_html_e( 'Refunded', 'doughboss' ); ?></th><td><?php echo esc_html( sprintf( __( '%1$s (%2$s orders)', 'doughboss' ), DoughBoss_Settings::format_price( $refunded['revenue'] ), number_format_i18n( $refunded['orders'] ) ) ); ?></td></tr>
-						<tr><th><?php esc_html_e( 'Failed or unresolved card attempts', 'doughboss' ); ?></th><td><?php echo esc_html( $attempts['available'] ? number_format_i18n( $failed_attempts ) : __( 'Not available', 'doughboss' ) ); ?></td></tr>
+						<tr><th><?php esc_html_e( 'Failed, unresolved or recovery-needed card attempts', 'doughboss' ); ?></th><td><?php echo esc_html( $attempts['available'] ? number_format_i18n( $failed_attempts ) : __( 'Not available', 'doughboss' ) ); ?></td></tr>
 					</tbody></table>
-					<p class="description" style="margin-bottom:0;"><?php esc_html_e( 'Failed attempts have no order by design; they are tracked separately from unpaid pay-in-store orders.', 'doughboss' ); ?></p>
+					<p class="description" style="margin-bottom:0;"><?php esc_html_e( 'Failed attempts have no order by design. A captured MPGS payment that has not completed an order is marked for staff recovery rather than being silently treated as an order.', 'doughboss' ); ?></p>
 				</section>
 
 				<section class="card" style="margin:0;padding:16px;"><h2 style="margin-top:0;"><?php esc_html_e( 'POSPal order mirror', 'doughboss' ); ?></h2>
@@ -3279,6 +3280,7 @@ JS;
 					</table>
 
 					<h3><?php esc_html_e( 'Mastercard Payment Gateway (MPGS)', 'doughboss' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'Before card testing, enable Hosted Checkout webhook notifications in MPGS Merchant Administration. DoughBoss supplies a unique HTTPS callback for each payment, then retrieves the gateway order itself; no webhook signing secret is stored in WordPress.', 'doughboss' ); ?></p>
 					<p class="description"><?php esc_html_e( 'Uses Mastercard Hosted Checkout. Customers enter card details on Mastercard’s secure page; DoughBoss never receives or stores the card number or CVV.', 'doughboss' ); ?></p>
 					<?php $mpgs_mode = isset( $settings['mpgs_mode'] ) && 'live' === $settings['mpgs_mode'] ? 'live' : 'test'; ?>
 					<table class="form-table" role="presentation">

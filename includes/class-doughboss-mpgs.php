@@ -101,6 +101,7 @@ class DoughBoss_MPGS {
 			),
 			$return_base
 		);
+		$notification_url = self::notification_url( $order_id, $checkout_key );
 		$result = self::request(
 			'POST',
 			'/session',
@@ -120,6 +121,7 @@ class DoughBoss_MPGS {
 					'amount'      => number_format( $amount_minor / 100, 2, '.', '' ),
 					'currency'    => $currency,
 					'description' => 'Dough Boss online order',
+					'notificationUrl' => $notification_url,
 				),
 			)
 		);
@@ -139,6 +141,63 @@ class DoughBoss_MPGS {
 			'amount'        => $amount_minor,
 			'currency'      => strtolower( $currency ),
 		);
+	}
+
+	/**
+	 * Per-attempt callback URL. The gateway notification is never trusted as a
+	 * payment result; it only authorises a server-side Retrieve Order call.
+	 *
+	 * @param string $order_id Gateway order reference.
+	 * @param string $checkout_key Immutable server-owned checkout identity.
+	 * @return string
+	 */
+	public static function notification_url( $order_id, $checkout_key ) {
+		$token = hash_hmac( 'sha256', (string) $order_id . '|' . (string) $checkout_key, wp_salt( 'doughboss_mpgs_notification' ) );
+		return add_query_arg(
+			array(
+				'order' => rawurlencode( (string) $order_id ),
+				'token' => $token,
+			),
+			rest_url( DOUGHBOSS_REST_NAMESPACE . '/mpgs-notification' )
+		);
+	}
+
+	/**
+	 * Reconcile a Gateway notification without accepting any posted payment
+	 * fields. A captured payment with no finished DoughBoss order stays visible
+	 * as recovery_required until the customer return completes or staff resolve it.
+	 *
+	 * @param string $id Gateway order reference.
+	 * @param string $token Per-attempt callback token.
+	 * @return array|WP_Error
+	 */
+	public static function reconcile_notification( $id, $token ) {
+		$id      = self::canonical_id( $id );
+		$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
+		if ( '' === $id || ! $attempt || 'mpgs' !== $attempt['provider'] ) {
+			return new WP_Error( 'doughboss_mpgs_notification', __( 'The payment notification could not be reconciled.', 'doughboss' ), array( 'status' => 404 ) );
+		}
+		$expected = hash_hmac( 'sha256', $id . '|' . (string) $attempt['checkout_key'], wp_salt( 'doughboss_mpgs_notification' ) );
+		if ( ! is_string( $token ) || ! hash_equals( $expected, $token ) ) {
+			return new WP_Error( 'doughboss_mpgs_notification_auth', __( 'The payment notification was not authorised.', 'doughboss' ), array( 'status' => 403 ) );
+		}
+
+		$result = self::retrieve_payment_intent( $id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		if ( 'succeeded' === $result['status'] && ! DoughBoss_Order::payment_intent_used( $id ) ) {
+			DoughBoss_Payment_Attempts::update(
+				(int) $attempt['id'],
+				array(
+					'status'          => 'recovery_required',
+					'provider_status' => (string) $result['provider_status'],
+					'last_error'      => 'captured_without_order',
+					'verified_at'     => current_time( 'mysql', true ),
+				)
+			);
+		}
+		return $result;
 	}
 
 	/** @return array|WP_Error */

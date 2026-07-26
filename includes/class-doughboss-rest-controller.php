@@ -1144,6 +1144,19 @@ class DoughBoss_REST_Controller {
 				'permission_callback' => '__return_true',
 			)
 		);
+
+		// MPGS Hosted Checkout order notifications are authenticated with a
+		// per-attempt HMAC token and always re-retrieve the gateway order. Raw
+		// notification data is neither trusted nor stored.
+		register_rest_route(
+			$ns,
+			'/mpgs-notification',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'mpgs_notification' ),
+				'permission_callback' => '__return_true',
+			)
+		);
 	}
 
 	/**
@@ -1693,6 +1706,24 @@ class DoughBoss_REST_Controller {
 				'message' => __( 'Mastercard Gateway is reachable and the credentials were accepted.', 'doughboss' ),
 			)
 		);
+	}
+
+	/**
+	 * POST /mpgs-notification â€” receive a Hosted Checkout order update and
+	 * reconcile it by retrieving the authoritative gateway order.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function mpgs_notification( WP_REST_Request $request ) {
+		$result = DoughBoss_MPGS::reconcile_notification(
+			$request->get_param( 'order' ),
+			$request->get_param( 'token' )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response( array( 'received' => true ) );
 	}
 
 	/**
@@ -2396,6 +2427,12 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}
+		if ( DoughBoss_Payment::ready() ) {
+			$payment_location = DoughBoss_Locations::online_payment_location( $location_id );
+			if ( is_wp_error( $payment_location ) ) {
+				return $payment_location;
+			}
+		}
 
 		$totals   = $this->cart->totals( $order_type );
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
@@ -3049,6 +3086,10 @@ class DoughBoss_REST_Controller {
 		$payment_method    = '';
 		$payment_intent_id = '';
 		if ( DoughBoss_Payment::ready() ) {
+			$payment_location = DoughBoss_Locations::online_payment_location( $location_id );
+			if ( is_wp_error( $payment_location ) ) {
+				return $payment_location;
+			}
 			$verified = $this->verify_payment( $request, $totals['total'], $order_type, $location_id, $table_context );
 			if ( is_wp_error( $verified ) ) {
 				return $verified;
