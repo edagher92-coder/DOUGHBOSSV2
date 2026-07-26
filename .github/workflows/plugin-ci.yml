@@ -84,6 +84,9 @@ jobs:
           node --test tests/admin-dashboard-contract.test.js
           node --test tests/migration-gate-contract.test.js
           node --test tests/quarantine-helper-contract.test.js
+          node --test tests/mpgs-hosted-checkout-contract.test.js
+          node --test tests/hybrid-theme-contract.test.js
+          node --test tests/storefront-uplift-contract.test.js
 
   build-zip:
     name: Build installable plugin zip
