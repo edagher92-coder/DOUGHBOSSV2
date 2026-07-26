@@ -22,7 +22,7 @@ function doughboss_hybrid_setup() {
 add_action( 'after_setup_theme', 'doughboss_hybrid_setup' );
 
 function doughboss_hybrid_assets() {
-	wp_enqueue_style( 'doughboss-hybrid', get_stylesheet_uri(), array(), '0.1.0' );
+	wp_enqueue_style( 'doughboss-hybrid', get_stylesheet_uri(), array(), '0.1.1' );
 }
 add_action( 'wp_enqueue_scripts', 'doughboss_hybrid_assets' );
 
@@ -48,7 +48,7 @@ function doughboss_hybrid_menu_fallback() {
 
 /** Force plugin assets for template-rendered shortcodes, outside post content. */
 function doughboss_hybrid_load_storefront_assets( $load ) {
-	return $load || is_front_page() || is_page( array( 'order', 'track-order', 'catering' ) );
+	return $load || is_front_page() || is_page( array( 'menu', 'order', 'track-order', 'catering' ) );
 }
 add_filter( 'doughboss_load_assets', 'doughboss_hybrid_load_storefront_assets' );
 
