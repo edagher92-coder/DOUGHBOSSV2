@@ -266,8 +266,8 @@ foreach ( $board_routes as $board_route ) {
 }
 // A real count check, not just ">0", so a route silently failing to register
 // would fail this. Includes table context plus the public request and two
-// board-authorised morning-review routes.
-ok( 53 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, and pre-order review (' . count( $routes ) . ' routes, expected 53)' );
+// board-authorised morning-review routes, and the MPGS notification webhook.
+ok( 54 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, and pre-order review (' . count( $routes ) . ' routes, expected 54)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
