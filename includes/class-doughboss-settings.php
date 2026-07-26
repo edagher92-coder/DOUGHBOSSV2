@@ -98,6 +98,10 @@ class DoughBoss_Settings {
 			// back to the WordPress admin email (see orders_email()). Defaults to the
 			// Dough Boss orders inbox so the shop is notified out of the box.
 			'orders_email'    => 'hello@doughboss.com.au',
+			// Dedicated customer-facing catering contacts. Catering enquiries use
+			// this inbox rather than mixing with normal online-order notices.
+			'catering_email'  => 'catering@doughboss.com.au',
+			'catering_phone'  => '0422487487',
 			// Public WordPress page containing [doughboss_order_tracking].
 			// Blank is safe: emails still include the order number and matching-
 			// email instructions, but no potentially broken tracking link.
@@ -332,6 +336,26 @@ class DoughBoss_Settings {
 			$email = (string) get_option( 'admin_email' );
 		}
 		return (string) apply_filters( 'doughboss_orders_email', $email );
+	}
+
+	/**
+	 * Customer-facing catering inbox and notification destination.
+	 *
+	 * @return string
+	 */
+	public static function catering_email() {
+		$email = sanitize_email( (string) self::get( 'catering_email', 'catering@doughboss.com.au' ) );
+		return is_email( $email ) ? $email : 'catering@doughboss.com.au';
+	}
+
+	/**
+	 * Customer-facing Australian mobile number, stored as digits only.
+	 *
+	 * @return string
+	 */
+	public static function catering_phone() {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'catering_phone', '0422487487' ) );
+		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '0422487487';
 	}
 
 	/**

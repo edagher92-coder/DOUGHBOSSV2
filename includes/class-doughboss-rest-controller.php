@@ -4318,8 +4318,8 @@ class DoughBoss_REST_Controller {
 			error_log( 'DoughBoss mail: catering enquiry email to customer failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
-		$orders_email = DoughBoss_Settings::orders_email();
-		if ( is_email( $orders_email ) && false === wp_mail( $orders_email, $subject, $body ) ) {
+		$catering_email = DoughBoss_Settings::catering_email();
+		if ( is_email( $catering_email ) && false === wp_mail( $catering_email, $subject, $body ) ) {
 			error_log( 'DoughBoss mail: catering enquiry email to shop failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 	}
