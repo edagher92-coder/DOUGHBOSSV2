@@ -83,6 +83,7 @@ jobs:
           node --test tests/catering-contact-contract.test.js
           node --test tests/admin-dashboard-contract.test.js
           node --test tests/migration-gate-contract.test.js
+          node --test tests/quarantine-helper-contract.test.js
 
   build-zip:
     name: Build installable plugin zip
