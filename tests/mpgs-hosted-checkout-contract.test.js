@@ -39,7 +39,8 @@ test('MPGS endpoints are HTTPS Mastercard hosts and credentials stay server-side
 test('Hosted Checkout owns card entry and the browser stores no card fields', function () {
 	assert.match(mpgs, /'apiOperation'\s*=>\s*'INITIATE_CHECKOUT'/);
 	assert.match(mpgs, /'operation'\s*=>\s*'PURCHASE'/);
-	assert.match(mpgs, /\/checkout\/version\//);
+	assert.match(mpgs, /\/static\/checkout\/checkout\.min\.js/);
+	assert.doesNotMatch(mpgs, /\/checkout\/version\/.*\/checkout\.js/);
 	assert.match(client, /window\.Checkout\.showPaymentPage/);
 	assert.doesNotMatch(client, /mpgs.*(?:pan|cvv|cvc|cardNumber)/i);
 });

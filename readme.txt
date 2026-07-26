@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.7
+Stable tag: 2.24.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.8 =
+* Load Hosted Checkout from Mastercard's current static v63+ JavaScript endpoint so payment-page handoff completes instead of remaining in a processing state.
 
 = 2.24.7 =
 * Authenticate protected storefront read requests with the WordPress REST nonce so signed-in staff can test the ordering preview while the public migration gate remains closed.

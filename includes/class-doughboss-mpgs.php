@@ -38,7 +38,11 @@ class DoughBoss_MPGS {
 	/** @return string */
 	public static function checkout_script_url() {
 		$host = DoughBoss_Settings::mpgs_host();
-		return $host ? $host . '/checkout/version/' . DoughBoss_Settings::mpgs_api_version() . '/checkout.js' : '';
+		// Hosted Checkout API v63+ uses Mastercard's stable static loader.
+		// The legacy versioned checkout.js URL now returns an error instead of
+		// defining window.Checkout, which leaves the customer payment button in
+		// a permanent processing state.
+		return $host ? $host . '/static/checkout/checkout.min.js' : '';
 	}
 
 	/**
