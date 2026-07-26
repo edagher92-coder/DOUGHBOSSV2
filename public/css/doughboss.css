@@ -262,6 +262,11 @@ body.page-id-402 .bgtext {
 	inline-size: auto;
 }
 
+body.page-id-402 #primary-menu > li > a {
+	box-sizing: border-box;
+	max-inline-size: 100%;
+}
+
 @media (max-width: 640px) {
 	.db-app .db-grid { grid-template-columns: minmax(0, 1fr); }
 	.db-app.db-menu { padding: 1rem; }
@@ -1138,6 +1143,7 @@ body.page-id-402 .bgtext {
 .db-app .db-jumpbar::-webkit-scrollbar { display: none; }
 .db-app .db-jump {
 	flex: 0 0 auto;
+	min-height: 44px;
 	border: 1px solid var(--db-border);
 	background: #fff;
 	color: inherit;

@@ -49,6 +49,7 @@ test('connected WordPress menu is contained and ordered like the approved demo',
 	assert.match(css, /\.db-app \{[\s\S]*?box-sizing: border-box/);
 	assert.match(css, /body\.page-id-402 \.entry-content/);
 	assert.match(css, /body\.page-id-402 \.bgcontent/);
+	assert.match(css, /body\.page-id-402 #primary-menu > li > a/);
 	assert.match(css, /overflow-x: clip/);
 });
 
@@ -58,6 +59,7 @@ test('small-screen cart, voucher and tracking controls remain usable', function 
 	assert.match(css, /\.db-voucher-input \{[\s\S]*?min-width: 0/);
 	assert.match(css, /@media \(max-width: 360px\)[\s\S]*?\.db-stage-tracker/);
 	assert.match(css, /\.db-app\.db-menu--has-cart-fab \{ padding-bottom: calc\(84px/);
+	assert.match(css, /\.db-app \.db-jump \{[\s\S]*?min-height: 44px/);
 });
 
 test('specialist assets are not loaded by the broad storefront filter', function () {
