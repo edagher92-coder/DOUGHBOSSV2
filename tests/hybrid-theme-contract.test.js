@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..', 'themes', 'doughboss-hybrid');
-const files = ['style.css', 'functions.php', 'header.php', 'footer.php', 'front-page.php', 'page-order.php', 'page-track-order.php', 'page-catering.php', 'README.md'];
+const files = ['style.css', 'index.php', 'functions.php', 'header.php', 'footer.php', 'front-page.php', 'page-order.php', 'page-track-order.php', 'page-catering.php', 'README.md'];
 let failed = false;
 function check(condition, message) { if (!condition) { failed = true; console.error(`FAIL: ${message}`); } else { console.log(`PASS: ${message}`); } }
 
