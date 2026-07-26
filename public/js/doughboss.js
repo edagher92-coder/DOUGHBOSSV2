@@ -108,7 +108,11 @@
 	function request(path, options) {
 		options = options || {};
 		var headers = { 'Content-Type': 'application/json' };
-		if (options.method && options.method !== 'GET') {
+		// Send the REST nonce on reads as well as writes. WordPress deliberately
+		// treats cookie-authenticated REST requests without a nonce as anonymous,
+		// which prevents signed-in staff from using the protected migration
+		// preview even though the page itself is authenticated.
+		if (DATA.nonce) {
 			headers['X-WP-Nonce'] = DATA.nonce;
 		}
 		if (options.headers) {

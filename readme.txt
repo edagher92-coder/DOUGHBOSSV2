@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.24.6
+Stable tag: 2.24.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.24.7 =
+* Authenticate protected storefront read requests with the WordPress REST nonce so signed-in staff can test the ordering preview while the public migration gate remains closed.
 
 = 2.24.6 =
 * Enforce each shop's online-payment permission before an MPGS, Tyro or Stripe payment session or checkout can proceed.
