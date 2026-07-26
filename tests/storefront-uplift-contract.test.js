@@ -46,6 +46,7 @@ test('connected WordPress menu is contained and ordered like the approved demo',
 	assert.match(css, /repeat\(auto-fit, minmax\(min\(220px, 100%\), 1fr\)\)/);
 	assert.match(css, /@media \(max-width: 640px\)/);
 	assert.match(css, /\.db-app\.db-menu \{/);
+	assert.match(css, /\.db-app \{[\s\S]*?box-sizing: border-box/);
 	assert.match(css, /body\.page-id-402 \.entry-content/);
 	assert.match(css, /body\.page-id-402 \.bgcontent/);
 	assert.match(css, /overflow-x: clip/);

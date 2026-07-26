@@ -39,6 +39,7 @@
 	font-size: 16px;
 	line-height: 1.5;
 	color: #2b2b2b;
+	box-sizing: border-box;
 	inline-size: 100%;
 	max-inline-size: 100%;
 	min-inline-size: 0;
