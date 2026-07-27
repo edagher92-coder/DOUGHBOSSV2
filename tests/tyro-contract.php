@@ -51,7 +51,11 @@ class DoughBoss_Tyro_Contract_DB extends DB_Stub {
 
 	public function get_var( $query = null ) {
 		if ( preg_match( "/WHERE event_key = '([^']+)'/", (string) $query, $match ) ) {
-			return isset( $this->events[ stripslashes( $match[1] ) ] ) ? 1 : null;
+			$key = stripslashes( $match[1] );
+			if ( ! isset( $this->events[ $key ] ) ) {
+				return null;
+			}
+			return false !== strpos( (string) $query, 'SELECT outcome' ) ? $this->events[ $key ]['outcome'] : 1;
 		}
 		return null;
 	}
@@ -96,12 +100,20 @@ class DoughBoss_Tyro_Contract_DB extends DB_Stub {
 	}
 
 	public function query( $query ) {
-		if ( preg_match( "/SET status = 'provisioning'.*WHERE id = (\d+) AND status = 'created' AND provider_reference IS NULL/", (string) $query, $match ) ) {
+		if ( preg_match( "/SET status = 'provisioning'.*WHERE id = (\d+) AND provider_reference IS NULL/", (string) $query, $match ) ) {
 			$id = (int) $match[1];
-			if ( ! isset( $this->rows[ $id ] ) || 'created' !== $this->rows[ $id ]['status'] || null !== $this->rows[ $id ]['provider_reference'] ) {
+			if ( ! isset( $this->rows[ $id ] ) || null !== $this->rows[ $id ]['provider_reference'] ) {
+				return 0;
+			}
+			$claimable = 'created' === $this->rows[ $id ]['status'];
+			if ( ! $claimable && 'provisioning' === $this->rows[ $id ]['status'] && preg_match( "/updated_at < '([^']+)'/", (string) $query, $cutoff ) ) {
+				$claimable = (string) $this->rows[ $id ]['updated_at'] < stripslashes( $cutoff[1] );
+			}
+			if ( ! $claimable ) {
 				return 0;
 			}
 			$this->rows[ $id ]['status'] = 'provisioning';
+			$this->rows[ $id ]['updated_at'] = gmdate( 'Y-m-d H:i:s' );
 			return 1;
 		}
 		if ( preg_match( "/SET provider_reference = '([^']+)', status = '([^']+)', provider_status = '([^']+)'.*WHERE id = (\d+) AND status = 'provisioning' AND provider_reference IS NULL/", (string) $query, $match ) ) {

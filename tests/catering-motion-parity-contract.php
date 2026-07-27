@@ -38,7 +38,6 @@ $wp_css   = file_get_contents( $root . '/public/css/doughboss-manoush-hero.css' 
 $wp_js    = file_get_contents( $root . '/public/js/doughboss-manoush-hero.js' );
 
 $catering_assets = array(
-	'catering-menu-platter-v3.webp',
 	'catering-zaatar-cutout-v2.webp',
 	'catering-cheese-cutout-v2.webp',
 	'catering-pies-v3.webp',
@@ -51,8 +50,10 @@ $menu_varieties = array(
 );
 
 echo "=== Catering motion parity contract ===\n";
-catering_parity_ok( catering_parity_has_all( $demo, $catering_assets ), 'demo references the real-alpha catering platter and pie assets' );
-catering_parity_ok( catering_parity_has_all( $wp, $catering_assets ), 'WordPress shortcode defaults reference the same catering assets' );
+catering_parity_ok( catering_parity_has_all( $demo, $catering_assets ), 'demo references every approved transparent catering cutout' );
+catering_parity_ok( catering_parity_has_all( $wp, $catering_assets ), 'WordPress shortcode defaults reference the same transparent catering cutouts' );
+catering_parity_ok( false === strpos( $demo, 'catering-menu-platter-v3.webp' ), 'demo does not restore the rejected precomposed middle platter' );
+catering_parity_ok( false === strpos( $wp, 'catering-menu-platter-v3.webp' ), 'WordPress does not restore the rejected precomposed middle platter' );
 catering_parity_ok( catering_parity_has_all( $demo, $menu_varieties ), 'demo catering copy names the actual mini-manoush and pie varieties' );
 catering_parity_ok( catering_parity_has_all( $wp, $menu_varieties ), 'WordPress catering copy names the actual mini-manoush and pie varieties' );
 catering_parity_ok( false !== strpos( $demo, 'data-manoush-replay="bites"' ) && false !== strpos( $demo_js, "button.setAttribute('aria-pressed', 'true')" ), 'demo provides an accessible Bites replay control' );

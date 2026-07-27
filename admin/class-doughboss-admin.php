@@ -3176,19 +3176,25 @@ JS;
 
 				<h2><?php esc_html_e( 'Payments', 'doughboss' ); ?></h2>
 					<p class="description">
-						<?php esc_html_e( 'Optional. Take card payments at checkout via Stripe or Tyro — pick one active gateway below. Off by default — start in Test/Sandbox mode with your test keys, then switch to Live. Card payments apply only once payments are on AND the active gateway is fully configured for its mode.', 'doughboss' ); ?>
+						<?php esc_html_e( 'Optional. Take online card payments through Stripe, Tyro Connect or Mastercard Gateway — pick one active gateway below. Start in Test/Sandbox mode and move to Live only after the end-to-end acceptance checklist passes. Card payments apply only when payments are on and the selected gateway is fully configured.', 'doughboss' ); ?>
 						<?php
 						if ( ! class_exists( 'DoughBoss_Payment' ) || ! DoughBoss_Payment::ready() ) {
 							echo ' <strong>' . esc_html__( 'Status: card payments are OFF.', 'doughboss' ) . '</strong>';
 						} else {
+							$gateway_key = DoughBoss_Settings::payment_gateway();
+							if ( 'tyro' === $gateway_key ) {
+								$mode_label = DoughBoss_Settings::tyro_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Sandbox', 'doughboss' );
+							} elseif ( 'mpgs' === $gateway_key ) {
+								$mode_label = DoughBoss_Settings::mpgs_live_mode() ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' );
+							} else {
+								$mode_label = DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' );
+							}
 							/* translators: 1: gateway name (Stripe or Tyro), 2: mode (Test/Sandbox or Live). */
 							echo ' <strong style="color:#1f8a54;">' . esc_html(
 								sprintf(
 									__( 'Status: card payments are ON via %1$s (%2$s mode).', 'doughboss' ),
 									DoughBoss_Payment::gateway_label(),
-									'tyro' === DoughBoss_Settings::payment_gateway()
-										? ( DoughBoss_Settings::tyro_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Sandbox', 'doughboss' ) )
-										: ( DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' ) )
+									$mode_label
 								)
 							) . '</strong>';
 						}
@@ -3213,6 +3219,16 @@ JS;
 					</table>
 
 					<h3><?php esc_html_e( 'Stripe', 'doughboss' ); ?></h3>
+					<p class="description">
+						<?php esc_html_e( 'DoughBoss uses Stripe Payment Element for Visa, Mastercard and eligible Apple Pay or Google Pay wallets. Wallets appear only on supported devices after they are enabled and the site domain is registered in Stripe.', 'doughboss' ); ?>
+						<?php if ( 'stripe' === DoughBoss_Settings::payment_gateway() ) : ?>
+							<?php if ( DoughBoss_Settings::stripe_webhook_configured() ) : ?>
+								<strong style="color:#1f8a54;"><?php esc_html_e( 'Webhook recovery: configured.', 'doughboss' ); ?></strong>
+							<?php else : ?>
+								<strong style="color:#b32d2e;"><?php esc_html_e( 'Webhook recovery: missing. Test checkout may be exercised, but live Stripe payments remain fail-closed.', 'doughboss' ); ?></strong>
+							<?php endif; ?>
+						<?php endif; ?>
+					</p>
 					<?php $mode = isset( $settings['stripe_mode'] ) && 'live' === $settings['stripe_mode'] ? 'live' : 'test'; ?>
 					<table class="form-table" role="presentation">
 						<tr>

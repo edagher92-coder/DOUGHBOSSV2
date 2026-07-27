@@ -233,14 +233,48 @@ class DoughBoss_Payment_Attempts {
 		if ( ! $attempt_id ) {
 			return false;
 		}
+		// Each adapter replays the same stable provider identity. Reclaiming an
+		// unbound, stale provisioning lease therefore recovers from a PHP crash
+		// between the provider request and the durable reference binding.
+		$lease_cutoff = gmdate( 'Y-m-d H:i:s', time() - 5 * 60 );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$updated = $wpdb->query(
 			$wpdb->prepare(
-				"UPDATE " . self::table() . " SET status = %s, updated_at = %s WHERE id = %d AND status = %s AND provider_reference IS NULL",
+				"UPDATE " . self::table() . " SET status = %s, updated_at = %s WHERE id = %d AND provider_reference IS NULL AND (status = %s OR (status = %s AND updated_at < %s))",
 				'provisioning',
 				self::utc_now(),
 				$attempt_id,
-				'created'
+				'created',
+				'provisioning',
+				$lease_cutoff
+			)
+		);
+		return 1 === (int) $updated;
+	}
+
+	/**
+	 * Release an owned, still-unbound creation lease after a safe-to-replay
+	 * provider/storage failure.
+	 *
+	 * @param int    $attempt_id Attempt id.
+	 * @param string $last_error Safe error identifier only.
+	 * @return bool
+	 */
+	public static function release_creation( $attempt_id, $last_error = '' ) {
+		global $wpdb;
+		$attempt_id = absint( $attempt_id );
+		if ( ! $attempt_id ) {
+			return false;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE " . self::table() . " SET status = %s, last_error = %s, updated_at = %s WHERE id = %d AND status = %s AND provider_reference IS NULL",
+				'created',
+				self::safe_error( $last_error ),
+				self::utc_now(),
+				$attempt_id,
+				'provisioning'
 			)
 		);
 		return 1 === (int) $updated;
@@ -325,21 +359,49 @@ class DoughBoss_Payment_Attempts {
 		if ( 1 === (int) $inserted ) {
 			return true;
 		}
-		// A failed earlier delivery deliberately leaves outcome=retry. Exactly one
-		// later delivery can reclaim it; received and completed outcomes remain
-		// duplicates and therefore cannot be processed twice.
+		// A failed delivery leaves outcome=retry. A process that fatals before it
+		// can record retry leaves received; reclaim that only after a five-minute
+		// lease. Normal webhook work completes in milliseconds, so concurrent
+		// deliveries still cannot both own the same event.
+		$lease_cutoff = gmdate( 'Y-m-d H:i:s', time() - 5 * 60 );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$reclaimed = $wpdb->query(
 			$wpdb->prepare(
-				"UPDATE " . self::events_table() . " SET outcome = %s, updated_at = %s WHERE event_key = %s AND outcome = %s",
+				"UPDATE " . self::events_table() . " SET outcome = %s, updated_at = %s WHERE event_key = %s AND (outcome = %s OR (outcome = %s AND updated_at < %s))",
 				'received',
 				self::utc_now(),
 				$event_key,
-				'retry'
+				'retry',
+				'received',
+				$lease_cutoff
 			)
 		);
 		return 1 === (int) $reclaimed;
 	}
+
+	/**
+	 * Return the safe processing state for an already-claimed provider event.
+	 *
+	 * A null result means no durable row could be read and callers must return a
+	 * retryable HTTP error rather than incorrectly acknowledging a duplicate.
+	 *
+	 * @param string $event_key SHA-256 event identity.
+	 * @return string|null
+	 */
+	public static function event_outcome( $event_key ) {
+		global $wpdb;
+		$event_key = self::event_key( $event_key );
+		if ( '' === $event_key ) {
+			return null;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$outcome = $wpdb->get_var( $wpdb->prepare( "SELECT outcome FROM " . self::events_table() . " WHERE event_key = %s LIMIT 1", $event_key ) );
+		if ( ! is_string( $outcome ) || '' === $outcome ) {
+			return null;
+		}
+		return self::short_key( $outcome, 32 );
+	}
+
 	/**
 	 * Mark a claimed event with its safe terminal/retry outcome.
 	 *

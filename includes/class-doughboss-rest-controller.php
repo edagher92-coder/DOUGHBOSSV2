@@ -2187,10 +2187,11 @@ class DoughBoss_REST_Controller {
 				'db_version_code'   => DOUGHBOSS_DB_VERSION,
 				'db_version_stored' => (string) get_option( 'doughboss_db_version', '0' ),
 				'integrations'      => array(
-					'stripe'  => (bool) DoughBoss_Stripe::ready(),
-					'tyro'    => (bool) DoughBoss_Tyro::ready(),
-					'pospal'  => (bool) DoughBoss_POSPal::ready(),
-					'mercure' => (bool) DoughBoss_Settings::mercure_ready(),
+					'stripe'         => (bool) DoughBoss_Stripe::ready(),
+					'stripe_webhook' => (bool) DoughBoss_Settings::stripe_webhook_configured(),
+					'tyro'           => (bool) DoughBoss_Tyro::ready(),
+					'pospal'         => (bool) DoughBoss_POSPal::ready(),
+					'mercure'        => (bool) DoughBoss_Settings::mercure_ready(),
 					'ntfy'    => (bool) DoughBoss_Settings::ntfy_ready(),
 					'sms'     => (bool) DoughBoss_SMS::ready(),
 					'printer' => (bool) DoughBoss_Settings::printer_ready(),
@@ -4081,26 +4082,46 @@ class DoughBoss_REST_Controller {
 	public function catering_stripe_webhook( WP_REST_Request $request ) {
 		$payload = $request->get_body();
 		$sig     = $request->get_header( 'stripe_signature' );
-
 		if ( ! DoughBoss_Stripe::verify_webhook_signature( $payload, $sig ) ) {
 			return new WP_Error( 'doughboss_wh_sig', __( 'Invalid signature.', 'doughboss' ), array( 'status' => 400 ) );
 		}
-
 		$event = json_decode( $payload, true );
 		if ( ! is_array( $event ) || empty( $event['type'] ) ) {
-			return rest_ensure_response( array( 'received' => true ) );
+			return new WP_Error( 'doughboss_wh_event', __( 'Invalid payment event.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( 'payment_intent.succeeded' !== $event['type'] ) {
+			return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
 		}
 
-		if ( 'payment_intent.succeeded' === $event['type'] ) {
-			$obj  = isset( $event['data']['object'] ) && is_array( $event['data']['object'] ) ? $event['data']['object'] : array();
-			$meta = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
+		$obj      = isset( $event['data']['object'] ) && is_array( $event['data']['object'] ) ? $event['data']['object'] : array();
+		$event_id = isset( $event['id'] ) ? sanitize_text_field( (string) $event['id'] ) : '';
+		$pi_id    = isset( $obj['id'] ) ? sanitize_text_field( (string) $obj['id'] ) : '';
+		if ( ! preg_match( '/^evt_[A-Za-z0-9_]{8,191}$/', $event_id ) || ! preg_match( '/^pi_[A-Za-z0-9_]{8,191}$/', $pi_id ) ) {
+			return new WP_Error( 'doughboss_wh_reference', __( 'Invalid payment event reference.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$meta = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
+		if ( ! isset( $meta['context'] ) || 'catering' !== $meta['context'] ) {
+			return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+		}
 
-			if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
-				$this->reconcile_catering_intent( $obj, $meta );
+		$event_key = hash( 'sha256', 'stripe|' . $event_id );
+		if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'stripe', $pi_id, 'payment_intent.succeeded' ) ) {
+			$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+			if ( null === $event_outcome || 'retry' === $event_outcome ) {
+				return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
 			}
+			return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
 		}
 
-		return rest_ensure_response( array( 'received' => true ) );
+		if ( ! $this->reconcile_catering_intent( $obj, $meta ) ) {
+			DoughBoss_Payment_Attempts::complete_event( $event_key, 'retry' );
+			return new WP_Error( 'doughboss_wh_retry', __( 'Payment reconciliation will be retried.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		if ( ! DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' ) ) {
+			DoughBoss_Payment_Attempts::complete_event( $event_key, 'retry' );
+			return new WP_Error( 'doughboss_wh_store', __( 'Payment event storage will be retried.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		return rest_ensure_response( array( 'received' => true, 'processed' => true ) );
 	}
 
 	/**
@@ -4125,31 +4146,50 @@ class DoughBoss_REST_Controller {
 	public function stripe_webhook( WP_REST_Request $request ) {
 		$payload = $request->get_body();
 		$sig     = $request->get_header( 'stripe_signature' );
-
 		if ( ! DoughBoss_Stripe::verify_webhook_signature( $payload, $sig ) ) {
 			return new WP_Error( 'doughboss_wh_sig', __( 'Invalid signature.', 'doughboss' ), array( 'status' => 400 ) );
 		}
-
 		$event = json_decode( $payload, true );
 		if ( ! is_array( $event ) || empty( $event['type'] ) ) {
-			return rest_ensure_response( array( 'received' => true ) );
+			return new WP_Error( 'doughboss_wh_event', __( 'Invalid payment event.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( 'payment_intent.succeeded' !== $event['type'] ) {
+			return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
 		}
 
-		if ( 'payment_intent.succeeded' === $event['type'] ) {
-			$obj  = isset( $event['data']['object'] ) && is_array( $event['data']['object'] ) ? $event['data']['object'] : array();
-			$meta = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
+		$obj      = isset( $event['data']['object'] ) && is_array( $event['data']['object'] ) ? $event['data']['object'] : array();
+		$meta     = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
+		$event_id = isset( $event['id'] ) ? sanitize_text_field( (string) $event['id'] ) : '';
+		$pi_id    = isset( $obj['id'] ) ? sanitize_text_field( (string) $obj['id'] ) : '';
+		if ( ! preg_match( '/^evt_[A-Za-z0-9_]{8,191}$/', $event_id ) || ! preg_match( '/^pi_[A-Za-z0-9_]{8,191}$/', $pi_id ) ) {
+			return new WP_Error( 'doughboss_wh_reference', __( 'Invalid payment event reference.', 'doughboss' ), array( 'status' => 400 ) );
+		}
 
-			if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
-				$this->reconcile_catering_intent( $obj, $meta );
-			} else {
-				$pi_id = isset( $obj['id'] ) ? sanitize_text_field( $obj['id'] ) : '';
-				if ( '' !== $pi_id && ! DoughBoss_Order::payment_intent_used( $pi_id ) ) {
-					$this->record_unreconciled_payment( $pi_id, $obj );
-				}
+		$event_key = hash( 'sha256', 'stripe|' . $event_id );
+		if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'stripe', $pi_id, 'payment_intent.succeeded' ) ) {
+			$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+			if ( null === $event_outcome || 'retry' === $event_outcome ) {
+				return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
 			}
+			return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
 		}
 
-		return rest_ensure_response( array( 'received' => true ) );
+		$processed = true;
+		if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
+			$processed = $this->reconcile_catering_intent( $obj, $meta );
+		} elseif ( ! DoughBoss_Order::payment_intent_used( $pi_id ) ) {
+			$processed = $this->record_unreconciled_payment( $pi_id, $obj );
+		}
+
+		if ( ! $processed ) {
+			DoughBoss_Payment_Attempts::complete_event( $event_key, 'retry' );
+			return new WP_Error( 'doughboss_wh_retry', __( 'Payment reconciliation will be retried.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		if ( ! DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' ) ) {
+			DoughBoss_Payment_Attempts::complete_event( $event_key, 'retry' );
+			return new WP_Error( 'doughboss_wh_store', __( 'Payment event storage will be retried.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		return rest_ensure_response( array( 'received' => true, 'processed' => true ) );
 	}
 
 	/**
@@ -4201,6 +4241,10 @@ class DoughBoss_REST_Controller {
 		}
 		$event_key = hash( 'sha256', $type . '|' . $resource . '|' . $reference );
 		if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'tyro', $reference, $type ) ) {
+			$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+			if ( null === $event_outcome || 'retry' === $event_outcome ) {
+				return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+			}
 			return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
 		}
 
@@ -4295,7 +4339,7 @@ class DoughBoss_REST_Controller {
 	 *
 	 * @param array<string,mixed> $obj  PaymentIntent object from the event.
 	 * @param array<string,mixed> $meta PaymentIntent metadata.
-	 * @return void
+	 * @return bool
 	 */
 	private function reconcile_catering_intent( array $obj, array $meta ) {
 		$leg     = self::catering_leg( isset( $meta['leg'] ) ? $meta['leg'] : 'deposit' );
@@ -4303,9 +4347,10 @@ class DoughBoss_REST_Controller {
 		if ( ! $enquiry && ! empty( $meta['enquiry_id'] ) ) {
 			$enquiry = DoughBoss_Catering::get( (int) $meta['enquiry_id'] );
 		}
-		if ( $enquiry ) {
-			DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );
+		if ( ! $enquiry ) {
+			return false;
 		}
+		return DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );
 	}
 
 	/**
@@ -4320,7 +4365,7 @@ class DoughBoss_REST_Controller {
 	 *
 	 * @param string              $pi_id PaymentIntent id.
 	 * @param array<string,mixed> $obj   PaymentIntent object from the event.
-	 * @return void
+	 * @return bool
 	 */
 	private function record_unreconciled_payment( $pi_id, array $obj ) {
 		global $wpdb;
@@ -4360,8 +4405,19 @@ class DoughBoss_REST_Controller {
 			if ( count( $list ) > 50 ) {
 				$list = array_slice( $list, -50 );
 			}
-
-			update_option( 'doughboss_unreconciled_payments', $list, false );
+			$saved = update_option( 'doughboss_unreconciled_payments', $list, false );
+			if ( ! $saved ) {
+				wp_cache_delete( 'doughboss_unreconciled_payments', 'options' );
+				$stored = get_option( 'doughboss_unreconciled_payments', array() );
+				$saved  = is_array( $stored ) && (bool) array_filter(
+					$stored,
+					static function ( $entry ) use ( $pi_id ) {
+						return isset( $entry['id'] ) && $entry['id'] === $pi_id;
+					}
+				);
+			}
+		} else {
+			$saved = true;
 		}
 
 		if ( $locked ) {
@@ -4369,12 +4425,13 @@ class DoughBoss_REST_Controller {
 		}
 
 		if ( $already ) {
-			return;
+			return true;
 		}
 
-		if ( function_exists( 'error_log' ) ) {
+		if ( $saved && function_exists( 'error_log' ) ) {
 			error_log( sprintf( 'DoughBoss: unreconciled PaymentIntent %s (%d %s) succeeded with no matching order.', $pi_id, $amount, $currency ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log — deliberate greppable audit trail for money reconciliation.
 		}
+		return (bool) $saved;
 	}
 
 	/**

@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.25.6
+Stable tag: 2.26.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,10 +44,11 @@ Everything is rendered through shortcodes and a small REST API; no theme changes
 = Does this process payments? =
 
 Optionally. Orders are always recorded and the store is notified — DoughBoss
-suits "order now, pay on pickup/delivery" out of the box. Stripe card payments
-are also built in and can be switched on under **DoughBoss → Settings →
-Payments** (off by default); once configured, checkout collects a card and the
-order is verified server-side before it's accepted.
+suits "order now, pay on pickup/delivery" out of the box. Stripe Payment
+Element is also built in for Visa, Mastercard and eligible Apple Pay or Google
+Pay wallets. It can be switched on under **DoughBoss → Settings → Payments**
+(off by default); once configured, the payment and final order total are
+verified server-side before the order is accepted.
 
 Tyro Connect Pay is also available as a **pre-final, disabled-by-default**
 integration. It needs Tyro-provided sandbox credentials, a confirmed per-shop
@@ -66,6 +67,14 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.26.0 =
+* Replace legacy Stripe Card Element checkout with a responsive Payment Element for cards and eligible Apple Pay/Google Pay wallets across menu orders and catering deposits.
+* Create or reuse one server-bound PaymentIntent with an upstream idempotency key, including safe retries after ambiguous network failures.
+* De-duplicate signed Stripe webhooks and add stale-worker recovery leases so interrupted payment creation or reconciliation can resume safely.
+* Fail closed for live Stripe mode until the recovery webhook is configured, while exposing a safe readiness indicator in WordPress.
+* Preserve the Tyro and Mastercard adapters as inactive rollback paths and keep the provider-neutral order, voucher, KDS, email, tracking and POSPal chain unchanged.
+* Add offline adversarial contracts for duplicate checkout, stale leases, webhook signatures, server-authoritative totals, vouchers and payment-provider regressions.
 
 = 2.25.6 =
 * Add a live kitchen pulse panel with lightweight order-flow graphs, payment/timing/allergy chips and oldest-order visibility for touch displays.

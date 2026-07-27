@@ -25,7 +25,8 @@
 		guests: 0,
 		orderType: 'pickup',
 		quote: null,
-		email: ''
+		email: '',
+		name: ''
 	};
 
 	function money(n) {
@@ -227,6 +228,7 @@
 			return;
 		}
 		state.email = email;
+		state.name = name;
 
 		var btn = form.querySelector('.dbc-submit');
 		btn.disabled = true;
@@ -264,7 +266,7 @@
 
 	function showSuccess(data) {
 		var pay = (window.DoughBossData && window.DoughBossData.payments) || {};
-		var canPay = pay.enabled && data.deposit > 0 && ((pay.gateway === 'tyro' && typeof window.Tyro === 'function') || (pay.gateway !== 'tyro' && pay.pk && typeof window.Stripe === 'function'));
+		var canPay = pay.enabled && data.deposit > 0 && ((pay.gateway === 'tyro' && typeof window.Tyro === 'function') || (pay.gateway === 'stripe' && pay.pk && typeof window.Stripe === 'function'));
 
 		root.innerHTML = '';
 		var box = el('<div class="dbc-success" role="status"></div>');
@@ -278,7 +280,7 @@
 			box.appendChild(el('<p>Secure your date with a deposit of <strong>' + money(data.deposit) + '</strong>.</p>'));
 			var panel = el(
 				'<div class="dbc-pay">' +
-					'<label class="dbc-pay-label">Card details</label>' +
+					'<label class="dbc-pay-label">Secure payment</label>' +
 					'<div class="dbc-card-element"></div>' +
 					'<div class="dbc-error" role="alert" aria-live="assertive"></div>' +
 					'<button type="button" class="dbc-submit dbc-pay-btn">Pay ' + money(data.deposit) + ' deposit</button>' +
@@ -330,12 +332,18 @@
 	function mountPayment(panel, data) {
 		var pay = window.DoughBossData.payments;
 		var errBox = panel.querySelector('.dbc-error');
-		var stripe, card, tyro, paymentId = '';
+		var stripe, stripeElements, paymentElement, tyro;
+		var paymentId = '';
+		var confirmedPaymentId = '';
+		var stripeClientSecret = '';
 		var attemptKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
 		var cardMount = panel.querySelector('.dbc-card-element');
+		var cardLabel = panel.querySelector('.dbc-pay-label');
+		var btn = panel.querySelector('.dbc-pay-btn');
+		var payButtonLabel = 'Pay ' + money(data.deposit) + ' deposit';
 		cardMount.id = 'dbc-tyro-' + String(Date.now());
 		if (pay.gateway === 'tyro') {
-			panel.querySelector('.dbc-pay-btn').disabled = true;
+			btn.disabled = true;
 			post('/catering/payment-intent', { enquiry_number: data.enquiry_number, email: state.email, leg: 'deposit', payment_attempt_key: attemptKey }).then(function (res) {
 				if (!res.ok || !res.data || !res.data.client_secret) { throw new Error((res.data && res.data.message) || 'Could not start the payment.'); }
 				paymentId = res.data.payment_intent;
@@ -345,47 +353,154 @@
 				var form = tyro.createPayForm({ theme: 'minimal', options: { creditCardForm: { enabled: true }, applePay: { enabled: false }, googlePay: { enabled: false } } });
 				return form.inject('#' + cardMount.id);
 			}).then(function () {
-				panel.querySelector('.dbc-pay-btn').disabled = false;
+				btn.disabled = false;
 				panel.querySelector('.dbc-pay-secure').textContent = 'Secure payment by Tyro · bank verification may appear here.';
 			}).catch(function (err) { errBox.textContent = err.message || 'Card payments are unavailable right now.'; });
 		} else {
 			try {
 				stripe = window.Stripe(pay.pk);
-				card = stripe.elements().create('card');
-				card.mount(cardMount);
+				cardLabel.style.display = 'none';
+				cardMount.style.display = 'none';
+				btn.textContent = 'Continue to payment';
 			} catch (e) {
 				errBox.textContent = 'Card payments are unavailable right now.';
+				btn.disabled = true;
 				return;
 			}
 		}
 
-		panel.querySelector('.dbc-pay-btn').addEventListener('click', function () {
-			var btn = this;
-			errBox.textContent = '';
-			btn.disabled = true;
-			var prev = btn.textContent;
-			btn.textContent = 'Processing…';
+		function resetStripePaymentForm() {
+			if (paymentElement) {
+				try { paymentElement.unmount(); } catch (ignoreUnmount) {}
+			}
+			paymentElement = null;
+			stripeElements = null;
+			stripeClientSecret = '';
+			paymentId = '';
+			cardMount.innerHTML = '';
+			cardMount.style.display = 'none';
+			cardLabel.style.display = 'none';
+			btn.disabled = false;
+			btn.textContent = 'Continue to payment';
+		}
 
-			var payment = pay.gateway === 'tyro' ? tyro.submitPay().then(function () {
-				return tyro.fetchPayRequest();
-			}).then(function (result) {
-				var req = result && result.payRequest ? result.payRequest : result;
-				if (!req || String(req.status).toUpperCase() !== 'SUCCESS') { throw new Error('Your payment is still being checked. Do not pay again; please wait and retry confirmation.'); }
-				return paymentId;
-			}) : post('/catering/payment-intent', {
+		function prepareStripePayment() {
+			btn.textContent = 'Preparing secure payment...';
+			return post('/catering/payment-intent', {
 				enquiry_number: data.enquiry_number,
 				email: state.email,
 				leg: 'deposit',
 				payment_attempt_key: attemptKey
 			}).then(function (res) {
-				if (!res.ok || !res.data || !res.data.client_secret) {
+				if (!res.ok || !res.data || !res.data.client_secret || !res.data.payment_intent) {
 					throw new Error((res.data && res.data.message) || 'Could not start the payment.');
 				}
-				return stripe.confirmCardPayment(res.data.client_secret, { payment_method: { card: card } }).then(function (result) {
-					if (result.error) { throw new Error(result.error.message || 'Your card was declined.'); }
-					return result.paymentIntent.id;
+				paymentId = res.data.payment_intent;
+				stripeClientSecret = res.data.client_secret;
+				stripeElements = stripe.elements({
+					clientSecret: stripeClientSecret,
+					appearance: {
+						theme: 'stripe',
+						variables: {
+							colorPrimary: '#e52b2f',
+							colorText: '#171717',
+							borderRadius: '10px'
+						}
+					}
 				});
+				paymentElement = stripeElements.create('payment', {
+					layout: {
+						type: 'accordion',
+						defaultCollapsed: false,
+						radios: 'never',
+						spacedAccordionItems: true
+					},
+					defaultValues: {
+						billingDetails: {
+							name: state.name,
+							email: state.email
+						}
+					},
+					paymentMethodOrder: ['card'],
+					wallets: { applePay: 'auto', googlePay: 'auto' }
+				});
+				paymentElement.on('change', function (event) {
+					errBox.textContent = event && event.error ? (event.error.message || 'Check your payment details.') : '';
+				});
+				paymentElement.on('loaderror', function (event) {
+					var loadMessage = event && event.error && event.error.message ? event.error.message : 'The secure payment form could not load. Please try again.';
+					resetStripePaymentForm();
+					errBox.textContent = loadMessage;
+				});
+				paymentElement.on('ready', function () {
+					try { paymentElement.focus(); } catch (ignoreFocus) {}
+					if (window.innerWidth < 720 && cardMount.scrollIntoView) {
+						cardMount.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+					}
+					panel.querySelector('.dbc-pay-secure').textContent = 'Secure Stripe payment · Apple Pay or Google Pay appears when supported.';
+					btn.disabled = false;
+					btn.textContent = payButtonLabel;
+				});
+				cardLabel.style.display = '';
+				cardMount.style.display = '';
+				paymentElement.mount(cardMount);
+				panel.querySelector('.dbc-pay-secure').textContent = 'Loading secure payment options...';
+			}).catch(function (err) {
+				resetStripePaymentForm();
+				throw err;
 			});
+		}
+
+		btn.addEventListener('click', function () {
+			errBox.textContent = '';
+			btn.disabled = true;
+			var prev = btn.textContent;
+			btn.textContent = confirmedPaymentId ? 'Confirming deposit...' : 'Processing...';
+
+			if (pay.gateway === 'stripe' && !paymentElement && !confirmedPaymentId) {
+				prepareStripePayment().catch(function (err) {
+					errBox.textContent = err.message || 'Card payments are unavailable right now.';
+					btn.disabled = false;
+					btn.textContent = 'Continue to payment';
+				});
+				return;
+			}
+
+			var payment;
+			if (confirmedPaymentId) {
+				payment = Promise.resolve(confirmedPaymentId);
+			} else if (pay.gateway === 'tyro') {
+				payment = tyro.submitPay().then(function () {
+				return tyro.fetchPayRequest();
+			}).then(function (result) {
+				var req = result && result.payRequest ? result.payRequest : result;
+				if (!req || String(req.status).toUpperCase() !== 'SUCCESS') { throw new Error('Your payment is still being checked. Do not pay again; please wait and retry confirmation.'); }
+					confirmedPaymentId = paymentId;
+					return confirmedPaymentId;
+				});
+			} else {
+				payment = stripeElements.submit().then(function (result) {
+					if (result && result.error) {
+						throw new Error(result.error.message || 'Check your payment details.');
+					}
+					return stripe.confirmPayment({
+						elements: stripeElements,
+						clientSecret: stripeClientSecret,
+						confirmParams: {
+							return_url: cateringPaymentReturnUrl()
+						},
+						redirect: 'if_required'
+					});
+				}).then(function (result) {
+					if (result.error) { throw new Error(result.error.message || 'Your card was declined.'); }
+					if (!result.paymentIntent || result.paymentIntent.id !== paymentId) {
+						throw new Error('The completed payment could not be matched safely.');
+					}
+					confirmedPaymentId = result.paymentIntent.id;
+					return confirmedPaymentId;
+				});
+			}
+
 			payment.then(function (confirmedId) {
 				return post('/catering/confirm-payment', {
 					enquiry_number: data.enquiry_number,
@@ -401,9 +516,20 @@
 			}).catch(function (err) {
 				errBox.textContent = err.message || 'Something went wrong. Please try again.';
 				btn.disabled = false;
-				btn.textContent = prev;
+				btn.textContent = confirmedPaymentId ? 'Confirm paid deposit' : prev;
 			});
 		});
+	}
+
+	function cateringPaymentReturnUrl() {
+		var current = new URL(window.location.href);
+		var safe = new URL(current.origin + current.pathname);
+		['page_id', 'p'].forEach(function (key) {
+			var value = current.searchParams.get(key);
+			if (/^[1-9][0-9]*$/.test(value || '')) { safe.searchParams.set(key, value); }
+		});
+		if (current.searchParams.get('preview') === 'true') { safe.searchParams.set('preview', 'true'); }
+		return safe.toString();
 	}
 
 	function showPaid(conf, data) {

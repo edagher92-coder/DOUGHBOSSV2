@@ -89,6 +89,13 @@ jobs:
           node --test tests/storefront-uplift-contract.test.js
           node --test tests/wordpress-menu-images-contract.test.js
 
+      - name: Verify Stripe payment safety contracts
+        run: |
+          php tests/stripe-adversarial-contract.php
+          php tests/provider-readiness-contract.php
+          php tests/catering-motion-parity-contract.php
+          node --test tests/stripe-payment-element-contract.test.js
+
   build-zip:
     name: Build installable plugin zip
     runs-on: ubuntu-latest

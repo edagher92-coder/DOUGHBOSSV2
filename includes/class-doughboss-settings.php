@@ -673,13 +673,26 @@ class DoughBoss_Settings {
 	}
 
 	/**
-	 * Whether Stripe is both enabled and fully configured for the active mode
-	 * (so the storefront should actually collect card payment).
+	 * Whether the active Stripe mode has a webhook signing secret.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_webhook_configured() {
+		return '' !== self::stripe_webhook_secret();
+	}
+
+	/**
+	 * Whether Stripe is enabled and sufficiently configured for the active mode.
+	 * Live mode fails closed without the recovery webhook; test mode can still
+	 * exercise the synchronous checkout path while setup is being completed.
 	 *
 	 * @return bool
 	 */
 	public static function stripe_ready() {
-		return self::payments_enabled() && '' !== self::stripe_publishable_key() && '' !== self::stripe_secret_key();
+		return self::payments_enabled()
+			&& '' !== self::stripe_publishable_key()
+			&& '' !== self::stripe_secret_key()
+			&& ( 'live' !== self::stripe_mode() || self::stripe_webhook_configured() );
 	}
 
 	/**
