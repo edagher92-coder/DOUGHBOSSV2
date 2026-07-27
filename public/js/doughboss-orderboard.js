@@ -16,11 +16,21 @@
 
 	var STATUSES = cfg.statuses || {};
 	var ETA_CHOICES = [10, 15, 20, 30];
-	var LANES = [
+	var SCREEN_MODE = cfg.screenMode === 'make' || cfg.screenMode === 'pass' ? cfg.screenMode : 'all';
+	var ALL_LANES = [
 		{ key: 'new', title: 'New', statuses: ['pending'] },
 		{ key: 'prep', title: 'Preparing', statuses: ['confirmed', 'preparing', 'baking'] },
 		{ key: 'ready', title: 'Ready', statuses: ['ready', 'out_for_delivery'] }
 	];
+	var LANES = SCREEN_MODE === 'make'
+		? [
+			{ key: 'new', title: 'New', statuses: ['pending'] },
+			{ key: 'bench', title: 'On the bench', statuses: ['confirmed', 'preparing'] },
+			{ key: 'oven', title: 'Oven', statuses: ['baking'] }
+		]
+		: (SCREEN_MODE === 'pass'
+			? [{ key: 'ready', title: 'Ready to call', statuses: ['ready', 'out_for_delivery'] }]
+			: ALL_LANES);
 
 	var boardEl = document.getElementById('db-board');
 	var preorderPanel = document.getElementById('db-preorder-review');
@@ -280,7 +290,21 @@
 		for (var i = 0; i < LANES.length; i++) {
 			if (LANES[i].statuses.indexOf(status) !== -1) { return LANES[i].key; }
 		}
-		return 'prep';
+		return '';
+	}
+
+	// Screen wording follows the real bench workflow while preserving the
+	// server-authoritative status values and transition permissions.
+	function actionLabel(o, status) {
+		if (SCREEN_MODE === 'make') {
+			if (status === 'preparing') { return 'Start prep'; }
+			if (status === 'baking') { return 'Move to oven'; }
+			if (status === 'ready') { return 'Send to pass'; }
+		}
+		if (SCREEN_MODE === 'pass' && status === 'completed') {
+			return o.order_type === 'dine_in' ? 'Served' : 'Collected';
+		}
+		return orderLabel(o, status);
 	}
 
 	function advanceActions(o) {
@@ -530,6 +554,14 @@
 			o.customer_phone ? el('span', { text: ' · ' + o.customer_phone }) : null
 		]);
 
+		// The make screen does not need customer details. The pass screen keeps a
+		// simple pickup name but never exposes the phone number.
+		if (SCREEN_MODE === 'make') {
+			contact.textContent = serviceLabel(o);
+		} else if (SCREEN_MODE === 'pass') {
+			contact.textContent = o.customer_name || 'Customer pickup';
+		}
+
 		var items = el('ul', { class: 'db-card-items', 'aria-label': (o.items || []).length + ' items' }, (o.items || []).map(itemLine));
 
 		var meta = [];
@@ -550,7 +582,9 @@
 			meta.push(el('div', { class: 'db-card-timing db-card-timing-passed', text: o.timing_label || 'Estimate passed — check this order' }));
 		}
 		meta.push(el('div', { class: 'db-card-payment db-payment-' + (o.payment_status || 'unknown'), text: 'Payment: ' + paymentLabel(o.payment_status) }));
-		meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
+		if (SCREEN_MODE === 'all') {
+			meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
+		}
 
 		var actions;
 		if (isNew) {
@@ -571,9 +605,9 @@
 				return el('button', {
 					class: 'button ' + (primary ? 'button-primary' : '') + ' db-advance',
 					type: 'button',
-					'aria-label': orderLabel(o, st) + ' for order ' + o.order_number,
+					'aria-label': actionLabel(o, st) + ' for order ' + o.order_number,
 					onclick: function () { setStatus(o, st); }
-				}, [orderLabel(o, st)]);
+				}, [actionLabel(o, st)]);
 			});
 			var actionRow = [
 				el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change'])
@@ -609,13 +643,13 @@
 
 		// Persistent warning if sound isn't enabled — a reloaded tablet must
 		// never sit silent through new orders.
-		if (!audio.on) {
+		if (SCREEN_MODE !== 'pass' && !audio.on) {
 			boardEl.appendChild(el('div', { class: 'db-sound-warn' }, [
 				'🔇 Sound is OFF — tap “Enable sound alerts” (top right) so you don’t miss new orders.'
 			]));
 		}
 
-		var unacked = orders.filter(function (o) {
+		var unacked = SCREEN_MODE === 'pass' ? [] : orders.filter(function (o) {
 			return o.status === 'pending' && !o.acknowledged && !localAck[o.id];
 		});
 
@@ -634,14 +668,14 @@
 		// kitchen can batch ("6× Zaatar · 3× All Meat …"). Hidden when empty.
 		var STRIP_STATUSES = ['pending', 'confirmed', 'preparing', 'baking'];
 		var counts = {};
-		orders.forEach(function (o) {
+		if (SCREEN_MODE !== 'pass') { orders.forEach(function (o) {
 			if (STRIP_STATUSES.indexOf(o.status) === -1) { return; }
 			(o.items || []).forEach(function (it) {
 				var name = String(it.name || '');
 				if (!name) { return; }
 				counts[name] = (counts[name] || 0) + (parseInt(it.quantity, 10) || 1);
 			});
-		});
+		}); }
 		var stripEntries = Object.keys(counts).map(function (name) {
 			return { name: name, count: counts[name] };
 		}).sort(function (a, b) { return b.count - a.count; }).slice(0, 12);
@@ -654,6 +688,7 @@
 				)));
 		}
 
+		var visibleOrders = orders.filter(function (o) { return !!laneOf(o.status); });
 		var lanesWrap = el('div', { class: 'db-lanes' }, LANES.map(function (lane) {
 			var laneOrders = orders.filter(function (o) { return laneOf(o.status) === lane.key; });
 			var cards = laneOrders.length
@@ -730,6 +765,10 @@
 			lastSuccessfulSync = new Date();
 			updateHeartbeat();
 			render(res.data);
+			if (SCREEN_MODE !== 'pass') {
+				if (preorderPanel) { preorderPanel.hidden = true; }
+				return null;
+			}
 			var preorderPath = '/admin/preorder-requests?per_page=100' + (currentLocation ? '&location_id=' + currentLocation : '');
 			return api(preorderPath, 'GET').then(function (preorders) {
 				if (!preorders || !Array.isArray(preorders.data)) { throw new Error('The pre-order review feed returned an invalid response.'); }

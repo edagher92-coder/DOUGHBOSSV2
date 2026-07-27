@@ -161,11 +161,16 @@ final class DoughBoss_Staff_Experience {
 			body.doughboss-staff-kitchen #wpcontent,body.doughboss-staff-kitchen #wpbody-content{margin:0;padding:0;}
 			body.doughboss-staff-kitchen .doughboss-board-wrap{--dbb-ink:#fff8ee;--dbb-ink-soft:#e1d4c1;--dbb-muted:#c5b7a3;--dbb-muted-2:#9c8d79;--dbb-paper:#fffaf1;--dbb-paper-soft:#fff6e6;--dbb-lane-bg:rgba(255,255,255,.08);--dbb-line:rgba(255,255,255,.15);--dbb-blue:#e7b355;--dbb-red:#ef5b37;--dbb-green:#4ab879;--dbb-green-dark:#236b4b;--dbb-amber:#e7a52e;--dbb-danger:#ef5b37;--dbb-chip-bg:#2b211b;--dbb-chip-ink:#fff8ee;--dbb-chip-delivery-bg:#6b3b1c;--dbb-chip-delivery-ink:#ffe4aa;--dbb-chip-shop-bg:#2f4b43;--dbb-chip-shop-ink:#d7f4e5;background:radial-gradient(100% 80% at 100% 0%,#4a2719 0%,transparent 48%),radial-gradient(80% 70% at 0% 100%,#233b32 0%,transparent 52%),var(--db-ink);min-height:100vh;margin:0;padding:clamp(16px,3vw,34px);}
 			body.doughboss-staff-kitchen .db-board-bar{padding:0 0 16px;border-bottom:1px solid rgba(255,255,255,.14);}
+			body.doughboss-staff-kitchen .db-board-kicker{color:#ef5b37;}
 			body.doughboss-staff-kitchen .db-board-bar h1{font-family:"Arial Narrow",Impact,sans-serif;font-size:clamp(34px,5vw,58px);letter-spacing:.045em;text-transform:uppercase;color:#fff8ee;}
+			body.doughboss-staff-kitchen .db-board-title-group p{color:#e1d4c1;}
 			body.doughboss-staff-kitchen .db-board-status{color:#e7ddcd;font-weight:600;}
 			body.doughboss-staff-kitchen .db-lane{backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.12);}
 			body.doughboss-staff-kitchen .db-lane-title{font-family:"Arial Narrow",Impact,sans-serif;font-size:1.45rem;letter-spacing:.04em;text-transform:uppercase;color:#fff8ee;}
 			body.doughboss-staff-kitchen .db-card{box-shadow:0 18px 35px rgba(0,0,0,.18);}
+			body.doughboss-staff-kitchen .doughboss-board--screen-make .db-card-number,body.doughboss-staff-kitchen .doughboss-board--screen-pass .db-card-number{font-family:"Arial Narrow",Impact,sans-serif;font-size:2.5rem;line-height:1;color:#110d0a;}
+			body.doughboss-staff-kitchen .doughboss-board--screen-make .db-card,body.doughboss-staff-kitchen .doughboss-board--screen-pass .db-card{padding:1rem;background:#fff8ee;}
+			body.doughboss-staff-kitchen .doughboss-board--screen-pass .db-card-actions .button-primary{background:#e24d28;border-color:#b83118;}
 			body.doughboss-staff-kitchen .db-card button,body.doughboss-staff-kitchen .db-board-actions .button{min-height:48px;border-radius:12px;font-weight:800;}
 			@media(max-width:782px){body.doughboss-staff-kitchen #wpbody{padding-top:0;}body.doughboss-staff-kitchen .doughboss-board-wrap{padding:16px 12px;}}
 		</style>

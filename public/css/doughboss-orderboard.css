@@ -52,6 +52,34 @@
 	font-size: 1.6rem;
 }
 
+.db-board-title-group { min-width: 0; }
+.db-board-kicker {
+	display: block;
+	margin-bottom: 0.2rem;
+	font-size: 0.72rem;
+	font-weight: 900;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+.db-board-title-group p { margin: 0.25rem 0 0; color: var(--dbb-muted); font-weight: 600; }
+.db-screen-layout { display: grid; gap: 1rem; align-items: start; }
+.doughboss-board--screen-pass .db-screen-layout { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr); }
+.doughboss-board--screen-pass .db-board { order: 1; }
+.doughboss-board--screen-pass .db-preorder-review { order: 2; margin: 0; max-height: calc(100vh - 10rem); overflow: auto; }
+.doughboss-board--screen-pass .db-preorder-list { grid-template-columns: minmax(0, 1fr); }
+.doughboss-board--screen-pass .db-lanes { grid-template-columns: minmax(0, 1fr); }
+.doughboss-board--screen-pass .db-lane { min-height: calc(100vh - 13rem); }
+.doughboss-board--screen-make .db-lanes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.doughboss-board--screen-make .db-card-actions .button,
+.doughboss-board--screen-pass .db-card-actions .button {
+	min-height: 58px;
+	font-size: 1.08rem;
+	font-weight: 900;
+	flex: 1 1 9rem;
+}
+.doughboss-board--screen-pass .db-card-actions-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.doughboss-board--screen-pass .db-review-change { grid-column: 1 / -1; }
+
 .db-board-actions {
 	display: flex;
 	align-items: center;
@@ -168,6 +196,9 @@ body.db-alerting .db-board-bar h1::after {
 @media (max-width: 640px) {
 	.db-lanes { grid-template-columns: 1fr; }
 	.db-preorder-review { padding: 0.75rem; }
+	.doughboss-board--screen-pass .db-screen-layout { grid-template-columns: minmax(0, 1fr); }
+	.doughboss-board--screen-pass .db-preorder-review,
+	.doughboss-board--screen-pass .db-lane { max-height: none; min-height: 0; }
 }
 
 .db-lane {
@@ -578,4 +609,12 @@ body.db-alerting .db-board-bar h1::after {
 	}
 	.db-banner .button { width: 100%; }
 	.db-preorder-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Kitchen touch screens need forgiving targets even when Windows reports a
+   mouse-like pointer. These are deliberately larger than generic wp-admin. */
+@media (pointer: coarse) {
+	.doughboss-board-wrap .button,
+	.doughboss-board-wrap select { min-height: 56px; }
+	.doughboss-board-wrap .db-card-actions .button { padding: 0.75rem 1rem; }
 }

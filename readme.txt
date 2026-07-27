@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.25.4
+Stable tag: 2.25.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.25.5 =
+* New kitchen workstation modes for one PC with two touch displays: **MAKE** for new/prep/oven and **PASS & PICKUP** for ready orders, collection and pre-order review.
+* Touch-first operational controls are at least 58px in the dedicated screen modes; no customer phone number or order total is shown on the production screens.
+* Collection now uses the familiar **Collected** action on the Pass screen while retaining server-side status/version safety checks.
 
 = 2.25.4 =
 * Keep Zaatar and Zaatar & Cheese as separate products; remove the incorrect mixed-cheese add-on from Zaatar.

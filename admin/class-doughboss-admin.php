@@ -674,6 +674,13 @@ class DoughBoss_Admin {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page gate, verified against the stored secret.
 			$supplied_board_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
 			$board_key_for_js    = DoughBoss_Settings::verify_board_access_key( $supplied_board_key ) ? $supplied_board_key : '';
+			// A single kitchen PC can drive two touch screens. This only selects a
+			// presentation mode; permissions and order transitions are unchanged.
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display preference.
+			$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'all';
+			if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass' ), true ) ) {
+				$screen_mode = 'all';
+			}
 			wp_enqueue_style(
 				'doughboss-orderboard',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-orderboard.css',
@@ -698,6 +705,7 @@ class DoughBoss_Admin {
 					'pollMs'    => 7000,
 					'statuses'  => DoughBoss_Order::statuses(),
 					'locations' => $this->board_locations(),
+					'screenMode' => $screen_mode,
 					// Mercure real-time config (public hub URL + topic only; never the
 					// publish JWT). Empty/disabled => the board stays on its poll.
 					'mercure'   => DoughBoss_Mercure::js_config(),
@@ -1939,10 +1947,30 @@ JS;
 				wp_die( esc_html__( 'This Order Board link is missing or has an incorrect access key. Ask an owner/manager for the bookmarked board URL from DoughBoss Settings.', 'doughboss' ) );
 			}
 		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display preference.
+		$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'all';
+		if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass' ), true ) ) {
+			$screen_mode = 'all';
+		}
+		$screen_title = array(
+			'make' => __( 'MAKE', 'doughboss' ),
+			'pass' => __( 'PASS & PICKUP', 'doughboss' ),
+			'all'  => __( 'Live Order Board', 'doughboss' ),
+		);
+		$screen_hint = array(
+			'make' => __( 'New orders, prep and oven flow', 'doughboss' ),
+			'pass' => __( 'Ready orders, collection and pre-orders', 'doughboss' ),
+			'all'  => __( 'Kitchen operations', 'doughboss' ),
+		);
 		?>
-		<div class="wrap doughboss-board-wrap">
+		<div class="wrap doughboss-board-wrap doughboss-board--screen-<?php echo esc_attr( $screen_mode ); ?>">
 			<div class="db-board-bar">
-				<h1><?php esc_html_e( 'Live Order Board', 'doughboss' ); ?></h1>
+				<div class="db-board-title-group">
+					<span class="db-board-kicker"><?php esc_html_e( 'Dough Boss', 'doughboss' ); ?></span>
+					<h1><?php echo esc_html( $screen_title[ $screen_mode ] ); ?></h1>
+					<p><?php echo esc_html( $screen_hint[ $screen_mode ] ); ?></p>
+				</div>
 				<div class="db-board-actions">
 					<span class="db-board-status" role="status" aria-live="polite"></span>
 					<button type="button" class="button db-sound-toggle" aria-pressed="false">
@@ -1950,9 +1978,11 @@ JS;
 					</button>
 				</div>
 			</div>
+			<div class="db-screen-layout">
 			<section id="db-preorder-review" class="db-preorder-review" hidden aria-labelledby="db-preorder-review-title"></section>
 			<div id="db-board" class="db-board">
 				<p class="db-board-loading"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
+			</div>
 			</div>
 		</div>
 		<?php
