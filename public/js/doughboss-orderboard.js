@@ -293,6 +293,17 @@
 		return '';
 	}
 
+	function laneSubtitle(key) {
+		var labels = {
+			new: 'Accept only after checking notes, allergies and timing.',
+			prep: 'Making now - keep oldest tickets moving first.',
+			bench: 'Prep and toppings - watch dietary notes.',
+			oven: 'Baking / finishing - send to pass when ready.',
+			ready: SCREEN_MODE === 'pass' ? 'Call customer, hand over, then clear as collected.' : 'Ready for pass / pickup.'
+		};
+		return labels[key] || 'Live orders';
+	}
+
 	// Screen wording follows the real bench workflow while preserving the
 	// server-authoritative status values and transition permissions.
 	function actionLabel(o, status) {
@@ -346,7 +357,84 @@
 		if (o.timing_status === 'estimate_passed') { messages.push(o.timing_label || 'Estimate passed - check this order.'); }
 		if (o.payment_status === 'refunded') { messages.push('Refunded - pause preparation and check with a manager.'); }
 		if (!Array.isArray(o.allowed_next_statuses)) { messages.push('Status controls are unavailable - refresh before acting.'); }
+		if (hasAllergenNote(o)) { messages.push('Allergy / dietary note - read before making.'); }
 		return messages;
+	}
+
+	function hasAllergenNote(o) {
+		var text = String(o && o.notes || '').toLowerCase();
+		return /\b(allerg|gluten|nut|peanut|sesame|dairy|egg|soy|shellfish|vegan|vegetarian|halal|lactose|celiac|coeliac)\b/.test(text);
+	}
+
+	function orderAgeMinutes(o) {
+		return minutesSince(o && (o.accepted_at || o.created_at));
+	}
+
+	function liveStats(orders) {
+		var stats = {
+			active: orders.length,
+			newCount: 0,
+			makeCount: 0,
+			passCount: 0,
+			lateCount: 0,
+			paidCount: 0,
+			unpaidCount: 0,
+			allergenCount: 0,
+			itemCount: 0,
+			oldest: 0
+		};
+		orders.forEach(function (o) {
+			var lane = laneOf(o.status);
+			var age = orderAgeMinutes(o);
+			if (lane === 'new') { stats.newCount++; }
+			if (lane === 'prep' || lane === 'bench' || lane === 'oven') { stats.makeCount++; }
+			if (lane === 'ready') { stats.passCount++; }
+			if (o.timing_status === 'estimate_passed' || (age !== null && age >= 10 && o.status !== 'completed' && o.status !== 'cancelled')) { stats.lateCount++; }
+			if (o.payment_status === 'paid') { stats.paidCount++; }
+			if (o.payment_status && o.payment_status !== 'paid' && o.payment_status !== 'refunded') { stats.unpaidCount++; }
+			if (hasAllergenNote(o)) { stats.allergenCount++; }
+			if (age !== null && age > stats.oldest) { stats.oldest = age; }
+			(o.items || []).forEach(function (it) {
+				stats.itemCount += Math.max(1, parseInt(it.quantity, 10) || 1);
+			});
+		});
+		return stats;
+	}
+
+	function metricBar(labelText, value, max, tone) {
+		var pct = max ? Math.max(4, Math.min(100, Math.round((value / max) * 100))) : 0;
+		return el('div', { class: 'db-live-graph db-live-graph--' + tone }, [
+			el('span', { class: 'db-live-graph-label', text: labelText }),
+			el('span', { class: 'db-live-graph-track' }, [
+				el('span', { class: 'db-live-graph-fill', style: 'width:' + pct + '%' })
+			]),
+			el('strong', { text: String(value) })
+		]);
+	}
+
+	function renderPulse(orders) {
+		var stats = liveStats(orders);
+		var maxFlow = Math.max(1, stats.newCount, stats.makeCount, stats.passCount);
+		var loadTone = stats.lateCount ? 'late' : (stats.active >= 8 ? 'busy' : 'steady');
+		return el('section', { class: 'db-live-pulse db-live-pulse--' + loadTone, 'aria-label': 'Live kitchen pulse' }, [
+			el('div', { class: 'db-live-pulse__main' }, [
+				el('span', { class: 'db-live-pulse__kicker', text: 'Live pulse' }),
+				el('strong', { text: stats.active + ' active' }),
+				el('small', { text: stats.itemCount + ' items on screen' })
+			]),
+			el('div', { class: 'db-live-pulse__graphs' }, [
+				metricBar('New', stats.newCount, maxFlow, 'new'),
+				metricBar('Make', stats.makeCount, maxFlow, 'make'),
+				metricBar('Pass', stats.passCount, maxFlow, 'pass')
+			]),
+			el('div', { class: 'db-live-pulse__chips' }, [
+				el('span', { class: 'db-pulse-chip db-pulse-chip--paid', text: stats.paidCount + ' paid' }),
+				stats.unpaidCount ? el('span', { class: 'db-pulse-chip db-pulse-chip--unpaid', text: stats.unpaidCount + ' counter pay' }) : null,
+				stats.allergenCount ? el('span', { class: 'db-pulse-chip db-pulse-chip--allergen', text: stats.allergenCount + ' allergy note' }) : null,
+				stats.lateCount ? el('span', { class: 'db-pulse-chip db-pulse-chip--late', text: stats.lateCount + ' check timing' }) : null,
+				el('span', { class: 'db-pulse-chip', text: 'Oldest ' + stats.oldest + 'm' })
+			])
+		]);
 	}
 
 	function buildAmendmentSummary(o) {
@@ -388,7 +476,7 @@
 		amendmentPanel.appendChild(el('p', { class: 'db-amendment-context', text: serviceLabel(o) + ' - ' + paymentLabel(o.payment_status) + ' - ' + label(o.status) }));
 		amendmentPanel.appendChild(el('h3', { text: 'Current items' }));
 		amendmentPanel.appendChild(currentItems);
-		amendmentPanel.appendChild(el('p', { class: 'db-amendment-boundary', text: 'This kitchen board is intentionally review-only for add/remove requests. It never changes a live or paid order total. Confirm the exact request, then use the manager-safe reprice and payment-adjustment workflow when it is available.' }));
+		amendmentPanel.appendChild(el('p', { class: 'db-amendment-boundary', text: 'No order changes are accepted until staff confirmation. This kitchen board is review-only for add/remove requests: it never changes a live or paid order total, voucher, Tyro/MPGS payment or POSPal record. Confirm the exact request first, then use the manager-safe reprice and payment-adjustment workflow when required.' }));
 		amendmentPanel.appendChild(el('div', { class: 'db-amendment-actions' }, [
 			el('button', { class: 'button', type: 'button', onclick: function () { copyAmendmentSummary(o, feedback); } }, ['Copy order summary']),
 			el('button', { class: 'button', type: 'button', onclick: closeAmendmentReview }, ['Done'])
@@ -572,7 +660,7 @@
 			meta.push(el('div', { class: 'db-card-addr', text: '🛵 ' + o.address }));
 		}
 		if (o.notes) {
-			meta.push(el('div', { class: 'db-card-notes', text: '📝 ' + o.notes }));
+			meta.push(el('div', { class: 'db-card-notes' + (hasAllergenNote(o) ? ' db-card-notes-alert' : ''), text: 'Note: ' + o.notes }));
 		}
 		if (o.eta_minutes) {
 			var windowText = readyWindow(o);
@@ -689,13 +777,15 @@
 		}
 
 		var visibleOrders = orders.filter(function (o) { return !!laneOf(o.status); });
+		boardEl.appendChild(renderPulse(visibleOrders));
 		var lanesWrap = el('div', { class: 'db-lanes' }, LANES.map(function (lane) {
 			var laneOrders = orders.filter(function (o) { return laneOf(o.status) === lane.key; });
 			var cards = laneOrders.length
 				? laneOrders.map(card)
 				: [el('p', { class: 'db-lane-empty', text: 'None' })];
 			return el('div', { class: 'db-lane db-lane-' + lane.key }, [
-				el('h2', { class: 'db-lane-title' }, [lane.title + ' ', el('span', { class: 'db-lane-count', text: String(laneOrders.length) })])
+				el('h2', { class: 'db-lane-title' }, [lane.title + ' ', el('span', { class: 'db-lane-count', text: String(laneOrders.length) })]),
+				el('p', { class: 'db-lane-subtitle', text: laneSubtitle(lane.key) })
 			].concat(cards));
 		}));
 		boardEl.appendChild(lanesWrap);

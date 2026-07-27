@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.25.5
+Stable tag: 2.25.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.25.6 =
+* Add a live kitchen pulse panel with lightweight order-flow graphs, payment/timing/allergy chips and oldest-order visibility for touch displays.
+* Surface allergy and dietary notes as staff warnings on the KDS instead of plain buried text.
+* Add checkout safety copy for optional notes/allergens and the rule that order changes require shop confirmation before action.
+* Strengthen the staff change-review wording so kitchen users can review requests without changing paid totals, vouchers, MPGS/Tyro payments or POSPal records.
 
 = 2.25.5 =
 * New kitchen workstation modes for one PC with two touch displays: **MAKE** for new/prep/oven and **PASS & PICKUP** for ready orders, collection and pre-order review.

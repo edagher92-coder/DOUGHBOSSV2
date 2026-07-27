@@ -587,6 +587,33 @@ body.page-id-402 #primary-menu > li > a {
 	min-height: 1rem;
 }
 
+.db-checkout-safety {
+	background: linear-gradient(135deg, #fff4df, #fffaf2);
+	border: 1px solid rgba(226, 77, 40, 0.24);
+	border-left: 5px solid var(--db-accent);
+	border-radius: var(--db-r-md);
+	box-shadow: 0 12px 28px rgba(45, 28, 14, 0.08);
+	color: #3b2a1d;
+	font-size: 0.92rem;
+	padding: 0.9rem 1rem;
+}
+
+.db-checkout-safety strong {
+	display: block;
+	font-weight: 900;
+	margin-bottom: 0.35rem;
+	text-transform: uppercase;
+}
+
+.db-checkout-safety ul {
+	margin: 0;
+	padding-left: 1.05rem;
+}
+
+.db-checkout-safety li + li {
+	margin-top: 0.28rem;
+}
+
 /* Card payment (Stripe) --------------------------------------------- */
 .db-cardfield {
 	display: flex;

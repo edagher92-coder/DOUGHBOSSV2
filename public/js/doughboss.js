@@ -989,7 +989,11 @@
 		var name = field('text', 'customer_name', 'Name', true);
 		var email = field('email', 'customer_email', 'Email', true);
 		var phone = field('tel', 'customer_phone', 'Phone', true);
-		var notes = field('textarea', 'notes', 'Notes (optional)', false);
+		var notes = field('textarea', 'notes', 'Notes / allergies (optional)', false);
+		var notesInput = notes.querySelector('textarea');
+		if (notesInput) {
+			notesInput.placeholder = 'E.g. no onion, allergy note, catering pickup detail...';
+		}
 		var acknowledgementInput = el('input', { type: 'checkbox', required: true });
 		var acknowledgement = el('label', { class: 'db-option' }, [
 			acknowledgementInput,
@@ -1088,7 +1092,16 @@
 		var paymentAttemptKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
 
 		form.appendChild(el('h3', { text: 'Checkout' }));
-		[name, email, phone, address, notes].forEach(function (f) { form.appendChild(f); });
+		[name, email, phone, address].forEach(function (f) { form.appendChild(f); });
+		form.appendChild(notes);
+		form.appendChild(el('div', { class: 'db-checkout-safety', role: 'note' }, [
+			el('strong', { text: 'Before you submit' }),
+			el('ul', {}, [
+				el('li', { text: 'Add any allergy or dietary notes above. Our kitchen handles common allergens, so severe allergies should also be mentioned to staff.' }),
+				el('li', { text: 'Your order can only be changed after the shop confirms it. Paid order changes may need manager approval and payment adjustment.' }),
+				el('li', { text: 'You will receive confirmation and updates by email, and can track with your order number.' })
+			])
+		]));
 
 		var card = null;
 		if (stripe) {
