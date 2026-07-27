@@ -46,10 +46,6 @@
 		{ label: 'Flat', delta: 0.5 },
 		{ label: 'Folded', delta: 0, def: true }
 	] };
-	var OPT_ZAATAR_MIX = { id: 'mix', label: 'Zaatar mix', type: 'radio', choices: [
-		{ label: 'Classic zaatar', delta: 0, def: true },
-		{ label: 'Mixed zaatar & cheese', sum: 'Zaatar & cheese mixed', delta: 0.5 }
-	] };
 	/* Crust (ex "Base") — Domino's/Pizza Hut say "crust". Prices per the owner's
 	   in-store POS (V23 photos, confirmed): Crispy & Classic free, Wholemeal +$2.50,
 	   Gluten-free +$3.50. */
@@ -134,7 +130,7 @@
 		   removable. Minis aren't a separate category in the demo yet — flagged. */
 		if (catId === 'cat-pies') { return [OPT_SAUCE_TOP, OPT_SESAME, OPT_LEMON]; }
 		if (catId === 'cat-manoush') {
-			if (name === 'Zaatar') { return [OPT_ZAATAR_STYLE, OPT_ZAATAR_MIX, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
+			if (name === 'Zaatar') { return [OPT_ZAATAR_STYLE, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
 			if (name === 'Zaatar & Cheese') { return [OPT_ZAATAR_STYLE, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON]; }
 			return [OPT_STYLE, OPT_PIZZA_BASE, OPT_REMOVE_TOPPINGS, OPT_LEMON];
 		}
