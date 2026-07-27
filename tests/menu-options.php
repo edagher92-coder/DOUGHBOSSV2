@@ -28,7 +28,10 @@ menu_options_ok( is_wp_error( $invalid ) && 'doughboss_invalid_option' === $inva
 
 $zaatar = DoughBoss_Menu_Options::for_item( 'Manoush', 'Zaatar' );
 $zaatar_default = DoughBoss_Menu_Options::resolve( $zaatar, array() );
-menu_options_ok( ! is_wp_error( $zaatar_default ) && 0.0 === $zaatar_default['delta'], 'Zaatar defaults to folded classic mix at the base price' );
+menu_options_ok( ! is_wp_error( $zaatar_default ) && 0.0 === $zaatar_default['delta'], 'Zaatar defaults to folded at the base price' );
+menu_options_ok( array( 'style', 'crust', 'remove', 'lemon_chilli' ) === wp_list_pluck( $zaatar, 'id' ), 'Zaatar cannot be converted to the separate Zaatar & Cheese product' );
+$zaatar_cheese = DoughBoss_Menu_Options::for_item( 'Manoush', 'Zaatar & Cheese' );
+menu_options_ok( array( 'style', 'crust', 'remove', 'lemon_chilli' ) === wp_list_pluck( $zaatar_cheese, 'id' ), 'Zaatar & Cheese remains a separately configurable product' );
 menu_options_ok( array() === DoughBoss_Menu_Options::for_item( 'Drinks', 'Water' ), 'items outside configured families expose no unsupported options' );
 
 echo "=== RESULT: {$passed} passed · {$failed} failed ===\n";

@@ -21,7 +21,11 @@ function hasAll(text, values) {
 
 process.stdout.write('=== Menu photo contract ===\n');
 ok(order.indexOf("OPT_ZAATAR_STYLE") !== -1 && order.indexOf("{ label: 'Flat', delta: 0.5 }") !== -1, 'flat Zaatar style costs 50c extra');
-ok(order.indexOf('Mixed zaatar & cheese') !== -1, 'mixed Zaatar and cheese choice is restored');
+ok(
+	order.indexOf('Mixed zaatar & cheese') === -1 &&
+	hasAll(body, ['<span class="mn-it-n">Zaatar<span', '<span class="mn-it-n">Zaatar &amp; Cheese']),
+	'Zaatar and Zaatar & Cheese remain separate products without a mix add-on'
+);
 ok(hasAll(body, ['Zaatar Veggie Pizza', 'Labneh Veggie Pizza', 'Labneh Veggie Wrap']), 'veggie pizza and wrap products are visible');
 ok(order.indexOf("{ label: 'No sesame seeds', sum: 'No sesame', delta: 0, def: true }") !== -1, 'no sesame is the pie default');
 ok(body.indexOf('Dough Boss Pie') !== -1 && body.indexOf('>Chicken Pie<') === -1, 'Dough Boss Pie replaces the incorrect Chicken Pie label');

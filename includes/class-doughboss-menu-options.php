@@ -80,15 +80,6 @@ class DoughBoss_Menu_Options {
 					self::choice( 'folded', __( 'Folded', 'doughboss' ), 0, true ),
 				)
 			),
-			'zaatar_mix' => self::group(
-				'zaatar_mix',
-				__( 'Zaatar mix', 'doughboss' ),
-				'radio',
-				array(
-					self::choice( 'classic_zaatar', __( 'Classic zaatar', 'doughboss' ), 0, true ),
-					self::choice( 'mixed_zaatar_cheese', __( 'Mixed zaatar & cheese', 'doughboss' ), 0.50 ),
-				)
-			),
 			'crust' => self::group(
 				'crust',
 				__( 'Crust', 'doughboss' ),
@@ -218,7 +209,7 @@ class DoughBoss_Menu_Options {
 
 		if ( 'Manoush' === $category ) {
 			if ( 'Zaatar' === $name ) {
-				return array( $groups['zaatar_style'], $groups['zaatar_mix'], $groups['crust'], $groups['remove'], $groups['lemon_chilli'] );
+				return array( $groups['zaatar_style'], $groups['crust'], $groups['remove'], $groups['lemon_chilli'] );
 			}
 			if ( 'Zaatar & Cheese' === $name ) {
 				return array( $groups['zaatar_style'], $groups['crust'], $groups['remove'], $groups['lemon_chilli'] );
