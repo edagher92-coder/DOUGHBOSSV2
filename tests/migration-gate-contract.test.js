@@ -20,6 +20,19 @@ test('migration gate fails closed for public pages and ordering REST routes', ()
 	assert.match(gate, /doughboss_migration_in_progress/);
 });
 
+test('signed payment-provider callbacks bypass only the temporary migration gate', () => {
+	[
+		'/doughboss/v1/stripe-webhook',
+		'/doughboss/v1/catering/stripe-webhook',
+		'/doughboss/v1/tyro-webhook',
+		'/doughboss/v1/catering/tyro-webhook',
+		'/doughboss/v1/payments/tyro/webhook',
+		'/doughboss/v1/mpgs-notification'
+	].forEach((route) => assert.match(gate, new RegExp(route.replaceAll('/', '\\/'))));
+	assert.match(gate, /in_array\( \$route, \$provider_callbacks, true \)/);
+	assert.doesNotMatch(gate, /strpos\( \$route, ['"]\/doughboss\/v1\/.*webhook/);
+});
+
 test('only DoughBoss staff capabilities can bypass the migration gate', () => {
 	assert.match(gate, /current_user_can\( 'manage_options' \)/);
 	assert.match(gate, /current_user_can\( 'manage_doughboss' \)/);

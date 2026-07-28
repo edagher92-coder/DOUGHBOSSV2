@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       DoughBoss Migration Gate
  * Description:       Temporarily shields the public site and DoughBoss REST ordering routes during the live migration.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Author:            DoughBoss
  * Requires at least: 6.0
  * Requires PHP:      7.4
@@ -145,6 +145,22 @@ final class DoughBoss_Migration_Gate {
 
 		$route = (string) $request->get_route();
 		if ( 0 !== strpos( $route, '/doughboss/v1/' ) && '/doughboss/v1' !== $route ) {
+			return $result;
+		}
+
+		// Payment providers cannot carry a WordPress login cookie. Permit only
+		// these exact callback routes to reach DoughBoss's own signature/HMAC
+		// verification handlers; every other anonymous DoughBoss REST request
+		// remains blocked during migration.
+		$provider_callbacks = array(
+			'/doughboss/v1/stripe-webhook',
+			'/doughboss/v1/catering/stripe-webhook',
+			'/doughboss/v1/tyro-webhook',
+			'/doughboss/v1/catering/tyro-webhook',
+			'/doughboss/v1/payments/tyro/webhook',
+			'/doughboss/v1/mpgs-notification',
+		);
+		if ( in_array( $route, $provider_callbacks, true ) ) {
 			return $result;
 		}
 

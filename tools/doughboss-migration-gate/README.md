@@ -3,7 +3,7 @@
 Temporary WordPress protection used only during the controlled live migration.
 
 - Logged-out visitors receive a cache-safe `503 Service Unavailable` page.
-- Unauthenticated `/wp-json/doughboss/v1/*` requests receive a JSON `503`.
+- Unauthenticated `/wp-json/doughboss/v1/*` requests receive a JSON `503`, except exact payment-provider callbacks that continue to their own signature/HMAC verification handlers.
 - Logged-in staff and administrators can test the real WordPress experience.
 - The gate stores no settings and is removed by deactivating the plugin.
 
