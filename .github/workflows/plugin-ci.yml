@@ -94,7 +94,7 @@ jobs:
           php tests/stripe-adversarial-contract.php
           php tests/provider-readiness-contract.php
           php tests/catering-motion-parity-contract.php
-          node --test tests/stripe-payment-element-contract.test.js
+          node --test tests/stripe-checkout-contract.test.js
 
   build-zip:
     name: Build installable plugin zip
