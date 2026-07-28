@@ -11,6 +11,10 @@
 			window.clearTimeout(stage._dbManoushTimer);
 			stage._dbManoushTimer = 0;
 		}
+		if (stage._dbManoushReleaseTimer) {
+			window.clearTimeout(stage._dbManoushReleaseTimer);
+			stage._dbManoushReleaseTimer = 0;
+		}
 	}
 
 	function playReady(stage) {
@@ -21,6 +25,10 @@
 			stage.classList.remove('is-exploded');
 			return;
 		}
+		// Keep scroll motion from taking control until the food has completed its
+		// entrance. Without this short reservation, the first scroll-scene paint
+		// cancels the deliberate burst-and-assemble sequence on page load.
+		stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + 1000;
 		stage.classList.remove('is-exploded');
 		stage.classList.remove('is-assembled');
 		stage.classList.add('is-resetting');
@@ -33,6 +41,11 @@
 					stage.classList.remove('is-exploded');
 					stage.classList.add('is-assembled');
 					stage._dbManoushTimer = 0;
+					stage._dbManoushReleaseTimer = window.setTimeout(function () {
+						stage._dbManoushIntroUntil = 0;
+						stage._dbManoushReleaseTimer = 0;
+						window.dispatchEvent(new Event('db:manoush-ready'));
+					}, 1000);
 				}, explodeHoldMs);
 			});
 		});
@@ -61,6 +74,11 @@
 	}
 
 	function play(stage) {
+		if (!reduce) {
+			// Reserve the stage straight away; image decoding can be asynchronous
+			// while the scroll renderer is already queued for its first frame.
+			stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + 2400;
+		}
 		releaseScrollStage(stage);
 		imagesReady(stage, function () { playReady(stage); });
 	}
@@ -74,7 +92,7 @@
 	function playForView(view) {
 		var variant = stageForView(view);
 		if (!variant) { return; }
-		stages.filter(function (stage) { return stage.getAttribute('data-manoush-variant') === variant; }).forEach(prepareScrollStage);
+		stages.filter(function (stage) { return stage.getAttribute('data-manoush-variant') === variant; }).forEach(play);
 	}
 
 	function releaseScrollStage(stage) {
@@ -219,7 +237,9 @@
 				 * on position, not scroll direction, so it works identically scrolling
 				 * down into a scene and back up through it. */
 				var stage = scene.querySelector('[data-manoush-stage]');
-				if (stage) { paintScrollStage(stage, Math.min(1, Math.abs(centre) * 3.15)); }
+				if (stage && (!stage._dbManoushIntroUntil || Date.now() >= stage._dbManoushIntroUntil)) {
+					paintScrollStage(stage, Math.min(1, Math.abs(centre) * 3.15));
+				}
 			});
 			queued = false;
 		}
@@ -231,6 +251,7 @@
 		window.addEventListener('scroll', requestRender, { passive: true });
 		window.addEventListener('resize', requestRender);
 		window.addEventListener('db:view', requestRender);
+		window.addEventListener('db:manoush-ready', requestRender);
 		requestRender();
 	}
 
