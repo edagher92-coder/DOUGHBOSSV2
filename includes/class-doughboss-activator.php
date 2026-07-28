@@ -78,6 +78,7 @@ class DoughBoss_Activator {
 		$table_sessions  = $wpdb->prefix . 'doughboss_table_sessions';
 		$payment_attempts = $wpdb->prefix . 'doughboss_payment_attempts';
 		$payment_events   = $wpdb->prefix . 'doughboss_payment_events';
+		$checkout_snapshots = $wpdb->prefix . 'doughboss_checkout_snapshots';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -461,6 +462,22 @@ class DoughBoss_Activator {
 			KEY provider_reference (provider_reference)
 		) ENGINE=InnoDB {$charset_collate};";
 
+		$sql_checkout_snapshots = "CREATE TABLE {$checkout_snapshots} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			checkout_key char(64) NOT NULL,
+			payload_hash char(64) NOT NULL,
+			payload_json longtext NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'prepared',
+			order_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			expires_at datetime NOT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY checkout_key (checkout_key),
+			KEY status_expires (status,expires_at),
+			KEY order_id (order_id)
+		) ENGINE=InnoDB {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
 		dbDelta( $sql_events );
@@ -478,6 +495,7 @@ class DoughBoss_Activator {
 		dbDelta( $sql_table_sessions );
 		dbDelta( $sql_payment_attempts );
 		dbDelta( $sql_payment_events );
+		dbDelta( $sql_checkout_snapshots );
 	}
 
 	/**
@@ -490,7 +508,8 @@ class DoughBoss_Activator {
 		$attempts  = $wpdb->prefix . 'doughboss_payment_attempts';
 		$events    = $wpdb->prefix . 'doughboss_payment_events';
 		$locations = $wpdb->prefix . 'doughboss_locations';
-		foreach ( array( $attempts, $events, $locations ) as $table ) {
+		$snapshots = $wpdb->prefix . 'doughboss_checkout_snapshots';
+		foreach ( array( $attempts, $events, $locations, $snapshots ) as $table ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
 			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
@@ -510,6 +529,16 @@ class DoughBoss_Activator {
 		)
 			&& self::column_contract_ready( $events, array( 'event_key' => array( 'type' => 'char(64)', 'null' => 'NO' ) ) )
 			&& self::column_contract_ready(
+				$snapshots,
+				array(
+					'checkout_key' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'payload_hash' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'payload_json' => array( 'type' => 'longtext', 'null' => 'NO' ),
+					'status'       => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'prepared' ),
+					'order_id'     => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				)
+			)
+			&& self::column_contract_ready(
 				$locations,
 				array(
 					'tyro_location_id'      => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
@@ -520,7 +549,8 @@ class DoughBoss_Activator {
 			&& self::index_contract_ready( $attempts, 'attempt_key', array( 'attempt_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $attempts, 'provider_reference', array( 'provider_reference' ), true, array( 191 ) )
 			&& self::index_contract_ready( $attempts, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) )
-			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) );
+			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $snapshots, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );
 	}
 
 	/**

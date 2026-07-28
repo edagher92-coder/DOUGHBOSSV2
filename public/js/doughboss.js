@@ -1249,7 +1249,7 @@
 		// its provider-hosted embedded pay form.
 		function payLabelFor(t) {
 			var grandTotal = t && typeof t.total !== 'undefined' ? t.total : 0;
-			if (stripeHosted) { return (I18N.continueToPayment || 'Continue to secure payment') + ' · ' + money(grandTotal); }
+			if (stripeHosted) { return (I18N.continueToPayment || 'Continue to wallet or card') + ' · ' + money(grandTotal); }
 			return paying ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
 		}
 		var payLabel = payLabelFor(totals);
@@ -1292,7 +1292,8 @@
 				el('span', { class: 'db-secure-lock', 'aria-hidden': 'true', text: '⌁' }),
 				el('div', {}, [
 					el('strong', { text: 'Secure checkout powered by Stripe' }),
-					el('span', { text: 'Card details stay on Stripe. Eligible Apple Pay and Google Pay wallets appear automatically on supported devices.' })
+					el('span', { text: 'Apple Pay or Google Pay appears first when it is available on your device. Card is always available as the secure fallback.' }),
+					el('span', { class: 'db-payment-methods', text: 'Apple Pay  ·  Google Pay  ·  Card' })
 				])
 			]));
 		}
@@ -1490,6 +1491,7 @@
 						customer_email: payload.customer_email,
 						customer_phone: payload.customer_phone,
 						address: payload.address,
+						notes: payload.notes,
 						return_url: window.location.href
 					}
 				}).then(function (session) {

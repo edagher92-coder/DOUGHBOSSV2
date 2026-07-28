@@ -127,7 +127,7 @@ function customer_kds_ok( $condition, $label ) {
 }
 
 echo "=== DoughBoss customer to KDS E2E contract ===\n";
-update_option( 'doughboss_db_version', '1.16.0' );
+update_option( 'doughboss_db_version', '1.17.0' );
 $db = new DoughBoss_Customer_KDS_E2E_DB();
 $GLOBALS['wpdb'] = $db;
 

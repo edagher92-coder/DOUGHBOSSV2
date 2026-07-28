@@ -52,7 +52,8 @@ test('Stripe-hosted Checkout keeps cards and eligible Apple Pay and Google Pay w
 	assert.match(stripePhp, /['"]payment_method_types\[0\]['"]\s*=>\s*['"]card['"]/);
 	assert.doesNotMatch(stripePhp, /wallet_options\[(?:apple_pay|google_pay)\]\s*=\s*never/);
 	assert.doesNotMatch(stripePhp, /excluded_payment_method_types\[\].*(?:apple_pay|google_pay)/);
-	assert.match(client, /Eligible Apple Pay and Google Pay wallets appear automatically on supported devices\./);
+	assert.match(client, /Apple Pay or Google Pay appears first when it is available on your device\./);
+	assert.match(client, /Card is always available as the secure fallback\./);
 	assert.doesNotMatch(client, /ApplePaySession/);
 	assert.doesNotMatch(client, /PaymentRequest/);
 });

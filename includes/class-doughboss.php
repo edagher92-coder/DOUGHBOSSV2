@@ -85,6 +85,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-mpgs.php';
 		require_once $dir . 'class-doughboss-payment.php';
 		require_once $dir . 'class-doughboss-payment-attempts.php';
+		require_once $dir . 'class-doughboss-checkout-snapshots.php';
 		require_once $dir . 'class-doughboss-pospal.php';
 		require_once $dir . 'class-doughboss-coupon-code.php';
 		require_once $dir . 'class-doughboss-voucher.php';

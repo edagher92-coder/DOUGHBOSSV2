@@ -1702,9 +1702,17 @@ body.page-id-402 #primary-menu > li > a {
 	gap: .15rem;
 }
 
-.db-stripe-checkout-notice span:last-child {
+.db-stripe-checkout-notice > div > span {
 	color: #5c5788;
 	font-size: .82rem;
+}
+
+.db-stripe-checkout-notice > div > .db-payment-methods {
+	margin-top: .35rem;
+	color: #24205c;
+	font-size: .74rem;
+	font-weight: 800;
+	letter-spacing: .04em;
 }
 
 .db-secure-lock {

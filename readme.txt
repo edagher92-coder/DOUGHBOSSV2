@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.28.0
+Stable tag: 2.29.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.29.0 =
+* Added durable server-owned checkout snapshots so a signed Stripe webhook can create the paid order, kitchen ticket and downstream notifications even when the customer closes the browser before returning.
+* Kept Stripe-hosted Apple Pay and Google Pay automatic and provider-owned: an eligible wallet is prioritised on supported devices, with secure card fallback and no duplicate wallet integration.
+* Added immutable amount, currency, location, table and cart checks to webhook recovery, plus one-payment/one-order replay protection and short-lived snapshot retention.
 
 = 2.28.0 =
 * Redesign the complete storefront journey from menu search and category navigation through touch-friendly cart controls, customer details, Stripe payment return, confirmation and live tracking.

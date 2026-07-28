@@ -77,6 +77,7 @@ class DoughBoss_Migrations {
 				'1.14.0' => 'upgrade_to_1_14_0',
 				'1.15.0' => 'upgrade_to_1_15_0',
 				'1.16.0' => 'upgrade_to_1_16_0',
+				'1.17.0' => 'upgrade_to_1_17_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -452,6 +453,17 @@ class DoughBoss_Migrations {
 	private static function upgrade_to_1_16_0() {
 		if ( ! DoughBoss_Activator::pospal_outbox_storage_ready() ) {
 			throw new RuntimeException( 'POSPal outbox remote-reference storage is incomplete or is not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.17.0 — durable server-owned Stripe Checkout recovery snapshots.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_17_0() {
+		if ( ! DoughBoss_Activator::payment_storage_ready() ) {
+			throw new RuntimeException( 'Stripe Checkout recovery storage is incomplete or is not using InnoDB.' );
 		}
 	}
 }

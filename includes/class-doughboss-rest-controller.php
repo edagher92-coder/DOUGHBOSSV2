@@ -663,6 +663,9 @@ class DoughBoss_REST_Controller {
 					'address' => array(
 						'sanitize_callback' => 'sanitize_textarea_field',
 					),
+					'notes' => array(
+						'sanitize_callback' => 'sanitize_textarea_field',
+					),
 					'return_url' => array(
 						'sanitize_callback' => 'esc_url_raw',
 					),
@@ -1110,9 +1113,9 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
-		// Storefront — Stripe webhook (reconciliation safety-net for a payment
-		// that succeeds but never becomes an order). Public route, gated by the
-		// Stripe-Signature HMAC, not a nonce.
+		// Storefront — Stripe webhook. A signed paid event can fulfil the
+		// immutable server snapshot when the customer never returns from hosted
+		// Checkout; otherwise it safely replays the browser-created order.
 		register_rest_route(
 			$ns,
 			'/stripe-webhook',
@@ -2455,6 +2458,7 @@ class DoughBoss_REST_Controller {
 		$email   = sanitize_email( $request->get_param( 'customer_email' ) );
 		$phone   = sanitize_text_field( $request->get_param( 'customer_phone' ) );
 		$address = sanitize_textarea_field( $request->get_param( 'address' ) );
+		$notes   = sanitize_textarea_field( $request->get_param( 'notes' ) );
 		if ( 'stripe' === $gateway ) {
 			if ( '' === $name || ! is_email( $email ) || '' === $phone || ( 'delivery' === $order_type && '' === $address ) ) {
 				return new WP_Error( 'doughboss_invalid', __( 'Complete your contact and fulfilment details before continuing to payment.', 'doughboss' ), array( 'status' => 400 ) );
@@ -2485,6 +2489,37 @@ class DoughBoss_REST_Controller {
 			'site'         => home_url(),
 		);
 		if ( 'stripe' === $gateway ) {
+			$snapshot = DoughBoss_Checkout_Snapshots::store(
+				$checkout_key,
+				array(
+					'order' => array(
+						'order_type'        => $order_type,
+						'location_id'       => $location_id,
+						'table_id'          => $table_context ? (int) $table_context['table_id'] : 0,
+						'table_label'       => $table_context ? (string) $table_context['table_label'] : '',
+						'table_qr_code_id'  => $table_context ? (int) $table_context['qr_code_id'] : 0,
+						'table_session_id'  => $table_context ? (int) $table_context['session_id'] : 0,
+						'order_source'      => $table_context ? 'table_qr' : 'web',
+						'customer_name'     => $name,
+						'customer_email'    => $email,
+						'customer_phone'    => $phone,
+						'address'           => $address,
+						'notes'             => $notes,
+						'subtotal'          => (float) $totals['subtotal'],
+						'tax'               => (float) $totals['tax'],
+						'delivery_fee'      => (float) $totals['delivery_fee'],
+						'total'             => (float) $totals['total'],
+						'discount'          => isset( $totals['discount'] ) ? (float) $totals['discount'] : 0.0,
+						'voucher_code'      => isset( $totals['voucher_code'] ) ? (string) $totals['voucher_code'] : '',
+						'currency'          => strtoupper( (string) $currency ),
+						'checkout_key'      => $checkout_key,
+					),
+					'lines' => array_values( $this->cart->get_lines() ),
+				)
+			);
+			if ( is_wp_error( $snapshot ) ) {
+				return $snapshot;
+			}
 			$return_urls = $this->stripe_checkout_return_urls( $request->get_param( 'return_url' ) );
 			$intent      = DoughBoss_Stripe::create_checkout_session(
 				$amount,
@@ -4268,7 +4303,12 @@ class DoughBoss_REST_Controller {
 		if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
 			$processed = $this->reconcile_catering_intent( $obj, $meta );
 		} elseif ( ! DoughBoss_Order::payment_intent_used( $pi_id ) ) {
-			$processed = $this->record_unreconciled_payment( $pi_id, $obj );
+			$recovered = $this->recover_stripe_order( $pi_id, $obj, $meta );
+			if ( is_wp_error( $recovered ) ) {
+				$processed = false;
+			} elseif ( ! $recovered ) {
+				$processed = $this->record_unreconciled_payment( $pi_id, $obj );
+			}
 		}
 
 		if ( ! $processed ) {
@@ -4280,6 +4320,122 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_wh_store', __( 'Payment event storage will be retried.', 'doughboss' ), array( 'status' => 500 ) );
 		}
 		return rest_ensure_response( array( 'received' => true, 'processed' => true ) );
+	}
+
+	/**
+	 * Fulfil a signed, paid Stripe event from the immutable server snapshot.
+	 *
+	 * This is the browser-close recovery path. Stripe metadata contains only the
+	 * opaque checkout key; all customer/cart facts are read from DoughBoss's own
+	 * database and checked against the durable payment attempt before an order is
+	 * created. The order/payment unique indexes remain the final race authority.
+	 *
+	 * @param string $pi_id Canonical Stripe PaymentIntent id.
+	 * @param array  $obj   Normalised Stripe payment object.
+	 * @param array  $meta  Signed Stripe metadata.
+	 * @return bool|WP_Error True when fulfilled/replayed, false when no safe snapshot exists.
+	 */
+	private function recover_stripe_order( $pi_id, array $obj, array $meta ) {
+		$checkout_key = isset( $meta['checkout_key'] ) ? strtolower( sanitize_text_field( (string) $meta['checkout_key'] ) ) : '';
+		if (
+			1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key )
+			|| 'order' !== ( isset( $meta['purpose'] ) ? sanitize_key( (string) $meta['purpose'] ) : '' )
+		) {
+			return false;
+		}
+
+		$attempt  = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
+		$snapshot = DoughBoss_Checkout_Snapshots::find( $checkout_key );
+		if ( ! $attempt || ! $snapshot || empty( $snapshot['payload']['order'] ) || empty( $snapshot['payload']['lines'] ) ) {
+			return false;
+		}
+
+		$order_data = is_array( $snapshot['payload']['order'] ) ? $snapshot['payload']['order'] : array();
+		$lines      = is_array( $snapshot['payload']['lines'] ) ? array_values( $snapshot['payload']['lines'] ) : array();
+		$amount     = isset( $obj['amount_received'] ) ? absint( $obj['amount_received'] ) : ( isset( $obj['amount'] ) ? absint( $obj['amount'] ) : 0 );
+		$currency   = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) ( isset( $obj['currency'] ) ? $obj['currency'] : '' ) ) );
+		$expected   = isset( $order_data['total'] ) ? DoughBoss_Payment::to_minor_units( (float) $order_data['total'] ) : -1;
+
+		if (
+			'stripe' !== (string) $attempt['provider']
+			|| 'order' !== (string) $attempt['purpose']
+			|| $amount !== (int) $attempt['amount_minor']
+			|| $amount !== $expected
+			|| $currency !== strtoupper( (string) $attempt['currency'] )
+			|| $currency !== strtoupper( (string) ( isset( $order_data['currency'] ) ? $order_data['currency'] : '' ) )
+			|| (int) $attempt['location_id'] !== (int) ( isset( $order_data['location_id'] ) ? $order_data['location_id'] : 0 )
+			|| (int) $attempt['table_id'] !== (int) ( isset( $order_data['table_id'] ) ? $order_data['table_id'] : 0 )
+			|| (int) $attempt['qr_code_id'] !== (int) ( isset( $order_data['table_qr_code_id'] ) ? $order_data['table_qr_code_id'] : 0 )
+			|| $checkout_key !== ( isset( $order_data['checkout_key'] ) ? (string) $order_data['checkout_key'] : '' )
+		) {
+			return false;
+		}
+
+		$voucher_code = isset( $order_data['voucher_code'] ) ? (string) $order_data['voucher_code'] : '';
+		$discount     = isset( $order_data['discount'] ) ? (float) $order_data['discount'] : 0.0;
+		$voucher_idem = '';
+		if ( '' !== $voucher_code && $discount > 0 ) {
+			$voucher_idem = 'order_' . $checkout_key;
+			$redeem       = DoughBoss_Voucher::redeem(
+				$voucher_code,
+				isset( $order_data['subtotal'] ) ? (float) $order_data['subtotal'] : 0.0,
+				'online',
+				array( 'idempotency_key' => $voucher_idem )
+			);
+			if ( is_wp_error( $redeem ) ) {
+				$system_note = sprintf(
+					/* translators: 1: formatted discount amount, 2: voucher code. */
+					'[SYSTEM] Discount of %1$s from voucher "%2$s" was preserved on this paid webhook-recovered order, but its redemption needs manual reconciliation.',
+					DoughBoss_Settings::format_price( $discount ),
+					$voucher_code
+				);
+				$order_data['notes'] = ! empty( $order_data['notes'] ) ? $order_data['notes'] . "\n\n" . $system_note : $system_note;
+				$voucher_idem        = '';
+			} else {
+				$discount = (float) $redeem['amount'];
+			}
+		} else {
+			$discount     = 0.0;
+			$voucher_code = '';
+		}
+
+		$order_data['discount']          = $discount;
+		$order_data['voucher_code']      = $voucher_code;
+		$order_data['payment_status']    = 'paid';
+		$order_data['payment_method']    = 'stripe';
+		$order_data['payment_intent_id'] = $pi_id;
+		$order_data['checkout_key']      = $checkout_key;
+
+		$created = DoughBoss_Order::create( $order_data, $lines );
+		if ( is_wp_error( $created ) ) {
+			if ( '' !== $voucher_idem ) {
+				DoughBoss_Voucher::revert_redemption( $voucher_idem );
+			}
+			return $created;
+		}
+
+		$order_id = (int) $created['order_id'];
+		if ( '' !== $voucher_idem ) {
+			DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
+		}
+		$order = DoughBoss_Order::get( $order_id );
+		if ( ! $order ) {
+			return new WP_Error( 'doughboss_webhook_order_missing', __( 'The recovered order could not be loaded.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		if ( empty( $created['replayed'] ) ) {
+			$this->send_confirmation( $order );
+		}
+		DoughBoss_Checkout_Snapshots::complete( $checkout_key, $order_id );
+		DoughBoss_Payment_Attempts::update(
+			(int) $attempt['id'],
+			array(
+				'status'             => 'succeeded',
+				'provider_status'    => 'succeeded',
+				'local_reference'    => (string) $order->order_number,
+				'verified_at'        => true,
+			)
+		);
+		return true;
 	}
 
 	/**

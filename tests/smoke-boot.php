@@ -49,7 +49,7 @@ try {
 // 2. Per-slice class presence. Each slice must contribute its classes.
 $slices = array(
 	'1 · core plugin'          => array( 'DoughBoss', 'DoughBoss_Activator', 'DoughBoss_Settings', 'DoughBoss_Post_Types', 'DoughBoss_Cart', 'DoughBoss_Order', 'DoughBoss_REST_Controller', 'DoughBoss_Shortcodes', 'DoughBoss_Assets', 'DoughBoss_Migrations' ),
-	'2 · payments'             => array( 'DoughBoss_Stripe', 'DoughBoss_Tyro', 'DoughBoss_Payment', 'DoughBoss_Payment_Attempts' ),
+	'2 · payments'             => array( 'DoughBoss_Stripe', 'DoughBoss_Tyro', 'DoughBoss_Payment', 'DoughBoss_Payment_Attempts', 'DoughBoss_Checkout_Snapshots' ),
 	'3 · vouchers'             => array( 'DoughBoss_Voucher', 'DoughBoss_Coupon_Code' ),
 	'4 · POSPal'               => array( 'DoughBoss_POSPal', 'DoughBoss_POSPal_Sync', 'DoughBoss_POSPal_Orders' ),
 	'5 · catering'             => array( 'DoughBoss_Catering', 'DoughBoss_Catering_Package' ),
@@ -83,7 +83,7 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.16.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.16.0' );
+ok( '1.17.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.17.0' );
 ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Activator', 'payment_storage_ready' ), 'payment attempt storage readiness gate exists' );
