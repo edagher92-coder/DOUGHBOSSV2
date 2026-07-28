@@ -14,9 +14,9 @@ Date: 27 July 2026
 
 1. DoughBoss calculates the cart and voucher-adjusted total on the server.
 2. WordPress creates or reuses one durable Stripe payment attempt.
-3. Stripe Payment Element collects card or eligible wallet details.
-4. Stripe confirms the PaymentIntent.
-5. WordPress retrieves the PaymentIntent and verifies its status, amount, currency, location, order type, table/QR context and checkout identity.
+3. WordPress creates or reuses one Stripe-hosted Checkout Session for that immutable attempt.
+4. The customer enters card or eligible wallet details only on Stripe Checkout.
+5. Stripe returns the Checkout Session id; WordPress retrieves both the session and its canonical PaymentIntent, then verifies status, amount, currency, location, order type, table/QR context and checkout identity.
 6. DoughBoss atomically redeems the voucher and creates one order.
 7. The confirmation email, order tracker and kitchen board use the DoughBoss order.
 8. The POSPal outbox mirrors the completed order without controlling payment.
@@ -28,7 +28,7 @@ Date: 27 July 2026
 - Successful Mastercard payment.
 - 3-D Secure challenge.
 - Declined card with a clear retry path.
-- Double-click and repeated network request create one PaymentIntent and one order.
+- Double-click and repeated network request create one Checkout Session, one PaymentIntent and one order.
 - Browser closed after payment is surfaced for recovery.
 - Full refund is safe to retry.
 - Five-dollar voucher reaches Stripe, the order and POSPal as the same final total.
@@ -48,7 +48,7 @@ Do not enable live customer payments until all of the following are true:
 - Stripe business verification and payout bank account are complete.
 - Live publishable and secret keys are stored server-side.
 - One live webhook endpoint is configured and its signing secret is stored server-side.
-- The live webhook subscribes to `payment_intent.succeeded`.
+- The live webhook subscribes to `checkout.session.completed` and `payment_intent.succeeded`.
 - `doughboss.com.au` is registered as a Stripe payment-method domain.
 - Apple Pay and Google Pay are enabled in Stripe only after their device tests pass.
 - No Stripe secret, webhook secret, client secret or card detail exists in Git or browser storage.

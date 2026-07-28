@@ -292,6 +292,28 @@ stripe_contract_ok(
 		&& false !== strpos( $stripe_source, "=> 'card'" ),
 	'Stripe limits synchronous DoughBoss checkout to immediate card and card-wallet rails'
 );
+stripe_contract_ok(
+	false !== strpos( $stripe_source, 'function create_checkout_session' )
+		&& false !== strpos( $stripe_source, "'/checkout/sessions'" )
+		&& false !== strpos( $stripe_source, "self::idempotency_key( 'checkout', \$checkout_key )" )
+		&& false !== strpos( $stripe_source, 'payment_intent_data[metadata]' ),
+	'storefront creates one idempotent hosted Checkout Session with the immutable binding copied to its PaymentIntent'
+);
+stripe_contract_ok(
+	false !== strpos( $stripe_source, 'function stripe_secret_key_valid' )
+		|| false !== strpos( file_get_contents( __DIR__ . '/../includes/class-doughboss-settings.php' ), 'function stripe_secret_key_valid' ),
+	'Stripe rejects unrelated non-key credentials before an API request'
+);
+stripe_contract_ok(
+	false === strpos( $stripe_source, "\$data['error']['message']" )
+		&& false !== strpos( $stripe_source, 'We could not start payment. Please try again or contact the shop.' ),
+	'provider error bodies and secret-bearing messages are never returned to the customer'
+);
+stripe_contract_ok(
+	false !== strpos( $stripe_webhook, 'checkout.session.completed' )
+		&& false !== strpos( $stripe_webhook, 'payment_intent.succeeded' ),
+	'storefront webhook reconciles both hosted Checkout completion and the canonical PaymentIntent success'
+);
 foreach ( array( 'storefront' => $stripe_webhook, 'catering' => $catering_webhook ) as $label => $handler ) {
 	stripe_contract_ok(
 		false !== strpos( $handler, "['id']" )
@@ -308,8 +330,10 @@ stripe_contract_ok(
 	false !== strpos( $verify_payment, "'succeeded' !== \$status" )
 		&& false !== strpos( $verify_payment, '$amount !== $expected' )
 		&& false !== strpos( $verify_payment, '$cur !== $currency' )
+		&& false !== strpos( $verify_payment, '$session_amount !== $expected' )
+		&& false !== strpos( $verify_payment, 'hash_equals( $expected_checkout, $session_reference )' )
 		&& false !== strpos( $verify_payment, 'hash_equals( $expected_checkout, $meta_checkout )' ),
-	'checkout verifies status, amount, currency, and immutable order binding on the server'
+	'checkout verifies hosted session, canonical payment, amount, currency, and immutable order binding on the server'
 );
 stripe_contract_ok(
 	false !== strpos( $checkout, '$totals = $this->cart->totals( $order_type )' )

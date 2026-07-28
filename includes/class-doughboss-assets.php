@@ -173,8 +173,8 @@ class DoughBoss_Assets {
 				wp_enqueue_script( 'mpgs-checkout', DoughBoss_MPGS::checkout_script_url(), array(), null, true );
 				$deps[] = 'mpgs-checkout';
 			} else {
-				wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
-				$deps[] = 'stripe-js';
+				// Stripe Checkout is a full-page provider-hosted redirect. The
+				// storefront never loads Stripe.js or renders card fields.
 			}
 		}
 
@@ -202,6 +202,7 @@ class DoughBoss_Assets {
 					// Which gateway the storefront JS should drive (Stripe.js
 					// Elements vs Tyro Connect's hosted pay form).
 					'gateway' => $gateway,
+					'hostedCheckout' => 'stripe' === $gateway,
 					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ),
 				),
 				'i18n'     => array(

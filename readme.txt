@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.26.0
+Stable tag: 2.27.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,13 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.27.0 =
+* Storefront Stripe payments now redirect to a unique Stripe-hosted Checkout Session for each immutable cart.
+* Reject malformed mode-specific Stripe secret keys before making any provider request.
+* Replace raw Stripe API responses with a fixed customer-safe payment error.
+* Reconcile both checkout.session.completed and payment_intent.succeeded webhook events.
+* Add safe controls to clear obsolete Stripe secret-key database fallbacks.
 
 = 2.26.0 =
 * Replace legacy Stripe Card Element checkout with a responsive Payment Element for cards and eligible Apple Pay/Google Pay wallets across menu orders and catering deposits.

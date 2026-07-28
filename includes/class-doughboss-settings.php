@@ -659,6 +659,19 @@ class DoughBoss_Settings {
 	}
 
 	/**
+	 * Whether the configured Stripe secret has the expected mode-specific
+	 * format. Rejecting arbitrary non-empty strings here prevents a password or
+	 * other unrelated credential from ever being sent to Stripe.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_secret_key_valid() {
+		$prefix = 'live' === self::stripe_mode() ? 'sk_live_' : 'sk_test_';
+		$secret = self::stripe_secret_key();
+		return 0 === strpos( $secret, $prefix ) && strlen( $secret ) >= 16;
+	}
+
+	/**
 	 * Stripe webhook signing secret for the active mode (server-side only).
 	 * Read env-first — the constant DOUGHBOSS_STRIPE_TEST_WHSEC/
 	 * DOUGHBOSS_STRIPE_LIVE_WHSEC or the matching environment variable take
@@ -690,8 +703,7 @@ class DoughBoss_Settings {
 	 */
 	public static function stripe_ready() {
 		return self::payments_enabled()
-			&& '' !== self::stripe_publishable_key()
-			&& '' !== self::stripe_secret_key()
+			&& self::stripe_secret_key_valid()
 			&& ( 'live' !== self::stripe_mode() || self::stripe_webhook_configured() );
 	}
 

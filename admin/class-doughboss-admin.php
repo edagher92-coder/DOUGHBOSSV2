@@ -405,9 +405,9 @@ class DoughBoss_Admin {
 		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $requested_gateway : 'stripe';
 		$clean['stripe_mode']       = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
 		$clean['stripe_test_pk']    = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
-		$clean['stripe_test_sk']    = $this->keep_secret( $input, $existing, 'stripe_test_sk' );
+		$clean['stripe_test_sk']    = empty( $input['clear_stripe_test_sk'] ) ? $this->keep_secret( $input, $existing, 'stripe_test_sk' ) : '';
 		$clean['stripe_live_pk']    = isset( $input['stripe_live_pk'] ) ? sanitize_text_field( $input['stripe_live_pk'] ) : '';
-		$clean['stripe_live_sk']    = $this->keep_secret( $input, $existing, 'stripe_live_sk' );
+		$clean['stripe_live_sk']    = empty( $input['clear_stripe_live_sk'] ) ? $this->keep_secret( $input, $existing, 'stripe_live_sk' ) : '';
 		$clean['stripe_test_whsec'] = $this->keep_secret( $input, $existing, 'stripe_test_whsec' );
 		$clean['stripe_live_whsec'] = $this->keep_secret( $input, $existing, 'stripe_live_whsec' );
 
@@ -3220,8 +3220,11 @@ JS;
 
 					<h3><?php esc_html_e( 'Stripe', 'doughboss' ); ?></h3>
 					<p class="description">
-						<?php esc_html_e( 'DoughBoss uses Stripe Payment Element for Visa, Mastercard and eligible Apple Pay or Google Pay wallets. Wallets appear only on supported devices after they are enabled and the site domain is registered in Stripe.', 'doughboss' ); ?>
+						<?php esc_html_e( 'Storefront orders redirect to Stripe-hosted Checkout for Visa, Mastercard and eligible Apple Pay or Google Pay wallets. DoughBoss never renders or handles card fields. Catering retains its existing Stripe Payment Element flow.', 'doughboss' ); ?>
 						<?php if ( 'stripe' === DoughBoss_Settings::payment_gateway() ) : ?>
+							<?php if ( ! DoughBoss_Settings::stripe_secret_key_valid() ) : ?>
+								<strong style="color:#b32d2e;"><?php esc_html_e( 'Stripe secret key: missing or invalid for the selected mode. Card payments remain off.', 'doughboss' ); ?></strong>
+							<?php endif; ?>
 							<?php if ( DoughBoss_Settings::stripe_webhook_configured() ) : ?>
 								<strong style="color:#1f8a54;"><?php esc_html_e( 'Webhook recovery: configured.', 'doughboss' ); ?></strong>
 							<?php else : ?>
@@ -3245,7 +3248,9 @@ JS;
 						<tr>
 							<th><label for="db-stripe-test-sk"><?php esc_html_e( 'Test secret key', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-stripe-test-sk" class="regular-text" autocomplete="off" placeholder="sk_test_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_test_sk]" value="" />
-								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_TEST_SK environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_test_sk'] ) && '' !== $settings['stripe_test_sk'] ? esc_html__( 'A key is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+								<p class="description"><?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_TEST_SK environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_test_sk'] ) && '' !== $settings['stripe_test_sk'] ? esc_html__( 'A key is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p>
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[clear_stripe_test_sk]" value="1" /> <?php esc_html_e( 'Clear the stored database fallback when saving (the protected environment value is unaffected).', 'doughboss' ); ?></label>
+							</td>
 						</tr>
 						<tr>
 							<th><label for="db-stripe-live-pk"><?php esc_html_e( 'Live publishable key', 'doughboss' ); ?></label></th>
@@ -3254,6 +3259,7 @@ JS;
 						<tr>
 							<th><label for="db-stripe-live-sk"><?php esc_html_e( 'Live secret key', 'doughboss' ); ?></label></th>
 							<td><input type="password" id="db-stripe-live-sk" class="regular-text" autocomplete="off" placeholder="sk_live_&hellip;" name="<?php echo esc_attr( $opt ); ?>[stripe_live_sk]" value="" />
+								<label style="display:block;margin-top:6px;"><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[clear_stripe_live_sk]" value="1" /> <?php esc_html_e( 'Clear the stored database fallback when saving (the protected environment value is unaffected).', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Find your keys in the Stripe Dashboard → Developers → API keys. Secret keys are used only on the server.', 'doughboss' ); ?> <?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_LIVE_SK environment variable instead of here; this field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['stripe_live_sk'] ) && '' !== $settings['stripe_live_sk'] ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
@@ -3267,7 +3273,7 @@ JS;
 								<p class="description">
 									<?php esc_html_e( 'Stripe Dashboard → Developers → Webhooks. Add one endpoint pointing to:', 'doughboss' ); ?>
 									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/stripe-webhook' ) ); ?></code>
-									<?php esc_html_e( 'and subscribe it to payment_intent.succeeded, then paste its signing secret here. It covers both storefront orders (flagging any successful payment that never became an order) and catering deposits. The older catering-only endpoint', 'doughboss' ); ?>
+									<?php esc_html_e( 'and subscribe it to checkout.session.completed and payment_intent.succeeded, then paste its signing secret here. It covers hosted storefront orders (flagging any successful payment that never became an order) and catering deposits. The older catering-only endpoint', 'doughboss' ); ?>
 									<code><?php echo esc_html( rest_url( DOUGHBOSS_REST_NAMESPACE . '/catering/stripe-webhook' ) ); ?></code>
 									<?php esc_html_e( 'still works if already registered — Stripe issues one signing secret per endpoint and this plugin stores a single secret, so register only one of them.', 'doughboss' ); ?>
 									<?php esc_html_e( 'For best security set it as the DOUGHBOSS_STRIPE_LIVE_WHSEC environment variable instead; this field is a fallback.', 'doughboss' ); ?>

@@ -651,6 +651,21 @@ class DoughBoss_REST_Controller {
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_text_field',
 					),
+					'customer_name' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'customer_email' => array(
+						'sanitize_callback' => 'sanitize_email',
+					),
+					'customer_phone' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'address' => array(
+						'sanitize_callback' => 'sanitize_textarea_field',
+					),
+					'return_url' => array(
+						'sanitize_callback' => 'esc_url_raw',
+					),
 				),
 			)
 		);
@@ -2435,6 +2450,17 @@ class DoughBoss_REST_Controller {
 			}
 		}
 
+		$gateway = DoughBoss_Settings::payment_gateway();
+		$name    = sanitize_text_field( $request->get_param( 'customer_name' ) );
+		$email   = sanitize_email( $request->get_param( 'customer_email' ) );
+		$phone   = sanitize_text_field( $request->get_param( 'customer_phone' ) );
+		$address = sanitize_textarea_field( $request->get_param( 'address' ) );
+		if ( 'stripe' === $gateway ) {
+			if ( '' === $name || ! is_email( $email ) || '' === $phone || ( 'delivery' === $order_type && '' === $address ) ) {
+				return new WP_Error( 'doughboss_invalid', __( 'Complete your contact and fulfilment details before continuing to payment.', 'doughboss' ), array( 'status' => 400 ) );
+			}
+		}
+
 		$totals   = $this->cart->totals( $order_type );
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
 		$amount   = DoughBoss_Payment::to_minor_units( $totals['total'] );
@@ -2448,24 +2474,47 @@ class DoughBoss_REST_Controller {
 			return $checkout_key;
 		}
 
-		$intent = DoughBoss_Payment::create_payment_intent(
-			$amount,
-			$currency,
-			array(
-				'checkout_key' => $checkout_key,
-				'purpose'     => 'order',
-				'context'     => $table_context ? 'table_qr' : 'web',
-				'order_type'  => $order_type,
-				'location_id' => $location_id,
-				'table_id'    => $table_context ? (int) $table_context['table_id'] : 0,
-				'qr_code_id'  => $table_context ? (int) $table_context['qr_code_id'] : 0,
-				'site'        => home_url(),
-				'return_url'  => $this->same_site_return_url( $request->get_param( 'return_url' ) ),
-			)
+		$metadata = array(
+			'checkout_key' => $checkout_key,
+			'purpose'      => 'order',
+			'context'      => $table_context ? 'table_qr' : 'web',
+			'order_type'   => $order_type,
+			'location_id'  => $location_id,
+			'table_id'     => $table_context ? (int) $table_context['table_id'] : 0,
+			'qr_code_id'   => $table_context ? (int) $table_context['qr_code_id'] : 0,
+			'site'         => home_url(),
 		);
+		if ( 'stripe' === $gateway ) {
+			$return_urls = $this->stripe_checkout_return_urls( $request->get_param( 'return_url' ) );
+			$intent      = DoughBoss_Stripe::create_checkout_session(
+				$amount,
+				$currency,
+				$metadata,
+				$return_urls['success'],
+				$return_urls['cancel'],
+				$email
+			);
+		} else {
+			$metadata['return_url'] = $this->same_site_return_url( $request->get_param( 'return_url' ) );
+			$intent = DoughBoss_Payment::create_payment_intent( $amount, $currency, $metadata );
+		}
 
 		if ( is_wp_error( $intent ) ) {
 			return $intent;
+		}
+
+		if ( 'stripe' === $gateway ) {
+			return rest_ensure_response(
+				array(
+					'checkout_session' => $intent['checkout_session'],
+					'checkout_url'     => $intent['checkout_url'],
+					'amount'           => $intent['amount'],
+					'currency'         => $intent['currency'],
+					'gateway'          => 'stripe',
+					'live_mode'        => 'live' === DoughBoss_Settings::stripe_mode(),
+					'attempt_id'       => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
+				)
+			);
 		}
 
 		return rest_ensure_response(
@@ -2475,10 +2524,30 @@ class DoughBoss_REST_Controller {
 				'publishable_key' => DoughBoss_Payment::publishable_key(),
 				'amount'          => $intent['amount'],
 				'currency'        => $intent['currency'],
-				'gateway'         => DoughBoss_Settings::payment_gateway(),
-				'live_mode'       => ( 'tyro' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::mpgs_live_mode() ),
+				'gateway'         => $gateway,
+				'live_mode'       => ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ),
 				'attempt_id'      => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
 			)
+		);
+	}
+
+	/**
+	 * Build same-site Stripe success and cancellation return URLs.
+	 *
+	 * Stripe replaces the literal Checkout Session placeholder after payment.
+	 * It must therefore be appended after WordPress has encoded the other query
+	 * parameters.
+	 *
+	 * @param mixed $candidate Browser-provided current URL.
+	 * @return array{success:string,cancel:string}
+	 */
+	private function stripe_checkout_return_urls( $candidate ) {
+		$base      = $this->same_site_return_url( $candidate );
+		$success   = add_query_arg( 'doughboss_stripe_return', '1', $base );
+		$separator = false === strpos( $success, '?' ) ? '?' : '&';
+		return array(
+			'success' => $success . $separator . 'session_id={CHECKOUT_SESSION_ID}',
+			'cancel'  => add_query_arg( 'doughboss_stripe_cancel', '1', $base ),
 		);
 	}
 
@@ -3449,15 +3518,19 @@ class DoughBoss_REST_Controller {
 		// carry that session id, so storing anything other than the canonical
 		// id here would make webhook-based reconciliation permanently unable to
 		// find this order. See DoughBoss_Tyro::canonical_id().
-		$pi_id = DoughBoss_Payment::canonical_id( $raw_id );
-
-		if ( DoughBoss_Order::payment_intent_used( $pi_id ) ) {
-			return new WP_Error( 'doughboss_pay_used', __( 'This payment has already been used for an order.', 'doughboss' ), array( 'status' => 409 ) );
+		$is_stripe_checkout = 'stripe' === DoughBoss_Settings::payment_gateway() && 0 === strpos( $raw_id, 'cs_' );
+		if ( $is_stripe_checkout ) {
+			$intent = DoughBoss_Stripe::retrieve_checkout_payment( $raw_id );
+			$pi_id  = ! is_wp_error( $intent ) && isset( $intent['id'] ) ? DoughBoss_Stripe::canonical_id( $intent['id'] ) : '';
+		} else {
+			$pi_id  = DoughBoss_Payment::canonical_id( $raw_id );
+			$intent = DoughBoss_Payment::retrieve_payment_intent( $raw_id );
 		}
-
-		$intent = DoughBoss_Payment::retrieve_payment_intent( $raw_id );
 		if ( is_wp_error( $intent ) ) {
 			return $intent;
+		}
+		if ( '' === $pi_id || DoughBoss_Order::payment_intent_used( $pi_id ) ) {
+			return new WP_Error( 'doughboss_pay_used', __( 'This payment has already been used for an order.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
 		$expected = DoughBoss_Payment::to_minor_units( $expected_total );
@@ -3481,8 +3554,11 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $expected_checkout ) ) {
 			return $expected_checkout;
 		}
+		$session_amount    = $is_stripe_checkout && isset( $intent['checkout_session_amount'] ) ? (int) $intent['checkout_session_amount'] : $expected;
+		$session_currency  = $is_stripe_checkout && isset( $intent['checkout_session_currency'] ) ? strtolower( (string) $intent['checkout_session_currency'] ) : $currency;
+		$session_reference = $is_stripe_checkout && isset( $intent['checkout_session_reference'] ) ? strtolower( (string) $intent['checkout_session_reference'] ) : $expected_checkout;
 
-		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency || $meta_type !== $order_type || $meta_location !== (int) $location_id || $meta_table !== $expected_table || $meta_qr !== $expected_qr || ! hash_equals( $expected_checkout, $meta_checkout ) ) {
+		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency || $session_amount !== $expected || $session_currency !== $currency || ! hash_equals( $expected_checkout, $session_reference ) || $meta_type !== $order_type || $meta_location !== (int) $location_id || $meta_table !== $expected_table || $meta_qr !== $expected_qr || ! hash_equals( $expected_checkout, $meta_checkout ) ) {
 			// Do not claim an automatic reversal: nothing in this plugin refunds a
 			// payment automatically today. Point the customer at a human instead
 			// of a false promise.
@@ -4153,20 +4229,34 @@ class DoughBoss_REST_Controller {
 		if ( ! is_array( $event ) || empty( $event['type'] ) ) {
 			return new WP_Error( 'doughboss_wh_event', __( 'Invalid payment event.', 'doughboss' ), array( 'status' => 400 ) );
 		}
-		if ( 'payment_intent.succeeded' !== $event['type'] ) {
+		$event_type = sanitize_text_field( (string) $event['type'] );
+		if ( ! in_array( $event_type, array( 'payment_intent.succeeded', 'checkout.session.completed' ), true ) ) {
 			return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
 		}
 
 		$obj      = isset( $event['data']['object'] ) && is_array( $event['data']['object'] ) ? $event['data']['object'] : array();
 		$meta     = isset( $obj['metadata'] ) && is_array( $obj['metadata'] ) ? $obj['metadata'] : array();
 		$event_id = isset( $event['id'] ) ? sanitize_text_field( (string) $event['id'] ) : '';
-		$pi_id    = isset( $obj['id'] ) ? sanitize_text_field( (string) $obj['id'] ) : '';
+		if ( 'checkout.session.completed' === $event_type ) {
+			if ( 'paid' !== ( isset( $obj['payment_status'] ) ? (string) $obj['payment_status'] : '' ) ) {
+				return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+			}
+			$pi_id = isset( $obj['payment_intent'] ) && is_scalar( $obj['payment_intent'] ) ? sanitize_text_field( (string) $obj['payment_intent'] ) : '';
+			$obj   = array(
+				'id'       => $pi_id,
+				'amount'   => isset( $obj['amount_total'] ) ? absint( $obj['amount_total'] ) : 0,
+				'currency' => isset( $obj['currency'] ) ? sanitize_key( (string) $obj['currency'] ) : '',
+				'metadata' => $meta,
+			);
+		} else {
+			$pi_id = isset( $obj['id'] ) ? sanitize_text_field( (string) $obj['id'] ) : '';
+		}
 		if ( ! preg_match( '/^evt_[A-Za-z0-9_]{8,191}$/', $event_id ) || ! preg_match( '/^pi_[A-Za-z0-9_]{8,191}$/', $pi_id ) ) {
 			return new WP_Error( 'doughboss_wh_reference', __( 'Invalid payment event reference.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
 		$event_key = hash( 'sha256', 'stripe|' . $event_id );
-		if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'stripe', $pi_id, 'payment_intent.succeeded' ) ) {
+		if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'stripe', $pi_id, $event_type ) ) {
 			$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
 			if ( null === $event_outcome || 'retry' === $event_outcome ) {
 				return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );

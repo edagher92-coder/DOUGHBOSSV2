@@ -32,10 +32,10 @@
 	// Defaults to 'stripe' so older localized data behaves exactly as before.
 	var GATEWAY = PAY.gateway || 'stripe';
 
-	// Build a single Stripe instance when Stripe is the active gateway and
-	// Stripe.js has loaded. Stays null otherwise, and the checkout falls back
-	// to Tyro (below) or to no payment.
-	var stripe = (PAY.enabled && PAY.pk && GATEWAY === 'stripe' && typeof window.Stripe === 'function') ? window.Stripe(PAY.pk) : null;
+	// Stripe card entry is hosted entirely by Stripe Checkout. The storefront
+	// receives only a short-lived checkout.stripe.com URL and never loads,
+	// renders or handles card fields.
+	var stripeHosted = !!(PAY.enabled && GATEWAY === 'stripe');
 
 	// Current Tyro Connect Pay browser library. It owns all card fields and 3DS.
 	var tyroPay = !!(PAY.enabled && GATEWAY === 'tyro' && typeof window.Tyro === 'function');
@@ -1115,33 +1115,18 @@
 
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
-		// Whether this checkout takes a card payment (either gateway).
-		var paying = !!(stripe || tyroPay || mpgsHosted);
-		var stripeElements = null;
-		var paymentElement = null;
-		var stripeField = null;
-		var cardMount = null;
-		var stripeClientSecret = '';
-		var stripeIntentId = '';
-		var stripeIntentPending = false;
-		var stripeConfirming = false;
-		var stripeMountVersion = 0;
-		var stripeProviderConfirmationStarted = false;
+		// Whether this checkout takes a card payment through a hosted gateway.
+		var paying = !!(stripeHosted || tyroPay || mpgsHosted);
 
 		function newPaymentAttemptKey() {
 			return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
 		}
 
-		// Stripe prepares its secure Payment Element only after the customer has
-		// completed the contact form. Tyro and MPGS retain their existing labels.
+		// Stripe and MPGS redirect to their hosted checkout pages. Tyro retains
+		// its provider-hosted embedded pay form.
 		function payLabelFor(t) {
 			var grandTotal = t && typeof t.total !== 'undefined' ? t.total : 0;
-			if (stripe && checkoutPaymentId) {
-				return I18N.finishOrder || 'Finish paid order';
-			}
-			if (stripe && !paymentElement) {
-				return I18N.continueToPayment || 'Continue to payment';
-			}
+			if (stripeHosted) { return I18N.continueToPayment || 'Continue to secure payment'; }
 			return paying ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
 		}
 		var payLabel = payLabelFor(totals);
@@ -1160,14 +1145,11 @@
 			])
 		]));
 
-		if (stripe) {
-			cardMount = el('div', { class: 'db-card-element', 'data-stripe-payment-element': 'true' });
-			stripeField = el('div', { class: 'db-cardfield' }, [
-				el('span', { class: 'db-field-label', text: I18N.cardDetails || 'Secure payment' }),
-				cardMount
-			]);
-			stripeField.style.display = 'none';
-			form.appendChild(stripeField);
+		if (stripeHosted) {
+			form.appendChild(el('p', {
+				class: 'db-cardfield db-stripe-checkout-notice',
+				text: 'Card and wallet details will be entered securely on Stripe Checkout.'
+			}));
 		}
 
 		// Tyro Connect: hosted payment form and automatic 3DS.
@@ -1204,122 +1186,12 @@
 		var checkoutPaymentId = null;
 
 		function fail(err) {
-			var providerOutcomeAmbiguous = stripeProviderConfirmationStarted && !checkoutPaymentId;
-			stripeIntentPending = false;
-			stripeConfirming = false;
-			if (!checkoutPaymentId && !providerOutcomeAmbiguous) {
-				setPaymentMutationLock(false);
-			}
+			setPaymentMutationLock(false);
 			msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
 			msg.className = 'db-checkout-msg db-error';
 			submit.disabled = false;
 			payLabel = payLabelFor(totals);
 			submit.textContent = payLabel;
-		}
-
-		function resetStripePayment(message, renewAttempt) {
-			stripeMountVersion += 1;
-			stripeIntentPending = false;
-			stripeConfirming = false;
-			if (paymentElement) {
-				try { paymentElement.unmount(); } catch (ignoreUnmount) {}
-			}
-			paymentElement = null;
-			stripeElements = null;
-			stripeClientSecret = '';
-			stripeIntentId = '';
-			if (cardMount) { cardMount.innerHTML = ''; }
-			if (stripeField) { stripeField.style.display = 'none'; }
-			if (renewAttempt) { paymentAttemptKey = newPaymentAttemptKey(); }
-			payLabel = payLabelFor(totals);
-			submit.disabled = false;
-			submit.textContent = payLabel;
-			if (message) {
-				msg.textContent = message;
-				msg.className = 'db-checkout-msg';
-			}
-		}
-
-		function prepareStripePayment(payload) {
-			var version = ++stripeMountVersion;
-			stripeIntentPending = true;
-			submit.textContent = I18N.payPreparing || 'Preparing secure payment...';
-
-			return request('/payment-intent', {
-				method: 'POST',
-				body: {
-					order_type: orderType,
-					location_id: payload.location_id,
-					payment_attempt_key: paymentAttemptKey
-				}
-			}).then(function (pi) {
-				if (version !== stripeMountVersion) { return null; }
-				if (!pi || !pi.client_secret || !pi.payment_intent) {
-					throw new Error('Could not prepare the secure payment form.');
-				}
-
-				stripeClientSecret = pi.client_secret;
-				stripeIntentId = pi.payment_intent;
-				stripeElements = stripe.elements({
-					clientSecret: stripeClientSecret,
-					appearance: {
-						theme: 'stripe',
-						variables: {
-							colorPrimary: '#e52b2f',
-							colorText: '#171717',
-							borderRadius: '10px'
-						}
-					}
-				});
-				paymentElement = stripeElements.create('payment', {
-					layout: {
-						type: 'accordion',
-						defaultCollapsed: false,
-						radios: 'never',
-						spacedAccordionItems: true
-					},
-					defaultValues: {
-						billingDetails: {
-							name: payload.customer_name,
-							email: payload.customer_email
-						}
-					},
-					paymentMethodOrder: ['card'],
-					wallets: { applePay: 'auto', googlePay: 'auto' }
-				});
-				paymentElement.on('change', function (event) {
-					if (event && event.error) {
-						msg.textContent = event.error.message || 'Check your payment details.';
-						msg.className = 'db-checkout-msg db-error';
-					}
-				});
-				paymentElement.on('loaderror', function (event) {
-					if (version !== stripeMountVersion) { return; }
-					resetStripePayment('', false);
-					fail(new Error(event && event.error && event.error.message ? event.error.message : 'The secure payment form could not load. Please try again.'));
-				});
-				paymentElement.on('ready', function () {
-					if (version !== stripeMountVersion) { return; }
-					try { paymentElement.focus(); } catch (ignoreFocus) {}
-					if (window.innerWidth < 720 && stripeField && stripeField.scrollIntoView) {
-						stripeField.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-					}
-					stripeIntentPending = false;
-					payLabel = payLabelFor(totals);
-					submit.disabled = false;
-					submit.textContent = payLabel;
-					msg.textContent = 'Choose a wallet when available, or enter your card details.';
-					msg.className = 'db-checkout-msg';
-				});
-				stripeField.style.display = '';
-				paymentElement.mount(cardMount);
-				msg.textContent = 'Loading secure payment options...';
-				msg.className = 'db-checkout-msg';
-				return pi;
-			}).catch(function (err) {
-				if (version === stripeMountVersion) { resetStripePayment('', false); }
-				throw err;
-			});
 		}
 
 		function placeOrder(payload) {
@@ -1423,52 +1295,42 @@
 			};
 			if (paying) { payload.payment_attempt_key = paymentAttemptKey; }
 
-			if (stripe) {
-				if (checkoutPaymentId) {
-					submit.textContent = I18N.orderConfirming || 'Confirming paid order...';
-					payload.payment_intent_id = checkoutPaymentId;
-					placeOrder(payload).catch(fail);
-					return;
-				}
-
-				if (!paymentElement) {
-					if (!stripeIntentPending) { prepareStripePayment(payload).catch(fail); }
-					return;
-				}
-
-				stripeConfirming = true;
-				stripeProviderConfirmationStarted = false;
+			if (stripeHosted) {
+				// Save only the non-card order details in this tab, then redirect
+				// to the unique Stripe-hosted Checkout URL for this cart.
 				setPaymentMutationLock(true);
-				submit.textContent = I18N.payProcessing || 'Processing payment...';
-				stripeElements.submit().then(function (result) {
-					if (result && result.error) {
-						setPaymentMutationLock(false);
-						throw new Error(result.error.message || (I18N.cardError || 'Check your payment details.'));
+				submit.textContent = I18N.payPreparing || 'Opening secure Stripe Checkout...';
+				if (!checkoutAttemptId) {
+					checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+				}
+				request('/payment-intent', {
+					method: 'POST',
+					body: {
+						order_type: orderType,
+						location_id: payload.location_id,
+						payment_attempt_key: paymentAttemptKey,
+						customer_name: payload.customer_name,
+						customer_email: payload.customer_email,
+						customer_phone: payload.customer_phone,
+						address: payload.address,
+						return_url: window.location.href
 					}
-					stripeProviderConfirmationStarted = true;
-					return stripe.confirmPayment({
-						elements: stripeElements,
-						clientSecret: stripeClientSecret,
-						confirmParams: {
-							return_url: mpgsReturnUrl()
-						},
-						redirect: 'if_required'
-					});
-				}).then(function (result) {
-					if (result.error) {
-						if (result.error.type === 'card_error' || result.error.type === 'validation_error') {
-							stripeProviderConfirmationStarted = false;
-							setPaymentMutationLock(false);
-						}
-						throw new Error(result.error.message || (I18N.cardError || 'Card payment could not be completed.'));
+				}).then(function (session) {
+					if (!session || !/^cs_(test|live)_/.test(session.checkout_session || '') || !/^https:\/\/checkout\.stripe\.com\//.test(session.checkout_url || '')) {
+						throw new Error('The secure Stripe Checkout link could not be verified.');
 					}
-					if (!result.paymentIntent || !result.paymentIntent.id || result.paymentIntent.id !== stripeIntentId) {
-						throw new Error('The completed payment could not be matched safely.');
+					payload.payment_intent_id = session.checkout_session;
+					try {
+						window.sessionStorage.setItem('doughbossStripePending', JSON.stringify({
+							sessionId: session.checkout_session,
+							payload: payload,
+							checkoutAttemptId: checkoutAttemptId,
+							savedAt: Date.now()
+						}));
+					} catch (storageError) {
+						throw new Error('Your browser could not preserve the order for the secure payment return.');
 					}
-					stripeConfirming = false;
-					checkoutPaymentId = result.paymentIntent.id;
-					payload.payment_intent_id = checkoutPaymentId;
-					return placeOrder(payload);
+					window.location.assign(session.checkout_url);
 				}).catch(fail);
 			} else if (tyro) {
 				// 1) make sure the hosted card session is live, 2) create a fresh
@@ -1527,6 +1389,45 @@
 			}
 		});
 
+		// Complete the server-verified order after Stripe returns to this same
+		// checkout page. The session id from the URL is only a lookup key: the
+		// server retrieves Stripe and re-verifies payment, amount, currency and
+		// immutable cart metadata before creating an order.
+		if (stripeHosted && typeof window.URLSearchParams === 'function') {
+			var stripeReturnParams = new URLSearchParams(window.location.search);
+			if (stripeReturnParams.get('doughboss_stripe_return') === '1') {
+				var stripePending = null;
+				try {
+					stripePending = JSON.parse(window.sessionStorage.getItem('doughbossStripePending') || 'null');
+				} catch (ignoreStripePending) {}
+				var returnedSession = stripeReturnParams.get('session_id') || '';
+				if (stripePending && stripePending.sessionId === returnedSession && stripePending.payload && (Date.now() - Number(stripePending.savedAt || 0)) < 30 * 60 * 1000) {
+					checkoutAttemptId = stripePending.checkoutAttemptId;
+					stripePending.payload.payment_intent_id = returnedSession;
+					setPaymentMutationLock(true);
+					submit.disabled = true;
+					submit.textContent = 'Verifying Stripe payment...';
+					placeOrder(stripePending.payload).then(function () {
+						window.sessionStorage.removeItem('doughbossStripePending');
+						var cleanStripeUrl = new URL(window.location.href);
+						['doughboss_stripe_return', 'doughboss_stripe_cancel', 'session_id'].forEach(function (key) { cleanStripeUrl.searchParams.delete(key); });
+						window.history.replaceState({}, document.title, cleanStripeUrl.toString());
+					}).catch(fail);
+				} else {
+					fail(new Error('The Stripe payment return could not be matched to this cart. If you were charged, contact the shop before trying again.'));
+				}
+			} else if (stripeReturnParams.get('doughboss_stripe_cancel') === '1') {
+				window.sessionStorage.removeItem('doughbossStripePending');
+				setPaymentMutationLock(false);
+				paymentAttemptKey = newPaymentAttemptKey();
+				var cancelledStripeUrl = new URL(window.location.href);
+				cancelledStripeUrl.searchParams.delete('doughboss_stripe_cancel');
+				window.history.replaceState({}, document.title, cancelledStripeUrl.toString());
+				msg.textContent = 'Payment was cancelled. Your cart is still here and no order was placed.';
+				msg.className = 'db-checkout-msg';
+			}
+		}
+
 		// Complete the server-verified order after Mastercard returns to this
 		// same checkout page. The resultIndicator alone is never trusted.
 		if (mpgsHosted && typeof window.URLSearchParams === 'function') {
@@ -1562,9 +1463,6 @@
 			address.style.display = orderType === 'delivery' ? '' : 'none';
 			var addrInput = address.querySelector('input,textarea');
 			if (addrInput) { addrInput.required = orderType === 'delivery'; }
-			if (stripe && !paymentMutationLock && (paymentElement || stripeIntentPending) && !stripeConfirming && !checkoutPaymentId) {
-				resetStripePayment('Your cart changed. Review it, then continue to prepare a fresh payment.', true);
-			}
 			payLabel = payLabelFor(totals);
 			// Do not replace an in-flight payment or order confirmation label.
 			if (!submit.disabled) { submit.textContent = payLabel; }
