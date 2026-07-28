@@ -321,16 +321,18 @@ class DoughBoss_Shortcodes {
 		?>
 		<div id="track-order" class="db-app db-tracking" data-doughboss-tracking>
 			<form class="db-track-form">
+				<p class="db-order-kicker"><?php esc_html_e( 'Live order updates', 'doughboss' ); ?></p>
 				<h3><?php esc_html_e( 'Track your order', 'doughboss' ); ?></h3>
+				<p class="db-track-intro"><?php esc_html_e( 'Enter the order number from your confirmation and the same email used at checkout.', 'doughboss' ); ?></p>
 				<label>
 					<?php esc_html_e( 'Order number', 'doughboss' ); ?>
-					<input type="text" name="number" required maxlength="64" autocapitalize="characters" spellcheck="false" placeholder="DB-000000-XXXX" />
+					<input type="text" name="number" required maxlength="64" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DB-000000-XXXX" />
 				</label>
 				<label>
 					<?php esc_html_e( 'Email used on the order', 'doughboss' ); ?>
 					<input type="email" name="email" required autocomplete="email" autocapitalize="none" spellcheck="false" />
 				</label>
-				<button type="submit" class="db-btn"><?php esc_html_e( 'Check status', 'doughboss' ); ?></button>
+				<button type="submit" class="db-btn db-btn--lg"><?php esc_html_e( 'Check live status', 'doughboss' ); ?></button>
 			</form>
 			<div class="db-track-result" aria-live="polite"></div>
 		</div>

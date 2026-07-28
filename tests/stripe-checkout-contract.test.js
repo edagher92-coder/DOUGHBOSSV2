@@ -48,6 +48,15 @@ test('server creates idempotent Checkout Sessions and never exposes Stripe provi
 	assert.doesNotMatch(assetsPhp, /wp_enqueue_script\(\s*['"]stripe-js['"]/);
 });
 
+test('Stripe-hosted Checkout keeps cards and eligible Apple Pay and Google Pay wallets provider-owned', function () {
+	assert.match(stripePhp, /['"]payment_method_types\[0\]['"]\s*=>\s*['"]card['"]/);
+	assert.doesNotMatch(stripePhp, /wallet_options\[(?:apple_pay|google_pay)\]\s*=\s*never/);
+	assert.doesNotMatch(stripePhp, /excluded_payment_method_types\[\].*(?:apple_pay|google_pay)/);
+	assert.match(client, /Eligible Apple Pay and Google Pay wallets appear automatically on supported devices\./);
+	assert.doesNotMatch(client, /ApplePaySession/);
+	assert.doesNotMatch(client, /PaymentRequest/);
+});
+
 test('checkout return and webhooks bind the hosted session to one canonical PaymentIntent', function () {
 	assert.match(restPhp, /stripe_checkout_return_urls\s*\(/);
 	assert.match(restPhp, /session_id=\{CHECKOUT_SESSION_ID\}/);

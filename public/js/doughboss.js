@@ -363,6 +363,26 @@
 				return ai - bi || a.localeCompare(b);
 			});
 
+			var tools = el('div', { class: 'db-menu-tools' });
+			var searchStatus = el('span', {
+				class: 'db-menu-search-status',
+				role: 'status',
+				'aria-live': 'polite'
+			});
+			var search = el('input', {
+				class: 'db-menu-search',
+				type: 'search',
+				placeholder: I18N.searchMenu || 'Search the menu',
+				'aria-label': I18N.searchMenu || 'Search the menu',
+				autocomplete: 'off',
+				spellcheck: false
+			});
+			tools.appendChild(el('label', { class: 'db-menu-search-wrap' }, [
+				el('span', { class: 'db-menu-search-icon', 'aria-hidden': 'true', text: '⌕' }),
+				search
+			]));
+			tools.appendChild(searchStatus);
+
 			// Sticky category jump-bar: a pill per category that scrolls to its
 			// section. Only worth showing when there's more than one category.
 			if (categories.length > 1) {
@@ -371,6 +391,10 @@
 					var targetId = catId(category);
 					var pill = el('button', { class: 'db-jump', type: 'button', text: category, 'aria-controls': targetId });
 					pill.addEventListener('click', function () {
+						if (search.value) {
+							search.value = '';
+							search.dispatchEvent(new Event('input'));
+						}
 						var target = root.querySelector('#' + targetId);
 						if (target) {
 							target.scrollIntoView({
@@ -381,22 +405,50 @@
 					});
 					jump.appendChild(pill);
 				});
-				root.appendChild(jump);
+				tools.appendChild(jump);
 			}
+			root.appendChild(tools);
 
 			var stagger = 0;
+			var sections = [];
 			categories.forEach(function (category) {
-				root.appendChild(el('h3', { class: 'db-category', id: catId(category), text: category }));
-				var grid = el('div', { class: 'db-grid' });
+				var heading = el('h3', { class: 'db-category', id: catId(category), text: category });
+				var grid = el('div', { class: 'db-grid', 'aria-labelledby': catId(category) });
 				groups[category].forEach(function (item) {
 					var card = menuCard(item);
+					card.setAttribute('data-search-text', String(item.name || '') + ' ' + String(item.description || '') + ' ' + category);
 					// Cap the stagger so a long menu never delays the last card by
 					// seconds; the entrance still reads as a lively cascade.
 					card.style.setProperty('--db-i', String(Math.min(stagger, 12)));
 					stagger += 1;
 					grid.appendChild(card);
 				});
+				sections.push({ heading: heading, grid: grid });
+				root.appendChild(heading);
 				root.appendChild(grid);
+			});
+
+			searchStatus.textContent = items.length + (items.length === 1 ? ' item' : ' items');
+			search.addEventListener('input', function () {
+				var query = search.value.trim().toLowerCase();
+				var visible = 0;
+				sections.forEach(function (section) {
+					var sectionVisible = 0;
+					section.grid.querySelectorAll('.db-card').forEach(function (card) {
+						var matches = !query || String(card.getAttribute('data-search-text') || '').toLowerCase().indexOf(query) !== -1;
+						card.hidden = !matches;
+						if (matches) {
+							visible += 1;
+							sectionVisible += 1;
+						}
+					});
+					section.heading.hidden = sectionVisible === 0;
+					section.grid.hidden = sectionVisible === 0;
+				});
+				searchStatus.textContent = query
+					? (visible ? visible + (visible === 1 ? ' match' : ' matches') : 'No menu matches')
+					: items.length + (items.length === 1 ? ' item' : ' items');
+				root.classList.toggle('db-menu--searching', !!query);
 			});
 		}).catch(function (err) {
 			root.innerHTML = '';
@@ -532,9 +584,14 @@
 
 		var action;
 		if (soldOut) {
-			action = el('button', { class: 'db-btn', text: I18N.soldOut || 'Sold out', disabled: true });
+			action = el('button', { class: 'db-btn', type: 'button', text: I18N.soldOut || 'Sold out', disabled: true });
 		} else {
-			action = el('button', { class: 'db-btn', text: I18N.addToCart || 'Add to cart' });
+			action = el('button', {
+				class: 'db-btn',
+				type: 'button',
+				text: I18N.addToCart || 'Add to cart',
+				'aria-label': (I18N.addToCart || 'Add to cart') + ': ' + item.name
+			});
 			action.addEventListener('click', function () {
 				action.disabled = true;
 				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, options: selectedOptions(), quantity: 1 } })
@@ -674,7 +731,33 @@
 	/* Cart & checkout                                                    */
 	/* ------------------------------------------------------------------ */
 
+	function orderJourney() {
+		var labels = ['Review order', 'Your details', 'Secure payment'];
+		var items = [];
+		var list = el('ol', { class: 'db-order-journey', 'aria-label': 'Order progress' });
+		labels.forEach(function (label, index) {
+			var item = el('li', { class: 'db-order-journey-step' }, [
+				el('span', { class: 'db-order-journey-number', 'aria-hidden': 'true', text: String(index + 1) }),
+				el('span', { class: 'db-order-journey-label', text: label })
+			]);
+			items.push(item);
+			list.appendChild(item);
+		});
+		function set(step) {
+			items.forEach(function (item, index) {
+				var number = index + 1;
+				item.classList.toggle('is-current', number === step);
+				item.classList.toggle('is-complete', number < step || step > labels.length);
+				if (number === step) { item.setAttribute('aria-current', 'step'); }
+				else { item.removeAttribute('aria-current'); }
+			});
+		}
+		set(1);
+		return { element: list, set: set };
+	}
+
 	function renderCart(root) {
+		root.innerHTML = '';
 		var initialTableContext = activeTableContext();
 		var orderType = initialTableContext ? 'dine_in' : 'pickup';
 		var locationId = initialTableContext ? Number(initialTableContext.location.id) : 0;
@@ -685,16 +768,25 @@
 		// whatever the customer had already typed, and — worse — remount the
 		// Stripe card Element's iframe, silently clearing a card number they'd
 		// already entered mid-checkout.
-		var cartRegion = el('div', { class: 'db-cart-region' });
-		var checkoutRegion = el('div', { class: 'db-checkout-region' });
+		var cartRegion = el('section', { class: 'db-cart-region', 'aria-label': 'Order summary' });
+		var checkoutRegion = el('section', { class: 'db-checkout-region', 'aria-label': 'Checkout details' });
+		var journey = orderJourney();
+		var shell = el('div', { class: 'db-order-shell' }, [cartRegion, checkoutRegion]);
 		var checkoutEl = null;
+		var orderTitle = el('h2', { text: 'Review, pay and track' });
+		var orderIntro = el('p', { text: 'Check your items, add your details, then continue to Stripe for secure payment.' });
 		// Once an order is successfully placed, this cart widget's job is done —
 		// further reloads (triggered by the notifyCartChanged() that placeOrder
 		// itself fires, telling the rest of the page the cart is now empty) must
 		// not overwrite the confirmation message with an "empty cart" render.
 		var orderComplete = false;
-		root.appendChild(cartRegion);
-		root.appendChild(checkoutRegion);
+		root.appendChild(el('header', { class: 'db-order-header' }, [
+			el('p', { class: 'db-order-kicker', text: 'Your order' }),
+			orderTitle,
+			orderIntro
+		]));
+		root.appendChild(journey.element);
+		root.appendChild(shell);
 
 		function load() {
 			if (orderComplete) { return; }
@@ -713,11 +805,17 @@
 			cartRegion.innerHTML = '';
 			var tableContext = activeTableContext();
 			var orderingOpen = !!cfg.ordering_open;
+			journey.element.hidden = !orderingOpen;
+			orderTitle.textContent = orderingOpen ? 'Review, pay and track' : 'Browse now, request for later';
+			orderIntro.textContent = orderingOpen
+				? 'Check your items, add your details, then continue to Stripe for secure payment.'
+				: 'Online checkout and payment are closed. If pre-orders are available, your request stays unpaid until staff call and confirm it.';
 
 			if (!orderingOpen) {
 				cartRegion.appendChild(orderingClosedNotice(cfg.ordering_closed_message));
 				checkoutRegion.innerHTML = '';
 				checkoutEl = null;
+				journey.set(1);
 			}
 
 			if (!cart.items.length) {
@@ -727,6 +825,7 @@
 				// non-empty cart starts with a fresh one (and a fresh card mount).
 				checkoutRegion.innerHTML = '';
 				checkoutEl = null;
+				journey.set(1);
 				return;
 			}
 
@@ -741,6 +840,11 @@
 			} else if (!locationId) { locationId = currentLocationId(locs); }
 
 			// Line items.
+			var itemCount = cartItemCount(cart);
+			cartRegion.appendChild(el('div', { class: 'db-cart-section-heading' }, [
+				el('h3', { text: 'Order summary' }),
+				el('span', { text: itemCount + (itemCount === 1 ? ' item' : ' items') })
+			]));
 			var list = el('div', { class: 'db-cart-lines' });
 			cart.items.forEach(function (line) {
 				list.appendChild(cartLine(line, load));
@@ -808,8 +912,9 @@
 					// voucher box on screen untouched — clear it too so the
 					// confirmation isn't shown underneath a stale cart.
 					cartRegion.innerHTML = '';
-				});
+				}, journey.set);
 				checkoutRegion.appendChild(checkoutEl.form);
+				journey.set(2);
 			} else {
 				checkoutEl.update(orderType, cart.totals);
 			}
@@ -849,13 +954,31 @@
 			sub.push(line.toppings.map(function (t) { return t.label; }).join(', '));
 		}
 
-		var qty = el('input', { type: 'number', min: '0', value: line.quantity, class: 'db-qty', 'aria-label': 'Quantity for ' + line.name });
-		qty.addEventListener('change', function () {
-			request('/cart/update', { method: 'POST', body: { key: line.key, quantity: Number(qty.value) } })
-				.then(function () { notifyCartChanged(); }).catch(function (err) { dbToast(err.message); });
-		});
+		var qty = el('input', { type: 'number', min: '1', value: line.quantity, class: 'db-qty', 'aria-label': 'Quantity for ' + line.name, inputmode: 'numeric' });
+		var decrease = el('button', { class: 'db-qty-btn', type: 'button', text: '−', 'aria-label': 'Decrease quantity for ' + line.name });
+		var increase = el('button', { class: 'db-qty-btn', type: 'button', text: '+', 'aria-label': 'Increase quantity for ' + line.name });
+		var controls = el('div', { class: 'db-qty-control', role: 'group', 'aria-label': 'Quantity for ' + line.name }, [decrease, qty, increase]);
 
-		var remove = el('button', { class: 'db-link', text: I18N.remove || 'Remove' });
+		function updateQuantity(next) {
+			if (!paymentMutationAllowed()) { return; }
+			next = Math.max(1, Math.min(99, Number(next) || 1));
+			qty.value = String(next);
+			decrease.disabled = true;
+			increase.disabled = true;
+			request('/cart/update', { method: 'POST', body: { key: line.key, quantity: next } })
+				.then(function () { notifyCartChanged(); })
+				.catch(function (err) {
+					dbToast(err.message);
+					qty.value = String(line.quantity);
+					decrease.disabled = false;
+					increase.disabled = false;
+				});
+		}
+		decrease.addEventListener('click', function () { updateQuantity(Number(qty.value) - 1); });
+		increase.addEventListener('click', function () { updateQuantity(Number(qty.value) + 1); });
+		qty.addEventListener('change', function () { updateQuantity(qty.value); });
+
+		var remove = el('button', { class: 'db-link db-cart-remove', type: 'button', text: I18N.remove || 'Remove', 'aria-label': (I18N.remove || 'Remove') + ' ' + line.name });
 		remove.addEventListener('click', function () {
 			request('/cart/remove', { method: 'POST', body: { key: line.key } })
 				.then(function () { notifyCartChanged(); }).catch(function (err) { dbToast(err.message); });
@@ -866,7 +989,7 @@
 				el('strong', { text: line.name }),
 				sub.length ? el('small', { text: sub.join(' · ') }) : null
 			]),
-			qty,
+			controls,
 			el('span', { class: 'db-price', text: money(line.line_total) }),
 			remove
 		]);
@@ -1095,7 +1218,7 @@
 		return { form: form };
 	}
 
-	function checkoutForm(cfg, initialOrderType, getLocationId, initialTotals, onOrderComplete) {
+	function checkoutForm(cfg, initialOrderType, getLocationId, initialTotals, onOrderComplete, onJourneyStep) {
 		// orderType/totals are mutable — update() below can revise them (e.g. the
 		// customer switches pickup/delivery, or the cart total changes) without
 		// recreating this form or its mounted Stripe card Element. The submit
@@ -1107,11 +1230,11 @@
 		var form = el('form', { class: 'db-checkout' });
 		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
 
-		var name = field('text', 'customer_name', 'Name', true);
-		var email = field('email', 'customer_email', 'Email', true);
-		var phone = field('tel', 'customer_phone', 'Phone', true);
-		var address = field('textarea', 'address', 'Delivery address', orderType === 'delivery');
-		var notes = field('textarea', 'notes', 'Notes (optional)', false);
+		var name = field('text', 'customer_name', 'Name', true, { autocomplete: 'name' });
+		var email = field('email', 'customer_email', 'Email', true, { autocomplete: 'email', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false' });
+		var phone = field('tel', 'customer_phone', 'Mobile', true, { autocomplete: 'tel', inputmode: 'tel' });
+		var address = field('textarea', 'address', 'Delivery address', orderType === 'delivery', { autocomplete: 'street-address', rows: '3' });
+		var notes = field('textarea', 'notes', 'Kitchen notes (optional)', false, { rows: '3', placeholder: 'Allergies, dietary needs or preparation notes' });
 
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
@@ -1126,30 +1249,52 @@
 		// its provider-hosted embedded pay form.
 		function payLabelFor(t) {
 			var grandTotal = t && typeof t.total !== 'undefined' ? t.total : 0;
-			if (stripeHosted) { return I18N.continueToPayment || 'Continue to secure payment'; }
+			if (stripeHosted) { return (I18N.continueToPayment || 'Continue to secure payment') + ' · ' + money(grandTotal); }
 			return paying ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
 		}
 		var payLabel = payLabelFor(totals);
 		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
 		var paymentAttemptKey = newPaymentAttemptKey();
+		var summaryType = el('strong', { text: orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup') });
+		var summaryCount = el('span', { text: 'Review your items and total' });
+		var summaryTotal = el('strong', { class: 'db-checkout-summary-total', text: money(totals && totals.total) });
+		var summary = el('div', { class: 'db-checkout-summary', role: 'status' }, [
+			el('div', {}, [
+				el('span', { class: 'db-checkout-summary-label', text: 'Fulfilment' }),
+				summaryType,
+				summaryCount
+			]),
+			el('div', { class: 'db-checkout-summary-price' }, [
+				el('span', { class: 'db-checkout-summary-label', text: 'Order total' }),
+				summaryTotal
+			])
+		]);
 
-		form.appendChild(el('h3', { text: 'Checkout' }));
-		[name, email, phone, address].forEach(function (f) { form.appendChild(f); });
+		form.appendChild(el('div', { class: 'db-checkout-heading' }, [
+			el('p', { class: 'db-order-kicker', text: 'Step 2' }),
+			el('h3', { text: 'Your details' }),
+			el('p', { text: 'We use these details for your receipt and live order updates.' })
+		]));
+		form.appendChild(summary);
+		form.appendChild(el('div', { class: 'db-checkout-fields' }, [name, email, phone]));
+		form.appendChild(address);
 		form.appendChild(notes);
-		form.appendChild(el('div', { class: 'db-checkout-safety', role: 'note' }, [
-			el('strong', { text: 'Before you submit' }),
-			el('ul', {}, [
-				el('li', { text: 'Add any allergy or dietary notes above. Our kitchen handles common allergens, so severe allergies should also be mentioned to staff.' }),
-				el('li', { text: 'Your order can only be changed after the shop confirms it. Paid order changes may need manager approval and payment adjustment.' }),
-				el('li', { text: 'You will receive confirmation and updates by email, and can track with your order number.' })
+		form.appendChild(el('details', { class: 'db-checkout-safety' }, [
+			el('summary', { text: 'Allergies and order changes' }),
+			el('div', {}, [
+				el('p', { text: 'Add allergy or dietary notes above. For severe allergies, also speak with staff before ordering.' }),
+				el('p', { text: 'After the shop confirms an order, changes may need manager approval and a payment adjustment.' })
 			])
 		]));
 
 		if (stripeHosted) {
-			form.appendChild(el('p', {
-				class: 'db-cardfield db-stripe-checkout-notice',
-				text: 'Card and wallet details will be entered securely on Stripe Checkout.'
-			}));
+			form.appendChild(el('div', { class: 'db-stripe-checkout-notice', role: 'note' }, [
+				el('span', { class: 'db-secure-lock', 'aria-hidden': 'true', text: '⌁' }),
+				el('div', {}, [
+					el('strong', { text: 'Secure checkout powered by Stripe' }),
+					el('span', { text: 'Card details stay on Stripe. Eligible Apple Pay and Google Pay wallets appear automatically on supported devices.' })
+				])
+			]));
 		}
 
 		// Tyro Connect: hosted payment form and automatic 3DS.
@@ -1170,7 +1315,13 @@
 		}
 
 		form.appendChild(submit);
+		form.appendChild(el('p', { class: 'db-submit-note', text: paying
+			? 'You will review the final amount before payment. One payment creates one order.'
+			: 'Submitting places this order with the selected shop.' }));
 		form.appendChild(msg);
+		form.addEventListener('focusin', function () {
+			if (onJourneyStep && !paymentMutationLock) { onJourneyStep(2); }
+		});
 		trackCommerce('begin_checkout', {
 			currency: 'AUD',
 			value: Number(totals && totals.total || 0),
@@ -1187,6 +1338,8 @@
 
 		function fail(err) {
 			setPaymentMutationLock(false);
+			form.setAttribute('aria-busy', 'false');
+			if (onJourneyStep) { onJourneyStep(2); }
 			msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
 			msg.className = 'db-checkout-msg db-error';
 			submit.disabled = false;
@@ -1202,28 +1355,49 @@
 				checkoutAttemptId = null;
 				checkoutPaymentId = null;
 				setPaymentMutationLock(false);
+				form.setAttribute('aria-busy', 'false');
+				if (onJourneyStep) { onJourneyStep(4); }
 				// Capture the parent BEFORE clearing it: clearing via innerHTML
 				// detaches `form` from the document, which nulls form.parentNode —
 				// re-reading form.parentNode afterwards to append the confirmation
 				// would throw against null.
 				var parent = form.parentNode;
 				parent.innerHTML = '';
-				var confirmation = el('div', { class: 'db-confirm' }, [
+				var confirmation = el('div', { class: 'db-confirm', role: 'status', 'aria-live': 'polite' }, [
 					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
-					el('h3', { text: 'Order received' }),
-					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
+					el('p', { class: 'db-order-kicker', text: paying ? 'Payment confirmed' : 'Order confirmed' }),
+					el('h3', { text: 'Your order is in' }),
+					el('p', { text: 'Keep this order number for live updates.' })
 				]);
+				var orderNumber = el('strong', { class: 'db-confirm-number', text: res.order_number || '' });
+				var copyNumber = el('button', { class: 'db-link db-confirm-copy', type: 'button', text: 'Copy number' });
+				copyNumber.addEventListener('click', function () {
+					var copied = window.navigator && window.navigator.clipboard && window.navigator.clipboard.writeText
+						? window.navigator.clipboard.writeText(String(res.order_number || ''))
+						: Promise.reject(new Error('Clipboard unavailable'));
+					copied.then(function () {
+						copyNumber.textContent = 'Copied';
+						dbToast('Order number copied', true);
+					}).catch(function () {
+						copyNumber.textContent = 'Select and copy the number';
+					});
+				});
+				confirmation.appendChild(el('div', { class: 'db-confirm-number-wrap' }, [orderNumber, copyNumber]));
 				if (res.table_label) {
 					confirmation.appendChild(el('p', { class: 'db-table-context', text: 'Dine in · ' + (res.location_name ? res.location_name + ' · ' : '') + 'Table ' + res.table_label + ' · We will bring it to you.' }));
 				}
-				confirmation.appendChild(el('p', { text: 'The shop has not accepted it yet. We will email confirmation and meaningful updates to the address used at checkout.' }));
-				confirmation.appendChild(el('p', { text: 'You can also track it at any time using this order number and the same email address.' }));
-				confirmation.appendChild(el('p', { text: (paying ? 'Paid: ' : 'Total: ') + money(res.total) }));
+				confirmation.appendChild(el('div', { class: 'db-confirm-facts' }, [
+					el('span', {}, [el('small', { text: 'Status' }), el('strong', { text: 'Sent to the shop' })]),
+					el('span', {}, [el('small', { text: 'Payment' }), el('strong', { text: paying ? 'Paid' : 'Pay at shop' })]),
+					el('span', {}, [el('small', { text: 'Total' }), el('strong', { text: money(res.total) })])
+				]));
+				confirmation.appendChild(el('p', { class: 'db-confirm-next', text: 'The shop will accept your order next. We will email meaningful updates, or you can follow the live tracker.' }));
 				var tracker = document.querySelector('[data-doughboss-tracking]');
+				var confirmActions = el('div', { class: 'db-confirm-actions' });
 				if (res.tracking_url) {
-					confirmation.appendChild(el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' }));
+					confirmActions.appendChild(el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' }));
 				} else if (tracker) {
-					confirmation.appendChild(el('a', {
+					confirmActions.appendChild(el('a', {
 						class: 'db-btn db-btn--track',
 						href: '#track-order',
 						text: 'Track this order',
@@ -1235,6 +1409,7 @@
 						}
 					}));
 				}
+				confirmation.appendChild(confirmActions);
 				var review = el('div', { class: 'db-review-invite' });
 				review.appendChild(el('strong', { text: 'Stay close to the bake.' }));
 				review.appendChild(el('span', { text: 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.' }));
@@ -1281,6 +1456,8 @@
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
 			submit.disabled = true;
+			form.setAttribute('aria-busy', 'true');
+			if (onJourneyStep) { onJourneyStep(paying ? 3 : 2); }
 			msg.textContent = '';
 			msg.className = 'db-checkout-msg';
 
@@ -1405,8 +1582,12 @@
 					checkoutAttemptId = stripePending.checkoutAttemptId;
 					stripePending.payload.payment_intent_id = returnedSession;
 					setPaymentMutationLock(true);
+					form.setAttribute('aria-busy', 'true');
+					if (onJourneyStep) { onJourneyStep(3); }
 					submit.disabled = true;
 					submit.textContent = 'Verifying Stripe payment...';
+					msg.textContent = 'Payment received. We are securely matching it to your order—please keep this page open.';
+					msg.className = 'db-checkout-msg db-payment-verifying';
 					placeOrder(stripePending.payload).then(function () {
 						window.sessionStorage.removeItem('doughbossStripePending');
 						var cleanStripeUrl = new URL(window.location.href);
@@ -1419,6 +1600,8 @@
 			} else if (stripeReturnParams.get('doughboss_stripe_cancel') === '1') {
 				window.sessionStorage.removeItem('doughbossStripePending');
 				setPaymentMutationLock(false);
+				form.setAttribute('aria-busy', 'false');
+				if (onJourneyStep) { onJourneyStep(2); }
 				paymentAttemptKey = newPaymentAttemptKey();
 				var cancelledStripeUrl = new URL(window.location.href);
 				cancelledStripeUrl.searchParams.delete('doughboss_stripe_cancel');
@@ -1440,6 +1623,8 @@
 				var returnedOrder = returnParams.get('doughboss_mpgs_order') || '';
 				if (pending && pending.orderId === returnedOrder && pending.payload && (Date.now() - Number(pending.savedAt || 0)) < 30 * 60 * 1000) {
 					checkoutAttemptId = pending.checkoutAttemptId;
+					form.setAttribute('aria-busy', 'true');
+					if (onJourneyStep) { onJourneyStep(3); }
 					submit.disabled = true;
 					submit.textContent = 'Verifying Mastercard payment…';
 					placeOrder(pending.payload).then(function () {
@@ -1464,6 +1649,10 @@
 			var addrInput = address.querySelector('input,textarea');
 			if (addrInput) { addrInput.required = orderType === 'delivery'; }
 			payLabel = payLabelFor(totals);
+			summaryType.textContent = orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup');
+			var itemCount = Number(totals && (totals.item_count || totals.quantity) || 0);
+			summaryCount.textContent = itemCount ? itemCount + (itemCount === 1 ? ' item' : ' items') : 'Review your items and total';
+			summaryTotal.textContent = money(totals && totals.total);
 			// Do not replace an in-flight payment or order confirmation label.
 			if (!submit.disabled) { submit.textContent = payLabel; }
 		}
@@ -1482,12 +1671,18 @@
 		return safe.toString();
 	}
 
-	function field(type, nameAttr, label, required) {
+	function field(type, nameAttr, label, required, attributes) {
 		var input = type === 'textarea'
 			? el('textarea', { name: nameAttr })
 			: el('input', { type: type, name: nameAttr });
+		Object.keys(attributes || {}).forEach(function (key) {
+			input.setAttribute(key, attributes[key]);
+		});
 		if (required) { input.required = true; }
-		return el('label', { class: 'db-field' }, [el('span', { text: label }), input]);
+		return el('label', { class: 'db-field' }, [
+			el('span', { text: label + (required ? ' *' : '') }),
+			input
+		]);
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -1519,6 +1714,8 @@
 		var form = root.querySelector('.db-track-form');
 		var result = root.querySelector('.db-track-result');
 		if (!form) { return; }
+		var lookupButton = form.querySelector('button[type="submit"]');
+		var lookupLabel = lookupButton ? lookupButton.textContent : 'Check live status';
 
 		// Email links prefill only the non-sensitive order number. The customer
 		// must still type the matching checkout email, preserving the endpoint's
@@ -1646,9 +1843,15 @@
 
 		function renderOrder(order) {
 			result.innerHTML = '';
-			var card = el('div', { class: 'db-track-card' }, [
-				el('h4', { text: 'Order ' + order.order_number }),
-				el('p', { class: 'db-status-badge', text: order.customer_status_label || order.status_label || order.status })
+			var service = order.order_type === 'delivery' ? 'Delivery' : (order.order_type === 'dine_in' ? 'Dine in' : 'Pickup');
+			var card = el('article', { class: 'db-track-card' }, [
+				el('div', { class: 'db-track-card-head' }, [
+					el('div', {}, [
+						el('span', { class: 'db-track-service', text: service }),
+						el('h4', { text: 'Order ' + order.order_number })
+					]),
+					el('p', { class: 'db-status-badge', text: order.customer_status_label || order.status_label || order.status })
+				])
 			]);
 			if (order.status === 'cancelled') {
 				var cancelled = el('p', { class: 'db-track-cancelled', text: 'This order was cancelled' });
@@ -1680,6 +1883,10 @@
 			card.appendChild(items);
 			card.appendChild(el('p', { text: 'Total: ' + money(order.total) }));
 			card.appendChild(buildPaymentHint(order));
+			card.appendChild(el('p', {
+				class: 'db-track-checked',
+				text: 'Live status checked ' + new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date()) + ' · updates automatically'
+			}));
 			result.appendChild(card);
 
 			// Terminal states: stop polling for good.
@@ -1701,6 +1908,11 @@
 			var email = form.email.value.trim();
 			var lookup = { number: number, email: email };
 			var key = number + '\n' + email.toLowerCase();
+			form.setAttribute('aria-busy', 'true');
+			if (lookupButton) {
+				lookupButton.disabled = true;
+				lookupButton.textContent = 'Checking live status…';
+			}
 
 			request('/order/track', { method: 'POST', body: lookup })
 				.then(function (order) {
@@ -1713,6 +1925,13 @@
 				.catch(function (err) {
 					result.innerHTML = '';
 					result.appendChild(el('p', { class: 'db-error', text: err.message }));
+				})
+				.then(function () {
+					form.setAttribute('aria-busy', 'false');
+					if (lookupButton) {
+						lookupButton.disabled = false;
+						lookupButton.textContent = lookupLabel;
+					}
 				});
 		});
 	}

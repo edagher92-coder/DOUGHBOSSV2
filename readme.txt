@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.27.0
+Stable tag: 2.28.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,11 +44,13 @@ Everything is rendered through shortcodes and a small REST API; no theme changes
 = Does this process payments? =
 
 Optionally. Orders are always recorded and the store is notified — DoughBoss
-suits "order now, pay on pickup/delivery" out of the box. Stripe Payment
-Element is also built in for Visa, Mastercard and eligible Apple Pay or Google
-Pay wallets. It can be switched on under **DoughBoss → Settings → Payments**
-(off by default); once configured, the payment and final order total are
-verified server-side before the order is accepted.
+suits "order now, pay on pickup/delivery" out of the box. Storefront card
+payments redirect to Stripe-hosted Checkout for Visa, Mastercard and eligible
+Apple Pay or Google Pay wallets; Stripe automatically presents supported
+wallets using its own secure interface. Catering uses Stripe Payment Element.
+Payments can be switched on under **DoughBoss → Settings → Payments** (off by
+default); once configured, the payment and final order total are verified
+server-side before the order is accepted.
 
 Tyro Connect Pay is also available as a **pre-final, disabled-by-default**
 integration. It needs Tyro-provided sandbox credentials, a confirmed per-shop
@@ -67,6 +69,13 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.28.0 =
+* Redesign the complete storefront journey from menu search and category navigation through touch-friendly cart controls, customer details, Stripe payment return, confirmation and live tracking.
+* Add an accessible three-step order progress guide, responsive two-column checkout, clearer fulfilment/total summary and payment verification state.
+* Keep Apple Pay and Google Pay provider-owned in Stripe-hosted Checkout so eligible wallets are surfaced automatically, with cards as the universal fallback.
+* Add a customer-safe order confirmation handoff with copyable order number, payment/status/total facts and a prominent tracker action.
+* Improve mobile autofill, required-field labels, allergy guidance, live tracking feedback and reduced-motion behaviour.
 
 = 2.27.0 =
 * Storefront Stripe payments now redirect to a unique Stripe-hosted Checkout Session for each immutable cart.

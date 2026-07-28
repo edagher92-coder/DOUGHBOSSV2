@@ -43,7 +43,7 @@ test('UPLIFT-1 cart cue preserves scoped reduced-motion behaviour', function () 
 
 test('connected WordPress menu is contained and ordered like the approved demo', function () {
 	assert.match(client, /preferredCategories = \['Manoush', 'Pizza', 'Pies', 'Wraps', 'Desserts', 'Drinks'\]/);
-	assert.match(css, /repeat\(auto-fit, minmax\(min\(220px, 100%\), 1fr\)\)/);
+	assert.match(css, /repeat\(auto-fill, minmax\(min\(220px, 100%\), 1fr\)\)/);
 	assert.match(css, /@media \(max-width: 640px\)/);
 	assert.match(css, /\.db-app\.db-menu \{/);
 	assert.match(css, /\.db-app \{[\s\S]*?box-sizing: border-box/);
@@ -60,6 +60,32 @@ test('small-screen cart, voucher and tracking controls remain usable', function 
 	assert.match(css, /@media \(max-width: 360px\)[\s\S]*?\.db-stage-tracker/);
 	assert.match(css, /\.db-app\.db-menu--has-cart-fab \{ padding-bottom: calc\(84px/);
 	assert.match(css, /\.db-app \.db-jump \{[\s\S]*?min-height: 44px/);
+});
+
+test('UPLIFT-2 guides the complete menu, checkout, payment and tracking journey', function () {
+	assert.match(client, /class: 'db-menu-search'/);
+	assert.match(client, /function orderJourney\(\)/);
+	assert.match(client, /labels = \['Review order', 'Your details', 'Secure payment'\]/);
+	assert.match(client, /class: 'db-qty-control'/);
+	assert.match(client, /class: 'db-checkout-summary'/);
+	assert.match(client, /Secure checkout powered by Stripe/);
+	assert.match(client, /class: 'db-confirm-number-wrap'/);
+	assert.match(client, /class: 'db-confirm-facts'/);
+	assert.match(client, /Payment received\. We are securely matching it to your order/);
+	assert.match(client, /updates automatically/);
+	assert.match(css, /\.db-order-shell \{[\s\S]*?grid-template-columns/);
+	assert.match(css, /\.db-checkout-region \{[\s\S]*?position: sticky/);
+	assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.db-order-shell/);
+	assert.match(css, /@media \(max-width: 560px\)[\s\S]*?\.db-checkout-fields/);
+});
+
+test('UPLIFT-2 customer fields use mobile-friendly browser autofill', function () {
+	assert.match(client, /customer_name', 'Name', true, \{ autocomplete: 'name' \}/);
+	assert.match(client, /customer_email', 'Email', true, \{ autocomplete: 'email'/);
+	assert.match(client, /customer_phone', 'Mobile', true, \{ autocomplete: 'tel', inputmode: 'tel' \}/);
+	assert.match(client, /address', 'Delivery address'[\s\S]{0,120}?autocomplete: 'street-address'/);
+	assert.match(shortcodes, /Check live status/);
+	assert.match(shortcodes, /autocomplete="email"/);
 });
 
 test('specialist assets are not loaded by the broad storefront filter', function () {
