@@ -16,6 +16,9 @@ require_once $plugin . '/includes/class-doughboss-table-qr.php';
 require_once $plugin . '/includes/class-doughboss-stripe.php';
 require_once $plugin . '/includes/class-doughboss-tyro.php';
 require_once $plugin . '/includes/class-doughboss-payment.php';
+require_once $plugin . '/includes/class-doughboss-payment-attempts.php';
+require_once $plugin . '/includes/class-doughboss-checkout-snapshots.php';
+require_once $plugin . '/includes/class-doughboss-voucher.php';
 require_once $plugin . '/includes/class-doughboss-rest-controller.php';
 
 global $wpdb;
@@ -208,6 +211,59 @@ $payment_ids = array_unique( array_map( static function ( $row ) { return isset(
 $payment_replays = array_values( array_filter( $runtime_payment, static function ( $row ) { return ! empty( $row['replayed'] ); } ) );
 checkout_db_ok( 1 === count( array_filter( $payment_ids ) ) && 1 === count( $payment_replays ) && 'payment_intent_id' === $payment_replays[0]['replayed_by'], 'Order::create replays the payment owner for different checkout keys' );
 checkout_db_ok( 1 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$orders} WHERE customer_email = 'race-payment@example.test'" ), 'same-payment runtime race stores one order' );
+
+// A paid Stripe event can build the complete order from the immutable server
+// snapshot even when the browser never returns from hosted Checkout.
+$recovery_key = hash( 'sha256', 'stripe-browser-close-recovery' );
+$recovery_pi  = 'pi_runtime_webhook_recovery_123';
+$recovery_data = array(
+	'order_type' => 'pickup', 'location_id' => $location_id, 'table_id' => 0, 'table_label' => '',
+	'table_qr_code_id' => 0, 'table_session_id' => 0, 'order_source' => 'web',
+	'customer_name' => 'Webhook Recovery', 'customer_email' => 'webhook-recovery@example.test',
+	'customer_phone' => '0400000002', 'address' => '', 'notes' => 'Browser closed',
+	'subtotal' => 3.50, 'tax' => 0.32, 'delivery_fee' => 0, 'total' => 3.50,
+	'discount' => 0, 'voucher_code' => '', 'currency' => 'AUD', 'checkout_key' => $recovery_key,
+);
+$recovery_lines = array(
+	array( 'item_id' => 1, 'name' => 'Spring Water', 'size' => '', 'toppings' => array(), 'quantity' => 1, 'unit_price' => 3.50, 'line_total' => 3.50 ),
+);
+$stored_snapshot = DoughBoss_Checkout_Snapshots::store( $recovery_key, array( 'order' => $recovery_data, 'lines' => $recovery_lines ) );
+$stored_attempt = DoughBoss_Payment_Attempts::create_or_find(
+	array(
+		'attempt_key' => hash( 'sha256', 'stripe-checkout|' . $recovery_key ),
+		'checkout_key' => $recovery_key,
+		'provider' => 'stripe',
+		'purpose' => 'order',
+		'context' => 'web',
+		'location_id' => $location_id,
+		'amount_minor' => 350,
+		'currency' => 'AUD',
+		'status' => 'processing',
+	)
+);
+$recovery_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
+$recovery_method = new ReflectionMethod( DoughBoss_REST_Controller::class, 'recover_stripe_order' );
+$recovery_method->setAccessible( true );
+$recovery_result = $recovery_method->invoke(
+	$recovery_controller,
+	$recovery_pi,
+	array( 'id' => $recovery_pi, 'amount_received' => 350, 'currency' => 'aud' ),
+	array( 'checkout_key' => $recovery_key, 'purpose' => 'order', 'context' => 'web' )
+);
+$recovery_replay = $recovery_method->invoke(
+	$recovery_controller,
+	$recovery_pi,
+	array( 'id' => $recovery_pi, 'amount_received' => 350, 'currency' => 'aud' ),
+	array( 'checkout_key' => $recovery_key, 'purpose' => 'order', 'context' => 'web' )
+);
+$recovered_order_id = DoughBoss_Order::find_id_by_payment_intent( $recovery_pi );
+$recovered_order = DoughBoss_Order::get( $recovered_order_id );
+$completed_snapshot = DoughBoss_Checkout_Snapshots::find( $recovery_key );
+checkout_db_ok( is_array( $stored_snapshot ) && is_array( $stored_attempt ), 'server stores the immutable paid-order recovery inputs before Stripe redirect' );
+checkout_db_ok( true === $recovery_result && true === $recovery_replay, 'signed payment recovery and its replay both finish safely' );
+checkout_db_ok( $recovered_order && 'paid' === $recovered_order->payment_status && 'stripe' === $recovered_order->payment_method && 3.50 === (float) $recovered_order->total, 'browser-close recovery creates one correctly paid order' );
+checkout_db_ok( 1 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$orders} WHERE payment_intent_id = %s", $recovery_pi ) ), 'webhook replay cannot duplicate the paid order' );
+checkout_db_ok( 1 === count( DoughBoss_Order::get_items( $recovered_order_id ) ) && $completed_snapshot && 'completed' === $completed_snapshot['status'] && $recovered_order_id === (int) $completed_snapshot['order_id'], 'recovered order has its kitchen line and completed snapshot link' );
 
 // Historical duplicate paid orders fail closed and remain untouched.
 checkout_db_sql( "ALTER TABLE {$orders} DROP INDEX checkout_key, DROP INDEX payment_intent_id, DROP COLUMN checkout_key" );
