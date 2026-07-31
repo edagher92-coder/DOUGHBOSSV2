@@ -339,8 +339,11 @@
 	/* ------------------------------------------------------------------ */
 
 	function renderMenu(root) {
-		request('/menu').then(function (items) {
+		Promise.all([request('/menu'), getConfig()]).then(function (results) {
+			var items = results[0];
+			var orderingOpen = !!results[1].ordering_open;
 			root.innerHTML = '';
+			root.setAttribute('data-ordering-open', orderingOpen ? 'true' : 'false');
 			var tableContext = activeTableContext();
 			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!items.length) {
@@ -415,7 +418,7 @@
 				var heading = el('h3', { class: 'db-category', id: catId(category), text: category });
 				var grid = el('div', { class: 'db-grid', 'aria-labelledby': catId(category) });
 				groups[category].forEach(function (item) {
-					var card = menuCard(item);
+					var card = menuCard(item, orderingOpen);
 					card.setAttribute('data-search-text', String(item.name || '') + ' ' + String(item.description || '') + ' ' + category);
 					// Cap the stagger so a long menu never delays the last card by
 					// seconds; the entrance still reads as a lively cascade.
@@ -450,16 +453,21 @@
 					: items.length + (items.length === 1 ? ' item' : ' items');
 				root.classList.toggle('db-menu--searching', !!query);
 			});
+			initCartFab(root);
 		}).catch(function (err) {
 			root.innerHTML = '';
 			root.appendChild(el('p', { class: 'db-error', text: err.message }));
 		});
-		initCartFab(root);
 	}
 
 	// The cart remains server-owned. This small fixed cue deliberately navigates
 	// to the existing cart shortcode rather than duplicating checkout in a drawer.
 	function initCartFab(root) {
+		var orderingOpen = root.getAttribute('data-ordering-open') !== 'false';
+		if (!orderingOpen) {
+			root.classList.remove('db-menu--has-cart-fab');
+			return;
+		}
 		var cartUrl = root.getAttribute('data-cart-url') || '';
 		var cartRoot = document.querySelector('[data-doughboss-cart]');
 		var fab = el('a', { class: 'db-cart-fab', href: cartUrl || '#doughboss-cart' });
@@ -518,7 +526,7 @@
 		document.addEventListener('doughboss:cart-updated', function () { update(true); });
 	}
 
-	function menuCard(item) {
+	function menuCard(item, orderingOpen) {
 		var soldOut = item.available === false;
 		var options = Array.isArray(item.options) ? item.options : [];
 		var selections = {};
@@ -550,6 +558,12 @@
 
 		function optionControls() {
 			if (!options.length) { return null; }
+			if (!orderingOpen) {
+				return el('p', {
+					class: 'db-card-customize-note',
+					text: I18N.customizationAvailable || 'Customise when ordering opens'
+				});
+			}
 			var controls = el('div', { class: 'db-menu-options' });
 			options.forEach(function (group, groupIndex) {
 				var choices = Array.isArray(group.choices) ? group.choices : [];
@@ -558,7 +572,7 @@
 				var fieldset = el('fieldset', { class: 'db-menu-option-group' });
 				fieldset.appendChild(el('legend', { text: group.label || 'Options' }));
 				choices.forEach(function (choice, choiceIndex) {
-					var input = el('input', { type: group.type === 'check' ? 'checkbox' : 'radio', name: 'db-option-' + item.id + '-' + groupIndex, value: choice.slug });
+					var input = el('input', { type: group.type === 'check' ? 'checkbox' : 'radio', name: 'db-option-' + item.id + '-' + groupIndex, value: choice.slug, disabled: !orderingOpen });
 					input.checked = group.type === 'radio' ? choiceIndex === choices.indexOf(defaultChoice || choices[0]) : false;
 					input.addEventListener('change', function () {
 						var values = selections[group.id] || [];
@@ -572,7 +586,10 @@
 				});
 				controls.appendChild(fieldset);
 			});
-			return controls;
+			return el('details', { class: 'db-menu-customize' }, [
+				el('summary', { text: I18N.customize || 'Customize' }),
+				controls
+			]);
 		}
 
 		var media = item.image
@@ -585,6 +602,14 @@
 		var action;
 		if (soldOut) {
 			action = el('button', { class: 'db-btn', type: 'button', text: I18N.soldOut || 'Sold out', disabled: true });
+		} else if (!orderingOpen) {
+			action = el('button', {
+				class: 'db-btn db-btn--coming-soon',
+				type: 'button',
+				text: I18N.comingSoonShort || 'Coming soon',
+				disabled: true,
+				'aria-label': (I18N.orderingComingSoon || 'Online ordering coming soon') + ': ' + item.name
+			});
 		} else {
 			action = el('button', {
 				class: 'db-btn',

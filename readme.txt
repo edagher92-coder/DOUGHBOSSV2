@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.29.2
+Stable tag: 2.30.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.30.0 =
+* Integrates the approved dark-hero and wide cream-panel demo presentation directly into the WordPress Order Online page without changing the active theme or payment engine.
+* Adds reversible menu-card blowout motion while scrolling up and down, with a no-motion accessibility path.
+* Turns Coming Soon into a true browse-only state: products and prices remain visible while add-to-cart, custom builder, cart and checkout controls remain unavailable.
+* Keeps all styling and motion isolated to pages containing the complete DoughBoss menu-and-cart shortcode journey.
 
 = 2.29.2 =
 * Treats a webhook-first Stripe completion as an idempotent browser replay, returning the one existing order confirmation instead of a misleading "payment already used" error.

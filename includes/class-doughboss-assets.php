@@ -37,6 +37,39 @@ class DoughBoss_Assets {
 	 */
 	public function init() {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue' ) );
+		add_filter( 'body_class', array( $this, 'body_classes' ) );
+	}
+
+	/**
+	 * Whether the current page is the complete DoughBoss ordering journey.
+	 *
+	 * A shortcode-based check keeps this portable when the Order page receives a
+	 * different numeric ID on staging, production or a future franchise site.
+	 *
+	 * @return bool
+	 */
+	private function is_order_page() {
+		return $this->current_post_has( 'doughboss_menu' )
+			&& $this->current_post_has( 'doughboss_cart' );
+	}
+
+	/**
+	 * Add narrowly scoped storefront classes for the integrated order page.
+	 *
+	 * @param string[] $classes Existing WordPress body classes.
+	 * @return string[]
+	 */
+	public function body_classes( $classes ) {
+		if ( ! $this->is_order_page() ) {
+			return $classes;
+		}
+
+		$classes[] = 'doughboss-order-page';
+		if ( ! DoughBoss_Settings::ordering_open() ) {
+			$classes[] = 'doughboss-ordering-closed';
+		}
+
+		return array_values( array_unique( $classes ) );
 	}
 
 	/**
@@ -117,6 +150,16 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION
 		);
 
+		$is_order_page = $this->is_order_page();
+		if ( $is_order_page ) {
+			wp_enqueue_style(
+				'doughboss-order-page',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-order-page.css',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION
+			);
+		}
+
 		/*
 		 * Consent-gated measurement bridge. It contains no tracker IDs, customer
 		 * data or vendor network calls by default. A consent manager must call
@@ -186,6 +229,16 @@ class DoughBoss_Assets {
 			true
 		);
 
+		if ( $is_order_page ) {
+			wp_enqueue_script(
+				'doughboss-order-page',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-order-page.js',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
 		wp_localize_script(
 			'doughboss',
 			'DoughBossData',
@@ -212,6 +265,9 @@ class DoughBoss_Assets {
 					'menuCategories' => __( 'Menu categories', 'doughboss' ),
 					'viewCart'     => __( 'View cart', 'doughboss' ),
 					'cartItems'    => __( 'items', 'doughboss' ),
+					'customize'    => __( 'Customize', 'doughboss' ),
+					'customizationAvailable' => __( 'Customise when ordering opens', 'doughboss' ),
+					'comingSoonShort' => __( 'Coming soon', 'doughboss' ),
 					'emptyCart'    => __( 'Your cart is empty.', 'doughboss' ),
 					'remove'       => __( 'Remove', 'doughboss' ),
 					'subtotal'     => __( 'Subtotal', 'doughboss' ),

@@ -1,0 +1,396 @@
+/**
+ * Demo-parity presentation for the complete WordPress Order Online page.
+ *
+ * Everything is scoped to the body class added by DoughBoss_Assets. This lets
+ * the ordering experience escape a legacy theme's narrow/purple page wrapper
+ * without changing any other page or replacing the active site theme.
+ */
+
+body.doughboss-order-page {
+	--db-order-ink: #11100f;
+	--db-order-paper: #f7f5f0;
+	--db-order-ember: #e23a23;
+	margin: 0 !important;
+	background: var(--db-order-ink) !important;
+	color: var(--db-order-ink);
+	overflow-x: clip;
+}
+
+body.doughboss-order-page #masthead,
+body.doughboss-order-page .cd-side-nav,
+body.doughboss-order-page .pagelogowrap,
+body.doughboss-order-page #colophon {
+	display: none !important;
+}
+
+body.doughboss-order-page #page,
+body.doughboss-order-page .cd-main-content,
+body.doughboss-order-page .cd-content-wrapper,
+body.doughboss-order-page article,
+body.doughboss-order-page .bgcontent {
+	display: block !important;
+	width: 100% !important;
+	max-width: none !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	transform: none !important;
+}
+
+body.doughboss-order-page .cd-main-content {
+	min-height: 100vh;
+}
+
+body.doughboss-order-page .bgcontent {
+	position: relative;
+	overflow: clip;
+	text-align: left !important;
+	background:
+		linear-gradient(90deg, rgba(10, 9, 8, .92) 0%, rgba(10, 9, 8, .78) 48%, rgba(10, 9, 8, .58) 100%),
+		url('../images/doughboss-hero-premium-v1.webp') 64% 43% / cover no-repeat !important;
+}
+
+body.doughboss-order-page .bgcontent::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	height: 360px;
+	pointer-events: none;
+	background:
+		radial-gradient(circle at 50% 0%, rgba(255, 255, 255, .08), transparent 42%),
+		linear-gradient(180deg, rgba(255, 255, 255, .025), transparent 65%);
+}
+
+body.doughboss-order-page .bgheader {
+	position: relative;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	align-content: center;
+	min-height: clamp(300px, 34vw, 420px);
+	width: 100% !important;
+	margin: 0 !important;
+	padding: 44px 24px 120px !important;
+	color: #fff !important;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif !important;
+	font-size: clamp(3.4rem, 7.4vw, 6.5rem) !important;
+	font-weight: 400 !important;
+	line-height: .9 !important;
+	letter-spacing: .025em;
+	text-align: center;
+	text-transform: uppercase;
+	text-shadow: 0 5px 24px rgba(0, 0, 0, .38);
+}
+
+body.doughboss-order-page .bgheader::before {
+	content: "DOUGH BOSS · REVESBY";
+	display: block;
+	margin-bottom: 14px;
+	color: rgba(255, 255, 255, .78);
+	font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	font-size: .72rem;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: .22em;
+}
+
+body.doughboss-order-page .bgtext {
+	position: relative;
+	z-index: 2;
+	width: min(1740px, calc(100% - clamp(28px, 8vw, 156px))) !important;
+	max-width: none !important;
+	margin: -76px auto 0 !important;
+	padding: clamp(28px, 3.6vw, 60px) !important;
+	border-radius: 28px 28px 0 0;
+	background: var(--db-order-paper) !important;
+	box-shadow: 0 -16px 52px rgba(0, 0, 0, .2);
+	color: var(--db-order-ink) !important;
+	font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+	font-size: 16px !important;
+	line-height: 1.5;
+	text-align: left !important;
+}
+
+body.doughboss-order-page .bgtext > .db-app + .db-app {
+	margin-top: 28px;
+}
+
+body.doughboss-order-page .db-ordering-status {
+	width: min(760px, calc(100% - 24px));
+	margin: -112px auto 30px !important;
+	padding: 19px 24px;
+	border: 1px solid rgba(17, 16, 15, .1);
+	border-top: 4px solid var(--db-order-ember);
+	border-left-width: 1px;
+	border-radius: 18px;
+	background: #fff;
+	box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+	text-align: center;
+}
+
+body.doughboss-order-page .db-ordering-status strong {
+	color: var(--db-order-ink);
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: clamp(1.8rem, 4vw, 2.5rem);
+	font-weight: 400;
+	letter-spacing: .035em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+body.doughboss-order-page .db-ordering-status p {
+	max-width: 56ch;
+	margin: 8px auto 0;
+	color: #635d55;
+	font-size: .96rem;
+}
+
+body.doughboss-order-page .db-shop-picker {
+	display: flex;
+	justify-content: center;
+}
+
+body.doughboss-order-page .db-shop {
+	width: min(470px, 100%);
+	max-width: none;
+	align-items: center;
+	padding: 18px 24px;
+	border: 1px solid rgba(17, 16, 15, .1);
+	border-radius: 18px;
+	box-shadow: 0 10px 28px rgba(31, 24, 18, .1);
+	text-align: center;
+}
+
+body.doughboss-order-page .db-shop-name {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.45rem;
+	font-weight: 400;
+	letter-spacing: .035em;
+	text-transform: uppercase;
+}
+
+body.doughboss-order-page .db-shop-info {
+	font-size: .9rem;
+}
+
+body.doughboss-order-page .db-app.db-menu {
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+body.doughboss-order-page .db-menu-tools {
+	top: var(--wp-admin--admin-bar--height, 0px);
+	padding: .8rem;
+	border-color: rgba(17, 16, 15, .09);
+	background: rgba(247, 245, 240, .94);
+}
+
+body.doughboss-order-page .db-category {
+	margin: clamp(2rem, 4vw, 3.5rem) 0 1.1rem;
+	padding: 0;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: clamp(2rem, 4vw, 3rem);
+	font-weight: 400;
+	letter-spacing: .035em;
+	line-height: 1;
+	text-align: center;
+	text-transform: uppercase;
+}
+
+body.doughboss-order-page .db-category::after {
+	left: 0;
+	right: 0;
+	bottom: -13px;
+	width: 52px;
+	height: 4px;
+	margin-inline: auto;
+	background: var(--db-order-ink);
+}
+
+body.doughboss-order-page .db-grid {
+	grid-template-columns: repeat(auto-fill, minmax(min(235px, 100%), 1fr));
+	gap: clamp(16px, 1.6vw, 26px);
+}
+
+body.doughboss-order-page .db-card {
+	border: 1px solid rgba(17, 16, 15, .08);
+	border-radius: 20px;
+	box-shadow: 0 8px 24px rgba(31, 24, 18, .08);
+}
+
+body.doughboss-order-page .db-card-img {
+	aspect-ratio: 4 / 3;
+	min-height: 0;
+	background-position: center;
+	transform-origin: 50% 56%;
+	transition: transform 760ms cubic-bezier(.2, .82, .2, 1),
+		filter 560ms ease;
+}
+
+body.doughboss-order-page .db-card-body h4 {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.55rem;
+	font-weight: 400;
+	letter-spacing: .025em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+body.doughboss-order-page .db-card-desc {
+	font-size: .9rem;
+}
+
+body.doughboss-order-page .db-price {
+	color: var(--db-order-ember);
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.55rem;
+	font-weight: 400;
+}
+
+body.doughboss-order-page .db-btn--coming-soon {
+	min-height: 42px;
+	padding-inline: 1rem;
+	background: #e8e3db;
+	color: #5e5851;
+	font-size: .86rem;
+	text-transform: uppercase;
+	opacity: 1;
+}
+
+body.doughboss-order-page.doughboss-ordering-closed .db-builder,
+body.doughboss-order-page.doughboss-ordering-closed .db-cart {
+	display: none !important;
+}
+
+/* Reversible viewport motion: cards arrive from below while scrolling down,
+ * then leave upward; scrolling back reverses both states. JavaScript only adds
+ * the motion body class when IntersectionObserver and normal motion are present. */
+body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-ready="1"] {
+	animation: none !important;
+	opacity: .12;
+	transform: translate3d(0, 54px, 0) scale(.84) rotateX(5deg);
+	filter: saturate(.65);
+	transition:
+		opacity 520ms ease,
+		transform 760ms cubic-bezier(.2, .86, .2, 1),
+		filter 520ms ease,
+		box-shadow 260ms ease;
+	will-change: opacity, transform;
+}
+
+body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] {
+	opacity: .08;
+	transform: translate3d(0, -48px, 0) scale(1.08) rotateX(-4deg);
+	filter: saturate(.72);
+}
+
+body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible {
+	opacity: 1;
+	transform: translate3d(0, 0, 0) scale(1) rotateX(0);
+	filter: none;
+}
+
+body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="below"] .db-card-img {
+	transform: scale(.78) rotate(-3deg);
+	filter: blur(1px);
+}
+
+body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] .db-card-img {
+	transform: scale(1.14) rotate(2deg);
+	filter: blur(.6px);
+}
+
+body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible .db-card-img {
+	transform: scale(1) rotate(0);
+	filter: none;
+}
+
+@media (hover: hover) {
+	body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible:not(.db-card--soldout):hover {
+		transform: translate3d(0, -6px, 0) scale(1.01);
+		box-shadow: 0 18px 38px rgba(31, 24, 18, .15);
+	}
+}
+
+@media (max-width: 760px) {
+	body.doughboss-order-page .bgheader {
+		min-height: 300px;
+		padding: 36px 20px 108px !important;
+		font-size: clamp(3.3rem, 17vw, 5.2rem) !important;
+	}
+
+	body.doughboss-order-page .bgcontent {
+		background-position: 72% 40% !important;
+	}
+
+	body.doughboss-order-page .bgtext {
+		width: calc(100% - 20px) !important;
+		margin-top: -64px !important;
+		padding: 22px 14px 36px !important;
+		border-radius: 22px 22px 0 0;
+	}
+
+	body.doughboss-order-page .db-ordering-status {
+		width: calc(100% - 8px);
+		margin-top: -76px !important;
+		padding: 17px 16px;
+	}
+
+	body.doughboss-order-page .db-shop {
+		padding: 16px;
+	}
+
+	body.doughboss-order-page .db-menu-tools {
+		top: var(--wp-admin--admin-bar--height, 0px);
+	}
+
+	body.doughboss-order-page .db-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+	}
+
+	body.doughboss-order-page .db-card-body {
+		padding: 12px;
+	}
+
+	body.doughboss-order-page .db-card-body h4 {
+		font-size: 1.25rem;
+	}
+
+	body.doughboss-order-page .db-card-desc {
+		display: none;
+	}
+
+	body.doughboss-order-page .db-card-foot {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	body.doughboss-order-page .db-btn--coming-soon {
+		width: 100%;
+	}
+}
+
+@media (max-width: 420px) {
+	body.doughboss-order-page .db-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	body.doughboss-order-page .db-card-desc {
+		display: block;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	body.doughboss-order-page .db-card,
+	body.doughboss-order-page .db-card-img {
+		animation: none !important;
+		opacity: 1 !important;
+		transform: none !important;
+		filter: none !important;
+		transition: none !important;
+	}
+}
