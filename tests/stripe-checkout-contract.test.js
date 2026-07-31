@@ -16,6 +16,7 @@ var client = fs.readFileSync(path.join(root, 'public/js/doughboss.js'), 'utf8');
 var catering = fs.readFileSync(path.join(root, 'public/js/doughboss-catering.js'), 'utf8');
 var stripePhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-stripe.php'), 'utf8');
 var restPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-rest-controller.php'), 'utf8');
+var orderPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-order.php'), 'utf8');
 var settingsPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-settings.php'), 'utf8');
 var assetsPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-assets.php'), 'utf8');
 
@@ -70,6 +71,13 @@ test('checkout return and webhooks bind the hosted session to one canonical Paym
 	assert.match(restPhp, /checkout_session_reference/);
 	assert.match(restPhp, /array\(\s*['"]payment_intent\.succeeded['"]\s*,\s*['"]checkout\.session\.completed['"]\s*\)/);
 	assert.match(restPhp, /DoughBoss_Order::payment_intent_used\(\s*\$pi_id\s*\)/);
+});
+
+test('a webhook-first paid order replays as the browser confirmation instead of an error', function () {
+	assert.doesNotMatch(restPhp, /''\s*===\s*\$pi_id\s*\|\|\s*DoughBoss_Order::payment_intent_used/);
+	assert.doesNotMatch(restPhp, /doughboss_pay_used/);
+	assert.match(orderPhp, /find_id_by_payment_intent\(\s*\$payment_intent_id[\s\S]{0,300}?['"]replayed['"]\s*=>\s*true/);
+	assert.match(restPhp, /checkout_payload\(\s*\$order\s*,\s*\$replayed\s*\)/);
 });
 
 test('catering uses the same modern Stripe Payment Element integration', function () {

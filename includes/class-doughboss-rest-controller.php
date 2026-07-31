@@ -3567,8 +3567,8 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $intent ) ) {
 			return $intent;
 		}
-		if ( '' === $pi_id || DoughBoss_Order::payment_intent_used( $pi_id ) ) {
-			return new WP_Error( 'doughboss_pay_used', __( 'This payment has already been used for an order.', 'doughboss' ), array( 'status' => 409 ) );
+		if ( '' === $pi_id ) {
+			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your card payment. If you were charged, please contact us and we will sort out a refund.', 'doughboss' ), array( 'status' => 402 ) );
 		}
 
 		$expected = DoughBoss_Payment::to_minor_units( $expected_total );
@@ -3603,6 +3603,11 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_pay_unverified', __( 'We could not verify your card payment. If you were charged, please contact us and we will sort out a refund.', 'doughboss' ), array( 'status' => 402 ) );
 		}
 
+		// A signed webhook can commit the paid order before the customer's
+		// browser returns from Hosted Checkout. Do not reject that legitimate
+		// race here: after all immutable Stripe bindings above pass,
+		// DoughBoss_Order::create() uses its unique checkout/payment keys to
+		// replay the one existing order without firing notifications twice.
 		return $pi_id;
 	}
 
