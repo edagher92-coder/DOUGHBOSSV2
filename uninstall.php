@@ -18,11 +18,17 @@ global $wpdb;
 
 // Drop custom tables (children before parents).
 $tables = array(
+	$wpdb->prefix . 'doughboss_capacity_holds',
+	$wpdb->prefix . 'doughboss_capacity_slots',
+	$wpdb->prefix . 'doughboss_schedule_exceptions',
+	$wpdb->prefix . 'doughboss_location_hours',
 	$wpdb->prefix . 'doughboss_voucher_redemptions',
 	$wpdb->prefix . 'doughboss_vouchers',
+	$wpdb->prefix . 'doughboss_order_events',
 	$wpdb->prefix . 'doughboss_order_items',
 	$wpdb->prefix . 'doughboss_orders',
 	$wpdb->prefix . 'doughboss_catering_enquiries',
+	$wpdb->prefix . 'doughboss_pospal_outbox',
 	$wpdb->prefix . 'doughboss_locations',
 );
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -34,7 +40,7 @@ foreach ( $tables as $table ) {
 // Delete menu items, catering packages, and their meta.
 $post_ids = get_posts(
 	array(
-		'post_type'   => array( 'doughboss_item', 'doughboss_catering_package' ),
+		'post_type'   => array( 'doughboss_item', 'doughboss_cat_pkg' ),
 		'post_status' => 'any',
 		'numberposts' => -1,
 		'fields'      => 'ids',
@@ -47,7 +53,14 @@ foreach ( $post_ids as $post_id ) {
 // Remove options.
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
+delete_option( 'doughboss_migration_error' );
+delete_option( 'doughboss_migration_lock' );
 delete_option( 'doughboss_unreconciled_payments' );
+delete_option( 'doughboss_pospal_unmapped_alerts' );
+delete_option( 'doughboss_delivery_autodisabled' );
+delete_option( 'doughboss_printer_watermark' );
+delete_option( 'doughboss_email_stage_log' );
+delete_transient( 'doughboss_migrating' );
 
 // Remove the custom capabilities and the kitchen role.
 $role = get_role( 'administrator' );
@@ -57,6 +70,12 @@ if ( $role ) {
 	$role->remove_cap( 'redeem_doughboss_vouchers' );
 }
 remove_role( 'doughboss_kitchen' );
+remove_role( 'doughboss_manager' );
+
+// Remove any POSPal work left in WP-Cron (for example when uninstall runs
+// without a prior deactivation event).
+wp_clear_scheduled_hook( 'doughboss_pospal_outbox_dispatch' );
+wp_clear_scheduled_hook( 'doughboss_pospal_outbox_reconcile' );
 
 // Clean up checkout idempotency transients.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery
@@ -69,5 +88,19 @@ $wpdb->query(
 // phpcs:disable WordPress.DB.DirectDatabaseQuery
 $wpdb->query(
 	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_cart_%' OR option_name LIKE '_transient_timeout_doughboss_cart_%'"
+);
+// phpcs:enable
+
+// Clean up rate-limit buckets.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->query(
+	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_rl_%' OR option_name LIKE '_transient_timeout_doughboss_rl_%'"
+);
+// phpcs:enable
+
+// Remove any one-time Order Board key reveal left for an administrator.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->query(
+	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_board_key_reveal_%' OR option_name LIKE '_transient_timeout_doughboss_board_key_reveal_%'"
 );
 // phpcs:enable

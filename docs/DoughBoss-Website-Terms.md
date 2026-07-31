@@ -209,7 +209,7 @@ We may update these Terms from time to time. The current version will be availab
 
 Questions about these Terms or your order:
 
-- Email: **`[orders@doughboss.com.au ___]`** (orders & catering) · **`[GENERAL / SUPPORT EMAIL ___]`** (general)
+- Email: **`[hello@doughboss.com.au ___]`** (orders & catering) · **`[GENERAL / SUPPORT EMAIL ___]`** (general)
 - Phone: `[CONTACT PHONE ___]`
 - Shops: Bankstown `[ADDRESS ___]` · Roselands `[ADDRESS ___]` · Revesby `[ADDRESS ___]`
 

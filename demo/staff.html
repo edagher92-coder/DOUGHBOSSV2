@@ -4,24 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dough Boss — Staff &amp; Kitchen Sign-in</title>
-<meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; script-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; base-uri 'self'; form-action 'self';">
 <!-- Note: frame-ancestors in a meta CSP is ignored by browsers per spec; it only works as an HTTP header.
      For GitHub Pages, add a _headers file or a Cloudflare Worker to inject:
      Content-Security-Policy: frame-ancestors 'none'
      X-Frame-Options: DENY -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
-:root{--gold:#d98a3d;--ink:#0a0807;}
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/bebasneue-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/barlow-400.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;src:url('assets/fonts/barlow-500.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;src:url('assets/fonts/barlow-600.woff2') format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;src:url('assets/fonts/barlow-700.woff2') format('woff2');}
+:root{--paper:#f7f5f0;--ink:#0a0807;}
 *{box-sizing:border-box;}
 html,body{height:100%;}
 body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;background:var(--ink);-webkit-font-smoothing:antialiased;}
 .vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap;}
-.skip{position:absolute;top:-999px;left:12px;background:var(--gold);color:#241405;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
+.skip{position:absolute;top:-999px;left:12px;background:var(--paper);color:#0d0d0d;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 .skip:focus{top:0;}
-:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:3px;}
+:focus-visible{outline:3px solid var(--paper);outline-offset:3px;border-radius:3px;}
 
 /* cinematic scene */
 .scene{position:relative;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:44px 18px 60px;}
@@ -53,9 +55,11 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
 /* foreground */
 .stage{position:relative;z-index:2;width:100%;max-width:440px;text-align:center;}
-.brand{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:clamp(40px,9vw,64px);color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.55);}
-.brand span{color:var(--gold);}
-.eyebrow{font-family:'Bebas Neue',sans-serif;letter-spacing:.32em;text-transform:uppercase;font-size:14px;color:var(--gold);margin-top:6px;}
+.brand-mark{display:inline-flex;flex-direction:column;align-items:center;gap:6px;line-height:1;text-shadow:0 4px 30px rgba(0,0,0,.55);}
+.brand-mark .bm-box{font-family:'Bebas Neue',sans-serif;font-size:clamp(24px,6vw,34px);letter-spacing:4px;color:#fff;border:3px solid #fff;padding:9px 11px 8px 15px;white-space:nowrap;}
+.brand-mark .bm-dot{letter-spacing:0;}
+.brand-mark .bm-sub{font-family:'Barlow',sans-serif;font-weight:600;font-size:10px;letter-spacing:.4em;text-transform:uppercase;color:#d7d1c6;padding-left:.4em;white-space:nowrap;}
+.eyebrow{font-family:'Bebas Neue',sans-serif;letter-spacing:.32em;text-transform:uppercase;font-size:14px;color:var(--paper);margin-top:6px;}
 .tagline{color:#e7ddcd;font-size:14.5px;margin:6px 0 24px;text-shadow:0 2px 14px rgba(0,0,0,.65);}
 
 /* login card */
@@ -65,8 +69,8 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .fld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
 .fld label{font-family:'Bebas Neue',sans-serif;letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:#cfc9bd;}
 .fld input{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:12px 14px;font:inherit;font-size:15px;}
-.fld input:focus-visible{outline:3px solid var(--gold);outline-offset:2px;border-color:var(--gold);}
-.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#241405;background:var(--gold);box-shadow:0 12px 30px rgba(217,138,61,.32);transition:filter .15s,transform .1s;text-decoration:none;}
+.fld input:focus-visible{outline:3px solid var(--paper);outline-offset:2px;border-color:var(--paper);}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:19px;border:0;border-radius:11px;padding:14px;cursor:pointer;color:#0d0d0d;background:var(--paper);box-shadow:0 12px 30px rgba(0,0,0,.35);transition:filter .15s,transform .1s;text-decoration:none;}
 .btn:hover{filter:brightness(1.07);}
 .btn:active{transform:scale(.98);}
 .err{color:#ffb38a;font-size:13px;min-height:1em;margin:4px 0 0;}
@@ -82,9 +86,18 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 .backend:hover{background:rgba(0,0,0,.42);}
 .backend b{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em;font-size:17px;display:block;}
 .backend small{color:#b8b1a4;font-size:12px;}
-.backend .arr{color:var(--gold);font-size:20px;}
+.backend .arr{color:var(--paper);font-size:20px;}
 .foot{position:relative;z-index:2;margin-top:24px;font-size:11.5px;color:#a89f90;text-align:center;}
 .foot a{color:#cbbfaf;}
+
+/* role tabs */
+.roletabs{display:flex;gap:4px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:4px;margin-bottom:18px;}
+.roletab{flex:1;border:0;background:transparent;color:#cfc9bd;font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;font-size:15px;padding:10px 8px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s;}
+.roletab.is-active{background:var(--paper);color:#0d0d0d;}
+.roletab:not(.is-active):hover{background:rgba(255,255,255,.06);}
+.rolepanel{display:none;}
+.rolepanel.is-active{display:block;}
+.role-note{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:10px 12px;font-size:12px;color:#e7ddcd;margin:0 0 16px;}
 @media(prefers-reduced-motion:reduce){
 	.scene-art,.arms,.torso,.dough,.bokeh{animation:none;}
 	.puff,.fleck{display:none;}
@@ -202,27 +215,42 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
 
   <div class="stage">
     <h1 class="vh">Dough Boss &mdash; Staff &amp; Kitchen sign-in</h1>
-    <div class="brand">DOUGH<span>BOSS</span></div>
+    <div class="brand-mark"><span class="bm-box">DOUGH BOSS<span class="bm-dot">.</span></span></div>
     <div class="eyebrow">Kitchen &amp; Staff</div>
-    <p class="tagline">Fresh from the stone oven &middot; since 2013</p>
+    <p class="tagline">Fresh from the stone oven &middot; since 2009</p>
 
     <div class="card">
-      <h2>Staff sign-in</h2>
-      <p class="hint">Sign in to open the orders platform for your shop. <span style="color:#b8b1a4">Demo: any staff ID and passcode work.</span></p>
-      <div class="signed" id="signed" hidden></div>
-      <form id="staff-form" novalidate>
-        <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required aria-describedby="su-err"></div>
-        <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
-        <p class="vh" role="status" aria-live="polite" id="form-status"></p>
-        <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
-        <p class="err" id="su-err" role="alert" aria-live="assertive"></p>
-      </form>
+      <div class="roletabs" role="tablist" aria-label="Sign-in role">
+        <button type="button" class="roletab is-active" id="tab-staff" role="tab" aria-selected="true" aria-controls="panel-staff">Staff</button>
+        <button type="button" class="roletab" id="tab-owner" role="tab" aria-selected="false" aria-controls="panel-owner">Owner / Manager</button>
+      </div>
 
-      <div class="divider">OWNER &amp; MANAGER</div>
-      <a class="backend" id="owner-link" href="owner.html">
-        <span><b>Owner / Manager dashboard</b><small>Sales &amp; revenue, stores, catering pipeline &amp; all orders</small></span>
-        <span class="arr" aria-hidden="true">&rarr;</span>
-      </a>
+      <div class="signed" id="signed" hidden></div>
+
+      <div class="rolepanel is-active" id="panel-staff" role="tabpanel" aria-labelledby="tab-staff">
+        <h2>Staff sign-in</h2>
+        <p class="hint">Sign in to open the orders platform for your shop. <span style="color:#b8b1a4">Demo: any staff ID and passcode work.</span></p>
+        <form id="staff-form" novalidate>
+          <div class="fld"><label for="su">Staff ID</label><input id="su" name="user" type="text" autocomplete="username" placeholder="Staff ID" required aria-describedby="su-err"></div>
+          <div class="fld"><label for="sp">Passcode</label><input id="sp" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="su-err"></div>
+          <p class="vh" role="status" aria-live="polite" id="form-status"></p>
+          <button type="submit" class="btn">Open orders &amp; kitchen <span aria-hidden="true">→</span></button>
+          <p class="err" id="su-err" role="alert" aria-live="assertive"></p>
+        </form>
+      </div>
+
+      <div class="rolepanel" id="panel-owner" role="tabpanel" aria-labelledby="tab-owner" hidden>
+        <h2>Owner / Manager sign-in</h2>
+        <p class="hint">Sales &amp; revenue, stores, catering pipeline and all orders. <span style="color:#b8b1a4">Demo: any owner ID and passcode work.</span></p>
+        <div class="role-note" aria-hidden="true">In production this authenticates against the full WordPress admin, not the staff orders platform.</div>
+        <form id="owner-form" novalidate>
+          <div class="fld"><label for="ou">Owner / Manager ID</label><input id="ou" name="user" type="text" autocomplete="username" placeholder="Owner ID" required aria-describedby="ou-err"></div>
+          <div class="fld"><label for="op">Passcode</label><input id="op" name="pass" type="password" autocomplete="current-password" placeholder="••••••" required aria-describedby="ou-err"></div>
+          <p class="vh" role="status" aria-live="polite" id="owner-form-status"></p>
+          <button type="submit" class="btn">Open owner dashboard <span aria-hidden="true">→</span></button>
+          <p class="err" id="ou-err" role="alert" aria-live="assertive"></p>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -248,31 +276,68 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     field.appendChild(frag);
   }
   var KEY='db_staff';
-  var form = document.getElementById('staff-form'), err = document.getElementById('su-err'),
+  var tabs = document.getElementById('signed').parentElement;
+  var tabStaff = document.getElementById('tab-staff'), tabOwner = document.getElementById('tab-owner'),
+      panelStaff = document.getElementById('panel-staff'), panelOwner = document.getElementById('panel-owner'),
+      roletabs = document.querySelector('.roletabs');
+  var staffForm = document.getElementById('staff-form'), staffErr = document.getElementById('su-err'),
+      ownerForm = document.getElementById('owner-form'), ownerErr = document.getElementById('ou-err'),
       signed = document.getElementById('signed');
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
+  function selectTab(role){
+    var toStaff = role==='staff';
+    tabStaff.classList.toggle('is-active', toStaff);
+    tabOwner.classList.toggle('is-active', !toStaff);
+    tabStaff.setAttribute('aria-selected', toStaff ? 'true' : 'false');
+    tabOwner.setAttribute('aria-selected', !toStaff ? 'true' : 'false');
+    tabStaff.setAttribute('tabindex', toStaff ? '0' : '-1');
+    tabOwner.setAttribute('tabindex', !toStaff ? '0' : '-1');
+    panelStaff.classList.toggle('is-active', toStaff);
+    panelOwner.classList.toggle('is-active', !toStaff);
+    panelStaff.hidden = !toStaff;
+    panelOwner.hidden = toStaff;
+  }
+  var roleTabs = [tabStaff, tabOwner];
+  roleTabs.forEach(function(t){ t.setAttribute('tabindex', t.getAttribute('aria-selected')==='true' ? '0' : '-1'); });
+  tabStaff.addEventListener('click', function(){ selectTab('staff'); tabStaff.focus(); });
+  tabOwner.addEventListener('click', function(){ selectTab('owner'); tabOwner.focus(); });
+  roletabs.addEventListener('keydown', function(e){
+    if (e.key!=='ArrowRight' && e.key!=='ArrowLeft') return;
+    var idx = roleTabs.indexOf(document.activeElement); if (idx===-1) return;
+    e.preventDefault();
+    var next = e.key==='ArrowRight' ? (idx+1)%roleTabs.length : (idx-1+roleTabs.length)%roleTabs.length;
+    roleTabs[next].focus(); roleTabs[next].click();
+  });
+
   // Persistent session: localStorage has no expiry, so a signed-in staffer stays
   // signed in indefinitely (no timeout) until they explicitly sign out.
-  function showSigned(name){
-    form.style.display='none';
+  function showSigned(name, role){
+    roletabs.style.display='none';
+    panelStaff.hidden=true; panelOwner.hidden=true;
     signed.hidden=false;
-    signed.innerHTML='<p class="signed-t">&#10003; Signed in as <b>'+esc(name)+'</b><br><small>Staying signed in &mdash; no timeout.</small></p>'+
-      '<a class="btn" href="backend.html">Open orders &amp; kitchen</a>'+
+    var isOwner = role==='owner';
+    var dest = isOwner ? 'owner.html' : 'backend.html';
+    var label = isOwner ? 'Open owner dashboard' : 'Open orders &amp; kitchen';
+    signed.innerHTML='<p class="signed-t">&#10003; Signed in as <b>'+esc(name)+'</b> <small>('+(isOwner?'Owner/Manager':'Staff')+')</small><br><small>Staying signed in &mdash; no timeout.</small></p>'+
+      '<a class="btn" href="'+dest+'">'+label+'</a>'+
       '<button type="button" class="signout" id="signout">Sign out</button>';
     var so=document.getElementById('signout');
-    if(so){ so.addEventListener('click', function(){ try{localStorage.removeItem(KEY);}catch(_){} window.location.reload(); }); }
+    if(so){ so.addEventListener('click', function(){ try{localStorage.removeItem(KEY); localStorage.removeItem('db_role');}catch(_){} window.location.reload(); }); }
   }
-  try{ var existing=localStorage.getItem(KEY); if(existing){ showSigned(existing); } }catch(_){}
+  try{
+    var existing=localStorage.getItem(KEY);
+    if(existing){ showSigned(existing, localStorage.getItem('db_role')||'staff'); }
+  }catch(_){}
 
-  form.addEventListener('submit', function(e){
+  staffForm.addEventListener('submit', function(e){
     e.preventDefault();
     var u=document.getElementById('su').value.trim(), p=document.getElementById('sp').value;
-    if(!u||!p){ err.textContent='Enter your staff ID and passcode.'; return; }
-    err.textContent='';
-    var btn=form.querySelector('.btn');
+    if(!u||!p){ staffErr.textContent='Enter your staff ID and passcode.'; return; }
+    staffErr.textContent='';
+    var btn=staffForm.querySelector('.btn');
     try{ localStorage.setItem(KEY, u); localStorage.setItem('db_role', 'staff'); }catch(_){
-      err.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
+      staffErr.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
       return;
     }
     btn.setAttribute('aria-busy','true');
@@ -282,15 +347,22 @@ body{margin:0;font-family:'Barlow',system-ui,Arial,sans-serif;color:#f3efe8;back
     setTimeout(function(){ window.location.href='backend.html'; }, 650);
   });
 
-  // Owner / manager entry: seed the session (so the gate passes) then open the dashboard.
-  var ownerLink = document.getElementById('owner-link');
-  if (ownerLink) {
-    ownerLink.addEventListener('click', function(e){
-      e.preventDefault();
-      try { localStorage.setItem(KEY, 'Owner'); localStorage.setItem('db_role', 'owner'); window.location.href = 'owner.html'; }
-      catch(_){ err.textContent = 'Sign-in cannot be saved in private browsing — please use a regular browser window.'; }
-    });
-  }
+  ownerForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var u=document.getElementById('ou').value.trim(), p=document.getElementById('op').value;
+    if(!u||!p){ ownerErr.textContent='Enter your owner/manager ID and passcode.'; return; }
+    ownerErr.textContent='';
+    var btn=ownerForm.querySelector('.btn');
+    try{ localStorage.setItem(KEY, u); localStorage.setItem('db_role', 'owner'); }catch(_){
+      ownerErr.textContent='Sign-in cannot be saved in private browsing — please use a regular browser window.';
+      return;
+    }
+    btn.setAttribute('aria-busy','true');
+    btn.disabled=true;
+    btn.innerHTML='Signing in…';
+    document.getElementById('owner-form-status').textContent='Signing in…';
+    setTimeout(function(){ window.location.href='owner.html'; }, 650);
+  });
 }());
 </script>
 

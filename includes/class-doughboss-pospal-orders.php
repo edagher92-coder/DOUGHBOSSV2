@@ -58,6 +58,14 @@ class DoughBoss_POSPal_Orders {
 		if ( ! $order ) {
 			return;
 		}
+		if ( DoughBoss_Order::is_preorder_request( $order ) ) {
+			// A closed-hours request is neither a confirmed order nor a payment.
+			// Never mirror it to a till before the staff review/phone-confirmation
+			// gate has completed. Accepted requests intentionally need an explicit
+			// POS/payment action; do not infer one from the customer submission.
+			self::log( 'push deferred for unpaid pre-order request #' . $order_id );
+			return;
+		}
 
 		$items = DoughBoss_Order::get_items( $order_id );
 		if ( empty( $items ) ) {
@@ -71,17 +79,25 @@ class DoughBoss_POSPal_Orders {
 		$build = self::build_body( $order, $items );
 		if ( ! empty( $build['unmapped'] ) ) {
 			self::log( 'push skipped for #' . $order_id . ' — unmapped items: ' . implode( ', ', $build['unmapped'] ) );
+			self::record_unmapped_alert( $order, $build['unmapped'] );
 			return;
 		}
 
-		// Fire-and-forget: the mirror must never stall the checkout request, so the
-		// push is dispatched without waiting for POSPal's response.
-		$result = DoughBoss_POSPal::push_order( $build['body'], is_array( $creds ) ? $creds : null, false );
-		if ( is_wp_error( $result ) ) {
-			self::log( 'push failed for #' . $order_id . ' (' . $result->get_error_code() . ')' );
+		// Which store index this order rings into (1/2/3). Default 1 (primary).
+		// Filterable so a site can route by the order's location, alongside the
+		// per-store credentials filter above.
+		$store_index = (int) apply_filters( 'doughboss_pospal_order_store_index', 1, $order, $creds );
+		$store_index = max( 1, $store_index );
+
+		// Enqueue on the durable outbox — the cron worker owns the actual push and
+		// its retry curve. The checkout request never waits on POSPal here, and a
+		// POSPal blip no longer silently drops the till copy.
+		$row_id = DoughBoss_POSPal_Outbox::enqueue_order_push( $order_id, $store_index, $build['body'] );
+		if ( ! $row_id ) {
+			self::log( 'enqueue failed for #' . $order_id );
 			return;
 		}
-		self::log( 'push dispatched (non-blocking) for #' . $order_id );
+		self::log( 'enqueued #' . $order_id . ' as outbox row #' . $row_id . ' (store ' . $store_index . ')' );
 	}
 
 	/**
@@ -117,17 +133,19 @@ class DoughBoss_POSPal_Orders {
 
 		$type     = isset( $order->order_type ) ? (string) $order->order_type : 'pickup';
 		$delivery = ( 'delivery' === $type );
+		$dine_in  = ( 'dine_in' === $type );
 		$address  = isset( $order->address ) ? trim( (string) $order->address ) : '';
+		$table_label = $dine_in && isset( $order->table_label ) ? trim( (string) $order->table_label ) : '';
 
 		$body = array(
 			'orderSource'                => 'openApi',
 			'payMethod'                  => DoughBoss_Settings::pospal_order_pay_method(),
 			'orderDateTime'              => isset( $order->created_at ) ? (string) $order->created_at : current_time( 'mysql' ),
-			'deliveryType'               => $delivery ? 0 : 1,
+			'deliveryType'               => $delivery ? 0 : 2,
 			'daySeq'                     => isset( $order->order_number ) ? (string) $order->order_number : '',
 			'contactName'                => '' !== (string) $order->customer_name ? (string) $order->customer_name : __( 'Online order', 'doughboss' ),
 			'contactTel'                 => isset( $order->customer_phone ) ? (string) $order->customer_phone : '',
-			'contactAddress'             => ( $delivery && '' !== $address ) ? $address : __( 'Pickup in store', 'doughboss' ),
+			'contactAddress'             => $dine_in && '' !== $table_label ? 'TABLE ' . $table_label : ( ( $delivery && '' !== $address ) ? $address : __( 'Pickup in store', 'doughboss' ) ),
 			'totalAmount'                => round( (float) ( isset( $order->total ) ? $order->total : 0 ), 2 ),
 			'skipProductStockValidation' => 1,
 			'items'                      => $lines,
@@ -136,7 +154,9 @@ class DoughBoss_POSPal_Orders {
 		if ( $delivery && isset( $order->delivery_fee ) && (float) $order->delivery_fee > 0 ) {
 			$body['shippingFee'] = round( (float) $order->delivery_fee, 2 );
 		}
-		if ( isset( $order->notes ) && '' !== trim( (string) $order->notes ) ) {
+		if ( $dine_in && '' !== $table_label ) {
+			$body['orderRemark'] = substr( 'DINE IN — TABLE ' . $table_label . ( ! empty( $order->notes ) ? ' — ' . (string) $order->notes : '' ), 0, 200 );
+		} elseif ( isset( $order->notes ) && '' !== trim( (string) $order->notes ) ) {
 			$body['orderRemark'] = substr( (string) $order->notes, 0, 200 );
 		}
 
@@ -224,5 +244,33 @@ class DoughBoss_POSPal_Orders {
 		if ( function_exists( 'error_log' ) ) {
 			error_log( 'DoughBoss POSPal order: ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
+	}
+
+	/**
+	 * Option key for the admin-visible unmapped-item alert queue. A dedicated
+	 * option (not part of doughboss_settings) so reading/writing it never risks
+	 * touching unrelated settings.
+	 */
+	const UNMAPPED_ALERTS_OPTION = 'doughboss_pospal_unmapped_alerts';
+
+	/**
+	 * Record a skipped push so it surfaces as a wp-admin notice, not just a log
+	 * line. Capped at the most recent 20 so a bad menu/catalogue mismatch can't
+	 * grow this option without bound; item names only — no customer PII.
+	 *
+	 * @param object   $order    Order row (for the order number).
+	 * @param string[] $unmapped Item names with no POSPal product match.
+	 * @return void
+	 */
+	private static function record_unmapped_alert( $order, array $unmapped ) {
+		$alerts   = get_option( self::UNMAPPED_ALERTS_OPTION, array() );
+		$alerts   = is_array( $alerts ) ? $alerts : array();
+		$alerts[] = array(
+			'order_number' => isset( $order->order_number ) ? (string) $order->order_number : '',
+			'items'        => array_map( 'sanitize_text_field', $unmapped ),
+			'time'         => current_time( 'mysql' ),
+		);
+		$alerts = array_slice( $alerts, -20 );
+		update_option( self::UNMAPPED_ALERTS_OPTION, $alerts, false );
 	}
 }

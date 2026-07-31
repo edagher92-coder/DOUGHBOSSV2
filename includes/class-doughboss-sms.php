@@ -97,9 +97,15 @@ class DoughBoss_SMS {
 		}
 
 		$number  = isset( $order->order_number ) ? (string) $order->order_number : (string) $order_id;
+		$projection = DoughBoss_Order::customer_projection( $order );
 		$message = DoughBoss_Settings::render_template(
 			DoughBoss_Settings::tpl_sms_ready(),
-			array( 'order_number' => $number )
+			array(
+				'order_number'    => $number,
+				'status_label'    => $projection['label'],
+				'table_label'     => isset( $order->table_label ) ? (string) $order->table_label : '',
+				'handoff_message' => isset( $order->order_type ) && 'dine_in' === $order->order_type ? __( 'We will bring it to your table.', 'doughboss' ) : __( 'Please follow the collection details for your order.', 'doughboss' ),
+			)
 		);
 
 		// Fire-and-forget: this runs inside the kitchen's status-update request, so

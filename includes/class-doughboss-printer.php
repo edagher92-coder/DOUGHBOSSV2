@@ -201,9 +201,12 @@ class DoughBoss_Printer {
 
 	/**
 	 * The next order waiting to print: the OLDEST order with id above the
-	 * watermark, so a backlog prints in arrival order. Cancelled orders are
-	 * skipped (no point printing a ticket the kitchen shouldn't make), but the
-	 * watermark still advances past them so they never block the queue.
+	 * watermark, so a backlog prints in arrival order. Cancelled orders and
+	 * unreviewed after-hours pre-order requests are skipped (neither is a ticket
+	 * the kitchen should make), but the watermark still advances past them so
+	 * they never block the queue. A staff-accepted request appears on the KDS;
+	 * because its original id may already be below this watermark, the acceptance
+	 * response explicitly requires staff to issue the kitchen ticket manually.
 	 *
 	 * @return object|null The order row, or null when the queue is empty.
 	 */
@@ -221,7 +224,7 @@ class DoughBoss_Printer {
 		);
 
 		foreach ( (array) $rows as $row ) {
-			if ( 'cancelled' === $row->status ) {
+			if ( 'cancelled' === $row->status || 'preorder_request' === ( isset( $row->order_source ) ? $row->order_source : 'web' ) ) {
 				// Don't print cancellations; step the watermark past them so the
 				// queue keeps moving to the next genuine order.
 				self::advance_watermark( (int) $row->id );
@@ -440,6 +443,9 @@ class DoughBoss_Printer {
 
 		$type = self::order_type_label( $order->order_type );
 		$lines[] = 'Type:  ' . $type;
+		if ( 'dine_in' === $order->order_type && ! empty( $order->table_label ) ) {
+			$lines[] = self::center( '*** TABLE ' . self::clean( $order->table_label ) . ' ***', $width );
+		}
 		$lines[] = 'Time:  ' . self::clean( self::local_time( $order->created_at ) );
 
 		$name = self::clean( $order->customer_name );
@@ -535,6 +541,11 @@ class DoughBoss_Printer {
 
 		$x[] = self::xml_line( 'Order: ' . $order->order_number );
 		$x[] = self::xml_line( 'Type:  ' . self::order_type_label( $order->order_type ) );
+		if ( 'dine_in' === $order->order_type && ! empty( $order->table_label ) ) {
+			$x[] = '<text align="center" dw="true" dh="true" />';
+			$x[] = self::xml_line( 'TABLE ' . $order->table_label );
+			$x[] = '<text align="left" dw="false" dh="false" />';
+		}
 		$x[] = self::xml_line( 'Time:  ' . self::local_time( $order->created_at ) );
 
 		if ( '' !== trim( (string) $order->customer_name ) ) {
@@ -628,7 +639,7 @@ class DoughBoss_Printer {
 	 * @return string
 	 */
 	private static function order_type_label( $type ) {
-		return ( 'delivery' === $type ) ? 'DELIVERY' : 'PICKUP';
+		return ( 'delivery' === $type ) ? 'DELIVERY' : ( 'dine_in' === $type ? 'DINE IN' : 'PICKUP' );
 	}
 
 	/**

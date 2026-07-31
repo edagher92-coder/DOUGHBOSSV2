@@ -18,6 +18,8 @@ customer order tracking, all driven by shortcodes and a small REST API.
 - **Custom pizza builder** — configurable sizes and toppings with live pricing.
 - **Cart & checkout** — cookie-based guest cart, pickup or delivery, configurable
   tax rate and delivery fee. Prices are always computed server-side.
+- **Coming Soon launch mode** — menus stay public while checkout and payment
+  initialization remain blocked until an owner explicitly opens ordering.
 - **Order tracking** — customers look up an order by number + email.
 - **Admin** — an Orders screen with live status changes and a Settings page for
   sizes, toppings, currency, tax and fulfilment options.
@@ -57,9 +59,11 @@ Copy the repository contents into `wp-content/plugins/doughboss/` and activate
 | `[doughboss_cart]`          | The cart and checkout            |
 | `[doughboss_order_tracking]`| The order status lookup form     |
 | `[doughboss_shop_picker]`   | Shop selector (multi-shop sites) |
+| `[doughboss_ordering_status]` | Coming Soon / ordering status notice |
 
 A typical setup: an **Order Online** page containing `[doughboss_builder]` and
-`[doughboss_menu]` plus `[doughboss_cart]` (or a dedicated Cart page), and a
+`[doughboss_menu]` plus `[doughboss_cart]` (or a dedicated Cart page). Add
+`[doughboss_ordering_status]` near the top while launching, and use a
 **Track Order** page containing `[doughboss_order_tracking]`.
 
 ## REST API

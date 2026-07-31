@@ -37,8 +37,14 @@ class DoughBoss_Menu_Seeder {
 				array( 'Cheese', 9.50, 'standard', array( 'vegetarian', 'halal' ), 'A beautiful mix of our blended cheese, baked golden.' ),
 				array( 'Meat', 9.00, 'standard', array( 'halal' ), 'Minced lamb blended with spices, onions & tomatoes — flat or folded.' ),
 				array( 'Meat & Cheese', 11.00, 'standard', array( 'halal' ), 'Minced lamb with spices, topped with melted cheese.' ),
+				array( 'Sujuk & Cheese', 11.00, 'standard', array( 'halal' ), 'Spiced sujuk with melted cheese.' ),
+				array( 'Half Meat & Cheese', 11.00, 'standard', array( 'halal' ), 'Half minced meat and half blended cheese.' ),
+				array( 'Cheese, Tomato & Olives', 9.50, 'standard', array( 'vegetarian', 'halal' ), 'Blended cheese with tomato and olives.' ),
+				array( 'Cheese Kaak', 9.50, 'standard', array( 'vegetarian', 'halal' ), 'Cheese baked in a sesame kaak bread.' ),
 			),
 			'Pizza'    => array(
+				array( 'Zaatar Veggie Pizza', 13.00, 'pizza', array( 'vegetarian', 'halal' ), 'Zaatar with tomato, olives and cheese. Choose your menu sauce and customise at checkout.' ),
+				array( 'Labneh Veggie Pizza', 13.00, 'pizza', array( 'vegetarian', 'halal' ), 'Labneh, tomato, olives and fresh vegetables. Choose your menu sauce and customise at checkout.' ),
 				array( 'All Meat', 15.00, 'pizza', array( 'halal' ), 'Pepperoni, sujuk, chicken & cheese on a BBQ sauce base.' ),
 				array( 'Sujuk Deluxe', 14.00, 'pizza', array( 'halal' ), 'Spiced beef sausage with tomato, capsicum, mushroom, olives & cheese.' ),
 				array( 'Spinach Deluxe', 13.00, 'pizza', array( 'vegetarian', 'halal' ), 'Spinach mix, mushroom, tomato, olives & cheese.' ),
@@ -51,13 +57,14 @@ class DoughBoss_Menu_Seeder {
 				array( 'Garlic Prawns', 15.00, 'pizza', array( 'halal' ), 'Prawns, mushroom, onion, capsicum & cheese on a garlic-tomato base.' ),
 			),
 			'Pies'     => array(
-				array( 'Spinach & Cheese', 10.00, 'standard', array( 'vegetarian', 'halal' ), 'A triangular turnover of spinach, onion, lemon, spices & cheese.' ),
+				array( 'Spinach Pie', 10.00, 'standard', array( 'vegetarian', 'halal' ), 'A triangular turnover of spinach, onion, lemon, spices and cheese.' ),
 				array( 'Haloumi', 11.00, 'standard', array( 'vegetarian', 'halal' ), 'Delicious haloumi cheese baked in a pie.' ),
-				array( 'Chicken Pie', 11.00, 'standard', array( 'halal' ), 'Grilled chicken, capsicum, mushroom & cheese.' ),
+				array( 'Dough Boss Pie', 11.00, 'standard', array( 'halal' ), 'Grilled chicken, capsicum, mushroom & cheese.' ),
 				array( 'Aged Cheese', 10.00, 'standard', array( 'vegetarian', 'halal' ), 'Aged white cheese (shanklish) with diced tomatoes & onions.' ),
 			),
 			'Wraps'    => array(
 				array( 'Zaatar & Veggie', 8.50, 'standard', array( 'vegan', 'halal' ), 'Zaatar with fresh tomato, cucumber, olives & mint. Add labneh or cheese +$2.50 each.' ),
+				array( 'Labneh Veggie Wrap', 8.50, 'standard', array( 'vegetarian', 'halal' ), 'Labneh with fresh tomato, cucumber, olives and mint. Add cheese +$2.50 if you like.' ),
 				array( 'Chicken Delight', 14.00, 'standard', array( 'halal' ), 'Grilled chicken, fresh tomato, lettuce, pickled cucumber & garlic mayo.' ),
 				array( 'Ultimate Chicken', 14.00, 'standard', array( 'halal' ), 'Grilled chicken, melted cheese, mushroom, capsicum & lettuce, topped with mayo.' ),
 				array( 'Dough Boss Wrap', 14.00, 'standard', array( 'halal' ), 'Sujuk, fresh tomato, pickled cucumber, lettuce & cheese, topped with mayo.' ),
@@ -124,6 +131,28 @@ class DoughBoss_Menu_Seeder {
 						'suppress_filters' => false,
 					)
 				);
+				if ( empty( $existing ) ) {
+					// Two menu-board corrections rename existing seeded products. Match
+					// their retired stable keys once so re-importing updates rather than
+					// duplicates the live menu item.
+					$legacy_seed_keys = array(
+						'pies-dough-boss-pie' => 'pies-chicken-pie',
+						'pies-spinach-pie'    => 'pies-spinach-cheese',
+					);
+					if ( isset( $legacy_seed_keys[ $seed_key ] ) ) {
+						$existing = get_posts(
+							array(
+								'post_type'        => $post_type,
+								'post_status'      => 'any',
+								'posts_per_page'   => 1,
+								'fields'           => 'ids',
+								'meta_key'         => '_doughboss_seed_key', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+								'meta_value'       => $legacy_seed_keys[ $seed_key ], // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+								'suppress_filters' => false,
+							)
+						);
+					}
+				}
 				if ( empty( $existing ) ) {
 					// Legacy fallback: items seeded before the marker existed only
 					// match by title; they get stamped with the key below.

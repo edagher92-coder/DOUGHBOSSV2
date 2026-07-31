@@ -453,16 +453,35 @@ class DoughBoss_Voucher {
 	 */
 	public static function default_campaigns() {
 		return array(
-			'snow5'  => array(
-				'slug'      => 'snow5',
-				'label'     => '$5 Student Voucher (Dough Boss × Snow Boss)',
+			// Primary Dough Boss student voucher. The slug is what the CLI and REST
+			// address the campaign by; codes issued under it use the `DOUGH-` prefix.
+			'dough5' => array(
+				'slug'      => 'dough5',
+				'label'     => '$5 Student Voucher (Dough Boss)',
 				'type'      => 'amount',
 				'value'     => 5.00,
-				'prefix'    => 'SNOW',
+				'prefix'    => 'DOUGH',
 				'daily_cap' => 100,
 				'cap_group' => 'student',
 				'scope'     => 'both',
 				'active'    => 1,
+			),
+			// Backwards-compat alias: any voucher code issued under the retired
+			// Snow-Boss dual-brand campaign (SNOW-prefix, slug `snow5`) stays
+			// redeemable. The alias is dormant for new issuance (`active` = 0) so
+			// nothing NEW is minted under the old brand, and the daily cap sits at
+			// zero so the CLI/REST rejects a fresh claim; but existing rows are
+			// left untouched and continue to redeem at the till.
+			'snow5'  => array(
+				'slug'      => 'snow5',
+				'label'     => '$5 Student Voucher (legacy — Snow Boss launch)',
+				'type'      => 'amount',
+				'value'     => 5.00,
+				'prefix'    => 'SNOW',
+				'daily_cap' => 0,
+				'cap_group' => 'student',
+				'scope'     => 'both',
+				'active'    => 0,
 			),
 		);
 	}

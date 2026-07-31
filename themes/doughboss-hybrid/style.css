@@ -1,0 +1,48 @@
+/*
+Theme Name: DoughBoss Hybrid
+Theme URI: https://doughboss.com.au/
+Author: DoughBoss
+Description: A lightweight classic WordPress presentation theme for the DoughBoss ordering plugin.
+Version: 0.1.1
+Requires at least: 6.0
+Requires PHP: 7.4
+Text Domain: doughboss-hybrid
+*/
+
+:root {
+	--db-ink: #1d1713;
+	--db-cream: #f8f1e5;
+	--db-paper: #fffaf2;
+	--db-tomato: #b93624;
+	--db-zaatar: #4d642f;
+	--db-gold: #d58a2a;
+	--db-line: rgba(29, 23, 19, .14);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--db-cream); color: var(--db-ink); font-family: Arial, Helvetica, sans-serif; line-height: 1.5; }
+a { color: inherit; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--db-gold); outline-offset: 3px; }
+.screen-reader-text { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.skip-link:focus { position: fixed; z-index: 100; top: 1rem; left: 1rem; width: auto; height: auto; padding: .7rem 1rem; margin: 0; overflow: visible; clip: auto; background: var(--db-paper); border: 2px solid var(--db-ink); }
+.site-header { position: sticky; z-index: 20; top: 0; background: rgba(248, 241, 229, .96); border-bottom: 1px solid var(--db-line); backdrop-filter: blur(10px); }
+.site-header__inner, .site-footer__inner, .db-shell { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; }
+.site-header__inner { display: flex; gap: 1rem; align-items: center; justify-content: space-between; min-height: 4.5rem; }
+.site-brand { font-weight: 900; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
+.site-brand span { color: var(--db-tomato); }
+.primary-nav ul { display: flex; gap: 1rem; padding: 0; margin: 0; list-style: none; }
+.primary-nav a { font-size: .9rem; font-weight: 700; text-decoration: none; }
+.db-main { padding-block: 2rem 4rem; }
+.db-hero { padding: clamp(2rem, 8vw, 6rem) 0 2rem; }
+.db-kicker { margin: 0 0 .5rem; color: var(--db-tomato); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.db-hero h1, .db-page-title { max-width: 16ch; margin: 0; font-size: clamp(2.4rem, 8vw, 5.8rem); line-height: .95; letter-spacing: -.06em; }
+.db-lede { max-width: 50rem; font-size: clamp(1.05rem, 2vw, 1.3rem); }
+.db-section { margin-top: clamp(2.5rem, 6vw, 5rem); }
+.db-section h2 { font-size: clamp(1.7rem, 4vw, 2.7rem); letter-spacing: -.04em; }
+.db-card { padding: clamp(1rem, 3vw, 2rem); background: var(--db-paper); border: 1px solid var(--db-line); border-radius: 1rem; box-shadow: 0 12px 30px rgba(29, 23, 19, .06); }
+.db-notice { padding: 1rem; color: #fff; background: var(--db-tomato); border-radius: .75rem; }
+.site-footer { padding: 2rem 0; color: var(--db-cream); background: var(--db-ink); }
+.site-footer p { margin: 0; }
+@media (max-width: 640px) { .site-header__inner { min-height: auto; padding-block: .8rem; align-items: flex-start; flex-direction: column; } .primary-nav ul { flex-wrap: wrap; gap: .6rem 1rem; } .db-main { padding-top: 1rem; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

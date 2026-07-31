@@ -25,6 +25,16 @@
 	--dbb-chip-delivery-ink: #7a4b00;
 	--dbb-chip-shop-bg: #e8eefc;
 	--dbb-chip-shop-ink: #213a6b;
+	--r-sm: 10px;
+	--r-md: 14px;
+	--r-lg: 18px;
+	--r-xl: 24px;
+	--r-pill: 999px;
+	--sh-1: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 14px rgba(0, 0, 0, .06);
+	--sh-2: 0 4px 10px rgba(0, 0, 0, .08), 0 16px 36px rgba(0, 0, 0, .10);
+	--ease: cubic-bezier(.32, .72, .33, 1);
+	--t-fast: 150ms;
+	--t-med: 220ms;
 	margin-right: 20px;
 }
 
@@ -42,9 +52,38 @@
 	font-size: 1.6rem;
 }
 
+.db-board-title-group { min-width: 0; }
+.db-board-kicker {
+	display: block;
+	margin-bottom: 0.2rem;
+	font-size: 0.72rem;
+	font-weight: 900;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+.db-board-title-group p { margin: 0.25rem 0 0; color: var(--dbb-muted); font-weight: 600; }
+.db-screen-layout { display: grid; gap: 1rem; align-items: start; }
+.doughboss-board--screen-pass .db-screen-layout { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr); }
+.doughboss-board--screen-pass .db-board { order: 1; }
+.doughboss-board--screen-pass .db-preorder-review { order: 2; margin: 0; max-height: calc(100vh - 10rem); overflow: auto; }
+.doughboss-board--screen-pass .db-preorder-list { grid-template-columns: minmax(0, 1fr); }
+.doughboss-board--screen-pass .db-lanes { grid-template-columns: minmax(0, 1fr); }
+.doughboss-board--screen-pass .db-lane { min-height: calc(100vh - 13rem); }
+.doughboss-board--screen-make .db-lanes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.doughboss-board--screen-make .db-card-actions .button,
+.doughboss-board--screen-pass .db-card-actions .button {
+	min-height: 58px;
+	font-size: 1.08rem;
+	font-weight: 900;
+	flex: 1 1 9rem;
+}
+.doughboss-board--screen-pass .db-card-actions-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.doughboss-board--screen-pass .db-review-change { grid-column: 1 / -1; }
+
 .db-board-actions {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 0.75rem;
 }
 
@@ -114,18 +153,57 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-lanes {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 1rem;
 	align-items: start;
 }
 
-@media (max-width: 1100px) {
+.db-preorder-review {
+	margin: 0 0 1rem;
+	padding: 1rem;
+	border: 2px solid var(--dbb-amber);
+	border-radius: var(--r-md);
+	background: #fff8e7;
+	box-shadow: var(--sh-1);
+}
+
+.db-preorder-review > h2 { margin: 0 0 0.35rem; }
+.db-preorder-review > p { margin: 0 0 0.8rem; color: var(--dbb-ink-soft); }
+.db-preorder-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.db-preorder-card { border-top: 5px solid var(--dbb-amber); }
+
+.db-preorder-contact-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.55rem;
+	margin: 0.75rem 0;
+	padding: 0.7rem;
+	border-radius: var(--r-sm);
+	background: #fff1c7;
+	font-weight: 700;
+}
+
+.db-preorder-contact-check input { margin-top: 0.2rem; }
+.db-preorder-eta { min-height: 40px; max-width: 13rem; }
+
+/* Kitchen tablets are commonly 768-1100px wide. Keep two live queues in
+   view there; collapsing every lane to one vertical list makes a busy service
+   needlessly slow. Only phones get the single-column fallback. */
+@media (min-width: 641px) and (max-width: 1100px) {
+	.db-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
 	.db-lanes { grid-template-columns: 1fr; }
+	.db-preorder-review { padding: 0.75rem; }
+	.doughboss-board--screen-pass .db-screen-layout { grid-template-columns: minmax(0, 1fr); }
+	.doughboss-board--screen-pass .db-preorder-review,
+	.doughboss-board--screen-pass .db-lane { max-height: none; min-height: 0; }
 }
 
 .db-lane {
 	background: var(--dbb-lane-bg);
-	border-radius: 10px;
+	border-radius: var(--r-lg);
 	padding: 0.75rem;
 	min-height: 120px;
 }
@@ -160,10 +238,10 @@ body.db-alerting .db-board-bar h1::after {
 	background: var(--dbb-paper);
 	border: 1px solid var(--dbb-line);
 	border-left: 6px solid var(--dbb-blue);
-	border-radius: 8px;
+	border-radius: var(--r-md);
 	padding: 0.75rem;
 	margin-bottom: 0.75rem;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+	box-shadow: var(--sh-1);
 }
 
 .db-card-pending { border-left-color: var(--dbb-red); }
@@ -203,6 +281,23 @@ body.db-alerting .db-board-bar h1::after {
 
 .db-type-delivery { background: var(--dbb-chip-delivery-bg); color: var(--dbb-chip-delivery-ink); }
 
+.db-type-dine_in {
+	background: #fff0c2;
+	color: #6d4a00;
+}
+
+.db-card-table {
+	padding: 0.2rem 0.5rem;
+	border: 2px solid #5d3600;
+	border-radius: 4px;
+	background: #ffda62;
+	color: #2d1a00;
+	font-size: 0.78rem;
+	font-weight: 900;
+	letter-spacing: 0.06em;
+	line-height: 1;
+}
+
 .db-card-shop {
 	font-size: 0.7rem;
 	text-transform: uppercase;
@@ -211,6 +306,17 @@ body.db-alerting .db-board-bar h1::after {
 	border-radius: 4px;
 	background: var(--dbb-chip-shop-bg);
 	color: var(--dbb-chip-shop-ink);
+}
+
+.db-card-source {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+	background: #f2e9ff;
+	color: #542a7a;
+	font-weight: 700;
 }
 
 .db-shop-select { min-height: 40px; }
@@ -239,15 +345,154 @@ body.db-alerting .db-board-bar h1::after {
 	border-radius: 6px;
 }
 
-.db-card-item { padding: 0.15rem 0; }
-.db-card-item-name { font-weight: 600; }
+.db-card-item {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 0.5rem;
+	padding: 0.3rem 0;
+	border-bottom: 1px solid #ececec;
+}
+.db-card-item:last-child { border-bottom: 0; }
+.db-card-item-quantity {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: start;
+	min-width: 2rem;
+	min-height: 1.6rem;
+	padding: 0 0.35rem;
+	border-radius: 999px;
+	background: var(--dbb-ink);
+	color: var(--dbb-paper);
+	font-size: 0.78rem;
+	font-weight: 800;
+}
+.db-card-item-body { min-width: 0; }
+.db-card-item-name { display: block; font-weight: 700; }
+.db-card-item-size,
 .db-card-item-toppings { display: block; font-size: 0.8rem; color: var(--dbb-muted); }
+.db-card-item-toppings { color: #743d00; font-weight: 600; }
 
 .db-card-meta { font-size: 0.85rem; color: var(--dbb-ink-soft); margin-bottom: 0.5rem; }
 .db-card-meta > div { margin: 0.15rem 0; }
 .db-card-total { font-weight: 700; color: var(--dbb-ink); }
 .db-card-eta { color: var(--dbb-green); font-weight: 600; }
+.db-card-payment { font-weight: 700; }
+.db-payment-paid { color: var(--dbb-green-dark); }
+.db-payment-unpaid { color: var(--dbb-amber); }
+.db-payment-refunded { color: var(--dbb-danger); }
+.db-card-exception {
+	border-left: 4px solid var(--dbb-danger);
+	background: #fff0f0;
+	color: #7b1718;
+	padding: 0.4rem 0.55rem;
+	border-radius: 4px;
+	font-weight: 800;
+}
+.db-card-timing-passed {
+	border: 2px solid var(--dbb-danger);
+	border-radius: 4px;
+	padding: 0.35rem 0.5rem;
+	color: var(--dbb-danger);
+	font-weight: 700;
+}
 .db-card-addr { color: var(--dbb-chip-delivery-ink); }
+
+/* --- SLA aging --------------------------------------------------------- */
+
+/* Accepted orders still in progress: amber at 5 min, red at 10 min.
+   Colour-only cues — no animation — so they hold under reduced motion. */
+.db-card.db-age-warn {
+	border-left-color: var(--dbb-amber);
+}
+
+.db-card.db-age-warn .db-card-head {
+	background: rgba(180, 83, 9, 0.12);
+	border-radius: 6px;
+	padding: 0.15rem 0.35rem;
+}
+
+.db-card.db-age-late {
+	border-left-color: var(--dbb-danger);
+	border-left-width: 8px;
+}
+
+.db-card.db-age-late .db-card-head {
+	background: rgba(179, 45, 46, 0.16);
+	border-radius: 6px;
+	padding: 0.15rem 0.35rem;
+}
+
+.db-card-due { color: var(--dbb-green); font-weight: 600; }
+.db-card-due-over { color: var(--dbb-danger); font-weight: 700; }
+
+/* --- Heartbeat badge ---------------------------------------------------- */
+
+.db-heartbeat {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-left: 0.5rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.db-heartbeat-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.db-heartbeat-live { color: var(--dbb-green); }
+.db-heartbeat-polling { color: var(--dbb-amber); }
+.db-heartbeat-offline { color: var(--dbb-danger); }
+
+.db-board-retry {
+	min-height: 40px;
+	border-color: var(--dbb-danger);
+	color: var(--dbb-danger);
+	font-weight: 800;
+}
+
+/* A stale board must remain readable, but it must not look operable. */
+.db-board-offline .db-card { opacity: 0.72; }
+.db-board-offline .db-card-actions .button:disabled,
+.db-board-offline .db-banner .button:disabled {
+	cursor: not-allowed;
+	filter: grayscale(1);
+	opacity: 0.68;
+}
+
+/* --- All-day strip ------------------------------------------------------ */
+
+.db-allday {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem 0.75rem;
+	background: var(--dbb-paper);
+	border: 1px solid var(--dbb-line);
+	border-radius: var(--r-md);
+	padding: 0.45rem 0.75rem;
+	margin-bottom: 0.75rem;
+	font-size: 0.95rem;
+}
+
+.db-allday-label {
+	color: var(--dbb-muted);
+	font-size: 0.8rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	font-weight: 700;
+}
+
+.db-allday-item { font-weight: 600; color: var(--dbb-ink); }
+.db-allday-item + .db-allday-item::before {
+	content: "· ";
+	color: var(--dbb-muted-2);
+	font-weight: 400;
+}
 
 /* --- Actions --------------------------------------------------------- */
 
@@ -267,10 +512,54 @@ body.db-alerting .db-board-bar h1::after {
 	font-size: 0.95rem;
 	display: inline-flex;
 	align-items: center;
+	border-radius: var(--r-sm);
+	transition: transform var(--t-fast) var(--ease);
+}
+
+.db-card-actions .button:active {
+	transform: scale(.98);
 }
 
 .db-eta { min-width: 52px; justify-content: center; }
 .db-cancel { color: var(--dbb-danger); margin-left: auto; }
+.db-review-change { margin-left: auto; }
+.db-no-next-action { margin: 0 0 0.4rem; color: var(--dbb-muted); font-size: 0.85rem; }
+.db-card-busy { opacity: 0.72; }
+.db-card-busy::after {
+	content: "Updating...";
+	display: block;
+	margin-top: 0.45rem;
+	color: var(--dbb-blue);
+	font-size: 0.82rem;
+	font-weight: 800;
+}
+
+/* A review surface, rather than an unsafe in-place order editor. The KDS has
+   no authority to reprice paid orders or issue refunds; that remains a manager
+   workflow. */
+.db-amendment-panel {
+	background: #fffdf8;
+	border: 2px solid #c87d00;
+	border-radius: var(--r-lg);
+	box-shadow: var(--sh-2);
+	padding: 1rem;
+	margin: 0 0 1rem;
+	max-width: 860px;
+}
+.db-amendment-panel:focus { outline: 3px solid var(--dbb-blue); outline-offset: 2px; }
+.db-amendment-head,
+.db-amendment-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.db-amendment-head h2 { margin: 0; font-size: 1.15rem; }
+.db-amendment-context { color: var(--dbb-muted); font-weight: 700; }
+.db-amendment-items { margin: 0.5rem 0; padding: 0.55rem; background: var(--dbb-paper); border-radius: var(--r-sm); }
+.db-amendment-boundary { margin: 0.75rem 0; padding: 0.7rem; background: #fff0c2; border-radius: var(--r-sm); color: #5d3600; font-weight: 600; }
+.db-amendment-feedback { min-height: 1.2rem; margin: 0.75rem 0 0; color: var(--dbb-green-dark); font-weight: 700; }
 
 /* Visible keyboard focus for accessibility. */
 .doughboss-board-wrap .button:focus-visible {
@@ -288,5 +577,369 @@ body.db-alerting .db-board-bar h1::after {
 	.db-card-fresh {
 		animation: none;
 		box-shadow: 0 0 0 3px rgba(214, 69, 43, 0.35);
+	}
+
+	.db-card-actions .button {
+		transition: none;
+	}
+
+	.db-card-actions .button:active {
+		transform: none;
+	}
+}
+
+@media (max-width: 600px) {
+	.doughboss-board-wrap { margin-right: 0; }
+	.db-board-actions { width: 100%; }
+	.db-card-time { margin-left: 0; }
+	.db-review-change { margin-left: 0; }
+	.db-amendment-panel { padding: 0.75rem; }
+}
+
+@media (max-width: 480px) {
+	.db-board-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.db-board-actions .button,
+	.db-sound-toggle { min-height: 44px; width: 100%; }
+	.db-banner {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.db-banner .button { width: 100%; }
+	.db-preorder-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Kitchen touch screens need forgiving targets even when Windows reports a
+   mouse-like pointer. These are deliberately larger than generic wp-admin. */
+@media (pointer: coarse) {
+	.doughboss-board-wrap .button,
+	.doughboss-board-wrap select { min-height: 56px; }
+	.doughboss-board-wrap .db-card-actions .button { padding: 0.75rem 1rem; }
+}
+
+/* --- DoughBoss KDS Pro polish: touch-first, live, dark shop-floor UI ---- */
+
+body.doughboss-staff-kitchen .doughboss-board-wrap {
+	--dbb-kds-bg: #0b0907;
+	--dbb-kds-panel: rgba(24, 19, 15, 0.92);
+	--dbb-kds-panel-2: rgba(34, 27, 21, 0.94);
+	--dbb-kds-line: rgba(255, 237, 205, 0.15);
+	--dbb-kds-cream: #fff4df;
+	--dbb-kds-muted: rgba(255, 244, 223, 0.68);
+	--dbb-kds-amber: #f0a529;
+	--dbb-kds-red: #e24d28;
+	--dbb-kds-green: #49b86f;
+	color: var(--dbb-kds-cream);
+	background:
+		radial-gradient(circle at 18% 8%, rgba(226, 77, 40, 0.2), transparent 33rem),
+		radial-gradient(circle at 88% 20%, rgba(240, 165, 41, 0.16), transparent 28rem),
+		linear-gradient(135deg, #090705 0%, #16110d 46%, #0b0907 100%);
+	border-radius: 22px;
+	margin: 0 12px 0 0;
+	min-height: calc(100vh - 44px);
+	overflow: hidden;
+	padding: 1rem;
+}
+
+body.doughboss-staff-kitchen .db-board-bar {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	background: linear-gradient(135deg, rgba(10, 8, 7, 0.96), rgba(36, 26, 19, 0.94));
+	border: 1px solid var(--dbb-kds-line);
+	border-radius: 20px;
+	box-shadow: 0 22px 55px rgba(0, 0, 0, 0.34);
+	margin-bottom: 1rem;
+	padding: 1rem 1.15rem;
+}
+
+body.doughboss-staff-kitchen .db-board-kicker {
+	color: var(--dbb-kds-amber);
+	font-weight: 900;
+	letter-spacing: 0.28em;
+}
+
+body.doughboss-staff-kitchen .db-board-bar h1 {
+	color: #fff;
+	font-size: clamp(2.1rem, 4vw, 4.4rem);
+	line-height: 0.9;
+	margin: 0.08rem 0;
+	text-shadow: 0 4px 22px rgba(226, 77, 40, 0.28);
+}
+
+body.doughboss-staff-kitchen .db-board-title-group p,
+body.doughboss-staff-kitchen .db-board-status {
+	color: var(--dbb-kds-muted);
+}
+
+body.doughboss-staff-kitchen .db-live-pulse {
+	display: grid;
+	grid-template-columns: minmax(170px, 0.8fr) minmax(260px, 1.4fr) minmax(220px, 1fr);
+	gap: 1rem;
+	align-items: center;
+	background: linear-gradient(135deg, rgba(255, 244, 223, 0.09), rgba(255, 255, 255, 0.035));
+	border: 1px solid var(--dbb-kds-line);
+	border-radius: 22px;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 48px rgba(0, 0, 0, 0.24);
+	margin: 0 0 1rem;
+	padding: 0.9rem;
+}
+
+body.doughboss-staff-kitchen .db-live-pulse__main strong {
+	color: #fff;
+	display: block;
+	font-size: clamp(1.8rem, 3vw, 3.2rem);
+	line-height: 1;
+}
+
+body.doughboss-staff-kitchen .db-live-pulse__main small,
+body.doughboss-staff-kitchen .db-live-pulse__kicker {
+	color: var(--dbb-kds-muted);
+	display: block;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+body.doughboss-staff-kitchen .db-live-pulse__graphs {
+	display: grid;
+	gap: 0.45rem;
+}
+
+body.doughboss-staff-kitchen .db-live-graph {
+	display: grid;
+	grid-template-columns: 4.4rem minmax(120px, 1fr) 2.2rem;
+	gap: 0.65rem;
+	align-items: center;
+	color: var(--dbb-kds-cream);
+	font-weight: 900;
+}
+
+body.doughboss-staff-kitchen .db-live-graph-label {
+	color: var(--dbb-kds-muted);
+	font-size: 0.82rem;
+	text-transform: uppercase;
+}
+
+body.doughboss-staff-kitchen .db-live-graph-track {
+	background: rgba(255, 244, 223, 0.12);
+	border-radius: 999px;
+	height: 0.9rem;
+	overflow: hidden;
+}
+
+body.doughboss-staff-kitchen .db-live-graph-fill {
+	background: var(--dbb-kds-amber);
+	border-radius: inherit;
+	display: block;
+	height: 100%;
+	min-width: 0.25rem;
+	transition: width 0.45s ease;
+}
+
+body.doughboss-staff-kitchen .db-live-graph--new .db-live-graph-fill { background: var(--dbb-kds-red); }
+body.doughboss-staff-kitchen .db-live-graph--pass .db-live-graph-fill { background: var(--dbb-kds-green); }
+
+body.doughboss-staff-kitchen .db-live-pulse__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+	justify-content: flex-end;
+}
+
+body.doughboss-staff-kitchen .db-pulse-chip {
+	background: rgba(255, 244, 223, 0.1);
+	border: 1px solid var(--dbb-kds-line);
+	border-radius: 999px;
+	color: var(--dbb-kds-cream);
+	font-size: 0.86rem;
+	font-weight: 900;
+	padding: 0.44rem 0.62rem;
+}
+
+body.doughboss-staff-kitchen .db-pulse-chip--paid { border-color: rgba(73, 184, 111, 0.46); color: #bff3ce; }
+body.doughboss-staff-kitchen .db-pulse-chip--unpaid { border-color: rgba(240, 165, 41, 0.52); color: #ffd891; }
+body.doughboss-staff-kitchen .db-pulse-chip--allergen,
+body.doughboss-staff-kitchen .db-pulse-chip--late { border-color: rgba(226, 77, 40, 0.62); color: #ffb6a5; }
+
+body.doughboss-staff-kitchen .db-lanes {
+	gap: 1rem;
+}
+
+body.doughboss-staff-kitchen .db-lane {
+	background: var(--dbb-kds-panel);
+	border: 1px solid var(--dbb-kds-line);
+	border-radius: 22px;
+	box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+	padding: 0.9rem;
+}
+
+body.doughboss-staff-kitchen .db-lane-title {
+	align-items: baseline;
+	color: #fff;
+	display: flex;
+	font-size: clamp(1.25rem, 2vw, 2rem);
+	justify-content: space-between;
+	margin-bottom: 0.15rem;
+}
+
+body.doughboss-staff-kitchen .db-lane-subtitle {
+	color: var(--dbb-kds-muted);
+	font-size: 0.82rem;
+	font-weight: 800;
+	margin: 0 0 0.8rem;
+	text-transform: uppercase;
+}
+
+body.doughboss-staff-kitchen .db-lane-count {
+	background: var(--dbb-kds-amber);
+	color: #120d09;
+	font-size: 1rem;
+	min-width: 2.2rem;
+}
+
+body.doughboss-staff-kitchen .db-card {
+	background: #fff7e9;
+	border: 0;
+	border-left: 8px solid var(--dbb-kds-amber);
+	border-radius: 18px;
+	box-shadow: 0 18px 36px rgba(0, 0, 0, 0.2);
+	color: #17120e;
+	margin-bottom: 0.9rem;
+	padding: 1rem;
+}
+
+body.doughboss-staff-kitchen .db-lane .db-card:first-of-type {
+	box-shadow: 0 0 0 3px rgba(240, 165, 41, 0.38), 0 24px 44px rgba(0, 0, 0, 0.28);
+	transform: translateY(-1px);
+}
+
+body.doughboss-staff-kitchen .db-card-pending { border-left-color: var(--dbb-kds-red); }
+body.doughboss-staff-kitchen .db-card-ready,
+body.doughboss-staff-kitchen .db-card-out_for_delivery { border-left-color: var(--dbb-kds-green); }
+
+body.doughboss-staff-kitchen .db-card-head {
+	gap: 0.42rem;
+}
+
+body.doughboss-staff-kitchen .db-card-number {
+	font-size: clamp(2.2rem, 4.6vw, 4rem);
+	letter-spacing: 0.03em;
+}
+
+body.doughboss-staff-kitchen .db-card-status {
+	background: #17120e;
+	border-radius: 999px;
+	color: #fff4df;
+	display: inline-flex;
+	font-size: 0.9rem;
+	font-weight: 900;
+	margin: 0.25rem 0 0.55rem;
+	padding: 0.36rem 0.64rem;
+	text-transform: uppercase;
+}
+
+body.doughboss-staff-kitchen .db-card-item {
+	font-size: clamp(1rem, 1.25vw, 1.18rem);
+	padding: 0.5rem 0;
+}
+
+body.doughboss-staff-kitchen .db-card-item-quantity {
+	background: #17120e;
+	color: #fff4df;
+	font-size: 1rem;
+	min-width: 2.6rem;
+}
+
+body.doughboss-staff-kitchen .db-card-notes,
+body.doughboss-staff-kitchen .db-card-exception {
+	border-radius: 12px;
+	font-size: 0.95rem;
+	line-height: 1.35;
+	margin: 0.45rem 0;
+	padding: 0.58rem 0.7rem;
+}
+
+body.doughboss-staff-kitchen .db-card-notes {
+	background: #fff1cf;
+	color: #4d3000;
+	font-weight: 800;
+}
+
+body.doughboss-staff-kitchen .db-card-notes-alert,
+body.doughboss-staff-kitchen .db-card-exception {
+	background: #ffe2dc;
+	border: 2px solid rgba(226, 77, 40, 0.42);
+	color: #651f0f;
+	font-weight: 900;
+}
+
+body.doughboss-staff-kitchen .db-card-actions-row,
+body.doughboss-staff-kitchen .db-eta-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+	gap: 0.55rem;
+}
+
+body.doughboss-staff-kitchen .db-card-actions .button {
+	align-items: center;
+	border-radius: 14px;
+	display: inline-flex;
+	font-size: 1rem;
+	font-weight: 950;
+	justify-content: center;
+	min-height: 64px;
+	text-transform: uppercase;
+	touch-action: manipulation;
+}
+
+body.doughboss-staff-kitchen .db-card-actions .button-primary {
+	background: #e24d28;
+	border-color: #c63c1f;
+	color: #fff;
+}
+
+body.doughboss-staff-kitchen .doughboss-board--screen-pass .db-card-actions .button-primary {
+	background: #1f8d4f;
+	border-color: #176d3d;
+}
+
+body.doughboss-staff-kitchen .db-allday {
+	background: rgba(255, 244, 223, 0.09);
+	border-color: var(--dbb-kds-line);
+	color: var(--dbb-kds-cream);
+}
+
+body.doughboss-staff-kitchen .db-allday-label,
+body.doughboss-staff-kitchen .db-allday-item + .db-allday-item::before {
+	color: var(--dbb-kds-muted);
+}
+
+body.doughboss-staff-kitchen .db-allday-item {
+	color: #fff;
+}
+
+@media (max-width: 1100px) {
+	body.doughboss-staff-kitchen .db-live-pulse {
+		grid-template-columns: 1fr;
+	}
+	body.doughboss-staff-kitchen .db-live-pulse__chips {
+		justify-content: flex-start;
+	}
+}
+
+@media (max-width: 782px) {
+	body.doughboss-staff-kitchen .doughboss-board-wrap {
+		border-radius: 0;
+		margin: 0;
+		min-height: 100vh;
+		padding: 0.75rem;
+	}
+	body.doughboss-staff-kitchen .db-board-bar {
+		top: 46px;
+	}
+	body.doughboss-staff-kitchen .db-live-graph {
+		grid-template-columns: 3.8rem minmax(92px, 1fr) 2rem;
 	}
 }

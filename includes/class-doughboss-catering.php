@@ -278,16 +278,29 @@ class DoughBoss_Catering {
 			return false;
 		}
 
+		$id = absint( $id );
+
 		global $wpdb;
+		$data   = array(
+			'status'     => $status,
+			'updated_at' => current_time( 'mysql' ),
+		);
+		$format = array( '%s', '%s' );
+
+		if ( self::STATUS_QUOTED === $status ) {
+			$enquiry = self::get( $id );
+			if ( $enquiry && empty( $enquiry['quoted_at'] ) ) {
+				$data['quoted_at'] = current_time( 'mysql' );
+				$format[]          = '%s';
+			}
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$ok = $wpdb->update(
 			self::table(),
-			array(
-				'status'     => $status,
-				'updated_at' => current_time( 'mysql' ),
-			),
-			array( 'id' => absint( $id ) ),
-			array( '%s', '%s' ),
+			$data,
+			array( 'id' => $id ),
+			$format,
 			array( '%d' )
 		);
 

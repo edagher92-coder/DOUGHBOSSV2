@@ -34,6 +34,7 @@
 
 	// Camera QR scan (html5-qrcode, lazy-loaded from CDN on first use).
 	var CAM_CDN = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+	var CAM_SRI = 'sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+';
 	var camScanner = null;
 	var camLibPromise = null;
 
@@ -93,7 +94,7 @@
 
 		els.input = make( 'input', 'db-scan__input' );
 		els.input.setAttribute( 'type', 'text' );
-		els.input.setAttribute( 'placeholder', 'SNOW-XXXXXXXX' );
+		els.input.setAttribute( 'placeholder', 'DOUGH-XXXXXXXX' );
 		els.input.setAttribute( 'autocomplete', 'off' );
 		els.input.setAttribute( 'spellcheck', 'false' );
 		els.input.setAttribute( 'aria-label', 'Voucher code' );
@@ -199,6 +200,8 @@
 		camLibPromise = new Promise( function ( resolve, reject ) {
 			var s = document.createElement( 'script' );
 			s.src = CAM_CDN;
+			s.integrity = CAM_SRI;
+			s.crossOrigin = 'anonymous';
 			s.async = true;
 			s.onload = function () {
 				if ( window.Html5Qrcode ) {

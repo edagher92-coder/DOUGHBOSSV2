@@ -144,6 +144,18 @@ class DoughBoss_POSPal_Sync {
 	 * On redemption, best-effort revoke the mirrored POSPal coupon so it can't be
 	 * reused in-store. No-op when nothing was granted (no stored coupon ref).
 	 *
+	 * Deliberately does NOT roll back the WordPress redemption if POSPal revoke
+	 * fails: WordPress is the source of truth for whether the voucher was applied
+	 * (that transition is atomic in DoughBoss_Voucher::redeem()), and an in-store
+	 * checkout must never be blocked by a POSPal outage. A revoke failure is a
+	 * mirror drift, not a money-safety problem — the reconciliation cron and the
+	 * revoke's own retry curve close the gap.
+	 *
+	 * TODO(next slice): route the revoke through DoughBoss_POSPal_Outbox so a
+	 * transient failure gets the same exponential-backoff durable retry that
+	 * order pushes now enjoy. Kept out of this slice to keep the outbox scope
+	 * to order pushes only.
+	 *
 	 * @param object $row     Voucher row (passed by the redeem hook).
 	 * @param float  $amount  Amount applied (unused).
 	 * @param string $channel Redemption channel (unused).

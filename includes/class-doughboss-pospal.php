@@ -125,11 +125,17 @@ class DoughBoss_POSPal {
 	/**
 	 * Build POSPal's request signature: strtoupper( md5( appKey . rawBody ) ).
 	 *
+	 * Single source of truth for the signature format — every signed call goes
+	 * through here. Public so the smoke tests can pin the format against a known
+	 * vector; any accidental drift in the algorithm breaks the test rather than
+	 * silently sending bad requests.
+	 *
+	 * @param string $app_key  The store's POSPal appKey (secret).
 	 * @param string $raw_body The exact JSON string that will be sent as the body.
-	 * @return string
+	 * @return string 32-char uppercase hex md5.
 	 */
-	private static function sign( $raw_body ) {
-		return strtoupper( md5( self::app_key() . $raw_body ) );
+	public static function sign( $app_key, $raw_body ) {
+		return strtoupper( md5( (string) $app_key . (string) $raw_body ) );
 	}
 
 	/**
@@ -578,7 +584,7 @@ class DoughBoss_POSPal {
 					'User-Agent'     => 'openApi',
 					'Content-Type'   => 'application/json; charset=utf-8',
 					'time-stamp'     => self::timestamp_ms(),
-					'data-signature' => strtoupper( md5( $creds['app_key'] . $raw_body ) ),
+					'data-signature' => self::sign( $creds['app_key'], $raw_body ),
 				),
 				'body'     => $raw_body,
 			)

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>DoughBoss order loop UX preview</title>
+	<link rel="stylesheet" href="../public/css/doughboss.css">
+	<style>
+		body { margin: 0; background: #171717; color: #111; font-family: Arial, sans-serif; }
+		.preview-hero { padding: 52px clamp(18px, 6vw, 90px) 140px; color: #fff; background: radial-gradient(circle at 18% 20%, #444, #171717 52%); }
+		.preview-hero p { max-width: 640px; color: #d8d8d8; }
+		.preview-main { width: min(1440px, calc(100% - 24px)); margin: -90px auto 80px; display: grid; gap: 26px; }
+		.preview-note { color: #bbb; font-size: 13px; text-align: center; }
+	</style>
+</head>
+<body>
+	<header class="preview-hero">
+		<p style="letter-spacing:.18em;text-transform:uppercase;font-weight:800">DoughBoss · Revesby</p>
+		<h1 style="font-size:clamp(42px,9vw,100px);margin:.1em 0;line-height:.9">ORDER ONLINE</h1>
+		<p>Production-component preview: menu discovery, touch-friendly cart, guided details and Stripe-hosted wallet handoff.</p>
+	</header>
+	<main class="preview-main">
+		<div class="db-app db-menu" data-doughboss-menu data-cart-url="#checkout"></div>
+		<div id="checkout" class="db-app db-cart" data-doughboss-cart></div>
+		<div class="db-app db-tracking" data-doughboss-tracking>
+			<form class="db-track-form">
+				<p class="db-order-kicker">Live order updates</p>
+				<h3>Track your order</h3>
+				<p class="db-track-intro">Enter the order number from your confirmation and the same email used at checkout.</p>
+				<label>Order number<input type="text" name="number" required maxlength="64" autocomplete="off" placeholder="DB-000000-XXXX"></label>
+				<label>Email used on the order<input type="email" name="email" required autocomplete="email"></label>
+				<button type="submit" class="db-btn db-btn--lg">Check live status</button>
+			</form>
+			<div class="db-track-result" aria-live="polite"></div>
+		</div>
+		<p class="preview-note">Preview data only. No payment, order or customer data leaves this page.</p>
+	</main>
+	<script>
+		window.DoughBossData = {
+			restUrl: 'https://preview.invalid/doughboss/v1',
+			currency: '$',
+			payments: { enabled: true, gateway: 'stripe' },
+			i18n: { addToCart: 'Add to cart', added: 'Added!', viewCart: 'View cart' }
+		};
+		(function () {
+			var menu = [
+				{ id: 1, name: 'Zaatar & Cheese', category: 'Manoush', description: 'A folded DoughBoss favourite with zaatar and melted cheese.', price: 10.5, available: true, image: '../public/images/menu/zaatar-cheese.webp', options: [] },
+				{ id: 2, name: 'Zaatar Veggie', category: 'Manoush', description: 'Zaatar, tomato, cucumber, mint and olives.', price: 11.5, available: true, image: '../public/images/menu/zaatar-veggie-wrap.webp', options: [] },
+				{ id: 3, name: 'DoughBoss Special', category: 'Pizza', description: 'Cheese, pepperoni, capsicum, mushroom and olives.', price: 22, available: true, image: '../public/images/menu/dough-boss-special.webp', options: [
+					{ id: 'crust', label: 'Crust', type: 'radio', choices: [
+						{ slug: 'classic', label: 'Classic', price: 0, default: true },
+						{ slug: 'thick', label: 'Thick', price: 0 }
+					] }
+				] },
+				{ id: 4, name: 'Chicken Pie', category: 'Pies', description: 'Seasoned chicken in our house-baked pie.', price: 9.5, available: true, image: '../public/images/menu/chicken-pie.webp', options: [] },
+				{ id: 5, name: 'Spring Water', category: 'Drinks', description: 'Chilled still water.', price: 3.5, available: true, image: '../public/images/menu/spring-water.webp', options: [] }
+			];
+			var cart = {
+				items: [
+					{ key: 'line-1', name: 'Zaatar & Cheese', quantity: 1, line_total: 10.5, size: '', toppings: [] },
+					{ key: 'line-2', name: 'Spring Water', quantity: 1, line_total: 3.5, size: '', toppings: [] }
+				],
+				totals: { subtotal: 14, tax: 1.27, total: 14, discount: 0, delivery_fee: 0, tax_inclusive: true, item_count: 2 }
+			};
+			function response(data) {
+				return Promise.resolve({ ok: true, json: function () { return Promise.resolve(data); } });
+			}
+			window.fetch = function (url, options) {
+				var path = String(url).replace(/^.*\/doughboss\/v1/, '').split('?')[0];
+				if (path === '/table/context') { return response({ active: false }); }
+				if (path === '/menu') { return response(menu); }
+				if (path === '/locations') { return response([{ id: 1, name: 'Revesby', suburb: 'Revesby', address: 'Shop 12/25 Selems Parade, Revesby NSW 2212', phone: '02 9774 2286' }]); }
+				if (path === '/config') { return response({ ordering_open: true, enable_pickup: true, enable_delivery: false, single_location_mode: true, single_location_id: 1, gst_inclusive: true, sizes: [], toppings: [] }); }
+				if (path === '/cart') { return response(cart); }
+				if (path === '/order/track') {
+					return response({ order_number: 'DB-260728-DEMO', order_type: 'pickup', status: 'preparing', status_label: 'Being prepared', customer_status_label: 'Being prepared', payment_status: 'paid', total: 14, items: cart.items, accepted_at: '2026-07-28 04:10:00', eta_minutes: 15 });
+				}
+				if (options && options.method === 'POST') { return response(cart); }
+				return response({});
+			};
+		}());
+	</script>
+	<script src="../public/js/doughboss.js"></script>
+</body>
+</html>

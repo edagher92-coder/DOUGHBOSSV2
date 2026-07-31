@@ -27,6 +27,7 @@ class DoughBoss_Assets {
 		'doughboss_shop_picker',
 		'doughboss_catering',
 		'doughboss_voucher_claim',
+		'doughboss_ordering_status',
 	);
 
 	/**
@@ -36,6 +37,39 @@ class DoughBoss_Assets {
 	 */
 	public function init() {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue' ) );
+		add_filter( 'body_class', array( $this, 'body_classes' ) );
+	}
+
+	/**
+	 * Whether the current page is the complete DoughBoss ordering journey.
+	 *
+	 * A shortcode-based check keeps this portable when the Order page receives a
+	 * different numeric ID on staging, production or a future franchise site.
+	 *
+	 * @return bool
+	 */
+	private function is_order_page() {
+		return $this->current_post_has( 'doughboss_menu' )
+			&& $this->current_post_has( 'doughboss_cart' );
+	}
+
+	/**
+	 * Add narrowly scoped storefront classes for the integrated order page.
+	 *
+	 * @param string[] $classes Existing WordPress body classes.
+	 * @return string[]
+	 */
+	public function body_classes( $classes ) {
+		if ( ! $this->is_order_page() ) {
+			return $classes;
+		}
+
+		$classes[] = 'doughboss-order-page';
+		if ( ! DoughBoss_Settings::ordering_open() ) {
+			$classes[] = 'doughboss-ordering-closed';
+		}
+
+		return array_values( array_unique( $classes ) );
 	}
 
 	/**
@@ -86,6 +120,25 @@ class DoughBoss_Assets {
 	 * @return void
 	 */
 	public function enqueue() {
+		// The hero has deliberately separate, dependency-free assets. Load it
+		// before considering the storefront app, so a hero-only landing page
+		// stays free of checkout and payment code.
+		if ( $this->current_post_has( 'doughboss_manoush_hero' ) || apply_filters( 'doughboss_load_manoush_hero_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-manoush-hero',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-manoush-hero.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-manoush-hero',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-manoush-hero.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
 		if ( ! $this->should_load() ) {
 			return;
 		}
@@ -97,13 +150,75 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION
 		);
 
-		// Load Stripe.js (from Stripe's CDN, as they require) only when card
-		// payments are switched on and configured. Our script then depends on it.
-		$deps         = array();
-		$payments_on  = DoughBoss_Stripe::ready();
+		$is_order_page = $this->is_order_page();
+		if ( $is_order_page ) {
+			wp_enqueue_style(
+				'doughboss-order-page',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-order-page.css',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION
+			);
+		}
+
+		/*
+		 * Consent-gated measurement bridge. It contains no tracker IDs, customer
+		 * data or vendor network calls by default. A consent manager must call
+		 * DoughBossMarketing.setConsent() before configured Meta/TikTok globals
+		 * can receive an event. AdPilot remains server-to-server and is exposed
+		 * here only as a readiness flag, never as a browser endpoint or secret.
+		 */
+		$marketing_env     = getenv( 'DOUGHBOSS_MARKETING_ENABLED' );
+		$marketing_enabled = defined( 'DOUGHBOSS_MARKETING_ENABLED' )
+			? (bool) DOUGHBOSS_MARKETING_ENABLED
+			: ( false !== $marketing_env && filter_var( $marketing_env, FILTER_VALIDATE_BOOLEAN ) );
+		$meta_pixel_id     = defined( 'DOUGHBOSS_META_PIXEL_ID' ) ? (string) DOUGHBOSS_META_PIXEL_ID : (string) getenv( 'DOUGHBOSS_META_PIXEL_ID' );
+		$tiktok_pixel_id   = defined( 'DOUGHBOSS_TIKTOK_PIXEL_ID' ) ? (string) DOUGHBOSS_TIKTOK_PIXEL_ID : (string) getenv( 'DOUGHBOSS_TIKTOK_PIXEL_ID' );
+		$marketing_config  = apply_filters(
+			'doughboss_marketing_config',
+			array(
+				'enabled'            => (bool) $marketing_enabled,
+				'metaPixelId'        => sanitize_text_field( $meta_pixel_id ),
+				'tiktokPixelId'      => sanitize_text_field( $tiktok_pixel_id ),
+				'consentVersion'     => '2026-07',
+				'adpilotServerReady' => false,
+			)
+		);
+		wp_enqueue_script(
+			'doughboss-marketing',
+			DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-marketing.js',
+			array(),
+			DOUGHBOSS_VERSION,
+			true
+		);
+		wp_localize_script( 'doughboss-marketing', 'DoughBossMarketingConfig', $marketing_config );
+
+		// Load the ACTIVE gateway's official card-capture library (from the
+		// gateway's own host, as both require) only when card payments are
+		// switched on and configured. Gating goes through the gateway-agnostic
+		// DoughBoss_Payment facade — the same gate the REST checkout enforces —
+		// never DoughBoss_Stripe directly: checking only Stripe here while the
+		// `payment_gateway` setting selects Tyro would leave checkout demanding
+		// a payment the storefront renders no card UI for.
+		$deps        = array( 'doughboss-marketing' );
+		// A configured gateway must not initialize browser payment fields while
+		// the store is intentionally in browse-only / Coming Soon mode.
+		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
+		$gateway     = DoughBoss_Settings::payment_gateway();
 		if ( $payments_on ) {
-			wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
-			$deps[] = 'stripe-js';
+			if ( 'tyro' === $gateway ) {
+				// Tyro requires its PCI-scoped browser library to be loaded directly
+				// from Tyro. Never bundle, proxy or self-host this file.
+				wp_enqueue_script( 'tyro-js', 'https://pay.connect.tyro.com/v1/tyro.js', array(), null, true );
+				$deps[] = 'tyro-js';
+			} elseif ( 'mpgs' === $gateway ) {
+				// Mastercard Hosted Checkout owns card entry and 3-D Secure. The
+				// script origin is derived from the allowlisted API host.
+				wp_enqueue_script( 'mpgs-checkout', DoughBoss_MPGS::checkout_script_url(), array(), null, true );
+				$deps[] = 'mpgs-checkout';
+			} else {
+				// Stripe Checkout is a full-page provider-hosted redirect. The
+				// storefront never loads Stripe.js or renders card fields.
+			}
 		}
 
 		wp_enqueue_script(
@@ -114,6 +229,16 @@ class DoughBoss_Assets {
 			true
 		);
 
+		if ( $is_order_page ) {
+			wp_enqueue_script(
+				'doughboss-order-page',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-order-page.js',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
 		wp_localize_script(
 			'doughboss',
 			'DoughBossData',
@@ -121,13 +246,28 @@ class DoughBoss_Assets {
 				'restUrl'  => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
+				'googleReviewUrl' => DoughBoss_Settings::google_review_url(),
 				'payments' => array(
 					'enabled' => $payments_on,
-					'pk'      => $payments_on ? DoughBoss_Stripe::publishable_key() : '',
+					// Public-safe browser identifier for the ACTIVE gateway:
+					// Stripe's publishable key, or Tyro Connect's harmless bootstrap marker.
+					'pk'      => $payments_on ? DoughBoss_Payment::publishable_key() : '',
+					// Which gateway the storefront JS should drive (Stripe.js
+					// Elements vs Tyro Connect's hosted pay form).
+					'gateway' => $gateway,
+					'hostedCheckout' => 'stripe' === $gateway,
+					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ),
 				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),
 					'added'        => __( 'Added!', 'doughboss' ),
+					'addedToCart'  => __( 'added to cart', 'doughboss' ),
+					'menuCategories' => __( 'Menu categories', 'doughboss' ),
+					'viewCart'     => __( 'View cart', 'doughboss' ),
+					'cartItems'    => __( 'items', 'doughboss' ),
+					'customize'    => __( 'Customize', 'doughboss' ),
+					'customizationAvailable' => __( 'Customise when ordering opens', 'doughboss' ),
+					'comingSoonShort' => __( 'Coming soon', 'doughboss' ),
 					'emptyCart'    => __( 'Your cart is empty.', 'doughboss' ),
 					'remove'       => __( 'Remove', 'doughboss' ),
 					'subtotal'     => __( 'Subtotal', 'doughboss' ),
@@ -135,6 +275,7 @@ class DoughBoss_Assets {
 					'delivery'     => __( 'Delivery', 'doughboss' ),
 					'total'        => __( 'Total', 'doughboss' ),
 					'placeOrder'   => __( 'Place order', 'doughboss' ),
+					'orderingComingSoon' => __( 'Online ordering coming soon', 'doughboss' ),
 					'placing'      => __( 'Placing order…', 'doughboss' ),
 					'soldOut'      => __( 'Sold out', 'doughboss' ),
 					'chooseShop'   => __( 'Choose your shop', 'doughboss' ),
@@ -143,6 +284,14 @@ class DoughBoss_Assets {
 					'cardDetails'  => __( 'Card details', 'doughboss' ),
 					'payProcessing'=> __( 'Processing payment…', 'doughboss' ),
 					'cardError'    => __( 'Please check your card details and try again.', 'doughboss' ),
+					'cardNumber'   => __( 'Card number', 'doughboss' ),
+					'cardExpiryMonth' => __( 'Expiry month (MM)', 'doughboss' ),
+					'cardExpiryYear'  => __( 'Expiry year (YY)', 'doughboss' ),
+					'cardCsc'         => __( 'Security code (CVC)', 'doughboss' ),
+					'cardNumberError' => __( 'Please check the card number.', 'doughboss' ),
+					'cardExpiryError' => __( 'Please check the card expiry date.', 'doughboss' ),
+					'cardCscError'    => __( 'Please check the card security code.', 'doughboss' ),
+					'cardInitError'   => __( 'The secure card form could not be loaded. Please refresh the page and try again.', 'doughboss' ),
 					'vClaiming'    => __( 'Getting your code…', 'doughboss' ),
 					'vYourCode'    => __( 'Your code', 'doughboss' ),
 					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),
@@ -157,7 +306,7 @@ class DoughBoss_Assets {
 
 		// Catering page: ship its own self-contained app + styles, loaded only
 		// when the catering shortcode is on the page (it reuses DoughBossData).
-		if ( $this->current_post_has( 'doughboss_catering' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+		if ( $this->current_post_has( 'doughboss_catering' ) || apply_filters( 'doughboss_load_catering_assets', false ) ) {
 			wp_enqueue_style(
 				'doughboss-catering',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-catering.css',
@@ -175,7 +324,7 @@ class DoughBoss_Assets {
 
 		// Voucher claim widget: its own small app + styles, loaded only when the
 		// claim shortcode is on the page (reuses DoughBossData from the main app).
-		if ( $this->current_post_has( 'doughboss_voucher_claim' ) || apply_filters( 'doughboss_load_assets', false ) ) {
+		if ( $this->current_post_has( 'doughboss_voucher_claim' ) || apply_filters( 'doughboss_load_voucher_assets', false ) ) {
 			wp_enqueue_style(
 				'doughboss-voucher',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-voucher.css',
