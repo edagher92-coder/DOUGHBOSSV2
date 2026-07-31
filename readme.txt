@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.29.0
+Stable tag: 2.29.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,10 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.29.1 =
+* Keeps Stripe Checkout return identifiers in the browser-only URL fragment so managed WordPress firewalls cannot block the paid-order confirmation page.
+* Retains backward compatibility with older query-string returns while preserving webhook recovery and duplicate-order protection.
 
 = 2.29.0 =
 * Added durable server-owned checkout snapshots so a signed Stripe webhook can create the paid order, kitchen ticket and downstream notifications even when the customer closes the browser before returning.

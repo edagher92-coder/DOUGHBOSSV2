@@ -25,8 +25,10 @@ test('storefront redirects to a verified Stripe-hosted Checkout Session', functi
 	assert.match(client, /\^https:\\\/\\\/checkout\\\.stripe\\\.com\\\//);
 	assert.match(client, /window\.sessionStorage\.setItem\(['"]doughbossStripePending['"]/);
 	assert.match(client, /window\.location\.assign\(session\.checkout_url\)/);
+	assert.match(client, /window\.location\.hash/);
 	assert.match(client, /doughboss_stripe_return[\s\S]{0,1000}?session_id[\s\S]{0,1000}?placeOrder\(stripePending\.payload\)/);
 	assert.match(client, /stripePending\.payload\.payment_intent_id\s*=\s*returnedSession/);
+	assert.match(client, /cleanStripeUrl\.hash\s*=\s*['"]{2}/);
 	assert.doesNotMatch(client, /window\.Stripe\s*\(/);
 	assert.doesNotMatch(client, /stripe\.elements\s*\(/);
 	assert.doesNotMatch(client, /stripe\.confirmPayment\s*\(/);
@@ -60,7 +62,8 @@ test('Stripe-hosted Checkout keeps cards and eligible Apple Pay and Google Pay w
 
 test('checkout return and webhooks bind the hosted session to one canonical PaymentIntent', function () {
 	assert.match(restPhp, /stripe_checkout_return_urls\s*\(/);
-	assert.match(restPhp, /session_id=\{CHECKOUT_SESSION_ID\}/);
+	assert.match(restPhp, /#doughboss_stripe_return=1&session_id=\{CHECKOUT_SESSION_ID\}/);
+	assert.doesNotMatch(restPhp, /add_query_arg\(\s*['"]doughboss_stripe_return['"]/);
 	assert.match(restPhp, /DoughBoss_Stripe::retrieve_checkout_payment\(\s*\$raw_id\s*\)/);
 	assert.match(restPhp, /checkout_session_amount/);
 	assert.match(restPhp, /checkout_session_currency/);

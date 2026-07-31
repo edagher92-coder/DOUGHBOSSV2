@@ -2577,12 +2577,15 @@ class DoughBoss_REST_Controller {
 	 * @return array{success:string,cancel:string}
 	 */
 	private function stripe_checkout_return_urls( $candidate ) {
-		$base      = $this->same_site_return_url( $candidate );
-		$success   = add_query_arg( 'doughboss_stripe_return', '1', $base );
-		$separator = false === strpos( $success, '?' ) ? '?' : '&';
+		$base = $this->same_site_return_url( $candidate );
 		return array(
-			'success' => $success . $separator . 'session_id={CHECKOUT_SESSION_ID}',
-			'cancel'  => add_query_arg( 'doughboss_stripe_cancel', '1', $base ),
+			// Keep Stripe's provider identifier out of the HTTP request target.
+			// Some managed WordPress firewalls reject Checkout Session ids in
+			// query strings before WordPress can render the confirmation page.
+			// URL fragments remain browser-local and are still available to the
+			// storefront JavaScript for the server-verified completion request.
+			'success' => $base . '#doughboss_stripe_return=1&session_id={CHECKOUT_SESSION_ID}',
+			'cancel'  => $base . '#doughboss_stripe_cancel=1',
 		);
 	}
 

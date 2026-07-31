@@ -1574,12 +1574,17 @@
 		// immutable cart metadata before creating an order.
 		if (stripeHosted && typeof window.URLSearchParams === 'function') {
 			var stripeReturnParams = new URLSearchParams(window.location.search);
-			if (stripeReturnParams.get('doughboss_stripe_return') === '1') {
+			var stripeReturnFragment = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+			var stripeReturnState = (
+				stripeReturnFragment.get('doughboss_stripe_return') === '1'
+				|| stripeReturnFragment.get('doughboss_stripe_cancel') === '1'
+			) ? stripeReturnFragment : stripeReturnParams;
+			if (stripeReturnState.get('doughboss_stripe_return') === '1') {
 				var stripePending = null;
 				try {
 					stripePending = JSON.parse(window.sessionStorage.getItem('doughbossStripePending') || 'null');
 				} catch (ignoreStripePending) {}
-				var returnedSession = stripeReturnParams.get('session_id') || '';
+				var returnedSession = stripeReturnState.get('session_id') || '';
 				if (stripePending && stripePending.sessionId === returnedSession && stripePending.payload && (Date.now() - Number(stripePending.savedAt || 0)) < 30 * 60 * 1000) {
 					checkoutAttemptId = stripePending.checkoutAttemptId;
 					stripePending.payload.payment_intent_id = returnedSession;
@@ -1594,12 +1599,13 @@
 						window.sessionStorage.removeItem('doughbossStripePending');
 						var cleanStripeUrl = new URL(window.location.href);
 						['doughboss_stripe_return', 'doughboss_stripe_cancel', 'session_id'].forEach(function (key) { cleanStripeUrl.searchParams.delete(key); });
+						cleanStripeUrl.hash = '';
 						window.history.replaceState({}, document.title, cleanStripeUrl.toString());
 					}).catch(fail);
 				} else {
 					fail(new Error('The Stripe payment return could not be matched to this cart. If you were charged, contact the shop before trying again.'));
 				}
-			} else if (stripeReturnParams.get('doughboss_stripe_cancel') === '1') {
+			} else if (stripeReturnState.get('doughboss_stripe_cancel') === '1') {
 				window.sessionStorage.removeItem('doughbossStripePending');
 				setPaymentMutationLock(false);
 				form.setAttribute('aria-busy', 'false');
@@ -1607,6 +1613,7 @@
 				paymentAttemptKey = newPaymentAttemptKey();
 				var cancelledStripeUrl = new URL(window.location.href);
 				cancelledStripeUrl.searchParams.delete('doughboss_stripe_cancel');
+				cancelledStripeUrl.hash = '';
 				window.history.replaceState({}, document.title, cancelledStripeUrl.toString());
 				msg.textContent = 'Payment was cancelled. Your cart is still here and no order was placed.';
 				msg.className = 'db-checkout-msg';
