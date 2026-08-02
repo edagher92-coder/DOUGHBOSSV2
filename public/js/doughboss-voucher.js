@@ -26,13 +26,20 @@
 	function show( kind, msg ) {
 		result.className = 'db-vc-result is-' + kind;
 		result.textContent = msg;
+		if ( 'bad' === kind ) {
+			try { result.focus(); } catch ( e ) {}
+		}
 	}
 
 	Array.prototype.forEach.call( offers, function ( btn ) {
 		btn.addEventListener( 'click', function () {
 			selected = btn.getAttribute( 'data-campaign' ) || '';
-			Array.prototype.forEach.call( offers, function ( b ) { b.classList.remove( 'is-selected' ); } );
+			Array.prototype.forEach.call( offers, function ( b ) {
+				b.classList.remove( 'is-selected' );
+				b.setAttribute( 'aria-pressed', 'false' );
+			} );
 			btn.classList.add( 'is-selected' );
+			btn.setAttribute( 'aria-pressed', 'true' );
 			if ( form ) {
 				form.hidden = false;
 				result.className = 'db-vc-result';
@@ -100,7 +107,7 @@
 
 	/**
 	 * Build a scannable QR <img> encoding the voucher code, using the
-	 * `qrcode-generator` UMD lib loaded from the CDN (global `qrcode`).
+	 * bundled `qrcode-generator` UMD library (global `qrcode`).
 	 * Returns null if the global is missing or generation fails, so the
 	 * caller can degrade gracefully and still show the code text.
 	 */
@@ -148,5 +155,6 @@
 		if ( form ) {
 			form.hidden = true;
 		}
+		try { result.focus(); } catch ( e ) {}
 	}
 } )();

@@ -42,6 +42,9 @@ test('server creates idempotent Checkout Sessions and never exposes Stripe provi
 	assert.match(stripePhp, /function create_checkout_session\s*\(/);
 	assert.match(stripePhp, /['"]\/checkout\/sessions['"]/);
 	assert.match(stripePhp, /self::idempotency_key\(\s*['"]checkout['"]\s*,\s*\$checkout_key\s*\)/);
+	assert.match(stripePhp, /function is_same_site_return_url\s*\(/);
+	assert.match(stripePhp, /! self::is_same_site_return_url\( \$success_parts, \$home_parts \)/);
+	assert.match(stripePhp, /! self::is_same_site_return_url\( \$cancel_parts, \$home_parts \)/);
 	assert.match(stripePhp, /payment_intent_data\[metadata\]/);
 	assert.match(stripePhp, /function retrieve_checkout_payment\s*\(/);
 	assert.match(stripePhp, /checkout\.stripe\.com/);

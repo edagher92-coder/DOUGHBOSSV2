@@ -99,6 +99,8 @@ function doughboss_final_menu_fallback() {
 		__( 'About', 'doughboss-final' )    => home_url( '/about-us/' ),
 		__( 'Menu', 'doughboss-final' )     => home_url( '/order/' ),
 		__( 'Catering', 'doughboss-final' ) => home_url( '/catering/' ),
+		__( 'Vouchers', 'doughboss-final' ) => home_url( '/vouchers/' ),
+		__( 'Track order', 'doughboss-final' ) => home_url( '/track-order/' ),
 		__( 'Locations', 'doughboss-final' ) => home_url( '/locations/' ),
 		__( 'Partners', 'doughboss-final' ) => home_url( '/franchising/' ),
 	);

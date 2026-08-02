@@ -19,6 +19,8 @@
 				<li><a href="<?php echo esc_url( home_url( '/about-us/' ) ); ?>">About us</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/order/' ) ); ?>">Menu</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/catering/' ) ); ?>">Catering</a></li>
+				<li><a href="<?php echo esc_url( home_url( '/vouchers/' ) ); ?>">Student vouchers</a></li>
+				<li><a href="<?php echo esc_url( home_url( '/track-order/' ) ); ?>">Track order</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/locations/' ) ); ?>">Locations</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/franchising/' ) ); ?>">Partners</a></li>
 			</ul>

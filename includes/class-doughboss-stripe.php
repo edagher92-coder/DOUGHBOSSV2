@@ -225,6 +225,7 @@ class DoughBoss_Stripe {
 		$qr_code_id    = isset( $metadata['qr_code_id'] ) ? absint( $metadata['qr_code_id'] ) : 0;
 		$success_parts = wp_parse_url( (string) $success_url );
 		$cancel_parts  = wp_parse_url( (string) $cancel_url );
+		$home_parts    = wp_parse_url( home_url( '/' ) );
 
 		if (
 			$amount_minor < 1
@@ -233,8 +234,11 @@ class DoughBoss_Stripe {
 			|| ! $location_id
 			|| ! is_array( $success_parts )
 			|| ! is_array( $cancel_parts )
+			|| ! is_array( $home_parts )
 			|| 'https' !== strtolower( isset( $success_parts['scheme'] ) ? $success_parts['scheme'] : '' )
 			|| 'https' !== strtolower( isset( $cancel_parts['scheme'] ) ? $cancel_parts['scheme'] : '' )
+			|| ! self::is_same_site_return_url( $success_parts, $home_parts )
+			|| ! self::is_same_site_return_url( $cancel_parts, $home_parts )
 		) {
 			return new WP_Error( 'doughboss_pay_request', __( 'The payment request is incomplete.', 'doughboss' ), array( 'status' => 400 ) );
 		}
@@ -359,6 +363,25 @@ class DoughBoss_Stripe {
 
 		$payload['attempt_id'] = (int) $bound['id'];
 		return $payload;
+	}
+
+	/**
+	 * Checkout is provider-hosted, but its return endpoints must remain on the
+	 * WordPress site that owns the durable order snapshot.  Keeping this check
+	 * here makes the invariant hold even if a future caller supplies a URL
+	 * rather than using the REST controller's server-generated return links.
+	 *
+	 * @param array $candidate Parsed success/cancel URL.
+	 * @param array $home      Parsed WordPress home URL.
+	 * @return bool
+	 */
+	private static function is_same_site_return_url( array $candidate, array $home ) {
+		$candidate_host = strtolower( isset( $candidate['host'] ) ? (string) $candidate['host'] : '' );
+		$home_host      = strtolower( isset( $home['host'] ) ? (string) $home['host'] : '' );
+		$candidate_port = isset( $candidate['port'] ) ? (int) $candidate['port'] : 443;
+		$home_port      = isset( $home['port'] ) ? (int) $home['port'] : 443;
+
+		return '' !== $candidate_host && hash_equals( $home_host, $candidate_host ) && $home_port === $candidate_port;
 	}
 
 	/**

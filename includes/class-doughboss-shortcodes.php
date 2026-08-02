@@ -158,7 +158,7 @@ class DoughBoss_Shortcodes {
 				<?php else : ?>
 					<div class="db-vc-offers">
 						<?php foreach ( $campaigns as $c ) : ?>
-							<button type="button" class="db-vc-offer" data-campaign="<?php echo esc_attr( $c['slug'] ); ?>">
+							<button type="button" class="db-vc-offer" data-campaign="<?php echo esc_attr( $c['slug'] ); ?>" aria-pressed="false">
 								<span class="db-vc-val"><?php echo esc_html( 'percent' === $c['type'] ? $c['value'] . '%' : DoughBoss_Settings::format_price( $c['value'] ) ); ?></span>
 								<span class="db-vc-label"><?php echo esc_html( $c['label'] ); ?></span>
 							</button>
@@ -181,7 +181,7 @@ class DoughBoss_Shortcodes {
 						<button type="submit" class="db-btn db-vc-submit"><?php esc_html_e( 'Get my code', 'doughboss' ); ?></button>
 					</form>
 				<?php endif; ?>
-				<div class="db-vc-result" aria-live="polite"></div>
+				<div class="db-vc-result" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 			</div>
 		</div>
 		<?php

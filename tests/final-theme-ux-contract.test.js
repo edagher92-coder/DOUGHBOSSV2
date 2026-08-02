@@ -11,6 +11,9 @@ const home = read('themes/doughboss-final/front-page.php');
 const catering = read('themes/doughboss-final/page-catering.php');
 const locations = read('themes/doughboss-final/template-parts/locations.php');
 const vouchers = read('themes/doughboss-final/page-vouchers.php');
+const themeFunctions = read('themes/doughboss-final/functions.php');
+const footer = read('themes/doughboss-final/footer.php');
+const voucherClient = read('public/js/doughboss-voucher.js');
 const trackAlias = read('themes/doughboss-final/page-track.php');
 const shortcodes = read('includes/class-doughboss-shortcodes.php');
 const storefront = read('public/js/doughboss.js');
@@ -43,6 +46,9 @@ check(order.includes('[doughboss_menu]'), 'browseable menu remains available whi
 check(trackAlias.includes("page-track-order.php"), 'existing /track/ page slug resolves to the live tracking experience');
 check(locations.match(/rel="noopener noreferrer"/g)?.length === 3, 'all external map links use safe new-tab relationships');
 check(vouchers.includes('.edu or .edu.au') && vouchers.includes('doughboss_voucher_claim'), 'voucher page explains education-email eligibility and delegates allocation to the plugin');
+check(themeFunctions.includes("home_url( '/vouchers/' )") && footer.includes("home_url( '/vouchers/' )"), 'student vouchers are discoverable in fallback navigation and the footer');
+check(themeFunctions.includes("home_url( '/track-order/' )") && footer.includes("home_url( '/track-order/' )"), 'order tracking is discoverable in fallback navigation and the footer');
+check(shortcodes.includes('aria-pressed="false"') && shortcodes.includes('aria-atomic="true"') && voucherClient.includes("setAttribute( 'aria-pressed', 'true' )"), 'voucher selection and results expose their state to assistive technology');
 check(themeScript.includes("data-dbf-scroll-state") && !themeScript.includes('observer.unobserve'), 'theme reveals reverse cleanly when scrolling up and down');
 
 check((shortcodes.match(/class="db-loading" role="status" aria-live="polite"/g) || []).length === 4, 'storefront loading states are announced');
