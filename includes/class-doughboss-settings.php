@@ -353,4 +353,1198 @@ class DoughBoss_Settings {
 	 * @return string
 	 */
 	public static function catering_phone() {
-		$phone = preg_replace( '/[^0-9+]/', '', (strinïŽ<¶‰žËkºwµç@ôø€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}±…‰•°œ°€œœ€¤°($$$$¡½ÍÐœ€€€€ôøÕ¹ÑÉ…¥±¥¹Í±…Í¡¥Ð €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}¡½ÍÐœ°€œœ€¤€¤°($$$$…ÁÁ}¥œ€€ôø€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}…ÁÁ}¥œ°€œœ€¤°($$$$…ÁÁ}­•äœ€ôøÍ•±˜èéÁ½ÍÁ…±}ÍÑ½É•}­•ä €‘¸€¤°($$$$Õ¥Ôœ€€€€ôø€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}½ÕÁ½¹}Õ¥‘|Ôœ°€œœ€¤°($$$$¼¨ÑÉ…¹Í±…Ñ½ÉÌè€•èÍÑ½É”¹Õµ‰•È¸€¨¼($$$$‘•™…Õ±Ðœ€ôøÍÁÉ¥¹Ñ˜ }| €MÑ½É”€•œ°€‘½Õ¡‰½ÍÌœ€¤°€‘¸€¤°($$$¤ì($%ô(($$‘ÍÑ½É•Ì€ô…ÉÉ…ä ¤ì($%™½É•… € €‘É…Ü…Ì€‘Ì€¤ì($$%¥˜€ €œœ€ôôô€‘Íl¡½ÍÐtñð€œœ€ôôô€‘Íl…ÁÁ}¥tñð€œœ€ôôô€‘Íl…ÁÁ}­•ät€¤ì($$$%½¹Ñ¥¹Õ”ì€¼¼M­¥À¥¹½µÁ±•Ñ•±äµ½¹™¥ÕÉ•ÍÑ½É•Ì¸($$%ô($$$‘Íl±…‰•°t€ô€œœ€„ôô€‘Íl±…‰•°t€ü€‘Íl±…‰•°t€è€‘Íl‘•™…Õ±Ðtì($$%Õ¹Í•Ð €‘Íl‘•™…Õ±Ðt€¤ì($$$‘ÍÑ½É•Ímt€ô€‘Ìì($%ô($%É•ÑÕÉ¸€‘ÍÑ½É•Ìì(%ô(($¼¨¨($€¨Í¥¹±”A=MA…°ÍÑ½É”Ì½¹™¥œ‰ä¹Õµ‰•È€ Ä€ô±•…ä½ÁÉ¥µ…Éä°€È°€Ì¤É•…É‘±•ÍÌ($€¨½˜Ý¡•Ñ¡•È¥Ð¥Ì™Õ±±ä½¹™¥ÕÉ•ƒŠPÕÍ•‰äÑ¡”Á•ÈµÍÑ½É”…‘µ¥¸Y•É¥™ä½Q•ÍÐ($€¨Ñ½½±ÌÍ¼…¸¥¹½µÁ±•Ñ”ÍÑ½É”É•Á½ÉÑÌ±•…É±ä¥¹ÍÑ•…½˜™…±±¥¹œ‰…¬Í¥±•¹Ñ±ä¸($€¨($€¨Á…É…´¥¹Ð€‘¸MÑ½É”¹Õµ‰•È¸($€¨É•ÑÕÉ¸…ÉÉ…äì±…‰•°°¡½ÍÐ°…ÁÁ}¥°…ÁÁ}­•ä°Õ¥Ôô¸($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸Á½ÍÁ…±}ÍÑ½É” €‘¸€¤ì($$‘¸€ôµ…à €Ä°€¡¥¹Ð¤€‘¸€¤ì($%¥˜€ €Ä€ôôô€‘¸€¤ì($$$‘±…‰•°Ä€ô€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…±}±…‰•°œ°€œœ€¤ì($$%É•ÑÕÉ¸…ÉÉ…ä ($$$$±…‰•°œ€€€ôø€œœ€„ôô€‘±…‰•°Ä€ü€‘±…‰•°Ä€è}| €MÑ½É”€Äœ°€‘½Õ¡‰½ÍÌœ€¤°($$$$¡½ÍÐœ€€€€ôøÍ•±˜èéÁ½ÍÁ…±}¡½ÍÐ ¤°($$$$…ÁÁ}¥œ€€ôøÍ•±˜èéÁ½ÍÁ…±}…ÁÁ}¥ ¤°($$$$…ÁÁ}­•äœ€ôøÍ•±˜èéÁ½ÍÁ…±}…ÁÁ}­•ä ¤°($$$$Õ¥Ôœ€€€€ôøÍ•±˜èéÁ½ÍÁ…±}½ÕÁ½¹}Õ¥‘|Ô ¤°($$$¤ì($%ô($$‘±…‰•°€ô€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}±…‰•°œ°€œœ€¤ì($%É•ÑÕÉ¸…ÉÉ…ä ($$$¼¨ÑÉ…¹Í±…Ñ½ÉÌè€•èÍÑ½É”¹Õµ‰•È¸€¨¼($$$±…‰•°œ€€€ôø€œœ€„ôô€‘±…‰•°€ü€‘±…‰•°€èÍÁÉ¥¹Ñ˜ }| €MÑ½É”€•œ°€‘½Õ¡‰½ÍÌœ€¤°€‘¸€¤°($$$¡½ÍÐœ€€€€ôøÕ¹ÑÉ…¥±¥¹Í±…Í¡¥Ð €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}¡½ÍÐœ°€œœ€¤€¤°($$$…ÁÁ}¥œ€€ôø€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}…ÁÁ}¥œ°€œœ€¤°($$$…ÁÁ}­•äœ€ôøÍ•±˜èéÁ½ÍÁ…±}ÍÑ½É•}­•ä €‘¸€¤°($$$Õ¥Ôœ€€€€ôø€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €Á½ÍÁ…°œ€¸€‘¸€¸€}½ÕÁ½¹}Õ¥‘|Ôœ°€œœ€¤°($$¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¡”5•ÉÕÉ”É•…°µÑ¥µ”ÁÕÍ ¥¹Ñ•É…Ñ¥½¸¥ÌÍÝ¥Ñ¡•½¸‰äÑ¡”½Á•É…Ñ½È¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸µ•ÉÕÉ•}•¹…‰±• ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €µ•ÉÕÉ•}•¹…‰±•œ°€À€¤ì(%ô(($¼¨¨($€¨5•ÉÕÉ”¡ÕˆUI0°ÑÉ…¥±¥¹œÍ±…Í É•µ½Ù•€¡”¹œ¸¡ÑÑÁÌè¼½¡Õˆ¹•á…µÁ±”¹½´¼¹Ý•±°µ­¹½Ý¸½µ•ÉÕÉ”¤¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸µ•ÉÕÉ•}¡Õ‰}ÕÉ° ¤ì($%É•ÑÕÉ¸Õ¹ÑÉ…¥±¥¹Í±…Í¡¥Ð €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €µ•ÉÕÉ•}¡Õ‰}ÕÉ°œ°€œœ€¤€¤ì(%ô(($¼¨¨($€¨5•ÉÕÉ”ÁÕ‰±¥Í¡•È)]P¸I•…•¹Øµ™¥ÉÍÐƒŠPÑ¡”½¹ÍÑ…¹Ð($€¨=U!	=MM}5IUI}AU	1%M!})]P½ÈÑ¡”µ…Ñ¡¥¹œ•¹Ù¥É½¹µ•¹ÐÙ…É¥…‰±”Ñ…­”($€¨ÁÉ••‘•¹”½Ù•ÈÑ¡”ÍÑ½É•½ÁÑ¥½¸°Í¼Ñ¡”Í•É•Ð…¸‰”­•ÁÐ½ÕÐ½˜Ñ¡”($€¨‘…Ñ…‰…Í”€¡…¹Ñ¡•É•™½É”½ÕÐ½˜‰…­ÕÁÌ¤¸=¹±ä•Ù•ÈÕÍ•Í•ÉÙ•ÈµÍ¥‘”Ñ¼($€¨…ÕÑ¡•¹Ñ¥…Ñ”ÁÕ‰±¥Í¡•ÌÑ¼Ñ¡”¡Õˆì¹•Ù•È•¡½•Ñ¼„±¥•¹Ð¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸µ•ÉÕÉ•}ÁÕ‰±¥Í¡}©ÝÐ ¤ì($%¥˜€ ‘•™¥¹• €=U!	=MM}5IUI}AU	1%M!})]Pœ€¤€˜˜€œœ€„ôô€¡ÍÑÉ¥¹œ¤=U!	=MM}5IUI}AU	1%M!})]P€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤=U!	=MM}5IUI}AU	1%M!})]Pì($%ô($$‘•¹Ø€ô•Ñ•¹Ø €=U!	=MM}5IUI}AU	1%M!})]Pœ€¤ì($%¥˜€ ™…±Í”€„ôô€‘•¹Ø€˜˜€œœ€„ôô€‘•¹Ø€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤€‘•¹Øì($%ô($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €µ•ÉÕÉ•}ÁÕ‰±¥Í¡}©ÝÐœ°€œœ€¤ì(%ô(($¼¨¨($€¨5•ÉÕÉ”ÍÕ‰ÍÉ¥‰•È)]P°¡…¹‘•Ñ¼‰É½ÝÍ•È±¥•¹ÑÌÍ¼Ñ¡•äµ…äÍÕ‰ÍÉ¥‰”Ñ¼($€¨Ñ½Á¥Ì¸9½Ð„ÁÕ‰±¥Í É•‘•¹Ñ¥…°°Í¼¥Ð¥ÌÉ•…™É½´Ñ¡”ÍÑ½É•½ÁÑ¥½¸¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸µ•ÉÕÉ•}ÍÕ‰ÍÉ¥‰•}©ÝÐ ¤ì($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €µ•ÉÕÉ•}ÍÕ‰ÍÉ¥‰•}©ÝÐœ°€œœ€¤ì(%ô(($¼¨¨($€¨AÉ•™¥àÕÍ•Ý¡•¸½µÁ½Í¥¹œ5•ÉÕÉ”Ñ½Á¥ŒUI%Ì½¹…µ•Ì¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸µ•ÉÕÉ•}Ñ½Á¥}ÁÉ•™¥à ¤ì($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €µ•ÉÕÉ•}Ñ½Á¥}ÁÉ•™¥àœ°€‘½Õ¡‰½ÍÌœ€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•È5•ÉÕÉ”¥Ì‰½Ñ •¹…‰±•…¹Ñ¡”µ¥¹¥µÕ´½¹™¥œ€¡¡ÕˆUI0€¬ÁÕ‰±¥Í ($€¨)]P¤¥ÌÁÉ•Í•¹Ð°Í¼Ñ¡”Í•ÉÙ•ÈÍ¡½Õ±…ÑÕ…±±äÁÕ‰±¥Í É•…°µÑ¥µ”ÕÁ‘…Ñ•Ì¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸µ•ÉÕÉ•}É•…‘ä ¤ì($%É•ÑÕÉ¸Í•±˜èéµ•ÉÕÉ•}•¹…‰±• ¤€˜˜€œœ€„ôôÍ•±˜èéµ•ÉÕÉ•}¡Õ‰}ÕÉ° ¤€˜˜€œœ€„ôôÍ•±˜èéµ•ÉÕÉ•}ÁÕ‰±¥Í¡}©ÝÐ ¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¡”¹Ñ™äÁÕÍ µ¹½Ñ¥™¥…Ñ¥½¸¥¹Ñ•É…Ñ¥½¸¥ÌÍÝ¥Ñ¡•½¸‰äÑ¡”½Á•É…Ñ½È¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¹Ñ™å}•¹…‰±• ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €¹Ñ™å}•¹…‰±•œ°€À€¤ì(%ô(($¼¨¨($€¨¹Ñ™äÍ•ÉÙ•È‰…Í”UI0°ÑÉ…¥±¥¹œÍ±…Í É•µ½Ù•€¡‘•™…Õ±Ð¡ÑÑÁÌè¼½¹Ñ™ä¹Í ¤¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¹Ñ™å}Í•ÉÙ•È ¤ì($$‘Í•ÉÙ•È€ôÕ¹ÑÉ…¥±¥¹Í±…Í¡¥Ð €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €¹Ñ™å}Í•ÉÙ•Èœ°€¡ÑÑÁÌè¼½¹Ñ™ä¹Í œ€¤€¤ì($%É•ÑÕÉ¸€œœ€„ôô€‘Í•ÉÙ•È€ü€‘Í•ÉÙ•È€è€¡ÑÑÁÌè¼½¹Ñ™ä¹Í œì(%ô(($¼¨¨($€¨¹Ñ™äÑ½Á¥ŒÑ¼ÁÕ‰±¥Í Ñ¼€¡‰±…¹¬Ý¡•¸Õ¹½¹™¥ÕÉ•¤¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¹Ñ™å}Ñ½Á¥Œ ¤ì($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €¹Ñ™å}Ñ½Á¥Œœ°€œœ€¤ì(%ô(($¼¨¨($€¨¹Ñ™ä‰•…É•ÈÑ½­•¸¸I•…•¹Øµ™¥ÉÍÐƒŠPÑ¡”½¹ÍÑ…¹Ð=U!	=MM}9Qe}Q=-8½ÈÑ¡”($€¨µ…Ñ¡¥¹œ•¹Ù¥É½¹µ•¹ÐÙ…É¥…‰±”Ñ…­”ÁÉ••‘•¹”½Ù•ÈÑ¡”ÍÑ½É•½ÁÑ¥½¸°Í¼Ñ¡”($€¨Í•É•Ð…¸‰”­•ÁÐ½ÕÐ½˜Ñ¡”‘…Ñ…‰…Í”€¡…¹Ñ¡•É•™½É”½ÕÐ½˜‰…­ÕÁÌ¤¸=¹±ä($€¨•Ù•ÈÕÍ•Í•ÉÙ•ÈµÍ¥‘”Ñ¼…ÕÑ¡•¹Ñ¥…Ñ”ÁÕ‰±¥Í¡•Ìì¹•Ù•È•¡½•Ñ¼„±¥•¹Ð¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¹Ñ™å}Ñ½­•¸ ¤ì($%¥˜€ ‘•™¥¹• €=U!	=MM}9Qe}Q=-8œ€¤€˜˜€œœ€„ôô€¡ÍÑÉ¥¹œ¤=U!	=MM}9Qe}Q=-8€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤=U!	=MM}9Qe}Q=-8ì($%ô($$‘•¹Ø€ô•Ñ•¹Ø €=U!	=MM}9Qe}Q=-8œ€¤ì($%¥˜€ ™…±Í”€„ôô€‘•¹Ø€˜˜€œœ€„ôô€‘•¹Ø€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤€‘•¹Øì($%ô($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €¹Ñ™å}Ñ½­•¸œ°€œœ€¤ì(%ô(($¼¨¨($€¨¹Ñ™äµ•ÍÍ…”ÁÉ¥½É¥Ñä€¡‘•™…Õ±Ð€¡¥ œ¤¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¹Ñ™å}ÁÉ¥½É¥Ñä ¤ì($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €¹Ñ™å}ÁÉ¥½É¥Ñäœ°€¡¥ œ€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•È¹Ñ™ä¥Ì‰½Ñ •¹…‰±•…¹„Ñ½Á¥Œ¥Ì½¹™¥ÕÉ•°Í¼Ñ¡”Í•ÉÙ•ÈÍ¡½Õ±($€¨…ÑÕ…±±äÁÕ‰±¥Í ¹½Ñ¥™¥…Ñ¥½¹Ì¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¹Ñ™å}É•…‘ä ¤ì($%É•ÑÕÉ¸Í•±˜èé¹Ñ™å}•¹…‰±• ¤€˜˜€œœ€„ôôÍ•±˜èé¹Ñ™å}Ñ½Á¥Œ ¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¡”M5L€¡±¥­M•¹¤¥¹Ñ•É…Ñ¥½¸¥ÌÍÝ¥Ñ¡•½¸‰äÑ¡”½Á•É…Ñ½È¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÍµÍ}•¹…‰±• ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €ÍµÍ}•¹…‰±•œ°€À€¤ì(%ô(($¼¨¨($€¨±¥­M•¹…½Õ¹ÐÕÍ•É¹…µ”¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸±¥­Í•¹‘}ÕÍ•É¹…µ” ¤ì($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €±¥­Í•¹‘}ÕÍ•É¹…µ”œ°€œœ€¤ì(%ô(($¼¨¨($€¨±¥­M•¹A$­•ä¸I•…•¹Øµ™¥ÉÍÐƒŠPÑ¡”½¹ÍÑ…¹Ð=U!	=MM}1%-M9}A%}-d($€¨½ÈÑ¡”µ…Ñ¡¥¹œ•¹Ù¥É½¹µ•¹ÐÙ…É¥…‰±”Ñ…­”ÁÉ••‘•¹”½Ù•ÈÑ¡”ÍÑ½É•½ÁÑ¥½¸°($€¨Í¼Ñ¡”Í•É•Ð…¸‰”­•ÁÐ½ÕÐ½˜Ñ¡”‘…Ñ…‰…Í”€¡…¹Ñ¡•É•™½É”½ÕÐ½˜‰…­ÕÁÌ¤¸($€¨=¹±ä•Ù•ÈÕÍ•Í•ÉÙ•ÈµÍ¥‘”Ñ¼…ÕÑ¡•¹Ñ¥…Ñ”Ñ¡”A$ì¹•Ù•È•¡½•Ñ¼„±¥•¹Ð¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸±¥­Í•¹‘}…Á¥}­•ä ¤ì($%¥˜€ ‘•™¥¹• €=U!	=MM}1%-M9}A%}-dœ€¤€˜˜€œœ€„ôô€¡ÍÑÉ¥¹œ¤=U!	=MM}1%-M9}A%}-d€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤=U!	=MM}1%-M9}A%}-dì($%ô($$‘•¹Ø€ô•Ñ•¹Ø €=U!	=MM}1%-M9}A%}-dœ€¤ì($%¥˜€ ™…±Í”€„ôô€‘•¹Ø€˜˜€œœ€„ôô€‘•¹Ø€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤€‘•¹Øì($%ô($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €±¥­Í•¹‘}…Á¥}­•äœ°€œœ€¤ì(%ô(($¼¨¨($€¨Q¡”Í•¹‘•È%€¼™É½´µ¹Õµ‰•ÈÕÍ•™½È½ÕÑ‰½Õ¹M5L¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÍµÍ}™É½´ ¤ì($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÍµÍ}™É½´œ°€œœ€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¼Ñ•áÐÑ¡”ÕÍÑ½µ•ÈÝ¡•¸Ñ¡•¥È½É‘•È¥Ìµ…É­•É•…‘ä€¡‘•™…Õ±Ð½¸¤¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÍµÍ}½¹}É•…‘ä ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €ÍµÍ}½¹}É•…‘äœ°€Ä€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¼Ñ•áÐÑ¡”Ù½Õ¡•È½‘”Ñ¼Ñ¡”ÕÍÑ½µ•ÈÝ¡•¸„Ù½Õ¡•È¥Ì±…¥µ•($€¨€¡‘•™…Õ±Ð½™˜¤¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÍµÍ}½¹}Ù½Õ¡•É}±…¥´ ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €ÍµÍ}½¹}Ù½Õ¡•É}±…¥´œ°€À€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¼•µ…¥°Ñ¡”ÕÍÑ½µ•ÈÝ¡•¸Ñ¡•¥È½É‘•È¥Ì…•ÁÑ•€¡‘•™…Õ±Ð½¸¤¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸•µ…¥±}½¹}…•ÁÑ• ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €•µ…¥±}½¹}…•ÁÑ•œ°€Ä€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¼•µ…¥°Ñ¡”ÕÍÑ½µ•ÈÝ¡•¸Ñ¡•¥È½É‘•È¥Ìµ…É­•É•…‘ä™½È($€¨Á¥­ÕÀ€¡‘•™…Õ±Ð½¸¤¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸•µ…¥±}½¹}É•…‘ä ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €•µ…¥±}½¹}É•…‘äœ°€Ä€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¼Í•¹Ñ¡”Í¡½À¥¹‰½à€¡½É‘•ÉÍ}•µ…¥° ¤¤„½Áä½˜•… ÍÑ…”($€¨•µ…¥°€¡‘•™…Õ±Ð½™˜¤¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸•µ…¥±}ÍÑ…™™}½Áä ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €•µ…¥±}ÍÑ…™™}½Áäœ°€À€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈM5L¥Ì‰½Ñ •¹…‰±•…¹™Õ±±ä½¹™¥ÕÉ•€¡ÕÍ•É¹…µ”€¬A$­•ä¤°Í¼($€¨Ñ¡”Í•ÉÙ•ÈÍ¡½Õ±…ÑÕ…±±äÍ•¹µ•ÍÍ…•Ì¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÍµÍ}É•…‘ä ¤ì($%É•ÑÕÉ¸Í•±˜èéÍµÍ}•¹…‰±• ¤€˜˜€œœ€„ôôÍ•±˜èé±¥­Í•¹‘}ÕÍ•É¹…µ” ¤€˜˜€œœ€„ôôÍ•±˜èé±¥­Í•¹‘}…Á¥}­•ä ¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¡”É••¥ÁÐµÁÉ¥¹Ñ•È¥¹Ñ•É…Ñ¥½¸¥ÌÍÝ¥Ñ¡•½¸‰äÑ¡”½Á•É…Ñ½È¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÁÉ¥¹Ñ•É}•¹…‰±• ¤ì($%É•ÑÕÉ¸€¡‰½½°¤Í•±˜èé•Ð €ÁÉ¥¹Ñ•É}•¹…‰±•œ°€À€¤ì(%ô(($¼¨¨($€¨I••¥ÁÐÁÉ¥¹Ñ•ÈÁÉ½Ñ½½°è€±½Õ‘ÁÉ¹Ðœ½È€•Á½Ìœ€¡‘•™…Õ±Ð€±½Õ‘ÁÉ¹Ðœ¤¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÁÉ¥¹Ñ•É}ÁÉ½Ñ½½° ¤ì($%É•ÑÕÉ¸€•Á½Ìœ€ôôôÍ•±˜èé•Ð €ÁÉ¥¹Ñ•É}ÁÉ½Ñ½½°œ°€±½Õ‘ÁÉ¹Ðœ€¤€ü€•Á½Ìœ€è€±½Õ‘ÁÉ¹Ðœì(%ô(($¼¨¨($€¨I••¥ÁÐÁÉ¥¹Ñ•ÈÍ¡…É•Ñ½­•¸¸I•…•¹Øµ™¥ÉÍÐƒŠPÑ¡”½¹ÍÑ…¹Ð($€¨=U!	=MM}AI%9QI}Q=-8½ÈÑ¡”µ…Ñ¡¥¹œ•¹Ù¥É½¹µ•¹ÐÙ…É¥…‰±”Ñ…­”ÁÉ••‘•¹”($€¨½Ù•ÈÑ¡”ÍÑ½É•½ÁÑ¥½¸°Í¼Ñ¡”Í•É•Ð…¸‰”­•ÁÐ½ÕÐ½˜Ñ¡”‘…Ñ…‰…Í”€¡…¹($€¨Ñ¡•É•™½É”½ÕÐ½˜‰…­ÕÁÌ¤¸UÍ•Ñ¼…ÕÑ¡•¹Ñ¥…Ñ”Ñ¡”ÁÉ¥¹Ñ•È½Á½±°•á¡…¹”ì($€¨¹•Ù•È•¡½•Ñ¼„±¥•¹Ð¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÁÉ¥¹Ñ•É}Ñ½­•¸ ¤ì($%¥˜€ ‘•™¥¹• €=U!	=MM}AI%9QI}Q=-8œ€¤€˜˜€œœ€„ôô€¡ÍÑÉ¥¹œ¤=U!	=MM}AI%9QI}Q=-8€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤=U!	=MM}AI%9QI}Q=-8ì($%ô($$‘•¹Ø€ô•Ñ•¹Ø €=U!	=MM}AI%9QI}Q=-8œ€¤ì($%¥˜€ ™…±Í”€„ôô€‘•¹Ø€˜˜€œœ€„ôô€‘•¹Ø€¤ì($$%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤€‘•¹Øì($%ô($%É•ÑÕÉ¸€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÁÉ¥¹Ñ•É}Ñ½­•¸œ°€œœ€¤ì(%ô(($¼¨¨($€¨I••¥ÁÐÝ¥‘Ñ ¥¸¡…É…Ñ•ÉÌ€¡‘•™…Õ±Ð€Ðà™½È…¸€àÁµ´É½±°¤¸($€¨($€¨É•ÑÕÉ¸¥¹Ð($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÁÉ¥¹Ñ•É}Ý¥‘Ñ  ¤ì($%É•ÑÕÉ¸€¡¥¹Ð¤Í•±˜èé•Ð €ÁÉ¥¹Ñ•É}Ý¥‘Ñ œ°€Ðà€¤ì(%ô(($¼¨¨($€¨]¡•Ñ¡•ÈÑ¡”ÁÉ¥¹Ñ•È¥Ì‰½Ñ •¹…‰±•…¹„Í¡…É•Ñ½­•¸¥ÌÍ•Ð°Í¼Ñ¡”Í•ÉÙ•È($€¨Í¡½Õ±…ÑÕ…±±ä•µ¥ÐÉ••¥ÁÑÌ¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÁÉ¥¹Ñ•É}É•…‘ä ¤ì($%É•ÑÕÉ¸Í•±˜èéÁÉ¥¹Ñ•É}•¹…‰±• ¤€˜˜€œœ€„ôôÍ•±˜èéÁÉ¥¹Ñ•É}Ñ½­•¸ ¤ì(%ô(($¼¨¨($€¨=É‘•Èµ½¹™¥Éµ…Ñ¥½¸•µ…¥°ÍÕ‰©•Ð¸=Ý¹•Èµ•‘¥Ñ…‰±”€¡½Õ¡	½ÍÌƒŠH5•ÍÍ…”($€¨Q•µÁ±…Ñ•Ì¤ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”‰Õ¥±Ðµ¥¸‘•™…Õ±Ð¸MÕÁÁ½ÉÑÌÑ¡”($€¨íÍ¥Ñ•}¹…µ•ô½í½É‘•É}¹Õµ‰•ÉôÁ±…•¡½±‘•ÉÌƒŠPÍ•”É•¹‘•É}Ñ•µÁ±…Ñ” ¤¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}½É‘•É}•µ…¥±}ÍÕ‰©•Ð ¤ì($$‘Ø€ôÑÉ¥´ €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}½É‘•É}•µ…¥±}ÍÕ‰©•Ðœ°€œœ€¤€¤ì($%É•ÑÕÉ¸€œœ€„ôô€‘Ø€ü€‘Ø€è€míÍ¥Ñ•}¹…µ•õt=É‘•Èí½É‘•É}¹Õµ‰•ÉôÉ••¥Ù•œì(%ô(($¼¨¨($€¨=É‘•Èµ½¹™¥Éµ…Ñ¥½¸•µ…¥°‰½‘ä¸=Ý¹•Èµ•‘¥Ñ…‰±”ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”($€¨‰Õ¥±Ðµ¥¸‘•™…Õ±Ð¸MÕÁÁ½ÉÑÌíÕÍÑ½µ•É}¹…µ•ô½í½É‘•É}¹Õµ‰•Éô½í¥Ñ•µÍô½íÑ½Ñ…±ô¼($€¨íÑÉ…­¥¹}ÕÉ±ô½íÑÉ…­¥¹}¥¹ÍÑÉÕÑ¥½¹Íô¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}½É‘•É}•µ…¥±}‰½‘ä ¤ì($$‘Ø€ô€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}½É‘•É}•µ…¥±}‰½‘äœ°€œœ€¤ì($%É•ÑÕÉ¸€œœ€„ôôÑÉ¥´ €‘Ø€¤($$$ü€‘Ø($$$è€‰!¤íÕÍÑ½µ•É}¹…µ•ô±q¹q¹Q¡…¹­Ì™½Èå½ÕÈ½É‘•Èí½É‘•É}¹Õµ‰•Éô¸!•É”ÌÝ¡…ÐÝ”½Ðéq¹q¹í¥Ñ•µÍõq¹q¹Q½Ñ…°èíÑ½Ñ…±õq¹q¹íÑÉ…­¥¹}¥¹ÍÑÉÕÑ¥½¹Íõq¸ˆì(%ô(($¼¨¨($€¨€‰=É‘•ÈÉ•…‘äˆM5LÑ•áÐ¸=Ý¹•Èµ•‘¥Ñ…‰±”ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”‰Õ¥±Ðµ¥¸($€¨‘•™…Õ±Ð¸MÕÁÁ½ÉÑÌí½É‘•É}¹Õµ‰•Éô¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}ÍµÍ}É•…‘ä ¤ì($$‘Ø€ôÑÉ¥´ €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}ÍµÍ}É•…‘äœ°€œœ€¤€¤ì($%É•ÑÕÉ¸€œœ€„ôô€‘Ø€ü€‘Ø€è€½Õ¡	½ÍÌ½É‘•È€í½É‘•É}¹Õµ‰•ÉôèíÍÑ…ÑÕÍ}±…‰•±ô¸í¡…¹‘½™™}µ•ÍÍ…•ôœì(%ô(($¼¨¨($€¨Y½Õ¡•Èµ±…¥µ•M5LÑ•áÐ¸=Ý¹•Èµ•‘¥Ñ…‰±”ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”‰Õ¥±Ðµ¥¸($€¨‘•™…Õ±Ð¸MÕÁÁ½ÉÑÌí½‘•ô¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}ÍµÍ}Ù½Õ¡•È ¤ì($$‘Ø€ôÑÉ¥´ €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}ÍµÍ}Ù½Õ¡•Èœ°€œœ€¤€¤ì($%É•ÑÕÉ¸€œœ€„ôô€‘Ø€ü€‘Ø€è€e½ÕÈ½Õ¡	½ÍÌÙ½Õ¡•È¥ÌÉ•…‘äèí½‘•ô¸M¡½ÜÑ¡¥Ì½‘”Ñ¼É•‘••´¸œì(%ô(($¼¨¨($€¨€‰=É‘•È…•ÁÑ•ˆÍÑ…”•µ…¥°ÍÕ‰©•Ð¸=Ý¹•Èµ•‘¥Ñ…‰±”ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”($€¨‰Õ¥±Ðµ¥¸‘•™…Õ±Ð¸MÕÁÁ½ÉÑÌíÕÍÑ½µ•É}¹…µ•ô½í½É‘•É}¹Õµ‰•Éô½í•Ñ…}µ¥¹ÕÑ•Íô¼($€¨íÑ½Ñ…±ô½íÍÑ…ÑÕÍ}±…‰•±ô¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}…•ÁÑ•‘}•µ…¥±}ÍÕ‰©•Ð ¤ì($$‘Ø€ôÑÉ¥´ €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}…•ÁÑ•‘}•µ…¥±}ÍÕ‰©•Ðœ°€œœ€¤€¤ì($%É•ÑÕÉ¸€œœ€„ôô€‘Ø€ü€‘Ø€è€‰]”É”½¸¥Ð„=É‘•Èí½É‘•É}¹Õµ‰•Éô¥Ì‰•¥¹œÁÉ•Á…É•ˆì(%ô(($¼¨¨($€¨€‰=É‘•È…•ÁÑ•ˆÍÑ…”•µ…¥°‰½‘ä¸=Ý¹•Èµ•‘¥Ñ…‰±”ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”($€¨‰Õ¥±Ðµ¥¸‘•™…Õ±Ð¸Q¡”‰Õ¥±Ðµ¥¸‘•™…Õ±Ð¡…ÌÑÝ¼Ù…É¥…¹ÑÌè½¹”Ý¥Ñ Ñ¡”($€¨€‰É•…‘ä¥¸…‰½ÕÐí•Ñ…}µ¥¹ÕÑ•Íôµ¥¹ÕÑ•Ìˆ±¥¹”…¹„¹•ÕÑÉ…°½¹”ÕÍ•Ý¡•¸($€¨¹¼QÝ…Ì¥Ù•¸€¡•Ñ„€À¤°Í¼Ñ¡”ÕÍÑ½µ•È¹•Ù•ÈÉ•…‘Ì€‰¥¸…‰½ÕÐ€À($€¨µ¥¹ÕÑ•Ìˆ¸ÕÍÑ½´Ñ•µÁ±…Ñ”¥ÌÉ•ÑÕÉ¹•…Ìµ¥Ì•¥Ñ¡•ÈÝ…ä¸($€¨($€¨Á…É…´‰½½°€‘Ý¥Ñ¡}•Ñ„]¡•Ñ¡•È…¸QÝ…Ì¥Ù•¸€¡Í•±•ÑÌÑ¡”‘•™…Õ±ÐÙ…É¥…¹Ð¤¸($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}…•ÁÑ•‘}•µ…¥±}‰½‘ä €‘Ý¥Ñ¡}•Ñ„€ôÑÉÕ”€¤ì($$‘Ø€ô€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}…•ÁÑ•‘}•µ…¥±}‰½‘äœ°€œœ€¤ì($%¥˜€ €œœ€„ôôÑÉ¥´ €‘Ø€¤€¤ì($$%É•ÑÕÉ¸€‘Øì($%ô($%¥˜€ €‘Ý¥Ñ¡}•Ñ„€¤ì($$%É•ÑÕÉ¸€‰!¤íÕÍÑ½µ•É}¹…µ•ô±q¹q¹É•…Ð¹•ÝÌƒŠP½ÕÈ‰…­•ÉÌ¡…Ù”ÍÑ…ÉÑ•½¸å½ÕÈ½É‘•Èí½É‘•É}¹Õµ‰•Éô¸%ÐÍ¡½Õ±‰”É•…‘ä¥¸…‰½ÕÐí•Ñ…}µ¥¹ÕÑ•Íôµ¥¹ÕÑ•Ì¹q¹q¹=É‘•ÈÑ½Ñ…°èíÑ½Ñ…±õq¹q¹íÑÉ…­¥¹}¥¹ÍÑÉÕÑ¥½¹Íõq¹q¹Q¡…¹­Ì™½È¡½½Í¥¹œÕÌƒŠPÍ•”å½ÔÍ½½¸…q¸ˆì($%ô($%É•ÑÕÉ¸€‰!¤íÕÍÑ½µ•É}¹…µ•ô±q¹q¹É•…Ð¹•ÝÌƒŠP½ÕÈ‰…­•ÉÌ¡…Ù”ÍÑ…ÉÑ•½¸å½ÕÈ½É‘•Èí½É‘•É}¹Õµ‰•Éô¸]”±°±•Ðå½Ô­¹½ÜÑ¡”µ½µ•¹Ð¥ÐÌÉ•…‘ä¹q¹q¹=É‘•ÈÑ½Ñ…°èíÑ½Ñ…±õq¹q¹íÑÉ…­¥¹}¥¹ÍÑÉÕÑ¥½¹Íõq¹q¹Q¡…¹­Ì™½È¡½½Í¥¹œÕÌƒŠPÍ•”å½ÔÍ½½¸…q¸ˆì(%ô(($¼¨¨($€¨€‰=É‘•ÈÉ•…‘äˆÍÑ…”•µ…¥°ÍÕ‰©•Ð¸=Ý¹•Èµ•‘¥Ñ…‰±”ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”($€¨‰Õ¥±Ðµ¥¸‘•™…Õ±Ð¸MÕÁÁ½ÉÑÌÑ¡”Í…µ”Á±…•¡½±‘•ÉÌ…ÌÑ¡”…•ÁÑ••µ…¥°¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}É•…‘å}•µ…¥±}ÍÕ‰©•Ð ¤ì($$‘Ø€ôÑÉ¥´ €¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}É•…‘å}•µ…¥±}ÍÕ‰©•Ðœ°€œœ€¤€¤ì($%É•ÑÕÉ¸€œœ€„ôô€‘Ø€ü€‘Ø€è€=É‘•Èí½É‘•É}¹Õµ‰•ÉôèíÍÑ…ÑÕÍ}±…‰•±ôœì(%ô(($¼¨¨($€¨€‰=É‘•ÈÉ•…‘äˆÍÑ…”•µ…¥°‰½‘ä¸=Ý¹•Èµ•‘¥Ñ…‰±”ì‰±…¹¬É•ÍÑ½É•ÌÑ¡”($€¨‰Õ¥±Ðµ¥¸‘•™…Õ±Ð¸($€¨($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸ÑÁ±}É•…‘å}•µ…¥±}‰½‘ä ¤ì($$‘Ø€ô€¡ÍÑÉ¥¹œ¤Í•±˜èé•Ð €ÑÁ±}É•…‘å}•µ…¥±}‰½‘äœ°€œœ€¤ì($%É•ÑÕÉ¸€œœ€„ôôÑÉ¥´ €‘Ø€¤($$$ü€‘Ø($$$è€‰!¤íÕÍÑ½µ•É}¹…µ•ô±q¹q¹e½ÕÈ½É‘•Èí½É‘•É}¹Õµ‰•Éô¥ÌíÍÑ…ÑÕÍ}±…‰•±ô¸í¡…¹‘½™™}µ•ÍÍ…•õq¹q¹=É‘•ÈÑ½Ñ…°èíÑ½Ñ…±õq¹q¹íÑÉ…­¥¹}¥¹ÍÑÉÕÑ¥½¹Íõq¹q¹M•”å½ÔÍ½½¸…q¸ˆì(%ô(($¼¨¨($€¨I•Á±…”íÁ±…•¡½±‘•ÉôÑ½­•¹Ì¥¸„µ•ÍÍ…”Ñ•µÁ±…Ñ”Ý¥Ñ Ñ¡”¥Ù•¸Ù…±Õ•Ì¸($€¨U¹­¹½Ý¸Á±…•¡½±‘•ÉÌ…É”±•™Ð…Ì±¥Ñ•É…°Ñ•áÐÉ…Ñ¡•ÈÑ¡…¸Í¥±•¹Ñ±ä($€¨‰±…¹­•°Í¼„ÑåÁ¼¥¸„ÕÍÑ½´Ñ•µÁ±…Ñ”ÍÑ…åÌÙ¥Í¥‰±”¥¹ÍÑ•…½˜¡¥‘‘•¸¸($€¨($€¨Á…É…´ÍÑÉ¥¹œ€‘Ñ•µÁ±…Ñ”Q•µÁ±…Ñ”Ñ•áÐ½¹Ñ…¥¹¥¹œíÁ±…•¡½±‘•ÉôÑ½­•¹Ì¸($€¨Á…É…´…ÉÉ…ä€€‘Ù…ÉÌ€€€€5…À½˜Á±…•¡½±‘•È¹…µ”€¡Ý¥Ñ¡½ÕÐ‰É…•Ì¤€ôøÙ…±Õ”¸($€¨É•ÑÕÉ¸ÍÑÉ¥¹œ($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸É•¹‘•É}Ñ•µÁ±…Ñ” €‘Ñ•µÁ±…Ñ”°…ÉÉ…ä€‘Ù…ÉÌ€¤ì($$‘Í•…É €€ô…ÉÉ…ä ¤ì($$‘É•Á±…”€ô…ÉÉ…ä ¤ì($%™½É•… € €‘Ù…ÉÌ…Ì€‘­•ä€ôø€‘Ù…±Õ”€¤ì($$$‘Í•…É¡mt€€ô€ìœ€¸€‘­•ä€¸€ôœì($$$‘É•Á±…•mt€ô€¡ÍÑÉ¥¹œ¤€‘Ù…±Õ”ì($%ô($%É•ÑÕÉ¸ÍÑÉ}É•Á±…” €‘Í•…É °€‘É•Á±…”°€¡ÍÑÉ¥¹œ¤€‘Ñ•µÁ±…Ñ”€¤ì(%ô)ô(
+		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'catering_phone', '0422487487' ) );
+		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '0422487487';
+	}
+
+	/**
+	 * Customer-facing tracking page URL, optionally prefilled with an order
+	 * number. The matching email is deliberately never placed in the URL.
+	 *
+	 * @param string $order_number Order number to prefill.
+	 * @return string Empty until an owner configures a published tracking page.
+	 */
+	public static function tracking_page_url( $order_number = '' ) {
+		$url = self::sanitize_tracking_page_url( self::get( 'tracking_page_url', '' ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		if ( '' !== trim( (string) $order_number ) ) {
+			$url = add_query_arg( 'order', (string) $order_number, $url );
+		}
+		return (string) apply_filters( 'doughboss_tracking_page_url', $url, $order_number );
+	}
+
+	/**
+	 * Public Google Business review destination.
+	 *
+	 * @return string HTTPS Google URL, or empty when the invitation is disabled.
+	 */
+	public static function google_review_url() {
+		$url = self::sanitize_google_review_url( self::get( 'google_review_url', '' ) );
+		return (string) apply_filters( 'doughboss_google_review_url', $url );
+	}
+
+	/**
+	 * Only allow HTTPS destinations owned by Google.
+	 *
+	 * @param string $url Candidate review URL.
+	 * @return string
+	 */
+	public static function sanitize_google_review_url( $url ) {
+		$url    = esc_url_raw( trim( (string) $url ) );
+		$target = wp_parse_url( $url );
+		if ( ! is_array( $target ) || 'https' !== strtolower( (string) ( isset( $target['scheme'] ) ? $target['scheme'] : '' ) ) ) {
+			return '';
+		}
+		$host = strtolower( (string) ( isset( $target['host'] ) ? $target['host'] : '' ) );
+		if ( ! preg_match( '/(^|\.)google\.(com|com\.au)$/', $host ) && 'g.page' !== $host ) {
+			return '';
+		}
+		return $url;
+	}
+
+	/**
+	 * Keep tracking links on the current WordPress host.
+	 *
+	 * @param string $url Candidate page URL.
+	 * @return string Valid first-party URL, or an empty string.
+	 */
+	public static function sanitize_tracking_page_url( $url ) {
+		$url = esc_url_raw( trim( (string) $url ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$site   = wp_parse_url( home_url( '/' ) );
+		$target = wp_parse_url( $url );
+		if (
+			! is_array( $site )
+			|| ! is_array( $target )
+			|| empty( $site['host'] )
+			|| empty( $target['host'] )
+			|| strtolower( (string) $site['host'] ) !== strtolower( (string) $target['host'] )
+			|| empty( $target['scheme'] )
+			|| ! in_array( strtolower( (string) $target['scheme'] ), array( 'http', 'https' ), true )
+			|| ! empty( $target['user'] )
+			|| ! empty( $target['pass'] )
+		) {
+			return '';
+		}
+		return $url;
+	}
+
+	/**
+	 * Plain-text tracking instructions shared by customer emails.
+	 *
+	 * @param string $order_number Order number.
+	 * @return string
+	 */
+	public static function tracking_instructions( $order_number ) {
+		$url = self::tracking_page_url( $order_number );
+		if ( '' !== $url ) {
+			return sprintf(
+				"Track your order: %s\nUse order %s and the same email address used at checkout.",
+				$url,
+				(string) $order_number
+			);
+		}
+		return sprintf(
+			'Keep order %s and use it with the same email address on the Track My Order page.',
+			(string) $order_number
+		);
+	}
+
+	/**
+	 * Configured pizza sizes.
+	 *
+	 * @return array[] List of array{slug:string,label:string,price:float}.
+	 */
+	public static function sizes() {
+		$sizes = self::get( 'sizes', array() );
+		return is_array( $sizes ) ? array_values( $sizes ) : array();
+	}
+
+	/**
+	 * Configured toppings.
+	 *
+	 * @return array[] List of array{slug:string,label:string,price:float}.
+	 */
+	public static function toppings() {
+		$toppings = self::get( 'toppings', array() );
+		return is_array( $toppings ) ? array_values( $toppings ) : array();
+	}
+
+	/**
+	 * Look up a single size definition by slug.
+	 *
+	 * @param string $slug Size slug.
+	 * @return array|null
+	 */
+	public static function find_size( $slug ) {
+		foreach ( self::sizes() as $size ) {
+			if ( isset( $size['slug'] ) && $size['slug'] === $slug ) {
+				return $size;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Look up a single topping definition by slug.
+	 *
+	 * @param string $slug Topping slug.
+	 * @return array|null
+	 */
+	public static function find_topping( $slug ) {
+		foreach ( self::toppings() as $topping ) {
+			if ( isset( $topping['slug'] ) && $topping['slug'] === $slug ) {
+				return $topping;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Tax rate as a fraction (e.g. 8.25% -> 0.0825).
+	 *
+	 * @return float
+	 */
+	public static function tax_fraction() {
+		return (float) self::get( 'tax_rate', 0 ) / 100;
+	}
+
+	/**
+	 * Is online ordering currently accepting orders?
+	 *
+	 * @return bool
+	 */
+	public static function ordering_open() {
+		return (bool) self::get( 'ordering_open', 0 );
+	}
+
+	/**
+	 * Customer-facing copy shown while checkout is paused.
+	 *
+	 * @return string
+	 */
+	public static function ordering_closed_message() {
+		$message = trim( (string) self::get( 'ordering_closed_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.', 'doughboss' );
+	}
+
+	/**
+	 * Whether unpaid after-hours pre-order requests are available.
+	 *
+	 * This remains opt-in so a fresh browse-only install cannot silently start
+	 * collecting customer requests. It is intentionally independent from
+	 * ordering_open(): it is only meaningful while standard checkout is closed.
+	 *
+	 * @return bool
+	 */
+	public static function after_hours_preorders_enabled() {
+		return (bool) self::get( 'after_hours_preorders_enabled', 0 );
+	}
+
+	/**
+	 * Customer-facing copy for an accepted after-hours request.
+	 *
+	 * @return string
+	 */
+	public static function after_hours_preorders_message() {
+		$message = trim( (string) self::get( 'after_hours_preorders_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.', 'doughboss' );
+	}
+
+	/**
+	 * Whether the site sits behind a trusted reverse proxy/CDN, so the rate
+	 * limiter should read the client IP from a forwarded header instead of
+	 * REMOTE_ADDR. Off by default. See the note in defaults() and
+	 * DoughBoss_REST_Controller::client_ip() for the trust assumption.
+	 *
+	 * @return bool
+	 */
+	public static function behind_reverse_proxy() {
+		return (bool) self::get( 'behind_reverse_proxy', 0 );
+	}
+
+	/**
+	 * The forwarded header the trusted proxy sets the real client IP in (e.g.
+	 * 'X-Forwarded-For'). Only consulted when behind_reverse_proxy() is true.
+	 *
+	 * @return string
+	 */
+	public static function trusted_proxy_header() {
+		$header = trim( (string) self::get( 'trusted_proxy_header', 'X-Forwarded-For' ) );
+		return '' !== $header ? $header : 'X-Forwarded-For';
+	}
+
+	/**
+	 * Format a numeric amount for display using the configured symbol.
+	 *
+	 * @param float $amount Amount.
+	 * @return string
+	 */
+	public static function format_price( $amount ) {
+		$symbol = self::get( 'currency_symbol', '$' );
+		return $symbol . number_format( (float) $amount, 2 );
+	}
+
+	/**
+	 * Whether online card payments are switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function payments_enabled() {
+		return (bool) self::get( 'payments_enabled', 0 );
+	}
+
+	/**
+	 * Active Stripe mode: 'test' or 'live'.
+	 *
+	 * @return string
+	 */
+	public static function stripe_mode() {
+		return 'live' === self::get( 'stripe_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Stripe publishable key for the active mode.
+	 *
+	 * @return string
+	 */
+	public static function stripe_publishable_key() {
+		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_pk' : 'stripe_test_pk', '' );
+	}
+
+	/**
+	 * Env-first read for a secret: a wp-config.php constant or environment
+	 * variable of the given name overrides the stored option, so the secret can
+	 * be kept out of the database (and therefore out of backups). Mirrors the
+	 * pattern already used for POSPal/Mercure/ntfy/ClickSend/printer secrets.
+	 *
+	 * @param string $const_name Constant/env var name (e.g. DOUGHBOSS_STRIPE_TEST_SK).
+	 * @param string $option_key Fallback option key.
+	 * @return string
+	 */
+	private static function env_first_secret( $const_name, $option_key ) {
+		if ( defined( $const_name ) && '' !== (string) constant( $const_name ) ) {
+			return (string) constant( $const_name );
+		}
+		$env = getenv( $const_name );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( $option_key, '' );
+	}
+
+	/**
+	 * Stripe secret key for the active mode. Read env-first â€” the constant
+	 * DOUGHBOSS_STRIPE_TEST_SK/DOUGHBOSS_STRIPE_LIVE_SK or the matching
+	 * environment variable take precedence over the stored option. Only ever
+	 * used server-side; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function stripe_secret_key() {
+		return 'live' === self::stripe_mode()
+			? self::env_first_secret( 'DOUGHBOSS_STRIPE_LIVE_SK', 'stripe_live_sk' )
+			: self::env_first_secret( 'DOUGHBOSS_STRIPE_TEST_SK', 'stripe_test_sk' );
+	}
+
+	/**
+	 * Whether the configured Stripe secret has the expected mode-specific
+	 * format. Rejecting arbitrary non-empty strings here prevents a password or
+	 * other unrelated credential from ever being sent to Stripe.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_secret_key_valid() {
+		$prefix = 'live' === self::stripe_mode() ? 'sk_live_' : 'sk_test_';
+		$secret = self::stripe_secret_key();
+		return 0 === strpos( $secret, $prefix ) && strlen( $secret ) >= 16;
+	}
+
+	/**
+	 * Stripe webhook signing secret for the active mode (server-side only).
+	 * Read env-first â€” the constant DOUGHBOSS_STRIPE_TEST_WHSEC/
+	 * DOUGHBOSS_STRIPE_LIVE_WHSEC or the matching environment variable take
+	 * precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function stripe_webhook_secret() {
+		return 'live' === self::stripe_mode()
+			? self::env_first_secret( 'DOUGHBOSS_STRIPE_LIVE_WHSEC', 'stripe_live_whsec' )
+			: self::env_first_secret( 'DOUGHBOSS_STRIPE_TEST_WHSEC', 'stripe_test_whsec' );
+	}
+
+	/**
+	 * Whether the active Stripe mode has a webhook signing secret.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_webhook_configured() {
+		return '' !== self::stripe_webhook_secret();
+	}
+
+	/**
+	 * Whether Stripe is enabled and sufficiently configured for the active mode.
+	 * Live mode fails closed without the recovery webhook; test mode can still
+	 * exercise the synchronous checkout path while setup is being completed.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_ready() {
+		return self::payments_enabled()
+			&& self::stripe_secret_key_valid()
+			&& ( 'live' !== self::stripe_mode() || self::stripe_webhook_configured() );
+	}
+
+	/**
+	 * Which payment gateway is active: 'stripe', 'tyro' or 'mpgs'. Defaults to
+	 * 'stripe' so existing sites are unaffected until an owner deliberately
+	 * switches this.
+	 *
+	 * @return string
+	 */
+	public static function payment_gateway() {
+		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'stripe' ) );
+		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $gateway : 'stripe';
+	}
+
+	/** @return string */
+	public static function mpgs_mode() {
+		return 'live' === self::get( 'mpgs_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/** @return string */
+	public static function mpgs_merchant_id() {
+		$key = 'live' === self::mpgs_mode() ? 'mpgs_live_merchant_id' : 'mpgs_test_merchant_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		return preg_match( '/^[A-Za-z0-9_-]{1,40}$/', $value ) ? $value : '';
+	}
+
+	/** @return string */
+	public static function mpgs_api_password() {
+		return 'live' === self::mpgs_mode()
+			? self::env_first_secret( 'DOUGHBOSS_MPGS_LIVE_API_PASSWORD', 'mpgs_live_api_password' )
+			: self::env_first_secret( 'DOUGHBOSS_MPGS_TEST_API_PASSWORD', 'mpgs_test_api_password' );
+	}
+
+	/**
+	 * Return a tightly validated MPGS API origin. Arbitrary hosts are rejected
+	 * so a settings change cannot turn authenticated requests into SSRF.
+	 *
+	 * @return string
+	 */
+	public static function mpgs_host() {
+		$key  = 'live' === self::mpgs_mode() ? 'mpgs_live_host' : 'mpgs_test_host';
+		$host = untrailingslashit( esc_url_raw( trim( (string) self::get( $key, '' ) ) ) );
+		$parts = wp_parse_url( $host );
+		if ( ! is_array( $parts ) || 'https' !== strtolower( isset( $parts['scheme'] ) ? $parts['scheme'] : '' ) || empty( $parts['host'] ) ) {
+			return '';
+		}
+		$name = strtolower( (string) $parts['host'] );
+		if ( ! preg_match( '/(^|\.)gateway\.mastercard\.com$/', $name ) ) {
+			return '';
+		}
+		return 'https://' . $name;
+	}
+
+	/** @return int */
+	public static function mpgs_api_version() {
+		$version = absint( self::get( 'mpgs_api_version', 100 ) );
+		return min( 100, max( 63, $version ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_ready() {
+		return self::payments_enabled()
+			&& 'mpgs' === self::payment_gateway()
+			&& '' !== self::mpgs_merchant_id()
+			&& '' !== self::mpgs_api_password()
+			&& '' !== self::mpgs_host()
+			&& ( 'test' === self::mpgs_mode() || (bool) self::get( 'mpgs_live_approved', 0 ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_live_mode() {
+		return 'live' === self::mpgs_mode();
+	}
+
+	/**
+	 * Active Tyro mode: 'test' or 'live'.
+	 *
+	 * @return string
+	 */
+	public static function tyro_mode() {
+		return 'live' === self::get( 'tyro_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect authenticates with an OAuth client ID, not a merchant ID.
+	 *
+	 * @return string
+	 */
+	public static function tyro_merchant_id() {
+		return self::tyro_client_id();
+	}
+
+	/**
+	 * Tyro Connect OAuth client ID for the active mode. It is used server-side
+	 * to obtain an access token and is never a browser card-field credential.
+	 *
+	 * @return string
+	 */
+	public static function tyro_client_id() {
+		$key = 'live' === self::tyro_mode() ? 'tyro_live_client_id' : 'tyro_test_client_id';
+		return trim( (string) self::get( $key, '' ) );
+	}
+
+	/**
+	 * Tyro Connect OAuth client secret for the active mode. It is read env-first
+	 * and used only server-side to obtain an access token.
+	 *
+	 * @return string
+	 */
+	public static function tyro_client_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET', 'tyro_live_client_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_CLIENT_SECRET', 'tyro_test_client_secret' );
+	}
+
+	/**
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect uses an OAuth client secret, not a merchant password.
+	 *
+	 * @return string
+	 */
+	public static function tyro_password() {
+		return self::tyro_client_secret();
+	}
+
+	/**
+	 * Tyro webhook signing secret for the active mode (server-side only).
+	 * Read env-first â€” the constant DOUGHBOSS_TYRO_TEST_WHSEC/
+	 * DOUGHBOSS_TYRO_LIVE_WHSEC or the matching environment variable take
+	 * precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_WHSEC', 'tyro_live_webhook_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_WHSEC', 'tyro_test_webhook_secret' );
+	}
+
+	/**
+	 * Whether Tyro is both the active gateway and fully configured for the
+	 * active mode (so the storefront should actually route card payments to
+	 * it instead of Stripe).
+	 *
+	 * @return bool
+	 */
+	public static function tyro_ready() {
+		return self::payments_enabled()
+			&& 'tyro' === self::payment_gateway()
+			&& '' !== self::tyro_client_id()
+			&& '' !== self::tyro_client_secret()
+			&& ( 'test' === self::tyro_mode() || (bool) self::get( 'tyro_live_certified', 0 ) );
+	}
+
+	/**
+	 * WordPress-normalized form of Tyro Connect's Tyro-Connect-Signature
+	 * webhook header. The raw request body is verified by DoughBoss_Tyro.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_signature_header() {
+		return 'tyro_connect_signature';
+	}
+
+	/** @return bool */
+	public static function tyro_live_mode() {
+		return 'live' === self::tyro_mode();
+	}
+
+	/**
+	 * Whether the POSPal POS integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_enabled() {
+		return (bool) self::get( 'pospal_enabled', 0 );
+	}
+
+	/**
+	 * POSPal area host, trailing slash removed (e.g. https://area28-win.pospal.cn:443).
+	 *
+	 * @return string
+	 */
+	public static function pospal_host() {
+		return untrailingslashit( (string) self::get( 'pospal_host', '' ) );
+	}
+
+	/**
+	 * POSPal public application id.
+	 *
+	 * @return string
+	 */
+	public static function pospal_app_id() {
+		return (string) self::get( 'pospal_app_id', '' );
+	}
+
+	/**
+	 * POSPal secret application key. Read env-first â€” the constant
+	 * DOUGHBOSS_POSPAL_APPKEY or the matching environment variable take
+	 * precedence over the stored option, so the secret can be kept out of the
+	 * database (and therefore out of backups). Only ever used server-side to
+	 * sign requests; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function pospal_app_key() {
+		if ( defined( 'DOUGHBOSS_POSPAL_APPKEY' ) && '' !== (string) DOUGHBOSS_POSPAL_APPKEY ) {
+			return (string) DOUGHBOSS_POSPAL_APPKEY;
+		}
+		$env = getenv( 'DOUGHBOSS_POSPAL_APPKEY' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'pospal_app_key', '' );
+	}
+
+	/**
+	 * Whether POSPal is both enabled and fully configured (host + appId + appKey).
+	 *
+	 * @return bool
+	 */
+	public static function pospal_ready() {
+		return self::pospal_enabled() && '' !== self::pospal_host() && '' !== self::pospal_app_id() && '' !== self::pospal_app_key();
+	}
+
+	/**
+	 * POSPal coupon-rule UID mapped to the $5 voucher (blank when unmapped).
+	 *
+	 * @return string
+	 */
+	public static function pospal_coupon_uid_5() {
+		return (string) self::get( 'pospal_coupon_uid_5', '' );
+	}
+
+	/**
+	 * Map a dollar voucher value to the configured POSPal coupon-rule UID.
+	 *
+	 * Only the pilot's $5 student voucher is mapped today (the $10 tier was
+	 * retired); any other value returns '' (no rule), which the grant flow
+	 * treats as "skip â€” nothing to grant in POSPal".
+	 *
+	 * @param int|float|string $value Voucher dollar value (e.g. 5, '5.00').
+	 * @return string The mapped coupon-rule UID, or '' when none is configured.
+	 */
+	public static function pospal_coupon_uid_for( $value ) {
+		$dollars = (int) round( (float) $value );
+		switch ( $dollars ) {
+			case 5:
+				return self::pospal_coupon_uid_5();
+			default:
+				return '';
+		}
+	}
+
+	/**
+	 * Whether the POSPal coupon-GRANT leg should run: POSPal is fully configured
+	 * AND at least one coupon-rule UID is mapped. When false the whole grant/revoke
+	 * sync stays dormant and voucher claims behave exactly as before.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_grant_enabled() {
+		if ( ! self::pospal_enabled() ) {
+			return false;
+		}
+		foreach ( self::pospal_stores() as $store ) {
+			if ( '' !== $store['uid5'] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether mirroring online orders onto the POSPal till is switched on.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_push_orders() {
+		return (bool) self::get( 'pospal_push_orders', 0 );
+	}
+
+	/**
+	 * Whether the order-push leg is live: POSPal on AND order push on.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_push_enabled() {
+		return self::pospal_enabled() && self::pospal_push_orders();
+	}
+
+	/**
+	 * Pay method recorded on pushed POS orders (Cash / Wxpay / Alipay / a custom name).
+	 *
+	 * @return string
+	 */
+	public static function pospal_order_pay_method() {
+		$m = trim( (string) self::get( 'pospal_order_pay_method', 'Cash' ) );
+		return '' !== $m ? $m : 'Cash';
+	}
+
+	/**
+	 * Custom pay-method code (originalCode), required when pay method is a custom one.
+	 *
+	 * @return string
+	 */
+	public static function pospal_order_pay_method_code() {
+		return trim( (string) self::get( 'pospal_order_pay_method_code', '' ) );
+	}
+
+	/**
+	 * Whether a Stripe-paid order should be marked paid online (payOnLine=1) on the POS.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_order_pay_online() {
+		return (bool) self::get( 'pospal_order_pay_online', 0 );
+	}
+
+	/**
+	 * Map of normalised menu-item name => POSPal product uid, used to translate order
+	 * lines into POSPal products. Built with `wp doughboss pospal-map`.
+	 *
+	 * @return array<string,int|string>
+	 */
+	public static function pospal_product_map() {
+		$map = self::get( 'pospal_product_map', array() );
+		return is_array( $map ) ? $map : array();
+	}
+
+	/**
+	 * Env-first App Key for an additional POSPal store (store 2, 3, â€¦). Mirrors
+	 * pospal_app_key(): a DOUGHBOSS_POSPAL_APPKEY_<n> constant or env var overrides
+	 * the stored option so secrets can be kept out of the database.
+	 *
+	 * @param int $n Store number (2, 3, â€¦).
+	 * @return string
+	 */
+	public static function pospal_store_key( $n ) {
+		$n     = (int) $n;
+		$const = 'DOUGHBOSS_POSPAL_APPKEY_' . $n;
+		if ( defined( $const ) && '' !== (string) constant( $const ) ) {
+			return (string) constant( $const );
+		}
+		$env = getenv( $const );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'pospal' . $n . '_app_key', '' );
+	}
+
+	/**
+	 * The configured POSPal stores for multi-store grants. Store 1 is the legacy
+	 * single-store fields (kept first for backward-compat); stores 2 and 3 come from
+	 * the pospal2_* / pospal3_* settings. Only fully-configured stores (host + App ID
+	 * + App Key all set) are returned, so an empty store is skipped and nothing breaks.
+	 *
+	 * @return array[] List of { label, host, app_id, app_key, uid5 }.
+	 */
+	public static function pospal_stores() {
+		$raw = array(
+			array(
+				'label'   => (string) self::get( 'pospal_label', '' ),
+				'host'    => self::pospal_host(),
+				'app_id'  => self::pospal_app_id(),
+				'app_key' => self::pospal_app_key(),
+				'uid5'    => self::pospal_coupon_uid_5(),
+				'default' => __( 'Store 1', 'doughboss' ),
+			),
+		);
+		foreach ( array( 2, 3 ) as $n ) {
+			$raw[] = array(
+				'label'   => (string) self::get( 'pospal' . $n . '_label', '' ),
+				'host'    => untrailingslashit( (string) self::get( 'pospal' . $n . '_host', '' ) ),
+				'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
+				'app_key' => self::pospal_store_key( $n ),
+				'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
+				/* translators: %d: store number. */
+				'default' => sprintf( __( 'Store %d', 'doughboss' ), $n ),
+			);
+		}
+
+		$stores = array();
+		foreach ( $raw as $s ) {
+			if ( '' === $s['host'] || '' === $s['app_id'] || '' === $s['app_key'] ) {
+				continue; // Skip incompletely-configured stores.
+			}
+			$s['label'] = '' !== $s['label'] ? $s['label'] : $s['default'];
+			unset( $s['default'] );
+			$stores[] = $s;
+		}
+		return $stores;
+	}
+
+	/**
+	 * A single POSPal store's config by number (1 = legacy/primary, 2, 3) regardless
+	 * of whether it is fully configured â€” used by the per-store admin Verify/Test
+	 * tools so an incomplete store reports clearly instead of falling back silently.
+	 *
+	 * @param int $n Store number.
+	 * @return array { label, host, app_id, app_key, uid5 }.
+	 */
+	public static function pospal_store( $n ) {
+		$n = max( 1, (int) $n );
+		if ( 1 === $n ) {
+			$label1 = (string) self::get( 'pospal_label', '' );
+			return array(
+				'label'   => '' !== $label1 ? $label1 : __( 'Store 1', 'doughboss' ),
+				'host'    => self::pospal_host(),
+				'app_id'  => self::pospal_app_id(),
+				'app_key' => self::pospal_app_key(),
+				'uid5'    => self::pospal_coupon_uid_5(),
+			);
+		}
+		$label = (string) self::get( 'pospal' . $n . '_label', '' );
+		return array(
+			/* translators: %d: store number. */
+			'label'   => '' !== $label ? $label : sprintf( __( 'Store %d', 'doughboss' ), $n ),
+			'host'    => untrailingslashit( (string) self::get( 'pospal' . $n . '_host', '' ) ),
+			'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
+			'app_key' => self::pospal_store_key( $n ),
+			'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
+		);
+	}
+
+	/**
+	 * Whether the Mercure real-time push integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function mercure_enabled() {
+		return (bool) self::get( 'mercure_enabled', 0 );
+	}
+
+	/**
+	 * Mercure hub URL, trailing slash removed (e.g. https://hub.example.com/.well-known/mercure).
+	 *
+	 * @return string
+	 */
+	public static function mercure_hub_url() {
+		return untrailingslashit( (string) self::get( 'mercure_hub_url', '' ) );
+	}
+
+	/**
+	 * Mercure publisher JWT. Read env-first â€” the constant
+	 * DOUGHBOSS_MERCURE_PUBLISH_JWT or the matching environment variable take
+	 * precedence over the stored option, so the secret can be kept out of the
+	 * database (and therefore out of backups). Only ever used server-side to
+	 * authenticate publishes to the hub; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function mercure_publish_jwt() {
+		if ( defined( 'DOUGHBOSS_MERCURE_PUBLISH_JWT' ) && '' !== (string) DOUGHBOSS_MERCURE_PUBLISH_JWT ) {
+			return (string) DOUGHBOSS_MERCURE_PUBLISH_JWT;
+		}
+		$env = getenv( 'DOUGHBOSS_MERCURE_PUBLISH_JWT' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'mercure_publish_jwt', '' );
+	}
+
+	/**
+	 * Mercure subscriber JWT, handed to browser clients so they may subscribe to
+	 * topics. Not a publish credential, so it is read from the stored option.
+	 *
+	 * @return string
+	 */
+	public static function mercure_subscribe_jwt() {
+		return (string) self::get( 'mercure_subscribe_jwt', '' );
+	}
+
+	/**
+	 * Prefix used when composing Mercure topic URIs/names.
+	 *
+	 * @return string
+	 */
+	public static function mercure_topic_prefix() {
+		return (string) self::get( 'mercure_topic_prefix', 'doughboss' );
+	}
+
+	/**
+	 * Whether Mercure is both enabled and the minimum config (hub URL + publish
+	 * JWT) is present, so the server should actually publish real-time updates.
+	 *
+	 * @return bool
+	 */
+	public static function mercure_ready() {
+		return self::mercure_enabled() && '' !== self::mercure_hub_url() && '' !== self::mercure_publish_jwt();
+	}
+
+	/**
+	 * Whether the ntfy push-notification integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function ntfy_enabled() {
+		return (bool) self::get( 'ntfy_enabled', 0 );
+	}
+
+	/**
+	 * ntfy server base URL, trailing slash removed (default https://ntfy.sh).
+	 *
+	 * @return string
+	 */
+	public static function ntfy_server() {
+		$server = untrailingslashit( (string) self::get( 'ntfy_server', 'https://ntfy.sh' ) );
+		return '' !== $server ? $server : 'https://ntfy.sh';
+	}
+
+	/**
+	 * ntfy topic to publish to (blank when unconfigured).
+	 *
+	 * @return string
+	 */
+	public static function ntfy_topic() {
+		return (string) self::get( 'ntfy_topic', '' );
+	}
+
+	/**
+	 * ntfy bearer token. Read env-first â€” the constant DOUGHBOSS_NTFY_TOKEN or the
+	 * matching environment variable take precedence over the stored option, so the
+	 * secret can be kept out of the database (and therefore out of backups). Only
+	 * ever used server-side to authenticate publishes; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function ntfy_token() {
+		if ( defined( 'DOUGHBOSS_NTFY_TOKEN' ) && '' !== (string) DOUGHBOSS_NTFY_TOKEN ) {
+			return (string) DOUGHBOSS_NTFY_TOKEN;
+		}
+		$env = getenv( 'DOUGHBOSS_NTFY_TOKEN' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'ntfy_token', '' );
+	}
+
+	/**
+	 * ntfy message priority (default 'high').
+	 *
+	 * @return string
+	 */
+	public static function ntfy_priority() {
+		return (string) self::get( 'ntfy_priority', 'high' );
+	}
+
+	/**
+	 * Whether ntfy is both enabled and a topic is configured, so the server should
+	 * actually publish notifications.
+	 *
+	 * @return bool
+	 */
+	public static function ntfy_ready() {
+		return self::ntfy_enabled() && '' !== self::ntfy_topic();
+	}
+
+	/**
+	 * Whether the SMS (ClickSend) integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function sms_enabled() {
+		return (bool) self::get( 'sms_enabled', 0 );
+	}
+
+	/**
+	 * ClickSend account username.
+	 *
+	 * @return string
+	 */
+	public static function clicksend_username() {
+		return (string) self::get( 'clicksend_username', '' );
+	}
+
+	/**
+	 * ClickSend API key. Read env-first â€” the constant DOUGHBOSS_CLICKSEND_API_KEY
+	 * or the matching environment variable take precedence over the stored option,
+	 * so the secret can be kept out of the database (and therefore out of backups).
+	 * Only ever used server-side to authenticate the API; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function clicksend_api_key() {
+		if ( defined( 'DOUGHBOSS_CLICKSEND_API_KEY' ) && '' !== (string) DOUGHBOSS_CLICKSEND_API_KEY ) {
+			return (string) DOUGHBOSS_CLICKSEND_API_KEY;
+		}
+		$env = getenv( 'DOUGHBOSS_CLICKSEND_API_KEY' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'clicksend_api_key', '' );
+	}
+
+	/**
+	 * The sender ID / from-number used for outbound SMS.
+	 *
+	 * @return string
+	 */
+	public static function sms_from() {
+		return (string) self::get( 'sms_from', '' );
+	}
+
+	/**
+	 * Whether to text the customer when their order is marked ready (default on).
+	 *
+	 * @return bool
+	 */
+	public static function sms_on_ready() {
+		return (bool) self::get( 'sms_on_ready', 1 );
+	}
+
+	/**
+	 * Whether to text the voucher code to the customer when a voucher is claimed
+	 * (default off).
+	 *
+	 * @return bool
+	 */
+	public static function sms_on_voucher_claim() {
+		return (bool) self::get( 'sms_on_voucher_claim', 0 );
+	}
+
+	/**
+	 * Whether to email the customer when their order is accepted (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_accepted() {
+		return (bool) self::get( 'email_on_accepted', 1 );
+	}
+
+	/**
+	 * Whether to email the customer when their order is marked ready for
+	 * pickup (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_ready() {
+		return (bool) self::get( 'email_on_ready', 1 );
+	}
+
+	/**
+	 * Whether to send the shop inbox (orders_email()) a copy of each stage
+	 * email (default off).
+	 *
+	 * @return bool
+	 */
+	public static function email_staff_copy() {
+		return (bool) self::get( 'email_staff_copy', 0 );
+	}
+
+	/**
+	 * Whether SMS is both enabled and fully configured (username + API key), so
+	 * the server should actually send messages.
+	 *
+	 * @return bool
+	 */
+	public static function sms_ready() {
+		return self::sms_enabled() && '' !== self::clicksend_username() && '' !== self::clicksend_api_key();
+	}
+
+	/**
+	 * Whether the receipt-printer integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function printer_enabled() {
+		return (bool) self::get( 'printer_enabled', 0 );
+	}
+
+	/**
+	 * Receipt printer protocol: 'cloudprnt' or 'epos' (default 'cloudprnt').
+	 *
+	 * @return string
+	 */
+	public static function printer_protocol() {
+		return 'epos' === self::get( 'printer_protocol', 'cloudprnt' ) ? 'epos' : 'cloudprnt';
+	}
+
+	/**
+	 * Receipt printer shared token. Read env-first â€” the constant
+	 * DOUGHBOSS_PRINTER_TOKEN or the matching environment variable take precedence
+	 * over the stored option, so the secret can be kept out of the database (and
+	 * therefore out of backups). Used to authenticate the printer/poll exchange;
+	 * never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function printer_token() {
+		if ( defined( 'DOUGHBOSS_PRINTER_TOKEN' ) && '' !== (string) DOUGHBOSS_PRINTER_TOKEN ) {
+			return (string) DOUGHBOSS_PRINTER_TOKEN;
+		}
+		$env = getenv( 'DOUGHBOSS_PRINTER_TOKEN' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'printer_token', '' );
+	}
+
+	/**
+	 * Receipt width in characters (default 48 for an 80mm roll).
+	 *
+	 * @return int
+	 */
+	public static function printer_width() {
+		return (int) self::get( 'printer_width', 48 );
+	}
+
+	/**
+	 * Whether the printer is both enabled and a shared token is set, so the server
+	 * should actually emit receipts.
+	 *
+	 * @return bool
+	 */
+	public static function printer_ready() {
+		return self::printer_enabled() && '' !== self::printer_token();
+	}
+
+	/**
+	 * Order-confirmation email subject. Owner-editable (DoughBoss â†’ Message
+	 * Templates); blank restores the built-in default. Supports the
+	 * {site_name}/{order_number} placeholders â€” see render_template().
+	 *
+	 * @return string
+	 */
+	public static function tpl_order_email_subject() {
+		$v = trim( (string) self::get( 'tpl_order_email_subject', '' ) );
+		return '' !== $v ? $v : '[{site_name}] Order {order_number} received';
+	}
+
+	/**
+	 * Order-confirmation email body. Owner-editable; blank restores the
+	 * built-in default. Supports {customer_name}/{order_number}/{items}/{total}/
+	 * {tracking_url}/{tracking_instructions}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_order_email_body() {
+		$v = (string) self::get( 'tpl_order_email_body', '' );
+		return '' !== trim( $v )
+			? $v
+			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\n{tracking_instructions}\n";
+	}
+
+	/**
+	 * "Order ready" SMS text. Owner-editable; blank restores the built-in
+	 * default. Supports {order_number}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_sms_ready() {
+		$v = trim( (string) self::get( 'tpl_sms_ready', '' ) );
+		return '' !== $v ? $v : 'DoughBoss order #{order_number}: {status_label}. {handoff_message}';
+	}
+
+	/**
+	 * Voucher-claimed SMS text. Owner-editable; blank restores the built-in
+	 * default. Supports {code}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_sms_voucher() {
+		$v = trim( (string) self::get( 'tpl_sms_voucher', '' ) );
+		return '' !== $v ? $v : 'Your DoughBoss voucher is ready: {code}. Show this code to redeem.';
+	}
+
+	/**
+	 * "Order accepted" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports {customer_name}/{order_number}/{eta_minutes}/
+	 * {total}/{status_label}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_accepted_email_subject() {
+		$v = trim( (string) self::get( 'tpl_accepted_email_subject', '' ) );
+		return '' !== $v ? $v : "We're on it! Order {order_number} is being prepared";
+	}
+
+	/**
+	 * "Order accepted" stage email body. Owner-editable; blank restores the
+	 * built-in default. The built-in default has two variants: one with the
+	 * "ready in about {eta_minutes} minutes" line and a neutral one used when
+	 * no ETA was given (eta 0), so the customer never reads "in about 0
+	 * minutes". A custom template is returned as-is either way.
+	 *
+	 * @param bool $with_eta Whether an ETA was given (selects the default variant).
+	 * @return string
+	 */
+	public static function tpl_accepted_email_body( $with_eta = true ) {
+		$v = (string) self::get( 'tpl_accepted_email_body', '' );
+		if ( '' !== trim( $v ) ) {
+			return $v;
+		}
+		if ( $with_eta ) {
+			return "Hi {customer_name},\n\nGreat news â€” our bakers have started on your order {order_number}. It should be ready in about {eta_minutes} minutes.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us â€” see you soon!\n";
+		}
+		return "Hi {customer_name},\n\nGreat news â€” our bakers have started on your order {order_number}. We'll let you know the moment it's ready.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us â€” see you soon!\n";
+	}
+
+	/**
+	 * "Order ready" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports the same placeholders as the accepted email.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_subject() {
+		$v = trim( (string) self::get( 'tpl_ready_email_subject', '' ) );
+		return '' !== $v ? $v : 'Order {order_number}: {status_label}';
+	}
+
+	/**
+	 * "Order ready" stage email body. Owner-editable; blank restores the
+	 * built-in default.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_body() {
+		$v = (string) self::get( 'tpl_ready_email_body', '' );
+		return '' !== trim( $v )
+			? $v
+			: "Hi {customer_name},\n\nYour order {order_number} is {status_label}. {handoff_message}\n\nOrder total: {total}\n\n{tracking_instructions}\n\nSee you soon!\n";
+	}
+
+	/**
+	 * Replace {placeholder} tokens in a message template with the given values.
+	 * Unknown placeholders are left as literal text rather than silently
+	 * blanked, so a typo in a custom template stays visible instead of hidden.
+	 *
+	 * @param string $template Template text containing {placeholder} tokens.
+	 * @param array  $vars     Map of placeholder name (without braces) => value.
+	 * @return string
+	 */
+	public static function render_template( $template, array $vars ) {
+		$search  = array();
+		$replace = array();
+		foreach ( $vars as $key => $value ) {
+			$search[]  = '{' . $key . '}';
+			$replace[] = (string) $value;
+		}
+		return str_replace( $search, $replace, (string) $template );
+	}
+}

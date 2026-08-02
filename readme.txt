@@ -215,7 +215,26 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 
 = 2.23.1 =
 * Add an end-to-end customer tracking and versioned KDS lifecycle acceptance contract.
-* Persist POSPal's stable order number for„Œ-¢Gß≤⁄Óù∆≠y“owser payment initialization whenever ordering is closed.
+* Persist POSPal's stable order number for safe positive reconciliation.
+* Quarantine ambiguous transport and success-without-order-number outcomes instead of blindly replaying them.
+* Add provider-readiness and behavioural POSPal outbox contracts to the strict verifier.
+* Add schema 1.16.0 for the indexed POSPal remote reference.
+
+= 2.23.0 =
+* Add a live-data WordPress SEO fallback, full social previews, and crawlable Menu and Catering landing pages.
+* Add a consent-gated Meta/TikTok commerce event bridge with a strict no-PII allowlist and simulated-demo isolation.
+* Replace the catering artwork with real-alpha menu-based mini manoush and pie compositions shared by the demo and WordPress.
+* Refine product motion into a replayable lift/explode/assemble sequence without scroll-direction reversal.
+
+= 2.22.2 =
+* Add the complete item-specific WordPress menu options from the reviewed demo, including Zaatar styles and mix, pizza sauces and crusts, pie sesame defaults, extras, removals, lemon and chilli.
+* Recalculate every selected option and price on the server before storing the cart line.
+* Import the corrected 33-item catalogue and ensure a fresh single-shop activation seeds the Revesby location.
+* Build and validate installable plugin ZIPs consistently across Windows, macOS and Linux.
+
+= 2.22.1 =
+* Add a WordPress-native browse-only launch mode with configurable "Online ordering coming soon" copy.
+* Keep menus and carts viewable while removing checkout, vouchers and browser payment initialization whenever ordering is closed.
 * Default fresh installations to ordering closed and require an explicit owner action to accept orders.
 * Add `[doughboss_ordering_status]` for page builders, block pages and theme templates.
 * Add real plugin activation, menu import, shortcode, REST and checkout-gate tests on WordPress 6.0.9/PHP 7.4 and WordPress 7.0.2/PHP 8.4.
