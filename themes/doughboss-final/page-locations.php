@@ -1,0 +1,4 @@
+<?php get_header(); ?>
+<section class="dbf-page-hero"><img class="dbf-page-hero-bg" src="<?php echo esc_url( doughboss_final_asset_url( 'menu/dough-boss-special.webp' ) ); ?>" alt=""><div class="dbf-wrap dbf-page-hero-inner"><p class="dbf-eyebrow">Come see us</p><h1 class="dbf-display">Three shops.<br><em>One fresh bake.</em></h1><p class="dbf-lede">Now baking in Revesby, Bankstown and Roselands. Online pickup will launch from Revesby first.</p></div></section>
+<section class="dbf-section"><div class="dbf-wrap"><?php get_template_part( 'template-parts/locations' ); ?><div class="dbf-contact-strip" data-dbf-reveal><a href="mailto:orders@doughboss.com.au"><span>Orders and general enquiries</span>orders@doughboss.com.au</a><a href="mailto:catering@doughboss.com.au"><span>Catering enquiries</span>catering@doughboss.com.au</a></div></div></section>
+<?php get_footer(); ?>

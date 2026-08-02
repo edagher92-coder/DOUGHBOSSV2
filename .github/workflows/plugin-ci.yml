@@ -86,6 +86,7 @@ jobs:
           node --test tests/quarantine-helper-contract.test.js
           node --test tests/mpgs-hosted-checkout-contract.test.js
           node --test tests/hybrid-theme-contract.test.js
+          node --test tests/final-theme-contract.test.js
           node --test tests/storefront-uplift-contract.test.js
           node --test tests/order-page-presentation-contract.test.js
           node --test tests/wordpress-menu-images-contract.test.js
@@ -122,6 +123,16 @@ jobs:
         with:
           name: doughboss-plugin-zip
           path: dist/doughboss.zip
+          if-no-files-found: error
+
+      - name: Build production website theme
+        run: php scripts/build-theme-zip.php
+
+      - name: Publish production website theme
+        uses: actions/upload-artifact@v7
+        with:
+          name: doughboss-final-theme-zip
+          path: dist/doughboss-final.zip
           if-no-files-found: error
 
   secret-scan:
