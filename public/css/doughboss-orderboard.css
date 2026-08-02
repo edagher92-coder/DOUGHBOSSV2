@@ -380,6 +380,8 @@ body.db-alerting .db-board-bar h1::after {
 .db-card-payment { font-weight: 700; }
 .db-payment-paid { color: var(--dbb-green-dark); }
 .db-payment-unpaid { color: var(--dbb-amber); }
+.db-payment-pending,
+.db-payment-failed { color: var(--dbb-danger); }
 .db-payment-refunded { color: var(--dbb-danger); }
 .db-card-exception {
 	border-left: 4px solid var(--dbb-danger);

@@ -82,8 +82,21 @@ General shop configuration:
 - **Tax / GST rate (%)** — Australian GST is 10%.
 - **Prices include GST** — tick this for Australia: menu prices already include GST, so tax is shown as a component of the price, not added on top. (Leave this consistent — the cart math branches differently depending on this flag.)
 - **Delivery fee** — flat fee added to delivery orders.
-- **Order notification email** — where new-order and catering-enquiry emails land. Leave blank to fall back to the site's WordPress admin email.
+- **Order notification email** — where ordinary online-order emails land (the default is `orders@doughboss.com.au`). Leave blank to fall back to the site's WordPress admin email.
+- **Catering notification email** — the separate catering inbox (the default is `catering@doughboss.com.au`).
 - **Staff session (days)** — see §3 above (kitchen tablet login longevity).
+
+### 4.1.1 Quoting a custom catering enquiry
+
+Open **DoughBoss → Catering**. A custom enquiry that has not started payment shows three manager-only fields in the **Quote / Deposit** column:
+
+1. Enter the food/service subtotal in AUD.
+2. Enter any delivery fee in AUD (use `0` for pickup).
+3. Choose the deposit percentage from 1–100 and select **Save quote**.
+
+DoughBoss calculates the total, deposit and remaining balance on the server, records the enquiry as **Quoted**, and sends the quote lifecycle event. The browser cannot submit its own total, deposit, balance or currency. You may correct a quote until a payment is prepared. As soon as either payment leg has a durable attempt, provider reference or paid timestamp, the quote becomes immutable and the admin screen labels it locked. This prevents a customer paying an old amount while a manager is repricing the same enquiry.
+
+Packaged catering enquiries continue to use their server-configured package price and cannot be manually repriced from this screen.
 
 ### 4.2 Pizza Sizes / Toppings
 Two repeatable label+price tables feeding the custom pizza builder on the storefront. Use **+ Add row** to add a size/topping, the **✕** to remove one (the last remaining row is cleared rather than deleted). Prices here are the base numbers the builder's server-side pricing is computed from — never trust a browser-submitted price, so these are the actual source of truth.
@@ -150,12 +163,14 @@ For every secret field in this section, the recommended path is the matching ser
 Go to **DoughBoss → Vouchers**. This screen has **two separate ways to create a voucher**, and they behave very differently — this distinction has caused real confusion before, so read this section carefully.
 
 ### 5.1 "Daily campaigns" (top table)
-Shows the built-in campaign(s) (by default, the $5 / $10 Dough Boss × Snow Boss student vouchers) with their value, daily cap, how many have been claimed today, and how many remain. When two campaigns share a pool (shown as "(shared)"), the "Remaining" figure is the combined total across both, not per-campaign — a shared-pool row underneath shows the combined usage explicitly. This table is read-only reporting; campaigns themselves are configured in code/settings, not edited from this screen.
+Shows the built-in campaign(s) (by default, the single $5 Dough Boss student voucher) with their value, daily cap, how many have been claimed today, and how many remain. When campaigns share a pool (shown as "(shared)"), the "Remaining" figure is the combined total across the pool, not per campaign. This table is read-only reporting; campaigns themselves are configured in code/settings, not edited from this screen.
 
 ### 5.2 "Claim a voucher for a customer" — the **real** flow
 Use this when a customer is standing in front of you (or on the phone) and wants an actual campaign voucher. This form:
 - Runs the **exact same claim process** the website's voucher widget uses (`DoughBoss_Voucher::claim()`).
 - **Counts against that campaign's daily cap**, same as an online claim.
+- **Requires the same eligible student email twice.** The address must end in `.edu` or `.edu.au` (institutional subdomains such as `student.example.edu.au` are accepted). Both values are compared and the domain rule is enforced on the server, not only in the browser.
+- Allows **one allocation per student email per campaign each site-local day**. The check runs inside the same database lock as the daily cap, so concurrent requests cannot issue duplicate allocations.
 - **Requires a customer phone number** — the form marks it required, and the on-screen note explains why: that phone number is what POSPal uses as the member key. Without it, the voucher will still work as an online/in-store discount code, but **nothing gets granted at the till**.
 - **Automatically grants a matching POSPal coupon** at every fully-configured POSPal store, provided POSPal granting is switched on (§6).
 - The confirmation banner after submitting explicitly says: *"this went through the real claim flow, so it will be granted to POSPal if configured."*

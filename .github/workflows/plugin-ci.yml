@@ -90,6 +90,7 @@ jobs:
           node --test tests/storefront-uplift-contract.test.js
           node --test tests/order-page-presentation-contract.test.js
           node --test tests/wordpress-menu-images-contract.test.js
+          node --test tests/backend-release-integrity-contract.test.js
 
       - name: Verify Stripe payment safety contracts
         run: |

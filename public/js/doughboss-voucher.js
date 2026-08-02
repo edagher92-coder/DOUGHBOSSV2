@@ -52,9 +52,20 @@
 				return;
 			}
 			var phone = ( form.querySelector( 'input[name="phone"]' ).value || '' ).trim();
-			var email = ( form.querySelector( 'input[name="email"]' ).value || '' ).trim();
+			var email = ( form.querySelector( 'input[name="email"]' ).value || '' ).trim().toLowerCase();
+			var emailConfirmation = ( form.querySelector( 'input[name="email_confirmation"]' ).value || '' ).trim().toLowerCase();
 			if ( ! phone ) {
 				show( 'bad', i18n.vNeedPhone || 'Please enter your mobile number.' );
+				return;
+			}
+			var at = email.lastIndexOf( '@' );
+			var domain = at > 0 ? email.slice( at + 1 ) : '';
+			if ( ! /(?:^|\.)edu(?:\.au)?$/i.test( domain ) ) {
+				show( 'bad', i18n.vNeedStudentEmail || 'Enter a valid student email ending in .edu or .edu.au.' );
+				return;
+			}
+			if ( ! emailConfirmation || email !== emailConfirmation ) {
+				show( 'bad', i18n.vEmailMismatch || 'The student emails do not match. Please re-enter them.' );
 				return;
 			}
 			var submit = form.querySelector( '.db-vc-submit' );
@@ -65,7 +76,12 @@
 				method: 'POST',
 				credentials: 'same-origin',
 				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': cfg.nonce || '' },
-				body: JSON.stringify( { campaign: selected, customer_phone: phone, customer_email: email } )
+				body: JSON.stringify( {
+					campaign: selected,
+					customer_phone: phone,
+					customer_email: email,
+					customer_email_confirmation: emailConfirmation
+				} )
 			} ).then( function ( res ) {
 				return res.json().then( function ( data ) { return { ok: res.ok, data: data }; } );
 			} ).then( function ( r ) {

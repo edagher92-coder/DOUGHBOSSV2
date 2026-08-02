@@ -152,7 +152,7 @@ class DoughBoss_Shortcodes {
 		<div class="db-app db-voucher-claim" data-doughboss-voucher-claim>
 			<div class="db-vc-card">
 				<h3 class="db-vc-title"><?php esc_html_e( 'Claim your student voucher', 'doughboss' ); ?></h3>
-				<p class="db-vc-sub"><?php esc_html_e( 'Pick an offer and enter your mobile to get a single-use code.', 'doughboss' ); ?></p>
+				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au.', 'doughboss' ); ?></p>
 				<?php if ( empty( $campaigns ) ) : ?>
 					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
 				<?php else : ?>
@@ -165,8 +165,19 @@ class DoughBoss_Shortcodes {
 						<?php endforeach; ?>
 					</div>
 					<form class="db-vc-form" hidden>
-						<input type="tel" name="phone" inputmode="tel" autocomplete="tel" placeholder="<?php esc_attr_e( 'Mobile number', 'doughboss' ); ?>" required />
-						<input type="email" name="email" autocomplete="email" placeholder="<?php esc_attr_e( 'Email (optional)', 'doughboss' ); ?>" />
+						<label class="db-vc-field">
+							<span><?php esc_html_e( 'Mobile number', 'doughboss' ); ?></span>
+							<input type="tel" name="phone" inputmode="tel" autocomplete="tel" aria-label="<?php esc_attr_e( 'Mobile number', 'doughboss' ); ?>" placeholder="<?php esc_attr_e( '04xx xxx xxx', 'doughboss' ); ?>" required />
+						</label>
+						<label class="db-vc-field">
+							<span><?php esc_html_e( 'Student email', 'doughboss' ); ?></span>
+							<input type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="<?php esc_attr_e( 'you@student.university.edu.au', 'doughboss' ); ?>" required />
+						</label>
+						<label class="db-vc-field">
+							<span><?php esc_html_e( 'Re-enter student email', 'doughboss' ); ?></span>
+							<input type="email" name="email_confirmation" autocomplete="off" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="<?php esc_attr_e( 'Type the same email again', 'doughboss' ); ?>" required />
+						</label>
+						<p class="db-vc-eligibility"><?php esc_html_e( 'One $5 voucher per eligible student email each day, while the daily allocation lasts. Your code is single use.', 'doughboss' ); ?></p>
 						<button type="submit" class="db-btn db-vc-submit"><?php esc_html_e( 'Get my code', 'doughboss' ); ?></button>
 					</form>
 				<?php endif; ?>
@@ -250,7 +261,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-shop-picker" data-doughboss-shop>
-			<div class="db-loading"><?php esc_html_e( 'Loading shops…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading shops…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();
@@ -275,7 +286,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-menu" data-doughboss-menu data-cart-url="<?php echo esc_url( $atts['cart_url'] ); ?>">
-			<div class="db-loading"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();
@@ -290,7 +301,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-builder" data-doughboss-builder>
-			<div class="db-loading"><?php esc_html_e( 'Loading pizza builder…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading pizza builder…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();
@@ -305,7 +316,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-cart" data-doughboss-cart>
-			<div class="db-loading"><?php esc_html_e( 'Loading cart…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading cart…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();

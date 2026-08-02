@@ -53,6 +53,10 @@
 	var pollTimer = null;
 	var retryBtn = null;
 	var lastSuccessfulSync = null;
+	// Multiple refresh signals can overlap (poll, SSE and a staff action). Only
+	// the newest response may repaint the board, otherwise a slower stale request
+	// can visually undo a just-completed status transition.
+	var loadEpoch = 0;
 
 	// Mercure SSE transport (optional). When connected and healthy, the ~7s poll
 	// is slowed to a long safety net; on any SSE error we fall straight back to
@@ -231,6 +235,7 @@
 	}
 
 	function accept(o, eta) {
+		if (offline) { return; }
 		if (!setBusy(o, 'accept', true)) { return; }
 		localAck[o.id] = true;
 		api('/admin/order/' + o.id + '/accept', 'POST', {
@@ -249,6 +254,7 @@
 	}
 
 	function setStatus(o, status) {
+		if (offline) { return Promise.resolve(); }
 		if (!setBusy(o, status, true)) { return Promise.resolve(); }
 		return api('/admin/order/' + o.id + '/status', 'POST', {
 			status: status,
@@ -271,6 +277,7 @@
 	}
 
 	function acknowledgeAll(ids) {
+		if (offline) { return; }
 		ids.forEach(function (id) {
 			localAck[id] = true;
 			api('/admin/order/' + id + '/ack', 'POST', {}).catch(function (error) {
@@ -343,7 +350,13 @@
 	}
 
 	function paymentLabel(status) {
-		var labels = { 'paid': 'Paid', 'unpaid': 'Pay at counter', 'refunded': 'Refunded' };
+		var labels = {
+			'paid': 'Paid',
+			'unpaid': 'Pay at counter',
+			'pending': 'Payment pending',
+			'failed': 'Payment failed - manager check',
+			'refunded': 'Refunded'
+		};
 		return labels[status] || 'Payment check';
 	}
 
@@ -362,8 +375,17 @@
 	}
 
 	function hasAllergenNote(o) {
-		var text = String(o && o.notes || '').toLowerCase();
+		var itemText = (o && o.items || []).map(function (item) {
+			return [item.name || '', item.size || ''].concat((item.toppings || []).map(toppingLabel)).join(' ');
+		}).join(' ');
+		var text = (String(o && o.notes || '') + ' ' + itemText).toLowerCase();
 		return /\b(allerg|gluten|nut|peanut|sesame|dairy|egg|soy|shellfish|vegan|vegetarian|halal|lactose|celiac|coeliac)\b/.test(text);
+	}
+
+	function confirmUnpaid(o, next) {
+		if (o.payment_status === 'paid') { next(); return; }
+		var prompt = 'This order is not marked paid (' + paymentLabel(o.payment_status) + '). Continue only after confirming the approved pay-at-counter process.';
+		if (window.confirm(prompt)) { next(); }
 	}
 
 	function orderAgeMinutes(o) {
@@ -404,599 +426,6 @@
 	function metricBar(labelText, value, max, tone) {
 		var pct = max ? Math.max(4, Math.min(100, Math.round((value / max) * 100))) : 0;
 		return el('div', { class: 'db-live-graph db-live-graph--' + tone }, [
-			el('span', { class: 'db-live-graph-label', text: labelText }),
-			el('span', { class: 'db-live-graph-track' }, [
-				el('span', { class: 'db-live-graph-fill', style: 'width:' + pct + '%' })
-			]),
-			el('strong', { text: String(value) })
-		]);
-	}
-
-	function renderPulse(orders) {
-		var stats = liveStats(orders);
-		var maxFlow = Math.max(1, stats.newCount, stats.makeCount, stats.passCount);
-		var loadTone = stats.lateCount ? 'late' : (stats.active >= 8 ? 'busy' : 'steady');
-		return el('section', { class: 'db-live-pulse db-live-pulse--' + loadTone, 'aria-label': 'Live kitchen pulse' }, [
-			el('div', { class: 'db-live-pulse__main' }, [
-				el('span', { class: 'db-live-pulse__kicker', text: 'Live pulse' }),
-				el('strong', { text: stats.active + ' active' }),
-				el('small', { text: stats.itemCount + ' items on screen' })
-			]),
-			el('div', { class: 'db-live-pulse__graphs' }, [
-				metricBar('New', stats.newCount, maxFlow, 'new'),
-				metricBar('Make', stats.makeCount, maxFlow, 'make'),
-				metricBar('Pass', stats.passCount, maxFlow, 'pass')
-			]),
-			el('div', { class: 'db-live-pulse__chips' }, [
-				el('span', { class: 'db-pulse-chip db-pulse-chip--paid', text: stats.paidCount + ' paid' }),
-				stats.unpaidCount ? el('span', { class: 'db-pulse-chip db-pulse-chip--unpaid', text: stats.unpaidCount + ' counter pay' }) : null,
-				stats.allergenCount ? el('span', { class: 'db-pulse-chip db-pulse-chip--allergen', text: stats.allergenCount + ' allergy note' }) : null,
-				stats.lateCount ? el('span', { class: 'db-pulse-chip db-pulse-chip--late', text: stats.lateCount + ' check timing' }) : null,
-				el('span', { class: 'db-pulse-chip', text: 'Oldest ' + stats.oldest + 'm' })
-			])
-		]);
-	}
-
-	function buildAmendmentSummary(o) {
-		var lines = (o.items || []).map(function (it) {
-			var toppings = (it.toppings && it.toppings.length) ? ' (' + it.toppings.map(toppingLabel).filter(Boolean).join(', ') + ')' : '';
-			return (parseInt(it.quantity, 10) || 1) + 'x ' + (it.name || 'Menu item') + toppings;
-		});
-		return orderTag(o) + ' - ' + serviceLabel(o) + '\n' + lines.join('\n');
-	}
-
-	var amendmentPanel = null;
-	function closeAmendmentReview() {
-		if (amendmentPanel) { amendmentPanel.hidden = true; amendmentPanel.textContent = ''; }
-	}
-
-	function copyAmendmentSummary(o, feedback) {
-		var summary = buildAmendmentSummary(o);
-		if (navigator.clipboard && navigator.clipboard.writeText) {
-			navigator.clipboard.writeText(summary).then(function () {
-				feedback.textContent = 'Order summary copied. Use it when confirming the change with a manager or customer.';
-			}).catch(function () {
-				feedback.textContent = 'Copy is unavailable in this browser. Read the line list above to the manager.';
-			});
-		} else {
-			feedback.textContent = 'Copy is unavailable in this browser. Read the line list above to the manager.';
-		}
-	}
-
-	function openAmendmentReview(o) {
-		if (!amendmentPanel) { return; }
-		amendmentPanel.hidden = false;
-		amendmentPanel.textContent = '';
-		var feedback = el('p', { class: 'db-amendment-feedback', role: 'status' }, []);
-		var currentItems = el('ul', { class: 'db-amendment-items' }, (o.items || []).map(itemLine));
-		amendmentPanel.appendChild(el('div', { class: 'db-amendment-head' }, [
-			el('h2', { text: 'Review change for ' + orderTag(o) }),
-			el('button', { class: 'button db-amendment-close', type: 'button', onclick: closeAmendmentReview }, ['Close'])
-		]));
-		amendmentPanel.appendChild(el('p', { class: 'db-amendment-context', text: serviceLabel(o) + ' - ' + paymentLabel(o.payment_status) + ' - ' + label(o.status) }));
-		amendmentPanel.appendChild(el('h3', { text: 'Current items' }));
-		amendmentPanel.appendChild(currentItems);
-		amendmentPanel.appendChild(el('p', { class: 'db-amendment-boundary', text: 'No order changes are accepted until staff confirmation. This kitchen board is review-only for add/remove requests: it never changes a live or paid order total, voucher, Tyro/MPGS payment or POSPal record. Confirm the exact request first, then use the manager-safe reprice and payment-adjustment workflow when required.' }));
-		amendmentPanel.appendChild(el('div', { class: 'db-amendment-actions' }, [
-			el('button', { class: 'button', type: 'button', onclick: function () { copyAmendmentSummary(o, feedback); } }, ['Copy order summary']),
-			el('button', { class: 'button', type: 'button', onclick: closeAmendmentReview }, ['Done'])
-		]));
-		amendmentPanel.appendChild(feedback);
-		amendmentPanel.focus();
-	}
-
-	function itemLine(it) {
-		var quantity = Math.max(1, parseInt(it.quantity, 10) || 1);
-		var toppings = (it.toppings && it.toppings.length)
-			? it.toppings.map(toppingLabel).filter(Boolean).join(', ')
-			: '';
-		return el('li', { class: 'db-card-item' }, [
-			el('span', { class: 'db-card-item-quantity', text: quantity + 'x' }),
-			el('span', { class: 'db-card-item-body' }, [
-				el('span', { class: 'db-card-item-name', text: it.name || 'Menu item' }),
-				it.size ? el('span', { class: 'db-card-item-size', text: it.size }) : null,
-				toppings ? el('span', { class: 'db-card-item-toppings', text: 'Custom: ' + toppings }) : null
-			])
-		]);
-	}
-
-	/* ------------------------------------------------------ Pre-order review */
-
-	// These requests are deliberately outside the normal live KDS lanes: they
-	// are unpaid and are not a kitchen commitment until a staff member has
-	// spoken to the customer. This panel keeps the required morning decision in
-	// the same staff surface without making it look like an ordinary new order.
-	function setPreorderMessage(message, isError) {
-		if (!preorderPanel) { return; }
-		var feedback = preorderPanel.querySelector('.db-preorder-feedback');
-		if (!feedback) { return; }
-		feedback.textContent = message || '';
-		feedback.classList.toggle('notice-error', !!isError);
-		feedback.hidden = !message;
-	}
-
-	function decidePreorder(o, decision, contactConfirmed, eta) {
-		if (offline || !setPreorderBusy(o, 'preorder-' + decision, true)) { return; }
-		api('/admin/preorder/' + o.id + '/decision', 'POST', {
-			decision: decision,
-			contact_confirmed: !!contactConfirmed,
-			eta: eta || 0,
-			expected_version: o.version,
-			event_key: eventKey(o, 'preorder-' + decision)
-		}).then(function (res) {
-			var message = res && res.message ? res.message : 'Pre-order request updated.';
-			return load().then(function () {
-				setPreorderMessage(message, false);
-				if (statusEl) { statusEl.textContent = message; }
-			});
-		}).catch(function (error) {
-			var message = error.message || 'Could not update the pre-order request.';
-			return load().then(function () {
-				setPreorderMessage(message, true);
-				if (statusEl) { statusEl.textContent = message; }
-			});
-		}).then(function () {
-			setPreorderBusy(o, 'preorder-' + decision, false);
-		});
-	}
-
-	function preorderCard(o) {
-		var timingConfirmed = false;
-		var rejectOpen = false;
-		var eta = 0;
-		var cardEl = el('article', {
-			class: 'db-card db-card-pending db-preorder-card',
-			'data-preorder-id': String(o.id),
-			'aria-busy': 'false'
-		}, []);
-		var acceptBtn = el('button', {
-			class: 'button button-primary db-preorder-accept', type: 'button',
-			text: 'Accept into kitchen', disabled: 'disabled'
-		}, []);
-		var rejectBtn = el('button', { class: 'button db-preorder-reject', type: 'button', text: 'Reject request' }, []);
-		var rejectConfirm = el('div', { class: 'db-card-actions-row', hidden: 'hidden' }, []);
-		var etaSelect = el('select', { class: 'db-preorder-eta', 'aria-label': 'Agreed pickup estimate for ' + orderTag(o) }, []);
-		etaSelect.appendChild(el('option', { value: '0', text: 'Timing agreed by phone' }));
-		ETA_CHOICES.forEach(function (minutes) {
-			etaSelect.appendChild(el('option', { value: String(minutes), text: minutes + ' minutes' }));
-		});
-		etaSelect.addEventListener('change', function () { eta = parseInt(etaSelect.value, 10) || 0; });
-		var contactCheck = el('input', { type: 'checkbox' }, []);
-		contactCheck.addEventListener('change', function () {
-			timingConfirmed = !!contactCheck.checked;
-			acceptBtn.disabled = !timingConfirmed || offline;
-		});
-		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', timingConfirmed, eta); });
-		rejectBtn.addEventListener('click', function () {
-			rejectOpen = !rejectOpen;
-			rejectConfirm.hidden = !rejectOpen;
-			rejectBtn.textContent = rejectOpen ? 'Keep request' : 'Reject request';
-		});
-		rejectConfirm.appendChild(el('span', { text: 'No payment has been taken. Reject this request?' }));
-		rejectConfirm.appendChild(el('button', {
-			class: 'button button-link-delete', type: 'button', text: 'Confirm reject',
-			onclick: function () { decidePreorder(o, 'reject', false, 0); }
-		}, []));
-
-		cardEl.appendChild(el('div', { class: 'db-card-head' }, [
-			el('span', { class: 'db-card-number', text: o.order_number || orderTag(o) }),
-			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
-		]));
-		cardEl.appendChild(el('div', { class: 'db-card-status', text: 'Pre-order request â€” awaiting morning review' }));
-		cardEl.appendChild(el('div', { class: 'db-card-contact' }, [
-			el('strong', { text: o.customer_name || 'Customer' }),
-			o.customer_phone ? el('span', { text: ' Â· ' + o.customer_phone }) : null
-		]));
-		if (o.notes) { cardEl.appendChild(el('div', { class: 'db-card-notes', text: 'Notes: ' + o.notes })); }
-		cardEl.appendChild(el('ul', { class: 'db-card-items', 'aria-label': (o.items || []).length + ' items' }, (o.items || []).map(itemLine)));
-		cardEl.appendChild(el('div', { class: 'db-card-meta' }, [
-			el('div', { class: 'db-card-exception', role: 'alert', text: 'Unconfirmed and unpaid â€” call the customer to agree pickup timing before accepting.' }),
-			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid â€” agree the payment method with the customer.' }),
-			el('div', { class: 'db-card-exception', text: 'POSPal is deferred. After acceptance, create or confirm the POS action and issue the required manual kitchen ticket.' }),
-			el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) })
-		]));
-		cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [
-			contactCheck,
-			' I called the customer and agreed pickup timing.'
-		]));
-		cardEl.appendChild(el('div', { class: 'db-card-actions' }, [
-			el('div', { class: 'db-card-actions-row' }, [etaSelect, acceptBtn, rejectBtn]),
-			rejectConfirm
-		]));
-		return cardEl;
-	}
-
-	function renderPreorders(requests) {
-		if (!preorderPanel) { return; }
-		preorderPanel.textContent = '';
-		if (!requests.length) {
-			preorderPanel.hidden = true;
-			return;
-		}
-		preorderPanel.hidden = false;
-		preorderPanel.appendChild(el('h2', { id: 'db-preorder-review-title', text: 'Morning pre-order review (' + requests.length + ')' }));
-		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. Call first, then accept or reject.' }));
-		preorderPanel.appendChild(el('div', { class: 'db-preorder-feedback', role: 'status', hidden: 'hidden' }, []));
-		var list = el('div', { class: 'db-lanes db-preorder-list' }, requests.map(preorderCard));
-		preorderPanel.appendChild(list);
-		applyConnectionState();
-	}
-
-	function card(o) {
-		var isNew = o.status === 'pending';
-		var showShop = LOCATIONS.length > 1 && !currentLocation && o.location_id && locationsById[o.location_id];
-		var tableLabel = o.dining_table_label || o.table_label || (o.table && o.table.label) || '';
-		var typeLabel = serviceLabel(o);
-		var source = sourceLabel(o.order_source);
-		var head = el('div', { class: 'db-card-head' }, [
-			el('span', { class: 'db-card-number', text: o.order_number }),
-			el('span', { class: 'db-card-type db-type-' + o.order_type, text: typeLabel }),
-			tableLabel ? el('span', { class: 'db-card-table', text: 'TABLE ' + tableLabel }) : null,
-			source ? el('span', { class: 'db-card-source', text: source }) : null,
-			showShop ? el('span', { class: 'db-card-shop', text: locationsById[o.location_id] }) : null,
-			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
-		]);
-
-		var contact = el('div', { class: 'db-card-contact' }, [
-			el('strong', { text: o.customer_name || 'â€”' }),
-			o.customer_phone ? el('span', { text: ' Â· ' + o.customer_phone }) : null
-		]);
-
-		// The make screen does not need customer details. The pass screen keeps a
-		// simple pickup name but never exposes the phone number.
-		if (SCREEN_MODE === 'make') {
-			contact.textContent = serviceLabel(o);
-		} else if (SCREEN_MODE === 'pass') {
-			contact.textContent = o.customer_name || 'Customer pickup';
-		}
-
-		var items = el('ul', { class: 'db-card-items', 'aria-label': (o.items || []).length + ' items' }, (o.items || []).map(itemLine));
-
-		var meta = [];
-		exceptionMessages(o).forEach(function (message) {
-			meta.push(el('div', { class: 'db-card-exception', role: 'alert', text: message }));
-		});
-		if (o.order_type === 'delivery' && o.address) {
-			meta.push(el('div', { class: 'db-card-addr', text: 'ðŸ›µ ' + o.address }));
-		}
-		if (o.notes) {
-			meta.push(el('div', { class: 'db-card-notes' + (hasAllergenNote(o) ? ' db-card-notes-alert' : ''), text: 'Note: ' + o.notes }));
-		}
-		if (o.eta_minutes) {
-			var windowText = readyWindow(o);
-			meta.push(el('div', { class: 'db-card-eta', text: windowText ? 'Staff estimate ' + windowText : 'Staff estimate ' + o.eta_minutes + ' min' }));
-		}
-		if (o.timing_status === 'estimate_passed') {
-			meta.push(el('div', { class: 'db-card-timing db-card-timing-passed', text: o.timing_label || 'Estimate passed â€” check this order' }));
-		}
-		meta.push(el('div', { class: 'db-card-payment db-payment-' + (o.payment_status || 'unknown'), text: 'Payment: ' + paymentLabel(o.payment_status) }));
-		if (SCREEN_MODE === 'all') {
-			meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
-		}
-
-		var actions;
-		if (isNew) {
-			var etaRow = ETA_CHOICES.map(function (m) {
-				return el('button', { class: 'button db-eta', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ', ready in ' + m + ' minutes', onclick: function () { accept(o, m); } }, [m + 'm']);
-			});
-			actions = el('div', { class: 'db-card-actions' }, [
-				el('div', { class: 'db-accept-label', text: 'Accept â€” ready in:' }),
-				el('div', { class: 'db-eta-row' }, etaRow),
-				el('div', { class: 'db-card-actions-row' }, [
-					el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change']),
-					el('button', { class: 'button button-primary db-accept', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ' without an estimate', onclick: function () { accept(o, 0); } }, ['Accept'])
-				])
-			]);
-		} else {
-			var advBtns = advanceActions(o).map(function (st) {
-				var primary = (st === 'ready' || st === 'completed');
-				return el('button', {
-					class: 'button ' + (primary ? 'button-primary' : '') + ' db-advance',
-					type: 'button',
-					'aria-label': actionLabel(o, st) + ' for order ' + o.order_number,
-					onclick: function () { setStatus(o, st); }
-				}, [actionLabel(o, st)]);
-			});
-			var actionRow = [
-				el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change'])
-			].concat(advBtns);
-			actions = el('div', { class: 'db-card-actions' }, [
-				!advBtns.length ? el('p', { class: 'db-no-next-action', text: 'No next kitchen step is available. Refresh or ask a manager before changing this order.' }) : null,
-				el('div', { class: 'db-card-actions-row' }, actionRow)
-			]);
-		}
-
-		// SLA aging â€” accepted orders still in an active state get amber at 5 min
-		// and red at 10 min since acceptance.
-		var ageClass = '';
-		if (o.accepted_at && o.status !== 'completed' && o.status !== 'cancelled') {
-			var ageMins = minutesSince(o.accepted_at);
-			if (ageMins !== null && ageMins >= 10) { ageClass = ' db-age-late'; }
-			else if (ageMins !== null && ageMins >= 5) { ageClass = ' db-age-warn'; }
-		}
-
-		return el('div', { class: 'db-card db-card-' + o.status + ageClass + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : ''), 'data-order-id': String(o.id), 'aria-busy': inFlight[String(o.id)] ? 'true' : 'false' }, [
-			head,
-			el('div', { class: 'db-card-status', text: orderLabel(o, o.status) }),
-			contact,
-			items,
-			el('div', { class: 'db-card-meta' }, meta),
-			actions
-		]);
-	}
-
-	function render(orders) {
-		lastOrders = orders;
-		boardEl.textContent = '';
-
-		// Persistent warning if sound isn't enabled â€” a reloaded tablet must
-		// never sit silent through new orders.
-		if (SCREEN_MODE !== 'pass' && !audio.on) {
-			boardEl.appendChild(el('div', { class: 'db-sound-warn' }, [
-				'ðŸ”‡ Sound is OFF â€” tap â€œEnable sound alertsâ€ (top right) so you donâ€™t miss new orders.'
-			]));
-		}
-
-		var unacked = SCREEN_MODE === 'pass' ? [] : orders.filter(function (o) {
-			return o.status === 'pending' && !o.acknowledged && !localAck[o.id];
-		});
-
-		if (unacked.length) {
-			var ids = unacked.map(function (o) { return o.id; });
-			boardEl.appendChild(el('div', { class: 'db-banner' }, [
-				el('span', { text: unacked.length + ' new order' + (unacked.length > 1 ? 's' : '') + '!' }),
-				el('button', { class: 'button button-primary', type: 'button', onclick: function () { acknowledgeAll(ids); } }, ['Acknowledge'])
-			]));
-			startAlert();
-		} else {
-			stopAlert();
-		}
-
-		// All-day strip â€” aggregate item counts across in-progress orders so the
-		// kitchen can batch ("6Ã— Zaatar Â· 3Ã— All Meat â€¦"). Hidden when empty.
-		var STRIP_STATUSES = ['pending', 'confirmed', 'preparing', 'baking'];
-		var counts = {};
-		if (SCREEN_MODE !== 'pass') { orders.forEach(function (o) {
-			if (STRIP_STATUSES.indexOf(o.status) === -1) { return; }
-			(o.items || []).forEach(function (it) {
-				var name = String(it.name || '');
-				if (!name) { return; }
-				counts[name] = (counts[name] || 0) + (parseInt(it.quantity, 10) || 1);
-			});
-		}); }
-		var stripEntries = Object.keys(counts).map(function (name) {
-			return { name: name, count: counts[name] };
-		}).sort(function (a, b) { return b.count - a.count; }).slice(0, 12);
-		if (stripEntries.length) {
-			boardEl.appendChild(el('div', { class: 'db-allday' },
-				[el('span', { class: 'db-allday-label', text: 'All day:' })].concat(
-					stripEntries.map(function (e) {
-						return el('span', { class: 'db-allday-item', text: e.count + 'Ã— ' + e.name });
-					})
-				)));
-		}
-
-		var visibleOrders = orders.filter(function (o) { return !!laneOf(o.status); });
-		boardEl.appendChild(renderPulse(visibleOrders));
-		var lanesWrap = el('div', { class: 'db-lanes' }, LANES.map(function (lane) {
-			var laneOrders = orders.filter(function (o) { return laneOf(o.status) === lane.key; });
-			var cards = laneOrders.length
-				? laneOrders.map(card)
-				: [el('p', { class: 'db-lane-empty', text: 'None' })];
-			return el('div', { class: 'db-lane db-lane-' + lane.key }, [
-				el('h2', { class: 'db-lane-title' }, [lane.title + ' ', el('span', { class: 'db-lane-count', text: String(laneOrders.length) })]),
-				el('p', { class: 'db-lane-subtitle', text: laneSubtitle(lane.key) })
-			].concat(cards));
-		}));
-		boardEl.appendChild(lanesWrap);
-
-		if (statusEl) {
-			statusEl.textContent = orders.length + ' active Â· updated ' +
-				new Date().toLocaleTimeString();
-		}
-		applyConnectionState();
-	}
-
-	/* ----------------------------------------------------------- Heartbeat */
-
-	// Small connection badge next to the board status: green "Live" (SSE),
-	// amber "Polling" (poll OK), red "Offline" (last load failed).
-	var offline = false;
-	var heartbeatEl = null;
-
-	function syncTimeLabel() {
-		return lastSuccessfulSync ? lastSuccessfulSync.toLocaleTimeString() : 'never';
-	}
-
-	function applyConnectionState() {
-		if (boardEl) {
-			boardEl.classList.toggle('db-board-offline', offline);
-			var mutationButtons = boardEl.querySelectorAll('button');
-			for (var i = 0; i < mutationButtons.length; i++) {
-				var card = mutationButtons[i].closest('[data-order-id]');
-				mutationButtons[i].disabled = offline || !!(card && inFlight[card.getAttribute('data-order-id')]);
-			}
-		}
-		if (preorderPanel) {
-			var preorderButtons = preorderPanel.querySelectorAll('button');
-			for (var j = 0; j < preorderButtons.length; j++) {
-				var preorderCardEl = preorderButtons[j].closest('[data-preorder-id]');
-				var preorderBusy = preorderCardEl && inFlight[preorderCardEl.getAttribute('data-preorder-id')];
-				var contactCheck = preorderCardEl && preorderCardEl.querySelector('.db-preorder-contact-check input[type="checkbox"]');
-				preorderButtons[j].disabled = offline || !!preorderBusy ||
-					(preorderButtons[j].classList.contains('db-preorder-accept') && (!contactCheck || !contactCheck.checked));
-			}
-		}
-		if (retryBtn) { retryBtn.hidden = !offline; }
-		if (statusEl) {
-			statusEl.textContent = offline
-				? 'Offline - showing orders last synced ' + syncTimeLabel() + '. Changes are locked.'
-				: lastOrders.length + ' active - synced ' + syncTimeLabel();
-		}
-	}
-
-	function updateHeartbeat() {
-		if (!heartbeatEl) { return; }
-		var state = offline ? 'offline' : (sseHealthy ? 'live' : 'polling');
-		var word = offline ? 'Offline' : (sseHealthy ? 'Live' : 'Polling');
-		heartbeatEl.className = 'db-heartbeat db-heartbeat-' + state;
-		heartbeatEl.textContent = '';
-		heartbeatEl.appendChild(el('span', { class: 'db-heartbeat-dot', 'aria-hidden': 'true' }));
-		heartbeatEl.appendChild(el('span', { class: 'db-heartbeat-word', text: word }));
-	}
-
-	/* --------------------------------------------------------------- Cycle */
-
-	function load() {
-		var path = '/admin/orders' + (currentLocation ? '?location_id=' + currentLocation : '');
-		return api(path, 'GET').then(function (res) {
-			if (!res || !Array.isArray(res.data)) { throw new Error('The order feed returned an invalid response.'); }
-			offline = false;
-			lastSuccessfulSync = new Date();
-			updateHeartbeat();
-			render(res.data);
-			if (SCREEN_MODE !== 'pass') {
-				if (preorderPanel) { preorderPanel.hidden = true; }
-				return null;
-			}
-			var preorderPath = '/admin/preorder-requests?per_page=100' + (currentLocation ? '&location_id=' + currentLocation : '');
-			return api(preorderPath, 'GET').then(function (preorders) {
-				if (!preorders || !Array.isArray(preorders.data)) { throw new Error('The pre-order review feed returned an invalid response.'); }
-				renderPreorders(preorders.data);
-			}).catch(function (error) {
-				// A review-feed failure must never blank or lock the live kitchen board.
-				if (preorderPanel) { preorderPanel.hidden = true; }
-				if (statusEl) { statusEl.textContent = 'Kitchen board synced; pre-order review unavailable: ' + (error.message || 'retrying'); }
-			});
-		}).catch(function () {
-			offline = true;
-			updateHeartbeat();
-			// Preserve the connection warning below, then replace it with the
-			// actionable offline state after this error callback completes.
-			setTimeout(applyConnectionState, 0);
-			if (statusEl) { statusEl.textContent = 'Connection problem â€” retryingâ€¦'; }
-		});
-	}
-
-	function loop() {
-		load().then(function () {
-			pollTimer = setTimeout(loop, sseHealthy ? POLL_SAFETY : POLL_FAST);
-		});
-	}
-
-	/* ----------------------------------------------------- Mercure SSE */
-
-	// Open an EventSource to the Mercure hub. On any message, re-pull the
-	// authoritative board (the SSE payload is only a "refresh" signal, never
-	// trusted data). On error, fall back to the normal poll cadence. The poll
-	// always keeps running as the fallback path.
-	function connectSse() {
-		if (!mercure || !mercure.enabled || !mercure.url || typeof window.EventSource === 'undefined') {
-			return;
-		}
-
-		var url = mercure.url + '?topic=' + encodeURIComponent(mercure.topic);
-		// The board topic is publicly readable, so normally no token is needed on
-		// subscribe. EventSource cannot send Authorization headers; only fall back
-		// to the (URL) authorization param when a subscribe JWT is actually set.
-		if (mercure.subscribe_jwt) {
-			url += '&authorization=' + encodeURIComponent(mercure.subscribe_jwt);
-		}
-
-		try {
-			sse = new EventSource(url);
-		} catch (e) {
-			return;
-		}
-
-		sse.onopen = function () {
-			sseHealthy = true;
-			updateHeartbeat();
-		};
-
-		sse.onmessage = function () {
-			// A message means the channel is alive â€” re-affirm health so a recovery
-			// after a transient error slows the poll again even before onopen refires.
-			sseHealthy = true;
-			updateHeartbeat();
-			// Authoritative re-fetch â€” never render from the SSE payload itself.
-			load();
-		};
-
-		sse.onerror = function () {
-			// Drop back to fast polling; the browser auto-reconnects the SSE, and
-			// onopen will slow the poll again once it recovers.
-			sseHealthy = false;
-			updateHeartbeat();
-		};
-	}
-
-	if (soundBtn) {
-		soundBtn.addEventListener('click', enableSound);
-	}
-
-	// If the tablet sleeps/refocuses, the audio context can suspend â€” resume it
-	// so the chime keeps working without a fresh tap.
-	document.addEventListener('visibilitychange', function () {
-		if (!document.hidden && audio.on && audio.ctx && audio.ctx.state === 'suspended') {
-			audio.ctx.resume();
-		}
-	});
-	document.addEventListener('keydown', function (event) {
-		if (event.key === 'Escape' && amendmentPanel && !amendmentPanel.hidden) {
-			closeAmendmentReview();
-		}
-	});
-
-	// Shop filter â€” only shown when more than one shop exists.
-	if (actionsEl && LOCATIONS.length > 1) {
-		var sel = el('select', { class: 'db-shop-select', 'aria-label': 'Filter by shop' }, []);
-		sel.appendChild(el('option', { value: '0', text: 'All shops' }));
-		LOCATIONS.forEach(function (l) {
-			sel.appendChild(el('option', { value: String(l.id), text: l.name }));
-		});
-		sel.addEventListener('change', function () {
-			currentLocation = parseInt(sel.value, 10) || 0;
-			load();
-		});
-		actionsEl.insertBefore(sel, actionsEl.firstChild);
-	}
-
-	// Heartbeat badge â€” next to the existing board status text.
-	if (statusEl) {
-		heartbeatEl = el('span', { class: 'db-heartbeat db-heartbeat-polling' }, []);
-		statusEl.parentNode.insertBefore(heartbeatEl, statusEl.nextSibling);
-		if (actionsEl) {
-			retryBtn = el('button', {
-				class: 'button db-board-retry', type: 'button', hidden: 'hidden',
-				'aria-label': 'Retry loading the live order board now',
-				onclick: function () { load(); }
-			}, ['Retry now']);
-			actionsEl.insertBefore(retryBtn, statusEl.nextSibling);
-		}
-		updateHeartbeat();
-		applyConnectionState();
-	}
-
-	// The KDS may review the precise current line list, but it must never become
-	// a back door for repricing or refunding an order. The panel is created once
-	// outside the refreshed board so focus and the review remain stable.
-	if (boardEl && boardEl.parentNode) {
-		amendmentPanel = el('section', {
-			class: 'db-amendment-panel',
-			tabindex: '-1',
-			'aria-label': 'Order change review'
-		}, []);
-		amendmentPanel.hidden = true;
-		boardEl.parentNode.insertBefore(amendmentPanel, boardEl);
-	}
-
-	// Refresh "x ago" labels even between polls.
-	setInterval(function () { if (lastOrders.length) { render(lastOrders); } }, 30000);
-
-	// Open the real-time SSE channel when configured; the poll below stays as the
-	// always-on fallback regardless.
-	connectSse();
-
-	loop();
-}());
+			el('spaã}w¶‰žËkºwµçdì($$%µ•Ñ„¹ÁÕÍ ¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµ…‘‘Èœ°Ñ•áÐè€ŸÂ~nÔ€œ€¬¼¹…‘‘É•ÍÌô¤¤ì($%ô($%¥˜€¡¼¹¹½Ñ•Ì¤ì($$%µ•Ñ„¹ÁÕÍ ¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµ¹½Ñ•Ìœ€¬€¡¡…Í±±•É•¹9½Ñ”¡¼¤€ü€œ‘ˆµ…Éµ¹½Ñ•Ìµ…±•ÉÐœ€è€œœ¤°Ñ•áÐè€9½Ñ”è€œ€¬¼¹¹½Ñ•Ìô¤¤ì($%ô($%¥˜€¡¼¹•Ñ…}µ¥¹ÕÑ•Ì¤ì($$%Ù…ÈÝ¥¹‘½ÝQ•áÐ€ôÉ•…‘å]¥¹‘½Ü¡¼¤ì($$%µ•Ñ„¹ÁÕÍ ¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµ•Ñ„œ°Ñ•áÐèÝ¥¹‘½ÝQ•áÐ€ü€MÑ…™˜•ÍÑ¥µ…Ñ”€œ€¬Ý¥¹‘½ÝQ•áÐ€è€MÑ…™˜•ÍÑ¥µ…Ñ”€œ€¬¼¹•Ñ…}µ¥¹ÕÑ•Ì€¬€œµ¥¸œô¤¤ì($%ô($%¥˜€¡¼¹Ñ¥µ¥¹}ÍÑ…ÑÕÌ€ôôô€•ÍÑ¥µ…Ñ•}Á…ÍÍ•œ¤ì($$%µ•Ñ„¹ÁÕÍ ¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…ÉµÑ¥µ¥¹œ‘ˆµ…ÉµÑ¥µ¥¹œµÁ…ÍÍ•œ°Ñ•áÐè¼¹Ñ¥µ¥¹}±…‰•°ñð€ÍÑ¥µ…Ñ”Á…ÍÍ•ƒŠP¡•¬Ñ¡¥Ì½É‘•Èœô¤¤ì($%ô($%µ•Ñ„¹ÁÕÍ ¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…ÉµÁ…åµ•¹Ð‘ˆµÁ…åµ•¹Ð´œ€¬€¡¼¹Á…åµ•¹Ñ}ÍÑ…ÑÕÌñð€Õ¹­¹½Ý¸œ¤°Ñ•áÐè€A…åµ•¹Ðè€œ€¬Á…åµ•¹Ñ1…‰•°¡¼¹Á…åµ•¹Ñ}ÍÑ…ÑÕÌ¤ô¤¤ì($%¥˜€¡MI9}5=€ôôô€…±°œ¤ì($$%µ•Ñ„¹ÁÕÍ ¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…ÉµÑ½Ñ…°œ°Ñ•áÐè€Q½Ñ…°€œ€¬µ½¹•ä¡¼¹Ñ½Ñ…°¤ô¤¤ì($%ô(($%Ù…È…Ñ¥½¹Ìì($%¥˜€¡¥Í9•Ü¤ì($$%Ù…È•Ñ…I½Ü€ôQ}!=%L¹µ…À¡™Õ¹Ñ¥½¸€¡´¤ì($$$%É•ÑÕÉ¸•° ‰ÕÑÑ½¸œ°ì±…ÍÌè€‰ÕÑÑ½¸‘ˆµ•Ñ„œ°ÑåÁ”è€‰ÕÑÑ½¸œ°€…É¥„µ±…‰•°œè€•ÁÐ½É‘•È€œ€¬¼¹½É‘•É}¹Õµ‰•È€¬€œ°É•…‘ä¥¸€œ€¬´€¬€œµ¥¹ÕÑ•Ìœ°½¹±¥¬è™Õ¹Ñ¥½¸€ ¤ì½¹™¥ÉµU¹Á…¥¡¼°™Õ¹Ñ¥½¸€ ¤ì…•ÁÐ¡¼°´¤ìô¤ìôô°m´€¬€´t¤ì($$%ô¤ì($$%…Ñ¥½¹Ì€ô•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµ…Ñ¥½¹Ìœô°l($$$%•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…•ÁÐµ±…‰•°œ°Ñ•áÐè€•ÁÐƒŠPÉ•…‘ä¥¸èœô¤°($$$%•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ•Ñ„µÉ½Üœô°•Ñ…I½Ü¤°($$$%•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµ…Ñ¥½¹ÌµÉ½Üœô°l($$$$%•° ‰ÕÑÑ½¸œ°ì±…ÍÌè€‰ÕÑÑ½¸‘ˆµÉ•Ù¥•Üµ¡…¹”œ°ÑåÁ”è€‰ÕÑÑ½¸œ°€…É¥„µ±…‰•°œè€I•Ù¥•Ü…¸…‘½ÈÉ•µ½Ù”¥Ñ•´É•ÅÕ•ÍÐ™½È½É‘•È€œ€¬¼¹½É‘•É}¹Õµ‰•È°½¹±¥¬è™Õ¹Ñ¥½¸€ ¤ì½Á•¹µ•¹‘µ•¹ÑI•Ù¥•Ü¡¼¤ìôô°lI•Ù¥•Ü¡…¹”t¤°($$$$%•° ‰ÕÑÑ½¸œ°ì±…ÍÌè€‰ÕÑÑ½¸‰ÕÑÑ½¸µÁÉ¥µ…Éä‘ˆµ…•ÁÐœ°ÑåÁ”è€‰ÕÑÑ½¸œ°€…É¥„µ±…‰•°œè€•ÁÐ½É‘•È€œ€¬¼¹½É‘•É}¹Õµ‰•È€¬€œÝ¥Ñ¡½ÕÐ…¸•ÍÑ¥µ…Ñ”œ°½¹±¥¬è™Õ¹Ñ¥½¸€ ¤ì½¹™¥ÉµU¹Á…¥¡¼°™Õ¹Ñ¥½¸€ ¤ì…•ÁÐ¡¼°€À¤ìô¤ìôô°l•ÁÐt¤($$$%t¤($$%t¤ì($%ô•±Í”ì($$%Ù…È…‘Ù	Ñ¹Ì€ô…‘Ù…¹•Ñ¥½¹Ì¡¼¤¹µ…À¡™Õ¹Ñ¥½¸€¡ÍÐ¤ì($$$%Ù…ÈÁÉ¥µ…Éä€ô€¡ÍÐ€ôôô€É•…‘äœñðÍÐ€ôôô€½µÁ±•Ñ•œ¤ì($$$%É•ÑÕÉ¸•° ‰ÕÑÑ½¸œ°ì($$$$%±…ÍÌè€‰ÕÑÑ½¸€œ€¬€¡ÁÉ¥µ…Éä€ü€‰ÕÑÑ½¸µÁÉ¥µ…Éäœ€è€œœ¤€¬€œ‘ˆµ…‘Ù…¹”œ°($$$$%ÑåÁ”è€‰ÕÑÑ½¸œ°($$$$$…É¥„µ±…‰•°œè…Ñ¥½¹1…‰•°¡¼°ÍÐ¤€¬€œ™½È½É‘•È€œ€¬¼¹½É‘•É}¹Õµ‰•È°($$$$%½¹±¥¬è™Õ¹Ñ¥½¸€ ¤ìÍ•ÑMÑ…ÑÕÌ¡¼°ÍÐ¤ìô($$$%ô°m…Ñ¥½¹1…‰•°¡¼°ÍÐ¥t¤ì($$%ô¤ì($$%Ù…È…Ñ¥½¹I½Ü€ôl($$$%•° ‰ÕÑÑ½¸œ°ì±…ÍÌè€‰ÕÑÑ½¸‘ˆµÉ•Ù¥•Üµ¡…¹”œ°ÑåÁ”è€‰ÕÑÑ½¸œ°€…É¥„µ±…‰•°œè€I•Ù¥•Ü…¸…‘½ÈÉ•µ½Ù”¥Ñ•´É•ÅÕ•ÍÐ™½È½É‘•È€œ€¬¼¹½É‘•É}¹Õµ‰•È°½¹±¥¬è™Õ¹Ñ¥½¸€ ¤ì½Á•¹µ•¹‘µ•¹ÑI•Ù¥•Ü¡¼¤ìôô°lI•Ù¥•Ü¡…¹”t¤($$%t¹½¹…Ð¡…‘Ù	Ñ¹Ì¤ì($$%…Ñ¥½¹Ì€ô•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµ…Ñ¥½¹Ìœô°l($$$$……‘Ù	Ñ¹Ì¹±•¹Ñ €ü•° Àœ°ì±…ÍÌè€‘ˆµ¹¼µ¹•áÐµ…Ñ¥½¸œ°Ñ•áÐè€9¼¹•áÐ­¥Ñ¡•¸ÍÑ•À¥Ì…Ù…¥±…‰±”¸I•™É•Í ½È…Í¬„µ…¹…•È‰•™½É”¡…¹¥¹œÑ¡¥Ì½É‘•È¸œô¤€è¹Õ±°°($$$%•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµ…Ñ¥½¹ÌµÉ½Üœô°…Ñ¥½¹I½Ü¤($$%t¤ì($%ô(($$¼¼M1…¥¹œƒŠP…•ÁÑ•½É‘•ÉÌÍÑ¥±°¥¸…¸…Ñ¥Ù”ÍÑ…Ñ”•Ð…µ‰•È…Ð€Ôµ¥¸($$¼¼…¹É•…Ð€ÄÀµ¥¸Í¥¹”…•ÁÑ…¹”¸($%Ù…È…•±…ÍÌ€ô€œœì($%¥˜€¡¼¹…•ÁÑ•‘}…Ð€˜˜¼¹ÍÑ…ÑÕÌ€„ôô€½µÁ±•Ñ•œ€˜˜¼¹ÍÑ…ÑÕÌ€„ôô€…¹•±±•œ¤ì($$%Ù…È…•5¥¹Ì€ôµ¥¹ÕÑ•ÍM¥¹”¡¼¹…•ÁÑ•‘}…Ð¤ì($$%¥˜€¡…•5¥¹Ì€„ôô¹Õ±°€˜˜…•5¥¹Ì€øô€ÄÀ¤ì…•±…ÍÌ€ô€œ‘ˆµ…”µ±…Ñ”œìô($$%•±Í”¥˜€¡…•5¥¹Ì€„ôô¹Õ±°€˜˜…•5¥¹Ì€øô€Ô¤ì…•±…ÍÌ€ô€œ‘ˆµ…”µÝ…É¸œìô($%ô(($%É•ÑÕÉ¸•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…É‘ˆµ…É´œ€¬¼¹ÍÑ…ÑÕÌ€¬…•±…ÍÌ€¬€¡¥Í9•Ü€˜˜€…¼¹…­¹½Ý±•‘•€˜˜€…±½…±­m¼¹¥‘t€ü€œ‘ˆµ…Éµ™É•Í œ€è€œœ¤°€‘…Ñ„µ½É‘•Èµ¥œèMÑÉ¥¹œ¡¼¹¥¤°€…É¥„µ‰ÕÍäœè¥¹±¥¡ÑmMÑÉ¥¹œ¡¼¹¥¥t€ü€ÑÉÕ”œ€è€™…±Í”œô°l($$%¡•…°($$%•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…ÉµÍÑ…ÑÕÌœ°Ñ•áÐè½É‘•É1…‰•°¡¼°¼¹ÍÑ…ÑÕÌ¤ô¤°($$%½¹Ñ…Ð°($$%¥Ñ•µÌ°($$%•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…Éµµ•Ñ„œô°µ•Ñ„¤°($$%…Ñ¥½¹Ì($%t¤ì(%ô((%™Õ¹Ñ¥½¸É•¹‘•È¡½É‘•ÉÌ¤ì($%±…ÍÑ=É‘•ÉÌ€ô½É‘•ÉÌì($%‰½…É‘°¹Ñ•áÑ½¹Ñ•¹Ð€ô€œœì(($$¼¼A•ÉÍ¥ÍÑ•¹ÐÝ…É¹¥¹œ¥˜Í½Õ¹¥Í¸Ð•¹…‰±•ƒŠP„É•±½…‘•Ñ…‰±•ÐµÕÍÐ($$¼¼¹•Ù•ÈÍ¥ÐÍ¥±•¹ÐÑ¡É½Õ ¹•Ü½É‘•ÉÌ¸($%¥˜€¡MI9}5=€„ôô€Á…ÍÌœ€˜˜€……Õ‘¥¼¹½¸¤ì($$%‰½…É‘°¹…ÁÁ•¹‘¡¥±¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµÍ½Õ¹µÝ…É¸œô°l($$$$ŸÂ~RM½Õ¹¥Ì=ƒŠPÑ…ÀƒŠq¹…‰±”Í½Õ¹…±•ÉÑÏŠt€¡Ñ½ÀÉ¥¡Ð¤Í¼å½Ô‘½»ŠeÐµ¥ÍÌ¹•Ü½É‘•ÉÌ¸œ($$%t¤¤ì($%ô(($%Ù…ÈÕ¹…­•€ôMI9}5=€ôôô€Á…ÍÌœ€ümt€è½É‘•ÉÌ¹™¥±Ñ•È¡™Õ¹Ñ¥½¸€¡¼¤ì($$%É•ÑÕÉ¸¼¹ÍÑ…ÑÕÌ€ôôô€Á•¹‘¥¹œœ€˜˜€…¼¹…­¹½Ý±•‘•€˜˜€…±½…±­m¼¹¥‘tì($%ô¤ì(($%¥˜€¡Õ¹…­•¹±•¹Ñ ¤ì($$%Ù…È¥‘Ì€ôÕ¹…­•¹µ…À¡™Õ¹Ñ¥½¸€¡¼¤ìÉ•ÑÕÉ¸¼¹¥ìô¤ì($$%‰½…É‘°¹…ÁÁ•¹‘¡¥±¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ‰…¹¹•Èœô°l($$$%•° ÍÁ…¸œ°ìÑ•áÐèÕ¹…­•¹±•¹Ñ €¬€œ¹•Ü½É‘•Èœ€¬€¡Õ¹…­•¹±•¹Ñ €ø€Ä€ü€Ìœ€è€œœ¤€¬€œ„œô¤°($$$%•° ‰ÕÑÑ½¸œ°ì±…ÍÌè€‰ÕÑÑ½¸‰ÕÑÑ½¸µÁÉ¥µ…Éäœ°ÑåÁ”è€‰ÕÑÑ½¸œ°½¹±¥¬è™Õ¹Ñ¥½¸€ ¤ì…­¹½Ý±•‘•±°¡¥‘Ì¤ìôô°l­¹½Ý±•‘”t¤($$%t¤¤ì($$%ÍÑ…ÉÑ±•ÉÐ ¤ì($%ô•±Í”ì($$%ÍÑ½Á±•ÉÐ ¤ì($%ô(($$¼¼±°µ‘…äÍÑÉ¥ÀƒŠP…É•…Ñ”¥Ñ•´½Õ¹ÑÌ…É½ÍÌ¥¸µÁÉ½É•ÍÌ½É‘•ÉÌÍ¼Ñ¡”($$¼¼­¥Ñ¡•¸…¸‰…Ñ € ˆÛ\i……Ñ…Èƒ
+Ü€Ï\±°5•…ÐƒŠ˜ˆ¤¸!¥‘‘•¸Ý¡•¸•µÁÑä¸($%Ù…ÈMQI%A}MQQUML€ôlÁ•¹‘¥¹œœ°€½¹™¥Éµ•œ°€ÁÉ•Á…É¥¹œœ°€‰…­¥¹œtì($%Ù…È½Õ¹ÑÌ€ôíôì($%¥˜€¡MI9}5=€„ôô€Á…ÍÌœ¤ì½É‘•ÉÌ¹™½É… ¡™Õ¹Ñ¥½¸€¡¼¤ì($$%¥˜€¡MQI%A}MQQUML¹¥¹‘•á=˜¡¼¹ÍÑ…ÑÕÌ¤€ôôô€´Ä¤ìÉ•ÑÕÉ¸ìô($$$¡¼¹¥Ñ•µÌñðmt¤¹™½É… ¡™Õ¹Ñ¥½¸€¡¥Ð¤ì($$$%Ù…È¹…µ”€ôMÑÉ¥¹œ¡¥Ð¹¹…µ”ñð€œœ¤ì($$$%¥˜€ …¹…µ”¤ìÉ•ÑÕÉ¸ìô($$$%½Õ¹ÑÍm¹…µ•t€ô€¡½Õ¹ÑÍm¹…µ•tñð€À¤€¬€¡Á…ÉÍ•%¹Ð¡¥Ð¹ÅÕ…¹Ñ¥Ñä°€ÄÀ¤ñð€Ä¤ì($$%ô¤ì($%ô¤ìô($%Ù…ÈÍÑÉ¥Á¹ÑÉ¥•Ì€ô=‰©•Ð¹­•åÌ¡½Õ¹ÑÌ¤¹µ…À¡™Õ¹Ñ¥½¸€¡¹…µ”¤ì($$%É•ÑÕÉ¸ì¹…µ”è¹…µ”°½Õ¹Ðè½Õ¹ÑÍm¹…µ•tôì($%ô¤¹Í½ÉÐ¡™Õ¹Ñ¥½¸€¡„°ˆ¤ìÉ•ÑÕÉ¸ˆ¹½Õ¹Ð€´„¹½Õ¹Ðìô¤¹Í±¥” À°€ÄÈ¤ì($%¥˜€¡ÍÑÉ¥Á¹ÑÉ¥•Ì¹±•¹Ñ ¤ì($$%‰½…É‘°¹…ÁÁ•¹‘¡¥±¡•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ…±±‘…äœô°($$$%m•° ÍÁ…¸œ°ì±…ÍÌè€‘ˆµ…±±‘…äµ±…‰•°œ°Ñ•áÐè€±°‘…äèœô¥t¹½¹…Ð ($$$$%ÍÑÉ¥Á¹ÑÉ¥•Ì¹µ…À¡™Õ¹Ñ¥½¸€¡”¤ì($$$$$%É•ÑÕÉ¸•° ÍÁ…¸œ°ì±…ÍÌè€‘ˆµ…±±‘…äµ¥Ñ•´œ°Ñ•áÐè”¹½Õ¹Ð€¬€Ÿ\€œ€¬”¹¹…µ”ô¤ì($$$$%ô¤($$$$¤¤¤ì($%ô(($%Ù…ÈÙ¥Í¥‰±•=É‘•ÉÌ€ô½É‘•ÉÌ¹™¥±Ñ•È¡™Õ¹Ñ¥½¸€¡¼¤ìÉ•ÑÕÉ¸€„…±…¹•=˜¡¼¹ÍÑ…ÑÕÌ¤ìô¤ì($%‰½…É‘°¹…ÁÁ•¹‘¡¥±¡É•¹‘•ÉAÕ±Í”¡Ù¥Í¥‰±•=É‘•ÉÌ¤¤ì($%Ù…È±…¹•Í]É…À€ô•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ±…¹•Ìœô°19L¹µ…À¡™Õ¹Ñ¥½¸€¡±…¹”¤ì($$%Ù…È±…¹•=É‘•ÉÌ€ô½É‘•ÉÌ¹™¥±Ñ•È¡™Õ¹Ñ¥½¸€¡¼¤ìÉ•ÑÕÉ¸±…¹•=˜¡¼¹ÍÑ…ÑÕÌ¤€ôôô±…¹”¹­•äìô¤ì($$%Ù…È…É‘Ì€ô±…¹•=É‘•ÉÌ¹±•¹Ñ ($$$$ü±…¹•=É‘•ÉÌ¹µ…À¡…É¤($$$$èm•° Àœ°ì±…ÍÌè€‘ˆµ±…¹”µ•µÁÑäœ°Ñ•áÐè€9½¹”œô¥tì($$%É•ÑÕÉ¸•° ‘¥Øœ°ì±…ÍÌè€‘ˆµ±…¹”‘ˆµ±…¹”´œ€¬±…¹”¹­•äô°l($$$%•°  Èœ°ì±…ÍÌè€‘ˆµ±…¹”µÑ¥Ñ±”œô°m±…¹”¹Ñ¥Ñ±”€¬€œ€œ°•° ÍÁ…¸œ°ì±…ÍÌè€‘ˆµ±…¹”µ½Õ¹Ðœ°Ñ•áÐèMÑÉ¥¹œ¡±…¹•=É‘•ÉÌ¹±•¹Ñ ¤ô¥t¤°($$$%•° Àœ°ì±…ÍÌè€‘ˆµ±…¹”µÍÕ‰Ñ¥Ñ±”œ°Ñ•áÐè±…¹•MÕ‰Ñ¥Ñ±”¡±…¹”¹­•ä¤ô¤($$%t¹½¹…Ð¡…É‘Ì¤¤ì($%ô¤¤ì($%‰½…É‘°¹…ÁÁ•¹‘¡¥±¡±…¹•Í]É…À¤ì(($%¥˜€¡ÍÑ…ÑÕÍ°¤ì($$%ÍÑ…ÑÕÍ°¹Ñ•áÑ½¹Ñ•¹Ð€ô½É‘•ÉÌ¹±•¹Ñ €¬€œ…Ñ¥Ù”ƒ
+ÜÕÁ‘…Ñ•€œ€¬($$$%¹•Ü…Ñ” ¤¹Ñ½1½…±•Q¥µ•MÑÉ¥¹œ ¤ì($%ô($%…ÁÁ±å½¹¹•Ñ¥½¹MÑ…Ñ” ¤ì(%ô(($¼¨€´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´!•…ÉÑ‰•…Ð€¨¼(($¼¼Mµ…±°½¹¹•Ñ¥½¸‰…‘”¹•áÐÑ¼Ñ¡”‰½…ÉÍÑ…ÑÕÌèÉ••¸€‰1¥Ù”ˆ€¡MM¤°($¼¼…µ‰•È€‰A½±±¥¹œˆ€¡Á½±°=,¤°É•€‰=™™±¥¹”ˆ€¡±…ÍÐ±½…™…¥±•¤¸(%Ù…È½™™±¥¹”€ô™…±Í”ì(%Ù…È¡•…ÉÑ‰•…Ñ°€ô¹Õ±°ì((%™Õ¹Ñ¥½¸Íå¹Q¥µ•1…‰•° ¤ì($%É•ÑÕÉ¸±…ÍÑMÕ•ÍÍ™Õ±Må¹Œ€ü±…ÍÑMÕ•ÍÍ™Õ±Må¹Œ¹Ñ½1½…±•Q¥µ•MÑÉ¥¹œ ¤€è€¹•Ù•Èœì(%ô((%™Õ¹Ñ¥½¸…ÁÁ±å½¹¹•Ñ¥½¹MÑ…Ñ” ¤ì($%¥˜€¡‰½…É‘°¤ì($$%‰½…É‘°¹±…ÍÍ1¥ÍÐ¹Ñ½±” ‘ˆµ‰½…Éµ½™™±¥¹”œ°½™™±¥¹”¤ì($$%Ù…ÈµÕÑ…Ñ¥½¹	ÕÑÑ½¹Ì€ô‰½…É‘°¹ÅÕ•ÉåM•±•Ñ½É±° ‰ÕÑÑ½¸œ¤ì($$%™½È€¡Ù…È¤€ô€Àì¤€ðµÕÑ…Ñ¥½¹	ÕÑÑ½¹Ì¹±•¹Ñ ì¤¬¬¤ì($$$%Ù…È…É€ôµÕÑ…Ñ¥½¹	ÕÑÑ½¹Ím¥t¹±½Í•ÍÐ m‘…Ñ„µ½É‘•Èµ¥‘tœ¤ì($$$%µÕÑ…Ñ¥½¹	ÕÑÑ½¹Ím¥t¹‘¥Í…‰±•€ô½™™±¥¹”ñð€„„¡…É€˜˜¥¹±¥¡Ñm…É¹•ÑÑÑÉ¥‰ÕÑ” ‘…Ñ„µ½É‘•Èµ¥œ¥t¤ì($$%ô($%ô($%¥˜€¡ÁÉ•½É‘•ÉA…¹•°¤ì($$%Ù…ÈÁÉ•½É‘•É	ÕÑÑ½¹Ì€ôÁÉ•½É‘•ÉA…¹•°¹ÅÕ•ÉåM•±•Ñ½É±° ‰ÕÑÑ½¸œ¤ì($$%™½È€¡Ù…È¨€ô€Àì¨€ðÁÉ•½É‘•É	ÕÑÑ½¹Ì¹±•¹Ñ ì¨¬¬¤ì($$$%Ù…ÈÁÉ•½É‘•É…É‘°€ôÁÉ•½É‘•É	ÕÑÑ½¹Ím©t¹±½Í•ÍÐ m‘…Ñ„µÁÉ•½É‘•Èµ¥‘tœ¤ì($$$%Ù…ÈÁÉ•½É‘•É	ÕÍä€ôÁÉ•½É‘•É…É‘°€˜˜¥¹±¥¡ÑmÁÉ•½É‘•É…É‘°¹•ÑÑÑÉ¥‰ÕÑ” ‘…Ñ„µÁÉ•½É‘•Èµ¥œ¥tì($$$%Ù…È½¹Ñ…Ñ¡•¬€ôÁÉ•½É‘•É…É‘°€˜˜ÁÉ•½É‘•É…É‘°¹ÅÕ•ÉåM•±•Ñ½È œ¹‘ˆµÁÉ•½É‘•Èµ½¹Ñ…Ðµ¡•¬¥¹ÁÕÑmÑåÁ”ô‰¡•­‰½à‰tœ¤ì($$$%ÁÉ•½É‘•É	ÕÑÑ½¹Ím©t¹‘¥Í…‰±•€ô½™™±¥¹”ñð€„…ÁÉ•½É‘•É	ÕÍäñð($$$$$¡ÁÉ•½É‘•É	ÕÑÑ½¹Ím©t¹±…ÍÍ1¥ÍÐ¹½¹Ñ…¥¹Ì ‘ˆµÁÉ•½É‘•Èµ…•ÁÐœ¤€˜˜€ …½¹Ñ…Ñ¡•¬ñð€…½¹Ñ…Ñ¡•¬¹¡•­•¤¤ì($$%ô($%ô($%¥˜€¡É•ÑÉå	Ñ¸¤ìÉ•ÑÉå	Ñ¸¹¡¥‘‘•¸€ô€…½™™±¥¹”ìô($%¥˜€¡ÍÑ…ÑÕÍ°¤ì($$%ÍÑ…ÑÕÍ°¹Ñ•áÑ½¹Ñ•¹Ð€ô½™™±¥¹”($$$$ü€=™™±¥¹”€´Í¡½Ý¥¹œ½É‘•ÉÌ±…ÍÐÍå¹•€œ€¬Íå¹Q¥µ•1…‰•° ¤€¬€œ¸¡…¹•Ì…É”±½­•¸œ($$$$è±…ÍÑ=É‘•ÉÌ¹±•¹Ñ €¬€œ…Ñ¥Ù”€´Íå¹•€œ€¬Íå¹Q¥µ•1…‰•° ¤ì($%ô(%ô((%™Õ¹Ñ¥½¸ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($%¥˜€ …¡•…ÉÑ‰•…Ñ°¤ìÉ•ÑÕÉ¸ìô($%Ù…ÈÍÑ…Ñ”€ô½™™±¥¹”€ü€½™™±¥¹”œ€è€¡ÍÍ•!•…±Ñ¡ä€ü€±¥Ù”œ€è€Á½±±¥¹œœ¤ì($%Ù…ÈÝ½É€ô½™™±¥¹”€ü€=™™±¥¹”œ€è€¡ÍÍ•!•…±Ñ¡ä€ü€1¥Ù”œ€è€A½±±¥¹œœ¤ì($%¡•…ÉÑ‰•…Ñ°¹±…ÍÍ9…µ”€ô€‘ˆµ¡•…ÉÑ‰•…Ð‘ˆµ¡•…ÉÑ‰•…Ð´œ€¬ÍÑ…Ñ”ì($%¡•…ÉÑ‰•…Ñ°¹Ñ•áÑ½¹Ñ•¹Ð€ô€œœì($%¡•…ÉÑ‰•…Ñ°¹…ÁÁ•¹‘¡¥±¡•° ÍÁ…¸œ°ì±…ÍÌè€‘ˆµ¡•…ÉÑ‰•…Ðµ‘½Ðœ°€…É¥„µ¡¥‘‘•¸œè€ÑÉÕ”œô¤¤ì($%¡•…ÉÑ‰•…Ñ°¹…ÁÁ•¹‘¡¥±¡•° ÍÁ…¸œ°ì±…ÍÌè€‘ˆµ¡•…ÉÑ‰•…ÐµÝ½Éœ°Ñ•áÐèÝ½Éô¤¤ì(%ô(($¼¨€´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´å±”€¨¼((%™Õ¹Ñ¥½¸±½… ¤ì($%Ù…ÈÉ•ÅÕ•ÍÑÁ½ €ô€¬­±½…‘Á½ ì($%Ù…ÈÁ…Ñ €ô€œ½…‘µ¥¸½½É‘•ÉÌœ€¬€¡ÕÉÉ•¹Ñ1½…Ñ¥½¸€ü€œý±½…Ñ¥½¹}¥ôœ€¬ÕÉÉ•¹Ñ1½…Ñ¥½¸€è€œœ¤ì($%É•ÑÕÉ¸…Á¤¡Á…Ñ °€Pœ¤¹Ñ¡•¸¡™Õ¹Ñ¥½¸€¡É•Ì¤ì($$%¥˜€ …É•Ìñð€…ÉÉ…ä¹¥ÍÉÉ…ä¡É•Ì¹‘…Ñ„¤¤ìÑ¡É½Ü¹•ÜÉÉ½È Q¡”½É‘•È™••É•ÑÕÉ¹•…¸¥¹Ù…±¥É•ÍÁ½¹Í”¸œ¤ìô($$%¥˜€¡É•ÅÕ•ÍÑÁ½ €„ôô±½…‘Á½ ¤ìÉ•ÑÕÉ¸¹Õ±°ìô($$%½™™±¥¹”€ô™…±Í”ì($$%±…ÍÑMÕ•ÍÍ™Õ±Må¹Œ€ô¹•Ü…Ñ” ¤ì($$%ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($$%É•¹‘•È¡É•Ì¹‘…Ñ„¤ì($$%¥˜€¡MI9}5=€„ôô€Á…ÍÌœ¤ì($$$%¥˜€¡ÁÉ•½É‘•ÉA…¹•°¤ìÁÉ•½É‘•ÉA…¹•°¹¡¥‘‘•¸€ôÑÉÕ”ìô($$$%É•ÑÕÉ¸¹Õ±°ì($$%ô($$%Ù…ÈÁÉ•½É‘•ÉA…Ñ €ô€œ½…‘µ¥¸½ÁÉ•½É‘•ÈµÉ•ÅÕ•ÍÑÌýÁ•É}Á…”ôÄÀÀœ€¬€¡ÕÉÉ•¹Ñ1½…Ñ¥½¸€ü€œ™±½…Ñ¥½¹}¥ôœ€¬ÕÉÉ•¹Ñ1½…Ñ¥½¸€è€œœ¤ì($$%É•ÑÕÉ¸…Á¤¡ÁÉ•½É‘•ÉA…Ñ °€Pœ¤¹Ñ¡•¸¡™Õ¹Ñ¥½¸€¡ÁÉ•½É‘•ÉÌ¤ì($$$%¥˜€ …ÁÉ•½É‘•ÉÌñð€…ÉÉ…ä¹¥ÍÉÉ…ä¡ÁÉ•½É‘•ÉÌ¹‘…Ñ„¤¤ìÑ¡É½Ü¹•ÜÉÉ½È Q¡”ÁÉ”µ½É‘•ÈÉ•Ù¥•Ü™••É•ÑÕÉ¹•…¸¥¹Ù…±¥É•ÍÁ½¹Í”¸œ¤ìô($$$%¥˜€¡É•ÅÕ•ÍÑÁ½ €„ôô±½…‘Á½ ¤ìÉ•ÑÕÉ¸ìô($$$%É•¹‘•ÉAÉ•½É‘•ÉÌ¡ÁÉ•½É‘•ÉÌ¹‘…Ñ„¤ì($$%ô¤¹…Ñ ¡™Õ¹Ñ¥½¸€¡•ÉÉ½È¤ì($$$$¼¼É•Ù¥•Üµ™••™…¥±ÕÉ”µÕÍÐ¹•Ù•È‰±…¹¬½È±½¬Ñ¡”±¥Ù”­¥Ñ¡•¸‰½…É¸($$$%¥˜€¡ÁÉ•½É‘•ÉA…¹•°¤ìÁÉ•½É‘•ÉA…¹•°¹¡¥‘‘•¸€ôÑÉÕ”ìô($$$%¥˜€¡ÍÑ…ÑÕÍ°¤ìÍÑ…ÑÕÍ°¹Ñ•áÑ½¹Ñ•¹Ð€ô€-¥Ñ¡•¸‰½…ÉÍå¹•ìÁÉ”µ½É‘•ÈÉ•Ù¥•ÜÕ¹…Ù…¥±…‰±”è€œ€¬€¡•ÉÉ½È¹µ•ÍÍ…”ñð€É•ÑÉå¥¹œœ¤ìô($$%ô¤ì($%ô¤¹…Ñ ¡™Õ¹Ñ¥½¸€ ¤ì($$%¥˜€¡É•ÅÕ•ÍÑÁ½ €„ôô±½…‘Á½ ¤ìÉ•ÑÕÉ¸ìô($$%½™™±¥¹”€ôÑÉÕ”ì($$%ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($$$¼¼AÉ•Í•ÉÙ”Ñ¡”½¹¹•Ñ¥½¸Ý…É¹¥¹œ‰•±½Ü°Ñ¡•¸É•Á±…”¥ÐÝ¥Ñ Ñ¡”($$$¼¼…Ñ¥½¹…‰±”½™™±¥¹”ÍÑ…Ñ”…™Ñ•ÈÑ¡¥Ì•ÉÉ½È…±±‰…¬½µÁ±•Ñ•Ì¸($$%Í•ÑQ¥µ•½ÕÐ¡…ÁÁ±å½¹¹•Ñ¥½¹MÑ…Ñ”°€À¤ì($$%¥˜€¡ÍÑ…ÑÕÍ°¤ìÍÑ…ÑÕÍ°¹Ñ•áÑ½¹Ñ•¹Ð€ô€½¹¹•Ñ¥½¸ÁÉ½‰±•´ƒŠPÉ•ÑÉå¥¹ŸŠ˜œìô($%ô¤ì(%ô((%™Õ¹Ñ¥½¸±½½À ¤ì($%±½… ¤¹Ñ¡•¸¡™Õ¹Ñ¥½¸€ ¤ì($$%Á½±±Q¥µ•È€ôÍ•ÑQ¥µ•½ÕÐ¡±½½À°ÍÍ•!•…±Ñ¡ä€üA=11}MQd€èA=11}MP¤ì($%ô¤ì(%ô(($¼¨€´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´´5•ÉÕÉ”MM€¨¼(($¼¼=Á•¸…¸Ù•¹ÑM½ÕÉ”Ñ¼Ñ¡”5•ÉÕÉ”¡Õˆ¸=¸…¹äµ•ÍÍ…”°É”µÁÕ±°Ñ¡”($¼¼…ÕÑ¡½É¥Ñ…Ñ¥Ù”‰½…É€¡Ñ¡”MMÁ…å±½…¥Ì½¹±ä„€‰É•™É•Í ˆÍ¥¹…°°¹•Ù•È($¼¼ÑÉÕÍÑ•‘…Ñ„¤¸=¸•ÉÉ½È°™…±°‰…¬Ñ¼Ñ¡”¹½Éµ…°Á½±°…‘•¹”¸Q¡”Á½±°($¼¼…±Ý…åÌ­••ÁÌÉÕ¹¹¥¹œ…ÌÑ¡”™…±±‰…¬Á…Ñ ¸(%™Õ¹Ñ¥½¸½¹¹•ÑMÍ” ¤ì($%¥˜€ …µ•ÉÕÉ”ñð€…µ•ÉÕÉ”¹•¹…‰±•ñð€…µ•ÉÕÉ”¹ÕÉ°ñðÑåÁ•½˜Ý¥¹‘½Ü¹Ù•¹ÑM½ÕÉ”€ôôô€Õ¹‘•™¥¹•œ¤ì($$%É•ÑÕÉ¸ì($%ô(($%Ù…ÈÕÉ°€ôµ•ÉÕÉ”¹ÕÉ°€¬€œýÑ½Á¥Œôœ€¬•¹½‘•UI%½µÁ½¹•¹Ð¡µ•ÉÕÉ”¹Ñ½Á¥Œ¤ì($$¼¼Q¡”‰½…ÉÑ½Á¥Œ¥ÌÁÕ‰±¥±äÉ•…‘…‰±”°Í¼¹½Éµ…±±ä¹¼Ñ½­•¸¥Ì¹••‘•½¸($$¼¼ÍÕ‰ÍÉ¥‰”¸Ù•¹ÑM½ÕÉ”…¹¹½ÐÍ•¹ÕÑ¡½É¥é…Ñ¥½¸¡•…‘•ÉÌì½¹±ä™…±°‰…¬($$¼¼Ñ¼Ñ¡”€¡UI0¤…ÕÑ¡½É¥é…Ñ¥½¸Á…É…´Ý¡•¸„ÍÕ‰ÍÉ¥‰”)]P¥Ì…ÑÕ…±±äÍ•Ð¸($%¥˜€¡µ•ÉÕÉ”¹ÍÕ‰ÍÉ¥‰•}©ÝÐ¤ì($$%ÕÉ°€¬ô€œ™…ÕÑ¡½É¥é…Ñ¥½¸ôœ€¬•¹½‘•UI%½µÁ½¹•¹Ð¡µ•ÉÕÉ”¹ÍÕ‰ÍÉ¥‰•}©ÝÐ¤ì($%ô(($%ÑÉäì($$%ÍÍ”€ô¹•ÜÙ•¹ÑM½ÕÉ”¡ÕÉ°¤ì($%ô…Ñ €¡”¤ì($$%É•ÑÕÉ¸ì($%ô(($%ÍÍ”¹½¹½Á•¸€ô™Õ¹Ñ¥½¸€ ¤ì($$%ÍÍ•!•…±Ñ¡ä€ôÑÉÕ”ì($$%ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($%ôì(($%ÍÍ”¹½¹µ•ÍÍ…”€ô™Õ¹Ñ¥½¸€ ¤ì($$$¼¼µ•ÍÍ…”µ•…¹ÌÑ¡”¡…¹¹•°¥Ì…±¥Ù”ƒŠPÉ”µ…™™¥É´¡•…±Ñ Í¼„É•½Ù•Éä($$$¼¼…™Ñ•È„ÑÉ…¹Í¥•¹Ð•ÉÉ½ÈÍ±½ÝÌÑ¡”Á½±°……¥¸•Ù•¸‰•™½É”½¹½Á•¸É•™¥É•Ì¸($$%ÍÍ•!•…±Ñ¡ä€ôÑÉÕ”ì($$%ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($$$¼¼ÕÑ¡½É¥Ñ…Ñ¥Ù”É”µ™•Ñ ƒŠP¹•Ù•ÈÉ•¹‘•È™É½´Ñ¡”MMÁ…å±½…¥ÑÍ•±˜¸($$%±½… ¤ì($%ôì(($%ÍÍ”¹½¹•ÉÉ½È€ô™Õ¹Ñ¥½¸€ ¤ì($$$¼¼É½À‰…¬Ñ¼™…ÍÐÁ½±±¥¹œìÑ¡”‰É½ÝÍ•È…ÕÑ¼µÉ•½¹¹•ÑÌÑ¡”MM°…¹($$$¼¼½¹½Á•¸Ý¥±°Í±½ÜÑ¡”Á½±°……¥¸½¹”¥ÐÉ•½Ù•ÉÌ¸($$%ÍÍ•!•…±Ñ¡ä€ô™…±Í”ì($$%ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($%ôì(%ô((%¥˜€¡Í½Õ¹‘	Ñ¸¤ì($%Í½Õ¹‘	Ñ¸¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ±¥¬œ°•¹…‰±•M½Õ¹¤ì(%ô(($¼¼%˜Ñ¡”Ñ…‰±•ÐÍ±••ÁÌ½É•™½ÕÍ•Ì°Ñ¡”…Õ‘¥¼½¹Ñ•áÐ…¸ÍÕÍÁ•¹ƒŠPÉ•ÍÕµ”¥Ð($¼¼Í¼Ñ¡”¡¥µ”­••ÁÌÝ½É­¥¹œÝ¥Ñ¡½ÕÐ„™É•Í Ñ…À¸(%‘½Õµ•¹Ð¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È Ù¥Í¥‰¥±¥Ñå¡…¹”œ°™Õ¹Ñ¥½¸€ ¤ì($%¥˜€ …‘½Õµ•¹Ð¹¡¥‘‘•¸€˜˜…Õ‘¥¼¹½¸€˜˜…Õ‘¥¼¹Ñà€˜˜…Õ‘¥¼¹Ñà¹ÍÑ…Ñ”€ôôô€ÍÕÍÁ•¹‘•œ¤ì($$%…Õ‘¥¼¹Ñà¹É•ÍÕµ” ¤ì($%ô(%ô¤ì(%Ý¥¹‘½Ü¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ½™™±¥¹”œ°™Õ¹Ñ¥½¸€ ¤ì($%½™™±¥¹”€ôÑÉÕ”ì($%ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($%…ÁÁ±å½¹¹•Ñ¥½¹MÑ…Ñ” ¤ì(%ô¤ì(%Ý¥¹‘½Ü¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ½¹±¥¹”œ°™Õ¹Ñ¥½¸€ ¤ì($%¥˜€¡Á½±±Q¥µ•È¤ì±•…ÉQ¥µ•½ÕÐ¡Á½±±Q¥µ•È¤ìÁ½±±Q¥µ•È€ô¹Õ±°ìô($%±½… ¤ì(%ô¤ì(%‘½Õµ•¹Ð¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ­•å‘½Ý¸œ°™Õ¹Ñ¥½¸€¡•Ù•¹Ð¤ì($%¥˜€¡•Ù•¹Ð¹­•ä€ôôô€Í…Á”œ€˜˜…µ•¹‘µ•¹ÑA…¹•°€˜˜€……µ•¹‘µ•¹ÑA…¹•°¹¡¥‘‘•¸¤ì($$%±½Í•µ•¹‘µ•¹ÑI•Ù¥•Ü ¤ì($%ô(%ô¤ì(($¼¼M¡½À™¥±Ñ•ÈƒŠP½¹±äÍ¡½Ý¸Ý¡•¸µ½É”Ñ¡…¸½¹”Í¡½À•á¥ÍÑÌ¸(%¥˜€¡…Ñ¥½¹Í°€˜˜1=Q%=9L¹±•¹Ñ €ø€Ä¤ì($%Ù…ÈÍ•°€ô•° Í•±•Ðœ°ì±…ÍÌè€‘ˆµÍ¡½ÀµÍ•±•Ðœ°€…É¥„µ±…‰•°œè€¥±Ñ•È‰äÍ¡½Àœô°mt¤ì($%Í•°¹…ÁÁ•¹‘¡¥±¡•° ½ÁÑ¥½¸œ°ìÙ…±Õ”è€œÀœ°Ñ•áÐè€±°Í¡½ÁÌœô¤¤ì($%1=Q%=9L¹™½É… ¡™Õ¹Ñ¥½¸€¡°¤ì($$%Í•°¹…ÁÁ•¹‘¡¥±¡•° ½ÁÑ¥½¸œ°ìÙ…±Õ”èMÑÉ¥¹œ¡°¹¥¤°Ñ•áÐè°¹¹…µ”ô¤¤ì($%ô¤ì($%Í•°¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ¡…¹”œ°™Õ¹Ñ¥½¸€ ¤ì($$%ÕÉÉ•¹Ñ1½…Ñ¥½¸€ôÁ…ÉÍ•%¹Ð¡Í•°¹Ù…±Õ”°€ÄÀ¤ñð€Àì($$%±½… ¤ì($%ô¤ì($%…Ñ¥½¹Í°¹¥¹Í•ÉÑ	•™½É”¡Í•°°…Ñ¥½¹Í°¹™¥ÉÍÑ¡¥±¤ì(%ô(($¼¼!•…ÉÑ‰•…Ð‰…‘”ƒŠP¹•áÐÑ¼Ñ¡”•á¥ÍÑ¥¹œ‰½…ÉÍÑ…ÑÕÌÑ•áÐ¸(%¥˜€¡ÍÑ…ÑÕÍ°¤ì($%¡•…ÉÑ‰•…Ñ°€ô•° ÍÁ…¸œ°ì±…ÍÌè€‘ˆµ¡•…ÉÑ‰•…Ð‘ˆµ¡•…ÉÑ‰•…ÐµÁ½±±¥¹œœô°mt¤ì($%ÍÑ…ÑÕÍ°¹Á…É•¹Ñ9½‘”¹¥¹Í•ÉÑ	•™½É”¡¡•…ÉÑ‰•…Ñ°°ÍÑ…ÑÕÍ°¹¹•áÑM¥‰±¥¹œ¤ì($%¥˜€¡…Ñ¥½¹Í°¤ì($$%É•ÑÉå	Ñ¸€ô•° ‰ÕÑÑ½¸œ°ì($$$%±…ÍÌè€‰ÕÑÑ½¸‘ˆµ‰½…ÉµÉ•ÑÉäœ°ÑåÁ”è€‰ÕÑÑ½¸œ°¡¥‘‘•¸è€¡¥‘‘•¸œ°($$$$…É¥„µ±…‰•°œè€I•ÑÉä±½…‘¥¹œÑ¡”±¥Ù”½É‘•È‰½…É¹½Üœ°($$$%½¹±¥¬è™Õ¹Ñ¥½¸€ ¤ì±½… ¤ìô($$%ô°lI•ÑÉä¹½Üt¤ì($$%…Ñ¥½¹Í°¹¥¹Í•ÉÑ	•™½É”¡É•ÑÉå	Ñ¸°ÍÑ…ÑÕÍ°¹¹•áÑM¥‰±¥¹œ¤ì($%ô($%ÕÁ‘…Ñ•!•…ÉÑ‰•…Ð ¤ì($%…ÁÁ±å½¹¹•Ñ¥½¹MÑ…Ñ” ¤ì(%ô(($¼¼Q¡”-Lµ…äÉ•Ù¥•ÜÑ¡”ÁÉ•¥Í”ÕÉÉ•¹Ð±¥¹”±¥ÍÐ°‰ÕÐ¥ÐµÕÍÐ¹•Ù•È‰•½µ”($¼¼„‰…¬‘½½È™½ÈÉ•ÁÉ¥¥¹œ½ÈÉ•™Õ¹‘¥¹œ…¸½É‘•È¸Q¡”Á…¹•°¥ÌÉ•…Ñ•½¹”($¼¼½ÕÑÍ¥‘”Ñ¡”É•™É•Í¡•‰½…ÉÍ¼™½ÕÌ…¹Ñ¡”É•Ù¥•ÜÉ•µ…¥¸ÍÑ…‰±”¸(%¥˜€¡‰½…É‘°€˜˜‰½…É‘°¹Á…É•¹Ñ9½‘”¤ì($%…µ•¹‘µ•¹ÑA…¹•°€ô•° Í•Ñ¥½¸œ°ì($$%±…ÍÌè€‘ˆµ…µ•¹‘µ•¹ÐµÁ…¹•°œ°($$%Ñ…‰¥¹‘•àè€œ´Äœ°($$$…É¥„µ±…‰•°œè€=É‘•È¡…¹”É•Ù¥•Üœ($%ô°mt¤ì($%…µ•¹‘µ•¹ÑA…¹•°¹¡¥‘‘•¸€ôÑÉÕ”ì($%‰½…É‘°¹Á…É•¹Ñ9½‘”¹¥¹Í•ÉÑ	•™½É”¡…µ•¹‘µ•¹ÑA…¹•°°‰½…É‘°¤ì(%ô(($¼¼I•™É•Í €‰à…¼ˆ±…‰•±Ì•Ù•¸‰•ÑÝ••¸Á½±±Ì¸(%Í•Ñ%¹Ñ•ÉÙ…°¡™Õ¹Ñ¥½¸€ ¤ì¥˜€¡±…ÍÑ=É‘•ÉÌ¹±•¹Ñ ¤ìÉ•¹‘•È¡±…ÍÑ=É‘•ÉÌ¤ìôô°€ÌÀÀÀÀ¤ì(($¼¼=Á•¸Ñ¡”É•…°µÑ¥µ”MM¡…¹¹•°Ý¡•¸½¹™¥ÕÉ•ìÑ¡”Á½±°‰•±½ÜÍÑ…åÌ…ÌÑ¡”($¼¼…±Ý…åÌµ½¸™…±±‰…¬É•…É‘±•ÍÌ¸(%½¹¹•ÑMÍ” ¤ì((%±½½À ¤ì)ô ¤¤ì(

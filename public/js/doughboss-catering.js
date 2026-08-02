@@ -483,6 +483,7 @@
 					if (result && result.error) {
 						throw new Error(result.error.message || 'Check your payment details.');
 					}
+					rememberStripePayment(data, paymentId);
 					return stripe.confirmPayment({
 						elements: stripeElements,
 						clientSecret: stripeClientSecret,
@@ -532,7 +533,70 @@
 		return safe.toString();
 	}
 
+	// A 3DS challenge may leave this page and return after Stripe has already
+	// captured the deposit. Persist only the short-lived browser-local reference
+	// needed to finish the server-side verification on return; the REST endpoint
+	// still retrieves Stripe and checks the immutable enquiry/amount binding.
+	function rememberStripePayment(data, paymentIntentId) {
+		try {
+			window.sessionStorage.setItem('doughbossCateringPending', JSON.stringify({
+				enquiryNumber: data.enquiry_number,
+				email: state.email,
+				leg: 'deposit',
+				paymentIntentId: paymentIntentId,
+				savedAt: Date.now()
+			}));
+		} catch (ignoreStorage) {}
+	}
+
+	function clearRememberedStripePayment() {
+		try { window.sessionStorage.removeItem('doughbossCateringPending'); } catch (ignoreStorage) {}
+	}
+
+	function resumeStripePaymentReturn() {
+		if (!(window.DoughBossData && window.DoughBossData.payments && window.DoughBossData.payments.gateway === 'stripe') || typeof window.URLSearchParams !== 'function') {
+			return false;
+		}
+		var params = new URLSearchParams(window.location.search);
+		var returnedId = params.get('payment_intent') || '';
+		if (!returnedId) {
+			return false;
+		}
+		var pending = null;
+		try { pending = JSON.parse(window.sessionStorage.getItem('doughbossCateringPending') || 'null'); } catch (ignoreStorage) {}
+
+		// Remove Stripe's return parameters (including the client secret) from the
+		// visible URL regardless of whether this tab holds the matching attempt.
+		try {
+			var clean = new URL(window.location.href);
+			['payment_intent', 'payment_intent_client_secret', 'redirect_status'].forEach(function (key) { clean.searchParams.delete(key); });
+			window.history.replaceState({}, document.title, clean.toString());
+		} catch (ignoreHistory) {}
+
+		if (!pending || pending.paymentIntentId !== returnedId || !pending.enquiryNumber || !pending.email || pending.leg !== 'deposit' || (Date.now() - Number(pending.savedAt || 0)) > 30 * 60 * 1000) {
+			return false;
+		}
+
+		root.innerHTML = '<div class="dbc-builder"><p class="dbc-sub" role="status">Confirming your secure deposit payment. Please do not pay again.</p></div>';
+		post('/catering/confirm-payment', {
+			enquiry_number: pending.enquiryNumber,
+			email: pending.email,
+			leg: pending.leg,
+			payment_intent_id: pending.paymentIntentId
+		}).then(function (conf) {
+			if (!conf.ok || !conf.data || !conf.data.success) {
+				throw new Error((conf.data && conf.data.message) || 'We could not confirm your payment.');
+			}
+			clearRememberedStripePayment();
+			showPaid(conf.data, { enquiry_number: pending.enquiryNumber });
+		}).catch(function () {
+			root.innerHTML = '<div class="dbc-builder"><p class="dbc-sub" role="alert">Your payment return could not be confirmed yet. Please do not pay again; contact us so we can check it safely.</p></div>';
+		});
+		return true;
+	}
+
 	function showPaid(conf, data) {
+		clearRememberedStripePayment();
 		root.innerHTML = '';
 		root.appendChild(el(
 			'<div class="dbc-success" role="status">' +
@@ -546,6 +610,10 @@
 	}
 
 	/* ---------- boot ---------- */
+
+	if (resumeStripePaymentReturn()) {
+		return;
+	}
 
 	get('/catering/packages').then(function (list) {
 		state.packages = Array.isArray(list) ? list : [];

@@ -159,8 +159,10 @@ $board_test_key = 'BoardKey23456789ABCDEFGH';
 update_option( DoughBoss_Settings::OPTION_KEY, array( 'board_access_key' => hash( 'sha256', $board_test_key ) ) );
 $board_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
 $GLOBALS['__db_caps_override'] = array( 'manage_doughboss_kds' );
-ok( true === $board_controller->verify_board_access( new WP_REST_Request( array(), array( 'X-DoughBoss-Board-Key' => $board_test_key ) ) ), 'correct Order Board key unlocks KDS REST access' );
-ok( is_wp_error( $board_controller->verify_board_access( new WP_REST_Request( array(), array( 'X-DoughBoss-Board-Key' => 'wrong-key' ) ) ) ), 'wrong Order Board key blocks KDS REST access' );
+ok( true === DoughBoss_Settings::verify_board_access_key( $board_test_key ), 'correct Order Board key passes the secondary key verifier' );
+ok( false === DoughBoss_Settings::verify_board_access_key( 'wrong-key' ), 'wrong Order Board key fails the secondary key verifier' );
+$unassigned_board = $board_controller->verify_board_access( new WP_REST_Request( array(), array( 'X-DoughBoss-Board-Key' => $board_test_key ) ) );
+ok( is_wp_error( $unassigned_board ) && 'doughboss_staff_location_required' === $unassigned_board->get_error_code(), 'correct Board key cannot bypass the required KDS shop assignment' );
 $GLOBALS['__db_caps_override'] = null;
 update_option( DoughBoss_Settings::OPTION_KEY, array() );
 
@@ -266,8 +268,9 @@ foreach ( $board_routes as $board_route ) {
 }
 // A real count check, not just ">0", so a route silently failing to register
 // would fail this. Includes table context plus the public request and two
-// board-authorised morning-review routes, and the MPGS notification webhook.
-ok( 54 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, and pre-order review (' . count( $routes ) . ' routes, expected 54)' );
+// board-authorised morning-review routes, the manager-only catering quote
+// endpoint, and the MPGS notification webhook.
+ok( 55 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, custom quotes, and pre-order review (' . count( $routes ) . ' routes, expected 55)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );

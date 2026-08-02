@@ -296,6 +296,8 @@ class DoughBoss_Assets {
 					'vYourCode'    => __( 'Your code', 'doughboss' ),
 					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),
 					'vNeedPhone'   => __( 'Please enter your mobile number.', 'doughboss' ),
+					'vNeedStudentEmail' => __( 'Enter a valid student email ending in .edu or .edu.au.', 'doughboss' ),
+					'vEmailMismatch' => __( 'The student emails do not match. Please re-enter them.', 'doughboss' ),
 					'discount'     => __( 'Discount', 'doughboss' ),
 					'apply'        => __( 'Apply', 'doughboss' ),
 					'voucherApplied'     => __( 'Voucher applied', 'doughboss' ),
@@ -331,16 +333,13 @@ class DoughBoss_Assets {
 				array( 'doughboss' ),
 				DOUGHBOSS_VERSION
 			);
-			// Load the QR generator (from jsDelivr's CDN, as a runtime dependency,
-			// exactly like Stripe.js above): full https URL, no local file, version
-			// null, in footer. Exposes the global `qrcode`. Our voucher script then
-			// depends on it so it loads first; the script degrades gracefully if the
-			// CDN is unreachable and the global is missing.
+			// Use the audited, bundled QR generator so voucher display does not fail
+			// when a firewall, content blocker or CDN outage blocks third-party code.
 			wp_enqueue_script(
 				'doughboss-qrcode',
-				'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+				DOUGHBOSS_PLUGIN_URL . 'public/vendor/qrcode-generator/qrcode.js',
 				array(),
-				null,
+				DOUGHBOSS_VERSION,
 				true
 			);
 			wp_enqueue_script(

@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DOUGHBOSS_FINAL_VERSION', '1.0.0' );
+define( 'DOUGHBOSS_FINAL_VERSION', '1.1.0' );
 
 function doughboss_final_setup() {
 	add_theme_support( 'title-tag' );

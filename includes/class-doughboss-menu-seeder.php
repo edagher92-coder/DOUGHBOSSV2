@@ -155,7 +155,28 @@ class DoughBoss_Menu_Seeder {
 				}
 				if ( empty( $existing ) ) {
 					// Legacy fallback: items seeded before the marker existed only
-					// match by title; they get stamped with the key below.
+					// match by title; they get stamped with the key below. Check the
+					// retired board labels first so an unmarked production menu is
+					// renamed in place instead of creating a second published item.
+					$legacy_titles = array(
+						'pies-dough-boss-pie' => 'Chicken Pie',
+						'pies-spinach-pie'    => 'Spinach & Cheese',
+					);
+					$legacy_title = isset( $legacy_titles[ $seed_key ] ) ? $legacy_titles[ $seed_key ] : '';
+					if ( '' !== $legacy_title ) {
+						$existing = get_posts(
+							array(
+								'post_type'        => $post_type,
+								'post_status'      => 'any',
+								'title'            => $legacy_title,
+								'posts_per_page'   => 1,
+								'fields'           => 'ids',
+								'suppress_filters' => false,
+							)
+						);
+					}
+				}
+				if ( empty( $existing ) ) {
 					$existing = get_posts(
 						array(
 							'post_type'        => $post_type,

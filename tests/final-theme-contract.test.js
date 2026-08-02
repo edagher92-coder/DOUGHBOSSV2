@@ -4,8 +4,8 @@ const path = require('path');
 const root = path.resolve(__dirname, '..', 'themes', 'doughboss-final');
 const required = [
   'style.css', 'functions.php', 'header.php', 'footer.php', 'front-page.php',
-  'page.php', 'page-order.php', 'page-menu.php', 'page-track-order.php',
-  'page-catering.php', 'page-about-us.php', 'page-locations.php',
+  'page.php', 'page-order.php', 'page-menu.php', 'page-track.php', 'page-track-order.php',
+  'page-catering.php', 'page-about-us.php', 'page-locations.php', 'page-vouchers.php',
   'page-franchising.php', 'page-wholesale.php', 'single.php', 'archive.php',
   'search.php', '404.php', 'assets/theme.js', 'template-parts/locations.php'
 ];

@@ -2,6 +2,7 @@
 
 <section class="dbf-hero" aria-label="Dough Boss introduction">
 	<div class="dbf-wrap">
+		<h1 class="dbf-sr-only"><?php esc_html_e( 'Dough Boss — a contemporary Lebanese bakery', 'doughboss-final' ); ?></h1>
 		<?php
 		echo doughboss_final_shortcode_or_notice(
 			'[doughboss_manoush_hero variant="bites" kicker="In the industry since 2009" title="A taste of the Mediterranean." description="Authentic manoush, pizza and pies, stone-baked fresh to order with a modern twist." replay_label="Replay the food build"]',
@@ -20,7 +21,7 @@
 	<div class="dbf-wrap dbf-story-grid">
 		<div class="dbf-story-copy" data-dbf-reveal>
 			<p class="dbf-eyebrow">Who we are</p>
-			<h1 class="dbf-heading">Tradition through generations.<br><span style="color:var(--dbf-ember)">Made for today.</span></h1>
+			<h2 class="dbf-heading">Tradition through generations.<br><span style="color:var(--dbf-ember)">Made for today.</span></h2>
 			<p>Dough Boss is a contemporary Lebanese bakery preserving traditional dough recipes while embracing a modern twist. We use quality ingredients to craft simple, generous manoush, pizza and pies — a taste of the Mediterranean in every bite.</p>
 			<a class="dbf-button" href="<?php echo esc_url( home_url( '/about-us/' ) ); ?>">Our story</a>
 		</div>

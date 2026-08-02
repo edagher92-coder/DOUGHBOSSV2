@@ -61,6 +61,12 @@
 .db-vc-label { font-size: 12px; color: var(--vc-muted); }
 
 .db-vc-form { display: flex; flex-direction: column; gap: 10px; }
+.db-vc-field { display: grid; gap: 6px; }
+.db-vc-field > span {
+	font-size: 13px;
+	font-weight: 750;
+	color: #24201c;
+}
 .db-vc-form input {
 	width: 100%;
 	box-sizing: border-box;
@@ -85,6 +91,15 @@
 }
 .db-vc-submit:active:not(:disabled) { transform: scale(0.98); }
 .db-vc-submit:disabled { opacity: .5; }
+.db-vc-eligibility {
+	margin: 2px 0 4px;
+	padding: 10px 12px;
+	border-left: 3px solid var(--vc-ink);
+	background: #f7f5f1;
+	color: var(--vc-muted);
+	font-size: 12px;
+	line-height: 1.45;
+}
 
 .db-vc-result { margin-top: 16px; font-size: 15px; }
 .db-vc-result.is-pending { color: var(--vc-muted); }

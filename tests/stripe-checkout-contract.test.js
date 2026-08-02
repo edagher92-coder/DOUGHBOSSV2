@@ -16,6 +16,7 @@ var client = fs.readFileSync(path.join(root, 'public/js/doughboss.js'), 'utf8');
 var catering = fs.readFileSync(path.join(root, 'public/js/doughboss-catering.js'), 'utf8');
 var stripePhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-stripe.php'), 'utf8');
 var restPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-rest-controller.php'), 'utf8');
+var cateringPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-catering.php'), 'utf8');
 var orderPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-order.php'), 'utf8');
 var settingsPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-settings.php'), 'utf8');
 var assetsPhp = fs.readFileSync(path.join(root, 'includes/class-doughboss-assets.php'), 'utf8');
@@ -55,8 +56,8 @@ test('Stripe-hosted Checkout keeps cards and eligible Apple Pay and Google Pay w
 	assert.match(stripePhp, /['"]payment_method_types\[0\]['"]\s*=>\s*['"]card['"]/);
 	assert.doesNotMatch(stripePhp, /wallet_options\[(?:apple_pay|google_pay)\]\s*=\s*never/);
 	assert.doesNotMatch(stripePhp, /excluded_payment_method_types\[\].*(?:apple_pay|google_pay)/);
-	assert.match(client, /Apple Pay or Google Pay appears first when it is available on your device\./);
-	assert.match(client, /Card is always available as the secure fallback\./);
+	assert.match(client, /Apple Pay or Google Pay is offered automatically when eligible/);
+	assert.match(client, /Card is always available; DoughBoss never stores your card details/);
 	assert.doesNotMatch(client, /ApplePaySession/);
 	assert.doesNotMatch(client, /PaymentRequest/);
 });
@@ -93,4 +94,19 @@ test('catering uses the same modern Stripe Payment Element integration', functio
 	assert.match(catering, /payment_intent_id:\s*confirmedId/);
 	assert.match(catering, /paymentElement\.on\(['"]loaderror['"][\s\S]{0,400}?resetStripePaymentForm\(\)/);
 	assert.match(catering, /paymentElement\.on\(['"]ready['"][\s\S]{0,500}?btn\.disabled\s*=\s*false/);
+});
+
+test('catering payment reconciliation is immutably bound before marking a leg paid', function () {
+	assert.match(restPhp, /function catering_payment_matches\s*\(/);
+	assert.match(restPhp, /find_by_provider_reference\(\s*\$provider_reference\s*\)/);
+	assert.match(restPhp, /\$amount\s*!==\s*\$expected_amount/);
+	assert.match(restPhp, /\$is_succeeded && isset\( \$payment\['amount_received'\] \)/);
+	assert.match(restPhp, /\$currency\s*!==\s*\$expected_currency/);
+	assert.match(restPhp, /\$attempt\['amount_minor'\]/);
+	assert.match(restPhp, /\$attempt\['location_id'\]/);
+	assert.match(restPhp, /catering_balance['"]\s*:\s*['"]catering_deposit/);
+	assert.match(restPhp, /catering_payment_matches\(\s*\$enquiry,\s*\$leg,\s*\$stored,\s*\$intent\s*\)/);
+	assert.match(restPhp, /catering_payment_matches\(\s*\$enquiry,\s*\$leg,\s*\$intent_id,\s*\$obj\s*\)/);
+	assert.match(cateringPhp, /WHERE id = %d AND \(\{\$paid_column\} IS NULL OR \{\$paid_column\} = '0000-00-00 00:00:00'\)/);
+	assert.match(cateringPhp, /if \( 0 === \(int\) \$updated \)[\s\S]{0,180}?self::is_paid\( \$fresh, \$leg \)/);
 });

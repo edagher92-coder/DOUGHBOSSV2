@@ -116,6 +116,7 @@ class DoughBoss_Customer_KDS_E2E_DB extends DB_Stub {
 require __DIR__ . '/../includes/class-doughboss-settings.php';
 require __DIR__ . '/../includes/class-doughboss-order.php';
 require __DIR__ . '/../includes/class-doughboss-cart.php';
+require __DIR__ . '/../includes/class-doughboss-staff-scope.php';
 require __DIR__ . '/../includes/class-doughboss-rest-controller.php';
 
 $passed = 0;

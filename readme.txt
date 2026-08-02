@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.30.0
+Stable tag: 2.32.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,21 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.32.0 =
+* Requires the same eligible .edu or .edu.au student email twice before a student voucher is allocated, with server-side domain, daily-cap and duplicate-per-day enforcement.
+* Adds the polished public voucher journey and clarifies the secure Stripe-hosted handoff, automatic eligible Apple Pay/Google Pay presentation, card fallback and return-to-tracking journey.
+* Adds manager-only Revesby bulk table-QR preparation with printable/PDF and individual SVG output using the existing server-bound table-session architecture.
+* Scopes kitchen-only staff to their assigned location across feeds and every ticket action, with a safe single-shop legacy fallback and manager all-shop override.
+* Improves kitchen offline/stale-response handling, explicit payment states and unpaid-order warnings, while preserving duplicate-safe status transitions.
+* Routes POSPal pushes using the order location's configured store mapping and resumes catering Stripe confirmation safely after 3-D Secure redirects.
+* Fixes legacy menu imports so renamed pies update in place, documents all 34 canonical menu items and completes the final responsive WordPress UI/accessibility pass.
+
+= 2.31.0 =
+* Adds a manager-only catering quote workflow with server-derived AUD totals, deposits and balances that becomes immutable when payment preparation begins.
+* Hardens catering payment reconciliation against amount, currency, metadata, location and payment-attempt mismatches, including duplicate browser/webhook races.
+* Makes voucher daily caps fail closed when their concurrency lock is unavailable and restricts catalogue/package editing to DoughBoss managers.
+* Updates operational inbox defaults, complete uninstall cleanup, customer accessibility states, tracking compatibility and the production WordPress theme handoff.
 
 = 2.30.0 =
 * Integrates the approved dark-hero and wide cream-panel demo presentation directly into the WordPress Order Online page without changing the active theme or payment engine.
@@ -200,26 +215,7 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 
 = 2.23.1 =
 * Add an end-to-end customer tracking and versioned KDS lifecycle acceptance contract.
-* Persist POSPal's stable order number for safe positive reconciliation.
-* Quarantine ambiguous transport and success-without-order-number outcomes instead of blindly replaying them.
-* Add provider-readiness and behavioural POSPal outbox contracts to the strict verifier.
-* Add schema 1.16.0 for the indexed POSPal remote reference.
-
-= 2.23.0 =
-* Add a live-data WordPress SEO fallback, full social previews, and crawlable Menu and Catering landing pages.
-* Add a consent-gated Meta/TikTok commerce event bridge with a strict no-PII allowlist and simulated-demo isolation.
-* Replace the catering artwork with real-alpha menu-based mini manoush and pie compositions shared by the demo and WordPress.
-* Refine product motion into a replayable lift/explode/assemble sequence without scroll-direction reversal.
-
-= 2.22.2 =
-* Add the complete item-specific WordPress menu options from the reviewed demo, including Zaatar styles and mix, pizza sauces and crusts, pie sesame defaults, extras, removals, lemon and chilli.
-* Recalculate every selected option and price on the server before storing the cart line.
-* Import the corrected 33-item catalogue and ensure a fresh single-shop activation seeds the Revesby location.
-* Build and validate installable plugin ZIPs consistently across Windows, macOS and Linux.
-
-= 2.22.1 =
-* Add a WordPress-native browse-only launch mode with configurable "Online ordering coming soon" copy.
-* Keep menus and carts viewable while removing checkout, vouchers and browser payment initialization whenever ordering is closed.
+* Persist POSPal's stable order number for„Œ-¢Gß≤⁄Óù∆≠y“owser payment initialization whenever ordering is closed.
 * Default fresh installations to ordering closed and require an explicit owner action to accept orders.
 * Add `[doughboss_ordering_status]` for page builders, block pages and theme templates.
 * Add real plugin activation, menu import, shortcode, REST and checkout-gate tests on WordPress 6.0.9/PHP 7.4 and WordPress 7.0.2/PHP 8.4.
