@@ -41,6 +41,7 @@ check(catering.includes('href="#catering-enquiry"') && catering.includes('id="ca
 check(order.includes('dbf-page-hero--order') && order.includes('Checkout coming soon'), 'order page matches the premium demo direction while clearly marking checkout unavailable');
 check(order.includes('dbf-order-intro') && order.includes('dbf-order-readiness'), 'location and availability share a collision-safe responsive order introduction');
 check(themeStyle.includes('.dbf-order-intro') && themeStyle.includes('grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr)'), 'desktop order panels use one non-overlapping grid');
+check(themeStyle.includes('body.doughboss-order-page .dbf-order-intro .db-ordering-status') && themeStyle.includes('margin: 0 !important'), 'final theme neutralises the plugin legacy negative status margin so availability never overlaps the hero or location card');
 check(order.includes("if ( doughboss_final_ordering_open() )") && order.includes('[doughboss_shop_picker]'), 'shop selection and checkout controls remain gated by server-owned ordering state');
 check(order.includes('[doughboss_menu]'), 'browseable menu remains available while checkout is paused');
 check(trackAlias.includes("page-track-order.php"), 'existing /track/ page slug resolves to the live tracking experience');
