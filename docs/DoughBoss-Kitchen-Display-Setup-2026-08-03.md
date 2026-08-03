@@ -46,12 +46,15 @@ order feed; Wi-Fi can remain the fallback.
 
 - Main kitchen: https://doughboss.com.au/kitchen/?screen=make
 - Pass and pickup: https://doughboss.com.au/kitchen/?screen=pass
-- Catering display: https://doughboss.com.au/kitchen/?screen=catering
+- Catering production: https://doughboss.com.au/catering-kitchen/
 - Owner and manager overview: https://doughboss.com.au/management/
 
 These are not public boards. They use WordPress authentication, DoughBoss role
 capabilities, assigned-shop scope, REST nonces and the optional verified board
 link key. The screens are no-index and cannot be framed by another website.
+They are intentionally absent from the customer navigation. Existing devices
+bookmarked to `https://doughboss.com.au/kitchen/?screen=catering` remain
+compatible, but new catering devices should use the dedicated URL above.
 
 Create a dedicated WordPress kitchen user named **DoughBoss** with the
 DoughBoss Kitchen role and assign it only to the correct shop. Generate a new,

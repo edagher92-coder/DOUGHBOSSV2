@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.33.1
+Stable tag: 2.33.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,9 +23,10 @@ DoughBoss turns any WordPress site into a pizza/food ordering storefront. It add
 Everything is rendered through shortcodes and a small REST API; no theme changes are required.
 
 Kitchen staff can use the capability-gated, shop-scoped `/kitchen/` workspace,
-optimised for a 23.8-inch Full HD touch display. Managers can use the protected
-`/management/` overview. Both routes use the normal WordPress user and role
-system; no password or secret is stored in the plugin.
+optimised for a 23.8-inch Full HD touch display. Catering production uses the
+separate hidden `/catering-kitchen/` workspace, while managers use the protected
+`/management/` overview. Every staff route uses the normal WordPress user and
+role system; no password or secret is stored in the plugin.
 
 = Shortcodes =
 
@@ -74,6 +75,10 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.33.2 =
+* Adds a dedicated, hidden `/catering-kitchen/` production workspace while preserving existing `/kitchen/?screen=catering` bookmarks.
+* Sends no-index, no-cache and anti-framing protection before staff authentication redirects and keeps the catering URL out of the public theme and navigation.
 
 = 2.33.1 =
 * Makes one-time voucher pricing exclusive to a single immutable Stripe checkout attempt, preventing concurrent carts from paying with the same discount.

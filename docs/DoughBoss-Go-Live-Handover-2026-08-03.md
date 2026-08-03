@@ -76,11 +76,11 @@ Post-payment verification completed:
 | --- | --- | --- |
 | Main kitchen MAKE screen | https://doughboss.com.au/kitchen/?screen=make | DoughBoss Kitchen |
 | Pass and pickup | https://doughboss.com.au/kitchen/?screen=pass | DoughBoss Kitchen |
-| Catering screen | https://doughboss.com.au/kitchen/?screen=catering | DoughBoss Kitchen |
+| Catering production | https://doughboss.com.au/catering-kitchen/ | DoughBoss Kitchen |
 | Owner/manager overview | https://doughboss.com.au/management/ | DoughBoss Manager |
 | WordPress sign-in | https://doughboss.com.au/wp-login.php | Individual staff account |
 
-These workspaces are protected by WordPress authentication, DoughBoss capabilities, the assigned-shop scope and REST nonces. An optional kitchen board key can add a second control for a bookmarked kitchen URL. An unauthenticated request to either `/kitchen/` or `/management/` was verified to return a 302 redirect to WordPress sign-in.
+These workspaces are protected by WordPress authentication, DoughBoss capabilities, the assigned-shop scope and REST nonces. An optional kitchen board key can add a second control for a bookmarked kitchen URL. `/kitchen/`, `/catering-kitchen/` and `/management/` are intentionally absent from public navigation and send no-index, no-cache and anti-framing headers. An unauthenticated request redirects to the branded WordPress sign-in and returns to the requested staff workspace after authentication. The older `/kitchen/?screen=catering` bookmark remains compatible.
 
 Never place a shared administrator password on the kitchen computer. Create one individual Kitchen account with the **DoughBoss Kitchen** role and a separate owner account with the **DoughBoss Manager** role. The kitchen role can use the order board and voucher scanner without receiving full WordPress administration. The manager role can operate DoughBoss orders, menu, settings, vouchers and kitchen screens without being made a full WordPress administrator.
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * Standalone, capability-gated kitchen and management portals.
+ * Standalone, capability-gated kitchen, catering and management portals.
  *
  * @package DoughBoss
  */
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Portals {
 
-	const ROUTE_VERSION = '1';
+	const ROUTE_VERSION = '2';
 	const QUERY_VAR     = 'doughboss_portal';
 
 	/**
@@ -41,6 +41,7 @@ class DoughBoss_Portals {
 	 */
 	public function register_routes() {
 		add_rewrite_rule( '^kitchen/?$', 'index.php?' . self::QUERY_VAR . '=kitchen', 'top' );
+		add_rewrite_rule( '^catering-kitchen/?$', 'index.php?' . self::QUERY_VAR . '=catering-kitchen', 'top' );
 		add_rewrite_rule( '^management/?$', 'index.php?' . self::QUERY_VAR . '=management', 'top' );
 	}
 
@@ -75,9 +76,14 @@ class DoughBoss_Portals {
 	 */
 	public function render_requested_portal() {
 		$portal = sanitize_key( (string) get_query_var( self::QUERY_VAR ) );
-		if ( ! in_array( $portal, array( 'kitchen', 'management' ), true ) ) {
+		if ( ! in_array( $portal, array( 'kitchen', 'catering-kitchen', 'management' ), true ) ) {
 			return;
 		}
+
+		// Protect the response even when WordPress must first redirect the staff
+		// member to sign in. These workspaces are intentionally absent from the
+		// public navigation and must never be indexed, cached or framed.
+		$this->portal_headers();
 
 		if ( ! is_user_logged_in() ) {
 			auth_redirect();
@@ -86,6 +92,8 @@ class DoughBoss_Portals {
 
 		if ( 'kitchen' === $portal ) {
 			$this->render_kitchen();
+		} elseif ( 'catering-kitchen' === $portal ) {
+			$this->render_kitchen( 'catering' );
 		} else {
 			$this->render_management();
 		}
@@ -95,9 +103,10 @@ class DoughBoss_Portals {
 	/**
 	 * Render the touch-first kitchen display.
 	 *
+	 * @param string $forced_screen Optional route-owned screen mode.
 	 * @return void
 	 */
-	private function render_kitchen() {
+	private function render_kitchen( $forced_screen = '' ) {
 		if ( ! current_user_can( 'manage_doughboss_kds' ) && ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have permission to view the kitchen.', 'doughboss' ), esc_html__( 'Kitchen access required', 'doughboss' ), array( 'response' => 403 ) );
 		}
@@ -117,10 +126,15 @@ class DoughBoss_Portals {
 			wp_die( esc_html__( 'This kitchen link is missing or has an incorrect access key. Ask a manager for the bookmarked kitchen URL.', 'doughboss' ), esc_html__( 'Kitchen link required', 'doughboss' ), array( 'response' => 403 ) );
 		}
 
-		// The purchased 23.8-inch FHD station defaults to MAKE. The smaller second
-		// display can bookmark ?screen=catering without changing permissions.
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only presentation preference.
-		$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'make';
+		// The purchased 23.8-inch FHD station defaults to MAKE. Catering receives
+		// its own clean, bookmarkable route; the legacy ?screen=catering URL remains
+		// available for existing device bookmarks.
+		if ( '' !== $forced_screen ) {
+			$screen_mode = sanitize_key( $forced_screen );
+		} else {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only presentation preference.
+			$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'make';
+		}
 		if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass', 'catering' ), true ) ) {
 			$screen_mode = 'make';
 		}
@@ -149,7 +163,6 @@ class DoughBoss_Portals {
 			'mercure'    => DoughBoss_Mercure::js_config(),
 		);
 
-		$this->portal_headers();
 		$this->render_head( $titles[ $screen_mode ] . ' — DoughBoss', 'kitchen' );
 		?>
 		<body class="doughboss-standalone-portal doughboss-staff-kitchen">
@@ -192,7 +205,6 @@ class DoughBoss_Portals {
 		}
 
 		require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
-		$this->portal_headers();
 		$this->render_head( __( 'Management — DoughBoss', 'doughboss' ), 'management' );
 		?>
 		<body class="doughboss-standalone-portal doughboss-management-portal">
@@ -251,10 +263,14 @@ class DoughBoss_Portals {
 	private function render_portal_bar( $portal, $screen, $board_key ) {
 		$user = wp_get_current_user();
 		$kitchen_url = static function ( $target_screen ) use ( $board_key ) {
-			$args = array( 'screen' => $target_screen );
+			$args = array();
 			if ( '' !== $board_key ) {
 				$args['key'] = $board_key;
 			}
+			if ( 'catering' === $target_screen ) {
+				return $args ? add_query_arg( $args, home_url( '/catering-kitchen/' ) ) : home_url( '/catering-kitchen/' );
+			}
+			$args['screen'] = $target_screen;
 			return add_query_arg( $args, home_url( '/kitchen/' ) );
 		};
 		?>
@@ -339,6 +355,9 @@ class DoughBoss_Portals {
 		if ( false !== strpos( $redirect, '/kitchen/' ) ) {
 			return 'kitchen';
 		}
+		if ( false !== strpos( $redirect, '/catering-kitchen/' ) ) {
+			return 'catering-kitchen';
+		}
 		if ( false !== strpos( $redirect, '/management/' ) ) {
 			return 'management';
 		}
@@ -401,9 +420,13 @@ class DoughBoss_Portals {
 		if ( '' === $portal ) {
 			return $message;
 		}
-		$copy = 'kitchen' === $portal
-			? __( 'Kitchen staff sign-in. You will return directly to the live production board.', 'doughboss' )
-			: __( 'Owner and manager sign-in. You will return directly to the operations overview.', 'doughboss' );
+		if ( 'kitchen' === $portal ) {
+			$copy = __( 'Kitchen staff sign-in. You will return directly to the live production board.', 'doughboss' );
+		} elseif ( 'catering-kitchen' === $portal ) {
+			$copy = __( 'Catering team sign-in. You will return directly to the protected catering production board.', 'doughboss' );
+		} else {
+			$copy = __( 'Owner and manager sign-in. You will return directly to the operations overview.', 'doughboss' );
+		}
 		return '<p class="db-login-context" role="status">' . esc_html( $copy ) . '</p>' . $message;
 	}
 }

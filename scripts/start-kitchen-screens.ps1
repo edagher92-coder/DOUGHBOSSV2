@@ -6,8 +6,8 @@
  .DESCRIPTION
  This helper intentionally does not store a WordPress password or Order Board
  access key. Sign in to the low-privilege Kitchen account once in Chrome, then
- run this script. If an owner has enabled a Board access key, use the normal
- bookmarked URL as the BaseUrl parameter.
+ run this script. If an owner has enabled a Board access key, use the approved
+ bookmarked URLs as the BaseUrl and CateringUrl parameters.
 
  The physical screens must be set to "Extend these displays" in Windows and
  arranged left-to-right before use. Adjust the width/height parameters only if
@@ -16,6 +16,7 @@
 [CmdletBinding()]
 param(
 	[string]$BaseUrl = 'https://doughboss.com.au/kitchen/',
+	[string]$CateringUrl = 'https://doughboss.com.au/catering-kitchen/',
 	[int]$PrimaryScreenWidth = 1920,
 	[int]$PrimaryScreenHeight = 1080,
 	[int]$CateringScreenWidth = 1366,
@@ -34,7 +35,7 @@ if ( $chromeCandidates.Count -eq 0 ) {
 $chrome = $chromeCandidates[0]
 $separator = if ( $BaseUrl.Contains('?') ) { '&' } else { '?' }
 $makeUrl = "$BaseUrl${separator}screen=make"
-$cateringUrl = "$BaseUrl${separator}screen=catering"
+$cateringUrl = $CateringUrl
 
 # --kiosk removes browser chrome, while the two distinct URLs retain the
 # existing WordPress login, capability and optional Board-key gates.
