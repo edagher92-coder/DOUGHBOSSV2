@@ -478,7 +478,9 @@ class DoughBoss_Migrations {
 	 * @return void
 	 */
 	private static function upgrade_to_1_18_0() {
-		$post_type = DoughBoss_Post_Types::POST_TYPE;
+		// Keep the migration self-contained: isolated upgrade rehearsals load the
+		// migration runner without booting the post-type component first.
+		$post_type = 'doughboss_item';
 		$legacy_key = 'pizza-dough-boss-special';
 		$ids = get_posts(
 			array(
