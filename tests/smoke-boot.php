@@ -261,6 +261,7 @@ $board_routes = array(
 	'doughboss/v1/admin/order/(?P<id>\d+)/accept',
 	'doughboss/v1/admin/preorder-requests',
 	'doughboss/v1/admin/preorder/(?P<id>\d+)/decision',
+	'doughboss/v1/admin/catering-board',
 );
 foreach ( $board_routes as $board_route ) {
 	$permission = $GLOBALS['__db_rest_args'][ $board_route ]['permission_callback'] ?? null;
@@ -268,9 +269,9 @@ foreach ( $board_routes as $board_route ) {
 }
 // A real count check, not just ">0", so a route silently failing to register
 // would fail this. Includes table context plus the public request and two
-// board-authorised morning-review routes, the manager-only catering quote
-// endpoint, and the MPGS notification webhook.
-ok( 55 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, custom quotes, and pre-order review (' . count( $routes ) . ' routes, expected 55)' );
+// board-authorised morning-review and catering-production routes, the
+// manager-only catering quote endpoint, and the MPGS notification webhook.
+ok( 56 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, custom quotes, pre-order review, and catering production (' . count( $routes ) . ' routes, expected 56)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
