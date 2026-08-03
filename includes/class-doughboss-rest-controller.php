@@ -269,6 +269,10 @@ class DoughBoss_REST_Controller {
 						'default'           => '',
 						'sanitize_callback' => 'sanitize_email',
 					),
+					'customer_email_confirmation' => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_email',
+					),
 				),
 			)
 		);
@@ -1026,6 +1030,25 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		// Read-only, shop-scoped catering production feed. It intentionally
+		// shares the KDS access boundary but not the manager-only lifecycle
+		// mutation endpoint below.
+		register_rest_route(
+			$ns,
+			'/admin/catering-board',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_catering_board' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
+				'args'                => array(
+					'location_id' => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
 		register_rest_route(
 			$ns,
 			'/admin/catering/(?P<id>\d+)/status',
@@ -1038,6 +1061,21 @@ class DoughBoss_REST_Controller {
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_key',
 					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/admin/catering/(?P<id>\d+)/quote',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_update_catering_quote' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'subtotal'     => array( 'required' => true ),
+					'delivery_fee' => array( 'required' => true ),
+					'deposit_pct'  => array( 'required' => true ),
 				),
 			)
 		);
@@ -1224,6 +1262,10 @@ class DoughBoss_REST_Controller {
 		// kitchen bookmark. The optional second gate is for KDS-only staff accounts.
 		if ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) {
 			return true;
+		}
+		$location_scope = DoughBoss_Staff_Scope::current_location_id();
+		if ( is_wp_error( $location_scope ) ) {
+			return $location_scope;
 		}
 		if ( '' === DoughBoss_Settings::board_access_key() ) {
 			return true;
@@ -2178,12 +2220,15 @@ class DoughBoss_REST_Controller {
 	 */
 	public function auth_me() {
 		$user = wp_get_current_user();
+		$location_scope = current_user_can( 'manage_doughboss_kds' ) ? DoughBoss_Staff_Scope::current_location_id() : 0;
 		return rest_ensure_response(
 			array(
 				'name'       => $user ? $user->display_name : '',
 				'can_redeem' => current_user_can( 'redeem_doughboss_vouchers' ) || current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
 				'can_manage' => current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
 				'can_board'  => current_user_can( 'manage_doughboss_kds' ) || current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ),
+				'location_id'=> is_wp_error( $location_scope ) ? 0 : (int) $location_scope,
+				'location_assignment_required' => is_wp_error( $location_scope ),
 				'currency'   => DoughBoss_Settings::get( 'currency_symbol', '$' ),
 			)
 		);
@@ -2324,6 +2369,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'customer_phone' => $request->get_param( 'customer_phone' ),
 				'customer_email' => $request->get_param( 'customer_email' ),
+				'customer_email_confirmation' => $request->get_param( 'customer_email_confirmation' ),
 			)
 		);
 		if ( is_wp_error( $result ) ) {
@@ -2756,6 +2802,7 @@ class DoughBoss_REST_Controller {
 			'spinach-deluxe'          => 'spinach-deluxe.webp',
 			'veggie-plus'             => 'veggie-plus.webp',
 			'pepperoni-cheese'        => 'pepperoni-cheese.webp',
+			'sujuk-special'           => 'dough-boss-special.webp',
 			'dough-boss-special'      => 'dough-boss-special.webp',
 			'chicken-cheese'          => 'chicken-cheese.webp',
 			'bbq-chicken'             => 'bbq-chicken.webp',
@@ -3666,12 +3713,19 @@ class DoughBoss_REST_Controller {
 	public function admin_update_status( WP_REST_Request $request ) {
 		$order_id = absint( $request->get_param( 'id' ) );
 		$status   = sanitize_key( $request->get_param( 'status' ) );
-		$order    = DoughBoss_Order::get( $order_id );
-		if ( $order && DoughBoss_Order::is_preorder_request( $order ) ) {
-			return new WP_Error( 'doughboss_preorder_decision_required', __( 'Use the pre-order review decision after calling the customer to arrange pickup timing.', 'doughboss' ), array( 'status' => 409 ) );
-		}
+		// Kitchen accounts can never cancel an order, regardless of shop scope.
+		// Enforce that role boundary before resolving an order so an unassigned
+		// device cannot receive a weaker location error for a forbidden action.
 		if ( 'cancelled' === $status && ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
 			return new WP_Error( 'doughboss_cancel_forbidden', __( 'A manager must cancel an order.', 'doughboss' ), array( 'status' => 403 ) );
+		}
+		$order    = DoughBoss_Order::get( $order_id );
+		$location_access = DoughBoss_Staff_Scope::can_access_order( $order );
+		if ( is_wp_error( $location_access ) ) {
+			return $location_access;
+		}
+		if ( $order && DoughBoss_Order::is_preorder_request( $order ) ) {
+			return new WP_Error( 'doughboss_preorder_decision_required', __( 'Use the pre-order review decision after calling the customer to arrange pickup timing.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		$result   = DoughBoss_Order::transition(
 			$order_id,
@@ -3700,7 +3754,10 @@ class DoughBoss_REST_Controller {
 		// No status/history filter: preserve the existing live-board behaviour
 		// exactly (active orders only, oldest first, location-scoped).
 		if ( '' === $status && ! $history ) {
-			$location_id = absint( $request->get_param( 'location_id' ) );
+			$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+			if ( is_wp_error( $location_id ) ) {
+				return $location_id;
+			}
 			return rest_ensure_response(
 				array(
 					'data'        => DoughBoss_Order::active_orders( 100, $location_id ),
@@ -3744,7 +3801,12 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function admin_acknowledge( WP_REST_Request $request ) {
-		DoughBoss_Order::acknowledge( absint( $request->get_param( 'id' ) ) );
+		$order_id = absint( $request->get_param( 'id' ) );
+		$access = DoughBoss_Staff_Scope::can_access_order( DoughBoss_Order::get( $order_id ) );
+		if ( is_wp_error( $access ) ) {
+			return $access;
+		}
+		DoughBoss_Order::acknowledge( $order_id );
 		return rest_ensure_response( array( 'success' => true ) );
 	}
 
@@ -3757,6 +3819,10 @@ class DoughBoss_REST_Controller {
 	public function admin_accept( WP_REST_Request $request ) {
 		$order_id = absint( $request->get_param( 'id' ) );
 		$order    = DoughBoss_Order::get( $order_id );
+		$location_access = DoughBoss_Staff_Scope::can_access_order( $order );
+		if ( is_wp_error( $location_access ) ) {
+			return $location_access;
+		}
 		if ( $order && DoughBoss_Order::is_preorder_request( $order ) ) {
 			return new WP_Error( 'doughboss_preorder_decision_required', __( 'Use the pre-order review decision after calling the customer to arrange pickup timing.', 'doughboss' ), array( 'status' => 409 ) );
 		}
@@ -3782,7 +3848,10 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function admin_preorder_requests( WP_REST_Request $request ) {
-		$location_id = absint( $request->get_param( 'location_id' ) );
+		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
+		}
 		$per_page    = min( 200, max( 1, absint( $request->get_param( 'per_page' ) ) ) );
 		$requests = DoughBoss_Order::preorder_requests( $per_page, $location_id );
 		foreach ( $requests as &$preorder ) {
@@ -3813,6 +3882,10 @@ class DoughBoss_REST_Controller {
 		$order_id = absint( $request->get_param( 'id' ) );
 		$decision = sanitize_key( $request->get_param( 'decision' ) );
 		$order    = DoughBoss_Order::get( $order_id );
+		$location_access = DoughBoss_Staff_Scope::can_access_order( $order );
+		if ( is_wp_error( $location_access ) ) {
+			return $location_access;
+		}
 		if ( ! $order || ! DoughBoss_Order::is_preorder_request( $order ) ) {
 			return new WP_Error( 'doughboss_preorder_not_found', __( 'That pre-order request is no longer awaiting review.', 'doughboss' ), array( 'status' => 404 ) );
 		}
@@ -4005,6 +4078,63 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * GET /admin/catering-board — committed jobs for the catering display.
+	 *
+	 * The response omits email addresses and provider identifiers. KDS-only
+	 * accounts are forced to their assigned shop by the same server-side scope
+	 * used for ordinary kitchen orders.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_catering_board( WP_REST_Request $request ) {
+		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
+		}
+
+		$statuses = DoughBoss_Catering::statuses();
+		$rows     = DoughBoss_Catering::production_queue( $location_id, 100 );
+		$data     = array_map(
+			static function ( $row ) use ( $statuses ) {
+				$package = (int) $row['package_id'] ? get_the_title( (int) $row['package_id'] ) : __( 'Custom catering', 'doughboss' );
+				$status  = sanitize_key( (string) $row['status'] );
+				return array(
+					'id'              => (int) $row['id'],
+					'enquiry_number'  => sanitize_text_field( (string) $row['enquiry_number'] ),
+					'location_id'     => (int) $row['location_id'],
+					'package_name'    => sanitize_text_field( (string) $package ),
+					'status'          => $status,
+					'status_label'    => isset( $statuses[ $status ] ) ? $statuses[ $status ] : $status,
+					'customer_name'   => sanitize_text_field( (string) $row['customer_name'] ),
+					'customer_phone'  => sanitize_text_field( (string) $row['customer_phone'] ),
+					'event_date'      => sanitize_text_field( (string) $row['event_date'] ),
+					'event_time'      => sanitize_text_field( (string) $row['event_time'] ),
+					'guest_count'     => (int) $row['guest_count'],
+					'order_type'      => sanitize_key( (string) $row['order_type'] ),
+					'address'         => sanitize_textarea_field( (string) $row['address'] ),
+					'dietary'         => sanitize_textarea_field( (string) $row['dietary'] ),
+					'notes'           => sanitize_textarea_field( (string) $row['notes'] ),
+					'quote_total'     => (float) $row['quote_total'],
+					'deposit_amount'  => (float) $row['deposit_amount'],
+					'balance_amount'  => (float) $row['balance_amount'],
+					'currency'        => sanitize_text_field( (string) $row['currency'] ),
+					'created_at'      => sanitize_text_field( (string) $row['created_at'] ),
+					'updated_at'      => sanitize_text_field( (string) $row['updated_at'] ),
+				);
+			},
+			$rows
+		);
+
+		return rest_ensure_response(
+			array(
+				'data'        => $data,
+				'server_time' => current_time( 'mysql', true ),
+			)
+		);
+	}
+
+	/**
 	 * POST /admin/catering/{id}/status — staff lifecycle update for an enquiry.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -4022,6 +4152,40 @@ class DoughBoss_REST_Controller {
 			array(
 				'success' => true,
 				'status'  => $status,
+			)
+		);
+	}
+
+	/**
+	 * POST /admin/catering/{id}/quote — manager-only custom quote update.
+	 *
+	 * The client supplies staff-authored components only. DoughBoss validates
+	 * them and derives the locked total, deposit, balance and AUD currency.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_update_catering_quote( WP_REST_Request $request ) {
+		$result = DoughBoss_Catering::set_custom_quote(
+			absint( $request->get_param( 'id' ) ),
+			$request->get_param( 'subtotal' ),
+			$request->get_param( 'delivery_fee' ),
+			$request->get_param( 'deposit_pct' )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return rest_ensure_response(
+			array(
+				'success'        => true,
+				'status'         => (string) $result['status'],
+				'subtotal'       => (float) $result['subtotal'],
+				'delivery_fee'   => (float) $result['delivery_fee'],
+				'total'          => (float) $result['quote_total'],
+				'deposit_amount' => (float) $result['deposit_amount'],
+				'balance_amount' => (float) $result['balance_amount'],
+				'currency'       => (string) $result['currency'],
 			)
 		);
 	}
@@ -4048,12 +4212,63 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $enquiry ) ) {
 			return $enquiry;
 		}
+		$enquiry_id = (int) $enquiry['id'];
+		if ( ! DoughBoss_Catering::acquire_quote_lock( $enquiry_id ) ) {
+			return new WP_Error( 'doughboss_catering_payment_busy', __( 'This enquiry is busy. Please wait a moment and try again.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+
+		try {
+			return $this->catering_payment_intent_locked( $request, $enquiry_id );
+		} finally {
+			DoughBoss_Catering::release_quote_lock( $enquiry_id );
+		}
+	}
+
+	/**
+	 * Prepare a catering payment while holding the enquiry quote lock.
+	 *
+	 * @param WP_REST_Request $request    Request.
+	 * @param int             $enquiry_id Verified enquiry ID.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function catering_payment_intent_locked( WP_REST_Request $request, $enquiry_id ) {
+		$enquiry = DoughBoss_Catering::get( $enquiry_id );
+		if ( ! $enquiry ) {
+			return new WP_Error( 'doughboss_catering_missing', __( 'That catering enquiry could not be found.', 'doughboss' ), array( 'status' => 404 ) );
+		}
 
 		$leg    = self::catering_leg( $request->get_param( 'leg' ) );
 		$amount = DoughBoss_Catering::leg_amount( $enquiry, $leg );
+		$stored = DoughBoss_Catering::LEG_BALANCE === $leg ? (string) $enquiry['balance_intent_id'] : (string) $enquiry['deposit_intent_id'];
 
 		if ( DoughBoss_Catering::is_paid( $enquiry, $leg ) ) {
 			return new WP_Error( 'doughboss_pay_done', __( 'That payment has already been made.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( '' !== $stored ) {
+			if ( 'stripe' === DoughBoss_Settings::payment_gateway() ) {
+				$existing = DoughBoss_Payment::retrieve_payment_intent( $stored );
+				if ( is_wp_error( $existing ) ) {
+					return $existing;
+				}
+				if ( empty( $existing['client_secret'] ) || ! $this->catering_payment_matches( $enquiry, $leg, $stored, $existing ) ) {
+					return new WP_Error( 'doughboss_pay_mismatch', __( 'The prepared payment no longer matches this quote.', 'doughboss' ), array( 'status' => 409 ) );
+				}
+				$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $stored );
+				return rest_ensure_response(
+					array(
+						'client_secret'   => (string) $existing['client_secret'],
+						'payment_intent'  => $stored,
+						'publishable_key' => DoughBoss_Payment::publishable_key(),
+						'amount'          => isset( $existing['amount'] ) ? (int) $existing['amount'] : 0,
+						'currency'        => isset( $existing['currency'] ) ? strtolower( (string) $existing['currency'] ) : '',
+						'leg'             => $leg,
+						'gateway'         => 'stripe',
+						'live_mode'       => false,
+						'attempt_id'      => $attempt ? (int) $attempt['id'] : 0,
+					)
+				);
+			}
+			return new WP_Error( 'doughboss_pay_prepared', __( 'That payment is already prepared. Please contact us if you need a new payment session.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		if ( DoughBoss_Catering::LEG_BALANCE === $leg && ! DoughBoss_Catering::is_paid( $enquiry, DoughBoss_Catering::LEG_DEPOSIT ) ) {
 			return new WP_Error( 'doughboss_pay_seq', __( 'The deposit must be paid before the balance.', 'doughboss' ), array( 'status' => 409 ) );
@@ -4096,7 +4311,9 @@ class DoughBoss_REST_Controller {
 		// reconcile_catering_intent()'s webhook-based lookup permanently unable
 		// to match this leg once the short-lived metadata transient expires. See
 		// DoughBoss_Tyro::canonical_id() and the same fix in verify_payment().
-		DoughBoss_Catering::set_intent( (int) $enquiry['id'], $leg, DoughBoss_Payment::canonical_id( $intent['id'] ) );
+		if ( ! DoughBoss_Catering::set_intent( (int) $enquiry['id'], $leg, DoughBoss_Payment::canonical_id( $intent['id'] ) ) ) {
+			return new WP_Error( 'doughboss_pay_store', __( 'Payment preparation could not be stored safely. Please contact us before retrying.', 'doughboss' ), array( 'status' => 503 ) );
+		}
 
 		return rest_ensure_response(
 			array(
@@ -4160,13 +4377,9 @@ class DoughBoss_REST_Controller {
 			return $intent;
 		}
 
-		$expected = DoughBoss_Payment::to_minor_units( DoughBoss_Catering::leg_amount( $enquiry, $leg ) );
-		$currency = strtolower( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) );
 		$status   = isset( $intent['status'] ) ? $intent['status'] : '';
-		$amount   = isset( $intent['amount'] ) ? (int) $intent['amount'] : 0;
-		$cur      = isset( $intent['currency'] ) ? strtolower( $intent['currency'] ) : '';
 
-		if ( 'succeeded' !== $status || $amount !== $expected || $cur !== $currency ) {
+		if ( 'succeeded' !== $status || ! $this->catering_payment_matches( $enquiry, $leg, $stored, $intent ) ) {
 			// Do not claim an automatic reversal: nothing in this plugin refunds a
 			// payment automatically today. Point the customer at a human instead
 			// of a false promise.
@@ -4596,15 +4809,73 @@ class DoughBoss_REST_Controller {
 	 * @return bool
 	 */
 	private function reconcile_catering_intent( array $obj, array $meta ) {
-		$leg     = self::catering_leg( isset( $meta['leg'] ) ? $meta['leg'] : 'deposit' );
-		$enquiry = ! empty( $obj['id'] ) ? DoughBoss_Catering::find_by_intent( $obj['id'] ) : null;
+		$raw_leg = isset( $meta['leg'] ) ? sanitize_key( (string) $meta['leg'] ) : '';
+		if ( ! in_array( $raw_leg, array( DoughBoss_Catering::LEG_DEPOSIT, DoughBoss_Catering::LEG_BALANCE ), true ) ) {
+			return false;
+		}
+		$leg     = self::catering_leg( $raw_leg );
+		$intent_id = ! empty( $obj['id'] ) ? sanitize_text_field( (string) $obj['id'] ) : '';
+		$enquiry = '' !== $intent_id ? DoughBoss_Catering::find_by_intent( $intent_id ) : null;
 		if ( ! $enquiry && ! empty( $meta['enquiry_id'] ) ) {
 			$enquiry = DoughBoss_Catering::get( (int) $meta['enquiry_id'] );
 		}
-		if ( ! $enquiry ) {
+		if ( ! $enquiry || ! $this->catering_payment_matches( $enquiry, $leg, $intent_id, $obj ) ) {
 			return false;
 		}
 		return DoughBoss_Catering::mark_paid( (int) $enquiry['id'], $leg );
+	}
+
+	/**
+	 * Verify a catering payment against both the enquiry and its immutable
+	 * durable payment attempt before any paid-state transition is allowed.
+	 *
+	 * The signed provider object is necessary but not sufficient: the amount,
+	 * currency, leg, enquiry, location and stored provider reference must all be
+	 * the exact values DoughBoss recorded when the payment was created.
+	 *
+	 * @param array<string,mixed> $enquiry           Catering enquiry row.
+	 * @param string              $leg               deposit or balance.
+	 * @param string              $provider_reference Canonical provider reference.
+	 * @param array<string,mixed> $payment            Retrieved/signed provider object.
+	 * @return bool
+	 */
+	private function catering_payment_matches( array $enquiry, $leg, $provider_reference, array $payment ) {
+		$leg                = self::catering_leg( $leg );
+		$provider_reference = sanitize_text_field( (string) $provider_reference );
+		$stored_reference   = DoughBoss_Catering::LEG_BALANCE === $leg
+			? (string) $enquiry['balance_intent_id']
+			: (string) $enquiry['deposit_intent_id'];
+		$expected_amount    = DoughBoss_Payment::to_minor_units( DoughBoss_Catering::leg_amount( $enquiry, $leg ) );
+		$expected_currency  = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $enquiry['currency'] ) );
+		$is_succeeded       = isset( $payment['status'] ) && 'succeeded' === sanitize_key( (string) $payment['status'] );
+		$amount             = $is_succeeded && isset( $payment['amount_received'] )
+			? absint( $payment['amount_received'] )
+			: ( isset( $payment['amount'] ) ? absint( $payment['amount'] ) : -1 );
+		$currency           = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) ( isset( $payment['currency'] ) ? $payment['currency'] : '' ) ) );
+		$metadata           = isset( $payment['metadata'] ) && is_array( $payment['metadata'] ) ? $payment['metadata'] : array();
+		$attempt            = DoughBoss_Payment_Attempts::find_by_provider_reference( $provider_reference );
+
+		if (
+			'' === $provider_reference
+			|| ! hash_equals( $stored_reference, $provider_reference )
+			|| $expected_amount < 1
+			|| $amount !== $expected_amount
+			|| $currency !== $expected_currency
+			|| ! $attempt
+			|| (int) $attempt['amount_minor'] !== $expected_amount
+			|| strtoupper( (string) $attempt['currency'] ) !== $expected_currency
+			|| (int) $attempt['location_id'] !== (int) $enquiry['location_id']
+			|| 'catering' !== (string) $attempt['context']
+			|| ( DoughBoss_Catering::LEG_BALANCE === $leg ? 'catering_balance' : 'catering_deposit' ) !== (string) $attempt['purpose']
+			|| (int) ( isset( $metadata['enquiry_id'] ) ? $metadata['enquiry_id'] : 0 ) !== (int) $enquiry['id']
+			|| sanitize_text_field( (string) ( isset( $metadata['enquiry_number'] ) ? $metadata['enquiry_number'] : '' ) ) !== (string) $enquiry['enquiry_number']
+			|| sanitize_key( (string) ( isset( $metadata['context'] ) ? $metadata['context'] : '' ) ) !== 'catering'
+			|| sanitize_key( (string) ( isset( $metadata['leg'] ) ? $metadata['leg'] : '' ) ) !== $leg
+		) {
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

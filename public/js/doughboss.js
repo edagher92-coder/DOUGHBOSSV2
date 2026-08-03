@@ -456,7 +456,7 @@
 			initCartFab(root);
 		}).catch(function (err) {
 			root.innerHTML = '';
-			root.appendChild(el('p', { class: 'db-error', text: err.message }));
+			root.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
 		});
 	}
 
@@ -748,7 +748,7 @@
 			refreshPrice();
 		}).catch(function (err) {
 			root.innerHTML = '';
-			root.appendChild(el('p', { class: 'db-error', text: err.message }));
+			root.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
 		});
 	}
 
@@ -821,7 +821,7 @@
 				cartRegion.innerHTML = '';
 				checkoutRegion.innerHTML = '';
 				checkoutEl = null;
-				cartRegion.appendChild(el('p', { class: 'db-error', text: err.message }));
+				cartRegion.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
 			});
 		}
 
@@ -1312,12 +1312,19 @@
 			])
 		]));
 
+		var stripeNoticeTotal = null;
 		if (stripeHosted) {
+			stripeNoticeTotal = el('strong', { class: 'db-stripe-notice-total', text: money(totals && totals.total) + ' AUD' });
 			form.appendChild(el('div', { class: 'db-stripe-checkout-notice', role: 'note' }, [
-				el('span', { class: 'db-secure-lock', 'aria-hidden': 'true', text: '⌁' }),
+				el('span', { class: 'db-secure-lock', 'aria-hidden': 'true', text: '✓' }),
 				el('div', {}, [
 					el('strong', { text: 'Secure checkout powered by Stripe' }),
-					el('span', { text: 'Apple Pay or Google Pay appears first when it is available on your device. Card is always available as the secure fallback.' }),
+					el('span', { text: 'Continue to Stripe to review and pay ' }, [stripeNoticeTotal]),
+					el('ul', { class: 'db-stripe-checkout-points' }, [
+						el('li', { text: 'Apple Pay or Google Pay is offered automatically when eligible' }),
+						el('li', { text: 'Card is always available; DoughBoss never stores your card details' }),
+						el('li', { text: 'You return here for your order number, receipt and live tracking' })
+					]),
 					el('span', { class: 'db-payment-methods', text: 'Apple Pay  ·  Google Pay  ·  Card' })
 				])
 			]));
@@ -1687,6 +1694,7 @@
 			var itemCount = Number(totals && (totals.item_count || totals.quantity) || 0);
 			summaryCount.textContent = itemCount ? itemCount + (itemCount === 1 ? ' item' : ' items') : 'Review your items and total';
 			summaryTotal.textContent = money(totals && totals.total);
+			if (stripeNoticeTotal) { stripeNoticeTotal.textContent = money(totals && totals.total) + ' AUD'; }
 			// Do not replace an in-flight payment or order confirmation label.
 			if (!submit.disabled) { submit.textContent = payLabel; }
 		}
@@ -1958,7 +1966,7 @@
 				})
 				.catch(function (err) {
 					result.innerHTML = '';
-					result.appendChild(el('p', { class: 'db-error', text: err.message }));
+					result.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
 				})
 				.then(function () {
 					form.setAttribute('aria-busy', 'false');

@@ -38,10 +38,11 @@ $wp_css   = file_get_contents( $root . '/public/css/doughboss-manoush-hero.css' 
 $wp_js    = file_get_contents( $root . '/public/js/doughboss-manoush-hero.js' );
 
 $catering_assets = array(
-	'catering-zaatar-cutout-v2.webp',
-	'catering-cheese-cutout-v2.webp',
-	'catering-pies-v3.webp',
-	'catering-fresh-cutout-v2.webp',
+	'hero-meat-manoush-v4.webp',
+	'hero-folded-zaatar-v4.webp',
+	'hero-cheese-manoush-v4.webp',
+	'hero-spinach-fatayer-v4.webp',
+	'hero-chicken-wrap-v4.webp',
 );
 $menu_varieties = array(
 	'Mini zaatar',
@@ -97,7 +98,7 @@ catering_parity_ok(
 		&& false === strpos( $demo_css, '.hero-manoush .ingredient-burst{display:none' ),
 	'homepage and menu food stages remain visible on mobile'
 );
-catering_parity_ok( false !== strpos( $wp_css, '@media (max-width:720px)' ) && false !== strpos( $wp_css, '.db-mh-stage,.db-mh-world { min-height: 285px; }' ) && false === strpos( $wp_css, '.db-mh-stage { display: none' ), 'WordPress keeps the composition visible on mobile' );
+catering_parity_ok( false !== strpos( $wp_css, '@media (max-width:720px)' ) && false !== strpos( $wp_css, '.db-mh-stage,.db-mh-world { min-height: 305px; }' ) && false === strpos( $wp_css, '.db-mh-stage { display: none' ), 'WordPress keeps the composition visible on mobile' );
 catering_parity_ok( false === strpos( $demo_js, "classList.toggle('is-exploded'") && false === strpos( $demo_js, "classList.toggle('is-assembled'") && false === strpos( $demo_js, 'direction = currentY' ), 'demo scroll handler does not toggle assembly states' );
 catering_parity_ok( false === strpos( $wp_js, "classList.toggle('is-exploded'") && false === strpos( $wp_js, "classList.toggle('is-assembled'") && false === strpos( $wp_js, 'direction = currentY' ), 'WordPress scroll handler does not toggle assembly states' );
 

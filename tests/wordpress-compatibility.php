@@ -22,7 +22,7 @@ function doughboss_wp_compat_assert( $condition, $label ) {
 }
 
 doughboss_wp_compat_assert( defined( 'DOUGHBOSS_VERSION' ), 'plugin bootstrap is active' );
-doughboss_wp_compat_assert( '1.17.0' === get_option( 'doughboss_db_version' ), 'database schema activated at 1.17.0' );
+doughboss_wp_compat_assert( '1.18.0' === get_option( 'doughboss_db_version' ), 'database schema activated at 1.18.0' );
 doughboss_wp_compat_assert( DoughBoss_Activator::pospal_outbox_storage_ready(), 'POSPal remote-reference reconciliation storage is ready' );
 doughboss_wp_compat_assert( ! DoughBoss_Settings::ordering_open(), 'fresh WordPress install starts in browse-only mode' );
 doughboss_wp_compat_assert( false !== stripos( DoughBoss_Settings::ordering_closed_message(), 'coming soon' ), 'Coming Soon copy is available' );
@@ -33,11 +33,42 @@ $notice = do_shortcode( '[doughboss_ordering_status]' );
 doughboss_wp_compat_assert( false !== stripos( $notice, 'Online ordering coming soon' ), 'server-rendered page shows the launch notice' );
 doughboss_wp_compat_assert( false !== stripos( $notice, 'role="status"' ), 'launch notice is accessible' );
 
+$legacy_special_id = wp_insert_post(
+	array(
+		'post_type'    => DoughBoss_Post_Types::POST_TYPE,
+		'post_status'  => 'publish',
+		'post_title'   => 'Dough Boss Special',
+		'post_name'    => 'dough-boss-special',
+		'post_content' => 'Pepperoni, tomato, mushroom, capsicum, onion, black olives & cheese on a tomato base.',
+	),
+	true
+);
+doughboss_wp_compat_assert( ! is_wp_error( $legacy_special_id ) && 0 < $legacy_special_id, 'legacy seeded pizza fixture is created' );
+update_post_meta( $legacy_special_id, '_doughboss_seed', 'v1' );
+update_post_meta( $legacy_special_id, '_doughboss_seed_key', 'pizza-dough-boss-special' );
+update_option( 'doughboss_db_version', '1.17.0' );
+DoughBoss_Migrations::run();
+$renamed_special = get_post( $legacy_special_id );
+doughboss_wp_compat_assert( '1.18.0' === get_option( 'doughboss_db_version' ), 'menu rename migration checkpoints schema 1.18.0' );
+doughboss_wp_compat_assert( $renamed_special instanceof WP_Post && 'Sujuk Special' === $renamed_special->post_title, 'legacy pizza is renamed on the same WordPress post' );
+doughboss_wp_compat_assert( 'sujuk-special' === $renamed_special->post_name, 'legacy pizza receives the canonical Sujuk slug' );
+doughboss_wp_compat_assert( 'pizza-sujuk-special' === get_post_meta( $legacy_special_id, '_doughboss_seed_key', true ), 'legacy pizza receives the canonical stable seed key' );
+
 $seed = DoughBoss_Menu_Seeder::seed();
 doughboss_wp_compat_assert( 0 < (int) $seed['total'], 'corrected menu imports into WordPress' );
 doughboss_wp_compat_assert( 0 < (int) wp_count_posts( DoughBoss_Post_Types::POST_TYPE )->publish, 'published menu products exist' );
 doughboss_wp_compat_assert( 0 < (int) get_page_by_title( 'Dough Boss Pie', OBJECT, DoughBoss_Post_Types::POST_TYPE )->ID, 'Dough Boss Pie exists in WordPress' );
 doughboss_wp_compat_assert( 0 < (int) get_page_by_title( 'Zaatar Veggie Pizza', OBJECT, DoughBoss_Post_Types::POST_TYPE )->ID, 'Zaatar Veggie Pizza exists in WordPress' );
+$sujuk_specials = get_posts(
+	array(
+		'post_type'      => DoughBoss_Post_Types::POST_TYPE,
+		'post_status'    => 'any',
+		'posts_per_page' => 2,
+		'fields'         => 'ids',
+		'title'          => 'Sujuk Special',
+	)
+);
+doughboss_wp_compat_assert( array( $legacy_special_id ) === array_map( 'intval', $sujuk_specials ), 'menu import keeps exactly one Sujuk Special with the original product ID' );
 
 $config = rest_do_request( new WP_REST_Request( 'GET', '/doughboss/v1/config' ) );
 doughboss_wp_compat_assert( 200 === $config->get_status(), 'WordPress REST configuration endpoint responds' );

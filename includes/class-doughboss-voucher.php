@@ -464,6 +464,9 @@ class DoughBoss_Voucher {
 				'daily_cap' => 100,
 				'cap_group' => 'student',
 				'scope'     => 'both',
+				// Student offers are allocated only after the same eligible
+				// education email has been entered twice. claim() rechecks this.
+				'requires_student_email' => 1,
 				'active'    => 1,
 			),
 			// Backwards-compat alias: any voucher code issued under the retired
@@ -483,6 +486,61 @@ class DoughBoss_Voucher {
 				'scope'     => 'both',
 				'active'    => 0,
 			),
+		);
+	}
+
+	/**
+	 * Whether a campaign is a student offer that requires an education email.
+	 *
+	 * The student cap group is always protected, even when an older owner-saved
+	 * campaign definition predates the requires_student_email flag.
+	 *
+	 * @param array $campaign Campaign definition.
+	 * @return bool
+	 */
+	public static function campaign_requires_student_email( array $campaign ) {
+		return ! empty( $campaign['requires_student_email'] )
+			|| ( isset( $campaign['cap_group'] ) && 'student' === sanitize_key( $campaign['cap_group'] ) );
+	}
+
+	/**
+	 * Validate an education email without accepting lookalike domains.
+	 *
+	 * @param string $email Candidate address.
+	 * @return bool
+	 */
+	public static function eligible_student_email( $email ) {
+		$email = strtolower( sanitize_email( (string) $email ) );
+		if ( '' === $email || ! is_email( $email ) ) {
+			return false;
+		}
+
+		$at = strrpos( $email, '@' );
+		if ( false === $at ) {
+			return false;
+		}
+		$domain = substr( $email, $at + 1 );
+		return 1 === preg_match( '/(?:^|\.)edu(?:\.au)?$/i', $domain );
+	}
+
+	/**
+	 * Whether this student email already received this campaign today.
+	 *
+	 * @param string $slug  Campaign slug.
+	 * @param string $email Canonical education email.
+	 * @return bool
+	 */
+	private static function student_email_claimed_today( $slug, $email ) {
+		global $wpdb;
+		$table = self::table();
+		$start = current_time( 'Y-m-d' ) . ' 00:00:00';
+		return (bool) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE campaign = %s AND LOWER(customer_email) = %s AND created_at >= %s LIMIT 1",
+				sanitize_key( $slug ),
+				strtolower( sanitize_email( $email ) ),
+				$start
+			)
 		);
 	}
 
@@ -562,18 +620,56 @@ class DoughBoss_Voucher {
 		$campaign = $campaigns[ $slug ];
 		$cap      = (int) ( isset( $campaign['daily_cap'] ) ? $campaign['daily_cap'] : 0 );
 
+		// Student vouchers require the same eligible education email twice. Keep
+		// this in the model so REST, CLI and any future UI cannot bypass it.
+		$student_email = '';
+		if ( self::campaign_requires_student_email( $campaign ) ) {
+			$student_email = strtolower( sanitize_email( isset( $args['customer_email'] ) ? $args['customer_email'] : '' ) );
+			$confirmation  = strtolower( sanitize_email( isset( $args['customer_email_confirmation'] ) ? $args['customer_email_confirmation'] : '' ) );
+			if (
+				! self::eligible_student_email( $student_email )
+				|| '' === $confirmation
+				|| ! hash_equals( $student_email, $confirmation )
+			) {
+				return new WP_Error(
+					'doughboss_student_email',
+					__( 'Enter the same valid student email twice. It must end in .edu or .edu.au.', 'doughboss' ),
+					array( 'status' => 422 )
+				);
+			}
+			$args['customer_email'] = $student_email;
+			unset( $args['customer_email_confirmation'] );
+		}
+
 		// Serialize the count -> issue for this campaign's daily pool so two
 		// concurrent claims can't both pass the cap check and over-issue. A named
-		// DB lock keyed by the shared cap_group (or the slug when ungrouped); if
-		// the lock can't be taken we still enforce the cap, just unserialized.
+		// DB lock keyed by the shared cap_group (or the slug when ungrouped). A
+		// capped campaign fails closed when that lock is unavailable: issuing
+		// without serialization can oversubscribe the advertised daily pool.
 		$lock = substr( 'dbv_' . ( ! empty( $campaign['cap_group'] ) ? 'g_' . sanitize_key( $campaign['cap_group'] ) : 's_' . $slug ), 0, 64 );
 		$got  = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $lock, 5 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		if ( $cap > 0 && 1 !== $got ) {
+			return new WP_Error( 'doughboss_campaign_busy', __( 'This offer is busy right now. Please wait a moment and try again.', 'doughboss' ), array( 'status' => 503 ) );
+		}
 
 		if ( $cap > 0 && self::claimed_today_for( $campaign ) >= $cap ) {
 			if ( 1 === $got ) {
 				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			}
 			return new WP_Error( 'doughboss_campaign_full', __( 'Today’s vouchers have all been claimed — check back tomorrow.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		// This check runs while the campaign/pool lock is held, making one
+		// allocation per student email per day race-safe.
+		if ( '' !== $student_email && self::student_email_claimed_today( $slug, $student_email ) ) {
+			if ( 1 === $got ) {
+				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+			return new WP_Error(
+				'doughboss_student_email_used',
+				__( 'A voucher has already been allocated to this student email today.', 'doughboss' ),
+				array( 'status' => 409 )
+			);
 		}
 
 		$result = self::issue(

@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.30.0
+Stable tag: 2.32.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,30 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.32.2 =
+* Automatically renames the one existing seeded Dough Boss Special pizza to Sujuk Special during upgrade while preserving its post ID, price, options, category and integration mappings.
+
+= 2.32.1 =
+* Rebuilds the homepage food blowout with five distinct premium oven-baked products, atmospheric depth and responsive reversible motion.
+* Updates public oven-baked wording and tightens the small-screen partnership, contact and footer flow so content no longer overflows or leaves a large empty gap.
+* Tunes the MAKE board for a 23.8-inch 1920x1080 touch station and adds a protected, shop-scoped catering production view for a smaller 15-inch display.
+* Renames the existing Dough Boss Special pizza to Sujuk Special in place, retaining its product identity while updating the recipe copy and imagery lookup.
+
+= 2.32.0 =
+* Requires the same eligible .edu or .edu.au student email twice before a student voucher is allocated, with server-side domain, daily-cap and duplicate-per-day enforcement.
+* Adds the polished public voucher journey and clarifies the secure Stripe-hosted handoff, automatic eligible Apple Pay/Google Pay presentation, card fallback and return-to-tracking journey.
+* Adds manager-only Revesby bulk table-QR preparation with printable/PDF and individual SVG output using the existing server-bound table-session architecture.
+* Scopes kitchen-only staff to their assigned location across feeds and every ticket action, with a safe single-shop legacy fallback and manager all-shop override.
+* Improves kitchen offline/stale-response handling, explicit payment states and unpaid-order warnings, while preserving duplicate-safe status transitions.
+* Routes POSPal pushes using the order location's configured store mapping and resumes catering Stripe confirmation safely after 3-D Secure redirects.
+* Fixes legacy menu imports so renamed pies update in place, documents all 34 canonical menu items and completes the final responsive WordPress UI/accessibility pass.
+
+= 2.31.0 =
+* Adds a manager-only catering quote workflow with server-derived AUD totals, deposits and balances that becomes immutable when payment preparation begins.
+* Hardens catering payment reconciliation against amount, currency, metadata, location and payment-attempt mismatches, including duplicate browser/webhook races.
+* Makes voucher daily caps fail closed when their concurrency lock is unavailable and restricts catalogue/package editing to DoughBoss managers.
+* Updates operational inbox defaults, complete uninstall cleanup, customer accessibility states, tracking compatibility and the production WordPress theme handoff.
 
 = 2.30.0 =
 * Integrates the approved dark-hero and wide cream-panel demo presentation directly into the WordPress Order Online page without changing the active theme or payment engine.

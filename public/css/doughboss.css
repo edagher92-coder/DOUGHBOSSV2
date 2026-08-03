@@ -1758,6 +1758,35 @@ body.page-id-402 #primary-menu > li > a {
 	font-size: .82rem;
 }
 
+.db-stripe-notice-total {
+	color: #24205c;
+	font-variant-numeric: tabular-nums;
+}
+
+.db-stripe-checkout-points {
+	display: grid;
+	gap: .28rem;
+	margin: .45rem 0 .1rem;
+	padding: 0;
+	color: #4c4778;
+	font-size: .8rem;
+	line-height: 1.4;
+	list-style: none;
+}
+
+.db-stripe-checkout-points li {
+	position: relative;
+	padding-left: 1rem;
+}
+
+.db-stripe-checkout-points li::before {
+	position: absolute;
+	left: 0;
+	content: '✓';
+	color: #635bff;
+	font-weight: 900;
+}
+
 .db-stripe-checkout-notice > div > .db-payment-methods {
 	margin-top: .35rem;
 	color: #24205c;

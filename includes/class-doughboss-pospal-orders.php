@@ -86,7 +86,16 @@ class DoughBoss_POSPal_Orders {
 		// Which store index this order rings into (1/2/3). Default 1 (primary).
 		// Filterable so a site can route by the order's location, alongside the
 		// per-store credentials filter above.
-		$store_index = (int) apply_filters( 'doughboss_pospal_order_store_index', 1, $order, $creds );
+		// Honour the per-location mapping before the legacy store-1 fallback.
+		// Otherwise a paid multi-location order can be mirrored to the wrong till.
+		$default_store_index = 1;
+		if ( ! empty( $order->location_id ) ) {
+			$location = DoughBoss_Locations::get( (int) $order->location_id );
+			if ( $location && ! empty( $location->pospal_store_index ) ) {
+				$default_store_index = (int) $location->pospal_store_index;
+			}
+		}
+		$store_index = (int) apply_filters( 'doughboss_pospal_order_store_index', $default_store_index, $order, $creds );
 		$store_index = max( 1, $store_index );
 
 		// Enqueue on the durable outbox — the cron worker owns the actual push and

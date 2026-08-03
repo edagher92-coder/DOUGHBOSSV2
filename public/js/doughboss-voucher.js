@@ -26,13 +26,20 @@
 	function show( kind, msg ) {
 		result.className = 'db-vc-result is-' + kind;
 		result.textContent = msg;
+		if ( 'bad' === kind ) {
+			try { result.focus(); } catch ( e ) {}
+		}
 	}
 
 	Array.prototype.forEach.call( offers, function ( btn ) {
 		btn.addEventListener( 'click', function () {
 			selected = btn.getAttribute( 'data-campaign' ) || '';
-			Array.prototype.forEach.call( offers, function ( b ) { b.classList.remove( 'is-selected' ); } );
+			Array.prototype.forEach.call( offers, function ( b ) {
+				b.classList.remove( 'is-selected' );
+				b.setAttribute( 'aria-pressed', 'false' );
+			} );
 			btn.classList.add( 'is-selected' );
+			btn.setAttribute( 'aria-pressed', 'true' );
 			if ( form ) {
 				form.hidden = false;
 				result.className = 'db-vc-result';
@@ -52,9 +59,20 @@
 				return;
 			}
 			var phone = ( form.querySelector( 'input[name="phone"]' ).value || '' ).trim();
-			var email = ( form.querySelector( 'input[name="email"]' ).value || '' ).trim();
+			var email = ( form.querySelector( 'input[name="email"]' ).value || '' ).trim().toLowerCase();
+			var emailConfirmation = ( form.querySelector( 'input[name="email_confirmation"]' ).value || '' ).trim().toLowerCase();
 			if ( ! phone ) {
 				show( 'bad', i18n.vNeedPhone || 'Please enter your mobile number.' );
+				return;
+			}
+			var at = email.lastIndexOf( '@' );
+			var domain = at > 0 ? email.slice( at + 1 ) : '';
+			if ( ! /(?:^|\.)edu(?:\.au)?$/i.test( domain ) ) {
+				show( 'bad', i18n.vNeedStudentEmail || 'Enter a valid student email ending in .edu or .edu.au.' );
+				return;
+			}
+			if ( ! emailConfirmation || email !== emailConfirmation ) {
+				show( 'bad', i18n.vEmailMismatch || 'The student emails do not match. Please re-enter them.' );
 				return;
 			}
 			var submit = form.querySelector( '.db-vc-submit' );
@@ -65,7 +83,12 @@
 				method: 'POST',
 				credentials: 'same-origin',
 				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': cfg.nonce || '' },
-				body: JSON.stringify( { campaign: selected, customer_phone: phone, customer_email: email } )
+				body: JSON.stringify( {
+					campaign: selected,
+					customer_phone: phone,
+					customer_email: email,
+					customer_email_confirmation: emailConfirmation
+				} )
 			} ).then( function ( res ) {
 				return res.json().then( function ( data ) { return { ok: res.ok, data: data }; } );
 			} ).then( function ( r ) {
@@ -84,7 +107,7 @@
 
 	/**
 	 * Build a scannable QR <img> encoding the voucher code, using the
-	 * `qrcode-generator` UMD lib loaded from the CDN (global `qrcode`).
+	 * bundled `qrcode-generator` UMD library (global `qrcode`).
 	 * Returns null if the global is missing or generation fails, so the
 	 * caller can degrade gracefully and still show the code text.
 	 */
@@ -132,5 +155,6 @@
 		if ( form ) {
 			form.hidden = true;
 		}
+		try { result.focus(); } catch ( e ) {}
 	}
 } )();

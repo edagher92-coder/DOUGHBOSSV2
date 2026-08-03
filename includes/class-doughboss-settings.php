@@ -94,10 +94,9 @@ class DoughBoss_Settings {
 			// pickup for now"). Flipping to 0 restores the multi-shop picker;
 			// delivery additionally needs enable_delivery back on.
 			'single_location_mode' => 1,
-			// Shop inbox: where order + catering notifications are emailed. Blank falls
-			// back to the WordPress admin email (see orders_email()). Defaults to the
-			// Dough Boss orders inbox so the shop is notified out of the box.
-			'orders_email'    => 'hello@doughboss.com.au',
+			// Shop inbox for ordinary online-order notifications. Catering uses its
+			// own dedicated inbox below. Blank falls back to the WordPress admin email.
+			'orders_email'    => 'orders@doughboss.com.au',
 			// Dedicated customer-facing catering contacts. Catering enquiries use
 			// this inbox rather than mixing with normal online-order notices.
 			'catering_email'  => 'catering@doughboss.com.au',

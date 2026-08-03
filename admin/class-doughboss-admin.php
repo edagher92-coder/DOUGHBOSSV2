@@ -469,7 +469,7 @@ class DoughBoss_Admin {
 		if ( isset( $input['orders_email'] ) ) {
 			$clean['orders_email'] = is_email( $input['orders_email'] ) ? sanitize_email( $input['orders_email'] ) : '';
 		} else {
-			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'hello@doughboss.com.au';
+			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
 		}
 		$clean['catering_email'] = isset( $input['catering_email'] ) && is_email( $input['catering_email'] )
 			? sanitize_email( $input['catering_email'] )
@@ -678,7 +678,7 @@ class DoughBoss_Admin {
 			// presentation mode; permissions and order transitions are unchanged.
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display preference.
 			$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'all';
-			if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass' ), true ) ) {
+			if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass', 'catering' ), true ) ) {
 				$screen_mode = 'all';
 			}
 			wp_enqueue_style(
@@ -720,8 +720,15 @@ class DoughBoss_Admin {
 	 * @return array<int,array{id:int,name:string}>
 	 */
 	private function board_locations() {
+		$scope = DoughBoss_Staff_Scope::current_location_id();
+		if ( is_wp_error( $scope ) ) {
+			return array();
+		}
 		$out = array();
-		foreach ( DoughBoss_Locations::all() as $loc ) {
+		foreach ( DoughBoss_Locations::all( true ) as $loc ) {
+			if ( $scope && (int) $loc->id !== (int) $scope ) {
+				continue;
+			}
 			$out[] = array( 'id' => (int) $loc->id, 'name' => $loc->name );
 		}
 		return $out;
@@ -784,6 +791,44 @@ class DoughBoss_Admin {
 	});
 
 	document.addEventListener('click', function (e) {
+		var quoteBtn = e.target.closest('.db-catering-quote-save');
+		if (quoteBtn) {
+			e.preventDefault();
+			var quoteRow = quoteBtn.closest('tr');
+			var quoteId = quoteBtn.getAttribute('data-enquiry');
+			var subtotal = quoteRow.querySelector('.db-catering-quote-subtotal');
+			var delivery = quoteRow.querySelector('.db-catering-quote-delivery');
+			var deposit = quoteRow.querySelector('.db-catering-quote-deposit');
+			quoteBtn.disabled = true;
+			fetch(DoughBossAdmin.restUrl + '/admin/catering/' + quoteId + '/quote', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
+				body: JSON.stringify({
+					subtotal: subtotal.value,
+					delivery_fee: delivery.value,
+					deposit_pct: deposit.value
+				})
+			}).then(function (r) {
+				return r.json().catch(function () { return {}; }).then(function (data) {
+					if (!r.ok) { throw new Error(data.message || 'Could not save quote.'); }
+					return data;
+				});
+			}).then(function (data) {
+				quoteBtn.disabled = false;
+				quoteRow.querySelector('.db-catering-quote-total').textContent = '$' + Number(data.total).toFixed(2);
+				quoteRow.querySelector('.db-catering-quote-deposit-display').textContent = '$' + Number(data.deposit_amount).toFixed(2) + ' deposit';
+				var status = quoteRow.querySelector('.db-catering-status');
+				if (status) { status.value = data.status; status.setAttribute('data-current', data.status); }
+				quoteRow.style.transition = 'background .6s';
+				quoteRow.style.background = '#eaffea';
+				setTimeout(function(){ quoteRow.style.background=''; }, 800);
+			}).catch(function (error) {
+				quoteBtn.disabled = false;
+				alert(error.message || 'Could not save quote.');
+			});
+			return;
+		}
+
 		var addBtn = e.target.closest('.db-add-row');
 		if (addBtn) {
 			e.preventDefault();
@@ -1862,6 +1907,12 @@ JS;
 						<?php foreach ( $result['items'] as $row ) : ?>
 							<?php
 							$package = (int) $row['package_id'] ? get_the_title( (int) $row['package_id'] ) : __( 'Custom', 'doughboss' );
+							$can_quote = 0 === (int) $row['package_id']
+								&& in_array( (string) $row['status'], array( DoughBoss_Catering::STATUS_NEW, DoughBoss_Catering::STATUS_QUOTED ), true )
+								&& ! DoughBoss_Catering::has_payment_preparation( $row );
+							$deposit_pct = (float) $row['quote_total'] > 0
+								? (int) round( (float) $row['deposit_amount'] * 100 / (float) $row['quote_total'] )
+								: DoughBoss_Catering_Package::DEFAULT_DEPOSIT_PCT;
 							$event   = '';
 							if ( ! empty( $row['event_date'] ) ) {
 								$event = mysql2date( 'M j, Y', $row['event_date'] );
@@ -1881,12 +1932,22 @@ JS;
 								<td><?php echo esc_html( $package ? $package : '—' ); ?></td>
 								<td><?php echo esc_html( (int) $row['guest_count'] ? (string) (int) $row['guest_count'] : '—' ); ?></td>
 								<td>
-									<?php echo esc_html( DoughBoss_Settings::format_price( $row['quote_total'] ) ); ?><br />
-									<small><?php echo esc_html( DoughBoss_Settings::format_price( $row['deposit_amount'] ) ); ?> <?php esc_html_e( 'deposit', 'doughboss' ); ?></small>
+									<strong class="db-catering-quote-total"><?php echo esc_html( DoughBoss_Settings::format_price( $row['quote_total'] ) ); ?></strong><br />
+									<small class="db-catering-quote-deposit-display"><?php echo esc_html( DoughBoss_Settings::format_price( $row['deposit_amount'] ) ); ?> <?php esc_html_e( 'deposit', 'doughboss' ); ?></small>
+									<?php if ( $can_quote ) : ?>
+										<div class="db-catering-quote-editor" style="margin-top:8px; display:grid; gap:5px; min-width:150px;">
+											<label><small><?php esc_html_e( 'Subtotal (AUD)', 'doughboss' ); ?></small><input class="db-catering-quote-subtotal" type="number" min="0" max="999999.99" step="0.01" value="<?php echo esc_attr( $row['subtotal'] ); ?>" style="width:100%;" /></label>
+											<label><small><?php esc_html_e( 'Delivery (AUD)', 'doughboss' ); ?></small><input class="db-catering-quote-delivery" type="number" min="0" max="999999.99" step="0.01" value="<?php echo esc_attr( $row['delivery_fee'] ); ?>" style="width:100%;" /></label>
+											<label><small><?php esc_html_e( 'Deposit %', 'doughboss' ); ?></small><input class="db-catering-quote-deposit" type="number" min="1" max="100" step="1" value="<?php echo esc_attr( $deposit_pct ); ?>" style="width:100%;" /></label>
+											<button type="button" class="button button-small db-catering-quote-save" data-enquiry="<?php echo esc_attr( $row['id'] ); ?>"><?php esc_html_e( 'Save quote', 'doughboss' ); ?></button>
+										</div>
+									<?php elseif ( 0 === (int) $row['package_id'] ) : ?>
+										<br /><small><?php esc_html_e( 'Quote locked after payment preparation.', 'doughboss' ); ?></small>
+									<?php endif; ?>
 								</td>
 								<td><?php echo esc_html( mysql2date( 'M j, g:i a', $row['created_at'] ) ); ?></td>
 								<td>
-									<select class="db-catering-status" data-enquiry="<?php echo esc_attr( $row['id'] ); ?>">
+									<select class="db-catering-status" data-enquiry="<?php echo esc_attr( $row['id'] ); ?>" data-current="<?php echo esc_attr( $row['status'] ); ?>">
 										<?php foreach ( $statuses as $key => $label ) : ?>
 											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $row['status'], $key ); ?>>
 												<?php echo esc_html( $label ); ?>
@@ -1933,6 +1994,10 @@ JS;
 		if ( ! current_user_can( 'manage_doughboss_kds' ) ) {
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'doughboss' ) );
 		}
+		$location_scope = DoughBoss_Staff_Scope::current_location_id();
+		if ( is_wp_error( $location_scope ) ) {
+			wp_die( esc_html( $location_scope->get_error_message() ), esc_html__( 'Kitchen shop assignment required', 'doughboss' ), array( 'response' => 403 ) );
+		}
 
 		// Optional secondary gate: if the owner has set a board access key in
 		// Settings, this authenticated + capable user must ALSO supply it via
@@ -1950,18 +2015,20 @@ JS;
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display preference.
 		$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'all';
-		if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass' ), true ) ) {
+		if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass', 'catering' ), true ) ) {
 			$screen_mode = 'all';
 		}
 		$screen_title = array(
-			'make' => __( 'MAKE', 'doughboss' ),
-			'pass' => __( 'PASS & PICKUP', 'doughboss' ),
-			'all'  => __( 'Live Order Board', 'doughboss' ),
+			'make'     => __( 'MAKE', 'doughboss' ),
+			'pass'     => __( 'PASS & PICKUP', 'doughboss' ),
+			'catering' => __( 'CATERING', 'doughboss' ),
+			'all'      => __( 'Live Order Board', 'doughboss' ),
 		);
 		$screen_hint = array(
-			'make' => __( 'New orders, prep and oven flow', 'doughboss' ),
-			'pass' => __( 'Ready orders, collection and pre-orders', 'doughboss' ),
-			'all'  => __( 'Kitchen operations', 'doughboss' ),
+			'make'     => __( 'New orders, prep and oven flow', 'doughboss' ),
+			'pass'     => __( 'Ready orders, collection and pre-orders', 'doughboss' ),
+			'catering' => __( 'Catering production and hand-off', 'doughboss' ),
+			'all'      => __( 'Kitchen operations', 'doughboss' ),
 		);
 		?>
 		<div class="wrap doughboss-board-wrap doughboss-board--screen-<?php echo esc_attr( $screen_mode ); ?>">
@@ -1981,7 +2048,7 @@ JS;
 			<div class="db-screen-layout">
 			<section id="db-preorder-review" class="db-preorder-review" hidden aria-labelledby="db-preorder-review-title"></section>
 			<div id="db-board" class="db-board">
-				<p class="db-board-loading"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
+				<p class="db-board-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading orders…', 'doughboss' ); ?></p>
 			</div>
 			</div>
 		</div>
@@ -2361,8 +2428,13 @@ JS;
 							<p class="description"><?php esc_html_e( 'Required — this is the POSPal member key. Without it the voucher still works online but nothing is granted at the till.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
-						<th><label for="db-cv-email"><?php esc_html_e( 'Customer email', 'doughboss' ); ?></label></th>
-						<td><input name="email" id="db-cv-email" type="email" class="regular-text" /></td>
+						<th><label for="db-cv-email"><?php esc_html_e( 'Student email', 'doughboss' ); ?></label></th>
+						<td><input name="email" id="db-cv-email" type="email" class="regular-text" required />
+							<p class="description"><?php esc_html_e( 'Student campaigns require an eligible .edu or .edu.au address.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><label for="db-cv-email-confirmation"><?php esc_html_e( 'Re-enter student email', 'doughboss' ); ?></label></th>
+						<td><input name="email_confirmation" id="db-cv-email-confirmation" type="email" class="regular-text" autocomplete="off" required /></td>
 					</tr>
 				</table>
 				<?php submit_button( __( 'Claim voucher', 'doughboss' ) ); ?>
@@ -2503,12 +2575,14 @@ JS;
 		$campaign = isset( $_POST['campaign'] ) ? sanitize_key( wp_unslash( $_POST['campaign'] ) ) : '';
 		$phone    = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
 		$email    = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+		$email_confirmation = isset( $_POST['email_confirmation'] ) ? sanitize_email( wp_unslash( $_POST['email_confirmation'] ) ) : '';
 
 		$result = DoughBoss_Voucher::claim(
 			$campaign,
 			array(
 				'customer_phone' => $phone,
 				'customer_email' => $email,
+				'customer_email_confirmation' => $email_confirmation,
 			)
 		);
 
@@ -3042,7 +3116,7 @@ JS;
 				<h2><?php esc_html_e( 'Menu', 'doughboss' ); ?></h2>
 				<p class="description"><?php
 					/* translators: %d: number of published menu items. */
-					echo esc_html( sprintf( __( 'There are currently %d published menu item(s). Import the standard Dough Boss menu — Manoush, Pizza, Pies, Wraps, Desserts, Drinks (33 items, with prices, categories and dietary flags). Safe to re-run: matching items are updated, never duplicated.', 'doughboss' ), $db_item_count ) );
+					echo esc_html( sprintf( __( 'There are currently %d published menu item(s). Import the standard Dough Boss menu — Manoush, Pizza, Pies, Wraps, Desserts, Drinks (34 items, with prices, categories and dietary flags). Safe to re-run: matching items are updated, never duplicated.', 'doughboss' ), $db_item_count ) );
 				?></p>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 					<input type="hidden" name="action" value="doughboss_seed_menu" />
@@ -3766,6 +3840,15 @@ JS;
 					isset( $_POST['table_zone'] ) ? sanitize_text_field( wp_unslash( $_POST['table_zone'] ) ) : '',
 					isset( $_POST['ordering_url'] ) ? esc_url_raw( wp_unslash( $_POST['ordering_url'] ) ) : ''
 				);
+			} elseif ( 'create_pack' === $action ) {
+				$raw_labels = isset( $_POST['table_labels'] ) ? sanitize_textarea_field( wp_unslash( $_POST['table_labels'] ) ) : '';
+				$labels = preg_split( '/[\r\n,]+/', $raw_labels, -1, PREG_SPLIT_NO_EMPTY );
+				$issued = DoughBoss_Table_QR::create_pack(
+					isset( $_POST['location_id'] ) ? absint( $_POST['location_id'] ) : 0,
+					is_array( $labels ) ? $labels : array(),
+					isset( $_POST['table_zone'] ) ? sanitize_text_field( wp_unslash( $_POST['table_zone'] ) ) : '',
+					isset( $_POST['ordering_url'] ) ? esc_url_raw( wp_unslash( $_POST['ordering_url'] ) ) : ''
+				);
 			} elseif ( 'rotate' === $action ) {
 				$issued = DoughBoss_Table_QR::issue_code( isset( $_POST['table_id'] ) ? absint( $_POST['table_id'] ) : 0 );
 			} elseif ( 'activate' === $action || 'deactivate' === $action ) {
@@ -3777,6 +3860,8 @@ JS;
 			if ( is_wp_error( $issued ) ) {
 				$error  = $issued;
 				$issued = null;
+			} elseif ( is_array( $issued ) && isset( $issued['code'] ) ) {
+				$issued = array( $issued );
 			}
 		}
 
@@ -3791,25 +3876,62 @@ JS;
 			<?php endif; ?>
 
 			<?php if ( $issued ) : ?>
-				<div class="notice notice-warning"><p><strong><?php esc_html_e( 'Print this QR now.', 'doughboss' ); ?></strong> <?php esc_html_e( 'For security, its bearer code is not stored and cannot be shown again. Rotating creates a replacement and immediately invalidates the old print.', 'doughboss' ); ?></p></div>
-				<section id="doughboss-qr-print" style="background:#fff;border:2px solid #111;max-width:440px;padding:28px;text-align:center;">
-					<h2 style="font-size:30px;margin:0 0 8px;"><?php echo esc_html( sprintf( __( 'TABLE %s', 'doughboss' ), $issued['label'] ) ); ?></h2>
-					<p style="font-size:18px;"><?php esc_html_e( 'Scan to order. Enter your name and we will bring your order to this table.', 'doughboss' ); ?></p>
-					<div id="doughboss-qr-code" data-url="<?php echo esc_attr( $issued['url'] ); ?>" style="display:flex;justify-content:center;margin:18px;"></div>
-					<p><code><?php echo esc_html( $issued['url'] ); ?></code></p>
-				</section>
-				<p><button type="button" class="button button-primary" onclick="window.print()"><?php esc_html_e( 'Print QR label', 'doughboss' ); ?></button></p>
+				<div class="notice notice-warning"><p><strong><?php echo esc_html( 1 === count( $issued ) ? __( 'Print this QR now.', 'doughboss' ) : __( 'Print this QR pack now.', 'doughboss' ) ); ?></strong> <?php esc_html_e( 'For security, bearer codes are not stored and cannot be shown again. Save to PDF or print before leaving this page. Rotating creates a replacement and immediately invalidates the old print.', 'doughboss' ); ?></p></div>
+				<div id="doughboss-qr-print">
+				<?php foreach ( $issued as $index => $qr ) : ?>
+					<section class="doughboss-qr-label" data-qr-label="<?php echo esc_attr( $qr['label'] ); ?>" style="background:#fff;border:2px solid #111;max-width:440px;padding:28px;text-align:center;margin:0 0 22px;break-inside:avoid;page-break-inside:avoid;">
+						<p style="font-size:14px;font-weight:700;letter-spacing:.08em;margin:0 0 6px;"><?php echo esc_html( sprintf( __( 'DOUGH BOSS %s', 'doughboss' ), isset( $qr['location_name'] ) ? strtoupper( $qr['location_name'] ) : '' ) ); ?></p>
+						<h2 style="font-size:30px;margin:0 0 8px;"><?php echo esc_html( sprintf( __( 'TABLE %s', 'doughboss' ), $qr['label'] ) ); ?></h2>
+						<p style="font-size:18px;"><?php esc_html_e( 'Scan to order from this table. Check your table number, choose your food and pay securely when ordering is open.', 'doughboss' ); ?></p>
+						<div class="doughboss-qr-code" data-url="<?php echo esc_attr( $qr['url'] ); ?>" data-index="<?php echo esc_attr( $index ); ?>" style="display:flex;justify-content:center;margin:18px;"></div>
+						<p><code><?php echo esc_html( $qr['url'] ); ?></code></p>
+						<button type="button" class="button db-download-qr" data-index="<?php echo esc_attr( $index ); ?>" data-label="<?php echo esc_attr( $qr['label'] ); ?>" data-location="<?php echo esc_attr( isset( $qr['location_name'] ) ? $qr['location_name'] : 'store' ); ?>"><?php esc_html_e( 'Download SVG', 'doughboss' ); ?></button>
+					</section>
+				<?php endforeach; ?>
+				</div>
+				<p class="db-qr-print-actions"><button type="button" class="button button-primary" onclick="window.print()"><?php esc_html_e( 'Print / save QR pack as PDF', 'doughboss' ); ?></button></p>
+				<style media="print">#wpadminbar,#adminmenumain,#wpfooter,.wrap.doughboss-admin>h1,.wrap.doughboss-admin>p,.wrap.doughboss-admin>h2,.wrap.doughboss-admin>form,.wrap.doughboss-admin>table,.notice,.db-qr-print-actions,.db-download-qr{display:none!important}#wpcontent{margin:0!important}#doughboss-qr-print{display:grid!important;grid-template-columns:repeat(2,1fr);gap:16px}.doughboss-qr-label{margin:0!important;max-width:none!important}.doughboss-qr-label svg{max-width:240px;height:auto}}</style>
 				<script>
 				document.addEventListener('DOMContentLoaded', function () {
-					var mount = document.getElementById('doughboss-qr-code');
-					if (!mount || typeof qrcode !== 'function') return;
-					var code = qrcode(0, 'M');
-					code.addData(mount.getAttribute('data-url'), 'Byte');
-					code.make();
-					mount.innerHTML = code.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
+					var mounts = document.querySelectorAll('.doughboss-qr-code');
+					if (!mounts.length || typeof qrcode !== 'function') return;
+					mounts.forEach(function (mount) {
+						var code = qrcode(0, 'M');
+						code.addData(mount.getAttribute('data-url'), 'Byte');
+						code.make();
+						mount.innerHTML = code.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
+					});
+					document.querySelectorAll('.db-download-qr').forEach(function (button) {
+						button.addEventListener('click', function () {
+							var mount = document.querySelector('.doughboss-qr-code[data-index="' + button.getAttribute('data-index') + '"]');
+							var svg = mount && mount.querySelector('svg');
+							if (!svg) return;
+							var blob = new Blob([new XMLSerializer().serializeToString(svg)], {type: 'image/svg+xml;charset=utf-8'});
+							var link = document.createElement('a');
+							link.href = URL.createObjectURL(blob);
+							var store = String(button.getAttribute('data-location') || 'store').replace(/[^a-z0-9_-]+/gi, '-');
+							link.download = 'doughboss-' + store + '-table-' + String(button.getAttribute('data-label') || 'qr').replace(/[^a-z0-9_-]+/gi, '-') + '.svg';
+							link.click();
+							setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+						});
+					});
 				});
 				</script>
 			<?php endif; ?>
+
+			<h2><?php esc_html_e( 'Revesby launch QR pack', 'doughboss' ); ?></h2>
+			<p><?php esc_html_e( 'Create all confirmed table labels in one manager-only operation. The labels below are a launch template: edit them to match the physical Revesby floor before creating the pack.', 'doughboss' ); ?></p>
+			<form method="post">
+				<?php wp_nonce_field( 'doughboss_table_qr' ); ?>
+				<input type="hidden" name="table_action" value="create_pack" />
+				<table class="form-table"><tbody>
+				<tr><th><label for="db-pack-location"><?php esc_html_e( 'Store', 'doughboss' ); ?></label></th><td><select id="db-pack-location" name="location_id" required><option value=""><?php esc_html_e( 'Choose store', 'doughboss' ); ?></option><?php foreach ( $locations as $location ) : ?><option value="<?php echo esc_attr( $location->id ); ?>" <?php selected( 'revesby', sanitize_title( $location->name ) ); ?>><?php echo esc_html( $location->name ); ?></option><?php endforeach; ?></select></td></tr>
+				<tr><th><label for="db-pack-labels"><?php esc_html_e( 'Confirmed table labels', 'doughboss' ); ?></label></th><td><textarea id="db-pack-labels" name="table_labels" rows="12" class="large-text" required><?php echo esc_textarea( implode( "\n", range( 1, 12 ) ) ); ?></textarea><p class="description"><?php esc_html_e( 'One label per line (maximum 50). Delete any number that is not physically on the Revesby floor. Existing labels are rejected before anything is created.', 'doughboss' ); ?></p></td></tr>
+				<tr><th><label for="db-pack-zone"><?php esc_html_e( 'Zone', 'doughboss' ); ?></label></th><td><input id="db-pack-zone" name="table_zone" type="text" maxlength="80" value="Dining Room" /></td></tr>
+				<tr><th><label for="db-pack-ordering-url"><?php esc_html_e( 'Order page URL', 'doughboss' ); ?></label></th><td><input id="db-pack-ordering-url" name="ordering_url" type="url" class="regular-text" required value="<?php echo esc_attr( home_url( '/order/' ) ); ?>" /><p class="description"><?php esc_html_e( 'Use the published same-site page containing the DoughBoss menu and checkout.', 'doughboss' ); ?></p></td></tr>
+				</tbody></table>
+				<?php submit_button( __( 'Create Revesby QR pack', 'doughboss' ) ); ?>
+			</form>
 
 			<h2><?php esc_html_e( 'Add a table', 'doughboss' ); ?></h2>
 			<form method="post">

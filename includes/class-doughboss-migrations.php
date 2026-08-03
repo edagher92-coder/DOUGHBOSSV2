@@ -78,6 +78,7 @@ class DoughBoss_Migrations {
 				'1.15.0' => 'upgrade_to_1_15_0',
 				'1.16.0' => 'upgrade_to_1_16_0',
 				'1.17.0' => 'upgrade_to_1_17_0',
+				'1.18.0' => 'upgrade_to_1_18_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -465,5 +466,71 @@ class DoughBoss_Migrations {
 		if ( ! DoughBoss_Activator::payment_storage_ready() ) {
 			throw new RuntimeException( 'Stripe Checkout recovery storage is incomplete or is not using InnoDB.' );
 		}
+	}
+
+	/**
+	 * 1.18.0 — rename the existing seeded Dough Boss Special pizza in place.
+	 *
+	 * This is deliberately narrower than re-running the complete menu importer:
+	 * only one unambiguous legacy product is touched, its post ID is retained,
+	 * and prices, option groups, categories and external mappings are preserved.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_18_0() {
+		// Keep the migration self-contained: isolated upgrade rehearsals load the
+		// migration runner without booting the post-type component first.
+		$post_type = 'doughboss_item';
+		$legacy_key = 'pizza-dough-boss-special';
+		$ids = get_posts(
+			array(
+				'post_type'        => $post_type,
+				'post_status'      => 'any',
+				'posts_per_page'   => 2,
+				'fields'           => 'ids',
+				'meta_key'         => '_doughboss_seed_key', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value'       => $legacy_key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'suppress_filters' => false,
+			)
+		);
+
+		if ( empty( $ids ) ) {
+			// Very early seeders pre-date the stable marker. An exact, unique legacy
+			// title remains a safe fallback; ambiguity is handled below.
+			$ids = get_posts(
+				array(
+					'post_type'        => $post_type,
+					'post_status'      => 'any',
+					'posts_per_page'   => 2,
+					'fields'           => 'ids',
+					'title'            => 'Dough Boss Special',
+					'suppress_filters' => false,
+				)
+			);
+		}
+
+		if ( empty( $ids ) ) {
+			return; // Fresh installs already use the canonical Sujuk Special name.
+		}
+		if ( 1 !== count( $ids ) ) {
+			throw new RuntimeException( 'Sujuk Special migration found multiple legacy menu products; manual review is required.' );
+		}
+
+		$post_id = (int) reset( $ids );
+		$updated = wp_update_post(
+			array(
+				'ID'           => $post_id,
+				'post_title'   => 'Sujuk Special',
+				'post_name'    => 'sujuk-special',
+				'post_content' => 'Sujuk, tomato, mushroom, capsicum, onion, black olives & cheese on a tomato base.',
+			),
+			true
+		);
+		if ( is_wp_error( $updated ) || $updated < 1 ) {
+			$message = is_wp_error( $updated ) ? $updated->get_error_message() : 'WordPress did not update the legacy menu product.';
+			throw new RuntimeException( 'Sujuk Special migration failed: ' . $message );
+		}
+
+		update_post_meta( $post_id, '_doughboss_seed_key', 'pizza-sujuk-special' );
 	}
 }

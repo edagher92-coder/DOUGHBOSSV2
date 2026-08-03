@@ -137,7 +137,7 @@ update_option( 'doughboss_db_version', '1.12.0' );
 delete_option( 'doughboss_migration_error' );
 DoughBoss_Migrations::run();
 
-checkout_db_ok( '1.17.0' === get_option( 'doughboss_db_version' ), 'clean 1.12 fixture advances through checkout, table-QR, payment-attempt, POSPal-reference, and Stripe-recovery storage' );
+checkout_db_ok( '1.18.0' === get_option( 'doughboss_db_version' ), 'clean 1.12 fixture advances through checkout, table-QR, payment-attempt, POSPal-reference, Stripe-recovery, and menu-rename storage' );
 checkout_db_ok( DoughBoss_Activator::checkout_storage_ready(), 'checkout columns and exact unique indexes are ready' );
 checkout_db_ok( DoughBoss_Activator::table_qr_storage_ready(), 'table QR tables, snapshots, and exact unique indexes are ready' );
 checkout_db_ok( DoughBoss_Activator::payment_storage_ready(), 'payment attempts, webhook events, recovery snapshots, and location mappings are ready' );

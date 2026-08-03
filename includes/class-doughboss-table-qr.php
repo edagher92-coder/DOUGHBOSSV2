@@ -218,6 +218,93 @@ class DoughBoss_Table_QR {
 	}
 
 	/**
+	 * Create a printable group of table QR codes as one manager operation.
+	 *
+	 * Every label is validated before the first row is written. If a concurrent
+	 * request still causes one create to fail, rows and codes created by this
+	 * request are removed before any bearer URL is returned. This prevents a
+	 * half-created launch pack whose missing labels are easy to overlook during
+	 * a busy store setup.
+	 *
+	 * @param int      $location_id Location ID.
+	 * @param string[] $labels      Customer-facing table labels.
+	 * @param string   $zone        Optional zone shared by the pack.
+	 * @param string   $ordering_url Same-site page containing the ordering menu.
+	 * @return array|WP_Error
+	 */
+	public static function create_pack( $location_id, array $labels, $zone = '', $ordering_url = '' ) {
+		global $wpdb;
+		$location_id = absint( $location_id );
+		$zone = sanitize_text_field( $zone );
+		$ordering_url = esc_url_raw( $ordering_url ? $ordering_url : home_url( '/' ) );
+		if ( ! self::is_same_origin_url( $ordering_url ) ) {
+			return new WP_Error( 'doughboss_table_url_invalid', __( 'The ordering page must be on this WordPress site.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( ! $location_id || ! DoughBoss_Locations::is_valid( $location_id ) ) {
+			return new WP_Error( 'doughboss_table_location_invalid', __( 'Choose an active store for this QR pack.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$clean = array();
+		foreach ( $labels as $label ) {
+			$label = sanitize_text_field( $label );
+			if ( '' === $label || strlen( $label ) > 80 ) {
+				continue;
+			}
+			$key = strtolower( $label );
+			if ( isset( $clean[ $key ] ) ) {
+				return new WP_Error( 'doughboss_table_pack_duplicate', sprintf( __( 'The table label "%s" appears more than once in this pack.', 'doughboss' ), $label ), array( 'status' => 400 ) );
+			}
+			$clean[ $key ] = $label;
+		}
+		$labels = array_values( $clean );
+		if ( ! $labels || count( $labels ) > 50 ) {
+			return new WP_Error( 'doughboss_table_pack_size', __( 'Enter between 1 and 50 unique table labels.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$tables = $wpdb->prefix . 'doughboss_dining_tables';
+		$placeholders = implode( ',', array_fill( 0, count( $labels ), '%s' ) );
+		$args = array_merge( array( $location_id ), $labels );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$existing = (array) $wpdb->get_col( $wpdb->prepare( "SELECT label FROM {$tables} WHERE location_id = %d AND label IN ({$placeholders})", $args ) );
+		if ( $existing ) {
+			return new WP_Error( 'doughboss_table_pack_exists', sprintf( __( 'These labels already exist at this store: %s. Remove them from the pack or rotate their existing QR instead.', 'doughboss' ), implode( ', ', array_map( 'sanitize_text_field', $existing ) ) ), array( 'status' => 409 ) );
+		}
+
+		$issued = array();
+		foreach ( $labels as $label ) {
+			$code = self::create_table( $location_id, $label, $zone, $ordering_url );
+			if ( is_wp_error( $code ) ) {
+				self::rollback_pack( $issued );
+				return $code;
+			}
+			$issued[] = $code;
+		}
+		return $issued;
+	}
+
+	/**
+	 * Remove rows created by a failed pack request before their codes are shown.
+	 *
+	 * @param array[] $issued Codes created in the current request.
+	 * @return void
+	 */
+	private static function rollback_pack( array $issued ) {
+		global $wpdb;
+		foreach ( array_reverse( $issued ) as $code ) {
+			$table_id = isset( $code['table_id'] ) ? absint( $code['table_id'] ) : 0;
+			$qr_id = isset( $code['qr_code_id'] ) ? absint( $code['qr_code_id'] ) : 0;
+			if ( $qr_id ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$wpdb->delete( $wpdb->prefix . 'doughboss_table_qr_codes', array( 'id' => $qr_id ), array( '%d' ) );
+			}
+			if ( $table_id ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$wpdb->delete( $wpdb->prefix . 'doughboss_dining_tables', array( 'id' => $table_id ), array( '%d' ) );
+			}
+		}
+	}
+
+	/**
 	 * List tables for the management screen without exposing bearer codes.
 	 *
 	 * @return array
@@ -304,6 +391,7 @@ class DoughBoss_Table_QR {
 			return new WP_Error( 'doughboss_qr_failed', __( 'Could not bind the table QR code.', 'doughboss' ), array( 'status' => 500 ) );
 		}
 		$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$location = DoughBoss_Locations::get( (int) $table->location_id );
 		return array(
 			'table_id' => $table_id,
 			'qr_code_id' => $code_id,
@@ -311,6 +399,7 @@ class DoughBoss_Table_QR {
 			'url' => add_query_arg( self::QUERY_ARG, rawurlencode( $raw ), $table->ordering_url ? $table->ordering_url : home_url( '/' ) ),
 			'label' => $table->label,
 			'location_id' => (int) $table->location_id,
+			'location_name' => $location && isset( $location->name ) ? sanitize_text_field( $location->name ) : '',
 		);
 	}
 

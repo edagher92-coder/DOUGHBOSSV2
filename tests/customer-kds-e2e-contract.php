@@ -116,6 +116,7 @@ class DoughBoss_Customer_KDS_E2E_DB extends DB_Stub {
 require __DIR__ . '/../includes/class-doughboss-settings.php';
 require __DIR__ . '/../includes/class-doughboss-order.php';
 require __DIR__ . '/../includes/class-doughboss-cart.php';
+require __DIR__ . '/../includes/class-doughboss-staff-scope.php';
 require __DIR__ . '/../includes/class-doughboss-rest-controller.php';
 
 $passed = 0;
@@ -127,7 +128,7 @@ function customer_kds_ok( $condition, $label ) {
 }
 
 echo "=== DoughBoss customer to KDS E2E contract ===\n";
-update_option( 'doughboss_db_version', '1.17.0' );
+update_option( 'doughboss_db_version', '1.18.0' );
 $db = new DoughBoss_Customer_KDS_E2E_DB();
 $GLOBALS['wpdb'] = $db;
 

@@ -69,13 +69,14 @@ class DoughBoss_Shortcodes {
 				'description'   => __( 'Mini zaatar, cheese and meat manoush with spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
 				'replay_label'  => __( 'See the spread come together', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
-				// A single authentic manoush sits at the centre. The former full platter
-				// looked like a floating plate when the surrounding layers separated.
-				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-fresh-cutout-v2.webp',
-				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-zaatar-cutout-v2.webp',
-				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-cheese-cutout-v2.webp',
-				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-pies-v3.webp',
-				'spinach_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-fresh-cutout-v2.webp',
+				// Five deliberately different silhouettes keep the build readable as food
+				// moves in and out: oval meat manoush, folded zaatar, open cheese,
+				// triangular spinach fatayer and a cut-open chicken wrap.
+				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-meat-manoush-v4.webp',
+				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-folded-zaatar-v4.webp',
+				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-cheese-manoush-v4.webp',
+				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-chicken-wrap-v4.webp',
+				'spinach_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-spinach-fatayer-v4.webp',
 			),
 			$atts,
 			'doughboss_manoush_hero'
@@ -86,8 +87,8 @@ class DoughBoss_Shortcodes {
 			array(
 			'zaatar'  => array( 'label' => __( 'Zaatar', 'doughboss' ), 'url' => $atts['zaatar_image'] ),
 			'cheese'  => array( 'label' => __( 'Cheese', 'doughboss' ), 'url' => $atts['cheese_image'] ),
-			'meat'    => array( 'label' => __( 'Meat', 'doughboss' ), 'url' => $atts['meat_image'] ),
-			'spinach' => array( 'label' => __( 'Spinach', 'doughboss' ), 'url' => $atts['spinach_image'] ),
+			'meat'    => array( 'label' => __( 'Chicken wrap', 'doughboss' ), 'url' => $atts['meat_image'] ),
+			'spinach' => array( 'label' => __( 'Spinach fatayer', 'doughboss' ), 'url' => $atts['spinach_image'] ),
 			),
 			static function ( $ingredient ) {
 				return '' !== $ingredient['url'];
@@ -109,7 +110,7 @@ class DoughBoss_Shortcodes {
 				<div class="db-mh-world">
 					<div class="db-mh-central">
 						<?php if ( '' !== $atts['central_image'] ) : ?>
-							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" width="900" height="716" loading="eager" decoding="async" fetchpriority="high" />
+							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" width="1254" height="1254" loading="eager" decoding="async" fetchpriority="high" />
 						<?php else : ?>
 							<span><?php esc_html_e( 'Manoush', 'doughboss' ); ?></span>
 						<?php endif; ?>
@@ -117,7 +118,7 @@ class DoughBoss_Shortcodes {
 					<?php foreach ( $ingredients as $name => $ingredient ) : ?>
 						<div class="db-mh-ingredient db-mh-ingredient--<?php echo esc_attr( $name ); ?>">
 							<?php if ( '' !== $ingredient['url'] ) : ?>
-								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" width="240" height="180" loading="lazy" decoding="async" />
+								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" width="1254" height="1254" loading="lazy" decoding="async" />
 							<?php else : ?>
 								<span><?php echo esc_html( $ingredient['label'] ); ?></span>
 							<?php endif; ?>
@@ -152,25 +153,36 @@ class DoughBoss_Shortcodes {
 		<div class="db-app db-voucher-claim" data-doughboss-voucher-claim>
 			<div class="db-vc-card">
 				<h3 class="db-vc-title"><?php esc_html_e( 'Claim your student voucher', 'doughboss' ); ?></h3>
-				<p class="db-vc-sub"><?php esc_html_e( 'Pick an offer and enter your mobile to get a single-use code.', 'doughboss' ); ?></p>
+				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au.', 'doughboss' ); ?></p>
 				<?php if ( empty( $campaigns ) ) : ?>
 					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
 				<?php else : ?>
 					<div class="db-vc-offers">
 						<?php foreach ( $campaigns as $c ) : ?>
-							<button type="button" class="db-vc-offer" data-campaign="<?php echo esc_attr( $c['slug'] ); ?>">
+							<button type="button" class="db-vc-offer" data-campaign="<?php echo esc_attr( $c['slug'] ); ?>" aria-pressed="false">
 								<span class="db-vc-val"><?php echo esc_html( 'percent' === $c['type'] ? $c['value'] . '%' : DoughBoss_Settings::format_price( $c['value'] ) ); ?></span>
 								<span class="db-vc-label"><?php echo esc_html( $c['label'] ); ?></span>
 							</button>
 						<?php endforeach; ?>
 					</div>
 					<form class="db-vc-form" hidden>
-						<input type="tel" name="phone" inputmode="tel" autocomplete="tel" placeholder="<?php esc_attr_e( 'Mobile number', 'doughboss' ); ?>" required />
-						<input type="email" name="email" autocomplete="email" placeholder="<?php esc_attr_e( 'Email (optional)', 'doughboss' ); ?>" />
+						<label class="db-vc-field">
+							<span><?php esc_html_e( 'Mobile number', 'doughboss' ); ?></span>
+							<input type="tel" name="phone" inputmode="tel" autocomplete="tel" aria-label="<?php esc_attr_e( 'Mobile number', 'doughboss' ); ?>" placeholder="<?php esc_attr_e( '04xx xxx xxx', 'doughboss' ); ?>" required />
+						</label>
+						<label class="db-vc-field">
+							<span><?php esc_html_e( 'Student email', 'doughboss' ); ?></span>
+							<input type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="<?php esc_attr_e( 'you@student.university.edu.au', 'doughboss' ); ?>" required />
+						</label>
+						<label class="db-vc-field">
+							<span><?php esc_html_e( 'Re-enter student email', 'doughboss' ); ?></span>
+							<input type="email" name="email_confirmation" autocomplete="off" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="<?php esc_attr_e( 'Type the same email again', 'doughboss' ); ?>" required />
+						</label>
+						<p class="db-vc-eligibility"><?php esc_html_e( 'One $5 voucher per eligible student email each day, while the daily allocation lasts. Your code is single use.', 'doughboss' ); ?></p>
 						<button type="submit" class="db-btn db-vc-submit"><?php esc_html_e( 'Get my code', 'doughboss' ); ?></button>
 					</form>
 				<?php endif; ?>
-				<div class="db-vc-result" aria-live="polite"></div>
+				<div class="db-vc-result" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 			</div>
 		</div>
 		<?php
@@ -250,7 +262,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-shop-picker" data-doughboss-shop>
-			<div class="db-loading"><?php esc_html_e( 'Loading shops…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading shops…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();
@@ -275,7 +287,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-menu" data-doughboss-menu data-cart-url="<?php echo esc_url( $atts['cart_url'] ); ?>">
-			<div class="db-loading"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();
@@ -290,7 +302,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-builder" data-doughboss-builder>
-			<div class="db-loading"><?php esc_html_e( 'Loading pizza builder…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading pizza builder…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();
@@ -305,7 +317,7 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-cart" data-doughboss-cart>
-			<div class="db-loading"><?php esc_html_e( 'Loading cart…', 'doughboss' ); ?></div>
+			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading cart…', 'doughboss' ); ?></div>
 		</div>
 		<?php
 		return ob_get_clean();

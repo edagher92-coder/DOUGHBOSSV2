@@ -16,7 +16,7 @@
 
 	var STATUSES = cfg.statuses || {};
 	var ETA_CHOICES = [10, 15, 20, 30];
-	var SCREEN_MODE = cfg.screenMode === 'make' || cfg.screenMode === 'pass' ? cfg.screenMode : 'all';
+	var SCREEN_MODE = ['make', 'pass', 'catering'].indexOf(cfg.screenMode) !== -1 ? cfg.screenMode : 'all';
 	var ALL_LANES = [
 		{ key: 'new', title: 'New', statuses: ['pending'] },
 		{ key: 'prep', title: 'Preparing', statuses: ['confirmed', 'preparing', 'baking'] },
@@ -30,7 +30,13 @@
 		]
 		: (SCREEN_MODE === 'pass'
 			? [{ key: 'ready', title: 'Ready to call', statuses: ['ready', 'out_for_delivery'] }]
-			: ALL_LANES);
+			: (SCREEN_MODE === 'catering'
+				? [
+					{ key: 'new', title: 'Deposit paid', statuses: ['deposit_paid'] },
+					{ key: 'prep', title: 'Booked / production', statuses: ['confirmed', 'balance_due'] },
+					{ key: 'ready', title: 'Paid / hand-off', statuses: ['paid'] }
+				]
+				: ALL_LANES));
 
 	var boardEl = document.getElementById('db-board');
 	var preorderPanel = document.getElementById('db-preorder-review');
@@ -53,6 +59,10 @@
 	var pollTimer = null;
 	var retryBtn = null;
 	var lastSuccessfulSync = null;
+	// Multiple refresh signals can overlap (poll, SSE and a staff action). Only
+	// the newest response may repaint the board, otherwise a slower stale request
+	// can visually undo a just-completed status transition.
+	var loadEpoch = 0;
 
 	// Mercure SSE transport (optional). When connected and healthy, the ~7s poll
 	// is slowed to a long safety net; on any SSE error we fall straight back to
@@ -231,6 +241,7 @@
 	}
 
 	function accept(o, eta) {
+		if (offline) { return; }
 		if (!setBusy(o, 'accept', true)) { return; }
 		localAck[o.id] = true;
 		api('/admin/order/' + o.id + '/accept', 'POST', {
@@ -249,6 +260,7 @@
 	}
 
 	function setStatus(o, status) {
+		if (offline) { return Promise.resolve(); }
 		if (!setBusy(o, status, true)) { return Promise.resolve(); }
 		return api('/admin/order/' + o.id + '/status', 'POST', {
 			status: status,
@@ -271,6 +283,7 @@
 	}
 
 	function acknowledgeAll(ids) {
+		if (offline) { return; }
 		ids.forEach(function (id) {
 			localAck[id] = true;
 			api('/admin/order/' + id + '/ack', 'POST', {}).catch(function (error) {
@@ -294,6 +307,13 @@
 	}
 
 	function laneSubtitle(key) {
+		if (SCREEN_MODE === 'catering') {
+			return {
+				new: 'Management confirmation required before production.',
+				prep: 'Check due time, guest count and dietary notes.',
+				ready: 'Final count, label and delivery / pickup hand-off.'
+			}[key] || 'Committed catering jobs';
+		}
 		var labels = {
 			new: 'Accept only after checking notes, allergies and timing.',
 			prep: 'Making now - keep oldest tickets moving first.',
@@ -343,7 +363,13 @@
 	}
 
 	function paymentLabel(status) {
-		var labels = { 'paid': 'Paid', 'unpaid': 'Pay at counter', 'refunded': 'Refunded' };
+		var labels = {
+			'paid': 'Paid',
+			'unpaid': 'Pay at counter',
+			'pending': 'Payment pending',
+			'failed': 'Payment failed - manager check',
+			'refunded': 'Refunded'
+		};
 		return labels[status] || 'Payment check';
 	}
 
@@ -362,8 +388,17 @@
 	}
 
 	function hasAllergenNote(o) {
-		var text = String(o && o.notes || '').toLowerCase();
+		var itemText = (o && o.items || []).map(function (item) {
+			return [item.name || '', item.size || ''].concat((item.toppings || []).map(toppingLabel)).join(' ');
+		}).join(' ');
+		var text = (String(o && o.notes || '') + ' ' + itemText).toLowerCase();
 		return /\b(allerg|gluten|nut|peanut|sesame|dairy|egg|soy|shellfish|vegan|vegetarian|halal|lactose|celiac|coeliac)\b/.test(text);
+	}
+
+	function confirmUnpaid(o, next) {
+		if (o.payment_status === 'paid') { next(); return; }
+		var prompt = 'This order is not marked paid (' + paymentLabel(o.payment_status) + '). Continue only after confirming the approved pay-at-counter process.';
+		if (window.confirm(prompt)) { next(); }
 	}
 
 	function orderAgeMinutes(o) {
@@ -677,14 +712,14 @@
 		var actions;
 		if (isNew) {
 			var etaRow = ETA_CHOICES.map(function (m) {
-				return el('button', { class: 'button db-eta', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ', ready in ' + m + ' minutes', onclick: function () { accept(o, m); } }, [m + 'm']);
+				return el('button', { class: 'button db-eta', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ', ready in ' + m + ' minutes', onclick: function () { confirmUnpaid(o, function () { accept(o, m); }); } }, [m + 'm']);
 			});
 			actions = el('div', { class: 'db-card-actions' }, [
 				el('div', { class: 'db-accept-label', text: 'Accept — ready in:' }),
 				el('div', { class: 'db-eta-row' }, etaRow),
 				el('div', { class: 'db-card-actions-row' }, [
 					el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change']),
-					el('button', { class: 'button button-primary db-accept', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ' without an estimate', onclick: function () { accept(o, 0); } }, ['Accept'])
+					el('button', { class: 'button button-primary db-accept', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ' without an estimate', onclick: function () { confirmUnpaid(o, function () { accept(o, 0); }); } }, ['Accept'])
 				])
 			]);
 		} else {
@@ -723,6 +758,111 @@
 			el('div', { class: 'db-card-meta' }, meta),
 			actions
 		]);
+	}
+
+	function cateringDue(job) {
+		var value = String(job.event_date || '');
+		var parts = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+		var dateLabel = 'Date to confirm';
+		if (parts) {
+			var date = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), 12, 0, 0);
+			try {
+				dateLabel = new Intl.DateTimeFormat('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }).format(date);
+			} catch (e) {
+				dateLabel = parts[3] + '/' + parts[2] + '/' + parts[1];
+			}
+		}
+		return job.event_time ? dateLabel + ' · ' + job.event_time : dateLabel;
+	}
+
+	function cateringIsOverdue(job) {
+		var value = String(job.event_date || '');
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) { return false; }
+		var today = new Date();
+		var local = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+		return value < local;
+	}
+
+	function cateringPayment(job) {
+		if (job.status === 'paid') { return 'Paid in full'; }
+		if (job.status === 'deposit_paid') { return 'Deposit received · confirmation required'; }
+		if (job.status === 'balance_due') { return 'Balance due ' + money(job.balance_amount || 0); }
+		return 'Deposit received · balance ' + money(job.balance_amount || 0);
+	}
+
+	function cateringCard(job) {
+		var showShop = LOCATIONS.length > 1 && !currentLocation && job.location_id && locationsById[job.location_id];
+		var delivery = job.order_type === 'delivery';
+		var meta = [];
+		if (cateringIsOverdue(job)) {
+			meta.push(el('div', { class: 'db-card-exception', role: 'alert', text: 'Past event date — management must confirm hand-off or mark this fulfilled.' }));
+		}
+		if (job.dietary) {
+			meta.push(el('div', { class: 'db-card-notes db-card-notes-alert', role: 'alert', text: 'Dietary: ' + job.dietary }));
+		}
+		if (job.notes) {
+			meta.push(el('div', { class: 'db-card-notes', text: 'Note: ' + job.notes }));
+		}
+		if (delivery && job.address) {
+			meta.push(el('div', { class: 'db-card-addr', text: 'Delivery: ' + job.address }));
+		}
+		meta.push(el('div', { class: 'db-catering-finance', text: cateringPayment(job) + ' · Total ' + money(job.quote_total || 0) }));
+
+		return el('article', {
+			class: 'db-card db-catering-card db-catering-card-' + job.status + (cateringIsOverdue(job) ? ' db-catering-card-overdue' : ''),
+			'data-catering-id': String(job.id)
+		}, [
+			el('div', { class: 'db-card-head' }, [
+				el('span', { class: 'db-card-number', text: job.enquiry_number || ('CAT-' + job.id) }),
+				el('span', { class: 'db-card-type', text: delivery ? 'Delivery' : 'Pickup' }),
+				showShop ? el('span', { class: 'db-card-shop', text: locationsById[job.location_id] }) : null
+			]),
+			el('div', { class: 'db-catering-due', text: cateringDue(job) }),
+			el('div', { class: 'db-card-status', text: job.status_label || job.status }),
+			el('div', { class: 'db-catering-contact' }, [
+				el('strong', { text: job.customer_name || 'Customer' }),
+				job.customer_phone ? el('span', { text: ' · ' + job.customer_phone }) : null
+			]),
+			el('div', { class: 'db-catering-package' }, [
+				el('strong', { text: job.package_name || 'Custom catering' }),
+				el('span', { text: (Number(job.guest_count) || 0) + ' guests' })
+			]),
+			el('div', { class: 'db-card-meta' }, meta),
+			el('p', { class: 'db-catering-readonly', text: 'Production display · lifecycle changes stay in Catering Enquiries.' })
+		]);
+	}
+
+	function renderCatering(jobs) {
+		lastOrders = jobs;
+		boardEl.textContent = '';
+		var guestTotal = jobs.reduce(function (sum, job) { return sum + (Number(job.guest_count) || 0); }, 0);
+		var deliveryCount = jobs.filter(function (job) { return job.order_type === 'delivery'; }).length;
+		var overdueCount = jobs.filter(cateringIsOverdue).length;
+		boardEl.appendChild(el('section', { class: 'db-live-pulse db-catering-pulse', 'aria-label': 'Catering production summary' }, [
+			el('div', { class: 'db-live-pulse__main' }, [
+				el('span', { class: 'db-live-pulse__kicker', text: 'Committed jobs' }),
+				el('strong', { text: jobs.length + ' active' }),
+				el('small', { text: guestTotal + ' guests across the queue' })
+			]),
+			el('div', { class: 'db-live-pulse__chips' }, [
+				el('span', { class: 'db-pulse-chip', text: deliveryCount + ' delivery' }),
+				el('span', { class: 'db-pulse-chip', text: (jobs.length - deliveryCount) + ' pickup' }),
+				overdueCount ? el('span', { class: 'db-pulse-chip db-pulse-chip--late', text: overdueCount + ' overdue check' }) : null
+			])
+		]));
+
+		boardEl.appendChild(el('div', { class: 'db-lanes' }, LANES.map(function (lane) {
+			var laneJobs = jobs.filter(function (job) { return lane.statuses.indexOf(job.status) !== -1; });
+			return el('section', { class: 'db-lane db-lane-' + lane.key }, [
+				el('h2', { class: 'db-lane-title' }, [lane.title + ' ', el('span', { class: 'db-lane-count', text: String(laneJobs.length) })]),
+				el('p', { class: 'db-lane-subtitle', text: laneSubtitle(lane.key) })
+			].concat(laneJobs.length ? laneJobs.map(cateringCard) : [el('p', { class: 'db-lane-empty', text: 'None' })]));
+		})));
+
+		if (statusEl) {
+			statusEl.textContent = jobs.length + ' committed catering jobs · updated ' + new Date().toLocaleTimeString();
+		}
+		applyConnectionState();
 	}
 
 	function render(orders) {
@@ -848,12 +988,19 @@
 	/* --------------------------------------------------------------- Cycle */
 
 	function load() {
-		var path = '/admin/orders' + (currentLocation ? '?location_id=' + currentLocation : '');
+		var requestEpoch = ++loadEpoch;
+		var path = (SCREEN_MODE === 'catering' ? '/admin/catering-board' : '/admin/orders') + (currentLocation ? '?location_id=' + currentLocation : '');
 		return api(path, 'GET').then(function (res) {
-			if (!res || !Array.isArray(res.data)) { throw new Error('The order feed returned an invalid response.'); }
+			if (!res || !Array.isArray(res.data)) { throw new Error('The production feed returned an invalid response.'); }
+			if (requestEpoch !== loadEpoch) { return null; }
 			offline = false;
 			lastSuccessfulSync = new Date();
 			updateHeartbeat();
+			if (SCREEN_MODE === 'catering') {
+				renderCatering(res.data);
+				if (preorderPanel) { preorderPanel.hidden = true; }
+				return null;
+			}
 			render(res.data);
 			if (SCREEN_MODE !== 'pass') {
 				if (preorderPanel) { preorderPanel.hidden = true; }
@@ -862,6 +1009,7 @@
 			var preorderPath = '/admin/preorder-requests?per_page=100' + (currentLocation ? '&location_id=' + currentLocation : '');
 			return api(preorderPath, 'GET').then(function (preorders) {
 				if (!preorders || !Array.isArray(preorders.data)) { throw new Error('The pre-order review feed returned an invalid response.'); }
+				if (requestEpoch !== loadEpoch) { return; }
 				renderPreorders(preorders.data);
 			}).catch(function (error) {
 				// A review-feed failure must never blank or lock the live kitchen board.
@@ -869,6 +1017,7 @@
 				if (statusEl) { statusEl.textContent = 'Kitchen board synced; pre-order review unavailable: ' + (error.message || 'retrying'); }
 			});
 		}).catch(function () {
+			if (requestEpoch !== loadEpoch) { return; }
 			offline = true;
 			updateHeartbeat();
 			// Preserve the connection warning below, then replace it with the
@@ -880,7 +1029,7 @@
 
 	function loop() {
 		load().then(function () {
-			pollTimer = setTimeout(loop, sseHealthy ? POLL_SAFETY : POLL_FAST);
+			pollTimer = setTimeout(loop, SCREEN_MODE === 'catering' ? POLL_FAST : (sseHealthy ? POLL_SAFETY : POLL_FAST));
 		});
 	}
 
@@ -891,7 +1040,7 @@
 	// trusted data). On error, fall back to the normal poll cadence. The poll
 	// always keeps running as the fallback path.
 	function connectSse() {
-		if (!mercure || !mercure.enabled || !mercure.url || typeof window.EventSource === 'undefined') {
+		if (SCREEN_MODE === 'catering' || !mercure || !mercure.enabled || !mercure.url || typeof window.EventSource === 'undefined') {
 			return;
 		}
 
@@ -941,6 +1090,15 @@
 		if (!document.hidden && audio.on && audio.ctx && audio.ctx.state === 'suspended') {
 			audio.ctx.resume();
 		}
+	});
+	window.addEventListener('offline', function () {
+		offline = true;
+		updateHeartbeat();
+		applyConnectionState();
+	});
+	window.addEventListener('online', function () {
+		if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+		load();
 	});
 	document.addEventListener('keydown', function (event) {
 		if (event.key === 'Escape' && amendmentPanel && !amendmentPanel.hidden) {
@@ -992,7 +1150,11 @@
 	}
 
 	// Refresh "x ago" labels even between polls.
-	setInterval(function () { if (lastOrders.length) { render(lastOrders); } }, 30000);
+	setInterval(function () {
+		if (!lastOrders.length) { return; }
+		if (SCREEN_MODE === 'catering') { renderCatering(lastOrders); }
+		else { render(lastOrders); }
+	}, 30000);
 
 	// Open the real-time SSE channel when configured; the poll below stays as the
 	// always-on fallback regardless.

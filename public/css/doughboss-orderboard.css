@@ -70,6 +70,7 @@
 .doughboss-board--screen-pass .db-lanes { grid-template-columns: minmax(0, 1fr); }
 .doughboss-board--screen-pass .db-lane { min-height: calc(100vh - 13rem); }
 .doughboss-board--screen-make .db-lanes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.doughboss-board--screen-catering .db-lanes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .doughboss-board--screen-make .db-card-actions .button,
 .doughboss-board--screen-pass .db-card-actions .button {
 	min-height: 58px;
@@ -380,6 +381,8 @@ body.db-alerting .db-board-bar h1::after {
 .db-card-payment { font-weight: 700; }
 .db-payment-paid { color: var(--dbb-green-dark); }
 .db-payment-unpaid { color: var(--dbb-amber); }
+.db-payment-pending,
+.db-payment-failed { color: var(--dbb-danger); }
 .db-payment-refunded { color: var(--dbb-danger); }
 .db-card-exception {
 	border-left: 4px solid var(--dbb-danger);
@@ -918,6 +921,192 @@ body.doughboss-staff-kitchen .db-allday-item + .db-allday-item::before {
 
 body.doughboss-staff-kitchen .db-allday-item {
 	color: #fff;
+}
+
+/* The main kitchen station is a 23.8-inch 1920x1080 touch display. At that
+   working canvas, keep all three production lanes visible and independently
+   scrollable so a long queue never pushes the oldest ticket off every lane. */
+@media (min-width: 1500px) and (min-height: 850px) {
+	body.doughboss-staff-kitchen .doughboss-board--screen-make {
+		padding: 0.75rem;
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-make .db-board-bar {
+		margin-bottom: 0.7rem;
+		padding: 0.75rem 1rem;
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-make .db-board-bar h1 {
+		font-size: clamp(2.55rem, 3.2vw, 3.8rem);
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-make .db-live-pulse {
+		margin-bottom: 0.7rem;
+		padding: 0.7rem 0.85rem;
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-make .db-lanes {
+		align-items: stretch;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-make .db-lane {
+		max-height: calc(100vh - 19rem);
+		min-height: 390px;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-gutter: stable;
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-make .db-card-number {
+		font-size: clamp(2.2rem, 2.7vw, 3.2rem);
+	}
+}
+
+/* Dedicated compact catering station. It reads the protected, shop-scoped
+   catering production feed rather than the ordinary order feed. This density
+   fits common 15-inch 1366x768 or scaled-FHD displays while keeping the event
+   date, guest count and dietary exceptions easy to scan. */
+body.doughboss-staff-kitchen .doughboss-board--screen-catering {
+	padding: 0.65rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-board-bar {
+	margin-bottom: 0.6rem;
+	padding: 0.7rem 0.85rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-board-title-group {
+	flex: 0 0 min(17rem, 42vw);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-board-actions {
+	flex: 1 1 22rem;
+	justify-content: flex-end;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-sound-toggle {
+	display: none;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-board-bar h1 {
+	font-size: clamp(2rem, 3.4vw, 2.9rem);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-board-title-group p {
+	font-size: 0.82rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-live-pulse {
+	grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1.3fr);
+	margin-bottom: 0.6rem;
+	padding: 0.65rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-live-pulse__graphs {
+	display: none;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-live-pulse__chips {
+	justify-content: flex-end;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-lanes {
+	gap: 0.65rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-lane {
+	max-height: calc(100vh - 15rem);
+	min-height: 330px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 0.65rem;
+	scrollbar-gutter: stable;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-lane-title {
+	font-size: clamp(1.1rem, 1.8vw, 1.55rem);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-lane-subtitle {
+	font-size: 0.74rem;
+	margin-bottom: 0.55rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-card {
+	margin-bottom: 0.65rem;
+	padding: 0.75rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-card-number {
+	font-size: clamp(1.9rem, 3vw, 2.55rem);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-card-item {
+	font-size: 1rem;
+	padding: 0.38rem 0;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-card-deposit_paid {
+	border-left-color: var(--dbb-kds-red);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-card-confirmed,
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-card-balance_due {
+	border-left-color: var(--dbb-kds-amber);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-card-paid {
+	border-left-color: var(--dbb-kds-green);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-card-overdue {
+	box-shadow: 0 0 0 3px rgba(226, 77, 40, 0.55), 0 18px 36px rgba(0, 0, 0, 0.24);
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-due {
+	background: #17120e;
+	border-radius: 12px;
+	color: #fff4df;
+	font-size: clamp(1rem, 1.65vw, 1.35rem);
+	font-weight: 950;
+	letter-spacing: 0.015em;
+	margin: 0.35rem 0 0.5rem;
+	padding: 0.55rem 0.65rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-contact {
+	display: flex;
+	flex-wrap: wrap;
+	font-size: 0.92rem;
+	gap: 0.2rem;
+	margin-bottom: 0.5rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-package {
+	align-items: center;
+	background: #fff;
+	border-radius: 12px;
+	display: flex;
+	gap: 0.6rem;
+	justify-content: space-between;
+	margin-bottom: 0.5rem;
+	padding: 0.65rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-package strong {
+	font-size: 1.05rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-package span {
+	background: #17120e;
+	border-radius: 999px;
+	color: #fff4df;
+	font-weight: 900;
+	padding: 0.34rem 0.55rem;
+	white-space: nowrap;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-finance {
+	color: #14643a;
+	font-size: 0.9rem;
+	font-weight: 900;
+	margin-top: 0.45rem;
+}
+body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-readonly {
+	border-top: 1px solid rgba(23, 18, 14, 0.12);
+	color: #665c53;
+	font-size: 0.72rem;
+	margin: 0.55rem 0 0;
+	padding-top: 0.45rem;
+}
+
+@media (max-width: 1100px) {
+	body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-lanes {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 780px) {
+	body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-live-pulse,
+	body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-lanes {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-live-pulse__chips {
+		justify-content: flex-start;
+	}
+	body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-lane {
+		max-height: none;
+		min-height: 0;
+	}
 }
 
 @media (max-width: 1100px) {

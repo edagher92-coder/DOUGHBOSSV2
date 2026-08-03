@@ -92,6 +92,8 @@ class DoughBoss_Catering_Package {
 				'rewrite'         => array( 'slug' => 'catering-package' ),
 				'supports'        => array( 'title', 'editor', 'thumbnail', 'page-attributes' ),
 				'capability_type' => 'post',
+				'map_meta_cap'    => false,
+				'capabilities'    => self::management_capabilities(),
 			)
 		);
 
@@ -114,7 +116,7 @@ class DoughBoss_Catering_Package {
 					'show_in_rest'      => true,
 					'sanitize_callback' => $sanitizer,
 					'auth_callback'     => function () {
-						return current_user_can( 'edit_posts' );
+						return current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
 					},
 				)
 			);
@@ -129,9 +131,34 @@ class DoughBoss_Catering_Package {
 				'show_in_rest'      => true,
 				'sanitize_callback' => 'sanitize_textarea_field',
 				'auth_callback'     => function () {
-					return current_user_can( 'edit_posts' );
+					return current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
 				},
 			)
+		);
+	}
+
+	/**
+	 * Restrict catering-package mutations to DoughBoss owners/managers while
+	 * keeping published package content publicly readable.
+	 *
+	 * @return array<string,string>
+	 */
+	private static function management_capabilities() {
+		return array(
+			'edit_post'              => 'manage_doughboss',
+			'read_post'              => 'read',
+			'delete_post'            => 'manage_doughboss',
+			'edit_posts'             => 'manage_doughboss',
+			'edit_others_posts'      => 'manage_doughboss',
+			'publish_posts'          => 'manage_doughboss',
+			'read_private_posts'     => 'manage_doughboss',
+			'delete_posts'           => 'manage_doughboss',
+			'delete_private_posts'   => 'manage_doughboss',
+			'delete_published_posts' => 'manage_doughboss',
+			'delete_others_posts'    => 'manage_doughboss',
+			'edit_private_posts'     => 'manage_doughboss',
+			'edit_published_posts'   => 'manage_doughboss',
+			'create_posts'           => 'manage_doughboss',
 		);
 	}
 

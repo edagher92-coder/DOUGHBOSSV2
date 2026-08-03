@@ -103,6 +103,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-shortcodes.php';
 		require_once $dir . 'class-doughboss-assets.php';
 		require_once $dir . 'class-doughboss-seo.php';
+		require_once $dir . 'class-doughboss-staff-scope.php';
 		require_once $dir . 'class-doughboss-staff-experience.php';
 
 		if ( is_admin() ) {
@@ -135,6 +136,7 @@ final class DoughBoss {
 		( new DoughBoss_Shortcodes() )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_SEO() )->init();
+		DoughBoss_Staff_Scope::init();
 		( new DoughBoss_Staff_Experience() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
 		( new DoughBoss_Privacy() )->init();
