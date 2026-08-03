@@ -16,6 +16,7 @@ const board = read('public/js/doughboss-orderboard.js');
 const boardCss = read('public/css/doughboss-orderboard.css');
 const guide = read('docs/DoughBoss-Revesby-Scan-To-Order-Launch-2026-08-02.md');
 const plugin = read('includes/class-doughboss.php');
+const catering = read('includes/class-doughboss-catering.php');
 
 test('Revesby QR pack is manager-only, nonce protected and printable/exportable', () => {
   assert.match(admin, /current_user_can\( self::CAP \)/);
@@ -99,6 +100,23 @@ test('KDS includes audible and visible alerts plus polling fallback', () => {
   assert.match(board, /var POLL_SAFETY/);
   assert.match(board, /new EventSource/);
   assert.match(board, /sseHealthy = false/);
+});
+
+test('compact catering display reads committed jobs from a protected shop-scoped feed', () => {
+  assert.match(rest, /'\/admin\/catering-board'/);
+  assert.match(rest, /'permission_callback'\s*=> array\( \$this, 'verify_board_access' \)/);
+  assert.match(rest, /public function admin_catering_board/);
+  assert.match(rest, /DoughBoss_Staff_Scope::effective_location_id/);
+  assert.match(rest, /DoughBoss_Catering::production_queue/);
+  assert.match(catering, /public static function production_queue/);
+  assert.match(catering, /self::STATUS_DEPOSIT/);
+  assert.match(catering, /self::STATUS_CONFIRMED/);
+  assert.match(catering, /self::STATUS_BALANCE_DUE/);
+  assert.match(catering, /self::STATUS_PAID/);
+  assert.match(board, /'\/admin\/catering-board'/);
+  assert.match(board, /function renderCatering/);
+  assert.match(board, /Production display · lifecycle changes stay in Catering Enquiries/);
+  assert.doesNotMatch(board, /orders\.filter\(isCateringOrder\)/);
 });
 
 test('checkout-to-kitchen event loop is durable, versioned and notification-aware', () => {

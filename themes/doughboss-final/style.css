@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.1.1
+Version: 1.1.2
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -212,8 +212,11 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 .dbf-contact-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 28px; }
 .dbf-contact-strip a { padding: 22px; background: #fff; border: 1px solid var(--dbf-line); border-radius: 14px; font-weight: 700; text-decoration: none; }
 .dbf-contact-strip span { display: block; color: #756e64; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.dbf-page-content--partner { padding-block: clamp(38px, 5vw, 72px); }
 .dbf-partner-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: clamp(40px, 7vw, 90px); align-items: start; }
-.dbf-partner-aside { position: sticky; top: 120px; padding: 28px; background: var(--dbf-char); color: #fff; border-radius: 20px; }
+.dbf-partner-grid--single { grid-template-columns: minmax(0, 760px); justify-content: center; }
+.dbf-partner-aside { position: sticky; top: 120px; min-width: 0; overflow: hidden; padding: 28px; background: var(--dbf-char); color: #fff; border-radius: 20px; }
+.dbf-partner-grid--single .dbf-partner-aside { position: static; width: 100%; }
 .dbf-partner-aside p { color: #c7c0b5; }
 .dbf-not-found { min-height: 65vh; display: grid; place-items: center; text-align: center; }
 
@@ -276,7 +279,7 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 	.dbf-hero { padding: 0; }
 	.dbf-hero .dbf-wrap { width: 100%; }
 	.dbf-hero .db-manoush-hero { min-height: 0; border-radius: 0; }
-	.dbf-hero .db-mh-copy h2 { font-size: clamp(52px, 15vw, 74px); }
+	.dbf-hero .db-mh-copy h2 { max-width: 100%; overflow-wrap: normal; font-size: clamp(42px, 12vw, 62px); text-wrap: balance; }
 	.dbf-hero-stats { grid-template-columns: 1fr 1fr; }
 	.dbf-hero-stat:last-child { grid-column: 1 / -1; border-top: 1px solid var(--dbf-line-dark); }
 	.dbf-section-head { align-items: flex-start; flex-direction: column; }
@@ -306,16 +309,26 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 	.dbf-voucher-section { padding-block: 56px; }
 	.dbf-voucher-widget .db-vc-card { padding: 22px 18px; border-radius: 18px; }
 	.dbf-contact-strip { grid-template-columns: 1fr; }
+	.dbf-page-content--partner { padding-block: 30px; }
+	.dbf-partner-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+	.dbf-partner-aside { position: static; width: 100%; max-width: 100%; padding: 26px 22px; border-radius: 18px; }
+	.dbf-partner-aside .dbf-heading { font-size: clamp(42px, 13vw, 58px); }
+	.dbf-partner-aside .dbf-button { width: 100%; margin-top: 8px; }
+	.dbf-footer { padding: 50px 0 18px; }
 	.dbf-footer-grid { grid-template-columns: 1fr 1fr; }
+	.dbf-footer-grid { gap: 30px 24px; }
 	.dbf-footer-brand { grid-column: 1 / -1; }
-	.dbf-footer-bottom { flex-direction: column; }
+	.dbf-footer-bottom { flex-direction: column; margin-top: 36px; }
+}
+
+@media (max-width: 560px) {
+	.dbf-footer-grid { grid-template-columns: 1fr; }
+	.dbf-footer-brand { grid-column: auto; }
 }
 
 @media (max-width: 420px) {
 	.dbf-brand { font-size: 18px; }
 	.dbf-menu-toggle-label { display: none; }
-	.dbf-footer-grid { grid-template-columns: 1fr; }
-	.dbf-footer-brand { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

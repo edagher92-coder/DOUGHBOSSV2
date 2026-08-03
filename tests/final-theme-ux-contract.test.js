@@ -18,7 +18,11 @@ const trackAlias = read('themes/doughboss-final/page-track.php');
 const shortcodes = read('includes/class-doughboss-shortcodes.php');
 const storefront = read('public/js/doughboss.js');
 const hero = read('public/js/doughboss-manoush-hero.js');
+const heroStyle = read('public/css/doughboss-manoush-hero.css');
 const board = read('admin/class-doughboss-admin.php');
+const boardClient = read('public/js/doughboss-orderboard.js');
+const boardStyle = read('public/css/doughboss-orderboard.css');
+const partnerPage = read('themes/doughboss-final/template-parts/partner-page.php');
 
 let failed = false;
 function check(value, message) {
@@ -35,6 +39,8 @@ check(/html\s*\{[^}]*overflow-x:\s*clip/s.test(themeStyle), 'off-canvas navigati
 check(themeStyle.includes('@media (prefers-reduced-motion: reduce)'), 'theme honours reduced motion');
 check(hero.includes('Math.abs(centre)') && hero.includes("window.addEventListener('scroll'"), 'hero blowout follows scroll in both directions');
 check(hero.includes("window.addEventListener('resize'"), 'hero recalculates its scene responsively');
+check(['hero-meat-manoush-v4.webp', 'hero-folded-zaatar-v4.webp', 'hero-cheese-manoush-v4.webp', 'hero-spinach-fatayer-v4.webp', 'hero-chicken-wrap-v4.webp'].every((asset) => shortcodes.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'hero uses five present, distinct production food assets');
+check(heroStyle.includes('@keyframes db-mh-smoke') && heroStyle.includes('drop-shadow'), 'hero adds premium atmospheric depth while retaining reduced-motion handling');
 
 check(home.includes('dbf-sr-only') && catering.includes('dbf-sr-only'), 'visual hero pages retain a clear page-level heading');
 check(catering.includes('href="#catering-enquiry"') && catering.includes('id="catering-enquiry"'), 'catering intro moves directly to one canonical contact experience');
@@ -51,10 +57,14 @@ check(themeFunctions.includes("home_url( '/vouchers/' )") && footer.includes("ho
 check(themeFunctions.includes("home_url( '/track-order/' )") && footer.includes("home_url( '/track-order/' )"), 'order tracking is discoverable in fallback navigation and the footer');
 check(shortcodes.includes('aria-pressed="false"') && shortcodes.includes('aria-atomic="true"') && voucherClient.includes("setAttribute( 'aria-pressed', 'true' )"), 'voucher selection and results expose their state to assistive technology');
 check(themeScript.includes("data-dbf-scroll-state") && !themeScript.includes('observer.unobserve'), 'theme reveals reverse cleanly when scrolling up and down');
+check(!/stone-baked/i.test(home + footer) && /oven-baked/i.test(home + footer), 'public homepage and footer use the approved oven-baked wording consistently');
+check(partnerPage.includes('dbf-partner-grid--single') && themeStyle.includes('.dbf-page-content--partner') && themeStyle.includes('@media (max-width: 560px)'), 'empty partnership content and narrow footer columns collapse without overflow or a large blank gap');
 
 check((shortcodes.match(/class="db-loading" role="status" aria-live="polite"/g) || []).length === 4, 'storefront loading states are announced');
 check(shortcodes.includes('aria-label="<?php esc_attr_e( \'Mobile number\''), 'voucher phone field has an accessible name');
 check((storefront.match(/class: 'db-error', role: 'alert'/g) || []).length >= 4, 'storefront load failures are announced as alerts');
 check(board.includes('db-board-loading" role="status" aria-live="polite"'), 'kitchen-board loading state is announced');
+check(boardClient.includes("['make', 'pass', 'catering']") && boardClient.includes("'/admin/catering-board'") && boardClient.includes('renderCatering'), 'order board exposes a dedicated catering production presentation');
+check(boardStyle.includes('min-width: 1500px') && boardStyle.includes('doughboss-board--screen-catering'), 'order board includes targeted FHD kitchen and compact catering display layouts');
 
 process.exitCode = failed ? 1 : 0;

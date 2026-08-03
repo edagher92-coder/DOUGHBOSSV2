@@ -678,7 +678,7 @@ class DoughBoss_Admin {
 			// presentation mode; permissions and order transitions are unchanged.
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display preference.
 			$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'all';
-			if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass' ), true ) ) {
+			if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass', 'catering' ), true ) ) {
 				$screen_mode = 'all';
 			}
 			wp_enqueue_style(
@@ -2015,18 +2015,20 @@ JS;
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display preference.
 		$screen_mode = isset( $_GET['screen'] ) ? sanitize_key( wp_unslash( $_GET['screen'] ) ) : 'all';
-		if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass' ), true ) ) {
+		if ( ! in_array( $screen_mode, array( 'all', 'make', 'pass', 'catering' ), true ) ) {
 			$screen_mode = 'all';
 		}
 		$screen_title = array(
-			'make' => __( 'MAKE', 'doughboss' ),
-			'pass' => __( 'PASS & PICKUP', 'doughboss' ),
-			'all'  => __( 'Live Order Board', 'doughboss' ),
+			'make'     => __( 'MAKE', 'doughboss' ),
+			'pass'     => __( 'PASS & PICKUP', 'doughboss' ),
+			'catering' => __( 'CATERING', 'doughboss' ),
+			'all'      => __( 'Live Order Board', 'doughboss' ),
 		);
 		$screen_hint = array(
-			'make' => __( 'New orders, prep and oven flow', 'doughboss' ),
-			'pass' => __( 'Ready orders, collection and pre-orders', 'doughboss' ),
-			'all'  => __( 'Kitchen operations', 'doughboss' ),
+			'make'     => __( 'New orders, prep and oven flow', 'doughboss' ),
+			'pass'     => __( 'Ready orders, collection and pre-orders', 'doughboss' ),
+			'catering' => __( 'Catering production and hand-off', 'doughboss' ),
+			'all'      => __( 'Kitchen operations', 'doughboss' ),
 		);
 		?>
 		<div class="wrap doughboss-board-wrap doughboss-board--screen-<?php echo esc_attr( $screen_mode ); ?>">

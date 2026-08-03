@@ -1030,6 +1030,25 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		// Read-only, shop-scoped catering production feed. It intentionally
+		// shares the KDS access boundary but not the manager-only lifecycle
+		// mutation endpoint below.
+		register_rest_route(
+			$ns,
+			'/admin/catering-board',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_catering_board' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
+				'args'                => array(
+					'location_id' => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
 		register_rest_route(
 			$ns,
 			'/admin/catering/(?P<id>\d+)/status',
@@ -2783,6 +2802,7 @@ class DoughBoss_REST_Controller {
 			'spinach-deluxe'          => 'spinach-deluxe.webp',
 			'veggie-plus'             => 'veggie-plus.webp',
 			'pepperoni-cheese'        => 'pepperoni-cheese.webp',
+			'sujuk-special'           => 'dough-boss-special.webp',
 			'dough-boss-special'      => 'dough-boss-special.webp',
 			'chicken-cheese'          => 'chicken-cheese.webp',
 			'bbq-chicken'             => 'bbq-chicken.webp',
@@ -4052,6 +4072,63 @@ class DoughBoss_REST_Controller {
 			array(
 				'data'        => $result['items'],
 				'total'       => $result['total'],
+				'server_time' => current_time( 'mysql', true ),
+			)
+		);
+	}
+
+	/**
+	 * GET /admin/catering-board — committed jobs for the catering display.
+	 *
+	 * The response omits email addresses and provider identifiers. KDS-only
+	 * accounts are forced to their assigned shop by the same server-side scope
+	 * used for ordinary kitchen orders.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_catering_board( WP_REST_Request $request ) {
+		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
+		}
+
+		$statuses = DoughBoss_Catering::statuses();
+		$rows     = DoughBoss_Catering::production_queue( $location_id, 100 );
+		$data     = array_map(
+			static function ( $row ) use ( $statuses ) {
+				$package = (int) $row['package_id'] ? get_the_title( (int) $row['package_id'] ) : __( 'Custom catering', 'doughboss' );
+				$status  = sanitize_key( (string) $row['status'] );
+				return array(
+					'id'              => (int) $row['id'],
+					'enquiry_number'  => sanitize_text_field( (string) $row['enquiry_number'] ),
+					'location_id'     => (int) $row['location_id'],
+					'package_name'    => sanitize_text_field( (string) $package ),
+					'status'          => $status,
+					'status_label'    => isset( $statuses[ $status ] ) ? $statuses[ $status ] : $status,
+					'customer_name'   => sanitize_text_field( (string) $row['customer_name'] ),
+					'customer_phone'  => sanitize_text_field( (string) $row['customer_phone'] ),
+					'event_date'      => sanitize_text_field( (string) $row['event_date'] ),
+					'event_time'      => sanitize_text_field( (string) $row['event_time'] ),
+					'guest_count'     => (int) $row['guest_count'],
+					'order_type'      => sanitize_key( (string) $row['order_type'] ),
+					'address'         => sanitize_textarea_field( (string) $row['address'] ),
+					'dietary'         => sanitize_textarea_field( (string) $row['dietary'] ),
+					'notes'           => sanitize_textarea_field( (string) $row['notes'] ),
+					'quote_total'     => (float) $row['quote_total'],
+					'deposit_amount'  => (float) $row['deposit_amount'],
+					'balance_amount'  => (float) $row['balance_amount'],
+					'currency'        => sanitize_text_field( (string) $row['currency'] ),
+					'created_at'      => sanitize_text_field( (string) $row['created_at'] ),
+					'updated_at'      => sanitize_text_field( (string) $row['updated_at'] ),
+				);
+			},
+			$rows
+		);
+
+		return rest_ensure_response(
+			array(
+				'data'        => $data,
 				'server_time' => current_time( 'mysql', true ),
 			)
 		);

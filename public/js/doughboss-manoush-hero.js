@@ -56,19 +56,19 @@
 
 	function heroRecipe(name) {
 		var recipes = {
-			zaatar: { near: [-95, -57, 38, 10, 0, -16], scatter: [-230, -145, 220, 20, -12, -34] },
-			cheese: { near: [98, -52, 60, 10, 0, 17], scatter: [244, -114, 280, 20, 12, 31] },
-			meat: { near: [85, 68, 45, 10, 0, -13], scatter: [213, 155, 200, 20, 12, -29] },
-			spinach: { near: [-90, 70, 58, 10, 0, 15], scatter: [-225, 155, 260, 20, 12, 33] }
+			zaatar: { near: [-116, -69, 38, 10, 0, -13], scatter: [-248, -150, 220, 20, -12, -30] },
+			cheese: { near: [118, -64, 60, 10, 0, 14], scatter: [254, -132, 280, 20, 12, 28] },
+			meat: { near: [108, 78, 50, 10, 0, -11], scatter: [232, 169, 220, 20, 12, -24] },
+			spinach: { near: [-110, 82, 58, 10, 0, 13], scatter: [-235, 168, 260, 20, 12, 29] }
 		};
 		var recipe = recipes[name];
 		if (window.innerWidth <= 720) {
 			var width = window.innerWidth;
 			var mobile = {
-				zaatar: { near: [-.21 * width, -.12 * width], scatter: [-.34 * width, -.20 * width] },
-				cheese: { near: [.21 * width, -.12 * width], scatter: [.34 * width, -.20 * width] },
-				meat: { near: [.19 * width, .13 * width], scatter: [.31 * width, .21 * width] },
-				spinach: { near: [-.19 * width, .13 * width], scatter: [-.31 * width, .21 * width] }
+				zaatar: { near: [-.22 * width, -.13 * width], scatter: [-.35 * width, -.21 * width] },
+				cheese: { near: [.22 * width, -.13 * width], scatter: [.35 * width, -.21 * width] },
+				meat: { near: [.20 * width, .14 * width], scatter: [.32 * width, .23 * width] },
+				spinach: { near: [-.20 * width, .14 * width], scatter: [-.32 * width, .23 * width] }
 			}[name];
 			recipe.near[0] = mobile.near[0]; recipe.near[1] = mobile.near[1];
 			recipe.scatter[0] = mobile.scatter[0]; recipe.scatter[1] = mobile.scatter[1];

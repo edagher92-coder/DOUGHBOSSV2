@@ -145,7 +145,7 @@
 			status: 'preparing', order_type: 'pickup', location_id: 3,
 			customer_name: 'Michael Chen', customer_phone: '0455 555 302',
 			items: [
-				{ name: 'Dough Boss Special', quantity: 1, size: 'Large' },
+				{ name: 'Sujuk Special', quantity: 1, size: 'Large' },
 				{ name: 'Zaatar', quantity: 3, toppings: [{ label: '1× gluten-free base' }] },
 				{ name: 'Juice', quantity: 2 }
 			],

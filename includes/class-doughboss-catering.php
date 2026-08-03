@@ -740,6 +740,50 @@ class DoughBoss_Catering {
 	}
 
 	/**
+	 * Fetch committed catering jobs for the production display.
+	 *
+	 * New and quoted enquiries are deliberately excluded: the kitchen screen
+	 * only receives work after a deposit has been recorded. Fulfilled and lost
+	 * jobs also stay off the active display. A past-due job remains visible until
+	 * management marks it fulfilled, preventing an overdue hand-off disappearing.
+	 *
+	 * @param int $location_id Optional active shop scope; zero means all shops.
+	 * @param int $limit       Maximum jobs returned.
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function production_queue( $location_id = 0, $limit = 100 ) {
+		global $wpdb;
+
+		$location_id = absint( $location_id );
+		$limit       = max( 1, min( 100, absint( $limit ) ) );
+		$table       = self::table();
+		$where       = 'status IN (%s, %s, %s, %s)';
+		$params      = array(
+			self::STATUS_DEPOSIT,
+			self::STATUS_CONFIRMED,
+			self::STATUS_BALANCE_DUE,
+			self::STATUS_PAID,
+		);
+
+		if ( $location_id ) {
+			$where   .= ' AND location_id = %d';
+			$params[] = $location_id;
+		}
+		$params[] = $limit;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$items = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE {$where} ORDER BY CASE WHEN event_date IS NULL OR event_date = '' THEN 1 ELSE 0 END ASC, event_date ASC, event_time ASC, created_at ASC LIMIT %d",
+				$params
+			),
+			ARRAY_A
+		);
+
+		return $items ? $items : array();
+	}
+
+	/**
 	 * Generate a unique, human-readable enquiry number (CAT-YYMMDD-XXXX).
 	 *
 	 * @return string
