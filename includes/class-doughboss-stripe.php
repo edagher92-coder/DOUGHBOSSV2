@@ -305,6 +305,9 @@ class DoughBoss_Stripe {
 		$body       = array(
 			'mode'                                                  => 'payment',
 			'payment_method_types[0]'                               => 'card',
+			// Stripe's minimum is 30 minutes. The extra minute avoids request
+			// transit making the timestamp fall just below that boundary.
+			'expires_at'                                            => time() + 1860,
 			'success_url'                                           => (string) $success_url,
 			'cancel_url'                                            => (string) $cancel_url,
 			'client_reference_id'                                   => $checkout_key,

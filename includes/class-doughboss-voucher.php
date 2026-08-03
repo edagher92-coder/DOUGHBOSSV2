@@ -30,6 +30,12 @@ class DoughBoss_Voucher {
 	 */
 	const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
+	/** Voucher meta key used for the short-lived checkout lease. */
+	const RESERVATION_META_KEY = '_doughboss_reservation';
+
+	/** Default lease lifetime: Stripe Checkout expires first, with webhook grace. */
+	const RESERVATION_TTL_SECONDS = 2700;
+
 	/**
 	 * Vouchers table name.
 	 *
@@ -244,6 +250,222 @@ class DoughBoss_Voucher {
 	}
 
 	/**
+	 * Reserve an eligible voucher for one immutable payment checkout.
+	 *
+	 * The voucher remains `issued` so existing validation/admin screens remain
+	 * compatible, but another checkout cannot reserve or redeem it until this
+	 * lease expires. The named database lock serializes reservation, redemption,
+	 * staff scanning and voiding for this voucher.
+	 *
+	 * @param string $code            Voucher code.
+	 * @param float  $subtotal        Server-computed cart subtotal.
+	 * @param string $channel         online|instore.
+	 * @param string $reservation_key Immutable SHA-256 checkout key.
+	 * @param int    $ttl_seconds     Lease lifetime in seconds.
+	 * @return array|WP_Error array{code:string,amount:float,reservation_key:string,expires_at:int}.
+	 */
+	public static function reserve( $code, $subtotal, $channel, $reservation_key, $ttl_seconds = self::RESERVATION_TTL_SECONDS ) {
+		global $wpdb;
+
+		$key = self::normalise_reservation_key( $reservation_key );
+		if ( '' === $key ) {
+			return new WP_Error( 'doughboss_voucher_reservation_key', __( 'The voucher checkout session is invalid. Please refresh and try again.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$generic = new WP_Error( 'doughboss_voucher_invalid', __( 'This voucher code isnâ€™t valid.', 'doughboss' ), array( 'status' => 422 ) );
+		if ( ! DoughBoss_Coupon_Code::validate( $code ) ) {
+			return $generic;
+		}
+
+		$row = self::find_by_code( $code );
+		if ( ! $row ) {
+			return $generic;
+		}
+		$voucher_id = (int) $row->id;
+		if ( ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return self::busy_error();
+		}
+
+		try {
+			$row = self::find_by_id( $voucher_id );
+			$eval = self::evaluate( $row, $subtotal, $channel );
+			if ( ! $row || ! $eval['valid'] ) {
+				if ( $row && 'min_spend' === $eval['reason'] ) {
+					return new WP_Error( 'doughboss_voucher_min', __( 'Your order doesnâ€™t meet this voucherâ€™s minimum spend.', 'doughboss' ), array( 'status' => 422 ) );
+				}
+				return $generic;
+			}
+
+			$now         = time();
+			$ttl         = max( 300, min( 86400, (int) $ttl_seconds ) );
+			$expires     = $now + $ttl;
+			$reservation = self::row_reservation( $row );
+			if ( $reservation && (int) $reservation['expires_at'] > $now ) {
+				if ( ! hash_equals( (string) $reservation['key'], $key ) ) {
+					return self::reserved_error();
+				}
+			}
+
+			// A same-owner retry may create/retrieve a Stripe Session much later
+			// than its first attempt. Renew before provisioning so the lease always
+			// outlives a newly-created Session plus webhook-delivery grace.
+			$meta = self::row_meta( $row );
+			$meta[ self::RESERVATION_META_KEY ] = array(
+				'key'        => $key,
+				'expires_at' => $expires,
+			);
+			$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				self::table(),
+				array(
+					'meta'       => self::encode_meta( $meta ),
+					'updated_at' => current_time( 'mysql' ),
+				),
+				array(
+					'id'     => (int) $row->id,
+					'status' => 'issued',
+				),
+				array( '%s', '%s' ),
+				array( '%d', '%s' )
+			);
+			if ( 1 !== (int) $updated ) {
+				$latest             = self::find_by_id( $voucher_id );
+				$latest_reservation = self::row_reservation( $latest );
+				if ( ! $latest_reservation || ! hash_equals( (string) $latest_reservation['key'], $key ) || (int) $latest_reservation['expires_at'] < $expires ) {
+					return new WP_Error( 'doughboss_voucher_reservation_storage', __( 'The voucher could not be reserved safely. Please try again.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+				$expires = (int) $latest_reservation['expires_at'];
+			}
+
+			return array(
+				'code'            => (string) $row->code,
+				'amount'          => (float) $eval['amount'],
+				'reservation_key' => $key,
+				'expires_at'      => $expires,
+			);
+		} finally {
+			self::release_voucher_lock( $voucher_id );
+		}
+	}
+
+	/**
+	 * Release a matching checkout lease without touching a newer reservation.
+	 *
+	 * @param string $code            Voucher code.
+	 * @param string $reservation_key Immutable SHA-256 checkout key.
+	 * @return bool True when the matching lease is absent after this call.
+	 */
+	public static function release_reservation( $code, $reservation_key ) {
+		global $wpdb;
+
+		$key = self::normalise_reservation_key( $reservation_key );
+		$row = '' !== $key ? self::find_by_code( $code ) : null;
+		if ( ! $row ) {
+			return false;
+		}
+		$voucher_id = (int) $row->id;
+		if ( ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return false;
+		}
+
+		try {
+			$row = self::find_by_id( $voucher_id );
+			if ( ! $row ) {
+				return false;
+			}
+			$reservation = self::row_reservation( $row );
+			if ( ! $reservation || ! hash_equals( (string) $reservation['key'], $key ) ) {
+				return true;
+			}
+			$meta = self::row_meta( $row );
+			unset( $meta[ self::RESERVATION_META_KEY ] );
+			$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				self::table(),
+				array(
+					'meta'       => self::encode_meta( $meta ),
+					'updated_at' => current_time( 'mysql' ),
+				),
+				array( 'id' => (int) $row->id ),
+				array( '%s', '%s' ),
+				array( '%d' )
+			);
+			if ( 1 === (int) $updated ) {
+				return true;
+			}
+			// A concurrent external status transition can legitimately produce a
+			// zero-row write. Only report success after proving our lease is gone.
+			$latest = self::find_by_id( $voucher_id );
+			$current = self::row_reservation( $latest );
+			return $latest && ( ! $current || ! hash_equals( (string) $current['key'], $key ) );
+		} finally {
+			self::release_voucher_lock( $voucher_id );
+		}
+	}
+
+	/** @return object|null */
+	private static function find_by_id( $id ) {
+		global $wpdb;
+		$table = self::table();
+		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", absint( $id ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/** @return array */
+	private static function row_meta( $row ) {
+		$meta = $row && isset( $row->meta ) && '' !== (string) $row->meta ? json_decode( (string) $row->meta, true ) : array();
+		return is_array( $meta ) ? $meta : array();
+	}
+
+	/** @return string */
+	private static function encode_meta( array $meta ) {
+		$json = wp_json_encode( $meta );
+		return false === $json ? '{}' : $json;
+	}
+
+	/** @return array|null */
+	private static function row_reservation( $row ) {
+		$meta = self::row_meta( $row );
+		if ( empty( $meta[ self::RESERVATION_META_KEY ] ) || ! is_array( $meta[ self::RESERVATION_META_KEY ] ) ) {
+			return null;
+		}
+		$reservation = $meta[ self::RESERVATION_META_KEY ];
+		$key         = isset( $reservation['key'] ) ? self::normalise_reservation_key( $reservation['key'] ) : '';
+		$expires     = isset( $reservation['expires_at'] ) ? (int) $reservation['expires_at'] : 0;
+		return '' !== $key && $expires > 0 ? array( 'key' => $key, 'expires_at' => $expires ) : null;
+	}
+
+	/** @return string */
+	private static function normalise_reservation_key( $value ) {
+		$value = strtolower( sanitize_text_field( (string) $value ) );
+		return 1 === preg_match( '/^[a-f0-9]{64}$/', $value ) ? $value : '';
+	}
+
+	/** @return bool */
+	private static function acquire_voucher_lock( $voucher_id ) {
+		global $wpdb;
+		$lock = self::voucher_lock_name( $voucher_id );
+		return 1 === (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $lock, 3 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	}
+
+	/** @return void */
+	private static function release_voucher_lock( $voucher_id ) {
+		global $wpdb;
+		$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', self::voucher_lock_name( $voucher_id ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	}
+
+	/** @return string */
+	private static function voucher_lock_name( $voucher_id ) {
+		return substr( 'dbv_v_' . absint( $voucher_id ), 0, 64 );
+	}
+
+	/** @return WP_Error */
+	private static function reserved_error() {
+		return new WP_Error( 'doughboss_voucher_reserved', __( 'This voucher is already being used in another checkout. Please wait a moment and try again.', 'doughboss' ), array( 'status' => 409 ) );
+	}
+
+	/** @return WP_Error */
+	private static function busy_error() {
+		return new WP_Error( 'doughboss_voucher_busy', __( 'This voucher is busy right now. Please wait a moment and try again.', 'doughboss' ), array( 'status' => 503 ) );
+	}
+
+	/**
 	 * Atomically redeem a single-use voucher.
 	 *
 	 * Wins the race via a conditional UPDATE (status issued -> redeemed); only
@@ -253,7 +475,7 @@ class DoughBoss_Voucher {
 	 * @param string $code     Voucher code.
 	 * @param float  $subtotal Server-computed cart subtotal.
 	 * @param string $channel  'online' or 'instore'.
-	 * @param array  $extra    { idempotency_key, location_id, pospal_ticket_no }.
+	 * @param array  $extra    { idempotency_key, reservation_key, location_id, pospal_ticket_no }.
 	 * @return array|WP_Error array{ code, amount } or error.
 	 */
 	public static function redeem( $code, $subtotal, $channel = 'online', array $extra = array() ) {
@@ -270,69 +492,114 @@ class DoughBoss_Voucher {
 			return $generic;
 		}
 
-		$row = self::find_by_code( $code );
-
 		$idem = isset( $extra['idempotency_key'] ) && '' !== $extra['idempotency_key']
 			? substr( sanitize_text_field( $extra['idempotency_key'] ), 0, 64 )
 			: '';
-
-		// Idempotent replay: a retried request carrying the same key returns the
-		// already-recorded result without consuming a second voucher — so a
-		// lost-response retry never surfaces a false "already used".
-		if ( '' !== $idem ) {
-			$prior = self::redemption_by_key( $idem );
-			if ( $prior ) {
-				return array(
-					'code'   => $prior->code,
-					'amount' => (float) $prior->amount_applied,
-				);
-			}
+		$reservation_key = isset( $extra['reservation_key'] ) && '' !== (string) $extra['reservation_key']
+			? self::normalise_reservation_key( $extra['reservation_key'] )
+			: '';
+		if ( isset( $extra['reservation_key'] ) && '' !== (string) $extra['reservation_key'] && '' === $reservation_key ) {
+			return new WP_Error( 'doughboss_voucher_reservation_key', __( 'The voucher checkout session is invalid. Please refresh and try again.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$eval = self::evaluate( $row, $subtotal, $channel );
-		if ( ! $row || ! $eval['valid'] ) {
-			if ( $row && 'min_spend' === $eval['reason'] ) {
-				return new WP_Error( 'doughboss_voucher_min', __( 'Your order doesn’t meet this voucher’s minimum spend.', 'doughboss' ), array( 'status' => 422 ) );
-			}
+		$row = self::find_by_code( $code );
+		if ( ! $row ) {
 			return $generic;
 		}
 
-		$table = self::table();
-		$now   = current_time( 'mysql' );
-
-		// Atomic claim: only one redeem can flip issued -> redeemed.
-		$claimed = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "UPDATE {$table} SET status = %s, updated_at = %s WHERE id = %d AND status = %s", 'redeemed', $now, $row->id, 'issued' )
-		);
-		if ( 1 !== (int) $claimed ) {
-			return new WP_Error( 'doughboss_voucher_used', __( 'This voucher has already been used.', 'doughboss' ), array( 'status' => 409 ) );
+		$voucher_id = (int) $row->id;
+		if ( ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return self::busy_error();
 		}
 
-		if ( '' === $idem ) {
-			$idem = md5( $row->id . '|' . $channel . '|' . $now . '|' . wp_rand() );
-		}
+		$result     = null;
+		$action_row = null;
+		try {
+			$row = self::find_by_id( $voucher_id );
+			if ( ! $row ) {
+				return $generic;
+			}
 
-		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-			self::redemptions_table(),
-			array(
-				'voucher_id'       => (int) $row->id,
-				'channel'          => 'instore' === $channel ? 'instore' : 'online',
-				'pospal_ticket_no' => isset( $extra['pospal_ticket_no'] ) ? substr( sanitize_text_field( $extra['pospal_ticket_no'] ), 0, 64 ) : '',
-				'location_id'      => isset( $extra['location_id'] ) ? absint( $extra['location_id'] ) : (int) $row->location_id,
-				'amount_applied'   => $eval['amount'],
-				'idempotency_key'  => $idem,
-				'redeemed_at'      => $now,
-			),
-			array( '%d', '%s', '%s', '%d', '%f', '%s', '%s' )
-		);
+			// Every replay reads under the same voucher lock as revert/link. An
+			// unlinked audit is reversible, so returning it before serialization
+			// could let a concurrent rollback delete the result we just promised.
+			if ( '' !== $idem ) {
+				$prior = self::redemption_by_key( $idem );
+				if ( $prior ) {
+					return hash_equals( (string) $row->code, (string) $prior->code )
+						? array( 'code' => $prior->code, 'amount' => (float) $prior->amount_applied )
+						: $generic;
+				}
+			}
 
-		// The audit row is mandatory. If it didn't write, undo the status flip so
-		// the voucher is never silently consumed without a record.
-		if ( ! $inserted ) {
-			$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				$wpdb->prepare( "UPDATE {$table} SET status = %s, updated_at = %s WHERE id = %d AND status = %s", 'issued', current_time( 'mysql' ), $row->id, 'redeemed' )
+			$eval = self::evaluate( $row, $subtotal, $channel );
+			if ( ! $eval['valid'] ) {
+				if ( 'min_spend' === $eval['reason'] ) {
+					return new WP_Error( 'doughboss_voucher_min', __( 'Your order doesn’t meet this voucher’s minimum spend.', 'doughboss' ), array( 'status' => 422 ) );
+				}
+				return $generic;
+			}
+
+			$reservation = self::row_reservation( $row );
+			if ( $reservation ) {
+				$same_lease = '' !== $reservation_key && hash_equals( (string) $reservation['key'], $reservation_key );
+				$active     = (int) $reservation['expires_at'] > time();
+				// Matching paid checkouts may redeem during webhook-delivery grace
+				// after nominal expiry. Active different/no-key callers always lose.
+				if ( ( $active && ! $same_lease ) || ( '' !== $reservation_key && ! $same_lease ) ) {
+					return self::reserved_error();
+				}
+			}
+
+			$table         = self::table();
+			$now           = current_time( 'mysql' );
+			$previous_meta = isset( $row->meta ) && '' !== (string) $row->meta ? (string) $row->meta : '{}';
+			$meta          = self::row_meta( $row );
+			unset( $meta[ self::RESERVATION_META_KEY ] );
+
+			// Atomic claim + lease removal: only one process can flip issued ->
+			// redeemed, and no stale reservation survives a successful claim.
+			$claimed = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "UPDATE {$table} SET status = %s, meta = %s, updated_at = %s WHERE id = %d AND status = %s", 'redeemed', self::encode_meta( $meta ), $now, $voucher_id, 'issued' )
 			);
-			return new WP_Error( 'doughboss_voucher_audit', __( 'Could not record the redemption. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+			if ( 1 !== (int) $claimed ) {
+				return new WP_Error( 'doughboss_voucher_used', __( 'This voucher has already been used.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+
+			if ( '' === $idem ) {
+				$idem = md5( $voucher_id . '|' . $channel . '|' . $now . '|' . wp_rand() );
+			}
+
+			$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				self::redemptions_table(),
+				array(
+					'voucher_id'       => $voucher_id,
+					'channel'          => 'instore' === $channel ? 'instore' : 'online',
+					'pospal_ticket_no' => isset( $extra['pospal_ticket_no'] ) ? substr( sanitize_text_field( $extra['pospal_ticket_no'] ), 0, 64 ) : '',
+					'location_id'      => isset( $extra['location_id'] ) ? absint( $extra['location_id'] ) : (int) $row->location_id,
+					'amount_applied'   => $eval['amount'],
+					'idempotency_key'  => $idem,
+					'redeemed_at'      => $now,
+				),
+				array( '%d', '%s', '%s', '%d', '%f', '%s', '%s' )
+			);
+
+			// Audit is mandatory. Restore both issued status and the exact prior
+			// reservation so an order retry does not expose it to a rival checkout.
+			if ( ! $inserted ) {
+				$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					$wpdb->prepare( "UPDATE {$table} SET status = %s, meta = %s, updated_at = %s WHERE id = %d AND status = %s", 'issued', $previous_meta, current_time( 'mysql' ), $voucher_id, 'redeemed' )
+				);
+				return new WP_Error( 'doughboss_voucher_audit', __( 'Could not record the redemption. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+			}
+
+			$action_row = $row;
+			$result     = array(
+				'code'   => $row->code,
+				'amount' => $eval['amount'],
+			);
+		} finally {
+			self::release_voucher_lock( $voucher_id );
 		}
 
 		/**
@@ -343,12 +610,9 @@ class DoughBoss_Voucher {
 		 * @param float  $amount  Amount applied.
 		 * @param string $channel Redemption channel.
 		 */
-		do_action( 'doughboss_voucher_redeemed', $row, $eval['amount'], $channel );
+		do_action( 'doughboss_voucher_redeemed', $action_row, $result['amount'], $channel );
 
-		return array(
-			'code'   => $row->code,
-			'amount' => $eval['amount'],
-		);
+		return $result;
 	}
 
 	/**
@@ -374,26 +638,72 @@ class DoughBoss_Voucher {
 
 	/**
 	 * Attach an order id to a redemption row, linking an online redemption to the
-	 * order it discounted. Best-effort.
+	 * order it discounted. Link and revert share the voucher lock, then take a
+	 * row lock on the audit so a paid order can never be unlinked/reissued by a
+	 * concurrent failed worker.
 	 *
 	 * @param string $idempotency_key Redemption idempotency key.
 	 * @param int    $order_id        Order id.
-	 * @return void
+	 * @return bool True when this order owns the redemption after the call.
 	 */
 	public static function link_redemption_to_order( $idempotency_key, $order_id ) {
 		global $wpdb;
 		$key = substr( sanitize_text_field( (string) $idempotency_key ), 0, 64 );
 		$oid = absint( $order_id );
 		if ( '' === $key || ! $oid ) {
-			return;
+			return false;
 		}
-		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-			self::redemptions_table(),
-			array( 'order_id' => $oid ),
-			array( 'idempotency_key' => $key ),
-			array( '%d' ),
-			array( '%s' )
+		$table      = self::redemptions_table();
+		$redemption = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT voucher_id, order_id FROM {$table} WHERE idempotency_key = %s", $key )
 		);
+		$voucher_id = $redemption ? (int) $redemption->voucher_id : 0;
+		if ( ! $voucher_id || ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return false;
+		}
+
+		$transaction = false;
+		$committed   = false;
+		$linked      = false;
+		try {
+			$transaction = false !== $wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			if ( ! $transaction ) {
+				return false;
+			}
+			$current = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "SELECT voucher_id, order_id FROM {$table} WHERE idempotency_key = %s FOR UPDATE", $key )
+			);
+			$row = $current && (int) $current->voucher_id === $voucher_id ? self::find_by_id( $voucher_id ) : null;
+			if ( ! $row || 'redeemed' !== (string) $row->status ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return false;
+			}
+
+			$current_order_id = (int) $current->order_id;
+			if ( $oid === $current_order_id ) {
+				$linked = true;
+			} elseif ( 0 === $current_order_id ) {
+				$updated = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					$wpdb->prepare( "UPDATE {$table} SET order_id = %d WHERE idempotency_key = %s AND voucher_id = %d AND order_id = 0", $oid, $key, $voucher_id )
+				);
+				$linked = 1 === (int) $updated;
+			}
+
+			if ( ! $linked ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return false;
+			}
+			$committed   = false !== $wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$transaction = ! $committed;
+			return $committed;
+		} finally {
+			if ( $transaction && ! $committed ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+			self::release_voucher_lock( $voucher_id );
+		}
 	}
 
 	/**
@@ -402,26 +712,111 @@ class DoughBoss_Voucher {
 	 * can redeem it cleanly instead of the customer losing the voucher.
 	 *
 	 * @param string $idempotency_key Redemption idempotency key.
+	 * @param string $reservation_key Optional checkout key to restore as a lease.
+	 * @param string $payment_intent_id Optional canonical payment reference to protect a winning order.
 	 * @return void
 	 */
-	public static function revert_redemption( $idempotency_key ) {
+	public static function revert_redemption( $idempotency_key, $reservation_key = '', $payment_intent_id = '' ) {
 		global $wpdb;
-		$key = substr( sanitize_text_field( (string) $idempotency_key ), 0, 64 );
+		$key                 = substr( sanitize_text_field( (string) $idempotency_key ), 0, 64 );
+		$raw_reservation_key = (string) $reservation_key;
+		$reservation_key     = '' !== $raw_reservation_key ? self::normalise_reservation_key( $raw_reservation_key ) : '';
+		$payment_intent_id   = sanitize_text_field( (string) $payment_intent_id );
+		if ( '' !== $raw_reservation_key && '' === $reservation_key ) {
+			return;
+		}
 		if ( '' === $key ) {
 			return;
 		}
 		$redemptions = self::redemptions_table();
-		$voucher_id  = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "SELECT voucher_id FROM {$redemptions} WHERE idempotency_key = %s", $key )
+		$redemption  = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT voucher_id, order_id FROM {$redemptions} WHERE idempotency_key = %s", $key )
 		);
+		$voucher_id = $redemption ? (int) $redemption->voucher_id : 0;
 		if ( ! $voucher_id ) {
 			return;
 		}
-		$wpdb->delete( $redemptions, array( 'idempotency_key' => $key ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$table = self::table();
-		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "UPDATE {$table} SET status = %s, updated_at = %s WHERE id = %d AND status = %s", 'issued', current_time( 'mysql' ), $voucher_id, 'redeemed' )
-		);
+		if ( ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return;
+		}
+
+		$locked_voucher_id = $voucher_id;
+		$transaction       = false;
+		$committed         = false;
+		try {
+			$transaction = false !== $wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			if ( ! $transaction ) {
+				return;
+			}
+			// Re-read after both locks are held; another retry may have already
+			// reverted the audit row while this request was waiting.
+			$current_redemption = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "SELECT voucher_id, order_id FROM {$redemptions} WHERE idempotency_key = %s FOR UPDATE", $key )
+			);
+			$current_voucher_id = $current_redemption ? (int) $current_redemption->voucher_id : 0;
+			$row = $current_voucher_id === $locked_voucher_id && 0 === (int) $current_redemption->order_id
+				? self::find_by_id( $locked_voucher_id )
+				: null;
+			if ( ! $row || 'redeemed' !== (string) $row->status ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return;
+			}
+
+			// Another browser/webhook worker may have committed the paid order
+			// after this worker saw its own create error. The provider reference is
+			// unique on orders: if it now has a winner, atomically link instead of
+			// reissuing the voucher. If revert won earlier, the successful worker's
+			// post-create redeem below recreates and links the audit.
+			$winning_order_id = '' !== $payment_intent_id && class_exists( 'DoughBoss_Order' )
+				? DoughBoss_Order::find_id_by_payment_intent( $payment_intent_id, true )
+				: 0;
+			if ( ! $winning_order_id && '' !== $reservation_key && class_exists( 'DoughBoss_Order' ) ) {
+				$winning_order_id = DoughBoss_Order::find_id_by_checkout_key( $reservation_key, true );
+			}
+			if ( $winning_order_id ) {
+				$linked = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					$wpdb->prepare( "UPDATE {$redemptions} SET order_id = %d WHERE idempotency_key = %s AND voucher_id = %d AND order_id = 0", $winning_order_id, $key, $locked_voucher_id )
+				);
+				if ( 1 !== (int) $linked ) {
+					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$transaction = false;
+					return;
+				}
+				$committed   = false !== $wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = ! $committed;
+				return;
+			}
+
+			$deleted = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "DELETE FROM {$redemptions} WHERE idempotency_key = %s AND voucher_id = %d AND order_id = 0", $key, $locked_voucher_id )
+			);
+			$meta    = self::row_meta( $row );
+			if ( '' !== $reservation_key ) {
+				$meta[ self::RESERVATION_META_KEY ] = array(
+					'key'        => $reservation_key,
+					'expires_at' => time() + self::RESERVATION_TTL_SECONDS,
+				);
+			} else {
+				unset( $meta[ self::RESERVATION_META_KEY ] );
+			}
+			$table   = self::table();
+			$updated = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "UPDATE {$table} SET status = %s, meta = %s, updated_at = %s WHERE id = %d AND status = %s", 'issued', self::encode_meta( $meta ), current_time( 'mysql' ), $locked_voucher_id, 'redeemed' )
+			);
+			if ( 1 !== (int) $deleted || 1 !== (int) $updated ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return;
+			}
+			$committed   = false !== $wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$transaction = ! $committed;
+		} finally {
+			if ( $transaction && ! $committed ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+			self::release_voucher_lock( $locked_voucher_id );
+		}
 	}
 
 	/**
@@ -763,9 +1158,26 @@ class DoughBoss_Voucher {
 		if ( ! $id ) {
 			return false;
 		}
-		$table = self::table();
-		return (bool) $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "UPDATE {$table} SET status = %s, updated_at = %s WHERE id = %d AND status = %s", 'voided', current_time( 'mysql' ), $id, 'issued' )
-		);
+		if ( ! self::acquire_voucher_lock( $id ) ) {
+			return false;
+		}
+		try {
+			$row = self::find_by_id( $id );
+			if ( ! $row || 'issued' !== (string) $row->status ) {
+				return false;
+			}
+			$reservation = self::row_reservation( $row );
+			if ( $reservation && (int) $reservation['expires_at'] > time() ) {
+				return false;
+			}
+			$meta = self::row_meta( $row );
+			unset( $meta[ self::RESERVATION_META_KEY ] );
+			$table = self::table();
+			return 1 === (int) $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "UPDATE {$table} SET status = %s, meta = %s, updated_at = %s WHERE id = %d AND status = %s", 'voided', self::encode_meta( $meta ), current_time( 'mysql' ), $id, 'issued' )
+			);
+		} finally {
+			self::release_voucher_lock( $id );
+		}
 	}
 }

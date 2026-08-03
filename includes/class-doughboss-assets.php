@@ -294,7 +294,7 @@ class DoughBoss_Assets {
 					'cardInitError'   => __( 'The secure card form could not be loaded. Please refresh the page and try again.', 'doughboss' ),
 					'vClaiming'    => __( 'Getting your code…', 'doughboss' ),
 					'vYourCode'    => __( 'Your code', 'doughboss' ),
-					'vUseInfo'     => __( 'Show this code at the till, or paste it at checkout. One use only.', 'doughboss' ),
+					'vUseInfo'     => __( 'We are emailing this code to your student email. Keep this screen as a backup in case it is delayed. Show the code at the till, or paste it at checkout. One use only.', 'doughboss' ),
 					'vNeedPhone'   => __( 'Please enter your mobile number.', 'doughboss' ),
 					'vNeedStudentEmail' => __( 'Enter a valid student email ending in .edu or .edu.au.', 'doughboss' ),
 					'vEmailMismatch' => __( 'The student emails do not match. Please re-enter them.', 'doughboss' ),

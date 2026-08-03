@@ -75,13 +75,19 @@ catering_parity_ok(
 );
 catering_parity_ok( false !== strpos( $wp, 'data-db-manoush-replay' ) && false !== strpos( $wp_js, "replay.addEventListener('click'" ), 'WordPress provides an accessible replay control' );
 catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce)' ) && false !== strpos( $demo_css, '.hero-replay{display:none;}' ) && false !== strpos( $demo_js, "stage.classList.add('is-assembled')" ), 'demo has reduced-motion still-state and hides replay' );
-catering_parity_ok( false !== strpos( $wp_css, '@media (prefers-reduced-motion:reduce)' ) && false !== strpos( $wp_css, '.db-mh-replay { display: none; }' ) && false !== strpos( $wp_js, "hero.classList.add('is-assembled')" ), 'WordPress has reduced-motion still-state and hides replay' );
+catering_parity_ok(
+	false !== strpos( $wp_css, '@media (prefers-reduced-motion:reduce)' )
+		&& false !== strpos( $wp_css, '.db-mh-replay { display: inline-flex; }' )
+		&& false !== strpos( $wp_js, "sessionStorage.setItem('doughbossHeroMotion', 'on')" )
+		&& false !== strpos( $wp_js, "hero.classList.add('is-assembled')" ),
+	'WordPress keeps the reduced-motion still-state while exposing an explicit replay opt-in'
+);
 catering_parity_ok(
 	false !== strpos( $demo, 'Animation paused by your device motion setting.' )
 		&& false !== strpos( $demo_css, '.hero-motion-reduced{display:inline-flex;}' )
-		&& false !== strpos( $wp, 'Animation paused by your device motion setting.' )
-		&& false !== strpos( $wp_css, '.db-mh-motion-note { display: block; }' ),
-	'demo and WordPress explain when Chrome follows a reduced-motion device setting'
+		&& false !== strpos( $wp, 'Animation paused by your device motion setting. Select replay to play it.' )
+		&& false !== strpos( $wp_css, '.db-mh-motion-note { display: block;' ),
+	'demo and WordPress explain the reduced-motion state and WordPress offers an explicit replay'
 );
 catering_parity_ok(
 	false !== strpos( $demo_js, "stage.classList.add('is-resetting')" )

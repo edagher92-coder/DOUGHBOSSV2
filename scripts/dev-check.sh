@@ -70,6 +70,16 @@ if ! "$PHP_BIN" tests/customer-notification-tracking-contract.php; then
 	failed=$((failed + 1))
 fi
 
+echo "--- claimed voucher email delivery contract ---"
+if ! "$PHP_BIN" tests/voucher-email-delivery.php; then
+	failed=$((failed + 1))
+fi
+
+echo "--- coupon and voucher behavioral contract ---"
+if ! "$PHP_BIN" tests/coupon-voucher-behavior.php; then
+	failed=$((failed + 1))
+fi
+
 echo "--- offline provider contracts ---"
 for contract in tests/tyro-contract.php tests/mpgs-retrieve-contract.php tests/provider-readiness-contract.php tests/pospal-outbox-contract.php; do
 	if ! "$PHP_BIN" "$contract"; then

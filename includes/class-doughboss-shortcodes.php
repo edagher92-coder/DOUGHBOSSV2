@@ -103,7 +103,7 @@ class DoughBoss_Shortcodes {
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
 				<p><?php echo esc_html( $atts['description'] ); ?></p>
 				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php echo esc_html( $atts['replay_label'] ); ?></button>
-				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'Animation paused by your device motion setting.', 'doughboss' ); ?></span>
+				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'Animation paused by your device motion setting. Select replay to play it.', 'doughboss' ); ?></span>
 			</div>
 			<div class="db-mh-stage" aria-hidden="true">
 				<div class="db-mh-world">
@@ -152,7 +152,7 @@ class DoughBoss_Shortcodes {
 		<div class="db-app db-voucher-claim" data-doughboss-voucher-claim>
 			<div class="db-vc-card">
 				<h3 class="db-vc-title"><?php esc_html_e( 'Claim your student voucher', 'doughboss' ); ?></h3>
-				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au.', 'doughboss' ); ?></p>
+				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au. We will email the code to that address and also show it here as a backup.', 'doughboss' ); ?></p>
 				<?php if ( empty( $campaigns ) ) : ?>
 					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
 				<?php else : ?>

@@ -29,7 +29,13 @@ hero_ok( false !== strpos( $css, 'perspective:' ) && false !== strpos( $css, 'tr
 hero_ok( false !== strpos( $css, 'translate3d(' ) && false !== strpos( $css, 'rotateX(' ) && false !== strpos( $css, 'rotateY(' ), 'ingredients use 3D transforms' );
 hero_ok( false !== strpos( $js, 'requestAnimationFrame' ) && false !== strpos( $js, 'offsetWidth' ), 'replay has a paint-safe reset' );
 hero_ok( false !== strpos( $js, 'imagesReady' ) && false !== strpos( $js, "addEventListener('error'" ), 'animation waits for image completion or failure' );
-hero_ok( false !== strpos( $css, '@media (prefers-reduced-motion:reduce)' ) && false !== strpos( $css, '.db-mh-replay { display: none; }' ), 'reduced-motion still hides replay' );
+hero_ok(
+	false !== strpos( $css, '@media (prefers-reduced-motion:reduce)' )
+		&& false !== strpos( $css, '.db-mh-replay { display: inline-flex; }' )
+		&& false !== strpos( $js, "sessionStorage.setItem('doughbossHeroMotion', 'on')" )
+		&& false !== strpos( $js, "document.documentElement.classList.add('db-mh-motion-opted-in')" ),
+	'reduced-motion defaults to a still scene but lets the visitor explicitly replay it for the session'
+);
 hero_ok( false !== strpos( $css, '@media (max-width:720px)' ) && false === strpos( $css, '.db-mh-stage { display: none' ), 'mobile retains the stage' );
 hero_ok( false !== strpos( $css, '@media (max-width:360px)' ) && false !== strpos( $css, '--db-x:-29vw' ), 'WordPress hero contains a 320px-safe composition' );
 hero_ok(

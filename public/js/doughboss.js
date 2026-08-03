@@ -1280,6 +1280,7 @@
 		var payLabel = payLabelFor(totals);
 		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
 		var paymentAttemptKey = newPaymentAttemptKey();
+		var stripeCancelledPayload = null;
 		var summaryType = el('strong', { text: orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup') });
 		var summaryCount = el('span', { text: 'Review your items and total' });
 		var summaryTotal = el('strong', { class: 'db-checkout-summary-total', text: money(totals && totals.total) });
@@ -1378,6 +1379,19 @@
 			submit.disabled = false;
 			payLabel = payLabelFor(totals);
 			submit.textContent = payLabel;
+		}
+
+		function stripePaidReturnFail() {
+			// Stripe may already have captured this Session. Keep the cart/payment
+			// locked so an uncertain browser return can never start a second charge;
+			// the signed webhook remains the recovery authority.
+			setPaymentMutationLock(true);
+			form.setAttribute('aria-busy', 'false');
+			if (onJourneyStep) { onJourneyStep(3); }
+			msg.textContent = 'Your payment may already be complete. Please do not pay again. Keep this page open or contact the shop so we can confirm your order.';
+			msg.className = 'db-checkout-msg db-error';
+			submit.disabled = true;
+			submit.textContent = 'Payment confirmation pending';
 		}
 
 		function placeOrder(payload) {
@@ -1494,7 +1508,9 @@
 			msg.textContent = '';
 			msg.className = 'db-checkout-msg';
 
-			var payload = {
+			// A cancelled Stripe Session remains payable. Its retry must submit the
+			// exact immutable details that created it, even if the DOM is modified.
+			var payload = stripeHosted && stripeCancelledPayload ? Object.assign({}, stripeCancelledPayload) : {
 				order_type: orderType,
 				location_id: getLocationId ? getLocationId() : storedLocationId(),
 				customer_name: name.querySelector('input,textarea').value,
@@ -1617,7 +1633,7 @@
 					stripePending = JSON.parse(window.sessionStorage.getItem('doughbossStripePending') || 'null');
 				} catch (ignoreStripePending) {}
 				var returnedSession = stripeReturnState.get('session_id') || '';
-				if (stripePending && stripePending.sessionId === returnedSession && stripePending.payload && (Date.now() - Number(stripePending.savedAt || 0)) < 30 * 60 * 1000) {
+				if (stripePending && stripePending.sessionId === returnedSession && stripePending.payload && (Date.now() - Number(stripePending.savedAt || 0)) < 45 * 60 * 1000) {
 					checkoutAttemptId = stripePending.checkoutAttemptId;
 					stripePending.payload.payment_intent_id = returnedSession;
 					setPaymentMutationLock(true);
@@ -1633,22 +1649,46 @@
 						['doughboss_stripe_return', 'doughboss_stripe_cancel', 'session_id'].forEach(function (key) { cleanStripeUrl.searchParams.delete(key); });
 						cleanStripeUrl.hash = '';
 						window.history.replaceState({}, document.title, cleanStripeUrl.toString());
-					}).catch(fail);
+					}).catch(stripePaidReturnFail);
 				} else {
-					fail(new Error('The Stripe payment return could not be matched to this cart. If you were charged, contact the shop before trying again.'));
+					stripePaidReturnFail();
 				}
 			} else if (stripeReturnState.get('doughboss_stripe_cancel') === '1') {
+				try {
+					var cancelledStripePending = JSON.parse(window.sessionStorage.getItem('doughbossStripePending') || 'null');
+					if (cancelledStripePending && cancelledStripePending.payload && /^[A-Za-z0-9._:-]{8,128}$/.test(cancelledStripePending.payload.payment_attempt_key || '') && (Date.now() - Number(cancelledStripePending.savedAt || 0)) < 45 * 60 * 1000) {
+						paymentAttemptKey = cancelledStripePending.payload.payment_attempt_key;
+						checkoutAttemptId = cancelledStripePending.checkoutAttemptId || checkoutAttemptId;
+						stripeCancelledPayload = Object.assign({}, cancelledStripePending.payload);
+						orderType = stripeCancelledPayload.order_type;
+						[
+							[name, 'customer_name'], [email, 'customer_email'], [phone, 'customer_phone'],
+							[address, 'address'], [notes, 'notes']
+						].forEach(function (entry) {
+							var input = entry[0].querySelector('input,textarea');
+							input.value = stripeCancelledPayload[entry[1]] || '';
+							input.readOnly = true;
+						});
+						address.style.display = orderType === 'delivery' ? '' : 'none';
+						summaryType.textContent = orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup');
+					}
+				} catch (ignoreStripeCancelledPending) {}
 				window.sessionStorage.removeItem('doughbossStripePending');
-				setPaymentMutationLock(false);
+				setPaymentMutationLock(true);
 				form.setAttribute('aria-busy', 'false');
 				if (onJourneyStep) { onJourneyStep(2); }
-				paymentAttemptKey = newPaymentAttemptKey();
+				// Keep this attempt key: Stripe's cancelled Session is still payable,
+				// so retrying must reuse the same server-side voucher lease and URL.
 				var cancelledStripeUrl = new URL(window.location.href);
 				cancelledStripeUrl.searchParams.delete('doughboss_stripe_cancel');
 				cancelledStripeUrl.hash = '';
 				window.history.replaceState({}, document.title, cancelledStripeUrl.toString());
-				msg.textContent = 'Payment was cancelled. Your cart is still here and no order was placed.';
-				msg.className = 'db-checkout-msg';
+				if (stripeCancelledPayload) {
+					msg.textContent = 'Payment was cancelled. Your original details are restored and locked so you can safely reopen the same secure payment session.';
+					msg.className = 'db-checkout-msg';
+				} else {
+					stripePaidReturnFail();
+				}
 			}
 		}
 

@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.33.0
+Stable tag: 2.33.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -74,6 +74,14 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.33.1 =
+* Makes one-time voucher pricing exclusive to a single immutable Stripe checkout attempt, preventing concurrent carts from paying with the same discount.
+* Moves voucher consumption into the paid-order path, makes browser and webhook recovery share the same lease, and preserves a safe retry after cancellation or failed order persistence.
+* Prevents public access to the legacy voucher redemption endpoint and protects linked redemption audit records from late retries.
+* Emails each successfully claimed student voucher to its verified education address using WordPress mail, with an exactly-once attempt marker and the on-screen code retained as a fallback.
+* Lets reduced-motion visitors explicitly replay the homepage food build and remembers that preference for the browser session.
+* Optimises all 34 distinct menu photos and homepage food scenes for faster delivery without changing their dimensions or transparent edges, and replaces the pies scene with an oven-bakery presentation.
 
 = 2.33.0 =
 * Adds protected, branded `/kitchen/` and `/management/` workspaces using WordPress authentication, staff capabilities, shop scope, REST nonces and optional kitchen-link verification.

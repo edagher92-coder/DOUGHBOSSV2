@@ -1,6 +1,6 @@
 <?php
 /**
- * Customer stage-transition emails (built-in, via wp_mail).
+ * Customer emails (built-in, via wp_mail).
  *
  * Emails the customer at two order milestones: an "we're on it" note when the
  * kitchen accepts the order (with the ETA when one was given) and a "ready for
@@ -8,16 +8,20 @@
  * DoughBoss_SMS: a static class registered via init(), where every handler
  * self-gates on its per-stage toggle and returns immediately when that stage
  * is switched off — no external service is involved, so plain wp_mail() with
- * no extra configuration is enough.
+ * no extra configuration is enough. Successfully claimed vouchers are also
+ * sent to the validated claim email, with the on-screen code retained as the
+ * fallback.
  *
  * Idempotency: kitchen board undo/redo can re-fire the accept/status hooks for
  * the same order, so a small stage log (option `doughboss_email_stage_log`,
  * autoload off) records which stages have already been emailed per order and
  * is pruned to the most recent orders. A short atomic dispatch lock also
- * suppresses two concurrent PHP workers for the same order and stage.
+ * suppresses two concurrent PHP workers for the same order and stage. Voucher
+ * claims use one permanent autoload-off, voucher-id-only option as an atomic
+ * exactly-once attempt marker.
  *
- * Privacy: log lines carry only the order id and the stage — never the
- * customer email address, name or message body.
+ * Privacy: log lines carry only an order/voucher id and stage — never the
+ * customer email address, name, voucher code or message body.
  *
  * @package DoughBoss
  */
@@ -27,7 +31,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Stage-transition email dispatcher. Static; register via init().
+ * Native customer email dispatcher. Static; register via init().
  */
 class DoughBoss_Emails {
 
@@ -55,14 +59,23 @@ class DoughBoss_Emails {
 	const DELIVERY_LOCK_TTL = 300;
 
 	/**
-	 * Register the email hooks. Always safe to call — every handler self-gates
-	 * on its per-stage toggle and does nothing when that stage is switched off.
+	 * One permanent, autoload-off dispatch marker per claimed voucher. The
+	 * voucher id is the only identifier in the option name/value; no customer
+	 * data or voucher code is stored here.
+	 */
+	const VOUCHER_DELIVERY_OPTION_PREFIX = 'doughboss_voucher_email_attempted_';
+
+	/**
+	 * Register the email hooks. Always safe to call: order-stage handlers
+	 * self-gate on their toggles, while a successful voucher claim uses native
+	 * wp_mail() with no external-service setting.
 	 *
 	 * @return void
 	 */
 	public static function init() {
 		add_action( 'doughboss_order_accepted', array( __CLASS__, 'on_order_accepted' ), 10, 2 );
 		add_action( 'doughboss_order_status_changed', array( __CLASS__, 'on_status_changed' ), 10, 2 );
+		add_action( 'doughboss_voucher_claimed', array( __CLASS__, 'on_voucher_claimed' ), 10, 4 );
 	}
 
 	/**
@@ -151,6 +164,209 @@ class DoughBoss_Emails {
 		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_ready_email_body(), $vars );
 
 		self::deliver( $order, $order_id, 'ready', $subject, $body );
+	}
+
+	/**
+	 * Email a successfully claimed voucher to the validated claim address.
+	 *
+	 * The recipient comes only from the claim hook arguments and must also match
+	 * the address persisted on the newly issued voucher. A permanent atomic
+	 * option marker is claimed before wp_mail() so concurrent/replayed hooks can
+	 * never dispatch the same voucher twice. Mail delivery is deliberately
+	 * fire-and-forget: the claim and its on-screen code remain successful even
+	 * when the local mailer returns false or throws.
+	 *
+	 * @param int    $voucher_id New voucher id.
+	 * @param string $code       New voucher code.
+	 * @param string $slug       Campaign slug.
+	 * @param array  $args       Extra claim arguments, including customer_email.
+	 * @return void
+	 */
+	public static function on_voucher_claimed( $voucher_id, $code, $slug, $args = array() ) {
+		$voucher_id = absint( $voucher_id );
+		$code       = trim( (string) $code );
+		if ( ! $voucher_id || '' === $code || ! is_array( $args ) || empty( $args['customer_email'] ) ) {
+			return;
+		}
+
+		$email = sanitize_email( wp_unslash( (string) $args['customer_email'] ) );
+		if ( ! is_email( $email ) ) {
+			return;
+		}
+
+		$voucher = DoughBoss_Voucher::find_by_code( $code );
+		if ( ! is_object( $voucher ) || ! isset( $voucher->id ) || $voucher_id !== absint( $voucher->id ) ) {
+			return;
+		}
+
+		$stored_email = isset( $voucher->customer_email )
+			? sanitize_email( (string) $voucher->customer_email )
+			: '';
+		if ( ! is_email( $stored_email ) || ! hash_equals( strtolower( $stored_email ), strtolower( $email ) ) ) {
+			return;
+		}
+
+		$campaign       = self::voucher_campaign( $slug );
+		$meta           = ! empty( $voucher->meta ) ? json_decode( (string) $voucher->meta, true ) : array();
+		$campaign_label = is_array( $meta ) && ! empty( $meta['label'] )
+			? sanitize_text_field( (string) $meta['label'] )
+			: ( isset( $campaign['label'] ) ? sanitize_text_field( (string) $campaign['label'] ) : '' );
+		if ( '' === $campaign_label ) {
+			$campaign_label = __( 'Voucher offer', 'doughboss' );
+		}
+
+		$type        = isset( $voucher->type )
+			? sanitize_key( $voucher->type )
+			: ( isset( $campaign['type'] ) ? sanitize_key( $campaign['type'] ) : 'amount' );
+		$value       = isset( $voucher->value )
+			? (float) $voucher->value
+			: ( isset( $campaign['value'] ) ? (float) $campaign['value'] : 0 );
+		$value_label = self::voucher_value_label( $type, $value );
+		$site_name   = trim( wp_strip_all_tags( (string) get_bloginfo( 'name' ) ) );
+		if ( '' === $site_name ) {
+			$site_name = __( 'Dough Boss', 'doughboss' );
+		}
+
+		$valid_to = isset( $voucher->valid_to ) ? (string) $voucher->valid_to : '';
+		$scope    = isset( $voucher->scope ) ? sanitize_key( $voucher->scope ) : 'both';
+		$online   = 'instore' === $scope
+			? __( 'Online redemption: This voucher is for in-store use only and cannot be applied online.', 'doughboss' )
+			: __( 'Online redemption: Enter the code in the Voucher code field at checkout and choose Apply before paying.', 'doughboss' );
+
+		$subject = sprintf(
+			/* translators: %s: site/store name. */
+			__( '[%s] Your voucher code', 'doughboss' ),
+			$site_name
+		);
+		$body    = implode(
+			"\n",
+			array(
+				sprintf(
+					/* translators: %s: site/store name. */
+					__( 'Your voucher from %s is ready.', 'doughboss' ),
+					$site_name
+				),
+				sprintf(
+					/* translators: %s: site/store name. */
+					__( 'Store: %s', 'doughboss' ),
+					$site_name
+				),
+				sprintf(
+					/* translators: %s: campaign label. */
+					__( 'Offer: %s', 'doughboss' ),
+					$campaign_label
+				),
+				sprintf(
+					/* translators: %s: formatted discount value. */
+					__( 'Value: %s', 'doughboss' ),
+					$value_label
+				),
+				sprintf(
+					/* translators: %s: voucher code. */
+					__( 'Voucher code: %s', 'doughboss' ),
+					$code
+				),
+				'',
+				__( 'Single-use: This code can be redeemed once only. Do not share it.', 'doughboss' ),
+				self::voucher_expiry_guidance( $valid_to ),
+				$online,
+				__( 'In store: Show this code or the on-screen QR code at the till.', 'doughboss' ),
+				__( 'Keep the on-screen code as a backup in case this email is delayed.', 'doughboss' ),
+			)
+		);
+
+		// add_option() is an atomic insert and the marker remains after either a
+		// success or failure, making this an exactly-once delivery attempt.
+		if ( ! add_option( self::VOUCHER_DELIVERY_OPTION_PREFIX . $voucher_id, time(), '', 'no' ) ) {
+			return;
+		}
+
+		try {
+			$sent = wp_mail( $email, $subject, $body );
+		} catch ( Throwable $exception ) {
+			// Never include the exception: mailer errors can contain recipient/body data.
+			$sent = false;
+		}
+
+		if ( false === $sent ) {
+			self::log( 'voucher: customer email failed for voucher #' . $voucher_id );
+			return;
+		}
+
+		self::log( 'voucher: customer email dispatched for voucher #' . $voucher_id );
+	}
+
+	/**
+	 * Find the campaign definition for a claim slug.
+	 *
+	 * @param string $slug Campaign slug.
+	 * @return array
+	 */
+	private static function voucher_campaign( $slug ) {
+		$slug      = sanitize_key( $slug );
+		$campaigns = DoughBoss_Voucher::campaigns();
+		if ( isset( $campaigns[ $slug ] ) && is_array( $campaigns[ $slug ] ) ) {
+			return $campaigns[ $slug ];
+		}
+		foreach ( (array) $campaigns as $campaign ) {
+			if ( is_array( $campaign ) && isset( $campaign['slug'] ) && $slug === sanitize_key( $campaign['slug'] ) ) {
+				return $campaign;
+			}
+		}
+		return array();
+	}
+
+	/**
+	 * Format an amount or percentage campaign value for plain-text email.
+	 *
+	 * @param string $type  amount|percent.
+	 * @param float  $value Discount value.
+	 * @return string
+	 */
+	private static function voucher_value_label( $type, $value ) {
+		if ( 'percent' === $type ) {
+			$percent = rtrim( rtrim( number_format( max( 0, (float) $value ), 2, '.', '' ), '0' ), '.' );
+			return sprintf(
+				/* translators: %s: percentage number. */
+				__( '%s%% off', 'doughboss' ),
+				$percent
+			);
+		}
+		return sprintf(
+			/* translators: %s: formatted currency amount. */
+			__( '%s off', 'doughboss' ),
+			DoughBoss_Settings::format_price( max( 0, (float) $value ) )
+		);
+	}
+
+	/**
+	 * Build explicit expiry guidance without inventing an expiry for open-ended
+	 * campaign vouchers.
+	 *
+	 * @param string $valid_to Stored voucher expiry, when set.
+	 * @return string
+	 */
+	private static function voucher_expiry_guidance( $valid_to ) {
+		$valid_to = sanitize_text_field( (string) $valid_to );
+		if ( '' === $valid_to ) {
+			return __( 'Expiry: No fixed expiry date is listed. Use it promptly and while the campaign terms remain valid.', 'doughboss' );
+		}
+
+		$display   = $valid_to;
+		$timestamp = strtotime( $valid_to );
+		if ( false !== $timestamp ) {
+			$date_format = (string) get_option( 'date_format', 'F j, Y' );
+			$date_format = '' !== $date_format ? $date_format : 'F j, Y';
+			$display     = function_exists( 'date_i18n' )
+				? date_i18n( $date_format, $timestamp )
+				: gmdate( $date_format, $timestamp );
+		}
+
+		return sprintf(
+			/* translators: %s: voucher expiry date. */
+			__( 'Expiry: Use this voucher by %s.', 'doughboss' ),
+			$display
+		);
 	}
 
 	/**

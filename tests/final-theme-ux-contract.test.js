@@ -37,6 +37,7 @@ check(themeStyle.includes('visibility: hidden') && themeStyle.includes('pointer-
 check(themeStyle.includes('100dvh') && themeStyle.includes('overflow-y: auto'), 'mobile navigation fits short touch screens');
 check(/html\s*\{[^}]*overflow-x:\s*clip/s.test(themeStyle), 'off-canvas navigation cannot create horizontal page scrolling');
 check(themeStyle.includes('@media (prefers-reduced-motion: reduce)'), 'theme honours reduced motion');
+check(hero.includes("sessionStorage.setItem('doughbossHeroMotion', 'on')") && hero.includes('motionAllowed()') && heroStyle.includes('html.db-mh-motion-opted-in'), 'reduced-motion visitors can explicitly replay and retain the hero animation for the session');
 check(hero.includes('Math.abs(centre)') && hero.includes("window.addEventListener('scroll'"), 'hero blowout follows scroll in both directions');
 check(hero.includes("window.addEventListener('resize'"), 'hero recalculates its scene responsively');
 check(['hero-sujuk-special-v5.webp', 'hero-folded-zaatar-v4.webp', 'hero-cheese-manoush-v4.webp', 'hero-spinach-fatayer-v4.webp', 'hero-chicken-wrap-v4.webp'].every((asset) => shortcodes.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'hero uses five present, distinct production food assets');

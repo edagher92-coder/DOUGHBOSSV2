@@ -48,6 +48,9 @@ jobs:
       - name: Customer to KDS REST contract
         run: php tests/customer-kds-e2e-contract.php
 
+      - name: Coupon and voucher behavioral contract
+        run: php tests/coupon-voucher-behavior.php
+
       - name: After-hours pre-order request contract
         run: php tests/preorder-backend.php
 

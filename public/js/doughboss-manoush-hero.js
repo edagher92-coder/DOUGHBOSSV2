@@ -2,7 +2,23 @@
 (function () {
 	'use strict';
 	var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	var motionOptedIn = false;
+	try { motionOptedIn = window.sessionStorage.getItem('doughbossHeroMotion') === 'on'; } catch (ignore) {}
 	var heroes = document.querySelectorAll('[data-db-manoush-hero]');
+
+	function motionAllowed() { return !reduceMotion || motionOptedIn; }
+
+	function enableMotion() {
+		if (!reduceMotion || motionOptedIn) { return; }
+		motionOptedIn = true;
+		try { window.sessionStorage.setItem('doughbossHeroMotion', 'on'); } catch (ignore) {}
+		document.documentElement.classList.add('db-mh-motion-opted-in');
+		for (var index = 0; index < heroes.length; index += 1) {
+			heroes[index].classList.remove('is-motion-paused');
+		}
+	}
+
+	if (reduceMotion && motionOptedIn) { document.documentElement.classList.add('db-mh-motion-opted-in'); }
 
 	function releaseScrollHero(hero) {
 		Array.prototype.forEach.call(hero.querySelectorAll('.db-mh-central,.db-mh-ingredient'), function (part) {
@@ -16,7 +32,7 @@
 		releaseScrollHero(hero);
 		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); }
 		if (hero._dbManoushUnlockTimer) { window.clearTimeout(hero._dbManoushUnlockTimer); }
-		if (reduceMotion) { hero.classList.remove('is-resetting'); hero.classList.remove('is-exploded'); hero.classList.add('is-assembled'); return; }
+		if (!motionAllowed()) { hero.classList.remove('is-resetting'); hero.classList.remove('is-exploded'); hero.classList.add('is-assembled'); return; }
 		hero._dbManoushPlaying = true;
 		hero._dbManoushHoldUntil = Date.now() + 3100;
 		hero.classList.remove('is-exploded');
@@ -52,7 +68,7 @@
 	}
 
 	function prepareScrollHero(hero) {
-		if (reduceMotion || hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
+		if (!motionAllowed() || hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
 		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); hero._dbManoushTimer = 0; }
 		hero.classList.remove('is-exploded', 'is-assembled');
 		hero.classList.add('is-scroll-driven');
@@ -103,16 +119,17 @@
 
 	function wire(hero) {
 		var replay = hero.querySelector('[data-db-manoush-replay]');
-		if (replay) { replay.addEventListener('click', function () { play(hero); }); }
-		if (reduceMotion) { return; }
+		if (replay) { replay.addEventListener('click', function () { enableMotion(); play(hero); }); }
+		if (!motionAllowed()) { hero.classList.add('is-motion-paused'); return; }
 		imagesReady(hero, function () { play(hero); });
 	}
 
 	for (var i = 0; i < heroes.length; i += 1) { wire(heroes[i]); }
 
-	if (!reduceMotion && heroes.length) {
+	if (heroes.length) {
 		var queued = false;
 		function renderScrollScenes() {
+			if (!motionAllowed()) { queued = false; return; }
 			var viewport = window.innerHeight || 800;
 			for (var index = 0; index < heroes.length; index += 1) {
 				var hero = heroes[index];
@@ -135,6 +152,6 @@
 		}
 		window.addEventListener('scroll', requestScrollScene, { passive: true });
 		window.addEventListener('resize', requestScrollScene);
-		requestScrollScene();
+		if (motionAllowed()) { requestScrollScene(); }
 	}
 }());
