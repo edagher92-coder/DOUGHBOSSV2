@@ -83,7 +83,7 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.17.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.17.0' );
+ok( '1.18.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.18.0' );
 ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Activator', 'payment_storage_ready' ), 'payment attempt storage readiness gate exists' );
