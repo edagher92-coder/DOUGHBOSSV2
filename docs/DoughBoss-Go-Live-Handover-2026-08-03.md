@@ -1,156 +1,207 @@
-# DoughBoss go-live handover
+# DoughBoss 2.33.2 go-live handover
 
 Date: 3 August 2026
 
 Site: https://doughboss.com.au/
 
-Document status: live version and post-test safety state verified. Public ordering remains intentionally closed while the remaining live-launch checks are completed.
+Document status: the 2.33.2 release is installed and the site is in a safe, closed state. Public ordering and card payments remain intentionally OFF while the final acceptance work is completed.
 
-This document deliberately contains no passwords, API keys, webhook secrets, card details, personal contact details or full voucher codes.
+This document contains no passwords, API keys, webhook signing secrets, card data, personal contact details or complete voucher codes.
 
-## Release and deployment record
+## Current live state
+
+The latest independently confirmed state is:
+
+- Canonical DoughBoss plugin: **2.33.2 active**.
+- DoughBoss database schema: **1.18.0**.
+- Payment gateway: **Stripe**.
+- Stripe selector: **Live**.
+- Live publishable key: present.
+- Live webhook signing secret: the settings page indicates that a secret is set.
+- Live secret-key readiness: **not confirmed**. The Live secret-key row has no configured/readiness indicator, so live payments must remain fail-closed.
+- Accept orders: **OFF**.
+- Accept card payments: **OFF**.
+- DoughBoss Migration Gate: **OFF**, after the safe state was independently restored and checked.
+- Toolset Types 3.4.2: **inactive and retained** with its legacy data.
+- Public ordering: browse-only/Coming Soon.
+
+Do not switch on public ordering or live card payments until the Live secret-key readiness indicator passes and the remaining acceptance evidence in this handover is complete.
+
+## Release record
 
 | Item | Verified value |
 | --- | --- |
-| Live DoughBoss plugin | 2.33.1 active on `doughboss.com.au` |
+| Live DoughBoss plugin | 2.33.2 |
+| Database schema | 1.18.0 |
 | Source branch | `codex/final-visual-polish` |
-| Source commit | `a4f6d8cdc3b3deecd412b93d8eba17b9ba9a7679` |
-| Release | [v2.33.1-rc.2](https://github.com/edagher92-coder/DOUGHBOSSV2/releases/tag/v2.33.1-rc.2) |
-| Installation ZIP | [doughboss.zip](https://github.com/edagher92-coder/DOUGHBOSSV2/releases/download/v2.33.1-rc.2/doughboss.zip) |
-| ZIP size | 7,735,268 bytes |
-| ZIP SHA-256 | `a61b1eba2a3ae44e33ca5539e106dcec796a38d23b09a33f5329eb02a8e51cf7` |
+| Source commit | `16f2c4f9eee17d51170527034b304274ce3b8edd` |
+| Release | [v2.33.2-rc.1](https://github.com/edagher92-coder/DOUGHBOSSV2/releases/tag/v2.33.2-rc.1) |
+| Installation ZIP | [doughboss.zip](https://github.com/edagher92-coder/DOUGHBOSSV2/releases/download/v2.33.2-rc.1/doughboss.zip) |
+| ZIP size | 7,735,635 bytes |
+| ZIP SHA-256 | `22987e2a059df55e87aac34611c31cad70b190b7651c4577972e524fe0441b50` |
 | Pull request | [PR #56](https://github.com/edagher92-coder/DOUGHBOSSV2/pull/56) |
+| Green CI | [Build 30803584886](https://github.com/edagher92-coder/DOUGHBOSSV2/actions/runs/30803584886) and [build 30803582269](https://github.com/edagher92-coder/DOUGHBOSSV2/actions/runs/30803582269) |
 
-Version 2.33.1 was deployed through a small verified updater because the host's normal WordPress upload limit rejected the full package. The updater verified the exact package size and SHA-256 before replacing the active plugin. A recoverable copy of the previous 2.32.0 plugin was retained outside the active plugins directory.
+The release ZIP is the canonical installable package. Do not use an older locally named `doughboss.zip`, because WordPress may offer to replace 2.33.2 with an earlier version.
 
-Two older DoughBoss installations, versions 2.22.1 and 2.25.5, remain inactive and were not used for this release. Both temporary verified-updater helper folders were safely deleted after the 2.33.1 activation was confirmed. The recoverable 2.32.0 backup remains retained outside the active plugins directory. Do not bulk-delete similarly named DoughBoss folders or remove that backup without first verifying the exact active plugin file and taking a current files-and-database backup.
+## Customer-facing release
 
-## What changed for customers
+- The customer site and ordering catalogue use 34 distinct, high-resolution square WebP menu images rather than repeated placeholder photos.
+- The Meat image is brighter and presented as properly oven-baked rather than burnt.
+- Dough Boss Special was renamed **Sujuk Special**.
+- **Zaatar & Cheese** remains a separate product, not an add-on.
+- Current customer copy uses **oven-baked**. Stone-baked and wood-fired wording was removed from the active customer-facing release assets; historical briefs and prototypes may still retain old wording for audit context.
+- The home food scene and replay control were refined. Normal-motion devices can replay the food movement; reduced-motion preferences remain respected for accessibility.
+- The menu is searchable and grouped into Manoush, Pizza, Pies, Wraps, Desserts and Drinks.
+- When ordering is closed, customers can still browse the menu and see Coming Soon rather than reaching an incomplete checkout.
 
-- The site and ordering menu now use the 2.33.1 visual set: 34 menu items with 34 distinct high-resolution 1254 x 1254 WebP images.
-- Repeated placeholder food photos were replaced with item-specific presentation. The Meat image is brighter and no longer appears burnt.
-- Dough Boss Special was renamed to **Sujuk Special**.
-- **Zaatar & Cheese** remains its own menu item, not an add-on to another product.
-- Customer copy now says **oven-baked**. Stone-baked and wood-fired wording was removed from the current live assets.
-- The home-page food scene is cleaner and more realistic. The replay control lets a customer deliberately replay the food movement. Devices that request reduced motion are respected rather than being forced to animate.
-- The ordering interface remains responsive, searchable and grouped by Manoush, Pizza, Pies, Wraps, Desserts and Drinks.
-- When ordering is closed, the menu remains available for browsing and clearly shows that ordering is coming soon.
+## Private kitchen, catering and management workspaces
 
-## Checkout and payment changes
+The staff interfaces are hosted on the main DoughBoss domain. They are not GitHub Pages, ordinary WordPress admin pages or public menu links.
 
-- DoughBoss calculates the cart, GST, discounts, location and fulfilment details on the server.
-- Online payment uses a Stripe-hosted Checkout Session. Card information is entered on Stripe's page and is not handled or stored by WordPress.
-- Eligible customers see Apple Pay or Google Pay automatically when Stripe, the browser, the device and the customer's wallet permit it. Card entry remains the fallback.
-- One durable payment attempt is reused across retries. Amount, currency, location, cart, table/QR context and checkout identity are verified before an order is created.
-- Voucher redemption and order creation are coordinated server-side to prevent a voucher being consumed without its matching order.
-- Signed Stripe webhooks provide recovery when the customer pays but closes the browser before returning to the confirmation page.
-- Payment and order safety controls remain separate: management can close orders and card payments without deleting configuration or payment references.
-- The existing Mastercard/MPGS configuration remains available as a rollback path, but Stripe is the intended online gateway. Tyro remains the in-store EFTPOS path.
-
-## Controlled checkout evidence
-
-The following evidence was produced in Stripe Test mode behind the DoughBoss Migration Gate:
-
-- Basket before discount: one Spring Water, A$3.50 including GST.
-- Voucher discount: A$1.00.
-- Final Stripe amount: A$2.50 AUD.
-- Stripe-hosted Checkout displayed wallet-first options where eligible, plus card fallback.
-- Payment returned to the DoughBoss confirmation page as paid.
-- DoughBoss order created: **DB-260803-NTSCXM**, total **A$2.50**.
-- The order-creation path performs server-side voucher redemption as part of the paid-order transaction; the full voucher code is intentionally omitted from this document.
-
-Post-payment verification completed:
-
-1. Admin Orders shows exactly one order for today: **DB-260803-NTSCXM**, A$2.50, paid and now **Completed**.
-2. Repeated navigation back to the return page followed by an admin recount still showed one order; no duplicate order was created.
-3. Vouchers shows exactly one **Redeemed online** row for the test voucher.
-4. A fresh-cart attempt to reuse that voucher was rejected before payment.
-5. Kitchen initially showed exactly one active paid Pickup ticket for Spring Water with the do-not-prepare test note. The ticket was deliberately moved through the full touch workflow: accepted, prep, sent to Pass and collected.
-6. The KDS cleanup completed correctly: Admin now shows the order as **Completed**, while MAKE and PASS both show 0 active tickets.
-7. Management shows Orders 1, gross sales A$2.50, paid A$2.50 and unresolved payments 0.
-8. An invalid-signature POST to the live Stripe webhook returned HTTP 400 rather than the former HTTP 503. This confirms that the route is publicly reachable and rejects an invalid signature. A genuine Stripe Dashboard delivery with a 2xx response remains to be verified because Stripe Dashboard access was unavailable during this check.
-
-## Kitchen and management access
-
-| Workspace | URL | Recommended WordPress role |
+| Workspace | Canonical URL | Minimum role |
 | --- | --- | --- |
-| Main kitchen MAKE screen | https://doughboss.com.au/kitchen/?screen=make | DoughBoss Kitchen |
-| Pass and pickup | https://doughboss.com.au/kitchen/?screen=pass | DoughBoss Kitchen |
+| Kitchen MAKE | https://doughboss.com.au/kitchen/ | DoughBoss Kitchen |
+| Kitchen PASS | https://doughboss.com.au/kitchen/?screen=pass | DoughBoss Kitchen |
 | Catering production | https://doughboss.com.au/catering-kitchen/ | DoughBoss Kitchen |
-| Owner/manager overview | https://doughboss.com.au/management/ | DoughBoss Manager |
-| WordPress sign-in | https://doughboss.com.au/wp-login.php | Individual staff account |
+| Management | https://doughboss.com.au/management/ | DoughBoss Manager |
+| Sign-in | https://doughboss.com.au/wp-login.php | Individual staff account |
 
-These workspaces are protected by WordPress authentication, DoughBoss capabilities, the assigned-shop scope and REST nonces. An optional kitchen board key can add a second control for a bookmarked kitchen URL. `/kitchen/`, `/catering-kitchen/` and `/management/` are intentionally absent from public navigation and send no-index, no-cache and anti-framing headers. An unauthenticated request redirects to the branded WordPress sign-in and returns to the requested staff workspace after authentication. The older `/kitchen/?screen=catering` bookmark remains compatible.
+`/kitchen/?screen=catering` remains a backward-compatible bookmark, but `/catering-kitchen/` is the canonical catering URL.
 
-Never place a shared administrator password on the kitchen computer. Create one individual Kitchen account with the **DoughBoss Kitchen** role and a separate owner account with the **DoughBoss Manager** role. The kitchen role can use the order board and voucher scanner without receiving full WordPress administration. The manager role can operate DoughBoss orders, menu, settings, vouchers and kitchen screens without being made a full WordPress administrator.
+The three staff workspaces are absent from public navigation and require WordPress authentication, the appropriate DoughBoss capability, assigned-shop scope and REST nonces. Logged-out requests redirect to sign-in and return to the requested workspace after authentication. Their responses use no-index, no-cache and anti-framing protections.
 
-### How staff use the kitchen screen
+Use named staff accounts with unique passwords held in the organisation's password manager. Do not place a shared administrator account on the kitchen computer. The Kitchen role is for production screens and voucher scanning; the Manager role is for orders, reporting, settings, vouchers and recovery.
 
-1. Sign in once with the dedicated Kitchen account and open the MAKE URL.
-2. Use full-screen Chrome on the 23.8-inch Lenovo touch monitor at 1920 x 1080 and 100% scaling.
-3. Confirm the connection and sound indicators before service.
-4. Move each ticket through the production lanes using the large touch controls; payment and allergy warnings remain visible on the ticket.
-5. Use the catering URL on the smaller display. Each touch monitor needs its own video connection and its own USB data connection.
-6. Keep the mini PC on Ethernet for the primary order feed; Wi-Fi can remain a fallback.
+### Kitchen hardware use
 
-### How management use the dashboard
+- Use the main MAKE workspace full-screen in Chrome on the 23.8-inch Lenovo touch monitor at 1920 x 1080 and 100% scaling.
+- Use the smaller display for `/catering-kitchen/` when catering production is required.
+- Each touchscreen needs both a video path and its own USB data path for touch input.
+- Keep the mini PC on Ethernet as the primary order-feed connection, with Wi-Fi only as fallback.
+- Confirm the board connection and sound indicators at the start of every service.
 
-1. Sign in with an individual Manager account and open the management URL.
-2. Review today's order count, sales, paid totals, unresolved payments and POSPal status before opening orders.
-3. Use Orders for fulfilment and payment investigation, Vouchers for campaigns and redemptions, and Payment Recovery for successful payments that did not immediately create an order.
-4. Close **Accept orders** immediately if kitchen capacity, connectivity or payment recovery is not healthy.
+## Stripe checkout architecture
 
-## Coupon email delivery
+DoughBoss 2.33.2 uses a per-order **Stripe-hosted Checkout Session**:
 
-Coupon delivery can use the existing WordPress email system without adding a new paid subscription:
+- WordPress calculates the authoritative cart, discount, GST, location and fulfilment data on the server.
+- Card and wallet details are collected on Stripe's hosted page, not by WordPress.
+- Apple Pay and Google Pay appear automatically when Stripe, the account, domain, browser, device and customer wallet are eligible. Card entry remains the fallback.
+- A durable, immutable payment attempt is reused for safe retries. Amount, currency, cart, location, fulfilment and checkout identity are verified before order creation.
+- Signed webhooks recover a paid order if the customer closes the browser before the return page finishes.
+- Return-page replay and webhook replay are idempotent: they must not create duplicate payments, orders, voucher redemptions, emails or KDS tickets.
+- Cancelling Stripe Checkout retains the same Checkout Session, frozen order snapshot and voucher reservation for safe retry. Cancellation does not redeem the voucher and does not create a redemption that then needs to be reverted.
 
-- A successful website or staff-assisted **campaign claim** sends the claimed voucher to the validated claim email through WordPress `wp_mail()`.
-- The current SMTP plugin transports that WordPress mail. If its existing plan/quota is sufficient, there is no extra DoughBoss fee or subscription.
-- Student campaigns require an eligible `.edu` or `.edu.au` address and enforce the campaign's duplicate-claim and daily-cap rules.
-- A manually created one-off voucher does **not** send the campaign-claim email automatically. It can be shared manually, or the customer should use the campaign claim flow when automatic delivery is required.
+The Mastercard/MPGS configuration remains a rollback option. Tyro remains the in-store EFTPOS route. Neither fallback should be switched while a checkout is in progress.
 
-WP Mail SMTP Lite accepted and sent a test message successfully to DoughBoss's own orders inbox. This confirms that WordPress can hand mail to the configured transport without requiring a paid plugin subscription. Actual receipt in the destination inbox was not independently confirmed, and the owner-controlled `.edu`/`.edu.au` campaign-claim test is still pending. Complete that claim, then confirm inbox receipt, From address, subject, spam-folder behaviour and the SMTP/email log. Do not use an invented or third-party address for this test. A paid mail service is only needed later if the current SMTP allowance or deliverability proves insufficient.
+## Current Stripe blocker
 
-## Verified post-test safety state
+The Live publishable key is present and the Live webhook signing-secret field indicates set, but the Live secret-key row does not report configured/readiness. That means Live Stripe remains blocked by design.
 
-The controlled checkout temporarily used Stripe Test mode with **Accept orders** and **Accept card payments** enabled while the Migration Gate shielded public customers. The settings were then restored and verified on a cache-busted live reload.
+The owner or host administrator must place the correct Live server secret in the protected hosting environment under the exact name expected by the plugin, restart the relevant PHP worker/cache if required, and reload the DoughBoss Payments page. Do not paste the value into chat, screenshots, source control or this document.
 
-The confirmed post-test state is:
+Only after the plugin visibly reports Live secret readiness may the team perform one tightly controlled live acceptance payment. Accept orders and Accept card payments must stay OFF until that moment.
 
-- Active gateway: Stripe.
-- Stripe selector: Live configuration.
-- Live webhook recovery: configured.
-- Live secret-key readiness: **not confirmed**. The Live secret-key row did not show the plugin's “A key is set” indicator, so live card payments must remain fail-closed until the protected host value is corrected and the indicator is rechecked.
-- Accept orders: **OFF**.
-- Accept card payments: **OFF**.
-- Migration Gate: inactive.
-- Maintenance: inactive.
-- Public order page: HTTP 200, browse-only, **Coming Soon**.
-- Kitchen and Management remain protected and redirect unauthenticated visitors to sign-in.
+## Acceptance evidence: current versus historical
 
-The public site can be browsed, but ordering and card payments are intentionally closed. These two controls must remain off until the remaining go-live checks are signed off and kitchen staff are ready for real orders.
+### Current 2.33.2 status
 
-## Remaining go-live checks
+- Admin Menu Items and Locations smoke checks passed after Toolset Types was deactivated.
+- Public pages, DoughBoss REST endpoints and the webhook route continued to respond after the unrelated WordPress security updates.
+- Logged-out Kitchen, Catering and Management requests remained protected and redirected to sign-in.
+- The approved navigation proof passed.
+- The fresh 2.33.2 order-preparation phase then timed out before Stripe Checkout. No payment was submitted. Run tag `QA-20260803-231050` has zero matching orders.
+- The site was safely restored: the Stripe selector is Live; public config reports `orders=false`, `cards=false` and `gateway=stripe`; `/order/` returns HTTP 200 with Coming Soon; and Migration Gate is deactivated.
+- A fresh controlled 2.33.2 Stripe Test recovery run is still pending and not accepted. Do not describe 2.33.2 as payment-accepted until its signed webhook, one-order result, KDS, email, tracking and management evidence are recorded.
 
-1. Set or correct the protected Live Stripe server key, restart the PHP worker/cache if required, and confirm that the Live secret-key row reports “A key is set.” Test readiness and Live webhook recovery are configured; the Live server-key indicator is the current blocker.
-2. From Stripe Dashboard, confirm the live webhook subscribes to the required Stripe Checkout and PaymentIntent events and record one genuine successful 2xx delivery. The HTTP 400 invalid-signature probe is reachability/security evidence, not a substitute for this Stripe delivery.
-3. Test Apple Pay on eligible Safari/Apple Wallet hardware and Google Pay on eligible Chrome/Google Wallet hardware. Confirm clean card fallback on an ineligible device.
-4. Run the remaining declined-card, 3-D Secure, abandoned-browser recovery and full-refund paths.
-5. Confirm one controlled live order reaches its confirmation email, customer tracking, Kitchen MAKE, Kitchen PASS, Management and the POSPal outbox with the same order number and total, then refund it.
-6. Test one owner-controlled campaign claim to an eligible `.edu` or `.edu.au` address and retain its inbox and mail-log evidence.
-7. Rotate any password that has previously appeared in a chat or screenshot, then use unique staff accounts and a password manager.
-8. Take a fresh files-and-database backup immediately before the live acceptance order.
-9. Open public ordering only after management signs the acceptance evidence and kitchen staff are ready to receive real tickets.
+### Historical supporting evidence
 
-## WordPress maintenance notices
+These records prove earlier flows but do not replace a fresh 2.33.2 acceptance run:
 
-WordPress currently reports **two high-risk vulnerabilities** and also offers these plugin updates:
+- **DB-260803-NTSCXM**: historical 2.33.1 Stripe Test/voucher order. A$3.50 basket, A$1.00 voucher discount and A$2.50 paid total. Earlier checks found one order, one online voucher redemption, no duplicate after return replay, and successful Kitchen progression to Completed.
+- **DB-260728-FUBKMT**: historical A$3.50 Stripe Test order for one Spring Water. Earlier checks found one PaymentIntent, one order and one Kitchen ticket after a duplicate-return check.
+- An invalid-signature POST to `/wp-json/doughboss/v1/stripe-webhook` returned HTTP 400. This is useful reachability and signature-rejection evidence only; it is not proof of a genuine signed Stripe delivery receiving HTTP 2xx.
 
-- Contact Form CFDB7: 1.3.6 to 1.4.0.
-- Really Simple Security: 9.6.1 to 9.7.0.
+Historical test orders should remain identifiable as test evidence and must not be counted as current 2.33.2 live acceptance.
 
-These unrelated plugins were not changed during the DoughBoss release so that payment and ordering verification remained isolated. Review the vulnerability details and apply the updates promptly in a separately backed-up maintenance window, then test sign-in, forms, REST/webhook access, kitchen, management and ordering before ending that window.
+## Voucher and coupon email status
+
+Voucher claiming can use WordPress's existing mail path without a new paid DoughBoss subscription:
+
+- A successful campaign claim sends the voucher to the validated claim email using WordPress `wp_mail()`.
+- Student offers require an eligible `.edu` or `.edu.au` address and enforce duplicate-claim and daily-cap rules.
+- The same email submitted twice must produce only one voucher and one email.
+- A manually created one-off voucher does not automatically trigger the campaign-claim email.
+- The on-screen code and self-hosted QR remain the fallback if mail delivery fails.
+
+Important limitation: the exactly-once email-attempt marker is claimed before `wp_mail()` runs. A transport failure is not automatically retried. Therefore, successful message handoff alone is insufficient; the final acceptance test must confirm receipt in an owner-controlled eligible inbox, correct sender and subject, spam behaviour and one matching mail-log entry.
+
+An earlier WP Mail SMTP test was accepted by the configured transport, but destination-inbox receipt was not independently confirmed. The owner-controlled `.edu`/`.edu.au` end-to-end campaign claim remains pending. A paid delivery service is needed only if the current allowance or deliverability proves inadequate.
+
+## POSPal status and launch gaps
+
+The POSPal order mirror uses a durable, retry-safe outbox with stable remote references. The voucher bridge is not yet equivalent:
+
+- POSPal member-coupon grant/revoke has no real provider-network automated test.
+- Voucher revoke is currently fire-and-forget rather than stored in the durable outbox. A failed revoke could leave a mirrored POSPal coupon active after the WordPress voucher was redeemed online.
+- The POSPal order payload sends the discounted final `totalAmount`, while item lines retain their original unit prices and contain no explicit voucher-discount line. The till's treatment of that difference must be verified on one controlled Revesby order.
+
+Keep POSPal member-coupon bridging disabled for production until grant, use/revoke and recovery are proven on the real account and an operator recovery procedure is approved. Do not bulk-retry an ambiguous outbox record.
+
+## Toolset and WordPress maintenance
+
+Toolset Types 3.4.2 is vulnerable and now inactive. It has no verified DoughBoss runtime dependency, and DoughBoss Menu Items and Locations continued to work after deactivation. However, the WordPress database still contains legacy Toolset data, including 43 Menu Items, 3 Locations and associated field groups.
+
+Do not delete Toolset or its legacy records yet. Retain it inactive until the final export and postponed backup are complete and management approves the cleanup.
+
+Completed unrelated maintenance:
+
+- Contact Form CFDB7 updated from 1.3.6 to 1.4.0. Existing submission counts were preserved: Apply for Franchise 0, Contact Us 356, Apply for a Job 16, Catering 43, Wholesale 27 and Franchising 8.
+- Really Simple Security updated from 9.6.1 to 9.7.0.
+- Inactive vulnerable Creatify and Lemmony themes were removed.
+- The obsolete inactive DoughBoss Verified Updater 2.33.1 was removed.
+- Four inactive duplicate WPVibe repair helpers were removed; WPVibe itself was retained.
+
+The public site, staff-access redirects, DoughBoss REST routes and webhook route were smoke-tested after this maintenance. These are smoke results, not a substitute for the payment acceptance run.
+
+## Remaining work before go-live
+
+Use [DoughBoss-Live-Acceptance-Runbook.md](DoughBoss-Live-Acceptance-Runbook.md) for the complete sequence. The launch blockers are:
+
+1. Correct the protected Live Stripe server key and confirm the plugin's Live readiness indicator.
+2. Run the fresh 2.33.2 Stripe Test recovery/idempotency test through Stripe Checkout and retain one successful signed webhook delivery. The completed navigation proof and timed-out order-preparation run do not satisfy this item.
+3. Complete one owner-controlled `.edu`/`.edu.au` voucher claim and verify exactly one received email.
+4. Complete the voucher-adjusted Stripe Test order using one POSPal-mapped item priced above A$5; verify the exact discounted total and single redemption.
+5. Confirm the same order number and total across Stripe, customer email, tracking, Kitchen MAKE/PASS, Management and, only with approval, POSPal.
+6. Test declined-card retry, 3-D Secure, abandoned-browser recovery and an idempotent refund.
+7. Test Apple Pay on eligible Apple hardware and Google Pay on eligible Android/Chrome hardware, plus card fallback on an ineligible device.
+8. From Stripe Dashboard, confirm the Live endpoint event subscriptions and capture one genuine signed 2xx delivery during the controlled Live test.
+9. Rotate any password or credential that has appeared in a chat or screenshot; use named staff accounts and a password manager.
+10. Obtain management acceptance and confirm kitchen staff are ready before opening ordering.
+
+## Backup timing
+
+Management has explicitly postponed backup work until all other implementation, deployment, repository, CI, security cleanup and acceptance tasks are complete.
+
+Do not interrupt the current completion sequence to take another backup. The final fresh files-and-database backup is the **last pre-launch protection step**, after the repository and CI are final and all implementation and acceptance checks pass, immediately before management authorises public go-live. Record its time and recovery location without recording credentials in this handover. Toolset and its legacy data must remain retained until that final backup is complete.
+
+## Go-live sequence
+
+After every blocker above passes:
+
+1. Confirm that the controlled 2.33.2 Test and Live acceptance evidence, including the approved small live order and any required refund, is complete with orders/cards returned OFF.
+2. Obtain provisional technical and operational sign-off to proceed to the final backup.
+3. Take and verify the postponed final files-and-database backup.
+4. Obtain final management authorisation for public go-live after the verified backup is recorded.
+5. Confirm Stripe is Live, Live readiness is configured, webhook recovery is healthy and POSPal is at its approved baseline.
+6. Confirm Kitchen MAKE, PASS, catering and management screens are signed in and monitored.
+7. Turn Accept card payments ON.
+8. Turn Accept orders ON.
+9. Monitor the first real orders, payments, webhooks, Kitchen and unresolved-payment recovery closely during the opening window.
+
+If any check fails, immediately turn Accept orders and Accept card payments OFF. Preserve the order, payment attempt, Stripe reference, webhook record, voucher audit and POSPal reference. Reconcile any successful payment before retrying or changing gateways.
 
 ## Rollback reference
 
-If a live acceptance order fails, switch **Accept orders** and **Accept card payments** off first. Preserve the order, payment attempt, Stripe reference and webhook record. Reconcile any payment that succeeded, refund through the provider recorded on that order when required, and only change gateways when no checkout is in progress. The retained 2.32.0 plugin backup is for a controlled technical rollback; it must not be restored over live data without a database-compatible rollback review.
+The v2.33.2-rc.1 release asset and its recorded checksum are the known package for this handover. A code rollback must be reviewed for database compatibility and must never overwrite live order/payment data blindly. The operational first response is always to close orders and card payments, preserve evidence and reconcile money movement before changing code or gateways.
