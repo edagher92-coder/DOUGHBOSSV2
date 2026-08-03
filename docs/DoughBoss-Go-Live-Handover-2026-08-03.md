@@ -119,6 +119,8 @@ The confirmed post-test state is:
 
 - Active gateway: Stripe.
 - Stripe selector: Live configuration.
+- Live webhook recovery: configured.
+- Live secret-key readiness: **not confirmed**. The Live secret-key row did not show the plugin's “A key is set” indicator, so live card payments must remain fail-closed until the protected host value is corrected and the indicator is rechecked.
 - Accept orders: **OFF**.
 - Accept card payments: **OFF**.
 - Migration Gate: inactive.
@@ -130,7 +132,7 @@ The public site can be browsed, but ordering and card payments are intentionally
 
 ## Remaining go-live checks
 
-1. Confirm Test and Live Stripe readiness separately: publishable key, server-side secret key and the correct signing secret for each endpoint.
+1. Set or correct the protected Live Stripe server key, restart the PHP worker/cache if required, and confirm that the Live secret-key row reports “A key is set.” Test readiness and Live webhook recovery are configured; the Live server-key indicator is the current blocker.
 2. From Stripe Dashboard, confirm the live webhook subscribes to the required Stripe Checkout and PaymentIntent events and record one genuine successful 2xx delivery. The HTTP 400 invalid-signature probe is reachability/security evidence, not a substitute for this Stripe delivery.
 3. Test Apple Pay on eligible Safari/Apple Wallet hardware and Google Pay on eligible Chrome/Google Wallet hardware. Confirm clean card fallback on an ineligible device.
 4. Run the remaining declined-card, 3-D Secure, abandoned-browser recovery and full-refund paths.
