@@ -66,13 +66,12 @@ class DoughBoss_Shortcodes {
 				'variant'       => 'bites',
 				'kicker'        => __( 'Catering, made fresh', 'doughboss' ),
 				'title'         => __( 'The menu comes together here.', 'doughboss' ),
-				'description'   => __( 'Mini zaatar, cheese and meat manoush with spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
+				'description'   => __( 'Mini zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies, oven-baked fresh to order.', 'doughboss' ),
 				'replay_label'  => __( 'See the spread come together', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
-				// Five deliberately different silhouettes keep the build readable as food
-				// moves in and out: oval meat manoush, folded zaatar, open cheese,
-				// triangular spinach fatayer and a cut-open chicken wrap.
-				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-meat-manoush-v4.webp',
+				// Five deliberately different foods keep the build readable as it moves:
+				// Sujuk Special, folded zaatar, cheese manoush, chicken wrap and spinach fatayer.
+				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-sujuk-special-v5.webp',
 				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-folded-zaatar-v4.webp',
 				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-cheese-manoush-v4.webp',
 				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-chicken-wrap-v4.webp',

@@ -78,7 +78,7 @@
 			'<div class="dbc-head">' +
 				'<p class="dbc-kicker">Catering</p>' +
 				'<h2 class="dbc-h2">Pick a package</h2>' +
-				'<p class="dbc-sub">Wood-fired, commission-free, deposit secures your date.</p>' +
+				'<p class="dbc-sub">Oven-baked, commission-free, deposit secures your date.</p>' +
 			'</div>'
 		);
 		wrap.appendChild(head);

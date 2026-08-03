@@ -15,7 +15,10 @@
 	function play(hero) {
 		releaseScrollHero(hero);
 		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); }
+		if (hero._dbManoushUnlockTimer) { window.clearTimeout(hero._dbManoushUnlockTimer); }
 		if (reduceMotion) { hero.classList.remove('is-resetting'); hero.classList.remove('is-exploded'); hero.classList.add('is-assembled'); return; }
+		hero._dbManoushPlaying = true;
+		hero._dbManoushHoldUntil = Date.now() + 3100;
 		hero.classList.remove('is-exploded');
 		hero.classList.remove('is-assembled');
 		hero.classList.add('is-resetting');
@@ -29,7 +32,10 @@
 				hero._dbManoushTimer = window.setTimeout(function () {
 					hero.classList.remove('is-exploded');
 					hero.classList.add('is-assembled');
-				}, 2050);
+				}, 820);
+				hero._dbManoushUnlockTimer = window.setTimeout(function () {
+					hero._dbManoushPlaying = false;
+				}, 2350);
 			});
 		});
 	}
@@ -46,7 +52,7 @@
 	}
 
 	function prepareScrollHero(hero) {
-		if (reduceMotion) { return; }
+		if (reduceMotion || hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
 		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); hero._dbManoushTimer = 0; }
 		hero.classList.remove('is-exploded', 'is-assembled');
 		hero.classList.add('is-scroll-driven');
@@ -56,19 +62,19 @@
 
 	function heroRecipe(name) {
 		var recipes = {
-			zaatar: { near: [-116, -69, 38, 10, 0, -13], scatter: [-248, -150, 220, 20, -12, -30] },
-			cheese: { near: [118, -64, 60, 10, 0, 14], scatter: [254, -132, 280, 20, 12, 28] },
-			meat: { near: [108, 78, 50, 10, 0, -11], scatter: [232, 169, 220, 20, 12, -24] },
-			spinach: { near: [-110, 82, 58, 10, 0, 13], scatter: [-235, 168, 260, 20, 12, 29] }
+			zaatar: { near: [-166, -104, 44, 10, 0, -12], scatter: [-300, -178, 240, 20, -12, -32] },
+			cheese: { near: [170, -100, 64, 10, 0, 13], scatter: [302, -162, 300, 20, 12, 29] },
+			meat: { near: [164, 116, 54, 10, 0, -10], scatter: [286, 204, 240, 20, 12, -25] },
+			spinach: { near: [-162, 116, 60, 10, 0, 12], scatter: [-290, 202, 280, 20, 12, 31] }
 		};
 		var recipe = recipes[name];
 		if (window.innerWidth <= 720) {
 			var width = window.innerWidth;
 			var mobile = {
-				zaatar: { near: [-.22 * width, -.13 * width], scatter: [-.35 * width, -.21 * width] },
-				cheese: { near: [.22 * width, -.13 * width], scatter: [.35 * width, -.21 * width] },
-				meat: { near: [.20 * width, .14 * width], scatter: [.32 * width, .23 * width] },
-				spinach: { near: [-.20 * width, .14 * width], scatter: [-.32 * width, .23 * width] }
+				zaatar: { near: [-.26 * width, -.15 * width], scatter: [-.39 * width, -.24 * width] },
+				cheese: { near: [.26 * width, -.15 * width], scatter: [.39 * width, -.24 * width] },
+				meat: { near: [.24 * width, .17 * width], scatter: [.36 * width, .27 * width] },
+				spinach: { near: [-.24 * width, .17 * width], scatter: [-.36 * width, .27 * width] }
 			}[name];
 			recipe.near[0] = mobile.near[0]; recipe.near[1] = mobile.near[1];
 			recipe.scatter[0] = mobile.scatter[0]; recipe.scatter[1] = mobile.scatter[1];
@@ -77,6 +83,7 @@
 	}
 
 	function paintScrollHero(hero, amount) {
+		if (hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
 		prepareScrollHero(hero);
 		var central = hero.querySelector('.db-mh-central');
 		if (central) {
@@ -98,7 +105,7 @@
 		var replay = hero.querySelector('[data-db-manoush-replay]');
 		if (replay) { replay.addEventListener('click', function () { play(hero); }); }
 		if (reduceMotion) { return; }
-		imagesReady(hero, function () { prepareScrollHero(hero); });
+		imagesReady(hero, function () { play(hero); });
 	}
 
 	for (var i = 0; i < heroes.length; i += 1) { wire(heroes[i]); }
@@ -114,9 +121,10 @@
 				var progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(viewport + rect.height, 1)));
 				hero.style.setProperty('--db-mh-scene-y', (centre * -34).toFixed(1) + 'px');
 				hero.style.setProperty('--db-mh-scene-scale', (1.055 + Math.sin(progress * Math.PI) * .035).toFixed(3));
+				if (hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { continue; }
 				// Ingredients draw inward at the focal point, then separate at either
 				// edge. The same position-driven motion plays in reverse on upward scroll.
-				paintScrollHero(hero, Math.min(1, Math.abs(centre) * 3.15));
+				paintScrollHero(hero, Math.min(1, Math.max(0, Math.abs(centre) - .035) * 3.45));
 			}
 			queued = false;
 		}

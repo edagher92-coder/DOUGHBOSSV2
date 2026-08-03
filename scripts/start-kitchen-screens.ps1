@@ -1,6 +1,6 @@
 <#
  .SYNOPSIS
- Starts the DoughBoss MAKE and PASS & PICKUP boards on an extended dual-screen
+ Starts the DoughBoss MAKE and CATERING boards on an extended dual-screen
  Windows workstation.
 
  .DESCRIPTION
@@ -15,9 +15,11 @@
 #>
 [CmdletBinding()]
 param(
-	[string]$BaseUrl = 'https://doughboss.com.au/wp-admin/admin.php?page=doughboss-board',
-	[int]$ScreenWidth = 1920,
-	[int]$ScreenHeight = 1080
+	[string]$BaseUrl = 'https://doughboss.com.au/kitchen/',
+	[int]$PrimaryScreenWidth = 1920,
+	[int]$PrimaryScreenHeight = 1080,
+	[int]$CateringScreenWidth = 1366,
+	[int]$CateringScreenHeight = 768
 )
 
 $chromeCandidates = @(
@@ -32,20 +34,21 @@ if ( $chromeCandidates.Count -eq 0 ) {
 $chrome = $chromeCandidates[0]
 $separator = if ( $BaseUrl.Contains('?') ) { '&' } else { '?' }
 $makeUrl = "$BaseUrl${separator}screen=make"
-$passUrl = "$BaseUrl${separator}screen=pass"
+$cateringUrl = "$BaseUrl${separator}screen=catering"
 
 # --kiosk removes browser chrome, while the two distinct URLs retain the
 # existing WordPress login, capability and optional Board-key gates.
 Start-Process -FilePath $chrome -ArgumentList @(
 	'--kiosk', '--new-window', "--window-position=0,0",
-	"--window-size=$ScreenWidth,$ScreenHeight", $makeUrl
+	"--window-size=$PrimaryScreenWidth,$PrimaryScreenHeight", $makeUrl
 )
 
 Start-Sleep -Seconds 2
 
 Start-Process -FilePath $chrome -ArgumentList @(
-	'--kiosk', '--new-window', "--window-position=$ScreenWidth,0",
-	"--window-size=$ScreenWidth,$ScreenHeight", $passUrl
+	'--kiosk', '--new-window',
+	"--window-position=$PrimaryScreenWidth,0",
+	"--window-size=$CateringScreenWidth,$CateringScreenHeight", $cateringUrl
 )
 
-Write-Host 'DoughBoss MAKE and PASS & PICKUP screens started.'
+Write-Host 'DoughBoss MAKE and CATERING screens started.'

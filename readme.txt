@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.32.2
+Stable tag: 2.33.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,11 @@ DoughBoss turns any WordPress site into a pizza/food ordering storefront. It add
 * An **Orders** admin screen with live status updates, plus a settings page for sizes, toppings, currency and fees.
 
 Everything is rendered through shortcodes and a small REST API; no theme changes are required.
+
+Kitchen staff can use the capability-gated, shop-scoped `/kitchen/` workspace,
+optimised for a 23.8-inch Full HD touch display. Managers can use the protected
+`/management/` overview. Both routes use the normal WordPress user and role
+system; no password or secret is stored in the plugin.
 
 = Shortcodes =
 
@@ -69,6 +74,13 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.33.0 =
+* Adds protected, branded `/kitchen/` and `/management/` workspaces using WordPress authentication, staff capabilities, shop scope, REST nonces and optional kitchen-link verification.
+* Optimises the primary MAKE view for a 23.8-inch 1920x1080 touch monitor and retains a compact dedicated Catering view for a smaller secondary display.
+* Rebuilds the homepage food animation around a high-resolution Sujuk Special and four clearly different menu foods, with an automatic blow-out/rebuild sequence, replay, scroll depth and reduced-motion support.
+* Replaces the main public category photography with high-resolution Manoush, Sujuk Special and Lebanese pie imagery, and standardises customer-facing copy on oven-baked.
+* Replaces repeated and low-resolution menu placeholders with a consistent high-resolution photo for every one of the 34 canonical products, including distinct half-and-half, pizza, pie, wrap, dessert and drink imagery.
 
 = 2.32.2 =
 * Automatically renames the one existing seeded Dough Boss Special pizza to Sujuk Special during upgrade while preserving its post ID, price, options, category and integration mappings.

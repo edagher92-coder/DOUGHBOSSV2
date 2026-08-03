@@ -26,7 +26,7 @@
 			<a class="dbf-button" href="<?php echo esc_url( home_url( '/about-us/' ) ); ?>">Our story</a>
 		</div>
 		<div class="dbf-story-media" data-dbf-reveal data-dbf-reveal-delay="1">
-			<img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/dough-boss-special.webp' ) ); ?>" width="900" height="720" alt="Freshly baked Dough Boss manoush" loading="lazy" decoding="async">
+			<img src="<?php echo esc_url( doughboss_final_asset_url( 'home-sujuk-special-category-v5.webp' ) ); ?>" width="1254" height="1254" alt="Freshly oven-baked Sujuk Special pizza" loading="lazy" decoding="async">
 		</div>
 	</div>
 </section>
@@ -52,9 +52,9 @@
 			<a class="dbf-button dbf-button--outline" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">Browse the full menu</a>
 		</header>
 		<div class="dbf-food-grid">
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#manoush' ) ); ?>" data-dbf-reveal><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/zaatar-cheese.webp' ) ); ?>" alt="Zaatar and cheese manoush" loading="lazy"><span class="dbf-food-card-copy"><span>Oven-baked</span><strong>Manoush</strong></span></a>
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pizza' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="1"><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/dough-boss-special.webp' ) ); ?>" alt="Sujuk Special pizza" loading="lazy"><span class="dbf-food-card-copy"><span>Fresh to order</span><strong>Pizza</strong></span></a>
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pies' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="2"><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/spinach-cheese-pie.webp' ) ); ?>" alt="Spinach and cheese pie" loading="lazy"><span class="dbf-food-card-copy"><span>Golden and warm</span><strong>Pies</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#manoush' ) ); ?>" data-dbf-reveal><img src="<?php echo esc_url( doughboss_final_asset_url( 'home-manoush-category-v5.webp' ) ); ?>" width="1254" height="1254" alt="Two freshly oven-baked zaatar and cheese manoush" loading="lazy" decoding="async"><span class="dbf-food-card-copy"><span>Oven-baked</span><strong>Manoush</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pizza' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="1"><img src="<?php echo esc_url( doughboss_final_asset_url( 'home-sujuk-special-category-v5.webp' ) ); ?>" width="1254" height="1254" alt="Sujuk Special pizza with cheese and Mediterranean vegetables" loading="lazy" decoding="async"><span class="dbf-food-card-copy"><span>Fresh to order</span><strong>Pizza</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pies' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="2"><img src="<?php echo esc_url( doughboss_final_asset_url( 'home-pies-category-v5.webp' ) ); ?>" width="1254" height="1254" alt="Fresh spinach, chicken and shanklish Lebanese pies" loading="lazy" decoding="async"><span class="dbf-food-card-copy"><span>Golden and warm</span><strong>Pies</strong></span></a>
 		</div>
 	</div>
 </section>

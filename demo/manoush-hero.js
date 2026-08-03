@@ -3,7 +3,7 @@
 	var stages = Array.prototype.slice.call(document.querySelectorAll('[data-manoush-stage]'));
 	if (!stages.length) { return; }
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	var explodeHoldMs = 2050;
+	var explodeHoldMs = 820;
 	document.documentElement.classList.add('motion-ready');
 
 	function clearStageTimer(stage) {
@@ -28,7 +28,7 @@
 		// Keep scroll motion from taking control until the food has completed its
 		// entrance. Without this short reservation, the first scroll-scene paint
 		// cancels the deliberate burst-and-assemble sequence on page load.
-		stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + 1000;
+		stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + 1550;
 		stage.classList.remove('is-exploded');
 		stage.classList.remove('is-assembled');
 		stage.classList.add('is-resetting');
@@ -45,7 +45,7 @@
 						stage._dbManoushIntroUntil = 0;
 						stage._dbManoushReleaseTimer = 0;
 						window.dispatchEvent(new Event('db:manoush-ready'));
-					}, 1000);
+					}, 1450);
 				}, explodeHoldMs);
 			});
 		});
@@ -114,27 +114,27 @@
 
 	function ingredientRecipe(stage, name) {
 		var recipes = {
-			zaatar: { near: [-102, -61, 42, 10, 0, -9], scatter: [-128, -84, 230, 18, -12, -20] },
-			cheese: { near: [108, -47, 62, 10, 0, 8], scatter: [145, -50, 285, 21, 14, 18] },
-			meat: { near: [-82, 88, 48, 10, 0, -6], scatter: [-92, 125, 205, 16, -13, -13] },
-			spinach: { near: [90, 80, 58, 10, 0, 7], scatter: [124, 104, 260, 19, 12, 16] }
+			zaatar: { near: [-154, -96, 42, 10, 0, -10], scatter: [-248, -158, 250, 18, -12, -28] },
+			cheese: { near: [158, -92, 62, 10, 0, 10], scatter: [252, -148, 300, 21, 14, 27] },
+			meat: { near: [-146, 108, 48, 10, 0, -8], scatter: [-228, 186, 225, 16, -13, -24] },
+			spinach: { near: [150, 106, 58, 10, 0, 9], scatter: [236, 180, 280, 19, 12, 25] }
 		};
 		var recipe = recipes[name];
 		if (window.innerWidth <= 800) {
 			var compact = {
-				zaatar: { near: [-65, -42], scatter: [-80, -64] },
-				cheese: { near: [64, -36], scatter: [80, -52] },
-				meat: { near: [-48, 60], scatter: [-62, 76] },
-				spinach: { near: [50, 53], scatter: [68, 66] }
+				zaatar: { near: [-.26 * window.innerWidth, -.15 * window.innerWidth], scatter: [-.39 * window.innerWidth, -.24 * window.innerWidth] },
+				cheese: { near: [.26 * window.innerWidth, -.15 * window.innerWidth], scatter: [.39 * window.innerWidth, -.24 * window.innerWidth] },
+				meat: { near: [-.24 * window.innerWidth, .17 * window.innerWidth], scatter: [-.36 * window.innerWidth, .27 * window.innerWidth] },
+				spinach: { near: [.24 * window.innerWidth, .17 * window.innerWidth], scatter: [.36 * window.innerWidth, .27 * window.innerWidth] }
 			}[name];
 			recipe.near[0] = compact.near[0]; recipe.near[1] = compact.near[1];
 			recipe.scatter[0] = compact.scatter[0]; recipe.scatter[1] = compact.scatter[1];
 		} else if (stage.classList.contains('ingredient-burst--bites')) {
 			var bites = {
-				zaatar: { near: [-92, -64], scatter: [-145, -92] },
-				cheese: { near: [94, -62], scatter: [148, -92] },
-				meat: { near: [-84, 88], scatter: [-128, 142] },
-				spinach: { near: [88, 82], scatter: [136, 128] }
+				zaatar: { near: [-154, -96], scatter: [-248, -158] },
+				cheese: { near: [158, -92], scatter: [252, -148] },
+				meat: { near: [-146, 108], scatter: [-228, 186] },
+				spinach: { near: [150, 106], scatter: [236, 180] }
 			}[name];
 			recipe.near[0] = bites.near[0]; recipe.near[1] = bites.near[1];
 			recipe.scatter[0] = bites.scatter[0]; recipe.scatter[1] = bites.scatter[1];
@@ -238,7 +238,7 @@
 				 * down into a scene and back up through it. */
 				var stage = scene.querySelector('[data-manoush-stage]');
 				if (stage && (!stage._dbManoushIntroUntil || Date.now() >= stage._dbManoushIntroUntil)) {
-					paintScrollStage(stage, Math.min(1, Math.abs(centre) * 3.15));
+					paintScrollStage(stage, Math.min(1, Math.max(0, Math.abs(centre) - .035) * 3.45));
 				}
 			});
 			queued = false;

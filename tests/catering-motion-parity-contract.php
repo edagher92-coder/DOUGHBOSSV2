@@ -38,7 +38,7 @@ $wp_css   = file_get_contents( $root . '/public/css/doughboss-manoush-hero.css' 
 $wp_js    = file_get_contents( $root . '/public/js/doughboss-manoush-hero.js' );
 
 $catering_assets = array(
-	'hero-meat-manoush-v4.webp',
+	'hero-sujuk-special-v5.webp',
 	'hero-folded-zaatar-v4.webp',
 	'hero-cheese-manoush-v4.webp',
 	'hero-spinach-fatayer-v4.webp',
@@ -98,7 +98,8 @@ catering_parity_ok(
 		&& false === strpos( $demo_css, '.hero-manoush .ingredient-burst{display:none' ),
 	'homepage and menu food stages remain visible on mobile'
 );
-catering_parity_ok( false !== strpos( $wp_css, '@media (max-width:720px)' ) && false !== strpos( $wp_css, '.db-mh-stage,.db-mh-world { min-height: 305px; }' ) && false === strpos( $wp_css, '.db-mh-stage { display: none' ), 'WordPress keeps the composition visible on mobile' );
+catering_parity_ok( false !== strpos( $wp_css, '@media (max-width:720px)' ) && false !== strpos( $wp_css, '.db-mh-stage,.db-mh-world { min-height: 325px; }' ) && false === strpos( $wp_css, '.db-mh-stage { display: none' ), 'WordPress keeps the composition visible on mobile' );
+catering_parity_ok( false !== strpos( $wp_js, 'imagesReady(hero, function () { play(hero); })' ) && false !== strpos( $demo_js, 'playForView((window.location.hash' ), 'demo and WordPress automatically play the food build after their images are ready' );
 catering_parity_ok( false === strpos( $demo_js, "classList.toggle('is-exploded'") && false === strpos( $demo_js, "classList.toggle('is-assembled'") && false === strpos( $demo_js, 'direction = currentY' ), 'demo scroll handler does not toggle assembly states' );
 catering_parity_ok( false === strpos( $wp_js, "classList.toggle('is-exploded'") && false === strpos( $wp_js, "classList.toggle('is-assembled'") && false === strpos( $wp_js, 'direction = currentY' ), 'WordPress scroll handler does not toggle assembly states' );
 

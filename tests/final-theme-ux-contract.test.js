@@ -39,7 +39,9 @@ check(/html\s*\{[^}]*overflow-x:\s*clip/s.test(themeStyle), 'off-canvas navigati
 check(themeStyle.includes('@media (prefers-reduced-motion: reduce)'), 'theme honours reduced motion');
 check(hero.includes('Math.abs(centre)') && hero.includes("window.addEventListener('scroll'"), 'hero blowout follows scroll in both directions');
 check(hero.includes("window.addEventListener('resize'"), 'hero recalculates its scene responsively');
-check(['hero-meat-manoush-v4.webp', 'hero-folded-zaatar-v4.webp', 'hero-cheese-manoush-v4.webp', 'hero-spinach-fatayer-v4.webp', 'hero-chicken-wrap-v4.webp'].every((asset) => shortcodes.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'hero uses five present, distinct production food assets');
+check(['hero-sujuk-special-v5.webp', 'hero-folded-zaatar-v4.webp', 'hero-cheese-manoush-v4.webp', 'hero-spinach-fatayer-v4.webp', 'hero-chicken-wrap-v4.webp'].every((asset) => shortcodes.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'hero uses five present, distinct production food assets');
+check(['home-manoush-category-v5.webp', 'home-sujuk-special-category-v5.webp', 'home-pies-category-v5.webp'].every((asset) => home.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'homepage category cards use the new high-resolution food photography');
+check(hero.includes('imagesReady(hero, function () { play(hero); })') && hero.includes('_dbManoushPlaying'), 'hero automatically performs the blow-out and rebuild without scroll cancelling it');
 check(heroStyle.includes('@keyframes db-mh-smoke') && heroStyle.includes('drop-shadow'), 'hero adds premium atmospheric depth while retaining reduced-motion handling');
 
 check(home.includes('dbf-sr-only') && catering.includes('dbf-sr-only'), 'visual hero pages retain a clear page-level heading');

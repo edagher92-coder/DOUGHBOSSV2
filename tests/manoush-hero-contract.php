@@ -40,7 +40,7 @@ hero_ok(
 hero_ok( false !== strpos( $storefront_css, '@media (max-width: 480px)' ) && false !== strpos( $storefront_css, 'overflow-wrap: anywhere' ), 'WordPress cart and builder guard narrow mobile widths' );
 hero_ok( false !== strpos( $demo_css, 'perspective:1100px' ) && false !== strpos( $demo_css, 'transform-style:preserve-3d' ), 'demo defines a 3D ingredient stage' );
 hero_ok( false !== strpos( $demo_css, 'translate3d(' ) && false !== strpos( $demo_css, 'rotateX(' ) && false !== strpos( $demo_css, 'rotateY(' ), 'demo burst uses 3D transforms' );
-hero_ok( false !== strpos( $demo_js, 'explodeHoldMs = 2050' ) && false !== strpos( $demo_js, "classList.remove('is-exploded')" ), 'demo holds the explosion before assembly' );
+hero_ok( false !== strpos( $demo_js, 'explodeHoldMs = 820' ) && false !== strpos( $demo_js, "classList.remove('is-exploded')" ), 'demo holds the explosion before assembly' );
 hero_ok( false !== strpos( $demo_js, 'requestAnimationFrame' ) && false !== strpos( $demo_js, 'offsetWidth' ), 'demo replay has a paint-safe reset' );
 hero_ok( false !== strpos( $demo_js, 'imagesReady' ) && false !== strpos( $demo_js, "addEventListener('error'" ), 'demo waits for image completion or failure' );
 hero_ok( false === strpos( $demo_css, '@media(max-width:560px){.ingredient-burst{display:none;}' ), 'demo keeps the ingredient stage visible on mobile' );

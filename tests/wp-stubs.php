@@ -28,6 +28,7 @@ $GLOBALS['__db_rest_args']  = array();
 $GLOBALS['__db_shortcodes'] = array();
 $GLOBALS['__db_posttypes']  = array();
 $GLOBALS['__db_options']    = array();
+$GLOBALS['__db_rewrites']   = array();
 
 /* ---- Hooks ---- */
 function add_action( $hook, $cb = null, $prio = 10, $args = 1 ) { $GLOBALS['__db_hooks'][ $hook ][] = $cb; return true; }
@@ -140,6 +141,7 @@ function wp_nonce_field( ...$x ) { return ''; }
 function post_type_exists( $t ) { return in_array( $t, $GLOBALS['__db_posttypes'], true ); }
 function taxonomy_exists( $t ) { return true; }
 function flush_rewrite_rules( $h = true ) {}
+function add_rewrite_rule( $regex, $query, $after = 'bottom' ) { $GLOBALS['__db_rewrites'][ $regex ] = array( $query, $after ); }
 function add_shortcode( $tag, $cb ) { $GLOBALS['__db_shortcodes'][ $tag ] = $cb; }
 function shortcode_atts( $defaults, $atts, $sc = '' ) { return array_merge( $defaults, (array) $atts ); }
 
