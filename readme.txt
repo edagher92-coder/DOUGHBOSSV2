@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.32.0
+Stable tag: 2.32.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.32.1 =
+* Rebuilds the homepage food blowout with five distinct premium oven-baked products, atmospheric depth and responsive reversible motion.
+* Updates public oven-baked wording and tightens the small-screen partnership, contact and footer flow so content no longer overflows or leaves a large empty gap.
+* Tunes the MAKE board for a 23.8-inch 1920x1080 touch station and adds a protected, shop-scoped catering production view for a smaller 15-inch display.
+* Renames the existing Dough Boss Special pizza to Sujuk Special in place, retaining its product identity while updating the recipe copy and imagery lookup.
 
 = 2.32.0 =
 * Requires the same eligible .edu or .edu.au student email twice before a student voucher is allocated, with server-side domain, daily-cap and duplicate-per-day enforcement.

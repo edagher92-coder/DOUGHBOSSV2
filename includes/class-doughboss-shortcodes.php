@@ -69,13 +69,14 @@ class DoughBoss_Shortcodes {
 				'description'   => __( 'Mini zaatar, cheese and meat manoush with spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
 				'replay_label'  => __( 'See the spread come together', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
-				// A single authentic manoush sits at the centre. The former full platter
-				// looked like a floating plate when the surrounding layers separated.
-				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-fresh-cutout-v2.webp',
-				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-zaatar-cutout-v2.webp',
-				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-cheese-cutout-v2.webp',
-				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-pies-v3.webp',
-				'spinach_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/catering-fresh-cutout-v2.webp',
+				// Five deliberately different silhouettes keep the build readable as food
+				// moves in and out: oval meat manoush, folded zaatar, open cheese,
+				// triangular spinach fatayer and a cut-open chicken wrap.
+				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-meat-manoush-v4.webp',
+				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-folded-zaatar-v4.webp',
+				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-cheese-manoush-v4.webp',
+				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-chicken-wrap-v4.webp',
+				'spinach_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-spinach-fatayer-v4.webp',
 			),
 			$atts,
 			'doughboss_manoush_hero'
@@ -86,8 +87,8 @@ class DoughBoss_Shortcodes {
 			array(
 			'zaatar'  => array( 'label' => __( 'Zaatar', 'doughboss' ), 'url' => $atts['zaatar_image'] ),
 			'cheese'  => array( 'label' => __( 'Cheese', 'doughboss' ), 'url' => $atts['cheese_image'] ),
-			'meat'    => array( 'label' => __( 'Meat', 'doughboss' ), 'url' => $atts['meat_image'] ),
-			'spinach' => array( 'label' => __( 'Spinach', 'doughboss' ), 'url' => $atts['spinach_image'] ),
+			'meat'    => array( 'label' => __( 'Chicken wrap', 'doughboss' ), 'url' => $atts['meat_image'] ),
+			'spinach' => array( 'label' => __( 'Spinach fatayer', 'doughboss' ), 'url' => $atts['spinach_image'] ),
 			),
 			static function ( $ingredient ) {
 				return '' !== $ingredient['url'];
@@ -109,7 +110,7 @@ class DoughBoss_Shortcodes {
 				<div class="db-mh-world">
 					<div class="db-mh-central">
 						<?php if ( '' !== $atts['central_image'] ) : ?>
-							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" width="900" height="716" loading="eager" decoding="async" fetchpriority="high" />
+							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" width="1254" height="1254" loading="eager" decoding="async" fetchpriority="high" />
 						<?php else : ?>
 							<span><?php esc_html_e( 'Manoush', 'doughboss' ); ?></span>
 						<?php endif; ?>
@@ -117,7 +118,7 @@ class DoughBoss_Shortcodes {
 					<?php foreach ( $ingredients as $name => $ingredient ) : ?>
 						<div class="db-mh-ingredient db-mh-ingredient--<?php echo esc_attr( $name ); ?>">
 							<?php if ( '' !== $ingredient['url'] ) : ?>
-								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" width="240" height="180" loading="lazy" decoding="async" />
+								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" width="1254" height="1254" loading="lazy" decoding="async" />
 							<?php else : ?>
 								<span><?php echo esc_html( $ingredient['label'] ); ?></span>
 							<?php endif; ?>

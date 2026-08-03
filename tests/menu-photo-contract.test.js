@@ -35,7 +35,8 @@ ok(order.indexOf("{ label: 'Classic', delta: 0 }") !== -1 && order.indexOf("{ la
 ok(hasAll(body, ['Sujuk &amp; Cheese', 'Spinach Pie', 'Half Meat &amp; Cheese', 'Cheese, Tomato &amp; Olives', 'Cheese Kaak']), 'all handwritten missing products are visible');
 ok(order.indexOf("label: 'Remove ingredients'") !== -1 && hasAll(order, ['No cheese', 'No tomato', 'No olives', 'No pickles']), 'manoush, pizza and wraps support ingredient removals');
 ok(hasAll(seed, ['Zaatar Veggie Pizza', 'Labneh Veggie Pizza', 'Labneh Veggie Wrap', 'Dough Boss Pie', 'Spinach Pie', 'Sujuk & Cheese', 'Half Meat & Cheese', 'Cheese, Tomato & Olives', 'Cheese Kaak']), 'WordPress menu importer contains the corrected catalogue');
+ok(hasAll(seed, ['Sujuk Special', "'pizza-sujuk-special' => 'pizza-dough-boss-special'"]) && seed.indexOf("array( 'Dough Boss Special'") === -1, 'Dough Boss Special is renamed to Sujuk Special without creating a duplicate seeded product');
 ok(html.indexOf('doughboss-legacy-menu-schema" type="application/json') !== -1 && schema.indexOf("querySelectorAll('#view-menu .mn-cat')") !== -1, 'structured menu data is generated from the corrected visible catalogue');
 
-process.stdout.write('\n' + (12 - failures) + ' passed, ' + failures + ' failed\n');
+process.stdout.write('\n' + (13 - failures) + ' passed, ' + failures + ' failed\n');
 process.exit(failures ? 1 : 0);

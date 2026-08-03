@@ -15,8 +15,13 @@ function ok(condition, message) {
 
 ok(
   seeder.includes("'pies-dough-boss-pie' => 'Chicken Pie'") &&
-    seeder.includes("'pies-spinach-pie'    => 'Spinach & Cheese'"),
-  'unmarked legacy pie titles must be matched and renamed in place'
+    seeder.includes("'pies-spinach-pie'    => 'Spinach & Cheese'") &&
+    seeder.includes("'pizza-sujuk-special' => 'Dough Boss Special'"),
+  'unmarked legacy menu titles must be matched and renamed in place'
+);
+ok(
+  seeder.includes("'pizza-sujuk-special' => 'pizza-dough-boss-special'"),
+  'Sujuk Special must reuse the existing Dough Boss Special seeded record'
 );
 ok(
   seeder.indexOf('$legacy_title') < seeder.indexOf("'title'            => $name"),

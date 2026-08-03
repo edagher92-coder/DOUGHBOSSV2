@@ -50,7 +50,7 @@ class DoughBoss_Menu_Seeder {
 				array( 'Spinach Deluxe', 13.00, 'pizza', array( 'vegetarian', 'halal' ), 'Spinach mix, mushroom, tomato, olives & cheese.' ),
 				array( 'Veggie Plus', 13.00, 'pizza', array( 'vegetarian', 'halal' ), 'Cheese, tomato, olives, capsicum, onion & mushroom on a garlic sauce base.' ),
 				array( 'Pepperoni & Cheese', 13.00, 'pizza', array( 'halal' ), 'A perfect blend of pepperoni & cheese on a tomato sauce base.' ),
-				array( 'Dough Boss Special', 15.00, 'pizza', array( 'halal' ), 'Pepperoni, tomato, mushroom, capsicum, onion, black olives & cheese on a tomato base.' ),
+				array( 'Sujuk Special', 15.00, 'pizza', array( 'halal' ), 'Sujuk, tomato, mushroom, capsicum, onion, black olives & cheese on a tomato base.' ),
 				array( 'Chicken & Cheese', 14.00, 'pizza', array( 'halal' ), 'Grilled chicken & mushroom on garlic sauce, topped with cheese.' ),
 				array( 'BBQ Chicken', 14.00, 'pizza', array( 'halal' ), 'BBQ sauce base with chicken, onion, capsicum, mushroom & cheese.' ),
 				array( 'Peri Peri Chicken', 14.00, 'pizza', array( 'halal' ), 'Grilled chicken, mushroom, capsicum, onion & cheese, finished with peri peri sauce.' ),
@@ -138,6 +138,7 @@ class DoughBoss_Menu_Seeder {
 					$legacy_seed_keys = array(
 						'pies-dough-boss-pie' => 'pies-chicken-pie',
 						'pies-spinach-pie'    => 'pies-spinach-cheese',
+						'pizza-sujuk-special' => 'pizza-dough-boss-special',
 					);
 					if ( isset( $legacy_seed_keys[ $seed_key ] ) ) {
 						$existing = get_posts(
@@ -161,6 +162,7 @@ class DoughBoss_Menu_Seeder {
 					$legacy_titles = array(
 						'pies-dough-boss-pie' => 'Chicken Pie',
 						'pies-spinach-pie'    => 'Spinach & Cheese',
+						'pizza-sujuk-special' => 'Dough Boss Special',
 					);
 					$legacy_title = isset( $legacy_titles[ $seed_key ] ) ? $legacy_titles[ $seed_key ] : '';
 					if ( '' !== $legacy_title ) {

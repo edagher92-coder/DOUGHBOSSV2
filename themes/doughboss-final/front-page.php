@@ -5,7 +5,7 @@
 		<h1 class="dbf-sr-only"><?php esc_html_e( 'Dough Boss — a contemporary Lebanese bakery', 'doughboss-final' ); ?></h1>
 		<?php
 		echo doughboss_final_shortcode_or_notice(
-			'[doughboss_manoush_hero variant="bites" kicker="In the industry since 2009" title="A taste of the Mediterranean." description="Authentic manoush, pizza and pies, stone-baked fresh to order with a modern twist." replay_label="Replay the food build"]',
+			'[doughboss_manoush_hero variant="bites" kicker="In the industry since 2009" title="A taste of the Mediterranean." description="Authentic manoush, pizza and pies, oven-baked fresh to order with a modern twist." replay_label="Replay the food build"]',
 			__( 'The DoughBoss menu experience is being prepared.', 'doughboss-final' )
 		); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		?>
@@ -38,8 +38,8 @@
 			<p>Fresh dough, bold Mediterranean flavour and food made when you order it.</p>
 		</header>
 		<div class="dbf-card-grid">
-			<article class="dbf-card" data-dbf-reveal><span class="dbf-card-number">01</span><h3>Manoush</h3><p>Stone-baked flatbreads with zaatar, cheese, meat and more, served flat or folded.</p><a class="dbf-card-link" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">Browse the menu &rarr;</a></article>
-			<article class="dbf-card" data-dbf-reveal data-dbf-reveal-delay="1"><span class="dbf-card-number">02</span><h3>Pizza, pies &amp; wraps</h3><p>Stone-baked pizzas, golden pies and fresh-rolled wraps made to order.</p><a class="dbf-card-link" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">See what's baking &rarr;</a></article>
+			<article class="dbf-card" data-dbf-reveal><span class="dbf-card-number">01</span><h3>Manoush</h3><p>Oven-baked flatbreads with zaatar, cheese, meat and more, served flat or folded.</p><a class="dbf-card-link" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">Browse the menu &rarr;</a></article>
+			<article class="dbf-card" data-dbf-reveal data-dbf-reveal-delay="1"><span class="dbf-card-number">02</span><h3>Pizza, pies &amp; wraps</h3><p>Oven-baked pizzas, golden pies and fresh-rolled wraps made to order.</p><a class="dbf-card-link" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">See what's baking &rarr;</a></article>
 			<article class="dbf-card" data-dbf-reveal data-dbf-reveal-delay="2"><span class="dbf-card-number">03</span><h3>Catering</h3><p>Office runs, footy nights and functions. Tell us what you need and we'll help plan the spread.</p><a class="dbf-card-link" href="<?php echo esc_url( home_url( '/catering/' ) ); ?>">Plan catering &rarr;</a></article>
 		</div>
 	</div>
@@ -52,8 +52,8 @@
 			<a class="dbf-button dbf-button--outline" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">Browse the full menu</a>
 		</header>
 		<div class="dbf-food-grid">
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#manoush' ) ); ?>" data-dbf-reveal><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/zaatar-cheese.webp' ) ); ?>" alt="Zaatar and cheese manoush" loading="lazy"><span class="dbf-food-card-copy"><span>Stone-baked</span><strong>Manoush</strong></span></a>
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pizza' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="1"><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/dough-boss-special.webp' ) ); ?>" alt="Dough Boss special pizza" loading="lazy"><span class="dbf-food-card-copy"><span>Fresh to order</span><strong>Pizza</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#manoush' ) ); ?>" data-dbf-reveal><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/zaatar-cheese.webp' ) ); ?>" alt="Zaatar and cheese manoush" loading="lazy"><span class="dbf-food-card-copy"><span>Oven-baked</span><strong>Manoush</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pizza' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="1"><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/dough-boss-special.webp' ) ); ?>" alt="Sujuk Special pizza" loading="lazy"><span class="dbf-food-card-copy"><span>Fresh to order</span><strong>Pizza</strong></span></a>
 			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pies' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="2"><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/spinach-cheese-pie.webp' ) ); ?>" alt="Spinach and cheese pie" loading="lazy"><span class="dbf-food-card-copy"><span>Golden and warm</span><strong>Pies</strong></span></a>
 		</div>
 	</div>
