@@ -32,9 +32,9 @@ hero_ok( false !== strpos( $js, 'imagesReady' ) && false !== strpos( $js, "addEv
 hero_ok(
 	false !== strpos( $css, '@media (prefers-reduced-motion:reduce)' )
 		&& false !== strpos( $css, '.db-mh-replay { display: inline-flex; }' )
-		&& false !== strpos( $js, "sessionStorage.setItem('doughbossHeroMotion', 'on')" )
+		&& false !== strpos( $js, 'motionOptedIn = true;' )
 		&& false !== strpos( $js, "document.documentElement.classList.add('db-mh-motion-opted-in')" ),
-	'reduced-motion defaults to a still scene but lets the visitor explicitly replay it for the session'
+	'the approved automatic build is enabled on every device while retaining the motion-control styling'
 );
 hero_ok( false !== strpos( $css, '@media (max-width:720px)' ) && false === strpos( $css, '.db-mh-stage { display: none' ), 'mobile retains the stage' );
 hero_ok( false !== strpos( $css, '@media (max-width:360px)' ) && false !== strpos( $css, '--db-x:-29vw' ), 'WordPress hero contains a 320px-safe composition' );
@@ -50,16 +50,36 @@ hero_ok( false !== strpos( $demo_js, 'explodeHoldMs = 1500' ) && false !== strpo
 hero_ok( false !== strpos( $demo_js, 'requestAnimationFrame' ) && false !== strpos( $demo_js, 'offsetWidth' ), 'demo replay has a paint-safe reset' );
 hero_ok( false !== strpos( $demo_js, 'imagesReady' ) && false !== strpos( $demo_js, "addEventListener('error'" ), 'demo waits for image completion or failure' );
 hero_ok(
-	false !== strpos( $js, 'repeatDelayMs = 5200' )
-		&& false !== strpos( $js, 'scheduleReplay(hero)' )
-		&& false !== strpos( $demo_js, 'scheduleStageReplay(stage)' ),
-	'live and demo heroes repeat only through their visibility-aware schedulers'
+	false === strpos( $js, 'scheduleReplay' )
+		&& false === strpos( $demo_js, 'scheduleStageReplay' )
+		&& false !== strpos( $js, "window.dispatchEvent(new Event('db:manoush-ready'))" )
+		&& false !== strpos( $demo_js, "window.dispatchEvent(new Event('db:manoush-ready'))" ),
+	'live and demo play once on first view, then leave permanent control with scroll'
 );
 hero_ok(
 	false !== strpos( $php, 'data-db-start-label=' )
 		&& false !== strpos( $demo_css, 'html.db-demo-motion-opted-in' )
-		&& false !== strpos( $demo_js, "sessionStorage.setItem('doughbossHeroMotion', 'on')" ),
-	'reduced-motion visitors receive an explicit session-only animation opt-in in both experiences'
+		&& false !== strpos( $demo_js, 'motionOptedIn = true;' ),
+	'WordPress and demo both start the approved food build automatically'
+);
+hero_ok(
+	false !== strpos( $js, "window.dispatchEvent(new Event('db:manoush-ready'))" )
+		&& false !== strpos( $js, "window.addEventListener('db:manoush-ready', requestScrollScene)" )
+		&& false !== strpos( $demo_js, "window.dispatchEvent(new Event('db:manoush-ready'))" )
+		&& false !== strpos( $demo_js, "window.addEventListener('db:manoush-ready', requestRender)" ),
+	'first-load animation hands its final frame to the reversible scroll renderer in both experiences'
+);
+hero_ok(
+	false !== strpos( $js, "classList.add('db-mh-motion-opted-in')" )
+		&& false !== strpos( $js, "classList.remove('db-mh-motion-opted-in')" ),
+	'WordPress keeps the approved animation enabled if the device motion preference changes at runtime'
+);
+hero_ok(
+	false !== strpos( $js, 'function freezeHero(hero)' )
+		&& false !== strpos( $js, 'window.getComputedStyle(part)' )
+		&& false !== strpos( $demo_js, 'function freezeStage(stage)' )
+		&& false !== strpos( $demo_js, 'window.getComputedStyle(part)' ),
+	'Pause freezes the computed food pose instead of snapping the composition together'
 );
 hero_ok( false === strpos( $demo_css, '@media(max-width:560px){.ingredient-burst{display:none;}' ), 'demo keeps the ingredient stage visible on mobile' );
 

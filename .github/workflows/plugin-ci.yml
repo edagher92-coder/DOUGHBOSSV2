@@ -76,6 +76,7 @@ jobs:
         run: |
           php tests/tyro-contract.php
           php tests/manoush-hero-contract.php
+          node --test tests/manoush-hero-behavior.test.js
           php tests/menu-options.php
           php tests/activation-location-seed.php
           node --test tests/menu-photo-contract.test.js

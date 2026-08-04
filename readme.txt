@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.33.3
+Stable tag: 2.33.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.33.4 =
+* Start the signature food build once on first view, including on devices that previously suppressed it.
+* Hand the finished entrance permanently to the reversible scroll scene so scrolling down and back up always updates the composition without a timer taking control back.
+* Make Pause freeze the current food pose and Resume return smoothly to the current scroll position.
 
 = 2.33.3 =
 * Makes the hero food blow-out and rebuild clearly visible, then repeats it at a calm interval only while the hero is on screen.

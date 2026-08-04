@@ -74,20 +74,20 @@ catering_parity_ok(
 	'homepage uses natural-shape transparent food assets instead of the tilted oval photo collage'
 );
 catering_parity_ok( false !== strpos( $wp, 'data-db-manoush-replay' ) && false !== strpos( $wp_js, "replay.addEventListener('click'" ), 'WordPress provides an accessible replay control' );
-catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce)' ) && false !== strpos( $demo_css, '.hero-replay{display:inline-flex;}' ) && false !== strpos( $demo_js, "stage.classList.add('is-assembled')" ), 'demo has a reduced-motion still-state with an explicit animation control' );
+catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce)' ) && false !== strpos( $demo_css, '.hero-replay{display:inline-flex;}' ) && false !== strpos( $demo_js, "stage.classList.add('is-assembled')" ), 'demo retains its motion-control styling and safe assembled state while the approved automatic build is enabled' );
 catering_parity_ok(
 	false !== strpos( $wp_css, '@media (prefers-reduced-motion:reduce)' )
 		&& false !== strpos( $wp_css, '.db-mh-replay { display: inline-flex; }' )
-		&& false !== strpos( $wp_js, "sessionStorage.setItem('doughbossHeroMotion', 'on')" )
+		&& false !== strpos( $wp_js, 'motionOptedIn = true;' )
 		&& false !== strpos( $wp_js, "hero.classList.add('is-assembled')" ),
-	'WordPress keeps the reduced-motion still-state while exposing an explicit replay opt-in'
+	'WordPress starts the approved food build on every device while retaining Pause and Resume'
 );
 catering_parity_ok(
-	false !== strpos( $demo, 'Animation is paused by your device.' )
+	false !== strpos( $demo, 'The food build starts automatically and follows your scroll.' )
 		&& false !== strpos( $demo_css, '.hero-motion-reduced{display:inline-flex;}' )
-		&& false !== strpos( $wp, 'Animation is paused by your device.' )
+		&& false !== strpos( $wp, 'The food build starts automatically and follows your scroll.' )
 		&& false !== strpos( $wp_css, '.db-mh-motion-note { display: block;' ),
-	'demo and WordPress explain the reduced-motion state and offer an explicit session opt-in'
+	'demo and WordPress explain the automatic first build, scroll control and visible Pause override'
 );
 catering_parity_ok(
 	false !== strpos( $demo_js, "stage.classList.add('is-resetting')" )
@@ -106,9 +106,11 @@ catering_parity_ok(
 );
 catering_parity_ok( false !== strpos( $wp_css, '@media (max-width:720px)' ) && false !== strpos( $wp_css, '.db-mh-stage,.db-mh-world { min-height: 325px; }' ) && false === strpos( $wp_css, '.db-mh-stage { display: none' ), 'WordPress keeps the composition visible on mobile' );
 catering_parity_ok( false !== strpos( $wp_js, 'hero._dbManoushReady = true' ) && false !== strpos( $wp_js, 'play(hero);' ) && false !== strpos( $demo_js, 'playForView((window.location.hash' ), 'demo and WordPress automatically play the food build after their images are ready' );
-catering_parity_ok( false !== strpos( $wp_js, 'repeatDelayMs = 5200' ) && false !== strpos( $demo_js, 'repeatDelayMs = 5200' ) && false !== strpos( $wp_js, 'heroIsVisible(hero)' ) && false !== strpos( $demo_js, 'stageIsVisible(stage)' ), 'both experiences repeat the build only while the active hero is visible' );
-catering_parity_ok( false !== strpos( $wp_js, 'pauseHero(hero)' ) && false !== strpos( $demo_js, 'pauseStage(stage)' ) && false !== strpos( $wp, 'data-db-resume-label=' ), 'recurring motion has a visible pause and resume mechanism' );
+catering_parity_ok( false !== strpos( $wp_js, "window.dispatchEvent(new Event('db:manoush-ready'))" ) && false !== strpos( $wp_js, "window.addEventListener('db:manoush-ready', requestScrollScene)" ) && false !== strpos( $demo_js, "window.dispatchEvent(new Event('db:manoush-ready'))" ) && false !== strpos( $demo_js, "window.addEventListener('db:manoush-ready', requestRender)" ), 'demo and WordPress hand the completed entrance directly to their reversible scroll renderer' );
+catering_parity_ok( false === strpos( $wp_js, 'scheduleReplay' ) && false === strpos( $demo_js, 'scheduleStageReplay' ) && false !== strpos( $wp_js, "window.dispatchEvent(new Event('db:manoush-ready'))" ) && false !== strpos( $demo_js, "window.dispatchEvent(new Event('db:manoush-ready'))" ), 'both experiences play once on first view and leave permanent control with scroll' );
+catering_parity_ok( false !== strpos( $wp_js, 'pauseHero(hero)' ) && false !== strpos( $demo_js, 'pauseStage(stage)' ) && false !== strpos( $wp, 'data-db-resume-label=' ), 'first-load and scroll motion have a visible pause and resume mechanism' );
 catering_parity_ok( false !== strpos( $wp_js, "classList.add('is-user-paused')" ) && false !== strpos( $wp_css, '.db-manoush-hero.is-user-paused .db-mh-stage::before' ) && false !== strpos( $wp_css, '.is-user-paused.is-assembled:not(.is-scroll-driven) .db-mh-central img' ) && false !== strpos( $demo_js, "classList.add('is-user-paused')" ) && false !== strpos( $demo_css, '.ingredient-burst[data-manoush-stage].is-user-paused' ), 'pause stops scripted cycles, ambient food motion and atmospheric motion, including after reduced-motion opt-in' );
+catering_parity_ok( false !== strpos( $wp_js, 'function freezeHero(hero)' ) && false !== strpos( $wp_js, 'window.getComputedStyle(part)' ) && false !== strpos( $demo_js, 'function freezeStage(stage)' ) && false !== strpos( $demo_js, 'window.getComputedStyle(part)' ), 'Pause freezes the current computed pose in demo and WordPress without a visual reset' );
 catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce) and (max-width:800px)' ) && false !== strpos( $demo_css, '.hero-menu-motion .ingredient-burst.is-assembled' ) && false !== strpos( $demo_css, 'db-stage-breathe-mobile 8s' ), 'explicit reduced-motion opt-in preserves the compact and catering mobile stage layouts' );
 catering_parity_ok( false === strpos( $demo_js, "classList.toggle('is-exploded'") && false === strpos( $demo_js, "classList.toggle('is-assembled'") && false === strpos( $demo_js, 'direction = currentY' ), 'demo scroll handler does not toggle assembly states' );
 catering_parity_ok( false === strpos( $wp_js, "classList.toggle('is-exploded'") && false === strpos( $wp_js, "classList.toggle('is-assembled'") && false === strpos( $wp_js, 'direction = currentY' ), 'WordPress scroll handler does not toggle assembly states' );

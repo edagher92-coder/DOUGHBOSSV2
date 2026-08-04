@@ -7,9 +7,10 @@
 	var motionOptedIn = false;
 	var explodeHoldMs = 1500;
 	var settleMs = 1900;
-	var repeatDelayMs = 5200;
-	var lastScrollAt = 0;
 	try { motionOptedIn = window.sessionStorage.getItem('doughbossHeroMotion') === 'on'; } catch (ignore) {}
+	// The signature build starts automatically and then follows scroll in both
+	// directions. The on-page Pause control remains the visitor override.
+	motionOptedIn = true;
 	document.documentElement.classList.add('motion-ready');
 	if (reduce && motionOptedIn) { document.documentElement.classList.add('db-demo-motion-opted-in'); }
 
@@ -52,27 +53,6 @@
 		return rect.bottom > 0 && rect.top < (window.innerHeight || document.documentElement.clientHeight || 800);
 	}
 
-	function clearStageRepeat(stage) {
-		if (stage._dbManoushRepeatTimer) {
-			window.clearTimeout(stage._dbManoushRepeatTimer);
-			stage._dbManoushRepeatTimer = 0;
-		}
-	}
-
-	function scheduleStageReplay(stage, delay) {
-		clearStageRepeat(stage);
-		if (!stageCanRun(stage) || !stageIsVisible(stage)) { return; }
-		stage._dbManoushRepeatTimer = window.setTimeout(function () {
-			stage._dbManoushRepeatTimer = 0;
-			if (!stageCanRun(stage) || !stageIsVisible(stage)) { return; }
-			if (Date.now() - lastScrollAt < 1500) {
-				scheduleStageReplay(stage, 1700);
-				return;
-			}
-			play(stage);
-		}, typeof delay === 'number' ? delay : repeatDelayMs);
-	}
-
 	function clearStageTimer(stage) {
 		if (stage._dbManoushTimer) {
 			window.clearTimeout(stage._dbManoushTimer);
@@ -86,7 +66,6 @@
 
 	function stopStageCycle(stage) {
 		stage._dbManoushCycle = (stage._dbManoushCycle || 0) + 1;
-		clearStageRepeat(stage);
 		clearStageTimer(stage);
 		stage._dbManoushPlaying = false;
 		stage._dbManoushIntroUntil = 0;
@@ -95,9 +74,23 @@
 		stage.classList.add('is-assembled');
 	}
 
+	function freezeStage(stage) {
+		stage._dbManoushCycle = (stage._dbManoushCycle || 0) + 1;
+		clearStageTimer(stage);
+		stage._dbManoushPlaying = false;
+		stage._dbManoushIntroUntil = 0;
+		Array.prototype.slice.call(stage.querySelectorAll('.ingredient-burst__manoush,.ingredient,.ingredient-burst__stamp')).forEach(function (part) {
+			var computed = window.getComputedStyle(part);
+			part.style.transform = computed.transform;
+			part.style.opacity = computed.opacity;
+		});
+		stage.classList.remove('is-resetting', 'is-exploded', 'is-assembled');
+		stage.classList.add('is-scroll-driven');
+	}
+
 	function pauseStage(stage) {
 		stage._dbManoushUserPaused = true;
-		stopStageCycle(stage);
+		freezeStage(stage);
 		stage.classList.add('is-user-paused');
 		updateReplayButtons();
 	}
@@ -137,7 +130,6 @@
 						stage._dbManoushPlaying = false;
 						stage._dbManoushReleaseTimer = 0;
 						window.dispatchEvent(new Event('db:manoush-ready'));
-						scheduleStageReplay(stage);
 					}, settleMs);
 				}, explodeHoldMs);
 			});
@@ -186,7 +178,10 @@
 	function playForView(view) {
 		var variant = stageForView(view);
 		if (!variant) { return; }
-		stages.filter(function (stage) { return stage.getAttribute('data-manoush-variant') === variant; }).forEach(play);
+		stages.filter(function (stage) { return stage.getAttribute('data-manoush-variant') === variant; }).forEach(function (stage) {
+			if (!stage._dbManoushHasPlayed) { play(stage); }
+			else { window.dispatchEvent(new Event('db:manoush-ready')); }
+		});
 	}
 
 	function releaseScrollStage(stage) {
@@ -267,8 +262,10 @@
 					play(stage);
 				} else if (stage._dbManoushUserPaused) {
 					stage._dbManoushUserPaused = false;
+					stage.classList.remove('is-user-paused');
 					updateReplayButtons();
-					play(stage);
+					if (!stage._dbManoushHasPlayed) { play(stage); }
+					else { window.dispatchEvent(new Event('db:manoush-ready')); }
 				} else {
 					pauseStage(stage);
 				}
@@ -342,13 +339,11 @@
 				var stage = scene.querySelector('[data-manoush-stage]');
 				if (stage && stageCanRun(stage) && !stage._dbManoushPlaying && (!stage._dbManoushIntroUntil || Date.now() >= stage._dbManoushIntroUntil)) {
 					paintScrollStage(stage, Math.min(1, Math.max(0, Math.abs(centre) - .035) * 3.45));
-					if (!stage._dbManoushObserved && !stage._dbManoushRepeatTimer && stageIsVisible(stage)) { scheduleStageReplay(stage, 1700); }
 				}
 			});
 			queued = false;
 		}
 		function requestRender() {
-			lastScrollAt = Date.now();
 			if (queued) { return; }
 			queued = true;
 			window.requestAnimationFrame(render);
@@ -371,7 +366,7 @@
 					stopStageCycle(stage);
 				} else if (stageCanRun(stage) && !stage._dbManoushPlaying) {
 					if (!stage._dbManoushHasPlayed) { play(stage); }
-					else { scheduleStageReplay(stage, 700); }
+					else { window.dispatchEvent(new Event('db:manoush-ready')); }
 				}
 			});
 		}, { threshold: 0.22 });
@@ -388,7 +383,10 @@
 		else if (!reduce || !motionOptedIn) { document.documentElement.classList.remove('db-demo-motion-opted-in'); }
 		stages.forEach(function (stage) {
 			if (!motionAllowed()) { stopStageCycle(stage); }
-			else if (stageCanRun(stage) && stageIsVisible(stage) && !stage._dbManoushPlaying) { scheduleStageReplay(stage, 700); }
+			else if (stageCanRun(stage) && stageIsVisible(stage) && !stage._dbManoushPlaying) {
+				if (!stage._dbManoushHasPlayed) { play(stage); }
+				else { window.dispatchEvent(new Event('db:manoush-ready')); }
+			}
 		});
 		updateReplayButtons();
 	}
@@ -400,7 +398,10 @@
 	document.addEventListener('visibilitychange', function () {
 		stages.forEach(function (stage) {
 			if (document.hidden) { stopStageCycle(stage); }
-			else if (stageCanRun(stage) && !stage._dbManoushPlaying && stageIsVisible(stage)) { scheduleStageReplay(stage, 700); }
+			else if (stageCanRun(stage) && !stage._dbManoushPlaying && stageIsVisible(stage)) {
+				if (!stage._dbManoushHasPlayed) { play(stage); }
+				else { window.dispatchEvent(new Event('db:manoush-ready')); }
+			}
 		});
 	});
 	if (motionQuery) {
