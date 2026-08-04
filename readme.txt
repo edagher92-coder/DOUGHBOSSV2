@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.33.2
+Stable tag: 2.33.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.33.3 =
+* Makes the hero food blow-out and rebuild clearly visible, then repeats it at a calm interval only while the hero is on screen.
+* Keeps reduced-motion visitors still by default and adds explicit Start, Pause and Resume controls for the animation.
+* Brings the WordPress and GitHub demo motion behaviour back into parity.
 
 = 2.33.2 =
 * Adds a dedicated, hidden `/catering-kitchen/` production workspace while preserving existing `/kitchen/?screen=catering` bookmarks.

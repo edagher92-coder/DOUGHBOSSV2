@@ -2,9 +2,76 @@
 	'use strict';
 	var stages = Array.prototype.slice.call(document.querySelectorAll('[data-manoush-stage]'));
 	if (!stages.length) { return; }
-	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	var explodeHoldMs = 820;
+	var motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+	var reduce = motionQuery ? motionQuery.matches : false;
+	var motionOptedIn = false;
+	var explodeHoldMs = 1500;
+	var settleMs = 1900;
+	var repeatDelayMs = 5200;
+	var lastScrollAt = 0;
+	try { motionOptedIn = window.sessionStorage.getItem('doughbossHeroMotion') === 'on'; } catch (ignore) {}
 	document.documentElement.classList.add('motion-ready');
+	if (reduce && motionOptedIn) { document.documentElement.classList.add('db-demo-motion-opted-in'); }
+
+	function motionAllowed() { return !reduce || motionOptedIn; }
+	function stageCanRun(stage) { return motionAllowed() && !stage._dbManoushUserPaused; }
+
+	function stageForButton(button) {
+		var variant = button.getAttribute('data-manoush-replay');
+		return stages.filter(function (item) { return item.getAttribute('data-manoush-variant') === variant; })[0];
+	}
+
+	function updateReplayButtons() {
+		Array.prototype.slice.call(document.querySelectorAll('[data-manoush-replay]')).forEach(function (button) {
+			var stage = stageForButton(button);
+			var label;
+			if (reduce && !motionOptedIn) { label = 'Start food animation'; }
+			else if (stage && stage._dbManoushUserPaused) { label = 'Resume food animation'; }
+			else { label = 'Pause food animation'; }
+			var text = button.querySelector('[data-manoush-replay-text]');
+			if (text) { text.textContent = label; }
+			else { button.textContent = label; }
+			button.setAttribute('aria-label', label);
+		});
+	}
+
+	function enableMotion() {
+		if (!reduce || motionOptedIn) { return; }
+		motionOptedIn = true;
+		try { window.sessionStorage.setItem('doughbossHeroMotion', 'on'); } catch (ignore) {}
+		document.documentElement.classList.add('db-demo-motion-opted-in');
+		updateReplayButtons();
+		window.dispatchEvent(new Event('db:motion-opt-in'));
+	}
+
+	function stageIsVisible(stage) {
+		if (document.hidden || (stage._dbManoushObserved && stage._dbManoushInView === false)) { return false; }
+		var view = stage.closest('.view');
+		if (view && !view.classList.contains('active')) { return false; }
+		var rect = stage.getBoundingClientRect();
+		return rect.bottom > 0 && rect.top < (window.innerHeight || document.documentElement.clientHeight || 800);
+	}
+
+	function clearStageRepeat(stage) {
+		if (stage._dbManoushRepeatTimer) {
+			window.clearTimeout(stage._dbManoushRepeatTimer);
+			stage._dbManoushRepeatTimer = 0;
+		}
+	}
+
+	function scheduleStageReplay(stage, delay) {
+		clearStageRepeat(stage);
+		if (!stageCanRun(stage) || !stageIsVisible(stage)) { return; }
+		stage._dbManoushRepeatTimer = window.setTimeout(function () {
+			stage._dbManoushRepeatTimer = 0;
+			if (!stageCanRun(stage) || !stageIsVisible(stage)) { return; }
+			if (Date.now() - lastScrollAt < 1500) {
+				scheduleStageReplay(stage, 1700);
+				return;
+			}
+			play(stage);
+		}, typeof delay === 'number' ? delay : repeatDelayMs);
+	}
 
 	function clearStageTimer(stage) {
 		if (stage._dbManoushTimer) {
@@ -17,9 +84,27 @@
 		}
 	}
 
-	function playReady(stage) {
+	function stopStageCycle(stage) {
+		stage._dbManoushCycle = (stage._dbManoushCycle || 0) + 1;
+		clearStageRepeat(stage);
 		clearStageTimer(stage);
-		if (reduce) {
+		stage._dbManoushPlaying = false;
+		stage._dbManoushIntroUntil = 0;
+		releaseScrollStage(stage);
+		stage.classList.remove('is-resetting', 'is-exploded');
+		stage.classList.add('is-assembled');
+	}
+
+	function pauseStage(stage) {
+		stage._dbManoushUserPaused = true;
+		stopStageCycle(stage);
+		stage.classList.add('is-user-paused');
+		updateReplayButtons();
+	}
+
+	function playReady(stage, cycle) {
+		if (cycle !== stage._dbManoushCycle) { return; }
+		if (!stageCanRun(stage)) {
 			stage.classList.remove('is-resetting');
 			stage.classList.add('is-assembled');
 			stage.classList.remove('is-exploded');
@@ -28,24 +113,32 @@
 		// Keep scroll motion from taking control until the food has completed its
 		// entrance. Without this short reservation, the first scroll-scene paint
 		// cancels the deliberate burst-and-assemble sequence on page load.
-		stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + 1550;
+		stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + settleMs;
+		stage._dbManoushPlaying = true;
+		stage._dbManoushHasPlayed = true;
 		stage.classList.remove('is-exploded');
 		stage.classList.remove('is-assembled');
 		stage.classList.add('is-resetting');
 		void stage.offsetWidth;
 		window.requestAnimationFrame(function () {
+			if (cycle !== stage._dbManoushCycle) { return; }
 			window.requestAnimationFrame(function () {
+				if (cycle !== stage._dbManoushCycle) { return; }
 				stage.classList.remove('is-resetting');
 				stage.classList.add('is-exploded');
 				stage._dbManoushTimer = window.setTimeout(function () {
+					if (cycle !== stage._dbManoushCycle) { return; }
 					stage.classList.remove('is-exploded');
 					stage.classList.add('is-assembled');
 					stage._dbManoushTimer = 0;
 					stage._dbManoushReleaseTimer = window.setTimeout(function () {
+						if (cycle !== stage._dbManoushCycle) { return; }
 						stage._dbManoushIntroUntil = 0;
+						stage._dbManoushPlaying = false;
 						stage._dbManoushReleaseTimer = 0;
 						window.dispatchEvent(new Event('db:manoush-ready'));
-					}, 1450);
+						scheduleStageReplay(stage);
+					}, settleMs);
 				}, explodeHoldMs);
 			});
 		});
@@ -74,13 +167,14 @@
 	}
 
 	function play(stage) {
-		if (!reduce) {
-			// Reserve the stage straight away; image decoding can be asynchronous
-			// while the scroll renderer is already queued for its first frame.
-			stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + 2400;
-		}
-		releaseScrollStage(stage);
-		imagesReady(stage, function () { playReady(stage); });
+		stopStageCycle(stage);
+		if (!stageCanRun(stage)) { return; }
+		stage.classList.remove('is-user-paused');
+		// Reserve the stage straight away; image decoding can be asynchronous
+		// while the scroll renderer is already queued for its first frame.
+		stage._dbManoushIntroUntil = Date.now() + explodeHoldMs + settleMs + 600;
+		var cycle = stage._dbManoushCycle;
+		imagesReady(stage, function () { playReady(stage, cycle); });
 	}
 
 	function stageForView(view) {
@@ -104,7 +198,7 @@
 	}
 
 	function prepareScrollStage(stage) {
-		if (reduce) { return; }
+		if (!stageCanRun(stage) || stage._dbManoushPlaying) { return; }
 		clearStageTimer(stage);
 		stage.classList.remove('is-exploded', 'is-assembled');
 		stage.classList.add('is-scroll-driven');
@@ -143,6 +237,7 @@
 	}
 
 	function paintScrollStage(stage, amount) {
+		if (!stageCanRun(stage) || stage._dbManoushPlaying) { return; }
 		prepareScrollStage(stage);
 		var central = stage.querySelector('.ingredient-burst__manoush');
 		if (central) {
@@ -163,16 +258,23 @@
 	function wireReplay() {
 		Array.prototype.slice.call(document.querySelectorAll('[data-manoush-replay]')).forEach(function (button) {
 			button.addEventListener('click', function () {
-				var variant = button.getAttribute('data-manoush-replay');
-				var stage = stages.filter(function (item) {
-					return item.getAttribute('data-manoush-variant') === variant;
-				})[0];
+				var stage = stageForButton(button);
 				if (!stage) { return; }
-				play(stage);
-				button.setAttribute('aria-pressed', 'true');
-				window.setTimeout(function () { button.removeAttribute('aria-pressed'); }, reduce ? 50 : explodeHoldMs + 1000);
+				if (reduce && !motionOptedIn) {
+					enableMotion();
+					stage._dbManoushUserPaused = false;
+					updateReplayButtons();
+					play(stage);
+				} else if (stage._dbManoushUserPaused) {
+					stage._dbManoushUserPaused = false;
+					updateReplayButtons();
+					play(stage);
+				} else {
+					pauseStage(stage);
+				}
 			});
 		});
+		updateReplayButtons();
 	}
 
 	function updateStoreStatus() {
@@ -221,9 +323,10 @@
 
 	function wireScrollScenes() {
 		var scenes = Array.prototype.slice.call(document.querySelectorAll('[data-scroll-scene]'));
-		if (!scenes.length || reduce) { return; }
+		if (!scenes.length) { return; }
 		var queued = false;
 		function render() {
+			if (!motionAllowed()) { queued = false; return; }
 			var viewport = window.innerHeight || 800;
 			scenes.forEach(function (scene) {
 				if (scene.closest('.view') && !scene.closest('.view').classList.contains('active')) { return; }
@@ -237,13 +340,15 @@
 				 * on position, not scroll direction, so it works identically scrolling
 				 * down into a scene and back up through it. */
 				var stage = scene.querySelector('[data-manoush-stage]');
-				if (stage && (!stage._dbManoushIntroUntil || Date.now() >= stage._dbManoushIntroUntil)) {
+				if (stage && stageCanRun(stage) && !stage._dbManoushPlaying && (!stage._dbManoushIntroUntil || Date.now() >= stage._dbManoushIntroUntil)) {
 					paintScrollStage(stage, Math.min(1, Math.max(0, Math.abs(centre) - .035) * 3.45));
+					if (!stage._dbManoushObserved && !stage._dbManoushRepeatTimer && stageIsVisible(stage)) { scheduleStageReplay(stage, 1700); }
 				}
 			});
 			queued = false;
 		}
 		function requestRender() {
+			lastScrollAt = Date.now();
 			if (queued) { return; }
 			queued = true;
 			window.requestAnimationFrame(render);
@@ -252,15 +357,60 @@
 		window.addEventListener('resize', requestRender);
 		window.addEventListener('db:view', requestRender);
 		window.addEventListener('db:manoush-ready', requestRender);
-		requestRender();
+		window.addEventListener('db:motion-opt-in', requestRender);
+		if (motionAllowed()) { requestRender(); }
+	}
+
+	function wireStageVisibility() {
+		if (!('IntersectionObserver' in window)) { return; }
+		var observer = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				var stage = entry.target;
+				stage._dbManoushInView = entry.isIntersecting;
+				if (!entry.isIntersecting) {
+					stopStageCycle(stage);
+				} else if (stageCanRun(stage) && !stage._dbManoushPlaying) {
+					if (!stage._dbManoushHasPlayed) { play(stage); }
+					else { scheduleStageReplay(stage, 700); }
+				}
+			});
+		}, { threshold: 0.22 });
+		stages.forEach(function (stage) {
+			stage._dbManoushObserved = true;
+			stage._dbManoushInView = stageIsVisible(stage);
+			observer.observe(stage);
+		});
+	}
+
+	function motionPreferenceChanged(event) {
+		reduce = event.matches;
+		if (reduce && motionOptedIn) { document.documentElement.classList.add('db-demo-motion-opted-in'); }
+		else if (!reduce || !motionOptedIn) { document.documentElement.classList.remove('db-demo-motion-opted-in'); }
+		stages.forEach(function (stage) {
+			if (!motionAllowed()) { stopStageCycle(stage); }
+			else if (stageCanRun(stage) && stageIsVisible(stage) && !stage._dbManoushPlaying) { scheduleStageReplay(stage, 700); }
+		});
+		updateReplayButtons();
 	}
 
 	window.addEventListener('db:view', function (event) {
+		stages.forEach(stopStageCycle);
 		playForView(event && event.detail ? event.detail : '');
 	});
+	document.addEventListener('visibilitychange', function () {
+		stages.forEach(function (stage) {
+			if (document.hidden) { stopStageCycle(stage); }
+			else if (stageCanRun(stage) && !stage._dbManoushPlaying && stageIsVisible(stage)) { scheduleStageReplay(stage, 700); }
+		});
+	});
+	if (motionQuery) {
+		if (motionQuery.addEventListener) { motionQuery.addEventListener('change', motionPreferenceChanged); }
+		else if (motionQuery.addListener) { motionQuery.addListener(motionPreferenceChanged); }
+	}
 	wireReplay();
 	updateStoreStatus();
 	wireReveals();
 	wireScrollScenes();
+	wireStageVisibility();
 	playForView((window.location.hash || '#about').slice(1));
 }());

@@ -57,7 +57,7 @@ catering_parity_ok( false === strpos( $demo, 'catering-menu-platter-v3.webp' ), 
 catering_parity_ok( false === strpos( $wp, 'catering-menu-platter-v3.webp' ), 'WordPress does not restore the rejected precomposed middle platter' );
 catering_parity_ok( catering_parity_has_all( $demo, $menu_varieties ), 'demo catering copy names the actual mini-manoush and pie varieties' );
 catering_parity_ok( catering_parity_has_all( $wp, $menu_varieties ), 'WordPress catering copy names the actual mini-manoush and pie varieties' );
-catering_parity_ok( false !== strpos( $demo, 'data-manoush-replay="bites"' ) && false !== strpos( $demo_js, "button.setAttribute('aria-pressed', 'true')" ), 'demo provides an accessible Bites replay control' );
+catering_parity_ok( false !== strpos( $demo, 'data-manoush-replay="bites"' ) && false !== strpos( $demo, 'data-manoush-replay-text' ) && false !== strpos( $demo_js, "button.setAttribute('aria-label', label)" ), 'demo provides an accessible Bites animation control with a synchronised label' );
 catering_parity_ok(
 	false !== strpos( $demo, 'data-manoush-variant="full"' )
 		&& false !== strpos( $demo, 'data-manoush-variant="menu"' )
@@ -74,7 +74,7 @@ catering_parity_ok(
 	'homepage uses natural-shape transparent food assets instead of the tilted oval photo collage'
 );
 catering_parity_ok( false !== strpos( $wp, 'data-db-manoush-replay' ) && false !== strpos( $wp_js, "replay.addEventListener('click'" ), 'WordPress provides an accessible replay control' );
-catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce)' ) && false !== strpos( $demo_css, '.hero-replay{display:none;}' ) && false !== strpos( $demo_js, "stage.classList.add('is-assembled')" ), 'demo has reduced-motion still-state and hides replay' );
+catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce)' ) && false !== strpos( $demo_css, '.hero-replay{display:inline-flex;}' ) && false !== strpos( $demo_js, "stage.classList.add('is-assembled')" ), 'demo has a reduced-motion still-state with an explicit animation control' );
 catering_parity_ok(
 	false !== strpos( $wp_css, '@media (prefers-reduced-motion:reduce)' )
 		&& false !== strpos( $wp_css, '.db-mh-replay { display: inline-flex; }' )
@@ -83,11 +83,11 @@ catering_parity_ok(
 	'WordPress keeps the reduced-motion still-state while exposing an explicit replay opt-in'
 );
 catering_parity_ok(
-	false !== strpos( $demo, 'Animation paused by your device motion setting.' )
+	false !== strpos( $demo, 'Animation is paused by your device.' )
 		&& false !== strpos( $demo_css, '.hero-motion-reduced{display:inline-flex;}' )
-		&& false !== strpos( $wp, 'Animation paused by your device motion setting. Select replay to play it.' )
+		&& false !== strpos( $wp, 'Animation is paused by your device.' )
 		&& false !== strpos( $wp_css, '.db-mh-motion-note { display: block;' ),
-	'demo and WordPress explain the reduced-motion state and WordPress offers an explicit replay'
+	'demo and WordPress explain the reduced-motion state and offer an explicit session opt-in'
 );
 catering_parity_ok(
 	false !== strpos( $demo_js, "stage.classList.add('is-resetting')" )
@@ -105,7 +105,11 @@ catering_parity_ok(
 	'homepage and menu food stages remain visible on mobile'
 );
 catering_parity_ok( false !== strpos( $wp_css, '@media (max-width:720px)' ) && false !== strpos( $wp_css, '.db-mh-stage,.db-mh-world { min-height: 325px; }' ) && false === strpos( $wp_css, '.db-mh-stage { display: none' ), 'WordPress keeps the composition visible on mobile' );
-catering_parity_ok( false !== strpos( $wp_js, 'imagesReady(hero, function () { play(hero); })' ) && false !== strpos( $demo_js, 'playForView((window.location.hash' ), 'demo and WordPress automatically play the food build after their images are ready' );
+catering_parity_ok( false !== strpos( $wp_js, 'hero._dbManoushReady = true' ) && false !== strpos( $wp_js, 'play(hero);' ) && false !== strpos( $demo_js, 'playForView((window.location.hash' ), 'demo and WordPress automatically play the food build after their images are ready' );
+catering_parity_ok( false !== strpos( $wp_js, 'repeatDelayMs = 5200' ) && false !== strpos( $demo_js, 'repeatDelayMs = 5200' ) && false !== strpos( $wp_js, 'heroIsVisible(hero)' ) && false !== strpos( $demo_js, 'stageIsVisible(stage)' ), 'both experiences repeat the build only while the active hero is visible' );
+catering_parity_ok( false !== strpos( $wp_js, 'pauseHero(hero)' ) && false !== strpos( $demo_js, 'pauseStage(stage)' ) && false !== strpos( $wp, 'data-db-resume-label=' ), 'recurring motion has a visible pause and resume mechanism' );
+catering_parity_ok( false !== strpos( $wp_js, "classList.add('is-user-paused')" ) && false !== strpos( $wp_css, '.db-manoush-hero.is-user-paused .db-mh-stage::before' ) && false !== strpos( $wp_css, '.is-user-paused.is-assembled:not(.is-scroll-driven) .db-mh-central img' ) && false !== strpos( $demo_js, "classList.add('is-user-paused')" ) && false !== strpos( $demo_css, '.ingredient-burst[data-manoush-stage].is-user-paused' ), 'pause stops scripted cycles, ambient food motion and atmospheric motion, including after reduced-motion opt-in' );
+catering_parity_ok( false !== strpos( $demo_css, '@media(prefers-reduced-motion:reduce) and (max-width:800px)' ) && false !== strpos( $demo_css, '.hero-menu-motion .ingredient-burst.is-assembled' ) && false !== strpos( $demo_css, 'db-stage-breathe-mobile 8s' ), 'explicit reduced-motion opt-in preserves the compact and catering mobile stage layouts' );
 catering_parity_ok( false === strpos( $demo_js, "classList.toggle('is-exploded'") && false === strpos( $demo_js, "classList.toggle('is-assembled'") && false === strpos( $demo_js, 'direction = currentY' ), 'demo scroll handler does not toggle assembly states' );
 catering_parity_ok( false === strpos( $wp_js, "classList.toggle('is-exploded'") && false === strpos( $wp_js, "classList.toggle('is-assembled'") && false === strpos( $wp_js, 'direction = currentY' ), 'WordPress scroll handler does not toggle assembly states' );
 

@@ -102,8 +102,8 @@ class DoughBoss_Shortcodes {
 				<p class="db-mh-kicker"><?php echo esc_html( $atts['kicker'] ); ?></p>
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
 				<p><?php echo esc_html( $atts['description'] ); ?></p>
-				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php echo esc_html( $atts['replay_label'] ); ?></button>
-				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'Animation paused by your device motion setting. Select replay to play it.', 'doughboss' ); ?></span>
+				<button class="db-mh-replay" type="button" data-db-manoush-replay data-db-replay-label="<?php echo esc_attr( $atts['replay_label'] ); ?>" data-db-start-label="<?php esc_attr_e( 'Start food animation', 'doughboss' ); ?>" data-db-pause-label="<?php esc_attr_e( 'Pause food animation', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume food animation', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
+				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'Animation is paused by your device. Select “Start food animation” to enable it for this browser session.', 'doughboss' ); ?></span>
 			</div>
 			<div class="db-mh-stage" aria-hidden="true">
 				<div class="db-mh-world">

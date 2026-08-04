@@ -42,7 +42,10 @@ check(hero.includes('Math.abs(centre)') && hero.includes("window.addEventListene
 check(hero.includes("window.addEventListener('resize'"), 'hero recalculates its scene responsively');
 check(['hero-sujuk-special-v5.webp', 'hero-folded-zaatar-v4.webp', 'hero-cheese-manoush-v4.webp', 'hero-spinach-fatayer-v4.webp', 'hero-chicken-wrap-v4.webp'].every((asset) => shortcodes.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'hero uses five present, distinct production food assets');
 check(['home-manoush-category-v5.webp', 'home-sujuk-special-category-v5.webp', 'home-pies-category-v5.webp'].every((asset) => home.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'homepage category cards use the new high-resolution food photography');
-check(hero.includes('imagesReady(hero, function () { play(hero); })') && hero.includes('_dbManoushPlaying'), 'hero automatically performs the blow-out and rebuild without scroll cancelling it');
+check(hero.includes('hero._dbManoushReady = true') && hero.includes('_dbManoushPlaying'), 'hero automatically performs the blow-out and rebuild without scroll cancelling it');
+check(hero.includes('repeatDelayMs = 5200') && hero.includes('scheduleReplay(hero)') && hero.includes('heroIsVisible(hero)'), 'hero repeats the blow-out and rebuild only while it is visible');
+check(hero.includes('pauseHero(hero)') && hero.includes("getAttribute('data-db-pause-label')") && shortcodes.includes('data-db-pause-label='), 'recurring hero motion exposes a real pause and resume control');
+check(hero.includes("classList.add('is-user-paused')") && heroStyle.includes('.db-manoush-hero.is-user-paused .db-mh-stage::before'), 'pausing the hero also stops ambient food and smoke motion');
 check(heroStyle.includes('@keyframes db-mh-smoke') && heroStyle.includes('drop-shadow'), 'hero adds premium atmospheric depth while retaining reduced-motion handling');
 
 check(home.includes('dbf-sr-only') && catering.includes('dbf-sr-only'), 'visual hero pages retain a clear page-level heading');

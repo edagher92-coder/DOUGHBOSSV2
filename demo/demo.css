@@ -133,6 +133,8 @@ a{text-decoration:none;color:inherit;}
 .ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(42deg) rotateZ(-9deg) scale(1);}
 .ingredient-burst[data-manoush-stage].is-assembled{animation:db-stage-breathe 8s ease-in-out infinite alternate;}
 .ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:db-glow-breathe 4.8s ease-in-out infinite alternate;}
+.ingredient-burst[data-manoush-stage].is-user-paused,.ingredient-burst[data-manoush-stage].is-user-paused .ingredient-burst__glow{animation:none!important;}
+.ingredient-burst[data-manoush-stage].is-user-paused .ingredient-burst__manoush,.ingredient-burst[data-manoush-stage].is-user-paused .ingredient,.ingredient-burst[data-manoush-stage].is-user-paused .ingredient-burst__stamp{transition:none!important;}
 /* Scroll-controlled scenes paint the layers directly every animation frame.
    Keeping transitions off here prevents the composition lagging behind a mouse
    wheel or touch scroll. */
@@ -165,7 +167,7 @@ a{text-decoration:none;color:inherit;}
 	.hero-manoush .ingredient-burst{bottom:108px;}
 	.hero-menu-motion .ingredient-burst.is-assembled,.hero-manoush .ingredient-burst.is-assembled{animation:none;}
 }
-@media(prefers-reduced-motion:reduce){.ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(14deg) rotateZ(-3deg) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(10deg) rotateZ(var(--near-r)) scale(1);transition:none;}.ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(12deg) rotateZ(-9deg) scale(1);transition:none;}}
+@media(prefers-reduced-motion:reduce){html:not(.db-demo-motion-opted-in) .ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{opacity:1;transform:translate3d(-50%,-50%,16px) rotateX(14deg) rotateZ(-3deg) scale(1);transition:none;}html:not(.db-demo-motion-opted-in) .ingredient-burst[data-manoush-stage] .ingredient{opacity:.94;transform:translate3d(calc(-50% + var(--near-x)),calc(-50% + var(--near-y)),var(--near-z)) rotateX(10deg) rotateZ(var(--near-r)) scale(1);transition:none;}html:not(.db-demo-motion-opted-in) .ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{opacity:1;transform:translate3d(-50%,-50%,88px) rotateX(12deg) rotateZ(-9deg) scale(1);transition:none;}}
 
 /* Content enters as the customer reaches it. The page remains fully visible if
    JavaScript is unavailable, and motion is removed for reduced-motion users. */
@@ -177,7 +179,7 @@ a{text-decoration:none;color:inherit;}
 .motion-ready .db-reveal-group.is-visible>*:nth-child(3){transition-delay:180ms;}
 @keyframes db-stage-breathe-mobile{from{transform:translateY(0) rotateX(3deg) rotateY(-4deg);}to{transform:translateY(-5px) rotateX(4.5deg) rotateY(-1deg);}}
 @media(max-width:560px){.hero-live-row{margin-top:17px;gap:11px 15px;}.hero-live,.hero-replay{font-size:11px;}.hero-replay{min-height:44px;}.hero[data-scroll-scene] .hero-bg{inset:-3%;}.hero-manoush .hero-bg{background-position:64% center;}.hero-catering-bites{justify-content:flex-start;padding-bottom:8px;}.hero-catering-bites .hero-main{flex:0 0 auto;order:1;}.hero-catering-bites .ingredient-burst{margin:-18px auto 6px;opacity:.96;order:2;position:relative;right:auto;top:auto;transform:none;width:min(86vw,340px);}.hero-catering-bites .ingredient-burst.is-assembled{animation:db-stage-breathe-mobile 8s ease-in-out infinite alternate;}.ingredient-burst[data-manoush-stage].ingredient-burst--bites .ingredient-burst__manoush{width:min(44vw,190px);}.ingredient-burst[data-manoush-stage].ingredient-burst--bites .ingredient{width:min(24vw,100px);}.ingredient-burst[data-manoush-stage].ingredient-burst--bites .ingredient--meat{width:min(28vw,118px);}.ingredient-burst[data-manoush-stage].ingredient-burst--bites .ingredient-burst__stamp{width:78px;font-size:13px;}}
-@media(prefers-reduced-motion:reduce){.hero[data-scroll-scene] .hero-bg{inset:0;transform:none!important;transition:none;will-change:auto;}.hero-replay{display:none;}.hero-motion-reduced{display:inline-flex;}.hero-live__dot,.ingredient-burst[data-manoush-stage].is-assembled,.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:none!important;}.motion-ready .db-reveal,.motion-ready .db-reveal-group>*{opacity:1;transform:none;transition:none;}}
+@media(prefers-reduced-motion:reduce){.hero[data-scroll-scene] .hero-bg{inset:0;transform:none!important;transition:none;will-change:auto;}.hero-replay{display:inline-flex;}.hero-motion-reduced{display:inline-flex;}.hero-live__dot,.ingredient-burst[data-manoush-stage].is-assembled,.ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:none!important;}.motion-ready .db-reveal,.motion-ready .db-reveal-group>*{opacity:1;transform:none;transition:none;}}
 
 /* dual engine */
 .dual{display:grid;grid-template-columns:1fr 1fr;}
@@ -812,3 +814,29 @@ body{font-size:17.5px;}
 .cd-review-invite__actions{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:5px;}
 .cd-review-invite a{width:max-content;color:var(--ember);font-weight:800;text-underline-offset:3px;}
 @media(max-width:720px){.review-invite__inner{grid-template-columns:1fr;}.review-invite__button{width:100%;justify-content:center;}}
+
+/* A reduced-motion visitor can explicitly start the food animation. The
+ * opt-in lasts only for this browser session and restores motion only for the
+ * hero, leaving the rest of the accessibility preference untouched. */
+@media(prefers-reduced-motion:reduce){
+	html.db-demo-motion-opted-in .hero-motion-reduced{display:none;}
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage] .ingredient-burst__manoush{transition:opacity 380ms ease,transform 1000ms cubic-bezier(.2,.88,.2,1)!important;}
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage] .ingredient{transition:opacity 300ms ease var(--food-delay),transform 780ms cubic-bezier(.16,1,.3,1) var(--food-delay)!important;}
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage] .ingredient-burst__stamp{transition:opacity 300ms ease,transform 820ms cubic-bezier(.16,1,.3,1)!important;}
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-assembled{animation:db-stage-breathe 8s ease-in-out infinite alternate!important;}
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-assembled .ingredient-burst__glow{animation:db-glow-breathe 4.8s ease-in-out infinite alternate!important;}
+}
+@media(prefers-reduced-motion:reduce) and (max-width:800px){
+	html.db-demo-motion-opted-in .hero-menu-motion .ingredient-burst.is-assembled,
+	html.db-demo-motion-opted-in .hero-manoush .ingredient-burst.is-assembled{animation:none!important;}
+}
+@media(prefers-reduced-motion:reduce) and (max-width:560px){
+	html.db-demo-motion-opted-in .hero-catering-bites .ingredient-burst.is-assembled{animation:db-stage-breathe-mobile 8s ease-in-out infinite alternate!important;}
+}
+@media(prefers-reduced-motion:reduce){
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-user-paused,
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-user-paused .ingredient-burst__glow{animation:none!important;}
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-user-paused .ingredient-burst__manoush,
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-user-paused .ingredient,
+	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-user-paused .ingredient-burst__stamp{transition:none!important;}
+}

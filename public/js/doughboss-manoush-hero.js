@@ -1,12 +1,77 @@
 /* DoughBoss standalone Manoush hero. Scroll position drives the depth state. */
 (function () {
 	'use strict';
-	var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	var motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+	var reduceMotion = motionQuery ? motionQuery.matches : false;
 	var motionOptedIn = false;
+	var explodeHoldMs = 1500;
+	var settleMs = 1900;
+	var repeatDelayMs = 5200;
+	var lastScrollAt = 0;
 	try { motionOptedIn = window.sessionStorage.getItem('doughbossHeroMotion') === 'on'; } catch (ignore) {}
 	var heroes = document.querySelectorAll('[data-db-manoush-hero]');
 
 	function motionAllowed() { return !reduceMotion || motionOptedIn; }
+	function animationCanRun(hero) { return motionAllowed() && !hero._dbManoushUserPaused; }
+
+	function updateReplayLabel(hero) {
+		var replay = hero.querySelector('[data-db-manoush-replay]');
+		if (!replay) { return; }
+		var label;
+		if (reduceMotion && !motionOptedIn) { label = replay.getAttribute('data-db-start-label'); }
+		else if (hero._dbManoushUserPaused) { label = replay.getAttribute('data-db-resume-label'); }
+		else { label = replay.getAttribute('data-db-pause-label'); }
+		if (label) {
+			replay.textContent = label;
+			replay.setAttribute('aria-label', label);
+		}
+	}
+
+	function clearRepeat(hero) {
+		if (hero._dbManoushRepeatTimer) {
+			window.clearTimeout(hero._dbManoushRepeatTimer);
+			hero._dbManoushRepeatTimer = 0;
+		}
+	}
+
+	function stopCycle(hero) {
+		hero._dbManoushCycle = (hero._dbManoushCycle || 0) + 1;
+		clearRepeat(hero);
+		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); hero._dbManoushTimer = 0; }
+		if (hero._dbManoushUnlockTimer) { window.clearTimeout(hero._dbManoushUnlockTimer); hero._dbManoushUnlockTimer = 0; }
+		hero._dbManoushPlaying = false;
+		hero._dbManoushHoldUntil = 0;
+		releaseScrollHero(hero);
+		hero.classList.remove('is-resetting', 'is-exploded');
+		hero.classList.add('is-assembled');
+	}
+
+	function pauseHero(hero) {
+		hero._dbManoushUserPaused = true;
+		stopCycle(hero);
+		hero.classList.add('is-user-paused');
+		updateReplayLabel(hero);
+	}
+
+	function heroIsVisible(hero) {
+		if (document.hidden || (hero._dbManoushObserved && hero._dbManoushInView === false)) { return false; }
+		var rect = hero.getBoundingClientRect();
+		return rect.bottom > 0 && rect.top < (window.innerHeight || document.documentElement.clientHeight || 800);
+	}
+
+	function scheduleReplay(hero, delay) {
+		clearRepeat(hero);
+		if (!hero._dbManoushReady || !animationCanRun(hero) || !heroIsVisible(hero)) { return; }
+		hero._dbManoushRepeatTimer = window.setTimeout(function () {
+			hero._dbManoushRepeatTimer = 0;
+			if (!animationCanRun(hero) || !heroIsVisible(hero)) { return; }
+			if (Date.now() - lastScrollAt < 1500) {
+				scheduleReplay(hero, 1700);
+				return;
+			}
+			play(hero);
+		}, typeof delay === 'number' ? delay : repeatDelayMs);
+	}
 
 	function enableMotion() {
 		if (!reduceMotion || motionOptedIn) { return; }
@@ -15,6 +80,7 @@
 		document.documentElement.classList.add('db-mh-motion-opted-in');
 		for (var index = 0; index < heroes.length; index += 1) {
 			heroes[index].classList.remove('is-motion-paused');
+			updateReplayLabel(heroes[index]);
 		}
 	}
 
@@ -29,12 +95,13 @@
 	}
 
 	function play(hero) {
-		releaseScrollHero(hero);
-		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); }
-		if (hero._dbManoushUnlockTimer) { window.clearTimeout(hero._dbManoushUnlockTimer); }
-		if (!motionAllowed()) { hero.classList.remove('is-resetting'); hero.classList.remove('is-exploded'); hero.classList.add('is-assembled'); return; }
+		stopCycle(hero);
+		if (!animationCanRun(hero)) { return; }
+		hero.classList.remove('is-user-paused');
+		var cycle = hero._dbManoushCycle;
 		hero._dbManoushPlaying = true;
-		hero._dbManoushHoldUntil = Date.now() + 3100;
+		hero._dbManoushHasPlayed = true;
+		hero._dbManoushHoldUntil = Date.now() + explodeHoldMs + settleMs;
 		hero.classList.remove('is-exploded');
 		hero.classList.remove('is-assembled');
 		hero.classList.add('is-resetting');
@@ -42,16 +109,21 @@
 		// this, a rapid replay can be coalesced by the browser into no animation.
 		void hero.offsetWidth;
 		window.requestAnimationFrame(function () {
+			if (cycle !== hero._dbManoushCycle) { return; }
 			window.requestAnimationFrame(function () {
+				if (cycle !== hero._dbManoushCycle) { return; }
 				hero.classList.remove('is-resetting');
 				hero.classList.add('is-exploded');
 				hero._dbManoushTimer = window.setTimeout(function () {
+					if (cycle !== hero._dbManoushCycle) { return; }
 					hero.classList.remove('is-exploded');
 					hero.classList.add('is-assembled');
-				}, 820);
+				}, explodeHoldMs);
 				hero._dbManoushUnlockTimer = window.setTimeout(function () {
+					if (cycle !== hero._dbManoushCycle) { return; }
 					hero._dbManoushPlaying = false;
-				}, 2350);
+					scheduleReplay(hero);
+				}, explodeHoldMs + settleMs);
 			});
 		});
 	}
@@ -59,16 +131,19 @@
 	function imagesReady(hero, done) {
 		var images = hero.querySelectorAll('img');
 		var pending = images.length;
-		function finish() { pending -= 1; if (pending <= 0) { done(); } }
-		if (!pending) { done(); return; }
+		var finished = false;
+		function doneOnce() { if (finished) { return; } finished = true; done(); }
+		function finish() { pending -= 1; if (pending <= 0) { doneOnce(); } }
+		if (!pending) { doneOnce(); return; }
 		for (var i = 0; i < images.length; i += 1) {
 			if (images[i].complete) { finish(); }
 			else { images[i].addEventListener('load', finish, { once: true }); images[i].addEventListener('error', finish, { once: true }); }
 		}
+		window.setTimeout(doneOnce, 1800);
 	}
 
 	function prepareScrollHero(hero) {
-		if (!motionAllowed() || hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
+		if (!animationCanRun(hero) || hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
 		if (hero._dbManoushTimer) { window.clearTimeout(hero._dbManoushTimer); hero._dbManoushTimer = 0; }
 		hero.classList.remove('is-exploded', 'is-assembled');
 		hero.classList.add('is-scroll-driven');
@@ -99,7 +174,7 @@
 	}
 
 	function paintScrollHero(hero, amount) {
-		if (hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
+		if (!animationCanRun(hero) || hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { return; }
 		prepareScrollHero(hero);
 		var central = hero.querySelector('.db-mh-central');
 		if (central) {
@@ -119,9 +194,46 @@
 
 	function wire(hero) {
 		var replay = hero.querySelector('[data-db-manoush-replay]');
-		if (replay) { replay.addEventListener('click', function () { enableMotion(); play(hero); }); }
-		if (!motionAllowed()) { hero.classList.add('is-motion-paused'); return; }
-		imagesReady(hero, function () { play(hero); });
+		hero._dbManoushInView = heroIsVisible(hero);
+		updateReplayLabel(hero);
+		if (replay) {
+			replay.addEventListener('click', function () {
+				if (reduceMotion && !motionOptedIn) {
+					enableMotion();
+					hero._dbManoushUserPaused = false;
+					updateReplayLabel(hero);
+					play(hero);
+				} else if (hero._dbManoushUserPaused) {
+					hero._dbManoushUserPaused = false;
+					updateReplayLabel(hero);
+					play(hero);
+				} else {
+					pauseHero(hero);
+				}
+			});
+		}
+		if ('IntersectionObserver' in window) {
+			hero._dbManoushObserved = true;
+			var observer = new IntersectionObserver(function (entries) {
+				for (var entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+					var entry = entries[entryIndex];
+					entry.target._dbManoushInView = entry.isIntersecting;
+					if (!entry.isIntersecting) {
+						clearRepeat(entry.target);
+					} else if (entry.target._dbManoushReady && animationCanRun(entry.target)) {
+						if (entry.target._dbManoushPlaying) { continue; }
+						if (!entry.target._dbManoushHasPlayed) { play(entry.target); }
+						else { scheduleReplay(entry.target, 700); }
+					}
+				}
+			}, { threshold: 0.22 });
+			observer.observe(hero);
+		}
+		if (!motionAllowed()) { hero.classList.add('is-motion-paused'); }
+		imagesReady(hero, function () {
+			hero._dbManoushReady = true;
+			if (animationCanRun(hero) && heroIsVisible(hero)) { play(hero); }
+		});
 	}
 
 	for (var i = 0; i < heroes.length; i += 1) { wire(heroes[i]); }
@@ -138,20 +250,48 @@
 				var progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(viewport + rect.height, 1)));
 				hero.style.setProperty('--db-mh-scene-y', (centre * -34).toFixed(1) + 'px');
 				hero.style.setProperty('--db-mh-scene-scale', (1.055 + Math.sin(progress * Math.PI) * .035).toFixed(3));
-				if (hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { continue; }
+				if (!animationCanRun(hero) || hero._dbManoushPlaying || Date.now() < (hero._dbManoushHoldUntil || 0)) { continue; }
 				// Ingredients draw inward at the focal point, then separate at either
 				// edge. The same position-driven motion plays in reverse on upward scroll.
 				paintScrollHero(hero, Math.min(1, Math.max(0, Math.abs(centre) - .035) * 3.45));
+				if (!hero._dbManoushObserved && hero._dbManoushReady && !hero._dbManoushRepeatTimer && heroIsVisible(hero)) {
+					scheduleReplay(hero, 1700);
+				}
 			}
 			queued = false;
 		}
 		function requestScrollScene() {
+			lastScrollAt = Date.now();
 			if (queued) { return; }
 			queued = true;
 			window.requestAnimationFrame(renderScrollScenes);
 		}
 		window.addEventListener('scroll', requestScrollScene, { passive: true });
 		window.addEventListener('resize', requestScrollScene);
+		document.addEventListener('visibilitychange', function () {
+			for (var index = 0; index < heroes.length; index += 1) {
+				if (document.hidden) { stopCycle(heroes[index]); }
+				else if (heroes[index]._dbManoushReady && !heroes[index]._dbManoushPlaying && animationCanRun(heroes[index]) && heroIsVisible(heroes[index])) { scheduleReplay(heroes[index], 700); }
+			}
+		});
+		function motionPreferenceChanged(event) {
+			reduceMotion = event.matches;
+			for (var index = 0; index < heroes.length; index += 1) {
+				var hero = heroes[index];
+				if (reduceMotion && !motionOptedIn) {
+					hero.classList.add('is-motion-paused');
+					stopCycle(hero);
+				} else {
+					hero.classList.remove('is-motion-paused');
+					if (hero._dbManoushReady && !hero._dbManoushPlaying && animationCanRun(hero) && heroIsVisible(hero)) { scheduleReplay(hero, 700); }
+				}
+				updateReplayLabel(hero);
+			}
+		}
+		if (motionQuery) {
+			if (motionQuery.addEventListener) { motionQuery.addEventListener('change', motionPreferenceChanged); }
+			else if (motionQuery.addListener) { motionQuery.addListener(motionPreferenceChanged); }
+		}
 		if (motionAllowed()) { requestScrollScene(); }
 	}
 }());

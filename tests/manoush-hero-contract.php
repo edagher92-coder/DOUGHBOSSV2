@@ -46,9 +46,21 @@ hero_ok(
 hero_ok( false !== strpos( $storefront_css, '@media (max-width: 480px)' ) && false !== strpos( $storefront_css, 'overflow-wrap: anywhere' ), 'WordPress cart and builder guard narrow mobile widths' );
 hero_ok( false !== strpos( $demo_css, 'perspective:1100px' ) && false !== strpos( $demo_css, 'transform-style:preserve-3d' ), 'demo defines a 3D ingredient stage' );
 hero_ok( false !== strpos( $demo_css, 'translate3d(' ) && false !== strpos( $demo_css, 'rotateX(' ) && false !== strpos( $demo_css, 'rotateY(' ), 'demo burst uses 3D transforms' );
-hero_ok( false !== strpos( $demo_js, 'explodeHoldMs = 820' ) && false !== strpos( $demo_js, "classList.remove('is-exploded')" ), 'demo holds the explosion before assembly' );
+hero_ok( false !== strpos( $demo_js, 'explodeHoldMs = 1500' ) && false !== strpos( $demo_js, "classList.remove('is-exploded')" ), 'demo holds the explosion long enough to be clearly visible before assembly' );
 hero_ok( false !== strpos( $demo_js, 'requestAnimationFrame' ) && false !== strpos( $demo_js, 'offsetWidth' ), 'demo replay has a paint-safe reset' );
 hero_ok( false !== strpos( $demo_js, 'imagesReady' ) && false !== strpos( $demo_js, "addEventListener('error'" ), 'demo waits for image completion or failure' );
+hero_ok(
+	false !== strpos( $js, 'repeatDelayMs = 5200' )
+		&& false !== strpos( $js, 'scheduleReplay(hero)' )
+		&& false !== strpos( $demo_js, 'scheduleStageReplay(stage)' ),
+	'live and demo heroes repeat only through their visibility-aware schedulers'
+);
+hero_ok(
+	false !== strpos( $php, 'data-db-start-label=' )
+		&& false !== strpos( $demo_css, 'html.db-demo-motion-opted-in' )
+		&& false !== strpos( $demo_js, "sessionStorage.setItem('doughbossHeroMotion', 'on')" ),
+	'reduced-motion visitors receive an explicit session-only animation opt-in in both experiences'
+);
 hero_ok( false === strpos( $demo_css, '@media(max-width:560px){.ingredient-burst{display:none;}' ), 'demo keeps the ingredient stage visible on mobile' );
 
 echo "\n$pass passed, $fail failed\n";
