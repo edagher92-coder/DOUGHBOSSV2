@@ -68,6 +68,17 @@ delete_option( 'doughboss_printer_watermark' );
 delete_option( 'doughboss_email_stage_log' );
 delete_transient( 'doughboss_migrating' );
 
+// Remove permanent, autoload-off exactly-once markers for voucher emails.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$voucher_email_marker_prefix = 'doughboss_voucher_email_attempted_';
+$wpdb->query(
+	$wpdb->prepare(
+		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+		$wpdb->esc_like( $voucher_email_marker_prefix ) . '%'
+	)
+);
+// phpcs:enable
+
 // Remove the custom capabilities and the kitchen role.
 $role = get_role( 'administrator' );
 if ( $role ) {

@@ -26,7 +26,7 @@
 	<link rel="canonical" href="https://edagher92-coder.github.io/DOUGHBOSSV2/">
 	<link rel="icon" href="assets/logo.png" type="image/png">
 	<link rel="preload" as="image" href="assets/scene/doughboss-catering-premium-v1.webp" type="image/webp" fetchpriority="high">
-	<link rel="stylesheet" href="demo.css?v=20260724v35">
+	<link rel="stylesheet" href="demo.css?v=20260804v36">
 	<style>
 	.skip{position:absolute;top:-999px;left:12px;background:var(--ember);color:#fff;padding:8px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;z-index:999;text-decoration:none;}
 	.skip:focus{top:0;}
@@ -65,7 +65,7 @@
 		<div class="hero-bg" style="background-image:url('assets/banners/zaatar-w-jebneh-768x432.jpg');"></div>
 		<div class="ingredient-burst ingredient-burst--bites" data-manoush-stage data-manoush-variant="menu" aria-hidden="true">
 			<div class="ingredient-burst__glow"></div>
-			<img class="ingredient-burst__manoush" src="assets/scene/hero-meat-manoush-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async" fetchpriority="high">
+			<img class="ingredient-burst__manoush" src="assets/scene/hero-sujuk-special-v5.webp" alt="" width="1254" height="1254" loading="eager" decoding="async" fetchpriority="high">
 			<img class="ingredient ingredient--zaatar" src="assets/scene/hero-folded-zaatar-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async">
 			<img class="ingredient ingredient--cheese" src="assets/scene/hero-cheese-manoush-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async">
 			<img class="ingredient ingredient--meat" src="assets/scene/hero-chicken-wrap-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async">
@@ -73,16 +73,16 @@
 		</div>
 		<div class="hero-main"><div class="wrap">
 			<p class="eyebrow">The menu</p>
-			<h1 class="disp">Fresh from the<br><em>stone oven.</em></h1>
-			<p class="lead">Stone-baked manoush, pizza, pies and wraps &mdash; wholesome, halal and made to order. We&rsquo;re now baking in Revesby, Bankstown and Roselands, with online pickup ordering from Revesby.</p>
+			<h1 class="disp">Fresh from the<br><em>oven.</em></h1>
+			<p class="lead">Oven-baked manoush, pizza, pies and wraps &mdash; wholesome, halal and made to order. We&rsquo;re now baking in Revesby, Bankstown and Roselands, with online pickup ordering from Revesby.</p>
 			<div class="cta-row">
 				<button type="button" class="btn btn-ember" data-cat="cat-manoush">Start your order
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
 				<a class="btn btn-light" href="#catering">Contact us for catering</a>
 			</div>
 			<div class="hero-live-row">
-				<button class="hero-replay" type="button" data-manoush-replay="menu" aria-label="Replay the menu platter animation">Replay the food build</button>
-				<span class="hero-motion-reduced" role="status">Animation paused by your device motion setting.</span>
+				<button class="hero-replay" type="button" data-manoush-replay="menu" data-manoush-replay-label="Replay the food build" aria-label="Replay the food build"><span data-manoush-replay-text>Replay the food build</span></button>
+				<span class="hero-motion-reduced" role="status">The food build starts automatically and follows your scroll. Use “Pause food animation” at any time.</span>
 			</div>
 		</div></div>
 	</section>
@@ -102,35 +102,35 @@
 		</div>
 
 		<div class="mn-cat" id="cat-manoush">
-			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/banners/Zaatar-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Manoush</h2><p class="mn-cat-sub">Stone-baked flatbreads &mdash; served flat or folded, made fresh to order. Crispy &amp; classic crust free; wholemeal +$2.50, gluten-free +$3.50.</p></div></div>
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/scene/home-manoush-category-v5.webp" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Manoush</h2><p class="mn-cat-sub">Oven-baked flatbreads &mdash; served flat or folded, made fresh to order. Crispy &amp; classic crust free; wholemeal +$2.50, gluten-free +$3.50.</p></div></div>
 			<div class="mn-list">
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar.jpg" alt="Zaatar manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar<span class="mn-tag t-vg">VG</span></span><span class="mn-lead"></span><span class="mn-it-p">$4.50</span></div><p class="mn-it-d">Dried thyme, sumac &amp; toasted sesame mixed with olive oil &mdash; flat or folded.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-cheese.jpg" alt="Zaatar &amp; cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar &amp; Cheese<span class="mn-tag t-v">V</span><span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Zaatar on one half, blended cheese on the other &mdash; flat or folded.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/cheese.jpg" alt="Cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Cheese<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.50</span></div><p class="mn-it-d">A beautiful mix of our blended cheese, baked golden.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/meat.jpg" alt="Meat manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Meat<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.00</span></div><p class="mn-it-d">Minced lamb blended with spices, onions &amp; tomatoes &mdash; flat or folded.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/meat-cheese.jpg" alt="Meat &amp; cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Meat &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Minced lamb with spices, topped with melted cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/sujuk-deluxe.jpg" alt="Sujuk and cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Sujuk &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Spiced sujuk with melted cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/meat-cheese.jpg" alt="Half meat and cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Half Meat &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Half minced meat and half blended cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/cheese.jpg" alt="Cheese tomato and olives manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Cheese, Tomato &amp; Olives<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.50</span></div><p class="mn-it-d">Blended cheese with tomato and olives.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/cheese.jpg" alt="Cheese kaak" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Cheese Kaak<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.50</span></div><p class="mn-it-d">Cheese baked in a sesame kaak bread.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-v5.webp" alt="Zaatar manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar<span class="mn-tag t-vg">VG</span></span><span class="mn-lead"></span><span class="mn-it-p">$4.50</span></div><p class="mn-it-d">Dried thyme, sumac &amp; toasted sesame mixed with olive oil &mdash; flat or folded.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-cheese-v5.webp" alt="Zaatar &amp; cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar &amp; Cheese<span class="mn-tag t-v">V</span><span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Zaatar on one half, blended cheese on the other &mdash; flat or folded.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/cheese-v5.webp" alt="Cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Cheese<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.50</span></div><p class="mn-it-d">A beautiful mix of our blended cheese, baked golden.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/meat-v5.webp" alt="Meat manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Meat<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.00</span></div><p class="mn-it-d">Minced lamb blended with spices, onions &amp; tomatoes &mdash; flat or folded.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/meat-cheese-v5.webp" alt="Meat &amp; cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Meat &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Minced lamb with spices, topped with melted cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/sujuk-cheese-v5.webp" alt="Sujuk and cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Sujuk &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Spiced sujuk with melted cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/half-meat-cheese-v5.webp" alt="Half meat and cheese manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Half Meat &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Half minced meat and half blended cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/cheese-tomato-olives-v5.webp" alt="Cheese tomato and olives manoush" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Cheese, Tomato &amp; Olives<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.50</span></div><p class="mn-it-d">Blended cheese with tomato and olives.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/cheese-kaak-v5.webp" alt="Cheese kaak" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Cheese Kaak<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$9.50</span></div><p class="mn-it-d">Cheese baked in a sesame kaak bread.</p></div></div>
 			</div>
 		</div>
 
 		<div class="mn-cat" id="cat-pizza">
-			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/banners/Dough-Boss-Pie-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Pizza</h2><p class="mn-cat-sub">Stone-baked pizzas &mdash; crispy &amp; classic crust free; wholemeal +$2.50, gluten-free +$3.50.</p></div></div>
+			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/scene/home-sujuk-special-category-v5.webp" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Pizza</h2><p class="mn-cat-sub">Oven-baked pizzas &mdash; crispy &amp; classic crust free; wholemeal +$2.50, gluten-free +$3.50.</p></div></div>
 			<div class="mn-list">
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/all-meat.jpg" alt="All meat pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">All Meat</span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Pepperoni, sujuk, chicken &amp; cheese on a BBQ sauce base.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-veggie-wrap.jpg" alt="Zaatar veggie pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar Veggie Pizza<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Zaatar with tomato, olives and cheese. Choose the menu sauce, extras and removals.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-veggie-wrap.jpg" alt="Labneh veggie pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Labneh Veggie Pizza<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Labneh, tomato, olives and fresh vegetables. Choose the menu sauce, extras and removals.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/sujuk-deluxe.jpg" alt="Sujuk deluxe pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Sujuk Deluxe</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Spiced beef sausage with tomato, capsicum, mushroom, olives &amp; cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/spinach-deluxe.jpg" alt="Spinach deluxe pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spinach Deluxe<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Spinach mix, mushroom, tomato, olives &amp; cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/veggie-plus.jpg" alt="Veggie pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Veggie Plus<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Cheese, tomato, olives, capsicum, onion &amp; mushroom on a garlic sauce base.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/pepperoni-cheese.jpg" alt="Pepperoni &amp; cheese pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Pepperoni &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">A perfect blend of pepperoni &amp; cheese on a tomato sauce base.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/dough-boss-special.jpg" alt="Sujuk Special pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Sujuk Special<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Sujuk, tomato, mushroom, capsicum, onion, black olives &amp; cheese on a tomato base.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/chicken-cheese.jpg" alt="Chicken &amp; cheese pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Chicken &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken &amp; mushroom on garlic sauce, topped with cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/bbq-chicken.jpg" alt="BBQ chicken pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">BBQ Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">BBQ sauce base with chicken, onion, capsicum, mushroom &amp; cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/peri-peri-chicken.jpg" alt="Peri peri chicken pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Peri Peri Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, mushroom, capsicum, onion &amp; cheese, finished with peri peri sauce.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/garlic-prawns.jpg" alt="Garlic prawns pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Garlic Prawns</span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Prawns, mushroom, onion, capsicum &amp; cheese on a garlic-tomato base.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/all-meat-v5.webp" alt="All meat pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">All Meat</span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Pepperoni, sujuk, chicken &amp; cheese on a BBQ sauce base.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-veggie-pizza-v5.webp" alt="Zaatar veggie pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar Veggie Pizza<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Zaatar with tomato, olives and cheese. Choose the menu sauce, extras and removals.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/labneh-veggie-pizza-v5.webp" alt="Labneh veggie pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Labneh Veggie Pizza<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Labneh, tomato, olives and fresh vegetables. Choose the menu sauce, extras and removals.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/sujuk-deluxe-v5.webp" alt="Sujuk deluxe pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Sujuk Deluxe</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Spiced beef sausage with tomato, capsicum, mushroom, olives &amp; cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/spinach-deluxe-v5.webp" alt="Spinach deluxe pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spinach Deluxe<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Spinach mix, mushroom, tomato, olives &amp; cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/veggie-plus-v5.webp" alt="Veggie pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Veggie Plus<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Cheese, tomato, olives, capsicum, onion &amp; mushroom on a garlic sauce base.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/pepperoni-cheese-v5.webp" alt="Pepperoni &amp; cheese pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Pepperoni &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">A perfect blend of pepperoni &amp; cheese on a tomato sauce base.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/sujuk-special-menu-v5.webp" alt="Sujuk Special pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Sujuk Special<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Sujuk, tomato, mushroom, capsicum, onion, black olives &amp; cheese on a tomato base.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/chicken-cheese-v5.webp" alt="Chicken &amp; cheese pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Chicken &amp; Cheese</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken &amp; mushroom on garlic sauce, topped with cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/bbq-chicken-v5.webp" alt="BBQ chicken pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">BBQ Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">BBQ sauce base with chicken, onion, capsicum, mushroom &amp; cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/peri-peri-chicken-v5.webp" alt="Peri peri chicken pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Peri Peri Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, mushroom, capsicum, onion &amp; cheese, finished with peri peri sauce.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/garlic-prawns-v5.webp" alt="Garlic prawns pizza" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Garlic Prawns</span><span class="mn-lead"></span><span class="mn-it-p">$15.00</span></div><p class="mn-it-d">Prawns, mushroom, onion, capsicum &amp; cheese on a garlic-tomato base.</p></div></div>
 			</div>
 		</div>
 
@@ -139,37 +139,37 @@
 		<div class="mn-cat" id="cat-pies">
 			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/banners/Spinach-Cheese-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Pies</h2><p class="mn-cat-sub">Golden baked turnovers, filled fresh.</p></div></div>
 			<div class="mn-list">
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/spinach-cheese-pie.jpg" alt="Spinach pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spinach Pie<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$10.00</span></div><p class="mn-it-d">A triangular turnover of spinach, onion, lemon, spices and cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/haloumi-pie.jpg" alt="Haloumi pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Haloumi<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Delicious haloumi cheese baked in a pie.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/chicken-pie.jpg" alt="Dough Boss pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Dough Boss Pie</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Grilled chicken, capsicum, mushroom &amp; cheese.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/aged-cheese-pie.jpg" alt="Aged cheese (shanklish) pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Shanklish<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$10.00</span></div><p class="mn-it-d">Aged white cheese (shanklish) with diced tomatoes &amp; onions.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/spinach-pie-v5.webp" alt="Spinach pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spinach Pie<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$10.00</span></div><p class="mn-it-d">A triangular turnover of spinach, onion, lemon, spices and cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/haloumi-v5.webp" alt="Haloumi pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Haloumi<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Delicious haloumi cheese baked in a pie.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/dough-boss-pie-v5.webp" alt="Dough Boss pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Dough Boss Pie</span><span class="mn-lead"></span><span class="mn-it-p">$11.00</span></div><p class="mn-it-d">Grilled chicken, capsicum, mushroom &amp; cheese.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/aged-cheese-v5.webp" alt="Aged cheese (shanklish) pie" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Shanklish<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$10.00</span></div><p class="mn-it-d">Aged white cheese (shanklish) with diced tomatoes &amp; onions.</p></div></div>
 			</div>
 		</div>
 
 		<div class="mn-cat" id="cat-wraps">
 			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/banners/zaatar-w-jebneh-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Wraps</h2><p class="mn-cat-sub">Rolled fresh &mdash; made your way.</p></div></div>
 			<div class="mn-list">
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-veggie-wrap.jpg" alt="Zaatar &amp; veggie wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar &amp; Veggie<span class="mn-tag t-vg">VG</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Zaatar with fresh tomato, cucumber, olives &amp; mint. Add labneh or cheese +$2.50 each.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-veggie-wrap.jpg" alt="Labneh veggie wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Labneh Veggie Wrap<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Labneh with fresh tomato, cucumber, olives and mint. Add cheese +$2.50 if you like.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/chicken-delight.jpg" alt="Chicken delight wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Chicken Delight</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, fresh tomato, lettuce, pickled cucumber &amp; garlic mayo.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/ultimate-chicken.jpg" alt="Ultimate chicken wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Ultimate Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, melted cheese, mushroom, capsicum &amp; lettuce, topped with mayo.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/dough-boss-wrap.jpg" alt="Dough Boss wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Dough Boss Wrap<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Sujuk, fresh tomato, pickled cucumber, lettuce &amp; cheese, topped with mayo.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/zaatar-veggie-wrap-v5.webp" alt="Zaatar &amp; veggie wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Zaatar &amp; Veggie<span class="mn-tag t-vg">VG</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Zaatar with fresh tomato, cucumber, olives &amp; mint. Add labneh or cheese +$2.50 each.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/labneh-veggie-wrap-v5.webp" alt="Labneh veggie wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Labneh Veggie Wrap<span class="mn-tag t-v">V</span></span><span class="mn-lead"></span><span class="mn-it-p">$8.50</span></div><p class="mn-it-d">Labneh with fresh tomato, cucumber, olives and mint. Add cheese +$2.50 if you like.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/chicken-delight-v5.webp" alt="Chicken delight wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Chicken Delight</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, fresh tomato, lettuce, pickled cucumber &amp; garlic mayo.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/ultimate-chicken-v5.webp" alt="Ultimate chicken wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Ultimate Chicken</span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Grilled chicken, melted cheese, mushroom, capsicum &amp; lettuce, topped with mayo.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/dough-boss-wrap-v5.webp" alt="Dough Boss wrap" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Dough Boss Wrap<span class="mn-tag t-pop">Popular</span></span><span class="mn-lead"></span><span class="mn-it-p">$14.00</span></div><p class="mn-it-d">Sujuk, fresh tomato, pickled cucumber, lettuce &amp; cheese, topped with mayo.</p></div></div>
 			</div>
 		</div>
 
 		<div class="mn-cat" id="cat-desserts">
 			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/banners/chocobanana-768x432.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Desserts</h2><p class="mn-cat-sub">Save room for the sweet side.</p></div></div>
 			<div class="mn-list">
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/choco-banana.jpg" alt="Choco banana" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Choco Banana</span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Nutella chocolate &amp; banana baked in a pie.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/choco-banana-v5.webp" alt="Choco banana" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Choco Banana</span><span class="mn-lead"></span><span class="mn-it-p">$13.00</span></div><p class="mn-it-d">Nutella chocolate &amp; banana baked in a pie.</p></div></div>
 			</div>
 		</div>
 
 		<div class="mn-cat" id="cat-drinks">
 			<div class="mn-cat-head"><img class="mn-cat-bg" src="assets/drinks-banner.jpg" alt="" loading="lazy" decoding="async"><div class="mn-cat-head-in"><h2 class="disp">Drinks</h2><p class="mn-cat-sub">To wash it all down.</p></div></div>
 			<div class="mn-list">
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/spring-water.jpg" alt="Spring water" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spring Water</span><span class="mn-lead"></span><span class="mn-it-p">$3.50</span></div><p class="mn-it-d">Still, chilled.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/soft-drinks.jpg" alt="Soft drink" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Soft Drinks 600ml</span><span class="mn-lead"></span><span class="mn-it-p">$5.00</span></div><p class="mn-it-d">Coke, Sprite, Fanta or Solo &mdash; ice-cold.</p></div></div>
-				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/juice.jpg" alt="Juice" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Juice</span><span class="mn-lead"></span><span class="mn-it-p">$4.50</span></div><p class="mn-it-d">Chilled fruit juice.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/spring-water-v5.webp" alt="Spring water" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Spring Water</span><span class="mn-lead"></span><span class="mn-it-p">$3.50</span></div><p class="mn-it-d">Still, chilled.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/soft-drinks-v5.webp" alt="Soft drink" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Soft Drinks 600ml</span><span class="mn-lead"></span><span class="mn-it-p">$5.00</span></div><p class="mn-it-d">Coke, Sprite, Fanta or Solo &mdash; ice-cold.</p></div></div>
+				<div class="mn-item"><img class="mn-it-img" width="72" height="72" src="assets/menu/juice-v5.webp" alt="Juice" loading="lazy" decoding="async"><div class="mn-it-body"><div class="mn-it-top"><span class="mn-it-n">Juice</span><span class="mn-lead"></span><span class="mn-it-p">$4.50</span></div><p class="mn-it-d">Chilled fruit juice.</p></div></div>
 			</div>
 		</div>
 	</div></section>
@@ -190,7 +190,7 @@
 		<div class="hero-bg" style="background-image:url('assets/scene/doughboss-catering-premium-v1.webp');"></div>
 		<div class="ingredient-burst ingredient-burst--bites ingredient-burst--signature" data-manoush-stage data-manoush-variant="full" aria-hidden="true">
 			<div class="ingredient-burst__glow"></div>
-			<img class="ingredient-burst__manoush" src="assets/scene/hero-meat-manoush-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async" fetchpriority="high">
+			<img class="ingredient-burst__manoush" src="assets/scene/hero-sujuk-special-v5.webp" alt="" width="1254" height="1254" loading="eager" decoding="async" fetchpriority="high">
 			<img class="ingredient ingredient--zaatar" src="assets/scene/hero-folded-zaatar-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async">
 			<img class="ingredient ingredient--cheese" src="assets/scene/hero-cheese-manoush-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async">
 			<img class="ingredient ingredient--meat" src="assets/scene/hero-chicken-wrap-v4.webp" alt="" width="1254" height="1254" loading="eager" decoding="async">
@@ -207,8 +207,8 @@
 			</div>
 			<div class="hero-live-row">
 				<span class="hero-live" data-store-status role="status"><span class="hero-live__dot" aria-hidden="true"></span><span data-store-status-text>Revesby online pickup &middot; three shops baking daily</span></span>
-				<button class="hero-replay" type="button" data-manoush-replay="full" aria-label="Replay the manoush ingredient animation">Replay the food build</button>
-				<span class="hero-motion-reduced" role="status">Animation paused by your device motion setting.</span>
+				<button class="hero-replay" type="button" data-manoush-replay="full" data-manoush-replay-label="Replay the food build" aria-label="Replay the food build"><span data-manoush-replay-text>Replay the food build</span></button>
+				<span class="hero-motion-reduced" role="status">The food build starts automatically and follows your scroll. Use “Pause food animation” at any time.</span>
 			</div>
 		</div></div>
 		<div class="hero-foot"><div class="wrap">
@@ -227,14 +227,14 @@
 			<a class="btn btn-ember" href="#menu">See the menu
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
 		</div>
-		<div class="show-img"><img src="assets/banners/Dough-Boss-Pie-768x432.jpg" alt="Fresh Dough Boss manoush" loading="lazy" decoding="async"></div>
+		<div class="show-img"><img src="assets/scene/home-sujuk-special-category-v5.webp" width="1254" height="1254" alt="Freshly oven-baked Sujuk Special pizza" loading="lazy" decoding="async"></div>
 	</div></div></section>
 
 	<section class="steps"><div class="wrap">
 		<div class="head"><p class="eyebrow">What we do</p><h2 class="disp">Three ways we feed you</h2></div>
 		<div class="grid">
-			<div class="step"><div class="n">01</div><h3>Manoush</h3><p>Stone-baked flatbreads — zaatar, cheese, meat and more, served flat or folded, made to order.</p><a class="about-link" href="#menu">See the menu &rarr;</a></div>
-			<div class="step"><div class="n">02</div><h3>Pizza, pies &amp; wraps</h3><p>Stone-baked pizzas, golden pies and fresh-rolled wraps — a Mediterranean spread, made to order.</p><a class="about-link" href="#menu">Browse the menu &rarr;</a></div>
+			<div class="step"><div class="n">01</div><h3>Manoush</h3><p>Oven-baked flatbreads — zaatar, cheese, meat and more, served flat or folded, made to order.</p><a class="about-link" href="#menu">See the menu &rarr;</a></div>
+			<div class="step"><div class="n">02</div><h3>Pizza, pies &amp; wraps</h3><p>Oven-baked pizzas, golden pies and fresh-rolled wraps — a Mediterranean spread, made to order.</p><a class="about-link" href="#menu">Browse the menu &rarr;</a></div>
 			<div class="step"><div class="n">03</div><h3>Catering</h3><p>Office runs, footy nights and functions — email or call us and we&rsquo;ll sort the rest.</p><a class="about-link" href="#catering">Contact us &rarr;</a></div>
 		</div>
 	</div></section>
@@ -283,7 +283,7 @@
 		     cheese and meat manoush plus spinach, haloumi, chicken and shanklish pies. -->
 		<div class="ingredient-burst ingredient-burst--bites" data-manoush-stage data-manoush-variant="bites" aria-hidden="true">
 			<div class="ingredient-burst__glow"></div>
-			<img class="ingredient-burst__manoush" src="assets/scene/hero-meat-manoush-v4.webp" alt="" width="1254" height="1254" loading="lazy" decoding="async" fetchpriority="low">
+			<img class="ingredient-burst__manoush" src="assets/scene/hero-sujuk-special-v5.webp" alt="" width="1254" height="1254" loading="lazy" decoding="async" fetchpriority="low">
 			<img class="ingredient ingredient--zaatar" src="assets/scene/hero-folded-zaatar-v4.webp" alt="" width="1254" height="1254" loading="lazy" decoding="async" fetchpriority="low">
 			<img class="ingredient ingredient--cheese" src="assets/scene/hero-cheese-manoush-v4.webp" alt="" width="1254" height="1254" loading="lazy" decoding="async" fetchpriority="low">
 			<img class="ingredient ingredient--meat" src="assets/scene/hero-chicken-wrap-v4.webp" alt="" width="1254" height="1254" loading="lazy" decoding="async" fetchpriority="low">
@@ -295,11 +295,11 @@
 			<h1 class="disp">Talk to us about<br><em>catering.</em></h1>
 			<p class="lead">Mini zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies for office runs, birthdays and functions. Catering online ordering is coming soon &mdash; stay tuned! For now, email or call us and we&rsquo;ll build the spread with you.</p>
 			<div class="hero-live-row">
-				<button class="hero-replay" type="button" data-manoush-replay="bites" aria-label="Replay the catering bites animation">
+				<button class="hero-replay" type="button" data-manoush-replay="bites" data-manoush-replay-label="See the spread come together" aria-label="See the spread come together">
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 7.68"/><path d="M20 3v4.68h-4.68"/></svg>
-					See the spread come together
+					<span data-manoush-replay-text>See the spread come together</span>
 				</button>
-				<span class="hero-motion-reduced" role="status">Animation paused by your device motion setting.</span>
+				<span class="hero-motion-reduced" role="status">The food build starts automatically and follows your scroll. Use “Pause food animation” at any time.</span>
 			</div>
 		</div></div>
 	</section>
@@ -349,7 +349,7 @@
 		<div class="wrap sb-hero-in">
 			<p class="eyebrow sb-eyebrow">Offers &amp; News</p>
 			<h1 class="disp sb-title">Fresh drops<br><em>from the oven.</em></h1>
-			<p class="lead sb-lead">Launch offers, student vouchers and the latest news from Dough Boss &mdash; straight from the stone oven. Follow us on Instagram to be the first to know.</p>
+			<p class="lead sb-lead">Launch offers, student vouchers and the latest news from Dough Boss &mdash; fresh from the oven. Follow us on Instagram to be the first to know.</p>
 			<div class="cta-row">
 				<button type="button" class="btn sb-btn-amber" data-cat="snow-voucher">Claim student voucher
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
@@ -417,7 +417,7 @@
 	<div class="flinks"><a href="#about">About</a>&middot; <a href="menu.html">Menu</a>&middot; <a href="catering.html">Catering</a>&middot; <a href="#locations">Contact Us</a>&middot; <a href="#offers">Offers &amp; News</a></div>
 	<div class="flinks"><a href="franchise.html">Partners</a>&middot; <a href="licensing.html">Licensing</a>&middot; <a href="privacy.html">Privacy Policy</a>&middot; <a href="terms.html">Terms</a></div>
 	<div class="fsocial"><a href="https://instagram.com/doughboss" target="_blank" rel="noopener" aria-label="Dough Boss on Instagram"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1.3" fill="currentColor" stroke="none"/></svg>Dough Boss &middot; @doughboss</a></div>
-	<div>Concept demo &middot; Dough Boss &mdash; Lebanese bakery, stone-baked since 2009</div>
+	<div>Concept demo &middot; Dough Boss &mdash; Lebanese bakery, oven-baked since 2009</div>
 </footer>
 
 <div class="demo-ribbon">Concept demo · <b>orders &amp; payments are simulated</b> · details &amp; images illustrative.</div>
@@ -499,7 +499,7 @@
 <script>window.DoughBossMarketingConfig={enabled:false,metaPixelId:"",tiktokPixelId:"",consentVersion:"2026-07",initialConsent:{measurement:false,advertising:false,version:"2026-07"}};</script>
 <script src="marketing.js?v=20260724v2"></script>
 <script src="menu-order.js?v=20260724v30"></script>
-<script src="manoush-hero.js?v=20260728v8"></script>
+<script src="manoush-hero.js?v=20260804v10"></script>
 <!-- catering-demo.js + snowboss.js removed with the S1 rebrand (catering is
      contact-only until the online quote flow ships; Snow Boss falling-snow
      effect belonged to the retired dual-brand section). -->

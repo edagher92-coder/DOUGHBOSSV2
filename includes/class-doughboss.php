@@ -105,6 +105,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-seo.php';
 		require_once $dir . 'class-doughboss-staff-scope.php';
 		require_once $dir . 'class-doughboss-staff-experience.php';
+		require_once $dir . 'class-doughboss-portals.php';
 
 		if ( is_admin() ) {
 			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
@@ -138,6 +139,7 @@ final class DoughBoss {
 		( new DoughBoss_SEO() )->init();
 		DoughBoss_Staff_Scope::init();
 		( new DoughBoss_Staff_Experience() )->init();
+		( new DoughBoss_Portals() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
 		( new DoughBoss_Privacy() )->init();
 		DoughBoss_Table_QR::init( $this->cart );

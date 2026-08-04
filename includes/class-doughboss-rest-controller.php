@@ -235,7 +235,9 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'voucher_redeem' ),
-				'permission_callback' => array( $this, 'verify_nonce' ),
+				// Legacy endpoint retained for integrations, but no longer public:
+				// storefront redemption happens only inside paid/order checkout.
+				'permission_callback' => array( $this, 'verify_manage' ),
 				'args'                => array(
 					'code'            => array(
 						'required'          => true,
@@ -2524,6 +2526,30 @@ class DoughBoss_REST_Controller {
 			return $checkout_key;
 		}
 
+		$voucher_reservation_key  = '';
+		$reserved_voucher_code    = '';
+		$priced_voucher_code      = isset( $totals['voucher_code'] ) ? (string) $totals['voucher_code'] : '';
+		$priced_voucher_discount  = isset( $totals['discount'] ) ? (float) $totals['discount'] : 0.0;
+		if ( 'stripe' === $gateway && '' !== $priced_voucher_code && $priced_voucher_discount > 0 ) {
+			$reservation = DoughBoss_Voucher::reserve(
+				$priced_voucher_code,
+				(float) $totals['subtotal'],
+				'online',
+				$checkout_key,
+				DoughBoss_Voucher::RESERVATION_TTL_SECONDS
+			);
+			if ( is_wp_error( $reservation ) ) {
+				return $reservation;
+			}
+			$voucher_reservation_key = $checkout_key;
+			$reserved_voucher_code   = (string) $reservation['code'];
+			// Pricing and leasing both recompute from the database. Refuse payment
+			// if an administrative change somehow made those two results diverge.
+			if ( abs( (float) $reservation['amount'] - $priced_voucher_discount ) > 0.009 ) {
+				return new WP_Error( 'doughboss_voucher_changed', __( 'This voucher changed while payment was being prepared. Please review your cart and try again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+		}
+
 		$metadata = array(
 			'checkout_key' => $checkout_key,
 			'purpose'      => 'order',
@@ -2556,7 +2582,8 @@ class DoughBoss_REST_Controller {
 						'delivery_fee'      => (float) $totals['delivery_fee'],
 						'total'             => (float) $totals['total'],
 						'discount'          => isset( $totals['discount'] ) ? (float) $totals['discount'] : 0.0,
-						'voucher_code'      => isset( $totals['voucher_code'] ) ? (string) $totals['voucher_code'] : '',
+						'voucher_code'      => '' !== $reserved_voucher_code ? $reserved_voucher_code : $priced_voucher_code,
+						'voucher_reservation_key' => $voucher_reservation_key,
 						'currency'          => strtoupper( (string) $currency ),
 						'checkout_key'      => $checkout_key,
 					),
@@ -2564,6 +2591,9 @@ class DoughBoss_REST_Controller {
 				)
 			);
 			if ( is_wp_error( $snapshot ) ) {
+				// Do not release here: this checkout key may already own a live
+				// Stripe Session from an earlier response. Snapshot conflicts and
+				// unknown storage outcomes must retain the lease until it expires.
 				return $snapshot;
 			}
 			$return_urls = $this->stripe_checkout_return_urls( $request->get_param( 'return_url' ) );
@@ -2786,54 +2816,54 @@ class DoughBoss_REST_Controller {
 	 */
 	private function menu_image_url( $name, $category ) {
 		$images = array(
-			'zaatar'                  => 'zaatar.webp',
-			'zaatar-cheese'           => 'zaatar-cheese.webp',
-			'cheese'                  => 'cheese.webp',
-			'meat'                    => 'meat.webp',
-			'meat-cheese'             => 'meat-cheese.webp',
-			'sujuk-cheese'            => 'sujuk-deluxe.webp',
-			'half-meat-cheese'        => 'meat-cheese.webp',
-			'cheese-tomato-olives'    => 'cheese.webp',
-			'cheese-kaak'             => 'cheese.webp',
-			'zaatar-veggie-pizza'     => 'zaatar-veggie-wrap.webp',
-			'labneh-veggie-pizza'     => 'zaatar-veggie-wrap.webp',
-			'all-meat'                => 'all-meat.webp',
-			'sujuk-deluxe'            => 'sujuk-deluxe.webp',
-			'spinach-deluxe'          => 'spinach-deluxe.webp',
-			'veggie-plus'             => 'veggie-plus.webp',
-			'pepperoni-cheese'        => 'pepperoni-cheese.webp',
-			'sujuk-special'           => 'dough-boss-special.webp',
-			'dough-boss-special'      => 'dough-boss-special.webp',
-			'chicken-cheese'          => 'chicken-cheese.webp',
-			'bbq-chicken'             => 'bbq-chicken.webp',
-			'peri-peri-chicken'       => 'peri-peri-chicken.webp',
-			'garlic-prawns'           => 'garlic-prawns.webp',
-			'spinach-pie'             => 'spinach-cheese-pie.webp',
-			'spinach-cheese'          => 'spinach-cheese-pie.webp',
-			'haloumi'                 => 'haloumi-pie.webp',
-			'halloumi'                => 'haloumi-pie.webp',
-			'dough-boss-pie'          => 'chicken-pie.webp',
-			'chicken-pie'             => 'chicken-pie.webp',
-			'aged-cheese'             => 'aged-cheese-pie.webp',
-			'shanklish'               => 'aged-cheese-pie.webp',
-			'zaatar-veggie'           => 'zaatar-veggie-wrap.webp',
-			'labneh-veggie-wrap'      => 'zaatar-veggie-wrap.webp',
-			'chicken-delight'         => 'chicken-delight.webp',
-			'ultimate-chicken'        => 'ultimate-chicken.webp',
-			'dough-boss-wrap'         => 'dough-boss-wrap.webp',
-			'choco-banana'            => 'choco-banana.webp',
-			'spring-water'            => 'spring-water.webp',
-			'soft-drinks-600ml'       => 'soft-drinks.webp',
-			'soft-drinks'             => 'soft-drinks.webp',
-			'juice'                   => 'juice.webp',
+			'zaatar'                  => 'zaatar-v5.webp',
+			'zaatar-cheese'           => 'zaatar-cheese-v5.webp',
+			'cheese'                  => 'cheese-v5.webp',
+			'meat'                    => 'meat-v5.webp',
+			'meat-cheese'             => 'meat-cheese-v5.webp',
+			'sujuk-cheese'            => 'sujuk-cheese-v5.webp',
+			'half-meat-cheese'        => 'half-meat-cheese-v5.webp',
+			'cheese-tomato-olives'    => 'cheese-tomato-olives-v5.webp',
+			'cheese-kaak'             => 'cheese-kaak-v5.webp',
+			'zaatar-veggie-pizza'     => 'zaatar-veggie-pizza-v5.webp',
+			'labneh-veggie-pizza'     => 'labneh-veggie-pizza-v5.webp',
+			'all-meat'                => 'all-meat-v5.webp',
+			'sujuk-deluxe'            => 'sujuk-deluxe-v5.webp',
+			'spinach-deluxe'          => 'spinach-deluxe-v5.webp',
+			'veggie-plus'             => 'veggie-plus-v5.webp',
+			'pepperoni-cheese'        => 'pepperoni-cheese-v5.webp',
+			'sujuk-special'           => 'sujuk-special-menu-v5.webp',
+			'dough-boss-special'      => 'sujuk-special-menu-v5.webp',
+			'chicken-cheese'          => 'chicken-cheese-v5.webp',
+			'bbq-chicken'             => 'bbq-chicken-v5.webp',
+			'peri-peri-chicken'       => 'peri-peri-chicken-v5.webp',
+			'garlic-prawns'           => 'garlic-prawns-v5.webp',
+			'spinach-pie'             => 'spinach-pie-v5.webp',
+			'spinach-cheese'          => 'spinach-pie-v5.webp',
+			'haloumi'                 => 'haloumi-v5.webp',
+			'halloumi'                => 'haloumi-v5.webp',
+			'dough-boss-pie'          => 'dough-boss-pie-v5.webp',
+			'chicken-pie'             => 'dough-boss-pie-v5.webp',
+			'aged-cheese'             => 'aged-cheese-v5.webp',
+			'shanklish'               => 'aged-cheese-v5.webp',
+			'zaatar-veggie'           => 'zaatar-veggie-wrap-v5.webp',
+			'labneh-veggie-wrap'      => 'labneh-veggie-wrap-v5.webp',
+			'chicken-delight'         => 'chicken-delight-v5.webp',
+			'ultimate-chicken'        => 'ultimate-chicken-v5.webp',
+			'dough-boss-wrap'         => 'dough-boss-wrap-v5.webp',
+			'choco-banana'            => 'choco-banana-v5.webp',
+			'spring-water'            => 'spring-water-v5.webp',
+			'soft-drinks-600ml'       => 'soft-drinks-v5.webp',
+			'soft-drinks'             => 'soft-drinks-v5.webp',
+			'juice'                   => 'juice-v5.webp',
 		);
 		$fallbacks = array(
-			'manoush'  => 'zaatar.webp',
-			'pizza'    => 'dough-boss-special.webp',
-			'pies'     => 'spinach-cheese-pie.webp',
-			'wraps'    => 'zaatar-veggie-wrap.webp',
-			'desserts' => 'choco-banana.webp',
-			'drinks'   => 'soft-drinks.webp',
+			'manoush'  => 'zaatar-v5.webp',
+			'pizza'    => 'sujuk-special-menu-v5.webp',
+			'pies'     => 'spinach-pie-v5.webp',
+			'wraps'    => 'zaatar-veggie-wrap-v5.webp',
+			'desserts' => 'choco-banana-v5.webp',
+			'drinks'   => 'soft-drinks-v5.webp',
 		);
 		$key      = sanitize_title( $name );
 		$category = sanitize_title( $category );
@@ -3043,7 +3073,9 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_voucher_invalid', __( 'This voucher code isn’t valid.', 'doughboss' ), array( 'status' => 422 ) );
 		}
 
-		$this->cart->set_voucher_code( $code );
+		// Persist the canonical database code, not the user's recoverable spelling,
+		// so payment snapshots, orders and redemption audit all share one identity.
+		$this->cart->set_voucher_code( (string) $row->code );
 		return rest_ensure_response(
 			array(
 				'applied' => true,
@@ -3242,8 +3274,24 @@ class DoughBoss_REST_Controller {
 			}
 		}
 
+		// Gate the provider lookup below as well as ordinary checkout work. A
+		// returned Stripe Session id is still untrusted input, and resolving it
+		// must not provide an unauthenticated amplification path to Stripe.
 		if ( $this->rate_limited( 'checkout', 8, 10 * MINUTE_IN_SECONDS ) ) {
 			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+
+		// A signed webhook can finish the order before the browser returns. Its
+		// order uses the immutable PAYMENT checkout key, not this browser response
+		// key. Resolve that already-paid order from Stripe + the durable snapshot
+		// before cart totals are recomputed (the voucher is now redeemed, so a live
+		// cart calculation would otherwise drop its discount and falsely return 402).
+		$stripe_replay = $this->stripe_paid_order_replay( $request );
+		if ( $stripe_replay ) {
+			$payload = $this->checkout_payload( $stripe_replay, true );
+			$this->cart->clear();
+			set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
+			return rest_ensure_response( $payload );
 		}
 
 		if ( ! DoughBoss_Settings::ordering_open() ) {
@@ -3346,9 +3394,28 @@ class DoughBoss_REST_Controller {
 		$discount     = isset( $totals['discount'] ) ? (float) $totals['discount'] : 0.0;
 		$voucher_code = isset( $totals['voucher_code'] ) ? (string) $totals['voucher_code'] : '';
 		$voucher_idem = '';
+		$voucher_reservation_key = '';
 		if ( '' !== $voucher_code && $discount > 0 ) {
-			$voucher_idem = 'order_' . ( '' !== $idem ? $idem : md5( $this->cart->get_token() . '|' . $voucher_code ) );
-			$redeem       = DoughBoss_Voucher::redeem( $voucher_code, $totals['subtotal'], 'online', array( 'idempotency_key' => $voucher_idem ) );
+			if ( 'paid' === $payment_status && 'stripe' === $payment_method ) {
+				$voucher_reservation_key = $this->payment_checkout_key(
+					$request,
+					'order',
+					array( 'cart' => $this->cart->to_array( $order_type ), 'location_id' => $location_id, 'order_type' => $order_type, 'table' => $table_context )
+				);
+				if ( is_wp_error( $voucher_reservation_key ) ) {
+					return $voucher_reservation_key;
+				}
+			}
+			$voucher_idem = 'order_' . ( '' !== $voucher_reservation_key ? $voucher_reservation_key : ( '' !== $idem ? $idem : md5( $this->cart->get_token() . '|' . $voucher_code ) ) );
+			$redeem       = DoughBoss_Voucher::redeem(
+				$voucher_code,
+				$totals['subtotal'],
+				'online',
+				array(
+					'idempotency_key' => $voucher_idem,
+					'reservation_key' => $voucher_reservation_key,
+				)
+			);
 			if ( is_wp_error( $redeem ) ) {
 				if ( 'unpaid' === $payment_status ) {
 					$this->cart->set_voucher_code( '' );
@@ -3413,11 +3480,12 @@ class DoughBoss_REST_Controller {
 		);
 
 		if ( is_wp_error( $created ) ) {
-			// The voucher was already redeemed above; undo it so the customer
-			// keeps it (and a retry can redeem it again) rather than losing it to
-			// a failed order insert.
-			if ( '' !== $voucher_idem ) {
-				DoughBoss_Voucher::revert_redemption( $voucher_idem );
+			// An unpaid or legacy unreserved attempt can safely be compensated.
+			// A verified paid Stripe checkout with a reservation must stay
+			// consumed: restoring it here opens a race where another checkout can
+			// claim the voucher before the paid retry creates and links its order.
+			if ( '' !== $voucher_idem && ( 'unpaid' === $payment_status || '' === $voucher_reservation_key ) ) {
+				DoughBoss_Voucher::revert_redemption( $voucher_idem, $voucher_reservation_key, $payment_intent_id );
 			}
 			return $created;
 		}
@@ -3429,10 +3497,32 @@ class DoughBoss_REST_Controller {
 		if ( ! $order ) {
 			return new WP_Error( 'doughboss_order_replay_missing', __( 'The saved order could not be loaded. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 500 ) );
 		}
+		if ( '' !== $voucher_idem && '' !== $voucher_reservation_key && (string) $order->voucher_code === $voucher_code ) {
+			// A failed twin worker may have reverted the unlinked audit after this
+			// worker replayed redeem but before it committed the paid order. Now that
+			// the order exists, re-run the same owner/idempotency claim; it either
+			// replays the audit or safely recreates it from the restored lease.
+			DoughBoss_Voucher::redeem(
+				$voucher_code,
+				$totals['subtotal'],
+				'online',
+				array(
+					'idempotency_key' => $voucher_idem,
+					'reservation_key' => $voucher_reservation_key,
+				)
+			);
+		}
 		if ( $replayed && 'checkout_key' !== $replayed_by && '' !== $voucher_idem ) {
-			// A different checkout key reused the same payment/hold. It must not
-			// attach or consume a second voucher against the winning order.
-			DoughBoss_Voucher::revert_redemption( $voucher_idem );
+			if ( '' !== $voucher_reservation_key ) {
+				// A signed Stripe webhook can create the exact snapshot order before
+				// the browser returns. The lease proves this redemption belongs to
+				// that payment, so link it to the winning order instead of reverting
+				// the webhook's audit in the narrow pre-link race.
+				DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
+			} else {
+				// Legacy/unreserved payment reuse must not consume a second voucher.
+				DoughBoss_Voucher::revert_redemption( $voucher_idem );
+			}
 		} elseif ( '' !== $voucher_idem ) {
 			DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
 		}
@@ -3445,6 +3535,65 @@ class DoughBoss_REST_Controller {
 		set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
 
 		return rest_ensure_response( $payload );
+	}
+
+	/**
+	 * Resolve a webhook-first Stripe order without trusting now-stale cart totals.
+	 *
+	 * @param WP_REST_Request $request Checkout request containing the returned Session id.
+	 * @return object|null Verified existing order or null when ordinary checkout should continue.
+	 */
+	private function stripe_paid_order_replay( WP_REST_Request $request ) {
+		if ( 'stripe' !== DoughBoss_Settings::payment_gateway() ) {
+			return null;
+		}
+		$session_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
+		if ( ! preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $session_id ) ) {
+			return null;
+		}
+		$intent = DoughBoss_Stripe::retrieve_checkout_payment( $session_id );
+		if ( is_wp_error( $intent ) || 'succeeded' !== ( isset( $intent['status'] ) ? (string) $intent['status'] : '' ) ) {
+			return null;
+		}
+		$pi_id = isset( $intent['id'] ) ? DoughBoss_Stripe::canonical_id( $intent['id'] ) : '';
+		$order_id = '' !== $pi_id ? DoughBoss_Order::find_id_by_payment_intent( $pi_id ) : 0;
+		$order    = $order_id ? DoughBoss_Order::get( $order_id ) : null;
+		if ( ! $order || 'paid' !== (string) $order->payment_status || 'stripe' !== (string) $order->payment_method || ! hash_equals( (string) $order->payment_intent_id, $pi_id ) ) {
+			return null;
+		}
+
+		$metadata     = isset( $intent['metadata'] ) && is_array( $intent['metadata'] ) ? $intent['metadata'] : array();
+		$checkout_key = isset( $metadata['checkout_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['checkout_key'] ) ) : '';
+		$snapshot     = 1 === preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) ? DoughBoss_Checkout_Snapshots::find( $checkout_key ) : null;
+		$order_data   = $snapshot && ! empty( $snapshot['payload']['order'] ) && is_array( $snapshot['payload']['order'] ) ? $snapshot['payload']['order'] : array();
+		if ( empty( $order_data ) || ! hash_equals( (string) $order->checkout_key, $checkout_key ) || ! hash_equals( (string) $order_data['checkout_key'], $checkout_key ) ) {
+			return null;
+		}
+
+		$expected_amount   = DoughBoss_Payment::to_minor_units( (float) $order_data['total'] );
+		$expected_currency = strtolower( (string) $order_data['currency'] );
+		$intent_amount     = isset( $intent['amount'] ) ? (int) $intent['amount'] : -1;
+		$session_amount    = isset( $intent['checkout_session_amount'] ) ? (int) $intent['checkout_session_amount'] : -1;
+		$intent_currency   = isset( $intent['currency'] ) ? strtolower( (string) $intent['currency'] ) : '';
+		$session_currency  = isset( $intent['checkout_session_currency'] ) ? strtolower( (string) $intent['checkout_session_currency'] ) : '';
+		$session_reference = isset( $intent['checkout_session_reference'] ) ? strtolower( (string) $intent['checkout_session_reference'] ) : '';
+		$request_email     = strtolower( sanitize_email( $request->get_param( 'customer_email' ) ) );
+		if (
+			$intent_amount !== $expected_amount
+			|| $session_amount !== $expected_amount
+			|| $intent_currency !== $expected_currency
+			|| $session_currency !== $expected_currency
+			|| ! hash_equals( $checkout_key, $session_reference )
+			|| 'order' !== ( isset( $metadata['purpose'] ) ? sanitize_key( (string) $metadata['purpose'] ) : '' )
+			|| (string) $order->order_type !== (string) $order_data['order_type']
+			|| (int) $order->location_id !== (int) $order_data['location_id']
+			|| (int) $order->table_id !== (int) $order_data['table_id']
+			|| '' === $request_email
+			|| ! hash_equals( strtolower( (string) $order->customer_email ), $request_email )
+		) {
+			return null;
+		}
+		return $order;
 	}
 
 	/**
@@ -4594,6 +4743,10 @@ class DoughBoss_REST_Controller {
 
 		$voucher_code = isset( $order_data['voucher_code'] ) ? (string) $order_data['voucher_code'] : '';
 		$discount     = isset( $order_data['discount'] ) ? (float) $order_data['discount'] : 0.0;
+		$voucher_reservation_key = isset( $order_data['voucher_reservation_key'] ) ? strtolower( sanitize_text_field( (string) $order_data['voucher_reservation_key'] ) ) : '';
+		if ( '' !== $voucher_reservation_key && ! hash_equals( $checkout_key, $voucher_reservation_key ) ) {
+			return false;
+		}
 		$voucher_idem = '';
 		if ( '' !== $voucher_code && $discount > 0 ) {
 			$voucher_idem = 'order_' . $checkout_key;
@@ -4601,7 +4754,10 @@ class DoughBoss_REST_Controller {
 				$voucher_code,
 				isset( $order_data['subtotal'] ) ? (float) $order_data['subtotal'] : 0.0,
 				'online',
-				array( 'idempotency_key' => $voucher_idem )
+				array(
+					'idempotency_key' => $voucher_idem,
+					'reservation_key' => $voucher_reservation_key,
+				)
 			);
 			if ( is_wp_error( $redeem ) ) {
 				$system_note = sprintf(
@@ -4629,13 +4785,27 @@ class DoughBoss_REST_Controller {
 
 		$created = DoughBoss_Order::create( $order_data, $lines );
 		if ( is_wp_error( $created ) ) {
-			if ( '' !== $voucher_idem ) {
-				DoughBoss_Voucher::revert_redemption( $voucher_idem );
+			// This is a verified paid recovery. Keep a reserved redemption
+			// consumed and unlinked so a signed webhook/browser retry can replay
+			// it, create the order, and link the audit without a rival claim race.
+			if ( '' !== $voucher_idem && '' === $voucher_reservation_key ) {
+				DoughBoss_Voucher::revert_redemption( $voucher_idem, $voucher_reservation_key, $pi_id );
 			}
 			return $created;
 		}
 
 		$order_id = (int) $created['order_id'];
+		if ( '' !== $voucher_idem && '' !== $voucher_reservation_key ) {
+			DoughBoss_Voucher::redeem(
+				$voucher_code,
+				isset( $order_data['subtotal'] ) ? (float) $order_data['subtotal'] : 0.0,
+				'online',
+				array(
+					'idempotency_key' => $voucher_idem,
+					'reservation_key' => $voucher_reservation_key,
+				)
+			);
+		}
 		if ( '' !== $voucher_idem ) {
 			DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
 		}

@@ -66,13 +66,12 @@ class DoughBoss_Shortcodes {
 				'variant'       => 'bites',
 				'kicker'        => __( 'Catering, made fresh', 'doughboss' ),
 				'title'         => __( 'The menu comes together here.', 'doughboss' ),
-				'description'   => __( 'Mini zaatar, cheese and meat manoush with spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
+				'description'   => __( 'Mini zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies, oven-baked fresh to order.', 'doughboss' ),
 				'replay_label'  => __( 'See the spread come together', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
-				// Five deliberately different silhouettes keep the build readable as food
-				// moves in and out: oval meat manoush, folded zaatar, open cheese,
-				// triangular spinach fatayer and a cut-open chicken wrap.
-				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-meat-manoush-v4.webp',
+				// Five deliberately different foods keep the build readable as it moves:
+				// Sujuk Special, folded zaatar, cheese manoush, chicken wrap and spinach fatayer.
+				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-sujuk-special-v5.webp',
 				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-folded-zaatar-v4.webp',
 				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-cheese-manoush-v4.webp',
 				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-chicken-wrap-v4.webp',
@@ -103,8 +102,8 @@ class DoughBoss_Shortcodes {
 				<p class="db-mh-kicker"><?php echo esc_html( $atts['kicker'] ); ?></p>
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
 				<p><?php echo esc_html( $atts['description'] ); ?></p>
-				<button class="db-mh-replay" type="button" data-db-manoush-replay><?php echo esc_html( $atts['replay_label'] ); ?></button>
-				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'Animation paused by your device motion setting.', 'doughboss' ); ?></span>
+				<button class="db-mh-replay" type="button" data-db-manoush-replay data-db-replay-label="<?php echo esc_attr( $atts['replay_label'] ); ?>" data-db-start-label="<?php esc_attr_e( 'Start food animation', 'doughboss' ); ?>" data-db-pause-label="<?php esc_attr_e( 'Pause food animation', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume food animation', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
+				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'The food build starts automatically and follows your scroll. Use “Pause food animation” at any time.', 'doughboss' ); ?></span>
 			</div>
 			<div class="db-mh-stage" aria-hidden="true">
 				<div class="db-mh-world">
@@ -153,7 +152,7 @@ class DoughBoss_Shortcodes {
 		<div class="db-app db-voucher-claim" data-doughboss-voucher-claim>
 			<div class="db-vc-card">
 				<h3 class="db-vc-title"><?php esc_html_e( 'Claim your student voucher', 'doughboss' ); ?></h3>
-				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au.', 'doughboss' ); ?></p>
+				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au. We will email the code to that address and also show it here as a backup.', 'doughboss' ); ?></p>
 				<?php if ( empty( $campaigns ) ) : ?>
 					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
 				<?php else : ?>

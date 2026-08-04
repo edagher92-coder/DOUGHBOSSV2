@@ -1,0 +1,33 @@
+* { box-sizing: border-box; }
+html { min-height: 100%; }
+body.doughboss-standalone-portal { margin: 0; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.db-portal-bar { align-items: center; background: rgba(10,8,7,.98); border-bottom: 1px solid rgba(255,240,214,.14); color: #fff3df; display: flex; gap: 1rem; min-height: 64px; padding: .65rem 1rem; position: sticky; top: 0; z-index: 100; }
+.db-portal-brand { color: #fff; font-size: 1.05rem; font-weight: 950; letter-spacing: .13em; text-decoration: none; white-space: nowrap; }
+.db-portal-brand span { color: #e54b2d; }
+.db-portal-modes { display: flex; gap: .35rem; }
+.db-portal-modes a, .db-portal-account a, .db-portal-action { align-items: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,240,214,.15); border-radius: 10px; color: #fff3df; display: inline-flex; font: inherit; font-weight: 800; justify-content: center; min-height: 44px; padding: .55rem .8rem; text-decoration: none; touch-action: manipulation; }
+.db-portal-modes a.is-active { background: #e54b2d; border-color: #e54b2d; color: #fff; }
+.db-portal-account { align-items: center; display: flex; gap: .45rem; margin-left: auto; }
+.db-portal-clock { color: #ffd49d; font-variant-numeric: tabular-nums; font-weight: 900; min-width: 4.5rem; text-align: center; }
+.db-portal-user { color: rgba(255,244,225,.68); font-size: .86rem; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-portal-action { cursor: pointer; }
+.doughboss-standalone-portal .button { align-items: center; background: #f6f7f7; border: 1px solid #8c8f94; border-radius: 6px; color: #2c3338; cursor: pointer; display: inline-flex; font: inherit; justify-content: center; padding: .45rem .75rem; text-decoration: none; }
+.doughboss-standalone-portal .button-primary { background: #2271b1; border-color: #2271b1; color: #fff; }
+body.doughboss-staff-kitchen { background: #0b0907; }
+body.doughboss-staff-kitchen .doughboss-board-wrap { border-radius: 0; margin: 0; min-height: calc(100vh - 64px); padding: .75rem; }
+body.doughboss-staff-kitchen .db-board-bar { top: 64px; }
+.db-management-nav { background: #fff; border-bottom: 1px solid #ded8ce; display: flex; gap: .4rem; overflow-x: auto; padding: .7rem max(1rem,calc((100vw - 1280px)/2)); }
+.db-management-nav a { border-radius: 999px; color: #30271f; font-weight: 800; padding: .65rem .9rem; text-decoration: none; white-space: nowrap; }
+.db-management-nav a.is-active { background: #e54b2d; color: #fff; }
+body.doughboss-management-portal { background: #f6f2eb; color: #211a15; }
+.db-management-main { margin: 0 auto; max-width: 1320px; padding: 1.25rem; }
+.db-management-main .wrap { margin: 0; }
+.db-management-main .card { background: #fff; border: 1px solid #ded8ce; border-radius: 14px; box-shadow: 0 8px 24px rgba(53,36,20,.06); }
+.db-management-main .widefat { border-collapse: collapse; width: 100%; }
+.db-management-main .widefat th, .db-management-main .widefat td { border-bottom: 1px solid #ece7df; padding: .65rem; text-align: left; }
+.db-management-main .description { color: #645d55; }
+.db-management-main select { min-height: 42px; }
+.db-management-main .button-link { color: #a93420; font-weight: 800; margin-left: .8rem; }
+@media (pointer: coarse) { .db-portal-modes a, .db-portal-account a, .db-portal-action { min-height: 52px; padding-inline: 1rem; } }
+@media (max-width: 900px) { .db-portal-bar { align-items: stretch; flex-wrap: wrap; } .db-portal-account { margin-left: 0; width: 100%; } .db-portal-user { display: none; } body.doughboss-staff-kitchen .db-board-bar { top: 116px; } }
+@media (max-width: 620px) { .db-portal-modes { flex: 1; } .db-portal-modes a { flex: 1; } .db-portal-clock, .db-portal-action { display: none; } .db-portal-account a { flex: 1; } }

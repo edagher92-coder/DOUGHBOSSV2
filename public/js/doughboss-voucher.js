@@ -144,7 +144,7 @@
 		c.textContent = code;
 		var info = document.createElement( 'div' );
 		info.className = 'db-vc-info';
-		info.textContent = i18n.vUseInfo || 'Show this code at the till, or paste it at checkout. One use only.';
+		info.textContent = i18n.vUseInfo || 'We are emailing this code to your student email. Keep this screen as a backup in case it is delayed. Show the code at the till, or paste it at checkout. One use only.';
 		result.appendChild( label );
 		result.appendChild( c );
 		var qr = buildQr( code );

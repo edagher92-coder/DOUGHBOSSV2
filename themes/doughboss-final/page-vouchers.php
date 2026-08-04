@@ -29,11 +29,11 @@ get_header();
 		<aside class="dbf-voucher-guide" aria-labelledby="dbf-voucher-guide-title">
 			<p class="dbf-eyebrow"><?php esc_html_e( 'Before you begin', 'doughboss-final' ); ?></p>
 			<h2 id="dbf-voucher-guide-title" class="dbf-heading"><?php esc_html_e( 'Your student email is required.', 'doughboss-final' ); ?></h2>
-			<p><?php esc_html_e( 'Use an education email ending in .edu or .edu.au. You will enter it twice so your voucher is allocated to the right student.', 'doughboss-final' ); ?></p>
+			<p><?php esc_html_e( 'Use an education email ending in .edu or .edu.au. You will enter it twice so your voucher is allocated to the right student and the code can be emailed to you.', 'doughboss-final' ); ?></p>
 			<ol class="dbf-voucher-steps">
 				<li><span>1</span><div><strong><?php esc_html_e( 'Choose the offer', 'doughboss-final' ); ?></strong><small><?php esc_html_e( 'Select the available student voucher.', 'doughboss-final' ); ?></small></div></li>
 				<li><span>2</span><div><strong><?php esc_html_e( 'Confirm your details', 'doughboss-final' ); ?></strong><small><?php esc_html_e( 'Enter your mobile and matching student email twice.', 'doughboss-final' ); ?></small></div></li>
-				<li><span>3</span><div><strong><?php esc_html_e( 'Use your single-use code', 'doughboss-final' ); ?></strong><small><?php esc_html_e( 'Show the QR code at the till or apply the code at checkout.', 'doughboss-final' ); ?></small></div></li>
+				<li><span>3</span><div><strong><?php esc_html_e( 'Use your single-use code', 'doughboss-final' ); ?></strong><small><?php esc_html_e( 'We email the code and show it on screen as a backup. Show the QR code at the till or apply the code at checkout.', 'doughboss-final' ); ?></small></div></li>
 			</ol>
 			<p class="dbf-voucher-fineprint"><?php esc_html_e( 'One voucher per eligible student email per day, subject to the daily allocation and campaign terms.', 'doughboss-final' ); ?></p>
 		</aside>

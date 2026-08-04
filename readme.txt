@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.32.2
+Stable tag: 2.33.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,12 @@ DoughBoss turns any WordPress site into a pizza/food ordering storefront. It add
 * An **Orders** admin screen with live status updates, plus a settings page for sizes, toppings, currency and fees.
 
 Everything is rendered through shortcodes and a small REST API; no theme changes are required.
+
+Kitchen staff can use the capability-gated, shop-scoped `/kitchen/` workspace,
+optimised for a 23.8-inch Full HD touch display. Catering production uses the
+separate hidden `/catering-kitchen/` workspace, while managers use the protected
+`/management/` overview. Every staff route uses the normal WordPress user and
+role system; no password or secret is stored in the plugin.
 
 = Shortcodes =
 
@@ -69,6 +75,35 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.33.4 =
+* Start the signature food build once on first view, including on devices that previously suppressed it.
+* Hand the finished entrance permanently to the reversible scroll scene so scrolling down and back up always updates the composition without a timer taking control back.
+* Make Pause freeze the current food pose and Resume return smoothly to the current scroll position.
+
+= 2.33.3 =
+* Makes the hero food blow-out and rebuild clearly visible, then repeats it at a calm interval only while the hero is on screen.
+* Keeps reduced-motion visitors still by default and adds explicit Start, Pause and Resume controls for the animation.
+* Brings the WordPress and GitHub demo motion behaviour back into parity.
+
+= 2.33.2 =
+* Adds a dedicated, hidden `/catering-kitchen/` production workspace while preserving existing `/kitchen/?screen=catering` bookmarks.
+* Sends no-index, no-cache and anti-framing protection before staff authentication redirects and keeps the catering URL out of the public theme and navigation.
+
+= 2.33.1 =
+* Makes one-time voucher pricing exclusive to a single immutable Stripe checkout attempt, preventing concurrent carts from paying with the same discount.
+* Moves voucher consumption into the paid-order path, makes browser and webhook recovery share the same lease, and preserves a safe retry after cancellation or failed order persistence.
+* Prevents public access to the legacy voucher redemption endpoint and protects linked redemption audit records from late retries.
+* Emails each successfully claimed student voucher to its verified education address using WordPress mail, with an exactly-once attempt marker and the on-screen code retained as a fallback.
+* Lets reduced-motion visitors explicitly replay the homepage food build and remembers that preference for the browser session.
+* Optimises all 34 distinct menu photos and homepage food scenes for faster delivery without changing their dimensions or transparent edges, and replaces the pies scene with an oven-bakery presentation.
+
+= 2.33.0 =
+* Adds protected, branded `/kitchen/` and `/management/` workspaces using WordPress authentication, staff capabilities, shop scope, REST nonces and optional kitchen-link verification.
+* Optimises the primary MAKE view for a 23.8-inch 1920x1080 touch monitor and retains a compact dedicated Catering view for a smaller secondary display.
+* Rebuilds the homepage food animation around a high-resolution Sujuk Special and four clearly different menu foods, with an automatic blow-out/rebuild sequence, replay, scroll depth and reduced-motion support.
+* Replaces the main public category photography with high-resolution Manoush, Sujuk Special and Lebanese pie imagery, and standardises customer-facing copy on oven-baked.
+* Replaces repeated and low-resolution menu placeholders with a consistent high-resolution photo for every one of the 34 canonical products, including distinct half-and-half, pizza, pie, wrap, dessert and drink imagery.
 
 = 2.32.2 =
 * Automatically renames the one existing seeded Dough Boss Special pizza to Sujuk Special during upgrade while preserving its post ID, price, options, category and integration mappings.
