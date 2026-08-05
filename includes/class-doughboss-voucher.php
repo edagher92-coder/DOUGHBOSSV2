@@ -919,24 +919,55 @@ class DoughBoss_Voucher {
 	}
 
 	/**
-	 * Whether this student email already received this campaign today.
+	 * Whether a student email has already received a voucher in this allocation
+	 * group. A student voucher is a one-time benefit, not a daily repeat offer.
 	 *
-	 * @param string $slug  Campaign slug.
+	 * @param array  $campaign Campaign definition.
 	 * @param string $email Canonical education email.
 	 * @return bool
 	 */
-	private static function student_email_claimed_today( $slug, $email ) {
+	private static function student_email_claimed( array $campaign, $email ) {
 		global $wpdb;
-		$table = self::table();
-		$start = current_time( 'Y-m-d' ) . ' 00:00:00';
+		$slugs = self::campaign_slugs_for_allocation( $campaign );
+		if ( empty( $slugs ) ) {
+			return false;
+		}
+
+		$table        = self::table();
+		$placeholders = implode( ',', array_fill( 0, count( $slugs ), '%s' ) );
+		$params       = $slugs;
+		$params[]     = strtolower( sanitize_email( $email ) );
 		return (bool) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$wpdb->prepare(
-				"SELECT id FROM {$table} WHERE campaign = %s AND LOWER(customer_email) = %s AND created_at >= %s LIMIT 1",
-				sanitize_key( $slug ),
-				strtolower( sanitize_email( $email ) ),
-				$start
+				"SELECT id FROM {$table} WHERE campaign IN ({$placeholders}) AND LOWER(customer_email) = %s LIMIT 1",
+				$params
 			)
 		);
+	}
+
+	/**
+	 * Campaign slugs that share one allocation. This keeps the one-per-student
+	 * rule intact even when a legacy campaign shares the same pool.
+	 *
+	 * @param array $campaign Campaign definition.
+	 * @return string[]
+	 */
+	private static function campaign_slugs_for_allocation( array $campaign ) {
+		$group = isset( $campaign['cap_group'] ) ? sanitize_key( $campaign['cap_group'] ) : '';
+		if ( '' === $group ) {
+			$slug = isset( $campaign['slug'] ) ? sanitize_key( $campaign['slug'] ) : '';
+			return '' === $slug ? array() : array( $slug );
+		}
+
+		$slugs = array();
+		foreach ( self::campaigns() as $candidate ) {
+			$candidate_group = isset( $candidate['cap_group'] ) ? sanitize_key( $candidate['cap_group'] ) : '';
+			if ( $group === $candidate_group && ! empty( $candidate['slug'] ) ) {
+				$slugs[] = sanitize_key( $candidate['slug'] );
+			}
+		}
+
+		return array_values( array_unique( array_filter( $slugs ) ) );
 	}
 
 	/**
@@ -982,18 +1013,7 @@ class DoughBoss_Voucher {
 	 * @return int
 	 */
 	public static function claimed_today_for( array $campaign ) {
-		$group = isset( $campaign['cap_group'] ) ? sanitize_key( $campaign['cap_group'] ) : '';
-		if ( '' === $group ) {
-			return self::claimed_today_slugs( array( isset( $campaign['slug'] ) ? $campaign['slug'] : '' ) );
-		}
-		$slugs = array();
-		foreach ( self::campaigns() as $c ) {
-			$g = isset( $c['cap_group'] ) ? sanitize_key( $c['cap_group'] ) : '';
-			if ( $g === $group && ! empty( $c['slug'] ) ) {
-				$slugs[] = $c['slug'];
-			}
-		}
-		return self::claimed_today_slugs( $slugs );
+		return self::claimed_today_slugs( self::campaign_slugs_for_allocation( $campaign ) );
 	}
 
 	/**
@@ -1055,14 +1075,14 @@ class DoughBoss_Voucher {
 		}
 
 		// This check runs while the campaign/pool lock is held, making one
-		// allocation per student email per day race-safe.
-		if ( '' !== $student_email && self::student_email_claimed_today( $slug, $student_email ) ) {
+		// allocation per student email across the full campaign period race-safe.
+		if ( '' !== $student_email && self::student_email_claimed( $campaign, $student_email ) ) {
 			if ( 1 === $got ) {
 				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			}
 			return new WP_Error(
 				'doughboss_student_email_used',
-				__( 'A voucher has already been allocated to this student email today.', 'doughboss' ),
+				__( 'A voucher has already been allocated to this student email.', 'doughboss' ),
 				array( 'status' => 409 )
 			);
 		}
