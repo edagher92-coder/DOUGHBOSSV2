@@ -93,6 +93,7 @@ jobs:
           node --test tests/final-theme-contract.test.js
           node --test tests/final-theme-ux-contract.test.js
           node --test tests/staff-kds-qr-contract.test.js
+          node --test tests/student-voucher-qr-assets-contract.test.js
           node --test tests/storefront-uplift-contract.test.js
           node --test tests/order-page-presentation-contract.test.js
           node --test tests/wordpress-menu-images-contract.test.js
