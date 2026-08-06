@@ -177,7 +177,7 @@ class DoughBoss_Shortcodes {
 							<span><?php esc_html_e( 'Re-enter student email', 'doughboss' ); ?></span>
 							<input type="email" name="email_confirmation" autocomplete="off" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="<?php esc_attr_e( 'Type the same email again', 'doughboss' ); ?>" required />
 						</label>
-						<p class="db-vc-eligibility"><?php esc_html_e( 'One $5 voucher per eligible student email each day, while the daily allocation lasts. Your code is single use.', 'doughboss' ); ?></p>
+						<p class="db-vc-eligibility"><?php esc_html_e( 'One $5 voucher per eligible student email, while today’s allocation lasts. Your code is single use.', 'doughboss' ); ?></p>
 						<button type="submit" class="db-btn db-vc-submit"><?php esc_html_e( 'Get my code', 'doughboss' ); ?></button>
 					</form>
 				<?php endif; ?>

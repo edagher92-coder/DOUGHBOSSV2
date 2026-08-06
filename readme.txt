@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.33.4
+Stable tag: 2.33.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,10 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.33.5 =
+* Make the $5 student voucher a one-time allocation per verified student email across the whole student campaign, including legacy campaign records in the same allocation pool.
+* Keep the existing daily allocation limit while making the customer message accurately explain the one-time student benefit.
 
 = 2.33.4 =
 * Start the signature food build once on first view, including on devices that previously suppressed it.

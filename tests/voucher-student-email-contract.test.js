@@ -20,7 +20,11 @@ test('student campaign requires a confirmed eligible education email server-side
 	assert.match(voucherPhp, /eligible_student_email/);
 	assert.match(voucherPhp, /\(\?:\^\|\\\.\)edu\(\?:\\\.au\)\?\$/);
 	assert.match(voucherPhp, /hash_equals\(\s*\$student_email\s*,\s*\$confirmation\s*\)/);
-	assert.match(voucherPhp, /student_email_claimed_today/);
+	assert.match(voucherPhp, /student_email_claimed\s*\(/);
+	assert.match(voucherPhp, /campaign_slugs_for_allocation/);
+	assert.match(voucherPhp, /campaign IN \(\{\$placeholders\}\)/);
+	assert.doesNotMatch(voucherPhp, /student_email_claimed_today/);
+	assert.doesNotMatch(voucherPhp, /LOWER\(customer_email\) = %s AND created_at >= %s/);
 	assert.match(voucherPhp, /LOWER\(customer_email\)/);
 	assert.match(voucherPhp, /doughboss_student_email_used/);
 });

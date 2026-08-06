@@ -1,8 +1,8 @@
-# DoughBoss 2.33.4 live acceptance runbook
+# DoughBoss 2.33.5 live acceptance runbook
 
 ## Purpose
 
-Use this runbook to validate the installed DoughBoss 2.33.4 release on `doughboss.com.au` without opening public ordering or enabling live payments prematurely. It covers the customer checkout, Stripe recovery, vouchers, customer email, private staff portals, Kitchen Display System (KDS), management, tracking and the optional POSPal mirror.
+Use this runbook to validate the installed DoughBoss 2.33.5 release on `doughboss.com.au` without opening public ordering or enabling live payments prematurely. It covers the customer checkout, Stripe recovery, vouchers, customer email, private staff portals, Kitchen Display System (KDS), management, tracking and the optional POSPal mirror.
 
 This runbook contains no credentials. Never paste passwords, API keys, webhook secrets, full payment references or customer data into a shared document or chat.
 
@@ -10,7 +10,7 @@ This runbook contains no credentials. Never paste passwords, API keys, webhook s
 
 Before any controlled test, confirm all of the following:
 
-- The canonical DoughBoss plugin reports **2.33.4** and database schema **1.18.0**.
+- The canonical DoughBoss plugin reports **2.33.5** and database schema **1.18.0**.
 - Active gateway is **Stripe**.
 - Stripe selector is **Live**, but **Accept orders** is OFF and **Accept card payments** is OFF.
 - The Live publishable key is present and the Live webhook signing secret indicates set.
@@ -83,7 +83,7 @@ Required evidence:
 - Management totals increase by exactly the order total and unresolved Stripe payments remain zero.
 - Refreshing or reopening the return URL does not create a second order, email or ticket.
 
-The controlled Test-mode run for 2.33.4 is still pending and not accepted. The approved navigation proof for 2.33.2 passed, but that historical fresh order-preparation phase timed out before Stripe Checkout. No payment was submitted, and tag `QA-20260803-231050` has zero matching orders. Historical orders and earlier-version acceptance are supporting evidence only; they do not replace the required 2.33.4 run.
+The controlled Test-mode run for 2.33.5 is still pending and not accepted. The approved navigation proof for 2.33.2 passed, but that historical fresh order-preparation phase timed out before Stripe Checkout. No payment was submitted, and tag `QA-20260803-231050` has zero matching orders. Historical orders and earlier-version acceptance are supporting evidence only; they do not replace the required 2.33.5 run.
 
 ## C. Student voucher claim and customer email test
 
@@ -118,7 +118,7 @@ Required evidence:
 - A fresh-cart attempt to use the voucher is refused.
 - Replaying the return or checkout completion does not duplicate the order, redemption, email or ticket.
 
-Stripe cancellation semantics remain intentional in 2.33.4: cancelling Checkout does **not** consume or immediately release the voucher. The same Checkout Session, server snapshot and voucher reservation are retained for a safe immutable retry. Do not expect a cancelled payment to produce or "revert" a redemption row.
+Stripe cancellation semantics remain intentional in 2.33.5: cancelling Checkout does **not** consume or immediately release the voucher. The same Checkout Session, server snapshot and voucher reservation are retained for a safe immutable retry. Do not expect a cancelled payment to produce or "revert" a redemption row.
 
 ## E. Kitchen, management and customer tracking
 
