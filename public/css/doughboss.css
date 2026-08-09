@@ -278,8 +278,34 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 .db-card-img--placeholder {
-	background-image: linear-gradient(135deg, #f3efe9 25%, #ece6dd 25%, #ece6dd 50%, #f3efe9 50%);
-	background-size: 24px 24px;
+	align-items: center;
+	background:
+		radial-gradient(circle at 82% 18%, rgba(229, 42, 33, .22), transparent 29%),
+		linear-gradient(145deg, #141311, #29241f);
+	color: #fff;
+	display: flex;
+	justify-content: center;
+	text-align: center;
+}
+
+.db-card-img--placeholder::before {
+	border: 2px solid rgba(255, 255, 255, .78);
+	content: 'DOUGH BOSS.';
+	font-size: .86rem;
+	font-weight: 900;
+	letter-spacing: .16em;
+	padding: .58rem .72rem;
+}
+
+.db-card-img--placeholder::after {
+	bottom: .85rem;
+	color: rgba(255, 255, 255, .72);
+	content: 'Real product photo coming soon';
+	font-size: .7rem;
+	font-weight: 700;
+	letter-spacing: .05em;
+	position: absolute;
+	text-transform: uppercase;
 }
 
 .db-card-body {
@@ -1068,8 +1094,10 @@ body.page-id-402 #primary-menu > li > a {
  * .db-card-img--placeholder is emitted by renderMenu when item.image is absent. */
 .db-app .db-card-img--placeholder {
 	background-image: none;
-	background: #fff;
-	border: 2px solid var(--db-ink);
+	background:
+		radial-gradient(circle at 82% 18%, rgba(229, 42, 33, .24), transparent 31%),
+		linear-gradient(145deg, #181614, #080808);
+	border: 0;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -1078,21 +1106,23 @@ body.page-id-402 #primary-menu > li > a {
 	box-shadow: var(--db-shadow-1);
 }
 .db-app .db-card-img--placeholder::before {
-	content: "DB";
+	content: "DOUGH BOSS.";
 	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
-	font-size: 34px;
-	letter-spacing: .1em;
-	color: var(--db-ink);
+	font-size: 1rem;
+	letter-spacing: .12em;
+	color: #fff;
+	border: 2px solid rgba(255,255,255,.82);
+	padding: .6rem .75rem .5rem;
 	line-height: 1;
 }
 .db-app .db-card-img--placeholder::after {
-	content: "DOUGH BOSS";
+	content: "REAL PRODUCT PHOTO COMING SOON";
 	font-weight: 600;
-	font-size: 8px;
-	letter-spacing: .4em;
+	font-size: .62rem;
+	letter-spacing: .15em;
 	text-transform: uppercase;
-	color: var(--db-muted);
-	padding-left: .4em;
+	color: rgba(255,255,255,.7);
+	padding-left: .15em;
 }
 
 /* Builder option rows (<label class="db-option"><input>…</label>): soft shadow,

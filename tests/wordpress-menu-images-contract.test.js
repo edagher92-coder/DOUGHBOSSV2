@@ -1,54 +1,44 @@
 'use strict';
 
-var fs = require('fs');
-var path = require('path');
-var test = require('node:test');
-var assert = require('node:assert/strict');
-var root = path.resolve(__dirname, '..');
-var rest = fs.readFileSync(path.join(root, 'includes', 'class-doughboss-rest-controller.php'), 'utf8');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const assert = require('node:assert/strict');
 
-test('WordPress menu uses a distinct high-resolution local photo for every canonical product', function () {
+const root = path.resolve(__dirname, '..');
+const rest = fs.readFileSync(path.join(root, 'includes', 'class-doughboss-rest-controller.php'), 'utf8');
+
+const authentic = [
+	'zaatar.jpg', 'zaatar-cheese.jpg', 'cheese.jpg', 'meat.jpg',
+	'meat-cheese.jpg', 'sujuk-cheese.jpg', 'cheese-kaak.jpg',
+	'sujuk-deluxe.jpg', 'spinach-deluxe.jpg', 'veggie-plus.jpg',
+	'pepperoni-cheese.jpg', 'chicken-cheese.jpg', 'bbq-chicken.jpg',
+	'peri-peri-chicken.jpg', 'spinach-pie.jpg', 'haloumi-pie.jpg',
+	'dough-boss-pie.jpg', 'aged-cheese-pie.jpg', 'zaatar-veggie-wrap.jpg',
+	'labneh-veggie-wrap.jpg', 'chicken-delight-wrap.jpg', 'choco-banana.jpg',
+	'spring-water.jpg', 'juice.jpg'
+];
+
+test('WordPress menu ships and maps only approved authentic merchant photography', function () {
 	assert.match(rest, /\$this->menu_image_url\( \$post->post_title, \$category \)/);
-	assert.match(rest, /DOUGHBOSS_PLUGIN_URL \. 'public\/images\/menu\/'/);
-	[
-		'zaatar-v5.webp',
-		'zaatar-cheese-v5.webp',
-		'cheese-v5.webp',
-		'meat-v5.webp',
-		'meat-cheese-v5.webp',
-		'sujuk-cheese-v5.webp',
-		'half-meat-cheese-v5.webp',
-		'cheese-tomato-olives-v5.webp',
-		'cheese-kaak-v5.webp',
-		'zaatar-veggie-pizza-v5.webp',
-		'labneh-veggie-pizza-v5.webp',
-		'all-meat-v5.webp',
-		'sujuk-deluxe-v5.webp',
-		'spinach-deluxe-v5.webp',
-		'veggie-plus-v5.webp',
-		'pepperoni-cheese-v5.webp',
-		'sujuk-special-menu-v5.webp',
-		'chicken-cheese-v5.webp',
-		'bbq-chicken-v5.webp',
-		'peri-peri-chicken-v5.webp',
-		'garlic-prawns-v5.webp',
-		'spinach-pie-v5.webp',
-		'haloumi-v5.webp',
-		'dough-boss-pie-v5.webp',
-		'aged-cheese-v5.webp',
-		'zaatar-veggie-wrap-v5.webp',
-		'labneh-veggie-wrap-v5.webp',
-		'chicken-delight-v5.webp',
-		'ultimate-chicken-v5.webp',
-		'dough-boss-wrap-v5.webp',
-		'choco-banana-v5.webp',
-		'spring-water-v5.webp',
-		'soft-drinks-v5.webp',
-		'juice-v5.webp'
-	].forEach(function (file) {
-		assert.equal(fs.existsSync(path.join(root, 'public', 'images', 'menu', file)), true, file + ' is packaged locally');
-		assert.match(rest, new RegExp("'" + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'"));
+	assert.match(rest, /public\/images\/menu\//);
+	authentic.forEach(function (file) {
+		assert.equal(fs.existsSync(path.join(root, 'public', 'images', 'menu', 'real-v1', file)), true, file + ' is packaged');
+		assert.match(rest, new RegExp("'real-v1/" + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'"));
 	});
-	assert.doesNotMatch(rest, /'sujuk-cheese'\s*=>\s*'sujuk-deluxe\.webp'/);
-	assert.doesNotMatch(rest, /'half-meat-cheese'\s*=>\s*'meat-cheese\.webp'/);
+	assert.doesNotMatch(rest, /-v5\.webp/);
+});
+
+test('unverified products use an honest no-photo state rather than lookalikes', function () {
+	[
+		'half-meat-cheese', 'cheese-tomato-olives', 'zaatar-veggie-pizza',
+		'labneh-veggie-pizza', 'all-meat', 'sujuk-special', 'garlic-prawns',
+		'ultimate-chicken', 'dough-boss-wrap', 'soft-drinks-600ml'
+	].forEach(function (key) {
+		assert.match(rest, new RegExp("'" + key + "'\\s*=>\\s*''"), key + ' has no misleading substitute');
+	});
+	['manoush', 'pizza', 'pies', 'wraps', 'desserts', 'drinks'].forEach(function (category) {
+		assert.match(rest, new RegExp("'" + category + "'\\s*=>\\s*''"), category + ' does not repeat a fallback image');
+	});
+	assert.match(rest, /return \$encoded_file \? DOUGHBOSS_PLUGIN_URL[^:]+: '';/s);
 });

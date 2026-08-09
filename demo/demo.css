@@ -840,3 +840,40 @@ body{font-size:17.5px;}
 	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-user-paused .ingredient,
 	html.db-demo-motion-opted-in .ingredient-burst[data-manoush-stage].is-user-paused .ingredient-burst__stamp{transition:none!important;}
 }
+
+/* Authentic-photo direction (2026-08): the old assembled/floating food layer
+ * remains in legacy HTML for routing compatibility but is never presented.
+ * The approved real Dough Boss merchant photograph receives restrained camera
+ * movement from the existing scroll scene instead. */
+.hero-photo-real .ingredient-burst,
+.hero-photo-real .hero-replay,
+.hero-photo-real .hero-motion-reduced { display:none!important; }
+.hero-photo-real .hero-bg {
+	background-position:68% 50%;
+	filter:saturate(.98) contrast(1.02) brightness(.78);
+}
+.hero-photo-real .hero-bg::after {
+	background:linear-gradient(90deg,rgba(7,7,7,.96) 0%,rgba(7,7,7,.84) 38%,rgba(7,7,7,.34) 66%,rgba(7,7,7,.12) 100%);
+}
+.hero-photo-real .hero-main .wrap { padding-right:clamp(28px,38vw,540px); }
+.hero-photo-real h1 {
+	font-size:clamp(52px,5.4vw,82px);
+	line-height:.9;
+	max-width:14ch;
+	overflow-wrap:normal;
+	word-break:normal;
+}
+@media(max-width:800px){
+	.hero-photo-real .hero-main .wrap { padding-right:24px;padding-bottom:80px; }
+	.hero-photo-real .hero-bg { background-position:65% 50%; }
+}
+@media(max-width:560px){
+	.nav-cta { display:none; }
+	.hero-photo-real .hero-bg { background-position:70% 50%;filter:saturate(.96) contrast(1.03) brightness(.68); }
+	.hero-photo-real .hero-bg::after { background:linear-gradient(180deg,rgba(7,7,7,.36),rgba(7,7,7,.92) 57%,rgba(7,7,7,.98)); }
+	.hero-photo-real .hero-main .wrap { padding-top:42vh;padding-bottom:46px; }
+	.hero-photo-real h1 { font-size:clamp(40px,11.3vw,46px);max-width:none; }
+	.hero-photo-real p.lead { max-width:100%;font-size:16px; }
+	.hero-photo-real .cta-row { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.7fr);gap:12px; }
+	.hero-photo-real .cta-row .btn { min-width:0;padding:15px 12px; }
+}
