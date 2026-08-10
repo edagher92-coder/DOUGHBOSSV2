@@ -51,6 +51,21 @@ function doughboss_build_copy( $source, $destination ) {
 	if ( ! copy( $source, $destination ) ) { doughboss_build_fail( "could not copy {$source}" ); }
 }
 
+/**
+ * Keep rejected generated visual experiments out of the production archive.
+ * The authentic release uses public/images/menu/real-v1 plus the retained
+ * merchant-provided legacy assets; generated v4/v5 review renders are source
+ * references only and must never be shipped accidentally.
+ */
+function doughboss_build_skip_relative( $directory, $relative ) {
+	if ( 'public' !== $directory ) { return false; }
+	$path = str_replace( DIRECTORY_SEPARATOR, '/', $relative );
+	return 1 === preg_match(
+		'#^images/(?:menu/[^/]+-v5\.webp|home-[^/]+-v5\.webp|hero-[^/]+-v[45]\.webp|catering-(?:cheese-cutout-v2|fresh-cutout-v2|menu-platter-v3|pies-v3|zaatar-cutout-v2)\.webp|doughboss-(?:catering-premium-v1|hero-premium-v1)\.webp)$#',
+		$path
+	);
+}
+
 $plugin = file_get_contents( $root . DIRECTORY_SEPARATOR . 'doughboss.php' );
 $readme = file_get_contents( $root . DIRECTORY_SEPARATOR . 'readme.txt' );
 if ( false === $plugin || false === $readme ) { doughboss_build_fail( 'could not read release metadata' ); }
@@ -80,7 +95,28 @@ foreach ( $directories as $directory ) {
 	foreach ( $iterator as $item ) {
 		if ( ! $item->isFile() || $item->isLink() ) { continue; }
 		$relative = substr( $item->getPathname(), strlen( $source ) + 1 );
+		if ( doughboss_build_skip_relative( $directory, $relative ) ) { continue; }
 		doughboss_build_copy( $item->getPathname(), $stage . DIRECTORY_SEPARATOR . $directory . DIRECTORY_SEPARATOR . $relative );
+	}
+}
+
+// The paired theme must never reference an image removed from production.
+$theme_root = $root . DIRECTORY_SEPARATOR . 'themes' . DIRECTORY_SEPARATOR . 'doughboss-final';
+if ( ! is_dir( $theme_root ) ) { doughboss_build_fail( 'paired DoughBoss Final theme source is missing' ); }
+$theme_files = new RecursiveIteratorIterator(
+	new RecursiveDirectoryIterator( $theme_root, FilesystemIterator::SKIP_DOTS )
+);
+foreach ( $theme_files as $theme_file ) {
+	if ( ! $theme_file->isFile() || 'php' !== strtolower( $theme_file->getExtension() ) ) { continue; }
+	$contents = file_get_contents( $theme_file->getPathname() );
+	if ( false === $contents ) { doughboss_build_fail( 'could not inspect paired theme assets' ); }
+	if ( ! preg_match_all( "/doughboss_final_asset_url\\(\\s*'([^']+)'/", $contents, $matches ) ) { continue; }
+	foreach ( $matches[1] as $asset ) {
+		$asset = str_replace( array( '/', '\\\\' ), DIRECTORY_SEPARATOR, $asset );
+		$staged_asset = $stage . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'images' . DIRECTORY_SEPARATOR . $asset;
+		if ( ! is_file( $staged_asset ) || is_link( $staged_asset ) ) {
+			doughboss_build_fail( 'paired theme references an image absent from the production package: ' . $asset );
+		}
 	}
 }
 if ( is_file( $root . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'seed-menu.php' ) ) {

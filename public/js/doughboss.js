@@ -592,9 +592,14 @@
 			]);
 		}
 
+		var categoryLabel = String(item.category || 'Dough Boss');
+		var categoryKey = categoryLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'menu';
 		var media = item.image
 			? el('div', { class: 'db-card-img', style: 'background-image:url(' + item.image + ')' })
-			: el('div', { class: 'db-card-img db-card-img--placeholder' });
+			: el('div', { class: 'db-card-img db-card-img--placeholder', 'data-category': categoryKey }, [
+				el('span', { class: 'db-card-placeholder-kicker', text: 'Freshly made' }),
+				el('span', { class: 'db-card-placeholder-category', text: categoryLabel })
+			]);
 		if (soldOut) {
 			media.appendChild(el('span', { class: 'db-soldout-badge', text: I18N.soldOut || 'Sold out' }));
 		}

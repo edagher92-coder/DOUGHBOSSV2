@@ -7,6 +7,8 @@ const assert = require('node:assert/strict');
 
 const root = path.resolve(__dirname, '..');
 const rest = fs.readFileSync(path.join(root, 'includes', 'class-doughboss-rest-controller.php'), 'utf8');
+const storefront = fs.readFileSync(path.join(root, 'public', 'js', 'doughboss.js'), 'utf8');
+const storefrontCss = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
 
 const authentic = [
 	'zaatar.jpg', 'zaatar-cheese.jpg', 'cheese.jpg', 'meat.jpg',
@@ -41,4 +43,10 @@ test('unverified products use an honest no-photo state rather than lookalikes', 
 		assert.match(rest, new RegExp("'" + category + "'\\s*=>\\s*''"), category + ' does not repeat a fallback image');
 	});
 	assert.match(rest, /return \$encoded_file \? DOUGHBOSS_PLUGIN_URL[^:]+: '';/s);
+	assert.match(storefront, /db-card-placeholder-kicker/);
+	assert.match(storefront, /db-card-placeholder-category/);
+	assert.match(storefront, /'data-category': categoryKey/);
+	assert.doesNotMatch(storefrontCss, /REAL PRODUCT PHOTO COMING SOON/i);
+	assert.match(storefrontCss, /db-card-placeholder-category/);
+	assert.match(storefrontCss, /--db-placeholder-accent/);
 });

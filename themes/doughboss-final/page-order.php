@@ -1,6 +1,6 @@
 <?php get_header(); ?>
 <section class="dbf-page-hero dbf-page-hero--order" aria-labelledby="dbf-order-title">
-	<img class="dbf-page-hero-bg" src="<?php echo esc_url( doughboss_final_asset_url( 'doughboss-hero-premium-v1.webp' ) ); ?>" alt="" width="1600" height="900" fetchpriority="high">
+	<img class="dbf-page-hero-bg" src="<?php echo esc_url( doughboss_final_asset_url( 'menu/real-v1/sujuk-deluxe.jpg' ) ); ?>" alt="" width="900" height="720" fetchpriority="high">
 	<div class="dbf-wrap dbf-page-hero-inner"><p class="dbf-eyebrow"><?php echo esc_html( doughboss_final_ordering_open() ? 'Pickup from Revesby' : 'Browse the complete menu' ); ?></p><h1 id="dbf-order-title" class="dbf-display">Order <em>online.</em></h1><p class="dbf-lede"><?php echo esc_html( doughboss_final_ordering_open() ? 'Choose your favourites, customise them and order for pickup from Revesby.' : 'Online checkout is coming soon. Browse every category now while the final in-store ordering channels are completed.' ); ?></p><?php if ( ! doughboss_final_ordering_open() ) : ?><span class="dbf-coming-soon-badge" role="note"><span aria-hidden="true"></span><?php esc_html_e( 'Checkout coming soon', 'doughboss-final' ); ?></span><?php endif; ?></div>
 </section>
 <div class="dbf-order-stage">

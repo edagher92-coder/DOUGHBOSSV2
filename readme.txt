@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.34.0
+Stable tag: 2.34.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.34.1 =
+* Repairs the production visual release by pairing the authentic-photo plugin with the matching DoughBoss Final 1.3.0 theme.
+* Replaces the alarming black "photo coming soon" tile with an honest, category-specific freshly-made treatment for products awaiting an exact owner photograph.
+* Adds release asset-reference coverage so a package cannot pass when a referenced production image is missing.
 
 = 2.34.0 =
 * Replace the generated floating-food homepage treatment with approved real Dough Boss merchant photography and restrained, accessible photo parallax.
