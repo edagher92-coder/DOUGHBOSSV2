@@ -32,6 +32,12 @@ class DoughBoss_Shortcodes {
 		add_shortcode( 'doughboss_voucher_claim', array( $this, 'voucher_claim' ) );
 		add_shortcode( 'doughboss_manoush_hero', array( $this, 'manoush_hero' ) );
 		add_shortcode( 'doughboss_ordering_status', array( $this, 'ordering_status' ) );
+		add_shortcode( 'doughboss_loyalty', array( $this, 'loyalty' ) );
+	}
+
+	/** [doughboss_loyalty] — member account, points wallet and rewards. */
+	public function loyalty() {
+		return DoughBoss_Loyalty::shortcode();
 	}
 
 	/**

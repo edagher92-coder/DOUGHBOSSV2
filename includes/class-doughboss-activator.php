@@ -79,6 +79,9 @@ class DoughBoss_Activator {
 		$payment_attempts = $wpdb->prefix . 'doughboss_payment_attempts';
 		$payment_events   = $wpdb->prefix . 'doughboss_payment_events';
 		$checkout_snapshots = $wpdb->prefix . 'doughboss_checkout_snapshots';
+		$loyalty_members = $wpdb->prefix . 'doughboss_loyalty_members';
+		$loyalty_ledger  = $wpdb->prefix . 'doughboss_loyalty_ledger';
+		$loyalty_tokens  = $wpdb->prefix . 'doughboss_loyalty_tokens';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -478,6 +481,55 @@ class DoughBoss_Activator {
 			KEY order_id (order_id)
 		) ENGINE=InnoDB {$charset_collate};";
 
+		$sql_loyalty_members = "CREATE TABLE {$loyalty_members} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			email varchar(191) NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'active',
+			points_balance int(11) NOT NULL DEFAULT 0,
+			tier varchar(32) NOT NULL DEFAULT 'Dough Club',
+			lifetime_earned int(11) NOT NULL DEFAULT 0,
+			lifetime_redeemed int(11) NOT NULL DEFAULT 0,
+			lifetime_spend decimal(12,2) NOT NULL DEFAULT 0.00,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY user_id (user_id),
+			UNIQUE KEY email (email),
+			KEY tier (tier)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_loyalty_ledger = "CREATE TABLE {$loyalty_ledger} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			member_id bigint(20) unsigned NOT NULL,
+			event_type varchar(32) NOT NULL,
+			points int(11) NOT NULL,
+			event_key varchar(191) NOT NULL,
+			amount decimal(12,2) NOT NULL DEFAULT 0.00,
+			currency varchar(3) NOT NULL DEFAULT 'AUD',
+			campaign varchar(40) NOT NULL DEFAULT '',
+			meta longtext NULL,
+			created_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY event_key (event_key),
+			KEY member_created (member_id,created_at),
+			KEY member_type (member_id,event_type)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_loyalty_tokens = "CREATE TABLE {$loyalty_tokens} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			selector varchar(24) NOT NULL,
+			token_hash char(64) NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			expires_at datetime NOT NULL,
+			consumed_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY selector (selector),
+			KEY expires_at (expires_at),
+			KEY user_id (user_id)
+		) ENGINE=InnoDB {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
 		dbDelta( $sql_events );
@@ -496,6 +548,9 @@ class DoughBoss_Activator {
 		dbDelta( $sql_payment_attempts );
 		dbDelta( $sql_payment_events );
 		dbDelta( $sql_checkout_snapshots );
+		dbDelta( $sql_loyalty_members );
+		dbDelta( $sql_loyalty_ledger );
+		dbDelta( $sql_loyalty_tokens );
 	}
 
 	/**

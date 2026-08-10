@@ -2536,7 +2536,8 @@ class DoughBoss_REST_Controller {
 				(float) $totals['subtotal'],
 				'online',
 				$checkout_key,
-				DoughBoss_Voucher::RESERVATION_TTL_SECONDS
+				DoughBoss_Voucher::RESERVATION_TTL_SECONDS,
+				$email
 			);
 			if ( is_wp_error( $reservation ) ) {
 				return $reservation;

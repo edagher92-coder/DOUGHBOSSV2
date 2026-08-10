@@ -1127,6 +1127,11 @@ class DoughBoss_Order {
 			return false;
 		}
 
+		$order = self::get( $order_id );
+		if ( ! $order ) {
+			return false;
+		}
+		$previous_status = isset( $order->payment_status ) ? (string) $order->payment_status : 'unpaid';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$updated = $wpdb->update(
 			self::orders_table(),
@@ -1139,6 +1144,9 @@ class DoughBoss_Order {
 			array( '%d' )
 		);
 
+		if ( false !== $updated && $previous_status !== $payment_status ) {
+			do_action( 'doughboss_order_payment_status_changed', (int) $order_id, $previous_status, $payment_status );
+		}
 		return false !== $updated;
 	}
 

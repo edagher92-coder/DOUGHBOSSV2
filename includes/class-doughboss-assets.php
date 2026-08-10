@@ -28,6 +28,7 @@ class DoughBoss_Assets {
 		'doughboss_catering',
 		'doughboss_voucher_claim',
 		'doughboss_ordering_status',
+		'doughboss_loyalty',
 	);
 
 	/**
@@ -141,6 +142,15 @@ class DoughBoss_Assets {
 
 		if ( ! $this->should_load() ) {
 			return;
+		}
+
+		if ( $this->current_post_has( 'doughboss_loyalty' ) ) {
+			wp_enqueue_style(
+				'doughboss-loyalty',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-loyalty.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
 		}
 
 		wp_enqueue_style(

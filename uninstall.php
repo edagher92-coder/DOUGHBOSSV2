@@ -18,6 +18,9 @@ global $wpdb;
 
 // Drop custom tables (children before parents).
 $tables = array(
+	$wpdb->prefix . 'doughboss_loyalty_tokens',
+	$wpdb->prefix . 'doughboss_loyalty_ledger',
+	$wpdb->prefix . 'doughboss_loyalty_members',
 	$wpdb->prefix . 'doughboss_payment_events',
 	$wpdb->prefix . 'doughboss_payment_attempts',
 	$wpdb->prefix . 'doughboss_checkout_snapshots',
@@ -112,6 +115,15 @@ $wpdb->query(
 // phpcs:disable WordPress.DB.DirectDatabaseQuery
 $wpdb->query(
 	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_rl_%' OR option_name LIKE '_transient_timeout_doughboss_rl_%'"
+);
+// phpcs:enable
+
+// Clean up membership sign-in rate-limit buckets. The WordPress subscriber
+// account is deliberately retained: uninstalling a plugin must not silently
+// delete a person's broader WordPress identity.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->query(
+	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_db_loyalty_link_%' OR option_name LIKE '_transient_timeout_db_loyalty_link_%'"
 );
 // phpcs:enable
 

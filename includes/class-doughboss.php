@@ -89,6 +89,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-pospal.php';
 		require_once $dir . 'class-doughboss-coupon-code.php';
 		require_once $dir . 'class-doughboss-voucher.php';
+		require_once $dir . 'class-doughboss-loyalty.php';
 		require_once $dir . 'class-doughboss-pospal-outbox.php';
 		require_once $dir . 'class-doughboss-pospal-sync.php';
 		require_once $dir . 'class-doughboss-pospal-orders.php';
@@ -135,6 +136,7 @@ final class DoughBoss {
 		( new DoughBoss_Post_Types() )->init();
 		( new DoughBoss_Catering_Package() )->init();
 		( new DoughBoss_Shortcodes() )->init();
+		( new DoughBoss_Loyalty() )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_SEO() )->init();
 		DoughBoss_Staff_Scope::init();

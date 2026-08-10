@@ -80,6 +80,51 @@ class DoughBoss_Settings {
 			// open ordering after the WordPress staging checklist has passed.
 			'ordering_open'   => 0,
 			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
+			// Customer membership and rewards. The program remains off until the
+			// owner explicitly enables it in DoughBoss > Rewards. These prepared
+			// launch promotions therefore cannot create points or voucher liability
+			// during a visual/content review.
+			'loyalty_enabled'            => 0,
+			'loyalty_points_per_dollar'  => 1,
+			'loyalty_redemption_points'  => 100,
+			'loyalty_redemption_amount'  => 5,
+			'loyalty_tier_fresh_spend'   => 150,
+			'loyalty_tier_boss_spend'    => 400,
+			'loyalty_promos'             => array(
+				array(
+					'slug'         => 'join-the-dough-club',
+					'title'        => 'Join the Dough Club',
+					'description'  => 'Get 50 bonus points after your first eligible paid order.',
+					'rule'         => '50 bonus points on first paid order',
+					'type'         => 'welcome_first_paid',
+					'bonus_points' => 50,
+					'active'       => 1,
+					'public'       => 1,
+				),
+				array(
+					'slug'        => 'fresh-start-double-points',
+					'title'       => 'Fresh Start',
+					'description' => 'Double points for the first 14 days of the launch — dates set by management.',
+					'rule'        => '2× points during the approved launch window',
+					'type'        => 'date_multiplier',
+					'multiplier'  => 2,
+					'starts'      => '',
+					'ends'        => '',
+					'active'      => 1,
+					'public'      => 1,
+				),
+				array(
+					'slug'        => 'tuesday-treat',
+					'title'       => 'Tuesday Treat',
+					'description' => 'Double points on Tuesday for paid orders of $15 or more.',
+					'rule'        => '2× points on Tuesday, $15 minimum spend',
+					'type'        => 'weekly_multiplier',
+					'multiplier'  => 2,
+					'min_spend'   => 15,
+					'active'      => 1,
+					'public'      => 1,
+				),
+			),
 			// A deliberately separate, unpaid fallback for the Revesby launch.
 			// It captures a customer request while normal checkout is closed; it
 			// does not promise a time, reserve capacity, create a payment attempt,

@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.34.1
+Stable tag: 2.35.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.35.0 =
+* Adds Dough Boss Rewards: passwordless customer membership, points wallet, tiers and a manager-controlled, default-off launch gate.
+* Adds three prepared launch promotions: Join the Dough Club, Fresh Start and Tuesday Treat, with a one-promotion-per-order safeguard.
+* Exchanges points for personal, one-time vouchers through the existing secure voucher system, so online and in-store redemption share the same audit path.
+* Binds emailed QR/personal vouchers to the issued email at the final online checkout reservation boundary, preventing a shared QR image from being redeemed by another online customer.
 
 = 2.34.1 =
 * Repairs the production visual release by pairing the authentic-photo plugin with the matching DoughBoss Final 1.3.0 theme.

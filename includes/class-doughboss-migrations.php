@@ -79,6 +79,7 @@ class DoughBoss_Migrations {
 				'1.16.0' => 'upgrade_to_1_16_0',
 				'1.17.0' => 'upgrade_to_1_17_0',
 				'1.18.0' => 'upgrade_to_1_18_0',
+				'1.19.0' => 'upgrade_to_1_19_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -100,6 +101,12 @@ class DoughBoss_Migrations {
 
 		delete_option( $lock_key );
 		delete_transient( 'doughboss_migrating' ); // Clean up the pre-1.11 lock.
+	}
+
+	/** 1.19.0 — passwordless loyalty members, ledger and one-time login links. */
+	private static function upgrade_to_1_19_0() {
+		// Tables are added by create_tables(). Defaults are merged at read time,
+		// so existing store settings are never overwritten here.
 	}
 
 	/**

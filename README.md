@@ -60,11 +60,22 @@ Copy the repository contents into `wp-content/plugins/doughboss/` and activate
 | `[doughboss_order_tracking]`| The order status lookup form     |
 | `[doughboss_shop_picker]`   | Shop selector (multi-shop sites) |
 | `[doughboss_ordering_status]` | Coming Soon / ordering status notice |
+| `[doughboss_loyalty]`       | Passwordless member rewards wallet |
 
 A typical setup: an **Order Online** page containing `[doughboss_builder]` and
 `[doughboss_menu]` plus `[doughboss_cart]` (or a dedicated Cart page). Add
 `[doughboss_ordering_status]` near the top while launching, and use a
 **Track Order** page containing `[doughboss_order_tracking]`.
+
+## Rewards launch
+
+The optional **Dough Boss Rewards** program is deliberately disabled by default.
+When reviewed and enabled through **DoughBoss → Rewards**, customers can create a
+passwordless member account, earn points after paid orders and exchange a set
+point balance for a personal single-use voucher. The initial prepared launch
+promotions are Join the Dough Club, Fresh Start and Tuesday Treat. Add
+`[doughboss_loyalty]` to a public Rewards page (the admin screen can create the
+page) and keep the parent program disabled until staff and terms are approved.
 
 ## REST API
 

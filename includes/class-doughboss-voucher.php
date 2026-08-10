@@ -262,9 +262,11 @@ class DoughBoss_Voucher {
 	 * @param string $channel         online|instore.
 	 * @param string $reservation_key Immutable SHA-256 checkout key.
 	 * @param int    $ttl_seconds     Lease lifetime in seconds.
+	 * @param string $customer_email  Checkout email. Personal QR vouchers are
+	 *                                bound here, at the final payment boundary.
 	 * @return array|WP_Error array{code:string,amount:float,reservation_key:string,expires_at:int}.
 	 */
-	public static function reserve( $code, $subtotal, $channel, $reservation_key, $ttl_seconds = self::RESERVATION_TTL_SECONDS ) {
+	public static function reserve( $code, $subtotal, $channel, $reservation_key, $ttl_seconds = self::RESERVATION_TTL_SECONDS, $customer_email = '' ) {
 		global $wpdb;
 
 		$key = self::normalise_reservation_key( $reservation_key );
@@ -288,6 +290,13 @@ class DoughBoss_Voucher {
 		try {
 			$row = self::find_by_id( $voucher_id );
 			$eval = self::evaluate( $row, $subtotal, $channel );
+			// QR claim vouchers are issued to one customer email. The public cart
+			// may show an estimated discount, but checkout must only reserve it for
+			// that same email. This prevents a photographed/shared QR code being
+			// spent by someone else online while preserving legitimate till scans.
+			if ( $row && 'online' === $channel && '' !== (string) $row->customer_email && ! hash_equals( strtolower( (string) $row->customer_email ), strtolower( sanitize_email( $customer_email ) ) ) ) {
+				return $generic;
+			}
 			if ( ! $row || ! $eval['valid'] ) {
 				if ( $row && 'min_spend' === $eval['reason'] ) {
 					return new WP_Error( 'doughboss_voucher_min', __( 'Your order doesnâ€™t meet this voucherâ€™s minimum spend.', 'doughboss' ), array( 'status' => 422 ) );
