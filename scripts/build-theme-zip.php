@@ -1,44 +1,68 @@
 <?php
-/** Build the installable DoughBoss Final WordPress theme archive. */
+/** Build the production DoughBoss Final theme archive. */
 
-$root = dirname( __DIR__ );
-$source = $root . '/themes/doughboss-final';
-$output_dir = $root . '/dist';
-$output = $output_dir . '/doughboss-final.zip';
-
-if ( ! extension_loaded( 'zip' ) ) {
-	fwrite( STDERR, "The PHP zip extension is required.\n" );
+if ( PHP_SAPI !== 'cli' ) {
+	fwrite( STDERR, "This script must run from the command line.\n" );
 	exit( 1 );
 }
-if ( ! is_dir( $source ) || ! is_file( $source . '/style.css' ) || ! is_file( $source . '/index.php' ) ) {
-	fwrite( STDERR, "Theme source is incomplete.\n" );
-	exit( 1 );
-}
-if ( ! is_dir( $output_dir ) && ! mkdir( $output_dir, 0777, true ) && ! is_dir( $output_dir ) ) {
-	fwrite( STDERR, "Unable to create dist directory.\n" );
-	exit( 1 );
-}
-if ( is_file( $output ) ) {
-	unlink( $output );
-}
-
-$zip = new ZipArchive();
-if ( true !== $zip->open( $output, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
-	fwrite( STDERR, "Unable to create theme archive.\n" );
+if ( ! class_exists( 'ZipArchive' ) ) {
+	fwrite( STDERR, "ERROR: PHP ZipArchive is required.\n" );
 	exit( 1 );
 }
 
-$iterator = new RecursiveIteratorIterator(
-	new RecursiveDirectoryIterator( $source, FilesystemIterator::SKIP_DOTS ),
-	RecursiveIteratorIterator::LEAVES_ONLY
+$root       = dirname( __DIR__ );
+$theme_slug = 'doughboss-final';
+$theme_root = $root . DIRECTORY_SEPARATOR . 'themes' . DIRECTORY_SEPARATOR . $theme_slug;
+$dist       = $root . DIRECTORY_SEPARATOR . 'dist';
+$zip_path   = $dist . DIRECTORY_SEPARATOR . $theme_slug . '.zip';
+
+if ( ! is_dir( $theme_root ) ) {
+	fwrite( STDERR, "ERROR: theme source was not found.\n" );
+	exit( 1 );
+}
+if ( ! is_dir( $dist ) && ! mkdir( $dist, 0777, true ) && ! is_dir( $dist ) ) {
+	fwrite( STDERR, "ERROR: dist could not be created.\n" );
+	exit( 1 );
+}
+
+$style = file_get_contents( $theme_root . DIRECTORY_SEPARATOR . 'style.css' );
+if ( false === $style || 1 !== preg_match( '/^Version:\s*1\.3\.0\s*$/mi', $style ) ) {
+	fwrite( STDERR, "ERROR: expected DoughBoss Final theme version 1.3.0.\n" );
+	exit( 1 );
+}
+
+$files = new RecursiveIteratorIterator(
+	new RecursiveDirectoryIterator( $theme_root, FilesystemIterator::SKIP_DOTS )
 );
-foreach ( $iterator as $file ) {
-	if ( ! $file->isFile() ) {
-		continue;
+foreach ( $files as $file ) {
+	if ( $file->isFile() && ! $file->isLink() && 'php' === strtolower( $file->getExtension() ) ) {
+		exec( escapeshellarg( PHP_BINARY ) . ' -l ' . escapeshellarg( $file->getPathname() ), $output, $code );
+		if ( 0 !== $code ) {
+			fwrite( STDERR, 'ERROR: PHP syntax check failed for ' . $file->getPathname() . "\n" );
+			exit( 1 );
+		}
 	}
-	$relative = substr( $file->getPathname(), strlen( $source ) + 1 );
-	$zip->addFile( $file->getPathname(), 'doughboss-final/' . str_replace( DIRECTORY_SEPARATOR, '/', $relative ) );
 }
-$zip->close();
 
-echo $output . PHP_EOL;
+$archive = new ZipArchive();
+if ( true !== $archive->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
+	fwrite( STDERR, "ERROR: theme archive could not be created.\n" );
+	exit( 1 );
+}
+$files->rewind();
+foreach ( $files as $file ) {
+	if ( ! $file->isFile() || $file->isLink() ) { continue; }
+	$relative = substr( $file->getPathname(), strlen( $theme_root ) + 1 );
+	$archive_name = $theme_slug . '/' . str_replace( DIRECTORY_SEPARATOR, '/', $relative );
+	if ( ! $archive->addFile( $file->getPathname(), $archive_name ) ) {
+		$archive->close();
+		fwrite( STDERR, "ERROR: {$archive_name} could not be archived.\n" );
+		exit( 1 );
+	}
+}
+if ( ! $archive->close() ) {
+	fwrite( STDERR, "ERROR: theme archive could not be finalized.\n" );
+	exit( 1 );
+}
+
+echo "Built {$zip_path}\n";

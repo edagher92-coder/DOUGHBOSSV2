@@ -92,6 +92,8 @@ place you use it:
 off"), enter your mobile number, and you're given a single-use code on the
 spot (with a scannable QR code, if your device supports it). These offers are
 capped per day; if a campaign has already given out its full daily allowance,
+each verified student email may still receive only one student voucher across
+the entire campaign, even if a later day's allocation is available.
 you'll see *"Today's vouchers have all been claimed — check back tomorrow."*
 Other codes are handed to you directly — a one-off promotion, a goodwill
 gesture from the shop, etc.

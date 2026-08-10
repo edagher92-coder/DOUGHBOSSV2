@@ -115,6 +115,16 @@ class DoughBoss_Coupon_Voucher_DB extends DB_Stub {
 			}
 			return null;
 		}
+		if ( preg_match( "/SELECT id FROM wp_doughboss_vouchers WHERE campaign IN \\(([^)]+)\\) AND LOWER\\(customer_email\\) = '([^']+)' LIMIT 1/", $query, $match ) ) {
+			$campaigns = array_map( static function ( $slug ) { return trim( $slug, " '" ); }, explode( ',', $match[1] ) );
+			$email     = strtolower( str_replace( "''", "'", $match[2] ) );
+			foreach ( $this->vouchers as $row ) {
+				if ( in_array( $row['campaign'], $campaigns, true ) && strtolower( $row['customer_email'] ) === $email ) {
+					return (int) $row['id'];
+				}
+			}
+			return null;
+		}
 		if ( preg_match( "/SELECT voucher_id FROM wp_doughboss_voucher_redemptions WHERE idempotency_key = '([^']+)'/", $query, $match ) ) {
 			return isset( $this->redemptions[ $match[1] ] ) ? (int) $this->redemptions[ $match[1] ]['voucher_id'] : null;
 		}
@@ -632,6 +642,21 @@ $mismatch_claim = DoughBoss_Voucher::claim(
 	array( 'customer_email' => 'student@campus.edu.au', 'customer_email_confirmation' => 'other@campus.edu.au' )
 );
 coupon_voucher_ok( coupon_voucher_error( $mismatch_claim, 'doughboss_student_email' ), 'student claim rejects a mismatched confirmation before allocation' );
+$first_student_claim = DoughBoss_Voucher::claim(
+	'dough5',
+	array( 'customer_email' => 'one-time@campus.edu.au', 'customer_email_confirmation' => 'one-time@campus.edu.au' )
+);
+$repeat_student_claim = DoughBoss_Voucher::claim(
+	'dough5',
+	array( 'customer_email' => 'one-time@campus.edu.au', 'customer_email_confirmation' => 'one-time@campus.edu.au' )
+);
+coupon_voucher_ok( is_array( $first_student_claim ) && coupon_voucher_error( $repeat_student_claim, 'doughboss_student_email_used' ), 'student email receives only one voucher across the campaign period' );
+$db->seed_voucher( 'SNOW-LEGACY-STUDENT', array( 'campaign' => 'snow5', 'customer_email' => 'legacy@campus.edu.au' ) );
+$legacy_repeat_claim = DoughBoss_Voucher::claim(
+	'dough5',
+	array( 'customer_email' => 'legacy@campus.edu.au', 'customer_email_confirmation' => 'legacy@campus.edu.au' )
+);
+coupon_voucher_ok( coupon_voucher_error( $legacy_repeat_claim, 'doughboss_student_email_used' ), 'legacy student-campaign issuance also prevents a new Dough Boss voucher' );
 
 coupon_voucher_section( 'Fixed/percent totals and GST rounding' );
 $fixed_eval = (object) array(

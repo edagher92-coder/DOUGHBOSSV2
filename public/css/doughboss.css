@@ -278,8 +278,61 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 .db-card-img--placeholder {
-	background-image: linear-gradient(135deg, #f3efe9 25%, #ece6dd 25%, #ece6dd 50%, #f3efe9 50%);
-	background-size: 24px 24px;
+	align-items: center;
+	background:
+		radial-gradient(circle at 78% 20%, rgba(229, 42, 33, .34), transparent 31%),
+		radial-gradient(circle at 18% 85%, rgba(232, 180, 90, .2), transparent 34%),
+		linear-gradient(145deg, #17130f, #080808);
+	color: #fff;
+	display: flex;
+	flex-direction: column;
+	gap: .3rem;
+	justify-content: center;
+	overflow: hidden;
+	text-align: center;
+}
+
+.db-card-img--placeholder::before {
+	background: repeating-linear-gradient(90deg, rgba(255,255,255,.12) 0 1px, transparent 1px 18px);
+	content: '';
+	inset: 0;
+	mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 70%, transparent);
+	opacity: .38;
+	pointer-events: none;
+	position: absolute;
+}
+
+.db-card-img--placeholder::after {
+	border: 1px solid rgba(255, 255, 255, .24);
+	content: '';
+	inset: .8rem;
+	pointer-events: none;
+	position: absolute;
+}
+
+.db-card-placeholder-kicker,
+.db-card-placeholder-category { position: relative; z-index: 1; }
+.db-card-placeholder-kicker {
+	color: rgba(255,255,255,.72);
+	font-size: .68rem;
+	font-weight: 800;
+	letter-spacing: .18em;
+	text-transform: uppercase;
+}
+.db-card-placeholder-category {
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: clamp(1.65rem, 5vw, 2.25rem);
+	letter-spacing: .06em;
+	line-height: .95;
+	text-transform: uppercase;
+}
+.db-card-img--placeholder[data-category='manoush'] { --db-placeholder-accent: #c99747; }
+.db-card-img--placeholder[data-category='pizza'] { --db-placeholder-accent: #e52a21; }
+.db-card-img--placeholder[data-category='pies'] { --db-placeholder-accent: #a96f38; }
+.db-card-img--placeholder[data-category='wraps'] { --db-placeholder-accent: #b88b55; }
+.db-card-img--placeholder[data-category='drinks'] { --db-placeholder-accent: #5b88a6; }
+.db-card-img--placeholder[data-category] {
+	box-shadow: inset 0 -5px 0 var(--db-placeholder-accent, #e52a21), var(--db-shadow-1);
 }
 
 .db-card-body {
@@ -1068,31 +1121,11 @@ body.page-id-402 #primary-menu > li > a {
  * .db-card-img--placeholder is emitted by renderMenu when item.image is absent. */
 .db-app .db-card-img--placeholder {
 	background-image: none;
-	background: #fff;
-	border: 2px solid var(--db-ink);
+	border: 0;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 2px;
-	box-shadow: var(--db-shadow-1);
-}
-.db-app .db-card-img--placeholder::before {
-	content: "DB";
-	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
-	font-size: 34px;
-	letter-spacing: .1em;
-	color: var(--db-ink);
-	line-height: 1;
-}
-.db-app .db-card-img--placeholder::after {
-	content: "DOUGH BOSS";
-	font-weight: 600;
-	font-size: 8px;
-	letter-spacing: .4em;
-	text-transform: uppercase;
-	color: var(--db-muted);
-	padding-left: .4em;
 }
 
 /* Builder option rows (<label class="db-option"><input>…</label>): soft shadow,

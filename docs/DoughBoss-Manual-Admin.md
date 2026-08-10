@@ -170,7 +170,7 @@ Use this when a customer is standing in front of you (or on the phone) and wants
 - Runs the **exact same claim process** the website's voucher widget uses (`DoughBoss_Voucher::claim()`).
 - **Counts against that campaign's daily cap**, same as an online claim.
 - **Requires the same eligible student email twice.** The address must end in `.edu` or `.edu.au` (institutional subdomains such as `student.example.edu.au` are accepted). Both values are compared and the domain rule is enforced on the server, not only in the browser.
-- Allows **one allocation per student email per campaign each site-local day**. The check runs inside the same database lock as the daily cap, so concurrent requests cannot issue duplicate allocations.
+- Allows **one allocation per student email across the student campaign**. The check runs inside the same database lock as the daily cap, so concurrent requests cannot issue duplicate allocations.
 - **Requires a customer phone number** — the form marks it required, and the on-screen note explains why: that phone number is what POSPal uses as the member key. Without it, the voucher will still work as an online/in-store discount code, but **nothing gets granted at the till**.
 - **Automatically grants a matching POSPal coupon** at every fully-configured POSPal store, provided POSPal granting is switched on (§6).
 - The confirmation banner after submitting explicitly says: *"this went through the real claim flow, so it will be granted to POSPal if configured."*

@@ -1,87 +1,36 @@
 <?php
-/**
- * Static delivery contract for the self-contained Manoush hero.
- *
- * Run: php tests/manoush-hero-contract.php
- */
+/** Static contract for the authentic photographic homepage hero. */
 
 $fail = 0;
 $pass = 0;
 function hero_ok( $condition, $label ) {
 	global $fail, $pass;
-	if ( $condition ) { $pass++; echo "  ok   $label\n"; }
-	else { $fail++; echo "  FAIL $label\n"; }
+	if ( $condition ) { ++$pass; echo "  ok   $label\n"; }
+	else { ++$fail; echo "  FAIL $label\n"; }
 }
 
-$root = dirname( __DIR__ );
-$css  = file_get_contents( $root . '/public/css/doughboss-manoush-hero.css' );
-$js   = file_get_contents( $root . '/public/js/doughboss-manoush-hero.js' );
-$php  = file_get_contents( $root . '/includes/class-doughboss-shortcodes.php' );
+$root   = dirname( __DIR__ );
+$css    = file_get_contents( $root . '/public/css/doughboss-manoush-hero.css' );
+$js     = file_get_contents( $root . '/public/js/doughboss-manoush-hero.js' );
+$php    = file_get_contents( $root . '/includes/class-doughboss-shortcodes.php' );
 $assets = file_get_contents( $root . '/includes/class-doughboss-assets.php' );
-$demo_css = file_get_contents( $root . '/demo/demo.css' );
-$demo_js  = file_get_contents( $root . '/demo/manoush-hero.js' );
-$storefront_css = file_get_contents( $root . '/public/css/doughboss.css' );
+$theme  = file_get_contents( $root . '/themes/doughboss-final/front-page.php' );
 
-echo "=== Manoush hero contract ===\n";
+echo "=== Authentic photographic hero contract ===\n";
 hero_ok( false !== strpos( $php, "add_shortcode( 'doughboss_manoush_hero'" ), 'shortcode is registered' );
-hero_ok( false !== strpos( $assets, "doughboss-manoush-hero.css" ) && false !== strpos( $assets, "doughboss-manoush-hero.js" ), 'hero ships separate assets' );
-hero_ok( false !== strpos( $css, 'perspective:' ) && false !== strpos( $css, 'transform-style: preserve-3d' ), 'CSS defines a 3D stage' );
-hero_ok( false !== strpos( $css, 'translate3d(' ) && false !== strpos( $css, 'rotateX(' ) && false !== strpos( $css, 'rotateY(' ), 'ingredients use 3D transforms' );
-hero_ok( false !== strpos( $js, 'requestAnimationFrame' ) && false !== strpos( $js, 'offsetWidth' ), 'replay has a paint-safe reset' );
-hero_ok( false !== strpos( $js, 'imagesReady' ) && false !== strpos( $js, "addEventListener('error'" ), 'animation waits for image completion or failure' );
-hero_ok(
-	false !== strpos( $css, '@media (prefers-reduced-motion:reduce)' )
-		&& false !== strpos( $css, '.db-mh-replay { display: inline-flex; }' )
-		&& false !== strpos( $js, 'motionOptedIn = true;' )
-		&& false !== strpos( $js, "document.documentElement.classList.add('db-mh-motion-opted-in')" ),
-	'the approved automatic build is enabled on every device while retaining the motion-control styling'
-);
-hero_ok( false !== strpos( $css, '@media (max-width:720px)' ) && false === strpos( $css, '.db-mh-stage { display: none' ), 'mobile retains the stage' );
-hero_ok( false !== strpos( $css, '@media (max-width:360px)' ) && false !== strpos( $css, '--db-x:-29vw' ), 'WordPress hero contains a 320px-safe composition' );
-hero_ok(
-	false !== strpos( $php, 'width="1254" height="1254" loading="eager" decoding="async"' )
-		&& false !== strpos( $php, 'width="1254" height="1254" loading="lazy" decoding="async"' ),
-	'WordPress hero reserves mobile image space using the production asset dimensions'
-);
-hero_ok( false !== strpos( $storefront_css, '@media (max-width: 480px)' ) && false !== strpos( $storefront_css, 'overflow-wrap: anywhere' ), 'WordPress cart and builder guard narrow mobile widths' );
-hero_ok( false !== strpos( $demo_css, 'perspective:1100px' ) && false !== strpos( $demo_css, 'transform-style:preserve-3d' ), 'demo defines a 3D ingredient stage' );
-hero_ok( false !== strpos( $demo_css, 'translate3d(' ) && false !== strpos( $demo_css, 'rotateX(' ) && false !== strpos( $demo_css, 'rotateY(' ), 'demo burst uses 3D transforms' );
-hero_ok( false !== strpos( $demo_js, 'explodeHoldMs = 1500' ) && false !== strpos( $demo_js, "classList.remove('is-exploded')" ), 'demo holds the explosion long enough to be clearly visible before assembly' );
-hero_ok( false !== strpos( $demo_js, 'requestAnimationFrame' ) && false !== strpos( $demo_js, 'offsetWidth' ), 'demo replay has a paint-safe reset' );
-hero_ok( false !== strpos( $demo_js, 'imagesReady' ) && false !== strpos( $demo_js, "addEventListener('error'" ), 'demo waits for image completion or failure' );
-hero_ok(
-	false === strpos( $js, 'scheduleReplay' )
-		&& false === strpos( $demo_js, 'scheduleStageReplay' )
-		&& false !== strpos( $js, "window.dispatchEvent(new Event('db:manoush-ready'))" )
-		&& false !== strpos( $demo_js, "window.dispatchEvent(new Event('db:manoush-ready'))" ),
-	'live and demo play once on first view, then leave permanent control with scroll'
-);
-hero_ok(
-	false !== strpos( $php, 'data-db-start-label=' )
-		&& false !== strpos( $demo_css, 'html.db-demo-motion-opted-in' )
-		&& false !== strpos( $demo_js, 'motionOptedIn = true;' ),
-	'WordPress and demo both start the approved food build automatically'
-);
-hero_ok(
-	false !== strpos( $js, "window.dispatchEvent(new Event('db:manoush-ready'))" )
-		&& false !== strpos( $js, "window.addEventListener('db:manoush-ready', requestScrollScene)" )
-		&& false !== strpos( $demo_js, "window.dispatchEvent(new Event('db:manoush-ready'))" )
-		&& false !== strpos( $demo_js, "window.addEventListener('db:manoush-ready', requestRender)" ),
-	'first-load animation hands its final frame to the reversible scroll renderer in both experiences'
-);
-hero_ok(
-	false !== strpos( $js, "classList.add('db-mh-motion-opted-in')" )
-		&& false !== strpos( $js, "classList.remove('db-mh-motion-opted-in')" ),
-	'WordPress keeps the approved animation enabled if the device motion preference changes at runtime'
-);
-hero_ok(
-	false !== strpos( $js, 'function freezeHero(hero)' )
-		&& false !== strpos( $js, 'window.getComputedStyle(part)' )
-		&& false !== strpos( $demo_js, 'function freezeStage(stage)' )
-		&& false !== strpos( $demo_js, 'window.getComputedStyle(part)' ),
-	'Pause freezes the computed food pose instead of snapping the composition together'
-);
-hero_ok( false === strpos( $demo_css, '@media(max-width:560px){.ingredient-burst{display:none;}' ), 'demo keeps the ingredient stage visible on mobile' );
+hero_ok( false !== strpos( $assets, 'doughboss-manoush-hero.css' ) && false !== strpos( $assets, 'doughboss-manoush-hero.js' ), 'hero ships dependency-free assets' );
+hero_ok( false !== strpos( $php, 'doughboss-feast-real-v1.jpg' ), 'hero defaults to the approved real DoughBoss feast photo' );
+hero_ok( file_exists( $root . '/public/images/doughboss-feast-real-v1.jpg' ), 'real hero photo is packaged' );
+hero_ok( false !== strpos( $theme, 'title="Fresh from the oven."' ) && false !== strpos( $theme, 'Oven-baked in Sydney since 2009' ), 'homepage uses approved oven-baked language' );
+hero_ok( false !== strpos( $php, 'db-mh-action--primary' ) && false !== strpos( $php, "home_url( '/order/' )" ), 'hero exposes an immediate ordering action' );
+hero_ok( false !== strpos( $php, 'db-mh-action--secondary' ) && false !== strpos( $php, "home_url( '/catering/' )" ), 'hero exposes catering without crowding the primary action' );
+hero_ok( false === strpos( $php, 'db-mh-central' ) && false === strpos( $php, 'db-mh-ingredient' ), 'generated floating-food layer markup has been removed' );
+hero_ok( false === strpos( $css, 'db-mh-smoke' ) && false === strpos( $css, 'rotateX(' ), 'fake smoke and 3D food transforms have been removed' );
+hero_ok( false !== strpos( $css, 'background-size: cover' ) && false !== strpos( $css, 'linear-gradient(90deg' ), 'real photo is presented full-bleed with a legibility veil' );
+hero_ok( false !== strpos( $js, "setProperty('--db-mh-photo-y'" ) && false !== strpos( $js, "setProperty('--db-mh-photo-scale'" ), 'scroll drives restrained camera-style motion' );
+hero_ok( false !== strpos( $js, 'is-photo-paused' ) && false !== strpos( $js, 'aria-pressed' ), 'motion has an accessible pause control' );
+hero_ok( false !== strpos( $css, '@media (prefers-reduced-motion: reduce)' ) && false !== strpos( $js, 'prefers-reduced-motion: reduce' ), 'reduced-motion is honoured in CSS and JavaScript' );
+hero_ok( false !== strpos( $css, '@media (max-width: 720px)' ) && false !== strpos( $css, '.db-mh-copy { padding-top: 27vh; }' ), 'mobile receives deliberate photographic art direction' );
 
 echo "\n$pass passed, $fail failed\n";
 exit( $fail ? 1 : 0 );

@@ -63,68 +63,42 @@ class DoughBoss_Shortcodes {
 	public function manoush_hero( $atts = array() ) {
 		$atts = shortcode_atts(
 			array(
-				'variant'       => 'bites',
+				'variant'       => 'photo',
 				'kicker'        => __( 'Catering, made fresh', 'doughboss' ),
 				'title'         => __( 'The menu comes together here.', 'doughboss' ),
 				'description'   => __( 'Mini zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies, oven-baked fresh to order.', 'doughboss' ),
-				'replay_label'  => __( 'See the spread come together', 'doughboss' ),
-				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-catering-premium-v1.webp',
-				// Five deliberately different foods keep the build readable as it moves:
-				// Sujuk Special, folded zaatar, cheese manoush, chicken wrap and spinach fatayer.
-				'central_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-sujuk-special-v5.webp',
-				'zaatar_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-folded-zaatar-v4.webp',
-				'cheese_image'  => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-cheese-manoush-v4.webp',
-				'meat_image'    => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-chicken-wrap-v4.webp',
-				'spinach_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/hero-spinach-fatayer-v4.webp',
+				'replay_label'  => __( 'Pause photo motion', 'doughboss' ),
+				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-feast-real-v1.jpg',
+				'primary_label' => __( 'Browse the menu', 'doughboss' ),
+				'primary_url'   => home_url( '/order/' ),
+				'secondary_label' => __( 'Plan catering', 'doughboss' ),
+				'secondary_url' => home_url( '/catering/' ),
 			),
 			$atts,
 			'doughboss_manoush_hero'
 		);
-		$variant = in_array( $atts['variant'], array( 'manoush', 'bites' ), true ) ? $atts['variant'] : 'bites';
-
-		$ingredients = array_filter(
-			array(
-			'zaatar'  => array( 'label' => __( 'Zaatar', 'doughboss' ), 'url' => $atts['zaatar_image'] ),
-			'cheese'  => array( 'label' => __( 'Cheese', 'doughboss' ), 'url' => $atts['cheese_image'] ),
-			'meat'    => array( 'label' => __( 'Chicken wrap', 'doughboss' ), 'url' => $atts['meat_image'] ),
-			'spinach' => array( 'label' => __( 'Spinach fatayer', 'doughboss' ), 'url' => $atts['spinach_image'] ),
-			),
-			static function ( $ingredient ) {
-				return '' !== $ingredient['url'];
-			}
-		);
+		$variant = in_array( $atts['variant'], array( 'photo', 'home', 'catering' ), true ) ? $atts['variant'] : 'photo';
 
 		ob_start();
 		?>
-		<section class="db-manoush-hero db-manoush-hero--<?php echo esc_attr( $variant ); ?> is-assembled" data-db-manoush-hero data-db-manoush-variant="<?php echo esc_attr( $variant ); ?>" data-db-scroll-scene>
+		<section class="db-manoush-hero db-manoush-hero--<?php echo esc_attr( $variant ); ?>" data-db-manoush-hero data-db-manoush-variant="<?php echo esc_attr( $variant ); ?>" data-db-scroll-scene>
 			<div class="db-mh-backdrop" style="background-image:url('<?php echo esc_url( $atts['background_image'] ); ?>')" aria-hidden="true"></div>
 			<div class="db-mh-copy">
 				<p class="db-mh-kicker"><?php echo esc_html( $atts['kicker'] ); ?></p>
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
 				<p><?php echo esc_html( $atts['description'] ); ?></p>
-				<button class="db-mh-replay" type="button" data-db-manoush-replay data-db-replay-label="<?php echo esc_attr( $atts['replay_label'] ); ?>" data-db-start-label="<?php esc_attr_e( 'Start food animation', 'doughboss' ); ?>" data-db-pause-label="<?php esc_attr_e( 'Pause food animation', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume food animation', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
-				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'The food build starts automatically and follows your scroll. Use “Pause food animation” at any time.', 'doughboss' ); ?></span>
-			</div>
-			<div class="db-mh-stage" aria-hidden="true">
-				<div class="db-mh-world">
-					<div class="db-mh-central">
-						<?php if ( '' !== $atts['central_image'] ) : ?>
-							<img src="<?php echo esc_url( $atts['central_image'] ); ?>" alt="" width="1254" height="1254" loading="eager" decoding="async" fetchpriority="high" />
-						<?php else : ?>
-							<span><?php esc_html_e( 'Manoush', 'doughboss' ); ?></span>
-						<?php endif; ?>
-					</div>
-					<?php foreach ( $ingredients as $name => $ingredient ) : ?>
-						<div class="db-mh-ingredient db-mh-ingredient--<?php echo esc_attr( $name ); ?>">
-							<?php if ( '' !== $ingredient['url'] ) : ?>
-								<img src="<?php echo esc_url( $ingredient['url'] ); ?>" alt="" width="1254" height="1254" loading="lazy" decoding="async" />
-							<?php else : ?>
-								<span><?php echo esc_html( $ingredient['label'] ); ?></span>
-							<?php endif; ?>
-						</div>
-					<?php endforeach; ?>
+				<div class="db-mh-actions">
+					<a class="db-mh-action db-mh-action--primary" href="<?php echo esc_url( $atts['primary_url'] ); ?>"><?php echo esc_html( $atts['primary_label'] ); ?></a>
+					<a class="db-mh-action db-mh-action--secondary" href="<?php echo esc_url( $atts['secondary_url'] ); ?>"><?php echo esc_html( $atts['secondary_label'] ); ?></a>
+					<button class="db-mh-replay" type="button" data-db-manoush-replay data-db-pause-label="<?php esc_attr_e( 'Pause photo motion', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume photo motion', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
 				</div>
+				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'The photograph moves gently as you scroll. Pause it at any time.', 'doughboss' ); ?></span>
 			</div>
+				<div class="db-mh-proof" aria-label="<?php esc_attr_e( 'Dough Boss at a glance', 'doughboss' ); ?>">
+					<span><strong><?php esc_html_e( 'Since 2009', 'doughboss' ); ?></strong><?php esc_html_e( 'In the industry', 'doughboss' ); ?></span>
+					<span><strong><?php esc_html_e( 'Three shops', 'doughboss' ); ?></strong><?php esc_html_e( 'Baking daily', 'doughboss' ); ?></span>
+					<span><strong><?php esc_html_e( 'Oven-baked', 'doughboss' ); ?></strong><?php esc_html_e( 'Fresh to order', 'doughboss' ); ?></span>
+				</div>
 		</section>
 		<?php
 		return ob_get_clean();
@@ -177,7 +151,7 @@ class DoughBoss_Shortcodes {
 							<span><?php esc_html_e( 'Re-enter student email', 'doughboss' ); ?></span>
 							<input type="email" name="email_confirmation" autocomplete="off" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="<?php esc_attr_e( 'Type the same email again', 'doughboss' ); ?>" required />
 						</label>
-						<p class="db-vc-eligibility"><?php esc_html_e( 'One $5 voucher per eligible student email each day, while the daily allocation lasts. Your code is single use.', 'doughboss' ); ?></p>
+						<p class="db-vc-eligibility"><?php esc_html_e( 'One $5 voucher per eligible student email, while today’s allocation lasts. Your code is single use.', 'doughboss' ); ?></p>
 						<button type="submit" class="db-btn db-vc-submit"><?php esc_html_e( 'Get my code', 'doughboss' ); ?></button>
 					</form>
 				<?php endif; ?>
