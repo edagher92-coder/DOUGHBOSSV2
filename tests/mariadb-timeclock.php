@@ -126,7 +126,7 @@ echo "=== DoughBoss MariaDB staff-clock acceptance ===\n";
 $shifts        = $wpdb->prefix . 'doughboss_staff_shifts';
 $events        = $wpdb->prefix . 'doughboss_staff_shift_events';
 $locations     = $wpdb->prefix . 'doughboss_locations';
-$events_backup = $wpdb->prefix . 'doughboss_staff_shift_events_acceptance_hold';
+$audit_fail_trigger = $wpdb->prefix . 'doughboss_staff_audit_fail';
 
 // Build and migrate the real DB 1.20 contract. A failed InnoDB readiness check
 // must stop the version checkpoint and leave an operator-visible explanation.
@@ -370,11 +370,11 @@ timeclock_db_ok( $second_shift && (int) $second_shift->id !== (int) $first_shift
 timeclock_db_ok( $first_snapshot === $first_after_directory_change, 'completed shift snapshots are unchanged by later staff and shop edits' );
 timeclock_db_ok( $second_shift && 'Acceptance Staff Renamed' === $second_shift->staff_name && 'Acceptance Shop Renamed' === $second_shift->location_name && 'UTC' === $second_shift->timezone_snapshot, 'new shift captures fresh immutable staff, shop and timezone snapshots' );
 
-// Force the audit INSERT to fail after the manager UPDATE. The production
-// transaction must roll back the close, then succeed atomically once audit
-// storage is restored.
-timeclock_db_sql( "DROP TABLE IF EXISTS {$events_backup}" );
-timeclock_db_sql( "RENAME TABLE {$events} TO {$events_backup}" );
+// Force the audit INSERT to fail after the manager UPDATE while the table
+// remains structurally ready. The production transaction must roll back the
+// close, then succeed atomically once the temporary failure is removed.
+timeclock_db_sql( "DROP TRIGGER IF EXISTS {$audit_fail_trigger}" );
+timeclock_db_sql( "CREATE TRIGGER {$audit_fail_trigger} BEFORE INSERT ON {$events} FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Acceptance audit insert failure'" );
 $reason = 'Acceptance test: employee forgot to clock out';
 $failed_correction_pid = timeclock_fork_handler(
 	'handle_correction',
@@ -383,7 +383,7 @@ $failed_correction_pid = timeclock_fork_handler(
 	array( 'action' => 'doughboss_correct_shift', 'shift_id' => (int) $second_shift->id, 'reason' => $reason )
 );
 timeclock_db_ok( timeclock_wait_handler( $failed_correction_pid ), 'manager handler returns safely when audit persistence fails' );
-timeclock_db_sql( "RENAME TABLE {$events_backup} TO {$events}" );
+timeclock_db_sql( "DROP TRIGGER IF EXISTS {$audit_fail_trigger}" );
 $after_failed_correction = DoughBoss_Timeclock::open_shift( $staff_id );
 timeclock_db_ok( $after_failed_correction && (int) $second_shift->id === (int) $after_failed_correction->id, 'audit database error rolls back the manager close' );
 timeclock_db_ok( 0 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$events} WHERE shift_id = %d", (int) $second_shift->id ) ), 'failed manager transaction leaves no partial audit event' );
