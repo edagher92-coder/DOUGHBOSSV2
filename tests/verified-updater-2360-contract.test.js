@@ -30,6 +30,7 @@ for (const needle of [
   "hash_equals( $expected_digest",
   "write_verified_option",
   "! $operational || ! $shield",
+  "'' !== $target['textdomain']",
 ]) assert.ok(src.includes(needle), `missing ${needle}`);
 assert.ok(!src.includes('SNIPPET_ID_OPTION'));
 assert.ok(!src.includes("empty( $_GET['db_run'] )"));

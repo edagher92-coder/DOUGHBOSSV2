@@ -406,7 +406,7 @@ final class DoughBoss_Deploy_Bridge_2360 {
 		if ( $target['name'] !== (string) $data['Name'] || $target['target'] !== (string) $data['Version'] ) {
 			return new WP_Error( 'plugin_identity', 'The extracted plugin name or version did not match the approved target.' );
 		}
-		if ( $target['textdomain'] !== (string) $data['TextDomain'] ) {
+		if ( '' !== $target['textdomain'] && $target['textdomain'] !== (string) $data['TextDomain'] ) {
 			return new WP_Error( 'textdomain', 'The extracted plugin text domain did not match the approved target.' );
 		}
 		return true;
@@ -418,7 +418,7 @@ final class DoughBoss_Deploy_Bridge_2360 {
 			return false;
 		}
 		$data = get_plugin_data( $dir . '/' . $target['main'], false, false );
-		if ( $target['name'] !== (string) $data['Name'] || $version !== (string) $data['Version'] || $target['textdomain'] !== (string) $data['TextDomain'] ) {
+		if ( $target['name'] !== (string) $data['Name'] || $version !== (string) $data['Version'] || ( '' !== $target['textdomain'] && $target['textdomain'] !== (string) $data['TextDomain'] ) ) {
 			return false;
 		}
 		if ( $target['target'] === $version ) {
