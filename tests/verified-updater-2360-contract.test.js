@@ -1,8 +1,17 @@
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
-const src = fs.readFileSync('tools/doughboss-verified-updater-2360/doughboss-verified-updater-2360.php', 'utf8');
+const src = fs.readFileSync('tools/doughboss-deploy-2360-pclzip/doughboss-deploy-2360-pclzip.php', 'utf8');
 for (const needle of [
-  'Plugin Name: DoughBoss Verified Updater 2.36.0',
+  'Plugin Name: DoughBoss Deploy 2.36.0 (PclZip)',
+  'Version: 1.0.1',
+  'final class DoughBoss_Deploy_2360_PclZip',
+  "'doughboss_deploy_2360_pclzip_result'",
+  "'doughboss_deploy_2360_pclzip_journal'",
+  "'doughboss_deploy_2360_pclzip_db_lock'",
+  "'.doughboss-deploy-2360-pclzip.lock'",
+  "'doughboss-deploy-2360-pclzip'",
+  "'doughboss-deploy-2360-pclzip/v1'",
+  "'doughboss_deploy_2360_pclzip'",
   "'bytes'    => 2498594",
   "'sha256'   => 'b451b72111cd5aa46800ad7a2eebebc0e7e926ced2773666853f4b8a8c1e7f27'",
   "'bytes'    => 3285",
@@ -18,7 +27,7 @@ for (const needle of [
   "zip_special",
   "source_changed",
   "manifest.json",
-  "check_admin_referer( 'doughboss_deploy_2360' )",
+  "check_admin_referer( 'doughboss_deploy_2360_pclzip' )",
   "is_exact_off",
   "cutover_' . $key . '_pending",
   "'cross_device'",
@@ -42,5 +51,15 @@ assert.ok(!src.includes("ZipArchive is required for safe package inspection."));
 assert.ok(!src.includes('SNIPPET_ID_OPTION'));
 assert.ok(!src.includes("empty( $_GET['db_run'] )"));
 assert.ok(!src.includes("$failed = $extract_root"));
+assert.ok(!src.includes('DoughBoss_Deploy_Bridge_2360'));
+for (const stale of [
+  "'doughboss_deploy_2360_result'",
+  "'doughboss_deploy_2360_journal'",
+  "'doughboss_deploy_2360_db_lock'",
+  "'.doughboss-deploy-2360.lock'",
+  "'doughboss-deploy-2360'",
+  "'doughboss-updater/v1'",
+  "'doughboss_deploy_2360'",
+]) assert.ok(!src.includes(stale), `stale deployment identifier ${stale}`);
 assert.ok(fs.existsSync('tests/pclzip-fallback-2360.php'));
-console.log('verified updater 2.36.0 structural contract: PASS');
+console.log('verified updater 2.36.0 unique-slug structural contract: PASS');

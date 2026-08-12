@@ -19,8 +19,8 @@ class WP_Error {
 }
 function add_action() {}
 
-require dirname( __DIR__ ) . '/tools/doughboss-verified-updater-2360/doughboss-verified-updater-2360.php';
-$method = new ReflectionMethod( 'DoughBoss_Deploy_Bridge_2360', 'validate_zip_entries' );
+require dirname( __DIR__ ) . '/tools/doughboss-deploy-2360-pclzip/doughboss-deploy-2360-pclzip.php';
+$method = new ReflectionMethod( 'DoughBoss_Deploy_2360_PclZip', 'validate_zip_entries' );
 $method->setAccessible( true );
 
 foreach ( array( array( $argv[2], 'doughboss' ), array( $argv[3], 'doughboss-migration-gate' ) ) as $fixture ) {
