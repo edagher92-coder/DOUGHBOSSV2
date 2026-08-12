@@ -103,6 +103,7 @@ jobs:
       - name: Verify Stripe payment safety contracts
         run: |
           php tests/stripe-adversarial-contract.php
+          php tests/stripe-shutdown-return-behavior.php
           php tests/provider-readiness-contract.php
           php tests/catering-motion-parity-contract.php
           node --test tests/stripe-checkout-contract.test.js

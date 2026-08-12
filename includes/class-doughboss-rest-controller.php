@@ -3371,7 +3371,15 @@ class DoughBoss_REST_Controller {
 		$payment_status    = 'unpaid';
 		$payment_method    = '';
 		$payment_intent_id = '';
-		if ( DoughBoss_Payment::ready() ) {
+		$returned_payment_reference = $request->get_param( 'payment_intent_id' );
+		$returned_payment_reference = is_scalar( $returned_payment_reference ) ? sanitize_text_field( (string) $returned_payment_reference ) : '';
+		$payment_return             = '' !== $returned_payment_reference;
+		$returned_stripe_session    = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $returned_payment_reference );
+		if ( DoughBoss_Payment::ready() || $payment_return ) {
+			// A hosted payment can return after an operator closes card acceptance.
+			// The switch must stop new charges, but it must never reinterpret an
+			// already-paid return as pay-on-pickup. Any returned provider reference
+			// therefore forces verification (or a safe error) before order creation.
 			$payment_location = DoughBoss_Locations::online_payment_location( $location_id );
 			if ( is_wp_error( $payment_location ) ) {
 				return $payment_location;
@@ -3381,7 +3389,7 @@ class DoughBoss_REST_Controller {
 				return $verified;
 			}
 			$payment_status    = 'paid';
-			$payment_method    = DoughBoss_Settings::payment_gateway();
+			$payment_method    = $returned_stripe_session ? 'stripe' : DoughBoss_Settings::payment_gateway();
 			$payment_intent_id = $verified;
 		}
 
@@ -3742,7 +3750,8 @@ class DoughBoss_REST_Controller {
 	 * @return string|WP_Error Payment reference id, or an error.
 	 */
 	private function verify_payment( WP_REST_Request $request, $expected_total, $order_type, $location_id, $table_context = null ) {
-		$raw_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
+		$raw_id = $request->get_param( 'payment_intent_id' );
+		$raw_id = is_scalar( $raw_id ) ? sanitize_text_field( (string) $raw_id ) : '';
 		if ( '' === $raw_id ) {
 			return new WP_Error( 'doughboss_pay_required', __( 'Payment is required to place this order.', 'doughboss' ), array( 'status' => 402 ) );
 		}
@@ -3754,11 +3763,18 @@ class DoughBoss_REST_Controller {
 		// carry that session id, so storing anything other than the canonical
 		// id here would make webhook-based reconciliation permanently unable to
 		// find this order. See DoughBoss_Tyro::canonical_id().
-		$is_stripe_checkout = 'stripe' === DoughBoss_Settings::payment_gateway() && 0 === strpos( $raw_id, 'cs_' );
+		$is_stripe_checkout = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $raw_id );
 		if ( $is_stripe_checkout ) {
+			$expected_prefix = 'live' === DoughBoss_Settings::stripe_mode() ? 'cs_live_' : 'cs_test_';
+			if ( 'stripe' !== DoughBoss_Settings::payment_gateway() || 0 !== strpos( $raw_id, $expected_prefix ) ) {
+				return new WP_Error( 'doughboss_pay_mode_changed', __( 'This payment session cannot be verified with the shop\'s current payment configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 			$intent = DoughBoss_Stripe::retrieve_checkout_payment( $raw_id );
 			$pi_id  = ! is_wp_error( $intent ) && isset( $intent['id'] ) ? DoughBoss_Stripe::canonical_id( $intent['id'] ) : '';
 		} else {
+			if ( ! DoughBoss_Payment::ready() ) {
+				return new WP_Error( 'doughboss_pay_off', __( 'This payment cannot be verified while card payments are unavailable. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 			$pi_id  = DoughBoss_Payment::canonical_id( $raw_id );
 			$intent = DoughBoss_Payment::retrieve_payment_intent( $raw_id );
 		}
