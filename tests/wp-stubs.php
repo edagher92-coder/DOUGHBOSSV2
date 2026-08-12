@@ -146,7 +146,8 @@ function add_shortcode( $tag, $cb ) { $GLOBALS['__db_shortcodes'][ $tag ] = $cb;
 function shortcode_atts( $defaults, $atts, $sc = '' ) { return array_merge( $defaults, (array) $atts ); }
 
 /* ---- Capabilities / users ---- */
-$GLOBALS['__db_caps_override'] = null;
+$GLOBALS['__db_caps_override']   = null;
+$GLOBALS['__db_current_user_id'] = 0;
 function current_user_can( $c ) {
 	if ( is_array( $GLOBALS['__db_caps_override'] ) ) {
 		return in_array( $c, $GLOBALS['__db_caps_override'], true );
@@ -155,7 +156,12 @@ function current_user_can( $c ) {
 }
 function is_user_logged_in() { return false; }
 function wp_get_current_user() { return (object) array( 'ID' => 0, 'roles' => array() ); }
-function get_current_user_id() { return 0; }
+function get_current_user_id() { return (int) $GLOBALS['__db_current_user_id']; }
+function get_userdata( $id ) { return (object) array( 'ID' => (int) $id, 'display_name' => 'Test Staff', 'user_login' => 'test.staff' ); }
+function get_user_meta( $id, $key = '', $single = false ) { return $single ? '' : array(); }
+function update_user_meta( ...$x ) { return true; }
+function delete_user_meta( ...$x ) { return true; }
+function user_can( $user, $cap ) { return true; }
 
 /**
  * Minimal WP_Role stand-in: real capability storage with has_cap()/add_cap()/
@@ -174,7 +180,9 @@ class WP_Role_Stub {
 	public function add_cap( $cap, $grant = true ) { $this->capabilities[ $cap ] = $grant; }
 	public function remove_cap( $cap ) { unset( $this->capabilities[ $cap ] ); }
 }
-$GLOBALS['__db_roles'] = array();
+$GLOBALS['__db_roles'] = array(
+	'administrator' => new WP_Role_Stub( 'administrator', array( 'read' => true, 'manage_options' => true ) ),
+);
 function add_role( $r, $d, $c = array() ) {
 	// Real WordPress no-ops (returns null) if the role already exists.
 	if ( isset( $GLOBALS['__db_roles'][ $r ] ) ) { return null; }
@@ -185,6 +193,7 @@ function remove_role( $r ) { unset( $GLOBALS['__db_roles'][ $r ] ); }
 function get_role( $r ) { return $GLOBALS['__db_roles'][ $r ] ?? null; }
 function wp_verify_nonce( $n, $a = -1 ) { return 1; }
 function wp_create_nonce( $a = -1 ) { return 'nonce'; }
+function check_admin_referer( ...$x ) { return true; }
 function check_ajax_referer( ...$x ) { return true; }
 
 /* ---- i18n ---- */
@@ -255,6 +264,9 @@ function wp_hash( $d, $s = 'auth' ) { return md5( (string) $d ); }
 function wp_salt( $scheme = 'auth' ) { return 'doughboss-test-salt-' . $scheme; }
 function current_time( $type = 'mysql', $gmt = 0 ) { return $type === 'timestamp' ? 1750000000 : '2026-07-06 00:00:00'; }
 function wp_timezone_string() { return 'Australia/Sydney'; }
+function wp_timezone() { return new DateTimeZone( 'Australia/Sydney' ); }
+function wp_date( $format, $timestamp = null, $timezone = null ) { return ( new DateTimeImmutable( '@' . ( null === $timestamp ? time() : $timestamp ) ) )->setTimezone( $timezone ?: wp_timezone() )->format( $format ); }
+function get_current_blog_id() { return 1; }
 function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, $d ); }
 function wp_next_scheduled( ...$x ) { return false; }
 function wp_schedule_event( ...$x ) { return true; }
@@ -265,6 +277,10 @@ function wp_remote_retrieve_response_code( $r ) { return is_array( $r ) ? ( $r['
 function wp_remote_retrieve_body( $r ) { return is_array( $r ) ? ( $r['body'] ?? '' ) : ''; }
 function wp_safe_redirect( $l, $s = 302 ) { return true; }
 function wp_redirect( $l, $s = 302 ) { return true; }
+function wp_login_url( $redirect = '', $reauth = false ) { return 'http://example.test/wp-login.php'; }
+function wp_logout_url( $redirect = '' ) { return 'http://example.test/wp-login.php?action=logout'; }
+function wp_logout() { return true; }
+function nocache_headers() { return true; }
 function get_permalink( $id = 0 ) { return 'http://example.test/?p=' . $id; }
 function get_post( $id = 0 ) { return null; }
 function get_posts( $a = array() ) { return array(); }
@@ -277,6 +293,7 @@ function wp_add_inline_script( ...$x ) { return true; }
 function wp_create_nonce_field( ...$x ) { return ''; }
 function selected( $a, $b = true, $e = true ) { $r = (string) $a === (string) $b ? ' selected="selected"' : ''; if ( $e ) { echo $r; } return $r; }
 function checked( $a, $b = true, $e = true ) { $r = (string) $a === (string) $b ? ' checked="checked"' : ''; if ( $e ) { echo $r; } return $r; }
+function disabled( $a, $b = true, $e = true ) { $r = (string) $a === (string) $b ? ' disabled="disabled"' : ''; if ( $e ) { echo $r; } return $r; }
 function add_menu_page( ...$x ) { return ''; }
 function add_submenu_page( ...$x ) { return ''; }
 function add_settings_section( ...$x ) {}

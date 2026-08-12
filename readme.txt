@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.35.0
+Stable tag: 2.36.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,11 @@ optimised for a 23.8-inch Full HD touch display. Catering production uses the
 separate hidden `/catering-kitchen/` workspace, while managers use the protected
 `/management/` overview. Every staff route uses the normal WordPress user and
 role system; no password or secret is stored in the plugin.
+
+Every employee can use the touch-first `/staff-clock/` workspace with an
+individual WordPress staff account. Clock-in is bound to an active DoughBoss
+shop, the shared kiosk signs out after each action, and managers can review,
+filter, correct with an audit reason, and export attendance from Staff Timesheet.
 
 = Shortcodes =
 
@@ -75,6 +80,13 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.36.0 =
+* Adds a protected, touch-first `/staff-clock/` portal with safe shared-kiosk sign-out after every attendance action.
+* Records each shift against an active DoughBoss shop, snapshots staff and location identity, and fails closed when a multi-shop assignment is missing.
+* Adds a low-privilege clock-only staff role plus manager timesheets, shop filters, safe CSV export and audited forced-close corrections.
+* Serializes clock transitions and enforces one open shift per employee in transactional storage.
+* Repairs the Dough Boss Rewards settings save path inherited from 2.35.0 so the plugin parses cleanly before activation.
 
 = 2.35.0 =
 * Adds Dough Boss Rewards: passwordless customer membership, points wallet, tiers and a manager-controlled, default-off launch gate.

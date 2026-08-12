@@ -80,6 +80,7 @@ class DoughBoss_Migrations {
 				'1.17.0' => 'upgrade_to_1_17_0',
 				'1.18.0' => 'upgrade_to_1_18_0',
 				'1.19.0' => 'upgrade_to_1_19_0',
+				'1.20.0' => 'upgrade_to_1_20_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -107,6 +108,99 @@ class DoughBoss_Migrations {
 	private static function upgrade_to_1_19_0() {
 		// Tables are added by create_tables(). Defaults are merged at read time,
 		// so existing store settings are never overwritten here.
+	}
+
+	/** 1.20.0 — transactional, location-bound staff attendance. */
+	private static function upgrade_to_1_20_0() {
+		global $wpdb;
+		$shifts    = $wpdb->prefix . 'doughboss_staff_shifts';
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		$users     = $wpdb->users;
+
+		// The early staff-clock prototype used this table name without
+		// immutable staff/shop snapshots or a durable open-shift guard. dbDelta
+		// adds the columns; this step safely normalises existing rows before the
+		// unique guard is asserted. Closed rows use a NULL guard so MySQL permits
+		// more than one completed shift per employee.
+		foreach ( array( 'staff_name', 'staff_login', 'location_name', 'timezone_snapshot', 'open_guard' ) as $column ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( ! $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$shifts} LIKE %s", $column ) ) ) {
+				throw new RuntimeException( 'Staff attendance upgrade could not add the ' . $column . ' column.' );
+			}
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "UPDATE {$shifts} SET open_guard = NULL WHERE clock_out_utc IS NOT NULL" ) ) {
+			throw new RuntimeException( 'Could not normalise completed staff shifts.' );
+		}
+
+		// Multiple open legacy rows are conflicting evidence, regardless of the
+		// guard value an interrupted prototype may have left behind. Never choose
+		// one silently: hold the checkpoint and identify the records for review.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$duplicates = (array) $wpdb->get_results(
+			"SELECT user_id, GROUP_CONCAT(id ORDER BY id) AS shift_ids
+			FROM {$shifts}
+			WHERE clock_out_utc IS NULL
+			GROUP BY user_id HAVING COUNT(*) > 1 LIMIT 20"
+		);
+		if ( $duplicates ) {
+			$conflicts = array();
+			foreach ( $duplicates as $duplicate ) {
+				$conflicts[] = 'staff ' . absint( $duplicate->user_id ) . ' shifts ' . sanitize_text_field( $duplicate->shift_ids );
+			}
+			throw new RuntimeException( 'Multiple open staff shifts need manager reconciliation before attendance can be enabled: ' . implode( '; ', $conflicts ) . '.' );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "UPDATE {$shifts} SET open_guard = 1 WHERE clock_out_utc IS NULL" ) ) {
+			throw new RuntimeException( 'Could not normalise the staff open-shift guard.' );
+		}
+
+		// Snapshot the best shop evidence available at upgrade time. Limit this
+		// backfill to legacy rows whose location snapshot is still empty. If a
+		// later migration step fails, a retry must never rewrite an established
+		// timezone after management changes a shop's current timezone.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query(
+			"UPDATE {$shifts} s LEFT JOIN {$locations} l ON l.id = s.location_id
+			SET s.location_name = COALESCE(NULLIF(l.name, ''), CONCAT('Shop #', s.location_id)),
+				s.timezone_snapshot = COALESCE(NULLIF(l.timezone, ''), 'Australia/Sydney')
+			WHERE s.location_name = ''"
+		) ) {
+			throw new RuntimeException( 'Could not preserve shop snapshots on historical shifts.' );
+		}
+
+		// Snapshot the best staff evidence available at upgrade time. Reports never
+		// join current profile/shop names, so later edits cannot rewrite history.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query(
+			"UPDATE {$shifts} s LEFT JOIN {$users} u ON u.ID = s.user_id
+			SET s.staff_name = COALESCE(NULLIF(s.staff_name, ''), NULLIF(u.display_name, ''), CONCAT('Staff #', s.user_id)),
+				s.staff_login = COALESCE(NULLIF(s.staff_login, ''), NULLIF(u.user_login, ''), CONCAT('staff-', s.user_id))"
+		) ) {
+			throw new RuntimeException( 'Could not preserve staff identity snapshots.' );
+		}
+
+		// dbDelta does not reliably replace a same-named, wrongly shaped index.
+		// Rebuild it explicitly after the legacy rows have been normalised.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$index_rows = (array) $wpdb->get_results( "SHOW INDEX FROM {$shifts} WHERE Key_name = 'user_open_guard' ORDER BY Seq_in_index" );
+		$index_ok   = 2 === count( $index_rows )
+			&& 0 === (int) $index_rows[0]->Non_unique
+			&& 'user_id' === (string) $index_rows[0]->Column_name
+			&& 'open_guard' === (string) $index_rows[1]->Column_name;
+		if ( ! $index_ok ) {
+			if ( $index_rows && false === $wpdb->query( "ALTER TABLE {$shifts} DROP INDEX user_open_guard" ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				throw new RuntimeException( 'Could not replace the staff open-shift index.' );
+			}
+			if ( false === $wpdb->query( "ALTER TABLE {$shifts} ADD UNIQUE KEY user_open_guard (user_id,open_guard)" ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				throw new RuntimeException( 'Could not enforce one open shift per staff member.' );
+			}
+		}
+
+		if ( ! DoughBoss_Activator::timeclock_storage_ready() ) {
+			throw new RuntimeException( 'Staff attendance tables, columns or unique open-shift guard are incomplete or are not using InnoDB.' );
+		}
+		DoughBoss_Activator::add_capabilities();
 	}
 
 	/**

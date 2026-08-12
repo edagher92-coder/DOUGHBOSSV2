@@ -389,7 +389,17 @@ class DoughBoss_Loyalty {
 
 	public function save_settings() {
 		$this->require_admin( 'doughboss_save_loyalty_settings' );
-		DoughBoss_Settings::update( array( 'loyalty_enabled' => ! empty( $_POST['loyalty_enabled'] ) ? 1 : 0, 'loyalty_points_per_dollar' => max( 1, min( 10, absint( $_POST['points_per_dollar'] ?? 1 ) ) ), 'loyalty_redemption_points' => max( 10, min( 10000, absint( $_POST['redemption_points'] ?? 100 ) ) ), 'loyalty_redemption_amount' => max( 1, min( 100, (float) ( $_POST['redemption_amount'] ?? 5 ) ), 'loyalty_tier_fresh_spend' => max( 1, (float) ( $_POST['fresh_spend'] ?? 150 ) ), 'loyalty_tier_boss_spend' => max( 1, (float) ( $_POST['boss_spend'] ?? 400 ) ), 'loyalty_promos' => self::sanitize_promos( isset( $_POST['promos'] ) && is_array( $_POST['promos'] ) ? wp_unslash( $_POST['promos'] ) : array() ) ) );
+		DoughBoss_Settings::update(
+			array(
+				'loyalty_enabled'           => ! empty( $_POST['loyalty_enabled'] ) ? 1 : 0,
+				'loyalty_points_per_dollar' => max( 1, min( 10, absint( $_POST['points_per_dollar'] ?? 1 ) ) ),
+				'loyalty_redemption_points' => max( 10, min( 10000, absint( $_POST['redemption_points'] ?? 100 ) ) ),
+				'loyalty_redemption_amount' => max( 1, min( 100, (float) ( $_POST['redemption_amount'] ?? 5 ) ) ),
+				'loyalty_tier_fresh_spend'  => max( 1, (float) ( $_POST['fresh_spend'] ?? 150 ) ),
+				'loyalty_tier_boss_spend'   => max( 1, (float) ( $_POST['boss_spend'] ?? 400 ) ),
+				'loyalty_promos'            => self::sanitize_promos( isset( $_POST['promos'] ) && is_array( $_POST['promos'] ) ? wp_unslash( $_POST['promos'] ) : array() ),
+			)
+		);
 		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-rewards', 'updated' => 1 ), admin_url( 'admin.php' ) ) ); exit;
 	}
 

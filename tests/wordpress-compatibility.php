@@ -22,8 +22,12 @@ function doughboss_wp_compat_assert( $condition, $label ) {
 }
 
 doughboss_wp_compat_assert( defined( 'DOUGHBOSS_VERSION' ), 'plugin bootstrap is active' );
-doughboss_wp_compat_assert( '1.18.0' === get_option( 'doughboss_db_version' ), 'database schema activated at 1.18.0' );
+doughboss_wp_compat_assert( '1.20.0' === get_option( 'doughboss_db_version' ), 'database schema activated at 1.20.0' );
 doughboss_wp_compat_assert( DoughBoss_Activator::pospal_outbox_storage_ready(), 'POSPal remote-reference reconciliation storage is ready' );
+doughboss_wp_compat_assert( DoughBoss_Activator::timeclock_storage_ready(), 'staff attendance and manager-audit storage is ready' );
+doughboss_wp_compat_assert( get_role( 'administrator' )->has_cap( 'clock_doughboss_staff' ), 'administrator receives staff-clock capability' );
+$clock_role = get_role( 'doughboss_staff' );
+doughboss_wp_compat_assert( $clock_role && $clock_role->has_cap( 'clock_doughboss_staff' ) && ! $clock_role->has_cap( 'manage_doughboss' ) && ! $clock_role->has_cap( 'manage_doughboss_kds' ), 'clock-only staff role keeps least privilege' );
 doughboss_wp_compat_assert( ! DoughBoss_Settings::ordering_open(), 'fresh WordPress install starts in browse-only mode' );
 doughboss_wp_compat_assert( false !== stripos( DoughBoss_Settings::ordering_closed_message(), 'coming soon' ), 'Coming Soon copy is available' );
 doughboss_wp_compat_assert( shortcode_exists( 'doughboss_ordering_status' ), 'ordering-status shortcode is registered' );
@@ -49,7 +53,7 @@ update_post_meta( $legacy_special_id, '_doughboss_seed_key', 'pizza-dough-boss-s
 update_option( 'doughboss_db_version', '1.17.0' );
 DoughBoss_Migrations::run();
 $renamed_special = get_post( $legacy_special_id );
-doughboss_wp_compat_assert( '1.18.0' === get_option( 'doughboss_db_version' ), 'menu rename migration checkpoints schema 1.18.0' );
+doughboss_wp_compat_assert( '1.20.0' === get_option( 'doughboss_db_version' ), 'full migration checkpoints schema 1.20.0' );
 doughboss_wp_compat_assert( $renamed_special instanceof WP_Post && 'Sujuk Special' === $renamed_special->post_title, 'legacy pizza is renamed on the same WordPress post' );
 doughboss_wp_compat_assert( 'sujuk-special' === $renamed_special->post_name, 'legacy pizza receives the canonical Sujuk slug' );
 doughboss_wp_compat_assert( 'pizza-sujuk-special' === get_post_meta( $legacy_special_id, '_doughboss_seed_key', true ), 'legacy pizza receives the canonical stable seed key' );

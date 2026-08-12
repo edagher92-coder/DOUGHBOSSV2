@@ -83,11 +83,13 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.19.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.19.0' );
+ok( '1.20.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.20.0' );
 ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Activator', 'payment_storage_ready' ), 'payment attempt storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Activator', 'pospal_outbox_storage_ready' ), 'POSPal remote-reference storage readiness gate exists' );
+ok( method_exists( 'DoughBoss_Activator', 'timeclock_storage_ready' ), 'staff attendance storage readiness gate exists' );
+ok( class_exists( 'DoughBoss_Timeclock' ), 'staff clock authority loads' );
 ok( method_exists( 'DoughBoss_Tyro', 'retrieve_pay_request' ), 'Tyro Connect Pay Request retrieval exists' );
 ok( method_exists( 'DoughBoss_Order', 'transition' ), 'DoughBoss_Order::transition() exists' );
 ok( method_exists( 'DoughBoss_Order', 'events' ), 'DoughBoss_Order::events() exists' );
@@ -159,11 +161,18 @@ $board_test_key = 'BoardKey23456789ABCDEFGH';
 update_option( DoughBoss_Settings::OPTION_KEY, array( 'board_access_key' => hash( 'sha256', $board_test_key ) ) );
 $board_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
 $GLOBALS['__db_caps_override'] = array( 'manage_doughboss_kds' );
+$GLOBALS['__db_current_user_id'] = 17;
 ok( true === DoughBoss_Settings::verify_board_access_key( $board_test_key ), 'correct Order Board key passes the secondary key verifier' );
 ok( false === DoughBoss_Settings::verify_board_access_key( 'wrong-key' ), 'wrong Order Board key fails the secondary key verifier' );
 $unassigned_board = $board_controller->verify_board_access( new WP_REST_Request( array(), array( 'X-DoughBoss-Board-Key' => $board_test_key ) ) );
-ok( is_wp_error( $unassigned_board ) && 'doughboss_staff_location_required' === $unassigned_board->get_error_code(), 'correct Board key cannot bypass the required KDS shop assignment' );
+$single_shop = DoughBoss_Locations::single_location_id();
+if ( $single_shop ) {
+	ok( true === $unassigned_board, 'single active shop safely scopes a KDS account without an explicit assignment' );
+} else {
+	ok( is_wp_error( $unassigned_board ) && 'doughboss_staff_location_required' === $unassigned_board->get_error_code(), 'correct Board key cannot bypass the required KDS shop assignment' );
+}
 $GLOBALS['__db_caps_override'] = null;
+$GLOBALS['__db_current_user_id'] = 0;
 update_option( DoughBoss_Settings::OPTION_KEY, array() );
 
 // 3d. Management oversight surface: shop/location filtering on the admin
@@ -303,6 +312,7 @@ if ( $kitchen ) {
 	ok( $kitchen->has_cap( 'read' ), 'doughboss_kitchen has read' );
 	ok( $kitchen->has_cap( 'manage_doughboss_kds' ), 'doughboss_kitchen has manage_doughboss_kds' );
 	ok( $kitchen->has_cap( 'redeem_doughboss_vouchers' ), 'doughboss_kitchen has redeem_doughboss_vouchers' );
+	ok( $kitchen->has_cap( 'clock_doughboss_staff' ), 'doughboss_kitchen has clock_doughboss_staff' );
 	ok( ! $kitchen->has_cap( 'manage_doughboss' ), 'doughboss_kitchen does NOT have manage_doughboss (low-privilege boundary)' );
 }
 
@@ -313,8 +323,21 @@ if ( $manager ) {
 	ok( $manager->has_cap( 'manage_doughboss' ), 'doughboss_manager has manage_doughboss' );
 	ok( $manager->has_cap( 'manage_doughboss_kds' ), 'doughboss_manager has manage_doughboss_kds' );
 	ok( $manager->has_cap( 'redeem_doughboss_vouchers' ), 'doughboss_manager has redeem_doughboss_vouchers' );
-	ok( 4 === count( $manager->capabilities ), 'doughboss_manager has exactly the 4 expected capabilities' );
+	ok( $manager->has_cap( 'clock_doughboss_staff' ), 'doughboss_manager has clock_doughboss_staff' );
+	ok( 5 === count( $manager->capabilities ), 'doughboss_manager has exactly the 5 expected capabilities' );
 }
+
+$staff = get_role( 'doughboss_staff' );
+ok( null !== $staff, 'doughboss_staff clock-only role exists after add_capabilities()' );
+if ( $staff ) {
+	ok( $staff->has_cap( 'read' ), 'doughboss_staff has read' );
+	ok( $staff->has_cap( 'clock_doughboss_staff' ), 'doughboss_staff has clock capability' );
+	ok( ! $staff->has_cap( 'manage_doughboss_kds' ), 'doughboss_staff does NOT have KDS access' );
+	ok( ! $staff->has_cap( 'manage_doughboss' ), 'doughboss_staff does NOT have management access' );
+}
+
+$administrator = get_role( 'administrator' );
+ok( $administrator && $administrator->has_cap( 'clock_doughboss_staff' ), 'administrator receives the staff clock capability' );
 
 // 7. Optional integrations dormant by default (no config → *_ready() false).
 section( 'Integrations dormant-by-default (security gate)' );
