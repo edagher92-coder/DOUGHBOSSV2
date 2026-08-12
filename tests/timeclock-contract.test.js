@@ -133,6 +133,9 @@ test('schema readiness covers shift and audit tables before migration advances',
 		assert.match(activator, new RegExp('\\b' + field + '\\b'), `${field} must be part of the audit schema/readiness contract`);
 	}
 	assert.match(migrations, /upgrade_to_1_20_0\s*\([\s\S]*?timeclock_storage_ready\(\)/);
+	assert.match(migrations, /SHOW INDEX FROM \{\$shifts\} WHERE Key_name = 'user_open_guard'/);
+	assert.match(migrations, /usort\(\s*\$index_rows[\s\S]*?Seq_in_index/);
+	assert.doesNotMatch(migrations, /SHOW INDEX FROM \{\$shifts\}[^\n]*ORDER BY/i);
 	assert.match(migrations, /WHERE s\.location_name = ''/);
 	assert.doesNotMatch(migrations, /SET s\.location_name[\s\S]{0,300}s\.timezone_snapshot[\s\S]{0,1000}UPDATE \{\$shifts\} s LEFT JOIN \{\$locations\}/);
 });

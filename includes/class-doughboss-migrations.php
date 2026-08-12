@@ -183,7 +183,13 @@ class DoughBoss_Migrations {
 		// dbDelta does not reliably replace a same-named, wrongly shaped index.
 		// Rebuild it explicitly after the legacy rows have been normalised.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$index_rows = (array) $wpdb->get_results( "SHOW INDEX FROM {$shifts} WHERE Key_name = 'user_open_guard' ORDER BY Seq_in_index" );
+		$index_rows = (array) $wpdb->get_results( "SHOW INDEX FROM {$shifts} WHERE Key_name = 'user_open_guard'" );
+		usort(
+			$index_rows,
+			static function ( $left, $right ) {
+				return (int) $left->Seq_in_index <=> (int) $right->Seq_in_index;
+			}
+		);
 		$index_ok   = 2 === count( $index_rows )
 			&& 0 === (int) $index_rows[0]->Non_unique
 			&& 'user_id' === (string) $index_rows[0]->Column_name
