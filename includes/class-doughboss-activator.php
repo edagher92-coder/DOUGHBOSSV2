@@ -31,6 +31,7 @@ class DoughBoss_Activator {
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-settings.php';
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-locations.php';
 		DoughBoss_Locations::ensure_default();
+		self::ensure_staff_clock_page();
 
 		// Register post types so rewrite rules exist, then flush them.
 		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-post-types.php';
@@ -39,11 +40,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::pospal_outbox_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, or POSPal outbox storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, POSPal outbox, or staff-clock storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -78,6 +79,7 @@ class DoughBoss_Activator {
 		$table_sessions  = $wpdb->prefix . 'doughboss_table_sessions';
 		$payment_attempts = $wpdb->prefix . 'doughboss_payment_attempts';
 		$payment_events   = $wpdb->prefix . 'doughboss_payment_events';
+		$staff_shifts     = $wpdb->prefix . 'doughboss_staff_shifts';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -461,6 +463,21 @@ class DoughBoss_Activator {
 			KEY provider_reference (provider_reference)
 		) ENGINE=InnoDB {$charset_collate};";
 
+		$sql_staff_shifts = "CREATE TABLE {$staff_shifts} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			clock_in_utc datetime NOT NULL,
+			clock_out_utc datetime NULL DEFAULT NULL,
+			source varchar(32) NOT NULL DEFAULT 'staff_portal',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			KEY user_open (user_id,clock_out_utc),
+			KEY location_clock_in (location_id,clock_in_utc),
+			KEY clock_in_utc (clock_in_utc)
+		) ENGINE=InnoDB {$charset_collate};";
+
 		dbDelta( $sql_orders );
 		dbDelta( $sql_items );
 		dbDelta( $sql_events );
@@ -478,6 +495,16 @@ class DoughBoss_Activator {
 		dbDelta( $sql_table_sessions );
 		dbDelta( $sql_payment_attempts );
 		dbDelta( $sql_payment_events );
+		dbDelta( $sql_staff_shifts );
+	}
+
+	/** Verify staff-clock storage is available before marking an upgrade complete. */
+	public static function timeclock_storage_ready() {
+		global $wpdb;
+		$table  = $wpdb->prefix . 'doughboss_staff_shifts';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+		return $engine && 'INNODB' === strtoupper( $engine ) && self::column_contract_ready( $table, array( 'user_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ), 'clock_in_utc' => array( 'type' => 'datetime', 'null' => 'NO' ), 'clock_out_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ) ) );
 	}
 
 	/**
@@ -934,6 +961,9 @@ class DoughBoss_Activator {
 			if ( ! $admin->has_cap( 'redeem_doughboss_vouchers' ) ) {
 				$admin->add_cap( 'redeem_doughboss_vouchers' );
 			}
+			if ( ! $admin->has_cap( 'clock_doughboss_staff' ) ) {
+				$admin->add_cap( 'clock_doughboss_staff' );
+			}
 		}
 
 		// Kitchen staff role: just enough to open the order board and scan
@@ -948,10 +978,12 @@ class DoughBoss_Activator {
 					'read'                      => true,
 					'manage_doughboss_kds'      => true,
 					'redeem_doughboss_vouchers' => true,
+					'clock_doughboss_staff'     => true,
 				)
 			);
-		} elseif ( ! $kitchen->has_cap( 'redeem_doughboss_vouchers' ) ) {
+		} else {
 			$kitchen->add_cap( 'redeem_doughboss_vouchers' );
+			$kitchen->add_cap( 'clock_doughboss_staff' );
 		}
 
 		// Owner/Manager role: full DoughBoss management (menu, orders, settings,
@@ -966,6 +998,7 @@ class DoughBoss_Activator {
 					'manage_doughboss'          => true,
 					'manage_doughboss_kds'      => true,
 					'redeem_doughboss_vouchers' => true,
+					'clock_doughboss_staff'     => true,
 				)
 			);
 		} else {
@@ -978,6 +1011,26 @@ class DoughBoss_Activator {
 			if ( ! $manager->has_cap( 'redeem_doughboss_vouchers' ) ) {
 				$manager->add_cap( 'redeem_doughboss_vouchers' );
 			}
+			if ( ! $manager->has_cap( 'clock_doughboss_staff' ) ) {
+				$manager->add_cap( 'clock_doughboss_staff' );
+			}
 		}
+	}
+
+	/** Create the staff portal page once; access remains enforced by the shortcode. */
+	public static function ensure_staff_clock_page() {
+		if ( get_page_by_path( 'staff-clock' ) ) {
+			return;
+		}
+		wp_insert_post(
+			array(
+				'post_title'     => __( 'Staff Clock', 'doughboss' ),
+				'post_name'      => 'staff-clock',
+				'post_status'    => 'publish',
+				'post_type'      => 'page',
+				'post_content'   => '[doughboss_staff_clock]',
+				'comment_status' => 'closed',
+			)
+		);
 	}
 }

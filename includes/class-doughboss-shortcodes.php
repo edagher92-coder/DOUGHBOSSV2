@@ -32,6 +32,16 @@ class DoughBoss_Shortcodes {
 		add_shortcode( 'doughboss_voucher_claim', array( $this, 'voucher_claim' ) );
 		add_shortcode( 'doughboss_manoush_hero', array( $this, 'manoush_hero' ) );
 		add_shortcode( 'doughboss_ordering_status', array( $this, 'ordering_status' ) );
+		add_shortcode( 'doughboss_staff_clock', array( $this, 'staff_clock' ) );
+	}
+
+	/**
+	 * [doughboss_staff_clock] â€” secure staff clock portal.
+	 *
+	 * @return string
+	 */
+	public function staff_clock() {
+		return class_exists( 'DoughBoss_Timeclock' ) ? DoughBoss_Timeclock::render_portal() : '';
 	}
 
 	/**

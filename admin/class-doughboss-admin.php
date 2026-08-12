@@ -162,6 +162,15 @@ class DoughBoss_Admin {
 
 		add_submenu_page(
 			'doughboss',
+			__( 'Staff Timesheet', 'doughboss' ),
+			__( 'Staff Timesheet', 'doughboss' ),
+			$this->cap(),
+			'doughboss-timeclock',
+			array( 'DoughBoss_Timeclock', 'render_timesheet' )
+		);
+
+		add_submenu_page(
+			'doughboss',
 			__( 'DoughBoss Settings', 'doughboss' ),
 			__( 'Settings', 'doughboss' ),
 			$this->cap(),

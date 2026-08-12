@@ -44,6 +44,13 @@ final class DoughBoss_Staff_Experience {
 			return $redirect_to;
 		}
 
+		// Preserve the intended staff-clock destination after the normal
+		// WordPress login form. Staff should not need to find their way back from
+		// the kitchen board just to clock in.
+		if ( false !== strpos( (string) $requested, 'staff-clock' ) ) {
+			return wp_validate_redirect( $requested, $redirect_to );
+		}
+
 		if ( in_array( 'doughboss_kitchen', (array) $user->roles, true ) ) {
 			return admin_url( 'admin.php?page=doughboss-board' );
 		}

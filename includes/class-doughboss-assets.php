@@ -28,6 +28,7 @@ class DoughBoss_Assets {
 		'doughboss_catering',
 		'doughboss_voucher_claim',
 		'doughboss_ordering_status',
+		'doughboss_staff_clock',
 	);
 
 	/**
@@ -87,6 +88,12 @@ class DoughBoss_Assets {
 	 * @return void
 	 */
 	public function enqueue() {
+		// Staff clock is deliberately a small, standalone surface: it does not
+		// load ordering, checkout, payment or customer scripts.
+		if ( $this->current_post_has( 'doughboss_staff_clock' ) || apply_filters( 'doughboss_load_timeclock_assets', false ) ) {
+			wp_enqueue_style( 'doughboss-timeclock', DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-timeclock.css', array(), DOUGHBOSS_VERSION );
+		}
+
 		// The hero has deliberately separate, dependency-free assets. Load it
 		// before considering the storefront app, so a hero-only landing page
 		// stays free of checkout and payment code.

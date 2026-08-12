@@ -23,6 +23,7 @@ $tables = array(
 	$wpdb->prefix . 'doughboss_schedule_exceptions',
 	$wpdb->prefix . 'doughboss_location_hours',
 	$wpdb->prefix . 'doughboss_voucher_redemptions',
+	$wpdb->prefix . 'doughboss_staff_shifts',
 	$wpdb->prefix . 'doughboss_vouchers',
 	$wpdb->prefix . 'doughboss_order_events',
 	$wpdb->prefix . 'doughboss_order_items',
