@@ -19,9 +19,9 @@ const migrations = read('includes/class-doughboss-migrations.php');
 const uninstall = read('uninstall.php');
 const clockCss = read('public/css/doughboss-timeclock.css');
 
-test('release 2.36.0 boots the staff clock on database schema 1.20.0', () => {
-	assert.match(plugin, /Version:\s+2\.36\.0/);
-	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.36\.0'/);
+test('release 2.36.1 retains the staff clock on database schema 1.20.0', () => {
+	assert.match(plugin, /Version:\s+2\.36\.1/);
+	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.36\.1'/);
 	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.20\.0'/);
 	assert.match(core, /class-doughboss-timeclock\.php/);
 	assert.match(core, /new DoughBoss_Timeclock\(\)/);
