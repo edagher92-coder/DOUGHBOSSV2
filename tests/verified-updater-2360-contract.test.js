@@ -31,8 +31,16 @@ for (const needle of [
   "write_verified_option",
   "! $operational || ! $shield",
   "'' !== $target['textdomain']",
+  "class-pclzip.php",
+  "class_exists( 'PclZip' )",
+  "validate_archive_members",
+  "stored_filename",
+  "compressed_size",
+  "zip_overflow",
 ]) assert.ok(src.includes(needle), `missing ${needle}`);
+assert.ok(!src.includes("ZipArchive is required for safe package inspection."));
 assert.ok(!src.includes('SNIPPET_ID_OPTION'));
 assert.ok(!src.includes("empty( $_GET['db_run'] )"));
 assert.ok(!src.includes("$failed = $extract_root"));
+assert.ok(fs.existsSync('tests/pclzip-fallback-2360.php'));
 console.log('verified updater 2.36.0 structural contract: PASS');

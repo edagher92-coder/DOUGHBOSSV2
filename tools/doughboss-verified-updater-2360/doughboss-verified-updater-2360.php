@@ -337,58 +337,89 @@ final class DoughBoss_Deploy_Bridge_2360 {
 	}
 
 	private static function validate_zip_entries( $zip_path, $root ) {
-		if ( ! class_exists( 'ZipArchive' ) ) {
-			return new WP_Error( 'ziparchive', 'ZipArchive is required for safe package inspection.' );
+		$target = 'doughboss' === $root ? self::$targets['main'] : self::$targets['gate'];
+		if ( class_exists( 'ZipArchive' ) ) {
+			return self::validate_with_ziparchive( $zip_path, $root, $target );
 		}
+
+		// WordPress ships PclZip specifically for hosts where ext-zip is not
+		// available. The release bytes are already pinned by exact size and
+		// SHA-256; this fallback independently validates every member before
+		// WordPress extracts the package, and candidate_valid() revalidates the
+		// resulting normal-file tree afterwards.
+		$pclzip_file = ABSPATH . 'wp-admin/includes/class-pclzip.php';
+		if ( ! class_exists( 'PclZip' ) && is_file( $pclzip_file ) && ! is_link( $pclzip_file ) ) {
+			require_once $pclzip_file;
+		}
+		if ( ! class_exists( 'PclZip' ) ) {
+			return new WP_Error( 'archive_inspector', 'Neither ZipArchive nor the bundled WordPress PclZip inspector is available.' );
+		}
+
+		$archive = new PclZip( $zip_path );
+		$list    = $archive->listContent();
+		if ( ! is_array( $list ) ) {
+			return new WP_Error( 'pclzip_open', 'The release archive could not be safely inspected by WordPress PclZip.' );
+		}
+		$entries = array();
+		foreach ( $list as $member ) {
+			if ( ! is_array( $member ) || ( isset( $member['status'] ) && 'ok' !== strtolower( (string) $member['status'] ) ) ) {
+				return new WP_Error( 'pclzip_member', 'WordPress PclZip reported an invalid release archive member.' );
+			}
+			$name = isset( $member['stored_filename'] ) && '' !== (string) $member['stored_filename'] ? (string) $member['stored_filename'] : ( isset( $member['filename'] ) ? (string) $member['filename'] : '' );
+			$entries[] = array(
+				'name'            => $name,
+				'size'            => isset( $member['size'] ) ? (int) $member['size'] : -1,
+				'compressed_size' => isset( $member['compressed_size'] ) ? (int) $member['compressed_size'] : -1,
+				'type'            => ! empty( $member['folder'] ) ? 'directory' : 'file',
+			);
+		}
+		return self::validate_archive_members( $entries, $root, $target, false );
+	}
+
+	private static function validate_with_ziparchive( $zip_path, $root, $target ) {
 		$zip = new ZipArchive();
 		if ( true !== $zip->open( $zip_path ) ) {
 			return new WP_Error( 'zip_open', 'The release archive could not be safely inspected.' );
 		}
-		$target = 'doughboss' === $root ? self::$targets['main'] : self::$targets['gate'];
-		if ( (int) $zip->numFiles !== (int) $target['entries'] ) {
-			$zip->close();
-			return new WP_Error( 'zip_entries', 'The release archive entry count did not match the approved package.' );
-		}
-		$total = 0;
-		$seen = array();
+		$entries = array();
 		for ( $i = 0; $i < $zip->numFiles; $i++ ) {
 			$stat = $zip->statIndex( $i );
-			$name = isset( $stat['name'] ) ? (string) $stat['name'] : '';
-			$normalized = strtolower( rtrim( $name, '/' ) );
-			if ( '' === $name || false !== strpos( $name, "\0" ) || false !== strpos( $name, '\\' ) || false !== strpos( $name, '//' ) || preg_match( '#^[a-zA-Z]:#', $name ) || 0 === strpos( $name, '/' ) || ! preg_match( '#^' . preg_quote( $root, '#' ) . '/#', $name ) || preg_match( '#(^|/)\.\.?(/|$)#', $name ) || isset( $seen[ $normalized ] ) ) {
-				$zip->close();
-				return new WP_Error( 'zip_path', 'The release archive contained an unsafe path.' );
-			}
-			$seen[ $normalized ] = true;
-			$total += isset( $stat['size'] ) ? (int) $stat['size'] : 0;
-			if ( isset( $stat['size'] ) && (int) $stat['size'] > (int) $target['max_file'] ) {
-				$zip->close();
-				return new WP_Error( 'zip_member_size', 'A release archive member exceeded the approved safety limit.' );
-			}
-			$compressed = isset( $stat['comp_size'] ) ? (int) $stat['comp_size'] : 0;
-			if ( (int) $stat['size'] > 0 && $compressed <= 0 ) { $zip->close(); return new WP_Error( 'zip_compression', 'A non-empty archive member had invalid compressed-size metadata.' ); }
-			if ( (int) $stat['size'] > 0 && $compressed > 0 && ( (int) $stat['size'] / $compressed ) > 100 ) {
-				$zip->close();
-				return new WP_Error( 'zip_ratio', 'A release archive member had an unsafe compression ratio.' );
-			}
-			if ( $total > (int) $target['unpacked'] ) {
-				$zip->close();
-				return new WP_Error( 'zip_size', 'The release archive expanded beyond the approved safety limit.' );
-			}
+			$type = '/' === substr( isset( $stat['name'] ) ? (string) $stat['name'] : '', -1 ) ? 'directory' : 'file';
 			if ( method_exists( $zip, 'getExternalAttributesIndex' ) ) {
 				$opsys = 0;
 				$attr = 0;
 				if ( $zip->getExternalAttributesIndex( $i, $opsys, $attr ) ) {
-					$type = ( $attr >> 16 ) & 0170000;
-					if ( 0 !== $type && 0100000 !== $type && 0040000 !== $type ) { $zip->close(); return new WP_Error( 'zip_special', 'The release archive contained a link or special file.' ); }
+					$mode_type = ( $attr >> 16 ) & 0170000;
+					if ( 0 !== $mode_type && 0100000 !== $mode_type && 0040000 !== $mode_type ) { $type = 'special'; }
 				}
 			}
-		}
-		if ( $total !== (int) $target['unpacked'] ) {
-			$zip->close();
-			return new WP_Error( 'zip_unpacked', 'The release archive expanded size did not match the approved package.' );
+			$entries[] = array( 'name' => isset( $stat['name'] ) ? (string) $stat['name'] : '', 'size' => isset( $stat['size'] ) ? (int) $stat['size'] : -1, 'compressed_size' => isset( $stat['comp_size'] ) ? (int) $stat['comp_size'] : -1, 'type' => $type );
 		}
 		$zip->close();
+		return self::validate_archive_members( $entries, $root, $target, true );
+	}
+
+	private static function validate_archive_members( $entries, $root, $target, $type_metadata_complete ) {
+		if ( count( $entries ) !== (int) $target['entries'] ) { return new WP_Error( 'zip_entries', 'The release archive entry count did not match the approved package.' ); }
+		$total = 0;
+		$seen  = array();
+		foreach ( $entries as $entry ) {
+			$name       = (string) $entry['name'];
+			$size       = (int) $entry['size'];
+			$compressed = (int) $entry['compressed_size'];
+			$type       = (string) $entry['type'];
+			$normalized = strtolower( rtrim( $name, '/' ) );
+			if ( '' === $name || false !== strpos( $name, "\0" ) || false !== strpos( $name, '\\' ) || false !== strpos( $name, '//' ) || preg_match( '#^[a-zA-Z]:#', $name ) || 0 === strpos( $name, '/' ) || ! preg_match( '#^' . preg_quote( $root, '#' ) . '/#', $name ) || preg_match( '#(^|/)\.\.?(/|$)#', $name ) || isset( $seen[ $normalized ] ) ) { return new WP_Error( 'zip_path', 'The release archive contained an unsafe or duplicate path.' ); }
+			$seen[ $normalized ] = true;
+			if ( $type_metadata_complete && ! in_array( $type, array( 'file', 'directory' ), true ) ) { return new WP_Error( 'zip_special', 'The release archive contained a link or special file.' ); }
+			if ( $size < 0 || $compressed < 0 || $size > (int) $target['max_file'] || ( 'directory' === $type && 0 !== $size ) ) { return new WP_Error( 'zip_member_size', 'A release archive member had invalid or excessive size metadata.' ); }
+			if ( $size > 0 && $compressed <= 0 ) { return new WP_Error( 'zip_compression', 'A non-empty archive member had invalid compressed-size metadata.' ); }
+			if ( $size > 0 && ( $size / $compressed ) > 100 ) { return new WP_Error( 'zip_ratio', 'A release archive member had an unsafe compression ratio.' ); }
+			if ( $total > PHP_INT_MAX - $size ) { return new WP_Error( 'zip_overflow', 'The release archive size metadata overflowed the safety counter.' ); }
+			$total += $size;
+			if ( $total > (int) $target['unpacked'] ) { return new WP_Error( 'zip_size', 'The release archive expanded beyond the approved safety limit.' ); }
+		}
+		if ( $total !== (int) $target['unpacked'] ) { return new WP_Error( 'zip_unpacked', 'The release archive expanded size did not match the approved package.' ); }
 		return true;
 	}
 
