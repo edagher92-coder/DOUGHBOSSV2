@@ -99,6 +99,14 @@
 		setTimeout(function () { node.classList.remove('db-pop'); }, 420);
 	}
 
+	function dbPulsePrice(node) {
+		if (!node || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { return; }
+		node.classList.remove('db-price-pulse');
+		void node.offsetWidth;
+		node.classList.add('db-price-pulse');
+		setTimeout(function () { node.classList.remove('db-price-pulse'); }, 360);
+	}
+
 	// Stable DOM id for a category name, for jump-bar scroll anchors.
 	function catId(category) {
 		return 'db-cat-' + String(category).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -555,6 +563,7 @@
 			});
 			priceEl.textContent = money(total);
 		}
+		function refreshPriceAnimated() { refreshPrice(); dbPulsePrice(priceEl); }
 
 		function optionControls() {
 			if (!options.length) { return null; }
@@ -579,7 +588,7 @@
 						if (group.type === 'radio') { selections[group.id] = input.checked ? [choice.slug] : []; }
 						else if (input.checked && values.indexOf(choice.slug) === -1) { values.push(choice.slug); selections[group.id] = values; }
 						else if (!input.checked) { selections[group.id] = values.filter(function (value) { return value !== choice.slug; }); }
-						refreshPrice();
+						refreshPriceAnimated();
 					});
 					var suffix = Number(choice.price || 0) ? (Number(choice.price) > 0 ? '+' : '') + money(choice.price) : '';
 					fieldset.appendChild(el('label', { class: 'db-menu-option' }, [ input, el('span', { text: choice.label }), suffix ? el('span', { class: 'db-option-price', text: suffix }) : null ]));
@@ -685,13 +694,14 @@
 				});
 				priceEl.textContent = money(total);
 			}
+			function refreshPriceAnimated() { refreshPrice(); dbPulsePrice(priceEl); }
 
 			// Sizes.
 			var sizeWrap = el('div', { class: 'db-options' });
 			cfg.sizes.forEach(function (size, idx) {
 				var input = el('input', { type: 'radio', name: 'db-size', value: size.slug });
 				if (idx === 0) { input.checked = true; }
-				input.addEventListener('change', function () { state.size = size; refreshPrice(); });
+				input.addEventListener('change', function () { state.size = size; refreshPriceAnimated(); });
 				sizeWrap.appendChild(el('label', { class: 'db-option' }, [
 					input,
 					el('span', { text: size.label }),
@@ -706,7 +716,7 @@
 				input.addEventListener('change', function () {
 					if (input.checked) { state.toppings[top.slug] = top; }
 					else { delete state.toppings[top.slug]; }
-					refreshPrice();
+					refreshPriceAnimated();
 				});
 				topWrap.appendChild(el('label', { class: 'db-option' }, [
 					input,

@@ -16,8 +16,8 @@ const board = read('public/js/doughboss-orderboard.js');
 const css = read('public/css/doughboss-orderboard.css');
 const tableQr = read('includes/class-doughboss-table-qr.php');
 
-test('table occupancy is a separate additive 2.37.0 schema concern, never a customer QR-ordering gate', () => {
-	assert.match(plugin, /DOUGHBOSS_VERSION', '2\.37\.0'/);
+test('table occupancy remains a separate additive schema concern, never a customer QR-ordering gate', () => {
+	assert.match(plugin, /DOUGHBOSS_VERSION', '2\.37\.1'/);
 	assert.match(plugin, /DOUGHBOSS_DB_VERSION', '1\.21\.0'/);
 	assert.match(activator, /manual_reserved_until datetime NULL DEFAULT NULL/);
 	assert.match(activator, /manual_released_at datetime NULL DEFAULT NULL/);

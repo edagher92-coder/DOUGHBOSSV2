@@ -4,9 +4,16 @@ body.doughboss-standalone-portal { margin: 0; min-height: 100vh; font-family: -a
 .db-portal-bar { align-items: center; background: rgba(10,8,7,.98); border-bottom: 1px solid rgba(255,240,214,.14); color: #fff3df; display: flex; gap: 1rem; min-height: 64px; padding: .65rem 1rem; position: sticky; top: 0; z-index: 100; }
 .db-portal-brand { color: #fff; font-size: 1.05rem; font-weight: 950; letter-spacing: .13em; text-decoration: none; white-space: nowrap; }
 .db-portal-brand span { color: #e54b2d; }
-.db-portal-modes { display: flex; gap: .35rem; }
+.db-portal-modes { display: flex; gap: .45rem; position: relative; }
 .db-portal-modes a, .db-portal-account a, .db-portal-action { align-items: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,240,214,.15); border-radius: 10px; color: #fff3df; display: inline-flex; font: inherit; font-weight: 800; justify-content: center; min-height: 44px; padding: .55rem .8rem; text-decoration: none; touch-action: manipulation; }
 .db-portal-modes a.is-active { background: #e54b2d; border-color: #e54b2d; color: #fff; }
+.db-portal-modes a { gap: .45rem; min-width: 7.25rem; position: relative; }
+.db-portal-mode-label { line-height: 1; }
+.db-portal-live-count { align-items: center; background: #fff4df; border: 2px solid #140f0b; border-radius: 999px; color: #1b120c; display: inline-flex; font-size: .79rem; font-variant-numeric: tabular-nums; font-weight: 950; justify-content: center; line-height: 1; min-width: 1.8rem; padding: .26rem .36rem; }
+.db-portal-modes a.is-active .db-portal-live-count { border-color: #c6321c; }
+.db-portal-modes a.db-portal-mode--stale .db-portal-live-count { background: #ffd082; color: #4a2700; }
+.db-portal-modes a:focus-visible, .db-portal-account a:focus-visible, .db-portal-action:focus-visible { outline: 3px solid #ffd082; outline-offset: 3px; }
+.db-portal-summary-announcement { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 .db-portal-account { align-items: center; display: flex; gap: .45rem; margin-left: auto; }
 .db-portal-clock { color: #ffd49d; font-variant-numeric: tabular-nums; font-weight: 900; min-width: 4.5rem; text-align: center; }
 .db-portal-user { color: rgba(255,244,225,.68); font-size: .86rem; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -30,4 +37,4 @@ body.doughboss-management-portal { background: #f6f2eb; color: #211a15; }
 .db-management-main .button-link { color: #a93420; font-weight: 800; margin-left: .8rem; }
 @media (pointer: coarse) { .db-portal-modes a, .db-portal-account a, .db-portal-action { min-height: 52px; padding-inline: 1rem; } }
 @media (max-width: 900px) { .db-portal-bar { align-items: stretch; flex-wrap: wrap; } .db-portal-account { margin-left: 0; width: 100%; } .db-portal-user { display: none; } body.doughboss-staff-kitchen .db-board-bar { top: 116px; } }
-@media (max-width: 620px) { .db-portal-modes { flex: 1; } .db-portal-modes a { flex: 1; } .db-portal-clock, .db-portal-action { display: none; } .db-portal-account a { flex: 1; } }
+@media (max-width: 620px) { .db-portal-modes { flex: 1; } .db-portal-modes a { flex: 1; min-width: 0; } .db-portal-clock, .db-portal-action { display: none; } .db-portal-account a { flex: 1; } }

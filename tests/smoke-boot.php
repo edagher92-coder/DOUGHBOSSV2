@@ -83,7 +83,7 @@ try {
 }
 
 echo "\n== Versioned order lifecycle ==\n";
-ok( '1.20.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.20.0' );
+ok( '1.21.0' === DOUGHBOSS_DB_VERSION, 'database contract version is 1.21.0' );
 ok( class_exists( 'DoughBoss_Table_QR' ), 'table QR authority loads' );
 ok( method_exists( 'DoughBoss_Activator', 'checkout_storage_ready' ), 'checkout storage readiness gate exists' );
 ok( method_exists( 'DoughBoss_Activator', 'payment_storage_ready' ), 'payment attempt storage readiness gate exists' );
@@ -280,7 +280,7 @@ foreach ( $board_routes as $board_route ) {
 // would fail this. Includes table context plus the public request and two
 // board-authorised morning-review and catering-production routes, the
 // manager-only catering quote endpoint, and the MPGS notification webhook.
-ok( 56 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, custom quotes, pre-order review, and catering production (' . count( $routes ) . ' routes, expected 56)' );
+ok( 59 === count( $routes ), 'REST route count includes table context and occupancy controls, payment checks, webhooks, custom quotes, pre-order review, kitchen workload summary, and catering production (' . count( $routes ) . ' routes, expected 59)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );
