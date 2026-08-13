@@ -19,9 +19,9 @@ const migrations = read('includes/class-doughboss-migrations.php');
 const uninstall = read('uninstall.php');
 const clockCss = read('public/css/doughboss-timeclock.css');
 
-test('release 2.36.0 boots the staff clock on database schema 1.20.0', () => {
-	assert.match(plugin, /Version:\s+2\.36\.0/);
-	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.36\.0'/);
+test('release 2.36.1 retains the staff clock on database schema 1.20.0', () => {
+	assert.match(plugin, /Version:\s+2\.36\.1/);
+	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.36\.1'/);
 	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.20\.0'/);
 	assert.match(core, /class-doughboss-timeclock\.php/);
 	assert.match(core, /new DoughBoss_Timeclock\(\)/);
@@ -120,6 +120,16 @@ test('clock-only staff role has no kitchen or management authority', () => {
 	const roleBlock = activator.match(/add_role\(\s*'doughboss_staff'[\s\S]*?\n\s*\);/);
 	assert.ok(roleBlock, 'clock-only role must be created');
 	assert.doesNotMatch(roleBlock[0], /manage_doughboss(?:_kds)?/);
+});
+
+test('operational roles return only to their approved same-site standalone portal', () => {
+	assert.match(staffExperience, /function requested_portal_url\s*\(/);
+	assert.match(staffExperience, /strtolower\( \$home_parts\['host'\] \) !== strtolower\( \$request_parts\['host'\] \)/);
+	assert.match(staffExperience, /'\/staff-clock\/'/);
+	assert.match(staffExperience, /'\/kitchen\/'/);
+	assert.match(staffExperience, /'\/catering-kitchen\/'/);
+	assert.match(staffExperience, /'\/management\/'/);
+	assert.match(staffExperience, /are deliberately discarded, except for the exact PASS-screen selector/);
 });
 
 test('schema readiness covers shift and audit tables before migration advances', () => {

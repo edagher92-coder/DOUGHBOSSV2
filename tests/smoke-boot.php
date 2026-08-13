@@ -265,6 +265,7 @@ ok( is_wp_error( $kds_cancel ) && 'doughboss_cancel_forbidden' === $kds_cancel->
 $GLOBALS['__db_caps_override'] = null;
 $board_routes = array(
 	'doughboss/v1/admin/orders',
+	'doughboss/v1/admin/board-summary',
 	'doughboss/v1/admin/order/(?P<id>\d+)/status',
 	'doughboss/v1/admin/order/(?P<id>\d+)/ack',
 	'doughboss/v1/admin/order/(?P<id>\d+)/accept',
@@ -280,7 +281,7 @@ foreach ( $board_routes as $board_route ) {
 // would fail this. Includes table context plus the public request and two
 // board-authorised morning-review and catering-production routes, the
 // manager-only catering quote endpoint, and the MPGS notification webhook.
-ok( 56 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, custom quotes, pre-order review, and catering production (' . count( $routes ) . ' routes, expected 56)' );
+ok( 57 === count( $routes ), 'REST route count includes table context, payment checks, webhooks, custom quotes, pre-order review, kitchen workload summary, and catering production (' . count( $routes ) . ' routes, expected 57)' );
 
 // 5. Storefront shortcodes registered.
 section( 'Shortcodes' );

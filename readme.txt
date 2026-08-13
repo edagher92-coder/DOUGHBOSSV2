@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.36.0
+Stable tag: 2.36.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.36.1 =
+* Ensures an in-flight hosted payment return is always verified as paid or rejected safely when card acceptance is switched off, instead of falling through to an unpaid order.
 
 = 2.36.0 =
 * Adds a protected, touch-first `/staff-clock/` portal with safe shared-kiosk sign-out after every attendance action.
