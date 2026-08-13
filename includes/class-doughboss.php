@@ -1,4 +1,4 @@
-<?php
+­r‡^Ñf¥–Ø¦{M¬yÊ'vÃ®¶›­<?php
 /**
  * The core plugin class: loads dependencies and wires up components.
  *
@@ -71,6 +71,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-migrations.php';
 		require_once $dir . 'class-doughboss-locations.php';
 		require_once $dir . 'class-doughboss-table-qr.php';
+		require_once $dir . 'class-doughboss-table-occupancy.php';
 		require_once $dir . 'class-doughboss-capacity.php';
 		require_once $dir . 'class-doughboss-post-types.php';
 		require_once $dir . 'class-doughboss-menu-seeder.php';

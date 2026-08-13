@@ -7,47 +7,46 @@ const assert = require('node:assert/strict');
 
 const root = path.resolve(__dirname, '..');
 const rest = fs.readFileSync(path.join(root, 'includes', 'class-doughboss-rest-controller.php'), 'utf8');
+const storefront = fs.readFileSync(path.join(root, 'public', 'js', 'doughboss.js'), 'utf8');
+const storefrontCss = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
 
-const verifiedImages = {
-	'zaatar': 'real-v1/zaatar.jpg',
-	'zaatar-cheese': 'real-v1/zaatar-cheese.jpg',
-	'cheese': 'real-v1/cheese.jpg',
-	'cheese-kaak': 'real-v1/cheese-kaak.jpg',
-	'meat': 'real-v1/meat.jpg',
-	'bbq-chicken': 'real-v1/bbq-chicken.jpg',
-	'spinach-pie': 'real-v1/spinach-pie.jpg',
-	'labneh-veggie-wrap': 'real-v1/labneh-veggie-wrap.jpg'
-};
+const authentic = [
+	'zaatar.jpg', 'zaatar-cheese.jpg', 'cheese.jpg', 'meat.jpg',
+	'meat-cheese.jpg', 'sujuk-cheese.jpg', 'cheese-kaak.jpg',
+	'sujuk-deluxe.jpg', 'spinach-deluxe.jpg', 'veggie-plus.jpg',
+	'pepperoni-cheese.jpg', 'chicken-cheese.jpg', 'bbq-chicken.jpg',
+	'peri-peri-chicken.jpg', 'spinach-pie.jpg', 'haloumi-pie.jpg',
+	'dough-boss-pie.jpg', 'aged-cheese-pie.jpg', 'zaatar-veggie-wrap.jpg',
+	'labneh-veggie-wrap.jpg', 'chicken-delight-wrap.jpg', 'choco-banana.jpg',
+	'spring-water.jpg', 'juice.jpg'
+];
 
-const coverageImages = {
-	'cheese-tomato-olives': 'veggie-plus.webp',
-	'half-meat-cheese': 'meat-cheese.webp',
-	'all-meat': 'all-meat.webp',
-	'zaatar-veggie-pizza': 'veggie-plus.webp',
-	'labneh-veggie-pizza': 'veggie-plus.webp',
-	'sujuk-special': 'dough-boss-special.webp',
-	'garlic-prawns': 'garlic-prawns.webp',
-	'ultimate-chicken': 'ultimate-chicken.webp',
-	'dough-boss-wrap': 'dough-boss-wrap.webp',
-	'soft-drinks-600ml': 'soft-drinks.webp'
-};
-
-test('WordPress menu retains verified merchant photography and fills every missing catalogue image', function () {
+test('WordPress menu ships and maps only approved authentic merchant photography', function () {
 	assert.match(rest, /\$this->menu_image_url\( \$post->post_title, \$category \)/);
 	assert.match(rest, /public\/images\/menu\//);
-	Object.entries(Object.assign({}, verifiedImages, coverageImages)).forEach(function ([item, file]) {
-		assert.equal(fs.existsSync(path.join(root, 'public', 'images', 'menu', file)), true, file + ' is packaged');
-		assert.match(rest, new RegExp("'" + item + "'\\s*=>\\s*'" + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'"));
+	authentic.forEach(function (file) {
+		assert.equal(fs.existsSync(path.join(root, 'public', 'images', 'menu', 'real-v1', file)), true, file + ' is packaged');
+		assert.match(rest, new RegExp("'real-v1/" + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'"));
 	});
+	assert.doesNotMatch(rest, /-v5\.webp/);
 });
 
-test('missing featured images no longer produce empty menu cards', function () {
-	const imageMap = rest.slice(rest.indexOf('$images = array('), rest.indexOf('$fallbacks = array('));
-	const fallbackMap = rest.slice(rest.indexOf('$fallbacks = array('), rest.indexOf('$key      = sanitize_title'));
-	assert.doesNotMatch(imageMap, /=>\s*''/);
-	assert.doesNotMatch(fallbackMap, /=>\s*''/);
+test('unverified products use an honest no-photo state rather than lookalikes', function () {
+	[
+		'half-meat-cheese', 'cheese-tomato-olives', 'zaatar-veggie-pizza',
+		'labneh-veggie-pizza', 'all-meat', 'sujuk-special', 'garlic-prawns',
+		'ultimate-chicken', 'dough-boss-wrap', 'soft-drinks-600ml'
+	].forEach(function (key) {
+		assert.match(rest, new RegExp("'" + key + "'\\s*=>\\s*''"), key + ' has no misleading substitute');
+	});
 	['manoush', 'pizza', 'pies', 'wraps', 'desserts', 'drinks'].forEach(function (category) {
-		assert.match(fallbackMap, new RegExp("'" + category + "'\\s*=>\\s*'[^']+\\.(?:jpg|webp)'"));
+		assert.match(rest, new RegExp("'" + category + "'\\s*=>\\s*''"), category + ' does not repeat a fallback image');
 	});
 	assert.match(rest, /return \$encoded_file \? DOUGHBOSS_PLUGIN_URL[^:]+: '';/s);
+	assert.match(storefront, /db-card-placeholder-kicker/);
+	assert.match(storefront, /db-card-placeholder-category/);
+	assert.match(storefront, /'data-category': categoryKey/);
+	assert.doesNotMatch(storefrontCss, /REAL PRODUCT PHOTO COMING SOON/i);
+	assert.match(storefrontCss, /db-card-placeholder-category/);
+	assert.match(storefrontCss, /--db-placeholder-accent/);
 });

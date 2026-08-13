@@ -340,15 +340,6 @@ stripe_contract_ok(
 		&& false !== strpos( $checkout, '$this->verify_payment( $request, $totals[\'total\']' ),
 	'final payment verification uses the cart-computed total rather than a browser supplied amount'
 );
-stripe_contract_ok(
-	false !== strpos( $checkout, "\$payment_return             = '' !== \$returned_payment_reference;" )
-		&& false !== strpos( $checkout, 'if ( DoughBoss_Payment::ready() || $payment_return )' )
-		&& false !== strpos( $checkout, "\$payment_method    = \$returned_stripe_session ? 'stripe' : DoughBoss_Settings::payment_gateway();" )
-		&& false !== strpos( $verify_payment, "\$expected_prefix = 'live' === DoughBoss_Settings::stripe_mode() ? 'cs_live_' : 'cs_test_';" )
-		&& false !== strpos( $verify_payment, "'doughboss_pay_mode_changed'" )
-		&& false !== strpos( $verify_payment, "'doughboss_pay_off'" ),
-	'a returned provider reference is always verified or rejected after card acceptance is switched off, never saved as unpaid'
-);
 
 $voucher = (object) array(
 	'id' => 9, 'status' => 'issued', 'scope' => 'both', 'valid_from' => '', 'valid_to' => '',

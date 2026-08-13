@@ -784,35 +784,6 @@ class DoughBoss_Catering {
 	}
 
 	/**
-	 * Count committed catering jobs without imposing the display feed's row cap.
-	 *
-	 * @param int $location_id Optional active shop scope; zero means all shops.
-	 * @return int
-	 */
-	public static function production_queue_count( $location_id = 0 ) {
-		global $wpdb;
-
-		$location_id = absint( $location_id );
-		$table       = self::table();
-		$where       = 'status IN (%s, %s, %s, %s)';
-		$params      = array(
-			self::STATUS_DEPOSIT,
-			self::STATUS_CONFIRMED,
-			self::STATUS_BALANCE_DUE,
-			self::STATUS_PAID,
-		);
-
-		if ( $location_id ) {
-			$where    .= ' AND location_id = %d';
-			$params[] = $location_id;
-		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE {$where}", $params ) );
-		return max( 0, (int) $count );
-	}
-
-	/**
 	 * Generate a unique, human-readable enquiry number (CAT-YYMMDD-XXXX).
 	 *
 	 * @return string

@@ -315,21 +315,9 @@ class DoughBoss_Portals {
 			<a class="db-portal-brand" href="<?php echo esc_url( home_url( '/' ) ); ?>" aria-label="<?php esc_attr_e( 'Dough Boss home', 'doughboss' ); ?>">DOUGH BOSS<span>.</span></a>
 			<?php if ( 'kitchen' === $portal ) : ?>
 				<nav class="db-portal-modes" aria-label="<?php esc_attr_e( 'Kitchen screen', 'doughboss' ); ?>">
-					<?php
-					$modes = array(
-						'make'     => __( 'Make', 'doughboss' ),
-						'pass'     => __( 'Pass', 'doughboss' ),
-						'catering' => __( 'Catering', 'doughboss' ),
-					);
-					foreach ( $modes as $mode => $label ) :
-						$is_active = $mode === $screen;
-						?>
-						<a class="<?php echo $is_active ? 'is-active' : ''; ?>" data-db-board-summary-link="<?php echo esc_attr( $mode ); ?>" href="<?php echo esc_url( $kitchen_url( $mode ) ); ?>"<?php echo $is_active ? ' aria-current="page"' : ''; ?> aria-label="<?php echo esc_attr( sprintf( __( '%s live workload loading', 'doughboss' ), $label ) ); ?>">
-							<span class="db-portal-mode-label"><?php echo esc_html( $label ); ?></span>
-							<span class="db-portal-live-count" data-db-board-count="<?php echo esc_attr( $mode ); ?>" aria-hidden="true">&mdash;</span>
-						</a>
-					<?php endforeach; ?>
-					<span class="db-portal-summary-announcement" data-db-board-summary-announcement aria-live="polite" aria-atomic="true"></span>
+					<a class="<?php echo 'make' === $screen ? 'is-active' : ''; ?>" href="<?php echo esc_url( $kitchen_url( 'make' ) ); ?>"><?php esc_html_e( 'Make', 'doughboss' ); ?></a>
+					<a class="<?php echo 'pass' === $screen ? 'is-active' : ''; ?>" href="<?php echo esc_url( $kitchen_url( 'pass' ) ); ?>"><?php esc_html_e( 'Pass', 'doughboss' ); ?></a>
+					<a class="<?php echo 'catering' === $screen ? 'is-active' : ''; ?>" href="<?php echo esc_url( $kitchen_url( 'catering' ) ); ?>"><?php esc_html_e( 'Catering', 'doughboss' ); ?></a>
 				</nav>
 			<?php endif; ?>
 			<div class="db-portal-account">

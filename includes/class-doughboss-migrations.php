@@ -1,4 +1,4 @@
-<?php
+­r‡^Ñf¥–Ø¦{M¬yÊ'vÃ®¶›­<?php
 /**
  * Versioned database/upgrade migrations.
  *
@@ -81,6 +81,7 @@ class DoughBoss_Migrations {
 				'1.18.0' => 'upgrade_to_1_18_0',
 				'1.19.0' => 'upgrade_to_1_19_0',
 				'1.20.0' => 'upgrade_to_1_20_0',
+				'1.21.0' => 'upgrade_to_1_21_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -207,6 +208,13 @@ class DoughBoss_Migrations {
 			throw new RuntimeException( 'Staff attendance tables, columns or unique open-shift guard are incomplete or are not using InnoDB.' );
 		}
 		DoughBoss_Activator::add_capabilities();
+	}
+
+	/** 1.21.0 â€” short-lived, audited QR-table occupancy. */
+	private static function upgrade_to_1_21_0() {
+		if ( ! DoughBoss_Activator::table_occupancy_storage_ready() ) {
+			throw new RuntimeException( 'Table occupancy storage could not be verified.' );
+		}
 	}
 
 	/**

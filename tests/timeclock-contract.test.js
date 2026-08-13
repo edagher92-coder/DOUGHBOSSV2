@@ -1,4 +1,4 @@
-'use strict';
+­r‡^Ñf¥–Ø¦{M¬yÊ'vÃ®¶›­'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,14 +19,15 @@ const migrations = read('includes/class-doughboss-migrations.php');
 const uninstall = read('uninstall.php');
 const clockCss = read('public/css/doughboss-timeclock.css');
 
-test('release 2.36.1 retains the staff clock on database schema 1.20.0', () => {
-	assert.match(plugin, /Version:\s+2\.36\.1/);
-	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.36\.1'/);
-	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.20\.0'/);
+test('release 2.37.0 retains the staff clock on its additive database schema', () => {
+	assert.match(plugin, /Version:\s+2\.37\.0/);
+	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.37\.0'/);
+	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.21\.0'/);
 	assert.match(core, /class-doughboss-timeclock\.php/);
 	assert.match(core, /new DoughBoss_Timeclock\(\)/);
 	assert.match(migrations, /'1\.20\.0'\s*=>\s*'upgrade_to_1_20_0'/);
 	assert.match(migrations, /function upgrade_to_1_20_0\s*\(/);
+	assert.match(migrations, /'1\.21\.0'\s*=>\s*'upgrade_to_1_21_0'/);
 });
 
 test('staff clock is a hidden standalone no-cache portal, not a public menu page', () => {

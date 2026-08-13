@@ -2,7 +2,7 @@
 
 ## What this feature does
 
-DoughBoss 2.36.1 includes the private, touch-friendly staff attendance screen at:
+DoughBoss 2.36.0 adds a private, touch-friendly staff attendance screen at:
 
 `https://doughboss.com.au/staff-clock/`
 
@@ -41,11 +41,11 @@ The **DoughBoss Staff** role is the preferred clock-only role for front-of-house
 
 1. Take a current files-and-database backup.
 2. In WordPress, open **Plugins → Add Plugin → Upload Plugin**.
-3. Upload the verified DoughBoss 2.36.1 ZIP.
+3. Upload the verified DoughBoss 2.36.0 ZIP.
 4. Choose **Replace current with uploaded** when WordPress confirms DoughBoss is already installed.
 5. Keep DoughBoss active and wait for the update to finish.
 6. Open **Settings → Permalinks** and click **Save Changes** once if `/staff-clock/` initially returns a not-found page.
-7. Confirm the active plugin shows version **2.36.1** and no DoughBoss migration error is displayed.
+7. Confirm the active plugin shows version **2.36.0** and no DoughBoss migration error is displayed.
 
 Do not upload an older 2.26.0 staff-clock build. It predates the current website, rewards and payment work and must not be used.
 
@@ -126,7 +126,7 @@ Suggested reasons include “employee forgot to clock out”, “manager verifie
 
 Complete this on a staging or controlled test site before relying on the clock operationally:
 
-- [ ] DoughBoss 2.36.1 is active and the database reports schema 1.20.0 with no migration error.
+- [ ] DoughBoss 2.36.0 is active and the database reports schema 1.20.0 with no migration error.
 - [ ] `/staff-clock/` loads on desktop and the purchased touch monitor.
 - [ ] A signed-out visitor sees only the staff sign-in landing screen.
 - [ ] A clock-only staff user cannot open Kitchen or Management.

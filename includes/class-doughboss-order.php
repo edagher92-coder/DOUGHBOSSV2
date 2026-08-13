@@ -517,46 +517,6 @@ class DoughBoss_Order {
 	}
 
 	/**
-	 * Return the exact ordinary-order workload for the three kitchen views.
-	 *
-	 * This deliberately uses database counts instead of the limited board feed,
-	 * so the header remains truthful when more than 100 cards are active. The
-	 * separate pre-order-review count is exposed alongside PASS because that
-	 * screen is where staff action it; it is not blended into ready-to-call work.
-	 *
-	 * @param int $location_id Optional shop filter (0 = all shops).
-	 * @return array{make:int,pass:int,preorder_review:int}
-	 */
-	public static function kitchen_workload_counts( $location_id = 0 ) {
-		global $wpdb;
-
-		$table       = self::orders_table();
-		$location_id = absint( $location_id );
-		$where       = '';
-		$params      = array();
-
-		if ( $location_id ) {
-			$where    = ' WHERE location_id = %d';
-			$params[] = $location_id;
-		}
-
-		$query = "SELECT
-			SUM(CASE WHEN ( order_source IS NULL OR order_source <> 'preorder_request' ) AND status IN ( 'pending', 'confirmed', 'preparing', 'baking' ) THEN 1 ELSE 0 END) AS make_count,
-			SUM(CASE WHEN ( order_source IS NULL OR order_source <> 'preorder_request' ) AND status IN ( 'ready', 'out_for_delivery' ) THEN 1 ELSE 0 END) AS pass_count,
-			SUM(CASE WHEN order_source = 'preorder_request' AND status = 'pending' AND payment_status = 'unpaid' THEN 1 ELSE 0 END) AS preorder_review_count
-			FROM {$table}{$where}";
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$row = $params ? $wpdb->get_row( $wpdb->prepare( $query, $params ) ) : $wpdb->get_row( $query );
-
-		return array(
-			'make'            => $row ? max( 0, (int) $row->make_count ) : 0,
-			'pass'            => $row ? max( 0, (int) $row->pass_count ) : 0,
-			'preorder_review' => $row ? max( 0, (int) $row->preorder_review_count ) : 0,
-		);
-	}
-
-	/**
 	 * Pending after-hours requests for the staff morning-review queue.
 	 *
 	 * Accepted requests change to the normal web channel atomically in

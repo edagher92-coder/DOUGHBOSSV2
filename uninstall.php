@@ -1,4 +1,4 @@
-<?php
+­r‡^Ñf¥–Ø¦{M¬yÊ'vÃ®¶›­<?php
 /**
  * DoughBoss uninstall routine.
  *
@@ -26,6 +26,7 @@ $tables = array(
 	$wpdb->prefix . 'doughboss_payment_events',
 	$wpdb->prefix . 'doughboss_payment_attempts',
 	$wpdb->prefix . 'doughboss_checkout_snapshots',
+	$wpdb->prefix . 'doughboss_table_reservation_events',
 	$wpdb->prefix . 'doughboss_table_sessions',
 	$wpdb->prefix . 'doughboss_table_qr_codes',
 	$wpdb->prefix . 'doughboss_dining_tables',

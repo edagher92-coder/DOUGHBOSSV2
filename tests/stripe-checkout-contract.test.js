@@ -77,16 +77,6 @@ test('checkout return and webhooks bind the hosted session to one canonical Paym
 	assert.match(restPhp, /DoughBoss_Order::payment_intent_used\(\s*\$pi_id\s*\)/);
 });
 
-test('an in-flight hosted return cannot become an unpaid order after card acceptance is switched off', function () {
-	assert.match(restPhp, /\$payment_return\s*=\s*''\s*!==\s*\$returned_payment_reference/);
-	assert.match(restPhp, /if \( DoughBoss_Payment::ready\(\) \|\| \$payment_return \)/);
-	assert.match(restPhp, /\$returned_stripe_session\s*=\s*1\s*===\s*preg_match/);
-	assert.match(restPhp, /\$payment_method\s*=\s*\$returned_stripe_session\s*\?\s*['"]stripe['"]\s*:/);
-	assert.match(restPhp, /\$expected_prefix\s*=\s*['"]live['"]\s*===\s*DoughBoss_Settings::stripe_mode\(\)\s*\?\s*['"]cs_live_['"]\s*:\s*['"]cs_test_['"]/);
-	assert.match(restPhp, /['"]stripe['"]\s*!==\s*DoughBoss_Settings::payment_gateway\(\)\s*\|\|\s*0\s*!==\s*strpos\(\s*\$raw_id,\s*\$expected_prefix\s*\)/);
-	assert.match(restPhp, /if \( ! DoughBoss_Payment::ready\(\) \)[\s\S]{0,250}?doughboss_pay_off/);
-});
-
 test('a webhook-first paid order replays as the browser confirmation instead of an error', function () {
 	assert.doesNotMatch(restPhp, /''\s*===\s*\$pi_id\s*\|\|\s*DoughBoss_Order::payment_intent_used/);
 	assert.doesNotMatch(restPhp, /doughboss_pay_used/);

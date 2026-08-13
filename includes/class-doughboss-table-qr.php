@@ -1,4 +1,4 @@
-<?php
+­r‡^Ñf¥–Ø¦{M¬yÊ'vÃ®¶›­<?php
 /**
  * Secure store/table QR ordering context.
  *
@@ -153,7 +153,7 @@ class DoughBoss_Table_QR {
 		// Re-check code rotation/revocation and active store/table on every money path.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$row = $wpdb->get_row( $wpdb->prepare(
-			"SELECT s.id AS session_id, s.expires_at, q.id AS qr_code_id, t.id AS table_id, t.label AS table_label, t.location_id, l.name AS location_name
+			"SELECT s.id AS session_id, s.expires_at, q.id AS qr_code_id, t.id AS table_id, t.label AS table_label, t.zone AS table_zone, t.location_id, l.name AS location_name
 			FROM {$sessions} s
 			INNER JOIN {$codes} q ON q.id = s.qr_code_id AND q.status = 'active'
 			INNER JOIN {$tables} t ON t.id = q.table_id AND t.current_qr_code_id = q.id AND t.is_active = 1
@@ -174,6 +174,7 @@ class DoughBoss_Table_QR {
 			'qr_code_id'   => (int) $row->qr_code_id,
 			'table_id'     => (int) $row->table_id,
 			'table_label'  => $row->table_label,
+			'table_zone'   => $row->table_zone,
 			'location_id'  => (int) $row->location_id,
 			'location_name' => $row->location_name,
 			'expires_at'   => mysql_to_rfc3339( $row->expires_at ),
