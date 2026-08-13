@@ -1,4 +1,4 @@
-≠rá^—f•ñÿ¶{M¨y 'v√Æ∂õ≠<?php
+<?php
 /**
  * Plugin Name:       DoughBoss
  * Plugin URI:        https://github.com/edagher92-coder/doughbossv2

@@ -1,4 +1,4 @@
-≠rá^—f•ñÿ¶{M¨y 'v√Æ∂õ≠<?php
+<?php
 /**
  * Versioned database/upgrade migrations.
  *

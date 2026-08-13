@@ -1,4 +1,4 @@
-≠rá^—f•ñÿ¶{M¨y 'v√Æ∂õ≠<?php
+<?php
 /**
  * The core plugin class: loads dependencies and wires up components.
  *

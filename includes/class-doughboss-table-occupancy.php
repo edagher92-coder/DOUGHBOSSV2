@@ -1,4 +1,4 @@
-≠rá^—f•ñÿ¶{M¨y 'v√Æ∂õ≠<?php
+<?php
 /**
  * PII-free, staff-managed table occupancy for QR table service.
  *

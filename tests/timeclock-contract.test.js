@@ -1,4 +1,4 @@
-≠rá^—f•ñÿ¶{M¨y 'v√Æ∂õ≠'use strict';
+'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
