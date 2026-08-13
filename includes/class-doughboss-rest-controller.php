@@ -1506,6 +1506,29 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Apply a generous abuse ceiling to ordinary cart mutations.
+	 *
+	 * Checkout and voucher operations already have tighter purpose-specific
+	 * limits. These ceilings protect the remaining write endpoints from scripts
+	 * without interfering with normal rapid tapping on a touch device.
+	 *
+	 * @param string $bucket Logical cart mutation bucket.
+	 * @param int    $max    Maximum writes inside one minute.
+	 * @return WP_Error|null Error when limited, otherwise null.
+	 */
+	private function cart_mutation_rate_error( $bucket, $max ) {
+		if ( ! $this->rate_limited( 'cart_' . $bucket, $max, MINUTE_IN_SECONDS ) ) {
+			return null;
+		}
+
+		return new WP_Error(
+			'doughboss_cart_rate_limit',
+			__( 'Too many cart changes. Please wait a moment and try again.', 'doughboss' ),
+			array( 'status' => 429 )
+		);
+	}
+
+	/**
 	 * Server-computed cart subtotal used for voucher maths. Never trusts a
 	 * browser-reported amount.
 	 *
@@ -2981,6 +3004,11 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function add_to_cart( WP_REST_Request $request ) {
+		$rate_error = $this->cart_mutation_rate_error( 'add', 60 );
+		if ( $rate_error ) {
+			return $rate_error;
+		}
+
 		$type     = $request->get_param( 'type' );
 		$quantity = max( 1, (int) $request->get_param( 'quantity' ) );
 
@@ -3096,6 +3124,11 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function update_cart( WP_REST_Request $request ) {
+		$rate_error = $this->cart_mutation_rate_error( 'update', 120 );
+		if ( $rate_error ) {
+			return $rate_error;
+		}
+
 		$ok = $this->cart->update_quantity( $request->get_param( 'key' ), (int) $request->get_param( 'quantity' ) );
 		if ( ! $ok ) {
 			return new WP_Error( 'doughboss_no_line', __( 'That cart item no longer exists.', 'doughboss' ), array( 'status' => 404 ) );
@@ -3110,6 +3143,11 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function remove_from_cart( WP_REST_Request $request ) {
+		$rate_error = $this->cart_mutation_rate_error( 'remove', 60 );
+		if ( $rate_error ) {
+			return $rate_error;
+		}
+
 		$this->cart->remove( $request->get_param( 'key' ) );
 		return rest_ensure_response( $this->cart->to_array() );
 	}
@@ -3120,6 +3158,11 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function clear_cart() {
+		$rate_error = $this->cart_mutation_rate_error( 'clear', 20 );
+		if ( $rate_error ) {
+			return $rate_error;
+		}
+
 		$this->cart->clear();
 		return rest_ensure_response( $this->cart->to_array() );
 	}

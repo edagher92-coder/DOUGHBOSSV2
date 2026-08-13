@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.37.0
+Stable tag: 2.37.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -85,6 +85,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.37.1 =
+* Adapts the useful UX ideas from the supplied 2.1 donor into the current platform: an accessible, reduced-motion-safe menu loading skeleton and restrained live price feedback.
+* Protects add, update, remove and clear cart writes with generous abuse ceilings using the existing trusted-proxy and database-serialised limiter.
+* Keeps one authoritative WordPress transient cart store, avoiding the donor's duplicate object-cache state and stale-cart risk.
 
 = 2.37.0 =
 * Adds a live, privacy-safe table-service strip to the MAKE and PASS kitchen views. It shows the physical table label, zone, availability and live reservation countdown without exposing customer or QR-session data.

@@ -64,7 +64,7 @@ check(themeScript.includes("data-dbf-scroll-state") && !themeScript.includes('ob
 check(!/stone-baked/i.test(home + footer) && /oven-baked/i.test(home + footer), 'public homepage and footer use the approved oven-baked wording consistently');
 check(partnerPage.includes('dbf-partner-grid--single') && themeStyle.includes('.dbf-page-content--partner') && themeStyle.includes('@media (max-width: 560px)'), 'empty partnership content and narrow footer columns collapse without overflow or a large blank gap');
 
-check((shortcodes.match(/class="db-loading" role="status" aria-live="polite"/g) || []).length === 4, 'storefront loading states are announced');
+check((shortcodes.match(/class="db-loading(?: [^"]+)?" role="status" aria-live="polite"/g) || []).length === 4, 'storefront loading states are announced');
 check(shortcodes.includes('aria-label="<?php esc_attr_e( \'Mobile number\''), 'voucher phone field has an accessible name');
 check((storefront.match(/class: 'db-error', role: 'alert'/g) || []).length >= 4, 'storefront load failures are announced as alerts');
 check(board.includes('db-board-loading" role="status" aria-live="polite"'), 'kitchen-board loading state is announced');

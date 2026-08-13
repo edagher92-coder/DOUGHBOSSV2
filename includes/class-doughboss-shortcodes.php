@@ -266,7 +266,14 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-menu" data-doughboss-menu data-cart-url="<?php echo esc_url( $atts['cart_url'] ); ?>">
-			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
+			<div class="db-loading db-loading--menu" role="status" aria-live="polite">
+				<span class="db-loading-label"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></span>
+				<div class="db-menu-skeleton" aria-hidden="true">
+					<?php for ( $i = 0; $i < 4; $i++ ) : ?>
+						<span class="db-menu-skeleton-card"></span>
+					<?php endfor; ?>
+				</div>
+			</div>
 		</div>
 		<?php
 		return ob_get_clean();
