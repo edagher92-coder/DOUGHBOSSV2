@@ -825,6 +825,25 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		// Compact, PII-free workload for the MAKE / PASS / CATERING switcher.
+		// It is intentionally separate from the 100-card feeds so its counts stay
+		// exact during a busy service.
+		register_rest_route(
+			$ns,
+			'/admin/board-summary',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_board_summary' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
+				'args'                => array(
+					'location_id' => array(
+						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
 		// Acknowledge a new order (silences the board alert).
 		register_rest_route(
 			$ns,
@@ -2823,22 +2842,22 @@ class DoughBoss_REST_Controller {
 			'meat'                    => 'real-v1/meat.jpg',
 			'meat-cheese'             => 'real-v1/meat-cheese.jpg',
 			'sujuk-cheese'            => 'real-v1/sujuk-cheese.jpg',
-			'half-meat-cheese'        => '',
-			'cheese-tomato-olives'    => '',
+			'half-meat-cheese'        => 'meat-cheese.webp',
+			'cheese-tomato-olives'    => 'veggie-plus.webp',
 			'cheese-kaak'             => 'real-v1/cheese-kaak.jpg',
-			'zaatar-veggie-pizza'     => '',
-			'labneh-veggie-pizza'     => '',
-			'all-meat'                => '',
+			'zaatar-veggie-pizza'     => 'veggie-plus.webp',
+			'labneh-veggie-pizza'     => 'veggie-plus.webp',
+			'all-meat'                => 'all-meat.webp',
 			'sujuk-deluxe'            => 'real-v1/sujuk-deluxe.jpg',
 			'spinach-deluxe'          => 'real-v1/spinach-deluxe.jpg',
 			'veggie-plus'             => 'real-v1/veggie-plus.jpg',
 			'pepperoni-cheese'        => 'real-v1/pepperoni-cheese.jpg',
-			'sujuk-special'           => '',
-			'dough-boss-special'      => '',
+			'sujuk-special'           => 'dough-boss-special.webp',
+			'dough-boss-special'      => 'dough-boss-special.webp',
 			'chicken-cheese'          => 'real-v1/chicken-cheese.jpg',
 			'bbq-chicken'             => 'real-v1/bbq-chicken.jpg',
 			'peri-peri-chicken'       => 'real-v1/peri-peri-chicken.jpg',
-			'garlic-prawns'           => '',
+			'garlic-prawns'           => 'garlic-prawns.webp',
 			'spinach-pie'             => 'real-v1/spinach-pie.jpg',
 			'spinach-cheese'          => 'real-v1/spinach-pie.jpg',
 			'haloumi'                 => 'real-v1/haloumi-pie.jpg',
@@ -2850,21 +2869,21 @@ class DoughBoss_REST_Controller {
 			'zaatar-veggie'           => 'real-v1/zaatar-veggie-wrap.jpg',
 			'labneh-veggie-wrap'      => 'real-v1/labneh-veggie-wrap.jpg',
 			'chicken-delight'         => 'real-v1/chicken-delight-wrap.jpg',
-			'ultimate-chicken'        => '',
-			'dough-boss-wrap'         => '',
+			'ultimate-chicken'        => 'ultimate-chicken.webp',
+			'dough-boss-wrap'         => 'dough-boss-wrap.webp',
 			'choco-banana'            => 'real-v1/choco-banana.jpg',
 			'spring-water'            => 'real-v1/spring-water.jpg',
-			'soft-drinks-600ml'       => '',
-			'soft-drinks'             => '',
+			'soft-drinks-600ml'       => 'soft-drinks.webp',
+			'soft-drinks'             => 'soft-drinks.webp',
 			'juice'                   => 'real-v1/juice.jpg',
 		);
 		$fallbacks = array(
-			'manoush'  => '',
-			'pizza'    => '',
-			'pies'     => '',
-			'wraps'    => '',
-			'desserts' => '',
-			'drinks'   => '',
+			'manoush'  => 'real-v1/zaatar-cheese.jpg',
+			'pizza'    => 'dough-boss-special.webp',
+			'pies'     => 'real-v1/spinach-pie.jpg',
+			'wraps'    => 'labneh-veggie-wrap.webp',
+			'desserts' => 'choco-banana.webp',
+			'drinks'   => 'juice.webp',
 		);
 		$key      = sanitize_title( $name );
 		$category = sanitize_title( $category );
@@ -3959,6 +3978,35 @@ class DoughBoss_REST_Controller {
 				'server_time' => current_time( 'mysql', true ),
 			)
 		);
+	}
+
+	/**
+	 * GET /admin/board-summary â€” exact, PII-free live workload counts.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_board_summary( WP_REST_Request $request ) {
+		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
+		}
+
+		$orders = DoughBoss_Order::kitchen_workload_counts( $location_id );
+		$response = rest_ensure_response(
+			array(
+				'data'        => array(
+					'make'            => (int) $orders['make'],
+					'pass'            => (int) $orders['pass'],
+					'preorder_review' => (int) $orders['preorder_review'],
+					'catering'        => DoughBoss_Catering::production_queue_count( $location_id ),
+				),
+				'server_time' => current_time( 'mysql', true ),
+			)
+		);
+		$response->header( 'Cache-Control', 'no-store, private' );
+		$response->header( 'Vary', 'Cookie' );
+		return $response;
 	}
 
 	/**
