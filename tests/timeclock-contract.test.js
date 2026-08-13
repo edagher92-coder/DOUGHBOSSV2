@@ -122,6 +122,16 @@ test('clock-only staff role has no kitchen or management authority', () => {
 	assert.doesNotMatch(roleBlock[0], /manage_doughboss(?:_kds)?/);
 });
 
+test('operational roles return only to their approved same-site standalone portal', () => {
+	assert.match(staffExperience, /function requested_portal_url\s*\(/);
+	assert.match(staffExperience, /strtolower\( \$home_parts\['host'\] \) !== strtolower\( \$request_parts\['host'\] \)/);
+	assert.match(staffExperience, /'\/staff-clock\/'/);
+	assert.match(staffExperience, /'\/kitchen\/'/);
+	assert.match(staffExperience, /'\/catering-kitchen\/'/);
+	assert.match(staffExperience, /'\/management\/'/);
+	assert.match(staffExperience, /are deliberately discarded, except for the exact PASS-screen selector/);
+});
+
 test('schema readiness covers shift and audit tables before migration advances', () => {
 	assert.match(activator, /doughboss_staff_shifts/);
 	assert.match(activator, /doughboss_staff_shift_events/);
