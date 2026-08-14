@@ -67,7 +67,7 @@ delete_option( 'doughboss_migration_lock' );
 delete_option( 'doughboss_migration_error' );
 
 DoughBoss_Migrations::run();
-mariadb_ok( '1.20.0' === get_option( 'doughboss_db_version' ), '1.11 fixture advances through current transactional storage including rewards and staff attendance' );
+mariadb_ok( '1.21.0' === get_option( 'doughboss_db_version' ), '1.11 fixture advances through current transactional storage including rewards, staff attendance and QR kiosk storage' );
 mariadb_ok( DoughBoss_Activator::capacity_storage_ready(), 'all capacity storage invariants are ready' );
 $after = $wpdb->get_row( $wpdb->prepare( "SELECT order_number,status,version,total,payment_intent_id FROM {$orders} WHERE id = %d", $order_id ), ARRAY_A );
 mariadb_ok( $snapshot === $after, 'existing order truth and payment reference are unchanged' );

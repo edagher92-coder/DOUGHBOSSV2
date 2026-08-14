@@ -17,6 +17,7 @@ require_once $plugin . '/includes/class-doughboss-migrations.php';
 require_once $plugin . '/includes/class-doughboss-locations.php';
 require_once $plugin . '/includes/class-doughboss-staff-scope.php';
 require_once $plugin . '/includes/class-doughboss-timeclock.php';
+require_once $plugin . '/includes/class-doughboss-staff-badge.php';
 
 global $wpdb;
 $GLOBALS['doughboss_timeclock_passed'] = 0;
@@ -125,13 +126,15 @@ echo "=== DoughBoss MariaDB staff-clock acceptance ===\n";
 
 $shifts        = $wpdb->prefix . 'doughboss_staff_shifts';
 $events        = $wpdb->prefix . 'doughboss_staff_shift_events';
+$breaks        = $wpdb->prefix . 'doughboss_staff_breaks';
+$badges        = $wpdb->prefix . 'doughboss_staff_badges';
 $locations     = $wpdb->prefix . 'doughboss_locations';
 $audit_fail_trigger = $wpdb->prefix . 'doughboss_staff_audit_fail';
 
-// Build and migrate the real DB 1.20 contract. A failed InnoDB readiness check
+// Build and migrate the real DB 1.21 contract. A failed InnoDB readiness check
 // must stop the version checkpoint and leave an operator-visible explanation.
 DoughBoss_Activator::create_tables();
-timeclock_db_ok( '2.36.1' === DOUGHBOSS_VERSION && '1.20.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.36.1 and DB contract 1.20.0' );
+timeclock_db_ok( '2.37.0' === DOUGHBOSS_VERSION && '1.21.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.37.0 and DB contract 1.21.0' );
 timeclock_db_ok( DoughBoss_Activator::timeclock_storage_ready(), 'fresh staff shifts and audit tables satisfy the exact readiness contract' );
 
 timeclock_db_sql( "ALTER TABLE {$events} ENGINE=MyISAM" );
@@ -146,7 +149,7 @@ timeclock_db_sql( "ALTER TABLE {$events} ENGINE=InnoDB" );
 delete_option( 'doughboss_migration_lock' );
 delete_option( 'doughboss_migration_error' );
 DoughBoss_Migrations::run();
-timeclock_db_ok( '1.20.0' === get_option( 'doughboss_db_version' ) && DoughBoss_Activator::timeclock_storage_ready(), 'repaired InnoDB storage advances to DB 1.20' );
+timeclock_db_ok( '1.21.0' === get_option( 'doughboss_db_version' ) && DoughBoss_Activator::timeclock_storage_ready(), 'repaired InnoDB storage advances through DB 1.21' );
 
 // Once a legacy row receives its immutable shop/timezone evidence, a failed
 // later migration retry must not rewrite that history from mutable shop data.
@@ -235,8 +238,10 @@ $manager_user->set_role( 'doughboss_manager' );
 wp_update_user( array( 'ID' => $staff_id, 'display_name' => 'Acceptance Staff Original' ) );
 
 // Remove only prior rows owned by this named acceptance fixture.
+$wpdb->query( $wpdb->prepare( "DELETE b FROM {$breaks} b INNER JOIN {$shifts} s ON s.id = b.shift_id WHERE s.user_id = %d", $staff_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 $wpdb->query( $wpdb->prepare( "DELETE e FROM {$events} e INNER JOIN {$shifts} s ON s.id = e.shift_id WHERE s.user_id = %d", $staff_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 $wpdb->query( $wpdb->prepare( "DELETE FROM {$shifts} WHERE user_id = %d", $staff_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$wpdb->query( $wpdb->prepare( "DELETE FROM {$badges} WHERE user_id = %d", $staff_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 $fixture_slugs = array( 'db-clock-acceptance-one', 'db-clock-acceptance-two', 'db-clock-acceptance-three' );
 $wpdb->query( "DELETE FROM {$locations} WHERE slug IN ('db-clock-acceptance-one','db-clock-acceptance-two','db-clock-acceptance-three')" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 delete_user_meta( $staff_id, DoughBoss_Staff_Scope::LOCATION_META );
@@ -305,6 +310,13 @@ timeclock_db_ok( file_exists( $nonce_file ) && $denied_before === (int) $wpdb->g
 // Two real clock-in handlers contend at once. The database lock serializes the
 // domain transition, and the unique nullable guard independently rejects a
 // second open record.
+$roster_now   = new DateTimeImmutable( 'now', new DateTimeZone( 'Australia/Sydney' ) );
+$roster_start = $roster_now->modify( '-30 minutes' );
+update_user_meta(
+	$staff_id,
+	DoughBoss_Staff_Scope::ROSTER_META,
+	array( $roster_now->format( 'w' ) => array( 'start' => $roster_start->format( 'H:i' ), 'grace' => 5 ) )
+);
 $base = sys_get_temp_dir() . '/doughboss-timeclock-acceptance-' . getmypid();
 $gate = $base . '.go';
 $pids = array(
@@ -324,6 +336,24 @@ $open_count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$shif
 $first_shift = DoughBoss_Timeclock::open_shift( $staff_id );
 timeclock_db_ok( 1 === $open_count && $first_shift, 'concurrent clock-in creates exactly one open shift' );
 timeclock_db_ok( $first_shift && $location_id === (int) $first_shift->location_id, 'created shift is bound to the assigned shop, not either forged POST value' );
+timeclock_db_ok( $first_shift && $roster_start->format( 'H:i' ) === $first_shift->scheduled_start_local && 5 === (int) $first_shift->late_grace_minutes && (int) $first_shift->late_minutes >= 24 && (int) $first_shift->late_minutes <= 26, 'clock-in snapshots roster start, grace and calculated late minutes' );
+
+// Recorded breaks are the only deduction. The unique nullable guard prevents
+// a duplicate open break, and clock-out fails closed until the break ends.
+timeclock_db_sql( $wpdb->prepare( "UPDATE {$shifts} SET clock_in_utc = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 20 MINUTE) WHERE id = %d", (int) $first_shift->id ) );
+$first_shift = DoughBoss_Timeclock::open_shift( $staff_id );
+$start_break = new ReflectionMethod( DoughBoss_Staff_Badge::class, 'start_break' );
+$start_break->setAccessible( true );
+$end_break = new ReflectionMethod( DoughBoss_Staff_Badge::class, 'end_break' );
+$end_break->setAccessible( true );
+timeclock_db_ok( 'break-start' === $start_break->invoke( null, $first_shift, $staff_id ), 'staff can start one recorded break' );
+timeclock_db_ok( 'already-break' === $start_break->invoke( null, $first_shift, $staff_id ), 'a duplicate open break is rejected' );
+timeclock_db_sql( $wpdb->prepare( "UPDATE {$breaks} SET break_start_utc = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 10 MINUTE) WHERE shift_id = %d AND open_guard = 1", (int) $first_shift->id ) );
+timeclock_db_ok( 'break-open' === DoughBoss_Timeclock::clock_out_for_user( $staff_id ), 'clock-out is rejected while a recorded break is open' );
+timeclock_db_ok( 'break-end' === $end_break->invoke( null, $first_shift, $staff_id ), 'staff can end the recorded break' );
+$break_minutes = DoughBoss_Staff_Badge::break_minutes_for_shift( $first_shift );
+$worked_minutes = DoughBoss_Timeclock::worked_minutes( $first_shift );
+timeclock_db_ok( $break_minutes >= 9 && $break_minutes <= 11 && $worked_minutes >= 9 && $worked_minutes <= 11, 'worked time subtracts the actual recorded break and no assumed break' );
 
 $wpdb->suppress_errors( true );
 $duplicate = $wpdb->insert(
@@ -370,6 +400,13 @@ timeclock_db_ok( $second_shift && (int) $second_shift->id !== (int) $first_shift
 timeclock_db_ok( $first_snapshot === $first_after_directory_change, 'completed shift snapshots are unchanged by later staff and shop edits' );
 timeclock_db_ok( $second_shift && 'Acceptance Staff Renamed' === $second_shift->staff_name && 'Acceptance Shop Renamed' === $second_shift->location_name && 'UTC' === $second_shift->timezone_snapshot, 'new shift captures fresh immutable staff, shop and timezone snapshots' );
 
+// A manager closure must finish a recorded break in the same audited
+// transaction. If the audit write fails, both the close and break finish roll
+// back together rather than changing payroll evidence halfway through.
+timeclock_db_ok( 'break-start' === $start_break->invoke( null, $second_shift, $staff_id ), 'a manager correction can safely close an active recorded break' );
+$second_open_break = DoughBoss_Staff_Badge::open_break( (int) $second_shift->id );
+timeclock_db_ok( $second_open_break && (int) $second_open_break->shift_id === (int) $second_shift->id, 'second shift has exactly one active break before correction' );
+
 // Force the audit INSERT to fail after the manager UPDATE while the table
 // remains structurally ready. The production transaction must roll back the
 // close, then succeed atomically once the temporary failure is removed.
@@ -387,6 +424,7 @@ timeclock_db_sql( "DROP TRIGGER IF EXISTS {$audit_fail_trigger}" );
 $after_failed_correction = DoughBoss_Timeclock::open_shift( $staff_id );
 timeclock_db_ok( $after_failed_correction && (int) $second_shift->id === (int) $after_failed_correction->id, 'audit database error rolls back the manager close' );
 timeclock_db_ok( 0 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$events} WHERE shift_id = %d", (int) $second_shift->id ) ), 'failed manager transaction leaves no partial audit event' );
+timeclock_db_ok( DoughBoss_Staff_Badge::open_break( (int) $second_shift->id ), 'audit failure also rolls back the attempted break finish' );
 
 $correction_pid = timeclock_fork_handler(
 	'handle_correction',
@@ -402,6 +440,7 @@ $after_json  = $event ? json_decode( (string) $event->after_json, true ) : array
 timeclock_db_ok( $corrected && $corrected->clock_out_utc && null === $corrected->open_guard && ! DoughBoss_Timeclock::open_shift( $staff_id ), 'manager close and guard clear commit together' );
 timeclock_db_ok( $event && 'manager_closed' === $event->event_type && $manager_id === (int) $event->actor_user_id && $reason === $event->reason, 'manager close records actor, reason and event type' );
 timeclock_db_ok( isset( $before_json['open_guard'], $before_json['location_name'], $after_json['location_name'] ) && 1 === (int) $before_json['open_guard'] && empty( $before_json['clock_out_utc'] ) && empty( $after_json['open_guard'] ) && ! empty( $after_json['clock_out_utc'] ) && $before_json['location_name'] === $after_json['location_name'], 'audit before/after evidence describes only the close transition and preserves snapshots' );
+timeclock_db_ok( ! DoughBoss_Staff_Badge::open_break( (int) $second_shift->id ), 'successful manager correction finishes the open break with the shift' );
 
 foreach ( glob( $base . '.*' ) as $file ) {
 	unlink( $file );

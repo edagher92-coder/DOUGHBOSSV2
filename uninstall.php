@@ -18,6 +18,8 @@ global $wpdb;
 
 // Drop custom tables (children before parents).
 $tables = array(
+	$wpdb->prefix . 'doughboss_staff_breaks',
+	$wpdb->prefix . 'doughboss_staff_badges',
 	$wpdb->prefix . 'doughboss_staff_shift_events',
 	$wpdb->prefix . 'doughboss_staff_shifts',
 	$wpdb->prefix . 'doughboss_loyalty_tokens',
@@ -94,6 +96,7 @@ delete_transient( 'doughboss_migrating' );
 // after a full uninstall would leave stale employee-location data behind.
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->usermeta} WHERE meta_key = %s", 'doughboss_location_id' ) );
+$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->usermeta} WHERE meta_key = %s", 'doughboss_staff_roster' ) );
 
 // Remove permanent, autoload-off exactly-once markers for voucher emails.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -150,6 +153,13 @@ $wpdb->query(
 // phpcs:disable WordPress.DB.DirectDatabaseQuery
 $wpdb->query(
 	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_db_loyalty_link_%' OR option_name LIKE '_transient_timeout_db_loyalty_link_%'"
+);
+// phpcs:enable
+
+// Remove short-lived QR badge sessions and PIN lockouts.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->query(
+	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_staff_badge_session_%' OR option_name LIKE '_transient_timeout_doughboss_staff_badge_session_%' OR option_name LIKE '_transient_doughboss_staff_badge_locked_%' OR option_name LIKE '_transient_timeout_doughboss_staff_badge_locked_%' OR option_name LIKE '_transient_doughboss_staff_badge_attempts_%' OR option_name LIKE '_transient_timeout_doughboss_staff_badge_attempts_%'"
 );
 // phpcs:enable
 

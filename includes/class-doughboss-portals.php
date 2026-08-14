@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Portals {
 
-	const ROUTE_VERSION = '3';
+	const ROUTE_VERSION = '4';
 	const QUERY_VAR     = 'doughboss_portal';
 
 	/**

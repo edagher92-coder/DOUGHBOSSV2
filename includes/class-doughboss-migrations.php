@@ -81,6 +81,7 @@ class DoughBoss_Migrations {
 				'1.18.0' => 'upgrade_to_1_18_0',
 				'1.19.0' => 'upgrade_to_1_19_0',
 				'1.20.0' => 'upgrade_to_1_20_0',
+				'1.21.0' => 'upgrade_to_1_21_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -218,6 +219,13 @@ class DoughBoss_Migrations {
 	 *
 	 * @return void
 	 */
+	/** 1.21.0 — QR/PIN staff kiosk, recorded breaks and roster snapshots. */
+	private static function upgrade_to_1_21_0() {
+		if ( ! DoughBoss_Activator::timeclock_storage_ready() ) {
+			throw new RuntimeException( 'Staff QR badge, break, roster or attendance storage is incomplete or is not using InnoDB.' );
+		}
+	}
+
 	private static function upgrade_to_1_1_0() {
 		DoughBoss_Activator::add_capabilities();
 	}
