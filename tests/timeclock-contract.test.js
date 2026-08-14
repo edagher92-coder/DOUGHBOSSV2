@@ -21,9 +21,9 @@ const clockCss = read('public/css/doughboss-timeclock.css');
 const badge = read('includes/class-doughboss-staff-badge.php');
 const badgeJs = read('public/js/doughboss-staff-badge.js');
 
-test('release 2.37.0 advances staff attendance to database schema 1.21.0', () => {
-	assert.match(plugin, /Version:\s+2\.37\.0/);
-	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.37\.0'/);
+test('release 2.38.0 retains staff attendance schema 1.21.0', () => {
+	assert.match(plugin, /Version:\s+2\.38\.0/);
+	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.38\.0'/);
 	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.21\.0'/);
 	assert.match(core, /class-doughboss-timeclock\.php/);
 	assert.match(core, /class-doughboss-staff-badge\.php/);
@@ -37,7 +37,7 @@ test('release 2.37.0 advances staff attendance to database schema 1.21.0', () =>
 
 test('staff clock is a hidden standalone no-cache portal, not a public menu page', () => {
 	assert.match(portals, /add_rewrite_rule\(\s*'\^staff-clock\/\?\$'/);
-	assert.match(portals, /array\(\s*'kitchen',\s*'catering-kitchen',\s*'staff-clock',\s*'management'\s*\)/);
+	assert.match(portals, /array\(\s*'kitchen',\s*'catering-kitchen',\s*'staff-clock',\s*'staff-guide',\s*'management',\s*'management-guide'\s*\)/);
 	assert.match(portals, /render_staff_clock\s*\(/);
 	assert.match(portals, /DoughBoss_Timeclock::render_portal\(\)/);
 	assert.doesNotMatch(portals, /is_user_logged_in\(\)\s*&&\s*!\s*DoughBoss_Timeclock::can_clock\(\)/);
@@ -49,7 +49,7 @@ test('staff clock is a hidden standalone no-cache portal, not a public menu page
 	assert.match(portals, /X-Robots-Tag:\s*noindex, nofollow, noarchive/);
 	assert.match(portals, /X-Frame-Options:\s*DENY/);
 	assert.ok(
-		portals.indexOf('$this->portal_headers();') < portals.indexOf("'staff-clock' !== $portal"),
+		portals.indexOf('$this->portal_headers();') < portals.indexOf('! is_user_logged_in()'),
 		'private/no-cache headers must be sent before any portal authentication branch'
 	);
 	assert.match(portals, /doughboss-timeclock\.css/);

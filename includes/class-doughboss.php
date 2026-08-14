@@ -108,6 +108,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-timeclock.php';
 		require_once $dir . 'class-doughboss-staff-badge.php';
 		require_once $dir . 'class-doughboss-staff-experience.php';
+		require_once $dir . 'class-doughboss-guides.php';
 		require_once $dir . 'class-doughboss-portals.php';
 
 		if ( is_admin() ) {
