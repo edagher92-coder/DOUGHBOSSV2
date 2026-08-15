@@ -222,14 +222,8 @@ class DoughBoss_CLI {
 	 * @return void
 	 */
 	public static function voucher_void( $args ) {
-		$id = isset( $args[0] ) ? (int) $args[0] : 0;
-		if ( ! $id ) {
-			WP_CLI::error( 'Usage: wp doughboss voucher-void <ID>' );
-		}
-		if ( ! DoughBoss_Voucher::void( $id ) ) {
-			WP_CLI::error( 'Could not void — voucher not found or not in the "issued" state.' );
-		}
-		WP_CLI::success( sprintf( 'Voucher voided: id %d.', $id ) );
+		unset( $args );
+		WP_CLI::error( 'Voucher voiding is restricted to the DoughBoss Vouchers page so a signed-in manager and mandatory reason are recorded in the audit trail.' );
 	}
 
 	/**
