@@ -358,7 +358,7 @@ $fixed = DoughBoss_Voucher::evaluate( $voucher, 24.95, 'online' );
 $voucher->type  = 'percent';
 $voucher->value = 10;
 $percent = DoughBoss_Voucher::evaluate( $voucher, 24.95, 'online' );
-stripe_contract_ok( $fixed['valid'] && 24.95 === $fixed['amount'] && 0.0 === max( 0.0, 24.95 - $fixed['amount'] ), 'voucher discount is capped at the server subtotal so the final amount cannot go negative' );
+stripe_contract_ok( $fixed['valid'] && 5.0 === $fixed['amount'] && 19.95 === round( 24.95 - $fixed['amount'], 2 ), 'promotional voucher discount is capped at $5 and the server subtotal so the final amount cannot go negative' );
 stripe_contract_ok( $percent['valid'] && 2.5 === $percent['amount'] && 22.45 === round( 24.95 - $percent['amount'], 2 ), 'percentage voucher final amount is calculated from the server subtotal with cents rounding' );
 
 $order_source  = file_get_contents( __DIR__ . '/../includes/class-doughboss-order.php' );
