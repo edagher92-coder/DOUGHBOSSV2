@@ -891,6 +891,7 @@ coupon_voucher_ok( coupon_voucher_error( $audit_fail, 'doughboss_voucher_audit' 
 
 $till_reverse_code = 'TILL-' . DoughBoss_Coupon_Code_Probe::checked_part( 'CDF', 0 ) . '-' . DoughBoss_Coupon_Code_Probe::checked_part( 'GJK', 1 );
 $till_reverse_id   = $db->seed_voucher( $till_reverse_code );
+$audit_before_till_reversal = count( $db->voucher_audit );
 $till_redeem       = DoughBoss_Voucher::redeem(
 	$till_reverse_code,
 	12.00,
@@ -919,7 +920,7 @@ $till_redeem_again   = DoughBoss_Voucher::redeem(
 coupon_voucher_ok(
 	is_array( $till_redeem ) && coupon_voucher_error( $till_missing_reason, 'doughboss_voucher_reverse_reason' )
 		&& is_array( $till_reversal ) && 'issued' === $db->vouchers[ $till_reverse_id ]['status']
-		&& 1 === count( $db->voucher_audit ) && 'reversal' === $db->voucher_audit[0]['event_type']
+		&& $audit_before_till_reversal + 1 === count( $db->voucher_audit ) && 'reversal' === $db->voucher_audit[ $audit_before_till_reversal ]['event_type']
 		&& coupon_voucher_error( $till_second_reverse, 'doughboss_voucher_reverse_state' )
 		&& is_array( $till_redeem_again ) && 'redeemed' === $db->vouchers[ $till_reverse_id ]['status'],
 	'in-store mis-scan reversal requires a manager reason, keeps an audit row and can only happen once'
