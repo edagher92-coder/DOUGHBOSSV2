@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.35.0
+Stable tag: 2.40.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,14 @@ optimised for a 23.8-inch Full HD touch display. Catering production uses the
 separate hidden `/catering-kitchen/` workspace, while managers use the protected
 `/management/` overview. Every staff route uses the normal WordPress user and
 role system; no password or secret is stored in the plugin.
+
+Every employee can use the touch-first `/staff-clock/` workspace by scanning a
+personal QR badge and entering a private PIN. Clock-in is bound to an active
+DoughBoss shop, the short kiosk session clears after every action, and recorded
+breaks are deducted from worked time. Optional manager-set rosters snapshot the
+expected start, grace and late minutes without making unapproved payroll-policy
+deductions. Managers can review, filter, correct with an audit reason, and export
+attendance from Staff Timesheet.
 
 = Shortcodes =
 
@@ -75,6 +83,37 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.40.0 =
+* Adds a manager-only, reason-required reversal for an unlinked in-store voucher mis-scan; the original receipt evidence remains and the reversal is audited.
+* Makes voucher voids reason-required and audited as well.
+* Keeps online or order-linked redemptions out of the manual reversal path so refunds remain tied to the original payment record.
+
+= 2.39.0 =
+* Enforces a maximum $5 promotional discount and a $3 minimum spend.
+* Makes in-store redemption fail closed until a manager is named as the daily reconciliation owner.
+* Requires the completed till/POS receipt reference and stores the signed-in cashier with each in-store redemption.
+
+= 2.38.0 =
+* Adds two standalone interactive operating guides: unlisted `/staff-guide/` and manager-protected `/management-guide/`, with touch-first walkthroughs, visual operating flows, live links and per-device progress tracking.
+* Keeps the QR/PIN kiosk workflow explicit: each employee receives a private badge and PIN, recorded breaks are actual breaks only, and managers retain audited access controls.
+* Extends the protected portal route contract without adding either guide to the public website navigation.
+
+= 2.37.0 =
+* Adds a scanner-first staff kiosk using revocable personal QR badges and 4–8 digit private PINs, with hashed credentials, short-lived sessions and timed lockout after repeated failures.
+* Adds touch-first clock in, break start/end and clock out actions while preserving one open shift and one open break per employee.
+* Subtracts only actually recorded breaks from worked time; no automatic unpaid-break assumption is made.
+* Adds optional weekly roster starts and grace periods, immutable late-minute snapshots, manager timesheets and expanded CSV evidence.
+
+= 2.36.1 =
+* Ensures an in-flight hosted payment return is always verified as paid or rejected safely when card acceptance is switched off, instead of falling through to an unpaid order.
+
+= 2.36.0 =
+* Adds a protected, touch-first `/staff-clock/` portal with safe shared-kiosk sign-out after every attendance action.
+* Records each shift against an active DoughBoss shop, snapshots staff and location identity, and fails closed when a multi-shop assignment is missing.
+* Adds a low-privilege clock-only staff role plus manager timesheets, shop filters, safe CSV export and audited forced-close corrections.
+* Serializes clock transitions and enforces one open shift per employee in transactional storage.
+* Repairs the Dough Boss Rewards settings save path inherited from 2.35.0 so the plugin parses cleanly before activation.
 
 = 2.35.0 =
 * Adds Dough Boss Rewards: passwordless customer membership, points wallet, tiers and a manager-controlled, default-off launch gate.

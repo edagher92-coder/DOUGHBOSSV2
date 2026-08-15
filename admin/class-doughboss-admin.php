@@ -31,6 +31,8 @@ class DoughBoss_Admin {
 		add_action( 'admin_post_doughboss_issue_voucher', array( $this, 'handle_issue_voucher' ) );
 		add_action( 'admin_post_doughboss_claim_voucher', array( $this, 'handle_claim_voucher' ) );
 		add_action( 'admin_post_doughboss_void_voucher', array( $this, 'handle_void_voucher' ) );
+		add_action( 'admin_post_doughboss_reverse_voucher', array( $this, 'handle_reverse_voucher' ) );
+		add_action( 'admin_post_doughboss_save_voucher_reconciliation', array( $this, 'handle_save_voucher_reconciliation' ) );
 		add_action( 'admin_post_doughboss_seed_menu', array( $this, 'handle_seed_menu' ) );
 		add_action( 'admin_post_doughboss_save_templates', array( $this, 'handle_save_templates' ) );
 		add_action( 'admin_post_doughboss_clear_payment_issues', array( $this, 'handle_clear_payment_issues' ) );
@@ -2338,15 +2340,35 @@ JS;
 		$new_code  = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
 		$campaigns = DoughBoss_Voucher::campaigns();
 		$vouchers  = DoughBoss_Voucher::query( 100 );
+		$owner_id  = absint( DoughBoss_Settings::get( 'voucher_reconciliation_owner_id', 0 ) );
+		$managers  = array_filter( get_users( array( 'fields' => array( 'ID', 'display_name', 'user_login' ) ) ), static function ( $user ) {
+			return user_can( $user, 'manage_doughboss' ) || user_can( $user, 'manage_options' );
+		} );
 		?>
 		<div class="wrap doughboss-vouchers">
 			<h1><?php esc_html_e( 'Vouchers', 'doughboss' ); ?></h1>
+			<div class="notice notice-warning inline"><p><strong><?php esc_html_e( 'Till control:', 'doughboss' ); ?></strong> <?php esc_html_e( 'Each in-store redemption requires the completed POS/till receipt reference and records the signed-in cashier. The assigned owner must reconcile this log to till totals each day.', 'doughboss' ); ?></p></div>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="max-width:820px;margin:1rem 0 1.5rem;">
+				<input type="hidden" name="action" value="doughboss_save_voucher_reconciliation" />
+				<?php wp_nonce_field( 'doughboss_save_voucher_reconciliation' ); ?>
+				<label for="db-voucher-owner"><strong><?php esc_html_e( 'Voucher reconciliation owner', 'doughboss' ); ?></strong></label>
+				<select id="db-voucher-owner" name="owner_id" required><option value="0"><?php esc_html_e( 'Select a manager', 'doughboss' ); ?></option><?php foreach ( $managers as $manager ) : ?><option value="<?php echo esc_attr( $manager->ID ); ?>" <?php selected( $owner_id, $manager->ID ); ?>><?php echo esc_html( $manager->display_name ? $manager->display_name : $manager->user_login ); ?></option><?php endforeach; ?></select>
+				<?php submit_button( __( 'Save owner', 'doughboss' ), 'secondary', 'submit', false ); ?>
+			</form>
 			<?php if ( 'issued' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html__( 'Voucher created:', 'doughboss' ); ?> <code><?php echo esc_html( $new_code ); ?></code> — <?php esc_html_e( 'reminder: this one does not reach POSPal.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'claimed' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html__( 'Voucher claimed:', 'doughboss' ); ?> <code><?php echo esc_html( $new_code ); ?></code> — <?php esc_html_e( 'this went through the real claim flow, so it will be granted to POSPal if configured.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'voided' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Voucher voided.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'reversed' === $msg ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'In-store voucher redemption reversed and recorded in the audit log.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'owner_saved' === $msg ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Voucher reconciliation owner saved.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'reverse_error' === $msg ) : ?>
+				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Could not reverse that voucher. It may be an online or already-linked redemption.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'void_error' === $msg ) : ?>
+				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Could not void that voucher. It may already be reserved, redeemed or missing a reason.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'claim_error' === $msg ) : ?>
 				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Could not claim the voucher — the campaign may be inactive or today\'s cap may be reached.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'error' === $msg ) : ?>
@@ -2510,7 +2532,21 @@ JS;
 							<td><?php echo $v->redeemed_at ? esc_html( mysql2date( 'j M, g:ia', $v->redeemed_at ) . ' · ' . $v->redeemed_channel ) : '—'; ?></td>
 							<td>
 								<?php if ( 'issued' === $v->status ) : ?>
-									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_void_voucher&id=' . $v->id ), 'doughboss_void_voucher_' . $v->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Void this voucher?', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Void', 'doughboss' ); ?></a>
+									<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:grid;gap:4px;min-width:210px;">
+										<input type="hidden" name="action" value="doughboss_void_voucher" />
+										<input type="hidden" name="id" value="<?php echo esc_attr( $v->id ); ?>" />
+										<?php wp_nonce_field( 'doughboss_void_voucher_' . $v->id ); ?>
+										<input name="reason" type="text" maxlength="500" minlength="5" required placeholder="Reason for void" aria-label="<?php esc_attr_e( 'Reason for void', 'doughboss' ); ?>" />
+										<button type="submit" class="button-link-delete" onclick="return confirm('<?php echo esc_js( __( 'Void this unused voucher?', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Void with reason', 'doughboss' ); ?></button>
+									</form>
+								<?php elseif ( 'redeemed' === $v->status && 'instore' === (string) $v->redeemed_channel ) : ?>
+									<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:grid;gap:4px;min-width:210px;">
+										<input type="hidden" name="action" value="doughboss_reverse_voucher" />
+										<input type="hidden" name="id" value="<?php echo esc_attr( $v->id ); ?>" />
+										<?php wp_nonce_field( 'doughboss_reverse_voucher_' . $v->id ); ?>
+										<input name="reason" type="text" maxlength="500" minlength="5" required placeholder="Reason for till correction" aria-label="<?php esc_attr_e( 'Reason for till correction', 'doughboss' ); ?>" />
+										<button type="submit" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Re-open this in-store voucher? The correction will be audited.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Reverse till scan', 'doughboss' ); ?></button>
+									</form>
 								<?php else : ?>
 									—
 								<?php endif; ?>
@@ -2554,6 +2590,22 @@ JS;
 			$args['code'] = $result['code'];
 		}
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/** Save the manager who owns the daily receipt-to-voucher reconciliation. */
+	public function handle_save_voucher_reconciliation() {
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_save_voucher_reconciliation' );
+		$owner_id = isset( $_POST['owner_id'] ) ? absint( $_POST['owner_id'] ) : 0;
+		$owner = $owner_id ? get_userdata( $owner_id ) : false;
+		if ( ! $owner || ! ( user_can( $owner, 'manage_doughboss' ) || user_can( $owner, 'manage_options' ) ) ) {
+			wp_die( esc_html__( 'Select a DoughBoss manager or administrator.', 'doughboss' ) );
+		}
+		DoughBoss_Settings::update( array( 'voucher_reconciliation_owner_id' => $owner_id ) );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-vouchers', 'msg' => 'owner_saved' ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
@@ -2603,15 +2655,33 @@ JS;
 	 * @return void
 	 */
 	public function handle_void_voucher() {
-		$id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
+		$id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
 		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
 		}
 		check_admin_referer( 'doughboss_void_voucher_' . $id );
-		if ( $id ) {
-			DoughBoss_Voucher::void( $id );
+		$reason = isset( $_POST['reason'] ) ? sanitize_text_field( wp_unslash( $_POST['reason'] ) ) : '';
+		$user   = wp_get_current_user();
+		$voided = $id && DoughBoss_Voucher::void( $id, $reason, (int) $user->ID, $user->display_name ? $user->display_name : $user->user_login );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-vouchers', 'msg' => $voided ? 'voided' : 'void_error' ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Handle a manager-approved reversal of a completed in-store voucher scan.
+	 *
+	 * @return void
+	 */
+	public function handle_reverse_voucher() {
+		$id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
+		if ( ! current_user_can( self::CAP ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
 		}
-		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-vouchers', 'msg' => 'voided' ), admin_url( 'admin.php' ) ) );
+		check_admin_referer( 'doughboss_reverse_voucher_' . $id );
+		$reason = isset( $_POST['reason'] ) ? sanitize_text_field( wp_unslash( $_POST['reason'] ) ) : '';
+		$user   = wp_get_current_user();
+		$result = DoughBoss_Voucher::reverse_redemption( $id, $reason, (int) $user->ID, $user->display_name ? $user->display_name : $user->user_login );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-vouchers', 'msg' => is_wp_error( $result ) ? 'reverse_error' : 'reversed' ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 

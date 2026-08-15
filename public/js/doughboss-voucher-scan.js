@@ -121,13 +121,18 @@
 		els.total.setAttribute( 'step', '0.01' );
 		els.total.setAttribute( 'placeholder', 'Order total (only for % / min-spend)' );
 		els.total.setAttribute( 'aria-label', 'Order total' );
+		els.receipt = make( 'input', 'db-scan__receipt' );
+		els.receipt.setAttribute( 'type', 'text' );
+		els.receipt.setAttribute( 'placeholder', 'POS/till receipt no. (required)' );
+		els.receipt.setAttribute( 'aria-label', 'Completed till receipt number' );
 		els.btn = make( 'button', 'db-scan__btn', 'Redeem' );
 		els.btn.setAttribute( 'type', 'button' );
 		row.appendChild( els.total );
+		row.appendChild( els.receipt );
 		row.appendChild( els.btn );
 		scanCard.appendChild( row );
 
-		scanCard.appendChild( make( 'p', 'db-scan__hint', 'Tip: a barcode scanner can type the code and press Enter. Enter the order total to cap a discount to the order value.' ) );
+		scanCard.appendChild( make( 'p', 'db-scan__hint', 'Complete the sale in the POS first. Enter its receipt number, then scan the voucher. The signed-in cashier and receipt are retained for daily reconciliation.' ) );
 
 		els.result = make( 'div', 'db-scan__result' );
 		els.result.setAttribute( 'role', 'status' );
@@ -301,6 +306,12 @@
 		if ( isNaN( subtotal ) || subtotal < 0 ) {
 			subtotal = 0;
 		}
+		var receipt = ( els.receipt.value || '' ).trim();
+		if ( ! receipt ) {
+			showResult( 'bad', 'Receipt required', 'Complete the POS sale first, then enter its receipt number.' );
+			els.receipt.focus();
+			return;
+		}
 		if ( code !== idemCode || ! idemKey ) {
 			idemCode = code;
 			idemKey  = 'scan-' + Date.now() + '-' + Math.random().toString( 36 ).slice( 2, 8 );
@@ -311,13 +322,15 @@
 		api( '/voucher/scan', 'POST', {
 			code: code,
 			subtotal: subtotal,
+			transaction_ref: receipt,
 			idempotency_key: idemKey
 		} ).then( function ( r ) {
 			els.btn.disabled = false;
 			if ( r.ok && r.data && r.data.redeemed ) {
 				showResult( 'ok', 'Redeemed ✓', r.data.code, r.data.amount );
 				els.input.value = '';
-				els.total.value = '';
+			els.total.value = '';
+			els.receipt.value = '';
 				idemCode = '';
 				idemKey = '';
 				clearTimer = setTimeout( function () { els.result.className = 'db-scan__result'; focusInput(); }, 7000 );

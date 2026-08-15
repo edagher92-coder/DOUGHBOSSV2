@@ -349,6 +349,10 @@ class DoughBoss_REST_Controller {
 							return (float) $value;
 						},
 					),
+					'transaction_ref' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 					'idempotency_key' => array(
 						'default'           => '',
 						'sanitize_callback' => 'sanitize_text_field',
@@ -587,6 +591,30 @@ class DoughBoss_REST_Controller {
 						'required'          => true,
 						'sanitize_callback' => 'absint',
 					),
+					'reason' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/voucher/reverse',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_reverse_voucher' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+					'reason' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 				),
 			)
 		);
@@ -819,6 +847,25 @@ class DoughBoss_REST_Controller {
 					),
 					'per_page' => array(
 						'default'           => 20,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		// Compact, PII-free workload for the MAKE / PASS / CATERING switcher.
+		// It is intentionally separate from the 100-card feeds so its counts stay
+		// exact during a busy service.
+		register_rest_route(
+			$ns,
+			'/admin/board-summary',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'admin_board_summary' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
+				'args'                => array(
+					'location_id' => array(
+						'default'           => 0,
 						'sanitize_callback' => 'absint',
 					),
 				),
@@ -1532,6 +1579,19 @@ class DoughBoss_REST_Controller {
 		}
 		$code     = (string) $request->get_param( 'code' );
 		$subtotal = (float) $request->get_param( 'subtotal' );
+		$transaction_ref = substr( sanitize_text_field( (string) $request->get_param( 'transaction_ref' ) ), 0, 64 );
+		$owner_id = absint( DoughBoss_Settings::get( 'voucher_reconciliation_owner_id', 0 ) );
+		$owner = $owner_id ? get_userdata( $owner_id ) : false;
+		if ( ! $owner || ! ( user_can( $owner, 'manage_doughboss' ) || user_can( $owner, 'manage_options' ) ) ) {
+			return new WP_Error( 'doughboss_voucher_owner', __( 'Voucher scans are paused until a manager is assigned as the reconciliation owner.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		if ( '' === $transaction_ref ) {
+			return new WP_Error( 'doughboss_voucher_reconciliation', __( 'Complete the till sale first, then enter its receipt reference.', 'doughboss' ), array( 'status' => 422 ) );
+		}
+		$cashier = wp_get_current_user();
+		if ( ! $cashier || ! $cashier->exists() ) {
+			return new WP_Error( 'doughboss_voucher_cashier', __( 'Sign in again before redeeming a voucher.', 'doughboss' ), array( 'status' => 401 ) );
+		}
 
 		// A busy till may not key the order total. A flat amount voucher with no
 		// minimum spend can safely apply its full value without one; but a
@@ -1555,7 +1615,12 @@ class DoughBoss_REST_Controller {
 			$code,
 			$subtotal,
 			'instore',
-			array( 'idempotency_key' => (string) $request->get_param( 'idempotency_key' ) )
+			array(
+				'idempotency_key' => (string) $request->get_param( 'idempotency_key' ),
+				'pospal_ticket_no' => $transaction_ref,
+				'redeemed_by_user_id' => (int) $cashier->ID,
+				'redeemed_by_name' => $cashier->display_name ? $cashier->display_name : $cashier->user_login,
+			)
 		);
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -2307,8 +2372,13 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function admin_void_voucher( WP_REST_Request $request ) {
-		$id = absint( $request->get_param( 'id' ) );
-		if ( ! DoughBoss_Voucher::void( $id ) ) {
+		$id     = absint( $request->get_param( 'id' ) );
+		$reason = trim( (string) $request->get_param( 'reason' ) );
+		$actor  = wp_get_current_user();
+		if ( strlen( $reason ) < 5 ) {
+			return new WP_Error( 'doughboss_void_reason', __( 'Give a short reason before voiding a voucher.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( ! DoughBoss_Voucher::void( $id, $reason, (int) $actor->ID, $actor->display_name ? $actor->display_name : $actor->user_login ) ) {
 			return new WP_Error( 'doughboss_void', __( 'Could not void — not found or already used.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		return rest_ensure_response(
@@ -2321,6 +2391,40 @@ class DoughBoss_REST_Controller {
 
 	/**
 	 * POST /voucher/issue — create a voucher (owner/admin only).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	/**
+	 * POST /voucher/reverse - re-open a genuine in-store mis-scan (owner only).
+	 * Online or linked payment redemptions are refused; use the order/payment
+	 * refund path for those transactions instead.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_reverse_voucher( WP_REST_Request $request ) {
+		$actor  = wp_get_current_user();
+		$result = DoughBoss_Voucher::reverse_redemption(
+			absint( $request->get_param( 'id' ) ),
+			(string) $request->get_param( 'reason' ),
+			(int) $actor->ID,
+			$actor->display_name ? $actor->display_name : $actor->user_login
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response(
+			array(
+				'reversed'      => true,
+				'voucher_id'    => $result['voucher_id'],
+				'redemption_id' => $result['redemption_id'],
+			)
+		);
+	}
+
+	/**
+	 * POST /voucher/issue - create a voucher (owner/admin only).
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
@@ -2823,22 +2927,22 @@ class DoughBoss_REST_Controller {
 			'meat'                    => 'real-v1/meat.jpg',
 			'meat-cheese'             => 'real-v1/meat-cheese.jpg',
 			'sujuk-cheese'            => 'real-v1/sujuk-cheese.jpg',
-			'half-meat-cheese'        => '',
-			'cheese-tomato-olives'    => '',
+			'half-meat-cheese'        => 'meat-cheese.webp',
+			'cheese-tomato-olives'    => 'veggie-plus.webp',
 			'cheese-kaak'             => 'real-v1/cheese-kaak.jpg',
-			'zaatar-veggie-pizza'     => '',
-			'labneh-veggie-pizza'     => '',
-			'all-meat'                => '',
+			'zaatar-veggie-pizza'     => 'veggie-plus.webp',
+			'labneh-veggie-pizza'     => 'veggie-plus.webp',
+			'all-meat'                => 'all-meat.webp',
 			'sujuk-deluxe'            => 'real-v1/sujuk-deluxe.jpg',
 			'spinach-deluxe'          => 'real-v1/spinach-deluxe.jpg',
 			'veggie-plus'             => 'real-v1/veggie-plus.jpg',
 			'pepperoni-cheese'        => 'real-v1/pepperoni-cheese.jpg',
-			'sujuk-special'           => '',
-			'dough-boss-special'      => '',
+			'sujuk-special'           => 'dough-boss-special.webp',
+			'dough-boss-special'      => 'dough-boss-special.webp',
 			'chicken-cheese'          => 'real-v1/chicken-cheese.jpg',
 			'bbq-chicken'             => 'real-v1/bbq-chicken.jpg',
 			'peri-peri-chicken'       => 'real-v1/peri-peri-chicken.jpg',
-			'garlic-prawns'           => '',
+			'garlic-prawns'           => 'garlic-prawns.webp',
 			'spinach-pie'             => 'real-v1/spinach-pie.jpg',
 			'spinach-cheese'          => 'real-v1/spinach-pie.jpg',
 			'haloumi'                 => 'real-v1/haloumi-pie.jpg',
@@ -2850,21 +2954,21 @@ class DoughBoss_REST_Controller {
 			'zaatar-veggie'           => 'real-v1/zaatar-veggie-wrap.jpg',
 			'labneh-veggie-wrap'      => 'real-v1/labneh-veggie-wrap.jpg',
 			'chicken-delight'         => 'real-v1/chicken-delight-wrap.jpg',
-			'ultimate-chicken'        => '',
-			'dough-boss-wrap'         => '',
+			'ultimate-chicken'        => 'ultimate-chicken.webp',
+			'dough-boss-wrap'         => 'dough-boss-wrap.webp',
 			'choco-banana'            => 'real-v1/choco-banana.jpg',
 			'spring-water'            => 'real-v1/spring-water.jpg',
-			'soft-drinks-600ml'       => '',
-			'soft-drinks'             => '',
+			'soft-drinks-600ml'       => 'soft-drinks.webp',
+			'soft-drinks'             => 'soft-drinks.webp',
 			'juice'                   => 'real-v1/juice.jpg',
 		);
 		$fallbacks = array(
-			'manoush'  => '',
-			'pizza'    => '',
-			'pies'     => '',
-			'wraps'    => '',
-			'desserts' => '',
-			'drinks'   => '',
+			'manoush'  => 'real-v1/zaatar-cheese.jpg',
+			'pizza'    => 'dough-boss-special.webp',
+			'pies'     => 'real-v1/spinach-pie.jpg',
+			'wraps'    => 'labneh-veggie-wrap.webp',
+			'desserts' => 'choco-banana.webp',
+			'drinks'   => 'juice.webp',
 		);
 		$key      = sanitize_title( $name );
 		$category = sanitize_title( $category );
@@ -3371,7 +3475,15 @@ class DoughBoss_REST_Controller {
 		$payment_status    = 'unpaid';
 		$payment_method    = '';
 		$payment_intent_id = '';
-		if ( DoughBoss_Payment::ready() ) {
+		$returned_payment_reference = $request->get_param( 'payment_intent_id' );
+		$returned_payment_reference = is_scalar( $returned_payment_reference ) ? sanitize_text_field( (string) $returned_payment_reference ) : '';
+		$payment_return             = '' !== $returned_payment_reference;
+		$returned_stripe_session    = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $returned_payment_reference );
+		if ( DoughBoss_Payment::ready() || $payment_return ) {
+			// A hosted payment can return after an operator closes card acceptance.
+			// The switch must stop new charges, but it must never reinterpret an
+			// already-paid return as pay-on-pickup. Any returned provider reference
+			// therefore forces verification (or a safe error) before order creation.
 			$payment_location = DoughBoss_Locations::online_payment_location( $location_id );
 			if ( is_wp_error( $payment_location ) ) {
 				return $payment_location;
@@ -3381,7 +3493,7 @@ class DoughBoss_REST_Controller {
 				return $verified;
 			}
 			$payment_status    = 'paid';
-			$payment_method    = DoughBoss_Settings::payment_gateway();
+			$payment_method    = $returned_stripe_session ? 'stripe' : DoughBoss_Settings::payment_gateway();
 			$payment_intent_id = $verified;
 		}
 
@@ -3742,7 +3854,8 @@ class DoughBoss_REST_Controller {
 	 * @return string|WP_Error Payment reference id, or an error.
 	 */
 	private function verify_payment( WP_REST_Request $request, $expected_total, $order_type, $location_id, $table_context = null ) {
-		$raw_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
+		$raw_id = $request->get_param( 'payment_intent_id' );
+		$raw_id = is_scalar( $raw_id ) ? sanitize_text_field( (string) $raw_id ) : '';
 		if ( '' === $raw_id ) {
 			return new WP_Error( 'doughboss_pay_required', __( 'Payment is required to place this order.', 'doughboss' ), array( 'status' => 402 ) );
 		}
@@ -3754,11 +3867,18 @@ class DoughBoss_REST_Controller {
 		// carry that session id, so storing anything other than the canonical
 		// id here would make webhook-based reconciliation permanently unable to
 		// find this order. See DoughBoss_Tyro::canonical_id().
-		$is_stripe_checkout = 'stripe' === DoughBoss_Settings::payment_gateway() && 0 === strpos( $raw_id, 'cs_' );
+		$is_stripe_checkout = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $raw_id );
 		if ( $is_stripe_checkout ) {
+			$expected_prefix = 'live' === DoughBoss_Settings::stripe_mode() ? 'cs_live_' : 'cs_test_';
+			if ( 'stripe' !== DoughBoss_Settings::payment_gateway() || 0 !== strpos( $raw_id, $expected_prefix ) ) {
+				return new WP_Error( 'doughboss_pay_mode_changed', __( 'This payment session cannot be verified with the shop\'s current payment configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 			$intent = DoughBoss_Stripe::retrieve_checkout_payment( $raw_id );
 			$pi_id  = ! is_wp_error( $intent ) && isset( $intent['id'] ) ? DoughBoss_Stripe::canonical_id( $intent['id'] ) : '';
 		} else {
+			if ( ! DoughBoss_Payment::ready() ) {
+				return new WP_Error( 'doughboss_pay_off', __( 'This payment cannot be verified while card payments are unavailable. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 			$pi_id  = DoughBoss_Payment::canonical_id( $raw_id );
 			$intent = DoughBoss_Payment::retrieve_payment_intent( $raw_id );
 		}
@@ -3943,6 +4063,35 @@ class DoughBoss_REST_Controller {
 				'server_time' => current_time( 'mysql', true ),
 			)
 		);
+	}
+
+	/**
+	 * GET /admin/board-summary â€” exact, PII-free live workload counts.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_board_summary( WP_REST_Request $request ) {
+		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
+		}
+
+		$orders = DoughBoss_Order::kitchen_workload_counts( $location_id );
+		$response = rest_ensure_response(
+			array(
+				'data'        => array(
+					'make'            => (int) $orders['make'],
+					'pass'            => (int) $orders['pass'],
+					'preorder_review' => (int) $orders['preorder_review'],
+					'catering'        => DoughBoss_Catering::production_queue_count( $location_id ),
+				),
+				'server_time' => current_time( 'mysql', true ),
+			)
+		);
+		$response->header( 'Cache-Control', 'no-store, private' );
+		$response->header( 'Vary', 'Cookie' );
+		return $response;
 	}
 
 	/**

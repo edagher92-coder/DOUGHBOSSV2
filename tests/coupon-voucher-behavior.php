@@ -37,6 +37,7 @@ set_error_handler(
 class DoughBoss_Coupon_Voucher_DB extends DB_Stub {
 	public $vouchers = array();
 	public $redemptions = array();
+	public $voucher_audit = array();
 	public $orders = array();
 	public $items = array();
 	public $events = array();
@@ -47,6 +48,7 @@ class DoughBoss_Coupon_Voucher_DB extends DB_Stub {
 	public $deny_next_voucher_lock = false;
 	public $zero_next_voucher_update = false;
 	private $next_voucher_id = 1;
+	private $next_redemption_id = 1;
 	private $next_order_id = 1;
 	private $next_item_id = 1;
 	private $snapshot = null;
@@ -170,11 +172,28 @@ class DoughBoss_Coupon_Voucher_DB extends DB_Stub {
 			$id = (int) $match[1];
 			return isset( $this->vouchers[ $id ] ) ? $this->output_row( $this->vouchers[ $id ], $output ) : null;
 		}
+		if ( preg_match( "/SELECT \* FROM wp_doughboss_voucher_redemptions WHERE voucher_id = (\d+) AND redemption_status = 'redeemed'/", $query, $match ) ) {
+			$voucher_id = (int) $match[1];
+			$matches = array_filter(
+				$this->redemptions,
+				static function ( $row ) use ( $voucher_id ) {
+					return (int) $row['voucher_id'] === $voucher_id && ( ! isset( $row['redemption_status'] ) || 'redeemed' === $row['redemption_status'] );
+				}
+			);
+			if ( empty( $matches ) ) {
+				return null;
+			}
+			usort( $matches, static function ( $a, $b ) { return (int) $b['id'] <=> (int) $a['id']; } );
+			return $this->output_row( $matches[0], $output );
+		}
 		if ( preg_match( "/WHERE r.idempotency_key = '([^']+)'/", $query, $match ) ) {
 			if ( ! isset( $this->redemptions[ $match[1] ] ) ) {
 				return null;
 			}
 			$redemption = $this->redemptions[ $match[1] ];
+			if ( isset( $redemption['redemption_status'] ) && 'redeemed' !== $redemption['redemption_status'] ) {
+				return null;
+			}
 			$voucher    = $this->vouchers[ $redemption['voucher_id'] ];
 			return $this->output_row(
 				array(
@@ -276,11 +295,11 @@ class DoughBoss_Coupon_Voucher_DB extends DB_Stub {
 	public function query( $query ) {
 		$query = (string) $query;
 		if ( 'START TRANSACTION' === $query ) {
-			$this->snapshot = serialize( array( $this->vouchers, $this->redemptions, $this->orders, $this->items, $this->events ) );
+			$this->snapshot = serialize( array( $this->vouchers, $this->redemptions, $this->voucher_audit, $this->orders, $this->items, $this->events ) );
 			return 0;
 		}
 		if ( 'ROLLBACK' === $query && null !== $this->snapshot ) {
-			list( $this->vouchers, $this->redemptions, $this->orders, $this->items, $this->events ) = unserialize( $this->snapshot );
+			list( $this->vouchers, $this->redemptions, $this->voucher_audit, $this->orders, $this->items, $this->events ) = unserialize( $this->snapshot );
 			$this->snapshot = null;
 			return 0;
 		}
@@ -343,8 +362,13 @@ class DoughBoss_Coupon_Voucher_DB extends DB_Stub {
 			if ( isset( $this->redemptions[ $key ] ) ) {
 				return false;
 			}
+			$data['id'] = $this->next_redemption_id++;
 			$data['order_id'] = isset( $data['order_id'] ) ? (int) $data['order_id'] : 0;
 			$this->redemptions[ $key ] = $data;
+			return 1;
+		}
+		if ( false !== strpos( $table, 'doughboss_voucher_audit' ) ) {
+			$this->voucher_audit[] = $data;
 			return 1;
 		}
 		if ( false !== strpos( $table, 'doughboss_vouchers' ) ) {
@@ -403,6 +427,21 @@ class DoughBoss_Coupon_Voucher_DB extends DB_Stub {
 
 	public function update( $table, $data, $where, $formats = null, $where_formats = null ) {
 		if ( false !== strpos( $table, 'doughboss_voucher_redemptions' ) ) {
+			if ( isset( $where['id'] ) ) {
+				foreach ( $this->redemptions as $key => $row ) {
+					if ( (int) $row['id'] !== (int) $where['id'] ) {
+						continue;
+					}
+					foreach ( $where as $field => $expected ) {
+						if ( (string) ( isset( $row[ $field ] ) ? $row[ $field ] : '' ) !== (string) $expected ) {
+							return 0;
+						}
+					}
+					$this->redemptions[ $key ] = array_merge( $row, $data );
+					return 1;
+				}
+				return 0;
+			}
 			$key = isset( $where['idempotency_key'] ) ? $where['idempotency_key'] : '';
 			if ( ! isset( $this->redemptions[ $key ] ) ) {
 				return 0;
@@ -614,14 +653,14 @@ coupon_voucher_ok( is_array( $percent_issue ) && 100.0 === (float) $percent_row[
 
 $eligible = (object) array(
 	'id' => 90, 'status' => 'issued', 'scope' => 'both', 'valid_from' => null, 'valid_to' => null,
-	'min_spend' => 20, 'type' => 'amount', 'value' => 50, 'location_id' => 0,
+	'min_spend' => 3, 'type' => 'amount', 'value' => 5, 'location_id' => 0,
 );
-$minimum = DoughBoss_Voucher::evaluate( $eligible, 19.99, 'online' );
+$minimum = DoughBoss_Voucher::evaluate( $eligible, 2.99, 'online' );
 coupon_voucher_ok( ! $minimum['valid'] && 'min_spend' === $minimum['reason'], 'minimum-spend failure is distinguished for customer guidance' );
 $eligible->valid_from = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) );
 $eligible->valid_to   = $eligible->valid_from;
-$minimum_boundary = DoughBoss_Voucher::evaluate( $eligible, 20.00, 'online' );
-coupon_voucher_ok( $minimum_boundary['valid'] && 20.00 === $minimum_boundary['amount'], 'exact minimum-spend and validity-window boundaries remain eligible' );
+$minimum_boundary = DoughBoss_Voucher::evaluate( $eligible, 3.00, 'online' );
+coupon_voucher_ok( $minimum_boundary['valid'] && 3.00 === $minimum_boundary['amount'], 'exact minimum-spend and validity-window boundaries remain eligible' );
 $eligible->valid_from = null;
 $eligible->valid_to   = null;
 $eligible->scope = 'instore';
@@ -661,13 +700,13 @@ coupon_voucher_ok( coupon_voucher_error( $legacy_repeat_claim, 'doughboss_studen
 coupon_voucher_section( 'Fixed/percent totals and GST rounding' );
 $fixed_eval = (object) array(
 	'id' => 91, 'status' => 'issued', 'scope' => 'both', 'valid_from' => null, 'valid_to' => null,
-	'min_spend' => 0, 'type' => 'amount', 'value' => 50, 'location_id' => 0,
+	'min_spend' => 3, 'type' => 'amount', 'value' => 5, 'location_id' => 0,
 );
 $fixed_amount = DoughBoss_Voucher::evaluate( $fixed_eval, 24.95, 'online' );
 $fixed_eval->type = 'percent';
 $fixed_eval->value = 10;
 $percent_amount = DoughBoss_Voucher::evaluate( $fixed_eval, 24.95, 'online' );
-coupon_voucher_ok( $fixed_amount['valid'] && 24.95 === $fixed_amount['amount'], 'fixed discount is capped at the goods subtotal' );
+coupon_voucher_ok( $fixed_amount['valid'] && 5.00 === $fixed_amount['amount'], 'fixed promotional discount is capped at $5' );
 coupon_voucher_ok( $percent_amount['valid'] && 2.50 === $percent_amount['amount'], 'percentage discount rounds 2.495 to AUD cents' );
 
 $fixed_code = 'FIX-' . DoughBoss_Coupon_Code_Probe::checked_part( 'CDE', 0 ) . '-' . DoughBoss_Coupon_Code_Probe::checked_part( 'FGH', 1 );
@@ -737,11 +776,11 @@ $void_code = 'VOID-' . DoughBoss_Coupon_Code_Probe::checked_part( 'DE4', 0 ) . '
 $void_id   = $db->seed_voucher( $void_code );
 $void_key  = hash( 'sha256', 'reserved-void' );
 DoughBoss_Voucher::reserve( $void_code, 20, 'online', $void_key );
-$active_void = DoughBoss_Voucher::void( $void_id );
+$active_void = DoughBoss_Voucher::void( $void_id, 'Test void after held checkout', 1, 'Test Manager' );
 $void_meta = json_decode( (string) $db->vouchers[ $void_id ]['meta'], true );
 $void_meta[ DoughBoss_Voucher::RESERVATION_META_KEY ]['expires_at'] = time() - 1;
 $db->vouchers[ $void_id ]['meta'] = wp_json_encode( $void_meta );
-$expired_void = DoughBoss_Voucher::void( $void_id );
+$expired_void = DoughBoss_Voucher::void( $void_id, 'Test void after lease expiry', 1, 'Test Manager' );
 coupon_voucher_ok( ! $active_void && $expired_void && 'voided' === $db->vouchers[ $void_id ]['status'], 'void refuses an active checkout lease but succeeds after that lease expires' );
 
 coupon_voucher_section( 'Stripe reservation and recovery wiring' );
@@ -850,6 +889,51 @@ $db->fail_next_redemption_insert = true;
 $audit_fail = DoughBoss_Voucher::redeem( $audit_code, 20, 'online', array( 'idempotency_key' => 'audit-fail' ) );
 coupon_voucher_ok( coupon_voucher_error( $audit_fail, 'doughboss_voucher_audit' ) && 'issued' === $db->vouchers[ $audit_id ]['status'] && ! isset( $db->redemptions['audit-fail'] ), 'mandatory-audit failure rolls the voucher claim back to issued' );
 
+$till_reverse_code = 'TILL-' . DoughBoss_Coupon_Code_Probe::checked_part( 'CDF', 0 ) . '-' . DoughBoss_Coupon_Code_Probe::checked_part( 'GJK', 1 );
+$till_reverse_id   = $db->seed_voucher( $till_reverse_code );
+$till_redeem       = DoughBoss_Voucher::redeem(
+	$till_reverse_code,
+	12.00,
+	'instore',
+	array(
+		'idempotency_key'    => 'till-reversal-original',
+		'pospal_ticket_no'   => 'POS-TEST-1001',
+		'redeemed_by_user_id' => 22,
+		'redeemed_by_name'   => 'Cashier One',
+	)
+);
+$till_missing_reason = DoughBoss_Voucher::reverse_redemption( $till_reverse_id, 'no', 8, 'Voucher Manager' );
+$till_reversal       = DoughBoss_Voucher::reverse_redemption( $till_reverse_id, 'Duplicate scan at till', 8, 'Voucher Manager' );
+$till_second_reverse = DoughBoss_Voucher::reverse_redemption( $till_reverse_id, 'Second correction attempt', 8, 'Voucher Manager' );
+$till_status_after_reversal = $db->vouchers[ $till_reverse_id ]['status'];
+$till_redeem_again   = DoughBoss_Voucher::redeem(
+	$till_reverse_code,
+	12.00,
+	'instore',
+	array(
+		'idempotency_key'    => 'till-reversal-retry',
+		'pospal_ticket_no'   => 'POS-TEST-1002',
+		'redeemed_by_user_id' => 22,
+		'redeemed_by_name'   => 'Cashier One',
+	)
+);
+$till_reversal_audits = array_values(
+	array_filter(
+		$db->voucher_audit,
+		static function ( $row ) use ( $till_reverse_id ) {
+			return (int) $till_reverse_id === (int) $row['voucher_id'] && 'reversal' === $row['event_type'];
+		}
+	)
+);
+coupon_voucher_ok(
+	is_array( $till_redeem ) && coupon_voucher_error( $till_missing_reason, 'doughboss_voucher_reverse_reason' )
+		&& is_array( $till_reversal ) && 'issued' === $till_status_after_reversal
+		&& 1 === count( $till_reversal_audits )
+		&& coupon_voucher_error( $till_second_reverse, 'doughboss_voucher_reverse_state' )
+		&& is_array( $till_redeem_again ) && 'redeemed' === $db->vouchers[ $till_reverse_id ]['status'],
+	'in-store mis-scan reversal requires a manager reason, keeps an audit row and can only happen once'
+);
+
 $revert_code = 'REV-' . DoughBoss_Coupon_Code_Probe::checked_part( 'XYZ', 0 ) . '-' . DoughBoss_Coupon_Code_Probe::checked_part( '234', 1 );
 $revert_id   = $db->seed_voucher( $revert_code );
 $before_revert = DoughBoss_Voucher::redeem( $revert_code, 20, 'online', array( 'idempotency_key' => 'order-revert-1' ) );
@@ -878,7 +962,7 @@ $owner_id   = $db->seed_voucher( $owner_code );
 $owner_key  = hash( 'sha256', 'reserved-owner-checkout' );
 $rival_key  = hash( 'sha256', 'reserved-rival-checkout' );
 DoughBoss_Voucher::reserve( $owner_code, 20, 'online', $owner_key );
-$reserved_scan = DoughBoss_Voucher::redeem( $owner_code, 20, 'instore', array( 'idempotency_key' => 'reserved-scan' ) );
+$reserved_scan = DoughBoss_Voucher::redeem( $owner_code, 20, 'instore', array( 'idempotency_key' => 'reserved-scan', 'pospal_ticket_no' => 'POS-RESERVED-1', 'redeemed_by_user_id' => 22, 'redeemed_by_name' => 'Cashier One' ) );
 $reserved_wrong = DoughBoss_Voucher::redeem( $owner_code, 20, 'online', array( 'idempotency_key' => 'reserved-wrong', 'reservation_key' => $rival_key ) );
 $reserved_owner = DoughBoss_Voucher::redeem( $owner_code, 20, 'online', array( 'idempotency_key' => 'reserved-owner', 'reservation_key' => $owner_key ) );
 $owner_meta_after = json_decode( (string) $db->vouchers[ $owner_id ]['meta'], true );
@@ -929,7 +1013,7 @@ DoughBoss_Voucher::reserve( $expired_scan_code, 20, 'online', $expired_scan_key 
 $expired_scan_meta = json_decode( (string) $db->vouchers[ $expired_scan_id ]['meta'], true );
 $expired_scan_meta[ DoughBoss_Voucher::RESERVATION_META_KEY ]['expires_at'] = time() - 1;
 $db->vouchers[ $expired_scan_id ]['meta'] = wp_json_encode( $expired_scan_meta );
-$expired_scan = DoughBoss_Voucher::redeem( $expired_scan_code, 20, 'instore', array( 'idempotency_key' => 'expired-staff-scan' ) );
+$expired_scan = DoughBoss_Voucher::redeem( $expired_scan_code, 20, 'instore', array( 'idempotency_key' => 'expired-staff-scan', 'pospal_ticket_no' => 'POS-EXPIRED-1', 'redeemed_by_user_id' => 22, 'redeemed_by_name' => 'Cashier One' ) );
 coupon_voucher_ok( is_array( $expired_scan ) && 'redeemed' === $db->vouchers[ $expired_scan_id ]['status'], 'expired abandoned lease no longer blocks an unreserved staff redemption' );
 
 $lock_code = 'LOCK-' . DoughBoss_Coupon_Code_Probe::checked_part( 'YZ6', 0 ) . '-' . DoughBoss_Coupon_Code_Probe::checked_part( '234', 1 );

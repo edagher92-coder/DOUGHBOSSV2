@@ -37,6 +37,10 @@ test('only DoughBoss staff capabilities can bypass the migration gate', () => {
 	assert.match(gate, /current_user_can\( 'manage_options' \)/);
 	assert.match(gate, /current_user_can\( 'manage_doughboss' \)/);
 	assert.match(gate, /current_user_can\( 'manage_doughboss_kds' \)/);
+	assert.match(gate, /function is_staff_clock_request\s*\([\s\S]*?\/staff-clock\//);
+	assert.match(gate, /protect_public_site\s*\([\s\S]*?is_staff_clock_request\(\)\s*\|\|\s*self::may_bypass\(\)/);
+	assert.match(gate, /protect_doughboss_rest\s*\([\s\S]*?may_bypass\(\)/);
+	assert.doesNotMatch(gate, /protect_doughboss_rest\s*\([\s\S]*?is_staff_clock_request\(\)/);
 	assert.doesNotMatch(gate, /return is_user_logged_in\(\)/);
 });
 

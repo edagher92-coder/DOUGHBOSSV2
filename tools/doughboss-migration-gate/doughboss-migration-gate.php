@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       DoughBoss Migration Gate
  * Description:       Temporarily shields the public site and DoughBoss REST ordering routes during the live migration.
- * Version:           1.0.2
+ * Version:           1.0.3
  * Author:            DoughBoss
  * Requires at least: 6.0
  * Requires PHP:      7.4
@@ -25,7 +25,7 @@ final class DoughBoss_Migration_Gate {
 	}
 
 	/**
-	 * Administrators, staff, and other authenticated test users may use the site.
+	 * Administrators and operational staff may use the protected test site.
 	 *
 	 * @return bool
 	 */
@@ -35,13 +35,24 @@ final class DoughBoss_Migration_Gate {
 			|| current_user_can( 'manage_doughboss_kds' );
 	}
 
+	/** Return true only for the site's canonical hidden staff-clock path. */
+	private static function is_staff_clock_request() {
+		$request_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH ) : '';
+		$clock_path   = wp_parse_url( home_url( '/staff-clock/' ), PHP_URL_PATH );
+		return untrailingslashit( (string) $request_path ) === untrailingslashit( (string) $clock_path );
+	}
+
 	/**
 	 * Return a reversible, cache-safe 503 migration page to logged-out visitors.
 	 *
 	 * @return void
 	 */
 	public static function protect_public_site() {
-		if ( self::may_bypass() ) {
+		// The exact hidden clock landing must remain reachable after every action
+		// signs the shared kiosk out. The DoughBoss portal itself protects all
+		// attendance data and mutations with login, capability, nonce and schema
+		// checks; no ordering REST route receives this public exception.
+		if ( self::is_staff_clock_request() || self::may_bypass() ) {
 			return;
 		}
 

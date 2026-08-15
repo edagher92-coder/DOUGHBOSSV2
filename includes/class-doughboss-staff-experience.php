@@ -38,10 +38,17 @@ final class DoughBoss_Staff_Experience {
 	 * @return string
 	 */
 	public function redirect_after_login( $redirect_to, $requested, $user ) {
-		unset( $requested );
-
 		if ( ! ( $user instanceof WP_User ) ) {
 			return $redirect_to;
+		}
+
+		$portal_url = $this->requested_portal_url( $requested, $user );
+		if ( '' !== $portal_url ) {
+			return $portal_url;
+		}
+
+		if ( in_array( 'doughboss_staff', (array) $user->roles, true ) ) {
+			return home_url( '/staff-clock/' );
 		}
 
 		if ( in_array( 'doughboss_kitchen', (array) $user->roles, true ) ) {
@@ -53,6 +60,53 @@ final class DoughBoss_Staff_Experience {
 		}
 
 		return $redirect_to;
+	}
+
+	/**
+	 * Honour only an approved same-site operational portal after sign-in.
+	 *
+	 * Kitchen and manager staff should return to the protected standalone
+	 * screen they opened, rather than the WordPress backend. Query parameters
+	 * are deliberately discarded, except for the exact PASS-screen selector,
+	 * so optional private board keys and arbitrary redirect values are never
+	 * copied into a post-login URL.
+	 *
+	 * @param string  $requested Requested redirect URL.
+	 * @param WP_User $user      Authenticated user.
+	 * @return string Canonical portal URL or an empty string.
+	 */
+	private function requested_portal_url( $requested, $user ) {
+		if ( ! is_string( $requested ) || '' === $requested ) {
+			return '';
+		}
+
+		$home_parts    = wp_parse_url( home_url( '/' ) );
+		$request_parts = wp_parse_url( $requested );
+		if ( ! is_array( $home_parts ) || ! is_array( $request_parts ) || empty( $home_parts['host'] ) || empty( $request_parts['host'] ) || strtolower( $home_parts['host'] ) !== strtolower( $request_parts['host'] ) ) {
+			return '';
+		}
+
+		$path  = '/' . trim( isset( $request_parts['path'] ) ? (string) $request_parts['path'] : '', '/' ) . '/';
+		$roles = (array) $user->roles;
+		if ( '/staff-clock/' === $path && ( in_array( 'doughboss_staff', $roles, true ) || in_array( 'doughboss_kitchen', $roles, true ) || in_array( 'doughboss_manager', $roles, true ) ) ) {
+			return home_url( '/staff-clock/' );
+		}
+
+		if ( in_array( 'doughboss_kitchen', $roles, true ) ) {
+			if ( '/kitchen/' === $path ) {
+				parse_str( isset( $request_parts['query'] ) ? (string) $request_parts['query'] : '', $query );
+				return 'pass' === ( isset( $query['screen'] ) ? (string) $query['screen'] : '' ) ? add_query_arg( 'screen', 'pass', home_url( '/kitchen/' ) ) : home_url( '/kitchen/' );
+			}
+			if ( '/catering-kitchen/' === $path ) {
+				return home_url( '/catering-kitchen/' );
+			}
+		}
+
+		if ( '/management/' === $path && in_array( 'doughboss_manager', $roles, true ) ) {
+			return home_url( '/management/' );
+		}
+
+		return '';
 	}
 
 	/**
@@ -68,6 +122,8 @@ final class DoughBoss_Staff_Experience {
 			$classes .= ' doughboss-staff doughboss-staff-kitchen';
 		} elseif ( 'manager' === $role ) {
 			$classes .= ' doughboss-staff doughboss-staff-manager';
+		} elseif ( 'staff' === $role ) {
+			$classes .= ' doughboss-staff doughboss-staff-clock';
 		}
 
 		return $classes;
@@ -104,7 +160,7 @@ final class DoughBoss_Staff_Experience {
 			remove_menu_page( $page );
 		}
 
-		if ( 'kitchen' === $role ) {
+		if ( in_array( $role, array( 'kitchen', 'staff' ), true ) ) {
 			// The KDS is full-screen below, so even the remaining sidebar is noise.
 			remove_menu_page( 'admin.php?page=doughboss' );
 			remove_menu_page( 'admin.php?page=doughboss-dashboard' );
@@ -114,7 +170,7 @@ final class DoughBoss_Staff_Experience {
 	/**
 	 * Return the current user's operational role, if any.
 	 *
-	 * @return string kitchen, manager or an empty string.
+	 * @return string kitchen, manager, staff or an empty string.
 	 */
 	private function current_staff_role() {
 		$user = wp_get_current_user();
@@ -128,6 +184,9 @@ final class DoughBoss_Staff_Experience {
 		}
 		if ( in_array( 'doughboss_manager', $roles, true ) ) {
 			return 'manager';
+		}
+		if ( in_array( 'doughboss_staff', $roles, true ) ) {
+			return 'staff';
 		}
 
 		return '';

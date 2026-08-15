@@ -57,12 +57,22 @@
 	var inFlight = {};
 	var audio = { ctx: null, on: false, timer: null };
 	var pollTimer = null;
+	var summaryTimer = null;
 	var retryBtn = null;
 	var lastSuccessfulSync = null;
 	// Multiple refresh signals can overlap (poll, SSE and a staff action). Only
 	// the newest response may repaint the board, otherwise a slower stale request
 	// can visually undo a just-completed status transition.
 	var loadEpoch = 0;
+	var summaryEpoch = 0;
+	var summaryAbort = null;
+	var summaryLoaded = false;
+	var summary = { make: null, pass: null, preorder_review: null, catering: null };
+	var summaryAnnouncement = document.querySelector('[data-db-board-summary-announcement]');
+	var summaryLinks = {};
+	['make', 'pass', 'catering'].forEach(function (mode) {
+		summaryLinks[mode] = document.querySelector('[data-db-board-summary-link="' + mode + '"]');
+	});
 
 	// Mercure SSE transport (optional). When connected and healthy, the ~7s poll
 	// is slowed to a long safety net; on any SSE error we fall straight back to
@@ -190,18 +200,78 @@
 
 	/* ----------------------------------------------------------------- API */
 
-	function api(path, method, body) {
+	function api(path, method, body, options) {
 		var headers = { 'Content-Type': 'application/json', 'X-WP-Nonce': cfg.nonce };
 		if (cfg.boardKey) { headers['X-DoughBoss-Board-Key'] = cfg.boardKey; }
 		return fetch(cfg.restUrl + path, {
 			method: method || 'GET',
 			headers: headers,
-			body: body ? JSON.stringify(body) : undefined
+			body: body ? JSON.stringify(body) : undefined,
+			signal: options && options.signal ? options.signal : undefined
 		}).then(function (r) {
 			return r.json().catch(function () { return {}; }).then(function (data) {
 				if (!r.ok) { throw new Error(data.message || 'Request failed.'); }
 				return data;
 			});
+		});
+	}
+
+	function scopedPath(path) {
+		return path + (currentLocation ? '?location_id=' + encodeURIComponent(currentLocation) : '');
+	}
+
+	function normalCount(value) {
+		var count = parseInt(value, 10);
+		return isNaN(count) || count < 0 ? 0 : count;
+	}
+
+	function compactCount(value) {
+		return value > 99 ? '99+' : String(value);
+	}
+
+	function summaryLabel(mode, counts, stale) {
+		var label = mode.charAt(0).toUpperCase() + mode.slice(1);
+		var count = counts[mode];
+		var detail = label + ' ' + count + (count === 1 ? ' active item' : ' active items');
+		if (mode === 'pass' && counts.preorder_review) {
+			detail += ', including ' + counts.preorder_review + (counts.preorder_review === 1 ? ' pre-order review' : ' pre-order reviews');
+		}
+		return stale ? detail + ', last known count is stale' : detail;
+	}
+
+	function renderSummary(counts, stale) {
+		['make', 'pass', 'catering'].forEach(function (mode) {
+			var link = summaryLinks[mode];
+			if (!link) { return; }
+			var badge = link.querySelector('[data-db-board-count="' + mode + '"]');
+			if (badge) { badge.textContent = compactCount(counts[mode]); }
+			link.classList.toggle('db-portal-mode--stale', !!stale);
+			link.setAttribute('aria-label', summaryLabel(mode, counts, stale));
+		});
+	}
+
+	function loadSummary() {
+		var requestEpoch = ++summaryEpoch;
+		if (summaryAbort && summaryAbort.abort) { summaryAbort.abort(); }
+		summaryAbort = window.AbortController ? new window.AbortController() : null;
+		return api(scopedPath('/admin/board-summary'), 'GET', null, summaryAbort ? { signal: summaryAbort.signal } : null).then(function (res) {
+			if (requestEpoch !== summaryEpoch || !res || !res.data) { return; }
+			var next = {
+				make: normalCount(res.data.make),
+				pass: normalCount(res.data.pass),
+				preorder_review: normalCount(res.data.preorder_review),
+				catering: normalCount(res.data.catering)
+			};
+			var changed = summaryLoaded && ['make', 'pass', 'preorder_review', 'catering'].some(function (key) { return next[key] !== summary[key]; });
+			summary = next;
+			summaryLoaded = true;
+			renderSummary(summary, false);
+			if (changed && summaryAnnouncement) {
+				summaryAnnouncement.textContent = 'Kitchen workload updated: ' + summaryLabel('make', summary, false) + '; ' + summaryLabel('pass', summary, false) + '; ' + summaryLabel('catering', summary, false) + '.';
+			}
+		}).catch(function (error) {
+			if (requestEpoch !== summaryEpoch || (error && error.name === 'AbortError')) { return; }
+			if (summaryLoaded) { renderSummary(summary, true); }
 		});
 	}
 
@@ -989,7 +1059,8 @@
 
 	function load() {
 		var requestEpoch = ++loadEpoch;
-		var path = (SCREEN_MODE === 'catering' ? '/admin/catering-board' : '/admin/orders') + (currentLocation ? '?location_id=' + currentLocation : '');
+		loadSummary();
+		var path = scopedPath(SCREEN_MODE === 'catering' ? '/admin/catering-board' : '/admin/orders');
 		return api(path, 'GET').then(function (res) {
 			if (!res || !Array.isArray(res.data)) { throw new Error('The production feed returned an invalid response.'); }
 			if (requestEpoch !== loadEpoch) { return null; }
@@ -1100,6 +1171,10 @@
 		if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
 		load();
 	});
+	window.addEventListener('beforeunload', function () {
+		if (summaryTimer) { clearInterval(summaryTimer); }
+		if (summaryAbort && summaryAbort.abort) { summaryAbort.abort(); }
+	});
 	document.addEventListener('keydown', function (event) {
 		if (event.key === 'Escape' && amendmentPanel && !amendmentPanel.hidden) {
 			closeAmendmentReview();
@@ -1159,6 +1234,7 @@
 	// Open the real-time SSE channel when configured; the poll below stays as the
 	// always-on fallback regardless.
 	connectSse();
+	summaryTimer = setInterval(loadSummary, POLL_FAST);
 
 	loop();
 }());

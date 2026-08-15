@@ -57,6 +57,16 @@ class DoughBoss_Voucher {
 	}
 
 	/**
+	 * Immutable voucher-management audit table name.
+	 *
+	 * @return string
+	 */
+	public static function audit_table() {
+		global $wpdb;
+		return $wpdb->prefix . 'doughboss_voucher_audit';
+	}
+
+	/**
 	 * Generate a high-entropy voucher code, e.g. SNOW-7K2D9QXM.
 	 *
 	 * The random body is built by DoughBoss_Coupon_Code::generate() so new codes
@@ -104,6 +114,9 @@ class DoughBoss_Voucher {
 		if ( $value <= 0 ) {
 			return new WP_Error( 'doughboss_voucher_value', __( 'Voucher value must be greater than zero.', 'doughboss' ), array( 'status' => 400 ) );
 		}
+		if ( 'amount' === $type && $value > 5.00 ) {
+			return new WP_Error( 'doughboss_voucher_value', __( 'Promotional vouchers cannot exceed $5.00.', 'doughboss' ), array( 'status' => 400 ) );
+		}
 		// A percentage discount can never exceed the whole order; clamp at issue
 		// time so a typo'd 500% is stored as 100% (evaluate() also clamps).
 		if ( 'percent' === $type && $value > 100 ) {
@@ -134,7 +147,7 @@ class DoughBoss_Voucher {
 			'type'           => $type,
 			'value'          => $value,
 			'currency'       => isset( $args['currency'] ) ? substr( strtoupper( sanitize_text_field( $args['currency'] ) ), 0, 3 ) : 'AUD',
-			'min_spend'      => round( (float) ( isset( $args['min_spend'] ) ? $args['min_spend'] : 0 ), 2 ),
+			'min_spend'      => max( 3.00, round( (float) ( isset( $args['min_spend'] ) ? $args['min_spend'] : 3.00 ), 2 ) ),
 			'scope'          => $scope,
 			'location_id'    => isset( $args['location_id'] ) ? absint( $args['location_id'] ) : 0,
 			'single_use'     => isset( $args['single_use'] ) ? (int) (bool) $args['single_use'] : 1,
@@ -230,7 +243,8 @@ class DoughBoss_Voucher {
 		if ( ! empty( $row->valid_to ) && strtotime( $row->valid_to ) < $now ) {
 			return $fail;
 		}
-		if ( (float) $row->min_spend > 0 && $subtotal < (float) $row->min_spend ) {
+		$minimum_spend = max( 3.00, (float) $row->min_spend );
+		if ( $subtotal < $minimum_spend ) {
 			$fail['reason'] = 'min_spend';
 			return $fail;
 		}
@@ -240,7 +254,7 @@ class DoughBoss_Voucher {
 		} else {
 			$amount = (float) $row->value;
 		}
-		$amount = max( 0, min( $amount, $subtotal ) );
+		$amount = max( 0, min( $amount, $subtotal, 5.00 ) );
 
 		return array(
 			'valid'  => true,
@@ -484,7 +498,7 @@ class DoughBoss_Voucher {
 	 * @param string $code     Voucher code.
 	 * @param float  $subtotal Server-computed cart subtotal.
 	 * @param string $channel  'online' or 'instore'.
-	 * @param array  $extra    { idempotency_key, reservation_key, location_id, pospal_ticket_no }.
+	 * @param array  $extra    { idempotency_key, reservation_key, location_id, pospal_ticket_no, redeemed_by_user_id, redeemed_by_name }.
 	 * @return array|WP_Error array{ code, amount } or error.
 	 */
 	public static function redeem( $code, $subtotal, $channel = 'online', array $extra = array() ) {
@@ -509,6 +523,13 @@ class DoughBoss_Voucher {
 			: '';
 		if ( isset( $extra['reservation_key'] ) && '' !== (string) $extra['reservation_key'] && '' === $reservation_key ) {
 			return new WP_Error( 'doughboss_voucher_reservation_key', __( 'The voucher checkout session is invalid. Please refresh and try again.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$ticket_no    = isset( $extra['pospal_ticket_no'] ) ? substr( sanitize_text_field( $extra['pospal_ticket_no'] ), 0, 64 ) : '';
+		$transaction_reference = 'instore' === $channel ? $ticket_no : null;
+		$cashier_id   = isset( $extra['redeemed_by_user_id'] ) ? absint( $extra['redeemed_by_user_id'] ) : 0;
+		$cashier_name = isset( $extra['redeemed_by_name'] ) ? substr( sanitize_text_field( $extra['redeemed_by_name'] ), 0, 191 ) : '';
+		if ( 'instore' === $channel && ( '' === $ticket_no || ! preg_match( '/^[A-Za-z0-9][A-Za-z0-9 ._\\/-]{2,63}$/', $ticket_no ) || ! $cashier_id || '' === $cashier_name ) ) {
+			return new WP_Error( 'doughboss_voucher_reconciliation', __( 'Complete the till sale first, then enter its receipt reference to redeem this voucher.', 'doughboss' ), array( 'status' => 422 ) );
 		}
 
 		$row = self::find_by_code( $code );
@@ -584,13 +605,17 @@ class DoughBoss_Voucher {
 				array(
 					'voucher_id'       => $voucher_id,
 					'channel'          => 'instore' === $channel ? 'instore' : 'online',
-					'pospal_ticket_no' => isset( $extra['pospal_ticket_no'] ) ? substr( sanitize_text_field( $extra['pospal_ticket_no'] ), 0, 64 ) : '',
+					'pospal_ticket_no' => $ticket_no,
+					'transaction_reference' => $transaction_reference,
 					'location_id'      => isset( $extra['location_id'] ) ? absint( $extra['location_id'] ) : (int) $row->location_id,
+					'redeemed_by_user_id' => $cashier_id,
+					'redeemed_by_name' => $cashier_name,
 					'amount_applied'   => $eval['amount'],
 					'idempotency_key'  => $idem,
 					'redeemed_at'      => $now,
+					'redemption_status' => 'redeemed',
 				),
-				array( '%d', '%s', '%s', '%d', '%f', '%s', '%s' )
+				array( '%d', '%s', '%s', '%s', '%d', '%d', '%s', '%f', '%s', '%s', '%s' )
 			);
 
 			// Audit is mandatory. Restore both issued status and the exact prior
@@ -641,7 +666,7 @@ class DoughBoss_Voucher {
 		$redemptions = self::redemptions_table();
 		$vouchers    = self::table();
 		return $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "SELECT r.amount_applied, v.code FROM {$redemptions} r INNER JOIN {$vouchers} v ON v.id = r.voucher_id WHERE r.idempotency_key = %s", $key )
+			$wpdb->prepare( "SELECT r.amount_applied, v.code FROM {$redemptions} r INNER JOIN {$vouchers} v ON v.id = r.voucher_id WHERE r.idempotency_key = %s AND r.redemption_status = %s", $key, 'redeemed' )
 		);
 	}
 
@@ -864,6 +889,7 @@ class DoughBoss_Voucher {
 				'label'     => '$5 Student Voucher (Dough Boss)',
 				'type'      => 'amount',
 				'value'     => 5.00,
+				'min_spend' => 3.00,
 				'prefix'    => 'DOUGH',
 				'daily_cap' => 100,
 				'cap_group' => 'student',
@@ -884,6 +910,7 @@ class DoughBoss_Voucher {
 				'label'     => '$5 Student Voucher (legacy — Snow Boss launch)',
 				'type'      => 'amount',
 				'value'     => 5.00,
+				'min_spend' => 3.00,
 				'prefix'    => 'SNOW',
 				'daily_cap' => 0,
 				'cap_group' => 'student',
@@ -1101,6 +1128,7 @@ class DoughBoss_Voucher {
 				array(
 					'type'       => isset( $campaign['type'] ) ? $campaign['type'] : 'amount',
 					'value'      => isset( $campaign['value'] ) ? $campaign['value'] : 0,
+					'min_spend'  => isset( $campaign['min_spend'] ) ? $campaign['min_spend'] : 3.00,
 					'prefix'     => isset( $campaign['prefix'] ) ? $campaign['prefix'] : 'DB',
 					'scope'      => isset( $campaign['scope'] ) ? $campaign['scope'] : 'both',
 					'single_use' => 1,
@@ -1153,7 +1181,7 @@ class DoughBoss_Voucher {
 			$wpdb->prepare(
 				"SELECT v.*, r.redeemed_at, r.amount_applied, r.channel AS redeemed_channel
 				FROM {$table} v
-				LEFT JOIN {$redemptions} r ON r.voucher_id = v.id
+				LEFT JOIN {$redemptions} r ON r.voucher_id = v.id AND r.redemption_status = 'redeemed'
 				ORDER BY v.id DESC
 				LIMIT %d",
 				$limit
@@ -1176,36 +1204,215 @@ class DoughBoss_Voucher {
 	}
 
 	/**
-	 * Void an unredeemed voucher.
+	 * Record a management action while the caller's transaction is open.
 	 *
-	 * @param int $id Voucher id.
+	 * This is intentionally private: every public path that gives voucher value
+	 * back must hold the per-voucher lock and prove the actor first.
+	 *
+	 * @param int    $voucher_id    Voucher id.
+	 * @param int    $redemption_id Redemption id, or zero for an unused voucher.
+	 * @param string $event_type    Reversal or void action name.
+	 * @param string $reason        Mandatory manager explanation.
+	 * @param int    $actor_id      WordPress manager id.
+	 * @param string $actor_name    Manager display name snapshot.
+	 * @param array  $details       Non-sensitive operational evidence.
 	 * @return bool
 	 */
-	public static function void( $id ) {
+	private static function record_audit_event( $voucher_id, $redemption_id, $event_type, $reason, $actor_id, $actor_name, array $details = array() ) {
+		global $wpdb;
+		return false !== $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			self::audit_table(),
+			array(
+				'voucher_id'    => absint( $voucher_id ),
+				'redemption_id'  => absint( $redemption_id ),
+				'event_type'     => sanitize_key( $event_type ),
+				'reason'         => substr( sanitize_text_field( $reason ), 0, 500 ),
+				'actor_user_id'  => absint( $actor_id ),
+				'actor_name'     => substr( sanitize_text_field( $actor_name ), 0, 191 ),
+				'details_json'   => wp_json_encode( $details ),
+				'occurred_at'    => current_time( 'mysql' ),
+			),
+			array( '%d', '%d', '%s', '%s', '%d', '%s', '%s', '%s' )
+		);
+	}
+
+	/**
+	 * Re-open a genuinely mis-scanned in-store voucher.
+	 *
+	 * Only a named manager can request this through the controller/admin UI and
+	 * the original receipt remains on the immutable redemption row. Online or
+	 * order-linked redemptions are deliberately excluded: refund the actual
+	 * payment instead of recreating a voucher after an online order.
+	 *
+	 * @param int    $voucher_id Voucher id.
+	 * @param string $reason     Mandatory explanation for the till correction.
+	 * @param int    $actor_id   WordPress manager id.
+	 * @param string $actor_name Manager display name.
+	 * @return array|WP_Error
+	 */
+	public static function reverse_redemption( $voucher_id, $reason, $actor_id, $actor_name ) {
+		global $wpdb;
+
+		$voucher_id = absint( $voucher_id );
+		$reason     = trim( substr( sanitize_text_field( (string) $reason ), 0, 500 ) );
+		$actor_id   = absint( $actor_id );
+		$actor_name = trim( substr( sanitize_text_field( (string) $actor_name ), 0, 191 ) );
+		if ( ! $voucher_id || strlen( $reason ) < 5 ) {
+			return new WP_Error( 'doughboss_voucher_reverse_reason', __( 'Give a short reason for the reversal.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( ! $actor_id || '' === $actor_name ) {
+			return new WP_Error( 'doughboss_voucher_reverse_actor', __( 'A signed-in manager is required to reverse a voucher.', 'doughboss' ), array( 'status' => 403 ) );
+		}
+		if ( ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return self::busy_error();
+		}
+
+		$transaction = false;
+		$committed   = false;
+		try {
+			if ( false === $wpdb->query( 'START TRANSACTION' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_voucher_reverse_storage', __( 'Could not safely start the voucher reversal. Please try again.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			$transaction = true;
+			$table       = self::table();
+			$redemptions = self::redemptions_table();
+			$row         = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d FOR UPDATE", $voucher_id )
+			);
+			if ( ! $row || 'redeemed' !== (string) $row->status ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return new WP_Error( 'doughboss_voucher_reverse_state', __( 'This voucher is not available to reverse.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+
+			$redemption = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare( "SELECT * FROM {$redemptions} WHERE voucher_id = %d AND redemption_status = %s ORDER BY id DESC LIMIT 1 FOR UPDATE", $voucher_id, 'redeemed' )
+			);
+			if ( ! $redemption || 'instore' !== (string) $redemption->channel || ! empty( $redemption->order_id ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return new WP_Error( 'doughboss_voucher_reverse_channel', __( 'Only an unlinked in-store scan can be reversed. Refund online orders through their payment record instead.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+
+			$now = current_time( 'mysql' );
+			$reversal_saved = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$redemptions,
+				array(
+					'redemption_status'  => 'reversed',
+					'reversed_at'        => $now,
+					'reversed_by_user_id' => $actor_id,
+					'reversed_by_name'   => $actor_name,
+					'reversal_reason'    => $reason,
+				),
+				array( 'id' => (int) $redemption->id, 'redemption_status' => 'redeemed' ),
+				array( '%s', '%s', '%d', '%s', '%s' ),
+				array( '%d', '%s' )
+			);
+			if ( 1 !== (int) $reversal_saved ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return new WP_Error( 'doughboss_voucher_reverse_race', __( 'That voucher changed before it could be reversed. Refresh and check the voucher log.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+
+			$reissued = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$table,
+				array( 'status' => 'issued', 'updated_at' => $now ),
+				array( 'id' => $voucher_id, 'status' => 'redeemed' ),
+				array( '%s', '%s' ),
+				array( '%d', '%s' )
+			);
+			if ( 1 !== (int) $reissued || ! self::record_audit_event(
+				$voucher_id,
+				(int) $redemption->id,
+				'reversal',
+				$reason,
+				$actor_id,
+				$actor_name,
+				array(
+					'channel'               => 'instore',
+					'transaction_reference' => (string) $redemption->transaction_reference,
+					'amount_applied'        => (float) $redemption->amount_applied,
+				)
+			) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return new WP_Error( 'doughboss_voucher_reverse_audit', __( 'Could not record the reversal, so the voucher was left unchanged.', 'doughboss' ), array( 'status' => 500 ) );
+			}
+
+			$committed   = false !== $wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$transaction = false;
+			if ( ! $committed ) {
+				return new WP_Error( 'doughboss_voucher_reverse_storage', __( 'Could not complete the voucher reversal. Check the voucher log before trying again.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+		} finally {
+			if ( $transaction && ! $committed ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+			self::release_voucher_lock( $voucher_id );
+		}
+
+		do_action( 'doughboss_voucher_reversed', $voucher_id, (int) $redemption->id, $actor_id );
+		return array( 'voucher_id' => $voucher_id, 'redemption_id' => (int) $redemption->id );
+	}
+
+	/**
+	 * Void an unredeemed voucher with a named-manager audit entry.
+	 *
+	 * @param int    $id         Voucher id.
+	 * @param string $reason     Mandatory reason.
+	 * @param int    $actor_id   WordPress manager id.
+	 * @param string $actor_name Manager display name.
+	 * @return bool
+	 */
+	public static function void( $id, $reason = '', $actor_id = 0, $actor_name = '' ) {
 		global $wpdb;
 		$id = absint( $id );
-		if ( ! $id ) {
+		$reason = trim( substr( sanitize_text_field( (string) $reason ), 0, 500 ) );
+		$actor_id = absint( $actor_id );
+		$actor_name = trim( substr( sanitize_text_field( (string) $actor_name ), 0, 191 ) );
+		if ( ! $id || strlen( $reason ) < 5 || ! $actor_id || '' === $actor_name ) {
 			return false;
 		}
 		if ( ! self::acquire_voucher_lock( $id ) ) {
 			return false;
 		}
+		$transaction = false;
+		$committed   = false;
 		try {
+			if ( false === $wpdb->query( 'START TRANSACTION' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return false;
+			}
+			$transaction = true;
 			$row = self::find_by_id( $id );
 			if ( ! $row || 'issued' !== (string) $row->status ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
 				return false;
 			}
 			$reservation = self::row_reservation( $row );
 			if ( $reservation && (int) $reservation['expires_at'] > time() ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
 				return false;
 			}
 			$meta = self::row_meta( $row );
 			unset( $meta[ self::RESERVATION_META_KEY ] );
 			$table = self::table();
-			return 1 === (int) $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$voided = 1 === (int) $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				$wpdb->prepare( "UPDATE {$table} SET status = %s, meta = %s, updated_at = %s WHERE id = %d AND status = %s", 'voided', self::encode_meta( $meta ), current_time( 'mysql' ), $id, 'issued' )
 			);
+			if ( ! $voided || ! self::record_audit_event( $id, 0, 'void', $reason, $actor_id, $actor_name ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				$transaction = false;
+				return false;
+			}
+			$committed = false !== $wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$transaction = false;
+			return $committed;
 		} finally {
+			if ( $transaction && ! $committed ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
 			self::release_voucher_lock( $id );
 		}
 	}

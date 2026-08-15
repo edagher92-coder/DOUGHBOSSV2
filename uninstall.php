@@ -18,6 +18,10 @@ global $wpdb;
 
 // Drop custom tables (children before parents).
 $tables = array(
+	$wpdb->prefix . 'doughboss_staff_breaks',
+	$wpdb->prefix . 'doughboss_staff_badges',
+	$wpdb->prefix . 'doughboss_staff_shift_events',
+	$wpdb->prefix . 'doughboss_staff_shifts',
 	$wpdb->prefix . 'doughboss_loyalty_tokens',
 	$wpdb->prefix . 'doughboss_loyalty_ledger',
 	$wpdb->prefix . 'doughboss_loyalty_members',
@@ -32,6 +36,7 @@ $tables = array(
 	$wpdb->prefix . 'doughboss_schedule_exceptions',
 	$wpdb->prefix . 'doughboss_location_hours',
 	$wpdb->prefix . 'doughboss_voucher_redemptions',
+	$wpdb->prefix . 'doughboss_voucher_audit',
 	$wpdb->prefix . 'doughboss_vouchers',
 	$wpdb->prefix . 'doughboss_order_events',
 	$wpdb->prefix . 'doughboss_order_items',
@@ -59,6 +64,22 @@ foreach ( $post_ids as $post_id ) {
 	wp_delete_post( $post_id, true );
 }
 
+// Remove only the exact public Staff Clock page created by the retired 2.26
+// prototype. A user-authored page that merely shares the slug is preserved.
+$legacy_clock_pages = get_posts(
+	array(
+		'post_type'      => 'page',
+		'post_status'    => 'any',
+		'name'           => 'staff-clock',
+		'posts_per_page' => -1,
+	)
+);
+foreach ( $legacy_clock_pages as $legacy_clock_page ) {
+	if ( '[doughboss_staff_clock]' === trim( (string) $legacy_clock_page->post_content ) ) {
+		wp_delete_post( $legacy_clock_page->ID, true );
+	}
+}
+
 // Remove options.
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
@@ -69,7 +90,14 @@ delete_option( 'doughboss_pospal_unmapped_alerts' );
 delete_option( 'doughboss_delivery_autodisabled' );
 delete_option( 'doughboss_printer_watermark' );
 delete_option( 'doughboss_email_stage_log' );
+delete_option( 'doughboss_portal_routes_version' );
 delete_transient( 'doughboss_migrating' );
+
+// Shop assignments are plugin-owned attendance/KDS metadata. Retaining them
+// after a full uninstall would leave stale employee-location data behind.
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->usermeta} WHERE meta_key = %s", 'doughboss_location_id' ) );
+$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->usermeta} WHERE meta_key = %s", 'doughboss_staff_roster' ) );
 
 // Remove permanent, autoload-off exactly-once markers for voucher emails.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -88,9 +116,11 @@ if ( $role ) {
 	$role->remove_cap( 'manage_doughboss' );
 	$role->remove_cap( 'manage_doughboss_kds' );
 	$role->remove_cap( 'redeem_doughboss_vouchers' );
+	$role->remove_cap( 'clock_doughboss_staff' );
 }
 remove_role( 'doughboss_kitchen' );
 remove_role( 'doughboss_manager' );
+remove_role( 'doughboss_staff' );
 
 // Remove any POSPal work left in WP-Cron (for example when uninstall runs
 // without a prior deactivation event).
@@ -124,6 +154,13 @@ $wpdb->query(
 // phpcs:disable WordPress.DB.DirectDatabaseQuery
 $wpdb->query(
 	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_db_loyalty_link_%' OR option_name LIKE '_transient_timeout_db_loyalty_link_%'"
+);
+// phpcs:enable
+
+// Remove short-lived QR badge sessions and PIN lockouts.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->query(
+	"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_staff_badge_session_%' OR option_name LIKE '_transient_timeout_doughboss_staff_badge_session_%' OR option_name LIKE '_transient_doughboss_staff_badge_locked_%' OR option_name LIKE '_transient_timeout_doughboss_staff_badge_locked_%' OR option_name LIKE '_transient_doughboss_staff_badge_attempts_%' OR option_name LIKE '_transient_timeout_doughboss_staff_badge_attempts_%'"
 );
 // phpcs:enable
 

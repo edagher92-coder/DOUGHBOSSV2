@@ -1,6 +1,6 @@
 <?php
 /**
- * Standalone, capability-gated kitchen, catering and management portals.
+ * Standalone, capability-gated kitchen, catering, staff-clock and management portals.
  *
  * @package DoughBoss
  */
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Portals {
 
-	const ROUTE_VERSION = '2';
+	const ROUTE_VERSION = '5';
 	const QUERY_VAR     = 'doughboss_portal';
 
 	/**
@@ -42,7 +42,10 @@ class DoughBoss_Portals {
 	public function register_routes() {
 		add_rewrite_rule( '^kitchen/?$', 'index.php?' . self::QUERY_VAR . '=kitchen', 'top' );
 		add_rewrite_rule( '^catering-kitchen/?$', 'index.php?' . self::QUERY_VAR . '=catering-kitchen', 'top' );
+		add_rewrite_rule( '^staff-clock/?$', 'index.php?' . self::QUERY_VAR . '=staff-clock', 'top' );
+		add_rewrite_rule( '^staff-guide/?$', 'index.php?' . self::QUERY_VAR . '=staff-guide', 'top' );
 		add_rewrite_rule( '^management/?$', 'index.php?' . self::QUERY_VAR . '=management', 'top' );
+		add_rewrite_rule( '^management-guide/?$', 'index.php?' . self::QUERY_VAR . '=management-guide', 'top' );
 	}
 
 	/**
@@ -76,7 +79,7 @@ class DoughBoss_Portals {
 	 */
 	public function render_requested_portal() {
 		$portal = sanitize_key( (string) get_query_var( self::QUERY_VAR ) );
-		if ( ! in_array( $portal, array( 'kitchen', 'catering-kitchen', 'management' ), true ) ) {
+		if ( ! in_array( $portal, array( 'kitchen', 'catering-kitchen', 'staff-clock', 'staff-guide', 'management', 'management-guide' ), true ) ) {
 			return;
 		}
 
@@ -85,7 +88,7 @@ class DoughBoss_Portals {
 		// public navigation and must never be indexed, cached or framed.
 		$this->portal_headers();
 
-		if ( ! is_user_logged_in() ) {
+		if ( ! is_user_logged_in() && ! in_array( $portal, array( 'staff-clock', 'staff-guide' ), true ) ) {
 			auth_redirect();
 			exit;
 		}
@@ -94,10 +97,46 @@ class DoughBoss_Portals {
 			$this->render_kitchen();
 		} elseif ( 'catering-kitchen' === $portal ) {
 			$this->render_kitchen( 'catering' );
-		} else {
+		} elseif ( 'staff-clock' === $portal ) {
+			$this->render_staff_clock();
+		} elseif ( 'management' === $portal ) {
 			$this->render_management();
+		} elseif ( 'management-guide' === $portal ) {
+			$this->render_guide( 'management' );
+		} else {
+			$this->render_guide( 'staff' );
 		}
 		exit;
+	}
+
+	/**
+	 * Render the shared-device staff clock. Its signed-out landing remains
+	 * visible so a completed clock action can confirm success to the employee.
+	 *
+	 * @return void
+	 */
+	private function render_staff_clock() {
+		if ( is_user_logged_in() && ! current_user_can( DoughBoss_Timeclock::CAPABILITY ) ) {
+			wp_die( esc_html__( 'This account does not have staff-clock access.', 'doughboss' ), esc_html__( 'Staff access required', 'doughboss' ), array( 'response' => 403 ) );
+		}
+		// Release an authenticated kiosk identity before any HTML is emitted if
+		// the attendance schema is unavailable. render_portal() then displays the
+		// fail-closed signed-out message without risking a late auth-cookie write.
+		if ( is_user_logged_in() && ! DoughBoss_Timeclock::storage_ready() ) {
+			wp_logout();
+		}
+
+		$this->render_head( __( 'Staff Clock — DoughBoss', 'doughboss' ), 'timeclock' );
+		?>
+		<body class="doughboss-standalone-portal doughboss-timeclock-portal">
+			<?php if ( is_user_logged_in() ) : ?>
+				<?php $this->render_portal_bar( 'timeclock', '', '' ); ?>
+			<?php endif; ?>
+			<?php DoughBoss_Timeclock::render_portal(); ?>
+			<script src="<?php echo esc_url( $this->versioned_asset( 'public/js/doughboss-portals.js' ) ); ?>"></script>
+		</body>
+		</html>
+		<?php
 	}
 
 	/**
@@ -214,12 +253,36 @@ class DoughBoss_Portals {
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss' ) ); ?>"><?php esc_html_e( 'Orders', 'doughboss' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-catering' ) ); ?>"><?php esc_html_e( 'Catering', 'doughboss' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-reports' ) ); ?>"><?php esc_html_e( 'Reports', 'doughboss' ); ?></a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-timeclock' ) ); ?>"><?php esc_html_e( 'Staff Timesheet', 'doughboss' ); ?></a>
+				<a href="<?php echo esc_url( home_url( '/staff-clock/' ) ); ?>"><?php esc_html_e( 'Staff Clock', 'doughboss' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>"><?php esc_html_e( 'Settings', 'doughboss' ); ?></a>
 			</nav>
 			<main class="db-management-main" id="main">
 				<?php ( new DoughBoss_Admin() )->render_dashboard_page(); ?>
 			</main>
 			<script src="<?php echo esc_url( $this->versioned_asset( 'public/js/doughboss-portals.js' ) ); ?>"></script>
+		</body>
+		</html>
+		<?php
+	}
+
+	/**
+	 * Render the unlisted interactive operating guide. Staff can open their
+	 * guide from any device; the management version remains capability-gated.
+	 *
+	 * @param string $audience staff|management.
+	 * @return void
+	 */
+	private function render_guide( $audience ) {
+		if ( 'management' === $audience && ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to view the management guide.', 'doughboss' ), esc_html__( 'Management access required', 'doughboss' ), array( 'response' => 403 ) );
+		}
+		$title = 'management' === $audience ? __( 'Management guide — DoughBoss', 'doughboss' ) : __( 'Staff guide — DoughBoss', 'doughboss' );
+		$this->render_head( $title, 'guide' );
+		?>
+		<body class="doughboss-guide-portal doughboss-guide-portal--<?php echo esc_attr( $audience ); ?>">
+			<?php DoughBoss_Guides::render( $audience ); ?>
+			<script src="<?php echo esc_url( $this->versioned_asset( 'public/js/doughboss-guides.js' ) ); ?>"></script>
 		</body>
 		</html>
 		<?php
@@ -240,11 +303,15 @@ class DoughBoss_Portals {
 			<meta charset="<?php bloginfo( 'charset' ); ?>">
 			<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 			<meta name="robots" content="noindex,nofollow,noarchive">
-			<meta name="theme-color" content="<?php echo 'kitchen' === $portal ? '#0b0907' : '#f6f2eb'; ?>">
+			<meta name="theme-color" content="<?php echo in_array( $portal, array( 'kitchen', 'timeclock' ), true ) ? '#0b0907' : '#f6f2eb'; ?>">
 			<title><?php echo esc_html( $title ); ?></title>
 			<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-portals.css' ) ); ?>">
 			<?php if ( 'kitchen' === $portal ) : ?>
 				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-orderboard.css' ) ); ?>">
+			<?php elseif ( 'timeclock' === $portal ) : ?>
+				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-timeclock.css' ) ); ?>">
+			<?php elseif ( 'guide' === $portal ) : ?>
+				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-guides.css' ) ); ?>">
 			<?php else : ?>
 				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-admin.css' ) ); ?>">
 			<?php endif; ?>
@@ -278,9 +345,21 @@ class DoughBoss_Portals {
 			<a class="db-portal-brand" href="<?php echo esc_url( home_url( '/' ) ); ?>" aria-label="<?php esc_attr_e( 'Dough Boss home', 'doughboss' ); ?>">DOUGH BOSS<span>.</span></a>
 			<?php if ( 'kitchen' === $portal ) : ?>
 				<nav class="db-portal-modes" aria-label="<?php esc_attr_e( 'Kitchen screen', 'doughboss' ); ?>">
-					<a class="<?php echo 'make' === $screen ? 'is-active' : ''; ?>" href="<?php echo esc_url( $kitchen_url( 'make' ) ); ?>"><?php esc_html_e( 'Make', 'doughboss' ); ?></a>
-					<a class="<?php echo 'pass' === $screen ? 'is-active' : ''; ?>" href="<?php echo esc_url( $kitchen_url( 'pass' ) ); ?>"><?php esc_html_e( 'Pass', 'doughboss' ); ?></a>
-					<a class="<?php echo 'catering' === $screen ? 'is-active' : ''; ?>" href="<?php echo esc_url( $kitchen_url( 'catering' ) ); ?>"><?php esc_html_e( 'Catering', 'doughboss' ); ?></a>
+					<?php
+					$modes = array(
+						'make'     => __( 'Make', 'doughboss' ),
+						'pass'     => __( 'Pass', 'doughboss' ),
+						'catering' => __( 'Catering', 'doughboss' ),
+					);
+					foreach ( $modes as $mode => $label ) :
+						$is_active = $mode === $screen;
+						?>
+						<a class="<?php echo $is_active ? 'is-active' : ''; ?>" data-db-board-summary-link="<?php echo esc_attr( $mode ); ?>" href="<?php echo esc_url( $kitchen_url( $mode ) ); ?>"<?php echo $is_active ? ' aria-current="page"' : ''; ?> aria-label="<?php echo esc_attr( sprintf( __( '%s live workload loading', 'doughboss' ), $label ) ); ?>">
+							<span class="db-portal-mode-label"><?php echo esc_html( $label ); ?></span>
+							<span class="db-portal-live-count" data-db-board-count="<?php echo esc_attr( $mode ); ?>" aria-hidden="true">&mdash;</span>
+						</a>
+					<?php endforeach; ?>
+					<span class="db-portal-summary-announcement" data-db-board-summary-announcement aria-live="polite" aria-atomic="true"></span>
 				</nav>
 			<?php endif; ?>
 			<div class="db-portal-account">
@@ -289,6 +368,13 @@ class DoughBoss_Portals {
 				<?php if ( 'kitchen' === $portal && ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) ) : ?>
 					<a href="<?php echo esc_url( home_url( '/management/' ) ); ?>"><?php esc_html_e( 'Management', 'doughboss' ); ?></a>
 				<?php elseif ( 'management' === $portal && current_user_can( 'manage_doughboss_kds' ) ) : ?>
+					<a href="<?php echo esc_url( home_url( '/kitchen/' ) ); ?>"><?php esc_html_e( 'Kitchen', 'doughboss' ); ?></a>
+				<?php endif; ?>
+				<?php if ( 'timeclock' !== $portal && current_user_can( DoughBoss_Timeclock::CAPABILITY ) ) : ?>
+					<a href="<?php echo esc_url( home_url( '/staff-clock/' ) ); ?>"><?php esc_html_e( 'Staff Clock', 'doughboss' ); ?></a>
+				<?php elseif ( 'timeclock' === $portal && ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) ) : ?>
+					<a href="<?php echo esc_url( home_url( '/management/' ) ); ?>"><?php esc_html_e( 'Management', 'doughboss' ); ?></a>
+				<?php elseif ( 'timeclock' === $portal && current_user_can( 'manage_doughboss_kds' ) ) : ?>
 					<a href="<?php echo esc_url( home_url( '/kitchen/' ) ); ?>"><?php esc_html_e( 'Kitchen', 'doughboss' ); ?></a>
 				<?php endif; ?>
 				<span class="db-portal-user"><?php echo esc_html( $user->display_name ); ?></span>
@@ -358,8 +444,17 @@ class DoughBoss_Portals {
 		if ( false !== strpos( $redirect, '/catering-kitchen/' ) ) {
 			return 'catering-kitchen';
 		}
+		if ( false !== strpos( $redirect, '/staff-clock/' ) ) {
+			return 'staff-clock';
+		}
+		if ( false !== strpos( $redirect, '/staff-guide/' ) ) {
+			return 'staff-guide';
+		}
 		if ( false !== strpos( $redirect, '/management/' ) ) {
 			return 'management';
+		}
+		if ( false !== strpos( $redirect, '/management-guide/' ) ) {
+			return 'management-guide';
 		}
 		return '';
 	}
@@ -424,6 +519,8 @@ class DoughBoss_Portals {
 			$copy = __( 'Kitchen staff sign-in. You will return directly to the live production board.', 'doughboss' );
 		} elseif ( 'catering-kitchen' === $portal ) {
 			$copy = __( 'Catering team sign-in. You will return directly to the protected catering production board.', 'doughboss' );
+		} elseif ( 'staff-clock' === $portal ) {
+			$copy = __( 'Staff attendance sign-in. Use your own account; the shared screen signs out after each clock action.', 'doughboss' );
 		} else {
 			$copy = __( 'Owner and manager sign-in. You will return directly to the operations overview.', 'doughboss' );
 		}
