@@ -131,10 +131,10 @@ $badges        = $wpdb->prefix . 'doughboss_staff_badges';
 $locations     = $wpdb->prefix . 'doughboss_locations';
 $audit_fail_trigger = $wpdb->prefix . 'doughboss_staff_audit_fail';
 
-// Build and migrate the real DB 1.21 contract. A failed InnoDB readiness check
+// Build and migrate the real DB 1.23 contract. A failed InnoDB readiness check
 // must stop the version checkpoint and leave an operator-visible explanation.
 DoughBoss_Activator::create_tables();
-timeclock_db_ok( '2.37.0' === DOUGHBOSS_VERSION && '1.21.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.37.0 and DB contract 1.21.0' );
+timeclock_db_ok( '2.40.0' === DOUGHBOSS_VERSION && '1.23.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.40.0 and DB contract 1.23.0' );
 timeclock_db_ok( DoughBoss_Activator::timeclock_storage_ready(), 'fresh staff shifts and audit tables satisfy the exact readiness contract' );
 
 timeclock_db_sql( "ALTER TABLE {$events} ENGINE=MyISAM" );
@@ -149,7 +149,7 @@ timeclock_db_sql( "ALTER TABLE {$events} ENGINE=InnoDB" );
 delete_option( 'doughboss_migration_lock' );
 delete_option( 'doughboss_migration_error' );
 DoughBoss_Migrations::run();
-timeclock_db_ok( '1.21.0' === get_option( 'doughboss_db_version' ) && DoughBoss_Activator::timeclock_storage_ready(), 'repaired InnoDB storage advances through DB 1.21' );
+timeclock_db_ok( '1.23.0' === get_option( 'doughboss_db_version' ) && DoughBoss_Activator::timeclock_storage_ready(), 'repaired InnoDB storage advances through DB 1.23' );
 
 // Once a legacy row receives its immutable shop/timezone evidence, a failed
 // later migration retry must not rewrite that history from mutable shop data.
