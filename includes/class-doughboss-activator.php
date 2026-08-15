@@ -344,4 +344,948 @@ class DoughBoss_Activator {
 			quote_total decimal(10,2) NOT NULL DEFAULT 0.00,
 			deposit_amount decimal(10,2) NOT NULL DEFAULT 0.00,
 			balance_amount decimal(10,2) NOT NULL DEFAULT 0.00,
-			currency varchaóÞx¶‰žËkºwµçUÉä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘É½ÝÌ€ô€¡…ÉÉ…ä¤€‘ÝÁ‘ˆ´ù•Ñ}É•ÍÕ±ÑÌ €‰M!=\=1U59LI=4ì‘Ñ…‰±•ôˆ€¤ì($$‘…ÑÕ…°€ô…ÉÉ…ä ¤ì($%™½É•… € €‘É½ÝÌ…Ì€‘É½Ü€¤ì($$$‘…ÑÕ…±l€‘É½Ü´ù¥•±t€ô€‘É½Üì($%ô($%™½É•… € €‘½¹ÑÉ…Ð…Ì€‘™¥•±€ôø€‘•áÁ•Ñ•€¤ì($$%¥˜€ €„¥ÍÍ•Ð €‘…ÑÕ…±l€‘™¥•±t€¤€¤ì($$$%É•ÑÕÉ¸™…±Í”ì($$%ô($$$‘É½Ü€ô€‘…ÑÕ…±l€‘™¥•±tì($$$¼¼5åME0€à½µ¥ÑÌ‘•ÁÉ•…Ñ•¥¹Ñ••È‘¥ÍÁ±…äÝ¥‘Ñ¡ÌÝ¡¥±”5…É¥…ÍÑ¥±°($$$¼¼É•Á½ÉÑÌÑ¡•´¸Q¡•ä‘•ÍÉ¥‰”Ñ¡”Í…µ”ÍÑ½É…”½¹ÑÉ…Ð°Í¼½µÁ…É”Ñ¡”($$$¼¼Í•µ…¹Ñ¥ŒÑåÁ”Ý¡¥±”É•Ñ…¥¹¥¹œ•á…ÐÙ…É¡…È±•¹Ñ¡Ì…¹Í¥¹•‘¹•ÍÌ¸($$$‘…ÑÕ…±}ÑåÁ”€€€ôÁÉ•}É•Á±…” €œ½qˆ¡Ñ¥¹å¥¹ÑñÍµ…±±¥¹Ññµ•‘¥Õµ¥¹Ññ¥¹Ññ‰¥¥¹Ð¥p¡q­p¤¼œ°€œÄœ°ÍÑÉÑ½±½Ý•È €¡ÍÑÉ¥¹œ¤€‘É½Ü´ùQåÁ”€¤€¤ì($$$‘•áÁ•Ñ•‘}ÑåÁ”€ôÁÉ•}É•Á±…” €œ½qˆ¡Ñ¥¹å¥¹ÑñÍµ…±±¥¹Ññµ•‘¥Õµ¥¹Ññ¥¹Ññ‰¥¥¹Ð¥p¡q­p¤¼œ°€œÄœ°€‘•áÁ•Ñ•‘lÑåÁ”t€¤ì($$%¥˜€ €‘…ÑÕ…±}ÑåÁ”€„ôô€‘•áÁ•Ñ•‘}ÑåÁ”ñðÍÑÉÑ½ÕÁÁ•È €¡ÍÑÉ¥¹œ¤€‘É½Ü´ù9Õ±°€¤€„ôô€‘•áÁ•Ñ•‘l¹Õ±°t€¤ì($$$%É•ÑÕÉ¸™…±Í”ì($$%ô($$%¥˜€ …ÉÉ…å}­•å}•á¥ÍÑÌ €‘•™…Õ±Ðœ°€‘•áÁ•Ñ•€¤€¤ì($$$$‘…ÑÕ…±}‘•™…Õ±Ð€€€ô€‘É½Ü´ù•™…Õ±Ðì($$$$‘•áÁ•Ñ•‘}‘•™…Õ±Ð€ô€‘•áÁ•Ñ•‘l‘•™…Õ±Ðtì($$$%¥˜€ € ¹Õ±°€ôôô€‘…ÑÕ…±}‘•™…Õ±Ð€¤€„ôô€ ¹Õ±°€ôôô€‘•áÁ•Ñ•‘}‘•™…Õ±Ð€¤€¤ì($$$$%É•ÑÕÉ¸™…±Í”ì($$$%ô($$$%¥˜€ ¹Õ±°€„ôô€‘…ÑÕ…±}‘•™…Õ±Ð€˜˜€¡ÍÑÉ¥¹œ¤€‘…ÑÕ…±}‘•™…Õ±Ð€„ôô€¡ÍÑÉ¥¹œ¤€‘•áÁ•Ñ•‘}‘•™…Õ±Ð€¤ì($$$$%É•ÑÕÉ¸™…±Í”ì($$$%ô($$%ô($%ô($%É•ÑÕÉ¸ÑÉÕ”ì(%ô(($¼¨¨($€¨Y•É¥™ä¥¹‘•àÕ¹¥ÅÕ•¹•ÍÌ…¹•á…Ð½É‘•É•½±Õµ¹Ì¸($€¨($€¨Á…É…´ÍÑÉ¥¹œ€€€‘Ñ…‰±”€€Q…‰±”¹…µ”¸($€¨Á…É…´ÍÑÉ¥¹œ€€€‘¹…µ”€€€%¹‘•à¹…µ”¸($€¨Á…É…´ÍÑÉ¥¹mt€‘½±Õµ¹Ì=É‘•É•½±Õµ¹Ì¸($€¨Á…É…´‰½½°€€€€€‘Õ¹¥ÅÕ”€]¡•Ñ¡•ÈÑ¡”¥¹‘•àµÕÍÐ‰”Õ¹¥ÅÕ”¸($€¨Á…É…´¥¹Ñmt€€€€‘±•¹Ñ¡Ì5¥¹¥µÕ´™Õ±°±•¹Ñ¡Ì™½ÈÍÑÉ¥¹œ¥¹‘•àÁ…ÉÑÌ¸($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÉ¥Ù…Ñ”ÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘Ñ…‰±”°€‘¹…µ”°…ÉÉ…ä€‘½±Õµ¹Ì°€‘Õ¹¥ÅÕ”°…ÉÉ…ä€‘±•¹Ñ¡Ì€ô…ÉÉ…ä ¤€¤ì($%±½‰…°€‘ÝÁ‘ˆì($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘É½ÝÌ€ô€¡…ÉÉ…ä¤€‘ÝÁ‘ˆ´ù•Ñ}É•ÍÕ±ÑÌ €‘ÝÁ‘ˆ´ùÁÉ•Á…É” €‰M!=\%9`I=4ì‘Ñ…‰±•ô]!I-•å}¹…µ”€ô€•Ìˆ°€‘¹…µ”€¤€¤ì($%ÕÍ½ÉÐ ($$$‘É½ÝÌ°($$%ÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸€ €‘±•™Ð°€‘É¥¡Ð€¤ì($$$%É•ÑÕÉ¸€¡¥¹Ð¤€‘±•™Ð´ùM•Å}¥¹}¥¹‘•à€ðôø€¡¥¹Ð¤€‘É¥¡Ð´ùM•Å}¥¹}¥¹‘•àì($$%ô($$¤ì($%¥˜€ ½Õ¹Ð €‘É½ÝÌ€¤€„ôô½Õ¹Ð €‘½±Õµ¹Ì€¤€¤ì($$%É•ÑÕÉ¸™…±Í”ì($%ô($%™½É•… € €‘É½ÝÌ…Ì€‘½™™Í•Ð€ôø€‘É½Ü€¤ì($$$‘ÍÕ‰}Á…ÉÐ€ô¹Õ±°€ôôô€‘É½Ü´ùMÕ‰}Á…ÉÐ€ü¹Õ±°€è€¡¥¹Ð¤€‘É½Ü´ùMÕ‰}Á…ÉÐì($$%¥˜€ ($$$$¡ÍÑÉ¥¹œ¤€‘É½Ü´ù½±Õµ¹}¹…µ”€„ôô€‘½±Õµ¹Íl€‘½™™Í•Ðt($$$%ñð€ €‘Õ¹¥ÅÕ”€ü€À€è€Ä€¤€„ôô€¡¥¹Ð¤€‘É½Ü´ù9½¹}Õ¹¥ÅÕ”($$$%ñð€ ¹Õ±°€„ôô€‘ÍÕ‰}Á…ÉÐ€˜˜€ €„¥ÍÍ•Ð €‘±•¹Ñ¡Íl€‘½™™Í•Ðt€¤ñð€‘ÍÕ‰}Á…ÉÐ€ð€‘±•¹Ñ¡Íl€‘½™™Í•Ðt€¤€¤($$$¤ì($$$%É•ÑÕÉ¸™…±Í”ì($$%ô($%ô($%É•ÑÕÉ¸ÑÉÕ”ì(%ô(($¼¨¨($€¨Y•É¥™äÑ¡”‘ÕÉ…‰±”¡•­½ÕÐÉ•Á±…ä…¹½¹”µÁ…åµ•¹Ð½½¹”µ½É‘•È½¹ÍÑÉ…¥¹ÑÌ¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸¡•­½ÕÑ}ÍÑ½É…•}É•…‘ä ¤ì($%±½‰…°€‘ÝÁ‘ˆì($$‘½É‘•ÉÌ€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}½É‘•ÉÌœì($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä($$‘•¹¥¹”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‘ÝÁ‘ˆ´ùÁÉ•Á…É” €M1P9%9I=4¥¹™½Éµ…Ñ¥½¹}Í¡•µ„¹Q	1L]!IQ	1}M!5€ôQ	M ¤9Q	1}95€ô€•Ìœ°€‘½É‘•ÉÌ€¤€¤ì($%¥˜€ €„€‘•¹¥¹”ñð€%99=œ€„ôôÍÑÉÑ½ÕÁÁ•È €‘•¹¥¹”€¤€¤ì($$%É•ÑÕÉ¸™…±Í”ì($%ô(($$‘½±Õµ¹Ì€ô…ÉÉ…ä ($$$Á…åµ•¹Ñ}¥¹Ñ•¹Ñ}¥œ€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€Ù…É¡…È ÄäÄ¤œ°€¹Õ±°œ€ôø€eLœ°€‘•™…Õ±Ðœ€ôø¹Õ±°€¤°($$$¡•­½ÕÑ}­•äœ€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€¡…È ØÐ¤œ°€¹Õ±°œ€ôø€eLœ°€‘•™…Õ±Ðœ€ôø¹Õ±°€¤°($$¤ì($%É•ÑÕÉ¸Í•±˜èé½±Õµ¹}½¹ÑÉ…Ñ}É•…‘ä €‘½É‘•ÉÌ°€‘½±Õµ¹Ì€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘½É‘•ÉÌ°€Á…åµ•¹Ñ}¥¹Ñ•¹Ñ}¥œ°…ÉÉ…ä €Á…åµ•¹Ñ}¥¹Ñ•¹Ñ}¥œ€¤°ÑÉÕ”°…ÉÉ…ä €ÄäÄ€¤€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘½É‘•ÉÌ°€¡•­½ÕÑ}­•äœ°…ÉÉ…ä €¡•­½ÕÑ}­•äœ€¤°ÑÉÕ”°…ÉÉ…ä €ØÐ€¤€¤ì(%ô(($¼¨¨($€¨Y•É¥™äÑ¡”ÍÑ½É”½Ñ…‰±”EH½É‘•É¥¹œÍ¡•µ„‰•™½É”…•ÁÑ¥¹œÑ…‰±”½É‘•ÉÌ¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸Ñ…‰±•}ÅÉ}ÍÑ½É…•}É•…‘ä ¤ì($%±½‰…°€‘ÝÁ‘ˆì($$‘½É‘•ÉÌ€€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}½É‘•ÉÌœì($$‘Ñ…‰±•Ì€€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}‘¥¹¥¹}Ñ…‰±•Ìœì($$‘½‘•Ì€€€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}Ñ…‰±•}ÅÉ}½‘•Ìœì($$‘Í•ÍÍ¥½¹Ì€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}Ñ…‰±•}Í•ÍÍ¥½¹Ìœì(($%™½É•… € …ÉÉ…ä €‘½É‘•ÉÌ°€‘Ñ…‰±•Ì°€‘½‘•Ì°€‘Í•ÍÍ¥½¹Ì€¤…Ì€‘Ñ…‰±”€¤ì($$$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä($$$‘•¹¥¹”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‘ÝÁ‘ˆ´ùÁÉ•Á…É” €M1P9%9I=4¥¹™½Éµ…Ñ¥½¹}Í¡•µ„¹Q	1L]!IQ	1}M!5€ôQ	M ¤9Q	1}95€ô€•Ìœ°€‘Ñ…‰±”€¤€¤ì($$%¥˜€ €„€‘•¹¥¹”ñð€%99=œ€„ôôÍÑÉÑ½ÕÁÁ•È €‘•¹¥¹”€¤€¤ì($$$%É•ÑÕÉ¸™…±Í”ì($$%ô($%ô(($%É•ÑÕÉ¸Í•±˜èé½±Õµ¹}½¹ÑÉ…Ñ}É•…‘ä ($$$‘½É‘•ÉÌ°($$%…ÉÉ…ä ($$$$Ñ…‰±•}¥œ€€€€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€‰¥¥¹Ð ÈÀ¤Õ¹Í¥¹•œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œÀœ€¤°($$$$Ñ…‰±•}±…‰•°œ€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€Ù…É¡…È àÀ¤œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œœ€¤°($$$$Ñ…‰±•}ÅÉ}½‘•}¥œ€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€‰¥¥¹Ð ÈÀ¤Õ¹Í¥¹•œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œÀœ€¤°($$$$Ñ…‰±•}Í•ÍÍ¥½¹}¥œ€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€‰¥¥¹Ð ÈÀ¤Õ¹Í¥¹•œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œÀœ€¤°($$$$½É‘•É}Í½ÕÉ”œ€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€Ù…É¡…È ÈÀ¤œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€Ý•ˆœ€¤°($$$¤($$¤($$$˜˜Í•±˜èé½±Õµ¹}½¹ÑÉ…Ñ}É•…‘ä ($$$$‘Ñ…‰±•Ì°($$$%…ÉÉ…ä ($$$$$±½…Ñ¥½¹}¥œ€€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€‰¥¥¹Ð ÈÀ¤Õ¹Í¥¹•œ°€¹Õ±°œ€ôø€9<œ€¤°($$$$$±…‰•°œ€€€€€€€€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€Ù…É¡…È àÀ¤œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œœ€¤°($$$$$½É‘•É¥¹}ÕÉ°œ€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€Ù…É¡…È ÈÔÔ¤œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œœ€¤°($$$$$¥Í}…Ñ¥Ù”œ€€€€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€Ñ¥¹å¥¹Ð Ä¤œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œÄœ€¤°($$$$$ÕÉÉ•¹Ñ}ÅÉ}½‘•}¥œôø…ÉÉ…ä €ÑåÁ”œ€ôø€‰¥¥¹Ð ÈÀ¤Õ¹Í¥¹•œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€œÀœ€¤°($$$$¤($$$¤($$$˜˜Í•±˜èé½±Õµ¹}½¹ÑÉ…Ñ}É•…‘ä ($$$$‘½‘•Ì°($$$%…ÉÉ…ä ($$$$$Ñ…‰±•}¥œ€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€‰¥¥¹Ð ÈÀ¤Õ¹Í¥¹•œ°€¹Õ±°œ€ôø€9<œ€¤°($$$$$Ñ½­•¹}¡…Í œ€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€¡…È ØÐ¤œ°€¹Õ±°œ€ôø€9<œ€¤°($$$$$ÍÑ…ÑÕÌœ€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€Ù…É¡…È ÈÀ¤œ°€¹Õ±°œ€ôø€9<œ°€‘•™…Õ±Ðœ€ôø€…Ñ¥Ù”œ€¤°($$$$¤($$$¤($$$˜˜Í•±˜èé½±Õµ¹}½¹ÑÉ…Ñ}É•…‘ä ($$$$‘Í•ÍÍ¥½¹Ì°($$$%…ÉÉ…ä ($$$$$Í•ÍÍ¥½¹}¡…Í œ€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€¡…È ØÐ¤œ°€¹Õ±°œ€ôø€9<œ€¤°($$$$$ÅÉ}½‘•}¥œ€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€‰¥¥¹Ð ÈÀ¤Õ¹Í¥¹•œ°€¹Õ±°œ€ôø€9<œ€¤°($$$$$…ÉÑ}Ñ½­•¹}¡…Í œ€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€¡…È ØÐ¤œ°€¹Õ±°œ€ôø€9<œ€¤°($$$$$•áÁ¥É•Í}…Ðœ€€€€€€ôø…ÉÉ…ä €ÑåÁ”œ€ôø€‘…Ñ•Ñ¥µ”œ°€¹Õ±°œ€ôø€9<œ€¤°($$$$¤($$$¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘Ñ…‰±•Ì°€±½…Ñ¥½¹}±…‰•°œ°…ÉÉ…ä €±½…Ñ¥½¹}¥œ°€±…‰•°œ€¤°ÑÉÕ”€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘½‘•Ì°€Ñ½­•¹}¡…Í œ°…ÉÉ…ä €Ñ½­•¹}¡…Í œ€¤°ÑÉÕ”°…ÉÉ…ä €ØÐ€¤€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘½‘•Ì°€Ñ…‰±•}ÍÑ…ÑÕÌœ°…ÉÉ…ä €Ñ…‰±•}¥œ°€ÍÑ…ÑÕÌœ€¤°™…±Í”€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘Í•ÍÍ¥½¹Ì°€Í•ÍÍ¥½¹}¡…Í œ°…ÉÉ…ä €Í•ÍÍ¥½¹}¡…Í œ€¤°ÑÉÕ”°…ÉÉ…ä €ØÐ€¤€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘Í•ÍÍ¥½¹Ì°€ÅÉ}½‘•}¥œ°…ÉÉ…ä €ÅÉ}½‘•}¥œ€¤°™…±Í”€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘Í•ÍÍ¥½¹Ì°€•áÁ¥É•Í}…Ðœ°…ÉÉ…ä €•áÁ¥É•Í}…Ðœ€¤°™…±Í”€¤($$$˜˜Í•±˜èé¥¹‘•á}½¹ÑÉ…Ñ}É•…‘ä €‘½É‘•ÉÌ°€±½…Ñ¥½¹}Ñ…‰±•}É•…Ñ•œ°…ÉÉ…ä €±½…Ñ¥½¹}¥œ°€Ñ…‰±•}¥œ°€É•…Ñ•‘}…Ðœ€¤°™…±Í”€¤ì(%ô(($¼¨¨($€¨Y•É¥™äÑ¡”A¡…Í”€Ì…Á…¥ÑäÑ…‰±•Ì…¹µÕÑ•à½Õ¹¥ÅÕ•¹•ÍÌ½¹ÍÑÉ…¥¹ÑÌ¸($€¨($€¨É•ÑÕÉ¸‰½½°($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸…Á…¥Ñå}ÍÑ½É…•}É•…‘ä ¤ì($%±½‰…°€‘ÝÁ‘ˆì($$‘½É‘•ÉÌ€€€€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}½É‘•ÉÌœì($$‘±½…Ñ¥½¹Ì€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}±½…Ñ¥½¹Ìœì($$‘¡½ÕÉÌ€€€€€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}±½…Ñ¥½¹}¡½ÕÉÌœì($$‘•á•ÁÑ¥½¹Ì€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}Í¡•‘Õ±•}•á•ÁÑ¥½¹Ìœì($$‘Í±½ÑÌ€€€€€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}…Á…¥Ñå}Í±½ÑÌœì($$‘¡½±‘Ì€€€€€€ô€‘ÝÁ‘ˆ´ùÁÉ•™¥à€¸€‘½Õ¡‰½ÍÍ}…Á…¥Ñå}¡½±‘Ìœì($$‘É•ÅÕ¥É•€ô…ÉÉ…ä ($$$‘½É‘•ÉÌ€ôø…ÉÉ…ä €…Á…¥Ñå}¡½±‘}¥œ°€…Á…¥Ñå}Õ¹¥ÑÌœ°€™¥É•}…Ñ}ÕÑŒœ°€Á±…¹¹¥¹}Ù•ÉÍ¥½¸œ€¤°($$$‘±½…Ñ¥½¹Ì€ôø…ÉÉ…ä €Ñ¥µ•é½¹”œ°€…Á…¥Ñå}µ½‘”œ°€Í±½Ñ}µ¥¹ÕÑ•Ìœ°€µ¥¹¥µÕµ}¹½Ñ¥•}µ¥¹ÕÑ•Ìœ°€‰½½­¥¹}¡½É¥é½¹}‘…åÌœ°€¡½±‘}µ¥¹ÕÑ•Ìœ°€Í±½Ñ}½É‘•É}…Á…¥Ñäœ°€Í±½Ñ}Õ¹¥Ñ}…Á…¥Ñäœ°€Á±…¹¹¥¹}Ù•ÉÍ¥½¸œ€¤°($$$‘¡½ÕÉÌ€ôø…ÉÉ…ä €±½…Ñ¥½¹}¥œ°€½É‘•É}ÑåÁ”œ°€Ý••­‘…äœ°€Í•µ•¹Ðœ°€½Á•¹Í}…Ðœ°€±½Í•Í}…Ðœ°€¥Í}…Ñ¥Ù”œ€¤°($$$‘•á•ÁÑ¥½¹Ì€ôø…ÉÉ…ä €±½…Ñ¥½¹}¥œ°€½É‘•É}ÑåÁ”œ°€Í•ÉÙ¥•}‘…Ñ”œ°€Í•µ•¹Ðœ°€¥Í}±½Í•œ°€½Á•¹Í}…Ðœ°€±½Í•Í}…Ðœ°€½É‘•É}…Á…¥Ñäœ°€Õ¹¥Ñ}…Á…¥Ñäœ€¤°($$$‘Í±½ÑÌ€ôø…ÉÉ…ä €±½…Ñ¥½¹}¥œ°€½É‘•É}ÑåÁ”œ°€ÍÑ…ÉÑÍ}…Ñ}ÕÑŒœ°€•¹‘Í}…Ñ}ÕÑŒœ°€Ñ¥µ•é½¹•}Í¹…ÁÍ¡½Ðœ°€½É‘•É}…Á…¥Ñäœ°€Õ¹¥Ñ}…Á…¥Ñäœ°€Á±…¹¹¥¹}Ù•ÉÍ¥½¸œ°€…•ÁÑ¥¹}¡½±‘Ìœ€¤°($$$‘¡½±‘Ì€ôø…ÉÉ…ä €Í±½Ñ}¥œ°€Ñ½­•¹}¡…Í œ°€¥‘•µÁ½Ñ•¹å}­•äœ°€…ÉÑ}¡…Í œ°€ÍÑ…ÑÕÌœ°€…Á…¥Ñå}Õ¹¥ÑÌœ°€•áÁ¥É•Í}…Ðœ°€½É‘•É}¥œ°€½¹Ù•ÉÑ•‘}…Ðœ°€É•±•…Í•‘}…Ðœ€¤°($$¤ì($%™½É•… € €‘É•ÅÕ¥É•…Ì€‘Ñ…‰±”€ôø€‘½±Õµ¹Ì€¤ì($$$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä($$$‘•¹¥¹”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‘ÝÁ‘ˆ´ùÁÉ•Á…É” €M1P9%9I=4¥¹™½Éµ…Ñ¥½¹}Í¡•µ„¹Q	1L]!IQ	1}M!5€ôQ	M ¤9Q	1}95€ô€•Ìœ°€‘Ñ…‰±”€¤€¤ì($$%¥˜€ €„€‘•¹¥¹”ñð€%99=œ€„ôôÍÑÉÑ½ÕÁÁ•È €‘•¹¥¹”€¤€¤ì($$$%É•ÑÕÉ¸™…±Í”ì($$%ô($$$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$$‘…ÑÕ…°€ô€¡…ÉÉ…ä¤€‘ÝÁ‘ˆ´ù•Ñ}½° €‰M!=\=1U59LI=4ì‘Ñ…‰±•ôˆ€¤ì($$%¥˜€ …ÉÉ…å}‘¥™˜ €‘½±Õµ¹Ì°€‘…ÑÕ…°€¤€¤ì($$$%É•ÑÕÉ¸™…±Í”ì($$%ô($%ô(($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘Í±½Ñ}µÕÑ•à€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‰M!=\%9`I=4ì‘Í±½ÑÍô]!I-•å}¹…µ”€ô€±½…Ñ¥½¹}Í±½Ðœ99½¹}Õ¹¥ÅÕ”€ô€Àˆ€¤ì($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘¡½ÕÉÍ}Õ¹¥ÅÕ”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‰M!=\%9`I=4ì‘¡½ÕÉÍô]!I-•å}¹…µ”€ô€±½…Ñ¥½¹}Í¡•‘Õ±”œ99½¹}Õ¹¥ÅÕ”€ô€Àˆ€¤ì($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘•á•ÁÑ¥½¹}Õ¹¥ÅÕ”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‰M!=\%9`I=4ì‘•á•ÁÑ¥½¹Íô]!I-•å}¹…µ”€ô€±½…Ñ¥½¹}•á•ÁÑ¥½¸œ99½¹}Õ¹¥ÅÕ”€ô€Àˆ€¤ì($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘Ñ½­•¹}Õ¹¥ÅÕ”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‰M!=\%9`I=4ì‘¡½±‘Íô]!I-•å}¹…µ”€ô€Ñ½­•¹}¡…Í œ99½¹}Õ¹¥ÅÕ”€ô€Àˆ€¤ì($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘¥‘•µ}Õ¹¥ÅÕ”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‰M!=\%9`I=4ì‘¡½±‘Íô]!I-•å}¹…µ”€ô€¥‘•µÁ½Ñ•¹å}­•äœ99½¹}Õ¹¥ÅÕ”€ô€Àˆ€¤ì($$¼¼Á¡ÁÌé¥¹½É”]½É‘AÉ•ÍÌ¹¹¥É•Ñ…Ñ…‰…Í•EÕ•Éä°]½É‘AÉ•ÍÌ¹¹AÉ•Á…É•‘ME0¹%¹Ñ•ÉÁ½±…Ñ•‘9½ÑAÉ•Á…É•($$‘½É‘•É}Õ¹¥ÅÕ”€ô€‘ÝÁ‘ˆ´ù•Ñ}Ù…È €‰M!=\%9`I=4ì‘¡½±‘Íô]!I-•å}¹…µ”€ô€½É‘•É}¥œ99½¹}Õ¹¥ÅÕ”€ô€Àˆ€¤ì(($%É•ÑÕÉ¸€¡‰½½°¤€‘Í±½Ñ}µÕÑ•à€˜˜€¡‰½½°¤€‘¡½ÕÉÍ}Õ¹¥ÅÕ”€˜˜€¡‰½½°¤€‘•á•ÁÑ¥½¹}Õ¹¥ÅÕ”€˜˜€¡‰½½°¤€‘Ñ½­•¹}Õ¹¥ÅÕ”€˜˜€¡‰½½°¤€‘¥‘•µ}Õ¹¥ÅÕ”€˜˜€¡‰½½°¤€‘½É‘•É}Õ¹¥ÅÕ”ì(%ô(($¼¨¨($€¨M••‘•™…Õ±ÐÍ•ÑÑ¥¹ÌÑ¡”™¥ÉÍÐÑ¥µ”Ñ¡”Á±Õ¥¸¥Ì…Ñ¥Ù…Ñ•¸($€¨($€¨É•ÑÕÉ¸Ù½¥($€¨¼(%ÁÉ¥Ù…Ñ”ÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸…‘‘}‘•™…Õ±Ñ}½ÁÑ¥½¹Ì ¤ì($%¥˜€ ™…±Í”€„ôô•Ñ}½ÁÑ¥½¸ €‘½Õ¡‰½ÍÍ}Í•ÑÑ¥¹Ìœ€¤€¤ì($$%É•ÑÕÉ¸ì($%ô(($$‘‘•™…Õ±ÑÌ€ô…ÉÉ…ä ($$$ÕÉÉ•¹å}Íåµ‰½°œ€ôø€œœ°($$$ÕÉÉ•¹å}½‘”œ€€€ôø€Uœ°($$$Ñ…á}É…Ñ”œ€€€€€€€€ôø€ÄÀ°($$$ÍÑ}¥¹±ÕÍ¥Ù”œ€€€ôø€Ä°($$$‘•±¥Ù•Éå}™•”œ€€€€ôø€Ô¸ÀÀ°($$$•¹…‰±•}Á¥­ÕÀœ€€€ôø€Ä°($$$•¹…‰±•}‘•±¥Ù•Éäœ€ôø€À°($$$½É‘•É¥¹}½Á•¸œ€€€ôø€À°($$$½É‘•É¥¹}±½Í•‘}µ•ÍÍ…”œ€ôø€=¹±¥¹”½É‘•É¥¹œ¥Ì½µ¥¹œÍ½½¸¸e½Ô…¸‰É½ÝÍ”Ñ¡”µ•¹Ô¹½Ü°…¹Ý”Ý¥±°±•Ðå½Ô­¹½ÜÝ¡•¸¡•­½ÕÐ½Á•¹Ì¸œ°($$$Í¥é•Ìœ€€€€€€€€€€€ôø…ÉÉ…ä ($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€Íµ…±°œ°($$$$$±…‰•°œ€ôø€Mµ…±°€ ÄÀˆ¤œ°($$$$$ÁÉ¥”œ€ôø€ä¸ÀÀ°($$$$¤°($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€µ•‘¥Õ´œ°($$$$$±…‰•°œ€ôø€5•‘¥Õ´€ ÄÈˆ¤œ°($$$$$ÁÉ¥”œ€ôø€ÄÈ¸ÀÀ°($$$$¤°($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€±…É”œ°($$$$$±…‰•°œ€ôø€1…É”€ ÄØˆ¤œ°($$$$$ÁÉ¥”œ€ôø€ÄÔ¸ÀÀ°($$$$¤°($$$¤°($$$Ñ½ÁÁ¥¹Ìœ€€€€€€€€ôø…ÉÉ…ä ($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€Á•ÁÁ•É½¹¤œ°($$$$$±…‰•°œ€ôø€A•ÁÁ•É½¹¤œ°($$$$$ÁÉ¥”œ€ôø€Ä¸ÔÀ°($$$$¤°($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€µÕÍ¡É½½µÌœ°($$$$$±…‰•°œ€ôø€5ÕÍ¡É½½µÌœ°($$$$$ÁÉ¥”œ€ôø€Ä¸ÀÀ°($$$$¤°($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€•áÑÉ„µ¡••Í”œ°($$$$$±…‰•°œ€ôø€áÑÉ„¡••Í”œ°($$$$$ÁÉ¥”œ€ôø€Ä¸ÔÀ°($$$$¤°($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€½±¥Ù•Ìœ°($$$$$±…‰•°œ€ôø€=±¥Ù•Ìœ°($$$$$ÁÉ¥”œ€ôø€Ä¸ÀÀ°($$$$¤°($$$%…ÉÉ…ä ($$$$$Í±Õœœ€€ôø€½¹¥½¹Ìœ°($$$$$±…‰•°œ€ôø€=¹¥½¹Ìœ°($$$$$ÁÉ¥”œ€ôø€À¸ÜÔ°($$$$¤°($$$¤°($$¤ì(($%…‘‘}½ÁÑ¥½¸ €‘½Õ¡‰½ÍÍ}Í•ÑÑ¥¹Ìœ°€‘‘•™…Õ±ÑÌ€¤ì(%ô(($¼¨¨($€¨¥Ù”…‘µ¥¹¥ÍÑÉ…Ñ½ÉÌÑ¡”µ…¹…•µ•¹Ð…Á…‰¥±¥Ñ¥•Ì…¹•¹ÍÕÉ”„±½ÜµÁÉ¥Ù¥±•”($€¨­¥Ñ¡•¸É½±”•á¥ÍÑÌ™½ÈÍÑ…™˜Ý¡¼½¹±ä¹••Ñ¡”±¥Ù”½É‘•È‰½…É¸($€¨($€¨AÕ‰±¥Œ…¹¥‘•µÁ½Ñ•¹ÐÍ¼Ñ¡”µ¥É…Ñ¥½¸ÉÕ¹¹•È…¸…±°¥Ð½¸ÕÁÉ…‘”¸($€¨($€¨É•ÑÕÉ¸Ù½¥($€¨¼(%ÁÕ‰±¥ŒÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸…‘‘}…Á…‰¥±¥Ñ¥•Ì ¤ì($$‘…‘µ¥¸€ô•Ñ}É½±” €…‘µ¥¹¥ÍÑÉ…Ñ½Èœ€¤ì($%¥˜€ €‘…‘µ¥¸€¤ì($$%¥˜€ €„€‘…‘µ¥¸´ù¡…Í}…À €µ…¹…•}‘½Õ¡‰½ÍÌœ€¤€¤ì($$$$‘…‘µ¥¸´ù…‘‘}…À €µ…¹…•}‘½Õ¡‰½ÍÌœ€¤ì($$%ô($$%¥˜€ €„€‘…‘µ¥¸´ù¡…Í}…À €µ…¹…•}‘½Õ¡‰½ÍÍ}­‘Ìœ€¤€¤ì($$$$‘…‘µ¥¸´ù…‘‘}…À €µ…¹…•}‘½Õ¡‰½ÍÍ}­‘Ìœ€¤ì($$%ô($$%¥˜€ €„€‘…‘µ¥¸´ù¡…Í}…À €É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€¤€¤ì($$$$‘…‘µ¥¸´ù…‘‘}…À €É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€¤ì($$%ô($$%¥˜€ €„€‘…‘µ¥¸´ù¡…Í}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤€¤ì($$$$‘…‘µ¥¸´ù…‘‘}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤ì($$%ô($%ô(($$¼¼-¥Ñ¡•¸ÍÑ…™˜É½±”è©ÕÍÐ•¹½Õ Ñ¼½Á•¸Ñ¡”½É‘•È‰½…É…¹Í…¸($$¼¼Ù½Õ¡•ÉÌ½¸„Í¡½ÀÑ…‰±•ÐƒŠP¹•Ù•È„™Õ±°…‘µ¥¸±½¥¸½¸„‘•Ù¥”¥¸($$¼¼Ñ¡”­¥Ñ¡•¸¸($$‘­¥Ñ¡•¸€ô•Ñ}É½±” €‘½Õ¡‰½ÍÍ}­¥Ñ¡•¸œ€¤ì($%¥˜€ €„€‘­¥Ñ¡•¸€¤ì($$%…‘‘}É½±” ($$$$‘½Õ¡‰½ÍÍ}­¥Ñ¡•¸œ°($$$%}| €½Õ¡	½ÍÌ-¥Ñ¡•¸œ°€‘½Õ¡‰½ÍÌœ€¤°($$$%…ÉÉ…ä ($$$$$É•…œ€€€€€€€€€€€€€€€€€€€€€€ôøÑÉÕ”°($$$$$µ…¹…•}‘½Õ¡‰½ÍÍ}­‘Ìœ€€€€€€ôøÑÉÕ”°($$$$$É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€ôøÑÉÕ”°($$$$$±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€€€€€ôøÑÉÕ”°($$$$¤($$$¤ì($%ô•±Í”ì($$%¥˜€ €„€‘­¥Ñ¡•¸´ù¡…Í}…À €É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€¤€¤ì($$$$‘­¥Ñ¡•¸´ù…‘‘}…À €É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€¤ì($$%ô($$%¥˜€ €„€‘­¥Ñ¡•¸´ù¡…Í}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤€¤ì($$$$‘­¥Ñ¡•¸´ù…‘‘}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤ì($$%ô($%ô(($$¼¼=Ý¹•È½5…¹…•ÈÉ½±”è™Õ±°½Õ¡	½ÍÌµ…¹…•µ•¹Ð€¡µ•¹Ô°½É‘•ÉÌ°Í•ÑÑ¥¹Ì°($$¼¼-L°Ù½Õ¡•ÉÌ¤Ý¥Ñ¡½ÕÐÉ…¹Ñ¥¹œ™Õ±°]½É‘AÉ•ÍÌ…‘µ¥¹¥ÍÑÉ…Ñ½È…•ÍÌ¸($$‘µ…¹…•È€ô•Ñ}É½±” €‘½Õ¡‰½ÍÍ}µ…¹…•Èœ€¤ì($%¥˜€ €„€‘µ…¹…•È€¤ì($$%…‘‘}É½±” ($$$$‘½Õ¡‰½ÍÍ}µ…¹…•Èœ°($$$%}| €½Õ¡	½ÍÌ5…¹…•Èœ°€‘½Õ¡‰½ÍÌœ€¤°($$$%…ÉÉ…ä ($$$$$É•…œ€€€€€€€€€€€€€€€€€€€€€€ôøÑÉÕ”°($$$$$µ…¹…•}‘½Õ¡‰½ÍÌœ€€€€€€€€€€ôøÑÉÕ”°($$$$$µ…¹…•}‘½Õ¡‰½ÍÍ}­‘Ìœ€€€€€€ôøÑÉÕ”°($$$$$É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€ôøÑÉÕ”°($$$$$±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€€€€€ôøÑÉÕ”°($$$$¤($$$¤ì($%ô•±Í”ì($$%¥˜€ €„€‘µ…¹…•È´ù¡…Í}…À €µ…¹…•}‘½Õ¡‰½ÍÌœ€¤€¤ì($$$$‘µ…¹…•È´ù…‘‘}…À €µ…¹…•}‘½Õ¡‰½ÍÌœ€¤ì($$%ô($$%¥˜€ €„€‘µ…¹…•È´ù¡…Í}…À €µ…¹…•}‘½Õ¡‰½ÍÍ}­‘Ìœ€¤€¤ì($$$$‘µ…¹…•È´ù…‘‘}…À €µ…¹…•}‘½Õ¡‰½ÍÍ}­‘Ìœ€¤ì($$%ô($$%¥˜€ €„€‘µ…¹…•È´ù¡…Í}…À €É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€¤€¤ì($$$$‘µ…¹…•È´ù…‘‘}…À €É•‘••µ}‘½Õ¡‰½ÍÍ}Ù½Õ¡•ÉÌœ€¤ì($$%ô($$%¥˜€ €„€‘µ…¹…•È´ù¡…Í}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤€¤ì($$$$‘µ…¹…•È´ù…‘‘}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤ì($$%ô($%ô(($$¼¼±½¬µ½¹±äÉ½±”™½È™É½¹Ðµ½˜µ¡½ÕÍ”…¹½Ñ¡•ÈÍÑ…™˜¸ÑÑ•¹‘…¹”…•ÍÌ($$¼¼µÕÍÐ¹½ÐÍ¥±•¹Ñ±äÉ…¹Ð-L°Ù½Õ¡•È½Èµ…¹…•µ•¹ÐÁ•Éµ¥ÍÍ¥½¹Ì¸($$‘ÍÑ…™˜€ô•Ñ}É½±” €‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤ì($%¥˜€ €„€‘ÍÑ…™˜€¤ì($$%…‘‘}É½±” ($$$$‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ°($$$%}| €½Õ¡	½ÍÌMÑ…™˜œ°€‘½Õ¡‰½ÍÌœ€¤°($$$%…ÉÉ…ä ($$$$$É•…œ€€€€€€€€€€€€€€€€€€ôøÑÉÕ”°($$$$$±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€ôøÑÉÕ”°($$$$¤($$$¤ì($%ô•±Í•¥˜€ €„€‘ÍÑ…™˜´ù¡…Í}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤€¤ì($$$‘ÍÑ…™˜´ù…‘‘}…À €±½­}‘½Õ¡‰½ÍÍ}ÍÑ…™˜œ€¤ì($%ô(%ô)ô(
+			currency varchar(10) NOT NULL DEFAULT 'AUD',
+			deposit_intent_id varchar(64) NOT NULL DEFAULT '',
+			balance_intent_id varchar(64) NOT NULL DEFAULT '',
+			deposit_paid_at datetime NULL DEFAULT NULL,
+			balance_paid_at datetime NULL DEFAULT NULL,
+			quoted_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY enquiry_number (enquiry_number),
+			KEY status (status),
+			KEY location_id (location_id),
+			KEY customer_email (customer_email),
+			KEY event_date (event_date),
+			KEY deposit_intent_id (deposit_intent_id),
+			KEY balance_intent_id (balance_intent_id)
+		) {$charset_collate};";
+
+		$sql_vouchers = "CREATE TABLE {$vouchers} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			code varchar(32) NOT NULL,
+			type varchar(20) NOT NULL DEFAULT 'amount',
+			value decimal(10,2) NOT NULL DEFAULT 0.00,
+			currency varchar(10) NOT NULL DEFAULT 'AUD',
+			min_spend decimal(10,2) NOT NULL DEFAULT 0.00,
+			scope varchar(20) NOT NULL DEFAULT 'both',
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			single_use tinyint(1) NOT NULL DEFAULT 1,
+			status varchar(20) NOT NULL DEFAULT 'issued',
+			customer_phone varchar(40) NOT NULL DEFAULT '',
+			customer_email varchar(191) NOT NULL DEFAULT '',
+			campaign varchar(40) NOT NULL DEFAULT '',
+			pospal_customer_uid varchar(64) NOT NULL DEFAULT '',
+			pospal_coupon_ref varchar(64) NOT NULL DEFAULT '',
+			valid_from datetime NULL DEFAULT NULL,
+			valid_to datetime NULL DEFAULT NULL,
+			meta text NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY code (code),
+			KEY status (status),
+			KEY customer_phone (customer_phone),
+			KEY campaign (campaign)
+		) {$charset_collate};";
+
+		$sql_redemptions = "CREATE TABLE {$redemptions} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			voucher_id bigint(20) unsigned NOT NULL,
+			order_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			channel varchar(20) NOT NULL DEFAULT 'online',
+			pospal_ticket_no varchar(64) NOT NULL DEFAULT '',
+			transaction_reference varchar(64) NULL DEFAULT NULL,
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			redeemed_by_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			redeemed_by_name varchar(191) NOT NULL DEFAULT '',
+			amount_applied decimal(10,2) NOT NULL DEFAULT 0.00,
+			idempotency_key varchar(64) NOT NULL DEFAULT '',
+			redeemed_at datetime NULL DEFAULT NULL,
+			redemption_status varchar(20) NOT NULL DEFAULT 'redeemed',
+			reversed_at datetime NULL DEFAULT NULL,
+			reversed_by_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			reversed_by_name varchar(191) NOT NULL DEFAULT '',
+			reversal_reason varchar(500) NOT NULL DEFAULT '',
+			PRIMARY KEY  (id),
+			UNIQUE KEY idempotency_key (idempotency_key),
+			UNIQUE KEY location_transaction_reference (location_id,transaction_reference),
+			KEY voucher_id (voucher_id),
+			KEY redemption_status (redemption_status),
+			KEY redeemed_by_user_id (redeemed_by_user_id),
+			KEY pospal_ticket_no (pospal_ticket_no)
+		) {$charset_collate};";
+
+		$sql_voucher_audit = "CREATE TABLE {$voucher_audit} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			voucher_id bigint(20) unsigned NOT NULL,
+			redemption_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			event_type varchar(32) NOT NULL,
+			reason varchar(500) NOT NULL DEFAULT '',
+			actor_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			actor_name varchar(191) NOT NULL DEFAULT '',
+			details_json longtext NULL,
+			occurred_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			KEY voucher_event (voucher_id,event_type,occurred_at),
+			KEY actor_occurred (actor_user_id,occurred_at)
+		) {$charset_collate};";
+
+		$sql_pospal_outbox = "CREATE TABLE {$pospal_outbox} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			kind varchar(32) NOT NULL DEFAULT 'order_push',
+			entity_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			store_index tinyint(3) unsigned NOT NULL DEFAULT 1,
+			payload_json longtext NULL,
+			idempotency_key varchar(191) NOT NULL DEFAULT '',
+			remote_reference varchar(64) NOT NULL DEFAULT '',
+			attempts tinyint(3) unsigned NOT NULL DEFAULT 0,
+			status varchar(20) NOT NULL DEFAULT 'pending',
+			last_error varchar(64) NOT NULL DEFAULT '',
+			next_attempt_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY idempotency_key (idempotency_key),
+			KEY status_next (status,next_attempt_at),
+			KEY remote_reference (remote_reference),
+			KEY entity_id (entity_id)
+		) {$charset_collate};";
+
+		$sql_payment_attempts = "CREATE TABLE {$payment_attempts} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			attempt_key char(64) NOT NULL,
+			provider varchar(20) NOT NULL DEFAULT 'tyro',
+			provider_reference varchar(191) NULL DEFAULT NULL,
+			checkout_key char(64) NOT NULL,
+			purpose varchar(32) NOT NULL DEFAULT 'order',
+			context varchar(32) NOT NULL DEFAULT 'web',
+			local_reference varchar(191) NOT NULL DEFAULT '',
+			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			table_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			qr_code_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			amount_minor bigint(20) unsigned NOT NULL DEFAULT 0,
+			currency char(3) NOT NULL DEFAULT 'AUD',
+			status varchar(32) NOT NULL DEFAULT 'created',
+			provider_status varchar(32) NOT NULL DEFAULT '',
+			safe_metadata_json longtext NULL,
+			last_error varchar(64) NOT NULL DEFAULT '',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			verified_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY attempt_key (attempt_key),
+			UNIQUE KEY provider_reference (provider_reference),
+			UNIQUE KEY checkout_key (checkout_key),
+			KEY status_updated (status,updated_at),
+			KEY local_reference (local_reference)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_payment_events = "CREATE TABLE {$payment_events} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			event_key char(64) NOT NULL,
+			provider varchar(20) NOT NULL DEFAULT 'tyro',
+			provider_reference varchar(191) NOT NULL DEFAULT '',
+			event_type varchar(64) NOT NULL DEFAULT '',
+			outcome varchar(32) NOT NULL DEFAULT 'processing',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY event_key (event_key),
+			KEY provider_reference (provider_reference)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_checkout_snapshots = "CREATE TABLE {$checkout_snapshots} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			checkout_key char(64) NOT NULL,
+			payload_hash char(64) NOT NULL,
+			payload_json longtext NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'prepared',
+			order_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			expires_at datetime NOT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY checkout_key (checkout_key),
+			KEY status_expires (status,expires_at),
+			KEY order_id (order_id)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_loyalty_members = "CREATE TABLE {$loyalty_members} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			email varchar(191) NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'active',
+			points_balance int(11) NOT NULL DEFAULT 0,
+			tier varchar(32) NOT NULL DEFAULT 'Dough Club',
+			lifetime_earned int(11) NOT NULL DEFAULT 0,
+			lifetime_redeemed int(11) NOT NULL DEFAULT 0,
+			lifetime_spend decimal(12,2) NOT NULL DEFAULT 0.00,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY user_id (user_id),
+			UNIQUE KEY email (email),
+			KEY tier (tier)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_loyalty_ledger = "CREATE TABLE {$loyalty_ledger} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			member_id bigint(20) unsigned NOT NULL,
+			event_type varchar(32) NOT NULL,
+			points int(11) NOT NULL,
+			event_key varchar(191) NOT NULL,
+			amount decimal(12,2) NOT NULL DEFAULT 0.00,
+			currency varchar(3) NOT NULL DEFAULT 'AUD',
+			campaign varchar(40) NOT NULL DEFAULT '',
+			meta longtext NULL,
+			created_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY event_key (event_key),
+			KEY member_created (member_id,created_at),
+			KEY member_type (member_id,event_type)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_loyalty_tokens = "CREATE TABLE {$loyalty_tokens} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			selector varchar(24) NOT NULL,
+			token_hash char(64) NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			expires_at datetime NOT NULL,
+			consumed_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY selector (selector),
+			KEY expires_at (expires_at),
+			KEY user_id (user_id)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_staff_shifts = "CREATE TABLE {$staff_shifts} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			staff_name varchar(191) NOT NULL DEFAULT '',
+			staff_login varchar(191) NOT NULL DEFAULT '',
+			location_id bigint(20) unsigned NOT NULL,
+			location_name varchar(191) NOT NULL DEFAULT '',
+			timezone_snapshot varchar(64) NOT NULL DEFAULT 'Australia/Sydney',
+			clock_in_utc datetime NOT NULL,
+			clock_out_utc datetime NULL DEFAULT NULL,
+			scheduled_start_local varchar(5) NOT NULL DEFAULT '',
+			late_grace_minutes smallint(5) unsigned NOT NULL DEFAULT 0,
+			late_minutes smallint(5) unsigned NOT NULL DEFAULT 0,
+			open_guard tinyint(1) unsigned NULL DEFAULT 1,
+			source varchar(32) NOT NULL DEFAULT 'staff_portal',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY user_open_guard (user_id,open_guard),
+			KEY location_clock_in (location_id,clock_in_utc),
+			KEY clock_in_utc (clock_in_utc)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_staff_badges = "CREATE TABLE {$staff_badges} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			token_hash char(64) NOT NULL,
+			pin_hash varchar(255) NOT NULL,
+			status varchar(16) NOT NULL DEFAULT 'active',
+			active_guard tinyint(1) unsigned NULL DEFAULT 1,
+			issued_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			last_used_at datetime NULL DEFAULT NULL,
+			revoked_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY token_hash (token_hash),
+			UNIQUE KEY user_active_guard (user_id,active_guard),
+			KEY user_status (user_id,status),
+			KEY status_updated (status,updated_at)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_staff_breaks = "CREATE TABLE {$staff_breaks} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			shift_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			break_start_utc datetime NOT NULL,
+			break_end_utc datetime NULL DEFAULT NULL,
+			open_guard tinyint(1) unsigned NULL DEFAULT 1,
+			source varchar(32) NOT NULL DEFAULT 'staff_badge',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY shift_open_guard (shift_id,open_guard),
+			KEY user_break_start (user_id,break_start_utc),
+			KEY shift_break_start (shift_id,break_start_utc)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_staff_events = "CREATE TABLE {$staff_events} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			shift_id bigint(20) unsigned NOT NULL,
+			event_type varchar(32) NOT NULL,
+			actor_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			reason varchar(500) NOT NULL DEFAULT '',
+			before_json longtext NULL,
+			after_json longtext NULL,
+			occurred_at_utc datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY shift_occurred (shift_id,occurred_at_utc),
+			KEY actor_occurred (actor_user_id,occurred_at_utc)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		dbDelta( $sql_orders );
+		dbDelta( $sql_items );
+		dbDelta( $sql_events );
+		dbDelta( $sql_locations );
+		dbDelta( $sql_catering );
+		dbDelta( $sql_vouchers );
+		dbDelta( $sql_redemptions );
+		dbDelta( $sql_voucher_audit );
+		dbDelta( $sql_pospal_outbox );
+		dbDelta( $sql_location_hours );
+		dbDelta( $sql_exceptions );
+		dbDelta( $sql_capacity_slots );
+		dbDelta( $sql_capacity_holds );
+		dbDelta( $sql_dining_tables );
+		dbDelta( $sql_table_qr_codes );
+		dbDelta( $sql_table_sessions );
+		dbDelta( $sql_payment_attempts );
+		dbDelta( $sql_payment_events );
+		dbDelta( $sql_checkout_snapshots );
+		dbDelta( $sql_loyalty_members );
+		dbDelta( $sql_loyalty_ledger );
+		dbDelta( $sql_loyalty_tokens );
+		dbDelta( $sql_staff_shifts );
+		dbDelta( $sql_staff_events );
+		dbDelta( $sql_staff_badges );
+		dbDelta( $sql_staff_breaks );
+	}
+
+	/** Verify immutable, transactional staff attendance storage. */
+	public static function timeclock_storage_ready() {
+		global $wpdb;
+		$shifts = $wpdb->prefix . 'doughboss_staff_shifts';
+		$events = $wpdb->prefix . 'doughboss_staff_shift_events';
+		$badges = $wpdb->prefix . 'doughboss_staff_badges';
+		$breaks = $wpdb->prefix . 'doughboss_staff_breaks';
+		foreach ( array( $shifts, $events, $badges, $breaks ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		return self::column_contract_ready(
+			$shifts,
+			array(
+				'user_id'           => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+				'staff_name'        => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
+				'staff_login'       => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
+				'location_id'       => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+				'location_name'     => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
+				'timezone_snapshot' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => 'Australia/Sydney' ),
+				'clock_in_utc'       => array( 'type' => 'datetime', 'null' => 'NO' ),
+				'clock_out_utc'      => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+				'scheduled_start_local' => array( 'type' => 'varchar(5)', 'null' => 'NO', 'default' => '' ),
+				'late_grace_minutes' => array( 'type' => 'smallint(5) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'late_minutes'       => array( 'type' => 'smallint(5) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'open_guard'         => array( 'type' => 'tinyint(1) unsigned', 'null' => 'YES', 'default' => '1' ),
+				'source'             => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'staff_portal' ),
+				'created_at'         => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+				'updated_at'         => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			)
+		)
+			&& self::column_contract_ready(
+				$events,
+				array(
+					'shift_id'        => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'event_type'      => array( 'type' => 'varchar(32)', 'null' => 'NO' ),
+					'actor_user_id'   => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+					'reason'          => array( 'type' => 'varchar(500)', 'null' => 'NO', 'default' => '' ),
+					'before_json'     => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+					'after_json'      => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+					'occurred_at_utc' => array( 'type' => 'datetime', 'null' => 'NO' ),
+				)
+			)
+			&& self::column_contract_ready(
+				$badges,
+				array(
+					'user_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'token_hash'   => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'pin_hash'     => array( 'type' => 'varchar(255)', 'null' => 'NO' ),
+					'status'       => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'active' ),
+					'active_guard' => array( 'type' => 'tinyint(1) unsigned', 'null' => 'YES', 'default' => '1' ),
+					'issued_by'    => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+					'last_used_at' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'revoked_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'created_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'updated_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+				)
+			)
+			&& self::column_contract_ready(
+				$breaks,
+				array(
+					'shift_id'        => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'user_id'         => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'break_start_utc' => array( 'type' => 'datetime', 'null' => 'NO' ),
+					'break_end_utc'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'open_guard'      => array( 'type' => 'tinyint(1) unsigned', 'null' => 'YES', 'default' => '1' ),
+					'source'          => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'staff_badge' ),
+					'created_at'      => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'updated_at'      => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+				)
+			)
+			&& self::index_contract_ready( $shifts, 'user_open_guard', array( 'user_id', 'open_guard' ), true )
+			&& self::index_contract_ready( $events, 'shift_occurred', array( 'shift_id', 'occurred_at_utc' ), false )
+			&& self::index_contract_ready( $events, 'actor_occurred', array( 'actor_user_id', 'occurred_at_utc' ), false )
+			&& self::index_contract_ready( $badges, 'token_hash', array( 'token_hash' ), true, array( 64 ) )
+			&& self::index_contract_ready( $badges, 'user_active_guard', array( 'user_id', 'active_guard' ), true )
+			&& self::index_contract_ready( $badges, 'user_status', array( 'user_id', 'status' ), false )
+			&& self::index_contract_ready( $breaks, 'shift_open_guard', array( 'shift_id', 'open_guard' ), true )
+			&& self::index_contract_ready( $breaks, 'user_break_start', array( 'user_id', 'break_start_utc' ), false )
+			&& self::index_contract_ready( $breaks, 'shift_break_start', array( 'shift_id', 'break_start_utc' ), false );
+	}
+
+	/**
+	 * Verify durable payment attempts, webhook de-duplication and store mappings.
+	 *
+	 * @return bool
+	 */
+	public static function payment_storage_ready() {
+		global $wpdb;
+		$attempts  = $wpdb->prefix . 'doughboss_payment_attempts';
+		$events    = $wpdb->prefix . 'doughboss_payment_events';
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		$snapshots = $wpdb->prefix . 'doughboss_checkout_snapshots';
+		foreach ( array( $attempts, $events, $locations, $snapshots ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		return self::column_contract_ready(
+			$attempts,
+			array(
+				'attempt_key'        => array( 'type' => 'char(64)', 'null' => 'NO' ),
+				'provider_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+				'checkout_key'       => array( 'type' => 'char(64)', 'null' => 'NO' ),
+				'amount_minor'       => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'status'             => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'created' ),
+			)
+		)
+			&& self::column_contract_ready( $events, array( 'event_key' => array( 'type' => 'char(64)', 'null' => 'NO' ) ) )
+			&& self::column_contract_ready(
+				$snapshots,
+				array(
+					'checkout_key' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'payload_hash' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'payload_json' => array( 'type' => 'longtext', 'null' => 'NO' ),
+					'status'       => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'prepared' ),
+					'order_id'     => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				)
+			)
+			&& self::column_contract_ready(
+				$locations,
+				array(
+					'tyro_location_id'      => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
+					'pospal_store_index'     => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => '0' ),
+					'online_payment_enabled' => array( 'type' => 'tinyint(1)', 'null' => 'NO', 'default' => '0' ),
+				)
+			)
+			&& self::index_contract_ready( $attempts, 'attempt_key', array( 'attempt_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $attempts, 'provider_reference', array( 'provider_reference' ), true, array( 191 ) )
+			&& self::index_contract_ready( $attempts, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $snapshots, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );
+	}
+
+	/**
+	 * Verify that POSPal pushes retain a stable remote reference for positive
+	 * reconciliation instead of relying on the local day sequence.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_outbox_storage_ready() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_pospal_outbox';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+		if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+			return false;
+		}
+
+		return self::column_contract_ready(
+			$table,
+			array( 'remote_reference' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ) )
+		)
+			&& self::index_contract_ready( $table, 'remote_reference', array( 'remote_reference' ), false, array( 64 ) );
+	}
+
+	/**
+	 * Verify that the three lifecycle tables exist and support transactions.
+	 *
+	 * @return bool
+	 */
+	public static function lifecycle_storage_ready() {
+		global $wpdb;
+		$orders = $wpdb->prefix . 'doughboss_orders';
+		$events = $wpdb->prefix . 'doughboss_order_events';
+		$tables = array(
+			$orders,
+			$wpdb->prefix . 'doughboss_order_items',
+			$events,
+		);
+
+		foreach ( $tables as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',
+					$table
+				)
+			);
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		$order_columns = array(
+			'version', 'status_changed_at', 'promised_ready_from_utc',
+			'promised_ready_by_utc', 'timezone_snapshot', 'cooking_started_at',
+			'ready_at', 'completed_at', 'cancelled_at',
+		);
+		$event_columns = array(
+			'order_id', 'order_version', 'event_type', 'from_status', 'to_status',
+			'actor_type', 'actor_id', 'reason_code', 'event_key', 'occurred_at',
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$actual_order_columns = $wpdb->get_col( "SHOW COLUMNS FROM {$orders}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$actual_event_columns = $wpdb->get_col( "SHOW COLUMNS FROM {$events}" );
+		if ( array_diff( $order_columns, (array) $actual_order_columns ) || array_diff( $event_columns, (array) $actual_event_columns ) ) {
+			return false;
+		}
+
+		// Presence alone is not enough: a partial/manual migration could leave a
+		// nullable version, the wrong default, or text where a UTC datetime is
+		// required. Verify the definitions that transaction/version semantics rely
+		// on before allowing the stored database version to advance.
+		$order_contract = array(
+			'version'                   => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+			'status_changed_at'         => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'promised_ready_from_utc'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'promised_ready_by_utc'     => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'timezone_snapshot'         => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ),
+			'cooking_started_at'        => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'ready_at'                  => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'completed_at'              => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'cancelled_at'              => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+		);
+		$event_contract = array(
+			'order_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+			'order_version' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+			'event_type'    => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'status_changed' ),
+			'from_status'   => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => '' ),
+			'to_status'     => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => '' ),
+			'actor_type'    => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'system' ),
+			'actor_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+			'reason_code'   => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => '' ),
+			'event_key'     => array( 'type' => 'varchar(191)', 'null' => 'NO' ),
+			'occurred_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+		);
+		if ( ! self::column_contract_ready( $orders, $order_contract ) || ! self::column_contract_ready( $events, $event_contract ) ) {
+			return false;
+		}
+
+		// Both uniqueness constraints are required for retry idempotency and to
+		// guarantee one event for each order version.
+		return self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 191 ) )
+			&& self::index_contract_ready( $events, 'order_version', array( 'order_id', 'order_version' ), true )
+			&& self::index_contract_ready( $orders, 'promised_ready_from', array( 'location_id', 'promised_ready_from_utc' ), false );
+	}
+
+	/**
+	 * Verify selected column metadata exactly.
+	 *
+	 * @param string $table    Table name.
+	 * @param array  $contract Field contracts.
+	 * @return bool
+	 */
+	private static function column_contract_ready( $table, array $contract ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = (array) $wpdb->get_results( "SHOW COLUMNS FROM {$table}" );
+		$actual = array();
+		foreach ( $rows as $row ) {
+			$actual[ $row->Field ] = $row;
+		}
+		foreach ( $contract as $field => $expected ) {
+			if ( ! isset( $actual[ $field ] ) ) {
+				return false;
+			}
+			$row = $actual[ $field ];
+			// MySQL 8 omits deprecated integer display widths while MariaDB still
+			// reports them. They describe the same storage contract, so compare the
+			// semantic type while retaining exact varchar lengths and signedness.
+			$actual_type   = preg_replace( '/\b(tinyint|smallint|mediumint|int|bigint)\(\d+\)/', '$1', strtolower( (string) $row->Type ) );
+			$expected_type = preg_replace( '/\b(tinyint|smallint|mediumint|int|bigint)\(\d+\)/', '$1', $expected['type'] );
+			if ( $actual_type !== $expected_type || strtoupper( (string) $row->Null ) !== $expected['null'] ) {
+				return false;
+			}
+			if ( array_key_exists( 'default', $expected ) ) {
+				$actual_default   = $row->Default;
+				$expected_default = $expected['default'];
+				if ( ( null === $actual_default ) !== ( null === $expected_default ) ) {
+					return false;
+				}
+				if ( null !== $actual_default && (string) $actual_default !== (string) $expected_default ) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Verify index uniqueness and exact ordered columns.
+	 *
+	 * @param string   $table   Table name.
+	 * @param string   $name    Index name.
+	 * @param string[] $columns Ordered columns.
+	 * @param bool     $unique  Whether the index must be unique.
+	 * @param int[]    $lengths Minimum full lengths for string index parts.
+	 * @return bool
+	 */
+	private static function index_contract_ready( $table, $name, array $columns, $unique, array $lengths = array() ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = (array) $wpdb->get_results( $wpdb->prepare( "SHOW INDEX FROM {$table} WHERE Key_name = %s", $name ) );
+		usort(
+			$rows,
+			static function ( $left, $right ) {
+				return (int) $left->Seq_in_index <=> (int) $right->Seq_in_index;
+			}
+		);
+		if ( count( $rows ) !== count( $columns ) ) {
+			return false;
+		}
+		foreach ( $rows as $offset => $row ) {
+			$sub_part = null === $row->Sub_part ? null : (int) $row->Sub_part;
+			if (
+				(string) $row->Column_name !== $columns[ $offset ]
+				|| ( $unique ? 0 : 1 ) !== (int) $row->Non_unique
+				|| ( null !== $sub_part && ( ! isset( $lengths[ $offset ] ) || $sub_part < $lengths[ $offset ] ) )
+			) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Verify the durable checkout replay and one-payment/one-order constraints.
+	 *
+	 * @return bool
+	 */
+	public static function checkout_storage_ready() {
+		global $wpdb;
+		$orders = $wpdb->prefix . 'doughboss_orders';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $orders ) );
+		if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+			return false;
+		}
+
+		$columns = array(
+			'payment_intent_id' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+			'checkout_key'      => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+		);
+		return self::column_contract_ready( $orders, $columns )
+			&& self::index_contract_ready( $orders, 'payment_intent_id', array( 'payment_intent_id' ), true, array( 191 ) )
+			&& self::index_contract_ready( $orders, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );
+	}
+
+	/**
+	 * Verify the store/table QR ordering schema before accepting table orders.
+	 *
+	 * @return bool
+	 */
+	public static function table_qr_storage_ready() {
+		global $wpdb;
+		$orders   = $wpdb->prefix . 'doughboss_orders';
+		$tables   = $wpdb->prefix . 'doughboss_dining_tables';
+		$codes    = $wpdb->prefix . 'doughboss_table_qr_codes';
+		$sessions = $wpdb->prefix . 'doughboss_table_sessions';
+
+		foreach ( array( $orders, $tables, $codes, $sessions ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		return self::column_contract_ready(
+			$orders,
+			array(
+				'table_id'         => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'table_label'      => array( 'type' => 'varchar(80)', 'null' => 'NO', 'default' => '' ),
+				'table_qr_code_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'table_session_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'order_source'     => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'web' ),
+			)
+		)
+			&& self::column_contract_ready(
+				$tables,
+				array(
+					'location_id'       => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'label'             => array( 'type' => 'varchar(80)', 'null' => 'NO', 'default' => '' ),
+					'ordering_url'      => array( 'type' => 'varchar(255)', 'null' => 'NO', 'default' => '' ),
+					'is_active'         => array( 'type' => 'tinyint(1)', 'null' => 'NO', 'default' => '1' ),
+					'current_qr_code_id'=> array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+				)
+			)
+			&& self::column_contract_ready(
+				$codes,
+				array(
+					'table_id'   => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'token_hash' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'status'     => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => 'active' ),
+				)
+			)
+			&& self::column_contract_ready(
+				$sessions,
+				array(
+					'session_hash'   => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'qr_code_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'cart_token_hash' => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'expires_at'      => array( 'type' => 'datetime', 'null' => 'NO' ),
+				)
+			)
+			&& self::index_contract_ready( $tables, 'location_label', array( 'location_id', 'label' ), true )
+			&& self::index_contract_ready( $codes, 'token_hash', array( 'token_hash' ), true, array( 64 ) )
+			&& self::index_contract_ready( $codes, 'table_status', array( 'table_id', 'status' ), false )
+			&& self::index_contract_ready( $sessions, 'session_hash', array( 'session_hash' ), true, array( 64 ) )
+			&& self::index_contract_ready( $sessions, 'qr_code_id', array( 'qr_code_id' ), false )
+			&& self::index_contract_ready( $sessions, 'expires_at', array( 'expires_at' ), false )
+			&& self::index_contract_ready( $orders, 'location_table_created', array( 'location_id', 'table_id', 'created_at' ), false );
+	}
+
+	/**
+	 * Verify the Phase 3 capacity tables and mutex/uniqueness constraints.
+	 *
+	 * @return bool
+	 */
+	public static function capacity_storage_ready() {
+		global $wpdb;
+		$orders     = $wpdb->prefix . 'doughboss_orders';
+		$locations  = $wpdb->prefix . 'doughboss_locations';
+		$hours      = $wpdb->prefix . 'doughboss_location_hours';
+		$exceptions = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		$slots      = $wpdb->prefix . 'doughboss_capacity_slots';
+		$holds      = $wpdb->prefix . 'doughboss_capacity_holds';
+		$required = array(
+			$orders => array( 'capacity_hold_id', 'capacity_units', 'fire_at_utc', 'planning_version' ),
+			$locations => array( 'timezone', 'capacity_mode', 'slot_minutes', 'minimum_notice_minutes', 'booking_horizon_days', 'hold_minutes', 'slot_order_capacity', 'slot_unit_capacity', 'planning_version' ),
+			$hours => array( 'location_id', 'order_type', 'weekday', 'segment', 'opens_at', 'closes_at', 'is_active' ),
+			$exceptions => array( 'location_id', 'order_type', 'service_date', 'segment', 'is_closed', 'opens_at', 'closes_at', 'order_capacity', 'unit_capacity' ),
+			$slots => array( 'location_id', 'order_type', 'starts_at_utc', 'ends_at_utc', 'timezone_snapshot', 'order_capacity', 'unit_capacity', 'planning_version', 'accepting_holds' ),
+			$holds => array( 'slot_id', 'token_hash', 'idempotency_key', 'cart_hash', 'status', 'capacity_units', 'expires_at', 'order_id', 'converted_at', 'released_at' ),
+		);
+		foreach ( $required as $table => $columns ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$actual = (array) $wpdb->get_col( "SHOW COLUMNS FROM {$table}" );
+			if ( array_diff( $columns, $actual ) ) {
+				return false;
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$slot_mutex = $wpdb->get_var( "SHOW INDEX FROM {$slots} WHERE Key_name = 'location_slot' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$hours_unique = $wpdb->get_var( "SHOW INDEX FROM {$hours} WHERE Key_name = 'location_schedule' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$exception_unique = $wpdb->get_var( "SHOW INDEX FROM {$exceptions} WHERE Key_name = 'location_exception' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$token_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'token_hash' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$idem_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'idempotency_key' AND Non_unique = 0" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$order_unique = $wpdb->get_var( "SHOW INDEX FROM {$holds} WHERE Key_name = 'order_id' AND Non_unique = 0" );
+
+		return (bool) $slot_mutex && (bool) $hours_unique && (bool) $exception_unique && (bool) $token_unique && (bool) $idem_unique && (bool) $order_unique;
+	}
+
+	/**
+	 * Seed default settings the first time the plugin is activated.
+	 *
+	 * @return void
+	 */
+	private static function add_default_options() {
+		if ( false !== get_option( 'doughboss_settings' ) ) {
+			return;
+		}
+
+		$defaults = array(
+			'currency_symbol' => '$',
+			'currency_code'   => 'AUD',
+			'tax_rate'        => 10,
+			'gst_inclusive'   => 1,
+			'delivery_fee'    => 5.00,
+			'enable_pickup'   => 1,
+			'enable_delivery' => 0,
+			'ordering_open'   => 0,
+			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
+			'sizes'           => array(
+				array(
+					'slug'  => 'small',
+					'label' => 'Small (10")',
+					'price' => 9.00,
+				),
+				array(
+					'slug'  => 'medium',
+					'label' => 'Medium (12")',
+					'price' => 12.00,
+				),
+				array(
+					'slug'  => 'large',
+					'label' => 'Large (16")',
+					'price' => 15.00,
+				),
+			),
+			'toppings'        => array(
+				array(
+					'slug'  => 'pepperoni',
+					'label' => 'Pepperoni',
+					'price' => 1.50,
+				),
+				array(
+					'slug'  => 'mushrooms',
+					'label' => 'Mushrooms',
+					'price' => 1.00,
+				),
+				array(
+					'slug'  => 'extra-cheese',
+					'label' => 'Extra Cheese',
+					'price' => 1.50,
+				),
+				array(
+					'slug'  => 'olives',
+					'label' => 'Olives',
+					'price' => 1.00,
+				),
+				array(
+					'slug'  => 'onions',
+					'label' => 'Onions',
+					'price' => 0.75,
+				),
+			),
+		);
+
+		add_option( 'doughboss_settings', $defaults );
+	}
+
+	/**
+	 * Give administrators the management capabilities and ensure a low-privilege
+	 * kitchen role exists for staff who only need the live order board.
+	 *
+	 * Public and idempotent so the migration runner can call it on upgrade.
+	 *
+	 * @return void
+	 */
+	public static function add_capabilities() {
+		$admin = get_role( 'administrator' );
+		if ( $admin ) {
+			if ( ! $admin->has_cap( 'manage_doughboss' ) ) {
+				$admin->add_cap( 'manage_doughboss' );
+			}
+			if ( ! $admin->has_cap( 'manage_doughboss_kds' ) ) {
+				$admin->add_cap( 'manage_doughboss_kds' );
+			}
+			if ( ! $admin->has_cap( 'redeem_doughboss_vouchers' ) ) {
+				$admin->add_cap( 'redeem_doughboss_vouchers' );
+			}
+			if ( ! $admin->has_cap( 'clock_doughboss_staff' ) ) {
+				$admin->add_cap( 'clock_doughboss_staff' );
+			}
+		}
+
+		// Kitchen staff role: just enough to open the order board and scan
+		// vouchers on a shop tablet â€” never a full admin login on a device in
+		// the kitchen.
+		$kitchen = get_role( 'doughboss_kitchen' );
+		if ( ! $kitchen ) {
+			add_role(
+				'doughboss_kitchen',
+				__( 'DoughBoss Kitchen', 'doughboss' ),
+				array(
+					'read'                      => true,
+					'manage_doughboss_kds'      => true,
+					'redeem_doughboss_vouchers' => true,
+					'clock_doughboss_staff'     => true,
+				)
+			);
+		} else {
+			if ( ! $kitchen->has_cap( 'redeem_doughboss_vouchers' ) ) {
+				$kitchen->add_cap( 'redeem_doughboss_vouchers' );
+			}
+			if ( ! $kitchen->has_cap( 'clock_doughboss_staff' ) ) {
+				$kitchen->add_cap( 'clock_doughboss_staff' );
+			}
+		}
+
+		// Owner/Manager role: full DoughBoss management (menu, orders, settings,
+		// KDS, vouchers) without granting full WordPress administrator access.
+		$manager = get_role( 'doughboss_manager' );
+		if ( ! $manager ) {
+			add_role(
+				'doughboss_manager',
+				__( 'DoughBoss Manager', 'doughboss' ),
+				array(
+					'read'                      => true,
+					'manage_doughboss'          => true,
+					'manage_doughboss_kds'      => true,
+					'redeem_doughboss_vouchers' => true,
+					'clock_doughboss_staff'     => true,
+				)
+			);
+		} else {
+			if ( ! $manager->has_cap( 'manage_doughboss' ) ) {
+				$manager->add_cap( 'manage_doughboss' );
+			}
+			if ( ! $manager->has_cap( 'manage_doughboss_kds' ) ) {
+				$manager->add_cap( 'manage_doughboss_kds' );
+			}
+			if ( ! $manager->has_cap( 'redeem_doughboss_vouchers' ) ) {
+				$manager->add_cap( 'redeem_doughboss_vouchers' );
+			}
+			if ( ! $manager->has_cap( 'clock_doughboss_staff' ) ) {
+				$manager->add_cap( 'clock_doughboss_staff' );
+			}
+		}
+
+		// Clock-only role for front-of-house and other staff. Attendance access
+		// must not silently grant KDS, voucher or management permissions.
+		$staff = get_role( 'doughboss_staff' );
+		if ( ! $staff ) {
+			add_role(
+				'doughboss_staff',
+				__( 'DoughBoss Staff', 'doughboss' ),
+				array(
+					'read'                  => true,
+					'clock_doughboss_staff' => true,
+				)
+			);
+		} elseif ( ! $staff->has_cap( 'clock_doughboss_staff' ) ) {
+			$staff->add_cap( 'clock_doughboss_staff' );
+		}
+	}
+}
