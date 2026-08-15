@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.40.0
+Stable tag: 2.41.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.41.0 =
+* Activates the existing stored catering-enquiry workflow on the public catering page while retaining direct email and phone fallbacks.
+* Extends page-specific metadata and LocalBusiness JSON-LD to template-rendered homepage, menu, catering, locations and voucher pages.
+* Adds one restrained home-hero oven-warmth treatment and a quiet first-load photo reveal, while preserving reversible scroll motion, pause controls and reduced-motion support.
 
 = 2.40.0 =
 * Adds a manager-only, reason-required reversal for an unlinked in-store voucher mis-scan; the original receipt evidence remains and the reversal is audited.

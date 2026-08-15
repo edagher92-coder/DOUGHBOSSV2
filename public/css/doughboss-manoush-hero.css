@@ -29,6 +29,47 @@
 	z-index: -3;
 }
 
+.db-manoush-hero.is-photo-ready .db-mh-backdrop {
+	animation: db-mh-photo-arrive 1.15s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes db-mh-photo-arrive {
+	0% { filter: saturate(.72) contrast(.96) blur(7px); opacity: .3; }
+	100% { filter: saturate(.92) contrast(1.04) blur(0); opacity: 1; }
+}
+
+/* One quiet ambient cue: oven warmth rising in the home hero only. */
+.db-mh-steam {
+	height: 180px;
+	pointer-events: none;
+	position: absolute;
+	width: 150px;
+	z-index: -1;
+}
+
+.db-mh-steam span {
+	animation: db-mh-steam-rise 6.8s ease-in-out infinite;
+	background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .17), transparent);
+	border-radius: 50%;
+	filter: blur(8px);
+	height: 132px;
+	left: 45%;
+	opacity: 0;
+	position: absolute;
+	transform: translate3d(-50%, 42px, 0) rotate(-8deg) scaleX(.5);
+	width: 30px;
+}
+
+.db-mh-steam span:nth-child(2) { animation-delay: -2.2s; left: 27%; }
+.db-mh-steam span:nth-child(3) { animation-delay: -4.5s; left: 65%; }
+
+@keyframes db-mh-steam-rise {
+	0%, 12% { opacity: 0; transform: translate3d(-50%, 44px, 0) rotate(-10deg) scaleX(.46); }
+	35% { opacity: .28; }
+	72% { opacity: .12; }
+	100% { opacity: 0; transform: translate3d(-28%, -54px, 0) rotate(13deg) scaleX(.86); }
+}
+
 .db-manoush-hero::before {
 	background:
 		linear-gradient(90deg, rgba(7, 7, 6, .97) 0%, rgba(7, 7, 6, .84) 36%, rgba(7, 7, 6, .30) 68%, rgba(7, 7, 6, .08)),
@@ -158,6 +199,8 @@
 	will-change: auto;
 }
 
+.db-manoush-hero.is-photo-paused .db-mh-steam span { animation-play-state: paused; opacity: 0; }
+
 @media (max-width: 720px) {
 	.db-manoush-hero {
 		min-height: 780px;
@@ -217,4 +260,9 @@
 
 	.db-mh-action,
 	.db-mh-replay { transition: none; }
+
+	.db-manoush-hero.is-photo-ready .db-mh-backdrop,
+	.db-mh-steam span { animation: none; }
+
+	.db-mh-steam { display: none; }
 }

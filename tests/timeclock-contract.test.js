@@ -21,9 +21,9 @@ const clockCss = read('public/css/doughboss-timeclock.css');
 const badge = read('includes/class-doughboss-staff-badge.php');
 const badgeJs = read('public/js/doughboss-staff-badge.js');
 
-test('release 2.40.0 retains staff attendance schema 1.23.0', () => {
-	assert.match(plugin, /Version:\s+2\.40\.0/);
-	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.40\.0'/);
+test('release 2.41.0 retains staff attendance schema 1.23.0', () => {
+	assert.match(plugin, /Version:\s+2\.41\.0/);
+	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.41\.0'/);
 	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.23\.0'/);
 	assert.match(core, /class-doughboss-timeclock\.php/);
 	assert.match(core, /class-doughboss-staff-badge\.php/);

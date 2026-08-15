@@ -89,6 +89,9 @@ class DoughBoss_Shortcodes {
 		?>
 		<section class="db-manoush-hero db-manoush-hero--<?php echo esc_attr( $variant ); ?>" data-db-manoush-hero data-db-manoush-variant="<?php echo esc_attr( $variant ); ?>" data-db-scroll-scene>
 			<div class="db-mh-backdrop" style="background-image:url('<?php echo esc_url( $atts['background_image'] ); ?>')" aria-hidden="true"></div>
+			<?php if ( 'home' === $variant ) : ?>
+				<div class="db-mh-steam" aria-hidden="true"><span></span><span></span><span></span></div>
+			<?php endif; ?>
 			<div class="db-mh-copy">
 				<p class="db-mh-kicker"><?php echo esc_html( $atts['kicker'] ); ?></p>
 				<h2><?php echo esc_html( $atts['title'] ); ?></h2>
@@ -96,7 +99,7 @@ class DoughBoss_Shortcodes {
 				<div class="db-mh-actions">
 					<a class="db-mh-action db-mh-action--primary" href="<?php echo esc_url( $atts['primary_url'] ); ?>"><?php echo esc_html( $atts['primary_label'] ); ?></a>
 					<a class="db-mh-action db-mh-action--secondary" href="<?php echo esc_url( $atts['secondary_url'] ); ?>"><?php echo esc_html( $atts['secondary_label'] ); ?></a>
-					<button class="db-mh-replay" type="button" data-db-manoush-replay data-db-pause-label="<?php esc_attr_e( 'Pause photo motion', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume photo motion', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
+					<button class="db-mh-replay" type="button" aria-pressed="false" data-db-manoush-replay data-db-pause-label="<?php esc_attr_e( 'Pause photo motion', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume photo motion', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
 				</div>
 				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'The photograph moves gently as you scroll. Pause it at any time.', 'doughboss' ); ?></span>
 			</div>
@@ -189,7 +192,7 @@ class DoughBoss_Shortcodes {
 		$email_body    = rawurlencode( "Event date:\nGuest count:\nPreferred pickup time:\nDietary notes:\n" );
 		ob_start();
 		?>
-		<div class="db-app db-catering">
+		<div class="db-app db-catering" data-doughboss-catering>
 			<section class="dbc-contact" aria-labelledby="dbc-contact-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'Catering enquiries', 'doughboss' ); ?></p>
 				<h2 class="dbc-h2" id="dbc-contact-title"><?php esc_html_e( 'Tell us what you need', 'doughboss' ); ?></h2>
@@ -204,7 +207,7 @@ class DoughBoss_Shortcodes {
 						<span><?php echo esc_html( $phone_display ); ?></span>
 					</a>
 				</div>
-				<p class="dbc-coming-soon" role="status"><strong><?php esc_html_e( 'Catering online ordering is coming soon — stay tuned!', 'doughboss' ); ?></strong></p>
+				<p class="dbc-coming-soon" role="status"><strong><?php esc_html_e( 'The online enquiry form will load here. You can also email or call us directly.', 'doughboss' ); ?></strong></p>
 			</section>
 			<section class="dbc-how" aria-labelledby="dbc-how-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'How it works', 'doughboss' ); ?></p>

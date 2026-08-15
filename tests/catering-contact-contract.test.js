@@ -25,11 +25,11 @@ test('catering notifications use the dedicated inbox', () => {
 	assert.match(rest, /wp_mail\( \$catering_email, \$subject, \$body \)/);
 });
 
-test('catering shortcode includes contact, how-to and Q&A content', () => {
+test('catering shortcode mounts the stored enquiry flow and retains fallback contact, how-to and Q&A content', () => {
 	assert.match(shortcodes, /mailto:/);
 	assert.match(shortcodes, /tel:/);
-	assert.match(shortcodes, /Catering online ordering is coming soon/);
-	assert.doesNotMatch(shortcodes, /data-doughboss-catering/);
+	assert.match(shortcodes, /The online enquiry form will load here/);
+	assert.match(shortcodes, /data-doughboss-catering/);
 	assert.match(shortcodes, /A fresh spread in three steps/);
 	assert.match(shortcodes, /Good to know before you order/);
 	assert.match(shortcodes, /cannot promise an allergen-free environment/);

@@ -83,6 +83,7 @@ jobs:
           node --test tests/storefront-options-contract.test.js
           node --test tests/seo-contract.test.js
           node --test tests/wordpress-seo-marketing-contract.test.js
+          node --test tests/wordpress-seo-theme-contract.test.js
           node --test tests/google-review-contract.test.js
           node --test tests/catering-contact-contract.test.js
           node --test tests/admin-dashboard-contract.test.js

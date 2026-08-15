@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.3.0
+Version: 1.4.0
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -91,6 +91,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-hero .db-mh-copy > p:not(.db-mh-kicker) { max-width: 39rem; color: #ddd6ca; font-size: clamp(17px, 1.7vw, 21px); }
 .dbf-hero .db-mh-kicker { color: #fff; letter-spacing: .17em; }
 .dbf-hero .db-mh-replay { background: var(--dbf-ember); color: #fff; }
+.dbf-hero .db-mh-steam { right: clamp(8%, 15vw, 20%); top: 13%; }
 .dbf-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--dbf-char); color: #fff; border-top: 1px solid var(--dbf-line-dark); }
 .dbf-hero-stat { padding: 25px clamp(18px, 4vw, 46px); border-left: 1px solid var(--dbf-line-dark); }
 .dbf-hero-stat:first-child { border-left: 0; }

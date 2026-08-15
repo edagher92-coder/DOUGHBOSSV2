@@ -44,10 +44,13 @@ check(!shortcodes.includes('db-mh-ingredient') && !shortcodes.includes('db-mh-ce
 check(!heroStyle.includes('db-mh-smoke') && !heroStyle.includes('rotateX('), 'fake smoke and 3D food transforms are absent');
 check(hero.includes('is-photo-paused') && hero.includes("getAttribute('data-db-pause-label')") && shortcodes.includes('data-db-pause-label='), 'hero exposes an accessible photo-motion pause and resume control');
 check(hero.includes('prefers-reduced-motion: reduce') && heroStyle.includes('@media (prefers-reduced-motion: reduce)'), 'hero honours device reduced-motion preferences');
+check(shortcodes.includes('class="db-mh-steam"') && heroStyle.includes('@keyframes db-mh-steam-rise'), 'home hero has one restrained oven-warmth ambience');
+check(heroStyle.includes('db-mh-photo-arrive') && heroStyle.includes('.is-photo-ready'), 'hero photograph receives a quiet first-load reveal');
 check(['menu/real-v1/zaatar-cheese.jpg', 'menu/real-v1/sujuk-deluxe.jpg', 'menu/real-v1/haloumi-pie.jpg'].every((asset) => home.includes(asset) && fs.existsSync(path.join(root, 'public/images', asset))), 'homepage category cards use distinct authentic merchant photography');
 
 check(home.includes('dbf-sr-only') && catering.includes('dbf-sr-only'), 'visual hero pages retain a clear page-level heading');
 check(catering.includes('href="#catering-enquiry"') && catering.includes('id="catering-enquiry"'), 'catering intro moves directly to one canonical contact experience');
+check(shortcodes.includes('class="db-app db-catering" data-doughboss-catering'), 'catering shortcode mounts the stored online enquiry workflow');
 check(order.includes('dbf-page-hero--order') && order.includes('Checkout coming soon'), 'order page matches the premium demo direction while clearly marking checkout unavailable');
 check(order.includes('dbf-order-intro') && order.includes('dbf-order-readiness'), 'location and availability share a collision-safe responsive order introduction');
 check(themeStyle.includes('.dbf-order-intro') && themeStyle.includes('grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr)'), 'desktop order panels use one non-overlapping grid');
@@ -63,6 +66,7 @@ check(shortcodes.includes('aria-pressed="false"') && shortcodes.includes('aria-a
 check(themeScript.includes("data-dbf-scroll-state") && !themeScript.includes('observer.unobserve'), 'theme reveals reverse cleanly when scrolling up and down');
 check(!/stone-baked/i.test(home + footer) && /oven-baked/i.test(home + footer), 'public homepage and footer use the approved oven-baked wording consistently');
 check(partnerPage.includes('dbf-partner-grid--single') && themeStyle.includes('.dbf-page-content--partner') && themeStyle.includes('@media (max-width: 560px)'), 'empty partnership content and narrow footer columns collapse without overflow or a large blank gap');
+check(themeFunctions.includes("add_filter( 'doughboss_seo_relevant_page'") && themeFunctions.includes('doughboss_final_seo_relevant_page'), 'template-rendered public pages opt into plugin SEO metadata');
 
 check((shortcodes.match(/class="db-loading" role="status" aria-live="polite"/g) || []).length === 4, 'storefront loading states are announced');
 check(shortcodes.includes('aria-label="<?php esc_attr_e( \'Mobile number\''), 'voucher phone field has an accessible name');

@@ -134,7 +134,7 @@ $audit_fail_trigger = $wpdb->prefix . 'doughboss_staff_audit_fail';
 // Build and migrate the real DB 1.23 contract. A failed InnoDB readiness check
 // must stop the version checkpoint and leave an operator-visible explanation.
 DoughBoss_Activator::create_tables();
-timeclock_db_ok( '2.40.0' === DOUGHBOSS_VERSION && '1.23.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.40.0 and DB contract 1.23.0' );
+timeclock_db_ok( '2.41.0' === DOUGHBOSS_VERSION && '1.23.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.41.0 and DB contract 1.23.0' );
 timeclock_db_ok( DoughBoss_Activator::timeclock_storage_ready(), 'fresh staff shifts and audit tables satisfy the exact readiness contract' );
 
 timeclock_db_sql( "ALTER TABLE {$events} ENGINE=MyISAM" );
