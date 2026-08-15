@@ -95,6 +95,7 @@ jobs:
           node --test tests/staff-kds-qr-contract.test.js
           node --test tests/kitchen-workload-summary-contract.test.js
           node --test tests/timeclock-contract.test.js
+          node --test tests/staff-badge-clock-contract.test.js
           node --test tests/student-voucher-qr-assets-contract.test.js
           node --test tests/storefront-uplift-contract.test.js
           node --test tests/order-page-presentation-contract.test.js

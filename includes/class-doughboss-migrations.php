@@ -81,6 +81,9 @@ class DoughBoss_Migrations {
 				'1.18.0' => 'upgrade_to_1_18_0',
 				'1.19.0' => 'upgrade_to_1_19_0',
 				'1.20.0' => 'upgrade_to_1_20_0',
+				'1.21.0' => 'upgrade_to_1_21_0',
+				'1.22.0' => 'upgrade_to_1_22_0',
+				'1.23.0' => 'upgrade_to_1_23_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -102,6 +105,40 @@ class DoughBoss_Migrations {
 
 		delete_option( $lock_key );
 		delete_transient( 'doughboss_migrating' ); // Clean up the pre-1.11 lock.
+	}
+
+	/** 1.22.0 — retain the receipt and signed-in cashier for till reconciliation. */
+	private static function upgrade_to_1_22_0() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_voucher_redemptions';
+		foreach ( array( 'transaction_reference', 'redeemed_by_user_id', 'redeemed_by_name' ) as $column ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( ! $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", $column ) ) ) {
+				throw new RuntimeException( 'Voucher reconciliation upgrade could not add the ' . $column . ' column.' );
+			}
+		}
+	}
+
+	/**
+	 * 1.23.0 — preserve a reversal/void audit trail rather than silently
+	 * reissuing value after a till correction.
+	 */
+	private static function upgrade_to_1_23_0() {
+		global $wpdb;
+		$redemptions = $wpdb->prefix . 'doughboss_voucher_redemptions';
+		$audit       = $wpdb->prefix . 'doughboss_voucher_audit';
+
+		foreach ( array( 'redemption_status', 'reversed_at', 'reversed_by_user_id', 'reversed_by_name', 'reversal_reason' ) as $column ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( ! $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$redemptions} LIKE %s", $column ) ) ) {
+				throw new RuntimeException( 'Voucher reversal upgrade could not add the ' . $column . ' column.' );
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( $audit !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $audit ) ) ) {
+			throw new RuntimeException( 'Voucher reversal audit storage was not created.' );
+		}
 	}
 
 	/** 1.19.0 — passwordless loyalty members, ledger and one-time login links. */
@@ -218,6 +255,13 @@ class DoughBoss_Migrations {
 	 *
 	 * @return void
 	 */
+	/** 1.21.0 — QR/PIN staff kiosk, recorded breaks and roster snapshots. */
+	private static function upgrade_to_1_21_0() {
+		if ( ! DoughBoss_Activator::timeclock_storage_ready() ) {
+			throw new RuntimeException( 'Staff QR badge, break, roster or attendance storage is incomplete or is not using InnoDB.' );
+		}
+	}
+
 	private static function upgrade_to_1_1_0() {
 		DoughBoss_Activator::add_capabilities();
 	}

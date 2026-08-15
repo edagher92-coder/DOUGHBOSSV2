@@ -349,6 +349,10 @@ class DoughBoss_REST_Controller {
 							return (float) $value;
 						},
 					),
+					'transaction_ref' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 					'idempotency_key' => array(
 						'default'           => '',
 						'sanitize_callback' => 'sanitize_text_field',
@@ -586,6 +590,30 @@ class DoughBoss_REST_Controller {
 					'id' => array(
 						'required'          => true,
 						'sanitize_callback' => 'absint',
+					),
+					'reason' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/voucher/reverse',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_reverse_voucher' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+					'reason' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
 					),
 				),
 			)
@@ -1551,6 +1579,19 @@ class DoughBoss_REST_Controller {
 		}
 		$code     = (string) $request->get_param( 'code' );
 		$subtotal = (float) $request->get_param( 'subtotal' );
+		$transaction_ref = substr( sanitize_text_field( (string) $request->get_param( 'transaction_ref' ) ), 0, 64 );
+		$owner_id = absint( DoughBoss_Settings::get( 'voucher_reconciliation_owner_id', 0 ) );
+		$owner = $owner_id ? get_userdata( $owner_id ) : false;
+		if ( ! $owner || ! ( user_can( $owner, 'manage_doughboss' ) || user_can( $owner, 'manage_options' ) ) ) {
+			return new WP_Error( 'doughboss_voucher_owner', __( 'Voucher scans are paused until a manager is assigned as the reconciliation owner.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		if ( '' === $transaction_ref ) {
+			return new WP_Error( 'doughboss_voucher_reconciliation', __( 'Complete the till sale first, then enter its receipt reference.', 'doughboss' ), array( 'status' => 422 ) );
+		}
+		$cashier = wp_get_current_user();
+		if ( ! $cashier || ! $cashier->exists() ) {
+			return new WP_Error( 'doughboss_voucher_cashier', __( 'Sign in again before redeeming a voucher.', 'doughboss' ), array( 'status' => 401 ) );
+		}
 
 		// A busy till may not key the order total. A flat amount voucher with no
 		// minimum spend can safely apply its full value without one; but a
@@ -1574,7 +1615,12 @@ class DoughBoss_REST_Controller {
 			$code,
 			$subtotal,
 			'instore',
-			array( 'idempotency_key' => (string) $request->get_param( 'idempotency_key' ) )
+			array(
+				'idempotency_key' => (string) $request->get_param( 'idempotency_key' ),
+				'pospal_ticket_no' => $transaction_ref,
+				'redeemed_by_user_id' => (int) $cashier->ID,
+				'redeemed_by_name' => $cashier->display_name ? $cashier->display_name : $cashier->user_login,
+			)
 		);
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -2326,8 +2372,13 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function admin_void_voucher( WP_REST_Request $request ) {
-		$id = absint( $request->get_param( 'id' ) );
-		if ( ! DoughBoss_Voucher::void( $id ) ) {
+		$id     = absint( $request->get_param( 'id' ) );
+		$reason = trim( (string) $request->get_param( 'reason' ) );
+		$actor  = wp_get_current_user();
+		if ( strlen( $reason ) < 5 ) {
+			return new WP_Error( 'doughboss_void_reason', __( 'Give a short reason before voiding a voucher.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		if ( ! DoughBoss_Voucher::void( $id, $reason, (int) $actor->ID, $actor->display_name ? $actor->display_name : $actor->user_login ) ) {
 			return new WP_Error( 'doughboss_void', __( 'Could not void — not found or already used.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		return rest_ensure_response(
@@ -2340,6 +2391,40 @@ class DoughBoss_REST_Controller {
 
 	/**
 	 * POST /voucher/issue — create a voucher (owner/admin only).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	/**
+	 * POST /voucher/reverse - re-open a genuine in-store mis-scan (owner only).
+	 * Online or linked payment redemptions are refused; use the order/payment
+	 * refund path for those transactions instead.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_reverse_voucher( WP_REST_Request $request ) {
+		$actor  = wp_get_current_user();
+		$result = DoughBoss_Voucher::reverse_redemption(
+			absint( $request->get_param( 'id' ) ),
+			(string) $request->get_param( 'reason' ),
+			(int) $actor->ID,
+			$actor->display_name ? $actor->display_name : $actor->user_login
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response(
+			array(
+				'reversed'      => true,
+				'voucher_id'    => $result['voucher_id'],
+				'redemption_id' => $result['redemption_id'],
+			)
+		);
+	}
+
+	/**
+	 * POST /voucher/issue - create a voucher (owner/admin only).
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error

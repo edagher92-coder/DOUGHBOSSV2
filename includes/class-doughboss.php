@@ -106,7 +106,9 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-seo.php';
 		require_once $dir . 'class-doughboss-staff-scope.php';
 		require_once $dir . 'class-doughboss-timeclock.php';
+		require_once $dir . 'class-doughboss-staff-badge.php';
 		require_once $dir . 'class-doughboss-staff-experience.php';
+		require_once $dir . 'class-doughboss-guides.php';
 		require_once $dir . 'class-doughboss-portals.php';
 
 		if ( is_admin() ) {
@@ -142,6 +144,7 @@ final class DoughBoss {
 		( new DoughBoss_SEO() )->init();
 		DoughBoss_Staff_Scope::init();
 		( new DoughBoss_Timeclock() )->init();
+		( new DoughBoss_Staff_Badge() )->init();
 		( new DoughBoss_Staff_Experience() )->init();
 		( new DoughBoss_Portals() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();

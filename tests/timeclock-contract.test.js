@@ -18,20 +18,26 @@ const activator = read('includes/class-doughboss-activator.php');
 const migrations = read('includes/class-doughboss-migrations.php');
 const uninstall = read('uninstall.php');
 const clockCss = read('public/css/doughboss-timeclock.css');
+const badge = read('includes/class-doughboss-staff-badge.php');
+const badgeJs = read('public/js/doughboss-staff-badge.js');
 
-test('release 2.36.1 retains the staff clock on database schema 1.20.0', () => {
-	assert.match(plugin, /Version:\s+2\.36\.1/);
-	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.36\.1'/);
-	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.20\.0'/);
+test('release 2.40.0 retains staff attendance schema 1.23.0', () => {
+	assert.match(plugin, /Version:\s+2\.40\.0/);
+	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.40\.0'/);
+	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.23\.0'/);
 	assert.match(core, /class-doughboss-timeclock\.php/);
+	assert.match(core, /class-doughboss-staff-badge\.php/);
 	assert.match(core, /new DoughBoss_Timeclock\(\)/);
+	assert.match(core, /new DoughBoss_Staff_Badge\(\)/);
 	assert.match(migrations, /'1\.20\.0'\s*=>\s*'upgrade_to_1_20_0'/);
 	assert.match(migrations, /function upgrade_to_1_20_0\s*\(/);
+	assert.match(migrations, /'1\.21\.0'\s*=>\s*'upgrade_to_1_21_0'/);
+	assert.match(migrations, /function upgrade_to_1_21_0\s*\(/);
 });
 
 test('staff clock is a hidden standalone no-cache portal, not a public menu page', () => {
 	assert.match(portals, /add_rewrite_rule\(\s*'\^staff-clock\/\?\$'/);
-	assert.match(portals, /array\(\s*'kitchen',\s*'catering-kitchen',\s*'staff-clock',\s*'management'\s*\)/);
+	assert.match(portals, /array\(\s*'kitchen',\s*'catering-kitchen',\s*'staff-clock',\s*'staff-guide',\s*'management',\s*'management-guide'\s*\)/);
 	assert.match(portals, /render_staff_clock\s*\(/);
 	assert.match(portals, /DoughBoss_Timeclock::render_portal\(\)/);
 	assert.doesNotMatch(portals, /is_user_logged_in\(\)\s*&&\s*!\s*DoughBoss_Timeclock::can_clock\(\)/);
@@ -43,7 +49,7 @@ test('staff clock is a hidden standalone no-cache portal, not a public menu page
 	assert.match(portals, /X-Robots-Tag:\s*noindex, nofollow, noarchive/);
 	assert.match(portals, /X-Frame-Options:\s*DENY/);
 	assert.ok(
-		portals.indexOf('$this->portal_headers();') < portals.indexOf("'staff-clock' !== $portal"),
+		portals.indexOf('$this->portal_headers();') < portals.indexOf('! is_user_logged_in()'),
 		'private/no-cache headers must be sent before any portal authentication branch'
 	);
 	assert.match(portals, /doughboss-timeclock\.css/);
@@ -97,20 +103,20 @@ test('clock-in and clock-out are serialized and verify database outcomes', () =>
 	assert.match(clock, /SELECT GET_LOCK\(%s,\s*5\)/);
 	assert.match(clock, /finally\s*\{[\s\S]*?SELECT RELEASE_LOCK\(%s\)/);
 	assert.match(clock, /open_shift\(\s*\$user_id\s*\)/);
-	assert.match(clock, /\$wpdb->insert\([\s\S]*?if\s*\(\s*false\s*===\s*\$ok[\s\S]*?return\s+'error'/);
+	assert.match(clock, /\$wpdb->insert\([\s\S]*?false\s*!==\s*\$ok\s*&&\s*self::open_shift/);
 	assert.match(clock, /clock_out_utc IS NULL/);
 	assert.match(clock, /return\s+1\s*===\s*\$ok\s*\?\s*'out'\s*:\s*'error'/);
 	assert.match(activator, /open_guard\s+tinyint\(1\)\s+unsigned\s+NULL\s+DEFAULT\s+1/);
 	assert.match(activator, /UNIQUE KEY\s+user_open_guard\s*\(user_id,open_guard\)/);
 });
 
-test('every valid shared-kiosk action signs the employee out, including failures', () => {
+test('fallback WordPress-account actions sign the employee out, including failures', () => {
 	assert.match(clock, /redirect_back\(\s*'location'\s*\)/);
 	assert.match(clock, /redirect_back\(\s*\$status\s*\)/);
 	assert.match(clock, /function redirect_back\s*\(\s*\$status\s*\)\s*\{\s*wp_logout\(\)/);
 	assert.doesNotMatch(clock, /redirect_back\([^\n]+false\s*\)/);
-	assert.match(clock, /Use your own staff account/);
-	assert.match(clock, /safely signed out for the next team member/);
+	assert.match(clock, /wp_logout\(\)/);
+	assert.match(clock, /function redirect_back\s*\([\s\S]*?wp_safe_redirect/);
 });
 
 test('clock-only staff role has no kitchen or management authority', () => {
@@ -193,9 +199,33 @@ test('uninstall removes attendance data, capability and clock-only role', () => 
 });
 
 test('attendance records the selected shop without browser GPS or IP collection', () => {
-	const attendanceSurface = [clock, clockCss, scope].join('\n');
+	const attendanceSurface = [clock, badge, badgeJs, clockCss, scope].join('\n');
 	assert.doesNotMatch(attendanceSurface, /navigator\.geolocation|getCurrentPosition|watchPosition/i);
 	assert.doesNotMatch(attendanceSurface, /REMOTE_ADDR|HTTP_X_FORWARDED_FOR|HTTP_CLIENT_IP|ip_address/i);
 	assert.doesNotMatch(activator.match(/CREATE TABLE \{\$staff_shifts\}[\s\S]*?ENGINE=InnoDB/)?.[0] || '', /latitude|longitude|gps|ip_address/i);
 	assert.match(portals, /Permissions-Policy:\s*camera=\(\), microphone=\(\), geolocation=\(\)/);
+});
+
+test('QR badge kiosk requires a private PIN, records actual breaks and preserves the shared kitchen login', () => {
+	assert.match(activator, /token_hash\s+char\(64\)/);
+	assert.match(badge, /hash\(\s*'sha256',\s*\$token\s*\)/);
+	assert.match(badge, /wp_hash_password\(\s*\$pin\s*\)/);
+	assert.match(badge, /wp_check_password\(/);
+	assert.match(badge, /MAX_PIN_ATTEMPTS\s*=\s*5/);
+	assert.match(badge, /LOCK_TTL\s*=\s*900/);
+	assert.match(badge, /doughboss_staff_badge_pin/);
+	assert.match(badge, /doughboss_staff_badge_action/);
+	assert.match(badge, /start_break\(/);
+	assert.match(badge, /end_break\(/);
+	assert.match(badge, /break_minutes_for_shift\(/);
+	assert.match(activator, /doughboss_staff_badges/);
+	assert.match(activator, /doughboss_staff_breaks/);
+	assert.match(activator, /UNIQUE KEY\s+shift_open_guard\s*\(shift_id,open_guard\)/);
+	assert.match(clock, /scheduled_start_local/);
+	assert.match(clock, /late_grace_minutes/);
+	assert.match(clock, /late_minutes/);
+	assert.match(scope, /function roster_snapshot\s*\(/);
+	assert.match(scope, /doughboss_staff_roster/);
+	assert.match(badgeJs, /staff_badge/);
+	assert.doesNotMatch(badge, /wp_set_auth_cookie|wp_signon|wp_logout\s*\(/);
 });

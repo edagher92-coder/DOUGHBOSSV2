@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Portals {
 
-	const ROUTE_VERSION = '3';
+	const ROUTE_VERSION = '5';
 	const QUERY_VAR     = 'doughboss_portal';
 
 	/**
@@ -43,7 +43,9 @@ class DoughBoss_Portals {
 		add_rewrite_rule( '^kitchen/?$', 'index.php?' . self::QUERY_VAR . '=kitchen', 'top' );
 		add_rewrite_rule( '^catering-kitchen/?$', 'index.php?' . self::QUERY_VAR . '=catering-kitchen', 'top' );
 		add_rewrite_rule( '^staff-clock/?$', 'index.php?' . self::QUERY_VAR . '=staff-clock', 'top' );
+		add_rewrite_rule( '^staff-guide/?$', 'index.php?' . self::QUERY_VAR . '=staff-guide', 'top' );
 		add_rewrite_rule( '^management/?$', 'index.php?' . self::QUERY_VAR . '=management', 'top' );
+		add_rewrite_rule( '^management-guide/?$', 'index.php?' . self::QUERY_VAR . '=management-guide', 'top' );
 	}
 
 	/**
@@ -77,7 +79,7 @@ class DoughBoss_Portals {
 	 */
 	public function render_requested_portal() {
 		$portal = sanitize_key( (string) get_query_var( self::QUERY_VAR ) );
-		if ( ! in_array( $portal, array( 'kitchen', 'catering-kitchen', 'staff-clock', 'management' ), true ) ) {
+		if ( ! in_array( $portal, array( 'kitchen', 'catering-kitchen', 'staff-clock', 'staff-guide', 'management', 'management-guide' ), true ) ) {
 			return;
 		}
 
@@ -86,7 +88,7 @@ class DoughBoss_Portals {
 		// public navigation and must never be indexed, cached or framed.
 		$this->portal_headers();
 
-		if ( ! is_user_logged_in() && 'staff-clock' !== $portal ) {
+		if ( ! is_user_logged_in() && ! in_array( $portal, array( 'staff-clock', 'staff-guide' ), true ) ) {
 			auth_redirect();
 			exit;
 		}
@@ -97,8 +99,12 @@ class DoughBoss_Portals {
 			$this->render_kitchen( 'catering' );
 		} elseif ( 'staff-clock' === $portal ) {
 			$this->render_staff_clock();
-		} else {
+		} elseif ( 'management' === $portal ) {
 			$this->render_management();
+		} elseif ( 'management-guide' === $portal ) {
+			$this->render_guide( 'management' );
+		} else {
+			$this->render_guide( 'staff' );
 		}
 		exit;
 	}
@@ -261,6 +267,28 @@ class DoughBoss_Portals {
 	}
 
 	/**
+	 * Render the unlisted interactive operating guide. Staff can open their
+	 * guide from any device; the management version remains capability-gated.
+	 *
+	 * @param string $audience staff|management.
+	 * @return void
+	 */
+	private function render_guide( $audience ) {
+		if ( 'management' === $audience && ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to view the management guide.', 'doughboss' ), esc_html__( 'Management access required', 'doughboss' ), array( 'response' => 403 ) );
+		}
+		$title = 'management' === $audience ? __( 'Management guide — DoughBoss', 'doughboss' ) : __( 'Staff guide — DoughBoss', 'doughboss' );
+		$this->render_head( $title, 'guide' );
+		?>
+		<body class="doughboss-guide-portal doughboss-guide-portal--<?php echo esc_attr( $audience ); ?>">
+			<?php DoughBoss_Guides::render( $audience ); ?>
+			<script src="<?php echo esc_url( $this->versioned_asset( 'public/js/doughboss-guides.js' ) ); ?>"></script>
+		</body>
+		</html>
+		<?php
+	}
+
+	/**
 	 * Shared document head.
 	 *
 	 * @param string $title Document title.
@@ -282,6 +310,8 @@ class DoughBoss_Portals {
 				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-orderboard.css' ) ); ?>">
 			<?php elseif ( 'timeclock' === $portal ) : ?>
 				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-timeclock.css' ) ); ?>">
+			<?php elseif ( 'guide' === $portal ) : ?>
+				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-guides.css' ) ); ?>">
 			<?php else : ?>
 				<link rel="stylesheet" href="<?php echo esc_url( $this->versioned_asset( 'public/css/doughboss-admin.css' ) ); ?>">
 			<?php endif; ?>
@@ -417,8 +447,14 @@ class DoughBoss_Portals {
 		if ( false !== strpos( $redirect, '/staff-clock/' ) ) {
 			return 'staff-clock';
 		}
+		if ( false !== strpos( $redirect, '/staff-guide/' ) ) {
+			return 'staff-guide';
+		}
 		if ( false !== strpos( $redirect, '/management/' ) ) {
 			return 'management';
+		}
+		if ( false !== strpos( $redirect, '/management-guide/' ) ) {
+			return 'management-guide';
 		}
 		return '';
 	}

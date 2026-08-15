@@ -383,10 +383,13 @@
 		s.total = el( 'input', 'scan__total' );
 		s.total.type = 'number'; s.total.min = '0'; s.total.step = '0.01';
 		s.total.placeholder = 'Order total (only for % / min-spend)';
+		s.receipt = el( 'input', 'scan__receipt' );
+		s.receipt.placeholder = 'POS/till receipt no. (required)';
 		s.btn = el( 'button', 'btn', 'Redeem' );
 		row.appendChild( s.total ); row.appendChild( s.btn );
 		c1.appendChild( row );
-		c1.appendChild( el( 'p', 'hint', 'A barcode scanner can type the code then press Enter.' ) );
+		c1.appendChild( s.receipt );
+		c1.appendChild( el( 'p', 'hint', 'Complete the sale in the POS first, then enter its receipt number and scan the voucher. The cashier and receipt are retained for daily reconciliation.' ) );
 		s.result = el( 'div', 'result' );
 		c1.appendChild( s.result );
 		grid.appendChild( c1 );
@@ -421,14 +424,16 @@
 			if ( ! code ) { showResult( 'neutral', 'Scan or type a voucher code' ); focusCode(); return; }
 			var sub = parseFloat( s.total.value );
 			if ( isNaN( sub ) || sub < 0 ) { sub = 0; }
+			var receipt = ( s.receipt.value || '' ).trim();
+			if ( ! receipt ) { showResult( 'bad', 'Receipt required', 'Complete the POS sale first, then enter its receipt number.' ); s.receipt.focus(); return; }
 			if ( code !== idemCode || ! idemKey ) { idemCode = code; idemKey = 'con-' + Date.now() + '-' + Math.random().toString( 36 ).slice( 2, 8 ); }
 			s.btn.disabled = true;
 			showResult( 'neutral', 'Checking…' );
-			api( '/voucher/scan', 'POST', { code: code, subtotal: sub, idempotency_key: idemKey } ).then( function ( r ) {
+			api( '/voucher/scan', 'POST', { code: code, subtotal: sub, transaction_ref: receipt, idempotency_key: idemKey } ).then( function ( r ) {
 				s.btn.disabled = false;
 				if ( r.ok && r.data && r.data.redeemed ) {
 					showResult( 'ok', 'Redeemed ✓', r.data.code, r.data.amount );
-					s.input.value = ''; s.total.value = ''; idemCode = ''; idemKey = '';
+				s.input.value = ''; s.total.value = ''; s.receipt.value = ''; idemCode = ''; idemKey = '';
 					clearTimer = setTimeout( function () { s.result.className = 'result'; focusCode(); }, 7000 );
 					activity();
 				} else {
@@ -542,17 +547,19 @@
 		[ [ 'amount', 'Amount ($)' ], [ 'percent', 'Percent (%)' ] ].forEach( function ( o ) {
 			var op = el( 'option', null, o[1] ); op.value = o[0]; type.appendChild( op );
 		} );
-		var value = el( 'input' ); value.type = 'number'; value.min = '0'; value.step = '0.01'; value.placeholder = 'Value';
+		var value = el( 'input' ); value.type = 'number'; value.min = '0.01'; value.max = '5'; value.step = '0.01'; value.placeholder = 'Value (max $5)';
+		var minSpend = el( 'input' ); minSpend.type = 'number'; minSpend.min = '3'; minSpend.step = '0.01'; minSpend.value = '3'; minSpend.placeholder = 'Minimum spend';
 		var prefix = el( 'input' ); prefix.type = 'text'; prefix.value = 'DOUGH'; prefix.placeholder = 'Prefix';
 		var phone = el( 'input' ); phone.type = 'text'; phone.placeholder = 'Customer phone (optional)';
 		fr.appendChild( labelled( 'Type', type ) );
 		fr.appendChild( labelled( 'Value', value ) );
+		fr.appendChild( labelled( 'Minimum spend', minSpend ) );
 		fr.appendChild( labelled( 'Code prefix', prefix ) );
 		fr.appendChild( labelled( 'Phone', phone ) );
 		var cbtn = el( 'button', 'btn', 'Create' ); cbtn.style.minHeight = '40px'; cbtn.style.fontSize = '14px';
 		fr.appendChild( cbtn );
 		make.appendChild( fr );
-		var note = el( 'div', 'sub' ); note.style.marginTop = '10px'; make.appendChild( note );
+		var note = el( 'div', 'sub', 'Promotional vouchers are capped at $5 and require at least a $3 basket.' ); note.style.marginTop = '10px'; make.appendChild( note );
 		screen.appendChild( make );
 
 		var listCard = el( 'div', 'card' );
@@ -565,9 +572,11 @@
 		var cache = [];
 		cbtn.addEventListener( 'click', function () {
 			var v = parseFloat( value.value );
-			if ( isNaN( v ) || v <= 0 ) { note.textContent = 'Enter a value greater than zero.'; return; }
+			var minimum = parseFloat( minSpend.value );
+			if ( isNaN( v ) || v <= 0 || v > 5 ) { note.textContent = 'Enter a value from $0.01 to $5.00.'; return; }
+			if ( isNaN( minimum ) || minimum < 3 ) { note.textContent = 'Minimum spend must be at least $3.00.'; return; }
 			cbtn.disabled = true;
-			api( '/voucher/issue', 'POST', { type: type.value, value: v, prefix: prefix.value, scope: 'both', customer_phone: phone.value } ).then( function ( r ) {
+			api( '/voucher/issue', 'POST', { type: type.value, value: v, min_spend: minimum, prefix: prefix.value, scope: 'both', customer_phone: phone.value } ).then( function ( r ) {
 				cbtn.disabled = false;
 				if ( r.ok && r.data && r.data.code ) { note.textContent = 'Created: ' + r.data.code; value.value = ''; phone.value = ''; refresh(); }
 				else { note.textContent = ( r.data && r.data.message ) || 'Could not create the voucher.'; }
@@ -595,13 +604,27 @@
 				if ( v.status === 'issued' ) {
 					var vb = el( 'button', 'btn--ghost btn--danger', 'Void' ); vb.style.color = '#fff';
 					vb.addEventListener( 'click', function () {
+						var reason = window.prompt( 'Reason for void (required):' );
+						if ( ! reason || reason.trim().length < 5 ) { toast( 'A short void reason is required.' ); return; }
 						vb.disabled = true;
-						api( '/voucher/void', 'POST', { id: v.id } ).then( function ( r ) {
+						api( '/voucher/void', 'POST', { id: v.id, reason: reason.trim() } ).then( function ( r ) {
 							if ( r.ok && r.data && r.data.voided ) { toast( 'Voided ' + v.code ); refresh(); }
 							else { vb.disabled = false; toast( ( r.data && r.data.message ) || 'Could not void.' ); }
 						} ).catch( function () { vb.disabled = false; toast( 'Network error.' ); } );
 					} );
 					li.appendChild( vb );
+				} else if ( v.status === 'redeemed' && v.channel === 'instore' ) {
+					var rb = el( 'button', 'btn--ghost', 'Reverse till scan' );
+					rb.addEventListener( 'click', function () {
+						var reason = window.prompt( 'Reason for till correction (required):' );
+						if ( ! reason || reason.trim().length < 5 ) { toast( 'A short correction reason is required.' ); return; }
+						rb.disabled = true;
+						api( '/voucher/reverse', 'POST', { id: v.id, reason: reason.trim() } ).then( function ( r ) {
+							if ( r.ok && r.data && r.data.reversed ) { toast( 'Voucher re-opened and audited: ' + v.code ); refresh(); }
+							else { rb.disabled = false; toast( ( r.data && r.data.message ) || 'Could not reverse this scan.' ); }
+						} ).catch( function () { rb.disabled = false; toast( 'Network error.' ); } );
+					} );
+					li.appendChild( rb );
 				}
 				list.appendChild( li );
 			} );

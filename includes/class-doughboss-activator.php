@@ -68,6 +68,7 @@ class DoughBoss_Activator {
 		$catering        = $wpdb->prefix . 'doughboss_catering_enquiries';
 		$vouchers        = $wpdb->prefix . 'doughboss_vouchers';
 		$redemptions     = $wpdb->prefix . 'doughboss_voucher_redemptions';
+		$voucher_audit   = $wpdb->prefix . 'doughboss_voucher_audit';
 		$pospal_outbox   = $wpdb->prefix . 'doughboss_pospal_outbox';
 		$location_hours  = $wpdb->prefix . 'doughboss_location_hours';
 		$exceptions      = $wpdb->prefix . 'doughboss_schedule_exceptions';
@@ -84,6 +85,8 @@ class DoughBoss_Activator {
 		$loyalty_tokens  = $wpdb->prefix . 'doughboss_loyalty_tokens';
 		$staff_shifts    = $wpdb->prefix . 'doughboss_staff_shifts';
 		$staff_events    = $wpdb->prefix . 'doughboss_staff_shift_events';
+		$staff_badges    = $wpdb->prefix . 'doughboss_staff_badges';
+		$staff_breaks    = $wpdb->prefix . 'doughboss_staff_breaks';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -393,14 +396,40 @@ class DoughBoss_Activator {
 			order_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			channel varchar(20) NOT NULL DEFAULT 'online',
 			pospal_ticket_no varchar(64) NOT NULL DEFAULT '',
+			transaction_reference varchar(64) NULL DEFAULT NULL,
 			location_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			redeemed_by_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			redeemed_by_name varchar(191) NOT NULL DEFAULT '',
 			amount_applied decimal(10,2) NOT NULL DEFAULT 0.00,
 			idempotency_key varchar(64) NOT NULL DEFAULT '',
 			redeemed_at datetime NULL DEFAULT NULL,
+			redemption_status varchar(20) NOT NULL DEFAULT 'redeemed',
+			reversed_at datetime NULL DEFAULT NULL,
+			reversed_by_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			reversed_by_name varchar(191) NOT NULL DEFAULT '',
+			reversal_reason varchar(500) NOT NULL DEFAULT '',
 			PRIMARY KEY  (id),
 			UNIQUE KEY idempotency_key (idempotency_key),
+			UNIQUE KEY location_transaction_reference (location_id,transaction_reference),
 			KEY voucher_id (voucher_id),
+			KEY redemption_status (redemption_status),
+			KEY redeemed_by_user_id (redeemed_by_user_id),
 			KEY pospal_ticket_no (pospal_ticket_no)
+		) {$charset_collate};";
+
+		$sql_voucher_audit = "CREATE TABLE {$voucher_audit} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			voucher_id bigint(20) unsigned NOT NULL,
+			redemption_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			event_type varchar(32) NOT NULL,
+			reason varchar(500) NOT NULL DEFAULT '',
+			actor_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			actor_name varchar(191) NOT NULL DEFAULT '',
+			details_json longtext NULL,
+			occurred_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			KEY voucher_event (voucher_id,event_type,occurred_at),
+			KEY actor_occurred (actor_user_id,occurred_at)
 		) {$charset_collate};";
 
 		$sql_pospal_outbox = "CREATE TABLE {$pospal_outbox} (
@@ -542,6 +571,9 @@ class DoughBoss_Activator {
 			timezone_snapshot varchar(64) NOT NULL DEFAULT 'Australia/Sydney',
 			clock_in_utc datetime NOT NULL,
 			clock_out_utc datetime NULL DEFAULT NULL,
+			scheduled_start_local varchar(5) NOT NULL DEFAULT '',
+			late_grace_minutes smallint(5) unsigned NOT NULL DEFAULT 0,
+			late_minutes smallint(5) unsigned NOT NULL DEFAULT 0,
 			open_guard tinyint(1) unsigned NULL DEFAULT 1,
 			source varchar(32) NOT NULL DEFAULT 'staff_portal',
 			created_at datetime NULL DEFAULT NULL,
@@ -550,6 +582,41 @@ class DoughBoss_Activator {
 			UNIQUE KEY user_open_guard (user_id,open_guard),
 			KEY location_clock_in (location_id,clock_in_utc),
 			KEY clock_in_utc (clock_in_utc)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_staff_badges = "CREATE TABLE {$staff_badges} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			token_hash char(64) NOT NULL,
+			pin_hash varchar(255) NOT NULL,
+			status varchar(16) NOT NULL DEFAULT 'active',
+			active_guard tinyint(1) unsigned NULL DEFAULT 1,
+			issued_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			last_used_at datetime NULL DEFAULT NULL,
+			revoked_at datetime NULL DEFAULT NULL,
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY token_hash (token_hash),
+			UNIQUE KEY user_active_guard (user_id,active_guard),
+			KEY user_status (user_id,status),
+			KEY status_updated (status,updated_at)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_staff_breaks = "CREATE TABLE {$staff_breaks} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			shift_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			break_start_utc datetime NOT NULL,
+			break_end_utc datetime NULL DEFAULT NULL,
+			open_guard tinyint(1) unsigned NULL DEFAULT 1,
+			source varchar(32) NOT NULL DEFAULT 'staff_badge',
+			created_at datetime NULL DEFAULT NULL,
+			updated_at datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY shift_open_guard (shift_id,open_guard),
+			KEY user_break_start (user_id,break_start_utc),
+			KEY shift_break_start (shift_id,break_start_utc)
 		) ENGINE=InnoDB {$charset_collate};";
 
 		$sql_staff_events = "CREATE TABLE {$staff_events} (
@@ -573,6 +640,7 @@ class DoughBoss_Activator {
 		dbDelta( $sql_catering );
 		dbDelta( $sql_vouchers );
 		dbDelta( $sql_redemptions );
+		dbDelta( $sql_voucher_audit );
 		dbDelta( $sql_pospal_outbox );
 		dbDelta( $sql_location_hours );
 		dbDelta( $sql_exceptions );
@@ -589,6 +657,8 @@ class DoughBoss_Activator {
 		dbDelta( $sql_loyalty_tokens );
 		dbDelta( $sql_staff_shifts );
 		dbDelta( $sql_staff_events );
+		dbDelta( $sql_staff_badges );
+		dbDelta( $sql_staff_breaks );
 	}
 
 	/** Verify immutable, transactional staff attendance storage. */
@@ -596,7 +666,9 @@ class DoughBoss_Activator {
 		global $wpdb;
 		$shifts = $wpdb->prefix . 'doughboss_staff_shifts';
 		$events = $wpdb->prefix . 'doughboss_staff_shift_events';
-		foreach ( array( $shifts, $events ) as $table ) {
+		$badges = $wpdb->prefix . 'doughboss_staff_badges';
+		$breaks = $wpdb->prefix . 'doughboss_staff_breaks';
+		foreach ( array( $shifts, $events, $badges, $breaks ) as $table ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
 			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
@@ -615,6 +687,9 @@ class DoughBoss_Activator {
 				'timezone_snapshot' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => 'Australia/Sydney' ),
 				'clock_in_utc'       => array( 'type' => 'datetime', 'null' => 'NO' ),
 				'clock_out_utc'      => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+				'scheduled_start_local' => array( 'type' => 'varchar(5)', 'null' => 'NO', 'default' => '' ),
+				'late_grace_minutes' => array( 'type' => 'smallint(5) unsigned', 'null' => 'NO', 'default' => '0' ),
+				'late_minutes'       => array( 'type' => 'smallint(5) unsigned', 'null' => 'NO', 'default' => '0' ),
 				'open_guard'         => array( 'type' => 'tinyint(1) unsigned', 'null' => 'YES', 'default' => '1' ),
 				'source'             => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'staff_portal' ),
 				'created_at'         => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
@@ -633,9 +708,43 @@ class DoughBoss_Activator {
 					'occurred_at_utc' => array( 'type' => 'datetime', 'null' => 'NO' ),
 				)
 			)
+			&& self::column_contract_ready(
+				$badges,
+				array(
+					'user_id'      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'token_hash'   => array( 'type' => 'char(64)', 'null' => 'NO' ),
+					'pin_hash'     => array( 'type' => 'varchar(255)', 'null' => 'NO' ),
+					'status'       => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'active' ),
+					'active_guard' => array( 'type' => 'tinyint(1) unsigned', 'null' => 'YES', 'default' => '1' ),
+					'issued_by'    => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
+					'last_used_at' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'revoked_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'created_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'updated_at'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+				)
+			)
+			&& self::column_contract_ready(
+				$breaks,
+				array(
+					'shift_id'        => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'user_id'         => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'break_start_utc' => array( 'type' => 'datetime', 'null' => 'NO' ),
+					'break_end_utc'   => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'open_guard'      => array( 'type' => 'tinyint(1) unsigned', 'null' => 'YES', 'default' => '1' ),
+					'source'          => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'staff_badge' ),
+					'created_at'      => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'updated_at'      => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+				)
+			)
 			&& self::index_contract_ready( $shifts, 'user_open_guard', array( 'user_id', 'open_guard' ), true )
 			&& self::index_contract_ready( $events, 'shift_occurred', array( 'shift_id', 'occurred_at_utc' ), false )
-			&& self::index_contract_ready( $events, 'actor_occurred', array( 'actor_user_id', 'occurred_at_utc' ), false );
+			&& self::index_contract_ready( $events, 'actor_occurred', array( 'actor_user_id', 'occurred_at_utc' ), false )
+			&& self::index_contract_ready( $badges, 'token_hash', array( 'token_hash' ), true, array( 64 ) )
+			&& self::index_contract_ready( $badges, 'user_active_guard', array( 'user_id', 'active_guard' ), true )
+			&& self::index_contract_ready( $badges, 'user_status', array( 'user_id', 'status' ), false )
+			&& self::index_contract_ready( $breaks, 'shift_open_guard', array( 'shift_id', 'open_guard' ), true )
+			&& self::index_contract_ready( $breaks, 'user_break_start', array( 'user_id', 'break_start_utc' ), false )
+			&& self::index_contract_ready( $breaks, 'shift_break_start', array( 'shift_id', 'break_start_utc' ), false );
 	}
 
 	/**
