@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  php:
+    name: PHP lint + unit tests (${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.1', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Syntax check every PHP file
+        run: |
+          set -e
+          find . -name '*.php' -not -path './vendor/*' -not -path './node_modules/*' -print0 \
+            | xargs -0 -n1 php -l
+      - name: Unit tests (no WordPress, no database)
+        run: php tests/run.php
+
+  js:
+    name: JS syntax + storefront harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check the storefront and admin scripts
+        run: |
+          set -e
+          node --check public/js/doughboss.js
+      - name: Storefront harness (Playwright, mocked REST)
+        if: hashFiles('tests/js/run-harness.js') != ''
+        run: |
+          npm --prefix tests/js ci --no-audit --no-fund
+          npx --prefix tests/js playwright install --with-deps chromium
+          node tests/js/run-harness.js
+
+  package:
+    name: Build plugin zip
+    runs-on: ubuntu-latest
+    needs: [php, js]
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash build-zip.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doughboss-zip
+          path: dist/doughboss.zip
+          if-no-files-found: error
