@@ -102,25 +102,31 @@ class DoughBoss_Shortcodes {
 					<div class="db-grid">
 						<?php foreach ( $group as $item ) : ?>
 							<?php $available = ! empty( $item['available'] ); ?>
-							<article class="db-card<?php echo $available ? '' : ' db-card--soldout'; ?>" data-item-id="<?php echo esc_attr( $item['id'] ); ?>" data-available="<?php echo $available ? '1' : '0'; ?>">
-								<?php if ( ! empty( $item['image'] ) ) : ?>
-									<img class="db-card-img" src="<?php echo esc_url( $item['image'] ); ?>"
-										<?php if ( ! empty( $item['srcset'] ) ) : ?>srcset="<?php echo esc_attr( $item['srcset'] ); ?>" sizes="(max-width: 600px) 100vw, 320px"<?php endif; ?>
-										<?php if ( ! empty( $item['image_width'] ) ) : ?>width="<?php echo esc_attr( $item['image_width'] ); ?>" height="<?php echo esc_attr( $item['image_height'] ); ?>"<?php endif; ?>
-										loading="lazy" decoding="async" alt="<?php echo esc_attr( $item['name'] ); ?>" />
-								<?php else : ?>
-									<div class="db-card-img db-card-img--placeholder" aria-hidden="true"></div>
-								<?php endif; ?>
+							<?php // Markup mirrors menuCard() in public/js/doughboss.js so the SSR and fetched menus are pixel-identical. ?>
+							<article class="db-card<?php echo $available ? '' : ' db-card--unavailable'; ?>" data-item-id="<?php echo esc_attr( $item['id'] ); ?>" data-available="<?php echo $available ? '1' : '0'; ?>">
+								<div class="db-card-media">
+									<?php if ( ! empty( $item['image'] ) ) : ?>
+										<img class="db-card-img" src="<?php echo esc_url( $item['image'] ); ?>"
+											<?php if ( ! empty( $item['srcset'] ) ) : ?>srcset="<?php echo esc_attr( $item['srcset'] ); ?>" sizes="(max-width: 560px) 100vw, 320px"<?php endif; ?>
+											<?php if ( ! empty( $item['image_width'] ) ) : ?>width="<?php echo esc_attr( $item['image_width'] ); ?>" height="<?php echo esc_attr( $item['image_height'] ); ?>"<?php endif; ?>
+											loading="lazy" decoding="async" alt="<?php echo esc_attr( $item['name'] ); ?>" />
+									<?php else : ?>
+										<div class="db-card-img db-card-img--placeholder" aria-hidden="true"></div>
+									<?php endif; ?>
+									<?php if ( ! $available ) : ?>
+										<span class="db-badge db-badge--soldout"><?php esc_html_e( 'Sold out', 'doughboss' ); ?></span>
+									<?php endif; ?>
+								</div>
 								<div class="db-card-body">
 									<<?php echo $h2; // phpcs:ignore WordPress.Security.EscapeOutput ?> class="db-card-title"><?php echo esc_html( $item['name'] ); ?></<?php echo $h2; // phpcs:ignore WordPress.Security.EscapeOutput ?>>
 									<?php if ( ! empty( $item['description'] ) ) : ?>
 										<p class="db-card-desc"><?php echo esc_html( $item['description'] ); ?></p>
 									<?php endif; ?>
+									<?php if ( ! $available ) : ?>
+										<p class="db-card-note"><?php esc_html_e( 'This item is unavailable right now.', 'doughboss' ); ?></p>
+									<?php endif; ?>
 									<div class="db-card-foot">
 										<span class="db-price"><?php echo esc_html( DoughBoss_Settings::format_price( $item['price'] ) ); ?></span>
-										<?php if ( ! $available ) : ?>
-											<span class="db-badge db-badge--soldout"><?php esc_html_e( 'Sold out', 'doughboss' ); ?></span>
-										<?php endif; ?>
 										<button type="button" class="db-btn db-add" data-item-id="<?php echo esc_attr( $item['id'] ); ?>"
 											<?php disabled( ! $available || ! $open ); ?> <?php echo ( ! $available || ! $open ) ? 'aria-disabled="true"' : ''; ?>>
 											<?php esc_html_e( 'Add to cart', 'doughboss' ); ?>
@@ -257,17 +263,18 @@ class DoughBoss_Shortcodes {
 		ob_start();
 		?>
 		<div class="db-app db-tracking" data-doughboss-tracking<?php echo $this->container_attrs( $level ); // phpcs:ignore WordPress.Security.EscapeOutput ?>>
+			<?php // Same structure the JS builds when no form is present (renderTracking), so the CSS applies identically. ?>
 			<form class="db-track-form">
-				<<?php echo $h; // phpcs:ignore WordPress.Security.EscapeOutput ?>><?php esc_html_e( 'Track your order', 'doughboss' ); ?></<?php echo $h; // phpcs:ignore WordPress.Security.EscapeOutput ?>>
-				<label class="db-field" for="db-track-number">
-					<span><?php esc_html_e( 'Order number', 'doughboss' ); ?></span>
-					<input type="text" id="db-track-number" name="number" required autocomplete="off" autocapitalize="characters" placeholder="DB-000000-XXXXXX" />
-				</label>
-				<label class="db-field" for="db-track-email">
-					<span><?php esc_html_e( 'Email used on the order', 'doughboss' ); ?></span>
-					<input type="email" id="db-track-email" name="email" required autocomplete="email" inputmode="email" />
-				</label>
-				<button type="submit" class="db-btn"><?php esc_html_e( 'Check status', 'doughboss' ); ?></button>
+				<<?php echo $h; // phpcs:ignore WordPress.Security.EscapeOutput ?> class="db-track-heading"><?php esc_html_e( 'Track your order', 'doughboss' ); ?></<?php echo $h; // phpcs:ignore WordPress.Security.EscapeOutput ?>>
+				<div class="db-field">
+					<label class="db-label" for="db-track-number"><?php esc_html_e( 'Order number', 'doughboss' ); ?></label>
+					<input class="db-input" type="text" id="db-track-number" name="number" required autocomplete="off" autocapitalize="characters" enterkeyhint="next" />
+				</div>
+				<div class="db-field">
+					<label class="db-label" for="db-track-email"><?php esc_html_e( 'Email', 'doughboss' ); ?></label>
+					<input class="db-input" type="email" id="db-track-email" name="email" required autocomplete="email" inputmode="email" enterkeyhint="go" />
+				</div>
+				<button type="submit" class="db-btn db-btn--lg"><?php esc_html_e( 'Find my order', 'doughboss' ); ?></button>
 			</form>
 			<div class="db-track-result" aria-live="polite"></div>
 		</div>

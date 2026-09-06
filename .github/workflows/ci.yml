@@ -26,6 +26,8 @@ jobs:
             | xargs -0 -n1 php -l
       - name: Unit tests (no WordPress, no database)
         run: php tests/run.php
+      - name: i18n map matches the storefront's t() calls
+        run: php tests/gen-i18n.php --check
 
   js:
     name: JS syntax + storefront harness
@@ -40,11 +42,11 @@ jobs:
           set -e
           node --check public/js/doughboss.js
       - name: Storefront harness (Playwright, mocked REST)
-        if: hashFiles('tests/js/run-harness.js') != ''
+        working-directory: tests/js
         run: |
-          npm --prefix tests/js ci --no-audit --no-fund
-          npx --prefix tests/js playwright install --with-deps chromium
-          node tests/js/run-harness.js
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npm test
 
   package:
     name: Build plugin zip

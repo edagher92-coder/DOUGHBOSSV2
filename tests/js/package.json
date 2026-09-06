@@ -1,0 +1,12 @@
+{
+  "name": "doughboss-storefront-harness",
+  "private": true,
+  "description": "Playwright harness for the DoughBoss storefront against a mocked doughboss/v1 REST API.",
+  "scripts": {
+    "build": "node build-harness.js",
+    "test": "node build-harness.js && node run-harness.js"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

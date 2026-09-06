@@ -97,6 +97,13 @@ class DoughBoss_REST_Controller {
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_cart' ),
 				'permission_callback' => '__return_true',
+				'args'                => array(
+					'order_type' => array(
+						'default'           => 'pickup',
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
 			)
 		);
 
@@ -133,6 +140,11 @@ class DoughBoss_REST_Controller {
 						'type'              => 'integer',
 						'sanitize_callback' => 'absint',
 					),
+					'order_type' => array(
+						'default'           => 'pickup',
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_key',
+					),
 				),
 			)
 		);
@@ -155,6 +167,11 @@ class DoughBoss_REST_Controller {
 						'type'              => 'integer',
 						'sanitize_callback' => 'absint',
 					),
+					'order_type' => array(
+						'default'           => 'pickup',
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_key',
+					),
 				),
 			)
 		);
@@ -171,6 +188,11 @@ class DoughBoss_REST_Controller {
 						'required'          => true,
 						'type'              => 'string',
 						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'order_type' => array(
+						'default'           => 'pickup',
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_key',
 					),
 				),
 			)
@@ -607,7 +629,9 @@ class DoughBoss_REST_Controller {
 			return $result;
 		}
 
-		$payload          = $this->cart->to_array();
+		// Totals must reflect the fulfilment the customer has chosen or the
+		// delivery fee is wrong until the next fetch; the storefront sends it.
+		$payload          = $this->cart->to_array( $this->normalise_order_type( $request->get_param( 'order_type' ) ) );
 		$payload['added'] = $result;
 		return $this->cart_response( $payload );
 	}
