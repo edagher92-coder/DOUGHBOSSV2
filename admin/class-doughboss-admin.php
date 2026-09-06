@@ -2341,8 +2341,12 @@ JS;
 		$campaigns = DoughBoss_Voucher::campaigns();
 		$vouchers  = DoughBoss_Voucher::query( 100 );
 		$owner_id  = absint( DoughBoss_Settings::get( 'voucher_reconciliation_owner_id', 0 ) );
+		// get_users() with an array `fields` returns raw stdClass rows, not WP_User
+		// objects, and user_can() calls ->has_cap() straight on the object it is
+		// given. Pass the user ID so core resolves a real WP_User first.
 		$managers  = array_filter( get_users( array( 'fields' => array( 'ID', 'display_name', 'user_login' ) ) ), static function ( $user ) {
-			return user_can( $user, 'manage_doughboss' ) || user_can( $user, 'manage_options' );
+			$uid = isset( $user->ID ) ? (int) $user->ID : 0;
+			return $uid && ( user_can( $uid, 'manage_doughboss' ) || user_can( $uid, 'manage_options' ) );
 		} );
 		?>
 		<div class="wrap doughboss-vouchers">
