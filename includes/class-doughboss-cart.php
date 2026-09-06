@@ -25,31 +25,59 @@ class DoughBoss_Cart {
 	const MAX_LINES   = 50;
 
 	/**
-	 * Cached token for the current request.
+	 * Cached token for the current request (null = no valid cookie yet).
 	 *
 	 * @var string|null
 	 */
 	private $token = null;
 
 	/**
-	 * Resolve (and lazily create) the cart token for this visitor.
+	 * Per-request memo of the stored lines (null = not read yet).
 	 *
-	 * @return string
+	 * @var array|null
+	 */
+	private $lines = null;
+
+	/**
+	 * Read the cart token from the cookie WITHOUT creating one.
+	 *
+	 * 2.0 generated a mixed-case token and then lower-cased it on read via
+	 * sanitize_key(), so the key written and the key read never matched. Plain
+	 * MySQL hid the bug behind a case-insensitive collation; on any host with a
+	 * persistent object cache (where core stores transients ONLY in the cache)
+	 * the first item added was silently lost. Tokens are now lowercase hex and
+	 * are validated, never mutated, on read.
+	 *
+	 * @return string|null
 	 */
 	public function get_token() {
 		if ( null !== $this->token ) {
 			return $this->token;
 		}
-
 		if ( isset( $_COOKIE[ self::COOKIE ] ) ) {
-			$candidate = sanitize_key( wp_unslash( $_COOKIE[ self::COOKIE ] ) );
-			if ( strlen( $candidate ) >= 16 ) {
-				$this->token = $candidate;
+			$raw = wp_unslash( $_COOKIE[ self::COOKIE ] );
+			if ( is_string( $raw ) && preg_match( '/^[a-f0-9]{32}$/', $raw ) ) {
+				$this->token = $raw;
 				return $this->token;
 			}
 		}
+		return null;
+	}
 
-		$this->token = wp_generate_password( 32, false, false );
+	/**
+	 * Resolve the token, minting one if the visitor has none. Only write paths
+	 * call this, so browse-only visitors never receive a cookie (page caches
+	 * that bypass on unknown cookies stay effective, and no consent surface is
+	 * created for someone who only looked at the menu).
+	 *
+	 * @return string
+	 */
+	private function ensure_token() {
+		$token = $this->get_token();
+		if ( null !== $token ) {
+			return $token;
+		}
+		$this->token = bin2hex( random_bytes( 16 ) );
 		$this->set_cookie( $this->token );
 		return $this->token;
 	}
@@ -80,22 +108,32 @@ class DoughBoss_Cart {
 	}
 
 	/**
-	 * Transient key for the current cart.
+	 * Transient key for a token.
 	 *
+	 * @param string $token Token.
 	 * @return string
 	 */
-	private function transient_key() {
-		return self::PREFIX . $this->get_token();
+	private function transient_key( $token ) {
+		return self::PREFIX . $token;
 	}
 
 	/**
-	 * Read raw cart lines from storage.
+	 * Read raw cart lines from storage (memoised per request).
 	 *
 	 * @return array
 	 */
 	private function read() {
-		$data = get_transient( $this->transient_key() );
-		return is_array( $data ) ? $data : array();
+		if ( null !== $this->lines ) {
+			return $this->lines;
+		}
+		$token = $this->get_token();
+		if ( null === $token ) {
+			$this->lines = array();
+			return $this->lines;
+		}
+		$data        = get_transient( $this->transient_key( $token ) );
+		$this->lines = is_array( $data ) ? $data : array();
+		return $this->lines;
 	}
 
 	/**
@@ -105,7 +143,19 @@ class DoughBoss_Cart {
 	 * @return void
 	 */
 	private function write( array $lines ) {
-		set_transient( $this->transient_key(), $lines, self::TTL );
+		$token = $this->ensure_token();
+		set_transient( $this->transient_key( $token ), $lines, self::TTL );
+		$this->lines = $lines;
+	}
+
+	/**
+	 * Whether the visitor has a cart cookie at all (used to avoid a needless
+	 * cart fetch on pages that only show a badge).
+	 *
+	 * @return bool
+	 */
+	public function has_token() {
+		return null !== $this->get_token();
 	}
 
 	/**
@@ -120,8 +170,8 @@ class DoughBoss_Cart {
 		$signature = wp_json_encode(
 			array(
 				$line['type'],
-				$line['item_id'],
-				isset( $line['size'] ) ? $line['size'] : '',
+				(int) $line['item_id'],
+				isset( $line['size_slug'] ) ? $line['size_slug'] : ( isset( $line['size'] ) ? $line['size'] : '' ),
 				$toppings,
 			)
 		);
@@ -132,15 +182,16 @@ class DoughBoss_Cart {
 	 * Add an item to the cart.
 	 *
 	 * @param array $line {
-	 *     Line definition.
+	 *     Line definition (already priced server-side by the caller).
 	 *
-	 *     @type string $type     'menu' or 'custom'.
-	 *     @type int    $item_id  Menu item post ID (0 for custom builds).
-	 *     @type string $name     Display name.
-	 *     @type string $size     Size label (optional).
-	 *     @type array  $toppings List of array{slug,label,price} (optional).
+	 *     @type string $type       'menu' or 'custom'.
+	 *     @type int    $item_id    Menu item post ID (0 for custom builds).
+	 *     @type string $name       Display name.
+	 *     @type string $size       Size label (optional).
+	 *     @type string $size_slug  Size slug (optional; used to re-price).
+	 *     @type array  $toppings   List of array{slug,label,price} (optional).
 	 *     @type float  $unit_price Per-unit price.
-	 *     @type int    $quantity Quantity to add.
+	 *     @type int    $quantity   Quantity to add.
 	 * }
 	 * @return array|WP_Error The added/merged line, or an error.
 	 */
@@ -151,6 +202,9 @@ class DoughBoss_Cart {
 
 		if ( isset( $lines[ $key ] ) ) {
 			$lines[ $key ]['quantity'] = min( self::MAX_QTY, $lines[ $key ]['quantity'] + $quantity );
+			// Re-adding the same configuration refreshes the price: a price rise
+			// between the two adds must not be frozen at the old figure.
+			$lines[ $key ]['unit_price'] = round( (float) $line['unit_price'], 2 );
 		} else {
 			if ( count( $lines ) >= self::MAX_LINES ) {
 				return new WP_Error( 'doughboss_cart_full', __( 'Your cart is full.', 'doughboss' ), array( 'status' => 400 ) );
@@ -161,9 +215,11 @@ class DoughBoss_Cart {
 				'item_id'    => (int) $line['item_id'],
 				'name'       => $line['name'],
 				'size'       => isset( $line['size'] ) ? $line['size'] : '',
+				'size_slug'  => isset( $line['size_slug'] ) ? $line['size_slug'] : '',
 				'toppings'   => isset( $line['toppings'] ) ? array_values( $line['toppings'] ) : array(),
 				'unit_price' => round( (float) $line['unit_price'], 2 ),
 				'quantity'   => min( self::MAX_QTY, $quantity ),
+				'available'  => true,
 			);
 		}
 
@@ -217,7 +273,31 @@ class DoughBoss_Cart {
 	 * @return void
 	 */
 	public function clear() {
-		delete_transient( $this->transient_key() );
+		$token = $this->get_token();
+		if ( null !== $token ) {
+			delete_transient( $this->transient_key( $token ) );
+		}
+		$this->lines = array();
+	}
+
+	/**
+	 * Replace every stored line (used by checkout re-validation after
+	 * re-pricing against the live menu and settings).
+	 *
+	 * @param array[] $lines Keyed lines.
+	 * @return void
+	 */
+	public function replace_lines( array $lines ) {
+		$this->write( $lines );
+	}
+
+	/**
+	 * Raw stored lines keyed by line key (no computed totals).
+	 *
+	 * @return array[]
+	 */
+	public function raw_lines() {
+		return $this->read();
 	}
 
 	/**
@@ -228,6 +308,9 @@ class DoughBoss_Cart {
 	 */
 	private function decorate_line( array $line ) {
 		$line['line_total'] = round( $line['unit_price'] * $line['quantity'], 2 );
+		if ( ! isset( $line['available'] ) ) {
+			$line['available'] = true;
+		}
 		return $line;
 	}
 
@@ -243,8 +326,19 @@ class DoughBoss_Cart {
 	/**
 	 * Compute cart totals.
 	 *
+	 * Two tax models are supported:
+	 *
+	 *  - prices_include_tax = 1 (Australian default): the displayed prices are
+	 *    what the customer pays. total = subtotal + delivery. The tax figure is
+	 *    the amount INCLUDED in that total: base × r / (1 + r).
+	 *  - prices_include_tax = 0 (US-style): tax is ADDED on top of the displayed
+	 *    prices. total = subtotal + delivery + base × r.
+	 *
+	 * In both models `tax_applies_to_delivery` decides whether the delivery fee
+	 * forms part of the taxable base.
+	 *
 	 * @param string $order_type 'pickup' or 'delivery' (affects delivery fee).
-	 * @return array{subtotal:float,tax:float,delivery_fee:float,total:float,item_count:int}
+	 * @return array
 	 */
 	public function totals( $order_type = 'pickup' ) {
 		$subtotal   = 0.0;
@@ -256,16 +350,35 @@ class DoughBoss_Cart {
 		}
 
 		$subtotal     = round( $subtotal, 2 );
-		$tax          = round( $subtotal * DoughBoss_Settings::tax_fraction(), 2 );
 		$delivery_fee = ( 'delivery' === $order_type ) ? round( (float) DoughBoss_Settings::get( 'delivery_fee', 0 ), 2 ) : 0.0;
-		$total        = round( $subtotal + $tax + $delivery_fee, 2 );
+		$rate         = DoughBoss_Settings::tax_fraction();
+		$inclusive    = DoughBoss_Settings::prices_include_tax();
+		$taxable_base = $subtotal + ( DoughBoss_Settings::tax_applies_to_delivery() ? $delivery_fee : 0.0 );
+
+		if ( $rate <= 0 ) {
+			$tax   = 0.0;
+			$total = round( $subtotal + $delivery_fee, 2 );
+		} elseif ( $inclusive ) {
+			$tax   = round( $taxable_base * $rate / ( 1 + $rate ), 2 );
+			$total = round( $subtotal + $delivery_fee, 2 );
+		} else {
+			$tax   = round( $taxable_base * $rate, 2 );
+			$total = round( $subtotal + $delivery_fee + $tax, 2 );
+		}
+
+		$min_order = DoughBoss_Settings::min_order();
 
 		return array(
-			'subtotal'     => $subtotal,
-			'tax'          => $tax,
-			'delivery_fee' => $delivery_fee,
-			'total'        => $total,
-			'item_count'   => $item_count,
+			'subtotal'      => $subtotal,
+			'tax'           => $tax,
+			'delivery_fee'  => $delivery_fee,
+			'total'         => $total,
+			'item_count'    => $item_count,
+			'tax_inclusive' => $inclusive,
+			'tax_label'     => DoughBoss_Settings::tax_label(),
+			'tax_rate'      => round( $rate * 100, 2 ),
+			'min_order'     => $min_order,
+			'min_order_met' => ( $min_order <= 0 ) || ( $subtotal >= $min_order ),
 		);
 	}
 

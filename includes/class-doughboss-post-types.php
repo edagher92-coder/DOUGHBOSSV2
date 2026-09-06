@@ -17,8 +17,11 @@ class DoughBoss_Post_Types {
 	const POST_TYPE = 'doughboss_item';
 	const TAXONOMY  = 'doughboss_category';
 
-	const META_PRICE = '_doughboss_price';
-	const META_TYPE  = '_doughboss_item_type';
+	const META_PRICE     = '_doughboss_price';
+	const META_TYPE      = '_doughboss_item_type';
+	const META_AVAILABLE = '_doughboss_available';
+
+	const MENU_VERSION_OPTION = 'doughboss_menu_version';
 
 	/**
 	 * Hook registration into WordPress.
@@ -29,11 +32,81 @@ class DoughBoss_Post_Types {
 		add_action( 'init', array( __CLASS__, 'register' ) );
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_meta' ), 10, 2 );
+
+		// Anything that changes the menu invalidates the cached /menu payload.
+		add_action( 'save_post_' . self::POST_TYPE, array( __CLASS__, 'bump_menu_version' ) );
+		add_action( 'deleted_post', array( __CLASS__, 'bump_menu_version_for_post' ), 10, 2 );
+		add_action( 'trashed_post', array( __CLASS__, 'bump_menu_version_for_post' ), 10, 2 );
+		add_action( 'edited_' . self::TAXONOMY, array( __CLASS__, 'bump_menu_version' ) );
+		add_action( 'delete_' . self::TAXONOMY, array( __CLASS__, 'bump_menu_version' ) );
+		add_action( 'updated_post_meta', array( __CLASS__, 'bump_menu_version_for_meta' ), 10, 3 );
+		add_action( 'added_post_meta', array( __CLASS__, 'bump_menu_version_for_meta' ), 10, 3 );
+	}
+
+	/**
+	 * Current menu cache version.
+	 *
+	 * @return int
+	 */
+	public static function menu_version() {
+		return max( 1, (int) get_option( self::MENU_VERSION_OPTION, 1 ) );
+	}
+
+	/**
+	 * Invalidate the cached menu.
+	 *
+	 * @return void
+	 */
+	public static function bump_menu_version() {
+		update_option( self::MENU_VERSION_OPTION, self::menu_version() + 1, false );
+	}
+
+	/**
+	 * Bump only when the affected post is a menu item.
+	 *
+	 * @param int          $post_id Post ID.
+	 * @param WP_Post|null $post    Post.
+	 * @return void
+	 */
+	public static function bump_menu_version_for_post( $post_id, $post = null ) {
+		$post = $post ? $post : get_post( $post_id );
+		if ( $post && self::POST_TYPE === $post->post_type ) {
+			self::bump_menu_version();
+		}
+	}
+
+	/**
+	 * Bump when a menu item's thumbnail or plugin meta changes via REST/other.
+	 *
+	 * @param int    $meta_id  Meta ID.
+	 * @param int    $post_id  Post ID.
+	 * @param string $meta_key Meta key.
+	 * @return void
+	 */
+	public static function bump_menu_version_for_meta( $meta_id, $post_id, $meta_key ) {
+		if ( in_array( $meta_key, array( '_thumbnail_id', self::META_PRICE, self::META_TYPE, self::META_AVAILABLE ), true ) ) {
+			self::bump_menu_version_for_post( $post_id );
+		}
+	}
+
+	/**
+	 * Whether a menu item is available to order today (the "86 it" switch).
+	 * Missing meta means available, so existing items are unaffected.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return bool
+	 */
+	public static function is_available( $post_id ) {
+		$value = get_post_meta( $post_id, self::META_AVAILABLE, true );
+		return '' === $value || '0' !== (string) $value;
 	}
 
 	/**
 	 * Register the post type, taxonomy and meta. Static so the activator can
 	 * call it directly before flushing rewrite rules.
+	 *
+	 * Menu items use their own mapped capability set rather than the generic
+	 * `post` caps, so a blog Author cannot publish a sellable item at any price.
 	 *
 	 * @return void
 	 */
@@ -56,16 +129,21 @@ class DoughBoss_Post_Types {
 		register_post_type(
 			self::POST_TYPE,
 			array(
-				'labels'        => $labels,
-				'public'        => true,
-				'show_ui'       => true,
-				'show_in_menu'  => 'doughboss',
-				'show_in_rest'  => true,
-				'menu_icon'     => 'dashicons-food',
-				'has_archive'   => false,
-				'rewrite'       => array( 'slug' => 'menu' ),
-				'supports'      => array( 'title', 'editor', 'thumbnail', 'page-attributes' ),
-				'capability_type' => 'post',
+				'labels'              => $labels,
+				'public'              => true,
+				// Items are ordered from the menu page; a bare single-item URL
+				// with no price or Add button only competes with it in search.
+				'publicly_queryable'  => false,
+				'exclude_from_search' => true,
+				'show_ui'             => true,
+				'show_in_menu'        => 'doughboss',
+				'show_in_rest'        => true,
+				'menu_icon'           => 'dashicons-food',
+				'has_archive'         => false,
+				'rewrite'             => false,
+				'supports'            => array( 'title', 'editor', 'excerpt', 'thumbnail', 'page-attributes' ),
+				'capability_type'     => array( 'doughboss_item', 'doughboss_items' ),
+				'map_meta_cap'        => true,
 			)
 		);
 
@@ -79,13 +157,24 @@ class DoughBoss_Post_Types {
 					'add_new_item'  => __( 'Add New Category', 'doughboss' ),
 					'edit_item'     => __( 'Edit Category', 'doughboss' ),
 				),
-				'public'            => true,
+				'public'            => false,
+				'show_ui'           => true,
 				'hierarchical'      => true,
 				'show_admin_column' => true,
 				'show_in_rest'      => true,
-				'rewrite'           => array( 'slug' => 'menu-category' ),
+				'rewrite'           => false,
+				'capabilities'      => array(
+					'manage_terms' => 'manage_doughboss_categories',
+					'edit_terms'   => 'manage_doughboss_categories',
+					'delete_terms' => 'manage_doughboss_categories',
+					'assign_terms' => 'edit_doughboss_items',
+				),
 			)
 		);
+
+		$auth = function ( $allowed, $meta_key, $post_id ) {
+			return current_user_can( 'edit_post', $post_id );
+		};
 
 		register_post_meta(
 			self::POST_TYPE,
@@ -95,9 +184,7 @@ class DoughBoss_Post_Types {
 				'single'            => true,
 				'show_in_rest'      => true,
 				'sanitize_callback' => array( __CLASS__, 'sanitize_price' ),
-				'auth_callback'     => function () {
-					return current_user_can( 'edit_posts' );
-				},
+				'auth_callback'     => $auth,
 			)
 		);
 
@@ -110,9 +197,20 @@ class DoughBoss_Post_Types {
 				'show_in_rest'      => true,
 				'default'           => 'standard',
 				'sanitize_callback' => 'sanitize_key',
-				'auth_callback'     => function () {
-					return current_user_can( 'edit_posts' );
-				},
+				'auth_callback'     => $auth,
+			)
+		);
+
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_AVAILABLE,
+			array(
+				'type'              => 'boolean',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'default'           => true,
+				'sanitize_callback' => 'rest_sanitize_boolean',
+				'auth_callback'     => $auth,
 			)
 		);
 	}
@@ -145,7 +243,7 @@ class DoughBoss_Post_Types {
 	}
 
 	/**
-	 * Render the price/type meta box.
+	 * Render the price/type/availability meta box.
 	 *
 	 * @param WP_Post $post Current post.
 	 * @return void
@@ -153,9 +251,10 @@ class DoughBoss_Post_Types {
 	public function render_meta_box( $post ) {
 		wp_nonce_field( 'doughboss_save_item', 'doughboss_item_nonce' );
 
-		$price = get_post_meta( $post->ID, self::META_PRICE, true );
-		$type  = get_post_meta( $post->ID, self::META_TYPE, true );
-		$type  = $type ? $type : 'standard';
+		$price     = get_post_meta( $post->ID, self::META_PRICE, true );
+		$type      = get_post_meta( $post->ID, self::META_TYPE, true );
+		$type      = $type ? $type : 'standard';
+		$available = self::is_available( $post->ID );
 		?>
 		<p>
 			<label for="doughboss_price"><strong><?php esc_html_e( 'Price', 'doughboss' ); ?></strong></label><br />
@@ -170,6 +269,13 @@ class DoughBoss_Post_Types {
 				<option value="side" <?php selected( $type, 'side' ); ?>><?php esc_html_e( 'Side', 'doughboss' ); ?></option>
 				<option value="drink" <?php selected( $type, 'drink' ); ?>><?php esc_html_e( 'Drink', 'doughboss' ); ?></option>
 			</select>
+		</p>
+		<p>
+			<label for="doughboss_available">
+				<input type="checkbox" id="doughboss_available" name="doughboss_available" value="1" <?php checked( $available ); ?> />
+				<strong><?php esc_html_e( 'Available to order', 'doughboss' ); ?></strong>
+			</label><br />
+			<span class="description"><?php esc_html_e( 'Untick to mark this item sold out without unpublishing it.', 'doughboss' ); ?></span>
 		</p>
 		<?php
 	}
@@ -204,5 +310,8 @@ class DoughBoss_Post_Types {
 			$type = sanitize_key( wp_unslash( $_POST['doughboss_item_type'] ) );
 			update_post_meta( $post_id, self::META_TYPE, $type );
 		}
+
+		// Checkbox: absent from the POST when unticked.
+		update_post_meta( $post_id, self::META_AVAILABLE, empty( $_POST['doughboss_available'] ) ? '0' : '1' );
 	}
 }

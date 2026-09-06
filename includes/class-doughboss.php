@@ -26,7 +26,7 @@ final class DoughBoss {
 	 *
 	 * @var DoughBoss_Cart
 	 */
-	public $cart;
+	private $cart;
 
 	/**
 	 * Retrieve (and lazily build) the singleton.
@@ -47,15 +47,29 @@ final class DoughBoss {
 	private function __construct() {}
 
 	/**
+	 * The shared cart service.
+	 *
+	 * @return DoughBoss_Cart
+	 */
+	public function cart() {
+		return $this->cart;
+	}
+
+	/**
 	 * Load files and register everything.
 	 *
 	 * @return void
 	 */
 	private function boot() {
 		$this->load_dependencies();
-		$this->maybe_upgrade_db();
 		$this->init_components();
 
+		DoughBoss_Settings::init();
+
+		// Schema upgrades run at `init` (not `plugins_loaded`): roles and
+		// rewrite rules exist by then, and the CPT is registered normally.
+		add_action( 'init', array( $this, 'maybe_upgrade_db' ), 1 );
+		add_action( 'init', array( 'DoughBoss_Activator', 'maybe_flush_rewrites' ), 99 );
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 	}
 
@@ -74,6 +88,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-rest-controller.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
 		require_once $dir . 'class-doughboss-assets.php';
+		require_once $dir . 'class-doughboss-activator.php';
 
 		if ( is_admin() ) {
 			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
@@ -81,19 +96,23 @@ final class DoughBoss {
 	}
 
 	/**
-	 * Run the activator's schema routine if the DB version is behind.
+	 * Run the schema routine if the DB version is behind.
 	 *
 	 * Covers sites updated via file copy (where the activation hook never
-	 * fires) so tables always exist for the current schema version.
+	 * fires). Guarded by a short mutex so a deploy during a busy period does
+	 * not have twenty concurrent requests all running dbDelta/ALTER TABLE.
 	 *
 	 * @return void
 	 */
-	private function maybe_upgrade_db() {
+	public function maybe_upgrade_db() {
 		if ( get_option( 'doughboss_db_version' ) === DOUGHBOSS_DB_VERSION ) {
 			return;
 		}
-		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-activator.php';
-		DoughBoss_Activator::activate();
+		if ( ! wp_cache_add( 'doughboss_upgrading', 1, 'doughboss', 60 ) ) {
+			return; // Another request is already upgrading.
+		}
+		DoughBoss_Activator::install();
+		wp_cache_delete( 'doughboss_upgrading', 'doughboss' );
 	}
 
 	/**
@@ -105,7 +124,7 @@ final class DoughBoss {
 		$this->cart = new DoughBoss_Cart();
 
 		( new DoughBoss_Post_Types() )->init();
-		( new DoughBoss_Shortcodes() )->init();
+		( new DoughBoss_Shortcodes( $this->cart ) )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
 

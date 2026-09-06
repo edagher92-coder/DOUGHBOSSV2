@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       DoughBoss
  * Plugin URI:        https://github.com/edagher92-coder/doughbossv2
- * Description:        Pizza & food ordering for WordPress — menu management, a custom pizza builder, online ordering, and order tracking.
- * Version:           2.0.0
+ * Description:       Pizza & food ordering for WordPress — menu management, a custom pizza builder, online ordering, and order tracking.
+ * Version:           2.5.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            DoughBoss
@@ -11,6 +11,7 @@
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       doughboss
  * Domain Path:       /languages
+ * Update URI:        false
  *
  * @package DoughBoss
  */
@@ -23,12 +24,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Current plugin version.
  */
-define( 'DOUGHBOSS_VERSION', '2.0.0' );
+define( 'DOUGHBOSS_VERSION', '2.5.0' );
 
 /**
  * Database schema version. Bump when the schema in the activator changes.
  */
-define( 'DOUGHBOSS_DB_VERSION', '1.0.0' );
+define( 'DOUGHBOSS_DB_VERSION', '2.0.0' );
 
 define( 'DOUGHBOSS_PLUGIN_FILE', __FILE__ );
 define( 'DOUGHBOSS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -41,6 +42,7 @@ define( 'DOUGHBOSS_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'DOUGHBOSS_REST_NAMESPACE', 'doughboss/v1' );
 
 require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss.php';
+require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-settings.php';
 require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-activator.php';
 require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-deactivator.php';
 
@@ -67,7 +69,7 @@ register_deactivation_hook( __FILE__, 'doughboss_deactivate' );
 /**
  * Boot the plugin once all plugins are loaded.
  *
- * @return void
+ * @return DoughBoss
  */
 function doughboss() {
 	return DoughBoss::instance();

@@ -15,21 +15,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 class DoughBoss_Order {
 
 	/**
+	 * Characters used in the random part of an order number. No 0/O, 1/I so a
+	 * number read over the phone or typed off a receipt is unambiguous.
+	 */
+	const NUMBER_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+	const NUMBER_LENGTH   = 6;
+
+	/**
 	 * Valid order statuses mapped to human labels.
 	 *
 	 * @return array<string,string>
 	 */
 	public static function statuses() {
 		return array(
-			'pending'         => __( 'Pending', 'doughboss' ),
-			'confirmed'       => __( 'Confirmed', 'doughboss' ),
-			'preparing'       => __( 'Preparing', 'doughboss' ),
-			'baking'          => __( 'In the Oven', 'doughboss' ),
-			'ready'           => __( 'Ready for Pickup', 'doughboss' ),
-			'out_for_delivery'=> __( 'Out for Delivery', 'doughboss' ),
-			'completed'       => __( 'Completed', 'doughboss' ),
-			'cancelled'       => __( 'Cancelled', 'doughboss' ),
+			'pending'          => __( 'Pending', 'doughboss' ),
+			'confirmed'        => __( 'Confirmed', 'doughboss' ),
+			'preparing'        => __( 'Preparing', 'doughboss' ),
+			'baking'           => __( 'In the Oven', 'doughboss' ),
+			'ready'            => __( 'Ready for Pickup', 'doughboss' ),
+			'out_for_delivery' => __( 'Out for Delivery', 'doughboss' ),
+			'completed'        => __( 'Completed', 'doughboss' ),
+			'cancelled'        => __( 'Cancelled', 'doughboss' ),
 		);
+	}
+
+	/**
+	 * Statuses that are "live" from the kitchen's point of view.
+	 *
+	 * @return string[]
+	 */
+	public static function active_statuses() {
+		return array( 'pending', 'confirmed', 'preparing', 'baking', 'ready', 'out_for_delivery' );
 	}
 
 	/**
@@ -37,7 +53,7 @@ class DoughBoss_Order {
 	 *
 	 * @return string
 	 */
-	private static function orders_table() {
+	public static function orders_table() {
 		global $wpdb;
 		return $wpdb->prefix . 'doughboss_orders';
 	}
@@ -47,31 +63,48 @@ class DoughBoss_Order {
 	 *
 	 * @return string
 	 */
-	private static function items_table() {
+	public static function items_table() {
 		global $wpdb;
 		return $wpdb->prefix . 'doughboss_order_items';
 	}
 
 	/**
-	 * Generate a unique, human-friendly order number.
+	 * Generate a candidate order number: DB-<local ymd>-<6 unambiguous chars>.
+	 *
+	 * The date uses the site's timezone so numbers sort into the shop's trading
+	 * days (2.0 used UTC, so an 8am Sydney order carried yesterday's date).
+	 * Uniqueness is enforced by the UNIQUE KEY on insert, with a retry — there
+	 * is no check-then-insert race any more.
 	 *
 	 * @return string
 	 */
-	private static function generate_order_number() {
+	public static function generate_order_number() {
+		$alphabet = self::NUMBER_ALPHABET;
+		$max      = strlen( $alphabet ) - 1;
+		$suffix   = '';
+		for ( $i = 0; $i < self::NUMBER_LENGTH; $i++ ) {
+			$suffix .= $alphabet[ wp_rand( 0, $max ) ];
+		}
+		return 'DB-' . wp_date( 'ymd' ) . '-' . $suffix;
+	}
+
+	/**
+	 * Whether the last $wpdb error was a duplicate-key violation.
+	 *
+	 * @return bool
+	 */
+	private static function last_error_is_duplicate() {
 		global $wpdb;
-		$table = self::orders_table();
-
-		do {
-			$number = 'DB-' . gmdate( 'ymd' ) . '-' . strtoupper( wp_generate_password( 4, false, false ) );
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-			$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE order_number = %s", $number ) );
-		} while ( $exists );
-
-		return $number;
+		return false !== stripos( (string) $wpdb->last_error, 'Duplicate entry' );
 	}
 
 	/**
 	 * Create an order from validated data and cart lines.
+	 *
+	 * The order row and every item row are written inside one transaction and
+	 * every insert is checked, so a partial order (a priced order with some of
+	 * its food missing) can no longer be committed. Requires InnoDB, which has
+	 * been the MySQL default since 5.5.
 	 *
 	 * @param array   $data  Customer/order fields and totals.
 	 * @param array[] $lines Cart lines.
@@ -84,56 +117,108 @@ class DoughBoss_Order {
 			return new WP_Error( 'doughboss_empty', __( 'Cannot create an empty order.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$now    = current_time( 'mysql', true );
-		$number = self::generate_order_number();
+		$idempotency_key = isset( $data['idempotency_key'] ) && '' !== $data['idempotency_key']
+			? substr( (string) $data['idempotency_key'], 0, 64 )
+			: null;
+
+		// A retried checkout (flaky connection, double tap across tabs) must return
+		// the order that already exists rather than creating a second one.
+		if ( $idempotency_key ) {
+			$existing = self::get_by_idempotency_key( $idempotency_key );
+			if ( $existing ) {
+				return (int) $existing->id;
+			}
+		}
+
+		$now      = current_time( 'mysql', true );
+		$order_id = 0;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$inserted = $wpdb->insert(
-			self::orders_table(),
-			array(
-				'order_number'  => $number,
-				'status'        => 'pending',
-				'order_type'    => $data['order_type'],
-				'customer_name' => $data['customer_name'],
-				'customer_email'=> $data['customer_email'],
-				'customer_phone'=> $data['customer_phone'],
-				'address'       => $data['address'],
-				'notes'         => $data['notes'],
-				'subtotal'      => $data['subtotal'],
-				'tax'           => $data['tax'],
-				'delivery_fee'  => $data['delivery_fee'],
-				'total'         => $data['total'],
-				'currency'      => DoughBoss_Settings::get( 'currency_code', 'USD' ),
-				'created_at'    => $now,
-				'updated_at'    => $now,
-			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%s' )
-		);
+		$wpdb->query( 'START TRANSACTION' );
 
-		if ( false === $inserted ) {
+		for ( $attempt = 0; $attempt < 5; $attempt++ ) {
+			$number = self::generate_order_number();
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$inserted = $wpdb->insert(
+				self::orders_table(),
+				array(
+					'order_number'    => $number,
+					'idempotency_key' => $idempotency_key,
+					'status'          => 'pending',
+					'order_type'      => $data['order_type'],
+					'customer_name'   => $data['customer_name'],
+					'customer_email'  => $data['customer_email'],
+					'customer_phone'  => $data['customer_phone'],
+					'address'         => $data['address'],
+					'notes'           => $data['notes'],
+					'subtotal'        => $data['subtotal'],
+					'tax'             => $data['tax'],
+					'tax_rate'        => isset( $data['tax_rate'] ) ? $data['tax_rate'] : 0,
+					'tax_inclusive'   => ! empty( $data['tax_inclusive'] ) ? 1 : 0,
+					'delivery_fee'    => $data['delivery_fee'],
+					'total'           => $data['total'],
+					'currency'        => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
+					'created_at'      => $now,
+					'updated_at'      => $now,
+				),
+				array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%d', '%f', '%f', '%s', '%s', '%s' )
+			);
+
+			if ( false !== $inserted ) {
+				$order_id = (int) $wpdb->insert_id;
+				break;
+			}
+
+			if ( ! self::last_error_is_duplicate() ) {
+				break; // A real error, not a number collision.
+			}
+
+			// Duplicate key: if it was the idempotency key, another request won.
+			if ( $idempotency_key ) {
+				$existing = self::get_by_idempotency_key( $idempotency_key );
+				if ( $existing ) {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$wpdb->query( 'ROLLBACK' );
+					return (int) $existing->id;
+				}
+			}
+			// Otherwise it was an order-number collision: loop and try a new one.
+		}
+
+		if ( ! $order_id ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$wpdb->query( 'ROLLBACK' );
 			return new WP_Error( 'doughboss_db_error', __( 'Could not save your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
 		}
 
-		$order_id = (int) $wpdb->insert_id;
-
+		// Items: one multi-row INSERT, checked.
+		$placeholders = array();
+		$values       = array();
 		foreach ( $lines as $line ) {
-			$toppings = isset( $line['toppings'] ) ? wp_json_encode( array_values( $line['toppings'] ) ) : '';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-			$wpdb->insert(
-				self::items_table(),
-				array(
-					'order_id'   => $order_id,
-					'item_id'    => (int) $line['item_id'],
-					'name'       => $line['name'],
-					'size'       => isset( $line['size'] ) ? $line['size'] : '',
-					'toppings'   => $toppings,
-					'quantity'   => (int) $line['quantity'],
-					'unit_price' => (float) $line['unit_price'],
-					'line_total' => (float) $line['line_total'],
-				),
-				array( '%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f' )
-			);
+			$placeholders[] = '(%d, %d, %s, %s, %s, %d, %f, %f)';
+			$values[]       = $order_id;
+			$values[]       = (int) $line['item_id'];
+			$values[]       = (string) $line['name'];
+			$values[]       = isset( $line['size'] ) ? (string) $line['size'] : '';
+			$values[]       = isset( $line['toppings'] ) ? wp_json_encode( array_values( $line['toppings'] ) ) : '';
+			$values[]       = (int) $line['quantity'];
+			$values[]       = (float) $line['unit_price'];
+			$values[]       = (float) $line['line_total'];
 		}
+
+		$items_table = self::items_table();
+		$sql         = "INSERT INTO {$items_table} (order_id, item_id, name, size, toppings, quantity, unit_price, line_total) VALUES " . implode( ', ', $placeholders );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL
+		$items_ok = $wpdb->query( $wpdb->prepare( $sql, $values ) );
+
+		if ( false === $items_ok ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$wpdb->query( 'ROLLBACK' );
+			return new WP_Error( 'doughboss_db_error', __( 'Could not save your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->query( 'COMMIT' );
 
 		/**
 		 * Fires after an order has been created and all items stored.
@@ -173,6 +258,33 @@ class DoughBoss_Order {
 	}
 
 	/**
+	 * Fetch an order by the client's idempotency key.
+	 *
+	 * @param string $key Idempotency key.
+	 * @return object|null
+	 */
+	public static function get_by_idempotency_key( $key ) {
+		global $wpdb;
+		$table = self::orders_table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE idempotency_key = %s", $key ) );
+	}
+
+	/**
+	 * Decode a raw items row.
+	 *
+	 * @param array $row Row.
+	 * @return array
+	 */
+	private static function decode_item( array $row ) {
+		$row['toppings'] = $row['toppings'] ? json_decode( $row['toppings'], true ) : array();
+		if ( ! is_array( $row['toppings'] ) ) {
+			$row['toppings'] = array();
+		}
+		return $row;
+	}
+
+	/**
 	 * Fetch the items belonging to an order.
 	 *
 	 * @param int $order_id Order ID.
@@ -183,17 +295,41 @@ class DoughBoss_Order {
 		$table = self::items_table();
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE order_id = %d ORDER BY id ASC", $order_id ), ARRAY_A );
+		return $rows ? array_map( array( __CLASS__, 'decode_item' ), $rows ) : array();
+	}
 
-		foreach ( $rows as &$row ) {
-			$row['toppings'] = $row['toppings'] ? json_decode( $row['toppings'], true ) : array();
+	/**
+	 * Fetch items for many orders in ONE query, grouped by order id. The admin
+	 * list used to run one query per row (20+ per page load).
+	 *
+	 * @param int[] $order_ids Order IDs.
+	 * @return array<int,array[]> order_id => items.
+	 */
+	public static function get_items_for_orders( array $order_ids ) {
+		global $wpdb;
+		$order_ids = array_values( array_filter( array_map( 'absint', $order_ids ) ) );
+		if ( empty( $order_ids ) ) {
+			return array();
 		}
-		unset( $row );
+		$table        = self::items_table();
+		$placeholders = implode( ', ', array_fill( 0, count( $order_ids ), '%d' ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE order_id IN ({$placeholders}) ORDER BY order_id, id", $order_ids ), ARRAY_A );
 
-		return $rows ? $rows : array();
+		$grouped = array_fill_keys( $order_ids, array() );
+		foreach ( (array) $rows as $row ) {
+			$grouped[ (int) $row['order_id'] ][] = self::decode_item( $row );
+		}
+		return $grouped;
 	}
 
 	/**
 	 * Update the status of an order.
+	 *
+	 * Returns false for an unknown status OR an unknown order. 2.0 returned
+	 * true for a non-existent order because $wpdb->update() returns 0 (not
+	 * false) when no row matches, and fired the status-changed action for a
+	 * phantom order.
 	 *
 	 * @param int    $order_id Order ID.
 	 * @param string $status   New status (must be a known status).
@@ -206,6 +342,14 @@ class DoughBoss_Order {
 			return false;
 		}
 
+		$order = self::get( $order_id );
+		if ( ! $order ) {
+			return false;
+		}
+		if ( $order->status === $status ) {
+			return true; // No-op, but not a failure.
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$updated = $wpdb->update(
 			self::orders_table(),
@@ -213,28 +357,90 @@ class DoughBoss_Order {
 				'status'     => $status,
 				'updated_at' => current_time( 'mysql', true ),
 			),
-			array( 'id' => $order_id ),
+			array( 'id' => (int) $order_id ),
 			array( '%s', '%s' ),
 			array( '%d' )
 		);
 
-		if ( false !== $updated ) {
-			do_action( 'doughboss_order_status_changed', $order_id, $status );
-			return true;
+		if ( false === $updated ) {
+			return false;
 		}
-		return false;
+
+		/**
+		 * Fires after an order's status genuinely changed.
+		 *
+		 * @param int    $order_id   Order ID.
+		 * @param string $status     New status.
+		 * @param string $old_status Previous status.
+		 */
+		do_action( 'doughboss_order_status_changed', (int) $order_id, $status, $order->status );
+		return true;
+	}
+
+	/**
+	 * Record the outcome of the confirmation email so a failed send is visible
+	 * in the admin list instead of vanishing.
+	 *
+	 * @param int    $order_id Order ID.
+	 * @param bool   $sent     Whether wp_mail reported success.
+	 * @param string $error    Error text when it failed.
+	 * @return void
+	 */
+	public static function mark_email_result( $order_id, $sent, $error = '' ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->update(
+			self::orders_table(),
+			array(
+				'email_sent'  => $sent ? 1 : 0,
+				'email_error' => $sent ? null : substr( (string) $error, 0, 1000 ),
+			),
+			array( 'id' => (int) $order_id ),
+			array( '%d', '%s' ),
+			array( '%d' )
+		);
+	}
+
+	/**
+	 * Count orders created after a timestamp (drives the new-order badge).
+	 *
+	 * @param string $since_gmt MySQL datetime (UTC).
+	 * @return int
+	 */
+	public static function count_since( $since_gmt ) {
+		global $wpdb;
+		$table = self::orders_table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE created_at > %s", $since_gmt ) );
+	}
+
+	/**
+	 * Count orders by status (for the admin views bar).
+	 *
+	 * @return array<string,int>
+	 */
+	public static function counts_by_status() {
+		global $wpdb;
+		$table = self::orders_table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$rows   = $wpdb->get_results( "SELECT status, COUNT(*) AS n FROM {$table} GROUP BY status", ARRAY_A );
+		$counts = array();
+		foreach ( (array) $rows as $row ) {
+			$counts[ $row['status'] ] = (int) $row['n'];
+		}
+		return $counts;
 	}
 
 	/**
 	 * Query orders for the admin list.
 	 *
 	 * @param array $args { Optional. Query arguments.
-	 *     @type string $status  Filter by status.
-	 *     @type string $search  Search order number / name / email.
+	 *     @type string $status   Filter by status, or 'active' for every live status.
+	 *     @type string $search   Search order number / name / email / phone.
 	 *     @type int    $per_page Results per page.
-	 *     @type int    $page    Current page (1-based).
-	 *     @type string $orderby Column to order by.
-	 *     @type string $order   ASC or DESC.
+	 *     @type int    $page     Current page (1-based).
+	 *     @type string $orderby  Column to order by.
+	 *     @type string $order    ASC or DESC.
 	 * }
 	 * @return array{items:object[],total:int}
 	 */
@@ -257,25 +463,44 @@ class DoughBoss_Order {
 		$where  = 'WHERE 1=1';
 		$params = array();
 
-		if ( $args['status'] && array_key_exists( $args['status'], self::statuses() ) ) {
+		if ( 'active' === $args['status'] ) {
+			$active       = self::active_statuses();
+			$placeholders = implode( ', ', array_fill( 0, count( $active ), '%s' ) );
+			$where       .= " AND status IN ({$placeholders})";
+			$params       = array_merge( $params, $active );
+		} elseif ( $args['status'] && array_key_exists( $args['status'], self::statuses() ) ) {
 			$where   .= ' AND status = %s';
 			$params[] = $args['status'];
 		}
 
-		if ( '' !== $args['search'] ) {
-			$like     = '%' . $wpdb->esc_like( $args['search'] ) . '%';
-			$where   .= ' AND ( order_number LIKE %s OR customer_name LIKE %s OR customer_email LIKE %s )';
-			$params[] = $like;
-			$params[] = $like;
-			$params[] = $like;
+		$search = trim( (string) $args['search'] );
+		if ( '' !== $search ) {
+			// The overwhelmingly common search is an order number pasted from a
+			// customer's phone, or an email address. Both have unique/indexed
+			// columns, so use equality instead of a leading-wildcard LIKE that
+			// would scan the whole table.
+			if ( preg_match( '/^DB-\d{6}-[A-Z0-9]{4,8}$/i', $search ) ) {
+				$where   .= ' AND order_number = %s';
+				$params[] = strtoupper( $search );
+			} elseif ( is_email( $search ) ) {
+				$where   .= ' AND customer_email = %s';
+				$params[] = strtolower( $search );
+			} else {
+				$like     = '%' . $wpdb->esc_like( $search ) . '%';
+				$where   .= ' AND ( order_number LIKE %s OR customer_name LIKE %s OR customer_email LIKE %s OR customer_phone LIKE %s )';
+				$params[] = $like;
+				$params[] = $like;
+				$params[] = $like;
+				$params[] = $like;
+			}
 		}
 
 		// Whitelist orderby to avoid SQL injection via column names.
-		$allowed_orderby = array( 'created_at', 'total', 'status', 'id' );
+		$allowed_orderby = array( 'created_at', 'total', 'status', 'id', 'order_number' );
 		$orderby         = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'created_at';
 		$order           = ( 'ASC' === strtoupper( $args['order'] ) ) ? 'ASC' : 'DESC';
 
-		$per_page = max( 1, (int) $args['per_page'] );
+		$per_page = max( 1, min( 200, (int) $args['per_page'] ) );
 		$offset   = max( 0, ( (int) $args['page'] - 1 ) * $per_page );
 
 		// Total count.
@@ -284,7 +509,7 @@ class DoughBoss_Order {
 		$total = (int) $wpdb->get_var( $params ? $wpdb->prepare( $count_sql, $params ) : $count_sql );
 
 		// Page of results.
-		$query    = "SELECT * FROM {$table} {$where} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+		$query    = "SELECT * FROM {$table} {$where} ORDER BY {$orderby} {$order}, id {$order} LIMIT %d OFFSET %d";
 		$all_args = array_merge( $params, array( $per_page, $offset ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL
 		$items = $wpdb->get_results( $wpdb->prepare( $query, $all_args ) );
@@ -297,12 +522,23 @@ class DoughBoss_Order {
 
 	/**
 	 * Build a public-safe representation of an order for the customer.
+	 * Deliberately excludes name, email, phone, address and notes.
 	 *
 	 * @param object $order Order row.
 	 * @return array
 	 */
 	public static function public_view( $order ) {
 		$statuses = self::statuses();
+		$items    = array();
+		foreach ( self::get_items( $order->id ) as $item ) {
+			$items[] = array(
+				'name'       => $item['name'],
+				'quantity'   => (int) $item['quantity'],
+				'size'       => $item['size'],
+				'toppings'   => $item['toppings'],
+				'line_total' => (float) $item['line_total'],
+			);
+		}
 		return array(
 			'order_number' => $order->order_number,
 			'status'       => $order->status,
@@ -311,7 +547,7 @@ class DoughBoss_Order {
 			'total'        => (float) $order->total,
 			'currency'     => $order->currency,
 			'created_at'   => $order->created_at,
-			'items'        => self::get_items( $order->id ),
+			'items'        => $items,
 		);
 	}
 }
