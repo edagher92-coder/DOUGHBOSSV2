@@ -1,336 +1,1401 @@
 /**
- * DoughBoss storefront styles. Scoped under .db-app to avoid clashing with
- * the active theme.
+ * DoughBoss storefront styles — v2.5
+ *
+ * Design direction: "wood-fired, not app-store". Warm paper surfaces, charcoal
+ * ink, one tomato red reserved exclusively for action, basil/oven semantics.
+ *
+ * Theme-survival rules baked in here (see the v2.5 audit §4.5):
+ *   1. Every component selector is authored as `.db-app .x` (0,2,0) so a
+ *      theme's `.entry-content button` (0,1,1) cannot win.
+ *   2. NO `@layer`. An unlayered theme declaration beats *any* layered
+ *      declaration regardless of specificity, and virtually every WordPress
+ *      theme is unlayered — layering would hand the theme every conflict.
+ *   3. `!important` appears on exactly three properties: `box-sizing`, the
+ *      focus `outline`, and `font-size` on form controls (the iOS zoom floor).
+ *   4. No bare `rem` anywhere — a theme running `html{font-size:62.5%}` would
+ *      otherwise shrink the whole plugin. Every dimension is a px token.
+ *   5. Fonts `inherit` by default; no webfont is loaded.
+ *   6. Every surface declares its own background, so a dark theme cannot leave
+ *      dark-on-dark text.
  */
 
+/* ------------------------------------------------------------------ */
+/* Tokens                                                             */
+/* ------------------------------------------------------------------ */
+
 .db-app {
-	--db-accent: #d6452b;
-	--db-accent-dark: #b8381f;
-	--db-border: #e6e1da;
-	--db-muted: #6b6b6b;
-	font-size: 16px;
-	line-height: 1.5;
-	color: #2b2b2b;
+	/* Surfaces — warm paper, never pure grey */
+	--db-cream: #FBF7F0;
+	--db-surface: #FFFFFF;
+	--db-surface-2: #F5EFE4;
+
+	/* Ink */
+	--db-ink: #1A1614;
+	--db-ink-2: #4A4038;
+	--db-muted: #6F655C;
+
+	/* Lines */
+	--db-hairline: #E4DACB;
+	--db-line: #9C8B78;
+
+	/* Action — tomato. ONLY for interactive/primary. */
+	--db-tomato: #C8371C;
+	--db-tomato-700: #A82815;
+	--db-tomato-050: #FCEBE7;
+
+	/* Semantics */
+	--db-basil: #1F6B3B;
+	--db-basil-050: #E7F2E9;
+	--db-oven: #8A4200;
+	--db-oven-050: #FDF0E1;
+	--db-danger: #8C1D18;
+	--db-pending-050: #F1EADF;
+
+	--db-focus: #1A1614;
+
+	/* Type — inherit the theme by default; no webfont is loaded. */
+	--db-font-body: inherit;
+	--db-font-display: inherit;
+
+	--db-fs-xs: 13px;
+	--db-fs-sm: 14px;
+	--db-fs-md: 16px;
+	--db-fs-lg: 18px;
+	--db-fs-xl: 22px;
+	--db-fs-2xl: 28px;
+	--db-fs-3xl: 36px;
+	--db-lh-tight: 1.15;
+	--db-lh-body: 1.55;
+
+	/* Space */
+	--db-s1: 4px;
+	--db-s2: 8px;
+	--db-s3: 12px;
+	--db-s4: 16px;
+	--db-s5: 24px;
+	--db-s6: 32px;
+	--db-s7: 48px;
+
+	/* Radii */
+	--db-r-sm: 8px;
+	--db-r-md: 12px;
+	--db-r-lg: 18px;
+	--db-r-pill: 999px;
+
+	/* Warm-tinted elevation, not the generic neutral SaaS drop */
+	--db-shadow-1: 0 1px 2px rgba(26, 22, 20, .06), 0 1px 1px rgba(26, 22, 20, .04);
+	--db-shadow-2: 0 2px 4px rgba(26, 22, 20, .05), 0 12px 28px -14px rgba(26, 22, 20, .22);
+
+	/* Minimum comfortable touch target */
+	--db-tap: 44px;
+
+	font-family: var(--db-font-body);
+	font-size: var(--db-fs-md);
+	line-height: var(--db-lh-body);
+	color: var(--db-ink);
+	background: var(--db-cream);
+	contain: layout style;
+	isolation: isolate;
 }
 
-.db-app * {
-	box-sizing: border-box;
+/* ------------------------------------------------------------------ */
+/* Targeted theme reset — only what themes reliably break             */
+/* ------------------------------------------------------------------ */
+
+.db-app,
+.db-app *,
+.db-app *::before,
+.db-app *::after {
+	box-sizing: border-box !important;
 }
 
-.db-loading,
-.db-empty {
-	padding: 1.5rem;
-	text-align: center;
-	color: var(--db-muted);
-}
-
-.db-error {
-	color: var(--db-accent-dark);
-	font-weight: 600;
-}
-
-/* Buttons ----------------------------------------------------------- */
-.db-btn {
-	background: var(--db-accent);
-	color: #fff;
-	border: 0;
-	border-radius: 6px;
-	padding: 0.55rem 1rem;
-	font-size: 0.95rem;
-	font-weight: 600;
+.db-app button {
+	font: inherit;
+	font-size: var(--db-fs-md) !important;
+	letter-spacing: normal;
+	text-transform: none;
+	line-height: var(--db-lh-body);
+	margin: 0;
 	cursor: pointer;
-	transition: background 0.15s ease;
 }
 
-.db-btn:hover:not(:disabled) {
-	background: var(--db-accent-dark);
+.db-app input,
+.db-app textarea,
+.db-app select {
+	font: inherit;
+	/* 16px floor: below it iOS Safari zooms the viewport on focus. */
+	font-size: var(--db-fs-md) !important;
+	letter-spacing: normal;
+	text-transform: none;
+	margin: 0;
+	background: var(--db-surface);
+	color: var(--db-ink);
 }
 
-.db-btn:disabled {
-	opacity: 0.6;
-	cursor: default;
-}
-
-.db-btn--lg {
-	width: 100%;
-	padding: 0.8rem 1rem;
-	font-size: 1.05rem;
-	margin-top: 0.75rem;
-}
-
-.db-link {
-	background: none;
-	border: 0;
-	color: var(--db-accent-dark);
-	cursor: pointer;
-	text-decoration: underline;
+.db-app ul,
+.db-app ol {
+	list-style: none;
+	margin: 0;
 	padding: 0;
-	font-size: 0.85rem;
 }
 
-/* Menu -------------------------------------------------------------- */
-.db-category {
-	margin: 1.5rem 0 0.75rem;
-	border-bottom: 2px solid var(--db-accent);
-	padding-bottom: 0.25rem;
+.db-app a {
+	color: var(--db-tomato-700);
+	text-decoration: underline;
+	text-underline-offset: 2px;
 }
 
-.db-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: 1rem;
+.db-app img {
+	max-width: 100%;
+	height: auto;
+	border-radius: 0;
+	display: block;
 }
 
-.db-card {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+.db-app fieldset {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+}
+
+.db-app legend {
+	padding: 0;
+	margin: 0 0 var(--db-s2);
+	float: none;
+	width: auto;
+}
+
+.db-app p {
+	margin: 0 0 var(--db-s3);
+}
+
+.db-app p:last-child {
+	margin-bottom: 0;
+}
+
+/* Theme-proof focus indicator: dark outline + white inner ring so it reads
+   on cream, on white and on the tomato button alike. */
+.db-app a:focus-visible,
+.db-app button:focus-visible,
+.db-app input:focus-visible,
+.db-app select:focus-visible,
+.db-app textarea:focus-visible,
+.db-app [tabindex]:focus-visible {
+	outline: 3px solid var(--db-focus) !important;
+	outline-offset: 2px;
+	box-shadow: 0 0 0 2px #fff;
+	border-radius: var(--db-r-sm);
+}
+
+/* The plugin toggles visibility with the `hidden` property. Doubling the
+   attribute lifts this to (0,3,0) so it beats every component `display`
+   rule below without reaching for !important. */
+.db-app [hidden][hidden] {
+	display: none;
+}
+
+.db-app .db-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
 	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-	background: #fff;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
 }
 
-.db-card-img {
-	height: 140px;
-	background-size: cover;
-	background-position: center;
-	background-color: #f3efe9;
+/* ------------------------------------------------------------------ */
+/* Headings, generic text                                             */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-category,
+.db-app .db-builder-heading,
+.db-app .db-cart-heading,
+.db-app .db-checkout-heading,
+.db-app .db-confirm-title,
+.db-app .db-track-heading,
+.db-app .db-track-title,
+.db-app .db-card-title {
+	font-family: var(--db-font-display);
+	color: var(--db-ink);
+	line-height: var(--db-lh-tight);
+	margin: 0 0 var(--db-s3);
 }
 
-.db-card-img--placeholder {
-	background-image: linear-gradient(135deg, #f3efe9 25%, #ece6dd 25%, #ece6dd 50%, #f3efe9 50%);
-	background-size: 24px 24px;
+.db-app .db-category {
+	font-size: var(--db-fs-xl);
+	margin: var(--db-s6) 0 var(--db-s4);
+	padding-bottom: var(--db-s2);
+	border-bottom: 2px solid var(--db-hairline);
 }
 
-.db-card-body {
-	padding: 0.85rem;
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-}
-
-.db-card-body h4 {
-	margin: 0 0 0.35rem;
-}
-
-.db-card-desc {
-	color: var(--db-muted);
-	font-size: 0.85rem;
-	margin: 0 0 0.75rem;
-	flex: 1;
-}
-
-.db-card-foot {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.5rem;
-}
-
-.db-price {
-	font-weight: 700;
-}
-
-/* Builder ----------------------------------------------------------- */
-.db-builder-inner {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
-	padding: 1.25rem;
-	background: #fff;
-	max-width: 560px;
-}
-
-.db-builder-inner h4 {
-	margin: 1rem 0 0.5rem;
-}
-
-.db-options {
-	display: flex;
-	flex-direction: column;
-	gap: 0.4rem;
-}
-
-.db-option {
-	display: flex;
-	align-items: center;
-	gap: 0.6rem;
-	padding: 0.5rem 0.6rem;
-	border: 1px solid var(--db-border);
-	border-radius: 6px;
-	cursor: pointer;
-}
-
-.db-option span:nth-of-type(1) {
-	flex: 1;
-}
-
-.db-option-price {
-	color: var(--db-muted);
-	font-size: 0.9rem;
-}
-
-.db-builder-foot {
-	display: flex;
-	align-items: center;
-	gap: 1rem;
-	margin-top: 1.25rem;
-	border-top: 1px dashed var(--db-border);
-	padding-top: 1rem;
-}
-
-.db-builder-price {
-	font-size: 1.5rem;
-	font-weight: 800;
-	color: var(--db-accent-dark);
-}
-
-.db-builder-foot .db-btn--lg {
+.db-app .db-category:first-child {
 	margin-top: 0;
 }
 
-/* Cart -------------------------------------------------------------- */
-.db-cart-lines {
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
+.db-app .db-loading,
+.db-app .db-empty {
+	padding: var(--db-s5);
+	text-align: center;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-error {
+	color: var(--db-danger);
+	font-weight: 600;
+}
+
+.db-app .db-panel {
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s5);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-panel--error {
+	border-color: var(--db-danger);
+	background: var(--db-tomato-050);
+}
+
+.db-app .db-phone-line {
+	font-size: var(--db-fs-sm);
+	color: var(--db-ink-2);
+	margin-top: var(--db-s3);
+}
+
+.db-app .db-price,
+.db-app .db-total-value,
+.db-app .db-option-price,
+.db-app .db-line-total,
+.db-app .db-builder-price-value,
+.db-app .db-orderbar-total,
+.db-app .db-cart-badge-total {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum" 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                            */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--db-s2);
+	min-height: var(--db-tap);
+	padding: var(--db-s3) var(--db-s5);
+	background: var(--db-tomato);
+	color: #fff;
+	border: 1px solid var(--db-tomato);
+	border-radius: var(--db-r-md);
+	font-weight: 600;
+	text-decoration: none;
+	text-align: center;
+	transition: background .15s ease, box-shadow .15s ease;
+}
+
+.db-app a.db-btn {
+	color: #fff;
+	text-decoration: none;
+}
+
+.db-app .db-btn:hover:not(:disabled) {
+	background: var(--db-tomato-700);
+	border-color: var(--db-tomato-700);
+}
+
+.db-app .db-btn:disabled,
+.db-app .db-btn[aria-disabled="true"] {
+	background: var(--db-surface-2);
+	border-color: var(--db-line);
+	color: var(--db-muted);
+	cursor: not-allowed;
+}
+
+.db-app .db-btn--lg {
+	width: 100%;
+	padding: var(--db-s4) var(--db-s5);
+	font-size: var(--db-fs-lg) !important;
+	margin-top: var(--db-s2);
+}
+
+.db-app .db-btn--ghost {
+	background: var(--db-surface);
+	color: var(--db-tomato-700);
+	border-color: var(--db-line);
+}
+
+.db-app a.db-btn--ghost {
+	color: var(--db-tomato-700);
+}
+
+.db-app .db-btn--ghost:hover:not(:disabled) {
+	background: var(--db-tomato-050);
+	border-color: var(--db-tomato);
+}
+
+.db-app .db-link {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--db-tomato-700);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* Closed banner                                                      */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-closed {
+	background: var(--db-oven-050);
+	border: 1px solid var(--db-oven);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s4) var(--db-s5);
+	margin-bottom: var(--db-s5);
+	color: var(--db-oven);
+}
+
+.db-app .db-closed-title {
+	display: block;
+	font-size: var(--db-fs-lg);
+	color: var(--db-oven);
+	margin-bottom: var(--db-s1);
+}
+
+.db-app .db-closed-body {
+	color: var(--db-ink-2);
+	font-size: var(--db-fs-sm);
+	margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Menu                                                               */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-catnav {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	margin: 0 0 var(--db-s4);
+	padding: var(--db-s2) 0;
+	background: var(--db-cream);
+	border-bottom: 1px solid var(--db-hairline);
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: thin;
+}
+
+.db-app .db-catnav-list {
+	display: flex;
+	gap: var(--db-s2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	min-width: max-content;
+}
+
+.db-app .db-catnav-item {
+	margin: 0;
+}
+
+.db-app .db-catpill {
+	display: inline-flex;
+	align-items: center;
+	min-height: 36px;
+	padding: 0 var(--db-s4);
+	background: var(--db-surface);
+	color: var(--db-ink-2);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-pill);
+	font-size: var(--db-fs-sm);
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.db-app .db-catpill:hover {
+	background: var(--db-surface-2);
+	color: var(--db-ink);
+}
+
+.db-app .db-catpill[aria-current="true"] {
+	background: var(--db-tomato);
+	border-color: var(--db-tomato);
+	color: #fff;
+}
+
+.db-app .db-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: var(--db-s4);
+}
+
+.db-app .db-card {
+	display: flex;
+	flex-direction: column;
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	overflow: hidden;
+	box-shadow: var(--db-shadow-1);
+	transition: box-shadow .15s ease, transform .15s ease;
+	content-visibility: auto;
+	contain-intrinsic-size: 0 280px;
+}
+
+.db-app .db-card:hover {
+	box-shadow: var(--db-shadow-2);
+}
+
+.db-app .db-card--unavailable,
+.db-app .db-card--soldout {
+	opacity: .82;
+}
+
+.db-app .db-card-media {
+	position: relative;
+	background: var(--db-surface-2);
+	aspect-ratio: 4 / 3;
 	overflow: hidden;
 }
 
-.db-cart-line {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	padding: 0.75rem;
-	border-bottom: 1px solid var(--db-border);
+.db-app .db-card-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	background: var(--db-surface-2);
 }
 
-.db-cart-line:last-child {
+/* A warm, flat "not photographed yet" tile — deliberately not a diagonal
+   stripe, which reads as a broken image. */
+.db-app .db-card-img--placeholder {
+	background: var(--db-surface-2);
+	position: relative;
+}
+
+.db-app .db-card-img--placeholder::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 56px;
+	height: 56px;
+	transform: translate(-50%, -50%);
+	border: 2px solid var(--db-hairline);
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 6px var(--db-surface-2), inset 0 0 0 8px var(--db-hairline);
+}
+
+.db-app .db-badge {
+	display: inline-block;
+	border-radius: var(--db-r-pill);
+	padding: var(--db-s1) var(--db-s3);
+	font-size: var(--db-fs-xs);
+	font-weight: 700;
+	background: var(--db-pending-050);
+	color: var(--db-ink);
+}
+
+.db-app .db-badge--soldout {
+	position: absolute;
+	top: var(--db-s3);
+	left: var(--db-s3);
+	background: var(--db-ink);
+	color: #fff;
+}
+
+.db-app .db-cart-line .db-badge--soldout {
+	position: static;
+	margin-top: var(--db-s1);
+	align-self: flex-start;
+}
+
+.db-app .db-card-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	gap: var(--db-s2);
+	padding: var(--db-s4);
+	background: var(--db-surface);
+}
+
+.db-app .db-card-title {
+	font-size: var(--db-fs-lg);
+	margin: 0;
+}
+
+.db-app .db-card-desc {
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+	margin: 0;
+	flex: 1;
+}
+
+.db-app .db-card-note {
+	color: var(--db-danger);
+	font-size: var(--db-fs-xs);
+	margin: 0;
+	font-weight: 600;
+}
+
+.db-app .db-card-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--db-s3);
+	margin-top: var(--db-s2);
+}
+
+.db-app .db-price {
+	font-family: var(--db-font-display);
+	font-size: var(--db-fs-lg);
+	font-weight: 700;
+	color: var(--db-ink);
+}
+
+/* ------------------------------------------------------------------ */
+/* Builder                                                            */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-builder-inner {
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s5);
+	max-width: 620px;
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-builder-heading {
+	font-size: var(--db-fs-xl);
+}
+
+.db-app .db-fieldset {
+	margin-bottom: var(--db-s5);
+	background: var(--db-surface);
+}
+
+.db-app .db-legend {
+	font-size: var(--db-fs-sm);
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	color: var(--db-ink-2);
+}
+
+.db-app .db-options {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s2);
+}
+
+.db-app .db-options--inline {
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+
+.db-app .db-option {
+	display: flex;
+	align-items: center;
+	gap: var(--db-s3);
+	min-height: var(--db-tap);
+	padding: var(--db-s2) var(--db-s3);
+	background: var(--db-surface);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+	cursor: pointer;
+	transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+
+.db-app .db-options--inline .db-option {
+	flex: 1 1 160px;
+}
+
+.db-app .db-option:hover {
+	background: var(--db-surface-2);
+}
+
+/* Selectable-card treatment. The native control stays visible on purpose. */
+.db-app .db-option:has(:checked) {
+	background: var(--db-tomato-050);
+	border-color: var(--db-tomato);
+	box-shadow: inset 0 0 0 1px var(--db-tomato);
+}
+
+.db-app .db-option-input {
+	width: 18px;
+	height: 18px;
+	flex: 0 0 auto;
+	accent-color: var(--db-tomato);
+}
+
+.db-app .db-option-label {
+	flex: 1;
+}
+
+.db-app .db-option-price {
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-builder-foot {
+	display: flex;
+	align-items: center;
+	gap: var(--db-s4);
+	padding-top: var(--db-s4);
+	border-top: 1px solid var(--db-hairline);
+	background: var(--db-surface);
+}
+
+.db-app .db-builder-price {
+	display: block;
+	font-family: var(--db-font-display);
+	font-size: var(--db-fs-2xl);
+	font-weight: 800;
+	line-height: var(--db-lh-tight);
+	color: var(--db-ink);
+}
+
+.db-app .db-builder-foot .db-btn--lg {
+	margin-top: 0;
+	width: auto;
+	flex: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cart                                                               */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-cart-inner {
+	background: var(--db-cream);
+}
+
+.db-app .db-cart-heading {
+	font-size: var(--db-fs-xl);
+}
+
+.db-app .db-empty-cart {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--db-s4);
+	padding: var(--db-s6) var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-empty-cart .db-empty {
+	border: 0;
+	padding: 0;
+	background: transparent;
+}
+
+.db-app .db-recent {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--db-s2) var(--db-s3);
+	padding: var(--db-s3) var(--db-s4);
+	margin-bottom: var(--db-s4);
+	background: var(--db-surface-2);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-md);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-recent-number {
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+}
+
+.db-app .db-cart-lines {
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	overflow: hidden;
+}
+
+.db-app .db-cart-line {
+	display: flex;
+	align-items: center;
+	gap: var(--db-s4);
+	padding: var(--db-s4);
+	background: var(--db-surface);
+	border-bottom: 1px solid var(--db-hairline);
+}
+
+.db-app .db-cart-line:last-child {
 	border-bottom: 0;
 }
 
-.db-cart-line-info {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
+.db-app .db-cart-line--unavailable {
+	background: var(--db-surface-2);
 }
 
-.db-cart-line-info small {
+.db-app .db-cart-line-info {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s1);
+	min-width: 0;
+}
+
+.db-app .db-line-name {
+	font-weight: 700;
+}
+
+.db-app .db-line-sub {
 	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
 }
 
-.db-qty {
-	width: 60px;
-	padding: 0.35rem;
-	border: 1px solid var(--db-border);
-	border-radius: 6px;
-}
-
-.db-fulfilment {
+.db-app .db-line-controls {
 	display: flex;
-	gap: 0.75rem;
-	margin: 1rem 0;
+	align-items: center;
+	gap: var(--db-s4);
+	flex: 0 0 auto;
 }
 
-.db-totals {
-	border-top: 1px solid var(--db-border);
-	padding-top: 0.75rem;
-	margin-top: 0.5rem;
-}
-
-.db-total-row {
+.db-app .db-qty-wrap {
 	display: flex;
-	justify-content: space-between;
-	padding: 0.2rem 0;
+	align-items: center;
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+	background: var(--db-surface);
+	overflow: hidden;
 }
 
-.db-total-row--grand {
-	font-size: 1.2rem;
-	font-weight: 800;
-	border-top: 2px solid var(--db-accent);
-	margin-top: 0.4rem;
-	padding-top: 0.5rem;
+.db-app .db-step {
+	width: var(--db-tap);
+	min-height: var(--db-tap);
+	background: var(--db-surface);
+	border: 0;
+	color: var(--db-ink);
+	font-size: var(--db-fs-lg) !important;
+	font-weight: 700;
+	line-height: 1;
 }
 
-/* Checkout ---------------------------------------------------------- */
-.db-checkout {
-	margin-top: 1.5rem;
-	display: flex;
-	flex-direction: column;
-	gap: 0.75rem;
+.db-app .db-step:hover {
+	background: var(--db-surface-2);
 }
 
-.db-field {
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-}
-
-.db-field span {
-	font-size: 0.85rem;
-	font-weight: 600;
-}
-
-.db-field input,
-.db-field textarea {
-	padding: 0.55rem;
-	border: 1px solid var(--db-border);
-	border-radius: 6px;
-	font: inherit;
-}
-
-.db-checkout-msg {
-	min-height: 1rem;
-}
-
-.db-confirm {
-	border: 2px solid var(--db-accent);
-	border-radius: 10px;
-	padding: 1.5rem;
+.db-app .db-qty {
+	width: 56px;
+	min-height: var(--db-tap);
+	padding: var(--db-s2) var(--db-s1);
 	text-align: center;
-	background: #fff8f5;
+	border: 0;
+	border-left: 1px solid var(--db-hairline);
+	border-right: 1px solid var(--db-hairline);
+	border-radius: 0;
+	background: var(--db-surface);
+	font-variant-numeric: tabular-nums;
 }
 
-/* Tracking ---------------------------------------------------------- */
-.db-track-form {
-	display: flex;
-	flex-direction: column;
-	gap: 0.6rem;
-	max-width: 380px;
+.db-app .db-line-total {
+	min-width: 72px;
+	text-align: right;
 }
 
-.db-track-form label {
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-	font-size: 0.85rem;
+.db-app .db-edit,
+.db-app .db-remove {
+	min-height: var(--db-tap);
+	min-width: var(--db-tap);
+	padding: 0 var(--db-s3);
+	background: var(--db-surface);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+	color: var(--db-danger);
+	font-size: var(--db-fs-sm) !important;
 	font-weight: 600;
 }
 
-.db-track-form input {
-	padding: 0.55rem;
-	border: 1px solid var(--db-border);
-	border-radius: 6px;
-	font: inherit;
+.db-app .db-remove:hover {
+	background: var(--db-tomato-050);
+	border-color: var(--db-danger);
 }
 
-.db-track-card {
-	margin-top: 1rem;
-	border: 1px solid var(--db-border);
-	border-radius: 10px;
-	padding: 1rem;
-	max-width: 380px;
+.db-app .db-edit {
+	color: var(--db-ink-2);
 }
 
-.db-status-badge {
+.db-app .db-edit:hover {
+	background: var(--db-surface-2);
+	border-color: var(--db-ink-2);
+}
+
+/* Fulfilment ------------------------------------------------------- */
+
+.db-app .db-fulfilment {
+	margin: var(--db-s5) 0;
+	padding: var(--db-s4);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+/* Totals ----------------------------------------------------------- */
+
+.db-app .db-totals {
+	padding: var(--db-s4);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-total-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--db-s4);
+	padding: var(--db-s1) 0;
+	color: var(--db-ink-2);
+}
+
+.db-app .db-total-row--grand {
+	margin-top: var(--db-s2);
+	padding-top: var(--db-s3);
+	border-top: 2px solid var(--db-hairline);
+	font-family: var(--db-font-display);
+	font-size: var(--db-fs-xl);
+	font-weight: 800;
+	color: var(--db-ink);
+}
+
+.db-app .db-tax-note {
+	margin: var(--db-s1) 0 0;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-min-order {
+	margin: var(--db-s3) 0 0;
+	font-size: var(--db-fs-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/* Checkout                                                           */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-checkout {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s4);
+	margin-top: var(--db-s5);
+	padding: var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-checkout-heading {
+	font-size: var(--db-fs-lg);
+	margin: 0;
+}
+
+.db-app .db-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s1);
+}
+
+.db-app .db-label {
+	font-size: var(--db-fs-sm);
+	font-weight: 600;
+	color: var(--db-ink-2);
+}
+
+.db-app .db-input {
+	width: 100%;
+	min-height: var(--db-tap);
+	padding: var(--db-s3);
+	background: var(--db-surface);
+	color: var(--db-ink);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+}
+
+.db-app textarea.db-input {
+	min-height: 84px;
+	resize: vertical;
+}
+
+.db-app .db-input[aria-invalid="true"] {
+	border-color: var(--db-danger);
+	box-shadow: inset 0 0 0 1px var(--db-danger);
+}
+
+.db-app .db-field-error {
+	margin: 0;
+	color: var(--db-danger);
+	font-size: var(--db-fs-sm);
+	font-weight: 600;
+}
+
+.db-app .db-due-line {
+	margin: 0;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.db-app .db-pay-note {
+	margin: 0;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+	text-align: center;
+}
+
+.db-app .db-checkout-msg {
+	min-height: 20px;
+	font-size: var(--db-fs-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sticky order bar (mobile)                                          */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-orderbar {
+	display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Receipt                                                            */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-confirm {
+	background: var(--db-surface);
+	border: 2px solid var(--db-basil);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s6) var(--db-s5);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-confirm-title {
+	font-size: var(--db-fs-2xl);
+	color: var(--db-basil);
+}
+
+.db-app .db-confirm-number {
+	font-size: var(--db-fs-lg);
+}
+
+.db-app .db-confirm-number strong {
+	font-variant-numeric: tabular-nums;
+	letter-spacing: .02em;
+}
+
+.db-app .db-item-list {
+	margin: var(--db-s4) 0;
+	padding: 0;
+	border-top: 1px solid var(--db-hairline);
+}
+
+.db-app .db-item-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--db-s1) var(--db-s3);
+	padding: var(--db-s3) 0;
+	border-bottom: 1px solid var(--db-hairline);
+	background: var(--db-surface);
+}
+
+.db-app .db-item-name {
+	font-weight: 600;
+}
+
+.db-app .db-item-sub {
+	flex: 1 1 100%;
+	order: 3;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-totals--receipt {
+	border: 0;
+	padding: 0;
+	background: var(--db-surface);
+}
+
+.db-app .db-confirm-email,
+.db-app .db-confirm-track {
+	margin-top: var(--db-s4);
+}
+
+.db-app .db-print {
+	margin-top: var(--db-s4);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tracking                                                           */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-track-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s3);
+	max-width: 420px;
+	padding: var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-track-form input {
+	width: 100%;
+	min-height: var(--db-tap);
+	padding: var(--db-s3);
+	background: var(--db-surface);
+	color: var(--db-ink);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+}
+
+.db-app .db-track-heading {
+	font-size: var(--db-fs-lg);
+	margin: 0;
+}
+
+.db-app .db-track-card {
+	max-width: 420px;
+	margin-top: var(--db-s4);
+	padding: var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-track-title {
+	font-size: var(--db-fs-lg);
+}
+
+/* Status pills — tint + text, never colour alone. */
+.db-app .db-pill {
 	display: inline-block;
-	background: var(--db-accent);
-	color: #fff;
-	border-radius: 20px;
-	padding: 0.25rem 0.85rem;
-	font-weight: 600;
-	font-size: 0.9rem;
+	padding: var(--db-s1) var(--db-s4);
+	border-radius: var(--db-r-pill);
+	font-size: var(--db-fs-sm);
+	font-weight: 700;
+	background: var(--db-pending-050);
+	color: var(--db-ink);
 }
 
-.db-item-list {
-	margin: 0.5rem 0;
-	padding-left: 1.1rem;
+.db-app .db-pill--pending {
+	background: var(--db-pending-050);
+	color: var(--db-ink);
+}
+
+.db-app .db-pill--preparing {
+	background: var(--db-oven-050);
+	color: var(--db-oven);
+}
+
+.db-app .db-pill--ready {
+	background: var(--db-basil-050);
+	color: var(--db-basil);
+}
+
+.db-app .db-pill--cancelled {
+	background: var(--db-tomato-050);
+	color: var(--db-danger);
+}
+
+/* ------------------------------------------------------------------ */
+/* Cart badge                                                         */
+/* ------------------------------------------------------------------ */
+
+.db-app.db-cart-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--db-s2);
+	min-height: var(--db-tap);
+	padding: var(--db-s2) var(--db-s4);
+	background: var(--db-tomato);
+	color: #fff;
+	border: 1px solid var(--db-tomato);
+	border-radius: var(--db-r-pill);
+	text-decoration: none;
+	font-weight: 700;
+	contain: none;
+}
+
+.db-app.db-cart-badge:hover {
+	background: var(--db-tomato-700);
+	color: #fff;
+}
+
+.db-app .db-cart-badge-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 24px;
+	height: 24px;
+	padding: 0 var(--db-s1);
+	background: #fff;
+	color: var(--db-tomato-700);
+	border-radius: var(--db-r-pill);
+	font-size: var(--db-fs-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+.db-app .db-cart-badge-icon {
+	font-size: var(--db-fs-lg);
+	line-height: 1;
+}
+
+.db-app .db-cart-badge-label {
+	font-size: var(--db-fs-sm);
+}
+
+.db-app.db-cart-badge--empty {
+	background: var(--db-surface);
+	color: var(--db-ink-2);
+	border-color: var(--db-line);
+}
+
+.db-app.db-cart-badge--empty .db-cart-badge-count {
+	background: var(--db-surface-2);
+	color: var(--db-ink-2);
+}
+
+/* ------------------------------------------------------------------ */
+/* Toasts                                                             */
+/* ------------------------------------------------------------------ */
+
+.db-app.db-toasts {
+	position: fixed;
+	left: 50%;
+	bottom: max(16px, env(safe-area-inset-bottom));
+	transform: translateX(-50%);
+	z-index: 99999;
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s2);
+	width: min(420px, calc(100vw - 32px));
+	background: transparent;
+	pointer-events: none;
+	contain: none;
+}
+
+.db-app .db-toast {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--db-s4);
+	padding: var(--db-s3) var(--db-s4);
+	background: var(--db-ink);
+	color: #fff;
+	border-radius: var(--db-r-md);
+	box-shadow: var(--db-shadow-2);
+	font-size: var(--db-fs-sm);
+	pointer-events: auto;
+}
+
+.db-app .db-toast--error {
+	background: var(--db-danger);
+}
+
+.db-app .db-toast-action {
+	flex: 0 0 auto;
+	min-height: 36px;
+	padding: var(--db-s1) var(--db-s3);
+	background: #fff;
+	color: var(--db-ink);
+	border: 0;
+	border-radius: var(--db-r-sm);
+	font-size: var(--db-fs-sm) !important;
+	font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile                                                             */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 768px) {
+	/* Keep the running price and the Add button on screen while the
+	   customer works through a long topping list. */
+	.db-app .db-builder-foot {
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
+		margin: 0 calc(var(--db-s5) * -1) calc(var(--db-s5) * -1);
+		padding: var(--db-s3) var(--db-s5);
+		padding-bottom: max(var(--db-s3), env(safe-area-inset-bottom));
+		background: var(--db-surface);
+		border-top: 1px solid var(--db-hairline);
+		box-shadow: 0 -12px 28px -18px rgba(26, 22, 20, .35);
+	}
+
+	.db-app .db-builder-price {
+		font-size: var(--db-fs-xl);
+	}
+
+	.db-app .db-orderbar {
+		position: sticky;
+		bottom: 0;
+		z-index: 3;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--db-s4);
+		min-height: 56px;
+		margin-top: var(--db-s5);
+		padding: var(--db-s3) var(--db-s4);
+		padding-bottom: max(var(--db-s3), env(safe-area-inset-bottom));
+		background: var(--db-cream);
+		border-top: 1px solid var(--db-hairline);
+		box-shadow: 0 -12px 28px -18px rgba(26, 22, 20, .35);
+	}
+
+	.db-app .db-orderbar[hidden] {
+		display: none;
+	}
+
+	.db-app .db-orderbar-info {
+		display: flex;
+		flex-direction: column;
+		line-height: var(--db-lh-tight);
+	}
+
+	.db-app .db-orderbar-label {
+		font-size: var(--db-fs-xs);
+		color: var(--db-muted);
+	}
+
+	.db-app .db-orderbar-total {
+		font-family: var(--db-font-display);
+		font-size: var(--db-fs-xl);
+	}
+
+	.db-app .db-orderbar-btn {
+		flex: 0 0 auto;
+	}
+
+	/* Clear the sticky order bar so a toast never sits on the CTA. */
+	.db-app.db-toasts {
+		bottom: max(76px, calc(env(safe-area-inset-bottom) + 68px));
+	}
+}
+
+@media (max-width: 560px) {
+	.db-app .db-cart-line {
+		flex-wrap: wrap;
+		gap: var(--db-s3);
+		padding: var(--db-s3);
+	}
+
+	.db-app .db-cart-line-info {
+		flex: 1 1 100%;
+	}
+
+	/* Row two: stepper, price, Remove — all still >= 44px, and the row must
+	   fit 390px without the container's overflow clipping Remove. */
+	.db-app .db-line-controls {
+		flex: 1 1 100%;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: var(--db-s2);
+	}
+
+	.db-app .db-qty {
+		width: 48px;
+	}
+
+	.db-app .db-line-total {
+		min-width: 0;
+	}
+
+	.db-app .db-remove {
+		padding: 0 var(--db-s2);
+	}
+
+	.db-app .db-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.db-app .db-builder-inner {
+		padding: var(--db-s4);
+	}
+
+	.db-app .db-checkout {
+		padding: var(--db-s4);
+	}
+
+	.db-app .db-options--inline {
+		flex-direction: column;
+	}
+
+	/* Stacked: the 160px basis would become a 160px-tall row. */
+	.db-app .db-options--inline .db-option {
+		flex: 0 0 auto;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.db-app *,
+	.db-app *::before,
+	.db-app *::after {
+		transition: none;
+		animation: none;
+		scroll-behavior: auto;
+	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Print — the customer's receipt is the only thing worth ink         */
+/* ------------------------------------------------------------------ */
+
+@media print {
+	.db-app .db-toasts,
+	.db-app .db-orderbar,
+	.db-app .db-print,
+	.db-app .db-cart-badge {
+		display: none;
+	}
+
+	.db-app {
+		background: #fff;
+		color: #000;
+		contain: none;
+	}
+
+	.db-app .db-confirm {
+		border: 1px solid #000;
+		box-shadow: none;
+		padding: 0;
+	}
+
+	.db-app .db-confirm-title {
+		color: #000;
+		font-size: 20px;
+	}
+
+	.db-app .db-item-row,
+	.db-app .db-totals--receipt {
+		background: #fff;
+	}
+
+	.db-app .db-link {
+		color: #000;
+		text-decoration: underline;
+	}
 }
