@@ -184,6 +184,8 @@
 	flex: 1 1 150px;
 }
 
+.db-catering .dbc-field[hidden] { display: none; }
+.db-catering .dbc-radio input[type="radio"] { width: auto; padding: 0; }
 .db-catering .dbc-field {
 	display: flex;
 	flex-direction: column;

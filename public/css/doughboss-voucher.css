@@ -61,6 +61,8 @@
 .db-vc-label { font-size: 12px; color: var(--vc-muted); }
 
 .db-vc-form { display: flex; flex-direction: column; gap: 10px; }
+/* The form ships hidden until an offer is chosen; an author display rule must not beat [hidden]. */
+.db-vc-form[hidden] { display: none; }
 .db-vc-field { display: grid; gap: 6px; }
 .db-vc-field > span {
 	font-size: 13px;
