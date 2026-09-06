@@ -14,7 +14,35 @@
 
 	var DATA = window.DoughBossData;
 	var I18N = DATA.i18n || {};
+	var PAY = DATA.payments || { enabled: false, pk: '' };
 	var configCache = null;
+	var locationsCache = null;
+	// A table QR opens the ordering page with a server-issued, HttpOnly context
+	// cookie. The browser deliberately receives only the safe display context;
+	// it never gets a table token or an editable table/store authority.
+	var tableContextCache = null;
+	var tableContextRequest = null;
+
+	// Once a Stripe confirmation reaches the provider, the paid cart snapshot
+	// must stay immutable until the matching order is stored.
+	var paymentMutationLock = false;
+	var paymentMutationMessage = 'Your payment is being confirmed. Cart, voucher, shop and fulfilment changes are temporarily locked until the order is saved.';
+
+	// Which gateway the server enqueued a card library for ('stripe' or 'tyro').
+	// Defaults to 'stripe' so older localized data behaves exactly as before.
+	var GATEWAY = PAY.gateway || 'stripe';
+
+	// Stripe card entry is hosted entirely by Stripe Checkout. The storefront
+	// receives only a short-lived checkout.stripe.com URL and never loads,
+	// renders or handles card fields.
+	var stripeHosted = !!(PAY.enabled && GATEWAY === 'stripe');
+
+	// Current Tyro Connect Pay browser library. It owns all card fields and 3DS.
+	var tyroPay = !!(PAY.enabled && GATEWAY === 'tyro' && typeof window.Tyro === 'function');
+	// Mastercard Hosted Checkout redirects card entry to the gateway page. No
+	// PAN/CVV fields are ever rendered or handled by DoughBoss.
+	var mpgsHosted = !!(PAY.enabled && GATEWAY === 'mpgs' && window.Checkout && typeof window.Checkout.configure === 'function');
+
 
 	/* ------------------------------------------------------------------ */
 	/* Helpers                                                            */
@@ -34,7 +62,7 @@
 				node.textContent = attrs[key];
 			} else if (key === 'html') {
 				node.innerHTML = attrs[key];
-			} else if (key.indexOf('data-') === 0) {
+			} else if (key.indexOf('data-') === 0 || key.indexOf('aria-') === 0) {
 				node.setAttribute(key, attrs[key]);
 			} else {
 				node[key] = attrs[key];
@@ -48,11 +76,66 @@
 		return node;
 	}
 
+	// Non-blocking, screen-reader-announced toast (replaces alert()). Pass ok=true
+	// for the success variant (green check, polite announcement); default is the
+	// error variant (assertive alert). Springs in via the .db-toast animation.
+	function dbToast(message, ok) {
+		var cls = ok ? 'db-toast db-toast--ok' : 'db-toast';
+		var t = el('div', { class: cls, text: String(message || (I18N.genericError || 'Something went wrong.')) });
+		t.setAttribute('role', ok ? 'status' : 'alert');
+		t.setAttribute('aria-live', ok ? 'polite' : 'assertive');
+		document.body.appendChild(t);
+		setTimeout(function () { if (t.parentNode) { t.parentNode.removeChild(t); } }, ok ? 2600 : 4200);
+	}
+
+	// Brief tactile "pop" on a tap target (spring scale via CSS). Safe to call on
+	// any element; the class is removed after the animation so it can retrigger.
+	function dbPop(node) {
+		if (!node) { return; }
+		node.classList.remove('db-pop');
+		// Force reflow so re-adding the class restarts the animation.
+		void node.offsetWidth;
+		node.classList.add('db-pop');
+		setTimeout(function () { node.classList.remove('db-pop'); }, 420);
+	}
+
+	// Stable DOM id for a category name, for jump-bar scroll anchors.
+	function catId(category) {
+		return 'db-cat-' + String(category).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+	}
+
+	function cartItemCount(cart) {
+		return (cart && Array.isArray(cart.items) ? cart.items : []).reduce(function (count, line) {
+			return count + Number(line.quantity || 0);
+		}, 0);
+	}
+
+	function setPaymentMutationLock(locked) {
+		paymentMutationLock = !!locked;
+	}
+
+	function paymentMutationAllowed() {
+		if (!paymentMutationLock) { return true; }
+		dbToast(paymentMutationMessage);
+		return false;
+	}
+
 	function request(path, options) {
 		options = options || {};
+		var method = String(options.method || 'GET').toUpperCase();
+		if (paymentMutationLock && method !== 'GET' && /^\/cart(?:\/|$)/.test(path)) {
+			return Promise.reject(new Error(paymentMutationMessage));
+		}
 		var headers = { 'Content-Type': 'application/json' };
-		if (options.method && options.method !== 'GET') {
+		// Send the REST nonce on reads as well as writes. WordPress deliberately
+		// treats cookie-authenticated REST requests without a nonce as anonymous,
+		// which prevents signed-in staff from using the protected migration
+		// preview even though the page itself is authenticated.
+		if (DATA.nonce) {
 			headers['X-WP-Nonce'] = DATA.nonce;
+		}
+		if (options.headers) {
+			Object.keys(options.headers).forEach(function (k) { headers[k] = options.headers[k]; });
 		}
 		return fetch(DATA.restUrl + path, {
 			method: options.method || 'GET',
@@ -74,13 +157,181 @@
 			return Promise.resolve(configCache);
 		}
 		return request('/config').then(function (cfg) {
+			// Single-location mode: the storefront behaves as one pickup-only
+			// shop regardless of how many locations or fulfilment types are
+			// configured. Display-only — the checkout REST endpoint's own
+			// enable_delivery gate rejects delivery orders server-side.
+			if (cfg && cfg.single_location_mode) {
+				cfg.enable_delivery = false;
+			}
 			configCache = cfg;
 			return cfg;
 		});
 	}
 
+	function getTableContext() {
+		if (tableContextRequest) {
+			return tableContextRequest;
+		}
+		tableContextRequest = request('/table/context').then(function (context) {
+			if (!context || !context.active || !context.location || !context.table) {
+				tableContextCache = null;
+				return null;
+			}
+			tableContextCache = context;
+			return tableContextCache;
+		});
+		return tableContextRequest;
+	}
+
+	function activeTableContext() {
+		return tableContextCache && tableContextCache.active ? tableContextCache : null;
+	}
+
+	function tableContextBanner(context, compact) {
+		if (!context) { return null; }
+		var locationName = context.location.name || 'this store';
+		var tableLabel = context.table.label || 'your table';
+		return el('div', {
+			class: 'db-table-context' + (compact ? ' db-table-context--compact' : ''),
+			role: 'status',
+			'aria-live': 'polite'
+		}, [
+			el('span', { class: 'db-table-context-icon', 'aria-hidden': 'true', text: '\u2713' }),
+			el('div', { class: 'db-table-context-copy' }, [
+				el('strong', { text: 'You are ordering for ' + locationName }),
+				el('span', { text: 'Table ' + tableLabel + ' \u00b7 dine in' })
+			])
+		]);
+	}
+
 	function notifyCartChanged() {
 		document.dispatchEvent(new CustomEvent('doughboss:cart-updated'));
+	}
+
+	function trackCommerce(name, properties) {
+		if (window.DoughBossMarketing && typeof window.DoughBossMarketing.track === 'function') {
+			window.DoughBossMarketing.track(name, properties || {});
+		}
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Shops (multi-location)                                             */
+	/* ------------------------------------------------------------------ */
+
+	function getLocations() {
+		if (locationsCache) {
+			return Promise.resolve(locationsCache);
+		}
+		return request('/locations').then(function (locs) {
+			locs = Array.isArray(locs) ? locs : [];
+			// Single-location mode pins the storefront to the first active shop:
+			// the picker collapses to the single-shop display and orders carry
+			// that shop's id. Note this is client-side narrowing only — keep the
+			// site's location list itself trimmed to the real active shop.
+			return getConfig().then(function (cfg) {
+				if (cfg && cfg.single_location_mode && locs.length > 1) {
+					locs = locs.slice(0, 1);
+				}
+				locationsCache = locs;
+				return locationsCache;
+			});
+		});
+	}
+
+	function locById(locs, id) {
+		for (var i = 0; i < locs.length; i++) {
+			if (Number(locs[i].id) === Number(id)) { return locs[i]; }
+		}
+		return null;
+	}
+
+	function storedLocationId() {
+		try {
+			return Number(window.localStorage.getItem('doughboss_location')) || 0;
+		} catch (e) {
+			return 0;
+		}
+	}
+
+	function setLocation(id, silent) {
+		try {
+			window.localStorage.setItem('doughboss_location', String(id));
+		} catch (e) { /* private mode — selection just isn't persisted */ }
+		if (!silent) {
+			document.dispatchEvent(new CustomEvent('doughboss:shop-changed', { detail: { id: Number(id) } }));
+		}
+	}
+
+	// The currently chosen shop: a remembered valid choice, else the first shop.
+	function currentLocationId(locs) {
+		var saved = storedLocationId();
+		if (saved && locById(locs, saved)) { return saved; }
+		return locs.length ? Number(locs[0].id) : 0;
+	}
+
+	function shopSelect(locs, current, onChange) {
+		var sel = el('select', { class: 'db-shop-select', 'aria-label': I18N.chooseShop || 'Choose your shop' });
+		locs.forEach(function (loc) {
+			var label = loc.suburb ? (loc.name + ' — ' + loc.suburb) : loc.name;
+			var opt = el('option', { value: String(loc.id), text: label });
+			if (Number(loc.id) === Number(current)) { opt.selected = true; }
+			sel.appendChild(opt);
+		});
+		sel.addEventListener('change', function () { onChange(Number(sel.value)); });
+		return sel;
+	}
+
+	function shopContact(loc) {
+		var info = el('div', { class: 'db-shop-info' });
+		if (loc && loc.address) { info.appendChild(el('div', { class: 'db-shop-addr', text: loc.address })); }
+		if (loc && loc.phone) { info.appendChild(el('div', { class: 'db-shop-phone', text: loc.phone })); }
+		return info;
+	}
+
+	function renderShopPicker(root) {
+		getLocations().then(function (locs) {
+			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) {
+				// QR table context is fixed on the server. Do not show an editable
+				// shop picker that suggests a customer can change its destination.
+				root.appendChild(tableContextBanner(tableContext, true));
+				return;
+			}
+			if (!locs.length) { root.style.display = 'none'; return; }
+
+			// Single shop: remember it silently and just show its details.
+			if (locs.length === 1) {
+				setLocation(locs[0].id, true);
+				root.appendChild(el('div', { class: 'db-shop' }, [
+					el('strong', { class: 'db-shop-name', text: locs[0].name }),
+					shopContact(locs[0])
+				]));
+				return;
+			}
+
+			var current = currentLocationId(locs);
+			setLocation(current, true);
+			var infoWrap = el('div', { class: 'db-shop-info-wrap' }, [shopContact(locById(locs, current))]);
+
+			var select = shopSelect(locs, current, function (id) {
+				if (!paymentMutationAllowed()) {
+					select.value = String(current);
+					return;
+				}
+				current = id;
+				setLocation(id);
+				infoWrap.innerHTML = '';
+				infoWrap.appendChild(shopContact(locById(locs, id)));
+			});
+
+			root.appendChild(el('div', { class: 'db-shop' }, [
+				el('label', { class: 'db-shop-heading', text: I18N.chooseShop || 'Choose your shop' }),
+				select,
+				infoWrap
+			]));
+		}).catch(function () { root.style.display = 'none'; });
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -88,8 +339,13 @@
 	/* ------------------------------------------------------------------ */
 
 	function renderMenu(root) {
-		request('/menu').then(function (items) {
+		Promise.all([request('/menu'), getConfig()]).then(function (results) {
+			var items = results[0];
+			var orderingOpen = !!results[1].ordering_open;
 			root.innerHTML = '';
+			root.setAttribute('data-ordering-open', orderingOpen ? 'true' : 'false');
+			var tableContext = activeTableContext();
+			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!items.length) {
 				root.appendChild(el('p', { class: 'db-empty', text: 'No menu items yet.' }));
 				return;
@@ -100,45 +356,306 @@
 				(groups[item.category] = groups[item.category] || []).push(item);
 			});
 
-			Object.keys(groups).forEach(function (category) {
-				root.appendChild(el('h3', { class: 'db-category', text: category }));
-				var grid = el('div', { class: 'db-grid' });
-				groups[category].forEach(function (item) {
-					grid.appendChild(menuCard(item));
+			var categories = Object.keys(groups);
+			var preferredCategories = ['Manoush', 'Pizza', 'Pies', 'Wraps', 'Desserts', 'Drinks'];
+			categories.sort(function (a, b) {
+				var ai = preferredCategories.indexOf(a);
+				var bi = preferredCategories.indexOf(b);
+				ai = ai < 0 ? preferredCategories.length : ai;
+				bi = bi < 0 ? preferredCategories.length : bi;
+				return ai - bi || a.localeCompare(b);
+			});
+
+			var tools = el('div', { class: 'db-menu-tools' });
+			var searchStatus = el('span', {
+				class: 'db-menu-search-status',
+				role: 'status',
+				'aria-live': 'polite'
+			});
+			var search = el('input', {
+				class: 'db-menu-search',
+				type: 'search',
+				placeholder: I18N.searchMenu || 'Search the menu',
+				'aria-label': I18N.searchMenu || 'Search the menu',
+				autocomplete: 'off',
+				spellcheck: false
+			});
+			tools.appendChild(el('label', { class: 'db-menu-search-wrap' }, [
+				el('span', { class: 'db-menu-search-icon', 'aria-hidden': 'true', text: '⌕' }),
+				search
+			]));
+			tools.appendChild(searchStatus);
+
+			// Sticky category jump-bar: a pill per category that scrolls to its
+			// section. Only worth showing when there's more than one category.
+			if (categories.length > 1) {
+				var jump = el('nav', { class: 'db-jumpbar', 'aria-label': I18N.menuCategories || 'Menu categories' });
+				categories.forEach(function (category) {
+					var targetId = catId(category);
+					var pill = el('button', { class: 'db-jump', type: 'button', text: category, 'aria-controls': targetId });
+					pill.addEventListener('click', function () {
+						if (search.value) {
+							search.value = '';
+							search.dispatchEvent(new Event('input'));
+						}
+						var target = root.querySelector('#' + targetId);
+						if (target) {
+							target.scrollIntoView({
+								behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+								block: 'start'
+							});
+						}
+					});
+					jump.appendChild(pill);
 				});
+				tools.appendChild(jump);
+			}
+			root.appendChild(tools);
+
+			var stagger = 0;
+			var sections = [];
+			categories.forEach(function (category) {
+				var heading = el('h3', { class: 'db-category', id: catId(category), text: category });
+				var grid = el('div', { class: 'db-grid', 'aria-labelledby': catId(category) });
+				groups[category].forEach(function (item) {
+					var card = menuCard(item, orderingOpen);
+					card.setAttribute('data-search-text', String(item.name || '') + ' ' + String(item.description || '') + ' ' + category);
+					// Cap the stagger so a long menu never delays the last card by
+					// seconds; the entrance still reads as a lively cascade.
+					card.style.setProperty('--db-i', String(Math.min(stagger, 12)));
+					stagger += 1;
+					grid.appendChild(card);
+				});
+				sections.push({ heading: heading, grid: grid });
+				root.appendChild(heading);
 				root.appendChild(grid);
 			});
+
+			searchStatus.textContent = items.length + (items.length === 1 ? ' item' : ' items');
+			search.addEventListener('input', function () {
+				var query = search.value.trim().toLowerCase();
+				var visible = 0;
+				sections.forEach(function (section) {
+					var sectionVisible = 0;
+					section.grid.querySelectorAll('.db-card').forEach(function (card) {
+						var matches = !query || String(card.getAttribute('data-search-text') || '').toLowerCase().indexOf(query) !== -1;
+						card.hidden = !matches;
+						if (matches) {
+							visible += 1;
+							sectionVisible += 1;
+						}
+					});
+					section.heading.hidden = sectionVisible === 0;
+					section.grid.hidden = sectionVisible === 0;
+				});
+				searchStatus.textContent = query
+					? (visible ? visible + (visible === 1 ? ' match' : ' matches') : 'No menu matches')
+					: items.length + (items.length === 1 ? ' item' : ' items');
+				root.classList.toggle('db-menu--searching', !!query);
+			});
+			initCartFab(root);
 		}).catch(function (err) {
 			root.innerHTML = '';
-			root.appendChild(el('p', { class: 'db-error', text: err.message }));
+			root.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
 		});
 	}
 
-	function menuCard(item) {
+	// The cart remains server-owned. This small fixed cue deliberately navigates
+	// to the existing cart shortcode rather than duplicating checkout in a drawer.
+	function initCartFab(root) {
+		var orderingOpen = root.getAttribute('data-ordering-open') !== 'false';
+		if (!orderingOpen) {
+			root.classList.remove('db-menu--has-cart-fab');
+			return;
+		}
+		var cartUrl = root.getAttribute('data-cart-url') || '';
+		var cartRoot = document.querySelector('[data-doughboss-cart]');
+		var fab = el('a', { class: 'db-cart-fab', href: cartUrl || '#doughboss-cart' });
+		var count = el('span', { class: 'db-cart-fab-count' });
+		var total = el('strong', { class: 'db-cart-fab-total' });
+		var label = el('span', { class: 'db-cart-fab-label', text: I18N.viewCart || 'View cart' });
+		fab.appendChild(el('span', { class: 'db-cart-fab-copy' }, [label, count]));
+		fab.appendChild(total);
+		root.appendChild(fab);
+
+		if (!cartUrl && cartRoot) {
+			fab.addEventListener('click', function (event) {
+				event.preventDefault();
+				cartRoot.scrollIntoView({
+					behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+					block: 'start'
+				});
+				var focusTarget = cartRoot.querySelector('input, button, select, textarea, a[href]');
+				if (focusTarget) { focusTarget.focus({ preventScroll: true }); }
+			});
+		} else if (!cartUrl && !cartRoot) {
+			// A menu-only page without a cart target cannot offer a usable route.
+			// Keep the element hidden until the page author supplies cart_url.
+			fab.remove();
+			return;
+		}
+
+		function update(bump) {
+			request('/cart').then(function (cart) {
+				var itemCount = cartItemCount(cart);
+				if (!itemCount) {
+					fab.classList.remove('is-shown', 'db-cart-fab--bump');
+					root.classList.remove('db-menu--has-cart-fab');
+					return;
+				}
+				var itemLabel = itemCount === 1 ? 'item' : (I18N.cartItems || 'items');
+				count.textContent = itemCount + ' ' + itemLabel;
+				total.textContent = money(cart.totals && cart.totals.total);
+				fab.setAttribute('aria-label', (I18N.viewCart || 'View cart') + ': ' + count.textContent + ', ' + total.textContent);
+				fab.classList.add('is-shown');
+				root.classList.add('db-menu--has-cart-fab');
+				if (bump) {
+					fab.classList.remove('db-cart-fab--bump');
+					void fab.offsetWidth;
+					fab.classList.add('db-cart-fab--bump');
+				}
+			}).catch(function () {
+				// The normal menu/cart renderers show REST errors. A decorative cue
+				// should fail closed and never interrupt ordering.
+				fab.classList.remove('is-shown', 'db-cart-fab--bump');
+				root.classList.remove('db-menu--has-cart-fab');
+			});
+		}
+
+		update(false);
+		document.addEventListener('doughboss:cart-updated', function () { update(true); });
+	}
+
+	function menuCard(item, orderingOpen) {
+		var soldOut = item.available === false;
+		var options = Array.isArray(item.options) ? item.options : [];
+		var selections = {};
+		var priceEl = el('span', { class: 'db-price', text: money(item.price) });
+
+		function selectedOptions() {
+			var selected = {};
+			options.forEach(function (group) {
+				var values = selections[group.id] || [];
+				if (group.type === 'radio') {
+					selected[group.id] = values.length ? values[0] : '';
+				} else if (values.length) {
+					selected[group.id] = values.slice();
+				}
+			});
+			return selected;
+		}
+
+		function refreshPrice() {
+			var total = Number(item.price || 0);
+			options.forEach(function (group) {
+				var values = selections[group.id] || [];
+				(group.choices || []).forEach(function (choice) {
+					if (values.indexOf(choice.slug) !== -1) { total += Number(choice.price || 0); }
+				});
+			});
+			priceEl.textContent = money(total);
+		}
+
+		function optionControls() {
+			if (!options.length) { return null; }
+			if (!orderingOpen) {
+				return el('p', {
+					class: 'db-card-customize-note',
+					text: I18N.customizationAvailable || 'Customise when ordering opens'
+				});
+			}
+			var controls = el('div', { class: 'db-menu-options' });
+			options.forEach(function (group, groupIndex) {
+				var choices = Array.isArray(group.choices) ? group.choices : [];
+				var defaultChoice = choices.filter(function (choice) { return choice.default; })[0];
+				selections[group.id] = group.type === 'radio' && defaultChoice ? [defaultChoice.slug] : [];
+				var fieldset = el('fieldset', { class: 'db-menu-option-group' });
+				fieldset.appendChild(el('legend', { text: group.label || 'Options' }));
+				choices.forEach(function (choice, choiceIndex) {
+					var input = el('input', { type: group.type === 'check' ? 'checkbox' : 'radio', name: 'db-option-' + item.id + '-' + groupIndex, value: choice.slug, disabled: !orderingOpen });
+					input.checked = group.type === 'radio' ? choiceIndex === choices.indexOf(defaultChoice || choices[0]) : false;
+					input.addEventListener('change', function () {
+						var values = selections[group.id] || [];
+						if (group.type === 'radio') { selections[group.id] = input.checked ? [choice.slug] : []; }
+						else if (input.checked && values.indexOf(choice.slug) === -1) { values.push(choice.slug); selections[group.id] = values; }
+						else if (!input.checked) { selections[group.id] = values.filter(function (value) { return value !== choice.slug; }); }
+						refreshPrice();
+					});
+					var suffix = Number(choice.price || 0) ? (Number(choice.price) > 0 ? '+' : '') + money(choice.price) : '';
+					fieldset.appendChild(el('label', { class: 'db-menu-option' }, [ input, el('span', { text: choice.label }), suffix ? el('span', { class: 'db-option-price', text: suffix }) : null ]));
+				});
+				controls.appendChild(fieldset);
+			});
+			return el('details', { class: 'db-menu-customize' }, [
+				el('summary', { text: I18N.customize || 'Customize' }),
+				controls
+			]);
+		}
+
+		var categoryLabel = String(item.category || 'Dough Boss');
+		var categoryKey = categoryLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'menu';
 		var media = item.image
 			? el('div', { class: 'db-card-img', style: 'background-image:url(' + item.image + ')' })
-			: el('div', { class: 'db-card-img db-card-img--placeholder' });
+			: el('div', { class: 'db-card-img db-card-img--placeholder', 'data-category': categoryKey }, [
+				el('span', { class: 'db-card-placeholder-kicker', text: 'Freshly made' }),
+				el('span', { class: 'db-card-placeholder-category', text: categoryLabel })
+			]);
+		if (soldOut) {
+			media.appendChild(el('span', { class: 'db-soldout-badge', text: I18N.soldOut || 'Sold out' }));
+		}
 
-		var btn = el('button', { class: 'db-btn', text: I18N.addToCart || 'Add to cart' });
-		btn.addEventListener('click', function () {
-			btn.disabled = true;
-			request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, quantity: 1 } })
-				.then(function () {
-					btn.textContent = I18N.added || 'Added!';
-					notifyCartChanged();
-					setTimeout(function () { btn.textContent = I18N.addToCart || 'Add to cart'; btn.disabled = false; }, 1200);
-				})
-				.catch(function (err) { alert(err.message); btn.disabled = false; });
-		});
+		var action;
+		if (soldOut) {
+			action = el('button', { class: 'db-btn', type: 'button', text: I18N.soldOut || 'Sold out', disabled: true });
+		} else if (!orderingOpen) {
+			action = el('button', {
+				class: 'db-btn db-btn--coming-soon',
+				type: 'button',
+				text: I18N.comingSoonShort || 'Coming soon',
+				disabled: true,
+				'aria-label': (I18N.orderingComingSoon || 'Online ordering coming soon') + ': ' + item.name
+			});
+		} else {
+			action = el('button', {
+				class: 'db-btn',
+				type: 'button',
+				text: I18N.addToCart || 'Add to cart',
+				'aria-label': (I18N.addToCart || 'Add to cart') + ': ' + item.name
+			});
+			action.addEventListener('click', function () {
+				action.disabled = true;
+				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, options: selectedOptions(), quantity: 1 } })
+					.then(function () {
+						action.textContent = I18N.added || 'Added!';
+						dbPop(action);
+						dbToast((item.name ? item.name + ' — ' : '') + (I18N.addedToCart || 'added to cart'), true);
+						trackCommerce('add_to_cart', {
+							content_ids: [String(item.id)],
+							content_name: item.name || 'Menu item',
+							content_category: item.category || 'Menu',
+							content_type: 'product',
+							currency: 'AUD',
+							value: Number(item.price || 0),
+							quantity: 1
+						});
+						notifyCartChanged();
+						setTimeout(function () { action.textContent = I18N.addToCart || 'Add to cart'; action.disabled = false; }, 1200);
+					})
+					.catch(function (err) { dbToast(err.message); action.disabled = false; });
+			});
+		}
 
-		return el('div', { class: 'db-card' }, [
+		var controls = optionControls();
+		refreshPrice();
+		return el('div', { class: soldOut ? 'db-card db-card--soldout' : 'db-card' }, [
 			media,
 			el('div', { class: 'db-card-body' }, [
 				el('h4', { text: item.name }),
 				item.description ? el('p', { class: 'db-card-desc', text: item.description }) : null,
+				controls,
 				el('div', { class: 'db-card-foot' }, [
-					el('span', { class: 'db-price', text: money(item.price) }),
-					btn
+					priceEl,
+					action
 				])
 			])
 		]);
@@ -151,6 +668,8 @@
 	function renderBuilder(root) {
 		getConfig().then(function (cfg) {
 			root.innerHTML = '';
+			var tableContext = activeTableContext();
+			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!cfg.sizes.length) {
 				root.appendChild(el('p', { class: 'db-empty', text: 'No pizza sizes configured yet.' }));
 				return;
@@ -204,9 +723,22 @@
 					body: { type: 'custom', size: state.size.slug, toppings: Object.keys(state.toppings), quantity: 1 }
 				}).then(function () {
 					addBtn.textContent = I18N.added || 'Added!';
+					dbPop(addBtn);
+					dbToast(I18N.addedToCart || 'Added to cart', true);
+					var customValue = Number(state.size.price || 0);
+					Object.keys(state.toppings).forEach(function (slug) { customValue += Number(state.toppings[slug].price || 0); });
+					trackCommerce('add_to_cart', {
+						content_ids: ['custom-pizza'],
+						content_name: 'Custom pizza',
+						content_category: 'Pizza',
+						content_type: 'product',
+						currency: 'AUD',
+						value: customValue,
+						quantity: 1
+					});
 					notifyCartChanged();
 					setTimeout(function () { addBtn.textContent = I18N.addToCart || 'Add to cart'; addBtn.disabled = false; }, 1200);
-				}).catch(function (err) { alert(err.message); addBtn.disabled = false; });
+				}).catch(function (err) { dbToast(err.message); addBtn.disabled = false; });
 			});
 
 			root.appendChild(el('div', { class: 'db-builder-inner' }, [
@@ -221,7 +753,7 @@
 			refreshPrice();
 		}).catch(function (err) {
 			root.innerHTML = '';
-			root.appendChild(el('p', { class: 'db-error', text: err.message }));
+			root.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
 		});
 	}
 
@@ -229,53 +761,213 @@
 	/* Cart & checkout                                                    */
 	/* ------------------------------------------------------------------ */
 
+	function orderJourney() {
+		var labels = ['Review order', 'Your details', 'Secure payment'];
+		var items = [];
+		var list = el('ol', { class: 'db-order-journey', 'aria-label': 'Order progress' });
+		labels.forEach(function (label, index) {
+			var item = el('li', { class: 'db-order-journey-step' }, [
+				el('span', { class: 'db-order-journey-number', 'aria-hidden': 'true', text: String(index + 1) }),
+				el('span', { class: 'db-order-journey-label', text: label })
+			]);
+			items.push(item);
+			list.appendChild(item);
+		});
+		function set(step) {
+			items.forEach(function (item, index) {
+				var number = index + 1;
+				item.classList.toggle('is-current', number === step);
+				item.classList.toggle('is-complete', number < step || step > labels.length);
+				if (number === step) { item.setAttribute('aria-current', 'step'); }
+				else { item.removeAttribute('aria-current'); }
+			});
+		}
+		set(1);
+		return { element: list, set: set };
+	}
+
 	function renderCart(root) {
-		var orderType = 'pickup';
+		root.innerHTML = '';
+		var initialTableContext = activeTableContext();
+		var orderType = initialTableContext ? 'dine_in' : 'pickup';
+		var locationId = initialTableContext ? Number(initialTableContext.location.id) : 0;
+		// The cart lines/totals region is rebuilt freely on every reload. The
+		// checkout region is NOT — once a checkout form exists it is updated in
+		// place (see checkoutEl.update below) rather than torn down. Rebuilding it
+		// on every cart mutation (e.g. bumping a line's quantity) used to wipe
+		// whatever the customer had already typed, and — worse — remount the
+		// Stripe card Element's iframe, silently clearing a card number they'd
+		// already entered mid-checkout.
+		var cartRegion = el('section', { class: 'db-cart-region', 'aria-label': 'Order summary' });
+		var checkoutRegion = el('section', { class: 'db-checkout-region', 'aria-label': 'Checkout details' });
+		var journey = orderJourney();
+		var shell = el('div', { class: 'db-order-shell' }, [cartRegion, checkoutRegion]);
+		var checkoutEl = null;
+		var orderTitle = el('h2', { text: 'Review, pay and track' });
+		var orderIntro = el('p', { text: 'Check your items, add your details, then continue to Stripe for secure payment.' });
+		// Once an order is successfully placed, this cart widget's job is done —
+		// further reloads (triggered by the notifyCartChanged() that placeOrder
+		// itself fires, telling the rest of the page the cart is now empty) must
+		// not overwrite the confirmation message with an "empty cart" render.
+		var orderComplete = false;
+		root.appendChild(el('header', { class: 'db-order-header' }, [
+			el('p', { class: 'db-order-kicker', text: 'Your order' }),
+			orderTitle,
+			orderIntro
+		]));
+		root.appendChild(journey.element);
+		root.appendChild(shell);
 
 		function load() {
-			Promise.all([getConfig(), request('/cart?order_type=' + orderType)]).then(function (results) {
-				draw(results[0], results[1]);
+			if (orderComplete) { return; }
+			Promise.all([getConfig(), request('/cart?order_type=' + orderType), getLocations()]).then(function (results) {
+				draw(results[0], results[1], results[2]);
 			}).catch(function (err) {
-				root.innerHTML = '';
-				root.appendChild(el('p', { class: 'db-error', text: err.message }));
+				cartRegion.innerHTML = '';
+				checkoutRegion.innerHTML = '';
+				checkoutEl = null;
+				cartRegion.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
 			});
 		}
 
-		function draw(cfg, cart) {
-			root.innerHTML = '';
+		function draw(cfg, cart, locs) {
+			if (orderComplete) { return; }
+			cartRegion.innerHTML = '';
+			var tableContext = activeTableContext();
+			var orderingOpen = !!cfg.ordering_open;
+			journey.element.hidden = !orderingOpen;
+			orderTitle.textContent = orderingOpen ? 'Review, pay and track' : 'Browse now, request for later';
+			orderIntro.textContent = orderingOpen
+				? 'Check your items, add your details, then continue to Stripe for secure payment.'
+				: 'Online checkout and payment are closed. If pre-orders are available, your request stays unpaid until staff call and confirm it.';
+
+			if (!orderingOpen) {
+				cartRegion.appendChild(orderingClosedNotice(cfg.ordering_closed_message));
+				checkoutRegion.innerHTML = '';
+				checkoutEl = null;
+				journey.set(1);
+			}
 
 			if (!cart.items.length) {
-				root.appendChild(el('p', { class: 'db-empty', text: I18N.emptyCart || 'Your cart is empty.' }));
+				if (tableContext) { cartRegion.appendChild(tableContextBanner(tableContext)); }
+				cartRegion.appendChild(el('p', { class: 'db-empty', text: I18N.emptyCart || 'Your cart is empty.' }));
+				// Nothing to check out — drop any previous checkout form so a later
+				// non-empty cart starts with a fresh one (and a fresh card mount).
+				checkoutRegion.innerHTML = '';
+				checkoutEl = null;
+				journey.set(1);
 				return;
 			}
 
+			if (tableContext) {
+				// The server resolves and enforces this QR context again on payment
+				// and checkout. These values are display-only client state.
+				locationId = Number(tableContext.location.id);
+				orderType = 'dine_in';
+			} else if (cfg.single_location_mode && cfg.single_location_id) {
+				locationId = Number(cfg.single_location_id);
+				orderType = 'pickup';
+			} else if (!locationId) { locationId = currentLocationId(locs); }
+
 			// Line items.
+			var itemCount = cartItemCount(cart);
+			cartRegion.appendChild(el('div', { class: 'db-cart-section-heading' }, [
+				el('h3', { text: 'Order summary' }),
+				el('span', { text: itemCount + (itemCount === 1 ? ' item' : ' items') })
+			]));
 			var list = el('div', { class: 'db-cart-lines' });
 			cart.items.forEach(function (line) {
 				list.appendChild(cartLine(line, load));
 			});
-			root.appendChild(list);
+			cartRegion.appendChild(list);
+			if (tableContext) { cartRegion.appendChild(tableContextBanner(tableContext)); }
+
+			// Shop selector — routes the order to the right kitchen board. Only
+			// shown when more than one shop exists; otherwise the single shop is
+			// remembered silently.
+			if (!tableContext && !cfg.single_location_mode && locs.length > 1) {
+				setLocation(locationId, true);
+				cartRegion.appendChild(el('div', { class: 'db-cart-shop' }, [
+					el('span', { class: 'db-cart-shop-label', text: I18N.chooseShop || 'Choose your shop' }),
+					shopSelect(locs, locationId, function (id) {
+						if (!paymentMutationAllowed()) {
+							load();
+							return;
+						}
+						locationId = id;
+						setLocation(id);
+						load();
+					})
+				]));
+			} else if (!tableContext && locs.length === 1) {
+				locationId = Number(locs[0].id);
+				setLocation(locationId, true);
+			}
 
 			// Fulfilment selector.
-			var typeWrap = el('div', { class: 'db-fulfilment' });
-			if (cfg.enable_pickup) { typeWrap.appendChild(typeRadio('pickup', 'Pickup', orderType, onType)); }
-			if (cfg.enable_delivery) { typeWrap.appendChild(typeRadio('delivery', 'Delivery', orderType, onType)); }
-			root.appendChild(typeWrap);
+			if (!tableContext) {
+				var typeWrap = el('div', { class: 'db-fulfilment' });
+				if (cfg.enable_pickup) { typeWrap.appendChild(typeRadio('pickup', 'Pickup', orderType, onType)); }
+				if (cfg.enable_delivery) { typeWrap.appendChild(typeRadio('delivery', 'Delivery', orderType, onType)); }
+				cartRegion.appendChild(typeWrap);
+			}
 
 			// Totals.
-			root.appendChild(totalsBlock(cart.totals));
+			cartRegion.appendChild(totalsBlock(cart.totals, cfg));
 
-			// Checkout.
-			root.appendChild(checkoutForm(cfg, orderType));
+			// Closed-hours Revesby requests intentionally use a separate unpaid path.
+			// It never renders card controls or calls /payment-intent; the server
+			// independently checks the same owner flag before saving anything.
+			if (!orderingOpen) {
+				if (cfg.after_hours_preorders_enabled && !tableContext) {
+					checkoutEl = preorderRequestForm(cfg, function () { return locationId; }, function () {
+						orderComplete = true;
+						cartRegion.innerHTML = '';
+					});
+					checkoutRegion.appendChild(checkoutEl.form);
+				}
+				return;
+			}
+
+			// Voucher code (apply/remove — preview only; redeemed at checkout).
+			cartRegion.appendChild(voucherBox(cart.totals, orderType, load));
+
+			// Checkout — create once, then only update in place.
+			if (!checkoutEl) {
+				checkoutEl = checkoutForm(cfg, orderType, function () { return locationId; }, cart.totals, function () {
+					orderComplete = true;
+					// The checkout form's own parent gets replaced with the
+					// confirmation message (see placeOrder() above), but that
+					// leaves this region's last-rendered cart items/subtotal/
+					// voucher box on screen untouched — clear it too so the
+					// confirmation isn't shown underneath a stale cart.
+					cartRegion.innerHTML = '';
+				}, journey.set);
+				checkoutRegion.appendChild(checkoutEl.form);
+				journey.set(2);
+			} else {
+				checkoutEl.update(orderType, cart.totals);
+			}
 		}
 
 		function onType(value) {
+			if (!paymentMutationAllowed()) {
+				load();
+				return;
+			}
 			orderType = value;
 			load();
 		}
 
 		load();
 		document.addEventListener('doughboss:cart-updated', load);
+	}
+
+	function orderingClosedNotice(message) {
+		return el('aside', { class: 'db-ordering-status', role: 'status' }, [
+			el('strong', { text: I18N.orderingComingSoon || 'Online ordering coming soon' }),
+			el('p', { text: message || 'You can browse the menu now, and we will let you know when checkout opens.' })
+		]);
 	}
 
 	function typeRadio(value, label, current, onChange) {
@@ -292,16 +984,34 @@
 			sub.push(line.toppings.map(function (t) { return t.label; }).join(', '));
 		}
 
-		var qty = el('input', { type: 'number', min: '0', value: line.quantity, class: 'db-qty' });
-		qty.addEventListener('change', function () {
-			request('/cart/update', { method: 'POST', body: { key: line.key, quantity: Number(qty.value) } })
-				.then(function () { notifyCartChanged(); }).catch(function (err) { alert(err.message); });
-		});
+		var qty = el('input', { type: 'number', min: '1', value: line.quantity, class: 'db-qty', 'aria-label': 'Quantity for ' + line.name, inputmode: 'numeric' });
+		var decrease = el('button', { class: 'db-qty-btn', type: 'button', text: '−', 'aria-label': 'Decrease quantity for ' + line.name });
+		var increase = el('button', { class: 'db-qty-btn', type: 'button', text: '+', 'aria-label': 'Increase quantity for ' + line.name });
+		var controls = el('div', { class: 'db-qty-control', role: 'group', 'aria-label': 'Quantity for ' + line.name }, [decrease, qty, increase]);
 
-		var remove = el('button', { class: 'db-link', text: I18N.remove || 'Remove' });
+		function updateQuantity(next) {
+			if (!paymentMutationAllowed()) { return; }
+			next = Math.max(1, Math.min(99, Number(next) || 1));
+			qty.value = String(next);
+			decrease.disabled = true;
+			increase.disabled = true;
+			request('/cart/update', { method: 'POST', body: { key: line.key, quantity: next } })
+				.then(function () { notifyCartChanged(); })
+				.catch(function (err) {
+					dbToast(err.message);
+					qty.value = String(line.quantity);
+					decrease.disabled = false;
+					increase.disabled = false;
+				});
+		}
+		decrease.addEventListener('click', function () { updateQuantity(Number(qty.value) - 1); });
+		increase.addEventListener('click', function () { updateQuantity(Number(qty.value) + 1); });
+		qty.addEventListener('change', function () { updateQuantity(qty.value); });
+
+		var remove = el('button', { class: 'db-link db-cart-remove', type: 'button', text: I18N.remove || 'Remove', 'aria-label': (I18N.remove || 'Remove') + ' ' + line.name });
 		remove.addEventListener('click', function () {
 			request('/cart/remove', { method: 'POST', body: { key: line.key } })
-				.then(function () { notifyCartChanged(); }).catch(function (err) { alert(err.message); });
+				.then(function () { notifyCartChanged(); }).catch(function (err) { dbToast(err.message); });
 		});
 
 		return el('div', { class: 'db-cart-line' }, [
@@ -309,17 +1019,20 @@
 				el('strong', { text: line.name }),
 				sub.length ? el('small', { text: sub.join(' · ') }) : null
 			]),
-			qty,
+			controls,
 			el('span', { class: 'db-price', text: money(line.line_total) }),
 			remove
 		]);
 	}
 
-	function totalsBlock(totals) {
+	function totalsBlock(totals, cfg) {
+		var inclusive = totals.tax_inclusive || (cfg && cfg.gst_inclusive);
+
 		var rows = [
 			[I18N.subtotal || 'Subtotal', totals.subtotal]
 		];
-		if (totals.tax > 0) { rows.push([I18N.tax || 'Tax', totals.tax]); }
+		// Only add tax as its own line when it's charged on top of prices.
+		if (!inclusive && totals.tax > 0) { rows.push([I18N.tax || 'Tax', totals.tax]); }
 		if (totals.delivery_fee > 0) { rows.push([I18N.delivery || 'Delivery', totals.delivery_fee]); }
 
 		var block = el('div', { class: 'db-totals' });
@@ -328,104 +1041,984 @@
 				el('span', { text: row[0] }), el('span', { text: money(row[1]) })
 			]));
 		});
+		if (totals.discount > 0) {
+			block.appendChild(el('div', { class: 'db-total-row db-total-row--discount' }, [
+				el('span', { text: (I18N.discount || 'Discount') + (totals.voucher_code ? ' (' + totals.voucher_code + ')' : '') }),
+				el('span', { text: '−' + money(totals.discount) })
+			]));
+		}
 		block.appendChild(el('div', { class: 'db-total-row db-total-row--grand' }, [
 			el('span', { text: I18N.total || 'Total' }), el('span', { text: money(totals.total) })
 		]));
+		if (inclusive && totals.tax > 0) {
+			block.appendChild(el('div', { class: 'db-total-note', text: '(' + (I18N.inclGst || 'includes GST') + ' ' + money(totals.tax) + ')' }));
+		}
 		return block;
 	}
 
-	function checkoutForm(cfg, orderType) {
-		var form = el('form', { class: 'db-checkout' });
-		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
+	function voucherBox(totals, orderType, reload) {
+		var wrap = el('div', { class: 'db-voucher' });
+		var msg = el('div', { class: 'db-voucher-msg', 'aria-live': 'polite' });
 
+		if (totals.voucher_code) {
+			var remove = el('button', { class: 'db-link', type: 'button', text: I18N.remove || 'Remove' });
+			remove.addEventListener('click', function () {
+				remove.disabled = true;
+				request('/cart/remove-voucher', { method: 'POST', body: { order_type: orderType } })
+					.then(function () { reload(); })
+					.catch(function (err) { remove.disabled = false; msg.textContent = err.message; });
+			});
+			wrap.appendChild(el('div', { class: 'db-voucher-applied' }, [
+				el('span', { text: (I18N.voucherApplied || 'Voucher applied') + ': ' + totals.voucher_code }),
+				remove
+			]));
+		} else {
+			var input = el('input', { type: 'text', class: 'db-voucher-input', placeholder: I18N.voucherPlaceholder || 'Voucher code', 'aria-label': 'Voucher code' });
+			var apply = el('button', { class: 'db-btn db-btn--sm', type: 'button', text: I18N.apply || 'Apply' });
+			function doApply() {
+				var code = (input.value || '').trim();
+				if (!code) { return; }
+				apply.disabled = true;
+				msg.textContent = '';
+				request('/cart/apply-voucher', { method: 'POST', body: { code: code, order_type: orderType } })
+					.then(function () { reload(); })
+					.catch(function (err) { apply.disabled = false; msg.textContent = err.message; });
+			}
+			apply.addEventListener('click', doApply);
+			input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doApply(); } });
+			wrap.appendChild(el('div', { class: 'db-voucher-row' }, [input, apply]));
+		}
+
+		wrap.appendChild(msg);
+		return wrap;
+	}
+
+
+	// Tyro Connect Pay sheet. The Pay Secret is kept only in this closure and is
+	// never placed in storage, URLs or logs. Server verification remains the
+	// authority before an order reaches the kitchen.
+	function tyroConnectCheckout(form, msg, getState, clientKey) {
+		var mount = el('div', { class: 'db-tyro-pay-form', id: 'db-tyro-pay-' + String(Date.now()) });
+		var status = el('p', { class: 'db-pay-secure', text: 'Secure payment by Tyro · Bank verification may appear here.' });
+		form.appendChild(el('div', { class: 'db-cardfield db-cardfield--tyro-connect' }, [
+			el('span', { class: 'db-field-label', text: I18N.cardDetails || 'Card details' }),
+			mount,
+			status
+		]));
+		var state = { initPromise: null, paymentId: '' };
+
+		function createIntent() {
+			var s = getState();
+			return request('/payment-intent', {
+				method: 'POST',
+				body: { order_type: s.orderType, location_id: s.locationId, payment_attempt_key: clientKey }
+			});
+		}
+
+		function waitForResult(tyro, remaining) {
+			return tyro.fetchPayRequest().then(function (result) {
+				var payRequest = result && result.payRequest ? result.payRequest : result;
+				var providerStatus = payRequest && payRequest.status ? String(payRequest.status).toUpperCase() : '';
+				if (providerStatus === 'SUCCESS') { return payRequest; }
+				if (providerStatus === 'FAILED' || providerStatus === 'VOIDED') {
+					throw new Error(I18N.cardError || 'The payment was not approved. Please check your details and try again.');
+				}
+				if (remaining < 1) {
+					throw new Error('Your payment is still being checked. Do not pay again; please wait a moment and retry confirmation.');
+				}
+				return new Promise(function (resolve) { setTimeout(resolve, 1200); }).then(function () { return waitForResult(tyro, remaining - 1); });
+			});
+		}
+
+		function init() {
+			if (state.initPromise) { return state.initPromise; }
+			state.initPromise = createIntent().then(function (pi) {
+				state.paymentId = pi.payment_intent;
+				var tyro = window.Tyro({ liveMode: !!PAY.liveMode });
+				return tyro.init(pi.client_secret).then(function () {
+					var payForm = tyro.createPayForm({
+						theme: 'minimal',
+						options: { creditCardForm: { enabled: true }, applePay: { enabled: false }, googlePay: { enabled: false } }
+					});
+					return payForm.inject('#' + mount.id).then(function () { return tyro; });
+				});
+			}).catch(function (err) {
+				state.initPromise = null;
+				throw err;
+			});
+			return state.initPromise;
+		}
+
+		setTimeout(function () {
+			init().catch(function (err) {
+				msg.textContent = err.message || (I18N.cardInitError || 'The secure payment form could not be loaded.');
+				msg.className = 'db-checkout-msg db-error';
+			});
+		}, 0);
+
+		return {
+			pay: function () {
+				status.textContent = 'Securely submitting your payment…';
+				return init().then(function (tyro) {
+					return tyro.submitPay().then(function () { return waitForResult(tyro, 10); });
+				}).then(function () {
+					status.textContent = 'Payment confirmed · sending your order to DoughBoss.';
+					return state.paymentId;
+				});
+			}
+		};
+	}
+
+	// Closed-hours request form. It deliberately does not share checkoutForm():
+	// checkoutForm can mount Stripe/Tyro fields, while this path must remain
+	// payment-free even if a gateway is configured for normal trading hours.
+	function preorderRequestForm(cfg, getLocationId, onRequestComplete) {
+		var form = el('form', { class: 'db-checkout db-preorder-request' });
+		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
 		var name = field('text', 'customer_name', 'Name', true);
 		var email = field('email', 'customer_email', 'Email', true);
 		var phone = field('tel', 'customer_phone', 'Phone', true);
-		var address = field('textarea', 'address', 'Delivery address', orderType === 'delivery');
-		var notes = field('textarea', 'notes', 'Notes (optional)', false);
+		var notes = field('textarea', 'notes', 'Notes / allergies (optional)', false);
+		var notesInput = notes.querySelector('textarea');
+		if (notesInput) {
+			notesInput.placeholder = 'E.g. no onion, allergy note, catering pickup detail...';
+		}
+		var acknowledgementInput = el('input', { type: 'checkbox', required: true });
+		var acknowledgement = el('label', { class: 'db-option' }, [
+			acknowledgementInput,
+			el('span', { text: 'I understand this is an unconfirmed, unpaid request. Revesby will call to arrange pickup timing before confirming.' })
+		]);
+		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: 'Send pre-order request' });
+		var requestAttemptId = null;
+
+		form.appendChild(el('h3', { text: 'Send a Revesby pre-order request' }));
+		form.appendChild(el('p', { class: 'db-ordering-status', text: (cfg && cfg.after_hours_preorders_message) || 'Your request is not confirmed or paid. Revesby will review it first thing in the morning.' }));
+		form.appendChild(el('p', { class: 'db-ordering-status', text: 'Pickup timing will be arranged by phone before Revesby confirms your request.' }));
+		[name, email, phone, notes, acknowledgement, submit, msg].forEach(function (node) { form.appendChild(node); });
+
+		form.addEventListener('submit', function (e) {
+			e.preventDefault();
+			if (!acknowledgementInput.checked) { return; }
+			submit.disabled = true;
+			submit.textContent = 'Sending request…';
+			msg.textContent = '';
+			msg.className = 'db-checkout-msg';
+			if (!requestAttemptId) {
+				requestAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+			}
+			request('/preorder-request', {
+				method: 'POST',
+				headers: { 'Idempotency-Key': requestAttemptId },
+				body: {
+					location_id: getLocationId ? getLocationId() : storedLocationId(),
+					customer_name: name.querySelector('input,textarea').value,
+					customer_email: email.querySelector('input,textarea').value,
+					customer_phone: phone.querySelector('input,textarea').value,
+					notes: notes.querySelector('input,textarea').value
+				}
+			}).then(function (res) {
+				requestAttemptId = null;
+				var parent = form.parentNode;
+				if (parent) {
+					parent.innerHTML = '';
+					parent.appendChild(el('div', { class: 'db-order-confirm' }, [
+						el('h3', { text: 'Pre-order request received' }),
+						el('p', { text: res.message || 'Revesby will review your request first thing in the morning.' }),
+						el('p', { text: 'Request ' + (res.order_number || '') + ' is unconfirmed and unpaid. No payment has been taken.' }),
+						el('p', { text: 'Revesby will call to arrange pickup timing before confirming.' })
+					]));
+				}
+				trackCommerce('generate_lead', {
+					content_name: 'After-hours preorder request',
+					content_category: 'Preorder',
+					currency: 'AUD',
+					location_id: getLocationId ? getLocationId() : storedLocationId(),
+					channel: 'web'
+				});
+				if (onRequestComplete) { onRequestComplete(); }
+				notifyCartChanged();
+			}).catch(function (err) {
+				msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
+				msg.className = 'db-checkout-msg db-error';
+				submit.disabled = false;
+				submit.textContent = 'Send pre-order request';
+			});
+		});
+
+		return { form: form };
+	}
+
+	function checkoutForm(cfg, initialOrderType, getLocationId, initialTotals, onOrderComplete, onJourneyStep) {
+		// orderType/totals are mutable — update() below can revise them (e.g. the
+		// customer switches pickup/delivery, or the cart total changes) without
+		// recreating this form or its mounted Stripe card Element. The submit
+		// handler always reads the current values through these closures, not the
+		// frozen constructor arguments.
+		var orderType = initialOrderType;
+		var totals = initialTotals;
+
+		var form = el('form', { class: 'db-checkout' });
+		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
+
+		var name = field('text', 'customer_name', 'Name', true, { autocomplete: 'name' });
+		var email = field('email', 'customer_email', 'Email', true, { autocomplete: 'email', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false' });
+		var phone = field('tel', 'customer_phone', 'Mobile', true, { autocomplete: 'tel', inputmode: 'tel' });
+		var address = field('textarea', 'address', 'Delivery address', orderType === 'delivery', { autocomplete: 'street-address', rows: '3' });
+		var notes = field('textarea', 'notes', 'Kitchen notes (optional)', false, { rows: '3', placeholder: 'Allergies, dietary needs or preparation notes' });
 
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
-		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: I18N.placeOrder || 'Place order' });
+		// Whether this checkout takes a card payment through a hosted gateway.
+		var paying = !!(stripeHosted || tyroPay || mpgsHosted);
 
-		form.appendChild(el('h3', { text: 'Checkout' }));
-		[name, email, phone, address, notes].forEach(function (f) { form.appendChild(f); });
+		function newPaymentAttemptKey() {
+			return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+		}
+
+		// Stripe and MPGS redirect to their hosted checkout pages. Tyro retains
+		// its provider-hosted embedded pay form.
+		function payLabelFor(t) {
+			var grandTotal = t && typeof t.total !== 'undefined' ? t.total : 0;
+			if (stripeHosted) { return (I18N.continueToPayment || 'Continue to wallet or card') + ' · ' + money(grandTotal); }
+			return paying ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
+		}
+		var payLabel = payLabelFor(totals);
+		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
+		var paymentAttemptKey = newPaymentAttemptKey();
+		var stripeCancelledPayload = null;
+		var summaryType = el('strong', { text: orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup') });
+		var summaryCount = el('span', { text: 'Review your items and total' });
+		var summaryTotal = el('strong', { class: 'db-checkout-summary-total', text: money(totals && totals.total) });
+		var summary = el('div', { class: 'db-checkout-summary', role: 'status' }, [
+			el('div', {}, [
+				el('span', { class: 'db-checkout-summary-label', text: 'Fulfilment' }),
+				summaryType,
+				summaryCount
+			]),
+			el('div', { class: 'db-checkout-summary-price' }, [
+				el('span', { class: 'db-checkout-summary-label', text: 'Order total' }),
+				summaryTotal
+			])
+		]);
+
+		form.appendChild(el('div', { class: 'db-checkout-heading' }, [
+			el('p', { class: 'db-order-kicker', text: 'Step 2' }),
+			el('h3', { text: 'Your details' }),
+			el('p', { text: 'We use these details for your receipt and live order updates.' })
+		]));
+		form.appendChild(summary);
+		form.appendChild(el('div', { class: 'db-checkout-fields' }, [name, email, phone]));
+		form.appendChild(address);
+		form.appendChild(notes);
+		form.appendChild(el('details', { class: 'db-checkout-safety' }, [
+			el('summary', { text: 'Allergies and order changes' }),
+			el('div', {}, [
+				el('p', { text: 'Add allergy or dietary notes above. For severe allergies, also speak with staff before ordering.' }),
+				el('p', { text: 'After the shop confirms an order, changes may need manager approval and a payment adjustment.' })
+			])
+		]));
+
+		var stripeNoticeTotal = null;
+		if (stripeHosted) {
+			stripeNoticeTotal = el('strong', { class: 'db-stripe-notice-total', text: money(totals && totals.total) + ' AUD' });
+			form.appendChild(el('div', { class: 'db-stripe-checkout-notice', role: 'note' }, [
+				el('span', { class: 'db-secure-lock', 'aria-hidden': 'true', text: '✓' }),
+				el('div', {}, [
+					el('strong', { text: 'Secure checkout powered by Stripe' }),
+					el('span', { text: 'Continue to Stripe to review and pay ' }, [stripeNoticeTotal]),
+					el('ul', { class: 'db-stripe-checkout-points' }, [
+						el('li', { text: 'Apple Pay or Google Pay is offered automatically when eligible' }),
+						el('li', { text: 'Card is always available; DoughBoss never stores your card details' }),
+						el('li', { text: 'You return here for your order number, receipt and live tracking' })
+					]),
+					el('span', { class: 'db-payment-methods', text: 'Apple Pay  ·  Google Pay  ·  Card' })
+				])
+			]));
+		}
+
+		// Tyro Connect: hosted payment form and automatic 3DS.
+		var tyro = null;
+		if (tyroPay) {
+			tyro = tyroConnectCheckout(form, msg, function () {
+				return {
+					orderType: orderType,
+					locationId: getLocationId ? getLocationId() : storedLocationId()
+				};
+			}, paymentAttemptKey);
+		}
+		if (mpgsHosted) {
+			form.appendChild(el('p', {
+				class: 'db-cardfield db-mpgs-notice',
+				text: 'Card details will be entered securely on the Mastercard payment page.'
+			}));
+		}
+
 		form.appendChild(submit);
+		form.appendChild(el('p', { class: 'db-submit-note', text: paying
+			? 'You will review the final amount before payment. One payment creates one order.'
+			: 'Submitting places this order with the selected shop.' }));
 		form.appendChild(msg);
+		form.addEventListener('focusin', function () {
+			if (onJourneyStep && !paymentMutationLock) { onJourneyStep(2); }
+		});
+		trackCommerce('begin_checkout', {
+			currency: 'AUD',
+			value: Number(totals && totals.total || 0),
+			num_items: Number(totals && (totals.item_count || totals.quantity) || 0),
+			order_type: orderType,
+			location_id: getLocationId ? getLocationId() : storedLocationId(),
+			channel: activeTableContext() ? 'table_qr' : 'web'
+		});
+		// One browser attempt keeps one checkout key and, after payment succeeds,
+		// one provider reference until the server confirms the order. A lost HTTP
+		// response can therefore be retried without charging or ordering twice.
+		var checkoutAttemptId = null;
+		var checkoutPaymentId = null;
+
+		function fail(err) {
+			setPaymentMutationLock(false);
+			form.setAttribute('aria-busy', 'false');
+			if (onJourneyStep) { onJourneyStep(2); }
+			msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
+			msg.className = 'db-checkout-msg db-error';
+			submit.disabled = false;
+			payLabel = payLabelFor(totals);
+			submit.textContent = payLabel;
+		}
+
+		function stripePaidReturnFail() {
+			// Stripe may already have captured this Session. Keep the cart/payment
+			// locked so an uncertain browser return can never start a second charge;
+			// the signed webhook remains the recovery authority.
+			setPaymentMutationLock(true);
+			form.setAttribute('aria-busy', 'false');
+			if (onJourneyStep) { onJourneyStep(3); }
+			msg.textContent = 'Your payment may already be complete. Please do not pay again. Keep this page open or contact the shop so we can confirm your order.';
+			msg.className = 'db-checkout-msg db-error';
+			submit.disabled = true;
+			submit.textContent = 'Payment confirmation pending';
+		}
+
+		function placeOrder(payload) {
+			if (!checkoutAttemptId) {
+				checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+			}
+			return request('/checkout', { method: 'POST', body: payload, headers: { 'Idempotency-Key': checkoutAttemptId } }).then(function (res) {
+				checkoutAttemptId = null;
+				checkoutPaymentId = null;
+				setPaymentMutationLock(false);
+				form.setAttribute('aria-busy', 'false');
+				if (onJourneyStep) { onJourneyStep(4); }
+				// Capture the parent BEFORE clearing it: clearing via innerHTML
+				// detaches `form` from the document, which nulls form.parentNode —
+				// re-reading form.parentNode afterwards to append the confirmation
+				// would throw against null.
+				var parent = form.parentNode;
+				parent.innerHTML = '';
+				var confirmation = el('div', { class: 'db-confirm', role: 'status', 'aria-live': 'polite' }, [
+					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
+					el('p', { class: 'db-order-kicker', text: paying ? 'Payment confirmed' : 'Order confirmed' }),
+					el('h3', { text: 'Your order is in' }),
+					el('p', { text: 'Keep this order number for live updates.' })
+				]);
+				var orderNumber = el('strong', { class: 'db-confirm-number', text: res.order_number || '' });
+				var copyNumber = el('button', { class: 'db-link db-confirm-copy', type: 'button', text: 'Copy number' });
+				copyNumber.addEventListener('click', function () {
+					var copied = window.navigator && window.navigator.clipboard && window.navigator.clipboard.writeText
+						? window.navigator.clipboard.writeText(String(res.order_number || ''))
+						: Promise.reject(new Error('Clipboard unavailable'));
+					copied.then(function () {
+						copyNumber.textContent = 'Copied';
+						dbToast('Order number copied', true);
+					}).catch(function () {
+						copyNumber.textContent = 'Select and copy the number';
+					});
+				});
+				confirmation.appendChild(el('div', { class: 'db-confirm-number-wrap' }, [orderNumber, copyNumber]));
+				if (res.table_label) {
+					confirmation.appendChild(el('p', { class: 'db-table-context', text: 'Dine in · ' + (res.location_name ? res.location_name + ' · ' : '') + 'Table ' + res.table_label + ' · We will bring it to you.' }));
+				}
+				confirmation.appendChild(el('div', { class: 'db-confirm-facts' }, [
+					el('span', {}, [el('small', { text: 'Status' }), el('strong', { text: 'Sent to the shop' })]),
+					el('span', {}, [el('small', { text: 'Payment' }), el('strong', { text: paying ? 'Paid' : 'Pay at shop' })]),
+					el('span', {}, [el('small', { text: 'Total' }), el('strong', { text: money(res.total) })])
+				]));
+				confirmation.appendChild(el('p', { class: 'db-confirm-next', text: 'The shop will accept your order next. We will email meaningful updates, or you can follow the live tracker.' }));
+				var tracker = document.querySelector('[data-doughboss-tracking]');
+				var confirmActions = el('div', { class: 'db-confirm-actions' });
+				if (res.tracking_url) {
+					confirmActions.appendChild(el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' }));
+				} else if (tracker) {
+					confirmActions.appendChild(el('a', {
+						class: 'db-btn db-btn--track',
+						href: '#track-order',
+						text: 'Track this order',
+						onclick: function () {
+							var trackForm = tracker.querySelector('.db-track-form');
+							if (!trackForm) { return; }
+							trackForm.number.value = res.order_number || '';
+							trackForm.email.value = payload.customer_email || '';
+						}
+					}));
+				}
+				confirmation.appendChild(confirmActions);
+				var review = el('div', { class: 'db-review-invite' });
+				review.appendChild(el('strong', { text: 'Stay close to the bake.' }));
+				review.appendChild(el('span', { text: 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.' }));
+				var reviewActions = el('div', { class: 'db-review-invite__actions' });
+				reviewActions.appendChild(el('a', {
+					href: 'https://instagram.com/doughboss',
+					target: '_blank',
+					rel: 'noopener noreferrer',
+					'data-doughboss-engagement': 'social_engagement',
+					'data-content-name': 'Instagram',
+					'data-channel': 'order_success',
+					text: 'Follow @doughboss ↗'
+				}));
+				if (DATA.googleReviewUrl) {
+					reviewActions.appendChild(el('a', {
+						href: DATA.googleReviewUrl,
+						target: '_blank',
+						rel: 'noopener noreferrer',
+						'data-doughboss-engagement': 'review_engagement',
+						'data-content-name': 'Google review',
+						'data-channel': 'order_success',
+						text: 'Leave a Google review ↗'
+					}));
+				}
+				review.appendChild(reviewActions);
+				confirmation.appendChild(review);
+				parent.appendChild(confirmation);
+				trackCommerce('purchase', {
+					currency: 'AUD',
+					value: Number(res.total || 0),
+					num_items: Number(totals && (totals.item_count || totals.quantity) || 0),
+					order_type: payload.order_type,
+					location_id: payload.location_id,
+					channel: activeTableContext() ? 'table_qr' : 'web'
+				});
+				// Mark this cart widget done BEFORE notifying — the notification
+				// triggers this same widget's own reload listener, which must not
+				// overwrite the confirmation just shown with an "empty cart" render.
+				if (onOrderComplete) { onOrderComplete(); }
+				notifyCartChanged();
+			});
+		}
 
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
 			submit.disabled = true;
-			submit.textContent = I18N.placing || 'Placing order…';
+			form.setAttribute('aria-busy', 'true');
+			if (onJourneyStep) { onJourneyStep(paying ? 3 : 2); }
 			msg.textContent = '';
 			msg.className = 'db-checkout-msg';
 
-			var payload = {
+			// A cancelled Stripe Session remains payable. Its retry must submit the
+			// exact immutable details that created it, even if the DOM is modified.
+			var payload = stripeHosted && stripeCancelledPayload ? Object.assign({}, stripeCancelledPayload) : {
 				order_type: orderType,
+				location_id: getLocationId ? getLocationId() : storedLocationId(),
 				customer_name: name.querySelector('input,textarea').value,
 				customer_email: email.querySelector('input,textarea').value,
 				customer_phone: phone.querySelector('input,textarea').value,
 				address: address.querySelector('input,textarea').value,
 				notes: notes.querySelector('input,textarea').value
 			};
+			if (paying) { payload.payment_attempt_key = paymentAttemptKey; }
 
-			request('/checkout', { method: 'POST', body: payload }).then(function (res) {
-				form.parentNode.innerHTML = '';
-				form.parentNode.appendChild(el('div', { class: 'db-confirm' }, [
-					el('h3', { text: '🍕 ' + res.message }),
-					el('p', { html: 'Your order number is <strong>' + res.order_number + '</strong>.' }),
-					el('p', { text: 'Total charged: ' + money(res.total) })
-				]));
-				notifyCartChanged();
-			}).catch(function (err) {
-				msg.textContent = err.message;
-				msg.className = 'db-checkout-msg db-error';
-				submit.disabled = false;
-				submit.textContent = I18N.placeOrder || 'Place order';
-			});
+			if (stripeHosted) {
+				// Save only the non-card order details in this tab, then redirect
+				// to the unique Stripe-hosted Checkout URL for this cart.
+				setPaymentMutationLock(true);
+				submit.textContent = I18N.payPreparing || 'Opening secure Stripe Checkout...';
+				if (!checkoutAttemptId) {
+					checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+				}
+				request('/payment-intent', {
+					method: 'POST',
+					body: {
+						order_type: orderType,
+						location_id: payload.location_id,
+						payment_attempt_key: paymentAttemptKey,
+						customer_name: payload.customer_name,
+						customer_email: payload.customer_email,
+						customer_phone: payload.customer_phone,
+						address: payload.address,
+						notes: payload.notes,
+						return_url: window.location.href
+					}
+				}).then(function (session) {
+					if (!session || !/^cs_(test|live)_/.test(session.checkout_session || '') || !/^https:\/\/checkout\.stripe\.com\//.test(session.checkout_url || '')) {
+						throw new Error('The secure Stripe Checkout link could not be verified.');
+					}
+					payload.payment_intent_id = session.checkout_session;
+					try {
+						window.sessionStorage.setItem('doughbossStripePending', JSON.stringify({
+							sessionId: session.checkout_session,
+							payload: payload,
+							checkoutAttemptId: checkoutAttemptId,
+							savedAt: Date.now()
+						}));
+					} catch (storageError) {
+						throw new Error('Your browser could not preserve the order for the secure payment return.');
+					}
+					window.location.assign(session.checkout_url);
+				}).catch(fail);
+			} else if (tyro) {
+				// 1) make sure the hosted card session is live, 2) create a fresh
+				// payment reference for the cart AS IT IS NOW, 3) push the gateway-
+				// hosted card fields into the session, 4) place the order with the
+				// composite payment reference — the server submits and verifies the
+				// actual charge before accepting the order as paid. Note the card
+				// details themselves never appear in `payload`: they live only in
+				// Tyro's hosted session.
+				submit.textContent = I18N.payProcessing || 'Processing payment…';
+				if (checkoutPaymentId) {
+					payload.payment_intent_id = checkoutPaymentId;
+					placeOrder(payload).catch(fail);
+					return;
+				}
+				tyro.pay().then(function (paymentId) {
+					checkoutPaymentId = paymentId;
+					payload.payment_intent_id = checkoutPaymentId;
+					return placeOrder(payload);
+				}).catch(fail);
+			} else if (mpgsHosted) {
+				// Create a server-bound Hosted Checkout session, save only the
+				// non-card checkout form in this tab, then redirect to Mastercard.
+				// On return the server retrieves and verifies the MPGS order before
+				// DoughBoss records the order as paid.
+				submit.textContent = I18N.payProcessing || 'Processing payment…';
+				if (!checkoutAttemptId) {
+					checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+				}
+				request('/payment-intent', {
+					method: 'POST',
+					body: {
+						order_type: orderType,
+						location_id: payload.location_id,
+						payment_attempt_key: paymentAttemptKey,
+						return_url: mpgsReturnUrl()
+					}
+				}).then(function (pi) {
+					payload.payment_intent_id = pi.payment_intent;
+					try {
+						window.sessionStorage.setItem('doughbossMpgsPending', JSON.stringify({
+							orderId: pi.payment_intent,
+							payload: payload,
+							checkoutAttemptId: checkoutAttemptId,
+							savedAt: Date.now()
+						}));
+					} catch (storageError) {
+						throw new Error('Your browser could not preserve the order for the secure payment return.');
+					}
+					window.Checkout.configure({ session: { id: pi.client_secret } });
+					window.Checkout.showPaymentPage();
+				}).catch(fail);
+			} else {
+				submit.textContent = I18N.placing || 'Placing order…';
+				placeOrder(payload).catch(fail);
+			}
 		});
 
-		return form;
+		// Complete the server-verified order after Stripe returns to this same
+		// checkout page. The session id from the URL is only a lookup key: the
+		// server retrieves Stripe and re-verifies payment, amount, currency and
+		// immutable cart metadata before creating an order.
+		if (stripeHosted && typeof window.URLSearchParams === 'function') {
+			var stripeReturnParams = new URLSearchParams(window.location.search);
+			var stripeReturnFragment = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+			var stripeReturnState = (
+				stripeReturnFragment.get('doughboss_stripe_return') === '1'
+				|| stripeReturnFragment.get('doughboss_stripe_cancel') === '1'
+			) ? stripeReturnFragment : stripeReturnParams;
+			if (stripeReturnState.get('doughboss_stripe_return') === '1') {
+				var stripePending = null;
+				try {
+					stripePending = JSON.parse(window.sessionStorage.getItem('doughbossStripePending') || 'null');
+				} catch (ignoreStripePending) {}
+				var returnedSession = stripeReturnState.get('session_id') || '';
+				if (stripePending && stripePending.sessionId === returnedSession && stripePending.payload && (Date.now() - Number(stripePending.savedAt || 0)) < 45 * 60 * 1000) {
+					checkoutAttemptId = stripePending.checkoutAttemptId;
+					stripePending.payload.payment_intent_id = returnedSession;
+					setPaymentMutationLock(true);
+					form.setAttribute('aria-busy', 'true');
+					if (onJourneyStep) { onJourneyStep(3); }
+					submit.disabled = true;
+					submit.textContent = 'Verifying Stripe payment...';
+					msg.textContent = 'Payment received. We are securely matching it to your order—please keep this page open.';
+					msg.className = 'db-checkout-msg db-payment-verifying';
+					placeOrder(stripePending.payload).then(function () {
+						window.sessionStorage.removeItem('doughbossStripePending');
+						var cleanStripeUrl = new URL(window.location.href);
+						['doughboss_stripe_return', 'doughboss_stripe_cancel', 'session_id'].forEach(function (key) { cleanStripeUrl.searchParams.delete(key); });
+						cleanStripeUrl.hash = '';
+						window.history.replaceState({}, document.title, cleanStripeUrl.toString());
+					}).catch(stripePaidReturnFail);
+				} else {
+					stripePaidReturnFail();
+				}
+			} else if (stripeReturnState.get('doughboss_stripe_cancel') === '1') {
+				try {
+					var cancelledStripePending = JSON.parse(window.sessionStorage.getItem('doughbossStripePending') || 'null');
+					if (cancelledStripePending && cancelledStripePending.payload && /^[A-Za-z0-9._:-]{8,128}$/.test(cancelledStripePending.payload.payment_attempt_key || '') && (Date.now() - Number(cancelledStripePending.savedAt || 0)) < 45 * 60 * 1000) {
+						paymentAttemptKey = cancelledStripePending.payload.payment_attempt_key;
+						checkoutAttemptId = cancelledStripePending.checkoutAttemptId || checkoutAttemptId;
+						stripeCancelledPayload = Object.assign({}, cancelledStripePending.payload);
+						orderType = stripeCancelledPayload.order_type;
+						[
+							[name, 'customer_name'], [email, 'customer_email'], [phone, 'customer_phone'],
+							[address, 'address'], [notes, 'notes']
+						].forEach(function (entry) {
+							var input = entry[0].querySelector('input,textarea');
+							input.value = stripeCancelledPayload[entry[1]] || '';
+							input.readOnly = true;
+						});
+						address.style.display = orderType === 'delivery' ? '' : 'none';
+						summaryType.textContent = orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup');
+					}
+				} catch (ignoreStripeCancelledPending) {}
+				window.sessionStorage.removeItem('doughbossStripePending');
+				setPaymentMutationLock(true);
+				form.setAttribute('aria-busy', 'false');
+				if (onJourneyStep) { onJourneyStep(2); }
+				// Keep this attempt key: Stripe's cancelled Session is still payable,
+				// so retrying must reuse the same server-side voucher lease and URL.
+				var cancelledStripeUrl = new URL(window.location.href);
+				cancelledStripeUrl.searchParams.delete('doughboss_stripe_cancel');
+				cancelledStripeUrl.hash = '';
+				window.history.replaceState({}, document.title, cancelledStripeUrl.toString());
+				if (stripeCancelledPayload) {
+					msg.textContent = 'Payment was cancelled. Your original details are restored and locked so you can safely reopen the same secure payment session.';
+					msg.className = 'db-checkout-msg';
+				} else {
+					stripePaidReturnFail();
+				}
+			}
+		}
+
+		// Complete the server-verified order after Mastercard returns to this
+		// same checkout page. The resultIndicator alone is never trusted.
+		if (mpgsHosted && typeof window.URLSearchParams === 'function') {
+			var returnParams = new URLSearchParams(window.location.search);
+			if (returnParams.get('doughboss_mpgs_return') === '1') {
+				var pending = null;
+				try {
+					pending = JSON.parse(window.sessionStorage.getItem('doughbossMpgsPending') || 'null');
+				} catch (ignorePending) {}
+				var returnedOrder = returnParams.get('doughboss_mpgs_order') || '';
+				if (pending && pending.orderId === returnedOrder && pending.payload && (Date.now() - Number(pending.savedAt || 0)) < 30 * 60 * 1000) {
+					checkoutAttemptId = pending.checkoutAttemptId;
+					form.setAttribute('aria-busy', 'true');
+					if (onJourneyStep) { onJourneyStep(3); }
+					submit.disabled = true;
+					submit.textContent = 'Verifying Mastercard payment…';
+					placeOrder(pending.payload).then(function () {
+						window.sessionStorage.removeItem('doughbossMpgsPending');
+						var cleanUrl = new URL(window.location.href);
+						['doughboss_mpgs_return', 'doughboss_mpgs_order', 'resultIndicator', 'sessionVersion', 'checkoutVersion'].forEach(function (key) { cleanUrl.searchParams.delete(key); });
+						window.history.replaceState({}, document.title, cleanUrl.toString());
+					}).catch(fail);
+				} else {
+					fail(new Error('The Mastercard payment return could not be matched to this cart. No order was placed.'));
+				}
+			}
+		}
+
+		// Called when the server cart reloads. A prepared but unconfirmed Stripe
+		// session belongs to the previous cart snapshot, so discard only that
+		// secure UI and preserve the customer's typed contact fields.
+		function update(newOrderType, newTotals) {
+			orderType = newOrderType;
+			totals = newTotals;
+			address.style.display = orderType === 'delivery' ? '' : 'none';
+			var addrInput = address.querySelector('input,textarea');
+			if (addrInput) { addrInput.required = orderType === 'delivery'; }
+			payLabel = payLabelFor(totals);
+			summaryType.textContent = orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup');
+			var itemCount = Number(totals && (totals.item_count || totals.quantity) || 0);
+			summaryCount.textContent = itemCount ? itemCount + (itemCount === 1 ? ' item' : ' items') : 'Review your items and total';
+			summaryTotal.textContent = money(totals && totals.total);
+			if (stripeNoticeTotal) { stripeNoticeTotal.textContent = money(totals && totals.total) + ' AUD'; }
+			// Do not replace an in-flight payment or order confirmation label.
+			if (!submit.disabled) { submit.textContent = payLabel; }
+		}
+
+		return { form: form, update: update };
 	}
 
-	function field(type, nameAttr, label, required) {
+	function mpgsReturnUrl() {
+		var cleanUrl = new URL(window.location.href);
+		var safe = new URL(cleanUrl.origin + cleanUrl.pathname);
+		['page_id', 'p'].forEach(function (key) {
+			var value = cleanUrl.searchParams.get(key);
+			if (/^[1-9][0-9]*$/.test(value || '')) { safe.searchParams.set(key, value); }
+		});
+		if (cleanUrl.searchParams.get('preview') === 'true') { safe.searchParams.set('preview', 'true'); }
+		return safe.toString();
+	}
+
+	function field(type, nameAttr, label, required, attributes) {
 		var input = type === 'textarea'
 			? el('textarea', { name: nameAttr })
 			: el('input', { type: type, name: nameAttr });
+		Object.keys(attributes || {}).forEach(function (key) {
+			input.setAttribute(key, attributes[key]);
+		});
 		if (required) { input.required = true; }
-		return el('label', { class: 'db-field' }, [el('span', { text: label }), input]);
+		return el('label', { class: 'db-field' }, [
+			el('span', { text: label + (required ? ' *' : '') }),
+			input
+		]);
 	}
 
 	/* ------------------------------------------------------------------ */
 	/* Order tracking                                                     */
 	/* ------------------------------------------------------------------ */
 
+	// Coarse progress stages for the customer tracker. Index = stage (0-3);
+	// unknown statuses fall back to stage 0 so the tracker never disappears.
+	var TRACK_STAGE_MAP = {
+		pending: 0,
+		confirmed: 1,
+		preparing: 1,
+		baking: 1,
+		ready: 2,
+		out_for_delivery: 2,
+		completed: 3
+	};
+
+	// Parse the API's UTC 'YYYY-MM-DD HH:MM:SS' timestamps to epoch ms.
+	// Returns null for anything malformed/absent so callers can bail out.
+	function parseUtcTimestamp(value) {
+		if (!value || typeof value !== 'string') { return null; }
+		var m = value.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+		if (!m) { return null; }
+		return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+	}
+
 	function renderTracking(root) {
 		var form = root.querySelector('.db-track-form');
 		var result = root.querySelector('.db-track-result');
 		if (!form) { return; }
+		var lookupButton = form.querySelector('button[type="submit"]');
+		var lookupLabel = lookupButton ? lookupButton.textContent : 'Check live status';
+
+		// Email links prefill only the non-sensitive order number. The customer
+		// must still type the matching checkout email, preserving the endpoint's
+		// anti-enumeration boundary.
+		try {
+			var prefill = new URLSearchParams(window.location.search).get('order');
+			if (prefill && prefill.length <= 64 && !form.number.value) {
+				form.number.value = prefill;
+			}
+		} catch (error) {}
+
+		var POLL_MS = 15000;
+		var POLL_MAX_MS = 2 * 60 * 60 * 1000; // give up after 2 hours
+		var pollTimer = null;
+		var pollKey = null;    // current lookup; also stale-response guard
+		var pollLookup = null; // request body stays in memory, never in a URL
+		var pollStarted = 0;
+		var pollDone = false;  // permanent stop (completed/cancelled/expired)
+
+		function stopPolling() {
+			if (pollTimer) {
+				clearTimeout(pollTimer);
+				pollTimer = null;
+			}
+		}
+
+		function scheduleTick() {
+			stopPolling();
+			if (pollDone || !pollKey || !pollLookup || document.hidden) { return; }
+			if (Date.now() - pollStarted >= POLL_MAX_MS) {
+				pollDone = true;
+				return;
+			}
+			pollTimer = setTimeout(pollTick, POLL_MS);
+		}
+
+		function pollTick() {
+			pollTimer = null;
+			if (pollDone || !pollKey || !pollLookup) { return; }
+			var key = pollKey;
+			request('/order/track', { method: 'POST', body: pollLookup })
+				.then(function (order) {
+					if (key !== pollKey) { return; } // a newer lookup took over
+					renderOrder(order);
+					scheduleTick();
+				})
+				.catch(function () {
+					// Silent: keep the last good render, retry on the next tick.
+					if (key !== pollKey) { return; }
+					scheduleTick();
+				});
+		}
+
+		// Pause polling while the tab is hidden, resume when visible again.
+		document.addEventListener('visibilitychange', function () {
+			if (document.hidden) {
+				stopPolling();
+			} else {
+				scheduleTick();
+			}
+		});
+
+		// 4-stage horizontal progress tracker (pickup vs delivery wording).
+		function buildTracker(order) {
+			var isDelivery = order.order_type === 'delivery';
+			var isDineIn = order.order_type === 'dine_in';
+			var labels = [
+				'Order placed',
+				'Being prepared',
+				isDelivery ? 'On its way' : (isDineIn ? 'Ready to serve' : 'Ready for pickup'),
+				isDelivery ? 'Delivered' : (isDineIn ? 'Served' : 'Picked up')
+			];
+			var current = TRACK_STAGE_MAP.hasOwnProperty(order.status) ? TRACK_STAGE_MAP[order.status] : 0;
+			var list = el('ol', { class: 'db-stage-tracker', 'aria-label': 'Order progress' });
+			labels.forEach(function (label, i) {
+				// A completed order is fully done, check on every stage.
+				var done = i < current || order.status === 'completed';
+				var cls = 'db-stage' + (done ? ' db-stage--done' : '') + (i === current ? ' db-stage--current' : '');
+				var item = el('li', { class: cls }, [
+					el('span', { class: 'db-stage-dot', 'aria-hidden': 'true', text: done ? '✓' : '' }),
+					el('span', { class: 'db-stage-label', text: label })
+				]);
+				if (i === current) { item.setAttribute('aria-current', 'step'); }
+				list.appendChild(item);
+			});
+			return list;
+		}
+
+		// Honest ETA line. accepted_at is a new server field that may not be
+		// deployed yet — when it's missing the countdown is simply omitted.
+		function buildEta(order) {
+			if (order.status === 'ready') {
+				return el('p', { class: 'db-track-eta db-track-eta--ready', text: 'Your order is ready!' });
+			}
+			if (order.status === 'completed' || order.status === 'cancelled') { return null; }
+			var accepted = parseUtcTimestamp(order.accepted_at);
+			var etaMinutes = Number(order.eta_minutes || 0);
+			if (accepted === null || !(etaMinutes > 0)) { return null; }
+			var remaining = Math.ceil((accepted + etaMinutes * 60000 - Date.now()) / 60000);
+			return el('p', {
+				class: 'db-track-eta',
+				text: remaining > 0 ? 'Ready in about ' + remaining + 'm' : 'Any minute now…'
+			});
+		}
+
+		function buildPaymentHint(order) {
+			if (order.payment_status === 'refunded') {
+				return el('p', { class: 'db-track-payment', text: 'Payment: refunded' });
+			}
+			if (order.payment_status === 'paid') {
+				return el('p', { class: 'db-track-paid', text: order.customer_status === 'cancelled' ? 'Payment: paid — contact the shop for the refund status' : '✓ Paid' });
+			}
+			return el('p', { class: 'db-track-pay-hint', text: order.customer_status === 'cancelled' ? 'Payment: no payment due' : 'Please pay at the counter — ' + money(order.total) });
+		}
+
+		function trackingTime(value, timezone) {
+			if (!value) { return ''; }
+			var date = new Date(value);
+			if (isNaN(date.getTime())) { return ''; }
+			var options = { hour: 'numeric', minute: '2-digit' };
+			if (timezone) { options.timeZone = timezone; }
+			try { return new Intl.DateTimeFormat('en-AU', options).format(date); }
+			catch (ignore) { delete options.timeZone; return new Intl.DateTimeFormat('en-AU', options).format(date); }
+		}
+
+		function renderOrder(order) {
+			result.innerHTML = '';
+			var service = order.order_type === 'delivery' ? 'Delivery' : (order.order_type === 'dine_in' ? 'Dine in' : 'Pickup');
+			var card = el('article', { class: 'db-track-card' }, [
+				el('div', { class: 'db-track-card-head' }, [
+					el('div', {}, [
+						el('span', { class: 'db-track-service', text: service }),
+						el('h4', { text: 'Order ' + order.order_number })
+					]),
+					el('p', { class: 'db-status-badge', text: order.customer_status_label || order.status_label || order.status })
+				])
+			]);
+			if (order.status === 'cancelled') {
+				var cancelled = el('p', { class: 'db-track-cancelled', text: 'This order was cancelled' });
+				cancelled.setAttribute('role', 'status');
+				card.appendChild(cancelled);
+				card.appendChild(el('p', { class: 'db-track-note', text: order.payment_status === 'refunded' ? 'Your payment has been refunded.' : 'If you paid online, contact the shop to confirm the refund status.' }));
+			} else {
+				card.appendChild(buildTracker(order));
+				var from = trackingTime(order.promised_ready_from_utc, order.timezone);
+				var by = trackingTime(order.promised_ready_by_utc, order.timezone);
+				var showEstimate = ['confirmed', 'preparing', 'baking'].indexOf(order.status) !== -1;
+				if (showEstimate && from) {
+					card.appendChild(el('p', { class: 'db-track-timing', text: 'Staff ready estimate: ' + (by && by !== from ? from + '–' + by : from) }));
+				}
+				var eta = buildEta(order);
+				if (eta) { card.appendChild(eta); }
+				if (order.customer_status === 'ready_for_pickup') {
+					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready — please collect it from the shop.' }));
+				} else if (order.customer_status === 'ready_to_serve') {
+					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready. We will bring it to your table.' }));
+				} else if (order.customer_status === 'ready_for_delivery') {
+					card.appendChild(el('p', { class: 'db-track-collection', text: 'Your order is ready for delivery.' }));
+				}
+			}
+			var items = el('ul', { class: 'db-item-list' });
+			(order.items || []).forEach(function (it) {
+				items.appendChild(el('li', { text: it.quantity + '× ' + it.name }));
+			});
+			card.appendChild(items);
+			card.appendChild(el('p', { text: 'Total: ' + money(order.total) }));
+			card.appendChild(buildPaymentHint(order));
+			card.appendChild(el('p', {
+				class: 'db-track-checked',
+				text: 'Live status checked ' + new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date()) + ' · updates automatically'
+			}));
+			result.appendChild(card);
+
+			// Terminal states: stop polling for good.
+			if (order.status === 'completed' || order.status === 'cancelled') {
+				pollDone = true;
+				stopPolling();
+			}
+		}
 
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
+			// A new lookup invalidates any in-flight poll cycle.
+			stopPolling();
+			pollKey = null;
+			pollLookup = null;
+			pollDone = false;
 			result.innerHTML = '';
 			var number = form.number.value.trim();
 			var email = form.email.value.trim();
+			var lookup = { number: number, email: email };
+			var key = number + '\n' + email.toLowerCase();
+			form.setAttribute('aria-busy', 'true');
+			if (lookupButton) {
+				lookupButton.disabled = true;
+				lookupButton.textContent = 'Checking live status…';
+			}
 
-			request('/order/' + encodeURIComponent(number) + '?email=' + encodeURIComponent(email))
+			request('/order/track', { method: 'POST', body: lookup })
 				.then(function (order) {
-					var items = el('ul', { class: 'db-item-list' });
-					(order.items || []).forEach(function (it) {
-						items.appendChild(el('li', { text: it.quantity + '× ' + it.name }));
-					});
-					result.appendChild(el('div', { class: 'db-track-card' }, [
-						el('h4', { text: 'Order ' + order.order_number }),
-						el('p', { class: 'db-status-badge', text: order.status_label }),
-						items,
-						el('p', { text: 'Total: ' + money(order.total) })
-					]));
+					pollKey = key;
+					pollLookup = lookup;
+					pollStarted = Date.now();
+					renderOrder(order);
+					scheduleTick();
 				})
 				.catch(function (err) {
-					result.appendChild(el('p', { class: 'db-error', text: err.message }));
+					result.innerHTML = '';
+					result.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
+				})
+				.then(function () {
+					form.setAttribute('aria-busy', 'false');
+					if (lookupButton) {
+						lookupButton.disabled = false;
+						lookupButton.textContent = lookupLabel;
+					}
 				});
 		});
 	}
@@ -435,10 +2028,23 @@
 	/* ------------------------------------------------------------------ */
 
 	function boot() {
-		document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
-		document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
-		document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);
-		document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
+		// Resolve a scanned-table session before any ordering controls render, so
+		// there is no moment where a customer sees a switchable shop or fulfilment
+		// option. Non-QR pages simply continue with a null context.
+		getTableContext().then(function () {
+			document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
+			document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
+			document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
+			document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);
+			document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
+		}).catch(function (err) {
+			// A claimed but expired/revoked table session must never silently become
+			// a switchable pickup order. Stop ordering and direct the guest to staff.
+			document.querySelectorAll('[data-doughboss-shop], [data-doughboss-menu], [data-doughboss-builder], [data-doughboss-cart]').forEach(function (root) {
+				root.innerHTML = '';
+				root.appendChild(el('div', { class: 'db-error', role: 'alert', text: (err && err.message ? err.message : 'This table session is no longer active.') + ' Please scan the table QR again or ask a staff member for help.' }));
+			});
+		});
 	}
 
 	if (document.readyState === 'loading') {

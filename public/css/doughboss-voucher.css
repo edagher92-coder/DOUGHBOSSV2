@@ -1,0 +1,147 @@
+/**
+ * DoughBoss — storefront voucher claim widget styles.
+ * Black/white brand base with functional status colour. Loaded only on pages
+ * with the [doughboss_voucher_claim] shortcode.
+ */
+
+.db-voucher-claim {
+	--vc-ink: #111;
+	--vc-line: #e3e3e3;
+	--vc-muted: #6b6b6b;
+	--vc-ok: #1f9d55;
+	--vc-bad: #d4351c;
+	--db-r-sm: 10px;
+	--db-r-md: 14px;
+	--db-r-lg: 18px;
+	--db-r-xl: 24px;
+	--db-r-pill: 999px;
+	--db-shadow-1: 0 1px 2px rgba(20, 16, 12, 0.05), 0 4px 12px rgba(20, 16, 12, 0.06);
+	--db-shadow-2: 0 2px 6px rgba(20, 16, 12, 0.07), 0 12px 28px rgba(20, 16, 12, 0.10);
+	--db-ease: cubic-bezier(0.32, 0.72, 0.33, 1);
+	--db-t-fast: 150ms;
+	--db-t-med: 220ms;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	color: var(--vc-ink);
+}
+
+.db-vc-card {
+	max-width: 460px;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	padding: 24px;
+	background: #fff;
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-vc-title { margin: 0 0 4px; font-size: 22px; font-weight: 800; }
+.db-vc-sub { margin: 0 0 18px; color: var(--vc-muted); font-size: 14px; line-height: 1.5; }
+.db-vc-none { color: var(--vc-muted); font-size: 15px; }
+
+.db-vc-offers { display: grid; gap: 10px; margin-bottom: 16px; }
+@media (min-width: 420px) { .db-vc-offers { grid-template-columns: 1fr 1fr; } }
+
+.db-vc-offer {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	text-align: left;
+	padding: 14px 16px;
+	border: 2px solid var(--vc-line);
+	border-radius: var(--db-r-md);
+	background: #fafafa;
+	cursor: pointer;
+	transition: border-color var(--db-t-fast) var(--db-ease), background var(--db-t-fast) var(--db-ease), transform var(--db-t-med) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+}
+@media (hover: hover) {
+	.db-vc-offer:hover { border-color: #bbb; transform: translateY(-2px); box-shadow: var(--db-shadow-2); }
+}
+.db-vc-offer.is-selected { border-color: var(--vc-ink); background: #fff; }
+.db-vc-val { font-size: 24px; font-weight: 800; line-height: 1; }
+.db-vc-label { font-size: 12px; color: var(--vc-muted); }
+
+.db-vc-form { display: flex; flex-direction: column; gap: 10px; }
+.db-vc-field { display: grid; gap: 6px; }
+.db-vc-field > span {
+	font-size: 13px;
+	font-weight: 750;
+	color: #24201c;
+}
+.db-vc-form input {
+	width: 100%;
+	box-sizing: border-box;
+	font-size: 16px;
+	padding: 13px 15px;
+	border: 1px solid var(--vc-line);
+	border-radius: var(--db-r-sm);
+	transition: border-color var(--db-t-fast) var(--db-ease);
+}
+.db-vc-form input:focus { outline: none; border-color: var(--vc-ink); }
+.db-vc-submit {
+	border: 0;
+	border-radius: var(--db-r-pill);
+	background: var(--vc-ink);
+	color: #fff;
+	font-size: 16px;
+	font-weight: 700;
+	padding: 13px;
+	min-height: 44px;
+	cursor: pointer;
+	transition: transform var(--db-t-fast) var(--db-ease), opacity var(--db-t-fast) var(--db-ease);
+}
+.db-vc-submit:active:not(:disabled) { transform: scale(0.98); }
+.db-vc-submit:disabled { opacity: .5; }
+.db-vc-eligibility {
+	margin: 2px 0 4px;
+	padding: 10px 12px;
+	border-left: 3px solid var(--vc-ink);
+	background: #f7f5f1;
+	color: var(--vc-muted);
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.db-vc-result { margin-top: 16px; font-size: 15px; }
+.db-vc-result.is-pending { color: var(--vc-muted); }
+.db-vc-result.is-bad { color: var(--vc-bad); }
+.db-vc-result.is-ok {
+	text-align: center;
+	background: #f0f9f3;
+	border: 1px solid #bfe6cf;
+	border-radius: var(--db-r-md);
+	padding: 18px;
+	box-shadow: var(--db-shadow-1);
+}
+.db-vc-code-label { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--vc-muted); }
+.db-vc-code {
+	font-family: ui-monospace, "SF Mono", Menlo, monospace;
+	font-size: 28px;
+	font-weight: 800;
+	letter-spacing: 2px;
+	color: var(--vc-ok);
+	margin: 6px 0;
+	user-select: all;
+}
+.db-vc-qr {
+	display: block;
+	width: 160px;
+	height: 160px;
+	margin: 14px auto;
+	padding: 10px;
+	background: #fff;
+	border: 1px solid #bfe6cf;
+	border-radius: var(--db-r-md);
+	image-rendering: pixelated;
+}
+.db-vc-info { font-size: 13px; color: #333; }
+
+/* Accessibility: respect reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+	.db-voucher-claim *,
+	.db-voucher-claim *::before,
+	.db-voucher-claim *::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}
