@@ -56,6 +56,9 @@
 		form.addEventListener( 'submit', function ( e ) {
 			e.preventDefault();
 			if ( ! selected ) {
+				// Only reachable if the form is visible before an offer is chosen;
+				// say so rather than failing silently.
+				show( 'bad', i18n.vChooseOffer || 'Please choose a voucher above first.' );
 				return;
 			}
 			var phone = ( form.querySelector( 'input[name="phone"]' ).value || '' ).trim();
