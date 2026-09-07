@@ -85,7 +85,23 @@ class DoughBoss_Shortcodes {
 		);
 		$variant = in_array( $atts['variant'], array( 'photo', 'home', 'catering' ), true ) ? $atts['variant'] : 'photo';
 
+		// The hero photograph is the largest paint on every page that uses this
+		// shortcode, but it is a CSS background — the browser cannot see it until
+		// the stylesheet has parsed and the rule has matched. A preload puts it in
+		// front of the preload scanner as the HTML streams instead. Emitted once
+		// per request, even if the shortcode appears more than once.
+		static $preloaded = false;
+		$preload = '';
+		if ( ! $preloaded && ! empty( $atts['background_image'] ) ) {
+			$preloaded = true;
+			$preload   = sprintf(
+				'<link rel="preload" as="image" fetchpriority="high" href="%s" />',
+				esc_url( $atts['background_image'] )
+			);
+		}
+
 		ob_start();
+		echo $preload; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from esc_url() above.
 		?>
 		<section class="db-manoush-hero db-manoush-hero--<?php echo esc_attr( $variant ); ?>" data-db-manoush-hero data-db-manoush-variant="<?php echo esc_attr( $variant ); ?>" data-db-scroll-scene>
 			<div class="db-mh-backdrop" style="background-image:url('<?php echo esc_url( $atts['background_image'] ); ?>')" aria-hidden="true"></div>
@@ -316,7 +332,7 @@ class DoughBoss_Shortcodes {
 		<div id="track-order" class="db-app db-tracking" data-doughboss-tracking>
 			<form class="db-track-form">
 				<p class="db-order-kicker"><?php esc_html_e( 'Live order updates', 'doughboss' ); ?></p>
-				<h3><?php esc_html_e( 'Track your order', 'doughboss' ); ?></h3>
+				<h2><?php esc_html_e( 'Track your order', 'doughboss' ); ?></h2>
 				<p class="db-track-intro"><?php esc_html_e( 'Enter the order number from your confirmation and the same email used at checkout.', 'doughboss' ); ?></p>
 				<label>
 					<?php esc_html_e( 'Order number', 'doughboss' ); ?>
