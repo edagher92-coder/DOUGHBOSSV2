@@ -19,6 +19,14 @@ WPVibe: yes
 	--dbf-white: #ffffff;
 	--dbf-ember: #e2231a;
 	--dbf-ember-dark: #b71912;
+	/* Same tomato, lifted just enough to clear 4.5:1 for small text on the
+	 * near-black sections. #e2231a on #0a0807 measures 4.27:1 (fails);
+	 * #ec4a41 measures 5.35:1 on #0a0807 and 4.99:1 on #151210. */
+	--dbf-ember-bright: #ec4a41;
+	/* ...and one step down for small red text on the cream/paper sections, where
+	 * #e2231a measures only 3.84:1 on #eee8de. #c92017 measures 4.65:1 on cream,
+	 * 5.21:1 on paper and 5.67:1 on white. */
+	--dbf-ember-ink: #c92017;
 	--dbf-gold: #f1a132;
 	--dbf-mist: #b8b1a4;
 	--dbf-line: rgba(13, 13, 13, .12);
@@ -31,7 +39,11 @@ WPVibe: yes
 
 * { box-sizing: border-box; }
 html { overflow-x: hidden; overflow-x: clip; scroll-behavior: smooth; }
-body { margin: 0; overflow-x: hidden; background: var(--dbf-paper); color: var(--dbf-ink); font-family: 'Barlow', sans-serif; font-size: 17px; line-height: 1.6; }
+/* overflow-x: clip (not hidden) keeps the off-canvas drawer from widening the
+ * page WITHOUT turning <body> into a scroll container — a body scroll container
+ * is a known cause of broken position:sticky headers. `hidden` stays first as
+ * the fallback for engines without `clip`. */
+body { margin: 0; overflow-x: hidden; overflow-x: clip; background: var(--dbf-paper); color: var(--dbf-ink); font-family: 'Barlow', sans-serif; font-size: 17px; line-height: 1.6; }
 body.dbf-menu-open { overflow: hidden; }
 body.dbf-menu-open::before { position: fixed; z-index: 98; inset: 0; background: rgba(0, 0, 0, .58); content: ''; }
 img { display: block; max-width: 100%; height: auto; }
@@ -43,15 +55,26 @@ button, input, select, textarea { font: inherit; }
 .dbf-skip { position: fixed; z-index: 9999; top: 12px; left: 12px; padding: 11px 16px; transform: translateY(-160%); background: #fff; color: #000; border-radius: 8px; font-weight: 700; }
 .dbf-skip:focus { transform: none; }
 .dbf-sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
-.dbf-launch-bar { display: flex; position: relative; z-index: 102; align-items: center; justify-content: center; gap: 18px; min-height: 35px; padding: 7px 20px; background: var(--dbf-ember); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-align: center; text-transform: uppercase; }
-.dbf-launch-bar a { text-underline-offset: 3px; }
+.dbf-launch-bar { display: flex; position: relative; z-index: 102; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 4px 20px; background: var(--dbf-ember); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-align: center; text-transform: uppercase; }
+/* The CTA in the bar is the only link many phone users will reach for — give it
+ * a real 44px target instead of a 16px line box. */
+.dbf-launch-bar a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; text-underline-offset: 3px; touch-action: manipulation; }
 
-/* Header */
-.dbf-header { position: sticky; z-index: 100; top: 0; background: rgba(10, 8, 7, .96); color: #fff; border-bottom: 1px solid var(--dbf-line-dark); backdrop-filter: blur(14px); }
+/* Header
+ * NOTE: backdrop-filter must NOT live on .dbf-header itself. A filter/
+ * backdrop-filter makes the element a containing block for its
+ * position:fixed descendants, which collapsed the mobile off-canvas
+ * .dbf-nav (top:0;bottom:0) down to the 65px header box instead of the
+ * viewport — the whole mobile menu became a 66px scrolling sliver with no
+ * visible links. Painting the frosted panel on a ::before keeps the exact
+ * same look while leaving the drawer anchored to the viewport. */
+.dbf-header { position: sticky; z-index: 100; top: 0; background: transparent; color: #fff; border-bottom: 1px solid var(--dbf-line-dark); }
+.dbf-header::before { position: absolute; z-index: -1; inset: 0; background: rgba(10, 8, 7, .96); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); content: ''; }
 .admin-bar .dbf-header { top: 32px; }
 .dbf-header-inner { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 34px; min-height: 72px; }
 .dbf-brand { display: inline-flex; flex: 0 0 auto; align-items: center; color: #fff; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 22px; letter-spacing: .13em; line-height: 1; text-decoration: none; }
-.dbf-brand > span { padding: 8px 8px 7px 11px; border: 2px solid currentColor; }
+.dbf-brand > span { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 8px 7px 11px; border: 2px solid currentColor; }
+.dbf-brand { min-height: 44px; touch-action: manipulation; }
 .dbf-brand-dot { color: var(--dbf-ember); }
 .dbf-nav { justify-self: end; }
 .dbf-nav-list, .dbf-nav ul { display: flex; align-items: center; gap: clamp(18px, 2.2vw, 34px); padding: 0; margin: 0; list-style: none; }
@@ -59,7 +82,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-nav a::after { position: absolute; right: 0; bottom: -9px; left: 0; height: 2px; transform: scaleX(0); transform-origin: left; background: var(--dbf-ember); content: ''; transition: transform .2s var(--dbf-ease); }
 .dbf-nav a:hover, .dbf-nav .current-menu-item > a { color: #fff; }
 .dbf-nav a:hover::after, .dbf-nav .current-menu-item > a::after { transform: scaleX(1); }
-.dbf-menu-toggle { display: none; align-items: center; gap: 8px; padding: 8px; border: 0; background: transparent; color: #fff; cursor: pointer; }
+.dbf-menu-toggle { display: none; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 10px; border: 0; background: transparent; color: #fff; cursor: pointer; touch-action: manipulation; }
 .dbf-menu-toggle-label { font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .dbf-nav-close { display: none; width: 44px; height: 44px; align-items: center; justify-content: center; margin: 0 0 22px auto; border: 1px solid var(--dbf-line-dark); border-radius: 50%; background: transparent; color: #fff; cursor: pointer; font-size: 32px; line-height: 1; }
 
@@ -70,7 +93,15 @@ button, input, select, textarea { font: inherit; }
 .dbf-button--light { border-color: #fff; background: #fff; color: var(--dbf-ink); }
 .dbf-button--light:hover { background: var(--dbf-paper); }
 .dbf-button--outline { border-color: currentColor; background: transparent; color: inherit; }
-.dbf-eyebrow { margin: 0 0 12px; color: var(--dbf-ember); font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.dbf-eyebrow { margin: 0 0 12px; color: var(--dbf-ember-ink); font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+/* Small red text on the near-black sections needs the brighter tomato to pass
+ * 4.5:1 — measured, not guessed (see --dbf-ember-bright). */
+.dbf-section--dark .dbf-eyebrow,
+.dbf-page-hero .dbf-eyebrow,
+.dbf-hero .dbf-eyebrow,
+.dbf-partner-aside .dbf-eyebrow,
+.dbf-catering-copy .dbf-eyebrow,
+.dbf-footer .dbf-eyebrow { color: var(--dbf-ember-bright); }
 .dbf-display { margin: 0; font-family: 'Bebas Neue', Impact, sans-serif; font-size: clamp(48px, 7vw, 92px); font-weight: 400; letter-spacing: .005em; line-height: .92; text-transform: uppercase; }
 .dbf-display em { color: var(--dbf-ember); font-style: normal; }
 .dbf-heading { margin: 0; font-family: 'Bebas Neue', Impact, sans-serif; font-size: clamp(39px, 5vw, 67px); font-weight: 400; letter-spacing: .01em; line-height: .96; text-transform: uppercase; }
@@ -110,7 +141,8 @@ button, input, select, textarea { font: inherit; }
 .dbf-card-number { display: inline-grid; width: 42px; height: 42px; margin-bottom: 25px; place-items: center; border-radius: 50%; background: var(--dbf-ink); color: #fff; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 20px; }
 .dbf-card h3 { margin: 0 0 10px; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 29px; font-weight: 400; letter-spacing: .03em; text-transform: uppercase; }
 .dbf-card p { margin: 0; color: #686158; }
-.dbf-card-link { display: inline-flex; margin-top: 22px; color: var(--dbf-ember); font-weight: 700; text-decoration: none; }
+.dbf-card-link { display: inline-flex; align-items: center; min-height: 44px; padding-block: 2px; margin-top: 12px; color: var(--dbf-ember-dark); font-weight: 700; text-decoration: none; touch-action: manipulation; }
+.dbf-card-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .dbf-food-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .dbf-food-card { position: relative; min-height: 390px; overflow: hidden; border-radius: var(--dbf-radius); background: #111; color: #fff; text-decoration: none; }
 .dbf-food-card img { width: 100%; height: 100%; object-fit: cover; transition: transform .7s var(--dbf-ease); }
@@ -137,7 +169,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-location-card address { min-height: 54px; color: #625c54; font-style: normal; }
 .dbf-location-meta { padding: 18px 0; margin: 22px 0; border-top: 1px solid var(--dbf-line); border-bottom: 1px solid var(--dbf-line); font-size: 14px; }
 .dbf-location-meta span { display: block; }
-.dbf-location-card a { font-weight: 700; text-underline-offset: 3px; }
+.dbf-location-card a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-underline-offset: 3px; touch-action: manipulation; }
 .dbf-review-panel { display: flex; align-items: center; justify-content: space-between; gap: 40px; padding: clamp(38px, 6vw, 72px); background: var(--dbf-ember); color: #fff; border-radius: 28px; }
 .dbf-review-panel p { max-width: 640px; margin: 14px 0 0; color: rgba(255,255,255,.84); }
 
@@ -227,11 +259,17 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 .dbf-footer-brand p { max-width: 400px; color: #a9a297; }
 .dbf-footer h2 { margin: 3px 0 17px; color: #fff; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 22px; font-weight: 400; letter-spacing: .08em; text-transform: uppercase; }
 .dbf-footer ul { padding: 0; margin: 0; list-style: none; }
-.dbf-footer li { margin: 8px 0; color: #bcb5aa; font-size: 15px; }
+/* Footer links used to be 18px-tall inline boxes. They carry the phone number,
+ * the ordering email and every secondary destination, so they get real 44px
+ * targets. line-height gives the plain (non-link) Visit items the same rhythm
+ * without needing :has(). */
+.dbf-footer li { margin: 0; color: #c7c0b5; font-size: 15px; line-height: 2.9; }
 .dbf-footer a { text-decoration: none; }
+.dbf-footer li > a { display: inline-flex; align-items: center; min-height: 44px; padding-right: 8px; touch-action: manipulation; }
 .dbf-footer a:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
-.dbf-social { display: inline-flex; align-items: center; gap: 9px; margin-top: 12px; color: #fff; font-weight: 700; }
-.dbf-footer-bottom { display: flex; justify-content: space-between; gap: 25px; padding-top: 24px; margin-top: 56px; color: #817a70; border-top: 1px solid var(--dbf-line-dark); font-size: 13px; }
+.dbf-social { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; margin-top: 6px; color: #fff; font-weight: 700; touch-action: manipulation; }
+.dbf-footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 25px; padding-top: 16px; margin-top: 48px; color: #8b8479; border-top: 1px solid var(--dbf-line-dark); font-size: 13px; }
+.dbf-footer-bottom a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 8px; touch-action: manipulation; }
 
 /* Motion */
 .dbf-js [data-dbf-reveal] { opacity: .28; transform: translateY(26px) scale(.985); transition: opacity .7s ease, transform .8s var(--dbf-ease); }

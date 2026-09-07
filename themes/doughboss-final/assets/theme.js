@@ -70,6 +70,27 @@
 		syncMenuMode();
 	}
 
+	/* The storefront CSS positions its sticky bits against --db-sticky-top but
+	 * nothing ever set it, so the menu's category jump-bar stuck to y=0 and sat
+	 * *behind* this sticky header (measured: 47px of overlap at 1280px wide, and
+	 * elementFromPoint returned the header — the chips were unclickable).
+	 * Publish the real header height instead of hard-coding one: this stays
+	 * correct with the admin bar, a wrapped nav, or a future header change. */
+	var stickyHeader = document.querySelector('[data-dbf-header]');
+	if (stickyHeader && document.documentElement.style.setProperty) {
+		var syncStickyTop = function () {
+			var h = Math.round(stickyHeader.getBoundingClientRect().height);
+			if (h > 0) {
+				document.documentElement.style.setProperty('--db-sticky-top', h + 'px');
+				document.documentElement.style.setProperty('--dbf-sticky-top', h + 'px');
+			}
+		};
+		syncStickyTop();
+		window.addEventListener('resize', syncStickyTop);
+		window.addEventListener('orientationchange', syncStickyTop);
+		window.addEventListener('load', syncStickyTop);
+	}
+
 	var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	var reveals = Array.prototype.slice.call(document.querySelectorAll('[data-dbf-reveal]'));
 	if (!reduceMotion && 'IntersectionObserver' in window) {
