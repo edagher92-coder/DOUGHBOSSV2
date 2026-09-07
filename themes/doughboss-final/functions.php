@@ -103,17 +103,7 @@ function doughboss_final_seo_relevant_page( $relevant, $post ) {
 		return (bool) $relevant;
 	}
 
-	return is_front_page() || is_page(
-		array(
-			'about-us',
-			'catering',
-			'locations',
-			'menu',
-			'order',
-			'track-order',
-			'vouchers',
-		)
-	);
+	return is_front_page() || is_page( doughboss_final_seo_covered_pages() );
 }
 add_filter( 'doughboss_seo_relevant_page', 'doughboss_final_seo_relevant_page', 10, 2 );
 
