@@ -182,7 +182,13 @@ body.doughboss-order-page .db-app.db-menu {
 }
 
 body.doughboss-order-page .db-menu-tools {
-	top: var(--wp-admin--admin-bar--height, 0px);
+	/* This bar carries the menu search and the category chips — the primary way
+	 * to move around a 34-item menu. It used to stick to top:0 and sit *behind*
+	 * the sticky site header (measured at 1280px: 47px of the bar hidden, and
+	 * elementFromPoint over the first chip returned the header, so the chips
+	 * could not be tapped at all). --db-sticky-top is the live header height,
+	 * published by the theme; the admin-bar offset is still added on top of it. */
+	top: calc(var(--db-sticky-top, 0px) + var(--wp-admin--admin-bar--height, 0px));
 	padding: .8rem;
 	border-color: rgba(17, 16, 15, .09);
 	background: rgba(247, 245, 240, .94);
@@ -230,6 +236,7 @@ body.doughboss-order-page .db-card-img {
 		filter 560ms ease;
 }
 
+body.doughboss-order-page .db-card-body h3,
 body.doughboss-order-page .db-card-body h4 {
 	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
 	font-size: 1.55rem;
@@ -315,6 +322,31 @@ body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible .db-ca
 	}
 }
 
+/* Touch: keep the scene, lose the cost.
+ * scale(.84) shrank the card — and with it the "Add to cart" button — to 84%
+ * while it sat at the edge of the viewport (measured: the 44px button painted
+ * at 36.8px, skewed by rotateX). On a phone that edge band is a large share of
+ * the screen and it is exactly where a thumb lands. Opacity .12/.08 also made
+ * the item name and price unreadable mid-scroll. Softer offsets, no scale, no
+ * rotation and a readable floor keep the motion without touching the target. */
+@media (pointer: coarse) {
+	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-ready="1"] {
+		opacity: .55;
+		transform: translate3d(0, 22px, 0);
+	}
+
+	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] {
+		opacity: .55;
+		transform: translate3d(0, -18px, 0);
+	}
+
+	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="below"] .db-card-img,
+	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] .db-card-img {
+		transform: none;
+		filter: none;
+	}
+}
+
 @media (max-width: 760px) {
 	body.doughboss-order-page .bgheader {
 		min-height: 300px;
@@ -344,7 +376,7 @@ body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible .db-ca
 	}
 
 	body.doughboss-order-page .db-menu-tools {
-		top: var(--wp-admin--admin-bar--height, 0px);
+		top: calc(var(--db-sticky-top, 0px) + var(--wp-admin--admin-bar--height, 0px));
 	}
 
 	body.doughboss-order-page .db-grid {
@@ -356,6 +388,7 @@ body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible .db-ca
 		padding: 12px;
 	}
 
+	body.doughboss-order-page .db-card-body h3,
 	body.doughboss-order-page .db-card-body h4 {
 		font-size: 1.25rem;
 	}

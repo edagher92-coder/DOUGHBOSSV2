@@ -23,11 +23,27 @@
 	var result   = root.querySelector( '.db-vc-result' );
 	var selected = '';
 
-	function show( kind, msg ) {
+	// `focusField` is the input the customer has to correct. Sending focus there
+	// (rather than to the message) means one tap to fix instead of scroll, read,
+	// scroll back, tap. The message is still announced because it flips to an
+	// assertive alert.
+	function show( kind, msg, focusField ) {
 		result.className = 'db-vc-result is-' + kind;
-		result.textContent = msg;
 		if ( 'bad' === kind ) {
-			try { result.focus(); } catch ( e ) {}
+			result.setAttribute( 'role', 'alert' );
+			result.setAttribute( 'aria-live', 'assertive' );
+		} else {
+			result.setAttribute( 'role', 'status' );
+			result.setAttribute( 'aria-live', 'polite' );
+		}
+		result.textContent = msg;
+		if ( 'bad' !== kind ) {
+			return;
+		}
+		var target = focusField || result;
+		try { target.focus(); } catch ( e ) {}
+		if ( focusField && focusField.select ) {
+			try { focusField.select(); } catch ( e2 ) {}
 		}
 	}
 
@@ -61,21 +77,24 @@
 				show( 'bad', i18n.vChooseOffer || 'Please choose a voucher above first.' );
 				return;
 			}
-			var phone = ( form.querySelector( 'input[name="phone"]' ).value || '' ).trim();
-			var email = ( form.querySelector( 'input[name="email"]' ).value || '' ).trim().toLowerCase();
-			var emailConfirmation = ( form.querySelector( 'input[name="email_confirmation"]' ).value || '' ).trim().toLowerCase();
+			var phoneField = form.querySelector( 'input[name="phone"]' );
+			var emailField = form.querySelector( 'input[name="email"]' );
+			var confirmField = form.querySelector( 'input[name="email_confirmation"]' );
+			var phone = ( phoneField.value || '' ).trim();
+			var email = ( emailField.value || '' ).trim().toLowerCase();
+			var emailConfirmation = ( confirmField.value || '' ).trim().toLowerCase();
 			if ( ! phone ) {
-				show( 'bad', i18n.vNeedPhone || 'Please enter your mobile number.' );
+				show( 'bad', i18n.vNeedPhone || 'Please enter your mobile number.', phoneField );
 				return;
 			}
 			var at = email.lastIndexOf( '@' );
 			var domain = at > 0 ? email.slice( at + 1 ) : '';
 			if ( ! /(?:^|\.)edu(?:\.au)?$/i.test( domain ) ) {
-				show( 'bad', i18n.vNeedStudentEmail || 'Enter a valid student email ending in .edu or .edu.au.' );
+				show( 'bad', i18n.vNeedStudentEmail || 'Enter a valid student email ending in .edu or .edu.au.', emailField );
 				return;
 			}
 			if ( ! emailConfirmation || email !== emailConfirmation ) {
-				show( 'bad', i18n.vEmailMismatch || 'The student emails do not match. Please re-enter them.' );
+				show( 'bad', i18n.vEmailMismatch || 'The student emails do not match. Please re-enter them.', confirmField );
 				return;
 			}
 			var submit = form.querySelector( '.db-vc-submit' );

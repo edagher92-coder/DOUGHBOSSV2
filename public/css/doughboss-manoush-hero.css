@@ -10,7 +10,12 @@
 	display: grid;
 	isolation: isolate;
 	min-height: clamp(610px, 76vh, 820px);
+	/* The backdrop is deliberately inset:-2% and scaled for the parallax, so it
+	 * is always wider than the hero. `clip` contains it exactly like `hidden`
+	 * without making the hero a scroll container (`hidden` leaves a programmatic
+	 * scrollLeft that scroll anchoring can nudge). `hidden` stays as fallback. */
 	overflow: hidden;
+	overflow: clip;
 	padding: clamp(6.8rem, 14vw, 10.5rem) clamp(1.25rem, 6.5vw, 6rem) clamp(2rem, 5vw, 4.5rem);
 	position: relative;
 }
@@ -140,9 +145,11 @@
 	transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease;
 }
 
+/* #e52a21 put white at 4.48:1 — just under AA for this 14.4px label. #d81f16
+ * is the same tomato one step down and measures 5.09:1. */
 .db-mh-action--primary {
-	background: #e52a21;
-	border-color: #e52a21;
+	background: #d81f16;
+	border-color: #d81f16;
 	color: #fff;
 }
 

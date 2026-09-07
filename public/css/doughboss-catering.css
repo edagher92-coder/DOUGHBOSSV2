@@ -228,6 +228,24 @@
 	gap: 6px;
 	margin-right: 16px;
 	font-weight: 500;
+	touch-action: manipulation;
+}
+
+/* Pickup/Delivery renders as a 13px radio. The label is the real target, so on
+ * touch give it a 44px row and scale the control to match the menu options. */
+@media (pointer: coarse) {
+	.db-catering .dbc-radio {
+		min-height: 44px;
+		padding-right: 4px;
+		gap: 9px;
+	}
+
+	.db-catering .dbc-radio input[type="radio"] {
+		width: 22px;
+		height: 22px;
+		flex: 0 0 auto;
+		accent-color: var(--dbc-ember, #e2231a);
+	}
 }
 
 /* Quote box */
