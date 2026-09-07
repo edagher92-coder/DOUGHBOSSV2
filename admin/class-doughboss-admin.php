@@ -410,7 +410,7 @@ class DoughBoss_Admin {
 
 		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
 		$requested_gateway = isset( $input['payment_gateway'] ) ? sanitize_key( $input['payment_gateway'] ) : 'stripe';
-		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $requested_gateway : 'stripe';
+		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $requested_gateway : 'stripe';
 		$clean['stripe_mode']       = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
 		$clean['stripe_test_pk']    = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
 		$clean['stripe_test_sk']    = empty( $input['clear_stripe_test_sk'] ) ? $this->keep_secret( $input, $existing, 'stripe_test_sk' ) : '';
@@ -440,6 +440,25 @@ class DoughBoss_Admin {
 		$clean['mpgs_live_host']         = isset( $input['mpgs_live_host'] ) ? esc_url_raw( trim( (string) $input['mpgs_live_host'] ) ) : '';
 		$clean['mpgs_api_version']       = min( 100, max( 63, absint( isset( $input['mpgs_api_version'] ) ? $input['mpgs_api_version'] : 100 ) ) );
 		$clean['mpgs_live_approved']     = empty( $input['mpgs_live_approved'] ) ? 0 : 1;
+
+		// Square Payments API. The application id, location id, API version and
+		// notification URL are public configuration; the access token and webhook
+		// signature key are write-only, env-first secrets that render blank and go
+		// through keep_secret() so a routine save cannot wipe them. The live
+		// approval switch is an explicit operator gate, like Tyro's and MPGS's.
+		$clean['square_mode']              = ( isset( $input['square_mode'] ) && 'live' === $input['square_mode'] ) ? 'live' : 'test';
+		$square_version                    = isset( $input['square_api_version'] ) ? trim( (string) $input['square_api_version'] ) : '';
+		$clean['square_api_version']       = preg_match( '/^\d{4}-\d{2}-\d{2}$/', $square_version ) ? $square_version : '2025-01-23';
+		$clean['square_webhook_url']       = isset( $input['square_webhook_url'] ) ? esc_url_raw( trim( (string) $input['square_webhook_url'] ) ) : '';
+		$clean['square_test_app_id']       = isset( $input['square_test_app_id'] ) ? sanitize_text_field( $input['square_test_app_id'] ) : '';
+		$clean['square_test_location_id']  = isset( $input['square_test_location_id'] ) ? sanitize_text_field( $input['square_test_location_id'] ) : '';
+		$clean['square_test_access_token'] = empty( $input['clear_square_test_access_token'] ) ? $this->keep_secret( $input, $existing, 'square_test_access_token' ) : '';
+		$clean['square_test_webhook_key']  = $this->keep_secret( $input, $existing, 'square_test_webhook_key' );
+		$clean['square_live_app_id']       = isset( $input['square_live_app_id'] ) ? sanitize_text_field( $input['square_live_app_id'] ) : '';
+		$clean['square_live_location_id']  = isset( $input['square_live_location_id'] ) ? sanitize_text_field( $input['square_live_location_id'] ) : '';
+		$clean['square_live_access_token'] = empty( $input['clear_square_live_access_token'] ) ? $this->keep_secret( $input, $existing, 'square_live_access_token' ) : '';
+		$clean['square_live_webhook_key']  = $this->keep_secret( $input, $existing, 'square_live_webhook_key' );
+		$clean['square_live_approved']     = empty( $input['square_live_approved'] ) ? 0 : 1;
 
 		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
 		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback, and
@@ -1272,11 +1291,11 @@ JS;
 										?>
 										</small>
 									<?php endif; ?>
-									<?php if ( isset( $order->payment_method ) && in_array( $order->payment_method, array( 'stripe', 'tyro', 'mpgs' ), true ) && ! empty( $order->payment_intent_id ) ) : ?>
+									<?php if ( isset( $order->payment_method ) && in_array( $order->payment_method, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) && ! empty( $order->payment_intent_id ) ) : ?>
 										<?php if ( 'paid' === $order->payment_status ) : ?>
 											<br /><small>
 												<?php esc_html_e( 'Paid by card', 'doughboss' ); ?>
-												<?php if ( in_array( $order->payment_method, array( 'stripe', 'tyro' ), true ) ) : ?> ·
+												<?php if ( in_array( $order->payment_method, array( 'stripe', 'tyro', 'square' ), true ) ) : ?> ·
 													<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=doughboss_refund_order&id=' . $order->id ), 'doughboss_refund_order_' . $order->id ) ); ?>" style="color:#b32d2e;" onclick="return confirm('<?php echo esc_js( __( 'Refund this order in full? A voucher used on the order is NOT automatically reissued.', 'doughboss' ) ); ?>');"><?php esc_html_e( 'Refund', 'doughboss' ); ?></a>
 												<?php else : ?> · <?php esc_html_e( 'Refund from the Mastercard gateway portal', 'doughboss' ); ?>
 												<?php endif; ?>
@@ -1828,7 +1847,7 @@ JS;
 		$args      = array( 'page' => 'doughboss' );
 		$order     = $id ? DoughBoss_Order::get( $id ) : null;
 		$gateway   = $order && isset( $order->payment_method ) ? (string) $order->payment_method : '';
-		$is_paid_by_gateway = in_array( $gateway, array( 'stripe', 'tyro' ), true );
+		$is_paid_by_gateway = in_array( $gateway, array( 'stripe', 'tyro', 'square' ), true );
 
 		if ( ! $order ) {
 			$args['msg'] = 'refund_error';
@@ -3330,7 +3349,7 @@ JS;
 
 				<h2><?php esc_html_e( 'Payments', 'doughboss' ); ?></h2>
 					<p class="description">
-						<?php esc_html_e( 'Optional. Take online card payments through Stripe, Tyro Connect or Mastercard Gateway — pick one active gateway below. Start in Test/Sandbox mode and move to Live only after the end-to-end acceptance checklist passes. Card payments apply only when payments are on and the selected gateway is fully configured.', 'doughboss' ); ?>
+						<?php esc_html_e( 'Optional. Take online card payments through Stripe, Tyro Connect, Mastercard Gateway or Square — pick one active gateway below. Start in Test/Sandbox mode and move to Live only after the end-to-end acceptance checklist passes. Card payments apply only when payments are on and the selected gateway is fully configured.', 'doughboss' ); ?>
 						<?php
 						if ( ! class_exists( 'DoughBoss_Payment' ) || ! DoughBoss_Payment::ready() ) {
 							echo ' <strong>' . esc_html__( 'Status: card payments are OFF.', 'doughboss' ) . '</strong>';
@@ -3340,6 +3359,8 @@ JS;
 								$mode_label = DoughBoss_Settings::tyro_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Sandbox', 'doughboss' );
 							} elseif ( 'mpgs' === $gateway_key ) {
 								$mode_label = DoughBoss_Settings::mpgs_live_mode() ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' );
+							} elseif ( 'square' === $gateway_key ) {
+								$mode_label = DoughBoss_Settings::square_live_mode() ? __( 'Live', 'doughboss' ) : __( 'Sandbox', 'doughboss' );
 							} else {
 								$mode_label = DoughBoss_Settings::stripe_mode() === 'live' ? __( 'Live', 'doughboss' ) : __( 'Test', 'doughboss' );
 							}
@@ -3363,10 +3384,11 @@ JS;
 						<tr>
 							<th><?php esc_html_e( 'Active gateway', 'doughboss' ); ?></th>
 							<td>
-								<?php $gateway = isset( $settings['payment_gateway'] ) && in_array( $settings['payment_gateway'], array( 'stripe', 'tyro', 'mpgs' ), true ) ? $settings['payment_gateway'] : 'stripe'; ?>
+								<?php $gateway = isset( $settings['payment_gateway'] ) && in_array( $settings['payment_gateway'], array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $settings['payment_gateway'] : 'stripe'; ?>
 								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="stripe" <?php checked( 'stripe' === $gateway, true ); ?> /> <?php esc_html_e( 'Stripe', 'doughboss' ); ?></label>&nbsp;&nbsp;
 								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="tyro" <?php checked( 'tyro' === $gateway, true ); ?> /> <?php esc_html_e( 'Tyro Connect', 'doughboss' ); ?></label>&nbsp;&nbsp;
-								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="mpgs" <?php checked( 'mpgs' === $gateway, true ); ?> /> <?php esc_html_e( 'Mastercard Gateway', 'doughboss' ); ?></label>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="mpgs" <?php checked( 'mpgs' === $gateway, true ); ?> /> <?php esc_html_e( 'Mastercard Gateway', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="square" <?php checked( 'square' === $gateway, true ); ?> /> <?php esc_html_e( 'Square', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Existing paid orders always refund correctly against whichever gateway actually processed them, even after you switch this.', 'doughboss' ); ?></p>
 							</td>
 						</tr>
@@ -3533,6 +3555,92 @@ JS;
 							<th><?php esc_html_e( 'Production approval', 'doughboss' ); ?></th>
 							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[mpgs_live_approved]" value="1" <?php checked( ! empty( $settings['mpgs_live_approved'] ), true ); ?> /> <?php esc_html_e( 'The acquirer has approved this Hosted Checkout integration for live use', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Live mode remains fail-closed until this is explicitly checked.', 'doughboss' ); ?></p></td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Square', 'doughboss' ); ?></h3>
+					<p class="description">
+						<?php esc_html_e( 'Uses the Square Web Payments SDK: the card fields are rendered and tokenised by Square inside the checkout page, and the charge is made server-side against the Square Payments API. DoughBoss never receives, stores or logs the card number or CVV.', 'doughboss' ); ?>
+						<?php if ( 'square' === DoughBoss_Settings::payment_gateway() ) : ?>
+							<?php if ( '' === DoughBoss_Settings::square_application_id() || '' === DoughBoss_Settings::square_location_id() || ! DoughBoss_Settings::square_access_token_valid() ) : ?>
+								<strong style="color:#b32d2e;"><?php esc_html_e( 'Square credentials: missing or invalid for the selected mode. Card payments remain off.', 'doughboss' ); ?></strong>
+							<?php endif; ?>
+							<?php if ( DoughBoss_Settings::square_webhook_configured() ) : ?>
+								<strong style="color:#1f8a54;"><?php esc_html_e( 'Webhook recovery: configured.', 'doughboss' ); ?></strong>
+							<?php else : ?>
+								<strong style="color:#b32d2e;"><?php esc_html_e( 'Webhook recovery: missing. Sandbox checkout may be exercised, but live Square payments remain fail-closed.', 'doughboss' ); ?></strong>
+							<?php endif; ?>
+						<?php endif; ?>
+					</p>
+					<p class="description"><?php esc_html_e( 'Register this exact notification URL in the Square Developer Dashboard (Webhooks → Subscriptions) and subscribe to the payment.created and payment.updated events:', 'doughboss' ); ?>
+						<code><?php echo esc_html( DoughBoss_Settings::square_webhook_url() ); ?></code></p>
+					<?php $square_mode = isset( $settings['square_mode'] ) && 'live' === $settings['square_mode'] ? 'live' : 'test'; ?>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th><?php esc_html_e( 'Mode', 'doughboss' ); ?></th>
+							<td>
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[square_mode]" value="test" <?php checked( 'test' === $square_mode, true ); ?> /> <?php esc_html_e( 'Sandbox', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[square_mode]" value="live" <?php checked( 'live' === $square_mode, true ); ?> /> <?php esc_html_e( 'Live', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Sandbox uses connect.squareupsandbox.com and a sandbox application id (it starts with "sandbox-"). Live uses connect.squareup.com and a production application id. A mismatched pair is rejected rather than used.', 'doughboss' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="db-square-test-app"><?php esc_html_e( 'Sandbox application ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-square-test-app" class="regular-text" autocomplete="off" placeholder="sandbox-sq0idb-&hellip;" name="<?php echo esc_attr( $opt ); ?>[square_test_app_id]" value="<?php echo esc_attr( isset( $settings['square_test_app_id'] ) ? $settings['square_test_app_id'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Square Developer Dashboard → your application → Credentials (Sandbox). Public by design — the browser card form needs it.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-test-location"><?php esc_html_e( 'Sandbox location ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-square-test-location" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[square_test_location_id]" value="<?php echo esc_attr( isset( $settings['square_test_location_id'] ) ? $settings['square_test_location_id'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Square Developer Dashboard → your application → Locations (Sandbox). Also public by design.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-test-token"><?php esc_html_e( 'Sandbox access token', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-square-test-token" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[square_test_access_token]" value="" />
+								<p class="description"><?php esc_html_e( 'Prefer the DOUGHBOSS_SQUARE_TEST_ACCESS_TOKEN environment variable; this write-only field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['square_test_access_token'] ) && '' !== $settings['square_test_access_token'] ? esc_html__( 'A token is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p>
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[clear_square_test_access_token]" value="1" /> <?php esc_html_e( 'Clear the stored database fallback when saving (the protected environment value is unaffected).', 'doughboss' ); ?></label></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-test-whkey"><?php esc_html_e( 'Sandbox webhook signature key', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-square-test-whkey" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[square_test_webhook_key]" value="" />
+								<p class="description"><?php esc_html_e( 'Square Developer Dashboard → Webhooks → your subscription → Signature key. Prefer the DOUGHBOSS_SQUARE_TEST_WEBHOOK_KEY environment variable; this write-only field is a fallback.', 'doughboss' ); ?>
+									<?php echo isset( $settings['square_test_webhook_key'] ) && '' !== $settings['square_test_webhook_key'] ? esc_html__( 'A key is set. Leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-live-app"><?php esc_html_e( 'Live application ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-square-live-app" class="regular-text" autocomplete="off" placeholder="sq0idp-&hellip;" name="<?php echo esc_attr( $opt ); ?>[square_live_app_id]" value="<?php echo esc_attr( isset( $settings['square_live_app_id'] ) ? $settings['square_live_app_id'] : '' ); ?>" /></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-live-location"><?php esc_html_e( 'Live location ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-square-live-location" class="regular-text" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[square_live_location_id]" value="<?php echo esc_attr( isset( $settings['square_live_location_id'] ) ? $settings['square_live_location_id'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Use the Square location for Dough Boss Revesby. Payments are attributed to it.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-live-token"><?php esc_html_e( 'Live access token', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-square-live-token" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[square_live_access_token]" value="" />
+								<p class="description"><?php esc_html_e( 'Prefer the DOUGHBOSS_SQUARE_LIVE_ACCESS_TOKEN environment variable; this write-only field is a fallback.', 'doughboss' ); ?> <?php echo isset( $settings['square_live_access_token'] ) && '' !== $settings['square_live_access_token'] ? esc_html__( 'A token is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p>
+								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[clear_square_live_access_token]" value="1" /> <?php esc_html_e( 'Clear the stored database fallback when saving (the protected environment value is unaffected).', 'doughboss' ); ?></label></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-live-whkey"><?php esc_html_e( 'Live webhook signature key', 'doughboss' ); ?></label></th>
+							<td><input type="password" id="db-square-live-whkey" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr( $opt ); ?>[square_live_webhook_key]" value="" />
+								<p class="description"><?php esc_html_e( 'Required before live Square payments are accepted — it is the only safety net for a payment whose browser never returns.', 'doughboss' ); ?>
+									<?php echo isset( $settings['square_live_webhook_key'] ) && '' !== $settings['square_live_webhook_key'] ? esc_html__( 'A key is set — leave blank to keep it.', 'doughboss' ) : esc_html__( 'Leave blank to keep the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-webhook-url"><?php esc_html_e( 'Notification URL override', 'doughboss' ); ?></label></th>
+							<td><input type="url" id="db-square-webhook-url" class="regular-text code" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[square_webhook_url]" value="<?php echo esc_attr( isset( $settings['square_webhook_url'] ) ? $settings['square_webhook_url'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Leave blank unless the URL shown above is not what Square actually calls. Square signs the URL together with the body, so this must match the registered URL exactly.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-version"><?php esc_html_e( 'Square API version', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-square-version" class="regular-text code" autocomplete="off" placeholder="2025-01-23" name="<?php echo esc_attr( $opt ); ?>[square_api_version]" value="<?php echo esc_attr( isset( $settings['square_api_version'] ) ? $settings['square_api_version'] : '2025-01-23' ); ?>" />
+								<p class="description"><?php esc_html_e( 'Sent as the Square-Version header. Change it only if Square rejects the current value.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Production approval', 'doughboss' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_live_approved]" value="1" <?php checked( ! empty( $settings['square_live_approved'] ), true ); ?> /> <?php esc_html_e( 'Sandbox testing has passed and this Square integration is approved for live use', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Live mode remains fail-closed until this is explicitly checked AND a live webhook signature key is stored.', 'doughboss' ); ?></p></td>
 						</tr>
 					</table>
 
