@@ -45,6 +45,24 @@ class DoughBoss_Settings {
 	}
 
 	/**
+	 * Merge a partial array of settings into the stored option (preserving the
+	 * keys not supplied) and persist. Used by programmatic config writers such
+	 * as the POSPal connect endpoint.
+	 *
+	 * @param array $partial Keys to set/overwrite.
+	 * @return array The merged settings now stored.
+	 */
+	public static function update( array $partial ) {
+		$current = get_option( self::OPTION_KEY, array() );
+		if ( ! is_array( $current ) ) {
+			$current = array();
+		}
+		$merged = array_merge( $current, $partial );
+		update_option( self::OPTION_KEY, $merged );
+		return $merged;
+	}
+
+	/**
 	 * Default settings used when nothing is stored yet.
 	 *
 	 * @return array
@@ -52,14 +70,457 @@ class DoughBoss_Settings {
 	public static function defaults() {
 		return array(
 			'currency_symbol' => '$',
-			'currency_code'   => 'USD',
-			'tax_rate'        => 0,
+			'currency_code'   => 'AUD',
+			'tax_rate'        => 10,
+			'gst_inclusive'   => 1,
 			'delivery_fee'    => 0,
 			'enable_pickup'   => 1,
 			'enable_delivery' => 0,
-			'ordering_open'   => 1,
+			// Fresh installs launch in browse-only mode. The owner must explicitly
+			// open ordering after the WordPress staging checklist has passed.
+			'ordering_open'   => 0,
+			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
+			// Customer membership and rewards. The program remains off until the
+			// owner explicitly enables it in DoughBoss > Rewards. These prepared
+			// launch promotions therefore cannot create points or voucher liability
+			// during a visual/content review.
+			'loyalty_enabled'            => 0,
+			// In-store voucher scans are paused until a named manager owns the
+			// daily receipt-to-voucher reconciliation.
+			'voucher_reconciliation_owner_id' => 0,
+			'loyalty_points_per_dollar'  => 1,
+			'loyalty_redemption_points'  => 100,
+			'loyalty_redemption_amount'  => 5,
+			'loyalty_tier_fresh_spend'   => 150,
+			'loyalty_tier_boss_spend'    => 400,
+			'loyalty_promos'             => array(
+				array(
+					'slug'         => 'join-the-dough-club',
+					'title'        => 'Join the Dough Club',
+					'description'  => 'Get 50 bonus points after your first eligible paid order.',
+					'rule'         => '50 bonus points on first paid order',
+					'type'         => 'welcome_first_paid',
+					'bonus_points' => 50,
+					'active'       => 1,
+					'public'       => 1,
+				),
+				array(
+					'slug'        => 'fresh-start-double-points',
+					'title'       => 'Fresh Start',
+					'description' => 'Double points for the first 14 days of the launch — dates set by management.',
+					'rule'        => '2× points during the approved launch window',
+					'type'        => 'date_multiplier',
+					'multiplier'  => 2,
+					'starts'      => '',
+					'ends'        => '',
+					'active'      => 1,
+					'public'      => 1,
+				),
+				array(
+					'slug'        => 'tuesday-treat',
+					'title'       => 'Tuesday Treat',
+					'description' => 'Double points on Tuesday for paid orders of $15 or more.',
+					'rule'        => '2× points on Tuesday, $15 minimum spend',
+					'type'        => 'weekly_multiplier',
+					'multiplier'  => 2,
+					'min_spend'   => 15,
+					'active'      => 1,
+					'public'      => 1,
+				),
+			),
+			// A deliberately separate, unpaid fallback for the Revesby launch.
+			// It captures a customer request while normal checkout is closed; it
+			// does not promise a time, reserve capacity, create a payment attempt,
+			// or enter the kitchen queue until a staff member accepts it.
+			'after_hours_preorders_enabled' => 0,
+			'after_hours_preorders_message' => 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.',
+			// Single-shop mode: the storefront JS (getConfig/getLocations in
+			// public/js/doughboss.js) hides the delivery toggle and pins the shop
+			// picker to the first active location while this is 1. Display-only —
+			// the checkout endpoint's enable_delivery gate is the server-side
+			// enforcement. Seeded to 1 by the 1.10.0 migration ("Revesby-only
+			// pickup for now"). Flipping to 0 restores the multi-shop picker;
+			// delivery additionally needs enable_delivery back on.
+			'single_location_mode' => 1,
+			// Shop inbox for ordinary online-order notifications. Catering uses its
+			// own dedicated inbox below. Blank falls back to the WordPress admin email.
+			'orders_email'    => 'orders@doughboss.com.au',
+			// Dedicated customer-facing catering contacts. Catering enquiries use
+			// this inbox rather than mixing with normal online-order notices.
+			'catering_email'  => 'catering@doughboss.com.au',
+			'catering_phone'  => '0422487487',
+			// Public WordPress page containing [doughboss_order_tracking].
+			// Blank is safe: emails still include the order number and matching-
+			// email instructions, but no potentially broken tracking link.
+			'tracking_page_url' => '',
+			// Public Google Business review destination. The Maps listing is a safe
+			// fallback until the owner pastes the exact "Ask for reviews" short link.
+			'google_review_url' => 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+12+25+Selems+Parade+Revesby+NSW+2212',
+			// Keep logged-in sessions for this many days (0 = WordPress default).
+			// Set high (e.g. 3650) so shop tablets stay signed in; off by default.
+			'staff_session_days' => 0,
+			// Kitchen Order Board — optional extra access-key layer. Blank (default)
+			// means the board is reachable at the normal wp-admin URL, gated only by
+			// login + the manage_doughboss_kds capability (the real security
+			// boundary). When set, render_board_page() ALSO requires a matching
+			// ?key= query arg — a memorable, bookmarkable "specific URL" for
+			// kitchen staff, layered on top of (never instead of) the WP login +
+			// capability check. Only ever written by the random generator in
+			// DoughBoss_Admin::generate_board_key() (admin-post actions
+			// doughboss_generate_board_key / doughboss_clear_board_key) — never
+			// accepted as free text. New keys are stored only as a SHA-256 hex
+			// digest; the raw value exists only in the one-time owner reveal and
+			// the staff URL. Legacy plaintext values from before hashing still
+			// verify until regenerated. See verify_board_access_key() below and
+			// admin/class-doughboss-admin.php render_board_page().
+			'board_access_key' => '',
+			// Rate-limiter client-IP resolution. Off by default so REMOTE_ADDR is used
+			// verbatim (zero behaviour change). Only enable 'behind_reverse_proxy' when
+			// the site sits behind a reverse proxy/CDN/load balancer that you have
+			// confirmed strips or overwrites any client-supplied forwarded header
+			// before appending its own — otherwise a caller could spoof the header and
+			// evade the checkout/voucher rate limiter. 'trusted_proxy_header' names the
+			// header the proxy sets (its first comma-separated entry is the client IP).
+			// See DoughBoss_REST_Controller::client_ip().
+			'behind_reverse_proxy' => 0,
+			'trusted_proxy_header' => 'X-Forwarded-For',
 			'sizes'           => array(),
 			'toppings'        => array(),
+			// Payments — off by default; keys added later. 'payment_gateway' picks
+			// which of the two clients below (DoughBoss_Stripe / DoughBoss_Tyro)
+			// DoughBoss_Payment routes to; default 'stripe' preserves the exact
+			// pre-existing behaviour on every site that never touches this setting.
+			'payments_enabled' => 0,
+			'payment_gateway'  => 'stripe',
+			'stripe_mode'      => 'test',
+			'stripe_test_pk'   => '',
+			'stripe_test_sk'   => '',
+			'stripe_live_pk'   => '',
+			'stripe_live_sk'   => '',
+			'stripe_test_whsec' => '',
+			'stripe_live_whsec' => '',
+			// Tyro Connect Pay. Secrets are read env-first and each shop also needs
+			// its own Tyro Connect locationId on the location record.
+			'tyro_mode'                => 'test',
+			'tyro_test_client_id'       => '',
+			'tyro_live_client_id'       => '',
+			'tyro_test_client_secret'   => '',
+			'tyro_live_client_secret'   => '',
+			'tyro_test_webhook_secret' => '',
+			'tyro_live_webhook_secret' => '',
+			'tyro_live_certified'       => 0,
+			// Mastercard Payment Gateway Services (MPGS) Hosted Checkout. This is
+			// deliberately separate from Tyro Connect: MPGS authenticates with a
+			// merchant ID + API password and redirects card entry to Mastercard's
+			// hosted page. The API password is env-first and never exposed to JS.
+			'mpgs_mode'              => 'test',
+			'mpgs_test_merchant_id'  => '',
+			'mpgs_live_merchant_id'  => '',
+			'mpgs_test_api_password' => '',
+			'mpgs_live_api_password' => '',
+			'mpgs_test_host'         => 'https://test-tyro.mtf.gateway.mastercard.com',
+			'mpgs_live_host'         => '',
+			'mpgs_api_version'       => 100,
+			'mpgs_live_approved'     => 0,
+			// Square Payments API. Off by default and completely inert until
+			// `payment_gateway` is switched to 'square' AND every credential for
+			// the active mode is present. The application id and location id are
+			// public by design (the Web Payments SDK needs them in the page); the
+			// access token and webhook signature key are env-first secrets and
+			// are never exposed to a browser. Live mode additionally fails closed
+			// until `square_live_approved` is explicitly ticked, mirroring
+			// tyro_live_certified / mpgs_live_approved.
+			'square_mode'               => 'test',
+			'square_api_version'        => '2025-01-23',
+			'square_webhook_url'        => '',
+			'square_test_app_id'        => '',
+			'square_test_access_token'  => '',
+			'square_test_location_id'   => '',
+			'square_test_webhook_key'   => '',
+			'square_live_app_id'        => '',
+			'square_live_access_token'  => '',
+			'square_live_location_id'   => '',
+			'square_live_webhook_key'   => '',
+			'square_live_approved'      => 0,
+			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
+			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
+			// this option is only a fallback and is best left blank where env is set.
+			'pospal_enabled'    => 0,
+			'pospal_host'       => '',
+			'pospal_app_id'     => '',
+			'pospal_app_key'    => '',
+			// POSPal coupon-rule mapping: which POSPal coupon (优惠券) rule UID
+			// represents the $5 student voucher. Blank = grant disabled (the GRANT
+			// leg is dormant until this is set). The $10 tier has been retired.
+			'pospal_coupon_uid_5'  => '',
+			// Additional POSPal stores (multi-store). Store 2 + store 3 each carry their
+			// own host / App ID / App Key (env-first DOUGHBOSS_POSPAL_APPKEY_2/_3) and
+			// $5 coupon-rule UID. Blank = that store is skipped; store 1 is the
+			// legacy single-store fields above.
+			'pospal2_label'         => '',
+			'pospal2_host'          => '',
+			'pospal2_app_id'        => '',
+			'pospal2_app_key'       => '',
+			'pospal2_coupon_uid_5'  => '',
+			'pospal3_label'         => '',
+			'pospal3_host'          => '',
+			'pospal3_app_id'        => '',
+			'pospal3_app_key'       => '',
+			'pospal3_coupon_uid_5'  => '',
+			// POSPal order push (mirror online orders onto the till) — off by default.
+			// Orders only push once a product map is built (pospal_product_map, via
+			// `wp doughboss pospal-map`). pay_method/pay_online describe how a Stripe-
+			// paid order is represented on the POS.
+			'pospal_push_orders'          => 0,
+			'pospal_order_pay_method'     => 'Cash',
+			'pospal_order_pay_method_code' => '',
+			'pospal_order_pay_online'     => 0,
+			'pospal_product_map'          => array(),
+			// Standalone staff console (separate origin, e.g. GitHub Pages) allowed
+			// to call the doughboss/v1 routes cross-origin via Application Password.
+			'app_origin'        => 'https://edagher92-coder.github.io',
+			// Real-time push (Mercure hub) — off by default. The publish JWT is a
+			// secret, read env-first (DOUGHBOSS_MERCURE_PUBLISH_JWT); this option is
+			// only a fallback and is best left blank where env is set.
+			'mercure_enabled'       => 0,
+			'mercure_hub_url'       => '',
+			'mercure_publish_jwt'   => '',
+			'mercure_subscribe_jwt' => '',
+			'mercure_topic_prefix'  => 'doughboss',
+			// ntfy push notifications — off by default. The bearer token is a secret,
+			// read env-first (DOUGHBOSS_NTFY_TOKEN); this option is only a fallback.
+			'ntfy_enabled'  => 0,
+			'ntfy_server'   => 'https://ntfy.sh',
+			'ntfy_topic'    => '',
+			'ntfy_token'    => '',
+			'ntfy_priority' => 'high',
+			// SMS (ClickSend) — off by default. The API key is a secret, read
+			// env-first (DOUGHBOSS_CLICKSEND_API_KEY); this option is only a fallback.
+			'sms_enabled'           => 0,
+			'clicksend_username'    => '',
+			'clicksend_api_key'     => '',
+			'sms_from'              => '',
+			'sms_on_ready'          => 1,
+			'sms_on_voucher_claim'  => 0,
+			// Customer stage-transition emails — sent via native wp_mail, so no
+			// external configuration is needed; the toggles are the whole gate.
+			'email_on_accepted' => 1,
+			'email_on_ready'    => 1,
+			'email_staff_copy'  => 0,
+			// Receipt printer (CloudPRNT / ePOS) — off by default. The shared token
+			// is a secret, read env-first (DOUGHBOSS_PRINTER_TOKEN); this option is
+			// only a fallback.
+			'printer_enabled'  => 0,
+			'printer_protocol' => 'cloudprnt',
+			'printer_token'    => '',
+			'printer_width'    => 48,
+			// Customer-facing message templates — owner-editable copy for the
+			// order-confirmation email and the two SMS messages. Blank means
+			// "use the built-in default text" (see the tpl_*() getters below),
+			// so leaving a field blank restores the default rather than sending
+			// an empty message.
+			'tpl_order_email_subject' => '',
+			'tpl_order_email_body'    => '',
+			'tpl_sms_ready'           => '',
+			'tpl_sms_voucher'         => '',
+			'tpl_accepted_email_subject' => '',
+			'tpl_accepted_email_body'    => '',
+			'tpl_ready_email_subject'    => '',
+			'tpl_ready_email_body'       => '',
+		);
+	}
+
+	/**
+	 * Allowed origin for the standalone staff console (CORS). Empty disables
+	 * cross-origin access. Filterable via 'doughboss_app_origin'.
+	 *
+	 * @return string
+	 */
+	public static function app_origin() {
+		return untrailingslashit( (string) apply_filters( 'doughboss_app_origin', self::get( 'app_origin', '' ) ) );
+	}
+
+	/**
+	 * Optional extra access-key verifier for the Order Board. Blank (default)
+	 * means the board relies solely on WP login + the manage_doughboss_kds
+	 * capability. When set, render_board_page() requires a matching ?key=
+	 * query argument in addition to that login + capability check — a
+	 * bookmarkable "specific URL" for kitchen staff, layered on top of the
+	 * real auth boundary and enforced again on KDS REST calls. New values are
+	 * SHA-256 verifiers rather than recoverable plaintext.
+	 *
+	 * @return string
+	 */
+	public static function board_access_key() {
+		return trim( (string) self::get( 'board_access_key', '' ) );
+	}
+
+	/**
+	 * Verify a presented Order Board key against the stored verifier.
+	 *
+	 * New keys are stored as SHA-256 verifiers so database/config backups cannot
+	 * reveal the bookmark secret. A 24-character legacy plaintext value is still
+	 * accepted for a safe upgrade path and is replaced the next time the owner
+	 * generates a key.
+	 *
+	 * @param string $supplied Raw key supplied by the staff client.
+	 * @return bool
+	 */
+	public static function verify_board_access_key( $supplied ) {
+		$stored   = self::board_access_key();
+		$supplied = trim( (string) $supplied );
+		if ( '' === $stored ) {
+			return true;
+		}
+		if ( '' === $supplied ) {
+			return false;
+		}
+		if ( 64 === strlen( $stored ) && ctype_xdigit( $stored ) ) {
+			return hash_equals( strtolower( $stored ), hash( 'sha256', $supplied ) );
+		}
+		return hash_equals( $stored, $supplied );
+	}
+
+	/**
+	 * Whether prices already include tax (GST-inclusive, the Australian norm).
+	 *
+	 * @return bool
+	 */
+	public static function gst_inclusive() {
+		return (bool) self::get( 'gst_inclusive', 1 );
+	}
+
+	/**
+	 * Email address that order + catering notifications are sent to (the shop inbox).
+	 * Falls back to the WordPress admin email when unset or invalid. Filterable via
+	 * 'doughboss_orders_email'.
+	 *
+	 * @return string
+	 */
+	public static function orders_email() {
+		$email = sanitize_email( (string) self::get( 'orders_email', '' ) );
+		if ( ! is_email( $email ) ) {
+			$email = (string) get_option( 'admin_email' );
+		}
+		return (string) apply_filters( 'doughboss_orders_email', $email );
+	}
+
+	/**
+	 * Customer-facing catering inbox and notification destination.
+	 *
+	 * @return string
+	 */
+	public static function catering_email() {
+		$email = sanitize_email( (string) self::get( 'catering_email', 'catering@doughboss.com.au' ) );
+		return is_email( $email ) ? $email : 'catering@doughboss.com.au';
+	}
+
+	/**
+	 * Customer-facing Australian mobile number, stored as digits only.
+	 *
+	 * @return string
+	 */
+	public static function catering_phone() {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'catering_phone', '0422487487' ) );
+		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '0422487487';
+	}
+
+	/**
+	 * Customer-facing tracking page URL, optionally prefilled with an order
+	 * number. The matching email is deliberately never placed in the URL.
+	 *
+	 * @param string $order_number Order number to prefill.
+	 * @return string Empty until an owner configures a published tracking page.
+	 */
+	public static function tracking_page_url( $order_number = '' ) {
+		$url = self::sanitize_tracking_page_url( self::get( 'tracking_page_url', '' ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		if ( '' !== trim( (string) $order_number ) ) {
+			$url = add_query_arg( 'order', (string) $order_number, $url );
+		}
+		return (string) apply_filters( 'doughboss_tracking_page_url', $url, $order_number );
+	}
+
+	/**
+	 * Public Google Business review destination.
+	 *
+	 * @return string HTTPS Google URL, or empty when the invitation is disabled.
+	 */
+	public static function google_review_url() {
+		$url = self::sanitize_google_review_url( self::get( 'google_review_url', '' ) );
+		return (string) apply_filters( 'doughboss_google_review_url', $url );
+	}
+
+	/**
+	 * Only allow HTTPS destinations owned by Google.
+	 *
+	 * @param string $url Candidate review URL.
+	 * @return string
+	 */
+	public static function sanitize_google_review_url( $url ) {
+		$url    = esc_url_raw( trim( (string) $url ) );
+		$target = wp_parse_url( $url );
+		if ( ! is_array( $target ) || 'https' !== strtolower( (string) ( isset( $target['scheme'] ) ? $target['scheme'] : '' ) ) ) {
+			return '';
+		}
+		$host = strtolower( (string) ( isset( $target['host'] ) ? $target['host'] : '' ) );
+		if ( ! preg_match( '/(^|\.)google\.(com|com\.au)$/', $host ) && 'g.page' !== $host ) {
+			return '';
+		}
+		return $url;
+	}
+
+	/**
+	 * Keep tracking links on the current WordPress host.
+	 *
+	 * @param string $url Candidate page URL.
+	 * @return string Valid first-party URL, or an empty string.
+	 */
+	public static function sanitize_tracking_page_url( $url ) {
+		$url = esc_url_raw( trim( (string) $url ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$site   = wp_parse_url( home_url( '/' ) );
+		$target = wp_parse_url( $url );
+		if (
+			! is_array( $site )
+			|| ! is_array( $target )
+			|| empty( $site['host'] )
+			|| empty( $target['host'] )
+			|| strtolower( (string) $site['host'] ) !== strtolower( (string) $target['host'] )
+			|| empty( $target['scheme'] )
+			|| ! in_array( strtolower( (string) $target['scheme'] ), array( 'http', 'https' ), true )
+			|| ! empty( $target['user'] )
+			|| ! empty( $target['pass'] )
+		) {
+			return '';
+		}
+		return $url;
+	}
+
+	/**
+	 * Plain-text tracking instructions shared by customer emails.
+	 *
+	 * @param string $order_number Order number.
+	 * @return string
+	 */
+	public static function tracking_instructions( $order_number ) {
+		$url = self::tracking_page_url( $order_number );
+		if ( '' !== $url ) {
+			return sprintf(
+				"Track your order: %s\nUse order %s and the same email address used at checkout.",
+				$url,
+				(string) $order_number
+			);
+		}
+		return sprintf(
+			'Keep order %s and use it with the same email address on the Track My Order page.',
+			(string) $order_number
 		);
 	}
 
@@ -128,7 +589,67 @@ class DoughBoss_Settings {
 	 * @return bool
 	 */
 	public static function ordering_open() {
-		return (bool) self::get( 'ordering_open', 1 );
+		return (bool) self::get( 'ordering_open', 0 );
+	}
+
+	/**
+	 * Customer-facing copy shown while checkout is paused.
+	 *
+	 * @return string
+	 */
+	public static function ordering_closed_message() {
+		$message = trim( (string) self::get( 'ordering_closed_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.', 'doughboss' );
+	}
+
+	/**
+	 * Whether unpaid after-hours pre-order requests are available.
+	 *
+	 * This remains opt-in so a fresh browse-only install cannot silently start
+	 * collecting customer requests. It is intentionally independent from
+	 * ordering_open(): it is only meaningful while standard checkout is closed.
+	 *
+	 * @return bool
+	 */
+	public static function after_hours_preorders_enabled() {
+		return (bool) self::get( 'after_hours_preorders_enabled', 0 );
+	}
+
+	/**
+	 * Customer-facing copy for an accepted after-hours request.
+	 *
+	 * @return string
+	 */
+	public static function after_hours_preorders_message() {
+		$message = trim( (string) self::get( 'after_hours_preorders_message', '' ) );
+		return '' !== $message
+			? $message
+			: __( 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.', 'doughboss' );
+	}
+
+	/**
+	 * Whether the site sits behind a trusted reverse proxy/CDN, so the rate
+	 * limiter should read the client IP from a forwarded header instead of
+	 * REMOTE_ADDR. Off by default. See the note in defaults() and
+	 * DoughBoss_REST_Controller::client_ip() for the trust assumption.
+	 *
+	 * @return bool
+	 */
+	public static function behind_reverse_proxy() {
+		return (bool) self::get( 'behind_reverse_proxy', 0 );
+	}
+
+	/**
+	 * The forwarded header the trusted proxy sets the real client IP in (e.g.
+	 * 'X-Forwarded-For'). Only consulted when behind_reverse_proxy() is true.
+	 *
+	 * @return string
+	 */
+	public static function trusted_proxy_header() {
+		$header = trim( (string) self::get( 'trusted_proxy_header', 'X-Forwarded-For' ) );
+		return '' !== $header ? $header : 'X-Forwarded-For';
 	}
 
 	/**
@@ -140,5 +661,1114 @@ class DoughBoss_Settings {
 	public static function format_price( $amount ) {
 		$symbol = self::get( 'currency_symbol', '$' );
 		return $symbol . number_format( (float) $amount, 2 );
+	}
+
+	/**
+	 * Whether online card payments are switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function payments_enabled() {
+		return (bool) self::get( 'payments_enabled', 0 );
+	}
+
+	/**
+	 * Active Stripe mode: 'test' or 'live'.
+	 *
+	 * @return string
+	 */
+	public static function stripe_mode() {
+		return 'live' === self::get( 'stripe_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Stripe publishable key for the active mode.
+	 *
+	 * @return string
+	 */
+	public static function stripe_publishable_key() {
+		return (string) self::get( 'live' === self::stripe_mode() ? 'stripe_live_pk' : 'stripe_test_pk', '' );
+	}
+
+	/**
+	 * Env-first read for a secret: a wp-config.php constant or environment
+	 * variable of the given name overrides the stored option, so the secret can
+	 * be kept out of the database (and therefore out of backups). Mirrors the
+	 * pattern already used for POSPal/Mercure/ntfy/ClickSend/printer secrets.
+	 *
+	 * @param string $const_name Constant/env var name (e.g. DOUGHBOSS_STRIPE_TEST_SK).
+	 * @param string $option_key Fallback option key.
+	 * @return string
+	 */
+	private static function env_first_secret( $const_name, $option_key ) {
+		if ( defined( $const_name ) && '' !== (string) constant( $const_name ) ) {
+			return (string) constant( $const_name );
+		}
+		$env = getenv( $const_name );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( $option_key, '' );
+	}
+
+	/**
+	 * Stripe secret key for the active mode. Read env-first — the constant
+	 * DOUGHBOSS_STRIPE_TEST_SK/DOUGHBOSS_STRIPE_LIVE_SK or the matching
+	 * environment variable take precedence over the stored option. Only ever
+	 * used server-side; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function stripe_secret_key() {
+		return 'live' === self::stripe_mode()
+			? self::env_first_secret( 'DOUGHBOSS_STRIPE_LIVE_SK', 'stripe_live_sk' )
+			: self::env_first_secret( 'DOUGHBOSS_STRIPE_TEST_SK', 'stripe_test_sk' );
+	}
+
+	/**
+	 * Whether the configured Stripe secret has the expected mode-specific
+	 * format. Rejecting arbitrary non-empty strings here prevents a password or
+	 * other unrelated credential from ever being sent to Stripe.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_secret_key_valid() {
+		$prefix = 'live' === self::stripe_mode() ? 'sk_live_' : 'sk_test_';
+		$secret = self::stripe_secret_key();
+		return 0 === strpos( $secret, $prefix ) && strlen( $secret ) >= 16;
+	}
+
+	/**
+	 * Stripe webhook signing secret for the active mode (server-side only).
+	 * Read env-first — the constant DOUGHBOSS_STRIPE_TEST_WHSEC/
+	 * DOUGHBOSS_STRIPE_LIVE_WHSEC or the matching environment variable take
+	 * precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function stripe_webhook_secret() {
+		return 'live' === self::stripe_mode()
+			? self::env_first_secret( 'DOUGHBOSS_STRIPE_LIVE_WHSEC', 'stripe_live_whsec' )
+			: self::env_first_secret( 'DOUGHBOSS_STRIPE_TEST_WHSEC', 'stripe_test_whsec' );
+	}
+
+	/**
+	 * Whether the active Stripe mode has a webhook signing secret.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_webhook_configured() {
+		return '' !== self::stripe_webhook_secret();
+	}
+
+	/**
+	 * Whether Stripe is enabled and sufficiently configured for the active mode.
+	 * Live mode fails closed without the recovery webhook; test mode can still
+	 * exercise the synchronous checkout path while setup is being completed.
+	 *
+	 * @return bool
+	 */
+	public static function stripe_ready() {
+		return self::payments_enabled()
+			&& self::stripe_secret_key_valid()
+			&& ( 'live' !== self::stripe_mode() || self::stripe_webhook_configured() );
+	}
+
+	/**
+	 * Which payment gateway is active: 'stripe', 'tyro' or 'mpgs'. Defaults to
+	 * 'stripe' so existing sites are unaffected until an owner deliberately
+	 * switches this.
+	 *
+	 * @return string
+	 */
+	public static function payment_gateway() {
+		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'stripe' ) );
+		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $gateway : 'stripe';
+	}
+
+	/**
+	 * Active Square mode: 'test' (Square sandbox) or 'live' (Square production).
+	 *
+	 * @return string
+	 */
+	public static function square_mode() {
+		return 'live' === self::get( 'square_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Whether the active Square mode is production.
+	 *
+	 * @return bool
+	 */
+	public static function square_live_mode() {
+		return 'live' === self::square_mode();
+	}
+
+	/**
+	 * Square API version sent as the `Square-Version` header. Square rejects an
+	 * unknown value outright, so this is operator-editable (like MPGS's API
+	 * version) rather than hard-coded — a shop can move it forward without a
+	 * plugin release. Anything that is not a YYYY-MM-DD date falls back to the
+	 * shipped default.
+	 *
+	 * @return string
+	 */
+	public static function square_api_version() {
+		$version = trim( (string) self::get( 'square_api_version', '2025-01-23' ) );
+		return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $version ) ? $version : '2025-01-23';
+	}
+
+	/**
+	 * Square application id for the active mode. Public by design — the Web
+	 * Payments SDK needs it in the page — but still mode-checked so a sandbox
+	 * application id can never be used to take a live payment (or vice versa).
+	 *
+	 * @return string
+	 */
+	public static function square_application_id() {
+		$key   = self::square_live_mode() ? 'square_live_app_id' : 'square_test_app_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{8,191}$/', $value ) ) {
+			return '';
+		}
+		$is_sandbox_id = ( 0 === strpos( $value, 'sandbox-' ) );
+		if ( self::square_live_mode() === $is_sandbox_id ) {
+			return '';
+		}
+		return $value;
+	}
+
+	/**
+	 * Square location id for the active mode. Public by design (the Web Payments
+	 * SDK needs it alongside the application id).
+	 *
+	 * @return string
+	 */
+	public static function square_location_id() {
+		$key   = self::square_live_mode() ? 'square_live_location_id' : 'square_test_location_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		return preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $value ) ? $value : '';
+	}
+
+	/**
+	 * Square access token for the active mode. Read env-first — the constant
+	 * DOUGHBOSS_SQUARE_TEST_ACCESS_TOKEN / DOUGHBOSS_SQUARE_LIVE_ACCESS_TOKEN or
+	 * the matching environment variable take precedence over the stored option.
+	 * Only ever used server-side; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function square_access_token() {
+		return self::square_live_mode()
+			? self::env_first_secret( 'DOUGHBOSS_SQUARE_LIVE_ACCESS_TOKEN', 'square_live_access_token' )
+			: self::env_first_secret( 'DOUGHBOSS_SQUARE_TEST_ACCESS_TOKEN', 'square_test_access_token' );
+	}
+
+	/**
+	 * Whether the configured Square access token is plausibly a Square token.
+	 *
+	 * Square does not publish a mode-distinguishing prefix for access tokens the
+	 * way Stripe does for secret keys, so this deliberately only rejects the
+	 * shapes that could never be one (empty, too short, or containing characters
+	 * an OAuth bearer token cannot hold). The mode guard lives on the
+	 * application id instead — see square_application_id().
+	 *
+	 * @return bool
+	 */
+	public static function square_access_token_valid() {
+		$token = self::square_access_token();
+		return 1 === preg_match( '/^[A-Za-z0-9_.-]{16,512}$/', $token );
+	}
+
+	/**
+	 * Square webhook signature key for the active mode (server-side only).
+	 * Read env-first — DOUGHBOSS_SQUARE_TEST_WEBHOOK_KEY /
+	 * DOUGHBOSS_SQUARE_LIVE_WEBHOOK_KEY take precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function square_webhook_key() {
+		return self::square_live_mode()
+			? self::env_first_secret( 'DOUGHBOSS_SQUARE_LIVE_WEBHOOK_KEY', 'square_live_webhook_key' )
+			: self::env_first_secret( 'DOUGHBOSS_SQUARE_TEST_WEBHOOK_KEY', 'square_test_webhook_key' );
+	}
+
+	/**
+	 * Whether the active Square mode has a webhook signature key.
+	 *
+	 * @return bool
+	 */
+	public static function square_webhook_configured() {
+		return '' !== self::square_webhook_key();
+	}
+
+	/**
+	 * The notification URL Square signs alongside the body. Square must be
+	 * configured to POST to exactly this string. Defaults to this site's own
+	 * REST route; the operator override exists for sites whose public URL is not
+	 * what rest_url() computes (reverse proxy, or plain permalinks producing a
+	 * `?rest_route=` form).
+	 *
+	 * @return string
+	 */
+	public static function square_webhook_url() {
+		$configured = trim( (string) self::get( 'square_webhook_url', '' ) );
+		if ( '' !== $configured ) {
+			return $configured;
+		}
+		if ( ! function_exists( 'rest_url' ) || ! defined( 'DOUGHBOSS_REST_NAMESPACE' ) ) {
+			return '';
+		}
+		return (string) rest_url( DOUGHBOSS_REST_NAMESPACE . '/square-webhook' );
+	}
+
+	/**
+	 * Whether Square is both the active gateway and fully configured for the
+	 * active mode. Live mode stays fail-closed until the operator has explicitly
+	 * approved production AND a webhook signature key exists — the webhook is the
+	 * only safety net for a payment whose browser never returns.
+	 *
+	 * @return bool
+	 */
+	public static function square_ready() {
+		return self::payments_enabled()
+			&& 'square' === self::payment_gateway()
+			&& '' !== self::square_application_id()
+			&& '' !== self::square_location_id()
+			&& self::square_access_token_valid()
+			&& (
+				! self::square_live_mode()
+				|| ( (bool) self::get( 'square_live_approved', 0 ) && self::square_webhook_configured() )
+			);
+	}
+
+	/** @return string */
+	public static function mpgs_mode() {
+		return 'live' === self::get( 'mpgs_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/** @return string */
+	public static function mpgs_merchant_id() {
+		$key = 'live' === self::mpgs_mode() ? 'mpgs_live_merchant_id' : 'mpgs_test_merchant_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		return preg_match( '/^[A-Za-z0-9_-]{1,40}$/', $value ) ? $value : '';
+	}
+
+	/** @return string */
+	public static function mpgs_api_password() {
+		return 'live' === self::mpgs_mode()
+			? self::env_first_secret( 'DOUGHBOSS_MPGS_LIVE_API_PASSWORD', 'mpgs_live_api_password' )
+			: self::env_first_secret( 'DOUGHBOSS_MPGS_TEST_API_PASSWORD', 'mpgs_test_api_password' );
+	}
+
+	/**
+	 * Return a tightly validated MPGS API origin. Arbitrary hosts are rejected
+	 * so a settings change cannot turn authenticated requests into SSRF.
+	 *
+	 * @return string
+	 */
+	public static function mpgs_host() {
+		$key  = 'live' === self::mpgs_mode() ? 'mpgs_live_host' : 'mpgs_test_host';
+		$host = untrailingslashit( esc_url_raw( trim( (string) self::get( $key, '' ) ) ) );
+		$parts = wp_parse_url( $host );
+		if ( ! is_array( $parts ) || 'https' !== strtolower( isset( $parts['scheme'] ) ? $parts['scheme'] : '' ) || empty( $parts['host'] ) ) {
+			return '';
+		}
+		$name = strtolower( (string) $parts['host'] );
+		if ( ! preg_match( '/(^|\.)gateway\.mastercard\.com$/', $name ) ) {
+			return '';
+		}
+		return 'https://' . $name;
+	}
+
+	/** @return int */
+	public static function mpgs_api_version() {
+		$version = absint( self::get( 'mpgs_api_version', 100 ) );
+		return min( 100, max( 63, $version ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_ready() {
+		return self::payments_enabled()
+			&& 'mpgs' === self::payment_gateway()
+			&& '' !== self::mpgs_merchant_id()
+			&& '' !== self::mpgs_api_password()
+			&& '' !== self::mpgs_host()
+			&& ( 'test' === self::mpgs_mode() || (bool) self::get( 'mpgs_live_approved', 0 ) );
+	}
+
+	/** @return bool */
+	public static function mpgs_live_mode() {
+		return 'live' === self::mpgs_mode();
+	}
+
+	/**
+	 * Active Tyro mode: 'test' or 'live'.
+	 *
+	 * @return string
+	 */
+	public static function tyro_mode() {
+		return 'live' === self::get( 'tyro_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect authenticates with an OAuth client ID, not a merchant ID.
+	 *
+	 * @return string
+	 */
+	public static function tyro_merchant_id() {
+		return self::tyro_client_id();
+	}
+
+	/**
+	 * Tyro Connect OAuth client ID for the active mode. It is used server-side
+	 * to obtain an access token and is never a browser card-field credential.
+	 *
+	 * @return string
+	 */
+	public static function tyro_client_id() {
+		$key = 'live' === self::tyro_mode() ? 'tyro_live_client_id' : 'tyro_test_client_id';
+		return trim( (string) self::get( $key, '' ) );
+	}
+
+	/**
+	 * Tyro Connect OAuth client secret for the active mode. It is read env-first
+	 * and used only server-side to obtain an access token.
+	 *
+	 * @return string
+	 */
+	public static function tyro_client_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_CLIENT_SECRET', 'tyro_live_client_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_CLIENT_SECRET', 'tyro_test_client_secret' );
+	}
+
+	/**
+	 * Backward-compatible alias used by the existing admin connectivity route.
+	 * Tyro Connect uses an OAuth client secret, not a merchant password.
+	 *
+	 * @return string
+	 */
+	public static function tyro_password() {
+		return self::tyro_client_secret();
+	}
+
+	/**
+	 * Tyro webhook signing secret for the active mode (server-side only).
+	 * Read env-first — the constant DOUGHBOSS_TYRO_TEST_WHSEC/
+	 * DOUGHBOSS_TYRO_LIVE_WHSEC or the matching environment variable take
+	 * precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_secret() {
+		return 'live' === self::tyro_mode()
+			? self::env_first_secret( 'DOUGHBOSS_TYRO_LIVE_WHSEC', 'tyro_live_webhook_secret' )
+			: self::env_first_secret( 'DOUGHBOSS_TYRO_TEST_WHSEC', 'tyro_test_webhook_secret' );
+	}
+
+	/**
+	 * Whether Tyro is both the active gateway and fully configured for the
+	 * active mode (so the storefront should actually route card payments to
+	 * it instead of Stripe).
+	 *
+	 * @return bool
+	 */
+	public static function tyro_ready() {
+		return self::payments_enabled()
+			&& 'tyro' === self::payment_gateway()
+			&& '' !== self::tyro_client_id()
+			&& '' !== self::tyro_client_secret()
+			&& ( 'test' === self::tyro_mode() || (bool) self::get( 'tyro_live_certified', 0 ) );
+	}
+
+	/**
+	 * WordPress-normalized form of Tyro Connect's Tyro-Connect-Signature
+	 * webhook header. The raw request body is verified by DoughBoss_Tyro.
+	 *
+	 * @return string
+	 */
+	public static function tyro_webhook_signature_header() {
+		return 'tyro_connect_signature';
+	}
+
+	/** @return bool */
+	public static function tyro_live_mode() {
+		return 'live' === self::tyro_mode();
+	}
+
+	/**
+	 * Whether the POSPal POS integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_enabled() {
+		return (bool) self::get( 'pospal_enabled', 0 );
+	}
+
+	/**
+	 * POSPal area host, trailing slash removed (e.g. https://area28-win.pospal.cn:443).
+	 *
+	 * @return string
+	 */
+	public static function pospal_host() {
+		return untrailingslashit( (string) self::get( 'pospal_host', '' ) );
+	}
+
+	/**
+	 * POSPal public application id.
+	 *
+	 * @return string
+	 */
+	public static function pospal_app_id() {
+		return (string) self::get( 'pospal_app_id', '' );
+	}
+
+	/**
+	 * POSPal secret application key. Read env-first — the constant
+	 * DOUGHBOSS_POSPAL_APPKEY or the matching environment variable take
+	 * precedence over the stored option, so the secret can be kept out of the
+	 * database (and therefore out of backups). Only ever used server-side to
+	 * sign requests; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function pospal_app_key() {
+		if ( defined( 'DOUGHBOSS_POSPAL_APPKEY' ) && '' !== (string) DOUGHBOSS_POSPAL_APPKEY ) {
+			return (string) DOUGHBOSS_POSPAL_APPKEY;
+		}
+		$env = getenv( 'DOUGHBOSS_POSPAL_APPKEY' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'pospal_app_key', '' );
+	}
+
+	/**
+	 * Whether POSPal is both enabled and fully configured (host + appId + appKey).
+	 *
+	 * @return bool
+	 */
+	public static function pospal_ready() {
+		return self::pospal_enabled() && '' !== self::pospal_host() && '' !== self::pospal_app_id() && '' !== self::pospal_app_key();
+	}
+
+	/**
+	 * POSPal coupon-rule UID mapped to the $5 voucher (blank when unmapped).
+	 *
+	 * @return string
+	 */
+	public static function pospal_coupon_uid_5() {
+		return (string) self::get( 'pospal_coupon_uid_5', '' );
+	}
+
+	/**
+	 * Map a dollar voucher value to the configured POSPal coupon-rule UID.
+	 *
+	 * Only the pilot's $5 student voucher is mapped today (the $10 tier was
+	 * retired); any other value returns '' (no rule), which the grant flow
+	 * treats as "skip — nothing to grant in POSPal".
+	 *
+	 * @param int|float|string $value Voucher dollar value (e.g. 5, '5.00').
+	 * @return string The mapped coupon-rule UID, or '' when none is configured.
+	 */
+	public static function pospal_coupon_uid_for( $value ) {
+		$dollars = (int) round( (float) $value );
+		switch ( $dollars ) {
+			case 5:
+				return self::pospal_coupon_uid_5();
+			default:
+				return '';
+		}
+	}
+
+	/**
+	 * Whether the POSPal coupon-GRANT leg should run: POSPal is fully configured
+	 * AND at least one coupon-rule UID is mapped. When false the whole grant/revoke
+	 * sync stays dormant and voucher claims behave exactly as before.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_grant_enabled() {
+		if ( ! self::pospal_enabled() ) {
+			return false;
+		}
+		foreach ( self::pospal_stores() as $store ) {
+			if ( '' !== $store['uid5'] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether mirroring online orders onto the POSPal till is switched on.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_push_orders() {
+		return (bool) self::get( 'pospal_push_orders', 0 );
+	}
+
+	/**
+	 * Whether the order-push leg is live: POSPal on AND order push on.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_push_enabled() {
+		return self::pospal_enabled() && self::pospal_push_orders();
+	}
+
+	/**
+	 * Pay method recorded on pushed POS orders (Cash / Wxpay / Alipay / a custom name).
+	 *
+	 * @return string
+	 */
+	public static function pospal_order_pay_method() {
+		$m = trim( (string) self::get( 'pospal_order_pay_method', 'Cash' ) );
+		return '' !== $m ? $m : 'Cash';
+	}
+
+	/**
+	 * Custom pay-method code (originalCode), required when pay method is a custom one.
+	 *
+	 * @return string
+	 */
+	public static function pospal_order_pay_method_code() {
+		return trim( (string) self::get( 'pospal_order_pay_method_code', '' ) );
+	}
+
+	/**
+	 * Whether a Stripe-paid order should be marked paid online (payOnLine=1) on the POS.
+	 *
+	 * @return bool
+	 */
+	public static function pospal_order_pay_online() {
+		return (bool) self::get( 'pospal_order_pay_online', 0 );
+	}
+
+	/**
+	 * Map of normalised menu-item name => POSPal product uid, used to translate order
+	 * lines into POSPal products. Built with `wp doughboss pospal-map`.
+	 *
+	 * @return array<string,int|string>
+	 */
+	public static function pospal_product_map() {
+		$map = self::get( 'pospal_product_map', array() );
+		return is_array( $map ) ? $map : array();
+	}
+
+	/**
+	 * Env-first App Key for an additional POSPal store (store 2, 3, …). Mirrors
+	 * pospal_app_key(): a DOUGHBOSS_POSPAL_APPKEY_<n> constant or env var overrides
+	 * the stored option so secrets can be kept out of the database.
+	 *
+	 * @param int $n Store number (2, 3, …).
+	 * @return string
+	 */
+	public static function pospal_store_key( $n ) {
+		$n     = (int) $n;
+		$const = 'DOUGHBOSS_POSPAL_APPKEY_' . $n;
+		if ( defined( $const ) && '' !== (string) constant( $const ) ) {
+			return (string) constant( $const );
+		}
+		$env = getenv( $const );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'pospal' . $n . '_app_key', '' );
+	}
+
+	/**
+	 * The configured POSPal stores for multi-store grants. Store 1 is the legacy
+	 * single-store fields (kept first for backward-compat); stores 2 and 3 come from
+	 * the pospal2_* / pospal3_* settings. Only fully-configured stores (host + App ID
+	 * + App Key all set) are returned, so an empty store is skipped and nothing breaks.
+	 *
+	 * @return array[] List of { label, host, app_id, app_key, uid5 }.
+	 */
+	public static function pospal_stores() {
+		$raw = array(
+			array(
+				'label'   => (string) self::get( 'pospal_label', '' ),
+				'host'    => self::pospal_host(),
+				'app_id'  => self::pospal_app_id(),
+				'app_key' => self::pospal_app_key(),
+				'uid5'    => self::pospal_coupon_uid_5(),
+				'default' => __( 'Store 1', 'doughboss' ),
+			),
+		);
+		foreach ( array( 2, 3 ) as $n ) {
+			$raw[] = array(
+				'label'   => (string) self::get( 'pospal' . $n . '_label', '' ),
+				'host'    => untrailingslashit( (string) self::get( 'pospal' . $n . '_host', '' ) ),
+				'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
+				'app_key' => self::pospal_store_key( $n ),
+				'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
+				/* translators: %d: store number. */
+				'default' => sprintf( __( 'Store %d', 'doughboss' ), $n ),
+			);
+		}
+
+		$stores = array();
+		foreach ( $raw as $s ) {
+			if ( '' === $s['host'] || '' === $s['app_id'] || '' === $s['app_key'] ) {
+				continue; // Skip incompletely-configured stores.
+			}
+			$s['label'] = '' !== $s['label'] ? $s['label'] : $s['default'];
+			unset( $s['default'] );
+			$stores[] = $s;
+		}
+		return $stores;
+	}
+
+	/**
+	 * A single POSPal store's config by number (1 = legacy/primary, 2, 3) regardless
+	 * of whether it is fully configured — used by the per-store admin Verify/Test
+	 * tools so an incomplete store reports clearly instead of falling back silently.
+	 *
+	 * @param int $n Store number.
+	 * @return array { label, host, app_id, app_key, uid5 }.
+	 */
+	public static function pospal_store( $n ) {
+		$n = max( 1, (int) $n );
+		if ( 1 === $n ) {
+			$label1 = (string) self::get( 'pospal_label', '' );
+			return array(
+				'label'   => '' !== $label1 ? $label1 : __( 'Store 1', 'doughboss' ),
+				'host'    => self::pospal_host(),
+				'app_id'  => self::pospal_app_id(),
+				'app_key' => self::pospal_app_key(),
+				'uid5'    => self::pospal_coupon_uid_5(),
+			);
+		}
+		$label = (string) self::get( 'pospal' . $n . '_label', '' );
+		return array(
+			/* translators: %d: store number. */
+			'label'   => '' !== $label ? $label : sprintf( __( 'Store %d', 'doughboss' ), $n ),
+			'host'    => untrailingslashit( (string) self::get( 'pospal' . $n . '_host', '' ) ),
+			'app_id'  => (string) self::get( 'pospal' . $n . '_app_id', '' ),
+			'app_key' => self::pospal_store_key( $n ),
+			'uid5'    => (string) self::get( 'pospal' . $n . '_coupon_uid_5', '' ),
+		);
+	}
+
+	/**
+	 * Whether the Mercure real-time push integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function mercure_enabled() {
+		return (bool) self::get( 'mercure_enabled', 0 );
+	}
+
+	/**
+	 * Mercure hub URL, trailing slash removed (e.g. https://hub.example.com/.well-known/mercure).
+	 *
+	 * @return string
+	 */
+	public static function mercure_hub_url() {
+		return untrailingslashit( (string) self::get( 'mercure_hub_url', '' ) );
+	}
+
+	/**
+	 * Mercure publisher JWT. Read env-first — the constant
+	 * DOUGHBOSS_MERCURE_PUBLISH_JWT or the matching environment variable take
+	 * precedence over the stored option, so the secret can be kept out of the
+	 * database (and therefore out of backups). Only ever used server-side to
+	 * authenticate publishes to the hub; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function mercure_publish_jwt() {
+		if ( defined( 'DOUGHBOSS_MERCURE_PUBLISH_JWT' ) && '' !== (string) DOUGHBOSS_MERCURE_PUBLISH_JWT ) {
+			return (string) DOUGHBOSS_MERCURE_PUBLISH_JWT;
+		}
+		$env = getenv( 'DOUGHBOSS_MERCURE_PUBLISH_JWT' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'mercure_publish_jwt', '' );
+	}
+
+	/**
+	 * Mercure subscriber JWT, handed to browser clients so they may subscribe to
+	 * topics. Not a publish credential, so it is read from the stored option.
+	 *
+	 * @return string
+	 */
+	public static function mercure_subscribe_jwt() {
+		return (string) self::get( 'mercure_subscribe_jwt', '' );
+	}
+
+	/**
+	 * Prefix used when composing Mercure topic URIs/names.
+	 *
+	 * @return string
+	 */
+	public static function mercure_topic_prefix() {
+		return (string) self::get( 'mercure_topic_prefix', 'doughboss' );
+	}
+
+	/**
+	 * Whether Mercure is both enabled and the minimum config (hub URL + publish
+	 * JWT) is present, so the server should actually publish real-time updates.
+	 *
+	 * @return bool
+	 */
+	public static function mercure_ready() {
+		return self::mercure_enabled() && '' !== self::mercure_hub_url() && '' !== self::mercure_publish_jwt();
+	}
+
+	/**
+	 * Whether the ntfy push-notification integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function ntfy_enabled() {
+		return (bool) self::get( 'ntfy_enabled', 0 );
+	}
+
+	/**
+	 * ntfy server base URL, trailing slash removed (default https://ntfy.sh).
+	 *
+	 * @return string
+	 */
+	public static function ntfy_server() {
+		$server = untrailingslashit( (string) self::get( 'ntfy_server', 'https://ntfy.sh' ) );
+		return '' !== $server ? $server : 'https://ntfy.sh';
+	}
+
+	/**
+	 * ntfy topic to publish to (blank when unconfigured).
+	 *
+	 * @return string
+	 */
+	public static function ntfy_topic() {
+		return (string) self::get( 'ntfy_topic', '' );
+	}
+
+	/**
+	 * ntfy bearer token. Read env-first — the constant DOUGHBOSS_NTFY_TOKEN or the
+	 * matching environment variable take precedence over the stored option, so the
+	 * secret can be kept out of the database (and therefore out of backups). Only
+	 * ever used server-side to authenticate publishes; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function ntfy_token() {
+		if ( defined( 'DOUGHBOSS_NTFY_TOKEN' ) && '' !== (string) DOUGHBOSS_NTFY_TOKEN ) {
+			return (string) DOUGHBOSS_NTFY_TOKEN;
+		}
+		$env = getenv( 'DOUGHBOSS_NTFY_TOKEN' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'ntfy_token', '' );
+	}
+
+	/**
+	 * ntfy message priority (default 'high').
+	 *
+	 * @return string
+	 */
+	public static function ntfy_priority() {
+		return (string) self::get( 'ntfy_priority', 'high' );
+	}
+
+	/**
+	 * Whether ntfy is both enabled and a topic is configured, so the server should
+	 * actually publish notifications.
+	 *
+	 * @return bool
+	 */
+	public static function ntfy_ready() {
+		return self::ntfy_enabled() && '' !== self::ntfy_topic();
+	}
+
+	/**
+	 * Whether the SMS (ClickSend) integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function sms_enabled() {
+		return (bool) self::get( 'sms_enabled', 0 );
+	}
+
+	/**
+	 * ClickSend account username.
+	 *
+	 * @return string
+	 */
+	public static function clicksend_username() {
+		return (string) self::get( 'clicksend_username', '' );
+	}
+
+	/**
+	 * ClickSend API key. Read env-first — the constant DOUGHBOSS_CLICKSEND_API_KEY
+	 * or the matching environment variable take precedence over the stored option,
+	 * so the secret can be kept out of the database (and therefore out of backups).
+	 * Only ever used server-side to authenticate the API; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function clicksend_api_key() {
+		if ( defined( 'DOUGHBOSS_CLICKSEND_API_KEY' ) && '' !== (string) DOUGHBOSS_CLICKSEND_API_KEY ) {
+			return (string) DOUGHBOSS_CLICKSEND_API_KEY;
+		}
+		$env = getenv( 'DOUGHBOSS_CLICKSEND_API_KEY' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'clicksend_api_key', '' );
+	}
+
+	/**
+	 * The sender ID / from-number used for outbound SMS.
+	 *
+	 * @return string
+	 */
+	public static function sms_from() {
+		return (string) self::get( 'sms_from', '' );
+	}
+
+	/**
+	 * Whether to text the customer when their order is marked ready (default on).
+	 *
+	 * @return bool
+	 */
+	public static function sms_on_ready() {
+		return (bool) self::get( 'sms_on_ready', 1 );
+	}
+
+	/**
+	 * Whether to text the voucher code to the customer when a voucher is claimed
+	 * (default off).
+	 *
+	 * @return bool
+	 */
+	public static function sms_on_voucher_claim() {
+		return (bool) self::get( 'sms_on_voucher_claim', 0 );
+	}
+
+	/**
+	 * Whether to email the customer when their order is accepted (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_accepted() {
+		return (bool) self::get( 'email_on_accepted', 1 );
+	}
+
+	/**
+	 * Whether to email the customer when their order is marked ready for
+	 * pickup (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_ready() {
+		return (bool) self::get( 'email_on_ready', 1 );
+	}
+
+	/**
+	 * Whether to send the shop inbox (orders_email()) a copy of each stage
+	 * email (default off).
+	 *
+	 * @return bool
+	 */
+	public static function email_staff_copy() {
+		return (bool) self::get( 'email_staff_copy', 0 );
+	}
+
+	/**
+	 * Whether SMS is both enabled and fully configured (username + API key), so
+	 * the server should actually send messages.
+	 *
+	 * @return bool
+	 */
+	public static function sms_ready() {
+		return self::sms_enabled() && '' !== self::clicksend_username() && '' !== self::clicksend_api_key();
+	}
+
+	/**
+	 * Whether the receipt-printer integration is switched on by the operator.
+	 *
+	 * @return bool
+	 */
+	public static function printer_enabled() {
+		return (bool) self::get( 'printer_enabled', 0 );
+	}
+
+	/**
+	 * Receipt printer protocol: 'cloudprnt' or 'epos' (default 'cloudprnt').
+	 *
+	 * @return string
+	 */
+	public static function printer_protocol() {
+		return 'epos' === self::get( 'printer_protocol', 'cloudprnt' ) ? 'epos' : 'cloudprnt';
+	}
+
+	/**
+	 * Receipt printer shared token. Read env-first — the constant
+	 * DOUGHBOSS_PRINTER_TOKEN or the matching environment variable take precedence
+	 * over the stored option, so the secret can be kept out of the database (and
+	 * therefore out of backups). Used to authenticate the printer/poll exchange;
+	 * never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function printer_token() {
+		if ( defined( 'DOUGHBOSS_PRINTER_TOKEN' ) && '' !== (string) DOUGHBOSS_PRINTER_TOKEN ) {
+			return (string) DOUGHBOSS_PRINTER_TOKEN;
+		}
+		$env = getenv( 'DOUGHBOSS_PRINTER_TOKEN' );
+		if ( false !== $env && '' !== $env ) {
+			return (string) $env;
+		}
+		return (string) self::get( 'printer_token', '' );
+	}
+
+	/**
+	 * Receipt width in characters (default 48 for an 80mm roll).
+	 *
+	 * @return int
+	 */
+	public static function printer_width() {
+		return (int) self::get( 'printer_width', 48 );
+	}
+
+	/**
+	 * Whether the printer is both enabled and a shared token is set, so the server
+	 * should actually emit receipts.
+	 *
+	 * @return bool
+	 */
+	public static function printer_ready() {
+		return self::printer_enabled() && '' !== self::printer_token();
+	}
+
+	/**
+	 * Order-confirmation email subject. Owner-editable (DoughBoss → Message
+	 * Templates); blank restores the built-in default. Supports the
+	 * {site_name}/{order_number} placeholders — see render_template().
+	 *
+	 * @return string
+	 */
+	public static function tpl_order_email_subject() {
+		$v = trim( (string) self::get( 'tpl_order_email_subject', '' ) );
+		return '' !== $v ? $v : '[{site_name}] Order {order_number} received';
+	}
+
+	/**
+	 * Order-confirmation email body. Owner-editable; blank restores the
+	 * built-in default. Supports {customer_name}/{order_number}/{items}/{total}/
+	 * {tracking_url}/{tracking_instructions}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_order_email_body() {
+		$v = (string) self::get( 'tpl_order_email_body', '' );
+		return '' !== trim( $v )
+			? $v
+			: "Hi {customer_name},\n\nThanks for your order {order_number}. Here's what we got:\n\n{items}\n\nTotal: {total}\n\n{tracking_instructions}\n";
+	}
+
+	/**
+	 * "Order ready" SMS text. Owner-editable; blank restores the built-in
+	 * default. Supports {order_number}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_sms_ready() {
+		$v = trim( (string) self::get( 'tpl_sms_ready', '' ) );
+		return '' !== $v ? $v : 'DoughBoss order #{order_number}: {status_label}. {handoff_message}';
+	}
+
+	/**
+	 * Voucher-claimed SMS text. Owner-editable; blank restores the built-in
+	 * default. Supports {code}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_sms_voucher() {
+		$v = trim( (string) self::get( 'tpl_sms_voucher', '' ) );
+		return '' !== $v ? $v : 'Your DoughBoss voucher is ready: {code}. Show this code to redeem.';
+	}
+
+	/**
+	 * "Order accepted" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports {customer_name}/{order_number}/{eta_minutes}/
+	 * {total}/{status_label}.
+	 *
+	 * @return string
+	 */
+	public static function tpl_accepted_email_subject() {
+		$v = trim( (string) self::get( 'tpl_accepted_email_subject', '' ) );
+		return '' !== $v ? $v : "We're on it! Order {order_number} is being prepared";
+	}
+
+	/**
+	 * "Order accepted" stage email body. Owner-editable; blank restores the
+	 * built-in default. The built-in default has two variants: one with the
+	 * "ready in about {eta_minutes} minutes" line and a neutral one used when
+	 * no ETA was given (eta 0), so the customer never reads "in about 0
+	 * minutes". A custom template is returned as-is either way.
+	 *
+	 * @param bool $with_eta Whether an ETA was given (selects the default variant).
+	 * @return string
+	 */
+	public static function tpl_accepted_email_body( $with_eta = true ) {
+		$v = (string) self::get( 'tpl_accepted_email_body', '' );
+		if ( '' !== trim( $v ) ) {
+			return $v;
+		}
+		if ( $with_eta ) {
+			return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. It should be ready in about {eta_minutes} minutes.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
+		}
+		return "Hi {customer_name},\n\nGreat news — our bakers have started on your order {order_number}. We'll let you know the moment it's ready.\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
+	}
+
+	/**
+	 * "Order ready" stage email subject. Owner-editable; blank restores the
+	 * built-in default. Supports the same placeholders as the accepted email.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_subject() {
+		$v = trim( (string) self::get( 'tpl_ready_email_subject', '' ) );
+		return '' !== $v ? $v : 'Order {order_number}: {status_label}';
+	}
+
+	/**
+	 * "Order ready" stage email body. Owner-editable; blank restores the
+	 * built-in default.
+	 *
+	 * @return string
+	 */
+	public static function tpl_ready_email_body() {
+		$v = (string) self::get( 'tpl_ready_email_body', '' );
+		return '' !== trim( $v )
+			? $v
+			: "Hi {customer_name},\n\nYour order {order_number} is {status_label}. {handoff_message}\n\nOrder total: {total}\n\n{tracking_instructions}\n\nSee you soon!\n";
+	}
+
+	/**
+	 * Replace {placeholder} tokens in a message template with the given values.
+	 * Unknown placeholders are left as literal text rather than silently
+	 * blanked, so a typo in a custom template stays visible instead of hidden.
+	 *
+	 * @param string $template Template text containing {placeholder} tokens.
+	 * @param array  $vars     Map of placeholder name (without braces) => value.
+	 * @return string
+	 */
+	public static function render_template( $template, array $vars ) {
+		$search  = array();
+		$replace = array();
+		foreach ( $vars as $key => $value ) {
+			$search[]  = '{' . $key . '}';
+			$replace[] = (string) $value;
+		}
+		return str_replace( $search, $replace, (string) $template );
 	}
 }
