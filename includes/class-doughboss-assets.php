@@ -225,6 +225,12 @@ class DoughBoss_Assets {
 				// script origin is derived from the allowlisted API host.
 				wp_enqueue_script( 'mpgs-checkout', DoughBoss_MPGS::checkout_script_url(), array(), null, true );
 				$deps[] = 'mpgs-checkout';
+			} elseif ( 'square' === $gateway ) {
+				// Square requires its PCI-scoped Web Payments SDK to be loaded
+				// directly from Square's own CDN. Never bundle, proxy or self-host
+				// this file; the sandbox and production bundles differ.
+				wp_enqueue_script( 'square-web-payments', DoughBoss_Square::sdk_url(), array(), null, true );
+				$deps[] = 'square-web-payments';
 			} else {
 				// Stripe Checkout is a full-page provider-hosted redirect. The
 				// storefront never loads Stripe.js or renders card fields.
@@ -249,6 +255,37 @@ class DoughBoss_Assets {
 			);
 		}
 
+		// Square card capture. Enqueued ONLY when Square is the active, ready
+		// gateway, so nothing about the current pay-at-shop or Stripe storefront
+		// changes. Only the application id and location id are handed to the
+		// browser — both are public by design for the Web Payments SDK. The
+		// access token and webhook signature key never leave the server.
+		if ( $payments_on && 'square' === $gateway ) {
+			wp_enqueue_style(
+				'doughboss-square',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-square.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-square',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-square.js',
+				array( 'doughboss' ),
+				DOUGHBOSS_VERSION,
+				true
+			);
+			wp_localize_script(
+				'doughboss-square',
+				'DoughBossSquareConfig',
+				array(
+					'applicationId' => DoughBoss_Square::publishable_key(),
+					'locationId'    => DoughBoss_Square::location_id(),
+					'liveMode'      => DoughBoss_Settings::square_live_mode(),
+					'currency'      => strtoupper( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ),
+				)
+			);
+		}
+
 		wp_localize_script(
 			'doughboss',
 			'DoughBossData',
@@ -266,7 +303,7 @@ class DoughBoss_Assets {
 					// Elements vs Tyro Connect's hosted pay form).
 					'gateway' => $gateway,
 					'hostedCheckout' => 'stripe' === $gateway,
-					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ),
+					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ) || ( 'square' === $gateway && DoughBoss_Settings::square_live_mode() ),
 				),
 				'i18n'     => array(
 					'addToCart'    => __( 'Add to cart', 'doughboss' ),
