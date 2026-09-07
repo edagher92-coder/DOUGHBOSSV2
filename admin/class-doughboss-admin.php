@@ -402,6 +402,12 @@ class DoughBoss_Admin {
 		// The secret key and webhook secret fields render blank (see the form
 		// below) and use keep_secret() so a routine save without re-entering them
 		// preserves the stored value instead of wiping it.
+		// Written by handle_save_voucher_reconciliation() via DoughBoss_Settings::update();
+		// without this line the sanitiser drops it and the Voucher Scan till tool stays paused.
+		$clean['voucher_reconciliation_owner_id'] = isset( $input['voucher_reconciliation_owner_id'] )
+			? absint( $input['voucher_reconciliation_owner_id'] )
+			: ( isset( $existing['voucher_reconciliation_owner_id'] ) ? absint( $existing['voucher_reconciliation_owner_id'] ) : 0 );
+
 		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
 		$requested_gateway = isset( $input['payment_gateway'] ) ? sanitize_key( $input['payment_gateway'] ) : 'stripe';
 		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $requested_gateway : 'stripe';
