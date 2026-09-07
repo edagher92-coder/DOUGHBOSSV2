@@ -703,6 +703,16 @@ class DoughBoss_REST_Controller {
 					'return_url' => array(
 						'sanitize_callback' => 'esc_url_raw',
 					),
+					// Square only: the single-use card token the Web Payments SDK
+					// produced in the browser, plus optional 3-D Secure evidence.
+					// Neither is a secret and neither is ever stored — they are
+					// passed straight through to Square and discarded.
+					'source_id' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'verification_token' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 				),
 			)
 		);
@@ -1259,6 +1269,21 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'mpgs_notification' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		// Storefront — Square webhook, mirroring /tyro-webhook. Public route,
+		// gated by DoughBoss_Square::verify_webhook_signature() (HMAC-SHA256 over
+		// the notification URL + the raw body), not a nonce. Like the Tyro
+		// webhook it never creates orders and never refunds: it only surfaces a
+		// payment that has no order for a human decision.
+		register_rest_route(
+			$ns,
+			'/square-webhook',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'square_webhook' ),
 				'permission_callback' => '__return_true',
 			)
 		);
@@ -2611,7 +2636,12 @@ class DoughBoss_REST_Controller {
 		$phone   = sanitize_text_field( $request->get_param( 'customer_phone' ) );
 		$address = sanitize_textarea_field( $request->get_param( 'address' ) );
 		$notes   = sanitize_textarea_field( $request->get_param( 'notes' ) );
-		if ( 'stripe' === $gateway ) {
+		// Stripe and Square both need the contact details BEFORE the money moves:
+		// Stripe because the hosted session is created from an immutable
+		// snapshot, Square because this call actually charges the card, and a
+		// card must never be charged for an order /checkout will then refuse for
+		// missing details.
+		if ( 'stripe' === $gateway || 'square' === $gateway ) {
 			if ( '' === $name || ! is_email( $email ) || '' === $phone || ( 'delivery' === $order_type && '' === $address ) ) {
 				return new WP_Error( 'doughboss_invalid', __( 'Complete your contact and fulfilment details before continuing to payment.', 'doughboss' ), array( 'status' => 400 ) );
 			}
@@ -2710,6 +2740,26 @@ class DoughBoss_REST_Controller {
 				$return_urls['cancel'],
 				$email
 			);
+		} elseif ( 'square' === $gateway ) {
+			// Square charges synchronously from a single-use browser card token.
+			// The token and its optional 3-D Secure evidence are passed straight
+			// through to Square and never stored (DoughBoss_Square strips both
+			// before the attempt row is written). The AMOUNT is the one this
+			// server just computed from the stored cart — never a client value.
+			$metadata['source_id']          = sanitize_text_field( (string) $request->get_param( 'source_id' ) );
+			$metadata['verification_token'] = sanitize_text_field( (string) $request->get_param( 'verification_token' ) );
+			$intent = DoughBoss_Square::create_payment_intent( $amount, $currency, $metadata );
+			if ( ! is_wp_error( $intent ) && 'succeeded' !== ( isset( $intent['status'] ) ? (string) $intent['status'] : '' ) ) {
+				// Anything short of a completed Square payment must not become an
+				// order. Refuse here and tell the customer not to retry: the
+				// signed Square webhook flags any money that did move so a human
+				// can reconcile it, exactly like the Tyro path.
+				$intent = new WP_Error(
+					'doughboss_pay_incomplete',
+					__( 'Your card payment has not completed. Please do not pay again — contact the shop and we will confirm it for you.', 'doughboss' ),
+					array( 'status' => 402 )
+				);
+			}
 		} else {
 			$metadata['return_url'] = $this->same_site_return_url( $request->get_param( 'return_url' ) );
 			$intent = DoughBoss_Payment::create_payment_intent( $amount, $currency, $metadata );
@@ -2729,6 +2779,22 @@ class DoughBoss_REST_Controller {
 					'gateway'          => 'stripe',
 					'live_mode'        => 'live' === DoughBoss_Settings::stripe_mode(),
 					'attempt_id'       => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
+				)
+			);
+		}
+
+		if ( 'square' === $gateway ) {
+			// No client secret exists for Square: the card was tokenised in the
+			// browser and charged here. The browser receives only the payment id,
+			// which /checkout re-verifies against Square before any order row.
+			return rest_ensure_response(
+				array(
+					'payment_intent' => $intent['id'],
+					'amount'         => $intent['amount'],
+					'currency'       => $intent['currency'],
+					'gateway'        => 'square',
+					'live_mode'      => DoughBoss_Settings::square_live_mode(),
+					'attempt_id'     => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
 				)
 			);
 		}
@@ -5053,6 +5119,104 @@ class DoughBoss_REST_Controller {
 			} elseif ( ! DoughBoss_Order::payment_intent_used( $reference ) ) {
 				$this->record_unreconciled_payment( $reference, $intent );
 			}
+		}
+		DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' );
+
+		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * POST /square-webhook — storefront payment reconciliation safety-net, the
+	 * Square equivalent of tyro_webhook().
+	 *
+	 * Same invariants as the Tyro webhook, deliberately NOT the Stripe one: it
+	 * never creates orders and never refunds. Square's storefront flow charges
+	 * the card synchronously and the browser's /checkout call is the only path
+	 * that can create an order, so the one failure this endpoint exists to catch
+	 * is "Square took the money but /checkout never landed". That is surfaced on
+	 * the Orders screen for a human decision rather than auto-fulfilled — money
+	 * movement without a verified cart is never automated here.
+	 *
+	 * Nothing in the delivered payload is trusted: the signature is checked
+	 * first, then the payment is re-read from Square and re-bound to this site's
+	 * own attempt row before anything is recorded.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function square_webhook( WP_REST_Request $request ) {
+		$payload = $request->get_body();
+		$sig     = $request->get_header( DoughBoss_Square::webhook_signature_header() );
+
+		if ( ! DoughBoss_Square::verify_webhook_signature( $payload, $sig ) ) {
+			return new WP_Error( 'doughboss_wh_sig', __( 'Invalid signature.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$event = json_decode( $payload, true );
+		if ( ! is_array( $event ) || empty( $event['type'] ) || empty( $event['event_id'] ) ) {
+			return rest_ensure_response( array( 'received' => true ) );
+		}
+
+		$type     = strtolower( sanitize_text_field( (string) $event['type'] ) );
+		$event_id = sanitize_text_field( (string) $event['event_id'] );
+		$data     = isset( $event['data'] ) && is_array( $event['data'] ) ? $event['data'] : array();
+		$resource = isset( $data['type'] ) ? sanitize_key( (string) $data['type'] ) : '';
+		$reference = isset( $data['id'] ) ? DoughBoss_Square::canonical_id( $data['id'] ) : '';
+
+		// Only payment events carry a payment id worth reconciling. Everything
+		// else (refunds, disputes, catalog, …) is acknowledged and ignored so
+		// Square does not retry a delivery this site will never act on.
+		if ( '' === $reference || '' === $event_id || 'payment' !== $resource || 0 !== strpos( $type, 'payment.' ) ) {
+			return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+		}
+
+		$event_key = hash( 'sha256', 'square|' . $event_id );
+		if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'square', $reference, $type ) ) {
+			$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+			if ( null === $event_outcome || 'retry' === $event_outcome ) {
+				return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
+		}
+
+		// Re-read the payment from Square rather than believing the delivered
+		// object; retrieve_payment_intent() also re-binds it to this site's
+		// attempt row (amount, currency, reference, Square location).
+		$intent = DoughBoss_Square::retrieve_payment_intent( $reference );
+		if ( is_wp_error( $intent ) ) {
+			$code = $intent->get_error_code();
+			if ( 'doughboss_pay_attempt' === $code ) {
+				// No attempt row matches. Usually this is simply another
+				// application on the same Square account. But it is ALSO how a
+				// charge that succeeded and then failed to bind looks — real
+				// money with no local record. Ask Square whether the payment is
+				// provably ours (our location + our db-attempt- reference); if it
+				// is, flag it for a human rather than dropping it.
+				$orphan = DoughBoss_Square::orphan_payment( $reference );
+				if (
+					! is_wp_error( $orphan )
+					&& 'succeeded' === $orphan['status']
+					&& ! DoughBoss_Order::payment_intent_used( $reference )
+				) {
+					$this->record_unreconciled_payment( $reference, $orphan );
+					DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' );
+					return rest_ensure_response( array( 'received' => true, 'flagged' => true ) );
+				}
+				DoughBoss_Payment_Attempts::complete_event( $event_key, 'unknown_reference' );
+				return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+			}
+			if ( in_array( $code, array( 'doughboss_pay_mismatch', 'doughboss_pay_id' ), true ) ) {
+				// A payment that no longer binds to its attempt. retrieve_payment_intent()
+				// has already marked the attempt 'mismatch' for the operator.
+				DoughBoss_Payment_Attempts::complete_event( $event_key, 'unknown_reference' );
+				return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+			}
+			DoughBoss_Payment_Attempts::complete_event( $event_key, 'retry' );
+			return new WP_Error( 'doughboss_square_webhook_retry', __( 'Square payment retrieval failed.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		if ( 'succeeded' === $intent['status'] && ! DoughBoss_Order::payment_intent_used( $reference ) ) {
+			$this->record_unreconciled_payment( $reference, $intent );
 		}
 		DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' );
 
