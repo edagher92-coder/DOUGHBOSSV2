@@ -37,6 +37,7 @@ class DoughBoss_Payment {
 			'stripe' => 'DoughBoss_Stripe',
 			'tyro'   => 'DoughBoss_Tyro',
 			'mpgs'   => 'DoughBoss_MPGS',
+			'square' => 'DoughBoss_Square',
 		);
 		$gateway = DoughBoss_Settings::payment_gateway();
 		return isset( $classes[ $gateway ] ) ? $classes[ $gateway ] : $classes['stripe'];
@@ -52,6 +53,7 @@ class DoughBoss_Payment {
 			'stripe' => 'Stripe',
 			'tyro'   => 'Tyro Connect',
 			'mpgs'   => 'Mastercard Payment Gateway',
+			'square' => 'Square',
 		);
 		$gateway = DoughBoss_Settings::payment_gateway();
 		return isset( $labels[ $gateway ] ) ? $labels[ $gateway ] : $labels['stripe'];
@@ -154,6 +156,7 @@ class DoughBoss_Payment {
 			'stripe' => 'DoughBoss_Stripe',
 			'tyro'   => 'DoughBoss_Tyro',
 			'mpgs'   => 'DoughBoss_MPGS',
+			'square' => 'DoughBoss_Square',
 		);
 		$class = isset( $classes[ $gateway ] ) ? $classes[ $gateway ] : '';
 		if ( ! class_exists( $class ) ) {

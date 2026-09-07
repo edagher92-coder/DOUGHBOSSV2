@@ -222,6 +222,26 @@ class DoughBoss_Settings {
 			'mpgs_live_host'         => '',
 			'mpgs_api_version'       => 100,
 			'mpgs_live_approved'     => 0,
+			// Square Payments API. Off by default and completely inert until
+			// `payment_gateway` is switched to 'square' AND every credential for
+			// the active mode is present. The application id and location id are
+			// public by design (the Web Payments SDK needs them in the page); the
+			// access token and webhook signature key are env-first secrets and
+			// are never exposed to a browser. Live mode additionally fails closed
+			// until `square_live_approved` is explicitly ticked, mirroring
+			// tyro_live_certified / mpgs_live_approved.
+			'square_mode'               => 'test',
+			'square_api_version'        => '2025-01-23',
+			'square_webhook_url'        => '',
+			'square_test_app_id'        => '',
+			'square_test_access_token'  => '',
+			'square_test_location_id'   => '',
+			'square_test_webhook_key'   => '',
+			'square_live_app_id'        => '',
+			'square_live_access_token'  => '',
+			'square_live_location_id'   => '',
+			'square_live_webhook_key'   => '',
+			'square_live_approved'      => 0,
 			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
 			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
 			// this option is only a fallback and is best left blank where env is set.
@@ -763,7 +783,163 @@ class DoughBoss_Settings {
 	 */
 	public static function payment_gateway() {
 		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'stripe' ) );
-		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs' ), true ) ? $gateway : 'stripe';
+		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $gateway : 'stripe';
+	}
+
+	/**
+	 * Active Square mode: 'test' (Square sandbox) or 'live' (Square production).
+	 *
+	 * @return string
+	 */
+	public static function square_mode() {
+		return 'live' === self::get( 'square_mode', 'test' ) ? 'live' : 'test';
+	}
+
+	/**
+	 * Whether the active Square mode is production.
+	 *
+	 * @return bool
+	 */
+	public static function square_live_mode() {
+		return 'live' === self::square_mode();
+	}
+
+	/**
+	 * Square API version sent as the `Square-Version` header. Square rejects an
+	 * unknown value outright, so this is operator-editable (like MPGS's API
+	 * version) rather than hard-coded — a shop can move it forward without a
+	 * plugin release. Anything that is not a YYYY-MM-DD date falls back to the
+	 * shipped default.
+	 *
+	 * @return string
+	 */
+	public static function square_api_version() {
+		$version = trim( (string) self::get( 'square_api_version', '2025-01-23' ) );
+		return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $version ) ? $version : '2025-01-23';
+	}
+
+	/**
+	 * Square application id for the active mode. Public by design — the Web
+	 * Payments SDK needs it in the page — but still mode-checked so a sandbox
+	 * application id can never be used to take a live payment (or vice versa).
+	 *
+	 * @return string
+	 */
+	public static function square_application_id() {
+		$key   = self::square_live_mode() ? 'square_live_app_id' : 'square_test_app_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{8,191}$/', $value ) ) {
+			return '';
+		}
+		$is_sandbox_id = ( 0 === strpos( $value, 'sandbox-' ) );
+		if ( self::square_live_mode() === $is_sandbox_id ) {
+			return '';
+		}
+		return $value;
+	}
+
+	/**
+	 * Square location id for the active mode. Public by design (the Web Payments
+	 * SDK needs it alongside the application id).
+	 *
+	 * @return string
+	 */
+	public static function square_location_id() {
+		$key   = self::square_live_mode() ? 'square_live_location_id' : 'square_test_location_id';
+		$value = trim( (string) self::get( $key, '' ) );
+		return preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $value ) ? $value : '';
+	}
+
+	/**
+	 * Square access token for the active mode. Read env-first — the constant
+	 * DOUGHBOSS_SQUARE_TEST_ACCESS_TOKEN / DOUGHBOSS_SQUARE_LIVE_ACCESS_TOKEN or
+	 * the matching environment variable take precedence over the stored option.
+	 * Only ever used server-side; never echoed to a client.
+	 *
+	 * @return string
+	 */
+	public static function square_access_token() {
+		return self::square_live_mode()
+			? self::env_first_secret( 'DOUGHBOSS_SQUARE_LIVE_ACCESS_TOKEN', 'square_live_access_token' )
+			: self::env_first_secret( 'DOUGHBOSS_SQUARE_TEST_ACCESS_TOKEN', 'square_test_access_token' );
+	}
+
+	/**
+	 * Whether the configured Square access token is plausibly a Square token.
+	 *
+	 * Square does not publish a mode-distinguishing prefix for access tokens the
+	 * way Stripe does for secret keys, so this deliberately only rejects the
+	 * shapes that could never be one (empty, too short, or containing characters
+	 * an OAuth bearer token cannot hold). The mode guard lives on the
+	 * application id instead — see square_application_id().
+	 *
+	 * @return bool
+	 */
+	public static function square_access_token_valid() {
+		$token = self::square_access_token();
+		return 1 === preg_match( '/^[A-Za-z0-9_.-]{16,512}$/', $token );
+	}
+
+	/**
+	 * Square webhook signature key for the active mode (server-side only).
+	 * Read env-first — DOUGHBOSS_SQUARE_TEST_WEBHOOK_KEY /
+	 * DOUGHBOSS_SQUARE_LIVE_WEBHOOK_KEY take precedence over the stored option.
+	 *
+	 * @return string
+	 */
+	public static function square_webhook_key() {
+		return self::square_live_mode()
+			? self::env_first_secret( 'DOUGHBOSS_SQUARE_LIVE_WEBHOOK_KEY', 'square_live_webhook_key' )
+			: self::env_first_secret( 'DOUGHBOSS_SQUARE_TEST_WEBHOOK_KEY', 'square_test_webhook_key' );
+	}
+
+	/**
+	 * Whether the active Square mode has a webhook signature key.
+	 *
+	 * @return bool
+	 */
+	public static function square_webhook_configured() {
+		return '' !== self::square_webhook_key();
+	}
+
+	/**
+	 * The notification URL Square signs alongside the body. Square must be
+	 * configured to POST to exactly this string. Defaults to this site's own
+	 * REST route; the operator override exists for sites whose public URL is not
+	 * what rest_url() computes (reverse proxy, or plain permalinks producing a
+	 * `?rest_route=` form).
+	 *
+	 * @return string
+	 */
+	public static function square_webhook_url() {
+		$configured = trim( (string) self::get( 'square_webhook_url', '' ) );
+		if ( '' !== $configured ) {
+			return $configured;
+		}
+		if ( ! function_exists( 'rest_url' ) || ! defined( 'DOUGHBOSS_REST_NAMESPACE' ) ) {
+			return '';
+		}
+		return (string) rest_url( DOUGHBOSS_REST_NAMESPACE . '/square-webhook' );
+	}
+
+	/**
+	 * Whether Square is both the active gateway and fully configured for the
+	 * active mode. Live mode stays fail-closed until the operator has explicitly
+	 * approved production AND a webhook signature key exists — the webhook is the
+	 * only safety net for a payment whose browser never returns.
+	 *
+	 * @return bool
+	 */
+	public static function square_ready() {
+		return self::payments_enabled()
+			&& 'square' === self::payment_gateway()
+			&& '' !== self::square_application_id()
+			&& '' !== self::square_location_id()
+			&& self::square_access_token_valid()
+			&& (
+				! self::square_live_mode()
+				|| ( (bool) self::get( 'square_live_approved', 0 ) && self::square_webhook_configured() )
+			);
 	}
 
 	/** @return string */
