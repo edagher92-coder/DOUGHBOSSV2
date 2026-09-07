@@ -81,6 +81,13 @@ foreach ( $legacy_clock_pages as $legacy_clock_page ) {
 }
 
 // Remove options.
+// Square's settings (square_mode, square_api_version, square_webhook_url and
+// the square_test_*/square_live_* credentials) live INSIDE doughboss_settings,
+// so this single delete removes them along with every other gateway's. Square
+// introduces no option key of its own and no transients; its durable state is
+// confined to the doughboss_payment_attempts / doughboss_payment_events tables
+// dropped above and, for a payment that never became an order, the
+// doughboss_unreconciled_payments option deleted below.
 delete_option( 'doughboss_settings' );
 delete_option( 'doughboss_db_version' );
 delete_option( 'doughboss_migration_error' );
