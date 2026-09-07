@@ -342,6 +342,7 @@ body.page-id-402 #primary-menu > li > a {
 	flex: 1;
 }
 
+.db-card-body h3,
 .db-card-body h4 {
 	margin: 0 0 0.35rem;
 }
@@ -484,9 +485,31 @@ body.page-id-402 #primary-menu > li > a {
 .db-menu-option {
 	display: flex;
 	align-items: center;
-	gap: 0.45rem;
+	gap: 0.55rem;
 	padding: 0.25rem 0;
 	cursor: pointer;
+	touch-action: manipulation;
+}
+
+/* The radio/checkbox itself renders ~11px. The <label> is the real target, so
+ * on touch it gets a full 44px row and the control is scaled up to match. */
+@media (pointer: coarse) {
+	.db-menu-option {
+		min-height: 44px;
+		padding: 0.35rem 0.25rem;
+		border-radius: var(--db-r-sm);
+	}
+
+	.db-menu-option input {
+		width: 22px;
+		height: 22px;
+		flex: 0 0 auto;
+		accent-color: var(--db-accent);
+	}
+
+	.db-menu-option:active {
+		background: color-mix(in srgb, var(--db-accent) 6%, transparent);
+	}
 }
 
 .db-menu-option span:nth-of-type(1) {
@@ -675,6 +698,7 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-field input,
 .db-field textarea {
+	min-height: 44px;
 	padding: 0.65rem 0.75rem;
 	border: 1px solid var(--db-border);
 	border-radius: var(--db-r-sm);
@@ -687,8 +711,50 @@ body.page-id-402 #primary-menu > li > a {
 	border-color: var(--db-accent);
 }
 
+/* Inline field validation. The message only occupies space once it has text,
+ * so an untouched form keeps its original rhythm. */
+.db-field .db-field-error:empty {
+	display: none;
+}
+
+.db-field .db-field-error {
+	margin-top: 0.3rem;
+	color: #c41c14;
+	font-size: 0.8rem;
+	font-weight: 600;
+}
+
+.db-field input[aria-invalid="true"],
+.db-field textarea[aria-invalid="true"] {
+	border-color: #c41c14;
+	background: #fff7f6;
+}
+
 .db-checkout-msg {
 	min-height: 1rem;
+	scroll-margin-top: calc(var(--db-sticky-top, 0px) + 16px);
+}
+
+/* An error here is the difference between a completed order and an abandoned
+ * one — it must be impossible to miss when focus lands on it. */
+.db-checkout-msg.db-error {
+	display: block;
+	padding: 0.8rem 0.9rem;
+	margin-top: 0.75rem;
+	border: 1px solid rgba(196, 28, 20, 0.35);
+	border-left: 4px solid #c41c14;
+	border-radius: var(--db-r-md);
+	background: #fff5f4;
+}
+
+.db-checkout-msg:focus-visible,
+.db-confirm:focus-visible {
+	outline: 3px solid var(--db-accent);
+	outline-offset: 3px;
+}
+
+.db-confirm {
+	scroll-margin-top: calc(var(--db-sticky-top, 0px) + 16px);
 }
 
 .db-checkout-safety {
@@ -773,6 +839,7 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 .db-track-form input {
+	min-height: 44px;
 	padding: 0.65rem 0.75rem;
 	border: 1px solid var(--db-border);
 	border-radius: var(--db-r-sm);
@@ -1100,7 +1167,8 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 /* Menu cards: Bebas item name + mono tabular price + softened media. */
-.db-app .db-card-body h4 {
+.db-app .db-card-body h3,
+.db-card-body h4 {
 	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
 	letter-spacing: .02em;
 	line-height: 1.05;
@@ -1272,8 +1340,12 @@ body.page-id-402 #primary-menu > li > a {
 }
 @media (hover: hover) { .db-app .db-jump:hover { border-color: var(--db-ink); } }
 .db-app .db-jump:active { transform: scale(.92); }
-/* Land category headings below the sticky bar on jump. */
-.db-app .db-category { scroll-margin-top: 64px; }
+/* Land category headings below BOTH sticky bars on jump: the site header
+ * (--db-sticky-top, published by the theme) and the menu's own sticky search +
+ * chips bar (--db-tools-h, published by renderMenu). */
+.db-app .db-category {
+	scroll-margin-top: calc(var(--db-sticky-top, 0px) + var(--db-tools-h, 64px) + 12px);
+}
 
 /* Fixed cart cue: rendered inside the menu shortcode and only revealed when
  * the existing server-owned cart is non-empty. Its moderate stacking level
@@ -1472,6 +1544,7 @@ body.page-id-402 #primary-menu > li > a {
 .db-order-header h2,
 .db-checkout-heading h3,
 .db-confirm h3,
+.db-track-form h2,
 .db-track-form h3 {
 	margin: 0;
 	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
@@ -1618,9 +1691,17 @@ body.page-id-402 #primary-menu > li > a {
 	text-align: right;
 }
 
+/* Remove used to be a 47x20 text link inside the cart — the one destructive
+ * control in the order, and the hardest to hit on a phone. Same look, real
+ * 44px target. */
 .db-cart-remove {
 	grid-column: 1;
 	justify-self: start;
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	padding-inline: 2px;
+	touch-action: manipulation;
 }
 
 .db-qty-control {
@@ -1963,6 +2044,7 @@ body.page-id-402 #primary-menu > li > a {
 	box-shadow: var(--db-shadow-1);
 }
 
+.db-track-form h2,
 .db-track-form h3 {
 	font-size: 2rem;
 }

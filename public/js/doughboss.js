@@ -64,6 +64,12 @@
 				node.innerHTML = attrs[key];
 			} else if (key.indexOf('data-') === 0 || key.indexOf('aria-') === 0) {
 				node.setAttribute(key, attrs[key]);
+			} else if (key === 'role' || key === 'tabindex' || key === 'for' || key === 'list') {
+				// These have no same-named settable DOM property (it is tabIndex /
+				// htmlFor, and role only reflects in newer engines), so the
+				// property assignment below silently did nothing — which is why a
+				// tabindex:'-1' region could never take focus.
+				node.setAttribute(key, attrs[key]);
 			} else {
 				node[key] = attrs[key];
 			}
@@ -97,6 +103,55 @@
 		void node.offsetWidth;
 		node.classList.add('db-pop');
 		setTimeout(function () { node.classList.remove('db-pop'); }, 420);
+	}
+
+	// Bring a node into view and hand it keyboard focus. Used at the two moments
+	// where the page changes underneath the customer but the viewport does not:
+	// a failed checkout submit, and the order confirmation replacing the form.
+	// Both previously rendered off-screen (measured: error at y=905 in an 844px
+	// viewport; confirmation at y=-637), so the customer saw nothing happen.
+	function revealNode(node, focus, block) {
+		if (!node) { return; }
+		try {
+			var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			if (node.scrollIntoView) {
+				node.scrollIntoView(reduce ? true : { behavior: 'smooth', block: block || 'center' });
+			}
+		} catch (scrollUnsupported) {
+			if (node.scrollIntoView) { node.scrollIntoView(); }
+		}
+		if (focus === false) { return; }
+		// Focus after the scroll is queued so assistive tech announces the node
+		// once, in its new position.
+		setTimeout(function () {
+			try { node.focus({ preventScroll: true }); } catch (focusUnsupported) { node.focus(); }
+		}, 0);
+	}
+
+	// Turn a passive polite message into an assertive, focused, visible error,
+	// keeping whatever base classes the node already carries. Pass focusNode to
+	// park the caret somewhere more useful than the message itself (e.g. back in
+	// the voucher input the customer now has to correct).
+	function announceError(node, message, focusNode) {
+		if (!node) { return; }
+		node.textContent = message;
+		if (node.classList) { node.classList.add('db-error'); }
+		node.setAttribute('role', 'alert');
+		node.setAttribute('aria-live', 'assertive');
+		revealNode(node, false);
+		var target = focusNode || node;
+		setTimeout(function () {
+			try { target.focus({ preventScroll: true }); } catch (focusUnsupported) { target.focus(); }
+		}, 0);
+	}
+
+	// Return a message node to its quiet state before a fresh attempt.
+	function clearError(node) {
+		if (!node) { return; }
+		node.textContent = '';
+		if (node.classList) { node.classList.remove('db-error'); }
+		node.removeAttribute('role');
+		node.setAttribute('aria-live', 'polite');
 	}
 
 	// Stable DOM id for a category name, for jump-bar scroll anchors.
@@ -412,10 +467,30 @@
 			}
 			root.appendChild(tools);
 
+			// The search + category bar is sticky under the site header, so a
+			// category jump has to clear BOTH or the heading lands underneath it
+			// (measured before this: 92px of the heading hidden at 390px, 37px at
+			// 1280px). Publish its real height for .db-category's scroll-margin-top
+			// instead of guessing a constant.
+			var publishToolsHeight = function () {
+				var toolsHeight = Math.round(tools.getBoundingClientRect().height);
+				if (toolsHeight > 0 && root.style && root.style.setProperty) {
+					root.style.setProperty('--db-tools-h', toolsHeight + 'px');
+				}
+			};
+			publishToolsHeight();
+			if (window.addEventListener) {
+				window.addEventListener('resize', publishToolsHeight);
+				window.addEventListener('orientationchange', publishToolsHeight);
+			}
+			if (typeof window.ResizeObserver === 'function') {
+				new window.ResizeObserver(publishToolsHeight).observe(tools);
+			}
+
 			var stagger = 0;
 			var sections = [];
 			categories.forEach(function (category) {
-				var heading = el('h3', { class: 'db-category', id: catId(category), text: category });
+				var heading = el('h2', { class: 'db-category', id: catId(category), text: category });
 				var grid = el('div', { class: 'db-grid', 'aria-labelledby': catId(category) });
 				groups[category].forEach(function (item) {
 					var card = menuCard(item, orderingOpen);
@@ -624,6 +699,9 @@
 			});
 			action.addEventListener('click', function () {
 				action.disabled = true;
+				// A disabled button with an unchanged label reads as "nothing
+				// happened" on a slow connection. Say what is happening.
+				action.textContent = I18N.adding || 'Adding…';
 				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, options: selectedOptions(), quantity: 1 } })
 					.then(function () {
 						action.textContent = I18N.added || 'Added!';
@@ -641,7 +719,11 @@
 						notifyCartChanged();
 						setTimeout(function () { action.textContent = I18N.addToCart || 'Add to cart'; action.disabled = false; }, 1200);
 					})
-					.catch(function (err) { dbToast(err.message); action.disabled = false; });
+					.catch(function (err) {
+						dbToast(err.message);
+						action.textContent = I18N.addToCart || 'Add to cart';
+						action.disabled = false;
+					});
 			});
 		}
 
@@ -650,7 +732,7 @@
 		return el('div', { class: soldOut ? 'db-card db-card--soldout' : 'db-card' }, [
 			media,
 			el('div', { class: 'db-card-body' }, [
-				el('h4', { text: item.name }),
+				el('h3', { class: 'db-card-title', text: item.name }),
 				item.description ? el('p', { class: 'db-card-desc', text: item.description }) : null,
 				controls,
 				el('div', { class: 'db-card-foot' }, [
@@ -742,10 +824,10 @@
 			});
 
 			root.appendChild(el('div', { class: 'db-builder-inner' }, [
-				el('h3', { text: 'Build your pizza' }),
-				el('h4', { text: 'Size' }),
+				el('h2', { text: 'Build your pizza' }),
+				el('h3', { text: 'Size' }),
 				sizeWrap,
-				cfg.toppings.length ? el('h4', { text: 'Toppings' }) : null,
+				cfg.toppings.length ? el('h3', { text: 'Toppings' }) : null,
 				cfg.toppings.length ? topWrap : null,
 				el('div', { class: 'db-builder-foot' }, [priceEl, addBtn])
 			]));
@@ -761,8 +843,18 @@
 	/* Cart & checkout                                                    */
 	/* ------------------------------------------------------------------ */
 
+	// Whether this storefront actually takes money online. When payments are off
+	// (the Revesby pickup launch state) the customer pays in the shop, so every
+	// piece of checkout copy must say that instead of promising a card step that
+	// never happens.
+	function payingOnline() {
+		return !!(stripeHosted || tyroPay || mpgsHosted);
+	}
+
 	function orderJourney() {
-		var labels = ['Review order', 'Your details', 'Secure payment'];
+		var labels = payingOnline()
+			? ['Review order', 'Your details', 'Secure payment']
+			: ['Review order', 'Your details', 'Confirm pickup'];
 		var items = [];
 		var list = el('ol', { class: 'db-order-journey', 'aria-label': 'Order progress' });
 		labels.forEach(function (label, index) {
@@ -803,8 +895,10 @@
 		var journey = orderJourney();
 		var shell = el('div', { class: 'db-order-shell' }, [cartRegion, checkoutRegion]);
 		var checkoutEl = null;
-		var orderTitle = el('h2', { text: 'Review, pay and track' });
-		var orderIntro = el('p', { text: 'Check your items, add your details, then continue to Stripe for secure payment.' });
+		var orderTitle = el('h2', { text: payingOnline() ? 'Review, pay and track' : 'Review, order and track' });
+		var orderIntro = el('p', { text: payingOnline()
+			? 'Check your items, add your details, then continue to Stripe for secure payment.'
+			: 'Check your items and add your details. You pay when you collect from the shop.' });
 		// Once an order is successfully placed, this cart widget's job is done —
 		// further reloads (triggered by the notifyCartChanged() that placeOrder
 		// itself fires, telling the rest of the page the cart is now empty) must
@@ -836,10 +930,16 @@
 			var tableContext = activeTableContext();
 			var orderingOpen = !!cfg.ordering_open;
 			journey.element.hidden = !orderingOpen;
-			orderTitle.textContent = orderingOpen ? 'Review, pay and track' : 'Browse now, request for later';
-			orderIntro.textContent = orderingOpen
-				? 'Check your items, add your details, then continue to Stripe for secure payment.'
-				: 'Online checkout and payment are closed. If pre-orders are available, your request stays unpaid until staff call and confirm it.';
+			if (!orderingOpen) {
+				orderTitle.textContent = 'Browse now, request for later';
+				orderIntro.textContent = 'Online checkout and payment are closed. If pre-orders are available, your request stays unpaid until staff call and confirm it.';
+			} else if (payingOnline()) {
+				orderTitle.textContent = 'Review, pay and track';
+				orderIntro.textContent = 'Check your items, add your details, then continue to Stripe for secure payment.';
+			} else {
+				orderTitle.textContent = 'Review, order and track';
+				orderIntro.textContent = 'Check your items and add your details. You pay when you collect from the shop.';
+			}
 
 			if (!orderingOpen) {
 				cartRegion.appendChild(orderingClosedNotice(cfg.ordering_closed_message));
@@ -1066,7 +1166,7 @@
 				remove.disabled = true;
 				request('/cart/remove-voucher', { method: 'POST', body: { order_type: orderType } })
 					.then(function () { reload(); })
-					.catch(function (err) { remove.disabled = false; msg.textContent = err.message; });
+					.catch(function (err) { remove.disabled = false; announceError(msg, err.message); });
 			});
 			wrap.appendChild(el('div', { class: 'db-voucher-applied' }, [
 				el('span', { text: (I18N.voucherApplied || 'Voucher applied') + ': ' + totals.voucher_code }),
@@ -1079,10 +1179,10 @@
 				var code = (input.value || '').trim();
 				if (!code) { return; }
 				apply.disabled = true;
-				msg.textContent = '';
+				clearError(msg);
 				request('/cart/apply-voucher', { method: 'POST', body: { code: code, order_type: orderType } })
 					.then(function () { reload(); })
-					.catch(function (err) { apply.disabled = false; msg.textContent = err.message; });
+					.catch(function (err) { apply.disabled = false; announceError(msg, err.message, input); });
 			}
 			apply.addEventListener('click', doApply);
 			input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doApply(); } });
@@ -1151,8 +1251,7 @@
 
 		setTimeout(function () {
 			init().catch(function (err) {
-				msg.textContent = err.message || (I18N.cardInitError || 'The secure payment form could not be loaded.');
-				msg.className = 'db-checkout-msg db-error';
+				announceError(msg, err.message || (I18N.cardInitError || 'The secure payment form could not be loaded.'));
 			});
 		}, 0);
 
@@ -1201,7 +1300,7 @@
 			if (!acknowledgementInput.checked) { return; }
 			submit.disabled = true;
 			submit.textContent = 'Sending request…';
-			msg.textContent = '';
+			clearError(msg);
 			msg.className = 'db-checkout-msg';
 			if (!requestAttemptId) {
 				requestAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
@@ -1238,10 +1337,9 @@
 				if (onRequestComplete) { onRequestComplete(); }
 				notifyCartChanged();
 			}).catch(function (err) {
-				msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
-				msg.className = 'db-checkout-msg db-error';
 				submit.disabled = false;
 				submit.textContent = 'Send pre-order request';
+				announceError(msg, err.message || (I18N.genericError || 'Something went wrong.'));
 			});
 		});
 
@@ -1258,7 +1356,10 @@
 		var totals = initialTotals;
 
 		var form = el('form', { class: 'db-checkout' });
-		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
+		// tabindex allows announceError() below to move focus here. Without it a
+		// failed submit only changed text 900px down the page: on a phone the
+		// customer saw nothing happen and had no reason to try again.
+		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite', tabindex: '-1' });
 
 		var name = field('text', 'customer_name', 'Name', true, { autocomplete: 'name' });
 		var email = field('email', 'customer_email', 'Email', true, { autocomplete: 'email', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false' });
@@ -1304,7 +1405,9 @@
 		form.appendChild(el('div', { class: 'db-checkout-heading' }, [
 			el('p', { class: 'db-order-kicker', text: 'Step 2' }),
 			el('h3', { text: 'Your details' }),
-			el('p', { text: 'We use these details for your receipt and live order updates.' })
+			el('p', { text: paying
+				? 'We use these details for your receipt and live order updates.'
+				: 'We use these details to call you if anything changes and to send your order updates. Pay at the shop when you collect.' })
 		]));
 		form.appendChild(summary);
 		form.appendChild(el('div', { class: 'db-checkout-fields' }, [name, email, phone]));
@@ -1356,7 +1459,7 @@
 		form.appendChild(submit);
 		form.appendChild(el('p', { class: 'db-submit-note', text: paying
 			? 'You will review the final amount before payment. One payment creates one order.'
-			: 'Submitting places this order with the selected shop.' }));
+			: 'This sends your order to the shop. Nothing is charged online — you pay when you collect.' }));
 		form.appendChild(msg);
 		form.addEventListener('focusin', function () {
 			if (onJourneyStep && !paymentMutationLock) { onJourneyStep(2); }
@@ -1379,11 +1482,10 @@
 			setPaymentMutationLock(false);
 			form.setAttribute('aria-busy', 'false');
 			if (onJourneyStep) { onJourneyStep(2); }
-			msg.textContent = err.message || (I18N.genericError || 'Something went wrong.');
-			msg.className = 'db-checkout-msg db-error';
 			submit.disabled = false;
 			payLabel = payLabelFor(totals);
 			submit.textContent = payLabel;
+			announceError(msg, err.message || (I18N.genericError || 'Something went wrong.'));
 		}
 
 		function stripePaidReturnFail() {
@@ -1393,10 +1495,9 @@
 			setPaymentMutationLock(true);
 			form.setAttribute('aria-busy', 'false');
 			if (onJourneyStep) { onJourneyStep(3); }
-			msg.textContent = 'Your payment may already be complete. Please do not pay again. Keep this page open or contact the shop so we can confirm your order.';
-			msg.className = 'db-checkout-msg db-error';
 			submit.disabled = true;
 			submit.textContent = 'Payment confirmation pending';
+			announceError(msg, 'Your payment may already be complete. Please do not pay again. Keep this page open or contact the shop so we can confirm your order.');
 		}
 
 		function placeOrder(payload) {
@@ -1415,7 +1516,7 @@
 				// would throw against null.
 				var parent = form.parentNode;
 				parent.innerHTML = '';
-				var confirmation = el('div', { class: 'db-confirm', role: 'status', 'aria-live': 'polite' }, [
+				var confirmation = el('div', { class: 'db-confirm', role: 'status', 'aria-live': 'polite', tabindex: '-1' }, [
 					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
 					el('p', { class: 'db-order-kicker', text: paying ? 'Payment confirmed' : 'Order confirmed' }),
 					el('h3', { text: 'Your order is in' }),
@@ -1443,8 +1544,18 @@
 					el('span', {}, [el('small', { text: 'Payment' }), el('strong', { text: paying ? 'Paid' : 'Pay at shop' })]),
 					el('span', {}, [el('small', { text: 'Total' }), el('strong', { text: money(res.total) })])
 				]));
-				confirmation.appendChild(el('p', { class: 'db-confirm-next', text: 'The shop will accept your order next. We will email meaningful updates, or you can follow the live tracker.' }));
+				// Only promise a tracker when one is actually reachable from here:
+				// /order/ carries no tracking widget, and the API returns an empty
+				// tracking_url while payments are off, so the original copy pointed
+				// at a "live tracker" with no link on screen.
 				var tracker = document.querySelector('[data-doughboss-tracking]');
+				var hasTracking = !!(res.tracking_url || tracker);
+				confirmation.appendChild(el('p', {
+					class: 'db-confirm-next',
+					text: hasTracking
+						? 'The shop will accept your order next. We will email meaningful updates, or you can follow the live tracker.'
+						: 'The shop will accept your order next. We will email meaningful updates — keep your order number handy when you collect.'
+				}));
 				var confirmActions = el('div', { class: 'db-confirm-actions' });
 				if (res.tracking_url) {
 					confirmActions.appendChild(el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' }));
@@ -1502,6 +1613,13 @@
 				// overwrite the confirmation just shown with an "empty cart" render.
 				if (onOrderComplete) { onOrderComplete(); }
 				notifyCartChanged();
+				// The page collapses when the cart and form are replaced, leaving
+				// the confirmation above the viewport (measured: y=-637 on a 390px
+				// phone). Take the customer to their order number and announce it.
+				// 'start' (with .db-confirm's scroll-margin-top clearing the sticky
+				// header) lands the tick and the order number at the top of the
+				// screen; 'center' left the top of a long confirmation cut off.
+				revealNode(confirmation, true, 'start');
 			});
 		}
 
@@ -1510,7 +1628,7 @@
 			submit.disabled = true;
 			form.setAttribute('aria-busy', 'true');
 			if (onJourneyStep) { onJourneyStep(paying ? 3 : 2); }
-			msg.textContent = '';
+			clearError(msg);
 			msg.className = 'db-checkout-msg';
 
 			// A cancelled Stripe Session remains payable. Its retry must submit the
@@ -1758,6 +1876,8 @@
 		return safe.toString();
 	}
 
+	var fieldSeq = 0;
+
 	function field(type, nameAttr, label, required, attributes) {
 		var input = type === 'textarea'
 			? el('textarea', { name: nameAttr })
@@ -1766,9 +1886,47 @@
 			input.setAttribute(key, attributes[key]);
 		});
 		if (required) { input.required = true; }
+
+		// Inline, per-field validation on top of (not instead of) the browser's
+		// own. The native bubble disappears the moment the customer taps away;
+		// this message stays put, is read by screen readers via aria-describedby,
+		// and marks the field aria-invalid so the styling and the a11y tree agree.
+		fieldSeq += 1;
+		var errorId = 'db-field-error-' + fieldSeq;
+		var error = el('span', { class: 'db-field-error', id: errorId, 'aria-live': 'polite' });
+
+		function showFieldError() {
+			var text = input.validity && input.validity.valueMissing
+				? (I18N.fieldRequired || 'Please fill this in.')
+				: (input.validationMessage || (I18N.fieldInvalid || 'Please check this.'));
+			error.textContent = text;
+			input.setAttribute('aria-invalid', 'true');
+			input.setAttribute('aria-describedby', errorId);
+		}
+
+		function clearFieldError() {
+			if (input.getAttribute('aria-invalid') !== 'true') { return; }
+			error.textContent = '';
+			input.removeAttribute('aria-invalid');
+			input.removeAttribute('aria-describedby');
+		}
+
+		input.addEventListener('invalid', showFieldError);
+		input.addEventListener('input', function () {
+			if (input.checkValidity && input.checkValidity()) { clearFieldError(); }
+		});
+		// Only correct what the customer actually typed. An empty required field
+		// is left to the submit-time check so tabbing through the form does not
+		// scold them before they have started.
+		input.addEventListener('blur', function () {
+			if (!input.value) { return; }
+			if (input.checkValidity && !input.checkValidity()) { showFieldError(); }
+		});
+
 		return el('label', { class: 'db-field' }, [
 			el('span', { text: label + (required ? ' *' : '') }),
-			input
+			input,
+			error
 		]);
 	}
 
