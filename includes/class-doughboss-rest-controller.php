@@ -4551,7 +4551,7 @@ class DoughBoss_REST_Controller {
 	 * GET /catering/quote — indicative, server-computed quote for a package.
 	 *
 	 * @param WP_REST_Request $request Request.
-	 * @return WP_REST_Response
+	 * @return WP_REST_Response|WP_Error
 	 */
 	public function get_catering_quote( WP_REST_Request $request ) {
 		$quote = DoughBoss_Catering::quote(
@@ -4559,6 +4559,9 @@ class DoughBoss_REST_Controller {
 			absint( $request->get_param( 'guest_count' ) ),
 			sanitize_key( $request->get_param( 'order_type' ) )
 		);
+		if ( is_wp_error( $quote ) ) {
+			return $quote;
+		}
 		return rest_ensure_response( $quote );
 	}
 
@@ -4588,9 +4591,17 @@ class DoughBoss_REST_Controller {
 			);
 		}
 
-		// Route the enquiry to a shop: a valid selected location, else the default.
+		// Preserve intentional legacy omission (0), but never silently reroute an
+		// explicitly selected location that has since disappeared or been disabled.
 		$location_id = absint( $request->get_param( 'location_id' ) );
-		if ( DoughBoss_Locations::count() > 0 && ! DoughBoss_Locations::is_valid( $location_id ) ) {
+		if ( $location_id > 0 && ! DoughBoss_Locations::is_valid( $location_id ) ) {
+			return new WP_Error(
+				'doughboss_catering_location_unavailable',
+				__( 'That location is no longer available. Please choose another location.', 'doughboss' ),
+				array( 'status' => 400 )
+			);
+		}
+		if ( 0 === $location_id && DoughBoss_Locations::count() > 0 ) {
 			$location_id = DoughBoss_Locations::default_id();
 		}
 
@@ -5721,7 +5732,7 @@ class DoughBoss_REST_Controller {
 		// get_the_title() adds for HTML display so "&" doesn't show as "&#038;".
 		$package = (int) $enquiry['package_id'] ? wp_specialchars_decode( get_the_title( (int) $enquiry['package_id'] ), ENT_QUOTES ) : __( 'Custom', 'doughboss' );
 
-		$body = sprintf(
+		$customer_body = sprintf(
 			/* translators: 1: name, 2: enquiry number, 3: package, 4: guests, 5: event date, 6: deposit. */
 			__( "Hi %1\$s,\n\nThanks for your catering enquiry %2\$s.\n\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nIndicative deposit: %6\$s\n\nWe'll confirm the details and send your deposit link shortly.\n", 'doughboss' ),
 			$enquiry['customer_name'],
@@ -5732,12 +5743,42 @@ class DoughBoss_REST_Controller {
 			DoughBoss_Settings::format_price( $enquiry['deposit_amount'] )
 		);
 
-		if ( is_email( $enquiry['customer_email'] ) && false === wp_mail( $enquiry['customer_email'], $subject, $body ) ) {
+		if ( is_email( $enquiry['customer_email'] ) && false === wp_mail( $enquiry['customer_email'], $subject, $customer_body ) ) {
 			error_log( 'DoughBoss mail: catering enquiry email to customer failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
 		$catering_email = DoughBoss_Settings::catering_email();
-		if ( is_email( $catering_email ) && false === wp_mail( $catering_email, $subject, $body ) ) {
+		$location_id    = absint( $enquiry['location_id'] );
+		$location       = $location_id ? DoughBoss_Locations::get( $location_id ) : null;
+		$location_label = $location
+			? sprintf( '%1$s (ID %2$d)', (string) $location->name, $location_id )
+			: sprintf( __( 'Unavailable (saved location ID %d)', 'doughboss' ), $location_id );
+		$not_provided   = __( 'Not provided', 'doughboss' );
+		$to_confirm     = __( 'To be confirmed', 'doughboss' );
+		$currency       = sanitize_text_field( (string) $enquiry['currency'] );
+		$staff_body     = sprintf(
+			/* translators: staff catering notification assembled exclusively from the saved enquiry row. */
+			__( "A new catering enquiry has been saved. Pricing is indicative until staff confirm the details.\n\nReference: %1\$s\nLocation: %2\$s\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nEvent time: %6\$s\nOrder type: %7\$s\nAddress: %8\$s\n\nCustomer name: %9\$s\nCustomer email: %10\$s\nCustomer phone: %11\$s\nDietary notes: %12\$s\nNotes: %13\$s\n\nIndicative subtotal: %14\$s\nIndicative delivery fee: %15\$s\nIndicative total: %16\$s\nIndicative deposit: %17\$s\nIndicative balance: %18\$s\n", 'doughboss' ),
+			(string) $enquiry['enquiry_number'],
+			$location_label,
+			$package,
+			(int) $enquiry['guest_count'],
+			'' !== (string) $enquiry['event_date'] ? (string) $enquiry['event_date'] : $to_confirm,
+			'' !== (string) $enquiry['event_time'] ? (string) $enquiry['event_time'] : $to_confirm,
+			ucfirst( (string) $enquiry['order_type'] ),
+			'' !== (string) $enquiry['address'] ? (string) $enquiry['address'] : $not_provided,
+			(string) $enquiry['customer_name'],
+			(string) $enquiry['customer_email'],
+			'' !== (string) $enquiry['customer_phone'] ? (string) $enquiry['customer_phone'] : $not_provided,
+			'' !== (string) $enquiry['dietary'] ? (string) $enquiry['dietary'] : $not_provided,
+			'' !== (string) $enquiry['notes'] ? (string) $enquiry['notes'] : $not_provided,
+			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['subtotal'] ),
+			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['delivery_fee'] ),
+			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['quote_total'] ),
+			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['deposit_amount'] ),
+			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['balance_amount'] )
+		);
+		if ( is_email( $catering_email ) && false === wp_mail( $catering_email, $subject, $staff_body ) ) {
 			error_log( 'DoughBoss mail: catering enquiry email to shop failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 	}

@@ -65,3 +65,85 @@ Before releasing this follow-on, verify in a permitted browser environment:
 - Verify the mobile sheet's focus trap/Escape restoration and reduced-motion behavior remain correct.
 
 The broader publication, accessible shared Drive target, full live backup/rollback, catering policy, provider/POS acceptance, SamOS and production performance gates remain as documented in `docs/STOREFRONT-COMPLETION-20260908.md`. No goal-completion claim is made.
+
+## User-directed Astra-to-orchestrator phase
+
+The user directed: finish Astra's review, then use the orchestrator to implement and code. The earlier accepted Astra artifact covers the frozen payment architecture, not the later storefront/hours/catering changes. A new bounded, read-only Astra review is assigned for those residual integration and release questions at source commit `e1c7f57c1efab1b5a76aa75d05de88403c33e25a`.
+
+- Model/effort: `gpt-6-astra`, `xhigh`, directly exposed by the active collaboration schema on 8 September 2026. Cost/credit estimate: unknown; no billing probe or benchmark.
+- Ownership: read-only source review; no provider calls, browser launches, credentials, live settings, source edits or remote writes. Existing payment-protocol acceptance is reused, not restarted.
+- Required result: evidence-backed residual findings and a ranked implementation packet, separating code defects, missing features, commercial decisions, runtime evidence and publication prerequisites. Each actionable item needs exact files/contracts, recommended worker capability, acceptance checks and stop conditions.
+- Acceptance: the lead verifies findings against actual source, rejects unsupported claims and preserves every unverified browser/provider/deployment gate. Review completion is not production completion.
+- Return route: after the accepted Astra review, resume the Sol orchestration workflow for bounded Terra/Luna implementation and independent Sol verification; use the guarded Ollama partner only where materially useful and within its data/call rules. Do not claim an in-place root model switch.
+- Status: residual review returned `fix-first`; the lead directly checked the three catering findings below. The user then assigned Astra a separate design/front-end brief phase. That design brief has now returned and been checked; the temporary Astra phase is closed and the first integrity batch is implemented locally as recorded below.
+
+The lead inspected the actual validation scripts while the read-only review ran. The implementation packet must use these boundaries:
+
+| Gate | Current command/implementation | Evidence boundary |
+| --- | --- | --- |
+| Focused PHP | `php tests/run.php` | Existing unit assertions; not a running WordPress database or provider acceptance |
+| Focused JavaScript | `node --test tests/storefront-helpers.test.js` and `node --check` | Helper/control logic and parse checks; not rendered keyboard/layout evidence |
+| Full local package gate | `scripts/test-release.ps1` with explicit PHP/extension and external candidate output paths | PHP/JS checks and exact plugin/theme source-byte ZIP validation |
+| WordPress/database | `scripts/test-wordpress-integration.ps1` against a designated disposable installation | SQL/integration assertions and a mocked two-process Square race; never point it at production |
+| Hosted PR CI | `.github/workflows/plugin-ci.yml`, one approved consolidated PR cycle | PHP 7.4/8.2, JavaScript and ZIP jobs; it does not run the real database/browser/provider gates |
+| Publication and business acceptance | Explicit live backup/rollback, supported transport, owner-approved provider/staff checks and read-only post-publication inspection | Cannot be substituted with a code review, helper tests or a synthetic provider mock |
+
+No workflow was dispatched during this preparation. The read-only review does not authorize new dependencies, live payment enablement, real orders, production changes or access-control workarounds.
+
+### Accepted residual findings and next integrity batch
+
+Astra completed its bounded review at `e1c7f57` and independently passed both PHP runtimes (158 assertions each), the nine named Node tests and `git diff --check`. Those existing suites do not cover the full catering enquiry-to-mail path. The lead verified these source paths directly:
+
+1. **Selected shop is omitted:** the catering enquiry POST does not include the existing `location_id` field or consume `doughboss:shop-changed`. The REST callback therefore defaults a missing selection. With two configured shops this can disagree with the header's visible selection; no actual misrouted production enquiry was observed.
+2. **Invalid package looks free:** `DoughBoss_Catering::quote()` gives missing, draft and wrong-type positive IDs the same zero quote as intentional custom package `0`. `create()` retains that positive ID, while the staff custom-quote path requires `0`. Validate public package availability at quote and creation boundaries without changing valid arithmetic, existing payment-bound records or the explicit custom path.
+3. **Staff mail is incomplete:** `send_catering_notification()` reuses a short customer acknowledgement as the staff body. Use saved values to include reference, shop, package/custom label, guests, event date/time, fulfilment/address, name/email/phone, dietary requirements and notes. Keep the existing configured recipient and honest enquiry/indicative wording. Mail composition tests do not prove delivery.
+
+The smallest coherent implementation batch is **catering enquiry integrity**: Terra owns the client selection/submit interaction; one lead owns the shared catering service and REST methods; test ownership is assigned explicitly once interfaces are fixed. No new schema, mail provider or pricing rule is needed. Explicitly stale selections must not silently route to another shop; preserve intentional missing-location compatibility. Keep an in-flight submission's location snapshot fixed and visible, or veto switching until it completes. Use the existing WordPress integration mail interception; never send test mail or provider traffic.
+
+### User-directed Astra design phase
+
+After the residual review, the user assigned Astra the design and front-end improvement brief, then a return to Sol orchestration for implementation. This is a new, bounded read-only assignment on the same source snapshot, not a reopened payment review.
+
+- Actual assigned model: `gpt-6-astra`, `xhigh`, using the existing Astra lane. Lead integration authority is unchanged; no application model-selector switch is claimed.
+- Outcome: an implementation-ready brief for distinct navigation, readable content/workspace panels, elevated dialogs, restrained glass with solid fallbacks, accessible state transitions/reduced motion, and phone usability. Existing self-hosted Bebas Neue/Barlow typography and DoughBoss ink/paper identity remain the baseline.
+- Scope: current WordPress storefront/theme source. SamOS receives a clearly labelled operational-UI handoff contract only; this phase does not claim another repository was inspected or its dashboard implemented.
+- Optional tools: Higgsfield connector availability was discovered, but no generation, credit-consuming job or media upload was submitted. An abstract background is optional and must not carry product claims or compete with prices, status, order information or text. The brief will remain ordinary Markdown usable in Obsidian; no vault, plugin, sync or third-party note capture is configured by this task.
+- Required return: one recommended direction, compact colour/type tokens, layering and motion rules, component/state matrix, mobile/desktop layouts, source-file implementation slices, acceptance checks and stop conditions. Separate already implemented controls from actual gaps. Preserve the header's pseudo-element blur boundary so the fixed mobile navigation does not collapse into the header.
+- Benchmark evidence: on 8 September 2026 the public [Ooshman site](https://ooshman.au/) (the Manoosh URL redirected there) exposed direct menu/order, location and catering paths with location-specific hours guidance. [Black Star Pastry](https://blackstarpastry.com/) exposed signature product collections, quick-view, price ranges, stores and delivery/pickup paths. These are content/information-architecture observations, not measured visual quality, usability rankings or permission to copy assets. The DoughBoss homepage fetch timed out; no fresh rendered-site verdict follows.
+- Acceptance/return: the lead checked Astra's source-backed recommendations and brand/safety fit, including recomputing the proposed solid-pair contrast ratios. The accepted [Astra design brief](ASTRA-DESIGN-BRIEF-20260908.md) records the remaining browser evidence and staged implementation. Catering integrity precedes the broader aesthetic changes. No app-selector switch or full-site acceptance is claimed.
+
+### Catering enquiry integrity: implemented and locally verified
+
+Outcome: the customer can see and submit the preferred shop, stale positive package/shop selections fail without creating an enquiry, and the configured staff mailbox receives a complete saved-enquiry summary. Explicit custom package `0`, omitted/zero legacy location behavior, valid package arithmetic and payment code remain unchanged.
+
+Implementation ownership and scope:
+
+- Actual Sol backend lane: `gpt-5.6-sol`, `high`; exclusive catering service/REST methods and the existing real-WordPress integration test. Both `quote()` callers were inspected and now propagate the explicit unavailable-package `WP_Error`.
+- A Terra client-worker spawn was rejected by the environment's agent-thread limit. The lead therefore owned catering JavaScript, existing Node tests and the minimal field-select CSS. The shared header file needed one narrow integration repair: retain a form's early shop-change event before asynchronous header initialization, including when local storage is blocked. No model switch or Terra implementation is claimed.
+- Catering reads existing public locations and table context, shows a preferred-shop control and explicit loading/unavailable states, honours the signed table's existing location, supports retry and retains form inputs. An unavailable explicit preference requires a valid choice, not a silent default. Only a verified empty shop list permits the existing location-zero compatibility path.
+- While an enquiry is pending, the form disables shop selection and vetoes sitewide shop-change requests. The POST captures location, package and form fields once; failure retains current inputs. The success panel identifies the submitted shop without claiming an event reservation.
+- Staff mail includes the saved reference, shop ID/name, package/custom label, guests, date/time, fulfilment/address, contact details, dietary requirements, notes and indicative prices. The configured recipient and customer acknowledgement remain unchanged. Failure logs contain the reference, not customer fields. The existing human package title remains a live lookup; immutable title snapshots would be a separately approved schema change, not part of this batch.
+
+One guarded Ollama `tests` call used preferred `kimi-k2.7-code:cloud`, data class `synthetic`, with only a conceptual contract/test-plan summary. No repository credentials, customer records or financial data were sent. Advice prompted explicit mid-flight field-edit snapshot and stale-preference/table-context precedence assertions. Its early-event/storage scenario was already covered; disabled form controls and the header event veto are complementary, not a contradiction. No second call was made.
+
+The available independent read-only review lane inspected the frozen combined diff and returned `ship`, with the non-blocking existing package-title lookup qualification above. It did not write the changes or independently run the integration suite. Reactivating the separate prior Sol-review lane also hit the agent-thread limit, so no dedicated fresh Sol-review-model result is claimed for this batch. The lead independently inspected all changed contracts and ran the checks below.
+
+| Check | Actual result |
+| --- | --- |
+| `node --test tests/storefront-helpers.test.js` | 18 named tests passed, plus existing top-level assertions |
+| PHP 7.4.33 and 8.2.33 `-n tests/run.php` | 158 assertions passed on each runtime |
+| `scripts/test-release.ps1` with external candidate outputs | 88 PHP syntax files, 15 JavaScript syntax files; exact 138 plugin / 25 theme runtime files validated |
+| `scripts/test-wordpress-integration.ps1` against the guarded disposable installation | 141 WordPress/MySQL assertions passed; two-process Square race produced one intercepted mock POST and no duplicate simulated charge |
+| Tested PHP source identity | Both changed PHP files SHA-256 matched the installed disposable test copies |
+| `git diff --check` | Passed |
+
+The real-WordPress tests add synthetic package/shop fixtures and capture `pre_wp_mail`; no real customer, email transport or provider was used. The only database process started by this batch was the existing disposable MariaDB installation bound to `127.0.0.1:33117` (PID 43748); it was stopped after the completed tests. No browser fixture launch or blocked file-protocol retry occurred.
+
+Review-only artifacts outside source:
+
+- `C:\Codex\Temp\doughboss-catering-integrity-20260908\doughboss-integrity-local.zip`: 2,580,902 bytes; SHA-256 `C57BE6A52654396DDDD1AC64E80BCEDBD5BF49C144ECB237274A3086D19469AC`.
+- `C:\Codex\Temp\doughboss-catering-integrity-20260908\doughboss-theme-local.zip`: 30,513 bytes; SHA-256 `A2B4C822F644550506214F57F872DB8A2764BABC4826D810FEA91BF2A1C5475D`.
+
+These still carry base versions 2.43.0/1.6.0 and are not versioned release artifacts. Existing canonical ZIPs, full-folder backup and quarantine were not overwritten. No push, PR update, hosted CI, generation, deployment, Drive upload, live settings change, real payment or real order was performed in this follow-on.
+
+Next: the accepted design brief's surfaces/focus/motion and compact-order-entry stages, with a supported preview needed for visual acceptance. The shared Drive target, full live backup/rollback, catering pricing policy, provider/POS/mail acceptance and SamOS integration remain separate unmet gates. Passing this local integrity batch does not complete the overall goal.

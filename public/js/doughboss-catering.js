@@ -28,6 +28,13 @@
 		quoteStatus: 'idle',
 		quoteGeneration: 0,
 		packagesUnavailable: false,
+		locations: [],
+		locationStatus: 'loading',
+		locationId: 0,
+		requestedLocationId: null,
+		locationLocked: false,
+		submitting: false,
+		submittedLocationName: '',
 		email: '',
 		name: ''
 	};
@@ -53,7 +60,7 @@
 	}
 
 	function get(path) {
-		// Both callers are public reads. Cached page nonces must not block them.
+		// Public reads must not depend on a cached page's expiring nonce.
 		var controller = typeof AbortController === 'function' ? new AbortController() : null;
 		var options = { credentials: 'same-origin', cache: 'no-store' };
 		if (controller) { options.signal = controller.signal; }
@@ -90,6 +97,76 @@
 			if (state.packages[i].id === state.selectedId) { return state.packages[i]; }
 		}
 		return null;
+	}
+
+	function cateringLocationId(value) {
+		if (typeof value !== 'number' && (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value))) { return 0; }
+		var id = Number(value);
+		return isFinite(id) && id > 0 && id <= 9007199254740991 && Math.floor(id) === id ? id : 0;
+	}
+
+	function selectedCateringLocation() {
+		return state.locations.filter(function (location) { return location.id === state.locationId; })[0] || null;
+	}
+
+	function updateCateringLocation(form) {
+		var select = form.querySelector('[name="location_id"]');
+		var note = form.querySelector('.dbc-location-note');
+		if (!select || !note) { return; }
+		select.innerHTML = '<option value="">Choose a shop</option>' + state.locations.map(function (location) {
+			return '<option value="' + location.id + '">' + esc(location.name) + '</option>';
+		}).join('');
+		select.value = state.locationId ? String(state.locationId) : '';
+		select.disabled = state.submitting || state.locationLocked || state.locationStatus !== 'ready' || !state.locations.length;
+		var location = selectedCateringLocation();
+		if (state.submitting) { note.textContent = 'Sending enquiry for ' + state.submittedLocationName + '. Shop selection is locked until the request finishes.'; }
+		else if (state.locationStatus === 'loading') { note.textContent = 'Checking shops...'; }
+		else if (state.locationStatus === 'error') { note.textContent = 'Shop information is unavailable. Retry before sending your enquiry.'; }
+		else if (!state.locations.length) { note.textContent = 'No shop is configured. Staff will confirm the location for this enquiry.'; }
+		else if (!location) { note.textContent = 'Your previous shop is no longer available. Choose a shop before sending.'; }
+		else { note.textContent = 'Enquiry for ' + location.name + (state.locationLocked ? '. Using your current table location.' : '. Availability will be confirmed by staff.'); }
+		var retry = form.querySelector('[data-catering-locations-retry]');
+		if (retry) { retry.hidden = state.locationStatus !== 'error'; }
+	}
+
+	function applyCateringLocation(id) {
+		state.requestedLocationId = cateringLocationId(id);
+		if (state.submitting || state.locationLocked) { return; }
+		state.locationId = state.locations.some(function (location) { return location.id === state.requestedLocationId; }) ? state.requestedLocationId : 0;
+		var form = root.querySelector('.dbc-form');
+		if (form) { updateCateringLocation(form); }
+	}
+
+	function loadCateringLocations() {
+		state.locationStatus = 'loading';
+		var form = root.querySelector('.dbc-form');
+		if (form) { updateCateringLocation(form); }
+		return Promise.all([get('/locations'), get('/table/context')]).then(function (results) {
+			var list = results[0];
+			var table = results[1];
+			if (!table || typeof table.active !== 'boolean' || (table.active && (!table.location || !table.table))) { throw new Error('Table context is unavailable.'); }
+			if (!Array.isArray(list) || !list.every(function (location) {
+				return location && cateringLocationId(location.id) && typeof location.name === 'string' && location.name.trim();
+			})) { throw new Error('Invalid shop information.'); }
+			state.locations = list.map(function (location) { return { id: cateringLocationId(location.id), name: location.name }; });
+			state.locationLocked = !!(table && table.active && table.location && table.table);
+			var desired = state.requestedLocationId;
+			if (state.locationLocked) { desired = cateringLocationId(table.location.id); }
+			else if (desired === null) {
+				try { desired = cateringLocationId(window.localStorage.getItem('doughboss_location')); } catch (error) { desired = 0; }
+				// No preference uses the same first configured shop as the site header.
+				if (!desired) { desired = list.length ? cateringLocationId(list[0].id) : 0; }
+			}
+			state.locationId = state.locations.some(function (location) { return location.id === desired; }) ? desired : 0;
+			if (state.locationLocked && !state.locationId) { throw new Error('Table shop is unavailable.'); }
+			state.locationStatus = 'ready';
+		}).catch(function () {
+			state.locationStatus = 'error';
+			state.locationId = 0;
+		}).then(function () {
+			var current = root.querySelector('.dbc-form');
+			if (current) { updateCateringLocation(current); }
+		});
 	}
 
 	/* ---------- rendering ---------- */
@@ -154,6 +231,9 @@
 			'<div class="dbc-selected" aria-live="polite">' +
 				(pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No package selected — a custom quote will be prepared.') +
 			'</div>' +
+			'<label class="dbc-field"><span>Preferred shop</span><select name="location_id" aria-describedby="dbc-location-note"></select></label>' +
+			'<p id="dbc-location-note" class="dbc-location-note dbc-sub" role="status"></p>' +
+			'<button type="button" data-catering-locations-retry hidden>Retry shop information</button>' +
 			'<div class="dbc-row">' +
 				'<label class="dbc-field"><span>Guests</span><input type="number" min="0" step="1" name="guest_count" inputmode="numeric" /></label>' +
 				'<label class="dbc-field"><span>Event date</span><input type="date" name="event_date" /></label>' +
@@ -179,6 +259,7 @@
 
 		wrap.appendChild(form);
 		updateQuoteBox(form);
+		updateCateringLocation(form);
 		return wrap;
 	}
 
@@ -264,7 +345,16 @@
 
 	/* ---------- interactions ---------- */
 
+	function guardCateringShopChange(event) {
+		if (state.submitting || state.locationLocked) { event.preventDefault(); }
+	}
+	document.addEventListener('doughboss:shop-change-request', guardCateringShopChange);
+	document.addEventListener('doughboss:shop-changed', function (event) {
+		applyCateringLocation(event.detail && event.detail.id);
+	});
+
 	root.addEventListener('click', function (e) {
+		if (e.target.closest('[data-catering-locations-retry]')) { loadCateringLocations(); return; }
 		var pick = e.target.closest('[data-pick]');
 		if (pick) {
 			selectPackage(parseInt(pick.getAttribute('data-pick'), 10) || 0);
@@ -284,6 +374,17 @@
 
 	root.addEventListener('change', function (e) {
 		var t = e.target;
+		if (t.name === 'location_id') {
+			var id = cateringLocationId(t.value);
+			var intent = new CustomEvent('doughboss:shop-change-request', { cancelable: true, detail: { id: id } });
+			if (!id || !state.locations.some(function (location) { return location.id === id; }) || !document.dispatchEvent(intent)) {
+				updateCateringLocation(t.form);
+				return;
+			}
+			try { window.localStorage.setItem('doughboss_location', String(id)); } catch (error) { /* Current-page events remain authoritative. */ }
+			document.dispatchEvent(new CustomEvent('doughboss:shop-changed', { detail: { id: id } }));
+			return;
+		}
 		if (t.name === 'order_type') {
 			state.orderType = t.value === 'delivery' ? 'delivery' : 'pickup';
 			var addr = root.querySelector('.dbc-addr');
@@ -292,12 +393,17 @@
 		}
 	});
 
-	root.addEventListener('submit', function (e) {
+	function submitCateringEnquiry(e) {
 		if (!e.target.classList.contains('dbc-form')) { return; }
 		e.preventDefault();
+		if (state.submitting) { return; }
 		var form = e.target;
 		var errBox = form.querySelector('.dbc-error');
 		errBox.textContent = '';
+		if (state.locationStatus !== 'ready' || (state.locations.length && !selectedCateringLocation())) {
+			errBox.textContent = 'Choose an available shop before sending your enquiry. Retry shop information if it could not be loaded.';
+			return;
+		}
 
 		var fd = new FormData(form);
 		var name = (fd.get('customer_name') || '').toString().trim();
@@ -308,13 +414,18 @@
 		}
 		state.email = email;
 		state.name = name;
+		state.submitting = true;
+		var location = selectedCateringLocation();
+		state.submittedLocationName = location ? location.name : 'a staff-confirmed shop';
+		updateCateringLocation(form);
 
 		var btn = form.querySelector('.dbc-submit');
 		btn.disabled = true;
 		var prev = btn.textContent;
 		btn.textContent = 'Sending…';
 
-		post('/catering/enquiry', {
+		return post('/catering/enquiry', {
+			location_id: state.locationId,
 			customer_name: name,
 			customer_email: email,
 			customer_phone: (fd.get('customer_phone') || '').toString(),
@@ -340,8 +451,12 @@
 			errBox.textContent = 'Something went wrong. Please try again.';
 			btn.disabled = false;
 			btn.textContent = prev;
+		}).then(function () {
+			state.submitting = false;
+			updateCateringLocation(form);
 		});
-	});
+	}
+	root.addEventListener('submit', submitCateringEnquiry);
 
 	function showSuccess(data) {
 		var pay = (window.DoughBossData && window.DoughBossData.payments) || {};
@@ -353,6 +468,7 @@
 			'<div class="dbc-success-check">✓</div>' +
 			'<h2 class="dbc-h2">Enquiry received</h2>' +
 			'<p class="dbc-success-num">Reference: <strong>' + esc(data.enquiry_number) + '</strong></p>';
+		box.appendChild(el('<p class="dbc-sub">Shop: ' + esc(state.submittedLocationName) + '. Your event details and availability still need staff confirmation.</p>'));
 		root.appendChild(box);
 
 		if (canPay) {
@@ -693,6 +809,7 @@
 	if (resumeStripePaymentReturn()) {
 		return;
 	}
+	loadCateringLocations();
 
 	get('/catering/packages').then(function (list) {
 		if (!Array.isArray(list)) { throw new Error('Invalid catering packages.'); }

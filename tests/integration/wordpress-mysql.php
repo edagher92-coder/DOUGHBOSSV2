@@ -27,6 +27,8 @@ $GLOBALS['db_square_http_mode']   = 'success';
 $GLOBALS['db_square_post_count']  = 0;
 $GLOBALS['db_square_get_count']   = 0;
 $GLOBALS['db_fail_guard_once']    = false;
+$GLOBALS['db_catering_mail']        = array();
+$GLOBALS['db_catering_mail_result'] = true;
 
 /** @param bool $condition Assertion result. @param string $message Label. */
 function db_integration_assert( $condition, $message ) {
@@ -54,6 +56,40 @@ function db_integration_rest_request( $route, array $params ) {
 /** Prevent the disposable checkout fixture from invoking a local mail transport. */
 function db_integration_block_mail() {
 	return true;
+}
+
+/** Capture catering mail without invoking any transport. */
+function db_integration_capture_catering_mail( $preempt, $attributes ) {
+	unset( $preempt );
+	$GLOBALS['db_catering_mail'][] = $attributes;
+	return $GLOBALS['db_catering_mail_result'];
+}
+
+/** Build a synthetic catering package with the server-owned pricing fields. */
+function db_integration_catering_package( $title, $status = 'publish' ) {
+	$id = wp_insert_post(
+		array(
+			'post_title'  => $title,
+			'post_type'   => DoughBoss_Catering_Package::POST_TYPE,
+			'post_status' => $status,
+		)
+	);
+	if ( ! is_wp_error( $id ) && $id > 0 ) {
+		update_post_meta( $id, DoughBoss_Catering_Package::META_BASE_PRICE, '240.00' );
+		update_post_meta( $id, DoughBoss_Catering_Package::META_PER_HEAD, '12.50' );
+		update_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MAX, '20' );
+	}
+	return is_wp_error( $id ) ? 0 : (int) $id;
+}
+
+/** Read a captured wp_mail attribute by recipient. */
+function db_integration_catering_mail_to( $recipient ) {
+	foreach ( $GLOBALS['db_catering_mail'] as $mail ) {
+		if ( isset( $mail['to'] ) && $recipient === $mail['to'] ) {
+			return $mail;
+		}
+	}
+	return array();
 }
 
 /**
@@ -194,7 +230,7 @@ db_integration_assert( DoughBoss_Activator::checkout_storage_ready(), 'checkout 
 db_integration_assert( DoughBoss_Activator::payment_storage_ready(), 'payment attempt storage contract is ready' );
 
 // Isolate the payment protocol fixtures from activation evidence.
-	foreach ( array( 'doughboss_order_items', 'doughboss_order_events', 'doughboss_orders', 'doughboss_payment_events', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots', 'doughboss_voucher_redemptions', 'doughboss_voucher_audit', 'doughboss_vouchers' ) as $suffix ) {
+	foreach ( array( 'doughboss_order_items', 'doughboss_order_events', 'doughboss_orders', 'doughboss_payment_events', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots', 'doughboss_voucher_redemptions', 'doughboss_voucher_audit', 'doughboss_vouchers', 'doughboss_catering_enquiries' ) as $suffix ) {
 		$wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . $suffix ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 	}
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_rl_%' OR option_name LIKE '_transient_timeout_doughboss_rl_%' OR option_name LIKE '_transient_doughboss_idem_%' OR option_name LIKE '_transient_timeout_doughboss_idem_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
@@ -656,6 +692,240 @@ remove_filter( 'query', 'db_integration_fail_legacy_select' );
 $wpdb->suppress_errors( $previous_suppress_errors );
 db_integration_same( 'doughboss_pay_legacy_storage', is_wp_error( $legacy_read_failure ) ? $legacy_read_failure->get_error_code() : '', 'legacy drain query failure is distinguishable from an empty result' );
 DoughBoss_Payment_Attempts::update( $legacy_null_id, array( 'status' => 'failed' ) );
+
+// Catering enquiry integrity uses real posts, locations, REST callbacks and the
+// MySQL enquiry table. Every mail is intercepted before transport.
+$settings['catering_email'] = 'catering.integration@example.invalid';
+update_option( 'doughboss_settings', $settings, false );
+$catering_table = DoughBoss_Catering::table();
+$published_package = db_integration_catering_package( 'Published Integration Feast' );
+$draft_package     = db_integration_catering_package( 'Draft Integration Feast', 'draft' );
+$deleted_package   = db_integration_catering_package( 'Deleted Integration Feast' );
+$race_package      = db_integration_catering_package( 'Race Integration Feast' );
+$wrong_type        = wp_insert_post(
+	array(
+		'post_title'  => 'Ordinary Integration Post',
+		'post_type'   => 'post',
+		'post_status' => 'publish',
+	)
+);
+wp_delete_post( $deleted_package, true );
+db_integration_assert( $published_package > 0 && $draft_package > 0 && $deleted_package > 0 && $race_package > 0 && ! is_wp_error( $wrong_type ), 'published, draft, deleted and wrong-type package fixtures are created' );
+
+$quote_request = new WP_REST_Request( 'GET', '/doughboss/v1/catering/quote' );
+$quote_request->set_param( 'package_id', $published_package );
+$quote_request->set_param( 'guest_count', 25 );
+$quote_request->set_param( 'order_type', 'pickup' );
+$published_quote = $rest_controller->get_catering_quote( $quote_request );
+$published_quote_data = $published_quote instanceof WP_REST_Response ? $published_quote->get_data() : array();
+db_integration_same( 302.5, isset( $published_quote_data['total'] ) ? (float) $published_quote_data['total'] : -1.0, 'published catering package keeps its server-computed quote' );
+
+$custom_quote_request = new WP_REST_Request( 'GET', '/doughboss/v1/catering/quote' );
+$custom_quote_request->set_param( 'package_id', 0 );
+$custom_quote_request->set_param( 'guest_count', 25 );
+$custom_quote_request->set_param( 'order_type', 'pickup' );
+$custom_quote = $rest_controller->get_catering_quote( $custom_quote_request );
+$custom_quote_data = $custom_quote instanceof WP_REST_Response ? $custom_quote->get_data() : array();
+db_integration_same( 0.0, isset( $custom_quote_data['total'] ) ? (float) $custom_quote_data['total'] : -1.0, 'explicit custom package zero keeps the legacy zero quote' );
+
+$invalid_packages = array(
+	'draft'      => $draft_package,
+	'wrong type' => (int) $wrong_type,
+	'deleted'    => $deleted_package,
+);
+foreach ( $invalid_packages as $fixture_name => $invalid_package_id ) {
+	$invalid_quote_request = new WP_REST_Request( 'GET', '/doughboss/v1/catering/quote' );
+	$invalid_quote_request->set_param( 'package_id', $invalid_package_id );
+	$invalid_quote_request->set_param( 'guest_count', 25 );
+	$invalid_quote_request->set_param( 'order_type', 'pickup' );
+	$invalid_quote = $rest_controller->get_catering_quote( $invalid_quote_request );
+	db_integration_same( 'doughboss_catering_package_unavailable', is_wp_error( $invalid_quote ) ? $invalid_quote->get_error_code() : '', $fixture_name . ' positive package is rejected by GET quote' );
+	db_integration_same( 400, is_wp_error( $invalid_quote ) ? (int) $invalid_quote->get_error_data()['status'] : 0, $fixture_name . ' GET rejection is a validation response' );
+}
+
+$shop_b = DoughBoss_Locations::create(
+	array(
+		'name'            => 'Integration Shop B',
+		'slug'            => 'integration-shop-b',
+		'timezone'        => 'Australia/Sydney',
+		'pickup_enabled'  => 1,
+		'delivery_enabled' => 1,
+		'is_active'       => 1,
+		'sort_order'      => 20,
+	)
+);
+$inactive_shop = DoughBoss_Locations::create(
+	array(
+		'name'       => 'Inactive Integration Shop',
+		'slug'       => 'inactive-integration-shop',
+		'is_active'  => 0,
+		'sort_order' => 30,
+	)
+);
+db_integration_assert( $shop_b > 0 && $inactive_shop > 0, 'active shop B and inactive location fixtures are stored' );
+
+$event_date = wp_date( 'Y-m-d', current_time( 'timestamp' ) + ( 30 * DAY_IN_SECONDS ) );
+$catering_params = array(
+	'customer_name'  => 'Catering Integration Customer',
+	'customer_email' => 'catering.customer@example.invalid',
+	'customer_phone' => '0400123456',
+	'package_id'     => $published_package,
+	'guest_count'    => 25,
+	'order_type'     => 'delivery',
+	'event_date'     => $event_date,
+	'event_time'     => '18:30',
+	'address'        => '22 Integration Street, Sydney',
+	'dietary'        => 'One gluten-free meal',
+	'notes'          => 'Use the rear loading entrance',
+	'location_id'    => $shop_b,
+);
+$original_remote_addr = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : null;
+$mail_start = count( $GLOBALS['db_catering_mail'] );
+add_filter( 'pre_wp_mail', 'db_integration_capture_catering_mail', 10, 2 );
+
+$fixture_ip = 10;
+foreach ( $invalid_packages as $fixture_name => $invalid_package_id ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+	$invalid_params = $catering_params;
+	$invalid_params['package_id'] = $invalid_package_id;
+	$rows_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$mail_before = count( $GLOBALS['db_catering_mail'] );
+	$invalid_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $invalid_params ) );
+	db_integration_same( 'doughboss_catering_package_unavailable', is_wp_error( $invalid_submit ) ? $invalid_submit->get_error_code() : '', $fixture_name . ' positive package is rejected by POST capture' );
+	db_integration_same( $rows_before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), $fixture_name . ' package rejection stores no enquiry' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	db_integration_same( $mail_before, count( $GLOBALS['db_catering_mail'] ), $fixture_name . ' package rejection sends no mail' );
+}
+
+$race_quote_request = new WP_REST_Request( 'GET', '/doughboss/v1/catering/quote' );
+$race_quote_request->set_param( 'package_id', $race_package );
+$race_quote_request->set_param( 'guest_count', 10 );
+$race_quote_request->set_param( 'order_type', 'pickup' );
+$race_quote = $rest_controller->get_catering_quote( $race_quote_request );
+db_integration_assert( $race_quote instanceof WP_REST_Response, 'published package can be quoted before an unpublish race' );
+wp_update_post( array( 'ID' => $race_package, 'post_status' => 'draft' ) );
+$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+$race_params = $catering_params;
+$race_params['package_id'] = $race_package;
+$rows_before_race = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$mail_before_race = count( $GLOBALS['db_catering_mail'] );
+$race_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $race_params ) );
+db_integration_same( 'doughboss_catering_package_unavailable', is_wp_error( $race_submit ) ? $race_submit->get_error_code() : '', 'package unpublished between quote and submit is rejected' );
+db_integration_same( $rows_before_race, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), 'unpublish race stores no enquiry' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+db_integration_same( $mail_before_race, count( $GLOBALS['db_catering_mail'] ), 'unpublish race sends no mail' );
+
+$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+$mail_before_shop_b = count( $GLOBALS['db_catering_mail'] );
+$shop_b_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $catering_params ) );
+$shop_b_data = $shop_b_submit instanceof WP_REST_Response ? $shop_b_submit->get_data() : array();
+$shop_b_row = ! empty( $shop_b_data['enquiry_number'] ) ? DoughBoss_Catering::get_by_number( $shop_b_data['enquiry_number'] ) : null;
+db_integration_assert( ! empty( $shop_b_data['success'] ) && is_array( $shop_b_row ), 'valid published-package enquiry is saved' );
+db_integration_same( $shop_b, is_array( $shop_b_row ) ? (int) $shop_b_row['location_id'] : 0, 'selected shop B is persisted as shop B' );
+db_integration_same( $mail_before_shop_b + 2, count( $GLOBALS['db_catering_mail'] ), 'valid enquiry emits exactly customer and configured-staff mail' );
+$customer_mail = db_integration_catering_mail_to( $catering_params['customer_email'] );
+$staff_mail = db_integration_catering_mail_to( $settings['catering_email'] );
+db_integration_assert( ! empty( $customer_mail ) && false !== strpos( (string) $customer_mail['message'], 'Thanks for your catering enquiry' ), 'customer acknowledgement wording is preserved' );
+db_integration_same( $settings['catering_email'], isset( $staff_mail['to'] ) ? $staff_mail['to'] : '', 'staff notification uses only the configured catering recipient' );
+$staff_message = isset( $staff_mail['message'] ) ? (string) $staff_mail['message'] : '';
+$expected_staff_fields = array(
+	'Reference: ' . $shop_b_row['enquiry_number'],
+	'Location: Integration Shop B (ID ' . $shop_b . ')',
+	'Package: Published Integration Feast',
+	'Guests: 25',
+	'Event date: ' . $event_date,
+	'Event time: 18:30',
+	'Order type: Delivery',
+	'Address: 22 Integration Street, Sydney',
+	'Customer name: Catering Integration Customer',
+	'Customer email: catering.customer@example.invalid',
+	'Customer phone: 0400123456',
+	'Dietary notes: One gluten-free meal',
+	'Notes: Use the rear loading entrance',
+	'Indicative subtotal: AUD $302.50',
+	'Indicative total: AUD $302.50',
+	'Indicative deposit:',
+);
+$staff_has_fields = true;
+foreach ( $expected_staff_fields as $expected_staff_field ) {
+	$staff_has_fields = $staff_has_fields && false !== strpos( $staff_message, $expected_staff_field );
+}
+db_integration_assert( $staff_has_fields, 'staff notification contains saved routing, event, contact, notes and indicative pricing fields' );
+db_integration_assert( empty( $staff_mail['headers'] ), 'staff notification adds no PII-bearing headers' );
+
+foreach ( array( 'inactive' => $inactive_shop, 'missing' => 987654321 ) as $fixture_name => $invalid_location_id ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+	$invalid_location_params = $catering_params;
+	$invalid_location_params['location_id'] = $invalid_location_id;
+	$rows_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$mail_before = count( $GLOBALS['db_catering_mail'] );
+	$invalid_location_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $invalid_location_params ) );
+	db_integration_same( 'doughboss_catering_location_unavailable', is_wp_error( $invalid_location_submit ) ? $invalid_location_submit->get_error_code() : '', 'explicit positive ' . $fixture_name . ' location is rejected' );
+	db_integration_same( 400, is_wp_error( $invalid_location_submit ) ? (int) $invalid_location_submit->get_error_data()['status'] : 0, $fixture_name . ' location rejection is a validation response' );
+	db_integration_same( $rows_before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), $fixture_name . ' location rejection stores no enquiry' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	db_integration_same( $mail_before, count( $GLOBALS['db_catering_mail'] ), $fixture_name . ' location rejection sends no mail' );
+}
+
+$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+$legacy_params = $catering_params;
+$legacy_params['package_id'] = 0;
+unset( $legacy_params['location_id'] );
+$legacy_params['customer_email'] = 'legacy.catering@example.invalid';
+$legacy_params['customer_phone'] = '';
+$legacy_params['event_time'] = '';
+$legacy_params['address'] = '';
+$legacy_params['dietary'] = '';
+$legacy_params['notes'] = '';
+$legacy_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $legacy_params ) );
+$legacy_data = $legacy_submit instanceof WP_REST_Response ? $legacy_submit->get_data() : array();
+$legacy_row = ! empty( $legacy_data['enquiry_number'] ) ? DoughBoss_Catering::get_by_number( $legacy_data['enquiry_number'] ) : null;
+db_integration_same( DoughBoss_Locations::default_id(), is_array( $legacy_row ) ? (int) $legacy_row['location_id'] : 0, 'omitted legacy location still routes to the configured default' );
+db_integration_same( 0, is_array( $legacy_row ) ? (int) $legacy_row['package_id'] : -1, 'explicit custom package zero is persisted as custom' );
+$legacy_staff_mail = db_integration_catering_mail_to( $settings['catering_email'] );
+foreach ( array_reverse( $GLOBALS['db_catering_mail'] ) as $candidate_mail ) {
+	if ( isset( $candidate_mail['to'] ) && $settings['catering_email'] === $candidate_mail['to'] ) {
+		$legacy_staff_mail = $candidate_mail;
+		break;
+	}
+}
+$legacy_staff_message = isset( $legacy_staff_mail['message'] ) ? (string) $legacy_staff_mail['message'] : '';
+db_integration_assert(
+	false !== strpos( $legacy_staff_message, 'Package: Custom' )
+	&& false !== strpos( $legacy_staff_message, 'Event time: To be confirmed' )
+	&& false !== strpos( $legacy_staff_message, 'Address: Not provided' )
+	&& false !== strpos( $legacy_staff_message, 'Customer phone: Not provided' )
+	&& false !== strpos( $legacy_staff_message, 'Dietary notes: Not provided' )
+	&& false !== strpos( $legacy_staff_message, 'Notes: Not provided' ),
+	'custom enquiry staff mail uses honest optional-field fallbacks'
+);
+
+// An installation with no location rows keeps the historical location_id 0.
+$wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$wpdb->query( 'DELETE FROM ' . $wpdb->prefix . 'doughboss_locations' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+$no_location_params = $legacy_params;
+$no_location_params['customer_email'] = 'no.location.catering@example.invalid';
+$no_location_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $no_location_params ) );
+$no_location_data = $no_location_submit instanceof WP_REST_Response ? $no_location_submit->get_data() : array();
+$no_location_row = ! empty( $no_location_data['enquiry_number'] ) ? DoughBoss_Catering::get_by_number( $no_location_data['enquiry_number'] ) : null;
+db_integration_same( 0, is_array( $no_location_row ) ? (int) $no_location_row['location_id'] : -1, 'no-location installation preserves legacy location zero' );
+$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+$GLOBALS['db_catering_mail_result'] = false;
+$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+$failed_mail_params = $legacy_params;
+$failed_mail_params['customer_email'] = 'failed.mail.catering@example.invalid';
+$rows_before_failed_mail = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$failed_mail_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $failed_mail_params ) );
+$failed_mail_data = $failed_mail_submit instanceof WP_REST_Response ? $failed_mail_submit->get_data() : array();
+db_integration_same( true, ! empty( $failed_mail_data['success'] ), 'false wp_mail result does not undo successful enquiry response' );
+db_integration_same( $rows_before_failed_mail + 1, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), 'false wp_mail result retains the saved enquiry row' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$GLOBALS['db_catering_mail_result'] = true;
+remove_filter( 'pre_wp_mail', 'db_integration_capture_catering_mail', 10 );
+db_integration_assert( count( $GLOBALS['db_catering_mail'] ) > $mail_start, 'all catering fixture mail was intercepted locally' );
+if ( null === $original_remote_addr ) {
+	unset( $_SERVER['REMOTE_ADDR'] );
+} else {
+	$_SERVER['REMOTE_ADDR'] = $original_remote_addr;
+}
 
 // Exercise the new read-only hours adapter against real WP/MySQL, not its unit shim.
 $original_hours = DoughBoss_Locations::weekly_hours( 1 );

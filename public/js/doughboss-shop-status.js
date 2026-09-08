@@ -8,6 +8,13 @@
 	var lastRefresh = 0;
 	var snapshot = null;
 	var tickTimer = null;
+	var latestLocationId = 0;
+	// A form can choose a shop while the header's public reads are still pending.
+	// Retain that event even when localStorage is blocked and renderHeader has
+	// not yet attached its rendered-control listener.
+	document.addEventListener('doughboss:shop-changed', function (event) {
+		latestLocationId = event.detail ? Number(event.detail.id) : 0;
+	});
 
 	function pickupStatusText(location, config, now) {
 		if (!config || !config.ordering_open) { return 'Online ordering is paused. Browse the menu or contact the shop.'; }
@@ -95,6 +102,7 @@
 	}
 
 	function chosenId(locations) {
+		if (locationById(locations, latestLocationId)) { return latestLocationId; }
 		var saved = 0;
 		try { saved = Number(window.localStorage.getItem('doughboss_location')); } catch (error) { /* Optional preference only. */ }
 		return locationById(locations, saved) ? saved : (locations.length ? Number(locations[0].id) : 0);

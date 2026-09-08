@@ -290,4 +290,167 @@ test('catering reads time out even without browser abort support', async () => {
 	assert.equal(cleared, 7);
 });
 
+const cateringLocationId = extractFunction(catering, 'cateringLocationId');
+const syntheticShops = [{ id: 1, name: 'Synthetic shop A' }, { id: 2, name: 'Synthetic shop B' }];
+
+test('header initial selection preserves early form events when storage is blocked', () => {
+	const choose = extractFunction(shopStatus, 'chosenId', {
+		latestLocationId: 2,
+		locationById: (locations, id) => locations.find(location => location.id === id),
+		window: { localStorage: { getItem: () => { throw new Error('Storage blocked'); } } }
+	});
+	assert.equal(choose(syntheticShops), 2);
+	assert.equal(choose([syntheticShops[0]]), 1, 'an event cannot select a shop missing from the header response');
+});
+
+function cateringLocationHarness(saved) {
+	const state = { locations: [], locationId: 0, locationStatus: 'loading', requestedLocationId: null, locationLocked: false, submitting: false };
+	const requests = [];
+	const context = {
+		state, cateringLocationId, root: { querySelector: () => ({}) }, updateCateringLocation: () => {},
+		window: { localStorage: { getItem: () => { if (saved instanceof Error) throw saved; return saved; } } },
+		get: url => new Promise((resolve, reject) => requests.push({ url, resolve, reject }))
+	};
+	const load = extractFunction(catering, 'loadCateringLocations', context);
+	const apply = extractFunction(catering, 'applyCateringLocation', context);
+	return { state, requests, load, apply };
+}
+
+test('catering location identifiers reject malformed values', () => {
+	for (const value of [null, undefined, true, {}, '', '2.5', '1e2', '-2', 2.5, Infinity, 9007199254740992]) assert.equal(cateringLocationId(value), 0);
+	assert.equal(cateringLocationId('2'), 2);
+	assert.equal(cateringLocationId(2), 2);
+});
+
+test('catering initial shop preference matches configured shops and storage is optional', async () => {
+	for (const [saved, expected] of [['2', 2], [null, 1], [new Error('Storage blocked'), 1], ['99', 0]]) {
+		const h = cateringLocationHarness(saved);
+		const pending = h.load();
+		h.requests[0].resolve(syntheticShops);
+		h.requests[1].resolve({ active: false });
+		await pending;
+		assert.equal(h.state.locationStatus, 'ready');
+		assert.equal(h.state.locationId, expected, 'a stale explicit preference must not silently select another shop');
+	}
+});
+
+test('header changes before and after shop loading remain current without local storage', async () => {
+	const h = cateringLocationHarness(new Error('Storage blocked'));
+	const pending = h.load();
+	h.apply(2);
+	h.requests[0].resolve(syntheticShops);
+	h.requests[1].resolve({ active: false });
+	await pending;
+	assert.equal(h.state.locationId, 2);
+	h.apply(1);
+	assert.equal(h.state.locationId, 1);
+	h.apply(99);
+	assert.equal(h.state.locationId, 0, 'unknown event cannot route to a default shop');
+});
+
+test('shop loading failure recovers without changing the queued preference', async () => {
+	const h = cateringLocationHarness('1');
+	h.apply(2);
+	const failed = h.load();
+	h.requests[0].reject(new Error('Offline'));
+	h.requests[1].resolve({ active: false });
+	await failed;
+	assert.equal(h.state.locationStatus, 'error');
+	const retry = h.load();
+	h.requests[2].resolve(syntheticShops);
+	h.requests[3].resolve({ active: false });
+	await retry;
+	assert.equal(h.state.locationStatus, 'ready');
+	assert.equal(h.state.locationId, 2);
+});
+
+test('verified empty shops retain legacy custom capture; invalid table context fails closed', async () => {
+	for (const [shops, table, expected, locked, id] of [
+		[[], { active: false }, 'ready', false, 0],
+		[syntheticShops, { active: true, location: { id: 2 }, table: { label: 'Synthetic table' } }, 'ready', true, 2],
+		[syntheticShops, { active: true, location: { id: 99 }, table: {} }, 'error', true, 0],
+		[syntheticShops, {}, 'error', false, 0]
+	]) {
+		const h = cateringLocationHarness(table.active ? '99' : '1');
+		const pending = h.load();
+		h.requests[0].resolve(shops);
+		h.requests[1].resolve(table);
+		await pending;
+		assert.equal(h.state.locationStatus, expected);
+		assert.equal(h.state.locationLocked, locked);
+		assert.equal(h.state.locationId, id);
+	}
+});
+
+test('pending catering or signed table context vetoes sitewide shop changes', () => {
+	const state = { submitting: false, locationLocked: false };
+	let vetoes = 0;
+	const guard = extractFunction(catering, 'guardCateringShopChange', { state });
+	const event = { preventDefault: () => { vetoes++; } };
+	guard(event);
+	assert.equal(vetoes, 0);
+	state.submitting = true;
+	guard(event);
+	state.submitting = false;
+	state.locationLocked = true;
+	guard(event);
+	assert.equal(vetoes, 2);
+});
+
+test('shop UI changes only its controls, keeping other form values untouched', () => {
+	const state = { locations: syntheticShops, locationId: 2, locationStatus: 'ready', submitting: false };
+	const select = {};
+	const note = {};
+	const retry = {};
+	const form = { querySelector: selector => ({ '[name="location_id"]': select, '.dbc-location-note': note, '[data-catering-locations-retry]': retry })[selector] };
+	Object.defineProperty(form, 'innerHTML', { set: () => assert.fail('shop change must not rebuild enquiry inputs') });
+	const selected = extractFunction(catering, 'selectedCateringLocation', { state });
+	const update = extractFunction(catering, 'updateCateringLocation', { state, selectedCateringLocation: selected, esc: value => value });
+	update(form);
+	assert.equal(select.value, '2');
+	assert.match(note.textContent, /Synthetic shop B/);
+	state.submitting = true;
+	state.submittedLocationName = 'Synthetic shop B';
+	update(form);
+	assert.equal(select.disabled, true);
+	assert.match(note.textContent, /Sending enquiry for Synthetic shop B/);
+});
+
+test('enquiry submits the exact shop and form snapshot once, retaining fields after server errors', async () => {
+	const state = { locations: syntheticShops, locationId: 2, locationStatus: 'ready', submitting: false, selectedId: 9, orderType: 'delivery' };
+	const values = { customer_name: 'Synthetic customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000', guest_count: '12', event_date: '2099-10-10', event_time: '12:30', address: 'Synthetic venue', dietary: 'Synthetic dietary note', notes: 'Retain this note', hp: '' };
+	const error = {};
+	const button = { textContent: 'Request booking & quote', disabled: false };
+	const form = { classList: { contains: () => true }, querySelector: selector => selector === '.dbc-error' ? error : button };
+	const sends = [];
+	const selected = extractFunction(catering, 'selectedCateringLocation', { state });
+	const submit = extractFunction(catering, 'submitCateringEnquiry', {
+		state, selectedCateringLocation: selected, updateCateringLocation: () => {},
+		FormData: function () { this.get = key => values[key]; },
+		post: (url, body) => new Promise(resolve => sends.push({ url, body, resolve })), showSuccess: () => assert.fail('failed response cannot show success')
+	});
+	const event = { target: form, preventDefault: () => {} };
+	const pending = submit(event);
+	submit(event);
+	assert.equal(sends.length, 1);
+	assert.equal(sends[0].url, '/catering/enquiry');
+	assert.equal(sends[0].body.location_id, 2);
+	for (const field of ['customer_phone', 'event_date', 'event_time', 'address', 'dietary', 'notes']) assert.equal(sends[0].body[field], values[field]);
+	assert.equal(state.submittedLocationName, 'Synthetic shop B');
+	values.notes = 'Edited while pending';
+	values.event_time = '13:45';
+	assert.equal(sends[0].body.notes, 'Retain this note', 'in-flight payload does not reread edited fields');
+	assert.equal(sends[0].body.event_time, '12:30');
+	sends[0].resolve({ ok: false, data: { message: 'That catering package is no longer available.' } });
+	await pending;
+	assert.equal(state.submitting, false);
+	assert.equal(button.disabled, false);
+	assert.match(error.textContent, /package is no longer available/);
+	assert.equal(values.notes, 'Edited while pending', 'failure preserves the current form rather than restoring old inputs');
+	state.locationId = 0;
+	submit(event);
+	assert.equal(sends.length, 1, 'unavailable location must not POST legacy zero');
+	assert.match(error.textContent, /Choose an available shop/);
+});
+
 console.log('Storefront helper regression checks passed.');
