@@ -28,8 +28,8 @@ Non-goals: no new framework or dependency, no provider activation, no live confi
 Completed local gates:
 
 ```text
-PHP syntax: 88 files passed
-PHP unit assertions: 158 passed, 0 failed
+PHP syntax: 88 files passed on both PHP 7.4.33 and 8.2.33
+PHP unit assertions: 158 passed, 0 failed on both PHP 7.4.33 and 8.2.33
 JavaScript syntax: 15 files passed
 Dependency-free storefront helper suite: passed
 WordPress/MySQL assertions: 96 passed, 0 failed
@@ -79,13 +79,21 @@ The canonical plugin exceeds the previously documented 2MB browser upload cap; a
 
 ## Final artifact evidence
 
-The final local release gate was rerun after the short-expiry timer and public-read nonce repairs and passed with the counts above. The 96-assertion database/concurrency gate preceded the nonce-only asset change; no controller or persistence behavior changed afterward. These artifacts match the runtime source bytes:
+The final local release gate was rerun after the short-expiry timer, public-read nonce and PHP 7.4 DST repairs and passed with the counts above. The 96-assertion database/concurrency gate was also rerun after the DST repair. These artifacts match the runtime source bytes:
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `dist/doughboss-2.43.0.zip` | 2,576,268 | `9733828ED9F34810CE83203833E26428192A409242CF6D8E254BB2AFA0AA5578` |
+| `dist/doughboss-2.43.0.zip` | 2,576,351 | `D4C527C852B0890AB9AB9B60616302E7A5430EA41BEF321E7412431E37FA390A` |
 | `dist/doughboss-final-1.6.0.zip` | 30,513 | `A2B4C822F644550506214F57F872DB8A2764BABC4826D810FEA91BF2A1C5475D` |
 
 Earlier intermediate artifacts were moved to the external local staging folder, not overwritten or presented as final. A fresh read-only Sol xhigh review returned `ship` after the public-read nonce repair; the reviewer independently reran final JavaScript syntax/helper checks and `git diff --check`. Astra's earlier payment-architecture acceptance remains limited to the frozen payment-hardening baseline, not this new UI batch.
 
 The authorized delivery shape is one consolidated commit/push and one draft PR/automatic CI cycle, stacked on #66. Consult that PR for its current hosted-CI result. Publishing, provider activation and Drive writes are not part of this source-delivery action. This is not a production completion declaration.
+
+## Hosted compatibility repair
+
+[Draft PR #67](https://github.com/edagher92-coder/DOUGHBOSSV2/pull/67) was opened for commit `6928123`. Its first [CI run 34219384387](https://github.com/edagher92-coder/DOUGHBOSSV2/actions/runs/34219384387) passed PHP 8.2 and paired archives but failed the PHP 7.4 repeated-hour regression (157/158 passed). No remote rerun was used to diagnose it.
+
+The failure reproduced locally with the official portable PHP 7.4.33 CLI. Two Sydney fold instants (`1775316600` and `1775320200`) both reported `1775320200` after timezone conversion on 7.4; PHP 8.2 retained distinct timestamps. This is consistent with the [PHP repeated-hour timestamp issue](https://bugs.php.net/bug.php?id=68549). The minimal repair keys ambiguity matches by the original UTC timestamp rather than the timezone-converted object's `getTimestamp()`. The existing failing test now passes on both runtimes; test expectations were not weakened. PHP 7.4 is used only as a local CLI compatibility test, not a web server or production runtime.
+
+A fresh read-only Sol high reviewer reproduced the timestamp difference and independently passed 158 assertions plus changed-file lint on both PHP versions, returning `ship` for this bounded repair. One deliberate follow-up push/CI cycle follows this local reproduction, repair, final gates and focused review. Intermediate ZIPs and the pre-repair source backup remain preserved but are not the final installable release.

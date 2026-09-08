@@ -670,9 +670,12 @@ class DoughBoss_Locations {
 			return $instant && $instant->format( 'Y-m-d H:i' ) === $input ? $instant : false;
 		}
 		foreach ( $transitions as $transition ) {
-			$candidate = ( new DateTimeImmutable( '@' . ( $wall->getTimestamp() - (int) $transition['offset'] ) ) )->setTimezone( $timezone );
+			$timestamp = $wall->getTimestamp() - (int) $transition['offset'];
+			$candidate = ( new DateTimeImmutable( '@' . $timestamp ) )->setTimezone( $timezone );
 			if ( $candidate->format( 'Y-m-d H:i' ) === $input ) {
-				$matches[ $candidate->getTimestamp() ] = $candidate;
+				// PHP 7.4 can collapse getTimestamp() after a repeated-hour timezone
+				// conversion. Keep the original UTC identity so both matches survive.
+				$matches[ $timestamp ] = $candidate;
 			}
 		}
 		return 1 === count( $matches ) ? reset( $matches ) : false;
