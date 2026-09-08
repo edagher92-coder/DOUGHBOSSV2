@@ -261,16 +261,6 @@ class DoughBoss_Assets {
 			true
 		);
 
-		if ( $is_order_page ) {
-			wp_enqueue_script(
-				'doughboss-order-page',
-				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-order-page.js',
-				array( 'doughboss' ),
-				DOUGHBOSS_VERSION,
-				true
-			);
-		}
-
 		// Square card capture. Enqueued ONLY when Square is the active, ready
 		// gateway, so nothing about the current pay-at-shop or Stripe storefront
 		// changes. Only the application id and location id are handed to the

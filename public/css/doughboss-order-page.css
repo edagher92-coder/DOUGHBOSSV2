@@ -191,7 +191,7 @@ body.doughboss-order-page .db-menu-tools {
 	top: calc(var(--db-sticky-top, 0px) + var(--wp-admin--admin-bar--height, 0px));
 	padding: .8rem;
 	border-color: rgba(17, 16, 15, .09);
-	background: rgba(247, 245, 240, .94);
+	background: var(--db-order-paper);
 }
 
 body.doughboss-order-page .db-category {
@@ -231,9 +231,6 @@ body.doughboss-order-page .db-card-img {
 	aspect-ratio: 4 / 3;
 	min-height: 0;
 	background-position: center;
-	transform-origin: 50% 56%;
-	transition: transform 760ms cubic-bezier(.2, .82, .2, 1),
-		filter 560ms ease;
 }
 
 body.doughboss-order-page .db-card-body h3,
@@ -258,7 +255,7 @@ body.doughboss-order-page .db-price {
 }
 
 body.doughboss-order-page .db-btn--coming-soon {
-	min-height: 42px;
+	min-height: 44px;
 	padding-inline: 1rem;
 	background: #e8e3db;
 	color: #5e5851;
@@ -270,81 +267,6 @@ body.doughboss-order-page .db-btn--coming-soon {
 body.doughboss-order-page.doughboss-ordering-closed .db-builder,
 body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 	display: none !important;
-}
-
-/* Reversible viewport motion: cards arrive from below while scrolling down,
- * then leave upward; scrolling back reverses both states. JavaScript only adds
- * the motion body class when IntersectionObserver and normal motion are present. */
-body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-ready="1"] {
-	animation: none !important;
-	opacity: .12;
-	transform: translate3d(0, 54px, 0) scale(.84) rotateX(5deg);
-	filter: saturate(.65);
-	transition:
-		opacity 520ms ease,
-		transform 760ms cubic-bezier(.2, .86, .2, 1),
-		filter 520ms ease,
-		box-shadow 260ms ease;
-	will-change: opacity, transform;
-}
-
-body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] {
-	opacity: .08;
-	transform: translate3d(0, -48px, 0) scale(1.08) rotateX(-4deg);
-	filter: saturate(.72);
-}
-
-body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible {
-	opacity: 1;
-	transform: translate3d(0, 0, 0) scale(1) rotateX(0);
-	filter: none;
-}
-
-body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="below"] .db-card-img {
-	transform: scale(.78) rotate(-3deg);
-	filter: blur(1px);
-}
-
-body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] .db-card-img {
-	transform: scale(1.14) rotate(2deg);
-	filter: blur(.6px);
-}
-
-body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible .db-card-img {
-	transform: scale(1) rotate(0);
-	filter: none;
-}
-
-@media (hover: hover) {
-	body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible:not(.db-card--soldout):hover {
-		transform: translate3d(0, -6px, 0) scale(1.01);
-		box-shadow: 0 18px 38px rgba(31, 24, 18, .15);
-	}
-}
-
-/* Touch: keep the scene, lose the cost.
- * scale(.84) shrank the card — and with it the "Add to cart" button — to 84%
- * while it sat at the edge of the viewport (measured: the 44px button painted
- * at 36.8px, skewed by rotateX). On a phone that edge band is a large share of
- * the screen and it is exactly where a thumb lands. Opacity .12/.08 also made
- * the item name and price unreadable mid-scroll. Softer offsets, no scale, no
- * rotation and a readable floor keep the motion without touching the target. */
-@media (pointer: coarse) {
-	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-ready="1"] {
-		opacity: .55;
-		transform: translate3d(0, 22px, 0);
-	}
-
-	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] {
-		opacity: .55;
-		transform: translate3d(0, -18px, 0);
-	}
-
-	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="below"] .db-card-img,
-	body.doughboss-order-page.db-order-page-motion .db-card[data-db-scroll-state="above"] .db-card-img {
-		transform: none;
-		filter: none;
-	}
 }
 
 @media (max-width: 760px) {

@@ -7,11 +7,47 @@
 	if (toggle && nav) {
 		var closeButton = nav.querySelector('[data-dbf-menu-close]');
 		var mobileQuery = window.matchMedia('(max-width: 900px)');
+		var isolatedNavigationBackground = [];
+		var menuReturnFocus = toggle;
 		function menuOpen() {
 			return toggle.getAttribute('aria-expanded') === 'true';
 		}
 		function focusableMenuItems() {
-			return Array.prototype.slice.call(nav.querySelectorAll('a[href], button:not([disabled])'));
+			return Array.prototype.slice.call(nav.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+		}
+		function navigationIsolationTargets(root, exception) {
+			var targets = [];
+			Array.prototype.forEach.call(root.children || [], function (child) {
+				if (child === exception) return;
+				if (child.contains(exception)) {
+					targets = targets.concat(navigationIsolationTargets(child, exception));
+				} else {
+					targets.push(child);
+				}
+			});
+			return targets;
+		}
+		function isolateNavigationBackground() {
+			if (!mobileQuery.matches || isolatedNavigationBackground.length) return;
+			isolatedNavigationBackground = navigationIsolationTargets(document.body, nav).map(function (element) {
+				var state = {
+					element: element,
+					inert: element.getAttribute('inert'),
+					ariaHidden: element.getAttribute('aria-hidden')
+				};
+				element.setAttribute('inert', '');
+				element.setAttribute('aria-hidden', 'true');
+				return state;
+			});
+		}
+		function restoreNavigationBackground() {
+			isolatedNavigationBackground.forEach(function (state) {
+				if (state.inert === null) state.element.removeAttribute('inert');
+				else state.element.setAttribute('inert', state.inert);
+				if (state.ariaHidden === null) state.element.removeAttribute('aria-hidden');
+				else state.element.setAttribute('aria-hidden', state.ariaHidden);
+			});
+			isolatedNavigationBackground = [];
 		}
 		function closeMenu(restoreFocus) {
 			toggle.setAttribute('aria-expanded', 'false');
@@ -20,9 +56,12 @@
 			document.body.classList.remove('dbf-menu-open');
 			if (mobileQuery.matches) nav.setAttribute('aria-hidden', 'true');
 			else nav.removeAttribute('aria-hidden');
-			if (restoreFocus) toggle.focus();
+			restoreNavigationBackground();
+			if (restoreFocus && menuReturnFocus && document.documentElement.contains(menuReturnFocus)) menuReturnFocus.focus();
 		}
 		function openMenu() {
+			if (!mobileQuery.matches) return;
+			menuReturnFocus = toggle;
 			toggle.setAttribute('aria-expanded', 'true');
 			toggle.setAttribute('aria-label', 'Close navigation');
 			nav.removeAttribute('aria-hidden');
@@ -30,6 +69,7 @@
 			document.body.classList.add('dbf-menu-open');
 			var items = focusableMenuItems();
 			if (items.length) items[0].focus();
+			isolateNavigationBackground();
 		}
 		function syncMenuMode() {
 			closeMenu(false);
@@ -50,10 +90,16 @@
 			}
 			if (event.key === 'Tab') {
 				var items = focusableMenuItems();
-				if (!items.length) return;
+				if (!items.length) {
+					event.preventDefault();
+					return;
+				}
 				var first = items[0];
 				var last = items[items.length - 1];
-				if (event.shiftKey && document.activeElement === first) {
+				if (!nav.contains(document.activeElement)) {
+					event.preventDefault();
+					(event.shiftKey ? last : first).focus();
+				} else if (event.shiftKey && document.activeElement === first) {
 					event.preventDefault();
 					last.focus();
 				} else if (!event.shiftKey && document.activeElement === last) {
@@ -63,7 +109,7 @@
 			}
 		});
 		document.addEventListener('click', function (event) {
-			if (menuOpen() && !nav.contains(event.target) && !toggle.contains(event.target)) closeMenu(false);
+			if (menuOpen() && !nav.contains(event.target) && !toggle.contains(event.target)) closeMenu(true);
 		});
 		if (mobileQuery.addEventListener) mobileQuery.addEventListener('change', syncMenuMode);
 		else if (mobileQuery.addListener) mobileQuery.addListener(syncMenuMode);
@@ -93,29 +139,47 @@
 		if (window.ResizeObserver) { new ResizeObserver(syncStickyTop).observe(stickyHeader); }
 	}
 
-	var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	var orderCounter = document.querySelector('.dbf-order-counter');
-	if (orderCounter && !reduceMotion) {
-		document.documentElement.classList.add('dbf-order-motion');
-		var settleOrderCounter = function () { orderCounter.classList.add('is-settled'); };
-		if (window.requestAnimationFrame) window.requestAnimationFrame(settleOrderCounter);
-		else settleOrderCounter();
-	}
+	var motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 	var reveals = Array.prototype.slice.call(document.querySelectorAll('[data-dbf-reveal]'));
-	if (!reduceMotion && 'IntersectionObserver' in window) {
+	var revealObserver = null;
+	function showAllReveals() {
+		reveals.forEach(function (element) {
+			element.classList.add('is-visible');
+			element.removeAttribute('data-dbf-scroll-state');
+		});
+	}
+	function stopRevealObserver() {
+		if (revealObserver) revealObserver.disconnect();
+		revealObserver = null;
+	}
+	function startRevealObserver() {
+		stopRevealObserver();
+		if (!('IntersectionObserver' in window)) {
+			showAllReveals();
+			return;
+		}
 		var observer = new IntersectionObserver(function (entries) {
 			entries.forEach(function (entry) {
 				if (entry.isIntersecting) {
 					entry.target.classList.add('is-visible');
-					entry.target.setAttribute('data-dbf-scroll-state', 'visible');
-				} else {
-					entry.target.classList.remove('is-visible');
-					entry.target.setAttribute('data-dbf-scroll-state', entry.boundingClientRect.bottom <= 0 ? 'above' : 'below');
+					observer.unobserve(entry.target);
 				}
 			});
 		}, { threshold: 0.08, rootMargin: '-3% 0px -4% 0px' });
-		reveals.forEach(function (element) { observer.observe(element); });
-	} else {
-		reveals.forEach(function (element) { element.classList.add('is-visible'); });
+		revealObserver = observer;
+		reveals.forEach(function (element) { revealObserver.observe(element); });
 	}
+	function syncMotionPreference() {
+		var reduceMotion = motionQuery ? motionQuery.matches : false;
+		document.documentElement.classList.toggle('dbf-motion-ok', !reduceMotion);
+		if (reduceMotion) {
+			stopRevealObserver();
+			showAllReveals();
+		} else {
+			startRevealObserver();
+		}
+	}
+	if (motionQuery && motionQuery.addEventListener) motionQuery.addEventListener('change', syncMotionPreference);
+	else if (motionQuery && motionQuery.addListener) motionQuery.addListener(syncMotionPreference);
+	syncMotionPreference();
 }());

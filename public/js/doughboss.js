@@ -563,7 +563,6 @@
 				new window.ResizeObserver(publishToolsHeight).observe(tools);
 			}
 
-			var stagger = 0;
 			var sections = [];
 			categories.forEach(function (category) {
 				var heading = el('h2', { class: 'db-category', id: catId(category), text: category });
@@ -571,10 +570,6 @@
 				groups[category].forEach(function (item) {
 					var card = menuCard(item, orderingOpen);
 					card.setAttribute('data-search-text', String(item.name || '') + ' ' + String(item.description || '') + ' ' + category);
-					// Cap the stagger so a long menu never delays the last card by
-					// seconds; the entrance still reads as a lively cascade.
-					card.style.setProperty('--db-i', String(Math.min(stagger, 12)));
-					stagger += 1;
 					grid.appendChild(card);
 				});
 				sections.push({ heading: heading, grid: grid });

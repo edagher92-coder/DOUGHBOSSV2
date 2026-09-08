@@ -147,3 +147,33 @@ Review-only artifacts outside source:
 These still carry base versions 2.43.0/1.6.0 and are not versioned release artifacts. Existing canonical ZIPs, full-folder backup and quarantine were not overwritten. No push, PR update, hosted CI, generation, deployment, Drive upload, live settings change, real payment or real order was performed in this follow-on.
 
 Next: the accepted design brief's surfaces/focus/motion and compact-order-entry stages, with a supported preview needed for visual acceptance. The shared Drive target, full live backup/rollback, catering pricing policy, provider/POS/mail acceptance and SamOS integration remain separate unmet gates. Passing this local integrity batch does not complete the overall goal.
+
+### Astra design stages 1–2: implemented locally
+
+The accepted brief now has a coherent local implementation. The existing Sol high lane owned the three theme files; the lead owned plugin presentation, the obsolete asset enqueue removal, and the existing Node tests. Saved WordPress navigation, homepage hero content/photos, customizer business logic, prices, checkout and live settings were not changed. No additional model or asset-generation call was needed for this batch.
+
+- Navigation uses opaque Coal by default, with supported blur only on its pseudo-element and a solid increased-contrast fallback. The header itself retains the fixed-drawer containing-block invariant. Theme, storefront and detached customizer focus treatments use contrasting ink/paper rings.
+- Opening the mobile navigation moves focus inside before isolating background branches. Closing restores exact prior `inert` and `aria-hidden` attribute states before returning focus. The desktop breakpoint releases isolation without moving an already-focused navigation link.
+- Theme reveals are one-shot, translate-only and never fade content out. Runtime reduced-motion changes disconnect the observer and expose all content; queued callbacks retain their original observer safely. CSS independently disables transforms/delays for reduced motion and prevents reveal translation around focused content.
+- Ordering tools and transient feedback are opaque. Interactive menu cards no longer scale, rotate, blur, fade or stagger into view. The motion-only `public/js/doughboss-order-page.js` and its enqueue were removed; Git retains the previous file. Order-page compatibility styles remain. Existing add-to-cart feedback hooks now use brief non-geometric emphasis, not bouncing money or shrinking controls.
+- The order-only masthead has natural-growth minimums of 132px on phones and 168px desktop, with shorter copy and no redundant eyebrow/badge/readiness blocks. These are CSS targets, not measured rendered heights. The shop/status counter remains available while ordering is paused; builder/cart retain the existing ordering gate. Paused copy no longer claims a future launch. The homepage remains food-led.
+
+The independent read-only review found no fix-first issue in the combined diff. It inspected source but did not rerun the lead's tests. The lead additionally corrected the reduced-motion selector specificity so CSS does not depend on JavaScript's media-change callback timing. No dedicated fresh Sol-review-model result is claimed: the prior environment agent-thread limit remains a documented routing limitation.
+
+| Check | Final local evidence |
+| --- | --- |
+| `node --test tests/storefront-helpers.test.js` | 22 named tests passed, plus existing top-level assertions; new synthetic checks cover isolation/restoration, focus order, desktop release, preference changes/late callbacks, and removal of the card-motion path |
+| PHP 7.4.33 and 8.2.33 `-n tests/run.php` | 158 assertions passed on each runtime |
+| `scripts/test-release.ps1` using the reviewed outputs below | 88 PHP syntax files, 14 JavaScript syntax files; exact current-tree bytes for 137 plugin and 25 theme runtime files validated |
+| `git diff --check` | Passed |
+
+One local rebuild attempt correctly refused to replace the earlier candidate ZIP. The source/tests had passed; no existing archive was deleted or overwritten. The final gate then completed using distinct `reviewed` filenames. The previous WordPress/MySQL 141-assertion result belongs to the catering checkpoint above; that database suite was not rerun for this presentation-only batch. Browser/layout, live provider and mail delivery evidence remain unverified.
+
+Final review-only artifacts (base versions 2.43.0 / 1.6.0, not versioned production releases):
+
+- `C:\Codex\Temp\doughboss-ui-counter-20260908\doughboss-ui-reviewed-local.zip`: 2,578,211 bytes; SHA-256 `AE5E07128D2B6C89458436588A600433BB68668C8D4CCA8022237BE972EB0109`.
+- `C:\Codex\Temp\doughboss-ui-counter-20260908\doughboss-theme-ui-reviewed-local.zip`: 30,661 bytes; SHA-256 `D5904B86F8473AE36A4DB9F3B6A5F022166F8BFB608036B365E1B56873DCB71D`.
+
+The user asked to see the updated interface. Read-only GitHub discovery found the existing separate Pages site at `https://edagher92-coder.github.io/DOUGHBOSSV2/`, with no custom domain and the latest listed successful deployment on 18 August 2026. It does not contain this batch. PR #67 still targets source `56159b55c91672ac704cbe016343659e90a29cca`; its three successful checks are older evidence. The active checkout has only the plugin CI workflow and no current Pages build pipeline. WPVibe lists only the production WordPress site, not a staging installation. No preview was generated or published.
+
+Next deliverable: an explicitly approved, separate visual-preview batch built from this source, followed by permitted-browser acceptance. A static Pages preview can demonstrate appearance and synthetic interactions, not a running WordPress/payment integration. Do not present the older demo, historical screenshots or a generated concept image as the updated rendered site. Production publication, complete live backup/rollback, accessible shared Drive target, catering policy, provider/POS/mail acceptance and SamOS remain unmet. No remote push/CI/deployment, live settings mutation, order, payment, email, Drive write or quarantine change occurred in this UI batch.

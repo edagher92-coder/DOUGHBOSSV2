@@ -453,4 +453,143 @@ test('enquiry submits the exact shop and form snapshot once, retaining fields af
 	assert.match(error.textContent, /Choose an available shop/);
 });
 
+const themeScript = path.resolve(__dirname, '..', 'themes', 'doughboss-final', 'assets', 'theme.js');
+
+// Minimal attribute/tree fixtures for the existing theme helpers, not a browser.
+function themeNode(attributes, children) {
+	const attrs = Object.assign({}, attributes);
+	const classes = new Set();
+	const element = {
+		children: children || [],
+		getAttribute: name => Object.hasOwn(attrs, name) ? attrs[name] : null,
+		setAttribute: (name, value) => { attrs[name] = String(value); },
+		removeAttribute: name => { delete attrs[name]; },
+		classList: {
+			add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name),
+			toggle: (name, on) => { if (on) classes.add(name); else classes.delete(name); }
+		},
+		contains: target => target === element || element.children.some(child => child.contains(target))
+	};
+	return element;
+}
+
+function themeNavigationHarness() {
+	const toggle = themeNode({ 'aria-expanded': 'false' });
+	const link = themeNode();
+	const nav = themeNode({ 'aria-hidden': 'true' }, [link]);
+	const priorInert = themeNode({ inert: 'inert', 'aria-hidden': 'false' });
+	const priorHidden = themeNode({ 'aria-hidden': 'true' });
+	const main = themeNode();
+	const headerInner = themeNode({}, [toggle, nav, priorInert]);
+	const header = themeNode({}, [headerInner]);
+	const body = themeNode({}, [header, main, priorHidden]);
+	const document = { body, documentElement: themeNode({}, [body]), activeElement: toggle };
+	const context = { document, toggle, nav, mobileQuery: { matches: true }, isolatedNavigationBackground: [], menuReturnFocus: toggle, focusableMenuItems: () => [link] };
+	for (const name of ['navigationIsolationTargets', 'isolateNavigationBackground', 'restoreNavigationBackground', 'openMenu', 'closeMenu', 'syncMenuMode']) {
+		context[name] = extractFunction(themeScript, name, context);
+	}
+	link.focus = () => {
+		assert.equal(nav.getAttribute('aria-hidden'), null, 'navigation is exposed before focus enters it');
+		assert.equal(toggle.getAttribute('inert'), null, 'move focus before hiding the previously focused trigger');
+		document.activeElement = link;
+	};
+	toggle.focus = () => {
+		assert.equal(toggle.getAttribute('inert'), null, 'restore background before returning keyboard focus');
+		document.activeElement = toggle;
+	};
+	return { context, document, toggle, nav, link, priorInert, priorHidden, main, header, headerInner };
+}
+
+test('mobile navigation isolates only background branches and restores exact prior attributes', () => {
+	const h = themeNavigationHarness();
+	const c = h.context;
+	const targets = c.navigationIsolationTargets(h.document.body, h.nav);
+	assert.deepEqual(Array.from(targets), [h.toggle, h.priorInert, h.main, h.priorHidden]);
+	c.openMenu();
+	assert.equal(h.document.activeElement, h.link);
+	for (const target of targets) {
+		assert.equal(target.getAttribute('inert'), '');
+		assert.equal(target.getAttribute('aria-hidden'), 'true');
+	}
+	for (const visible of [h.header, h.headerInner, h.nav, h.link]) assert.equal(visible.getAttribute('inert'), null);
+	c.isolateNavigationBackground();
+	c.closeMenu(true);
+	assert.equal(h.document.activeElement, h.toggle);
+	assert.equal(h.toggle.getAttribute('aria-expanded'), 'false');
+	assert.equal(h.nav.getAttribute('aria-hidden'), 'true');
+	assert.equal(h.document.body.classList.contains('dbf-menu-open'), false);
+	assert.equal(h.main.getAttribute('inert'), null);
+	assert.equal(h.main.getAttribute('aria-hidden'), null);
+	assert.equal(h.priorInert.getAttribute('inert'), 'inert');
+	assert.equal(h.priorInert.getAttribute('aria-hidden'), 'false');
+	assert.equal(h.priorHidden.getAttribute('aria-hidden'), 'true');
+	assert.equal(h.priorHidden.getAttribute('inert'), null);
+	c.restoreNavigationBackground();
+	assert.equal(h.priorInert.getAttribute('inert'), 'inert', 'repeated restoration is harmless');
+});
+
+test('desktop breakpoint releases mobile isolation without hiding navigation or moving focus', () => {
+	const h = themeNavigationHarness();
+	h.context.openMenu();
+	h.context.mobileQuery.matches = false;
+	h.context.syncMenuMode();
+	assert.equal(h.nav.getAttribute('aria-hidden'), null);
+	assert.equal(h.main.getAttribute('inert'), null);
+	assert.equal(h.priorInert.getAttribute('inert'), 'inert');
+	assert.equal(h.document.activeElement, h.link);
+	h.context.openMenu();
+	assert.equal(h.main.getAttribute('inert'), null, 'desktop cannot reopen the mobile isolation path');
+});
+
+test('runtime reduced-motion changes disconnect reveals and late callbacks remain safe', () => {
+	const reveal = themeNode({ 'data-dbf-scroll-state': 'below' });
+	const observers = [];
+	function Observer(callback) {
+		this.callback = callback;
+		this.observe = element => { this.observed = element; };
+		this.unobserve = element => { this.unobserved = element; };
+		this.disconnect = () => { this.disconnected = true; };
+		observers.push(this);
+	}
+	const context = {
+		motionQuery: { matches: false }, reveals: [reveal], revealObserver: null,
+		document: { documentElement: themeNode() }, window: { IntersectionObserver: Observer }, IntersectionObserver: Observer
+	};
+	for (const name of ['showAllReveals', 'stopRevealObserver', 'startRevealObserver', 'syncMotionPreference']) context[name] = extractFunction(themeScript, name, context);
+	context.syncMotionPreference();
+	assert.equal(observers.length, 1);
+	assert.equal(observers[0].observed, reveal);
+	context.motionQuery.matches = true;
+	context.syncMotionPreference();
+	assert.equal(observers[0].disconnected, true);
+	assert.equal(context.revealObserver, null);
+	assert.equal(context.document.documentElement.classList.contains('dbf-motion-ok'), false);
+	assert.equal(reveal.classList.contains('is-visible'), true);
+	assert.equal(reveal.getAttribute('data-dbf-scroll-state'), null);
+	assert.doesNotThrow(() => observers[0].callback([{ target: reveal, isIntersecting: true }]));
+	context.motionQuery.matches = false;
+	context.syncMotionPreference();
+	assert.equal(observers.length, 2);
+	assert.equal(reveal.classList.contains('is-visible'), true, 'relaxing the preference never hides previously visible content');
+	delete context.window.IntersectionObserver;
+	context.syncMotionPreference();
+	assert.equal(context.revealObserver, null);
+	assert.equal(reveal.classList.contains('is-visible'), true, 'unsupported observers retain readable content');
+});
+
+test('ordering presentation has opaque tools and no retired card-motion path', () => {
+	const css = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'css', 'doughboss.css'), 'utf8');
+	const orderCss = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'css', 'doughboss-order-page.css'), 'utf8');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(css, /\.db-app \.db-menu-tools\s*\{[^}]*background: var\(--db-paper, #f7f5f0\);/);
+	assert.match(orderCss, /body\.doughboss-order-page \.db-menu-tools\s*\{[^}]*background: var\(--db-order-paper\);/);
+	assert.doesNotMatch(css, /backdrop-filter|db-cardin|--db-spring/);
+	assert.doesNotMatch(orderCss, /db-order-page-motion|data-db-scroll|rotateX/);
+	assert.doesNotMatch(source, /setProperty\('--db-i'/);
+	assert.doesNotMatch(assets, /public\/js\/doughboss-order-page\.js/);
+	assert.match(assets, /public\/css\/doughboss-order-page\.css/, 'order-page compatibility styles remain enqueued');
+	assert.equal(fs.existsSync(path.resolve(__dirname, '..', 'public', 'js', 'doughboss-order-page.js')), false);
+});
+
 console.log('Storefront helper regression checks passed.');

@@ -47,8 +47,9 @@
 
 /* Accessibility: visible keyboard focus + respect reduced motion (audit P4). */
 .db-app :focus-visible {
-	outline: 3px solid var(--db-accent);
-	outline-offset: 2px;
+	outline: 3px solid var(--db-ink);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 3px var(--db-paper);
 	border-radius: 4px;
 }
 
@@ -57,7 +58,9 @@
 	.db-app *::before,
 	.db-app *::after {
 		transition-duration: 0.01ms !important;
+		transition-delay: 0s !important;
 		animation-duration: 0.01ms !important;
+		animation-delay: 0s !important;
 		animation-iteration-count: 1 !important;
 	}
 }
@@ -77,14 +80,6 @@
 	max-width: 90vw;
 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 	border-left: 3px solid var(--db-accent);
-}
-
-@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
-	.db-toast {
-		background: rgba(13, 13, 13, 0.78);
-		backdrop-filter: blur(12px) saturate(1.4);
-		-webkit-backdrop-filter: blur(12px) saturate(1.4);
-	}
 }
 
 .db-app * {
@@ -131,17 +126,19 @@
 	border: 0;
 	border-radius: var(--db-r-pill);
 	padding: 0.6rem 1.25rem;
+	min-height: 44px;
 	font-size: 0.95rem;
 	font-weight: 700;
 	cursor: pointer;
-	transition: background var(--db-t-fast) var(--db-ease), transform var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+	transition: background var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 }
 
 .db-btn:active:not(:disabled) {
-	transform: scale(0.98);
+	background: var(--db-accent-dark);
 }
 
-.db-btn:hover:not(:disabled) {
+.db-btn:hover:not(:disabled),
+.db-btn:focus-visible:not(:disabled) {
 	background: var(--db-accent-dark);
 }
 
@@ -213,16 +210,21 @@
 	flex-direction: column;
 	background: #fff;
 	box-shadow: var(--db-shadow-1);
-	transition: transform var(--db-t-med) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+	transition: border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 	min-inline-size: 0;
 	max-inline-size: 100%;
 }
 
 @media (hover: hover) {
 	.db-card:not(.db-card--soldout):hover {
-		transform: translateY(-2px);
+		border-color: var(--db-border);
 		box-shadow: var(--db-shadow-2);
 	}
+}
+
+.db-card:focus-within {
+	border-color: var(--db-border);
+	box-shadow: var(--db-shadow-2);
 }
 
 .db-card-img {
@@ -505,7 +507,7 @@ body.page-id-402 #primary-menu > li > a {
 	--db-paper: #f7f5f0;
 	--db-ink: #0d0d0d;
 	--db-ease: cubic-bezier(0.32, 0.72, 0.33, 1);
-	--db-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--db-t-fast: 150ms;
 	--db-t-med: 220ms;
 	box-sizing: border-box;
 	color: #2b2b2b;
@@ -518,8 +520,9 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 .db-customizer-sheet :focus-visible {
-	outline: 3px solid var(--db-accent, #111111);
-	outline-offset: 2px;
+	outline: 3px solid var(--db-ink, #0d0d0d);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 3px var(--db-paper, #f7f5f0);
 }
 
 .db-customizer-backdrop {
@@ -573,7 +576,7 @@ body.page-id-402 #primary-menu > li > a {
 		background: var(--db-paper, #f7f5f0);
 		box-shadow: 0 -18px 60px rgba(13, 13, 13, 0.24);
 		overflow: hidden;
-		animation: db-customizer-in 0.28s var(--db-spring) both;
+		animation: db-customizer-in 0.22s var(--db-ease) both;
 	}
 
 	.db-customizer-head,
@@ -661,8 +664,8 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 @keyframes db-customizer-in {
-	from { opacity: 0; transform: translateY(28px); }
-	to { opacity: 1; transform: translateY(0); }
+	from { transform: translateY(8px); }
+	to { transform: translateY(0); }
 }
 
 .db-card-customize-note {
@@ -1542,12 +1545,11 @@ body.page-id-402 #primary-menu > li > a {
 	justify-content: center;
 }
 @media (prefers-reduced-motion: no-preference) {
-	.db-app .db-confirm-check { animation: db-checkpop .42s var(--db-ease) both; }
+	.db-app .db-confirm-check { animation: db-checkpop .18s var(--db-ease) both; }
 }
 @keyframes db-checkpop {
-	0% { transform: scale(.4); opacity: 0; }
-	60% { transform: scale(1.12); }
-	100% { transform: scale(1); opacity: 1; }
+	from { transform: translateY(8px); }
+	to { transform: translateY(0); }
 }
 
 /* Success toast variant (Phase-2 JS calls showToast(msg, ok); dormant until then). */
@@ -1566,57 +1568,20 @@ body.page-id-402 #primary-menu > li > a {
 	vertical-align: middle;
 }
 
-/* ===== UPLIFT-1 Phase 2: motion "heart" — spring physics + tactile feedback ===== */
-/* Brings back the bouncy, alive feel: a spring easing curve with overshoot,
- * staggered card entrance, tap bounce, a sticky category jump-bar, and a
- * celebratory confirmation. All fully disabled under prefers-reduced-motion. */
-
-.db-app {
-	--db-spring: cubic-bezier(.34, 1.56, .64, 1);       /* overshoots ~1.1 — the "bounce" */
-	--db-spring-soft: cubic-bezier(.22, 1.2, .36, 1);   /* gentler overshoot */
-}
-
-/* Tap bounce on buttons (springier press than the base scale). */
-.db-app .db-btn {
-	transition: background var(--db-t-fast) var(--db-ease),
-		transform var(--db-t-fast) var(--db-spring),
-		box-shadow var(--db-t-med) var(--db-ease);
-}
-.db-app .db-btn:active:not(:disabled) { transform: scale(.94); }
-
-/* Reusable "pop" (dbPop() adds .db-pop on add-to-cart, etc.). */
+/* Restrained feedback: controls and monetary values keep their geometry. */
+/* Preserve the existing add-to-cart feedback hook without a scale bounce. */
 @keyframes db-pop {
-	0% { transform: scale(1); }
-	35% { transform: scale(1.14); }
-	70% { transform: scale(.97); }
-	100% { transform: scale(1); }
+	50% { box-shadow: inset 0 0 0 2px currentColor; }
 }
-.db-app .db-pop { animation: db-pop .4s var(--db-spring); }
+.db-app .db-pop { animation: db-pop .2s var(--db-ease); }
+.db-app .db-pop:focus-visible { animation: none; }
 
-/* Staggered card entrance — the menu cascades in instead of snapping. --db-i is
- * set per-card in renderMenu (capped), so the delay stays snappy on long menus. */
-@keyframes db-cardin {
-	from { opacity: 0; transform: translateY(16px) scale(.98); }
-	to { opacity: 1; transform: none; }
-}
-.db-app .db-grid .db-card {
-	animation: db-cardin .5s var(--db-spring) both;
-	animation-delay: calc(var(--db-i, 0) * 45ms);
-	transition: transform var(--db-t-med) var(--db-spring), box-shadow var(--db-t-med) var(--db-ease);
-}
-@media (hover: hover) {
-	.db-app .db-card:not(.db-card--soldout):hover { transform: translateY(-4px); }
-}
-
-/* Builder option rows: subtle spring on press + selected lift. */
+/* Builder option rows retain their selected border and background feedback. */
 .db-app .db-option {
 	transition: border-color var(--db-t-fast) var(--db-ease),
 		background-color var(--db-t-fast) var(--db-ease),
-		transform var(--db-t-fast) var(--db-spring),
 		box-shadow var(--db-t-fast) var(--db-ease);
 }
-.db-app .db-option:active { transform: scale(.98); }
-.db-app .db-option:has(input:checked) { transform: scale(1.015); }
 
 /* Sticky category jump-bar (rendered by renderMenu when >1 category). */
 .db-app .db-jumpbar {
@@ -1647,12 +1612,12 @@ body.page-id-402 #primary-menu > li > a {
 	cursor: pointer;
 	white-space: nowrap;
 	touch-action: manipulation;
-	transition: transform var(--db-t-fast) var(--db-spring),
-		border-color var(--db-t-fast) var(--db-ease),
+	transition: border-color var(--db-t-fast) var(--db-ease),
 		background var(--db-t-fast) var(--db-ease);
 }
 @media (hover: hover) { .db-app .db-jump:hover { border-color: var(--db-ink); } }
-.db-app .db-jump:active { transform: scale(.92); }
+.db-app .db-jump:active,
+.db-app .db-jump:focus-visible { border-color: var(--db-ink); }
 .db-app .db-jump[aria-current="location"] { background: var(--db-ink); border-color: var(--db-ink); color: #fff; }
 /* Land category headings below BOTH sticky bars on jump: the site header
  * (--db-sticky-top, published by the theme) and the menu's own sticky search +
@@ -1686,16 +1651,17 @@ body.page-id-402 #primary-menu > li > a {
 	text-decoration: none;
 	touch-action: manipulation;
 }
-.db-app .db-cart-fab.is-shown { display: flex; animation: db-cart-fab-in .26s var(--db-ease) both; }
+.db-app .db-cart-fab.is-shown { display: flex; animation: db-cart-fab-in .2s var(--db-ease) both; }
 .db-app .db-cart-fab-copy { display: grid; gap: .05rem; min-width: 0; }
 .db-app .db-cart-fab-label { font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif; font-size: 1.15rem; letter-spacing: .06em; text-transform: uppercase; }
 .db-app .db-cart-fab-count { color: #d9d5ce; font-size: .82rem; }
 .db-app .db-cart-fab-total { color: #fff; font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif; font-size: 1.65rem; font-variant-numeric: tabular-nums; letter-spacing: .03em; }
-.db-app .db-cart-fab:active { transform: scale(.98); }
+.db-app .db-cart-fab:hover,
+.db-app .db-cart-fab:focus-visible { border-color: var(--db-paper); }
 .db-app .db-cart-fab--bump .db-cart-fab-total,
-.db-app .db-cart-fab--bump .db-cart-fab-count { animation: db-cart-fab-bump .38s var(--db-spring); }
-@keyframes db-cart-fab-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes db-cart-fab-bump { 0% { transform: scale(1); } 35% { transform: scale(1.13); } 70% { transform: scale(.98); } 100% { transform: scale(1); } }
+.db-app .db-cart-fab--bump .db-cart-fab-count { animation: db-cart-fab-bump .2s var(--db-ease); }
+@keyframes db-cart-fab-in { from { transform: translateY(8px); } to { transform: translateY(0); } }
+@keyframes db-cart-fab-bump { 50% { text-shadow: 0 0 4px currentColor; } }
 
 @media (max-width: 360px) {
 	.db-app.db-menu--has-cart-fab { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
@@ -1738,16 +1704,15 @@ body.page-id-402 #primary-menu > li > a {
 .db-app .db-review-invite__actions { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
 .db-app .db-review-invite a { width: fit-content; color: var(--db-ember); font-weight: 800; text-underline-offset: 3px; }
 
-/* Success toast springs up from the bottom. */
+/* A short, non-bouncing entrance leaves transient feedback readable. */
 @keyframes db-toastin {
-	from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.96); }
-	to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+	from { transform: translateX(-50%) translateY(8px); }
+	to { transform: translateX(-50%) translateY(0); }
 }
 .db-app .db-toast,
-.db-toast { animation: db-toastin .34s var(--db-spring, cubic-bezier(.34,1.56,.64,1)) both; }
+.db-toast { animation: db-toastin .18s var(--db-ease, ease-out) both; }
 
-/* Reduced-motion: kill entrance/pop so nothing flashes or lingers hidden
- * (the global guard zeroes duration but not delay — be explicit here). */
+/* Reduced-motion: disable entrances and feedback, including the detached toast. */
 @media (prefers-reduced-motion: reduce) {
 	.db-app .db-grid .db-card,
 	.db-app .db-pop,
@@ -1779,16 +1744,10 @@ body.page-id-402 #primary-menu > li > a {
 	padding: .7rem;
 	border: 1px solid var(--db-border);
 	border-radius: var(--db-r-lg);
-	background: color-mix(in srgb, var(--db-paper) 92%, transparent);
+	background: var(--db-paper, #f7f5f0);
 	box-shadow: var(--db-shadow-1);
 	min-width: 0;
 	max-width: 100%;
-}
-
-@supports (backdrop-filter: blur(12px)) {
-	.db-app .db-menu-tools {
-		backdrop-filter: blur(12px) saturate(1.1);
-	}
 }
 
 .db-app .db-menu-search-wrap {
