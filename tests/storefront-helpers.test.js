@@ -474,6 +474,7 @@ function themeNode(attributes, children) {
 }
 
 function themeNavigationHarness() {
+	const frames = [];
 	const toggle = themeNode({ 'aria-expanded': 'false' });
 	const link = themeNode();
 	const nav = themeNode({ 'aria-hidden': 'true' }, [link]);
@@ -484,8 +485,12 @@ function themeNavigationHarness() {
 	const header = themeNode({}, [headerInner]);
 	const body = themeNode({}, [header, main, priorHidden]);
 	const document = { body, documentElement: themeNode({}, [body]), activeElement: toggle };
-	const context = { document, toggle, nav, mobileQuery: { matches: true }, isolatedNavigationBackground: [], menuReturnFocus: toggle, focusableMenuItems: () => [link] };
-	for (const name of ['navigationIsolationTargets', 'isolateNavigationBackground', 'restoreNavigationBackground', 'openMenu', 'closeMenu', 'syncMenuMode']) {
+	const context = {
+		document, toggle, nav, mobileQuery: { matches: true }, isolatedNavigationBackground: [], menuReturnFocus: toggle,
+		menuFocusRevision: 0, focusableMenuItems: () => [link],
+		window: { requestAnimationFrame: callback => frames.push(callback), setTimeout: callback => frames.push(callback) }
+	};
+	for (const name of ['menuOpen', 'navigationIsolationTargets', 'isolateNavigationBackground', 'restoreNavigationBackground', 'queueNavigationInitialFocus', 'openMenu', 'closeMenu', 'syncMenuMode']) {
 		context[name] = extractFunction(themeScript, name, context);
 	}
 	link.focus = () => {
@@ -497,7 +502,7 @@ function themeNavigationHarness() {
 		assert.equal(toggle.getAttribute('inert'), null, 'restore background before returning keyboard focus');
 		document.activeElement = toggle;
 	};
-	return { context, document, toggle, nav, link, priorInert, priorHidden, main, header, headerInner };
+	return { context, document, toggle, nav, link, priorInert, priorHidden, main, header, headerInner, frames };
 }
 
 test('mobile navigation isolates only background branches and restores exact prior attributes', () => {
@@ -506,6 +511,9 @@ test('mobile navigation isolates only background branches and restores exact pri
 	const targets = c.navigationIsolationTargets(h.document.body, h.nav);
 	assert.deepEqual(Array.from(targets), [h.toggle, h.priorInert, h.main, h.priorHidden]);
 	c.openMenu();
+	assert.equal(h.document.activeElement, h.toggle, 'focus waits until the newly visible drawer reaches layout');
+	assert.equal(h.main.getAttribute('inert'), null, 'background waits for focus to enter the drawer');
+	h.frames.shift()();
 	assert.equal(h.document.activeElement, h.link);
 	for (const target of targets) {
 		assert.equal(target.getAttribute('inert'), '');
@@ -531,6 +539,7 @@ test('mobile navigation isolates only background branches and restores exact pri
 test('desktop breakpoint releases mobile isolation without hiding navigation or moving focus', () => {
 	const h = themeNavigationHarness();
 	h.context.openMenu();
+	h.frames.shift()();
 	h.context.mobileQuery.matches = false;
 	h.context.syncMenuMode();
 	assert.equal(h.nav.getAttribute('aria-hidden'), null);
@@ -539,6 +548,27 @@ test('desktop breakpoint releases mobile isolation without hiding navigation or 
 	assert.equal(h.document.activeElement, h.link);
 	h.context.openMenu();
 	assert.equal(h.main.getAttribute('inert'), null, 'desktop cannot reopen the mobile isolation path');
+});
+
+test('queued mobile navigation focus cannot jump into a closed or desktop drawer', () => {
+	const closed = themeNavigationHarness();
+	closed.context.openMenu();
+	const afterClose = closed.frames.shift();
+	closed.context.closeMenu(true);
+	afterClose();
+	assert.equal(closed.document.activeElement, closed.toggle);
+	assert.equal(closed.main.getAttribute('inert'), null);
+	assert.equal(closed.nav.getAttribute('aria-hidden'), 'true');
+
+	const desktop = themeNavigationHarness();
+	desktop.context.openMenu();
+	const afterBreakpoint = desktop.frames.shift();
+	desktop.context.mobileQuery.matches = false;
+	desktop.context.syncMenuMode();
+	afterBreakpoint();
+	assert.equal(desktop.document.activeElement, desktop.toggle);
+	assert.equal(desktop.main.getAttribute('inert'), null);
+	assert.equal(desktop.nav.getAttribute('aria-hidden'), null);
 });
 
 test('runtime reduced-motion changes disconnect reveals and late callbacks remain safe', () => {

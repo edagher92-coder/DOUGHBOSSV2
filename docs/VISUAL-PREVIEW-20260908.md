@@ -15,7 +15,7 @@ The user separately approved updating the production plugin and indicated a logg
 
 The CLI-only WordPress presentation shim invokes selected source renderers without loading WordPress, its database, plugin bootstrap or production settings. It changes only preview boundaries: URL routing, synthetic data, a visible notice and unavailable-action placeholders. Copied runtime CSS/JS/images/fonts remain byte-identical to source. The manifest records the source commit and SHA-256 hashes of every input and output; PHP/config/docs/archive files are not published.
 
-The generated adapter accepts only four synthetic GET routes. Request objects retain their HTTP method; all writes, unknown routes and external origins are rejected without delegating to native fetch. CSP forbids network connections and form submission, starts with `default-src 'none'`, and allows only the required local assets. External/call/email links are rewritten in exported HTML, so alternate clicks and disabled JavaScript cannot escape that boundary. Noindex/nofollow/noarchive/nosnippet prevent the preview claiming to be the production menu.
+The generated adapter accepts only four synthetic GET routes. Request objects retain their HTTP method; all writes, unknown routes and external origins are rejected without delegating to native fetch. CSP forbids network connections and form submission, starts with `default-src 'none'`, and allows only the required local assets. External/call/email links are rewritten in exported HTML, so alternate clicks and disabled JavaScript cannot escape that boundary. Noindex/nofollow/noarchive/nosnippet request exclusion from search indexing; the visible preview notice identifies the synthetic menu regardless of crawler compliance.
 
 ## Source-faithful reference use
 
@@ -51,3 +51,54 @@ Every exporter/package run uses a new output path and refuses overwriting prior 
 WPVibe read-only checks confirmed the active canonical plugin `doughboss/doughboss.php` is 2.41.0, the active theme is 1.4.0, and UpdraftPlus is active. No backup contents or credentials were exposed. Supported Chrome discovery found the user's DoughBoss order tab, but two page-read attempts failed with `Emulation.setFocusEmulationEnabled` timeouts; no browser security or native-host changes were attempted. A complete current production backup/rollback has not been verified.
 
 The design changes through `b0a1d3d` and this preview batch still need rendered verification. GitHub PR #67's older checks do not cover this batch. Record the actual Pages commit/run and browser results after publication; until then the older demo is not the new design. Production plugin/theme deployment, Stripe/Square provider acceptance, POS/kitchen delivery, real catering mail, commercial catering policy, accessible Drive backup target and SamOS integration remain unmet gates.
+
+## Publication and rendered verification completed
+
+The one approved preview push published commit `27c39fff3d7f421b25d5fe68c8b70751ebfd8bc3`. [Deploy read-only visual preview, run 34231630329](https://github.com/edagher92-coder/DOUGHBOSSV2/actions/runs/34231630329) completed successfully. The hosted manifest's `source_commit` matched that exact commit, `preview_only` was true, and the base path was `/DOUGHBOSSV2/`. No PR or manual workflow dispatch was issued. Pages has no custom domain; this did not publish to production.
+
+- [Homepage](https://edagher92-coder.github.io/DOUGHBOSSV2/), [menu/customizer](https://edagher92-coder.github.io/DOUGHBOSSV2/order.html), and [paused ordering](https://edagher92-coder.github.io/DOUGHBOSSV2/paused.html) opened in the supported in-app browser.
+- Measured document widths at 320, 390, 767, 768, 900, 901 and 1440 CSS-pixel viewport requests showed no horizontal overflow. This is not a complete physical-device or breakpoint acceptance matrix.
+- At 390px, the labelled customizer opened, focused its close control, rendered canonical option groups, updated the synthetic total from $8.50 to $11.00 after choosing Wholemeal, and closed on Escape.
+- Reduced-motion emulation removed the motion-enabled class; no completed-but-failed images were observed. The paused page had its paused notice, no add buttons and no transaction/form roots. The inspected console log had no errors or warnings.
+- A usable, actual homepage capture was saved at `C:\Codex\Temp\doughboss-preview-20260908\published-home-default.png`. Viewport-override captures had scaling/padding artifacts and are not presented as reliable visual proof. Overrides were reset and the homepage was left visible as the deliverable.
+- The published mobile navigation exposed a real initial-focus defect: its background became inert while focus remained on the document body. Escape restored the trigger. This is the sole additional implementation scope below.
+
+These observations supersede the earlier pending-preview statement, not the production/provider/backup limitations. Zoom, every keyboard path, solid-fallback rendering and real-device acceptance are not complete. No orders, payments, customer mail or provider submissions were made.
+
+## Local follow-on: mobile navigation focus
+
+Work continued on `codex/release-readiness-20260908`, not the auto-deploy branch. The only runtime change defers initial navigation focus by one animation frame (one task fallback), verifies focus actually entered the drawer before isolating the background, and invalidates pending callbacks when the menu closes or changes breakpoint. The existing regression harness now checks deferred isolation and stale callbacks. No polling, dependency, settings change or second navigation implementation was added.
+
+A GPT-5.6 Sol worker implemented the two-file repair; the lead inspected the diff and interfaces. A separate read-only review returned **ship**, with rendered acceptance explicitly outstanding. That review lane's actual model metadata was not exposed, so no model identity is claimed for it.
+
+Full local gate after the repair:
+
+```powershell
+& .\scripts\test-release.ps1 -PhpPath C:\Codex\Temp\doughboss-review-20260908\php-8.2.33\php.exe -ExtensionDir C:\Codex\Temp\doughboss-review-20260908\php-8.2.33\ext -OutputPath C:\Codex\Temp\doughboss-preview-20260908\doughboss-focus-local.zip -ThemeOutputPath C:\Codex\Temp\doughboss-preview-20260908\doughboss-theme-focus-local.zip
+```
+
+Result: 90 PHP syntax files, 165 PHP assertions, 16 JavaScript syntax files, 26 named Node tests, and exact payload validation for 137 plugin / 25 theme files passed. The PHP source is unchanged from the earlier PHP 7.4 check; no new database suite was needed or claimed for this JavaScript-only repair.
+
+| Local review artifact | SHA-256 |
+| --- | --- |
+| `doughboss-focus-local.zip` (2.43.0) | `4D984E715D0D52BC06A0DA5A34AF79C27087F321A5479ACEE134C632AB644368` |
+| `doughboss-theme-focus-local.zip` (1.6.0) | `79D1901A4F1084DCD027AD31C7EF9B8FE11F825ECE983DD85A58C5C546CD60F6` |
+
+The repair and these artifacts are local only. The published preview still contains the original initial-focus defect until a separately approved preview batch verifies and publishes the fix. Production still has the last observed plugin 2.41.0 / theme 1.4.0; no production update occurred. Current live ordering/payment/POS toggle values were not successfully re-verified in this batch and must not be inferred from the old handoff.
+
+## Efficient continuation and advisory use
+
+The user's current preference is Ollama-first for batched analysis, draft code, test design and critique, with GPT-5.6 integration and verification, and GPT-5.5 where a supported callable lane exists. The current child-agent API does not expose GPT-5.5; no new task or unsupported model switch was made to simulate it. Astra's accepted design phase remains closed unless a material unresolved design question warrants escalation. No claim is made about the provider's current billing or unlimited usage.
+
+Two guarded, non-sensitive advisory calls were used for this local follow-on batch:
+
+1. `tests` / `public`: `kimi-k2.7-code:cloud`, selected by the guarded runner. Its context had already received the worker's deferred-focus edit while the prompt described the published synchronous failure. Therefore its suggested polling workaround was not treated as evidence of a new defect and was rejected. Focus-before-isolation and stale-callback test guidance was independently checked against the source.
+2. `long_horizon` / `synthetic`: `glm-5.2:cloud`, selected by the guarded runner. It usefully separated local, provider and deployment evidence. Suggested speculative refund state machines, placeholder SamOS/POS interfaces, blanket default-setting changes and an assumed `npm test` command were not adopted. Only real repository contracts and existing validation commands should drive the next implementation.
+
+Recommended next batches, in priority order:
+
+1. **Release acceptance and recoverability.** Verify the navigation fix in a supported rendered environment; finish the focused keyboard/mobile matrix; establish a fresh complete database-and-files backup with an identified restore path. Confirm the intended plugin package and unchanged live toggles before using the existing plugin-update approval. Theme publication still needs its own WordPress preview and publish approval. One explicit, coherent remote batch per approved release; no automatic second preview push.
+2. **Operational payment, mail and kitchen acceptance.** Inspect existing Stripe/Square contracts and configuration without exposing credentials; determine the actual Stripe failure and desired POS/provider before adding code. Reuse existing tests, then separately authorize any provider sandbox/refund, real mail or kitchen/printer tests. Exit evidence must distinguish mocks from provider responses and physical kitchen delivery. Never enable production ordering/payments/POS or create real transactions under this continuation.
+3. **Verified multi-location/SamOS integration and delivery.** Locate the actual SamOS repository and existing business/location/auth contracts read-only, then implement only an agreed first end-to-end connection with stable site/location identity and measurable status. No guessed endpoint or throw-only stub. Resolve the intended shared Drive folder by successful metadata verification before any upload; preserve quarantine and exclude sensitive historical material from public artifacts.
+
+Ollama supplies bounded work products, not release authority. GPT-5.6 integration retains exclusive file ownership, source review, local validation and fresh review for consequential changes. No more than two complementary Ollama calls are used per coherent batch; remote workflows and live actions retain their separate approval gates.

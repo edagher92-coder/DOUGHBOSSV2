@@ -9,6 +9,7 @@
 		var mobileQuery = window.matchMedia('(max-width: 900px)');
 		var isolatedNavigationBackground = [];
 		var menuReturnFocus = toggle;
+		var menuFocusRevision = 0;
 		function menuOpen() {
 			return toggle.getAttribute('aria-expanded') === 'true';
 		}
@@ -50,6 +51,7 @@
 			isolatedNavigationBackground = [];
 		}
 		function closeMenu(restoreFocus) {
+			menuFocusRevision += 1;
 			toggle.setAttribute('aria-expanded', 'false');
 			toggle.setAttribute('aria-label', 'Open navigation');
 			nav.classList.remove('is-open');
@@ -59,6 +61,18 @@
 			restoreNavigationBackground();
 			if (restoreFocus && menuReturnFocus && document.documentElement.contains(menuReturnFocus)) menuReturnFocus.focus();
 		}
+		function queueNavigationInitialFocus() {
+			var revision = ++menuFocusRevision;
+			var defer = window.requestAnimationFrame || function (callback) { return window.setTimeout(callback, 0); };
+			defer(function () {
+				if (revision !== menuFocusRevision || !menuOpen() || !mobileQuery.matches || !nav.classList.contains('is-open')) return;
+				var items = focusableMenuItems();
+				if (items.length) items[0].focus();
+				// Do not hide the triggering control while it still owns focus. If a
+				// browser rejects the focus move, leave the background available.
+				if (nav.contains(document.activeElement)) isolateNavigationBackground();
+			});
+		}
 		function openMenu() {
 			if (!mobileQuery.matches) return;
 			menuReturnFocus = toggle;
@@ -67,9 +81,9 @@
 			nav.removeAttribute('aria-hidden');
 			nav.classList.add('is-open');
 			document.body.classList.add('dbf-menu-open');
-			var items = focusableMenuItems();
-			if (items.length) items[0].focus();
-			isolateNavigationBackground();
+			// The closed drawer is visibility:hidden. Let its open styles reach
+			// layout before asking the browser to move focus into it.
+			queueNavigationInitialFocus();
 		}
 		function syncMenuMode() {
 			closeMenu(false);
