@@ -20,16 +20,21 @@
 	position: relative;
 }
 
-.db-mh-backdrop {
-	background-position: 64% 50%;
-	background-size: cover;
+.db-manoush-hero .db-responsive-picture { display: contents; }
+
+.db-manoush-hero .db-mh-backdrop {
 	filter: saturate(.92) contrast(1.04);
+	height: 104%;
 	inset: -2%;
+	max-width: none;
+	object-fit: cover;
+	object-position: 64% 50%;
 	pointer-events: none;
 	position: absolute;
 	transform: translate3d(0, var(--db-mh-photo-y), 0) scale(var(--db-mh-photo-scale));
 	transform-origin: 64% 50%;
 	transition: transform 100ms linear;
+	width: 104%;
 	will-change: transform;
 	z-index: -3;
 }
@@ -214,8 +219,8 @@
 		padding: 7.5rem 1.1rem 1.35rem;
 	}
 
-	.db-mh-backdrop {
-		background-position: 57% 50%;
+	.db-manoush-hero .db-mh-backdrop {
+		object-position: 57% 50%;
 		transform-origin: 57% 50%;
 	}
 
@@ -258,8 +263,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.db-mh-backdrop {
+	.db-manoush-hero .db-mh-backdrop {
 		inset: 0;
+		height: 100%;
+		width: 100%;
 		transform: none !important;
 		transition: none;
 		will-change: auto;

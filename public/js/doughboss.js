@@ -23,10 +23,10 @@
 	var tableContextCache = null;
 	var tableContextRequest = null;
 
-	// Once a Stripe confirmation reaches the provider, the paid cart snapshot
-	// must stay immutable until the matching order is stored.
+	// Once checkout is submitted, its shop and cart snapshot must stay immutable
+	// until the matching order is stored or the flow explicitly permits editing.
 	var paymentMutationLock = false;
-	var paymentMutationMessage = 'Your payment is being confirmed. Cart, voucher, shop and fulfilment changes are temporarily locked until the order is saved.';
+	var paymentMutationMessage = 'Your order is being confirmed. Cart, voucher, shop and fulfilment changes are temporarily locked until the order is saved.';
 
 	// Which gateway the server enqueued a card library for ('stripe' or 'tyro').
 	// Defaults to 'stripe' so older localized data behaves exactly as before.
@@ -175,6 +175,22 @@
 		return false;
 	}
 
+	// The lightweight sitewide header uses the same immutable-checkout boundary.
+	document.addEventListener('doughboss:shop-change-request', function (event) {
+		if (activeTableContext() || !paymentMutationAllowed()) { event.preventDefault(); }
+	});
+
+	// WordPress uses either pretty REST paths (/wp-json/doughboss/v1) or a
+	// query-string route (index.php?rest_route=/doughboss/v1). When the endpoint
+	// itself has query parameters, the latter form needs '&', not a second '?'.
+	function restRequestUrl(path) {
+		var queryAt = String(path).indexOf('?');
+		if (queryAt !== -1 && String(DATA.restUrl).indexOf('?') !== -1) {
+			return DATA.restUrl + path.slice(0, queryAt) + '&' + path.slice(queryAt + 1);
+		}
+		return DATA.restUrl + path;
+	}
+
 	function request(path, options) {
 		options = options || {};
 		var method = String(options.method || 'GET').toUpperCase();
@@ -192,7 +208,7 @@
 		if (options.headers) {
 			Object.keys(options.headers).forEach(function (k) { headers[k] = options.headers[k]; });
 		}
-		return fetch(DATA.restUrl + path, {
+		return fetch(restRequestUrl(path), {
 			method: options.method || 'GET',
 			credentials: 'same-origin',
 			headers: headers,
@@ -337,15 +353,41 @@
 		return sel;
 	}
 
-	function shopContact(loc) {
+	function shopContact(loc, cfg) {
 		var info = el('div', { class: 'db-shop-info' });
+		if (window.DoughBossShopStatus) {
+			var status = el('p', { class: 'db-pickup-status', role: 'status', 'aria-live': 'polite' });
+			info.appendChild(status);
+			window.DoughBossShopStatus.attach(status, loc, cfg);
+		}
 		if (loc && loc.address) { info.appendChild(el('div', { class: 'db-shop-addr', text: loc.address })); }
-		if (loc && loc.phone) { info.appendChild(el('div', { class: 'db-shop-phone', text: loc.phone })); }
+		if (loc && loc.phone) {
+			var dial = String(loc.phone).replace(/[^0-9+]/g, '');
+			info.appendChild(el(/^\+?\d{6,15}$/.test(dial) ? 'a' : 'span', {
+				class: 'db-shop-phone', text: loc.phone,
+				href: /^\+?\d{6,15}$/.test(dial) ? 'tel:' + dial : ''
+			}));
+		}
+		if (cfg) {
+			var pickup = !!(cfg.enable_pickup && loc && loc.pickup_enabled);
+			var delivery = !!(cfg.enable_delivery && loc && loc.delivery_enabled);
+			var service = !cfg.ordering_open ? 'Online ordering paused' : pickup && delivery ? 'Pickup or delivery'
+				: (pickup ? 'Pickup from this shop' : (delivery ? 'Delivery available' : 'Check with the shop'));
+			// The public location response does not expose online-payment
+			// eligibility. Global gateway readiness is not a per-shop promise.
+			var payment = !cfg.ordering_open ? 'Contact the shop' : PAY.enabled ? 'Confirmed at checkout' : (pickup && !delivery ? 'Pay when you collect' : 'Arrange with the shop');
+			info.appendChild(el('div', { class: 'db-shop-context' }, [
+				el('span', { class: 'db-shop-context-item' }, [el('small', { text: 'Ordering' }), el('strong', { text: service })]),
+				el('span', { class: 'db-shop-context-item' }, [el('small', { text: 'Payment' }), el('strong', { text: payment })])
+			]));
+		}
 		return info;
 	}
 
 	function renderShopPicker(root) {
-		getLocations().then(function (locs) {
+		Promise.all([getLocations(), getConfig()]).then(function (results) {
+			var locs = results[0];
+			var cfg = results[1];
 			root.innerHTML = '';
 			var tableContext = activeTableContext();
 			if (tableContext) {
@@ -360,25 +402,34 @@
 			if (locs.length === 1) {
 				setLocation(locs[0].id, true);
 				root.appendChild(el('div', { class: 'db-shop' }, [
+					el('span', { class: 'db-shop-heading', text: 'Your shop' }),
 					el('strong', { class: 'db-shop-name', text: locs[0].name }),
-					shopContact(locs[0])
+					shopContact(locs[0], cfg)
 				]));
 				return;
 			}
 
 			var current = currentLocationId(locs);
 			setLocation(current, true);
-			var infoWrap = el('div', { class: 'db-shop-info-wrap' }, [shopContact(locById(locs, current))]);
+			var infoWrap = el('div', { class: 'db-shop-info-wrap', 'aria-live': 'polite' }, [shopContact(locById(locs, current), cfg)]);
+			function showShop(id) {
+				current = id;
+				select.value = String(id);
+				infoWrap.innerHTML = '';
+				infoWrap.appendChild(shopContact(locById(locs, id), cfg));
+			}
 
 			var select = shopSelect(locs, current, function (id) {
 				if (!paymentMutationAllowed()) {
 					select.value = String(current);
 					return;
 				}
-				current = id;
+				showShop(id);
 				setLocation(id);
-				infoWrap.innerHTML = '';
-				infoWrap.appendChild(shopContact(locById(locs, id)));
+			});
+			document.addEventListener('doughboss:shop-changed', function (event) {
+				var id = Number(event.detail && event.detail.id);
+				if (id !== current && !paymentMutationLock && locById(locs, id)) { showShop(id); }
 			});
 
 			root.appendChild(el('div', { class: 'db-shop' }, [
@@ -392,6 +443,29 @@
 	/* ------------------------------------------------------------------ */
 	/* Menu                                                               */
 	/* ------------------------------------------------------------------ */
+
+	// Render only dietary claims explicitly supplied by the menu item. Keep the
+	// allowlist closed so names, descriptions and option choices cannot become
+	// inferred dietary claims (a gluten-free crust is an item option, not a
+	// gluten-free base-item certification).
+	function dietaryBadges(dietary) {
+		if (!Array.isArray(dietary)) { return []; }
+		var definitions = {
+			vegetarian: { value: 'vegetarian', label: 'V Vegetarian' },
+			vegan: { value: 'vegan', label: 'VG Vegan' },
+			halal: { value: 'halal', label: 'Halal' },
+			gluten_free: { value: 'gluten_free', label: 'GF Gluten-free' }
+		};
+		var seen = {};
+		return dietary.reduce(function (badges, flag) {
+			if (typeof flag !== 'string') { return badges; }
+			var value = flag.trim().toLowerCase();
+			if (!definitions[value] || seen[value]) { return badges; }
+			seen[value] = true;
+			badges.push(definitions[value]);
+			return badges;
+		}, []);
+	}
 
 	function renderMenu(root) {
 		Promise.all([request('/menu'), getConfig()]).then(function (results) {
@@ -422,6 +496,7 @@
 			});
 
 			var tools = el('div', { class: 'db-menu-tools' });
+			var categoryButtons = {};
 			var searchStatus = el('span', {
 				class: 'db-menu-search-status',
 				role: 'status',
@@ -448,6 +523,7 @@
 				categories.forEach(function (category) {
 					var targetId = catId(category);
 					var pill = el('button', { class: 'db-jump', type: 'button', text: category, 'aria-controls': targetId });
+					categoryButtons[targetId] = pill;
 					pill.addEventListener('click', function () {
 						if (search.value) {
 							search.value = '';
@@ -487,7 +563,6 @@
 				new window.ResizeObserver(publishToolsHeight).observe(tools);
 			}
 
-			var stagger = 0;
 			var sections = [];
 			categories.forEach(function (category) {
 				var heading = el('h2', { class: 'db-category', id: catId(category), text: category });
@@ -495,16 +570,52 @@
 				groups[category].forEach(function (item) {
 					var card = menuCard(item, orderingOpen);
 					card.setAttribute('data-search-text', String(item.name || '') + ' ' + String(item.description || '') + ' ' + category);
-					// Cap the stagger so a long menu never delays the last card by
-					// seconds; the entrance still reads as a lively cascade.
-					card.style.setProperty('--db-i', String(Math.min(stagger, 12)));
-					stagger += 1;
 					grid.appendChild(card);
 				});
 				sections.push({ heading: heading, grid: grid });
 				root.appendChild(heading);
 				root.appendChild(grid);
 			});
+
+			// Mark the section currently below the sticky tools without moving
+			// keyboard focus or changing the customer's scroll position.
+			function updateActiveCategory() {
+				var threshold = tools.getBoundingClientRect().bottom + 16;
+				var activeId = '';
+				sections.forEach(function (section) {
+					if (section.heading.hidden) { return; }
+					if (!activeId || section.heading.getBoundingClientRect().top <= threshold) { activeId = section.heading.id; }
+				});
+				Object.keys(categoryButtons).forEach(function (id) {
+					if (id === activeId) { categoryButtons[id].setAttribute('aria-current', 'location'); }
+					else { categoryButtons[id].removeAttribute('aria-current'); }
+				});
+			}
+			var categoryFramePending = false;
+			function scheduleCategoryUpdate() {
+				if (categoryFramePending) { return; }
+				categoryFramePending = true;
+				(window.requestAnimationFrame || function (callback) { callback(); })(function () {
+					categoryFramePending = false;
+					updateActiveCategory();
+				});
+			}
+			window.addEventListener('scroll', scheduleCategoryUpdate, { passive: true });
+			window.addEventListener('resize', scheduleCategoryUpdate);
+			updateActiveCategory();
+			// Homepage category cards use short hashes such as #pizza. The menu
+			// arrives asynchronously, so resolve those links once headings exist.
+			function followCategoryHash() {
+				var hash = window.location.hash;
+				var linked = sections.filter(function (section) {
+					return hash === '#' + section.heading.id || hash === '#' + section.heading.id.replace(/^db-cat-/, '');
+				})[0];
+				if (!linked) { return; }
+				if (search.value) { search.value = ''; search.dispatchEvent(new Event('input')); }
+				linked.heading.scrollIntoView({ behavior: 'auto', block: 'start' });
+				updateActiveCategory();
+			}
+			window.addEventListener('hashchange', followCategoryHash);
 
 			searchStatus.textContent = items.length + (items.length === 1 ? ' item' : ' items');
 			search.addEventListener('input', function () {
@@ -527,6 +638,17 @@
 					? (visible ? visible + (visible === 1 ? ' match' : ' matches') : 'No menu matches')
 					: items.length + (items.length === 1 ? ' item' : ' items');
 				root.classList.toggle('db-menu--searching', !!query);
+				updateActiveCategory();
+			});
+			var initialHash = window.location.hash;
+			var initialScroll = window.scrollY;
+			Promise.resolve(document.fonts ? document.fonts.ready : null).then(function () {
+				// Fonts can change the sticky tool height. Resolve the incoming
+				// link after that settles, unless the customer already moved on.
+				if (window.location.hash === initialHash && window.scrollY === initialScroll) {
+					publishToolsHeight();
+					followCategoryHash();
+				}
 			});
 			initCartFab(root);
 		}).catch(function (err) {
@@ -601,11 +723,133 @@
 		document.addEventListener('doughboss:cart-updated', function () { update(true); });
 	}
 
+	var activeMobileCustomizer = null;
+	var customizerBackdrop = null;
+	var customizerInertNodes = [];
+	var customizerWasMobile = isMobileCustomizer();
+
+	function isMobileCustomizer() {
+		return !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+	}
+
+	function ensureCustomizerBackdrop() {
+		if (customizerBackdrop && customizerBackdrop.parentNode) { return customizerBackdrop; }
+		customizerBackdrop = el('div', {
+			class: 'db-customizer-backdrop',
+			'aria-hidden': 'true'
+		});
+		customizerBackdrop.addEventListener('click', function () {
+			if (activeMobileCustomizer) { activeMobileCustomizer.open = false; }
+		});
+		document.body.appendChild(customizerBackdrop);
+		return customizerBackdrop;
+	}
+
+	function setCustomizerBackgroundInert(locked, panel) {
+		if (!('inert' in HTMLElement.prototype)) { return; }
+		if (!locked) {
+			customizerInertNodes.forEach(function (entry) {
+				if (!entry.wasInert) { entry.node.removeAttribute('inert'); }
+			});
+			customizerInertNodes = [];
+			return;
+		}
+		customizerInertNodes = [];
+		Array.prototype.forEach.call(document.body.children, function (node) {
+			if (node === panel || node === customizerBackdrop) { return; }
+			var wasInert = node.hasAttribute('inert');
+			customizerInertNodes.push({ node: node, wasInert: wasInert });
+			if (!wasInert) { node.setAttribute('inert', ''); }
+		});
+	}
+
+	function releaseMobileCustomizer(details, restoreFocus) {
+		var panel = details && (details._dbCustomizerPanel || details.querySelector('.db-menu-options'));
+		if (panel) {
+			panel.removeAttribute('role');
+			panel.removeAttribute('aria-modal');
+			if (panel.parentNode !== details) { details.appendChild(panel); }
+		}
+		if (activeMobileCustomizer !== details) { return; }
+		activeMobileCustomizer = null;
+		document.body.classList.remove('db-customizer-open');
+		if (customizerBackdrop) { customizerBackdrop.classList.remove('is-shown'); }
+		setCustomizerBackgroundInert(false);
+		if (restoreFocus) {
+			var summary = details.querySelector('summary');
+			if (summary) { revealNode(summary, true, 'nearest'); }
+		}
+	}
+
+	function activateMobileCustomizer(details) {
+		if (!isMobileCustomizer()) { return; }
+		if (activeMobileCustomizer && activeMobileCustomizer !== details) {
+			var previous = activeMobileCustomizer;
+			previous.open = false;
+			releaseMobileCustomizer(previous, false);
+		}
+		activeMobileCustomizer = details;
+		var panel = details._dbCustomizerPanel || details.querySelector('.db-menu-options');
+		if (!panel) { return; }
+		details._dbCustomizerPanel = panel;
+		panel.setAttribute('role', 'dialog');
+		panel.setAttribute('aria-modal', 'true');
+		document.body.appendChild(panel);
+		document.body.classList.add('db-customizer-open');
+		ensureCustomizerBackdrop().classList.add('is-shown');
+		setCustomizerBackgroundInert(true, panel);
+		var close = panel.querySelector('.db-customizer-close');
+		if (close) { setTimeout(function () { close.focus(); }, 0); }
+	}
+
+	document.addEventListener('keydown', function (event) {
+		if (!activeMobileCustomizer || !isMobileCustomizer()) { return; }
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			activeMobileCustomizer.open = false;
+			return;
+		}
+		if (event.key !== 'Tab') { return; }
+		var panel = activeMobileCustomizer._dbCustomizerPanel || activeMobileCustomizer.querySelector('.db-menu-options');
+		var focusable = panel ? Array.prototype.slice.call(panel.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')) : [];
+		if (!focusable.length) { return; }
+		var first = focusable[0];
+		var last = focusable[focusable.length - 1];
+		if (focusable.indexOf(document.activeElement) === -1) {
+			event.preventDefault();
+			(event.shiftKey ? last : first).focus();
+		} else if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	});
+
+	window.addEventListener('resize', function () {
+		var mobile = isMobileCustomizer();
+		if (mobile === customizerWasMobile) { return; }
+		customizerWasMobile = mobile;
+		if (!mobile) {
+			if (activeMobileCustomizer) { releaseMobileCustomizer(activeMobileCustomizer, true); }
+			return;
+		}
+		var openDetails = Array.prototype.slice.call(document.querySelectorAll('.db-menu-customize[open]'));
+		if (openDetails.length) {
+			openDetails.slice(1).forEach(function (details) { details.open = false; });
+			activateMobileCustomizer(openDetails[0]);
+		}
+	});
+
 	function menuCard(item, orderingOpen) {
 		var soldOut = item.available === false;
 		var options = Array.isArray(item.options) ? item.options : [];
 		var selections = {};
 		var priceEl = el('span', { class: 'db-price', text: money(item.price) });
+		var priceOutputs = [priceEl];
+		var actionButtons = [];
+		var optionInputs = [];
 
 		function selectedOptions() {
 			var selected = {};
@@ -620,7 +864,7 @@
 			return selected;
 		}
 
-		function refreshPrice() {
+		function currentPrice() {
 			var total = Number(item.price || 0);
 			options.forEach(function (group) {
 				var values = selections[group.id] || [];
@@ -628,7 +872,78 @@
 					if (values.indexOf(choice.slug) !== -1) { total += Number(choice.price || 0); }
 				});
 			});
-			priceEl.textContent = money(total);
+			return total;
+		}
+
+		function refreshPrice() {
+			var label = money(currentPrice());
+			priceOutputs.forEach(function (output) { output.textContent = label; });
+		}
+
+		function setActionState(label, disabled) {
+			actionButtons.forEach(function (button) {
+				button.textContent = label;
+				button.disabled = disabled;
+			});
+		}
+
+		function setOptionState(disabled) {
+			optionInputs.forEach(function (input) { input.disabled = disabled; });
+		}
+
+		function addItem(sourceButton) {
+			var submittedOptions = selectedOptions();
+			var submittedPrice = currentPrice();
+			var sheet = sourceButton.closest ? sourceButton.closest('.db-customizer-sheet') : null;
+			var close = sheet ? sheet.querySelector('.db-customizer-close') : null;
+			if (close) { close.focus(); }
+			setActionState(I18N.adding || 'Adding…', true);
+			setOptionState(true);
+			if (sheet) { sheet.setAttribute('aria-busy', 'true'); }
+			request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, options: submittedOptions, quantity: 1 } })
+				.then(function () {
+					setActionState(I18N.added || 'Added!', true);
+					dbPop(sourceButton);
+					dbToast((item.name ? item.name + ' — ' : '') + (I18N.addedToCart || 'added to cart'), true);
+					trackCommerce('add_to_cart', {
+						content_ids: [String(item.id)],
+						content_name: item.name || 'Menu item',
+						content_category: item.category || 'Menu',
+						content_type: 'product',
+						currency: 'AUD',
+						value: submittedPrice,
+						quantity: 1
+					});
+					notifyCartChanged();
+					var details = sourceButton.closest ? sourceButton.closest('.db-menu-customize') : null;
+					if (!details && activeMobileCustomizer && activeMobileCustomizer._dbCustomizerPanel === sourceButton.closest('.db-menu-options')) {
+						details = activeMobileCustomizer;
+					}
+					if (details) { details.open = false; }
+					setTimeout(function () {
+						setActionState(I18N.addToCart || 'Add to cart', false);
+						setOptionState(false);
+						if (sheet) { sheet.removeAttribute('aria-busy'); }
+					}, 1200);
+				})
+				.catch(function (err) {
+					dbToast(err.message);
+					setActionState(I18N.addToCart || 'Add to cart', false);
+					setOptionState(false);
+					if (sheet) { sheet.removeAttribute('aria-busy'); }
+				});
+		}
+
+		function makeAddButton(className) {
+			var button = el('button', {
+				class: className,
+				type: 'button',
+				text: I18N.addToCart || 'Add to cart',
+				'aria-label': (I18N.addToCart || 'Add to cart') + ': ' + item.name
+			});
+			actionButtons.push(button);
+			button.addEventListener('click', function () { addItem(button); });
+			return button;
 		}
 
 		function optionControls() {
@@ -639,15 +954,41 @@
 					text: I18N.customizationAvailable || 'Customise when ordering opens'
 				});
 			}
-			var controls = el('div', { class: 'db-menu-options' });
+			var titleId = 'db-customizer-title-' + String(item.id).replace(/[^a-z0-9_-]/gi, '-');
+			var closeButton = el('button', {
+				class: 'db-customizer-close',
+				type: 'button',
+				text: '×',
+				'aria-label': I18N.closeCustomizer || 'Close customization'
+			});
+			var header = el('div', { class: 'db-customizer-head' }, [
+				el('strong', { id: titleId, text: (I18N.customize || 'Customize') + ' ' + item.name }),
+				closeButton
+			]);
+			var scroll = el('div', { class: 'db-customizer-scroll' });
+			var sheetPrice = el('span', { class: 'db-customizer-price', text: money(item.price), 'aria-live': 'polite' });
+			priceOutputs.push(sheetPrice);
+			var footer = el('div', { class: 'db-customizer-foot' }, [
+				el('span', { class: 'db-customizer-total' }, [
+					el('small', { text: I18N.itemTotal || 'Item total' }),
+					sheetPrice
+				]),
+				makeAddButton('db-btn db-customizer-add')
+			]);
+			var controls = el('div', { class: 'db-menu-options db-customizer-sheet', 'aria-labelledby': titleId }, [ header, scroll, footer ]);
 			options.forEach(function (group, groupIndex) {
 				var choices = Array.isArray(group.choices) ? group.choices : [];
 				var defaultChoice = choices.filter(function (choice) { return choice.default; })[0];
 				selections[group.id] = group.type === 'radio' && defaultChoice ? [defaultChoice.slug] : [];
-				var fieldset = el('fieldset', { class: 'db-menu-option-group' });
+				// Style and Crust are the two compact, mutually-exclusive menu choices
+				// that benefit from a segmented presentation. Keep the native radios and
+				// their names intact so keyboard selection and submitted slugs are unchanged.
+				var segmented = group.type === 'radio' && (group.id === 'style' || group.id === 'crust');
+				var fieldset = el('fieldset', { class: 'db-menu-option-group' + (segmented ? ' db-menu-option-group--segmented' : '') });
 				fieldset.appendChild(el('legend', { text: group.label || 'Options' }));
 				choices.forEach(function (choice, choiceIndex) {
 					var input = el('input', { type: group.type === 'check' ? 'checkbox' : 'radio', name: 'db-option-' + item.id + '-' + groupIndex, value: choice.slug, disabled: !orderingOpen });
+					optionInputs.push(input);
 					input.checked = group.type === 'radio' ? choiceIndex === choices.indexOf(defaultChoice || choices[0]) : false;
 					input.addEventListener('change', function () {
 						var values = selections[group.id] || [];
@@ -657,14 +998,20 @@
 						refreshPrice();
 					});
 					var suffix = Number(choice.price || 0) ? (Number(choice.price) > 0 ? '+' : '') + money(choice.price) : '';
-					fieldset.appendChild(el('label', { class: 'db-menu-option' }, [ input, el('span', { text: choice.label }), suffix ? el('span', { class: 'db-option-price', text: suffix }) : null ]));
+					fieldset.appendChild(el('label', { class: 'db-menu-option' + (segmented ? ' db-menu-option--segment' : '') }, [ input, el('span', { text: choice.label }), suffix ? el('span', { class: 'db-option-price', text: suffix }) : null ]));
 				});
-				controls.appendChild(fieldset);
+				scroll.appendChild(fieldset);
 			});
-			return el('details', { class: 'db-menu-customize' }, [
+			var details = el('details', { class: 'db-menu-customize' }, [
 				el('summary', { text: I18N.customize || 'Customize' }),
 				controls
 			]);
+			closeButton.addEventListener('click', function () { details.open = false; });
+			details.addEventListener('toggle', function () {
+				if (details.open) { activateMobileCustomizer(details); }
+				else { releaseMobileCustomizer(details, true); }
+			});
+			return details;
 		}
 
 		var categoryLabel = String(item.category || 'Dough Boss');
@@ -686,54 +1033,31 @@
 			action = el('button', {
 				class: 'db-btn db-btn--coming-soon',
 				type: 'button',
-				text: I18N.comingSoonShort || 'Coming soon',
+				text: I18N.comingSoonShort || 'Ordering paused',
 				disabled: true,
-				'aria-label': (I18N.orderingComingSoon || 'Online ordering coming soon') + ': ' + item.name
+				'aria-label': (I18N.orderingComingSoon || 'Online ordering is paused') + ': ' + item.name
 			});
 		} else {
-			action = el('button', {
-				class: 'db-btn',
-				type: 'button',
-				text: I18N.addToCart || 'Add to cart',
-				'aria-label': (I18N.addToCart || 'Add to cart') + ': ' + item.name
-			});
-			action.addEventListener('click', function () {
-				action.disabled = true;
-				// A disabled button with an unchanged label reads as "nothing
-				// happened" on a slow connection. Say what is happening.
-				action.textContent = I18N.adding || 'Adding…';
-				request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, options: selectedOptions(), quantity: 1 } })
-					.then(function () {
-						action.textContent = I18N.added || 'Added!';
-						dbPop(action);
-						dbToast((item.name ? item.name + ' — ' : '') + (I18N.addedToCart || 'added to cart'), true);
-						trackCommerce('add_to_cart', {
-							content_ids: [String(item.id)],
-							content_name: item.name || 'Menu item',
-							content_category: item.category || 'Menu',
-							content_type: 'product',
-							currency: 'AUD',
-							value: Number(item.price || 0),
-							quantity: 1
-						});
-						notifyCartChanged();
-						setTimeout(function () { action.textContent = I18N.addToCart || 'Add to cart'; action.disabled = false; }, 1200);
-					})
-					.catch(function (err) {
-						dbToast(err.message);
-						action.textContent = I18N.addToCart || 'Add to cart';
-						action.disabled = false;
-					});
-			});
+			action = makeAddButton('db-btn');
 		}
 
 		var controls = optionControls();
+		var badges = dietaryBadges(item.dietary).map(function (badge) {
+			return el('span', {
+				class: 'db-dietary-badge db-dietary-badge--' + badge.value,
+				'aria-label': badge.label,
+				'data-dietary': badge.value,
+				text: badge.label
+			});
+		});
+		var badgeWrap = badges.length ? el('div', { class: 'db-dietary-badges', 'aria-label': 'Dietary information' }, badges) : null;
 		refreshPrice();
 		return el('div', { class: soldOut ? 'db-card db-card--soldout' : 'db-card' }, [
 			media,
 			el('div', { class: 'db-card-body' }, [
 				el('h3', { class: 'db-card-title', text: item.name }),
 				item.description ? el('p', { class: 'db-card-desc', text: item.description }) : null,
+				badgeWrap,
 				controls,
 				el('div', { class: 'db-card-foot' }, [
 					priceEl,
@@ -848,7 +1172,13 @@
 	// piece of checkout copy must say that instead of promising a card step that
 	// never happens.
 	function payingOnline() {
-		return !!(stripeHosted || tyroPay || mpgsHosted);
+		return !!(stripeHosted || tyroPay || mpgsHosted || (PAY.enabled && GATEWAY === 'square'));
+	}
+
+	function onlinePaymentIntro() {
+		return stripeHosted
+			? 'Check your items, add your details, then continue to Stripe for secure payment.'
+			: 'Check your items, add your details, then securely pay by card online.';
 	}
 
 	function orderJourney() {
@@ -897,7 +1227,7 @@
 		var checkoutEl = null;
 		var orderTitle = el('h2', { text: payingOnline() ? 'Review, pay and track' : 'Review, order and track' });
 		var orderIntro = el('p', { text: payingOnline()
-			? 'Check your items, add your details, then continue to Stripe for secure payment.'
+			? onlinePaymentIntro()
 			: 'Check your items and add your details. You pay when you collect from the shop.' });
 		// Once an order is successfully placed, this cart widget's job is done —
 		// further reloads (triggered by the notifyCartChanged() that placeOrder
@@ -935,7 +1265,7 @@
 				orderIntro.textContent = 'Online checkout and payment are closed. If pre-orders are available, your request stays unpaid until staff call and confirm it.';
 			} else if (payingOnline()) {
 				orderTitle.textContent = 'Review, pay and track';
-				orderIntro.textContent = 'Check your items, add your details, then continue to Stripe for secure payment.';
+				orderIntro.textContent = onlinePaymentIntro();
 			} else {
 				orderTitle.textContent = 'Review, order and track';
 				orderIntro.textContent = 'Check your items and add your details. You pay when you collect from the shop.';
@@ -1061,12 +1391,22 @@
 
 		load();
 		document.addEventListener('doughboss:cart-updated', load);
+		document.addEventListener('doughboss:shop-changed', function (event) {
+			var id = Number(event.detail && event.detail.id);
+			// QR destination and a payment already in flight remain immutable.
+			// Reuse the existing selection event so the top and cart pickers route
+			// to the same kitchen without rebuilding the customer's detail form.
+			if (orderComplete || paymentMutationLock || activeTableContext() || (configCache && configCache.single_location_mode)) { return; }
+			if (id === locationId || !locById(locationsCache || [], id)) { return; }
+			locationId = id;
+			load();
+		});
 	}
 
 	function orderingClosedNotice(message) {
 		return el('aside', { class: 'db-ordering-status', role: 'status' }, [
-			el('strong', { text: I18N.orderingComingSoon || 'Online ordering coming soon' }),
-			el('p', { text: message || 'You can browse the menu now, and we will let you know when checkout opens.' })
+			el('strong', { text: I18N.orderingComingSoon || 'Online ordering is paused' }),
+			el('p', { text: message || 'Browse the menu and check your preferred shop before visiting.' })
 		]);
 	}
 
@@ -1369,8 +1709,8 @@
 
 		address.style.display = orderType === 'delivery' ? '' : 'none';
 
-		// Whether this checkout takes a card payment through a hosted gateway.
-		var paying = !!(stripeHosted || tyroPay || mpgsHosted);
+		// Whether this checkout takes a card payment online.
+		var paying = payingOnline();
 
 		function newPaymentAttemptKey() {
 			return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
@@ -1500,131 +1840,157 @@
 			announceError(msg, 'Your payment may already be complete. Please do not pay again. Keep this page open or contact the shop so we can confirm your order.');
 		}
 
+		function completeOrder(res, payload) {
+			checkoutAttemptId = null;
+			checkoutPaymentId = null;
+			setPaymentMutationLock(false);
+			form.setAttribute('aria-busy', 'false');
+			if (onJourneyStep) { onJourneyStep(4); }
+			// Capture the parent BEFORE clearing it: clearing via innerHTML
+			// detaches `form` from the document, which nulls form.parentNode —
+			// re-reading form.parentNode afterwards to append the confirmation
+			// would throw against null.
+			var parent = form.parentNode;
+			parent.innerHTML = '';
+			var confirmation = el('div', { class: 'db-confirm', role: 'status', 'aria-live': 'polite', tabindex: '-1' }, [
+				el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
+				el('p', { class: 'db-order-kicker', text: paying ? 'Payment confirmed' : 'Order confirmed' }),
+				el('h3', { text: 'Your order is in' }),
+				el('p', { text: 'Keep this order number for live updates.' })
+			]);
+			var orderNumber = el('strong', { class: 'db-confirm-number', text: res.order_number || '' });
+			var copyNumber = el('button', { class: 'db-link db-confirm-copy', type: 'button', text: 'Copy number' });
+			copyNumber.addEventListener('click', function () {
+				var copied = window.navigator && window.navigator.clipboard && window.navigator.clipboard.writeText
+					? window.navigator.clipboard.writeText(String(res.order_number || ''))
+					: Promise.reject(new Error('Clipboard unavailable'));
+				copied.then(function () {
+					copyNumber.textContent = 'Copied';
+					dbToast('Order number copied', true);
+				}).catch(function () {
+					copyNumber.textContent = 'Select and copy the number';
+				});
+			});
+			confirmation.appendChild(el('div', { class: 'db-confirm-number-wrap' }, [orderNumber, copyNumber]));
+			if (res.table_label) {
+				confirmation.appendChild(el('p', { class: 'db-table-context', text: 'Dine in · ' + (res.location_name ? res.location_name + ' · ' : '') + 'Table ' + res.table_label + ' · We will bring it to you.' }));
+			}
+			confirmation.appendChild(el('div', { class: 'db-confirm-facts' }, [
+				el('span', {}, [el('small', { text: 'Status' }), el('strong', { text: 'Sent to the shop' })]),
+				el('span', {}, [el('small', { text: 'Payment' }), el('strong', { text: paying ? 'Paid' : 'Pay at shop' })]),
+				el('span', {}, [el('small', { text: 'Total' }), el('strong', { text: money(res.total) })])
+			]));
+			// Only promise a tracker when one is actually reachable from here:
+			// /order/ carries no tracking widget, and the API returns an empty
+			// tracking_url while payments are off, so the original copy pointed
+			// at a "live tracker" with no link on screen.
+			var tracker = document.querySelector('[data-doughboss-tracking]');
+			var hasTracking = !!(res.tracking_url || tracker);
+			confirmation.appendChild(el('p', {
+				class: 'db-confirm-next',
+				text: hasTracking
+					? 'The shop will accept your order next. We will email meaningful updates, or you can follow the live tracker.'
+					: 'The shop will accept your order next. We will email meaningful updates — keep your order number handy when you collect.'
+			}));
+			var confirmActions = el('div', { class: 'db-confirm-actions' });
+			if (res.tracking_url) {
+				confirmActions.appendChild(el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' }));
+			} else if (tracker) {
+				confirmActions.appendChild(el('a', {
+					class: 'db-btn db-btn--track',
+					href: '#track-order',
+					text: 'Track this order',
+					onclick: function () {
+						var trackForm = tracker.querySelector('.db-track-form');
+						if (!trackForm) { return; }
+						trackForm.number.value = res.order_number || '';
+						trackForm.email.value = payload.customer_email || '';
+					}
+				}));
+			}
+			confirmation.appendChild(confirmActions);
+			var review = el('div', { class: 'db-review-invite' });
+			review.appendChild(el('strong', { text: 'Stay close to the bake.' }));
+			review.appendChild(el('span', { text: 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.' }));
+			var reviewActions = el('div', { class: 'db-review-invite__actions' });
+			reviewActions.appendChild(el('a', {
+				href: 'https://instagram.com/doughboss',
+				target: '_blank',
+				rel: 'noopener noreferrer',
+				'data-doughboss-engagement': 'social_engagement',
+				'data-content-name': 'Instagram',
+				'data-channel': 'order_success',
+				text: 'Follow @doughboss ↗'
+			}));
+			if (DATA.googleReviewUrl) {
+				reviewActions.appendChild(el('a', {
+					href: DATA.googleReviewUrl,
+					target: '_blank',
+					rel: 'noopener noreferrer',
+					'data-doughboss-engagement': 'review_engagement',
+					'data-content-name': 'Google review',
+					'data-channel': 'order_success',
+					text: 'Leave a Google review ↗'
+				}));
+			}
+			review.appendChild(reviewActions);
+			confirmation.appendChild(review);
+			parent.appendChild(confirmation);
+			trackCommerce('purchase', {
+				currency: 'AUD',
+				value: Number(res.total || 0),
+				num_items: Number(totals && (totals.item_count || totals.quantity) || 0),
+				order_type: payload.order_type,
+				location_id: payload.location_id,
+				channel: activeTableContext() ? 'table_qr' : 'web'
+			});
+			// Mark this cart widget done BEFORE notifying — the notification
+			// triggers this same widget's own reload listener, which must not
+			// overwrite the confirmation just shown with an "empty cart" render.
+			if (onOrderComplete) { onOrderComplete(); }
+			notifyCartChanged();
+			// The page collapses when the cart and form are replaced, leaving
+			// the confirmation above the viewport (measured: y=-637 on a 390px
+			// phone). Take the customer to their order number and announce it.
+			// 'start' (with .db-confirm's scroll-margin-top clearing the sticky
+			// header) lands the tick and the order number at the top of the
+			// screen; 'center' left the top of a long confirmation cut off.
+			revealNode(confirmation, true, 'start');
+		}
+
 		function placeOrder(payload) {
 			if (!checkoutAttemptId) {
 				checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
 			}
 			return request('/checkout', { method: 'POST', body: payload, headers: { 'Idempotency-Key': checkoutAttemptId } }).then(function (res) {
-				checkoutAttemptId = null;
-				checkoutPaymentId = null;
-				setPaymentMutationLock(false);
-				form.setAttribute('aria-busy', 'false');
-				if (onJourneyStep) { onJourneyStep(4); }
-				// Capture the parent BEFORE clearing it: clearing via innerHTML
-				// detaches `form` from the document, which nulls form.parentNode —
-				// re-reading form.parentNode afterwards to append the confirmation
-				// would throw against null.
-				var parent = form.parentNode;
-				parent.innerHTML = '';
-				var confirmation = el('div', { class: 'db-confirm', role: 'status', 'aria-live': 'polite', tabindex: '-1' }, [
-					el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
-					el('p', { class: 'db-order-kicker', text: paying ? 'Payment confirmed' : 'Order confirmed' }),
-					el('h3', { text: 'Your order is in' }),
-					el('p', { text: 'Keep this order number for live updates.' })
-				]);
-				var orderNumber = el('strong', { class: 'db-confirm-number', text: res.order_number || '' });
-				var copyNumber = el('button', { class: 'db-link db-confirm-copy', type: 'button', text: 'Copy number' });
-				copyNumber.addEventListener('click', function () {
-					var copied = window.navigator && window.navigator.clipboard && window.navigator.clipboard.writeText
-						? window.navigator.clipboard.writeText(String(res.order_number || ''))
-						: Promise.reject(new Error('Clipboard unavailable'));
-					copied.then(function () {
-						copyNumber.textContent = 'Copied';
-						dbToast('Order number copied', true);
-					}).catch(function () {
-						copyNumber.textContent = 'Select and copy the number';
-					});
-				});
-				confirmation.appendChild(el('div', { class: 'db-confirm-number-wrap' }, [orderNumber, copyNumber]));
-				if (res.table_label) {
-					confirmation.appendChild(el('p', { class: 'db-table-context', text: 'Dine in · ' + (res.location_name ? res.location_name + ' · ' : '') + 'Table ' + res.table_label + ' · We will bring it to you.' }));
-				}
-				confirmation.appendChild(el('div', { class: 'db-confirm-facts' }, [
-					el('span', {}, [el('small', { text: 'Status' }), el('strong', { text: 'Sent to the shop' })]),
-					el('span', {}, [el('small', { text: 'Payment' }), el('strong', { text: paying ? 'Paid' : 'Pay at shop' })]),
-					el('span', {}, [el('small', { text: 'Total' }), el('strong', { text: money(res.total) })])
-				]));
-				// Only promise a tracker when one is actually reachable from here:
-				// /order/ carries no tracking widget, and the API returns an empty
-				// tracking_url while payments are off, so the original copy pointed
-				// at a "live tracker" with no link on screen.
-				var tracker = document.querySelector('[data-doughboss-tracking]');
-				var hasTracking = !!(res.tracking_url || tracker);
-				confirmation.appendChild(el('p', {
-					class: 'db-confirm-next',
-					text: hasTracking
-						? 'The shop will accept your order next. We will email meaningful updates, or you can follow the live tracker.'
-						: 'The shop will accept your order next. We will email meaningful updates — keep your order number handy when you collect.'
-				}));
-				var confirmActions = el('div', { class: 'db-confirm-actions' });
-				if (res.tracking_url) {
-					confirmActions.appendChild(el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' }));
-				} else if (tracker) {
-					confirmActions.appendChild(el('a', {
-						class: 'db-btn db-btn--track',
-						href: '#track-order',
-						text: 'Track this order',
-						onclick: function () {
-							var trackForm = tracker.querySelector('.db-track-form');
-							if (!trackForm) { return; }
-							trackForm.number.value = res.order_number || '';
-							trackForm.email.value = payload.customer_email || '';
-						}
-					}));
-				}
-				confirmation.appendChild(confirmActions);
-				var review = el('div', { class: 'db-review-invite' });
-				review.appendChild(el('strong', { text: 'Stay close to the bake.' }));
-				review.appendChild(el('span', { text: 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.' }));
-				var reviewActions = el('div', { class: 'db-review-invite__actions' });
-				reviewActions.appendChild(el('a', {
-					href: 'https://instagram.com/doughboss',
-					target: '_blank',
-					rel: 'noopener noreferrer',
-					'data-doughboss-engagement': 'social_engagement',
-					'data-content-name': 'Instagram',
-					'data-channel': 'order_success',
-					text: 'Follow @doughboss ↗'
-				}));
-				if (DATA.googleReviewUrl) {
-					reviewActions.appendChild(el('a', {
-						href: DATA.googleReviewUrl,
-						target: '_blank',
-						rel: 'noopener noreferrer',
-						'data-doughboss-engagement': 'review_engagement',
-						'data-content-name': 'Google review',
-						'data-channel': 'order_success',
-						text: 'Leave a Google review ↗'
-					}));
-				}
-				review.appendChild(reviewActions);
-				confirmation.appendChild(review);
-				parent.appendChild(confirmation);
-				trackCommerce('purchase', {
-					currency: 'AUD',
-					value: Number(res.total || 0),
-					num_items: Number(totals && (totals.item_count || totals.quantity) || 0),
-					order_type: payload.order_type,
-					location_id: payload.location_id,
-					channel: activeTableContext() ? 'table_qr' : 'web'
-				});
-				// Mark this cart widget done BEFORE notifying — the notification
-				// triggers this same widget's own reload listener, which must not
-				// overwrite the confirmation just shown with an "empty cart" render.
-				if (onOrderComplete) { onOrderComplete(); }
-				notifyCartChanged();
-				// The page collapses when the cart and form are replaced, leaving
-				// the confirmation above the viewport (measured: y=-637 on a 390px
-				// phone). Take the customer to their order number and announce it.
-				// 'start' (with .db-confirm's scroll-margin-top clearing the sticky
-				// header) lands the tick and the order number at the top of the
-				// screen; 'center' left the top of a long confirmation cut off.
-				revealNode(confirmation, true, 'start');
+				completeOrder(res, payload);
 			});
 		}
 
+		// Square owns its charge flow, but uses these form-local events to enter
+		// the same confirmation and accessible error paths as every other checkout.
+		// They are deliberately not a global API: only this checkout form consumes
+		// them, after the Square interceptor has completed its server-side work.
+		form.addEventListener('doughboss:checkout-complete', function (event) {
+			var detail = event.detail || {};
+			if (!detail.response) { return; }
+			completeOrder(detail.response, detail.payload || {});
+		});
+		form.addEventListener('doughboss:checkout-error', function (event) {
+			var detail = event.detail || {};
+			setPaymentMutationLock(!!detail.paymentPending);
+			if (onJourneyStep) { onJourneyStep(detail.paymentPending ? 3 : 2); }
+			announceError(msg, detail.message || (I18N.genericError || 'Something went wrong.'));
+		});
+		form.addEventListener('doughboss:checkout-start', function () {
+			setPaymentMutationLock(true);
+			clearError(msg);
+			if (onJourneyStep) { onJourneyStep(3); }
+		});
+
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
+			setPaymentMutationLock(true);
 			submit.disabled = true;
 			form.setAttribute('aria-busy', 'true');
 			if (onJourneyStep) { onJourneyStep(paying ? 3 : 2); }

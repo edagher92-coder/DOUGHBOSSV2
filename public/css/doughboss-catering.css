@@ -198,6 +198,7 @@
 }
 
 .db-catering .dbc-field input,
+.db-catering .dbc-field select,
 .db-catering .dbc-field textarea {
 	font: inherit;
 	padding: 11px 13px;
@@ -208,6 +209,10 @@
 	width: 100%;
 	transition: border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 }
+
+.db-catering .dbc-field select { min-height: 44px; min-width: 0; }
+.db-catering .dbc-field select:focus-visible { outline: 3px solid var(--dbc-ink); outline-offset: 2px; }
+.db-catering [data-catering-locations-retry] { min-height: 44px; padding: 8px 12px; cursor: pointer; }
 
 .db-catering .dbc-field input:focus,
 .db-catering .dbc-field textarea:focus {

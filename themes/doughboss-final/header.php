@@ -11,7 +11,7 @@
 <a class="dbf-skip" href="#main-content"><?php esc_html_e( 'Skip to content', 'doughboss-final' ); ?></a>
 <?php if ( ! doughboss_final_ordering_open() ) : ?>
 	<div class="dbf-launch-bar" role="region" aria-label="<?php esc_attr_e( 'Ordering status', 'doughboss-final' ); ?>">
-		<span><?php esc_html_e( 'Online ordering is coming soon', 'doughboss-final' ); ?></span>
+		<span><?php esc_html_e( 'Online ordering is paused — browse our menu or visit a shop', 'doughboss-final' ); ?></span>
 		<a href="<?php echo esc_url( home_url( '/order/' ) ); ?>"><?php esc_html_e( 'Browse the menu', 'doughboss-final' ); ?></a>
 	</div>
 <?php endif; ?>
@@ -33,6 +33,9 @@
 		<a class="dbf-button dbf-button--small dbf-header-cta" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">
 			<?php echo esc_html( doughboss_final_ordering_open() ? __( 'Order now', 'doughboss-final' ) : __( 'Browse menu', 'doughboss-final' ) ); ?>
 		</a>
+	</div>
+	<div class="dbf-wrap dbf-header-shop" data-doughboss-header-shop data-locations-url="<?php echo esc_url( home_url( '/locations/' ) ); ?>">
+		<a href="<?php echo esc_url( home_url( '/locations/' ) ); ?>"><?php esc_html_e( 'Check locations and pickup availability', 'doughboss-final' ); ?></a>
 	</div>
 </header>
 <main id="main-content" class="dbf-main">

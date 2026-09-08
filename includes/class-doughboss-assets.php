@@ -50,8 +50,16 @@ class DoughBoss_Assets {
 	 * @return bool
 	 */
 	private function is_order_page() {
-		return $this->current_post_has( 'doughboss_menu' )
+		$content_order_page = $this->current_post_has( 'doughboss_menu' )
 			&& $this->current_post_has( 'doughboss_cart' );
+
+		/**
+		 * Allow a theme template that renders the complete menu/cart journey
+		 * outside post_content to identify the page without hard-coding a post ID.
+		 *
+		 * @param bool $is_order_page Whether this is the integrated order page.
+		 */
+		return (bool) apply_filters( 'doughboss_is_order_page', $content_order_page );
 	}
 
 	/**
@@ -140,7 +148,15 @@ class DoughBoss_Assets {
 			);
 		}
 
-		if ( ! $this->should_load() ) {
+		$load_storefront = $this->should_load();
+		// The header needs public shop/status reads, not checkout or gateway SDKs.
+		if ( $load_storefront || apply_filters( 'doughboss_load_shop_status_assets', false ) ) {
+			wp_enqueue_script( 'doughboss-shop-status', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-shop-status.js', array(), DOUGHBOSS_VERSION, true );
+			wp_localize_script( 'doughboss-shop-status', 'DoughBossShopData', array(
+				'restUrl' => untrailingslashit( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
+			) );
+		}
+		if ( ! $load_storefront ) {
 			return;
 		}
 
@@ -209,7 +225,7 @@ class DoughBoss_Assets {
 		// never DoughBoss_Stripe directly: checking only Stripe here while the
 		// `payment_gateway` setting selects Tyro would leave checkout demanding
 		// a payment the storefront renders no card UI for.
-		$deps        = array( 'doughboss-marketing' );
+		$deps        = array( 'doughboss-marketing', 'doughboss-shop-status' );
 		// A configured gateway must not initialize browser payment fields while
 		// the store is intentionally in browse-only / Coming Soon mode.
 		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
@@ -244,16 +260,6 @@ class DoughBoss_Assets {
 			DOUGHBOSS_VERSION,
 			true
 		);
-
-		if ( $is_order_page ) {
-			wp_enqueue_script(
-				'doughboss-order-page',
-				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-order-page.js',
-				array( 'doughboss' ),
-				DOUGHBOSS_VERSION,
-				true
-			);
-		}
 
 		// Square card capture. Enqueued ONLY when Square is the active, ready
 		// gateway, so nothing about the current pay-at-shop or Stripe storefront
@@ -314,7 +320,7 @@ class DoughBoss_Assets {
 					'cartItems'    => __( 'items', 'doughboss' ),
 					'customize'    => __( 'Customize', 'doughboss' ),
 					'customizationAvailable' => __( 'Customise when ordering opens', 'doughboss' ),
-					'comingSoonShort' => __( 'Coming soon', 'doughboss' ),
+					'comingSoonShort' => __( 'Ordering paused', 'doughboss' ),
 					'emptyCart'    => __( 'Your cart is empty.', 'doughboss' ),
 					'remove'       => __( 'Remove', 'doughboss' ),
 					'subtotal'     => __( 'Subtotal', 'doughboss' ),
@@ -322,7 +328,7 @@ class DoughBoss_Assets {
 					'delivery'     => __( 'Delivery', 'doughboss' ),
 					'total'        => __( 'Total', 'doughboss' ),
 					'placeOrder'   => __( 'Place order', 'doughboss' ),
-					'orderingComingSoon' => __( 'Online ordering coming soon', 'doughboss' ),
+					'orderingComingSoon' => __( 'Online ordering is paused', 'doughboss' ),
 					'placing'      => __( 'Placing order…', 'doughboss' ),
 					'soldOut'      => __( 'Sold out', 'doughboss' ),
 					'chooseShop'   => __( 'Choose your shop', 'doughboss' ),

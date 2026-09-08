@@ -322,7 +322,7 @@ class DoughBoss_Voucher {
 			$ttl         = max( 300, min( 86400, (int) $ttl_seconds ) );
 			$expires     = $now + $ttl;
 			$reservation = self::row_reservation( $row );
-			if ( $reservation && (int) $reservation['expires_at'] > $now ) {
+			if ( $reservation && ( ! empty( $reservation['payment_pending'] ) || (int) $reservation['expires_at'] > $now ) ) {
 				if ( ! hash_equals( (string) $reservation['key'], $key ) ) {
 					return self::reserved_error();
 				}
@@ -335,6 +335,8 @@ class DoughBoss_Voucher {
 			$meta[ self::RESERVATION_META_KEY ] = array(
 				'key'        => $key,
 				'expires_at' => $expires,
+				'payment_pending' => $reservation && ! empty( $reservation['payment_pending'] ),
+				'attempt_id' => $reservation && ! empty( $reservation['attempt_id'] ) ? (int) $reservation['attempt_id'] : 0,
 			);
 			$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 				self::table(),
@@ -370,6 +372,127 @@ class DoughBoss_Voucher {
 	}
 
 	/**
+	 * Atomically protect a voucher and claim the irreversible Square dispatch.
+	 *
+	 * The payment attempt transition happens while the voucher's existing named
+	 * lock is held. If the voucher marker cannot then be stored, the attempt is
+	 * forced to unknown and no provider request is made.
+	 *
+	 * @param string $code            Voucher code.
+	 * @param string $reservation_key Checkout reservation owner.
+	 * @param int    $attempt_id      Durable Square attempt id.
+	 * @return true|WP_Error
+	 */
+	public static function claim_payment_dispatch( $code, $reservation_key, $attempt_id ) {
+		global $wpdb;
+		$key        = self::normalise_reservation_key( $reservation_key );
+		$attempt_id = absint( $attempt_id );
+		$row        = '' !== $key ? self::find_by_code( $code ) : null;
+		if ( ! $row || ! $attempt_id || ! class_exists( 'DoughBoss_Payment_Attempts' ) ) {
+			return new WP_Error( 'doughboss_voucher_payment_owner', __( 'The voucher payment owner could not be verified safely.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$voucher_id = (int) $row->id;
+		if ( ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return self::busy_error();
+		}
+
+		try {
+			$row         = self::find_by_id( $voucher_id );
+			$reservation = self::row_reservation( $row );
+			if ( ! $row || 'issued' !== (string) $row->status || ! $reservation || ! hash_equals( (string) $reservation['key'], $key ) ) {
+				return self::reserved_error();
+			}
+			if ( ! empty( $reservation['payment_pending'] ) ) {
+				return new WP_Error( 'doughboss_pay_pending', __( 'This voucher payment is already being confirmed. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true ) );
+			}
+			if ( ! DoughBoss_Payment_Attempts::claim_irreversible_creation( $attempt_id ) ) {
+				return new WP_Error( 'doughboss_pay_pending', __( 'This payment is already being confirmed. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true ) );
+			}
+
+			$meta = self::row_meta( $row );
+			$meta[ self::RESERVATION_META_KEY ] = array(
+				'key'             => $key,
+				'expires_at'      => (int) $reservation['expires_at'],
+				'payment_pending' => true,
+				'attempt_id'      => $attempt_id,
+			);
+			$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				self::table(),
+				array( 'meta' => self::encode_meta( $meta ), 'updated_at' => current_time( 'mysql' ) ),
+				array( 'id' => $voucher_id, 'status' => 'issued' ),
+				array( '%s', '%s' ),
+				array( '%d', '%s' )
+			);
+			if ( 1 !== (int) $updated ) {
+				DoughBoss_Payment_Attempts::mark_irreversible_unknown( $attempt_id, 'voucher_pending_storage' );
+				return new WP_Error( 'doughboss_voucher_payment_storage', __( 'The voucher payment could not be protected safely. Do not pay again; please contact the shop.', 'doughboss' ), array( 'status' => 503, 'payment_pending' => true, 'attempt_id' => $attempt_id ) );
+			}
+			return true;
+		} finally {
+			self::release_voucher_lock( $voucher_id );
+		}
+	}
+
+	/**
+	 * Release a payment-pending voucher only for its proven terminal attempt.
+	 *
+	 * @param string $code            Voucher code.
+	 * @param string $reservation_key Checkout reservation owner.
+	 * @param int    $attempt_id      Terminal Square attempt id.
+	 * @return bool|WP_Error True when released, false when this attempt no longer
+	 *                       owns the reservation, or an error on lock/storage failure.
+	 */
+	public static function release_payment_reservation( $code, $reservation_key, $attempt_id ) {
+		global $wpdb;
+		$key        = self::normalise_reservation_key( $reservation_key );
+		$attempt_id = absint( $attempt_id );
+		$row        = '' !== $key && $attempt_id ? self::find_by_code( $code ) : null;
+		if ( ! $row ) {
+			return false;
+		}
+		$voucher_id = (int) $row->id;
+		if ( ! self::acquire_voucher_lock( $voucher_id ) ) {
+			return self::busy_error();
+		}
+		try {
+			$row         = self::find_by_id( $voucher_id );
+			$reservation = self::row_reservation( $row );
+			if ( ! $reservation || ! hash_equals( (string) $reservation['key'], $key ) || empty( $reservation['payment_pending'] ) || (int) $reservation['attempt_id'] !== $attempt_id ) {
+				return false;
+			}
+			$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
+			if ( ! is_array( $attempt ) || 'square' !== (string) $attempt['provider'] || ! in_array( (string) $attempt['status'], array( 'failed', 'voided' ), true ) ) {
+				return false;
+			}
+			$attempt_meta = DoughBoss_Payment_Attempts::metadata( $attempt );
+			if (
+				'square-v2' !== ( isset( $attempt_meta['protocol_version'] ) ? (string) $attempt_meta['protocol_version'] : '' )
+				|| empty( $attempt_meta['voucher_code'] )
+				|| strtoupper( (string) $attempt_meta['voucher_code'] ) !== strtoupper( (string) $row->code )
+				|| empty( $attempt_meta['voucher_reservation_key'] )
+				|| ! hash_equals( $key, (string) $attempt_meta['voucher_reservation_key'] )
+			) {
+				return false;
+			}
+			$meta = self::row_meta( $row );
+			unset( $meta[ self::RESERVATION_META_KEY ] );
+			$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				self::table(),
+				array( 'meta' => self::encode_meta( $meta ), 'updated_at' => current_time( 'mysql' ) ),
+				array( 'id' => $voucher_id, 'status' => 'issued' ),
+				array( '%s', '%s' ),
+				array( '%d', '%s' )
+			);
+			if ( 1 !== (int) $updated ) {
+				return new WP_Error( 'doughboss_voucher_payment_storage', __( 'The terminal voucher payment could not be released safely.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			return true;
+		} finally {
+			self::release_voucher_lock( $voucher_id );
+		}
+	}
+
+	/**
 	 * Release a matching checkout lease without touching a newer reservation.
 	 *
 	 * @param string $code            Voucher code.
@@ -397,6 +520,9 @@ class DoughBoss_Voucher {
 			$reservation = self::row_reservation( $row );
 			if ( ! $reservation || ! hash_equals( (string) $reservation['key'], $key ) ) {
 				return true;
+			}
+			if ( ! empty( $reservation['payment_pending'] ) ) {
+				return false;
 			}
 			$meta = self::row_meta( $row );
 			unset( $meta[ self::RESERVATION_META_KEY ] );
@@ -451,7 +577,11 @@ class DoughBoss_Voucher {
 		$reservation = $meta[ self::RESERVATION_META_KEY ];
 		$key         = isset( $reservation['key'] ) ? self::normalise_reservation_key( $reservation['key'] ) : '';
 		$expires     = isset( $reservation['expires_at'] ) ? (int) $reservation['expires_at'] : 0;
-		return '' !== $key && $expires > 0 ? array( 'key' => $key, 'expires_at' => $expires ) : null;
+		$pending     = ! empty( $reservation['payment_pending'] );
+		$attempt_id  = isset( $reservation['attempt_id'] ) ? absint( $reservation['attempt_id'] ) : 0;
+		return '' !== $key && $expires > 0
+			? array( 'key' => $key, 'expires_at' => $expires, 'payment_pending' => $pending, 'attempt_id' => $attempt_id )
+			: null;
 	}
 
 	/** @return string */
@@ -573,7 +703,7 @@ class DoughBoss_Voucher {
 			$reservation = self::row_reservation( $row );
 			if ( $reservation ) {
 				$same_lease = '' !== $reservation_key && hash_equals( (string) $reservation['key'], $reservation_key );
-				$active     = (int) $reservation['expires_at'] > time();
+				$active     = ! empty( $reservation['payment_pending'] ) || (int) $reservation['expires_at'] > time();
 				// Matching paid checkouts may redeem during webhook-delivery grace
 				// after nominal expiry. Active different/no-key callers always lose.
 				if ( ( $active && ! $same_lease ) || ( '' !== $reservation_key && ! $same_lease ) ) {
@@ -1390,7 +1520,7 @@ class DoughBoss_Voucher {
 				return false;
 			}
 			$reservation = self::row_reservation( $row );
-			if ( $reservation && (int) $reservation['expires_at'] > time() ) {
+			if ( $reservation && ( ! empty( $reservation['payment_pending'] ) || (int) $reservation['expires_at'] > time() ) ) {
 				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 				$transaction = false;
 				return false;

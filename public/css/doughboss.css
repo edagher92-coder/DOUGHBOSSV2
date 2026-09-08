@@ -47,8 +47,9 @@
 
 /* Accessibility: visible keyboard focus + respect reduced motion (audit P4). */
 .db-app :focus-visible {
-	outline: 3px solid var(--db-accent);
-	outline-offset: 2px;
+	outline: 3px solid var(--db-ink);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 3px var(--db-paper);
 	border-radius: 4px;
 }
 
@@ -57,7 +58,9 @@
 	.db-app *::before,
 	.db-app *::after {
 		transition-duration: 0.01ms !important;
+		transition-delay: 0s !important;
 		animation-duration: 0.01ms !important;
+		animation-delay: 0s !important;
 		animation-iteration-count: 1 !important;
 	}
 }
@@ -77,14 +80,6 @@
 	max-width: 90vw;
 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 	border-left: 3px solid var(--db-accent);
-}
-
-@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
-	.db-toast {
-		background: rgba(13, 13, 13, 0.78);
-		backdrop-filter: blur(12px) saturate(1.4);
-		-webkit-backdrop-filter: blur(12px) saturate(1.4);
-	}
 }
 
 .db-app * {
@@ -131,17 +126,19 @@
 	border: 0;
 	border-radius: var(--db-r-pill);
 	padding: 0.6rem 1.25rem;
+	min-height: 44px;
 	font-size: 0.95rem;
 	font-weight: 700;
 	cursor: pointer;
-	transition: background var(--db-t-fast) var(--db-ease), transform var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+	transition: background var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 }
 
 .db-btn:active:not(:disabled) {
-	transform: scale(0.98);
+	background: var(--db-accent-dark);
 }
 
-.db-btn:hover:not(:disabled) {
+.db-btn:hover:not(:disabled),
+.db-btn:focus-visible:not(:disabled) {
 	background: var(--db-accent-dark);
 }
 
@@ -213,16 +210,21 @@
 	flex-direction: column;
 	background: #fff;
 	box-shadow: var(--db-shadow-1);
-	transition: transform var(--db-t-med) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease);
+	transition: border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 	min-inline-size: 0;
 	max-inline-size: 100%;
 }
 
 @media (hover: hover) {
 	.db-card:not(.db-card--soldout):hover {
-		transform: translateY(-2px);
+		border-color: var(--db-border);
 		box-shadow: var(--db-shadow-2);
 	}
+}
+
+.db-card:focus-within {
+	border-color: var(--db-border);
+	box-shadow: var(--db-shadow-2);
 }
 
 .db-card-img {
@@ -354,6 +356,27 @@ body.page-id-402 #primary-menu > li > a {
 	flex: 1;
 }
 
+.db-dietary-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .35rem;
+	margin: 0 0 .75rem;
+}
+
+.db-dietary-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 1.7rem;
+	padding: .2rem .55rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-pill);
+	background: var(--db-paper);
+	color: var(--db-ink);
+	font-size: .72rem;
+	font-weight: 800;
+	letter-spacing: .02em;
+}
+
 .db-card-foot {
 	display: flex;
 	align-items: center;
@@ -461,6 +484,190 @@ body.page-id-402 #primary-menu > li > a {
 	overscroll-behavior: contain;
 }
 
+.db-customizer-head,
+.db-customizer-foot {
+	display: none;
+}
+
+.db-customizer-scroll {
+	display: grid;
+	gap: 0.65rem;
+}
+
+/* The mobile sheet is portalled to <body> while open so transformed menu
+ * cards cannot become its containing block. Carry the app tokens with it. */
+.db-customizer-sheet {
+	--db-accent: #111111;
+	--db-accent-dark: #000000;
+	--db-border: #e6e1da;
+	--db-muted: #6b6b6b;
+	--db-r-sm: 10px;
+	--db-r-md: 14px;
+	--db-r-lg: 18px;
+	--db-paper: #f7f5f0;
+	--db-ink: #0d0d0d;
+	--db-ease: cubic-bezier(0.32, 0.72, 0.33, 1);
+	--db-t-fast: 150ms;
+	--db-t-med: 220ms;
+	box-sizing: border-box;
+	color: #2b2b2b;
+	font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	line-height: 1.5;
+}
+
+.db-customizer-sheet * {
+	box-sizing: border-box;
+}
+
+.db-customizer-sheet :focus-visible {
+	outline: 3px solid var(--db-ink, #0d0d0d);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 3px var(--db-paper, #f7f5f0);
+}
+
+.db-customizer-backdrop {
+	display: none;
+}
+
+@media (max-width: 767px) {
+	body.db-customizer-open {
+		overflow: hidden;
+	}
+
+	.db-customizer-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 1000;
+		display: block;
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		border: 0;
+		background: rgba(13, 13, 13, 0.62);
+		opacity: 0;
+		visibility: hidden;
+		transition: opacity var(--db-t-med, 220ms) var(--db-ease, ease), visibility var(--db-t-med, 220ms) var(--db-ease, ease);
+	}
+
+	.db-customizer-backdrop.is-shown {
+		opacity: 1;
+		visibility: visible;
+	}
+
+	.db-menu-customize[open] {
+		overflow: visible;
+	}
+
+	.db-menu-options.db-customizer-sheet {
+		position: fixed;
+		left: max(8px, env(safe-area-inset-left, 0px));
+		right: max(8px, env(safe-area-inset-right, 0px));
+		bottom: 0;
+		z-index: 1001;
+		display: grid;
+		grid-template-rows: auto minmax(0, 1fr) auto;
+		gap: 0;
+		max-height: min(88dvh, 760px);
+		margin: 0;
+		padding: 0;
+		border: 1px solid rgba(13, 13, 13, 0.12);
+		border-bottom: 0;
+		border-radius: 24px 24px 0 0;
+		background: var(--db-paper, #f7f5f0);
+		box-shadow: 0 -18px 60px rgba(13, 13, 13, 0.24);
+		overflow: hidden;
+		animation: db-customizer-in 0.22s var(--db-ease) both;
+	}
+
+	.db-customizer-head,
+	.db-customizer-foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		background: var(--db-paper, #f7f5f0);
+	}
+
+	.db-customizer-head {
+		min-height: 64px;
+		padding: 0.75rem 0.85rem 0.55rem 1rem;
+		border-bottom: 1px solid var(--db-border);
+	}
+
+	.db-customizer-head strong {
+		font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+		font-size: 1.35rem;
+		font-weight: 400;
+		letter-spacing: 0.04em;
+		line-height: 1.05;
+		text-transform: uppercase;
+	}
+
+	.db-customizer-close {
+		flex: 0 0 44px;
+		width: 44px;
+		height: 44px;
+		padding: 0;
+		border: 1px solid var(--db-border);
+		border-radius: 50%;
+		background: #fff;
+		color: var(--db-ink);
+		font: 400 1.75rem/1 Arial, sans-serif;
+		cursor: pointer;
+		touch-action: manipulation;
+	}
+
+	.db-customizer-scroll {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0.85rem;
+		scrollbar-gutter: stable;
+	}
+
+	.db-customizer-foot {
+		padding: 0.75rem 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+		border-top: 1px solid var(--db-border);
+		box-shadow: 0 -8px 24px rgba(13, 13, 13, 0.08);
+	}
+
+	.db-customizer-total {
+		display: grid;
+		gap: 0.05rem;
+		min-width: 88px;
+	}
+
+	.db-customizer-total small {
+		color: var(--db-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.db-customizer-price {
+		font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+		font-size: 1.6rem;
+		font-variant-numeric: tabular-nums;
+		line-height: 1;
+	}
+
+	.db-customizer-add {
+		flex: 1 1 auto;
+		min-height: 52px;
+		max-width: 230px;
+		border-radius: var(--db-r-md);
+		font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+		font-size: 1.05rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+}
+
+@keyframes db-customizer-in {
+	from { transform: translateY(8px); }
+	to { transform: translateY(0); }
+}
+
 .db-card-customize-note {
 	margin: 0.7rem 0;
 	color: var(--db-muted);
@@ -514,6 +721,99 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-menu-option span:nth-of-type(1) {
 	flex: 1;
+}
+
+/* Keep these as actual radio controls: the visually-hidden inputs retain native
+ * arrow-key behaviour and form semantics while their labels become the segmented
+ * tap targets. Only the canonical Style and Crust groups receive these classes. */
+.db-menu-option-group--segmented {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+	gap: 0.4rem;
+	padding: 0.65rem;
+}
+
+.db-menu-option-group--segmented legend {
+	grid-column: 1 / -1;
+}
+
+.db-menu-option--segment {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.3rem;
+	min-width: 0;
+	min-height: 44px;
+	padding: 0.5rem 0.65rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-sm);
+	background: #fff;
+	color: var(--db-ink);
+	font-size: 0.9rem;
+	font-weight: 700;
+	line-height: 1.2;
+	text-align: center;
+	transition: background-color var(--db-t-fast) var(--db-ease), border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
+}
+
+/* Without :has(), keep the native glyph and its focus ring visible. */
+@supports selector(:has(input:checked)) {
+	.db-menu-option--segment input {
+		position: absolute;
+		inline-size: 1px;
+		block-size: 1px;
+		margin: -1px;
+		opacity: 0;
+	}
+}
+
+.db-menu-option--segment span:nth-of-type(1) {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.db-menu-option--segment .db-option-price {
+	flex: 0 0 auto;
+	color: inherit;
+	font-size: 0.78rem;
+	font-weight: 600;
+	opacity: 0.78;
+}
+
+.db-menu-option--segment:has(input:checked) {
+	border-color: var(--db-accent);
+	background: var(--db-accent);
+	box-shadow: inset 0 -3px 0 var(--db-accent-dark);
+	color: #fff;
+}
+
+.db-menu-option--segment:has(input:focus-visible) {
+	z-index: 1;
+	outline: 3px solid var(--db-accent);
+	outline-offset: 2px;
+}
+
+.db-menu-option--segment:has(input:disabled) {
+	border-color: var(--db-border);
+	background: var(--db-paper);
+	background: color-mix(in srgb, var(--db-paper) 76%, var(--db-border));
+	box-shadow: none;
+	color: var(--db-muted);
+	cursor: not-allowed;
+	opacity: 0.72;
+}
+
+.db-menu-option--segment:has(input:checked):has(input:disabled) {
+	border-style: dashed;
+	font-weight: 800;
+}
+
+@media (hover: hover) {
+	.db-menu-option--segment:not(:has(input:disabled)):hover {
+		border-color: var(--db-accent);
+	}
 }
 
 .db-builder-foot {
@@ -1048,20 +1348,29 @@ body.page-id-402 #primary-menu > li > a {
 	padding: 1rem 1.1rem;
 	background: #fff;
 	box-shadow: var(--db-shadow-1);
-	max-width: 420px;
+	max-width: 100%;
+	min-width: 0;
 }
 
 .db-shop-heading {
-	font-size: 0.85rem;
+	font-size: 0.75rem;
 	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--db-muted);
 }
 
 .db-shop-name {
-	font-size: 1.05rem;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.65rem;
+	font-weight: 400;
+	line-height: 1.15;
 }
 
 .db-shop-select,
 .db-cart-shop .db-shop-select {
+	min-height: 44px;
+	max-width: 100%;
 	padding: 0.6rem 0.7rem;
 	border: 1px solid var(--db-border);
 	border-radius: var(--db-r-sm);
@@ -1078,7 +1387,14 @@ body.page-id-402 #primary-menu > li > a {
 	color: var(--db-muted);
 	font-size: 0.85rem;
 	line-height: 1.4;
+	overflow-wrap: anywhere;
 }
+
+.db-shop-phone { display: inline-flex; align-items: center; min-height: 44px; color: var(--db-ink); font-weight: 600; text-underline-offset: 3px; }
+.db-shop-context { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; padding-top: .7rem; margin-top: .2rem; border-top: 1px solid var(--db-border); }
+.db-shop-context-item { display: grid; gap: .2rem; }
+.db-shop-context-item small { font-size: .7rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+.db-shop-context-item strong { color: var(--db-ink); font-size: .85rem; font-weight: 600; }
 
 .db-cart-shop {
 	display: flex;
@@ -1229,12 +1545,11 @@ body.page-id-402 #primary-menu > li > a {
 	justify-content: center;
 }
 @media (prefers-reduced-motion: no-preference) {
-	.db-app .db-confirm-check { animation: db-checkpop .42s var(--db-ease) both; }
+	.db-app .db-confirm-check { animation: db-checkpop .18s var(--db-ease) both; }
 }
 @keyframes db-checkpop {
-	0% { transform: scale(.4); opacity: 0; }
-	60% { transform: scale(1.12); }
-	100% { transform: scale(1); opacity: 1; }
+	from { transform: translateY(8px); }
+	to { transform: translateY(0); }
 }
 
 /* Success toast variant (Phase-2 JS calls showToast(msg, ok); dormant until then). */
@@ -1253,57 +1568,20 @@ body.page-id-402 #primary-menu > li > a {
 	vertical-align: middle;
 }
 
-/* ===== UPLIFT-1 Phase 2: motion "heart" — spring physics + tactile feedback ===== */
-/* Brings back the bouncy, alive feel: a spring easing curve with overshoot,
- * staggered card entrance, tap bounce, a sticky category jump-bar, and a
- * celebratory confirmation. All fully disabled under prefers-reduced-motion. */
-
-.db-app {
-	--db-spring: cubic-bezier(.34, 1.56, .64, 1);       /* overshoots ~1.1 — the "bounce" */
-	--db-spring-soft: cubic-bezier(.22, 1.2, .36, 1);   /* gentler overshoot */
-}
-
-/* Tap bounce on buttons (springier press than the base scale). */
-.db-app .db-btn {
-	transition: background var(--db-t-fast) var(--db-ease),
-		transform var(--db-t-fast) var(--db-spring),
-		box-shadow var(--db-t-med) var(--db-ease);
-}
-.db-app .db-btn:active:not(:disabled) { transform: scale(.94); }
-
-/* Reusable "pop" (dbPop() adds .db-pop on add-to-cart, etc.). */
+/* Restrained feedback: controls and monetary values keep their geometry. */
+/* Preserve the existing add-to-cart feedback hook without a scale bounce. */
 @keyframes db-pop {
-	0% { transform: scale(1); }
-	35% { transform: scale(1.14); }
-	70% { transform: scale(.97); }
-	100% { transform: scale(1); }
+	50% { box-shadow: inset 0 0 0 2px currentColor; }
 }
-.db-app .db-pop { animation: db-pop .4s var(--db-spring); }
+.db-app .db-pop { animation: db-pop .2s var(--db-ease); }
+.db-app .db-pop:focus-visible { animation: none; }
 
-/* Staggered card entrance — the menu cascades in instead of snapping. --db-i is
- * set per-card in renderMenu (capped), so the delay stays snappy on long menus. */
-@keyframes db-cardin {
-	from { opacity: 0; transform: translateY(16px) scale(.98); }
-	to { opacity: 1; transform: none; }
-}
-.db-app .db-grid .db-card {
-	animation: db-cardin .5s var(--db-spring) both;
-	animation-delay: calc(var(--db-i, 0) * 45ms);
-	transition: transform var(--db-t-med) var(--db-spring), box-shadow var(--db-t-med) var(--db-ease);
-}
-@media (hover: hover) {
-	.db-app .db-card:not(.db-card--soldout):hover { transform: translateY(-4px); }
-}
-
-/* Builder option rows: subtle spring on press + selected lift. */
+/* Builder option rows retain their selected border and background feedback. */
 .db-app .db-option {
 	transition: border-color var(--db-t-fast) var(--db-ease),
 		background-color var(--db-t-fast) var(--db-ease),
-		transform var(--db-t-fast) var(--db-spring),
 		box-shadow var(--db-t-fast) var(--db-ease);
 }
-.db-app .db-option:active { transform: scale(.98); }
-.db-app .db-option:has(input:checked) { transform: scale(1.015); }
 
 /* Sticky category jump-bar (rendered by renderMenu when >1 category). */
 .db-app .db-jumpbar {
@@ -1334,12 +1612,13 @@ body.page-id-402 #primary-menu > li > a {
 	cursor: pointer;
 	white-space: nowrap;
 	touch-action: manipulation;
-	transition: transform var(--db-t-fast) var(--db-spring),
-		border-color var(--db-t-fast) var(--db-ease),
+	transition: border-color var(--db-t-fast) var(--db-ease),
 		background var(--db-t-fast) var(--db-ease);
 }
 @media (hover: hover) { .db-app .db-jump:hover { border-color: var(--db-ink); } }
-.db-app .db-jump:active { transform: scale(.92); }
+.db-app .db-jump:active,
+.db-app .db-jump:focus-visible { border-color: var(--db-ink); }
+.db-app .db-jump[aria-current="location"] { background: var(--db-ink); border-color: var(--db-ink); color: #fff; }
 /* Land category headings below BOTH sticky bars on jump: the site header
  * (--db-sticky-top, published by the theme) and the menu's own sticky search +
  * chips bar (--db-tools-h, published by renderMenu). */
@@ -1372,16 +1651,17 @@ body.page-id-402 #primary-menu > li > a {
 	text-decoration: none;
 	touch-action: manipulation;
 }
-.db-app .db-cart-fab.is-shown { display: flex; animation: db-cart-fab-in .26s var(--db-ease) both; }
+.db-app .db-cart-fab.is-shown { display: flex; animation: db-cart-fab-in .2s var(--db-ease) both; }
 .db-app .db-cart-fab-copy { display: grid; gap: .05rem; min-width: 0; }
 .db-app .db-cart-fab-label { font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif; font-size: 1.15rem; letter-spacing: .06em; text-transform: uppercase; }
 .db-app .db-cart-fab-count { color: #d9d5ce; font-size: .82rem; }
 .db-app .db-cart-fab-total { color: #fff; font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif; font-size: 1.65rem; font-variant-numeric: tabular-nums; letter-spacing: .03em; }
-.db-app .db-cart-fab:active { transform: scale(.98); }
+.db-app .db-cart-fab:hover,
+.db-app .db-cart-fab:focus-visible { border-color: var(--db-paper); }
 .db-app .db-cart-fab--bump .db-cart-fab-total,
-.db-app .db-cart-fab--bump .db-cart-fab-count { animation: db-cart-fab-bump .38s var(--db-spring); }
-@keyframes db-cart-fab-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes db-cart-fab-bump { 0% { transform: scale(1); } 35% { transform: scale(1.13); } 70% { transform: scale(.98); } 100% { transform: scale(1); } }
+.db-app .db-cart-fab--bump .db-cart-fab-count { animation: db-cart-fab-bump .2s var(--db-ease); }
+@keyframes db-cart-fab-in { from { transform: translateY(8px); } to { transform: translateY(0); } }
+@keyframes db-cart-fab-bump { 50% { text-shadow: 0 0 4px currentColor; } }
 
 @media (max-width: 360px) {
 	.db-app.db-menu--has-cart-fab { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
@@ -1424,24 +1704,27 @@ body.page-id-402 #primary-menu > li > a {
 .db-app .db-review-invite__actions { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
 .db-app .db-review-invite a { width: fit-content; color: var(--db-ember); font-weight: 800; text-underline-offset: 3px; }
 
-/* Success toast springs up from the bottom. */
+/* A short, non-bouncing entrance leaves transient feedback readable. */
 @keyframes db-toastin {
-	from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.96); }
-	to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+	from { transform: translateX(-50%) translateY(8px); }
+	to { transform: translateX(-50%) translateY(0); }
 }
 .db-app .db-toast,
-.db-toast { animation: db-toastin .34s var(--db-spring, cubic-bezier(.34,1.56,.64,1)) both; }
+.db-toast { animation: db-toastin .18s var(--db-ease, ease-out) both; }
 
-/* Reduced-motion: kill entrance/pop so nothing flashes or lingers hidden
- * (the global guard zeroes duration but not delay — be explicit here). */
+/* Reduced-motion: disable entrances and feedback, including the detached toast. */
 @media (prefers-reduced-motion: reduce) {
 	.db-app .db-grid .db-card,
 	.db-app .db-pop,
 	.db-app .db-toast,
 	.db-toast,
+	.db-menu-options.db-customizer-sheet,
+	.db-customizer-backdrop,
 	.db-app .db-cart-fab,
 	.db-app .db-cart-fab--bump .db-cart-fab-total,
 	.db-app .db-cart-fab--bump .db-cart-fab-count { animation: none !important; }
+	.db-customizer-backdrop { transition: none !important; }
+	.db-customizer-sheet * { animation: none !important; transition-duration: 0.01ms !important; }
 	.db-app .db-grid .db-card { opacity: 1 !important; transform: none !important; }
 }
 
@@ -1461,16 +1744,10 @@ body.page-id-402 #primary-menu > li > a {
 	padding: .7rem;
 	border: 1px solid var(--db-border);
 	border-radius: var(--db-r-lg);
-	background: color-mix(in srgb, var(--db-paper) 92%, transparent);
+	background: var(--db-paper, #f7f5f0);
 	box-shadow: var(--db-shadow-1);
 	min-width: 0;
 	max-width: 100%;
-}
-
-@supports (backdrop-filter: blur(12px)) {
-	.db-app .db-menu-tools {
-		backdrop-filter: blur(12px) saturate(1.1);
-	}
 }
 
 .db-app .db-menu-search-wrap {
@@ -2199,3 +2476,4 @@ body.page-id-402 #primary-menu > li > a {
 		border-top-color: #164f7a;
 	}
 }
+.db-shop-info .db-pickup-status { margin: 8px 0; padding: 10px 12px; border-left: 3px solid currentColor; border-radius: 4px; background: rgba(127, 127, 127, .08); font-size: 14px; line-height: 1.5; }

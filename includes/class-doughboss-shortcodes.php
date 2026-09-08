@@ -52,7 +52,7 @@ class DoughBoss_Shortcodes {
 
 		return sprintf(
 			'<aside class="db-app db-ordering-status" role="status"><strong>%1$s</strong><p>%2$s</p></aside>',
-			esc_html__( 'Online ordering coming soon', 'doughboss' ),
+			esc_html__( 'Online ordering is paused', 'doughboss' ),
 			esc_html( DoughBoss_Settings::ordering_closed_message() )
 		);
 	}
@@ -85,26 +85,13 @@ class DoughBoss_Shortcodes {
 		);
 		$variant = in_array( $atts['variant'], array( 'photo', 'home', 'catering' ), true ) ? $atts['variant'] : 'photo';
 
-		// The hero photograph is the largest paint on every page that uses this
-		// shortcode, but it is a CSS background — the browser cannot see it until
-		// the stylesheet has parsed and the rule has matched. A preload puts it in
-		// front of the preload scanner as the HTML streams instead. Emitted once
-		// per request, even if the shortcode appears more than once.
-		static $preloaded = false;
-		$preload = '';
-		if ( ! $preloaded && ! empty( $atts['background_image'] ) ) {
-			$preloaded = true;
-			$preload   = sprintf(
-				'<link rel="preload" as="image" fetchpriority="high" href="%s" />',
-				esc_url( $atts['background_image'] )
-			);
-		}
+		// The image element is directly discoverable and carries real dimensions.
+		$hero_image = $this->manoush_hero_image( $atts['background_image'] );
 
 		ob_start();
-		echo $preload; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from esc_url() above.
 		?>
 		<section class="db-manoush-hero db-manoush-hero--<?php echo esc_attr( $variant ); ?>" data-db-manoush-hero data-db-manoush-variant="<?php echo esc_attr( $variant ); ?>" data-db-scroll-scene>
-			<div class="db-mh-backdrop" style="background-image:url('<?php echo esc_url( $atts['background_image'] ); ?>')" aria-hidden="true"></div>
+			<?php echo $hero_image; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- helper escapes each attribute. ?>
 			<?php if ( 'home' === $variant ) : ?>
 				<div class="db-mh-steam" aria-hidden="true"><span></span><span></span><span></span></div>
 			<?php endif; ?>
@@ -127,6 +114,48 @@ class DoughBoss_Shortcodes {
 		</section>
 		<?php
 		return ob_get_clean();
+	}
+
+	/**
+	 * Render the decorative hero photo as a discoverable image rather than CSS.
+	 *
+	 * Media Library URLs receive WordPress's real srcset and sizes. The bundled
+	 * default uses packaged, measured AVIF/WebP variants with the original fallback.
+	 *
+	 * @param string $image_url Hero image URL.
+	 * @return string
+	 */
+	private function manoush_hero_image( $image_url ) {
+		$attributes = array(
+			'class'         => 'db-mh-backdrop',
+			'alt'           => '',
+			'loading'       => 'eager',
+			'decoding'      => 'async',
+			'fetchpriority' => 'high',
+			'sizes'         => '100vw',
+		);
+		$attachment_id = attachment_url_to_postid( $image_url );
+		if ( $attachment_id ) {
+			return wp_get_attachment_image( $attachment_id, 'full', false, $attributes );
+		}
+
+		$dimensions = false;
+		$default_url = DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-feast-real-v1.jpg';
+		if ( $default_url === $image_url ) {
+			$size = wp_getimagesize( DOUGHBOSS_PLUGIN_DIR . 'public/images/doughboss-feast-real-v1.jpg' );
+			if ( is_array( $size ) && ! empty( $size[0] ) && ! empty( $size[1] ) ) {
+				$dimensions = array( (int) $size[0], (int) $size[1] );
+			}
+		}
+
+		$html = '<img class="db-mh-backdrop" src="' . esc_url( $image_url ) . '" alt="" loading="eager" decoding="async" fetchpriority="high"';
+		if ( is_array( $dimensions ) ) {
+			$html .= ' width="' . $dimensions[0] . '" height="' . $dimensions[1] . '"';
+		}
+		$html .= '>';
+		return $default_url === $image_url && class_exists( 'DoughBoss_Images' )
+			? DoughBoss_Images::picture( 'doughboss-feast-real-v1.jpg', $html, '104vw' )
+			: $html;
 	}
 
 	/**

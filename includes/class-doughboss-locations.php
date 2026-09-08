@@ -427,6 +427,7 @@ class DoughBoss_Locations {
 	 * @return array
 	 */
 	public static function public_view( $loc ) {
+		$pickup_status = self::pickup_status( $loc );
 		return array(
 			'id'               => (int) $loc->id,
 			'name'             => $loc->name,
@@ -438,8 +439,257 @@ class DoughBoss_Locations {
 			'delivery_enabled' => (bool) $loc->delivery_enabled,
 			'prep_time'        => (int) $loc->prep_time_default,
 			'timezone'         => isset( $loc->timezone ) ? $loc->timezone : 'Australia/Sydney',
+			// Schedule only. This is not an assertion about ordering, capacity,
+			// payment availability or a guaranteed pickup time.
+			'pickup_status'    => $pickup_status,
 			'capacity_preview' => isset( $loc->capacity_mode ) && 'shadow' === $loc->capacity_mode,
 		);
+	}
+
+	/**
+	 * Return a short-lived, read-only view of configured pickup hours.
+	 *
+	 * Dated exceptions are conservatively treated as blackouts until their
+	 * override semantics are implemented end-to-end. The optional clock exists
+	 * for deterministic tests; production callers use the current UTC instant.
+	 *
+	 * @param object                     $loc Location row.
+	 * @param DateTimeImmutable|null     $now_utc Optional injected UTC clock.
+	 * @return array
+	 */
+	public static function pickup_status( $loc, $now_utc = null ) {
+		$now_utc = self::pickup_status_clock( $now_utc );
+		if ( ! $now_utc ) {
+			return self::unknown_pickup_status( '' );
+		}
+
+		$timezone_name = is_object( $loc ) && isset( $loc->timezone ) ? (string) $loc->timezone : '';
+		if ( ! is_object( $loc ) || empty( $loc->pickup_enabled ) || ( isset( $loc->is_active ) && ! $loc->is_active ) ) {
+			return self::pickup_status_response( 'unavailable', $now_utc, null, null, null, $timezone_name );
+		}
+		try {
+			$timezone = new DateTimeZone( $timezone_name );
+		} catch ( Exception $e ) {
+			return self::unknown_pickup_status( $timezone_name, $now_utc );
+		}
+
+		$location_id = isset( $loc->id ) ? absint( $loc->id ) : 0;
+		if ( ! $location_id ) {
+			return self::unknown_pickup_status( $timezone->getName(), $now_utc );
+		}
+		$hours = self::pickup_hours( $location_id );
+		if ( false === $hours || empty( $hours ) ) {
+			return self::unknown_pickup_status( $timezone->getName(), $now_utc );
+		}
+
+		$local_now     = $now_utc->setTimezone( $timezone );
+		$local_today   = $local_now->setTime( 0, 0, 0 );
+		$horizon_days  = isset( $loc->booking_horizon_days ) ? max( 1, min( 8, (int) $loc->booking_horizon_days ) ) : 8;
+		$blackouts     = self::pickup_blackouts( $location_id, $local_today, $horizon_days );
+		if ( false === $blackouts ) {
+			return self::unknown_pickup_status( $timezone->getName(), $now_utc );
+		}
+		$intervals = self::pickup_intervals( $hours, $blackouts, $local_today, $horizon_days, $timezone );
+		if ( false === $intervals ) {
+			return self::unknown_pickup_status( $timezone->getName(), $now_utc );
+		}
+
+		$current   = null;
+		$next_open = null;
+		foreach ( $intervals as $interval ) {
+			if ( $interval[0] <= $now_utc && $now_utc < $interval[1] ) {
+				$current = $interval;
+				break;
+			}
+			if ( $interval[0] > $now_utc && null === $next_open ) {
+				$next_open = $interval[0];
+			}
+		}
+
+		if ( $current ) {
+			$state = ( $current[1]->getTimestamp() - $now_utc->getTimestamp() <= 30 * MINUTE_IN_SECONDS ) ? 'closes_soon' : 'open';
+			$state_transition = 'open' === $state ? $current[1]->modify( '-30 minutes' ) : null;
+			return self::pickup_status_response( $state, $now_utc, $current[1], null, null, $timezone->getName(), $state_transition );
+		}
+		return self::pickup_status_response(
+			'closed',
+			$now_utc,
+			null,
+			$next_open,
+			$next_open ? self::pickup_open_label( $next_open, $timezone ) : null,
+			$timezone->getName()
+		);
+	}
+
+	/** @return DateTimeImmutable|false */
+	private static function pickup_status_clock( $now_utc ) {
+		try {
+			$clock = $now_utc instanceof DateTimeImmutable ? $now_utc : new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) );
+			return $clock->setTimezone( new DateTimeZone( 'UTC' ) );
+		} catch ( Exception $e ) {
+			return false;
+		}
+	}
+
+	/** @return array */
+	private static function unknown_pickup_status( $timezone, $now_utc = null ) {
+		$clock = self::pickup_status_clock( $now_utc );
+		if ( ! $clock ) {
+			$clock = new DateTimeImmutable( '@0' );
+		}
+		return self::pickup_status_response( 'unknown', $clock, null, null, null, (string) $timezone );
+	}
+
+	/** @return array */
+	private static function pickup_status_response( $state, DateTimeImmutable $observed, $closes_at, $next_open_at, $next_open_label, $timezone, $state_transition = null ) {
+		$expires = $observed->modify( '+60 seconds' );
+		foreach ( array( $closes_at, $next_open_at, $state_transition ) as $transition ) {
+			if ( $transition instanceof DateTimeImmutable && $transition > $observed && $transition < $expires ) {
+				$expires = $transition;
+			}
+		}
+		return array(
+			'state'           => $state,
+			'observed_at_utc' => $observed->format( 'Y-m-d\\TH:i:s\\Z' ),
+			'expires_at_utc'  => $expires->format( 'Y-m-d\\TH:i:s\\Z' ),
+			'closes_at_utc'   => $closes_at instanceof DateTimeImmutable ? $closes_at->format( 'Y-m-d\\TH:i:s\\Z' ) : null,
+			'next_open_at_utc'=> $next_open_at instanceof DateTimeImmutable ? $next_open_at->format( 'Y-m-d\\TH:i:s\\Z' ) : null,
+			'next_open_label' => $next_open_label,
+			'timezone'        => $timezone,
+		);
+	}
+
+	/** @return array|false */
+	private static function pickup_hours( $location_id ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_location_hours';
+		try {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT weekday, opens_at, closes_at FROM {$table} WHERE location_id = %d AND order_type = 'pickup' AND is_active = 1 ORDER BY weekday, segment", $location_id ) );
+		} catch ( Throwable $e ) {
+			return false;
+		}
+		if ( null === $rows || false === $rows || ! empty( $wpdb->last_error ) ) {
+			return false;
+		}
+		$out = array_fill( 1, 7, array() );
+		$has_ranges = false;
+		foreach ( (array) $rows as $row ) {
+			$weekday = isset( $row->weekday ) ? (int) $row->weekday : 0;
+			$open    = isset( $row->opens_at ) ? substr( (string) $row->opens_at, 0, 5 ) : '';
+			$close   = isset( $row->closes_at ) ? substr( (string) $row->closes_at, 0, 5 ) : '';
+			if ( ! isset( $out[ $weekday ] ) || ! self::valid_clock( $open ) || ! self::valid_clock( $close ) || $open === $close ) {
+				return false;
+			}
+			$out[ $weekday ][] = array( $open, $close );
+			$has_ranges = true;
+		}
+		return $has_ranges ? $out : array();
+	}
+
+	/** @return array|false */
+	private static function pickup_blackouts( $location_id, DateTimeImmutable $local_today, $horizon_days ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		$from  = $local_today->modify( '-1 day' )->format( 'Y-m-d' );
+		$to    = $local_today->modify( '+' . $horizon_days . ' days' )->format( 'Y-m-d' );
+		try {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$dates = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT service_date FROM {$table} WHERE location_id = %d AND order_type = 'pickup' AND service_date BETWEEN %s AND %s", $location_id, $from, $to ) );
+		} catch ( Throwable $e ) {
+			return false;
+		}
+		if ( null === $dates || false === $dates || ! empty( $wpdb->last_error ) ) {
+			return false;
+		}
+		$out = array();
+		foreach ( (array) $dates as $date ) {
+			if ( is_string( $date ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+				$out[ $date ] = true;
+			}
+		}
+		return $out;
+	}
+
+	/** @return array|false */
+	private static function pickup_intervals( array $hours, array $blackouts, DateTimeImmutable $local_today, $horizon_days, DateTimeZone $timezone ) {
+		$intervals = array();
+		for ( $offset = -1; $offset <= $horizon_days; ++$offset ) {
+			$date    = $local_today->modify( ( $offset >= 0 ? '+' : '' ) . $offset . ' days' );
+			$date_key = $date->format( 'Y-m-d' );
+			$weekday = (int) $date->format( 'N' );
+			foreach ( $hours[ $weekday ] as $range ) {
+				$open  = self::pickup_local_instant( $date_key, $range[0], $timezone );
+				$close_date = self::clock_minutes( $range[1] ) <= self::clock_minutes( $range[0] ) ? $date->modify( '+1 day' )->format( 'Y-m-d' ) : $date_key;
+				$close = self::pickup_local_instant( $close_date, $range[1], $timezone );
+				if ( ! $open || ! $close ) {
+					return false;
+				}
+				if ( isset( $blackouts[ $date_key ] ) || isset( $blackouts[ $close_date ] ) ) {
+					continue;
+				}
+				$open  = $open->setTimezone( new DateTimeZone( 'UTC' ) );
+				$close = $close->setTimezone( new DateTimeZone( 'UTC' ) );
+				if ( $close <= $open ) {
+					return false;
+				}
+				$intervals[] = array( $open, $close );
+			}
+		}
+		usort(
+			$intervals,
+			function ( $left, $right ) {
+				return $left[0] <=> $right[0];
+			}
+		);
+		$merged = array();
+		foreach ( $intervals as $interval ) {
+			$last = count( $merged ) - 1;
+			if ( $last >= 0 && $interval[0] <= $merged[ $last ][1] ) {
+				if ( $interval[1] > $merged[ $last ][1] ) {
+					$merged[ $last ][1] = $interval[1];
+				}
+				continue;
+			}
+			$merged[] = $interval;
+		}
+		return $merged;
+	}
+
+	/** @return DateTimeImmutable|false */
+	private static function pickup_local_instant( $date, $time, DateTimeZone $timezone ) {
+		$input = $date . ' ' . $time;
+		$wall  = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $input, new DateTimeZone( 'UTC' ) );
+		if ( ! $wall ) {
+			return false;
+		}
+		$matches = array();
+		$transitions = $timezone->getTransitions( $wall->getTimestamp() - DAY_IN_SECONDS, $wall->getTimestamp() + DAY_IN_SECONDS );
+		if ( false === $transitions ) {
+			$instant = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $input, $timezone );
+			return $instant && $instant->format( 'Y-m-d H:i' ) === $input ? $instant : false;
+		}
+		foreach ( $transitions as $transition ) {
+			$timestamp = $wall->getTimestamp() - (int) $transition['offset'];
+			$candidate = ( new DateTimeImmutable( '@' . $timestamp ) )->setTimezone( $timezone );
+			if ( $candidate->format( 'Y-m-d H:i' ) === $input ) {
+				// PHP 7.4 can collapse getTimestamp() after a repeated-hour timezone
+				// conversion. Keep the original UTC identity so both matches survive.
+				$matches[ $timestamp ] = $candidate;
+			}
+		}
+		return 1 === count( $matches ) ? reset( $matches ) : false;
+	}
+
+	/** @return int */
+	private static function clock_minutes( $time ) {
+		$parts = explode( ':', (string) $time );
+		return (int) $parts[0] * 60 + (int) $parts[1];
+	}
+
+	/** @return string */
+	private static function pickup_open_label( DateTimeImmutable $open, DateTimeZone $timezone ) {
+		return $open->setTimezone( $timezone )->format( 'l g:ia' );
 	}
 
 	/**

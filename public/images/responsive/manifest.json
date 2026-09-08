@@ -1,0 +1,214 @@
+{
+    "version": 1,
+    "images": {
+        "doughboss-feast-real-v1.jpg": {
+            "width": 1080,
+            "height": 864,
+            "source_sha256": "41d690070aec8ea4eb8c2a742a6c693b8b8867f1ce6a84346befa07c1b19e4f6",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/doughboss-feast-real-v1-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "506996b1732ce6fbdd5ee7424c128749638ce8c2dde9c2a1237f9400bc010721",
+                        "bytes": 49398
+                    },
+                    {
+                        "file": "responsive/doughboss-feast-real-v1-960.avif",
+                        "width": 960,
+                        "height": 768,
+                        "sha256": "01155d851205794c30e8c0804f1f6f0716635d7a0c51203a0694d6e89ae70767",
+                        "bytes": 161675
+                    },
+                    {
+                        "file": "responsive/doughboss-feast-real-v1-1080.avif",
+                        "width": 1080,
+                        "height": 864,
+                        "sha256": "c470f9e817222ac3e2799eedacdf23c24361884f1abf0bbac22976463e20bd12",
+                        "bytes": 238399
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/doughboss-feast-real-v1-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "3d4ddbcd8b1e4d6f30474f44c7be14527e3c4425799a3f82ab3ff1681982dc38",
+                        "bytes": 59552
+                    },
+                    {
+                        "file": "responsive/doughboss-feast-real-v1-960.webp",
+                        "width": 960,
+                        "height": 768,
+                        "sha256": "e2bdef825ea0fd3974532b56c66e3be3f0e93a92f0f35e664aa32159817e3d6a",
+                        "bytes": 190736
+                    },
+                    {
+                        "file": "responsive/doughboss-feast-real-v1-1080.webp",
+                        "width": 1080,
+                        "height": 864,
+                        "sha256": "4f5d9ce15024613a172c24fc4aacbea1a35b7c46a38612e1a4bd8f19e988da32",
+                        "bytes": 276492
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/zaatar-cheese.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "0a5d5012de87820b3e9ea0d5bb3a93633402eb06f32e754828a66574176d95c3",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/zaatar-cheese-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "4b8cd41a8080c74493ca82e1a237874b11c34f3957e0f566901eb5a4579ada6d",
+                        "bytes": 33065
+                    },
+                    {
+                        "file": "responsive/zaatar-cheese-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "7985f3857b9c97aabe871979019a18cacb3a52d1d0bda344924f837dbb0cbd3a",
+                        "bytes": 44905
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/zaatar-cheese-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "44593ba4a1d43566bfdb281f88eae529bf915a17aa2e5e8a6a8119f742cab3f2",
+                        "bytes": 36684
+                    },
+                    {
+                        "file": "responsive/zaatar-cheese-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "c3d50cb65d00fe49e3a4c60735d876d701dca580c1c94d46c97fe28e877cc9ec",
+                        "bytes": 49642
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/sujuk-deluxe.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "d9d64a6bbeea78aa07b454dbb981c8bf005d6e458ff4d33560741233f21af395",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/sujuk-deluxe-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "679c190eb29556088f10c537ceb43761ca06b806d3debb06c73dadf5e7c009d7",
+                        "bytes": 23127
+                    },
+                    {
+                        "file": "responsive/sujuk-deluxe-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "d690cb880792ea48567cc4d7074c8df9733ed1804ea7987230d993507d9ea953",
+                        "bytes": 30644
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/sujuk-deluxe-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "c56054e470d5b868d0d3b460e4a368635138e3f0d76132f10129e3eb4fdd1e44",
+                        "bytes": 21468
+                    },
+                    {
+                        "file": "responsive/sujuk-deluxe-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "43f6808ca36ac66ea47e4736019b904f34dbab5b488dd79ddea8c8d6d2601c11",
+                        "bytes": 29984
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/haloumi-pie.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "1b7540cd9d3672d1f7ffc9f715d1476824ff50a3cbf7d96be0dea9f0f03d640c",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/haloumi-pie-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "4af520668426eab08afd19295ca9bfd8bbddbfd5c50f1723783cc76c5c8e8dca",
+                        "bytes": 31841
+                    },
+                    {
+                        "file": "responsive/haloumi-pie-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "91d1103e55f75f77f7cf899207e4c4b26dd45d69ffed0ffd696a9dd4cebfc1f8",
+                        "bytes": 44944
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/haloumi-pie-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "8991f7b06b098b48337bd42f88dcf76cdd2dd6b5759d4482d25c94da518cbbfa",
+                        "bytes": 31524
+                    },
+                    {
+                        "file": "responsive/haloumi-pie-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "4fde2ae585a41b90d55a34011169c3f9d5d19ca4ac79d3d90580d60269a7d9ec",
+                        "bytes": 48230
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/meat-cheese.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "5b9f25dd57bc30bd2c76ec421643a02f46d9eeddcfdf72f4873fbde069ecf1d0",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/meat-cheese-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "7d27217b78aed01cb046387c504fc81814ed653352312db720be9fc6533fd976",
+                        "bytes": 22395
+                    },
+                    {
+                        "file": "responsive/meat-cheese-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "810e4945bbf052bf5d02d64314a55ee8a3a0f5638e4266036d5956412913d081",
+                        "bytes": 29657
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/meat-cheese-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "fb56f2d895e6d609e298700efce2266dfd21791548cf38b4462812a14286d0f3",
+                        "bytes": 21484
+                    },
+                    {
+                        "file": "responsive/meat-cheese-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "794ac003650d99b55f477a932721989e6933dd63490a779a2e18d359f1d321e7",
+                        "bytes": 28456
+                    }
+                ]
+            }
+        }
+    }
+}

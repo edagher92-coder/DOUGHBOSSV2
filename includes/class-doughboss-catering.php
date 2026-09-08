@@ -83,14 +83,14 @@ class DoughBoss_Catering {
 	 * The package price is the base; if a per-head price is set and the
 	 * headcount exceeds the package's serve range, the overflow is charged
 	 * per head. Delivery is added as a flat fee (the operator confirms distance
-	 * pricing). Custom enquiries with no valid package return zeros — staff
-	 * quote those by hand.
+	 * pricing). Explicit custom enquiries (package ID 0) return zeros — staff
+	 * quote those by hand. Positive IDs must identify a published package.
 	 *
 	 * @param int    $package_id   Catering package post ID (0 for custom).
 	 * @param int    $guest_count  Number of guests.
 	 * @param string $order_type   'pickup' or 'delivery'.
 	 * @param float  $delivery_fee Flat delivery fee to add (delivery only).
-	 * @return array<string,mixed>
+	 * @return array<string,mixed>|WP_Error
 	 */
 	public static function quote( $package_id, $guest_count, $order_type, $delivery_fee = 0.0 ) {
 		$package_id  = absint( $package_id );
@@ -102,7 +102,15 @@ class DoughBoss_Catering {
 		$subtotal    = 0.0;
 
 		$package = $package_id ? get_post( $package_id ) : null;
-		if ( $package && DoughBoss_Catering_Package::POST_TYPE === $package->post_type && 'publish' === $package->post_status ) {
+		if ( $package_id && ( ! $package || DoughBoss_Catering_Package::POST_TYPE !== $package->post_type || 'publish' !== $package->post_status ) ) {
+			return new WP_Error(
+				'doughboss_catering_package_unavailable',
+				__( 'That catering package is no longer available. Please choose another package or make a custom enquiry.', 'doughboss' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( $package ) {
 			$base       = (float) get_post_meta( $package_id, DoughBoss_Catering_Package::META_BASE_PRICE, true );
 			$per_head   = (float) get_post_meta( $package_id, DoughBoss_Catering_Package::META_PER_HEAD, true );
 			$serves_max = (int) get_post_meta( $package_id, DoughBoss_Catering_Package::META_SERVES_MAX, true );
@@ -166,6 +174,9 @@ class DoughBoss_Catering {
 		}
 
 		$quote = self::quote( $package_id, $guest_count, $order_type, $delivery );
+		if ( is_wp_error( $quote ) ) {
+			return $quote;
+		}
 
 		$number = self::generate_enquiry_number();
 		$now     = current_time( 'mysql' );
