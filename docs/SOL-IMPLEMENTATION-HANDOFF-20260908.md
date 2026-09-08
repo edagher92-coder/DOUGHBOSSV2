@@ -2,6 +2,8 @@
 
 Read `REVIEW-20260908.md` first. This document is the concise continuation contract for the completed local batch.
 
+**Follow-on checkpoint:** `4909823` is now frozen on `codex/full-system-review-20260908`, pushed in draft PR #66 with successful Actions run 34216140907. The current checkout is on `codex/storefront-completion-20260908`, implementing plugin 2.43.0 / theme 1.6.0; read `STOREFRONT-COMPLETION-20260908.md` before continuing. Do not mistake this historical 2.42.0 artifact section for the current working tree.
+
 ## Authoritative state
 
 - Checkout: `C:\Codex\.codex\worktrees\5bdb\DOUGHBOSSV2-review-20260908`
@@ -28,7 +30,7 @@ The local implementation is complete for this batch. Astra accepted the repaired
 
 1. Resolve real POSPal mappings or a staffed fallback for custom pizza builder names.
 2. Run one approved Square sandbox acceptance session using synthetic customer data, including success, decline, unknown/pending, signed webhook replay and refund/reconciliation behavior.
-3. Push this branch once, open one PR and allow one automatic CI cycle after the user approves that grouped remote batch.
+3. Baseline delivery completed: one branch push, draft PR #66 and one automatic CI cycle passed. Keep later storefront work consolidated in its own locally verified batch.
 4. Publish the paired plugin/theme release only after CI and rollback checks, keeping online payments off.
 5. Verify served versions/config/menu/location read-only, then upload a credential-safe full-folder backup and production ZIP to the confirmed shared Drive folder.
 6. Complete the SamOS read-only site/location adapter in its own repository and task; do not duplicate its business topology here.

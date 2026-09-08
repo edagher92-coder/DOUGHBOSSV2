@@ -657,6 +657,24 @@ $wpdb->suppress_errors( $previous_suppress_errors );
 db_integration_same( 'doughboss_pay_legacy_storage', is_wp_error( $legacy_read_failure ) ? $legacy_read_failure->get_error_code() : '', 'legacy drain query failure is distinguishable from an empty result' );
 DoughBoss_Payment_Attempts::update( $legacy_null_id, array( 'status' => 'failed' ) );
 
+// Exercise the new read-only hours adapter against real WP/MySQL, not its unit shim.
+$original_hours = DoughBoss_Locations::weekly_hours( 1 );
+$posts_before_hours = $GLOBALS['db_square_post_count'];
+$hours_saved = DoughBoss_Locations::save_weekly_hours( 1, array( 'tue' => '09:00-17:00' ) );
+db_integration_same( true, $hours_saved, 'pickup-hour fixture persists through the existing admin adapter' );
+$status_location = DoughBoss_Locations::get( 1 );
+$status_location->timezone = 'Australia/Sydney';
+$status_location->pickup_enabled = 1;
+$status_location->is_active = 1;
+$pickup_observation = DoughBoss_Locations::pickup_status( $status_location, new DateTimeImmutable( '2026-09-08T01:00:00Z' ) );
+db_integration_same( 'open', $pickup_observation['state'], 'stored weekday hours produce the correct Sydney pickup status' );
+$public_locations = $rest_controller->get_locations();
+db_integration_assert( $public_locations instanceof WP_REST_Response && isset( $public_locations->get_data()[0]['pickup_status']['observed_at_utc'] ), 'public locations expose timestamped schedule evidence' );
+$location_headers = $public_locations->get_headers();
+db_integration_same( 'no-store, max-age=0', isset( $location_headers['Cache-Control'] ) ? $location_headers['Cache-Control'] : '', 'public pickup observations cannot be cached beyond their validity' );
+db_integration_same( $posts_before_hours, $GLOBALS['db_square_post_count'], 'pickup-status observation performs no provider POST' );
+DoughBoss_Locations::save_weekly_hours( 1, $original_hours );
+
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 
 $failed = count( $GLOBALS['db_integration_failed'] );

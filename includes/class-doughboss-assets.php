@@ -148,7 +148,15 @@ class DoughBoss_Assets {
 			);
 		}
 
-		if ( ! $this->should_load() ) {
+		$load_storefront = $this->should_load();
+		// The header needs public shop/status reads, not checkout or gateway SDKs.
+		if ( $load_storefront || apply_filters( 'doughboss_load_shop_status_assets', false ) ) {
+			wp_enqueue_script( 'doughboss-shop-status', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-shop-status.js', array(), DOUGHBOSS_VERSION, true );
+			wp_localize_script( 'doughboss-shop-status', 'DoughBossShopData', array(
+				'restUrl' => untrailingslashit( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
+			) );
+		}
+		if ( ! $load_storefront ) {
 			return;
 		}
 
@@ -217,7 +225,7 @@ class DoughBoss_Assets {
 		// never DoughBoss_Stripe directly: checking only Stripe here while the
 		// `payment_gateway` setting selects Tyro would leave checkout demanding
 		// a payment the storefront renders no card UI for.
-		$deps        = array( 'doughboss-marketing' );
+		$deps        = array( 'doughboss-marketing', 'doughboss-shop-status' );
 		// A configured gateway must not initialize browser payment fields while
 		// the store is intentionally in browse-only / Coming Soon mode.
 		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();

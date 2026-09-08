@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DOUGHBOSS_FINAL_VERSION', '1.5.0' );
+define( 'DOUGHBOSS_FINAL_VERSION', '1.6.0' );
 
 function doughboss_final_setup() {
 	add_theme_support( 'title-tag' );
@@ -33,6 +33,68 @@ add_action( 'after_setup_theme', 'doughboss_final_setup' );
 function doughboss_final_asset_url( $path ) {
 	$base = defined( 'DOUGHBOSS_PLUGIN_URL' ) ? DOUGHBOSS_PLUGIN_URL : content_url( '/plugins/doughboss/' );
 	return trailingslashit( $base ) . 'public/images/' . ltrim( $path, '/' );
+}
+
+/**
+ * Return intrinsic dimensions for a bundled DoughBoss image when available.
+ *
+ * Bundled assets do not have Media Library attachment IDs, so WordPress cannot
+ * generate a genuine srcset for them. Their original dimensions still reserve
+ * the correct layout space without advertising the same source as fake variants.
+ *
+ * @param string $path Path relative to public/images.
+ * @return array{0:int,1:int}|false
+ */
+function doughboss_final_asset_dimensions( $path ) {
+	static $dimensions = array();
+
+	$path = ltrim( str_replace( '\\', '/', (string) $path ), '/' );
+	if ( false !== strpos( $path, '..' ) ) {
+		return false;
+	}
+	if ( isset( $dimensions[ $path ] ) ) {
+		return $dimensions[ $path ];
+	}
+
+	$base = defined( 'DOUGHBOSS_PLUGIN_DIR' ) ? DOUGHBOSS_PLUGIN_DIR : WP_PLUGIN_DIR . '/doughboss/';
+	$file = trailingslashit( $base ) . 'public/images/' . $path;
+	$size = is_readable( $file ) ? wp_getimagesize( $file ) : false;
+	if ( ! is_array( $size ) || empty( $size[0] ) || empty( $size[1] ) ) {
+		$dimensions[ $path ] = false;
+		return false;
+	}
+
+	$dimensions[ $path ] = array( (int) $size[0], (int) $size[1] );
+	return $dimensions[ $path ];
+}
+
+/**
+ * Render a bundled DoughBoss image with its actual intrinsic dimensions.
+ *
+ * @param string                $path       Path relative to public/images.
+ * @param string                $alt        Alternative text; use an empty string for decoration.
+ * @param array<string,string> $attributes Supported image attributes.
+ * @return string
+ */
+function doughboss_final_asset_image( $path, $alt, $attributes = array() ) {
+	$dimensions = doughboss_final_asset_dimensions( $path );
+	$allowed    = array( 'class', 'loading', 'decoding', 'fetchpriority' );
+	$parts      = array(
+		'src="' . esc_url( doughboss_final_asset_url( $path ) ) . '"',
+		'alt="' . esc_attr( $alt ) . '"',
+	);
+
+	if ( is_array( $dimensions ) ) {
+		$parts[] = 'width="' . (int) $dimensions[0] . '"';
+		$parts[] = 'height="' . (int) $dimensions[1] . '"';
+	}
+	foreach ( $allowed as $attribute ) {
+		if ( isset( $attributes[ $attribute ] ) && '' !== (string) $attributes[ $attribute ] ) {
+			$parts[] = $attribute . '="' . esc_attr( $attributes[ $attribute ] ) . '"';
+		}
+	}
+
+	return '<img ' . implode( ' ', $parts ) . '>';
 }
 
 /**
@@ -76,6 +138,9 @@ function doughboss_final_load_storefront_assets( $load ) {
 	return $load || is_front_page() || is_page( array( 'menu', 'order', 'track-order', 'catering' ) );
 }
 add_filter( 'doughboss_load_assets', 'doughboss_final_load_storefront_assets' );
+
+/** A small public-read script powers the sitewide pickup selector. */
+add_filter( 'doughboss_load_shop_status_assets', '__return_true' );
 
 /** Identify the theme's template-rendered order journey for plugin body classes. */
 function doughboss_final_is_order_page( $is_order_page ) {

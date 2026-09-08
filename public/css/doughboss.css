@@ -354,6 +354,27 @@ body.page-id-402 #primary-menu > li > a {
 	flex: 1;
 }
 
+.db-dietary-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .35rem;
+	margin: 0 0 .75rem;
+}
+
+.db-dietary-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 1.7rem;
+	padding: .2rem .55rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-pill);
+	background: var(--db-paper);
+	color: var(--db-ink);
+	font-size: .72rem;
+	font-weight: 800;
+	letter-spacing: .02em;
+}
+
 .db-card-foot {
 	display: flex;
 	align-items: center;
@@ -2403,3 +2424,4 @@ body.page-id-402 #primary-menu > li > a {
 		border-top-color: #164f7a;
 	}
 }
+.db-shop-info .db-pickup-status { margin: 8px 0; padding: 10px 12px; border-left: 3px solid currentColor; border-radius: 4px; background: rgba(127, 127, 127, .08); font-size: 14px; line-height: 1.5; }

@@ -3002,7 +3002,11 @@ class DoughBoss_REST_Controller {
 		foreach ( DoughBoss_Locations::all( true ) as $loc ) {
 			$out[] = DoughBoss_Locations::public_view( $loc );
 		}
-		return rest_ensure_response( $out );
+		$response = rest_ensure_response( $out );
+		// Pickup-hour status expires within a minute; do not allow a store or CDN
+		// response cache to outlive that schedule-only observation.
+		$response->header( 'Cache-Control', 'no-store, max-age=0' );
+		return $response;
 	}
 
 	/**

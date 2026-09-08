@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.42.0
+Stable tag: 2.43.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.43.0 =
+* Add read-only, short-lived pickup-hours status from configured schedules, with timezone and dated-closure handling.
+* Add a lightweight sitewide pickup selector, explicit saved dietary badges, and improved intrinsic/responsive hero image markup.
+* Keep payment activation, booking capacity, and production configuration unchanged.
 
 = 2.42.0 =
 * Adds the accessible mobile menu-customization sheet, synchronized live prices and floating cart summary while preserving the desktop disclosure layout and reduced-motion support.

@@ -11,7 +11,7 @@ if ( $ordering_open && ! $has_ordering_status ) {
 get_header();
 ?>
 <section class="dbf-page-hero dbf-page-hero--order" aria-labelledby="dbf-order-title">
-	<img class="dbf-page-hero-bg" src="<?php echo esc_url( doughboss_final_asset_url( 'menu/real-v1/sujuk-deluxe.jpg' ) ); ?>" alt="" width="900" height="720" fetchpriority="high">
+	<?php echo doughboss_final_asset_image( 'menu/real-v1/sujuk-deluxe.jpg', '', array( 'class' => 'dbf-page-hero-bg', 'decoding' => 'async', 'fetchpriority' => 'high' ) ); ?>
 	<div class="dbf-wrap dbf-page-hero-inner">
 		<p class="dbf-eyebrow"><?php echo esc_html( $ordering_open ? 'Fresh from the oven' : 'Browse the complete menu' ); ?></p>
 		<h1 id="dbf-order-title" class="dbf-display">Order <em>online.</em></h1>
