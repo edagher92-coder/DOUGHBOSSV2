@@ -52,7 +52,7 @@ class DoughBoss_Shortcodes {
 
 		return sprintf(
 			'<aside class="db-app db-ordering-status" role="status"><strong>%1$s</strong><p>%2$s</p></aside>',
-			esc_html__( 'Online ordering coming soon', 'doughboss' ),
+			esc_html__( 'Online ordering is paused', 'doughboss' ),
 			esc_html( DoughBoss_Settings::ordering_closed_message() )
 		);
 	}

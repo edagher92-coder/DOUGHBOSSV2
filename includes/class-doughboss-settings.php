@@ -79,7 +79,7 @@ class DoughBoss_Settings {
 			// Fresh installs launch in browse-only mode. The owner must explicitly
 			// open ordering after the WordPress staging checklist has passed.
 			'ordering_open'   => 0,
-			'ordering_closed_message' => 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.',
+			'ordering_closed_message' => 'Online ordering is paused. Browse the menu and check your preferred shop before visiting.',
 			// Customer membership and rewards. The program remains off until the
 			// owner explicitly enables it in DoughBoss > Rewards. These prepared
 			// launch promotions therefore cannot create points or voucher liability
@@ -601,7 +601,7 @@ class DoughBoss_Settings {
 		$message = trim( (string) self::get( 'ordering_closed_message', '' ) );
 		return '' !== $message
 			? $message
-			: __( 'Online ordering is coming soon. You can browse the menu now, and we will let you know when checkout opens.', 'doughboss' );
+			: __( 'Online ordering is paused. Browse the menu and check your preferred shop before visiting.', 'doughboss' );
 	}
 
 	/**

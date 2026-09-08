@@ -5,6 +5,26 @@
  * @package DoughBoss
  */
 
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-shortcodes.php';
+
+db_test(
+	'paused ordering uses truthful defaults without replacing a saved business message',
+	function () {
+		doughboss_test_set_settings( array() );
+		assert_false( DoughBoss_Settings::ordering_open(), 'fresh settings never enable ordering' );
+		assert_same( 'Online ordering is paused. Browse the menu and check your preferred shop before visiting.', DoughBoss_Settings::ordering_closed_message(), 'fresh default makes no future launch promise' );
+		$shortcodes = new DoughBoss_Shortcodes();
+		assert_true( false !== strpos( $shortcodes->ordering_status(), '<strong>Online ordering is paused</strong>' ), 'server-rendered notice matches the theme status' );
+		doughboss_test_set_settings( array( 'ordering_open' => 0, 'ordering_closed_message' => ' ' ) );
+		assert_same( DoughBoss_Settings::defaults()['ordering_closed_message'], DoughBoss_Settings::ordering_closed_message(), 'empty saved copy uses the same neutral fallback' );
+		doughboss_test_set_settings( array( 'ordering_open' => 0, 'ordering_closed_message' => 'Kitchen maintenance until Friday.' ) );
+		assert_same( 'Kitchen maintenance until Friday.', DoughBoss_Settings::ordering_closed_message(), 'custom business copy is preserved' );
+		assert_true( false !== strpos( $shortcodes->ordering_status(), 'Kitchen maintenance until Friday.' ), 'custom copy remains in the server-rendered notice' );
+		doughboss_test_set_settings( array( 'ordering_open' => 1 ) );
+		assert_same( '', $shortcodes->ordering_status(), 'open ordering has no paused notice' );
+	}
+);
+
 class DoughBoss_Test_Store_Hours_DB {
 	public $prefix = 'wp_';
 	public $last_error = '';

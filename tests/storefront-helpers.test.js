@@ -592,4 +592,76 @@ test('ordering presentation has opaque tools and no retired card-motion path', (
 	assert.equal(fs.existsSync(path.resolve(__dirname, '..', 'public', 'js', 'doughboss-order-page.js')), false);
 });
 
+test('paused client notice uses neutral copy and preserves configured messages', () => {
+	const render = extractFunction(storefront, 'orderingClosedNotice', {
+		I18N: {}, el: (tag, attrs, children) => ({ tag, attrs, children })
+	});
+	const defaultNotice = render('');
+	assert.equal(defaultNotice.children[0].attrs.text, 'Online ordering is paused');
+	assert.equal(defaultNotice.children[1].attrs.text, 'Browse the menu and check your preferred shop before visiting.');
+	assert.equal(render('Kitchen maintenance until Friday.').children[1].attrs.text, 'Kitchen maintenance until Friday.');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	assert.match(assets, /'comingSoonShort' => __\( 'Ordering paused'/, 'existing localization key stays compatible');
+	assert.match(assets, /'orderingComingSoon' => __\( 'Online ordering is paused'/);
+	assert.doesNotMatch(fs.readFileSync(storefront, 'utf8'), /'Coming soon'|'Online ordering coming soon'/);
+});
+
+function previewAdapter(paused) {
+	const window = { DoughBossPreviewOptions: { menu: [{ id: 1001, image: 'public/images/menu/real-v1/zaatar-cheese.jpg' }] } };
+	const listeners = {};
+	const document = {
+		currentScript: { src: 'https://example.test/DOUGHBOSSV2/preview/preview-api.js' },
+		baseURI: 'https://example.test/DOUGHBOSSV2/order.html',
+		body: { classList: { contains: name => paused && name === 'dbf-ordering-paused' } },
+		addEventListener: (type, handler) => { listeners[type] = handler; },
+		getElementById: () => null
+	};
+	vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '..', 'scripts/visual-preview/preview-api.js'), 'utf8'), {
+		window, document, URL, Request, Response, Date
+	});
+	return { window, listeners };
+}
+
+test('visual preview permits only four synthetic reads and rejects every write or external route', async () => {
+	const { window, listeners } = previewAdapter(false);
+	const apiRoot = 'https://preview.invalid/doughboss/v1';
+	for (const route of ['/config', '/locations', '/table/context', '/menu']) {
+		assert.equal((await window.fetch(apiRoot + route)).status, 200, route);
+	}
+	for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']) {
+		assert.equal((await window.fetch(apiRoot + '/config', { method })).status, 405, method);
+	}
+	assert.equal((await window.fetch(new Request(apiRoot + '/config', { method: 'POST' }))).status, 405, 'Request method cannot become GET');
+	for (const url of [apiRoot + '/cart', apiRoot + '/checkout', apiRoot + '/catering/enquiry']) {
+		assert.equal((await window.fetch(url)).status, 404, url);
+	}
+	assert.equal((await window.fetch('https://preview.invalid/config')).status, 403, 'paths outside the exact API prefix are forbidden');
+	assert.equal((await window.fetch('https://doughboss.com.au/wp-json/doughboss/v1/config')).status, 403);
+	assert.equal((await window.fetch('https://api.stripe.com/v1/checkout/sessions')).status, 403);
+	const config = await (await window.fetch(apiRoot + '/config')).json();
+	assert.equal(config.payments_enabled, false);
+	assert.equal(config.stripe_pk, '');
+	assert.equal(config.ordering_open, true, 'sample open state only');
+	assert.equal(window.DoughBossData.payments.enabled, false);
+	let prevented = false;
+	listeners.submit({ preventDefault: () => { prevented = true; } });
+	assert.equal(prevented, true);
+});
+
+test('visual preview keeps paused state separate and sample hours short-lived', async () => {
+	const { window } = previewAdapter(true);
+	const apiRoot = 'https://preview.invalid/doughboss/v1';
+	assert.equal((await (await window.fetch(apiRoot + '/config')).json()).ordering_open, false);
+	const locations = await (await window.fetch(apiRoot + '/locations')).json();
+	assert.equal(locations.length, 2);
+	for (const location of locations) {
+		assert.match(location.name, /^Sample /);
+		assert.equal(location.phone, '');
+		const status = location.pickup_status;
+		assert.equal(Date.parse(status.expires_at_utc) - Date.parse(status.observed_at_utc), 55000);
+	}
+	const menu = await (await window.fetch(apiRoot + '/menu')).json();
+	assert.equal(menu[0].image, 'https://example.test/DOUGHBOSSV2/public/images/menu/real-v1/zaatar-cheese.jpg');
+});
+
 console.log('Storefront helper regression checks passed.');

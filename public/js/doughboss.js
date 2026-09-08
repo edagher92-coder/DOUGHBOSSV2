@@ -1033,9 +1033,9 @@
 			action = el('button', {
 				class: 'db-btn db-btn--coming-soon',
 				type: 'button',
-				text: I18N.comingSoonShort || 'Coming soon',
+				text: I18N.comingSoonShort || 'Ordering paused',
 				disabled: true,
-				'aria-label': (I18N.orderingComingSoon || 'Online ordering coming soon') + ': ' + item.name
+				'aria-label': (I18N.orderingComingSoon || 'Online ordering is paused') + ': ' + item.name
 			});
 		} else {
 			action = makeAddButton('db-btn');
@@ -1405,8 +1405,8 @@
 
 	function orderingClosedNotice(message) {
 		return el('aside', { class: 'db-ordering-status', role: 'status' }, [
-			el('strong', { text: I18N.orderingComingSoon || 'Online ordering coming soon' }),
-			el('p', { text: message || 'You can browse the menu now, and we will let you know when checkout opens.' })
+			el('strong', { text: I18N.orderingComingSoon || 'Online ordering is paused' }),
+			el('p', { text: message || 'Browse the menu and check your preferred shop before visiting.' })
 		]);
 	}
 
