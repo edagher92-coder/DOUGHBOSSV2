@@ -128,3 +128,26 @@ The read-only payment trace found no direct Stripe regression coverage in the pr
 The lead reran `php -n tests/run.php` with PHP 7.4.33 and 8.2.33: **207 assertions passed on each**. PHP syntax and `git diff --check` passed. Revalidation of the published `doughboss-2.43.0.zip` still matched the 137-file runtime tree exactly. These test-only changes do not alter the release asset; provider HTTP, persistence and browser redirect/return acceptance remain distinct missing evidence.
 
 After the failed install, public read-only checks still returned 43 menu items, one Revesby location (native ID 1), ordering open, gateway Stripe and payments disabled. WPVibe still reported active theme 1.4.0. No toggle, menu/location record, quarantine item or credential was changed by this batch.
+
+## Private WordPress preview gate — 9 September 2026 (Sydney)
+
+The next scoped action was to copy the already-reviewed theme into a private WPVibe draft, then inspect its actual WordPress rendering. Public theme publication, plugin replacement, database/content changes and payment/provider changes were excluded from this action. The existing owner-confirmed backup was retained as evidence; no second backup confirmation was requested.
+
+`create_draft_theme` returned **HTTP 403: File editing is disabled on this site (`DISALLOW_FILE_EDIT` is set)**. No draft was created and no file was written. The tool explicitly reported that retrying the same call cannot succeed while that setting remains. The security constant was not changed, and no code snippet, helper plugin, alternate file writer or security bypass was used. Consequently, there is **no private WordPress preview URL** and the theme is not published. The existing GitHub Pages preview remains separate, synthetic presentation evidence.
+
+Read-only WPVibe evidence collected around 14:00 UTC on 8 September / midnight 9 September Sydney:
+
+- Active theme: **DoughBoss Final 1.4.0**, a plain classic theme with all standard templates present; 25 active-theme files were listed. `functions.php`, `header.php` and `page-order.php` were read without modification.
+- Active canonical plugin: **DoughBoss 2.41.0**. UpdraftPlus 1.26.7 remains active.
+- Individually plucked settings: `payments_enabled=0`, `ordering_open=1`, `pospal_enabled=1`, `pospal_push_orders=1`. These are saved flags, not proof that a provider or POS connection is operational. All were left unchanged; no credential-bearing settings object was retrieved.
+
+The independent read-only compatibility review found no theme-on-load database, settings, remote HTTP or provider writes. Theme 1.6.0 uses presentation hooks and read-only settings/image access. It can be considered for an authorized private visual preview, but **plugin 2.41.0 cannot demonstrate the complete 2.43.0 storefront behavior**: it lacks the newer `doughboss_load_shop_status_assets` and `doughboss_is_order_page` filter receivers. The missing receivers are harmless at the PHP hook boundary but leave newer pickup-status and template-rendered ordering styling/behavior incomplete. This is source evidence, not rendered or production acceptance.
+
+Both existing archives were revalidated against the current source tree, without rebuilding or uploading:
+
+- `doughboss-2.43.0.zip`: **137 files**, exact current-tree bytes; SHA-256 `4d984e715d0d52bc06a0da5a34af79c27087f321a5479acee134c632ab644368`.
+- `doughboss-theme-focus-local.zip`: theme **1.6.0**, **25 files**, exact current-tree bytes; SHA-256 `79d1901a4f1084dcd027ad31c7ef9b8fe11f825ece983dd85a58c5c546cd60f6`.
+
+The commands were the existing `scripts/validate-zip.php` and `scripts/validate-theme-zip.php` under PHP 8.2.33 with ZipArchive loaded. Both exited 0. No source behavior changed in this follow-on, so the prior 207-assertion PHP and 26-test Node results remain the latest behavioral test evidence rather than being represented as newly rerun tests.
+
+**Next owner-dependent actions:** complete the previously approved canonical plugin replacement through WordPress's normal upload flow; provide a host-supported staging/private-theme-preview path, or explicitly choose how the file-edit restriction should be handled. Do not weaken it automatically. A real draft preview and explicit publish approval are still required before public theme publication. Square connection work separately awaits confirmation of the merchant account and configured locations described in `SQUARE-MIGRATION-20260908.md`; no OAuth URL, account connection or migration is claimed. Do not repeat the failed install, browser claim or draft-creation attempts unless relevant external state has changed.
