@@ -985,7 +985,11 @@
 				var choices = Array.isArray(group.choices) ? group.choices : [];
 				var defaultChoice = choices.filter(function (choice) { return choice.default; })[0];
 				selections[group.id] = group.type === 'radio' && defaultChoice ? [defaultChoice.slug] : [];
-				var fieldset = el('fieldset', { class: 'db-menu-option-group' });
+				// Style and Crust are the two compact, mutually-exclusive menu choices
+				// that benefit from a segmented presentation. Keep the native radios and
+				// their names intact so keyboard selection and submitted slugs are unchanged.
+				var segmented = group.type === 'radio' && (group.id === 'style' || group.id === 'crust');
+				var fieldset = el('fieldset', { class: 'db-menu-option-group' + (segmented ? ' db-menu-option-group--segmented' : '') });
 				fieldset.appendChild(el('legend', { text: group.label || 'Options' }));
 				choices.forEach(function (choice, choiceIndex) {
 					var input = el('input', { type: group.type === 'check' ? 'checkbox' : 'radio', name: 'db-option-' + item.id + '-' + groupIndex, value: choice.slug, disabled: !orderingOpen });
@@ -999,7 +1003,7 @@
 						refreshPrice();
 					});
 					var suffix = Number(choice.price || 0) ? (Number(choice.price) > 0 ? '+' : '') + money(choice.price) : '';
-					fieldset.appendChild(el('label', { class: 'db-menu-option' }, [ input, el('span', { text: choice.label }), suffix ? el('span', { class: 'db-option-price', text: suffix }) : null ]));
+					fieldset.appendChild(el('label', { class: 'db-menu-option' + (segmented ? ' db-menu-option--segment' : '') }, [ input, el('span', { text: choice.label }), suffix ? el('span', { class: 'db-option-price', text: suffix }) : null ]));
 				});
 				scroll.appendChild(fieldset);
 			});

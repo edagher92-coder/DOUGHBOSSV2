@@ -25,6 +25,9 @@
 		guests: 0,
 		orderType: 'pickup',
 		quote: null,
+		quoteStatus: 'idle',
+		quoteGeneration: 0,
+		packagesUnavailable: false,
 		email: '',
 		name: ''
 	};
@@ -45,12 +48,37 @@
 		});
 	}
 
+	function cateringRequestUrl(path) {
+		return API + (API.indexOf('?') !== -1 ? path.replace('?', '&') : path);
+	}
+
 	function get(path) {
-		return fetch(API + path, { headers: { 'X-WP-Nonce': NONCE } }).then(function (r) { return r.json(); });
+		// Both callers are public reads. Cached page nonces must not block them.
+		var controller = typeof AbortController === 'function' ? new AbortController() : null;
+		var options = { credentials: 'same-origin', cache: 'no-store' };
+		if (controller) { options.signal = controller.signal; }
+		var timer;
+		var timeout = new Promise(function (resolve, reject) {
+			timer = setTimeout(function () {
+				reject(new Error('Catering request timed out.'));
+				if (controller) { controller.abort(); }
+			}, 8000);
+		});
+		var response = fetch(cateringRequestUrl(path), options).then(function (r) {
+			if (!r.ok) { throw new Error('Catering request failed.'); }
+			return r.json();
+		});
+		return Promise.race([response, timeout]).then(function (data) {
+			clearTimeout(timer);
+			return data;
+		}, function (error) {
+			clearTimeout(timer);
+			throw error;
+		});
 	}
 
 	function post(path, body) {
-		return fetch(API + path, {
+		return fetch(cateringRequestUrl(path), {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': NONCE },
 			body: JSON.stringify(body)
@@ -84,7 +112,8 @@
 		wrap.appendChild(head);
 
 		if (!state.packages.length) {
-			wrap.appendChild(el('<p class="dbc-empty">Catering packages are coming soon — use the form below to enquire.</p>'));
+			wrap.appendChild(el('<p class="dbc-empty"' + (state.packagesUnavailable ? ' role="alert"' : '') + '>' +
+				(state.packagesUnavailable ? 'We couldn\'t load packages. Refresh to try again, or use the form below for a custom enquiry.' : 'Catering packages are coming soon — use the form below to enquire.') + '</p>'));
 			return wrap;
 		}
 
@@ -93,7 +122,7 @@
 			var serves = p.serves_min && p.serves_max ? (p.serves_min + '–' + p.serves_max + ' guests')
 				: (p.serves_min ? p.serves_min + '+ guests' : '');
 			var card = el(
-				'<button type="button" class="dbc-card' + (p.id === state.selectedId ? ' is-selected' : '') + '" data-pick="' + p.id + '">' +
+				'<button type="button" class="dbc-card' + (p.id === state.selectedId ? ' is-selected' : '') + '" data-pick="' + p.id + '" aria-pressed="' + (p.id === state.selectedId ? 'true' : 'false') + '">' +
 					(p.image ? '<span class="dbc-card-img" style="background-image:url(\'' + esc(p.image) + '\')"></span>' : '') +
 					'<span class="dbc-card-body">' +
 						'<span class="dbc-card-name">' + esc(p.name) + '</span>' +
@@ -156,30 +185,81 @@
 	function updateQuoteBox(form) {
 		var box = form.querySelector('.dbc-quote');
 		if (!box) { return; }
+		box.setAttribute('aria-busy', state.quoteStatus === 'loading' ? 'true' : 'false');
 		var q = state.quote;
-		if (!q || !q.total) {
+		if (state.quoteStatus === 'loading') {
+			box.innerHTML = '<span class="dbc-quote-note">Updating estimate…</span>';
+			return;
+		}
+		if (state.quoteStatus === 'error') {
+			box.innerHTML = '<span class="dbc-quote-note">Estimate unavailable. Change the package or guest count to retry, or send an enquiry for a staff-confirmed quote.</span>';
+			return;
+		}
+		if (!q) {
 			box.innerHTML = '<span class="dbc-quote-note">Select a package and headcount to see your deposit.</span>';
 			return;
 		}
 		var deliveryNote = state.orderType === 'delivery'
 			? '<span class="dbc-quote-note">Delivery is quoted separately based on distance.</span>' : '';
+		var quoteMoney = function (value) { return esc(q.currency.trim().toUpperCase()) + ' ' + Number(value).toFixed(2); };
 		box.innerHTML =
-			'<div class="dbc-quote-line"><span>Estimated total</span><strong>' + money(q.total) + '</strong></div>' +
-			'<div class="dbc-quote-line dbc-quote-deposit"><span>Deposit to book (' + (q.deposit_pct || 0) + '%)</span><strong>' + money(q.deposit) + '</strong></div>' +
-			'<div class="dbc-quote-line"><span>Balance later</span><strong>' + money(q.balance) + '</strong></div>' +
+			'<div class="dbc-quote-line"><span>Estimated total</span><strong>' + quoteMoney(q.total) + '</strong></div>' +
+			'<div class="dbc-quote-line dbc-quote-deposit"><span>Deposit to book (' + q.deposit_pct + '%)</span><strong>' + quoteMoney(q.deposit) + '</strong></div>' +
+			'<div class="dbc-quote-line"><span>Balance later</span><strong>' + quoteMoney(q.balance) + '</strong></div>' +
 			deliveryNote;
 	}
 
+	function validCateringQuote(quote) {
+		if (!quote || typeof quote !== 'object' || Array.isArray(quote)) { return false; }
+		var fields = ['subtotal', 'delivery_fee', 'total', 'deposit_pct', 'deposit', 'balance', 'lead_days'];
+		return fields.every(function (field) {
+			return typeof quote[field] === 'number' && isFinite(quote[field]) && quote[field] >= 0;
+		}) && quote.deposit_pct <= 100 && Math.floor(quote.lead_days) === quote.lead_days &&
+			typeof quote.currency === 'string' && /^[A-Za-z]{3}$/.test(quote.currency.trim());
+	}
+
 	function refreshQuote() {
-		if (!state.selectedId) { state.quote = null; var f0 = root.querySelector('.dbc-form'); if (f0) { updateQuoteBox(f0); } return; }
+		// One generation covers package, headcount and fulfilment changes together.
+		var generation = ++state.quoteGeneration;
+		state.quote = null;
+		state.quoteStatus = state.selectedId ? 'loading' : 'idle';
+		var form = root.querySelector('.dbc-form');
+		if (form) { updateQuoteBox(form); }
+		if (!state.selectedId) { return; }
 		var path = '/catering/quote?package_id=' + state.selectedId +
 			'&guest_count=' + (state.guests || 0) +
 			'&order_type=' + encodeURIComponent(state.orderType);
-		get(path).then(function (q) {
+		return get(path).then(function (q) {
+			if (generation !== state.quoteGeneration) { return; }
+			if (!validCateringQuote(q)) { throw new Error('Invalid catering estimate.'); }
 			state.quote = q;
+			state.quoteStatus = 'ready';
 			var f = root.querySelector('.dbc-form');
 			if (f) { updateQuoteBox(f); }
-		}).catch(function () { /* leave prior estimate */ });
+		}).catch(function () {
+			if (generation !== state.quoteGeneration) { return; }
+			state.quote = null;
+			state.quoteStatus = 'error';
+			var f = root.querySelector('.dbc-form');
+			if (f) { updateQuoteBox(f); }
+		});
+	}
+
+	function selectPackage(id) {
+		state.selectedId = id;
+		var pkg = selectedPackage();
+		if (!pkg) { state.selectedId = 0; }
+		// Update only selection chrome: keep contact, event and dietary inputs intact.
+		var summary = root.querySelector('.dbc-selected');
+		if (summary) {
+			summary.innerHTML = pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No package selected — a custom quote will be prepared.';
+		}
+		Array.prototype.forEach.call(root.querySelectorAll('[data-pick]'), function (card) {
+			var selected = Number(card.getAttribute('data-pick')) === state.selectedId;
+			card.classList.toggle('is-selected', selected);
+			card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+		});
+		refreshQuote();
 	}
 
 	/* ---------- interactions ---------- */
@@ -187,11 +267,10 @@
 	root.addEventListener('click', function (e) {
 		var pick = e.target.closest('[data-pick]');
 		if (pick) {
-			state.selectedId = parseInt(pick.getAttribute('data-pick'), 10) || 0;
-			render();
-			refreshQuote();
+			selectPackage(parseInt(pick.getAttribute('data-pick'), 10) || 0);
 			var b = root.querySelector('.dbc-builder');
-			if (b && b.scrollIntoView) { b.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+			var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			if (b && b.scrollIntoView) { b.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' }); }
 		}
 	});
 
@@ -616,11 +695,11 @@
 	}
 
 	get('/catering/packages').then(function (list) {
-		state.packages = Array.isArray(list) ? list : [];
+		if (!Array.isArray(list)) { throw new Error('Invalid catering packages.'); }
+		state.packages = list;
 		render();
 	}).catch(function () {
-		root.innerHTML = '<div class="dbc-builder">' +
-			'<p class="dbc-sub">We couldn\'t load packages right now. Please refresh, or call your nearest shop to book catering.</p></div>';
+		state.packagesUnavailable = true;
 		render();
 	});
 }());
