@@ -26,7 +26,7 @@
 			<a class="dbf-button" href="<?php echo esc_url( home_url( '/about-us/' ) ); ?>">Our story</a>
 		</div>
 		<div class="dbf-story-media" data-dbf-reveal data-dbf-reveal-delay="1">
-			<img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/real-v1/sujuk-deluxe.jpg' ) ); ?>" width="550" height="440" alt="Real Dough Boss Sujuk Deluxe pizza" loading="lazy" decoding="async">
+			<?php echo doughboss_final_asset_image( 'menu/real-v1/sujuk-deluxe.jpg', 'Real Dough Boss Sujuk Deluxe pizza', array( 'loading' => 'lazy', 'decoding' => 'async' ) ); ?>
 		</div>
 	</div>
 </section>
@@ -52,9 +52,9 @@
 			<a class="dbf-button dbf-button--outline" href="<?php echo esc_url( home_url( '/order/' ) ); ?>">Browse the full menu</a>
 		</header>
 		<div class="dbf-food-grid">
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#manoush' ) ); ?>" data-dbf-reveal><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/real-v1/zaatar-cheese.jpg' ) ); ?>" width="550" height="440" alt="Real Dough Boss zaatar and cheese manoush" loading="lazy" decoding="async"><span class="dbf-food-card-copy"><span>Oven-baked</span><strong>Manoush</strong></span></a>
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pizza' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="1"><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/real-v1/sujuk-deluxe.jpg' ) ); ?>" width="550" height="440" alt="Real Dough Boss Sujuk Deluxe pizza" loading="lazy" decoding="async"><span class="dbf-food-card-copy"><span>Fresh to order</span><strong>Pizza</strong></span></a>
-			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pies' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="2"><img src="<?php echo esc_url( doughboss_final_asset_url( 'menu/real-v1/haloumi-pie.jpg' ) ); ?>" width="550" height="440" alt="Real Dough Boss oven-baked haloumi pie" loading="lazy" decoding="async"><span class="dbf-food-card-copy"><span>Golden and warm</span><strong>Pies</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#manoush' ) ); ?>" data-dbf-reveal><?php echo doughboss_final_asset_image( 'menu/real-v1/zaatar-cheese.jpg', 'Real Dough Boss zaatar and cheese manoush', array( 'loading' => 'lazy', 'decoding' => 'async' ) ); ?><span class="dbf-food-card-copy"><span>Oven-baked</span><strong>Manoush</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pizza' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="1"><?php echo doughboss_final_asset_image( 'menu/real-v1/sujuk-deluxe.jpg', 'Real Dough Boss Sujuk Deluxe pizza', array( 'loading' => 'lazy', 'decoding' => 'async' ) ); ?><span class="dbf-food-card-copy"><span>Fresh to order</span><strong>Pizza</strong></span></a>
+			<a class="dbf-food-card" href="<?php echo esc_url( home_url( '/order/#pies' ) ); ?>" data-dbf-reveal data-dbf-reveal-delay="2"><?php echo doughboss_final_asset_image( 'menu/real-v1/haloumi-pie.jpg', 'Real Dough Boss oven-baked haloumi pie', array( 'loading' => 'lazy', 'decoding' => 'async' ) ); ?><span class="dbf-food-card-copy"><span>Golden and warm</span><strong>Pies</strong></span></a>
 		</div>
 	</div>
 </section>
@@ -67,7 +67,7 @@
 			<p>Mini manoush, pizzas, pies, wraps and generous platters for work, family and celebrations. Contact our catering team and we'll help build the right menu.</p>
 			<a class="dbf-button" href="<?php echo esc_url( home_url( '/catering/' ) ); ?>">Plan your catering</a>
 		</div>
-		<div class="dbf-catering-media"><img src="<?php echo esc_url( doughboss_final_asset_url( 'doughboss-feast-real-v1.jpg' ) ); ?>" alt="A real Dough Boss catering spread" width="1080" height="864" loading="lazy" decoding="async"></div>
+		<div class="dbf-catering-media"><?php echo doughboss_final_asset_image( 'doughboss-feast-real-v1.jpg', 'A real Dough Boss catering spread', array( 'loading' => 'lazy', 'decoding' => 'async' ) ); ?></div>
 	</div>
 </section>
 

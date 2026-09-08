@@ -89,6 +89,8 @@
 		window.addEventListener('resize', syncStickyTop);
 		window.addEventListener('orientationchange', syncStickyTop);
 		window.addEventListener('load', syncStickyTop);
+		// Shop status arrives after initial layout and can wrap on small screens.
+		if (window.ResizeObserver) { new ResizeObserver(syncStickyTop).observe(stickyHeader); }
 	}
 
 	var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

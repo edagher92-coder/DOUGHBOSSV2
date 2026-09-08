@@ -175,6 +175,11 @@
 		return false;
 	}
 
+	// The lightweight sitewide header uses the same immutable-checkout boundary.
+	document.addEventListener('doughboss:shop-change-request', function (event) {
+		if (activeTableContext() || !paymentMutationAllowed()) { event.preventDefault(); }
+	});
+
 	// WordPress uses either pretty REST paths (/wp-json/doughboss/v1) or a
 	// query-string route (index.php?rest_route=/doughboss/v1). When the endpoint
 	// itself has query parameters, the latter form needs '&', not a second '?'.
@@ -350,6 +355,11 @@
 
 	function shopContact(loc, cfg) {
 		var info = el('div', { class: 'db-shop-info' });
+		if (window.DoughBossShopStatus) {
+			var status = el('p', { class: 'db-pickup-status', role: 'status', 'aria-live': 'polite' });
+			info.appendChild(status);
+			window.DoughBossShopStatus.attach(status, loc, cfg);
+		}
 		if (loc && loc.address) { info.appendChild(el('div', { class: 'db-shop-addr', text: loc.address })); }
 		if (loc && loc.phone) {
 			var dial = String(loc.phone).replace(/[^0-9+]/g, '');
@@ -361,11 +371,11 @@
 		if (cfg) {
 			var pickup = !!(cfg.enable_pickup && loc && loc.pickup_enabled);
 			var delivery = !!(cfg.enable_delivery && loc && loc.delivery_enabled);
-			var service = pickup && delivery ? 'Pickup or delivery'
+			var service = !cfg.ordering_open ? 'Online ordering paused' : pickup && delivery ? 'Pickup or delivery'
 				: (pickup ? 'Pickup from this shop' : (delivery ? 'Delivery available' : 'Check with the shop'));
 			// The public location response does not expose online-payment
 			// eligibility. Global gateway readiness is not a per-shop promise.
-			var payment = PAY.enabled ? 'Confirmed at checkout' : (pickup && !delivery ? 'Pay when you collect' : 'Arrange with the shop');
+			var payment = !cfg.ordering_open ? 'Contact the shop' : PAY.enabled ? 'Confirmed at checkout' : (pickup && !delivery ? 'Pay when you collect' : 'Arrange with the shop');
 			info.appendChild(el('div', { class: 'db-shop-context' }, [
 				el('span', { class: 'db-shop-context-item' }, [el('small', { text: 'Ordering' }), el('strong', { text: service })]),
 				el('span', { class: 'db-shop-context-item' }, [el('small', { text: 'Payment' }), el('strong', { text: payment })])
@@ -433,6 +443,29 @@
 	/* ------------------------------------------------------------------ */
 	/* Menu                                                               */
 	/* ------------------------------------------------------------------ */
+
+	// Render only dietary claims explicitly supplied by the menu item. Keep the
+	// allowlist closed so names, descriptions and option choices cannot become
+	// inferred dietary claims (a gluten-free crust is an item option, not a
+	// gluten-free base-item certification).
+	function dietaryBadges(dietary) {
+		if (!Array.isArray(dietary)) { return []; }
+		var definitions = {
+			vegetarian: { value: 'vegetarian', label: 'V Vegetarian' },
+			vegan: { value: 'vegan', label: 'VG Vegan' },
+			halal: { value: 'halal', label: 'Halal' },
+			gluten_free: { value: 'gluten_free', label: 'GF Gluten-free' }
+		};
+		var seen = {};
+		return dietary.reduce(function (badges, flag) {
+			if (typeof flag !== 'string') { return badges; }
+			var value = flag.trim().toLowerCase();
+			if (!definitions[value] || seen[value]) { return badges; }
+			seen[value] = true;
+			badges.push(definitions[value]);
+			return badges;
+		}, []);
+	}
 
 	function renderMenu(root) {
 		Promise.all([request('/menu'), getConfig()]).then(function (results) {
@@ -1010,12 +1043,22 @@
 		}
 
 		var controls = optionControls();
+		var badges = dietaryBadges(item.dietary).map(function (badge) {
+			return el('span', {
+				class: 'db-dietary-badge db-dietary-badge--' + badge.value,
+				'aria-label': badge.label,
+				'data-dietary': badge.value,
+				text: badge.label
+			});
+		});
+		var badgeWrap = badges.length ? el('div', { class: 'db-dietary-badges', 'aria-label': 'Dietary information' }, badges) : null;
 		refreshPrice();
 		return el('div', { class: soldOut ? 'db-card db-card--soldout' : 'db-card' }, [
 			media,
 			el('div', { class: 'db-card-body' }, [
 				el('h3', { class: 'db-card-title', text: item.name }),
 				item.description ? el('p', { class: 'db-card-desc', text: item.description }) : null,
+				badgeWrap,
 				controls,
 				el('div', { class: 'db-card-foot' }, [
 					priceEl,

@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.5.0
+Version: 1.6.0
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -85,6 +85,17 @@ button, input, select, textarea { font: inherit; }
 .dbf-menu-toggle { display: none; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 10px; border: 0; background: transparent; color: #fff; cursor: pointer; touch-action: manipulation; }
 .dbf-menu-toggle-label { font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .dbf-nav-close { display: none; width: 44px; height: 44px; align-items: center; justify-content: center; margin: 0 0 22px auto; border: 1px solid var(--dbf-line-dark); border-radius: 50%; background: transparent; color: #fff; cursor: pointer; font-size: 32px; line-height: 1; }
+
+.dbf-header-shop { display: flex; align-items: center; justify-content: space-between; gap: 8px 24px; min-height: 52px; padding-block: 8px; border-top: 1px solid var(--dbf-line-dark); font-size: 13px; line-height: 1.35; }
+.dbf-header-shop a { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
+.dbf-shop-choice { display: flex; align-items: center; flex-shrink: 0; gap: 10px; }
+.dbf-shop-choice > span { color: #b8b1a4; }
+.dbf-shop-choice select { max-width: 180px; min-height: 44px; padding: 8px 30px 8px 10px; border: 1px solid #77716a; border-radius: 8px; color: #fff; background: #151210; }
+.dbf-header-shop .db-pickup-status { max-width: 620px; margin: 0; color: #ddd7cd; text-align: right; }
+@media (max-width: 767px) {
+	.dbf-header-shop { align-items: flex-start; flex-direction: column; gap: 4px; }
+	.dbf-header-shop .db-pickup-status { font-size: 12px; text-align: left; }
+}
 
 /* Buttons and typography */
 .dbf-button { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 13px 23px; border: 1px solid var(--dbf-ember); border-radius: 999px; background: var(--dbf-ember); color: #fff; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 19px; letter-spacing: .06em; line-height: 1; text-decoration: none; transition: transform .2s var(--dbf-ease), background .2s ease, box-shadow .2s ease; }
