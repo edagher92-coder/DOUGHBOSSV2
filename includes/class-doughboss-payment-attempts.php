@@ -114,6 +114,119 @@ class DoughBoss_Payment_Attempts {
 	}
 
 	/**
+	 * Find an unresolved attempt holding a cart-scoped provider guard.
+	 *
+	 * This is used by Square protocol v2 before allocating a new browser nonce.
+	 * The caller must hold local_reference_lock() while checking and creating so
+	 * two tabs cannot both observe an empty guard and dispatch separate charges.
+	 *
+	 * @param string $provider          Provider slug.
+	 * @param string $local_reference   Server-keyed cart guard.
+	 * @param string $except_attempt_key Optional attempt identity to ignore.
+	 * @return array|WP_Error|null
+	 */
+	public static function find_blocking_by_local_reference( $provider, $local_reference, $except_attempt_key = '' ) {
+		global $wpdb;
+		$provider           = self::short_key( $provider, 20 );
+		$local_reference    = self::plain_text( $local_reference, 191 );
+		$except_attempt_key = self::stable_key( $except_attempt_key );
+		if ( '' === $provider || '' === $local_reference ) {
+			return null;
+		}
+
+		$sql = "SELECT * FROM " . self::table() . " WHERE provider = %s AND local_reference = %s AND status IN ('prepared','dispatching','processing','unknown','succeeded','mismatch')";
+		$args = array( $provider, $local_reference );
+		if ( '' !== $except_attempt_key ) {
+			$sql   .= ' AND attempt_key <> %s';
+			$args[] = $except_attempt_key;
+		}
+		$sql .= ' ORDER BY id DESC LIMIT 1';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( $sql, $args ), ARRAY_A );
+		if ( null === $row && '' !== (string) $wpdb->last_error ) {
+			return new WP_Error( 'doughboss_pay_guard_storage', __( 'The existing payment guard could not be checked safely.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		if (
+			is_array( $row )
+			&& 'succeeded' === (string) $row['status']
+			&& ! empty( $row['provider_reference'] )
+			&& class_exists( 'DoughBoss_Order' )
+		) {
+			$order_id = DoughBoss_Order::find_id_by_payment_intent( (string) $row['provider_reference'] );
+			if ( $order_id && self::mark_order_committed( (string) $row['provider_reference'], $order_id ) ) {
+				return null;
+			}
+		}
+		return is_array( $row ) ? $row : null;
+	}
+
+	/**
+	 * Find any unresolved pre-v2 Square attempt before enabling v2 allocation.
+	 *
+	 * Legacy attempts did not persist a cart guard and their error path could
+	 * reset an already-dispatched request to `created`. They therefore cannot be
+	 * scoped safely to one current browser. A deployment-wide drain is the only
+	 * fail-closed migration policy that does not invent ownership evidence.
+	 *
+	 * @return array|WP_Error|null
+	 */
+	public static function find_blocking_legacy_square() {
+		global $wpdb;
+		$attempts = self::table();
+		$orders   = $wpdb->prefix . 'doughboss_orders';
+		$sql      = "SELECT attempts.* FROM {$attempts} attempts LEFT JOIN {$orders} orders ON attempts.provider_reference IS NOT NULL AND orders.payment_intent_id = attempts.provider_reference WHERE attempts.provider = %s AND attempts.status IN ('created','provisioning','processing','unknown','succeeded','mismatch') AND (attempts.safe_metadata_json IS NULL OR attempts.safe_metadata_json NOT LIKE %s) AND (attempts.status <> 'succeeded' OR attempts.provider_reference IS NULL OR orders.id IS NULL) ORDER BY attempts.id ASC LIMIT 1";
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( $sql, 'square', '%"protocol_version":"square-v2"%' ), ARRAY_A );
+		if ( '' !== (string) $wpdb->last_error ) {
+			return new WP_Error( 'doughboss_pay_legacy_storage', __( 'Earlier payment attempts could not be checked safely.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return is_array( $row ) ? $row : null;
+	}
+
+	/**
+	 * Decode the filtered, non-card metadata stored with an attempt.
+	 *
+	 * @param array $attempt Attempt row.
+	 * @return array
+	 */
+	public static function metadata( array $attempt ) {
+		$metadata = isset( $attempt['safe_metadata_json'] ) ? json_decode( (string) $attempt['safe_metadata_json'], true ) : array();
+		return is_array( $metadata ) ? $metadata : array();
+	}
+
+	/**
+	 * Serialize allocation of one server-keyed local payment guard.
+	 *
+	 * @param string $local_reference Server-keyed cart guard.
+	 * @return bool
+	 */
+	public static function acquire_local_reference_lock( $local_reference ) {
+		global $wpdb;
+		$local_reference = self::plain_text( $local_reference, 191 );
+		if ( '' === $local_reference ) {
+			return false;
+		}
+		$lock = substr( 'dbpay_' . hash( 'sha256', $local_reference ), 0, 64 );
+		return 1 === (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $lock, 3 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	}
+
+	/**
+	 * Release a local payment guard lock owned by this database connection.
+	 *
+	 * @param string $local_reference Server-keyed cart guard.
+	 * @return void
+	 */
+	public static function release_local_reference_lock( $local_reference ) {
+		global $wpdb;
+		$local_reference = self::plain_text( $local_reference, 191 );
+		if ( '' === $local_reference ) {
+			return;
+		}
+		$lock = substr( 'dbpay_' . hash( 'sha256', $local_reference ), 0, 64 );
+		$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	}
+
+	/**
 	 * Alias retained for gateway call sites that use the shorter name.
 	 *
 	 * @param string $provider_reference Gateway's stable payment reference.
@@ -196,9 +309,35 @@ class DoughBoss_Payment_Attempts {
 	 public static function update( $attempt_id, array $changes ) {
 		 global $wpdb;
 		 $attempt_id = absint( $attempt_id );
-		 if ( ! $attempt_id || ! self::find( $attempt_id ) ) {
+		 $attempt = $attempt_id ? self::find( $attempt_id ) : null;
+		 if ( ! $attempt ) {
 			 return false;
 		 }
+		$existing_metadata = self::metadata( $attempt );
+		$is_square_v2      = 'square' === (string) $attempt['provider']
+			&& 'square-v2' === ( isset( $existing_metadata['protocol_version'] ) ? (string) $existing_metadata['protocol_version'] : '' );
+		if ( $is_square_v2 && ( array_key_exists( 'status', $changes ) || array_key_exists( 'local_reference', $changes ) ) ) {
+			// Square v2 state and cart ownership move only through the conditional,
+			// irreversible methods in this repository. Generic updates would allow
+			// an out-of-order response to weaken the duplicate-charge guard.
+			return false;
+		}
+		if ( $is_square_v2 && ( array_key_exists( 'safe_metadata', $changes ) || array_key_exists( 'metadata', $changes ) ) ) {
+			$candidate = array_key_exists( 'safe_metadata', $changes ) ? $changes['safe_metadata'] : $changes['metadata'];
+			if ( ! is_array( $candidate ) ) {
+				return false;
+			}
+			$candidate_json = self::safe_metadata_json( $candidate );
+			$candidate      = false !== $candidate_json ? json_decode( $candidate_json, true ) : null;
+			if ( ! is_array( $candidate ) ) {
+				return false;
+			}
+			foreach ( $existing_metadata as $key => $value ) {
+				if ( ! array_key_exists( $key, $candidate ) || $candidate[ $key ] !== $value ) {
+					return false;
+				}
+			}
+		}
 
 		 $data = self::normalise_update( $changes );
 		 if ( empty( $data ) ) {
@@ -248,6 +387,214 @@ class DoughBoss_Payment_Attempts {
 				'provisioning',
 				$lease_cutoff
 			)
+		);
+		return 1 === (int) $updated;
+	}
+
+	/**
+	 * Irreversibly claim a Square v2 payment dispatch.
+	 *
+	 * Unlike claim_creation(), this state is never reclaimed by elapsed time.
+	 * Once the provider boundary may have been crossed, only reconciliation can
+	 * move the attempt forward; another payment POST is never permitted.
+	 *
+	 * @param int $attempt_id Attempt id.
+	 * @return bool
+	 */
+	public static function claim_irreversible_creation( $attempt_id ) {
+		global $wpdb;
+		$attempt_id = absint( $attempt_id );
+		if ( ! $attempt_id ) {
+			return false;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				'UPDATE ' . self::table() . ' SET status = %s, updated_at = %s WHERE id = %d AND status = %s AND provider = %s AND provider_reference IS NULL',
+				'dispatching',
+				self::utc_now(),
+				$attempt_id,
+				'prepared',
+				'square'
+			)
+		);
+		return 1 === (int) $updated;
+	}
+
+	/**
+	 * Bind the result of an irreversible Square v2 dispatch.
+	 *
+	 * @param int    $attempt_id      Attempt id.
+	 * @param string $reference       Provider payment reference.
+	 * @param string $status          Normalised status.
+	 * @param string $provider_status Provider status.
+	 * @return array|false
+	 */
+	public static function bind_irreversible_reference( $attempt_id, $reference, $status, $provider_status ) {
+		global $wpdb;
+		$attempt_id      = absint( $attempt_id );
+		$reference       = self::provider_reference( $reference );
+		$status          = self::short_key( $status, 32 );
+		$provider_status = self::plain_text( $provider_status, 32 );
+		if ( ! $attempt_id || '' === $reference || '' === $status ) {
+			return false;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				'UPDATE ' . self::table() . ' SET provider_reference = %s, status = %s, provider_status = %s, updated_at = %s WHERE id = %d AND status = %s AND provider = %s AND provider_reference IS NULL',
+				$reference,
+				$status,
+				$provider_status,
+				self::utc_now(),
+				$attempt_id,
+				'dispatching',
+				'square'
+			)
+		);
+		return 1 === (int) $updated ? self::find( $attempt_id ) : false;
+	}
+
+	/**
+	 * Permanently lock an irreversible dispatch whose outcome is uncertain.
+	 *
+	 * @param int    $attempt_id Attempt id.
+	 * @param string $last_error Safe error label.
+	 * @return bool
+	 */
+	public static function mark_irreversible_unknown( $attempt_id, $last_error = '' ) {
+		global $wpdb;
+		$attempt_id = absint( $attempt_id );
+		if ( ! $attempt_id ) {
+			return false;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				'UPDATE ' . self::table() . ' SET status = %s, last_error = %s, updated_at = %s WHERE id = %d AND provider = %s AND status IN (%s,%s)',
+				'unknown',
+				self::safe_error( $last_error ),
+				self::utc_now(),
+				$attempt_id,
+				'square',
+				'dispatching',
+				'processing'
+			)
+		);
+		return 1 === (int) $updated;
+	}
+
+	/**
+	 * Reconcile a bound Square v2 reference without weakening terminal states.
+	 *
+	 * A provider retrieval may resolve processing/unknown to a terminal result,
+	 * but it must never regress a durable order, clear a mismatch, or turn a
+	 * completed charge back into processing because responses arrived out of
+	 * order.
+	 *
+	 * @param string $provider_reference Canonical Square payment id.
+	 * @param string $status             Normalised provider status.
+	 * @param string $provider_status    Raw provider status label.
+	 * @return array|false Updated/current row, or false for an invalid transition.
+	 */
+	public static function reconcile_irreversible_reference( $provider_reference, $status, $provider_status ) {
+		global $wpdb;
+		$provider_reference = self::provider_reference( $provider_reference );
+		$status             = self::short_key( $status, 32 );
+		$provider_status    = self::plain_text( $provider_status, 32 );
+		$allowed            = array(
+			'succeeded'  => array( 'unknown', 'processing', 'succeeded' ),
+			'processing' => array( 'unknown', 'processing' ),
+			'failed'     => array( 'unknown', 'processing', 'failed', 'voided' ),
+			'voided'     => array( 'unknown', 'processing', 'failed', 'voided' ),
+			'unknown'    => array( 'unknown', 'processing' ),
+			'mismatch'   => array( 'unknown', 'processing', 'succeeded', 'failed', 'voided', 'mismatch' ),
+		);
+		if ( '' === $provider_reference || ! isset( $allowed[ $status ] ) ) {
+			return false;
+		}
+		$attempt = self::find_by_provider_reference( $provider_reference );
+		if ( ! $attempt || 'square' !== (string) $attempt['provider'] ) {
+			return false;
+		}
+		$metadata = self::metadata( $attempt );
+		if ( 'square-v2' !== ( isset( $metadata['protocol_version'] ) ? (string) $metadata['protocol_version'] : '' ) ) {
+			return false;
+		}
+		if ( 'order_committed' === (string) $attempt['status'] || 'mismatch' === (string) $attempt['status'] ) {
+			return $attempt;
+		}
+		if ( ! in_array( (string) $attempt['status'], $allowed[ $status ], true ) ) {
+			return false;
+		}
+
+		$placeholders = implode( ',', array_fill( 0, count( $allowed[ $status ] ), '%s' ) );
+		$sql          = 'UPDATE ' . self::table() . " SET status = %s, provider_status = %s, updated_at = %s";
+		$args         = array( $status, $provider_status, self::utc_now() );
+		if ( 'succeeded' === $status ) {
+			$sql   .= ', verified_at = %s';
+			$args[] = self::utc_now();
+		}
+		$sql    .= " WHERE id = %d AND provider = %s AND provider_reference = %s AND status IN ({$placeholders})";
+		$args[] = (int) $attempt['id'];
+		$args[] = 'square';
+		$args[] = $provider_reference;
+		$args   = array_merge( $args, $allowed[ $status ] );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+		$updated = $wpdb->query( $wpdb->prepare( $sql, $args ) );
+		if ( false === $updated ) {
+			return false;
+		}
+		return self::find( (int) $attempt['id'] );
+	}
+
+	/**
+	 * Release a Square cart guard only after its paid order is durable.
+	 *
+	 * @param string $provider_reference Canonical Square payment id.
+	 * @param int    $order_id           Durable order id.
+	 * @return bool
+	 */
+	public static function mark_order_committed( $provider_reference, $order_id ) {
+		global $wpdb;
+		$provider_reference = self::provider_reference( $provider_reference );
+		$order_id           = absint( $order_id );
+		if ( '' === $provider_reference || ! $order_id ) {
+			return false;
+		}
+		if ( ! class_exists( 'DoughBoss_Order' ) || $order_id !== DoughBoss_Order::find_id_by_payment_intent( $provider_reference ) ) {
+			return false;
+		}
+		$attempt = self::find_by_provider_reference( $provider_reference );
+		if ( ! $attempt || 'square' !== (string) $attempt['provider'] ) {
+			return false;
+		}
+		$existing_metadata = self::metadata( $attempt );
+		if ( 'square-v2' !== ( isset( $existing_metadata['protocol_version'] ) ? (string) $existing_metadata['protocol_version'] : '' ) ) {
+			return false;
+		}
+		if ( 'order_committed' === (string) $attempt['status'] ) {
+			return isset( $existing_metadata['committed_order'] ) && (int) $existing_metadata['committed_order'] === $order_id;
+		}
+		if ( 'succeeded' !== (string) $attempt['status'] ) {
+			return false;
+		}
+		$metadata                    = $existing_metadata;
+		$metadata['committed_order'] = $order_id;
+		$data                        = self::normalise_update(
+			array(
+				'status'        => 'order_committed',
+				'safe_metadata' => $metadata,
+			)
+		);
+		$data['updated_at'] = self::utc_now();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$updated = $wpdb->update(
+			self::table(),
+			$data,
+			array( 'id' => (int) $attempt['id'], 'provider_reference' => $provider_reference, 'status' => 'succeeded' ),
+			self::formats_for( $data ),
+			array( '%d', '%s', '%s' )
 		);
 		return 1 === (int) $updated;
 	}

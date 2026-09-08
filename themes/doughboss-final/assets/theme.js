@@ -92,6 +92,13 @@
 	}
 
 	var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	var orderCounter = document.querySelector('.dbf-order-counter');
+	if (orderCounter && !reduceMotion) {
+		document.documentElement.classList.add('dbf-order-motion');
+		var settleOrderCounter = function () { orderCounter.classList.add('is-settled'); };
+		if (window.requestAnimationFrame) window.requestAnimationFrame(settleOrderCounter);
+		else settleOrderCounter();
+	}
 	var reveals = Array.prototype.slice.call(document.querySelectorAll('[data-dbf-reveal]'));
 	if (!reduceMotion && 'IntersectionObserver' in window) {
 		var observer = new IntersectionObserver(function (entries) {

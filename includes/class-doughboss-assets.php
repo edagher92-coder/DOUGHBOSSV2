@@ -50,8 +50,16 @@ class DoughBoss_Assets {
 	 * @return bool
 	 */
 	private function is_order_page() {
-		return $this->current_post_has( 'doughboss_menu' )
+		$content_order_page = $this->current_post_has( 'doughboss_menu' )
 			&& $this->current_post_has( 'doughboss_cart' );
+
+		/**
+		 * Allow a theme template that renders the complete menu/cart journey
+		 * outside post_content to identify the page without hard-coding a post ID.
+		 *
+		 * @param bool $is_order_page Whether this is the integrated order page.
+		 */
+		return (bool) apply_filters( 'doughboss_is_order_page', $content_order_page );
 	}
 
 	/**

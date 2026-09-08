@@ -259,6 +259,12 @@ class DoughBoss_Square {
 		$source_id    = isset( $metadata['source_id'] ) ? sanitize_text_field( (string) $metadata['source_id'] ) : '';
 		$verification = isset( $metadata['verification_token'] ) ? sanitize_text_field( (string) $metadata['verification_token'] ) : '';
 		$square_loc   = self::location_id();
+		$protocol     = isset( $metadata['protocol_version'] ) ? sanitize_key( (string) $metadata['protocol_version'] ) : '';
+		$attempt_identity = isset( $metadata['attempt_identity'] ) ? strtolower( sanitize_text_field( (string) $metadata['attempt_identity'] ) ) : '';
+		$binding_hash = isset( $metadata['binding_hash'] ) ? strtolower( sanitize_text_field( (string) $metadata['binding_hash'] ) ) : '';
+		$cart_guard   = isset( $metadata['cart_guard'] ) ? strtolower( sanitize_text_field( (string) $metadata['cart_guard'] ) ) : '';
+		$voucher_code = isset( $metadata['voucher_code'] ) ? sanitize_text_field( (string) $metadata['voucher_code'] ) : '';
+		$voucher_key  = isset( $metadata['voucher_reservation_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['voucher_reservation_key'] ) ) : '';
 
 		if (
 			$amount_minor < 1
@@ -266,14 +272,20 @@ class DoughBoss_Square {
 			|| ! preg_match( '/^[a-f0-9]{64}$/', $checkout_key )
 			|| ! $location_id
 			|| '' === $square_loc
+			|| 'square-v2' !== $protocol
+			|| ! preg_match( '/^[a-f0-9]{64}$/', $attempt_identity )
+			|| ! preg_match( '/^[a-f0-9]{64}$/', $binding_hash )
+			|| ! preg_match( '/^[a-f0-9]{64}$/', $cart_guard )
+			|| ( '' === $voucher_code && '' !== $voucher_key )
+			|| ( '' !== $voucher_code && ! preg_match( '/^[a-f0-9]{64}$/', $voucher_key ) )
 		) {
 			return new WP_Error( 'doughboss_pay_request', __( 'The payment request is incomplete.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 		if ( ! preg_match( '/^[A-Za-z0-9_:.-]{8,1024}$/', $source_id ) ) {
-			return new WP_Error( 'doughboss_pay_source', __( 'The card details could not be read securely. Please re-enter your card and try again.', 'doughboss' ), array( 'status' => 400 ) );
+			return new WP_Error( 'doughboss_pay_source', __( 'The card details could not be read securely. Please re-enter your card and try again.', 'doughboss' ), array( 'status' => 400, 'retry_safe' => true, 'payment_pending' => false ) );
 		}
 		if ( '' !== $verification && ! preg_match( '/^[A-Za-z0-9_:.-]{8,1024}$/', $verification ) ) {
-			return new WP_Error( 'doughboss_pay_source', __( 'The card verification could not be read securely. Please try again.', 'doughboss' ), array( 'status' => 400 ) );
+			return new WP_Error( 'doughboss_pay_source', __( 'The card verification could not be read securely. Please try again.', 'doughboss' ), array( 'status' => 400, 'retry_safe' => true, 'payment_pending' => false ) );
 		}
 
 		// The single-use card token and 3DS evidence must never reach durable
@@ -286,24 +298,51 @@ class DoughBoss_Square {
 			$safe_metadata['verification_token']
 		);
 		$safe_metadata['square_location_id'] = $square_loc;
+		$safe_metadata['square_mode']        = self::mode();
 
-		$attempt = DoughBoss_Payment_Attempts::create_or_find(
-			array(
-				'attempt_key'     => hash( 'sha256', 'square|' . $checkout_key ),
+		$attempt_key = hash( 'sha256', 'square-v2|' . $attempt_identity );
+		if ( ! DoughBoss_Payment_Attempts::acquire_local_reference_lock( $cart_guard ) ) {
+			return new WP_Error( 'doughboss_pay_busy', __( 'This cart payment is busy. Please wait a moment and try again.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		try {
+			$legacy = DoughBoss_Payment_Attempts::find_blocking_legacy_square();
+			if ( is_wp_error( $legacy ) ) {
+				return $legacy;
+			}
+			if ( $legacy ) {
+				return new WP_Error(
+					'doughboss_pay_legacy_pending',
+					__( 'Card payments are temporarily unavailable while an earlier Square payment is reconciled. Please contact the shop before paying again.', 'doughboss' ),
+					array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false )
+				);
+			}
+			$blocking = DoughBoss_Payment_Attempts::find_blocking_by_local_reference( 'square', $cart_guard, $attempt_key );
+			if ( is_wp_error( $blocking ) ) {
+				return $blocking;
+			}
+			if ( $blocking ) {
+				return self::pending_error( $blocking, 'doughboss_pay_cart_pending' );
+			}
+			$attempt = DoughBoss_Payment_Attempts::create_or_find(
+				array(
+				'attempt_key'     => $attempt_key,
 				'checkout_key'    => $checkout_key,
 				'provider'        => 'square',
 				'purpose'         => isset( $metadata['purpose'] ) ? $metadata['purpose'] : 'order',
 				'context'         => isset( $metadata['context'] ) ? $metadata['context'] : ( $table_id ? 'table_qr' : 'web' ),
-				'local_reference' => isset( $metadata['local_reference'] ) ? $metadata['local_reference'] : '',
+				'local_reference' => $cart_guard,
 				'location_id'     => $location_id,
 				'table_id'        => $table_id,
 				'qr_code_id'      => $qr_code_id,
 				'amount_minor'    => $amount_minor,
 				'currency'        => $currency,
-				'status'          => 'created',
+				'status'          => 'prepared',
 				'safe_metadata'   => $safe_metadata,
-			)
-		);
+				)
+			);
+		} finally {
+			DoughBoss_Payment_Attempts::release_local_reference_lock( $cart_guard );
+		}
 		if ( ! $attempt ) {
 			return new WP_Error( 'doughboss_pay_storage', __( 'The payment could not be recorded safely.', 'doughboss' ), array( 'status' => 503 ) );
 		}
@@ -311,11 +350,26 @@ class DoughBoss_Square {
 			'square' !== (string) $attempt['provider']
 			|| (int) $attempt['amount_minor'] !== $amount_minor
 			|| strtoupper( (string) $attempt['currency'] ) !== $currency
+			|| ! hash_equals( (string) $attempt['attempt_key'], $attempt_key )
+			|| ! hash_equals( (string) $attempt['checkout_key'], $checkout_key )
+			|| ! hash_equals( (string) $attempt['local_reference'], $cart_guard )
 			|| (int) $attempt['location_id'] !== $location_id
 			|| (int) $attempt['table_id'] !== $table_id
 			|| (int) $attempt['qr_code_id'] !== $qr_code_id
 		) {
 			return new WP_Error( 'doughboss_pay_attempt_changed', __( 'Your order changed while payment was being prepared. Please start payment again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$stored_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		if (
+			'square-v2' !== ( isset( $stored_metadata['protocol_version'] ) ? (string) $stored_metadata['protocol_version'] : '' )
+			|| empty( $stored_metadata['binding_hash'] )
+			|| ! hash_equals( $binding_hash, (string) $stored_metadata['binding_hash'] )
+			|| empty( $stored_metadata['square_location_id'] )
+			|| ! hash_equals( $square_loc, (string) $stored_metadata['square_location_id'] )
+			|| empty( $stored_metadata['square_mode'] )
+			|| ! hash_equals( self::mode(), (string) $stored_metadata['square_mode'] )
+		) {
+			return new WP_Error( 'doughboss_pay_legacy_locked', __( 'This payment attempt cannot be retried automatically. Please contact the shop before paying again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'attempt_id' => (int) $attempt['id'] ) );
 		}
 
 		// This checkout already produced a Square payment. Never charge again —
@@ -325,12 +379,20 @@ class DoughBoss_Square {
 			return self::replay( $existing_reference, $attempt, $amount_minor, $currency );
 		}
 
-		if ( ! DoughBoss_Payment_Attempts::claim_creation( (int) $attempt['id'] ) ) {
+		if ( '' !== $voucher_code ) {
+			$claimed = DoughBoss_Voucher::claim_payment_dispatch( $voucher_code, $voucher_key, (int) $attempt['id'] );
+		} else {
+			$claimed = DoughBoss_Payment_Attempts::claim_irreversible_creation( (int) $attempt['id'] );
+		}
+		if ( is_wp_error( $claimed ) ) {
+			return $claimed;
+		}
+		if ( true !== $claimed ) {
 			$attempt = DoughBoss_Payment_Attempts::find( (int) $attempt['id'] );
 			if ( $attempt && ! empty( $attempt['provider_reference'] ) ) {
 				return self::replay( (string) $attempt['provider_reference'], $attempt, $amount_minor, $currency );
 			}
-			return new WP_Error( 'doughboss_pay_provisioning', __( 'Your secure payment session is still being prepared. Please wait a moment and try again.', 'doughboss' ), array( 'status' => 409 ) );
+			return self::pending_error( $attempt, 'doughboss_pay_provisioning' );
 		}
 
 		$body = array(
@@ -350,22 +412,25 @@ class DoughBoss_Square {
 
 		$response = self::request( 'POST', '/v2/payments', $body );
 		if ( is_wp_error( $response ) ) {
-			// Releasing the creation claim is safe: the idempotency key is derived
-			// from the server-owned checkout key, so a replay of this same
-			// checkout returns Square's original payment instead of charging
-			// again — even if the network failed after Square accepted the call.
-			DoughBoss_Payment_Attempts::release_creation( (int) $attempt['id'], $response->get_error_code() );
-			return $response;
+			DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $response->get_error_code() );
+			return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $response->get_error_code() );
 		}
 
 		$payment = isset( $response['payment'] ) && is_array( $response['payment'] ) ? $response['payment'] : array();
 		$payload = self::payment_payload( $payment, $attempt, $amount_minor, $currency );
 		if ( is_wp_error( $payload ) ) {
-			DoughBoss_Payment_Attempts::release_creation( (int) $attempt['id'], $payload->get_error_code() );
-			return $payload;
+			$reference       = isset( $payment['id'] ) ? self::canonical_id( $payment['id'] ) : '';
+			$provider_status = isset( $payment['status'] ) ? strtoupper( sanitize_text_field( (string) $payment['status'] ) ) : '';
+			$bound           = '' !== $reference
+				? DoughBoss_Payment_Attempts::bind_irreversible_reference( (int) $attempt['id'], $reference, 'mismatch', $provider_status )
+				: false;
+			if ( ! $bound ) {
+				DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $payload->get_error_code() );
+			}
+			return self::pending_error( $bound ? $bound : DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $payload->get_error_code(), $reference );
 		}
 
-		$bound = DoughBoss_Payment_Attempts::bind_provider_reference(
+		$bound = DoughBoss_Payment_Attempts::bind_irreversible_reference(
 			(int) $attempt['id'],
 			(string) $payload['id'],
 			$payload['status'],
@@ -381,8 +446,8 @@ class DoughBoss_Square {
 				if ( function_exists( 'error_log' ) ) {
 					error_log( 'DoughBoss Square: payment ' . (string) $payload['id'] . ' succeeded but could not be bound to attempt ' . (int) $attempt['id'] . ' — reconcile manually.' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log — deliberate money-reconciliation audit trail.
 				}
-				DoughBoss_Payment_Attempts::release_creation( (int) $attempt['id'], 'doughboss_pay_binding' );
-				return new WP_Error( 'doughboss_pay_binding', __( 'The payment reference could not be bound safely. Do not pay again — please contact the shop and we will confirm it for you.', 'doughboss' ), array( 'status' => 409 ) );
+				DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], 'doughboss_pay_binding' );
+				return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), 'doughboss_pay_binding', (string) $payload['id'] );
 			}
 		}
 
@@ -404,9 +469,22 @@ class DoughBoss_Square {
 	 * @return array|WP_Error
 	 */
 	private static function replay( $reference, array $attempt, $amount_minor, $currency ) {
+		if ( 'mismatch' === (string) $attempt['status'] ) {
+			return self::pending_error( $attempt, 'doughboss_pay_mismatch', $reference );
+		}
+		if ( in_array( (string) $attempt['status'], array( 'failed', 'voided' ), true ) ) {
+			return array(
+				'id'         => $reference,
+				'status'     => (string) $attempt['status'],
+				'amount'     => (int) $attempt['amount_minor'],
+				'currency'   => strtolower( (string) $attempt['currency'] ),
+				'attempt_id' => (int) $attempt['id'],
+			);
+		}
 		$response = self::retrieve_payment( $reference );
 		if ( is_wp_error( $response ) ) {
-			return $response;
+			DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $response->get_error_code() );
+			return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $response->get_error_code(), $reference );
 		}
 		$payload = self::payment_payload( $response, $attempt, $amount_minor, $currency );
 		if ( is_wp_error( $payload ) ) {
@@ -421,6 +499,30 @@ class DoughBoss_Square {
 		}
 		$payload['attempt_id'] = isset( $attempt['id'] ) ? (int) $attempt['id'] : 0;
 		return $payload;
+	}
+
+	/**
+	 * Return a structured, fail-closed Square outcome without exposing card data.
+	 *
+	 * @param array|null $attempt   Durable attempt row.
+	 * @param string     $code      Safe error code.
+	 * @param string     $reference Optional known Square payment id.
+	 * @return WP_Error
+	 */
+	private static function pending_error( $attempt, $code, $reference = '' ) {
+		$attempt   = is_array( $attempt ) ? $attempt : array();
+		$reference = self::canonical_id( '' !== $reference ? $reference : ( isset( $attempt['provider_reference'] ) ? $attempt['provider_reference'] : '' ) );
+		$data      = array(
+			'status'          => 409,
+			'outcome'         => 'unknown',
+			'payment_pending' => true,
+			'retry_safe'      => false,
+			'attempt_id'      => isset( $attempt['id'] ) ? (int) $attempt['id'] : 0,
+		);
+		if ( '' !== $reference ) {
+			$data['payment_intent'] = $reference;
+		}
+		return new WP_Error( sanitize_key( $code ) ?: 'doughboss_pay_pending', __( 'Your payment may already be complete. Please do not pay again — contact the shop so we can confirm it for you.', 'doughboss' ), $data );
 	}
 
 	/**
@@ -466,6 +568,19 @@ class DoughBoss_Square {
 		if ( ! $attempt ) {
 			return new WP_Error( 'doughboss_pay_attempt', __( 'The payment attempt could not be reconciled.', 'doughboss' ), array( 'status' => 409 ) );
 		}
+		$attempt_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$is_v2            = 'square-v2' === ( isset( $attempt_metadata['protocol_version'] ) ? (string) $attempt_metadata['protocol_version'] : '' );
+		if (
+			$is_v2
+			&& (
+				empty( $attempt_metadata['square_location_id'] )
+				|| ! hash_equals( self::location_id(), (string) $attempt_metadata['square_location_id'] )
+				|| empty( $attempt_metadata['square_mode'] )
+				|| ! hash_equals( self::mode(), (string) $attempt_metadata['square_mode'] )
+			)
+		) {
+			return new WP_Error( 'doughboss_pay_mode_changed', __( 'This payment cannot be verified with the shop\'s current Square configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 
 		$payment = self::retrieve_payment( $id );
 		if ( is_wp_error( $payment ) ) {
@@ -499,25 +614,36 @@ class DoughBoss_Square {
 			&& hash_equals( $expected_location, $payment_loc );
 
 		if ( ! $valid ) {
-			DoughBoss_Payment_Attempts::update(
-				(int) $attempt['id'],
-				array(
-					'status'          => 'mismatch',
-					'provider_status' => $provider_status,
-					'last_error'      => 'provider_binding_mismatch',
-				)
-			);
+			if ( $is_v2 ) {
+				DoughBoss_Payment_Attempts::reconcile_irreversible_reference( $id, 'mismatch', $provider_status );
+			} else {
+				DoughBoss_Payment_Attempts::update( (int) $attempt['id'], array( 'status' => 'mismatch', 'provider_status' => $provider_status, 'last_error' => 'provider_binding_mismatch' ) );
+			}
 			return new WP_Error( 'doughboss_pay_mismatch', __( 'The payment did not match this order.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
-		DoughBoss_Payment_Attempts::update(
-			(int) $attempt['id'],
-			array(
-				'status'          => $status,
-				'provider_status' => $provider_status,
-				'verified_at'     => 'succeeded' === $status ? current_time( 'mysql', true ) : '',
-			)
-		);
+		if ( $is_v2 ) {
+			$reconciled = DoughBoss_Payment_Attempts::reconcile_irreversible_reference( $id, $status, $provider_status );
+			if ( false === $reconciled ) {
+				return new WP_Error( 'doughboss_pay_reconcile', __( 'The payment state could not be reconciled safely.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			$durable_status = isset( $reconciled['status'] ) ? (string) $reconciled['status'] : '';
+			if ( 'mismatch' === $durable_status ) {
+				return new WP_Error( 'doughboss_pay_mismatch', __( 'The payment remains quarantined because it did not match this order.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			$status = 'order_committed' === $durable_status ? 'succeeded' : $durable_status;
+		} else {
+			// Preserve legacy webhook/manual-reconciliation inspection without
+			// allowing legacy attempts to satisfy the v2 automatic checkout path.
+			DoughBoss_Payment_Attempts::update(
+				(int) $attempt['id'],
+				array(
+					'status'          => $status,
+					'provider_status' => $provider_status,
+					'verified_at'     => 'succeeded' === $status ? current_time( 'mysql', true ) : '',
+				)
+			);
+		}
 
 		return array(
 			'id'              => $id,
