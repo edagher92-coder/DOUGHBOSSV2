@@ -102,3 +102,29 @@ Recommended next batches, in priority order:
 3. **Verified multi-location/SamOS integration and delivery.** Locate the actual SamOS repository and existing business/location/auth contracts read-only, then implement only an agreed first end-to-end connection with stable site/location identity and measurable status. No guessed endpoint or throw-only stub. Resolve the intended shared Drive folder by successful metadata verification before any upload; preserve quarantine and exclude sensitive historical material from public artifacts.
 
 Ollama supplies bounded work products, not release authority. GPT-5.6 integration retains exclusive file ownership, source review, local validation and fresh review for consequential changes. No more than two complementary Ollama calls are used per coherent batch; remote workflows and live actions retain their separate approval gates.
+
+## Owner-confirmed backup and plugin update attempt
+
+The owner subsequently confirmed "backed up, go" after being asked for a fresh complete database-and-files backup. That is owner confirmation, not an agent-observed restore rehearsal. The plugin update was approved; theme publication and payment activation were not.
+
+Fresh read-only evidence on 8 September 2026, approximately 13:42 UTC:
+
+- WPVibe `option pluck doughboss_settings payments_enabled` returned `0`; `stripe_mode` returned `test`; `ordering_open`, `pospal_enabled` and `pospal_push_orders` each returned `1`. This establishes a local payments-disable gate, not a Stripe outage. No stored credential was retrieved.
+- Public `/wp-json/doughboss/v1/config` reported ordering open, effective payments disabled, gateway Stripe, single native location `1`, pickup enabled and delivery disabled. Current values supersede the older all-off handoff, and were left unchanged.
+- The active plugin remained 2.41.0. `doughboss_db_version` was already 1.23.0, matching the candidate; no new schema version is required.
+
+The canonical plugin payload at local `6226da0` is unchanged from published/tested commit `27c39fff3d7f421b25d5fe68c8b70751ebfd8bc3`. The existing successful run `34231630329` was rechecked; no new CI or Pages deployment was triggered. The verified ZIP was copied without overwrite to `C:\Codex\Temp\doughboss-preview-20260908\doughboss-2.43.0.zip` and uploaded as the only asset of [v2.43.0-rc.1](https://github.com/edagher92-coder/DOUGHBOSSV2/releases/tag/v2.43.0-rc.1). GitHub reported uploaded state, 2,578,194 bytes and matching SHA-256 `4d984e715d0d52bc06a0da5a34af79c27087f321a5479acee134c632ab644368`.
+
+The approved WPVibe command `plugin install https://github.com/edagher92-coder/DOUGHBOSSV2/releases/download/v2.43.0-rc.1/doughboss-2.43.0.zip --force --activate` returned exit 1, **Plugin not found**. It was not retried with guessed flags or an alternative payload. A subsequent plugin listing still showed active 2.41.0. Chrome could list the existing DoughBoss tab, but claiming it timed out; no plugin upload or replacement occurred through the browser.
+
+**Remaining delivery action:** use WordPress's normal Plugins → Add New → Upload Plugin flow with the exact canonical `doughboss-2.43.0.zip`, review the replacement target, and replace only the existing DoughBoss plugin. Do not uninstall/delete it, upload the full repository archive or publish the theme. Then verify active version 2.43.0, existing menu/location records and unchanged ordering/payment/POS settings. Until that succeeds, the release asset is delivered but production is not updated.
+
+The owner's new Square migration request and verified SamOS integration gaps are recorded in `SQUARE-MIGRATION-20260908.md`. Neither is claimed connected or operational from the existing payment-only implementation.
+
+## Stripe coverage follow-on
+
+The read-only payment trace found no direct Stripe regression coverage in the previous pure suite. `tests/test-stripe.php` now adds 42 assertions for the existing readiness gates, canonical reference sanitization, hosted-session response validation and webhook signature verification. It calls real pure helpers, uses synthetic settings and a narrow reflection invocation for the private response validator, and adds no HTTP/database shim or production code.
+
+The lead reran `php -n tests/run.php` with PHP 7.4.33 and 8.2.33: **207 assertions passed on each**. PHP syntax and `git diff --check` passed. Revalidation of the published `doughboss-2.43.0.zip` still matched the 137-file runtime tree exactly. These test-only changes do not alter the release asset; provider HTTP, persistence and browser redirect/return acceptance remain distinct missing evidence.
+
+After the failed install, public read-only checks still returned 43 menu items, one Revesby location (native ID 1), ordering open, gateway Stripe and payments disabled. WPVibe still reported active theme 1.4.0. No toggle, menu/location record, quarantine item or credential was changed by this batch.
