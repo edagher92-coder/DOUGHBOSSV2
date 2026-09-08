@@ -14,18 +14,15 @@
  *     amount is never sent from here: POST /payment-intent recomputes it from
  *     the stored cart, and POST /checkout re-verifies the charge against Square
  *     before an order is created.
- *  3. Renders the same confirmation shape the core script uses.
+ *  3. Hands confirmed orders and errors to the core checkout's form-local UI.
  *
  * Why it intercepts submit
  * ------------------------
- * The core storefront script (public/js/doughboss.js) is owned elsewhere and
- * has no Square branch, so its own submit handler would try to place an UNPAID
- * order. A capture-phase listener on `document` runs before the form's own
- * listener and stops it, so the Square path is the only one that runs while
- * Square is the active gateway. When doughboss.js later grows a native Square
- * branch, delete this interception and call window.DoughBossSquare.pay()
- * from it instead — that entry point is kept deliberately small for exactly
- * that hand-over.
+ * The core storefront script renders the shared confirmation and accessible
+ * error state, but does not own Square's charge flow. A capture-phase listener
+ * on `document` runs before the form's own listener and stops it, so the Square
+ * payment path is the only one that runs while Square is active. It emits
+ * form-local events only after its server-side work has completed.
  *
  * ES5 only, matching every other file in public/js/: var + function, no arrow
  * functions, template literals, const/let, class or optional chaining.
@@ -88,6 +85,14 @@
 		return String(Date.now()) + '-' + String(Math.random()).slice(2);
 	}
 
+	function restRequestUrl(path) {
+		var queryAt = String(path).indexOf('?');
+		if (queryAt !== -1 && String(DATA.restUrl).indexOf('?') !== -1) {
+			return DATA.restUrl + path.slice(0, queryAt) + '&' + path.slice(queryAt + 1);
+		}
+		return DATA.restUrl + path;
+	}
+
 	function request(path, options) {
 		options = options || {};
 		var headers = { 'Content-Type': 'application/json' };
@@ -99,7 +104,7 @@
 				headers[k] = options.headers[k];
 			});
 		}
-		return fetch(DATA.restUrl + path, {
+		return fetch(restRequestUrl(path), {
 			method: options.method || 'GET',
 			credentials: 'same-origin',
 			headers: headers,
@@ -107,7 +112,10 @@
 		}).then(function (res) {
 			return res.json().then(function (json) {
 				if (!res.ok) {
-					throw new Error((json && json.message) || I18N.genericError || 'Something went wrong.');
+					var error = new Error((json && json.message) || I18N.genericError || 'Something went wrong.');
+					error.code = json && json.code ? String(json.code) : '';
+					error.data = json && json.data && typeof json.data === 'object' ? json.data : {};
+					throw error;
 				}
 				return json;
 			});
@@ -233,6 +241,9 @@
 		var form = session.form;
 		var orderType = orderTypeFor(form);
 		var locationId = storedLocationId();
+		if (session.paymentId) {
+			return placeOrder(session, orderType, locationId);
+		}
 
 		return session.controller.ready().then(function (parts) {
 			return parts.card.tokenize().then(function (result) {
@@ -285,6 +296,8 @@
 				return { sourceId: tokenised.token, verificationToken: '' };
 			});
 		}).then(function (source) {
+			session.providerRequestStarted = true;
+			storeSession(session);
 			return request('/payment-intent', {
 				method: 'POST',
 				body: {
@@ -308,6 +321,7 @@
 			// this checkout: keep the same payment reference and the same
 			// checkout idempotency key for every retry of /checkout.
 			session.paymentId = payment.payment_intent;
+			storeSession(session);
 			return placeOrder(session, orderType, locationId);
 		});
 	}
@@ -333,52 +347,58 @@
 		if (!session.checkoutAttemptId) {
 			session.checkoutAttemptId = uuid();
 		}
+		var payload = {
+			order_type: orderType,
+			location_id: locationId,
+			customer_email: value(form, 'customer_email')
+		};
 		return request('/checkout', {
 			method: 'POST',
 			headers: { 'Idempotency-Key': session.checkoutAttemptId },
 			body: {
-				order_type: orderType,
-				location_id: locationId,
+				order_type: payload.order_type,
+				location_id: payload.location_id,
 				payment_attempt_key: session.paymentAttemptKey,
 				payment_intent_id: session.paymentId,
 				customer_name: value(form, 'customer_name'),
-				customer_email: value(form, 'customer_email'),
+				customer_email: payload.customer_email,
 				customer_phone: value(form, 'customer_phone'),
 				address: value(form, 'address'),
 				notes: value(form, 'notes')
 			}
 		}).then(function (res) {
-			renderConfirmation(session, res);
+			clearStoredSession();
+			form.dispatchEvent(new CustomEvent('doughboss:checkout-complete', {
+				detail: { response: res, payload: payload }
+			}));
 			return res;
 		});
 	}
 
-	function renderConfirmation(session, res) {
-		var form = session.form;
-		var parent = form.parentNode;
-		if (!parent) { return; }
-		parent.innerHTML = '';
+	var SESSION_STORAGE_KEY = 'doughboss_square_attempt_v2';
 
-		var confirmation = el('div', { class: 'db-confirm', role: 'status', 'aria-live': 'polite' }, [
-			el('div', { class: 'db-confirm-check', 'aria-hidden': 'true', text: '✓' }),
-			el('p', { class: 'db-order-kicker', text: 'Payment confirmed' }),
-			el('h3', { text: 'Your order is in' }),
-			el('p', { text: 'Keep this order number for live updates.' })
-		]);
-		confirmation.appendChild(el('div', { class: 'db-confirm-number-wrap' }, [
-			el('strong', { class: 'db-confirm-number', text: res.order_number || '' })
-		]));
-		confirmation.appendChild(el('div', { class: 'db-confirm-facts' }, [
-			el('span', {}, [el('small', { text: 'Status' }), el('strong', { text: 'Sent to the shop' })]),
-			el('span', {}, [el('small', { text: 'Payment' }), el('strong', { text: 'Paid' })]),
-			el('span', {}, [el('small', { text: 'Total' }), el('strong', { text: money(res.total) })])
-		]));
-		if (res.tracking_url) {
-			confirmation.appendChild(el('div', { class: 'db-confirm-actions' }, [
-				el('a', { class: 'db-btn db-btn--track', href: res.tracking_url, rel: 'noreferrer', text: 'Track this order' })
-			]));
+	function readStoredSession() {
+		try {
+			var value = JSON.parse(window.sessionStorage.getItem(SESSION_STORAGE_KEY) || '{}');
+			return value && typeof value === 'object' ? value : {};
+		} catch (ignore) {
+			return {};
 		}
-		parent.appendChild(confirmation);
+	}
+
+	function storeSession(session) {
+		try {
+			window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+				paymentAttemptKey: session.paymentAttemptKey,
+				checkoutAttemptId: session.checkoutAttemptId,
+				paymentId: session.paymentId,
+				providerRequestStarted: !!session.providerRequestStarted
+			}));
+		} catch (ignore) {}
+	}
+
+	function clearStoredSession() {
+		try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch (ignore) {}
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -397,46 +417,63 @@
 		if (form.className.indexOf('db-preorder-request') !== -1) { return; }
 		if (form.querySelector('.' + CARD_CONTAINER_CLASS)) { return; }
 
+		var stored = readStoredSession();
 		var session = {
 			form: form,
 			controller: mountCard(form),
-			paymentAttemptKey: uuid(),
-			checkoutAttemptId: null,
-			paymentId: '',
+			paymentAttemptKey: stored.paymentAttemptKey || uuid(),
+			checkoutAttemptId: stored.checkoutAttemptId || null,
+			paymentId: stored.paymentId || '',
+			providerRequestStarted: !!stored.providerRequestStarted,
 			busy: false
 		};
 		enhanced.push(session);
 
-		// The core script labels the button "Place order" when it does not
-		// recognise the gateway. Restate it from the total the server rendered
-		// so the customer knows a card will be charged.
+		// Keep the paid-gateway button label tied to the server-rendered total.
 		var submit = form.querySelector('button[type="submit"]');
 		if (submit) {
-			var total = readDisplayedTotal(form);
-			submit.textContent = total === null ? (I18N.pay || 'Pay') : ((I18N.pay || 'Pay') + ' ' + money(total));
+			if (session.paymentId) {
+				submit.textContent = 'Check payment and place order';
+			} else if (session.providerRequestStarted) {
+				submit.disabled = true;
+				submit.textContent = 'Payment confirmation pending';
+			} else {
+				var total = readDisplayedTotal(form);
+				submit.textContent = total === null ? (I18N.pay || 'Pay') : ((I18N.pay || 'Pay') + ' ' + money(total));
+			}
 		}
+	}
+
+	function isRetrySafeOutcome(data) {
+		return !!(data && data.retry_safe === true && data.payment_pending !== true);
 	}
 
 	function fail(session, err) {
 		var form = session.form;
-		var msg = form.querySelector('.db-checkout-msg');
 		var submit = form.querySelector('button[type="submit"]');
+		var message = err && err.message ? err.message : (I18N.genericError || 'Something went wrong.');
+		var data = err && err.data && typeof err.data === 'object' ? err.data : {};
+		if (data.payment_intent) {
+			session.paymentId = String(data.payment_intent);
+		}
+		var retrySafe = isRetrySafeOutcome(data);
+		if (retrySafe) {
+			// A matching, provider-verified FAILED/CANCELED result is the only
+			// post-tokenization outcome allowed to clear a known payment reference.
+			session.paymentId = '';
+			session.providerRequestStarted = false;
+		}
+		var paymentPending = !retrySafe && ( !!data.payment_pending || !!session.providerRequestStarted || !!session.paymentId );
 		session.busy = false;
 		form.setAttribute('aria-busy', 'false');
-		if (msg) {
-			msg.textContent = err && err.message ? err.message : (I18N.genericError || 'Something went wrong.');
-			msg.className = 'db-checkout-msg db-error';
-		}
 		if (submit) {
 			// Only re-enable when no money has moved for this attempt. Once a
 			// Square payment exists, a second press must never start a second
 			// charge — the customer is directed to the shop instead.
-			if (session.paymentId) {
-				submit.disabled = true;
-				submit.textContent = 'Payment confirmation pending';
-				if (msg) {
-					msg.textContent = 'Your payment may already be complete. Please do not pay again — keep this page open or contact the shop so we can confirm your order.';
-				}
+			if (paymentPending) {
+				submit.disabled = !session.paymentId;
+				submit.textContent = session.paymentId ? 'Check payment and place order' : 'Payment confirmation pending';
+				message = 'Your payment may already be complete. Please do not pay again — keep this page open or contact the shop so we can confirm your order.';
 			} else {
 				submit.disabled = false;
 				var total = readDisplayedTotal(form);
@@ -445,8 +482,16 @@
 				// the server derives a fresh Square idempotency key.
 				session.paymentAttemptKey = uuid();
 				session.checkoutAttemptId = null;
+				session.providerRequestStarted = false;
+				clearStoredSession();
 			}
 		}
+		if (paymentPending) {
+			storeSession(session);
+		}
+		form.dispatchEvent(new CustomEvent('doughboss:checkout-error', {
+			detail: { message: message, paymentPending: paymentPending }
+		}));
 	}
 
 	// Capture phase on `document`, so this runs BEFORE the core script's own
@@ -465,6 +510,7 @@
 
 		if (session.busy) { return; }
 		session.busy = true;
+		form.dispatchEvent(new CustomEvent('doughboss:checkout-start'));
 		form.setAttribute('aria-busy', 'true');
 
 		var msg = form.querySelector('.db-checkout-msg');

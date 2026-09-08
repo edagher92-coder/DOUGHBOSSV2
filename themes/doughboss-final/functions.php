@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DOUGHBOSS_FINAL_VERSION', '1.4.0' );
+define( 'DOUGHBOSS_FINAL_VERSION', '1.5.0' );
 
 function doughboss_final_setup() {
 	add_theme_support( 'title-tag' );
@@ -76,6 +76,12 @@ function doughboss_final_load_storefront_assets( $load ) {
 	return $load || is_front_page() || is_page( array( 'menu', 'order', 'track-order', 'catering' ) );
 }
 add_filter( 'doughboss_load_assets', 'doughboss_final_load_storefront_assets' );
+
+/** Identify the theme's template-rendered order journey for plugin body classes. */
+function doughboss_final_is_order_page( $is_order_page ) {
+	return $is_order_page || is_page( array( 'menu', 'order' ) );
+}
+add_filter( 'doughboss_is_order_page', 'doughboss_final_is_order_page' );
 
 function doughboss_final_load_catering_assets( $load ) {
 	return $load || is_page( 'catering' );

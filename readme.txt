@@ -2,9 +2,9 @@
 Contributors: doughboss
 Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.41.0
+Stable tag: 2.42.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.42.0 =
+* Adds the accessible mobile menu-customization sheet, synchronized live prices and floating cart summary while preserving the desktop disclosure layout and reduced-motion support.
+* Hardens Square checkout with durable attempt identity, cart serialization, immutable checkout snapshots, fail-closed recovery, terminal voucher-release checks and legacy-attempt draining.
+* Adds repeatable WordPress/MySQL integration coverage, dependency-free storefront helper tests and Windows-safe canonical ZIP validation for release candidates.
 
 = 2.41.0 =
 * Activates the existing stored catering-enquiry workflow on the public catering page while retaining direct email and phone fallbacks.

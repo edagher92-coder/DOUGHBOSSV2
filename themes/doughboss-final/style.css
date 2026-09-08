@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.4.0
+Version: 1.5.0
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -189,26 +189,31 @@ button, input, select, textarea { font: inherit; }
 .dbf-prose a { color: var(--dbf-ember-dark); font-weight: 600; text-underline-offset: 3px; }
 .dbf-prose img { border-radius: 18px; }
 .dbf-system-notice { padding: 18px 20px; background: #fff3d8; border-left: 4px solid var(--dbf-gold); border-radius: 10px; }
-.dbf-page-hero--order { min-height: 410px; text-align: center; }
-.dbf-page-hero--order::after { background: linear-gradient(rgba(10,8,7,.9), rgba(10,8,7,.95)); }
-.dbf-page-hero--order .dbf-page-hero-bg { filter: saturate(.55) brightness(.34); }
-.dbf-page-hero--order .dbf-page-hero-inner { align-items: center; min-height: 410px; padding-top: 58px; padding-bottom: 88px; }
-.dbf-page-hero--order .dbf-display { font-size: clamp(62px, 7.4vw, 106px); text-wrap: balance; }
-.dbf-page-hero--order .dbf-lede { max-width: 760px; color: #ddd6ca; }
+.dbf-page-hero--order { min-height: 360px; text-align: left; }
+.dbf-page-hero--order::after { background: linear-gradient(90deg, rgba(10,8,7,.96), rgba(10,8,7,.78) 58%, rgba(10,8,7,.52)); }
+.dbf-page-hero--order .dbf-page-hero-bg { filter: saturate(.62) brightness(.42); }
+.dbf-page-hero--order .dbf-page-hero-inner { align-items: flex-start; min-height: 360px; padding-block: 62px 76px; }
+.dbf-page-hero--order .dbf-display { font-size: clamp(58px, 7vw, 96px); text-wrap: balance; }
+.dbf-page-hero--order .dbf-lede { max-width: 620px; color: #ddd6ca; }
 .dbf-coming-soon-badge { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 9px 17px; margin-top: 24px; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; background: rgba(255,255,255,.09); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; backdrop-filter: blur(10px); }
 .dbf-coming-soon-badge > span { width: 8px; height: 8px; border-radius: 50%; background: var(--dbf-gold); box-shadow: 0 0 0 5px rgba(241,161,50,.15); }
-.dbf-order-stage { padding-bottom: clamp(56px, 8vw, 100px); background: linear-gradient(to bottom, var(--dbf-char) 0 54px, var(--dbf-cream) 54px 100%); }
-.dbf-order-intro { display: grid; position: relative; z-index: 3; grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr); align-items: stretch; gap: 18px; margin-top: -54px; }
-.dbf-order-shell { width: min(1540px, calc(100% - 48px)); padding-top: 32px; }
-.dbf-order-status { min-width: 0; margin: 0; }
-.dbf-order-status .db-ordering-status { display: flex; min-height: 100%; flex-direction: column; justify-content: center; padding: 23px 28px; margin: 0; background: #fff; border: 1px solid var(--dbf-line); border-left: 4px solid var(--dbf-ember); border-radius: 20px; box-shadow: 0 18px 45px rgba(0,0,0,.14); }
-body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; max-width: none; margin: 0 !important; }
-.dbf-order-status .db-ordering-status strong { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 30px; font-weight: 400; letter-spacing: .03em; text-transform: uppercase; }
-.dbf-order-status .db-ordering-status p { margin: 5px 0 0; color: #655f56; }
-.dbf-order-location { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-width: 0; min-height: 108px; padding: 20px 24px; margin: 0; background: #fff; color: var(--dbf-ink); border: 1px solid var(--dbf-line); border-top: 4px solid var(--dbf-ember); border-radius: 20px; box-shadow: 0 18px 45px rgba(0,0,0,.14); }
-.dbf-order-location strong { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 25px; font-weight: 400; }
-.dbf-order-location span { display: block; color: #655f56; font-size: 14px; }
-.dbf-order-location > span { flex: 0 0 auto; color: var(--dbf-ember-dark); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.dbf-order-stage { padding-bottom: clamp(48px, 7vw, 88px); background: linear-gradient(to bottom, var(--dbf-char) 0 42px, var(--dbf-cream) 42px 100%); }
+.dbf-order-intro { position: relative; z-index: 3; margin-top: -42px; }
+.dbf-order-shell { width: min(1540px, calc(100% - 48px)); padding-top: 24px; }
+.dbf-order-counter { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); overflow: hidden; background: var(--dbf-paper); border: 1px solid var(--dbf-line); border-top: 5px solid var(--dbf-ember); border-radius: 18px; box-shadow: 0 18px 45px rgba(10,8,7,.16); transition: transform 220ms var(--dbf-ease); }
+.dbf-order-counter--shop-only { grid-template-columns: minmax(0, 1fr); }
+.dbf-order-counter--status-only { grid-template-columns: minmax(0, 1fr); }
+.dbf-order-counter__shop, .dbf-order-counter__status { min-width: 0; padding: 20px 24px; }
+.dbf-order-counter__shop { display: flex; align-items: center; border-right: 1px solid var(--dbf-line); }
+.dbf-order-counter__shop .db-shop-picker { width: 100%; }
+.dbf-order-counter__shop .db-shop { max-width: none; padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.dbf-order-counter--shop-only .dbf-order-counter__shop { border: 0; }
+.dbf-order-counter__status { display: flex; align-items: center; background: rgba(238,232,222,.52); }
+body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; max-width: none; padding: 0; margin: 0 !important; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.dbf-order-counter .db-ordering-status strong { display: block; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 28px; font-weight: 400; letter-spacing: .03em; line-height: 1; text-transform: uppercase; }
+.dbf-order-counter .db-ordering-status p { margin: 6px 0 0; color: #655f56; font-size: 14px; line-height: 1.45; }
+.dbf-order-motion .dbf-order-counter { transform: translateY(12px); }
+.dbf-order-motion .dbf-order-counter.is-settled { transform: none; }
 .dbf-order-readiness { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; margin-top: 22px; background: rgba(13,13,13,.11); border: 1px solid var(--dbf-line); border-radius: 18px; }
 .dbf-order-readiness > div { display: grid; grid-template-columns: 38px 1fr; gap: 0 14px; padding: 20px 22px; background: rgba(255,255,255,.76); }
 .dbf-order-readiness span { grid-row: 1 / 3; color: var(--dbf-ember); font-family: 'Bebas Neue', Impact, sans-serif; font-size: 26px; line-height: 1; }
@@ -216,7 +221,7 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 .dbf-order-readiness small { margin-top: 4px; color: #706960; font-size: 12px; line-height: 1.4; }
 .dbf-storefront { padding: clamp(22px, 4vw, 50px); background: #fbfaf6; border: 1px solid var(--dbf-line); border-radius: 28px; box-shadow: 0 16px 50px rgba(13,13,13,.08); }
 .dbf-storefront .db-app { font-family: 'Barlow', sans-serif; }
-.dbf-storefront .db-menu { margin-top: 0; }
+.dbf-storefront .db-app.db-menu { margin-top: 0; padding-top: 0; padding-inline: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
 .dbf-storefront .db-menu-category-title, .dbf-storefront h2, .dbf-storefront h3 { font-family: 'Bebas Neue', Impact, sans-serif; letter-spacing: .025em; }
 .dbf-builder-wrap, .dbf-cart-wrap { margin-top: 34px; }
 .dbf-page-hero--compact { min-height: 390px; }
@@ -279,6 +284,13 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 .dbf-js [data-dbf-reveal-delay="1"] { transition-delay: .1s; }
 .dbf-js [data-dbf-reveal-delay="2"] { transition-delay: .2s; }
 
+@media (min-width: 721px) {
+	.dbf-order-counter__shop .db-shop { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .85fr); gap: .25rem 32px; }
+	.dbf-order-counter__shop .db-shop-heading, .dbf-order-counter__shop .db-shop-name, .dbf-order-counter__shop .db-shop-select, .dbf-order-counter__shop .db-shop-addr, .dbf-order-counter__shop .db-shop-phone { grid-column: 1; }
+	.dbf-order-counter__shop .db-shop-info, .dbf-order-counter__shop .db-shop-info-wrap { display: contents; }
+	.dbf-order-counter__shop .db-shop-context { grid-column: 2; grid-row: 1 / span 4; align-self: center; margin: 0; padding: 16px 0 16px 28px; border-top: 0; border-left: 1px solid var(--dbf-line); }
+}
+
 @media (max-width: 1000px) {
 	.dbf-header-inner { gap: 20px; }
 	.dbf-nav-list, .dbf-nav ul { gap: 18px; }
@@ -330,17 +342,18 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 	.dbf-catering-media { min-height: 330px; }
 	.dbf-review-panel { align-items: flex-start; flex-direction: column; }
 	.dbf-page-hero, .dbf-page-hero-inner { min-height: 390px; }
-	.dbf-page-hero--order, .dbf-page-hero--order .dbf-page-hero-inner { min-height: 370px; }
-	.dbf-page-hero--order .dbf-page-hero-inner { padding-top: 48px; padding-bottom: 82px; }
-	.dbf-page-hero--order .dbf-display { font-size: clamp(54px, 17vw, 78px); }
+	.dbf-page-hero--order, .dbf-page-hero--order .dbf-page-hero-inner { min-height: 310px; }
+	.dbf-page-hero--order .dbf-page-hero-inner { padding-top: 42px; padding-bottom: 58px; }
+	.dbf-page-hero--order .dbf-display { font-size: clamp(52px, 16vw, 74px); }
 	.dbf-page-hero--order .dbf-lede { margin-top: 16px; font-size: 17px; line-height: 1.45; }
-	.dbf-order-stage { background: linear-gradient(to bottom, var(--dbf-char) 0 36px, var(--dbf-cream) 36px 100%); }
-	.dbf-order-intro { gap: 12px; margin-top: -42px; }
-	.dbf-order-shell { width: min(100% - 20px, var(--dbf-wrap)); padding-top: 24px; }
+	.dbf-order-stage { background: linear-gradient(to bottom, var(--dbf-char) 0 30px, var(--dbf-cream) 30px 100%); }
+	.dbf-order-intro { margin-top: -30px; }
+	.dbf-order-shell { width: min(100% - 20px, var(--dbf-wrap)); padding-top: 18px; }
 	.dbf-page-hero::after { background: linear-gradient(90deg, rgba(10,8,7,.95), rgba(10,8,7,.62)); }
-	.dbf-page-hero--order::after { background: linear-gradient(rgba(10,8,7,.9), rgba(10,8,7,.95)); }
-	.dbf-order-location { align-items: flex-start; flex-direction: column; min-height: 0; padding: 18px 20px; }
-	.dbf-order-status .db-ordering-status { min-height: 0; padding: 20px; }
+	.dbf-page-hero--order::after { background: linear-gradient(rgba(10,8,7,.9), rgba(10,8,7,.94)); }
+	.dbf-order-counter { grid-template-columns: 1fr; border-radius: 16px; }
+	.dbf-order-counter__shop, .dbf-order-counter__status { padding: 18px; }
+	.dbf-order-counter__shop { border-right: 0; border-bottom: 1px solid var(--dbf-line); }
 	.dbf-order-readiness { margin-top: 14px; }
 	.dbf-order-readiness > div { padding: 17px 18px; }
 	.dbf-storefront { padding: 20px 14px; border-radius: 18px; }

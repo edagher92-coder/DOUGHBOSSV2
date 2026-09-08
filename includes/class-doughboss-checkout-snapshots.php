@@ -48,6 +48,9 @@ class DoughBoss_Checkout_Snapshots {
 		}
 		$payload_hash = hash( 'sha256', $json );
 		$existing     = self::find( $checkout_key );
+		if ( ! $existing ) {
+			$existing = self::find_for_irreversible_payment( $checkout_key );
+		}
 		if ( $existing ) {
 			if ( ! hash_equals( (string) $existing['payload_hash'], $payload_hash ) ) {
 				return new WP_Error( 'doughboss_snapshot_changed', __( 'Your order changed while payment was being prepared. Please start payment again.', 'doughboss' ), array( 'status' => 409 ) );
@@ -98,10 +101,49 @@ class DoughBoss_Checkout_Snapshots {
 		}
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE checkout_key = %s LIMIT 1', $checkout_key ), ARRAY_A );
+		return self::decode_row( $row, false );
+	}
+
+	/**
+	 * Read an expired snapshot only while an irreversible Square v2 payment
+	 * still requires recovery or manual reconciliation.
+	 *
+	 * @param string $checkout_key Stable checkout key.
+	 * @return array|null
+	 */
+	public static function find_for_irreversible_payment( $checkout_key ) {
+		global $wpdb;
+		$checkout_key = self::stable_key( $checkout_key );
+		if ( '' === $checkout_key || ! class_exists( 'DoughBoss_Payment_Attempts' ) ) {
+			return null;
+		}
+		$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
+		$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
+		if (
+			! is_array( $attempt )
+			|| 'square' !== (string) $attempt['provider']
+			|| 'square-v2' !== ( isset( $metadata['protocol_version'] ) ? (string) $metadata['protocol_version'] : '' )
+			|| ! in_array( (string) $attempt['status'], array( 'prepared', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch' ), true )
+		) {
+			return null;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE checkout_key = %s LIMIT 1', $checkout_key ), ARRAY_A );
+		return self::decode_row( $row, true );
+	}
+
+	/**
+	 * Validate and decode one stored snapshot row.
+	 *
+	 * @param array|null $row           Database row.
+	 * @param bool       $allow_expired Whether a protected payment owns it.
+	 * @return array|null
+	 */
+	private static function decode_row( $row, $allow_expired ) {
 		if ( ! is_array( $row ) ) {
 			return null;
 		}
-		if ( empty( $row['expires_at'] ) || strtotime( (string) $row['expires_at'] . ' UTC' ) < time() ) {
+		if ( ! $allow_expired && ( empty( $row['expires_at'] ) || strtotime( (string) $row['expires_at'] . ' UTC' ) < time() ) ) {
 			return null;
 		}
 		$payload = json_decode( (string) $row['payload_json'], true );
@@ -143,17 +185,22 @@ class DoughBoss_Checkout_Snapshots {
 	/**
 	 * Opportunistically remove abandoned/completed recovery data after expiry.
 	 *
+	 * @param bool $force Skip sampling for deterministic maintenance/testing.
 	 * @return void
 	 */
-	private static function purge_expired() {
+	private static function purge_expired( $force = false ) {
 		global $wpdb;
 		// Keep this lightweight on ordinary checkouts; approximately one request
 		// in 50 performs the bounded retention cleanup.
-		if ( 1 !== wp_rand( 1, 50 ) ) {
+		if ( ! $force && 1 !== wp_rand( 1, 50 ) ) {
 			return;
 		}
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . self::table() . ' WHERE expires_at < %s LIMIT 100', current_time( 'mysql', true ) ) );
+		$attempts = $wpdb->prefix . 'doughboss_payment_attempts';
+		$sql      = 'DELETE FROM ' . self::table() . ' WHERE expires_at < %s AND checkout_key NOT IN ('
+			. "SELECT checkout_key FROM {$attempts} WHERE provider = 'square' AND status IN ('prepared','dispatching','processing','unknown','succeeded','mismatch')"
+			. ') LIMIT 100';
+		$wpdb->query( $wpdb->prepare( $sql, current_time( 'mysql', true ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	/**

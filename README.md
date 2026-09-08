@@ -39,11 +39,30 @@ customer order tracking, all driven by shortcodes and a small REST API.
 ### From a built zip (recommended)
 
 ```bash
-# Build an installable zip from the repo root
+# Build a non-overwriting review-candidate zip from the repo root.
+# The builder refuses to replace an existing archive.
 bash build-zip.sh
 ```
 
-Then in wp-admin: **Plugins → Add New → Upload Plugin → `doughboss.zip` → Activate**.
+The output is `dist/doughboss-review-candidate.zip`. Upload that archive through
+the WordPress Plugins screen when installation is approved.
+
+### Windows local release gate
+
+Use the repository gate with a PHP executable that has the ZIP extension available:
+
+```powershell
+.\scripts\test-release.ps1 `
+  -PhpPath C:\path\to\php.exe `
+  -ExtensionDir C:\path\to\ext `
+  -OutputPath dist\doughboss-review-candidate.zip `
+  -ThemeOutputPath dist\doughboss-final-review-candidate.zip
+```
+
+It syntax-checks the current PHP and JavaScript files, runs `tests/run.php`,
+builds the paired plugin and theme candidates, and validates both archive layouts
+and their bytes against the current source tree. It does not publish, upload,
+deploy, or overwrite an existing archive.
 
 ### From source
 
