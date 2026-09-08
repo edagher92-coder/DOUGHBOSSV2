@@ -51,6 +51,10 @@ Final local review plugin: 2,578,150 bytes, SHA-256 `6687A57DB034576E03806F46600
 
 A disposable loopback-only fixture was prepared outside source at `C:\Codex\Temp\doughboss-interaction-polish-20260908`. The tool rejected the PHP fixture-server launch with `rejected: blocked by policy`. That launch was not retried or bypassed, and no browser acceptance result is claimed. The local source/package checks above remained available and passed.
 
+On the next continuation, source was revalidated at local commit `5de8324f4e84e03b2111bb1de34e0bfe2d1fcab0` with a clean working tree. A distinct offline test was attempted without any server: the synthetic fixture referenced only the existing local scripts/styles and replaced API calls in memory. Playwright CLI opened its dedicated browser session, but navigation returned `Access to "file:" protocol is blocked`. No local page was loaded and no browser checks ran. The dedicated `doughboss-polish-offline` session was then closed successfully. No alternate file-access mechanism, listener, server-launch retry, browser security flag or runtime injection was used to circumvent either rejection.
+
+Browser acceptance now requires a supported preview/staging URL or an approved test environment able to load these project assets. Do not count the prepared fixture, a browser process starting, helper tests or a code-review verdict as rendered UI evidence. A read-only GitHub check confirmed PR #67 remains open/draft at `56159b55c91672ac704cbe016343659e90a29cca`, with all three previous jobs successful. The local interaction checkpoint was not pushed, and no new CI run or deployment was triggered.
+
 Before releasing this follow-on, verify in a permitted browser environment:
 
 - Retain entered name, contact fields, event date/time, address and dietary notes across package switches; check the submitted synthetic enquiry still matches those fields and the selected package.
