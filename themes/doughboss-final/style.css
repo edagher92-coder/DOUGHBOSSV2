@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.6.0
+Version: 1.6.1
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -389,7 +389,9 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
 
 @media (prefers-reduced-motion: reduce) {
 	html { scroll-behavior: auto; }
-	*, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
+	/* A tiny nonzero duration creates visibility transitions on controls whose
+	 * default property is all, rejecting the drawer's first-frame focus move. */
+	*, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition: none !important; }
 	.dbf-js.dbf-motion-ok [data-dbf-reveal],
 	.dbf-button:hover, .dbf-button:focus-visible,
 	.dbf-card:hover, .dbf-card:focus-within,

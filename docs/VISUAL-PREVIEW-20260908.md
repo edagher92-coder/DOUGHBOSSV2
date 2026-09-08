@@ -153,3 +153,45 @@ The commands were the existing `scripts/validate-zip.php` and `scripts/validate-
 **Superseding plugin hold, 9 September:** do not install the earlier 2.43.0 candidate. A subsequent isolated Stripe lifecycle run reproduced two runtime defects; the separately versioned 2.43.1 repair candidate has now passed its local gates and bounded Astra review, but is not released or deployed. Preserve the earlier ZIP and release asset unchanged. Read the latest Stripe recovery section in `REVIEW-20260908.md` for current candidate evidence and approval status.
 
 **Next owner-dependent actions:** provide a host-supported staging/private-theme-preview path, or explicitly choose how the file-edit restriction should be handled. Do not weaken it automatically. A real draft preview and explicit publish approval are still required before public theme publication. Square connection work separately awaits confirmation of the merchant account and configured locations described in `SQUARE-MIGRATION-20260908.md`; no OAuth URL, account connection or migration is claimed. Do not repeat the failed install, browser claim or draft-creation attempts unless relevant external state has changed.
+
+## Rendered reduced-motion repair - 9 September 2026, theme 1.6.1
+
+The local browser acceptance pass found a remaining defect in the previously unit-tested focus repair. On a fresh mobile load with reduced motion enabled, the universal `.01ms` transition-duration override leaves the close button's default `transition-property: all` active. The button's inherited visibility was still `hidden` during the queued focus callback. The menu opened visually, but focus stayed on the trigger and no background branches became inert. Normal-motion fresh load focused the close control and isolated 14 background branches.
+
+This was diagnosed in the actual current-source preview, not inferred from a static test. A temporary animation-frame/focus probe observed the hidden close button at the rejected focus call. A fresh-load CSS probe disabling transitions fixed it. Probes were removed by reloading before source acceptance; they are not shipped.
+
+The permanent change replaces the two reduced-motion transition duration/delay overrides with `transition: none !important` in the same existing universal rule. Animation reduction and navigation JavaScript are unchanged. No transition/animation completion listeners were found in the relevant theme/plugin JavaScript. Theme metadata and its cache-busting version constant now agree on **1.6.1**. The existing presentation test was extended: its focused run failed before the CSS change, then all 26 Node tests passed afterward. This is a static regression guard, not an automated browser test.
+
+### Focused browser evidence
+
+The existing source exporter/validator produced three pages and 27 files under `C:\Codex\Temp\doughboss-accessibility-20260909`. `site-729ea43` preserves the baseline; `site-motion-fixed` records the repaired working-tree source hashes against base commit `729ea43`. Both exports passed the exact-source and read-only-boundary validator. The local PHP server bound only `127.0.0.1:31849` and served the selected export, not the repository or WordPress database.
+
+| Check | Observed result |
+| --- | --- |
+| Fresh-load mobile nav, normal and reduced motion | Focus enters `.dbf-nav-close`; 14 background branches become inert. No temporary probe is present in the accepted source rendering. |
+| Reverse and forward keyboard wrap | Shift+Tab from close reaches Partners; Tab from the last link returns to close. |
+| Escape, reopen and desktop resize | Escape restores trigger focus and removes isolation; rapid close/reopen works. Resizing open navigation to 1024px closes mobile state, removes `aria-hidden` and releases isolation. This does not time an input within a single animation frame; that stale-callback case remains unit-covered. |
+| 320px reflow | No page-level horizontal overflow; navigation spans the viewport with its own vertical scroll. On the order page the sticky header ends at approximately 161.68px and tools start at 162px, without overlap. |
+| Mobile customizer | At 320px and 390px the dialog, close control and sticky action row remain within the viewport. Wholemeal changes the synthetic item total from $8.50 to $11.00. Escape restores the summary control and removes all 11 background isolation targets. No Add to cart submission was made. |
+| Search and shop controls | Sample shop selection synchronizes header/order controls; empty search shows No menu matches and clearing it restores the menu. Category navigation reaches the selected section below the tools. |
+| Runtime reduced-motion preference | Reduced mode makes all reveal elements visible; relaxing it restores the motion class without hiding already-revealed content. |
+| Opaque header fallback | High-contrast emulation produces `rgb(21, 18, 16)` with `backdrop-filter: none`; menu height/focus remain correct. Removing the optional blur `@supports` rule in local page CSSOM yields the same opaque fallback. This is a staged fallback check, not an actual legacy browser without filter support; reload restored the original stylesheet. |
+
+The in-app viewport override initially produced scaled/padded captures because it used a different pixel density from this Windows host. Matching the observed native density of 1.5625 produced usable current-source screenshots without image editing. Reviewed captures are `mobile-navigation-fixed.png` and `mobile-customizer-fixed.png` in the same temporary artifact directory. These are local synthetic preview images, not production screenshots.
+
+True browser zoom remains unverified: one Ctrl-plus interaction left the observed width/height/density unchanged, so narrow viewport evidence is not represented as 200%/400% zoom acceptance. Ctrl-zero was issued afterward. Physical devices, other browser engines, assistive-technology acceptance, complete WordPress rendering and operational checkout remain outside this focused pass. The browser's temporary viewport/media overrides and diagnostic page changes are reset before closing the QA tab; the task-owned local server is stopped after verification.
+
+### Local gates, package and independent review
+
+`scripts/test-release.ps1` on PHP 8.2.33 passed 91 PHP syntax files, 207 pure assertions, 16 JavaScript syntax files, 26 Node tests, and exact plugin/theme archive validation. PHP 7.4.33 additionally passed the changed theme entrypoint lint and all 207 pure assertions. No backend behavior changed, so the disposable database was not restarted; the 275-assertion database result remains evidence for the prior unchanged Stripe repair, not a newly executed test in this CSS batch.
+
+| Artifact in `C:\Codex\Temp\doughboss-accessibility-20260909` | Bytes / files | SHA-256 |
+| --- | --- | --- |
+| `doughboss-final-1.6.1.zip` | 31,034 / 25 | `77F28BE431B51844EB660E2918867ED2F6F5AE63CA4F2F2443401F5746197328` |
+| `doughboss-2.43.1.zip` | 2,580,163 / 137 | `D63DD104E0510A62BB18636C1872DD92002A542904D3EEEB9509C8058FFDDEBA` |
+
+The plugin digest is identical to the prior accepted 2.43.1 artifact. Earlier theme 1.6.0 ZIPs remain preserved; 1.6.1 is the new local theme candidate. No package was uploaded or installed.
+
+One guarded Ollama call used preferred `kimi-k2.7-code:cloud`, role `code_review`, with a synthetic contract/reproduction summary only. It supported disabling transitions under the existing reduced-motion policy and retaining separate browser proof. Speculative future consumers and imprecise CSS-specificity/computed-style claims were not adopted; cost is unknown. The lead owns the diagnosis, patch and browser acceptance. A fresh read-only GPT-5.6 Sol high reviewer returned **ship**, independently passed all 26 Node tests and `git diff --check`, and found no blocking regression. Its review explicitly relied on lead-run browser evidence and did not independently execute the browser or PHP gate.
+
+This closes the demonstrated local reduced-motion focus defect, not the full publication goal. The public Pages preview and production site are unchanged. The existing release/CI, private WordPress preview, Square merchant/location, SamOS and Drive destination gates still apply; no new remote approval is inferred from these local results.

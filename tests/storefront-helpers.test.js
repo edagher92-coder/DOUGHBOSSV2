@@ -607,9 +607,15 @@ test('runtime reduced-motion changes disconnect reveals and late callbacks remai
 	assert.equal(reveal.classList.contains('is-visible'), true, 'unsupported observers retain readable content');
 });
 
-test('ordering presentation has opaque tools and no retired card-motion path', () => {
+test('ordering presentation has opaque tools, static reduced motion and no retired card-motion path', () => {
 	const css = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'css', 'doughboss.css'), 'utf8');
 	const orderCss = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'css', 'doughboss-order-page.css'), 'utf8');
+	const themeCss = fs.readFileSync(path.resolve(__dirname, '..', 'themes', 'doughboss-final', 'style.css'), 'utf8');
+	const reducedMotion = themeCss.slice(themeCss.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+	// A tiny duration on the default transition-property:all can delay inherited
+	// visibility and reject the drawer's first-frame focus. Browser proof is separate.
+	assert.match(reducedMotion, /\*, \*::before, \*::after\s*\{[^}]*transition:\s*none\s*!important;/);
+	assert.doesNotMatch(reducedMotion, /transition-duration:\s*\.01ms/);
 	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
 	const source = fs.readFileSync(storefront, 'utf8');
 	assert.match(css, /\.db-app \.db-menu-tools\s*\{[^}]*background: var\(--db-paper, #f7f5f0\);/);
