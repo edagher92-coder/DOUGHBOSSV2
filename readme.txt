@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.43.0
+Stable tag: 2.43.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.43.1 =
+* Reject changes to Stripe checkout contact details after hosted payment preparation, using the existing immutable server snapshot.
+* Finalize Stripe recovery records after browser checkout and safely repair interrupted bookkeeping on verified browser or webhook retries without duplicate orders or confirmation attempts.
+* Extend isolated WordPress/MySQL regression coverage with outbound HTTP blocked; payment and ordering activation remain unchanged.
 
 = 2.43.0 =
 * Add read-only, short-lived pickup-hours status from configured schedules, with timezone and dated-closure handling.

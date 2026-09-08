@@ -29,6 +29,9 @@ if ($PhpIniPath) {
     $arguments += (Resolve-Path -LiteralPath $PhpIniPath).Path
 }
 $arguments += $wpCli
+# Block outbound HTTP before WordPress loads; synthetic pre_http_request
+# responses still run, but an unhandled fixture cannot reach a provider.
+$arguments += "--exec=define('WP_HTTP_BLOCK_EXTERNAL',true);"
 $arguments += 'eval-file'
 $arguments += $testFile
 $arguments += "--path=$wordpress"
@@ -53,6 +56,7 @@ try {
         $workerArguments += (Resolve-Path -LiteralPath $PhpIniPath).Path
     }
     $workerArguments += $wpCli
+    $workerArguments += "--exec=define('WP_HTTP_BLOCK_EXTERNAL',true);"
     $workerArguments += 'eval-file'
     $workerArguments += $raceWorker
     $workerArguments += "--path=$wordpress"

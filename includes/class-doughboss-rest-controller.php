@@ -3539,15 +3539,35 @@ class DoughBoss_REST_Controller {
 		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Online ordering is temporarily unavailable while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
+		$returned_reference = $request->get_param( 'payment_intent_id' );
+		$returned_reference = is_scalar( $returned_reference ) ? sanitize_text_field( (string) $returned_reference ) : '';
+		$stripe_return      = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $returned_reference );
+		if ( $stripe_return ) {
+			// Paid returns must repair interrupted finalization before a cached or
+			// durable browser reply can hide it. Gate the provider lookup once.
+			if ( $this->rate_limited( 'checkout', 8, 10 * MINUTE_IN_SECONDS ) ) {
+				return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+			}
+			$stripe_replay = $this->stripe_paid_order_replay( $request, $idem );
+			if ( is_wp_error( $stripe_replay ) ) {
+				return $stripe_replay;
+			}
+			if ( $stripe_replay ) {
+				$payload = $this->checkout_payload( $stripe_replay, true );
+				$this->cart->clear();
+				set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
+				return rest_ensure_response( $payload );
+			}
+		}
 		$cached = get_transient( 'doughboss_idem_' . $idem );
-		if ( is_array( $cached ) ) {
+		if ( ! $stripe_return && is_array( $cached ) ) {
 			return rest_ensure_response( $cached );
 		}
 
 		// Durable replay check precedes cart validation: a response may be lost
 		// after the winning request commits and clears the shared cart.
 		$existing_id = DoughBoss_Order::find_id_by_checkout_key( $idem );
-		if ( $existing_id ) {
+		if ( ! $stripe_return && $existing_id ) {
 			$existing = DoughBoss_Order::get( $existing_id );
 			if ( $existing ) {
 				$payload = $this->checkout_payload( $existing, true );
@@ -3559,21 +3579,8 @@ class DoughBoss_REST_Controller {
 		// Gate the provider lookup below as well as ordinary checkout work. A
 		// returned Stripe Session id is still untrusted input, and resolving it
 		// must not provide an unauthenticated amplification path to Stripe.
-		if ( $this->rate_limited( 'checkout', 8, 10 * MINUTE_IN_SECONDS ) ) {
+		if ( ! $stripe_return && $this->rate_limited( 'checkout', 8, 10 * MINUTE_IN_SECONDS ) ) {
 			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
-		}
-
-		// A signed webhook can finish the order before the browser returns. Its
-		// order uses the immutable PAYMENT checkout key, not this browser response
-		// key. Resolve that already-paid order from Stripe + the durable snapshot
-		// before cart totals are recomputed (the voucher is now redeemed, so a live
-		// cart calculation would otherwise drop its discount and falsely return 402).
-		$stripe_replay = $this->stripe_paid_order_replay( $request );
-		if ( $stripe_replay ) {
-			$payload = $this->checkout_payload( $stripe_replay, true );
-			$this->cart->clear();
-			set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
-			return rest_ensure_response( $payload );
 		}
 
 		if ( ! DoughBoss_Settings::ordering_open() ) {
@@ -3853,6 +3860,14 @@ class DoughBoss_REST_Controller {
 		if ( ! $replayed ) {
 			$this->send_confirmation( $order );
 		}
+		if ( 'stripe' === $payment_method && is_array( $paid_snapshot ) ) {
+			// Attempt the new order's notification before fallible bookkeeping.
+			// A retry repairs the same order but must not send a second message.
+			$finalized = $this->finalize_stripe_order( $paid_snapshot, $order, $payment_intent_id );
+			if ( is_wp_error( $finalized ) ) {
+				return $finalized;
+			}
+		}
 
 		$payload = $this->checkout_payload( $order, $replayed );
 		set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
@@ -3861,22 +3876,24 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
-	 * Resolve a webhook-first Stripe order without trusting now-stale cart totals.
+	 * Resolve a paid Stripe order without trusting now-stale cart totals.
 	 *
 	 * @param WP_REST_Request $request Checkout request containing the returned Session id.
-	 * @return object|null Verified existing order or null when ordinary checkout should continue.
+	 * @param string          $idem    Server-bound browser checkout key.
+	 * @return object|null|WP_Error Verified order, no existing order, or a safe error.
 	 */
-	private function stripe_paid_order_replay( WP_REST_Request $request ) {
-		if ( 'stripe' !== DoughBoss_Settings::payment_gateway() ) {
-			return null;
-		}
+	private function stripe_paid_order_replay( WP_REST_Request $request, $idem ) {
 		$session_id = sanitize_text_field( $request->get_param( 'payment_intent_id' ) );
-		if ( ! preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $session_id ) ) {
-			return null;
+		$expected_prefix = 'live' === DoughBoss_Settings::stripe_mode() ? 'cs_live_' : 'cs_test_';
+		if ( 'stripe' !== DoughBoss_Settings::payment_gateway() || 0 !== strpos( $session_id, $expected_prefix ) ) {
+			return new WP_Error( 'doughboss_pay_mode_changed', __( 'This payment session cannot be verified with the shop\'s current payment configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		$intent = DoughBoss_Stripe::retrieve_checkout_payment( $session_id );
-		if ( is_wp_error( $intent ) || 'succeeded' !== ( isset( $intent['status'] ) ? (string) $intent['status'] : '' ) ) {
-			return null;
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+		if ( 'succeeded' !== ( isset( $intent['status'] ) ? (string) $intent['status'] : '' ) ) {
+			return new WP_Error( 'doughboss_pay_unverified', __( 'The payment is not confirmed. Please contact the shop before paying again.', 'doughboss' ), array( 'status' => 402 ) );
 		}
 		$pi_id = isset( $intent['id'] ) ? DoughBoss_Stripe::canonical_id( $intent['id'] ) : '';
 		$order_id = '' !== $pi_id ? DoughBoss_Order::find_id_by_payment_intent( $pi_id ) : 0;
@@ -3887,10 +3904,15 @@ class DoughBoss_REST_Controller {
 
 		$metadata     = isset( $intent['metadata'] ) && is_array( $intent['metadata'] ) ? $intent['metadata'] : array();
 		$checkout_key = isset( $metadata['checkout_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['checkout_key'] ) ) : '';
-		$snapshot     = 1 === preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) ? DoughBoss_Checkout_Snapshots::find( $checkout_key ) : null;
-		$order_data   = $snapshot && ! empty( $snapshot['payload']['order'] ) && is_array( $snapshot['payload']['order'] ) ? $snapshot['payload']['order'] : array();
-		if ( empty( $order_data ) || ! hash_equals( (string) $order->checkout_key, $checkout_key ) || ! hash_equals( (string) $order_data['checkout_key'], $checkout_key ) ) {
-			return null;
+		$snapshot     = $this->stripe_order_snapshot( $checkout_key, $session_id );
+		if ( is_wp_error( $snapshot ) ) {
+			return $snapshot;
+		}
+		$order_data = $snapshot['payload']['order'];
+		// Webhook orders use the payment key; browser orders retain their own
+		// response key. A completed snapshot also proves that durable linkage.
+		if ( ! hash_equals( (string) $order->checkout_key, $checkout_key ) && ! hash_equals( (string) $order->checkout_key, $idem ) && (int) $snapshot['order_id'] !== (int) $order->id ) {
+			return new WP_Error( 'doughboss_pay_unverified', __( 'The paid order requires manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
 		$expected_amount   = DoughBoss_Payment::to_minor_units( (float) $order_data['total'] );
@@ -3900,7 +3922,6 @@ class DoughBoss_REST_Controller {
 		$intent_currency   = isset( $intent['currency'] ) ? strtolower( (string) $intent['currency'] ) : '';
 		$session_currency  = isset( $intent['checkout_session_currency'] ) ? strtolower( (string) $intent['checkout_session_currency'] ) : '';
 		$session_reference = isset( $intent['checkout_session_reference'] ) ? strtolower( (string) $intent['checkout_session_reference'] ) : '';
-		$request_email     = strtolower( sanitize_email( $request->get_param( 'customer_email' ) ) );
 		if (
 			$intent_amount !== $expected_amount
 			|| $session_amount !== $expected_amount
@@ -3908,15 +3929,134 @@ class DoughBoss_REST_Controller {
 			|| $session_currency !== $expected_currency
 			|| ! hash_equals( $checkout_key, $session_reference )
 			|| 'order' !== ( isset( $metadata['purpose'] ) ? sanitize_key( (string) $metadata['purpose'] ) : '' )
+			|| (string) $order_data['order_type'] !== ( isset( $metadata['order_type'] ) ? (string) $metadata['order_type'] : '' )
+			|| (int) $order_data['location_id'] !== ( isset( $metadata['location_id'] ) ? (int) $metadata['location_id'] : -1 )
+			|| (int) $order_data['table_id'] !== ( isset( $metadata['table_id'] ) ? (int) $metadata['table_id'] : 0 )
+			|| (int) $order_data['table_qr_code_id'] !== ( isset( $metadata['qr_code_id'] ) ? (int) $metadata['qr_code_id'] : 0 )
 			|| (string) $order->order_type !== (string) $order_data['order_type']
 			|| (int) $order->location_id !== (int) $order_data['location_id']
 			|| (int) $order->table_id !== (int) $order_data['table_id']
-			|| '' === $request_email
-			|| ! hash_equals( strtolower( (string) $order->customer_email ), $request_email )
 		) {
-			return null;
+			return new WP_Error( 'doughboss_pay_unverified', __( 'The paid order requires manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$contacts = $this->verify_stripe_snapshot_contacts( $request, $snapshot );
+		if ( is_wp_error( $contacts ) ) {
+			return $contacts;
+		}
+		$finalized = $this->finalize_stripe_order( $snapshot, $order, $pi_id );
+		if ( is_wp_error( $finalized ) ) {
+			return $finalized;
 		}
 		return $order;
+	}
+
+	/**
+	 * Load Stripe's existing immutable snapshot and its matching attempt.
+	 * Ordinary expiry still applies; Square's retention exception is not used.
+	 *
+	 * @param string $checkout_key Payment checkout identity.
+	 * @param string $session_id   Verified browser Session, when available.
+	 * @return array|WP_Error
+	 */
+	private function stripe_order_snapshot( $checkout_key, $session_id = '' ) {
+		$invalid = new WP_Error( 'doughboss_pay_snapshot_missing', __( 'The paid order details require manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
+		$snapshot = DoughBoss_Checkout_Snapshots::find( $checkout_key );
+		if ( ! is_array( $attempt ) || ! is_array( $snapshot ) || empty( $snapshot['payload']['order'] ) || ! is_array( $snapshot['payload']['order'] ) || empty( $snapshot['payload']['lines'] ) || ! is_array( $snapshot['payload']['lines'] ) ) {
+			return $invalid;
+		}
+		$saved = $snapshot['payload']['order'];
+		foreach ( array( 'checkout_key', 'order_type', 'location_id', 'table_id', 'table_qr_code_id', 'total', 'currency', 'customer_name', 'customer_email', 'customer_phone', 'address', 'notes' ) as $field ) {
+			if ( ! isset( $saved[ $field ] ) || ! is_scalar( $saved[ $field ] ) ) {
+				return $invalid;
+			}
+		}
+		if (
+			'stripe' !== (string) $attempt['provider'] || 'order' !== (string) $attempt['purpose']
+			|| ! hash_equals( (string) $attempt['checkout_key'], $checkout_key )
+			|| ! hash_equals( (string) $snapshot['checkout_key'], $checkout_key )
+			|| ! hash_equals( (string) $saved['checkout_key'], $checkout_key )
+			|| ( '' !== $session_id && ! hash_equals( (string) $attempt['provider_reference'], $session_id ) )
+			|| ! is_numeric( $saved['total'] ) || (float) $saved['total'] <= 0
+			|| (int) $attempt['amount_minor'] !== DoughBoss_Payment::to_minor_units( (float) $saved['total'] )
+			|| 1 !== preg_match( '/^[A-Za-z]{3}$/', (string) $saved['currency'] )
+			|| strtoupper( (string) $attempt['currency'] ) !== strtoupper( (string) $saved['currency'] )
+			|| (int) $attempt['location_id'] !== (int) $saved['location_id']
+			|| (int) $attempt['table_id'] !== (int) $saved['table_id']
+			|| (int) $attempt['qr_code_id'] !== (int) $saved['table_qr_code_id']
+		) {
+			return $invalid;
+		}
+		return $snapshot;
+	}
+
+	/**
+	 * Reject post-payment contact changes without rewriting the paid snapshot.
+	 *
+	 * @param WP_REST_Request $request  Browser return.
+	 * @param array           $snapshot Validated Stripe snapshot.
+	 * @return true|WP_Error
+	 */
+	private function verify_stripe_snapshot_contacts( WP_REST_Request $request, array $snapshot ) {
+		$contacts = array(
+			'customer_name'  => sanitize_text_field( $request->get_param( 'customer_name' ) ),
+			'customer_email' => strtolower( sanitize_email( $request->get_param( 'customer_email' ) ) ),
+			'customer_phone' => sanitize_text_field( $request->get_param( 'customer_phone' ) ),
+			'address'        => sanitize_textarea_field( $request->get_param( 'address' ) ),
+			'notes'          => sanitize_textarea_field( $request->get_param( 'notes' ) ),
+		);
+		foreach ( $contacts as $field => $value ) {
+			$saved = (string) $snapshot['payload']['order'][ $field ];
+			$saved = 'customer_email' === $field ? strtolower( $saved ) : $saved;
+			if ( ! hash_equals( $saved, $value ) ) {
+				return new WP_Error( 'doughboss_pay_attempt_changed', __( 'The order details changed after payment started. Restore the original details or contact the shop; do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Repair Stripe bookkeeping for one verified, durable paid order.
+	 * Never creates an order, calls a provider, or sends a notification.
+	 *
+	 * @param array  $snapshot Validated payment snapshot.
+	 * @param object $order    Durable order row.
+	 * @param string $pi_id    Verified canonical PaymentIntent identity.
+	 * @return true|WP_Error Retryable storage/binding failure.
+	 */
+	private function finalize_stripe_order( array $snapshot, $order, $pi_id ) {
+		$pending = new WP_Error( 'doughboss_pay_finalize_pending', __( 'Your paid order is saved but its confirmation records are still being linked. Retry this confirmation or contact the shop; do not pay again.', 'doughboss' ), array( 'status' => 503 ) );
+		$key     = (string) $snapshot['checkout_key'];
+		$saved   = $snapshot['payload']['order'];
+		$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $key );
+		if (
+			! $order || ! $attempt || 'stripe' !== (string) $attempt['provider'] || 'order' !== (string) $attempt['purpose']
+			|| 'paid' !== (string) $order->payment_status || 'stripe' !== (string) $order->payment_method
+			|| '' === $pi_id || ! hash_equals( (string) $order->payment_intent_id, $pi_id )
+			|| DoughBoss_Payment::to_minor_units( (float) $order->total ) !== DoughBoss_Payment::to_minor_units( (float) $saved['total'] )
+			|| (string) $order->order_type !== (string) $saved['order_type']
+			|| (int) $order->location_id !== (int) $saved['location_id'] || (int) $order->table_id !== (int) $saved['table_id']
+			|| (int) $order->table_qr_code_id !== (int) $saved['table_qr_code_id']
+			|| ( ! empty( $snapshot['order_id'] ) && (int) $snapshot['order_id'] !== (int) $order->id )
+			|| ( ! empty( $attempt['local_reference'] ) && ! hash_equals( (string) $attempt['local_reference'], (string) $order->order_number ) )
+		) {
+			return $pending;
+		}
+		if ( ! DoughBoss_Checkout_Snapshots::complete( $key, (int) $order->id ) ) {
+			return $pending;
+		}
+		$completed = DoughBoss_Checkout_Snapshots::find( $key );
+		if ( ! $completed || 'completed' !== (string) $completed['status'] || (int) $completed['order_id'] !== (int) $order->id ) {
+			return $pending;
+		}
+		$updated = DoughBoss_Payment_Attempts::update(
+			(int) $attempt['id'],
+			array( 'status' => 'succeeded', 'provider_status' => 'succeeded', 'local_reference' => (string) $order->order_number, 'verified_at' => true )
+		);
+		if ( ! $updated || 'succeeded' !== (string) $updated['status'] || 'succeeded' !== (string) $updated['provider_status'] || empty( $updated['verified_at'] ) || ! hash_equals( (string) $updated['local_reference'], (string) $order->order_number ) ) {
+			return $pending;
+		}
+		return true;
 	}
 
 	/**
@@ -4060,7 +4200,7 @@ class DoughBoss_REST_Controller {
 	 * @param string          $order_type     Expected fulfilment type.
 	 * @param int             $location_id    Expected shop id.
 	 * @param array|null      $table_context  Authoritative table session, if any.
-	 * @return string|WP_Error Payment reference id, or an error.
+	 * @return string|array|WP_Error Payment reference, verified snapshot context, or an error.
 	 */
 	private function verify_payment( WP_REST_Request $request, $expected_total, $order_type, $location_id, $table_context = null ) {
 		$raw_id = $request->get_param( 'payment_intent_id' );
@@ -4204,6 +4344,21 @@ class DoughBoss_REST_Controller {
 				'provider' => 'square',
 				'snapshot' => $square_snapshot,
 			);
+		}
+		if ( $is_stripe_checkout ) {
+			$stripe_snapshot = $this->stripe_order_snapshot( $expected_checkout, $raw_id );
+			if ( is_wp_error( $stripe_snapshot ) ) {
+				return $stripe_snapshot;
+			}
+			$saved = $stripe_snapshot['payload']['order'];
+			if ( 'order' !== ( isset( $metadata['purpose'] ) ? (string) $metadata['purpose'] : '' ) || DoughBoss_Payment::to_minor_units( (float) $saved['total'] ) !== $expected || strtolower( (string) $saved['currency'] ) !== $currency || (string) $saved['order_type'] !== $order_type || (int) $saved['location_id'] !== (int) $location_id || (int) $saved['table_id'] !== $expected_table || (int) $saved['table_qr_code_id'] !== $expected_qr ) {
+				return new WP_Error( 'doughboss_pay_unverified', __( 'The paid order requires manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			$contacts = $this->verify_stripe_snapshot_contacts( $request, $stripe_snapshot );
+			if ( is_wp_error( $contacts ) ) {
+				return $contacts;
+			}
+			return array( 'id' => $pi_id, 'provider' => 'stripe', 'snapshot' => $stripe_snapshot );
 		}
 		return $pi_id;
 	}
@@ -5054,8 +5209,8 @@ class DoughBoss_REST_Controller {
 	 * handled synchronously by /checkout; this webhook exists so a payment
 	 * whose checkout call never lands (browser crash, network drop) is
 	 * surfaced to the owner instead of silently keeping the customer's money.
-	 * It never creates orders and never refunds — refunding real money is a
-	 * human decision made from the flagged list on the Orders screen.
+	 * A validated snapshot can recover the paid order or finish its bookkeeping.
+	 * Missing snapshots are surfaced for review; refunds remain a human decision.
 	 *
 	 * Catering-context events are delegated to the same idempotent handling as
 	 * /catering/stripe-webhook: Stripe issues one signing secret per endpoint
@@ -5113,11 +5268,11 @@ class DoughBoss_REST_Controller {
 		$processed = true;
 		if ( isset( $meta['context'] ) && 'catering' === $meta['context'] ) {
 			$processed = $this->reconcile_catering_intent( $obj, $meta );
-		} elseif ( ! DoughBoss_Order::payment_intent_used( $pi_id ) ) {
+		} else {
 			$recovered = $this->recover_stripe_order( $pi_id, $obj, $meta );
 			if ( is_wp_error( $recovered ) ) {
 				$processed = false;
-			} elseif ( ! $recovered ) {
+			} elseif ( ! $recovered && ! DoughBoss_Order::payment_intent_used( $pi_id ) ) {
 				$processed = $this->record_unreconciled_payment( $pi_id, $obj );
 			}
 		}
@@ -5156,8 +5311,8 @@ class DoughBoss_REST_Controller {
 		}
 
 		$attempt  = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
-		$snapshot = DoughBoss_Checkout_Snapshots::find( $checkout_key );
-		if ( ! $attempt || ! $snapshot || empty( $snapshot['payload']['order'] ) || empty( $snapshot['payload']['lines'] ) ) {
+		$snapshot = $this->stripe_order_snapshot( $checkout_key );
+		if ( ! $attempt || is_wp_error( $snapshot ) ) {
 			return false;
 		}
 
@@ -5180,6 +5335,13 @@ class DoughBoss_REST_Controller {
 			|| $checkout_key !== ( isset( $order_data['checkout_key'] ) ? (string) $order_data['checkout_key'] : '' )
 		) {
 			return false;
+		}
+
+		// A prior browser/webhook worker may have committed the order but lost
+		// one bookkeeping write. Repair it without redeeming or notifying again.
+		$existing_id = DoughBoss_Order::find_id_by_payment_intent( $pi_id );
+		if ( $existing_id ) {
+			return $this->finalize_stripe_order( $snapshot, DoughBoss_Order::get( $existing_id ), $pi_id );
 		}
 
 		$voucher_code = isset( $order_data['voucher_code'] ) ? (string) $order_data['voucher_code'] : '';
@@ -5257,17 +5419,7 @@ class DoughBoss_REST_Controller {
 		if ( empty( $created['replayed'] ) ) {
 			$this->send_confirmation( $order );
 		}
-		DoughBoss_Checkout_Snapshots::complete( $checkout_key, $order_id );
-		DoughBoss_Payment_Attempts::update(
-			(int) $attempt['id'],
-			array(
-				'status'             => 'succeeded',
-				'provider_status'    => 'succeeded',
-				'local_reference'    => (string) $order->order_number,
-				'verified_at'        => true,
-			)
-		);
-		return true;
+		return $this->finalize_stripe_order( $snapshot, $order, $pi_id );
 	}
 
 	/**
