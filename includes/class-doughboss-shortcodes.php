@@ -120,8 +120,7 @@ class DoughBoss_Shortcodes {
 	 * Render the decorative hero photo as a discoverable image rather than CSS.
 	 *
 	 * Media Library URLs receive WordPress's real srcset and sizes. The bundled
-	 * default has no attachment ID, so it retains its measured original size and
-	 * deliberately has no invented srcset candidates.
+	 * default uses packaged, measured AVIF/WebP variants with the original fallback.
 	 *
 	 * @param string $image_url Hero image URL.
 	 * @return string
@@ -153,7 +152,10 @@ class DoughBoss_Shortcodes {
 		if ( is_array( $dimensions ) ) {
 			$html .= ' width="' . $dimensions[0] . '" height="' . $dimensions[1] . '"';
 		}
-		return $html . '>';
+		$html .= '>';
+		return $default_url === $image_url && class_exists( 'DoughBoss_Images' )
+			? DoughBoss_Images::picture( 'doughboss-feast-real-v1.jpg', $html, '104vw' )
+			: $html;
 	}
 
 	/**

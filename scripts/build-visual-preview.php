@@ -36,6 +36,7 @@ $source_files = array(
 	'themes/doughboss-final/page-order.php',
 	'themes/doughboss-final/template-parts/locations.php',
 	'includes/class-doughboss-shortcodes.php',
+	'includes/class-doughboss-images.php',
 	'includes/class-doughboss-menu-options.php',
 );
 $asset_files  = array(
@@ -65,6 +66,27 @@ $preview_files = array(
 	'scripts/visual-preview/preview-api.js',
 	'scripts/visual-preview/preview.css',
 );
+// Copy only the manifest's prebuilt variants, never arbitrary directory contents.
+$image_manifest_path = 'public/images/responsive/manifest.json';
+$image_manifest = json_decode( file_get_contents( $repo_root . '/' . $image_manifest_path ), true );
+if ( ! is_array( $image_manifest ) || 1 !== ( $image_manifest['version'] ?? null ) ) {
+	fwrite( STDERR, "Responsive image manifest is missing or invalid.\n" );
+	exit( 1 );
+}
+$source_files[] = $image_manifest_path;
+foreach ( $image_manifest['images'] as $original => $entry ) {
+	if ( ! in_array( 'public/images/' . $original, $asset_files, true ) ) {
+		continue;
+	}
+	foreach ( array( 'avif', 'webp' ) as $format ) {
+		foreach ( $entry['sources'][ $format ] as $variant ) {
+			if ( ! preg_match( '#^responsive/[a-z0-9-]+-[1-9][0-9]*\.' . $format . '$#D', $variant['file'] ) ) {
+				throw new RuntimeException( 'Unsafe responsive preview asset.' );
+			}
+			$asset_files[] = 'public/images/' . $variant['file'];
+		}
+	}
+}
 $provenance_files = array_merge( array( 'scripts/build-visual-preview.php' ), $source_files, $asset_files, $preview_files );
 
 foreach ( $provenance_files as $relative ) {

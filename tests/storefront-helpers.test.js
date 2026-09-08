@@ -700,4 +700,26 @@ test('visual preview keeps paused state separate and sample hours short-lived', 
 	assert.equal(menu[0].image, 'https://example.test/DOUGHBOSSV2/public/images/menu/real-v1/zaatar-cheese.jpg');
 });
 
+test('preview srcsets permit only existing local assets and truthful ordered width descriptors', () => {
+	const validator = path.resolve(__dirname, '..', 'scripts/validate-visual-preview.js');
+	const relativeFiles = ['public/images/responsive/hero-480.avif', 'public/images/responsive/hero-960.webp'];
+	const localReference = extractFunction(validator, 'localReference', {
+		assert, path, manifest: { base_path: '/preview/', output_sha256: Object.fromEntries(relativeFiles.map(file => [file, 'synthetic'])) },
+		safeRelative: extractFunction(validator, 'safeRelative', { assert })
+	});
+	const validate = extractFunction(validator, 'validateSrcset', { assert, localReference });
+	assert.doesNotThrow(() => validate('./public/images/responsive/hero-480.avif 480w, ./public/images/responsive/hero-960.webp 960w', 'index.html'));
+	assert.doesNotThrow(() => validate('/preview/public/images/responsive/hero-480.avif 480w', 'index.html'));
+	for (const value of [
+		'https://external.test/public/images/responsive/hero-480.avif 480w',
+		'//external.test/public/images/responsive/hero-480.avif 480w',
+		'./public/images/responsive/missing-480.avif 480w',
+		'./public/images/responsive/hero-480.avif 960w',
+		'./public/images/responsive/hero-480.avif 2x',
+		'./public/images/responsive/../hero-480.avif 480w',
+		'./public/images/responsive/hero-480.avif 480w, ./public/images/responsive/hero-480.avif 480w',
+		'./public/images/responsive/hero-960.webp 960w, ./public/images/responsive/hero-480.avif 480w'
+	]) assert.throws(() => validate(value, 'index.html'), value);
+});
+
 console.log('Storefront helper regression checks passed.');

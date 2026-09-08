@@ -20,6 +20,8 @@
 	position: relative;
 }
 
+.db-manoush-hero .db-responsive-picture { display: contents; }
+
 .db-manoush-hero .db-mh-backdrop {
 	filter: saturate(.92) contrast(1.04);
 	height: 104%;

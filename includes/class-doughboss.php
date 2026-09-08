@@ -102,6 +102,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-privacy.php';
 		require_once $dir . 'class-doughboss-cli.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
+		require_once $dir . 'class-doughboss-images.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
 		require_once $dir . 'class-doughboss-assets.php';
 		require_once $dir . 'class-doughboss-seo.php';

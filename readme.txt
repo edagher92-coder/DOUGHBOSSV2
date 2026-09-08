@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.43.1
+Stable tag: 2.43.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.43.2 =
+* Serve prebuilt responsive AVIF/WebP photography for bundled page and homepage heroes, with original JPEG fallbacks and no runtime encoder dependency.
 
 = 2.43.1 =
 * Reject changes to Stripe checkout contact details after hosted payment preparation, using the existing immutable server snapshot.

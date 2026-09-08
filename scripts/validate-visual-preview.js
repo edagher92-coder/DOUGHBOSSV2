@@ -40,7 +40,7 @@ walk(output);
 assert.deepEqual(actual.sort(), [...Object.keys(manifest.output_sha256), 'manifest.json'].sort(), 'no unmanifested output');
 for (const [relative, hash] of Object.entries(manifest.output_sha256)) {
   safeRelative(relative);
-  assert.match(relative, /\.(?:html|js|css|woff2|jpg|webp)$/);
+  assert.match(relative, /\.(?:html|js|css|woff2|jpg|webp|avif)$/);
   assert.ok(!/(?:^|\/)(?:docs|admin|includes|scripts|tests|\.git)(?:\/|$)/.test(relative));
   assert.equal(digest(path.join(output, relative)), hash, `output hash: ${relative}`);
   if (generated.includes(relative)) continue;
@@ -59,6 +59,18 @@ function localReference(reference, from) {
   safeRelative(relative);
   assert.ok(Object.hasOwn(manifest.output_sha256, relative), `missing local reference ${reference} in ${from}`);
 }
+function validateSrcset(srcset, page) {
+  let previousWidth = 0;
+  for (const candidate of srcset.split(',')) {
+    const parsed = candidate.trim().match(/^([^\s,]+) ([1-9][0-9]*)w$/);
+    assert.ok(parsed, 'local width-descriptor candidate required');
+    assert.match(parsed[1], /\/public\/images\/responsive\/[a-z0-9-]+-([1-9][0-9]*)\.(?:avif|webp)$/);
+    assert.ok(Number(parsed[2]) > previousWidth, 'ascending unique widths');
+    assert.ok(parsed[1].endsWith(`-${parsed[2]}.avif`) || parsed[1].endsWith(`-${parsed[2]}.webp`), 'filename agrees with width');
+    localReference(parsed[1], page);
+    previousWidth = Number(parsed[2]);
+  }
+}
 for (const page of pages) {
   const html = fs.readFileSync(path.join(output, page), 'utf8');
   assert.match(html, /name="robots" content="noindex,\s*nofollow(?:,[a-z]+)*"/);
@@ -72,7 +84,13 @@ for (const page of pages) {
   assert.match(html, /font-src (?:&#39;|')self(?:&#39;|')(?:;|")/);
   assert.match(html, /Sample menu and prices/);
   assert.doesNotMatch(html, /<(?:form|iframe|object|embed)\b|\bon[a-z]+\s*=/i);
-  assert.doesNotMatch(html, /\b(?:srcset|poster)\s*=|http-equiv\s*=\s*["']?refresh/i, 'unsupported resource/navigation attributes');
+  assert.doesNotMatch(html, /\bposter\s*=|http-equiv\s*=\s*["']?refresh/i, 'unsupported resource/navigation attributes');
+  // This exporter emits only quoted, local width-descriptor picture sources.
+  const srcsets = [...html.matchAll(/\bsrcset="([^"]+)"/g)];
+  assert.equal((html.match(/\bsrcset\s*=/gi) || []).length, srcsets.length, 'no unsupported srcset quoting');
+  for (const [, srcset] of srcsets) {
+    validateSrcset(srcset, page);
+  }
   assert.doesNotMatch(html, /class="[^"]*\b(?:db-cart|db-builder)\b/);
   for (const script of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
     assert.match(script[1], /\bsrc="[^"]+"/);

@@ -110,6 +110,7 @@ class DoughBoss_Settings {
 	public static function ordering_closed_message() { return 'Sample paused-state message. Check a shop for current availability.'; }
 }
 
+require $preview_repo . '/includes/class-doughboss-images.php';
 require $preview_repo . '/themes/doughboss-final/functions.php';
 require $preview_repo . '/includes/class-doughboss-shortcodes.php';
 require $preview_repo . '/includes/class-doughboss-menu-options.php';

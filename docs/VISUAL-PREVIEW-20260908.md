@@ -195,3 +195,51 @@ The plugin digest is identical to the prior accepted 2.43.1 artifact. Earlier th
 One guarded Ollama call used preferred `kimi-k2.7-code:cloud`, role `code_review`, with a synthetic contract/reproduction summary only. It supported disabling transitions under the existing reduced-motion policy and retaining separate browser proof. Speculative future consumers and imprecise CSS-specificity/computed-style claims were not adopted; cost is unknown. The lead owns the diagnosis, patch and browser acceptance. A fresh read-only GPT-5.6 Sol high reviewer returned **ship**, independently passed all 26 Node tests and `git diff --check`, and found no blocking regression. Its review explicitly relied on lead-run browser evidence and did not independently execute the browser or PHP gate.
 
 This closes the demonstrated local reduced-motion focus defect, not the full publication goal. The public Pages preview and production site are unchanged. The existing release/CI, private WordPress preview, Square merchant/location, SamOS and Drive destination gates still apply; no new remote approval is inferred from these local results.
+
+## Responsive bundled photography - 9 September 2026 local candidate
+
+The completion audit identified genuine bundled AVIF/WebP variants as an unfinished part of the approved performance milestone. This bounded slice adds them for the five original photographs actually consumed by the theme/homepage image helpers: feast, zaatar-cheese, sujuk-deluxe, haloumi-pie and meat-cheese. It does not change the public menu REST image contract, generate variants for unused photographs, mutate Media Library attachments, alter visible photography, or configure any payment/provider.
+
+`scripts/build-responsive-images.php` is a CLI-only build tool using the existing portable PHP 8.2.33 GD runtime. It requires a fresh output directory, never overwrites originals, never crops or upscales, and emits canonical `responsive/` paths irrespective of staging-directory name. WebP uses quality 75; AVIF quality 58/speed 6. Runtime WordPress needs no GD/AVIF encoder. The five source JPEGs are unchanged; 22 actual encoded derivatives plus a manifest add 1,513,346 bytes to the runtime tree. The first WebP-82 experiment was rejected because three full-width files exceeded their originals; those agent-generated files were moved intact to `C:\Codex\Temp\doughboss-responsive-20260909\webp82-original`, not deleted or shipped. No pre-existing quarantine was touched.
+
+`DoughBoss_Images::picture()` is shared by the plugin's default photographic hero and the paired theme helper. It accepts only local bundled paths and validated, ascending width candidates with proportional heights and readable files. AVIF sources precede WebP; the original escaped image remains unchanged and last. Missing/unsupported assets retain the original markup. Existing dimensions, alt text, loading, decoding, class and fetch priority are preserved; theme cards supply their grid-specific `sizes`. `display: contents` prevents a picture box from changing existing grid/absolute positioning. The attachment and custom remote-image paths retain their earlier behavior.
+
+### Local browser evidence
+
+The current-source export is `C:\Codex\Temp\doughboss-responsive-20260909\site-final` (3 pages / 45 files). It was built from the working tree based on `d86e464`; exact source/output hashes identify the local changes, not a published commit. The public Pages preview was not changed.
+
+- At 1280px / DPR 1.5625, six responsive pictures rendered. Comparing every image's x/y/width/height before and after temporarily unwrapping the pictures returned exact equality; reload restored the DOM.
+- At 390px / DPR 1.5625, the homepage selected the 960px AVIF (161,675 bytes versus the original 329,439 bytes: approximately 51% smaller). Removing AVIF sources in the local page selected WebP 960 (190,736 bytes); removing both formats selected the original JPEG. Each decoded successfully and retained the exact hero rectangle. This is a source-selection fallback simulation, not a claim of physical-device or legacy-engine acceptance, nor automatic fallback after arbitrary HTTP failures.
+- Keyboard navigation scrolled the food cards into view; all six homepage images loaded. `mobile-food-images.png` in the same staging directory is a reviewed local screenshot of the actual source photography, not production.
+- Order at 390px and paused ordering at 320px loaded the sujuk 550px AVIF with no horizontal page overflow. The reduced-motion mobile menu still focused its close control with 14 isolated background branches and closed with Escape. Browser warning/error logs were empty.
+- Temporary source removals were reloaded away, viewport/media overrides reset, the task-owned QA tab closed and the localhost server stopped. The user's existing public-preview tab was left alone.
+
+### Tests and candidate packages
+
+The new image test checks source/variant hashes, actual bytes and formats, actual encoded dimensions, proportional sizes, no upsampling, exact manifest coverage, savings versus the source, untouched fallback markup, unsupported paths and escaped sizes. The existing Node helper suite now checks local-only, existing, ascending and truthful srcset candidates; external/protocol-relative URLs, traversal, missing files, duplicate/descending widths and density descriptors are rejected. Preview provenance and local-reference checks remain enforced.
+
+Commands run from the review checkout:
+
+```powershell
+& $php82 -n tests/run.php
+& $php74 -n tests/run.php
+node --test tests/storefront-helpers.test.js
+& $php82 -n scripts/build-visual-preview.php C:\Codex\Temp\doughboss-responsive-20260909\site-final ./
+node scripts/validate-visual-preview.js C:\Codex\Temp\doughboss-responsive-20260909\site-final
+& .\scripts\test-release.ps1 -PhpPath $php82 -ExtensionDir C:\Codex\Temp\doughboss-review-20260908\php-8.2.33\ext -OutputPath C:\Codex\Temp\doughboss-responsive-20260909\doughboss-2.43.2.zip -ThemeOutputPath C:\Codex\Temp\doughboss-responsive-20260909\doughboss-final-1.6.2.zip
+```
+
+`$php82` and `$php74` denote the existing `C:\Codex\Temp\doughboss-review-20260908\php-8.2.33\php.exe` and `php-7.4.33\php.exe` respectively. Results: PHP 8.2 **94 syntax files / 412 assertions**, PHP 7.4 **390 assertions** (22 AVIF dimension/MIME assertions require PHP 8.2), **16 JS syntax files / 27 Node tests**, and both exact-current-tree archive validators passed. No database or payment behavior changed, so the database was not restarted; the earlier 275-assertion Stripe database result was not rerun or relabelled as new evidence. No hosted CI ran for this candidate.
+
+| Artifact in `C:\Codex\Temp\doughboss-responsive-20260909` | Bytes / runtime files | SHA-256 |
+| --- | --- | --- |
+| `doughboss-2.43.2.zip` | 4,091,908 / 161 | `6AD0A7E0EC6057A62534825E44BC077DC993C32169A940A77F414E20F819D369` |
+| `doughboss-final-1.6.2.zip` | 31,315 / 25 | `C06961C0040511D12531E2B0BE981C2F773F569711F2B5B5E901A2C90B7389ED` |
+
+These are local candidates only. The plugin remains above the observed 2MB browser upload cap; do not use a workaround uploader or assume an install route. Earlier artifacts are preserved. Production Web Vitals, private WordPress acceptance, publication, Square merchant/application/pilot mapping, kitchen acceptance, SamOS authentication and the owner-selected Drive destination remain open.
+
+### Orchestration evidence
+
+One Terra high worker owned only the offline generator and generated files. The lead inspected the actual output, found the PHP-7-incompatible callback annotation and oversized WebP variants, and returned those concrete repairs to the same bounded lane before accepting the corrected output. One guarded Ollama call used preferred `kimi-k2.7-code:cloud`, `code_review`, with a synthetic contract only and no context files or secrets; cost is unknown. Its useful recommendations were exact fallback preservation, aspect checks and browser selection/geometry evidence. Its proposed relaxed hashes, mandatory class allowlist and hypothetical runtime failures were not adopted. Exact current-source hashes remain mandatory. The lead remains the integrator; no root-model switch is claimed.
+
+A fresh read-only GPT-5.6 Sol high review returned **ship**, with no blocking findings. It independently passed all ten changed/new PHP files on PHP 7.4 and both pure suites (412/412 on PHP 8.2, 390/390 on PHP 7.4), verified that the original photographs have no diff, and inspected the runtime, generator, preview and manifest contracts. It relied on the lead's browser and package evidence, not an independent browser session. The lead separately reran changed-file PHP 7.4 lint, verified missing-manifest fallback in an isolated invocation, and revalidated the final preview. Acceptance covers the local implementation and candidate packages only; no release, installation or provider activation follows from this verdict.

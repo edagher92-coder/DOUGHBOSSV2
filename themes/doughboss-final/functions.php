@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DOUGHBOSS_FINAL_VERSION', '1.6.1' );
+define( 'DOUGHBOSS_FINAL_VERSION', '1.6.2' );
 
 function doughboss_final_setup() {
 	add_theme_support( 'title-tag' );
@@ -94,7 +94,12 @@ function doughboss_final_asset_image( $path, $alt, $attributes = array() ) {
 		}
 	}
 
-	return '<img ' . implode( ' ', $parts ) . '>';
+	$image = '<img ' . implode( ' ', $parts ) . '>';
+	// Heroes fill the viewport; ordinary story/catering panels become half-width
+	// above 1000px. Food cards pass their narrower grid sizes explicitly.
+	$sizes = isset( $attributes['sizes'] ) ? $attributes['sizes'] :
+		( isset( $attributes['class'] ) && 'dbf-page-hero-bg' === $attributes['class'] ? '108vw' : '(max-width: 1000px) 100vw, 50vw' );
+	return class_exists( 'DoughBoss_Images' ) ? DoughBoss_Images::picture( $path, $image, $sizes ) : $image;
 }
 
 /**
