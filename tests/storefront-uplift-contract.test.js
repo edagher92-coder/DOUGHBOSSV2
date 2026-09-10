@@ -18,9 +18,11 @@ var assets = read('includes/class-doughboss-assets.php');
 test('UPLIFT-1 category navigation stays inside the rendered menu and respects motion preference', function () {
 	assert.match(client, /class: 'db-jumpbar'/);
 	assert.match(client, /root\.querySelector\('#' \+ targetId\)/);
+	assert.match(client, /function menuHashTarget\(root, hash\)/);
+	assert.match(client, /window\.addEventListener\('hashchange'/);
 	assert.match(client, /prefers-reduced-motion: reduce/);
 	assert.match(css, /\.db-app \.db-jumpbar/);
-	assert.match(css, /\.db-app \.db-category \{ scroll-margin-top: 64px;/);
+	assert.match(css, /\.db-app \.db-category \{ scroll-margin-top: calc\(var\(--db-menu-anchor-offset/);
 });
 
 test('UPLIFT-1 cart cue is a navigation aid backed by the existing cart endpoint', function () {

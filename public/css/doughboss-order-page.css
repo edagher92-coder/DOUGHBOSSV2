@@ -182,7 +182,7 @@ body.doughboss-order-page .db-app.db-menu {
 }
 
 body.doughboss-order-page .db-menu-tools {
-	top: var(--wp-admin--admin-bar--height, 0px);
+	top: var(--db-menu-sticky-offset, var(--wp-admin--admin-bar--height, 0px));
 	padding: .8rem;
 	border-color: rgba(17, 16, 15, .09);
 	background: rgba(247, 245, 240, .94);
@@ -344,7 +344,7 @@ body.doughboss-order-page.db-order-page-motion .db-card.is-scroll-visible .db-ca
 	}
 
 	body.doughboss-order-page .db-menu-tools {
-		top: var(--wp-admin--admin-bar--height, 0px);
+		top: var(--db-menu-sticky-offset, var(--wp-admin--admin-bar--height, 0px));
 	}
 
 	body.doughboss-order-page .db-grid {

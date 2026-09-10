@@ -198,7 +198,7 @@ a{color:inherit;}
 	<section class="panel on" id="p-live" role="tabpanel" aria-labelledby="tab-live">
 		<h1 class="ph">New &amp; cooking</h1>
 		<p class="psub" id="workflow-copy">Order actions follow the configured fulfilment workflow.</p>
-		<div class="tip"><span>🔔</span><span>New orders pop in here automatically.</span><div style="flex:1"></div><button type="button" class="sim" id="sim">+ New order (demo)</button></div>
+		<div class="tip"><span>🔔</span><span>Three fictional orders arrive automatically, then the demo feed continues.</span><div style="flex:1"></div><button type="button" class="sim" id="sim">+ New order (demo)</button></div>
 		<p class="psub" style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">&#9432; All customer names and order data shown are fictional and for demonstration purposes only.</p>
 		<div class="cols" id="board"></div>
 		<div class="vh" id="announce" aria-live="polite" aria-atomic="true"></div>
@@ -535,7 +535,7 @@ a{color:inherit;}
 	}
 	var simNames = ['Walk-in tablet', 'Hadi N.', 'Tina V.'];
 	var simN = 0;
-	document.getElementById('sim').addEventListener('click', function () {
+	function addSimulatedOrder() {
 		var location = store === 'all' ? LOCATIONS[simN % LOCATIONS.length] : window.DBDemo.getLocation(store);
 		var methods = window.DBDemo.enabledFulfilments(location.id);
 		var fulfilment = methods[simN % methods.length];
@@ -548,7 +548,21 @@ a{color:inherit;}
 			first.classList.add('flash');
 			setTimeout(function () { first.classList.remove('flash'); }, 900);
 		}
+	}
+	document.getElementById('sim').addEventListener('click', addSimulatedOrder);
+
+	// Presentation feed: three staggered arrivals show the full order path
+	// without touching WordPress, payments, email, POSPal or the live database.
+	[2500, 7000, 11500].forEach(function (delay) {
+		setTimeout(addSimulatedOrder, delay);
 	});
+	(function keepDemoFeedMoving() {
+		setTimeout(function () {
+			var active = ORDERS.filter(window.DBDemo.isLive).length;
+			if (active < 8) { addSimulatedOrder(); }
+			keepDemoFeedMoving();
+		}, 30000 + Math.random() * 15000);
+	}());
 
 	render();
 }());

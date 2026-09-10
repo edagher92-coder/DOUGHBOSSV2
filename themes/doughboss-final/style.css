@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.3.0
+Version: 1.4.1
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -27,6 +27,7 @@ WPVibe: yes
 	--dbf-radius: 24px;
 	--dbf-shadow: 0 22px 60px rgba(10, 8, 7, .14);
 	--dbf-ease: cubic-bezier(.22, 1, .36, 1);
+	--dbf-header-height: 72px;
 }
 
 * { box-sizing: border-box; }
@@ -49,7 +50,7 @@ button, input, select, textarea { font: inherit; }
 /* Header */
 .dbf-header { position: sticky; z-index: 100; top: 0; background: rgba(10, 8, 7, .96); color: #fff; border-bottom: 1px solid var(--dbf-line-dark); backdrop-filter: blur(14px); }
 .admin-bar .dbf-header { top: 32px; }
-.dbf-header-inner { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 34px; min-height: 72px; }
+.dbf-header-inner { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 34px; min-height: var(--dbf-header-height); }
 .dbf-brand { display: inline-flex; flex: 0 0 auto; align-items: center; color: #fff; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 22px; letter-spacing: .13em; line-height: 1; text-decoration: none; }
 .dbf-brand > span { padding: 8px 8px 7px 11px; border: 2px solid currentColor; }
 .dbf-brand-dot { color: var(--dbf-ember); }
@@ -91,6 +92,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-hero .db-mh-copy > p:not(.db-mh-kicker) { max-width: 39rem; color: #ddd6ca; font-size: clamp(17px, 1.7vw, 21px); }
 .dbf-hero .db-mh-kicker { color: #fff; letter-spacing: .17em; }
 .dbf-hero .db-mh-replay { background: var(--dbf-ember); color: #fff; }
+.dbf-hero .db-mh-steam { right: clamp(8%, 15vw, 20%); top: 13%; }
 .dbf-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--dbf-char); color: #fff; border-top: 1px solid var(--dbf-line-dark); }
 .dbf-hero-stat { padding: 25px clamp(18px, 4vw, 46px); border-left: 1px solid var(--dbf-line-dark); }
 .dbf-hero-stat:first-child { border-left: 0; }
@@ -176,11 +178,13 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 .dbf-order-location strong { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 25px; font-weight: 400; }
 .dbf-order-location span { display: block; color: #655f56; font-size: 14px; }
 .dbf-order-location > span { flex: 0 0 auto; color: var(--dbf-ember-dark); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.dbf-order-readiness { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; margin-top: 22px; background: rgba(13,13,13,.11); border: 1px solid var(--dbf-line); border-radius: 18px; }
-.dbf-order-readiness > div { display: grid; grid-template-columns: 38px 1fr; gap: 0 14px; padding: 20px 22px; background: rgba(255,255,255,.76); }
-.dbf-order-readiness span { grid-row: 1 / 3; color: var(--dbf-ember); font-family: 'Bebas Neue', Impact, sans-serif; font-size: 26px; line-height: 1; }
-.dbf-order-readiness strong { font-size: 14px; line-height: 1.25; }
-.dbf-order-readiness small { margin-top: 4px; color: #706960; font-size: 12px; line-height: 1.4; }
+.dbf-order-browse-brief { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 18px; padding: 16px 20px; border: 1px solid var(--dbf-line); border-radius: 18px; background: rgba(255,255,255,.76); }
+.dbf-order-browse-brief > div { display: grid; gap: 2px; }
+.dbf-order-browse-brief strong { font-size: 15px; line-height: 1.25; }
+.dbf-order-browse-brief span { color: #706960; font-size: 13px; line-height: 1.4; }
+.dbf-storefront .db-app.db-menu { --db-menu-sticky-offset: var(--dbf-header-height); --db-menu-anchor-offset: calc(var(--dbf-header-height) + 132px); }
+.admin-bar .dbf-storefront .db-app.db-menu { --db-menu-sticky-offset: calc(var(--dbf-header-height) + 32px); --db-menu-anchor-offset: calc(var(--dbf-header-height) + 164px); }
+body.doughboss-order-page .dbf-storefront .db-menu-tools { top: var(--db-menu-sticky-offset); }
 .dbf-storefront { padding: clamp(22px, 4vw, 50px); background: #fbfaf6; border: 1px solid var(--dbf-line); border-radius: 28px; box-shadow: 0 16px 50px rgba(13,13,13,.08); }
 .dbf-storefront .db-app { font-family: 'Barlow', sans-serif; }
 .dbf-storefront .db-menu { margin-top: 0; }
@@ -269,7 +273,7 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 	.dbf-food-grid { grid-template-columns: 1fr 1fr; }
 	.dbf-food-card:last-child { grid-column: 1 / -1; }
 	.dbf-order-intro { grid-template-columns: 1fr; }
-	.dbf-order-readiness { grid-template-columns: 1fr; }
+	.dbf-order-browse-brief { align-items: flex-start; flex-direction: column; }
 }
 
 @media (max-width: 720px) {
@@ -291,10 +295,16 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 	.dbf-catering-media { min-height: 330px; }
 	.dbf-review-panel { align-items: flex-start; flex-direction: column; }
 	.dbf-page-hero, .dbf-page-hero-inner { min-height: 390px; }
-	.dbf-page-hero--order, .dbf-page-hero--order .dbf-page-hero-inner { min-height: 370px; }
-	.dbf-page-hero--order .dbf-page-hero-inner { padding-top: 48px; padding-bottom: 82px; }
+	.dbf-page-hero--order, .dbf-page-hero--order .dbf-page-hero-inner { min-height: 294px; }
+	.dbf-page-hero--order .dbf-page-hero-inner { padding-top: 36px; padding-bottom: 54px; }
 	.dbf-page-hero--order .dbf-display { font-size: clamp(54px, 17vw, 78px); }
 	.dbf-page-hero--order .dbf-lede { margin-top: 16px; font-size: 17px; line-height: 1.45; }
+	body.dbf-ordering-paused .dbf-page-hero--order,
+	body.dbf-ordering-paused .dbf-page-hero--order .dbf-page-hero-inner { min-height: 0; }
+	body.dbf-ordering-paused .dbf-page-hero--order .dbf-page-hero-inner { padding-top: 24px; padding-bottom: 28px; }
+	body.dbf-ordering-paused .dbf-page-hero--order .dbf-lede { display: none; }
+	body.dbf-ordering-paused .dbf-page-hero--order .dbf-display { font-size: clamp(48px, 15vw, 64px); }
+	body.dbf-ordering-paused .dbf-page-hero--order .dbf-coming-soon-badge { min-height: 36px; padding: 7px 13px; margin-top: 14px; }
 	.dbf-order-stage { background: linear-gradient(to bottom, var(--dbf-char) 0 36px, var(--dbf-cream) 36px 100%); }
 	.dbf-order-intro { gap: 12px; margin-top: -42px; }
 	.dbf-order-shell { width: min(100% - 20px, var(--dbf-wrap)); padding-top: 24px; }
@@ -302,8 +312,8 @@ body.doughboss-order-page .dbf-order-intro .db-ordering-status { width: 100%; ma
 	.dbf-page-hero--order::after { background: linear-gradient(rgba(10,8,7,.9), rgba(10,8,7,.95)); }
 	.dbf-order-location { align-items: flex-start; flex-direction: column; min-height: 0; padding: 18px 20px; }
 	.dbf-order-status .db-ordering-status { min-height: 0; padding: 20px; }
-	.dbf-order-readiness { margin-top: 14px; }
-	.dbf-order-readiness > div { padding: 17px 18px; }
+	.dbf-order-browse-brief { gap: 12px; margin-top: 12px; padding: 14px 16px; }
+	.dbf-order-browse-brief .dbf-button { width: 100%; }
 	.dbf-storefront { padding: 20px 14px; border-radius: 18px; }
 	.dbf-page-hero--voucher .dbf-display { font-size: clamp(48px, 15vw, 70px); }
 	.dbf-voucher-section { padding-block: 56px; }

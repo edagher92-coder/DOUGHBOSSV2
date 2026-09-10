@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const php = fs.readFileSync(path.join(root, 'includes', 'class-doughboss-portals.php'), 'utf8');
 const core = fs.readFileSync(path.join(root, 'includes', 'class-doughboss.php'), 'utf8');
+const admin = fs.readFileSync(path.join(root, 'admin', 'class-doughboss-admin.php'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss-portals.css'), 'utf8');
 const boardCss = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss-orderboard.css'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'doughboss-portals.js'), 'utf8');
@@ -22,6 +23,12 @@ const publicTheme = readPublicTheme(path.join(root, 'themes', 'doughboss-final')
 
 assert.match(core, /class-doughboss-portals\.php/);
 assert.match(core, /new DoughBoss_Portals\(\)/);
+assert.match(core, /auth_cookie_expiration[\s\S]*?get_userdata\(\s*absint\(\s*\$user_id\s*\)\s*\)[\s\S]*?doughboss_kitchen/);
+assert.match(core, /array\( 'doughboss_kitchen' \) !== \$roles/);
+assert.match(core, /min\(\s*30,\s*\(int\) DoughBoss_Settings::get\(\s*'staff_session_days'/);
+assert.doesNotMatch(core, /unset\(\s*\$user_id\s*,\s*\$remember\s*\)/);
+assert.match(admin, /staff_session_days'\]\s*=\s*isset[\s\S]{0,180}?min\(\s*30,\s*absint/);
+assert.match(admin, /Kitchen tablet session \(days\)[\s\S]{0,600}?max="30"/);
 assert.match(php, /\^kitchen\/\?\$/);
 assert.match(php, /\^catering-kitchen\/\?\$/);
 assert.match(php, /\^management\/\?\$/);

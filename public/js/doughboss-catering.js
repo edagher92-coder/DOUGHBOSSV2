@@ -18,6 +18,7 @@
 	var API = (DB.restUrl || '').replace(/\/$/, '');
 	var NONCE = DB.nonce || '';
 	var CUR = DB.currency || '$';
+	var quoteRequest = 0;
 
 	var state = {
 		packages: [],
@@ -25,9 +26,20 @@
 		guests: 0,
 		orderType: 'pickup',
 		quote: null,
+		quoteStatus: 'idle',
 		email: '',
 		name: ''
 	};
+
+	function paymentsEnabled() {
+		return !!(DB.payments && DB.payments.enabled);
+	}
+
+	function scrollToElement(node, block) {
+		if (!node || !node.scrollIntoView) { return; }
+		var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: block || 'start' });
+	}
 
 	function money(n) {
 		return CUR + Number(n || 0).toFixed(2);
@@ -46,7 +58,14 @@
 	}
 
 	function get(path) {
-		return fetch(API + path, { headers: { 'X-WP-Nonce': NONCE } }).then(function (r) { return r.json(); });
+		return fetch(API + path, { headers: { 'X-WP-Nonce': NONCE } }).then(function (r) {
+			return r.json().then(function (data) {
+				if (!r.ok) {
+					throw new Error(data && data.message ? data.message : 'Request failed.');
+				}
+				return data;
+			});
+		});
 	}
 
 	function post(path, body) {
@@ -78,7 +97,9 @@
 			'<div class="dbc-head">' +
 				'<p class="dbc-kicker">Catering</p>' +
 				'<h2 class="dbc-h2">Pick a package</h2>' +
-				'<p class="dbc-sub">Oven-baked, commission-free, deposit secures your date.</p>' +
+				'<p class="dbc-sub">' + (paymentsEnabled()
+					? 'Oven-baked, commission-free, deposit secures your date.'
+					: 'Choose a package, then send an enquiry. We will confirm availability and the final price.') + '</p>' +
 			'</div>'
 		);
 		wrap.appendChild(head);
@@ -93,7 +114,7 @@
 			var serves = p.serves_min && p.serves_max ? (p.serves_min + '–' + p.serves_max + ' guests')
 				: (p.serves_min ? p.serves_min + '+ guests' : '');
 			var card = el(
-				'<button type="button" class="dbc-card' + (p.id === state.selectedId ? ' is-selected' : '') + '" data-pick="' + p.id + '">' +
+				'<button type="button" class="dbc-card' + (p.id === state.selectedId ? ' is-selected' : '') + '" data-pick="' + p.id + '" aria-pressed="' + (p.id === state.selectedId ? 'true' : 'false') + '">' +
 					(p.image ? '<span class="dbc-card-img" style="background-image:url(\'' + esc(p.image) + '\')"></span>' : '') +
 					'<span class="dbc-card-body">' +
 						'<span class="dbc-card-name">' + esc(p.name) + '</span>' +
@@ -114,8 +135,10 @@
 		var wrap = el('<div class="dbc-builder"></div>');
 		wrap.appendChild(el(
 			'<div class="dbc-head">' +
-				'<h2 class="dbc-h2">Build your quote</h2>' +
-				'<p class="dbc-sub">Tell us the details and we\'ll confirm your quote and deposit link.</p>' +
+				'<h2 class="dbc-h2">' + (paymentsEnabled() ? 'Build your quote' : 'Plan your catering enquiry') + '</h2>' +
+				'<p class="dbc-sub">' + (paymentsEnabled()
+					? 'Tell us the details and we\'ll confirm your quote and deposit link.'
+					: 'Tell us what you need. We will confirm availability, the final price and payment arrangement.') + '</p>' +
 			'</div>'
 		));
 
@@ -123,7 +146,7 @@
 		form.innerHTML =
 			'<input class="dbc-hp" type="text" name="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
 			'<div class="dbc-selected" aria-live="polite">' +
-				(pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No package selected — a custom quote will be prepared.') +
+				(pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No package selected — choose one for an indicative estimate.') +
 			'</div>' +
 			'<div class="dbc-row">' +
 				'<label class="dbc-field"><span>Guests</span><input type="number" min="0" step="1" name="guest_count" inputmode="numeric" /></label>' +
@@ -146,7 +169,7 @@
 			'<label class="dbc-field"><span>Notes (optional)</span><textarea name="notes" rows="2"></textarea></label>' +
 			'<div class="dbc-quote" aria-live="polite"></div>' +
 			'<div class="dbc-error" role="alert" aria-live="assertive"></div>' +
-			'<button type="submit" class="dbc-submit">Request booking &amp; quote</button>';
+			'<button type="submit" class="dbc-submit">' + (paymentsEnabled() ? 'Request booking &amp; quote' : 'Send catering enquiry') + '</button>';
 
 		wrap.appendChild(form);
 		updateQuoteBox(form);
@@ -157,12 +180,27 @@
 		var box = form.querySelector('.dbc-quote');
 		if (!box) { return; }
 		var q = state.quote;
+		if (state.quoteStatus === 'loading') {
+			box.innerHTML = '<span class="dbc-quote-note">Updating your indicative estimate…</span>';
+			return;
+		}
+		if (state.quoteStatus === 'failed') {
+			box.innerHTML = '<span class="dbc-quote-note">We could not update the estimate. No current estimate is shown; you can still send an enquiry.</span>';
+			return;
+		}
 		if (!q || !q.total) {
-			box.innerHTML = '<span class="dbc-quote-note">Select a package and headcount to see your deposit.</span>';
+			box.innerHTML = '<span class="dbc-quote-note">Select a package and headcount to see an indicative estimate.</span>';
 			return;
 		}
 		var deliveryNote = state.orderType === 'delivery'
 			? '<span class="dbc-quote-note">Delivery is quoted separately based on distance.</span>' : '';
+		if (!paymentsEnabled()) {
+			box.innerHTML =
+				'<div class="dbc-quote-line"><span>Indicative package estimate</span><strong>' + money(q.total) + '</strong></div>' +
+				'<span class="dbc-quote-note">Availability, final price and payment arrangement are confirmed with the catering team.</span>' +
+				deliveryNote;
+			return;
+		}
 		box.innerHTML =
 			'<div class="dbc-quote-line"><span>Estimated total</span><strong>' + money(q.total) + '</strong></div>' +
 			'<div class="dbc-quote-line dbc-quote-deposit"><span>Deposit to book (' + (q.deposit_pct || 0) + '%)</span><strong>' + money(q.deposit) + '</strong></div>' +
@@ -171,15 +209,52 @@
 	}
 
 	function refreshQuote() {
-		if (!state.selectedId) { state.quote = null; var f0 = root.querySelector('.dbc-form'); if (f0) { updateQuoteBox(f0); } return; }
+		var requestId = ++quoteRequest;
+		if (!state.selectedId) {
+			state.quote = null;
+			state.quoteStatus = 'idle';
+			var f0 = root.querySelector('.dbc-form');
+			if (f0) { updateQuoteBox(f0); }
+			return;
+		}
+		// Never show an estimate for an earlier selection while this request is
+		// pending or has failed. A package estimate is advisory, not a booking.
+		state.quote = null;
+		state.quoteStatus = 'loading';
+		var pendingForm = root.querySelector('.dbc-form');
+		if (pendingForm) { updateQuoteBox(pendingForm); }
 		var path = '/catering/quote?package_id=' + state.selectedId +
 			'&guest_count=' + (state.guests || 0) +
 			'&order_type=' + encodeURIComponent(state.orderType);
 		get(path).then(function (q) {
+			if (requestId !== quoteRequest) { return; }
 			state.quote = q;
+			state.quoteStatus = 'ready';
 			var f = root.querySelector('.dbc-form');
 			if (f) { updateQuoteBox(f); }
-		}).catch(function () { /* leave prior estimate */ });
+		}).catch(function () {
+			if (requestId !== quoteRequest) { return; }
+			state.quote = null;
+			state.quoteStatus = 'failed';
+			var f = root.querySelector('.dbc-form');
+			if (f) { updateQuoteBox(f); }
+		});
+	}
+
+	function updatePackageSelection() {
+		var pkg = selectedPackage();
+		var cards = root.querySelectorAll('[data-pick]');
+		for (var i = 0; i < cards.length; i++) {
+			var selected = (parseInt(cards[i].getAttribute('data-pick'), 10) || 0) === state.selectedId;
+			cards[i].classList.toggle('is-selected', selected);
+			cards[i].setAttribute('aria-pressed', selected ? 'true' : 'false');
+		}
+		var selectedBox = root.querySelector('.dbc-selected');
+		if (selectedBox) {
+			selectedBox.innerHTML = pkg
+				? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price)
+				: 'No package selected — choose one for an indicative estimate.';
+		}
 	}
 
 	/* ---------- interactions ---------- */
@@ -188,10 +263,12 @@
 		var pick = e.target.closest('[data-pick]');
 		if (pick) {
 			state.selectedId = parseInt(pick.getAttribute('data-pick'), 10) || 0;
-			render();
+			// Update only the selected controls. Re-rendering this root would lose
+			// every entered form value, active field and text cursor.
+			updatePackageSelection();
 			refreshQuote();
 			var b = root.querySelector('.dbc-builder');
-			if (b && b.scrollIntoView) { b.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+			scrollToElement(b, 'start');
 		}
 	});
 
@@ -290,7 +367,7 @@
 			box.appendChild(panel);
 			mountPayment(panel, data);
 		} else {
-			box.appendChild(el('<p class="dbc-sub">' + esc(data.message || 'We\'ll be in touch shortly to confirm your quote and deposit link.') + '</p>'));
+			box.appendChild(el('<p class="dbc-sub">We will confirm availability, the final price and payment arrangement before any payment is taken.</p>'));
 		}
 		var reviewUrl = window.DoughBossData && window.DoughBossData.googleReviewUrl;
 		var review = document.createElement('div');
@@ -326,7 +403,7 @@
 		review.appendChild(actions);
 		box.appendChild(review);
 
-		if (root.scrollIntoView) { root.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+		scrollToElement(root, 'start');
 	}
 
 	function mountPayment(panel, data) {
@@ -434,8 +511,8 @@
 				});
 				paymentElement.on('ready', function () {
 					try { paymentElement.focus(); } catch (ignoreFocus) {}
-					if (window.innerWidth < 720 && cardMount.scrollIntoView) {
-						cardMount.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+					if (window.innerWidth < 720) {
+						scrollToElement(cardMount, 'nearest');
 					}
 					panel.querySelector('.dbc-pay-secure').textContent = 'Secure Stripe payment · Apple Pay or Google Pay appears when supported.';
 					btn.disabled = false;
@@ -606,7 +683,7 @@
 				'<p class="dbc-sub">' + esc(conf.message || 'Your date is secured. We\'ll be in touch with the details.') + '</p>' +
 			'</div>'
 		));
-		if (root.scrollIntoView) { root.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+		scrollToElement(root, 'start');
 	}
 
 	/* ---------- boot ---------- */

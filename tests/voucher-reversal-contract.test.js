@@ -17,8 +17,8 @@ const admin = read('admin/class-doughboss-admin.php');
 const consoleApp = read('app/app.js');
 const terms = read('docs/Promotional-Voucher-Print-Terms.md');
 
-test('release 2.40 adds a manager-audited correction path', () => {
-	assert.match(plugin, /Version:\s+2\.40\.0/);
+test('release 2.41 retains the manager-audited correction path', () => {
+	assert.match(plugin, /Version:\s+2\.41\.1/);
 	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.23\.0'/);
 	assert.match(voucher, /function reverse_redemption\s*\(/);
 	assert.match(voucher, /'doughboss_voucher_reverse_reason'/);

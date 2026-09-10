@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DOUGHBOSS_FINAL_VERSION', '1.1.0' );
+define( 'DOUGHBOSS_FINAL_VERSION', '1.4.1' );
 
 function doughboss_final_setup() {
 	add_theme_support( 'title-tag' );
@@ -86,6 +86,36 @@ function doughboss_final_load_hero_assets( $load ) {
 	return $load || is_front_page() || is_page( array( 'order', 'menu', 'catering', 'about-us' ) );
 }
 add_filter( 'doughboss_load_manoush_hero_assets', 'doughboss_final_load_hero_assets' );
+
+/**
+ * Opt template-rendered public pages into the plugin's metadata and JSON-LD.
+ *
+ * The final theme renders its DoughBoss shortcodes from PHP templates rather
+ * than storing them in post_content. Without this filter, the plugin cannot
+ * discover those experiences when deciding whether to emit metadata.
+ *
+ * @param bool    $relevant Existing decision.
+ * @param WP_Post $post     Current singular post.
+ * @return bool
+ */
+function doughboss_final_seo_relevant_page( $relevant, $post ) {
+	if ( $relevant || ! $post instanceof WP_Post ) {
+		return (bool) $relevant;
+	}
+
+	return is_front_page() || is_page(
+		array(
+			'about-us',
+			'catering',
+			'locations',
+			'menu',
+			'order',
+			'track-order',
+			'vouchers',
+		)
+	);
+}
+add_filter( 'doughboss_seo_relevant_page', 'doughboss_final_seo_relevant_page', 10, 2 );
 
 function doughboss_final_body_class( $classes ) {
 	$classes[] = 'dbf-site';

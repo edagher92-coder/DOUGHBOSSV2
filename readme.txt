@@ -2,9 +2,9 @@
 Contributors: doughboss
 Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.40.0
+Stable tag: 2.41.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,20 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.41.1 =
+* Requires an explicit active shop assignment for attendance instead of inheriting a sole commerce location.
+* Adds audited historical clock-out correction, including manager, reason, selected local time and forced-break evidence.
+* Serializes badge PIN failures, makes revocation database failures visible, protects bearer responses from caches/referrers and issues new badges with 6–8 digit PINs.
+* Makes the shared clock landing QR-only and limits extended WordPress sessions to the dedicated Kitchen role for at most 30 days.
+* Coordinates the sticky site header and menu toolbar, repairs asynchronous category deep links and moves real products into the first mobile browse viewport.
+* Preserves every entered catering field when packages change, suppresses stale quote estimates and uses enquiry-only wording while payments are disabled.
+* Runs the complete Node contract suite in CI and validates the Windows-safe plugin packaging path.
+
+= 2.41.0 =
+* Activates the existing stored catering-enquiry workflow on the public catering page while retaining direct email and phone fallbacks.
+* Extends page-specific metadata and LocalBusiness JSON-LD to template-rendered homepage, menu, catering, locations and voucher pages.
+* Adds one restrained home-hero oven-warmth treatment and a quiet first-load photo reveal, while preserving reversible scroll motion, pause controls and reduced-motion support.
 
 = 2.40.0 =
 * Adds a manager-only, reason-required reversal for an unlinked in-store voucher mis-scan; the original receipt evidence remains and the reversal is audited.

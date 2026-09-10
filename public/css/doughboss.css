@@ -1240,7 +1240,7 @@ body.page-id-402 #primary-menu > li > a {
 /* Sticky category jump-bar (rendered by renderMenu when >1 category). */
 .db-app .db-jumpbar {
 	position: sticky;
-	top: var(--db-sticky-top, 0px);
+	top: var(--db-menu-sticky-offset, var(--db-sticky-top, 0px));
 	z-index: 20;
 	display: flex;
 	gap: .5rem;
@@ -1272,8 +1272,8 @@ body.page-id-402 #primary-menu > li > a {
 }
 @media (hover: hover) { .db-app .db-jump:hover { border-color: var(--db-ink); } }
 .db-app .db-jump:active { transform: scale(.92); }
-/* Land category headings below the sticky bar on jump. */
-.db-app .db-category { scroll-margin-top: 64px; }
+/* Land category headings below the site header and the sticky menu tools. */
+.db-app .db-category { scroll-margin-top: calc(var(--db-menu-anchor-offset, var(--db-menu-sticky-offset, 64px)) + 1rem); }
 
 /* Fixed cart cue: rendered inside the menu shortcode and only revealed when
  * the existing server-owned cart is non-empty. Its moderate stacking level
@@ -1379,7 +1379,7 @@ body.page-id-402 #primary-menu > li > a {
  * so long menus remain quick to navigate on phones and touch displays. */
 .db-app .db-menu-tools {
 	position: sticky;
-	top: var(--db-sticky-top, 0px);
+	top: var(--db-menu-sticky-offset, var(--db-sticky-top, 0px));
 	z-index: 25;
 	display: grid;
 	grid-template-columns: minmax(220px, .42fr) minmax(0, 1fr);

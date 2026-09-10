@@ -17,6 +17,7 @@ const catering = read('includes/class-doughboss-catering.php');
 const rest = read('includes/class-doughboss-rest-controller.php');
 const menuPostType = read('includes/class-doughboss-post-types.php');
 const cateringPostType = read('includes/class-doughboss-catering-package.php');
+const workflow = read('.github/workflows/plugin-ci.yml');
 
 test('daily-capped voucher campaigns fail closed when their serialization lock is unavailable', () => {
 	assert.match(voucher, /SELECT GET_LOCK\(%s, %d\)/);
@@ -91,4 +92,12 @@ test('menu and catering-package writes require the DoughBoss management capabili
 	}
 	assert.match(menuPostType, /'manage_terms'\s*=>\s*'manage_doughboss'/);
 	assert.match(menuPostType, /'assign_terms'\s*=>\s*'manage_doughboss'/);
+});
+
+test('release CI executes every Node contract and the Windows-safe package path', () => {
+	assert.match(workflow, /node --test tests\/\*\.test\.js/);
+	assert.match(workflow, /windows-package:/);
+	assert.match(workflow, /runs-on: windows-latest/);
+	assert.match(workflow, /\.\\scripts\\build-zip\.ps1/);
+	assert.match(workflow, /\.\\scripts\\validate-zip\.ps1/);
 });

@@ -39,6 +39,7 @@ class DoughBoss_SEO {
 	 */
 	public function init() {
 		add_filter( 'document_title_parts', array( $this, 'title_parts' ) );
+		add_filter( 'robots_txt', array( $this, 'robots_txt' ), 20, 2 );
 		add_action( 'wp_head', array( $this, 'head' ), 5 );
 	}
 
@@ -83,22 +84,48 @@ class DoughBoss_SEO {
 	private function page_copy() {
 		$post    = get_post();
 		$content = $post instanceof WP_Post ? $post->post_content : '';
-		if ( has_shortcode( $content, 'doughboss_catering' ) ) {
+		if ( is_page( 'catering' ) || has_shortcode( $content, 'doughboss_catering' ) ) {
 			return array(
 				'title'       => __( 'Dough Boss Catering | Mini Manoush & Pies Sydney', 'doughboss' ),
 				'description' => __( 'Plan a fresh Sydney catering spread with mini zaatar, cheese and meat manoush plus spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
 			);
 		}
-		if ( has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {
+		if ( is_page( array( 'menu', 'order' ) ) || has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {
 			return array(
 				'title'       => __( 'Dough Boss Menu | Manoush, Pizza & Pies Sydney', 'doughboss' ),
 				'description' => __( 'Browse fresh-baked manoush, pizza, golden pies and wraps. Order pickup from Dough Boss Revesby.', 'doughboss' ),
+			);
+		}
+		if ( is_page( 'locations' ) ) {
+			return array(
+				'title'       => __( 'Dough Boss Locations | Lebanese Bakery Sydney', 'doughboss' ),
+				'description' => __( 'Visit Dough Boss in Revesby, Bankstown or Roselands for oven-baked manoush, pizza, pies and wraps made fresh to order.', 'doughboss' ),
+			);
+		}
+		if ( is_page( 'vouchers' ) ) {
+			return array(
+				'title'       => __( 'Dough Boss Student Vouchers | Bankstown', 'doughboss' ),
+				'description' => __( 'Check current Dough Boss student voucher eligibility, allocation and redemption terms before claiming a personal single-use code.', 'doughboss' ),
 			);
 		}
 		return array(
 			'title'       => __( 'Dough Boss | Fresh Manoush, Pies & Catering Sydney', 'doughboss' ),
 			'description' => __( 'Fresh-baked manoush, pizza, golden pies, wraps and catering since 2009. Pickup from Revesby.', 'doughboss' ),
 		);
+	}
+
+	/**
+	 * Advertise the native WordPress sitemap when no SEO plugin owns robots.txt.
+	 *
+	 * @param string $output Existing virtual robots.txt output.
+	 * @param bool   $public Whether search indexing is enabled.
+	 * @return string
+	 */
+	public function robots_txt( $output, $public ) {
+		if ( ! $public || $this->dedicated_seo_plugin_active() || false !== stripos( $output, 'Sitemap:' ) ) {
+			return $output;
+		}
+		return rtrim( $output ) . "\nSitemap: " . esc_url_raw( home_url( '/wp-sitemap.xml' ) ) . "\n";
 	}
 
 	/**

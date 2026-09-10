@@ -84,6 +84,35 @@ final class DoughBoss_Staff_Scope {
 	}
 
 	/**
+	 * Resolve a staff member's explicit attendance shop.
+	 *
+	 * Attendance must never infer a shop from a single-store commerce setup.
+	 * A clock event is a personnel record, so its location must be deliberately
+	 * assigned before a badge can be issued or an attendance action accepted.
+	 * KDS uses assigned_location_id() separately for its migration-safe scope.
+	 *
+	 * @param int $user_id WordPress user ID; zero means the current user.
+	 * @return int|WP_Error Explicit active location ID or an assignment error.
+	 */
+	public static function attendance_location_id( $user_id = 0 ) {
+		$user_id = $user_id ? absint( $user_id ) : get_current_user_id();
+		if ( ! $user_id ) {
+			return new WP_Error( 'doughboss_staff_login_required', __( 'Staff sign-in is required.', 'doughboss' ), array( 'status' => 401 ) );
+		}
+
+		$assigned = absint( get_user_meta( $user_id, self::LOCATION_META, true ) );
+		if ( $assigned && DoughBoss_Locations::is_valid( $assigned ) ) {
+			return $assigned;
+		}
+
+		return new WP_Error(
+			'doughboss_staff_attendance_location_required',
+			__( 'This staff account needs an explicit active shop assignment before it can use attendance.', 'doughboss' ),
+			array( 'status' => 403 )
+		);
+	}
+
+	/**
 	 * Enforce the current KDS user's location against a requested filter.
 	 *
 	 * @param int $requested Requested location; 0 means caller did not choose.
@@ -148,7 +177,7 @@ final class DoughBoss_Staff_Scope {
 				<?php foreach ( $locations as $location ) : ?>
 					<option value="<?php echo esc_attr( $location->id ); ?>" <?php selected( $current, (int) $location->id ); ?>><?php echo esc_html( $location->name ); ?></option>
 				<?php endforeach; ?>
-			</select><p class="description"><?php esc_html_e( 'Required for staff clock-in and KDS access when more than one active shop exists. Managers select the shop when clocking in.', 'doughboss' ); ?></p></td>
+			</select><p class="description"><?php esc_html_e( 'Required for every staff clock-in. KDS access may inherit the sole active shop during migration; attendance never does. Managers select the shop when clocking themselves in.', 'doughboss' ); ?></p></td>
 		</tr></table>
 		<?php $roster = self::roster( $user->ID ); ?>
 		<h2><?php esc_html_e( 'DoughBoss roster & lateness', 'doughboss' ); ?></h2>

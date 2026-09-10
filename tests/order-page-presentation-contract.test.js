@@ -52,3 +52,16 @@ test('menu blowout motion reverses on up/down scroll and respects reduced motion
 	assert.match(css, /is-scroll-visible/);
 	assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
+
+test('menu anchors account for the live header after async hydration', function () {
+	assert.match(client, /function syncMenuScrollOffsets\(root\)/);
+	assert.match(client, /window\.getComputedStyle\(header\)/);
+	assert.match(client, /parseFloat\(headerStyle\.top\)/);
+	assert.match(client, /header\.getBoundingClientRect\(\)\.height/);
+	assert.doesNotMatch(client, /header\.getBoundingClientRect\(\)\.bottom/);
+	assert.match(client, /function menuHashTarget\(root, hash\)/);
+	assert.match(client, /window\.addEventListener\('hashchange'/);
+	assert.match(client, /navigateMenuHash\(root\)/);
+	assert.match(client, /prefersReducedMotion\(\) \? 'auto' : 'smooth'/);
+	assert.match(css, /--db-menu-sticky-offset/);
+});

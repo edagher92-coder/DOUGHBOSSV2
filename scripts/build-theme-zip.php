@@ -26,8 +26,8 @@ if ( ! is_dir( $dist ) && ! mkdir( $dist, 0777, true ) && ! is_dir( $dist ) ) {
 }
 
 $style = file_get_contents( $theme_root . DIRECTORY_SEPARATOR . 'style.css' );
-if ( false === $style || 1 !== preg_match( '/^Version:\s*1\.3\.0\s*$/mi', $style ) ) {
-	fwrite( STDERR, "ERROR: expected DoughBoss Final theme version 1.3.0.\n" );
+if ( false === $style || 1 !== preg_match( '/^Version:\s*1\.4\.1\s*$/mi', $style ) ) {
+	fwrite( STDERR, "ERROR: expected DoughBoss Final theme version 1.4.1.\n" );
 	exit( 1 );
 }
 
