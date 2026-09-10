@@ -12,6 +12,7 @@ const rest = read('includes/class-doughboss-rest-controller.php');
 const shortcodes = read('includes/class-doughboss-shortcodes.php');
 const css = read('public/css/doughboss-catering.css');
 const demo = read('demo/index.html');
+const template = read('themes/doughboss-final/page-catering.php');
 
 test('official catering contacts are configurable and safe by default', () => {
 	assert.match(settings, /'catering_email'\s*=>\s*'catering@doughboss\.com\.au'/);
@@ -45,4 +46,11 @@ test('catering contact and guide collapse to one column on mobile', () => {
 	assert.match(css, /\.dbc-contact-actions/);
 	assert.match(css, /\.dbc-how-grid/);
 	assert.match(css, /@media \(max-width: 540px\)[\s\S]*grid-template-columns: 1fr/);
+});
+
+test('catering template exposes the configurable direct contact fallback', () => {
+	assert.match(template, /DoughBoss_Settings::catering_email\(\)/);
+	assert.match(template, /DoughBoss_Settings::catering_phone\(\)/);
+	assert.match(template, /mailto:/);
+	assert.match(template, /tel:/);
 });

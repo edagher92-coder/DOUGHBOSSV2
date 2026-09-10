@@ -22,6 +22,8 @@ const source = required
   .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
   .join('\n');
 
+check(source.includes('Version: 1.4.1') && source.includes("DOUGHBOSS_FINAL_VERSION', '1.4.1'"), 'theme package and runtime version agree at 1.4.1');
+
 [
   'doughboss_manoush_hero', 'doughboss_ordering_status', 'doughboss_shop_picker',
   'doughboss_menu', 'doughboss_builder', 'doughboss_cart',

@@ -7,7 +7,7 @@ This file is the first-stop memory for Claude/ChatGPT/Codex-style agents working
 - **Repository:** `edagher92-coder/DOUGHBOSSV2`
 - **Primary integration branch:** `claude/doughboss-website-design-fixes-li6dqa` (PR #17; staging/integration, not a production release by default).
 - **Current release branch:** `codex/web-upgrade-2.41.0`.
-- **Current code release:** plugin `2.41.0` / DB `1.23.0`, paired with DoughBoss Final theme `1.4.0`. The release retains protected `/kitchen/`, hidden `/catering-kitchen/`, `/management/`, staff-clock and guide workspaces, hardened Stripe/voucher contracts, QR/PIN attendance and audited voucher till controls. The public site uses approved real Dough Boss merchant photography, reversible accessible parallax, a restrained one-time home-hero oven-warmth treatment, template-aware local SEO metadata and the stored catering-enquiry workflow. Do not infer that production WordPress is running it until the live site responds and the installed version is checked.
+- **Current code release:** plugin `2.41.1` / DB `1.23.0`, paired with DoughBoss Final theme `1.4.1`. The release retains protected `/kitchen/`, hidden `/catering-kitchen/`, `/management/`, staff-clock and guide workspaces, hardened Stripe/voucher contracts, QR/PIN attendance and audited voucher till controls. The public site uses approved real Dough Boss merchant photography, reversible accessible parallax, a product-first browse-only menu, collision-safe sticky category navigation, template-aware local SEO metadata and a catering-enquiry workflow that preserves entered details and accurately reflects disabled payments. Do not infer that production WordPress is running it until the live site responds and the installed versions are checked.
 - **Payments:** Stripe-hosted Checkout, webhook recovery and wallet eligibility are implemented. Keep customer ordering/card-payment switches off until shop hardware and launch operations are approved; Tyro and MPGS remain dormant rollback paths.
 - **Requires:** WordPress 6.0+, PHP 7.4+
 - **REST namespace:** `doughboss/v1`
@@ -37,7 +37,7 @@ DoughBoss is a commission-free restaurant ordering platform delivered as a WordP
 
 ## Release discipline
 
-Current consolidated release contract: plugin `2.41.0`, database schema `1.23.0`.
+Current consolidated release contract: plugin `2.41.1`, database schema `1.23.0`, DoughBoss Final theme `1.4.1`.
 
 Fresh WordPress installs are browse-only by default. The public menu remains
 available, `[doughboss_ordering_status]` displays the owner-editable Coming Soon

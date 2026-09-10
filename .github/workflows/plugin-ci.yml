@@ -66,42 +66,34 @@ jobs:
       - name: Verify demo launch scope
         run: php tests/demo-scope.php
 
-      - name: Verify universal demo profiles
-        run: node tests/demo-config.test.js
-
       - name: Verify WordPress Coming Soon launch gate
         run: php tests/coming-soon-contract.php
 
-      - name: Verify Tyro, menu and hero acceptance contracts
+      - name: Verify Tyro, menu and hero PHP contracts
         run: |
           php tests/tyro-contract.php
           php tests/manoush-hero-contract.php
-          node --test tests/manoush-hero-behavior.test.js
           php tests/menu-options.php
           php tests/activation-location-seed.php
-          node --test tests/menu-photo-contract.test.js
-          node --test tests/storefront-options-contract.test.js
-          node --test tests/seo-contract.test.js
-          node --test tests/wordpress-seo-marketing-contract.test.js
-          node --test tests/wordpress-seo-theme-contract.test.js
-          node --test tests/google-review-contract.test.js
-          node --test tests/catering-contact-contract.test.js
-          node --test tests/admin-dashboard-contract.test.js
-          node --test tests/migration-gate-contract.test.js
-          node --test tests/quarantine-helper-contract.test.js
-          node --test tests/mpgs-hosted-checkout-contract.test.js
-          node --test tests/hybrid-theme-contract.test.js
-          node --test tests/final-theme-contract.test.js
-          node --test tests/final-theme-ux-contract.test.js
-          node --test tests/staff-kds-qr-contract.test.js
-          node --test tests/kitchen-workload-summary-contract.test.js
-          node --test tests/timeclock-contract.test.js
-          node --test tests/staff-badge-clock-contract.test.js
-          node --test tests/student-voucher-qr-assets-contract.test.js
-          node --test tests/storefront-uplift-contract.test.js
-          node --test tests/order-page-presentation-contract.test.js
-          node --test tests/wordpress-menu-images-contract.test.js
-          node --test tests/backend-release-integrity-contract.test.js
+
+      - name: Run the complete Node contract suite
+        shell: bash
+        run: node --test tests/*.test.js
+
+      - name: Verify staff clock guide source and tracked PDF
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/build_staff_clock_guide.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          guide = Path('output/pdf/DoughBoss-Staff-Clock-Setup-Printer-and-Daily-Use-Guide.pdf')
+          if not guide.is_file() or guide.stat().st_size < 10_000:
+              raise SystemExit('tracked staff clock guide PDF is missing or unexpectedly small')
+          if not guide.read_bytes().startswith(b'%PDF-'):
+              raise SystemExit('tracked staff clock guide is not a PDF')
+          print(f'Staff clock guide PDF is present: {guide.stat().st_size} bytes')
+          PY
 
       - name: Verify Stripe payment safety contracts
         run: |
@@ -109,7 +101,6 @@ jobs:
           php tests/stripe-shutdown-return-behavior.php
           php tests/provider-readiness-contract.php
           php tests/catering-motion-parity-contract.php
-          node --test tests/stripe-checkout-contract.test.js
 
   build-zip:
     name: Build installable plugin zip
@@ -147,6 +138,21 @@ jobs:
           name: doughboss-final-theme-zip
           path: dist/doughboss-final.zip
           if-no-files-found: error
+
+  windows-package:
+    name: Build and validate ZIP on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build with the Windows-safe packager
+        shell: pwsh
+        run: .\scripts\build-zip.ps1
+
+      - name: Validate the Windows-built archive
+        shell: pwsh
+        run: .\scripts\validate-zip.ps1 -ArchivePath .\dist\doughboss.zip
 
   secret-scan:
     name: Static secret pattern scan

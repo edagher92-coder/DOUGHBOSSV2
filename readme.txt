@@ -89,6 +89,9 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 * Adds audited historical clock-out correction, including manager, reason, selected local time and forced-break evidence.
 * Serializes badge PIN failures, makes revocation database failures visible, protects bearer responses from caches/referrers and issues new badges with 6–8 digit PINs.
 * Makes the shared clock landing QR-only and limits extended WordPress sessions to the dedicated Kitchen role for at most 30 days.
+* Coordinates the sticky site header and menu toolbar, repairs asynchronous category deep links and moves real products into the first mobile browse viewport.
+* Preserves every entered catering field when packages change, suppresses stale quote estimates and uses enquiry-only wording while payments are disabled.
+* Runs the complete Node contract suite in CI and validates the Windows-safe plugin packaging path.
 
 = 2.41.0 =
 * Activates the existing stored catering-enquiry workflow on the public catering page while retaining direct email and phone fallbacks.
