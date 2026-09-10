@@ -2,9 +2,9 @@
 Contributors: doughboss
 Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.41.0
+Stable tag: 2.41.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.41.1 =
+* Requires an explicit active shop assignment for attendance instead of inheriting a sole commerce location.
+* Adds audited historical clock-out correction, including manager, reason, selected local time and forced-break evidence.
+* Serializes badge PIN failures, makes revocation database failures visible, protects bearer responses from caches/referrers and issues new badges with 6–8 digit PINs.
+* Makes the shared clock landing QR-only and limits extended WordPress sessions to the dedicated Kitchen role for at most 30 days.
 
 = 2.41.0 =
 * Activates the existing stored catering-enquiry workflow on the public catering page while retaining direct email and phone fallbacks.

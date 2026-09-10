@@ -134,7 +134,7 @@ $audit_fail_trigger = $wpdb->prefix . 'doughboss_staff_audit_fail';
 // Build and migrate the real DB 1.23 contract. A failed InnoDB readiness check
 // must stop the version checkpoint and leave an operator-visible explanation.
 DoughBoss_Activator::create_tables();
-timeclock_db_ok( '2.41.0' === DOUGHBOSS_VERSION && '1.23.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.41.0 and DB contract 1.23.0' );
+timeclock_db_ok( '2.41.1' === DOUGHBOSS_VERSION && '1.23.0' === DOUGHBOSS_DB_VERSION, 'test is running against plugin 2.41.1 and DB contract 1.23.0' );
 timeclock_db_ok( DoughBoss_Activator::timeclock_storage_ready(), 'fresh staff shifts and audit tables satisfy the exact readiness contract' );
 
 timeclock_db_sql( "ALTER TABLE {$events} ENGINE=MyISAM" );
@@ -263,13 +263,23 @@ foreach ( $fixture_slugs as $index => $slug ) {
 }
 $location_id = $location_ids[0];
 
-// The public assignment seam fails closed across multiple active stores, then
-// accepts only a real active assignment. The private handler resolver is
-// invoked to prove a clock-only employee cannot forge a different POSTed shop.
+// KDS may retain its migration-safe single-store fallback, but attendance is a
+// personnel record and always requires an explicit active assignment. The
+// handler resolver must ignore a forged POSTed shop and use only that explicit
+// attendance location.
 $unassigned = DoughBoss_Staff_Scope::assigned_location_id( $staff_id );
 timeclock_db_ok( is_wp_error( $unassigned ) && 'doughboss_staff_location_required' === $unassigned->get_error_code(), 'unassigned multi-shop staff fail closed' );
+$attendance_unassigned = DoughBoss_Staff_Scope::attendance_location_id( $staff_id );
+timeclock_db_ok( is_wp_error( $attendance_unassigned ) && 'doughboss_staff_attendance_location_required' === $attendance_unassigned->get_error_code(), 'unassigned attendance staff fail closed' );
+$wpdb->update( $locations, array( 'is_active' => 0 ), array( 'id' => $location_ids[1] ), array( '%d' ), array( '%d' ) );
+$wpdb->update( $locations, array( 'is_active' => 0 ), array( 'id' => $location_ids[2] ), array( '%d' ), array( '%d' ) );
+$sole_attendance_unassigned = DoughBoss_Staff_Scope::attendance_location_id( $staff_id );
+timeclock_db_ok( is_wp_error( $sole_attendance_unassigned ) && 'doughboss_staff_attendance_location_required' === $sole_attendance_unassigned->get_error_code(), 'attendance never infers the sole active commerce shop' );
+$wpdb->update( $locations, array( 'is_active' => 1 ), array( 'id' => $location_ids[1] ), array( '%d' ), array( '%d' ) );
+$wpdb->update( $locations, array( 'is_active' => 1 ), array( 'id' => $location_ids[2] ), array( '%d' ), array( '%d' ) );
 update_user_meta( $staff_id, DoughBoss_Staff_Scope::LOCATION_META, $location_id );
 timeclock_db_ok( $location_id === DoughBoss_Staff_Scope::assigned_location_id( $staff_id ), 'assigned active shop is authoritative' );
+timeclock_db_ok( $location_id === DoughBoss_Staff_Scope::attendance_location_id( $staff_id ), 'explicit active shop is authoritative for attendance' );
 $wpdb->update( $locations, array( 'is_active' => 0 ), array( 'id' => $location_id ), array( '%d' ), array( '%d' ) );
 $inactive = DoughBoss_Staff_Scope::assigned_location_id( $staff_id );
 timeclock_db_ok( is_wp_error( $inactive ) && 'doughboss_staff_location_required' === $inactive->get_error_code(), 'inactive assignment fails closed while other active shops exist' );
@@ -400,10 +410,43 @@ timeclock_db_ok( $second_shift && (int) $second_shift->id !== (int) $first_shift
 timeclock_db_ok( $first_snapshot === $first_after_directory_change, 'completed shift snapshots are unchanged by later staff and shop edits' );
 timeclock_db_ok( $second_shift && 'Acceptance Staff Renamed' === $second_shift->staff_name && 'Acceptance Shop Renamed' === $second_shift->location_name && 'UTC' === $second_shift->timezone_snapshot, 'new shift captures fresh immutable staff, shop and timezone snapshots' );
 
-// A manager closure must finish a recorded break in the same audited
-// transaction. If the audit write fails, both the close and break finish roll
-// back together rather than changing payroll evidence halfway through.
-timeclock_db_ok( 'break-start' === $start_break->invoke( null, $second_shift, $staff_id ), 'a manager correction can safely close an active recorded break' );
+// A manager correction cannot be backdated before any completed break. It can
+// then finish a later active break in the same audited transaction. If the
+// audit write fails, both the close and break finish roll back together rather
+// than changing payroll evidence halfway through.
+timeclock_db_sql( $wpdb->prepare( "UPDATE {$shifts} SET clock_in_utc = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 MINUTE) WHERE id = %d", (int) $second_shift->id ) );
+timeclock_db_ok( 'break-start' === $start_break->invoke( null, $second_shift, $staff_id ), 'a manager correction fixture can create a completed recorded break' );
+timeclock_db_sql( $wpdb->prepare( "UPDATE {$breaks} SET break_start_utc = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 20 MINUTE) WHERE shift_id = %d AND open_guard = 1", (int) $second_shift->id ) );
+timeclock_db_ok( 'break-end' === $end_break->invoke( null, $second_shift, $staff_id ), 'manager correction fixture can complete the first break' );
+$clock_timezone = new DateTimeZone( (string) $second_shift->timezone_snapshot );
+$before_completed_break_end_local = wp_date( 'Y-m-d\\TH:i', time() - 300, $clock_timezone );
+$reason = 'Acceptance test: employee forgot to clock out';
+$rejected_correction_pid = timeclock_fork_handler(
+	'handle_correction',
+	$manager_id,
+	'doughboss_correct_shift_' . (int) $second_shift->id,
+	array( 'action' => 'doughboss_correct_shift', 'shift_id' => (int) $second_shift->id, 'reason' => $reason, 'clock_out_local' => $before_completed_break_end_local )
+);
+timeclock_db_ok( timeclock_wait_handler( $rejected_correction_pid ), 'manager handler rejects a correction that predates a completed break' );
+timeclock_db_ok( DoughBoss_Timeclock::open_shift( $staff_id ) && 0 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$events} WHERE shift_id = %d", (int) $second_shift->id ) ), 'completed-break rejection preserves the open shift without an audit event' );
+$read_failure_clock_out_local = wp_date( 'Y-m-d\\TH:i', time() + 60, $clock_timezone );
+$fail_completed_break_read = static function ( $query ) use ( $breaks ) {
+	if ( false !== strpos( $query, "FROM {$breaks}" ) && false !== strpos( $query, 'break_end_utc IS NOT NULL' ) ) {
+		return 'SELECT * FROM doughboss_acceptance_missing_break_evidence';
+	}
+	return $query;
+};
+add_filter( 'query', $fail_completed_break_read, 999 );
+$read_failure_pid = timeclock_fork_handler(
+	'handle_correction',
+	$manager_id,
+	'doughboss_correct_shift_' . (int) $second_shift->id,
+	array( 'action' => 'doughboss_correct_shift', 'shift_id' => (int) $second_shift->id, 'reason' => $reason, 'clock_out_local' => $read_failure_clock_out_local )
+);
+timeclock_db_ok( timeclock_wait_handler( $read_failure_pid ), 'manager handler fails closed when break evidence cannot be read' );
+remove_filter( 'query', $fail_completed_break_read, 999 );
+timeclock_db_ok( DoughBoss_Timeclock::open_shift( $staff_id ) && 0 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$events} WHERE shift_id = %d", (int) $second_shift->id ) ), 'break-read failure preserves the open shift without an audit event' );
+timeclock_db_ok( 'break-start' === $start_break->invoke( null, $second_shift, $staff_id ), 'a manager correction can safely close a later active recorded break' );
 $second_open_break = DoughBoss_Staff_Badge::open_break( (int) $second_shift->id );
 timeclock_db_ok( $second_open_break && (int) $second_open_break->shift_id === (int) $second_shift->id, 'second shift has exactly one active break before correction' );
 
@@ -412,12 +455,12 @@ timeclock_db_ok( $second_open_break && (int) $second_open_break->shift_id === (i
 // close, then succeed atomically once the temporary failure is removed.
 timeclock_db_sql( "DROP TRIGGER IF EXISTS {$audit_fail_trigger}" );
 timeclock_db_sql( "CREATE TRIGGER {$audit_fail_trigger} BEFORE INSERT ON {$events} FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Acceptance audit insert failure'" );
-$reason = 'Acceptance test: employee forgot to clock out';
+$correction_clock_out_local = wp_date( 'Y-m-d\\TH:i', time() + 120, $clock_timezone );
 $failed_correction_pid = timeclock_fork_handler(
 	'handle_correction',
 	$manager_id,
 	'doughboss_correct_shift_' . (int) $second_shift->id,
-	array( 'action' => 'doughboss_correct_shift', 'shift_id' => (int) $second_shift->id, 'reason' => $reason )
+	array( 'action' => 'doughboss_correct_shift', 'shift_id' => (int) $second_shift->id, 'reason' => $reason, 'clock_out_local' => $correction_clock_out_local )
 );
 timeclock_db_ok( timeclock_wait_handler( $failed_correction_pid ), 'manager handler returns safely when audit persistence fails' );
 timeclock_db_sql( "DROP TRIGGER IF EXISTS {$audit_fail_trigger}" );
@@ -430,7 +473,7 @@ $correction_pid = timeclock_fork_handler(
 	'handle_correction',
 	$manager_id,
 	'doughboss_correct_shift_' . (int) $second_shift->id,
-	array( 'action' => 'doughboss_correct_shift', 'shift_id' => (int) $second_shift->id, 'reason' => $reason )
+	array( 'action' => 'doughboss_correct_shift', 'shift_id' => (int) $second_shift->id, 'reason' => $reason, 'clock_out_local' => $correction_clock_out_local )
 );
 timeclock_db_ok( timeclock_wait_handler( $correction_pid ), 'audited manager-close handler completed normally' );
 $corrected = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$shifts} WHERE id = %d", (int) $second_shift->id ) );
@@ -439,7 +482,7 @@ $before_json = $event ? json_decode( (string) $event->before_json, true ) : arra
 $after_json  = $event ? json_decode( (string) $event->after_json, true ) : array();
 timeclock_db_ok( $corrected && $corrected->clock_out_utc && null === $corrected->open_guard && ! DoughBoss_Timeclock::open_shift( $staff_id ), 'manager close and guard clear commit together' );
 timeclock_db_ok( $event && 'manager_closed' === $event->event_type && $manager_id === (int) $event->actor_user_id && $reason === $event->reason, 'manager close records actor, reason and event type' );
-timeclock_db_ok( isset( $before_json['open_guard'], $before_json['location_name'], $after_json['location_name'] ) && 1 === (int) $before_json['open_guard'] && empty( $before_json['clock_out_utc'] ) && empty( $after_json['open_guard'] ) && ! empty( $after_json['clock_out_utc'] ) && $before_json['location_name'] === $after_json['location_name'], 'audit before/after evidence describes only the close transition and preserves snapshots' );
+timeclock_db_ok( isset( $before_json['open_guard'], $before_json['location_name'], $before_json['open_break'], $after_json['location_name'], $after_json['open_break'], $after_json['correction_clock_out_local'] ) && 1 === (int) $before_json['open_guard'] && empty( $before_json['clock_out_utc'] ) && empty( $after_json['open_guard'] ) && ! empty( $after_json['clock_out_utc'] ) && $before_json['location_name'] === $after_json['location_name'] && empty( $before_json['open_break']['break_end_utc'] ) && $after_json['clock_out_utc'] === $after_json['open_break']['break_end_utc'] && $correction_clock_out_local === $after_json['correction_clock_out_local'], 'audit before/after evidence preserves shift, active-break and selected-local-time provenance' );
 timeclock_db_ok( ! DoughBoss_Staff_Badge::open_break( (int) $second_shift->id ), 'successful manager correction finishes the open break with the shift' );
 
 foreach ( glob( $base . '.*' ) as $file ) {

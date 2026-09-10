@@ -16,6 +16,9 @@ final class DoughBoss_Timeclock {
 
 	const CAPABILITY = 'clock_doughboss_staff';
 
+	/** A small allowance for server-clock drift; a correction is never prospective. */
+	const MAX_CORRECTION_FUTURE_SECONDS = 300;
+
 	/** Register state-changing handlers and the manager report. */
 	public function init() {
 		add_action( 'admin_post_doughboss_clock_in', array( $this, 'handle_clock_in' ) );
@@ -109,7 +112,7 @@ final class DoughBoss_Timeclock {
 		$shift     = self::open_shift( get_current_user_id() );
 		$locations = DoughBoss_Locations::all( true );
 		$manager   = current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
-		$assigned  = $manager ? 0 : DoughBoss_Staff_Scope::assigned_location_id( get_current_user_id() );
+		$assigned  = $manager ? 0 : DoughBoss_Staff_Scope::attendance_location_id( get_current_user_id() );
 		$location  = ! is_wp_error( $assigned ) && $assigned ? DoughBoss_Locations::get( $assigned ) : null;
 		$minutes   = $shift ? self::worked_minutes( $shift ) : 0;
 		?>
@@ -205,7 +208,7 @@ final class DoughBoss_Timeclock {
 				$location_id = (int) $active[0]->id;
 			}
 		} else {
-			$location_id = DoughBoss_Staff_Scope::assigned_location_id( get_current_user_id() );
+			$location_id = DoughBoss_Staff_Scope::attendance_location_id( get_current_user_id() );
 			if ( is_wp_error( $location_id ) ) {
 				return $location_id;
 			}
@@ -331,7 +334,8 @@ final class DoughBoss_Timeclock {
 		$correction  = isset( $_GET['db_shift'] ) ? sanitize_key( wp_unslash( $_GET['db_shift'] ) ) : '';
 		?>
 		<div class="wrap doughboss-timesheet"><h1><?php esc_html_e( 'Staff Timesheet', 'doughboss' ); ?></h1>
-			<?php if ( 'corrected' === $correction ) : ?><div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'The open shift was closed and the manager reason was added to the permanent audit trail.', 'doughboss' ); ?></p></div><?php endif; ?>
+			<?php if ( 'corrected' === $correction ) : ?><div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'The shift was closed at the recorded actual time and the manager reason was added to the permanent audit trail.', 'doughboss' ); ?></p></div><?php endif; ?>
+			<?php if ( 'invalid-time' === $correction ) : ?><div class="notice notice-error"><p><?php esc_html_e( 'The shift was not changed. Enter a valid actual clock-out after the recorded clock-in and no more than five minutes in the future.', 'doughboss' ); ?></p></div><?php endif; ?>
 			<?php if ( 'error' === $correction ) : ?><div class="notice notice-error"><p><?php esc_html_e( 'The shift was not changed. Please review it and try again.', 'doughboss' ); ?></p></div><?php endif; ?>
 			<p class="description"><?php esc_html_e( 'Active shifts appear first. Times are stored in UTC and displayed in each recorded shop timezone. Worked time subtracts only recorded breaks; roster lateness is snapshotted at clock-in. Manager closures require a reason and are permanently audited.', 'doughboss' ); ?></p>
 			<?php if ( count( $rows ) >= 1000 ) : ?><div class="notice notice-warning inline"><p><?php esc_html_e( 'This screen shows the newest 1,000 matching shifts. CSV export includes up to the newest 5,000 matching shifts; narrow the filters if that limit is reached.', 'doughboss' ); ?></p></div><?php endif; ?>
@@ -356,12 +360,16 @@ final class DoughBoss_Timeclock {
 	 */
 	public function handle_correction() {
 		self::verify_manager_access();
-		$shift_id = isset( $_POST['shift_id'] ) ? absint( $_POST['shift_id'] ) : 0;
+		$shift_id        = isset( $_POST['shift_id'] ) ? absint( $_POST['shift_id'] ) : 0;
+		$clock_out_local = isset( $_POST['clock_out_local'] ) ? trim( (string) wp_unslash( $_POST['clock_out_local'] ) ) : '';
 		check_admin_referer( 'doughboss_correct_shift_' . $shift_id );
 		$reason = isset( $_POST['reason'] ) ? trim( sanitize_textarea_field( wp_unslash( $_POST['reason'] ) ) ) : '';
 		$reason = substr( $reason, 0, 500 );
 		if ( ! $shift_id || '' === $reason ) {
 			wp_die( esc_html__( 'A clear correction reason is required.', 'doughboss' ), esc_html__( 'Reason required', 'doughboss' ), array( 'response' => 400 ) );
+		}
+		if ( '' === $clock_out_local ) {
+			wp_die( esc_html__( 'The actual local clock-out date and time are required.', 'doughboss' ), esc_html__( 'Clock-out time required', 'doughboss' ), array( 'response' => 400 ) );
 		}
 
 		global $wpdb;
@@ -372,7 +380,7 @@ final class DoughBoss_Timeclock {
 		$actor_id = get_current_user_id();
 		$status   = $this->with_user_lock(
 			(int) $initial->user_id,
-			static function () use ( $shift_id, $actor_id, $reason ) {
+			static function () use ( $shift_id, $actor_id, $reason, $clock_out_local ) {
 				global $wpdb;
 				if ( false === $wpdb->query( 'START TRANSACTION' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 					return 'error';
@@ -382,23 +390,61 @@ final class DoughBoss_Timeclock {
 					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 					return 'error';
 				}
-				$before = wp_json_encode( $row );
-				$now    = current_time( 'mysql', true );
-				if ( class_exists( 'DoughBoss_Staff_Badge' ) && DoughBoss_Staff_Badge::open_break( $shift_id ) ) {
-					$closed_break = $wpdb->query( $wpdb->prepare( 'UPDATE ' . DoughBoss_Staff_Badge::breaks_table() . ' SET break_end_utc = %s, open_guard = NULL, updated_at = %s WHERE shift_id = %d AND break_end_utc IS NULL AND open_guard = 1', $now, $now, $shift_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+				$correction = self::correction_clock_out( $clock_out_local, (string) $row->timezone_snapshot, (string) $row->clock_in_utc );
+				if ( is_wp_error( $correction ) ) {
+					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					return 'invalid-time';
+				}
+				$now              = current_time( 'mysql', true );
+				$completed_breaks = array();
+				$open_break       = null;
+				if ( class_exists( 'DoughBoss_Staff_Badge' ) ) {
+					$wpdb->last_error = '';
+					$completed_breaks = $wpdb->get_results( $wpdb->prepare( 'SELECT break_start_utc, break_end_utc FROM ' . DoughBoss_Staff_Badge::breaks_table() . ' WHERE shift_id = %d AND break_end_utc IS NOT NULL ORDER BY id ASC FOR UPDATE', $shift_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+					if ( '' !== $wpdb->last_error ) {
+						$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+						return 'error';
+					}
+					$completed_breaks = (array) $completed_breaks;
+					foreach ( $completed_breaks as $completed_break ) {
+						$break_end = strtotime( $completed_break->break_end_utc . ' UTC' );
+						if ( ! $break_end || $correction['timestamp'] < $break_end ) {
+							$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+							return 'invalid-time';
+						}
+					}
+					$wpdb->last_error = '';
+					$open_break = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . DoughBoss_Staff_Badge::breaks_table() . ' WHERE shift_id = %d AND break_end_utc IS NULL AND open_guard = 1 ORDER BY id DESC LIMIT 1 FOR UPDATE', $shift_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+					if ( '' !== $wpdb->last_error ) {
+						$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+						return 'error';
+					}
+					if ( $open_break && ( ! strtotime( $open_break->break_start_utc . ' UTC' ) || $correction['timestamp'] < strtotime( $open_break->break_start_utc . ' UTC' ) ) ) {
+						$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+						return 'invalid-time';
+					}
+				}
+				$before = self::correction_audit_state( $row, $open_break );
+				if ( $open_break ) {
+					$closed_break = $wpdb->query( $wpdb->prepare( 'UPDATE ' . DoughBoss_Staff_Badge::breaks_table() . ' SET break_end_utc = %s, open_guard = NULL, updated_at = %s WHERE id = %d AND shift_id = %d AND break_end_utc IS NULL AND open_guard = 1', $correction['utc'], $now, (int) $open_break->id, $shift_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 					if ( 1 !== $closed_break ) {
 						$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 						return 'error';
 					}
 				}
-				$updated = $wpdb->query( $wpdb->prepare( 'UPDATE ' . self::table() . ' SET clock_out_utc = %s, open_guard = NULL, updated_at = %s WHERE id = %d AND clock_out_utc IS NULL AND open_guard = 1', $now, $now, $shift_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+				$updated = $wpdb->query( $wpdb->prepare( 'UPDATE ' . self::table() . ' SET clock_out_utc = %s, open_guard = NULL, updated_at = %s WHERE id = %d AND clock_out_utc IS NULL AND open_guard = 1', $correction['utc'], $now, $shift_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 				if ( 1 !== $updated ) {
 					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 					return 'error';
 				}
-				$row->clock_out_utc = $now;
+				$row->clock_out_utc = $correction['utc'];
 				$row->open_guard    = null;
 				$row->updated_at    = $now;
+				if ( $open_break ) {
+					$open_break->break_end_utc = $correction['utc'];
+					$open_break->open_guard    = null;
+					$open_break->updated_at    = $now;
+				}
 				$event = $wpdb->insert(
 					self::events_table(),
 					array(
@@ -407,7 +453,7 @@ final class DoughBoss_Timeclock {
 						'actor_user_id'   => $actor_id,
 						'reason'          => $reason,
 						'before_json'     => $before,
-						'after_json'      => wp_json_encode( $row ),
+						'after_json'      => self::correction_audit_state( $row, $open_break, $correction ),
 						'occurred_at_utc' => $now,
 					),
 					array( '%d', '%s', '%d', '%s', '%s', '%s', '%s' )
@@ -439,14 +485,15 @@ final class DoughBoss_Timeclock {
 		if ( false === $out ) {
 			wp_die( esc_html__( 'The timesheet export could not be opened.', 'doughboss' ), esc_html__( 'Export failed', 'doughboss' ), array( 'response' => 500 ) );
 		}
-		fputcsv( $out, array( 'Staff member', 'Username', 'Shop', 'Clock in', 'Clock out', 'Break minutes', 'Worked minutes', 'Scheduled start', 'Late grace minutes', 'Late minutes', 'Status' ) );
+		fputcsv( $out, array( 'Staff member', 'Username', 'Shop', 'Clock in', 'Clock out', 'Break minutes', 'Worked minutes', 'Scheduled start', 'Late grace minutes', 'Late minutes', 'Status', 'Correction reason', 'Correction manager user ID', 'Correction recorded at' ) );
 		foreach ( $rows as $row ) {
 			$in  = strtotime( $row->clock_in_utc . ' UTC' );
 			$out_time = $row->clock_out_utc ? strtotime( $row->clock_out_utc . ' UTC' ) : 0;
 			$timezone = self::timezone( $row->timezone_snapshot );
 			$breaks = self::break_minutes( $row, $out_time ? $out_time : time() );
 			$worked = self::worked_minutes( $row );
-			fputcsv( $out, array( self::csv_cell( $row->staff_name ), self::csv_cell( $row->staff_login ), self::csv_cell( $row->location_name ), wp_date( 'Y-m-d H:i:s T', $in, $timezone ), $out_time ? wp_date( 'Y-m-d H:i:s T', $out_time, $timezone ) : '', $breaks, $worked, self::csv_cell( $row->scheduled_start_local ), (int) $row->late_grace_minutes, (int) $row->late_minutes, $out_time ? 'Complete' : 'Clocked in' ) );
+			$correction_recorded = empty( $row->correction_recorded_at_utc ) ? '' : strtotime( $row->correction_recorded_at_utc . ' UTC' );
+			fputcsv( $out, array( self::csv_cell( $row->staff_name ), self::csv_cell( $row->staff_login ), self::csv_cell( $row->location_name ), wp_date( 'Y-m-d H:i:s T', $in, $timezone ), $out_time ? wp_date( 'Y-m-d H:i:s T', $out_time, $timezone ) : '', $breaks, $worked, self::csv_cell( $row->scheduled_start_local ), (int) $row->late_grace_minutes, (int) $row->late_minutes, $out_time ? 'Complete' : 'Clocked in', self::csv_cell( isset( $row->correction_reason ) ? $row->correction_reason : '' ), absint( isset( $row->correction_actor_user_id ) ? $row->correction_actor_user_id : 0 ), $correction_recorded ? wp_date( 'Y-m-d H:i:s T', $correction_recorded, $timezone ) : '' ) );
 		}
 		fclose( $out );
 		exit;
@@ -457,7 +504,8 @@ final class DoughBoss_Timeclock {
 		global $wpdb;
 		$table = self::table();
 		$since = gmdate( 'Y-m-d H:i:s', time() - ( max( 1, $days ) * DAY_IN_SECONDS ) );
-		$sql   = "SELECT s.* FROM {$table} s WHERE (s.clock_in_utc >= %s OR s.clock_out_utc IS NULL)";
+		$events = self::events_table();
+		$sql   = "SELECT s.*, e.reason AS correction_reason, e.actor_user_id AS correction_actor_user_id, e.occurred_at_utc AS correction_recorded_at_utc FROM {$table} s LEFT JOIN {$events} e ON e.id = (SELECT id FROM {$events} WHERE shift_id = s.id AND event_type = 'manager_closed' ORDER BY id DESC LIMIT 1) WHERE (s.clock_in_utc >= %s OR s.clock_out_utc IS NULL)";
 		$args  = array( $since );
 		if ( $location_id ) {
 			$sql   .= ' AND s.location_id = %d';
@@ -476,7 +524,63 @@ final class DoughBoss_Timeclock {
 		$minutes  = self::worked_minutes( $row );
 		$timezone = self::timezone( $row->timezone_snapshot );
 		$late = empty( $row->scheduled_start_local ) ? __( 'No roster', 'doughboss' ) : ( (int) $row->late_minutes > 0 ? sprintf( __( '%d min', 'doughboss' ), (int) $row->late_minutes ) : __( 'On time', 'doughboss' ) );
-		?><tr><td><strong><?php echo esc_html( $row->staff_name ? $row->staff_name : $row->staff_login ); ?></strong></td><td><?php echo esc_html( $row->location_name ); ?></td><td><?php echo esc_html( wp_date( 'D j M, g:ia', $in, $timezone ) ); ?></td><td><?php echo esc_html( $out ? wp_date( 'D j M, g:ia', $out, $timezone ) : '—' ); ?></td><td><?php echo esc_html( self::duration_label( $breaks ) ); ?></td><td><?php echo esc_html( self::duration_label( $minutes ) ); ?></td><td><?php echo esc_html( $late ); ?></td><td><?php if ( $out ) : echo esc_html__( 'Complete', 'doughboss' ); else : ?><strong><?php esc_html_e( 'Clocked in', 'doughboss' ); ?></strong><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:8px"><input type="hidden" name="action" value="doughboss_correct_shift"><input type="hidden" name="shift_id" value="<?php echo esc_attr( $row->id ); ?>"><?php wp_nonce_field( 'doughboss_correct_shift_' . (int) $row->id ); ?><label class="screen-reader-text" for="db-shift-reason-<?php echo esc_attr( $row->id ); ?>"><?php esc_html_e( 'Required correction reason', 'doughboss' ); ?></label><input id="db-shift-reason-<?php echo esc_attr( $row->id ); ?>" name="reason" maxlength="500" required placeholder="<?php esc_attr_e( 'Required reason', 'doughboss' ); ?>"><button class="button" type="submit"><?php esc_html_e( 'Close now', 'doughboss' ); ?></button></form><?php endif; ?></td></tr><?php
+		$correction_note = self::correction_provenance_label( $row );
+		?><tr><td><strong><?php echo esc_html( $row->staff_name ? $row->staff_name : $row->staff_login ); ?></strong></td><td><?php echo esc_html( $row->location_name ); ?></td><td><?php echo esc_html( wp_date( 'D j M, g:ia', $in, $timezone ) ); ?></td><td><?php echo esc_html( $out ? wp_date( 'D j M, g:ia', $out, $timezone ) : '—' ); ?></td><td><?php echo esc_html( self::duration_label( $breaks ) ); ?></td><td><?php echo esc_html( self::duration_label( $minutes ) ); ?></td><td><?php echo esc_html( $late ); ?></td><td><?php if ( $out ) : echo esc_html__( 'Complete', 'doughboss' ); if ( $correction_note ) : ?><br><small><?php echo esc_html( $correction_note ); ?></small><?php endif; else : ?><strong><?php esc_html_e( 'Clocked in', 'doughboss' ); ?></strong><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:8px"><input type="hidden" name="action" value="doughboss_correct_shift"><input type="hidden" name="shift_id" value="<?php echo esc_attr( $row->id ); ?>"><?php wp_nonce_field( 'doughboss_correct_shift_' . (int) $row->id ); ?><label for="db-shift-clock-out-<?php echo esc_attr( $row->id ); ?>"><?php echo esc_html( sprintf( __( 'Actual clock-out (%s)', 'doughboss' ), $timezone->getName() ) ); ?></label><input id="db-shift-clock-out-<?php echo esc_attr( $row->id ); ?>" name="clock_out_local" type="datetime-local" step="60" required><label class="screen-reader-text" for="db-shift-reason-<?php echo esc_attr( $row->id ); ?>"><?php esc_html_e( 'Required correction reason', 'doughboss' ); ?></label><input id="db-shift-reason-<?php echo esc_attr( $row->id ); ?>" name="reason" maxlength="500" required placeholder="<?php esc_attr_e( 'Required reason', 'doughboss' ); ?>"><button class="button" type="submit"><?php esc_html_e( 'Record actual clock-out', 'doughboss' ); ?></button></form><?php endif; ?></td></tr><?php
+	}
+
+	/**
+	 * Parse the manager-entered local correction with no normalisation fallback.
+	 *
+	 * @return array|WP_Error UTC value, source-local value and epoch timestamp.
+	 */
+	private static function correction_clock_out( $local_value, $timezone_name, $clock_in_utc ) {
+		if ( ! is_string( $local_value ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $local_value ) ) {
+			return new WP_Error( 'doughboss_clock_correction_invalid', __( 'Enter the actual local clock-out date and time.', 'doughboss' ) );
+		}
+		try {
+			$timezone = new DateTimeZone( (string) $timezone_name );
+		} catch ( Exception $e ) {
+			return new WP_Error( 'doughboss_clock_correction_timezone', __( 'The recorded shop timezone is invalid. The shift was not changed.', 'doughboss' ) );
+		}
+		$local  = DateTimeImmutable::createFromFormat( '!Y-m-d\\TH:i', $local_value, $timezone );
+		$errors = DateTimeImmutable::getLastErrors();
+		if ( ! $local || ( is_array( $errors ) && ( ! empty( $errors['warning_count'] ) || ! empty( $errors['error_count'] ) ) ) || $local->format( 'Y-m-d\\TH:i' ) !== $local_value ) {
+			return new WP_Error( 'doughboss_clock_correction_invalid', __( 'Enter a valid actual local clock-out date and time.', 'doughboss' ) );
+		}
+		$utc       = $local->setTimezone( new DateTimeZone( 'UTC' ) );
+		$timestamp = $utc->getTimestamp();
+		$clock_in  = strtotime( $clock_in_utc . ' UTC' );
+		if ( ! $clock_in || $timestamp < $clock_in || $timestamp > ( time() + self::MAX_CORRECTION_FUTURE_SECONDS ) ) {
+			return new WP_Error( 'doughboss_clock_correction_range', __( 'The actual clock-out must follow the recorded clock-in and cannot be materially in the future.', 'doughboss' ) );
+		}
+		return array(
+			'utc'       => $utc->format( 'Y-m-d H:i:s' ),
+			'local'     => $local->format( 'Y-m-d\\TH:i' ),
+			'timezone'  => $timezone->getName(),
+			'timestamp' => $timestamp,
+		);
+	}
+
+	/** @return string JSON audit snapshot with shift and any forced-closed break. */
+	private static function correction_audit_state( $shift, $open_break, $correction = null ) {
+		$state = json_decode( wp_json_encode( $shift ), true );
+		$state = is_array( $state ) ? $state : array();
+		$state['open_break'] = $open_break ? json_decode( wp_json_encode( $open_break ), true ) : null;
+		if ( is_array( $correction ) ) {
+			$state['correction_clock_out_local'] = $correction['local'];
+			$state['correction_timezone']        = $correction['timezone'];
+		}
+		return wp_json_encode( $state );
+	}
+
+	/** @return string */
+	private static function correction_provenance_label( $row ) {
+		if ( empty( $row->correction_recorded_at_utc ) ) {
+			return '';
+		}
+		$recorded_at = strtotime( $row->correction_recorded_at_utc . ' UTC' );
+		$actor       = absint( $row->correction_actor_user_id );
+		return sprintf( __( 'Manager correction by user #%1$d at %2$s: %3$s', 'doughboss' ), $actor, $recorded_at ? wp_date( 'D j M, g:ia T', $recorded_at, self::timezone( $row->timezone_snapshot ) ) : __( 'unknown time', 'doughboss' ), (string) $row->correction_reason );
 	}
 
 	/** Neutralize spreadsheet formula injection in operator-controlled CSV cells. */

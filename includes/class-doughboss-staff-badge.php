@@ -27,6 +27,8 @@ final class DoughBoss_Staff_Badge {
 	/** Register public kiosk handlers and manager controls. */
 	public function init() {
 		add_action( 'init', array( $this, 'capture_badge_scan' ), 2 );
+		add_action( 'admin_post_doughboss_staff_badge_scan', array( $this, 'handle_badge_scan' ) );
+		add_action( 'admin_post_nopriv_doughboss_staff_badge_scan', array( $this, 'handle_badge_scan' ) );
 		add_action( 'admin_post_doughboss_staff_badge_pin', array( $this, 'handle_pin' ) );
 		add_action( 'admin_post_nopriv_doughboss_staff_badge_pin', array( $this, 'handle_pin' ) );
 		add_action( 'admin_post_doughboss_staff_badge_action', array( $this, 'handle_badge_action' ) );
@@ -61,8 +63,28 @@ final class DoughBoss_Staff_Badge {
 		if ( rtrim( (string) $request_path, '/' ) !== rtrim( (string) $clock_path, '/' ) ) {
 			return;
 		}
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- a QR scan is a one-time navigation, not a state-changing form.
+		self::send_bearer_response_headers();
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- legacy printed badge; the bearer itself is the short-lived kiosk capability.
 		$token = trim( (string) wp_unslash( $_GET['staff_badge'] ) );
+		$this->begin_badge_session( $token );
+	}
+
+	/**
+	 * Exchange a new fragment-based badge through POST so the bearer never enters
+	 * the address bar, referrer or ordinary request-URL logs.
+	 */
+	public function handle_badge_scan() {
+		self::send_bearer_response_headers();
+		if ( ! isset( $_SERVER['REQUEST_METHOD'] ) || 'POST' !== strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) ) {
+			self::redirect_clock( 'badge' );
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- possession of the random badge bearer is the kiosk-entry capability.
+		$token = isset( $_POST['staff_badge'] ) ? trim( (string) wp_unslash( $_POST['staff_badge'] ) ) : '';
+		$this->begin_badge_session( $token );
+	}
+
+	/** Consume one badge bearer and create a two-minute unverified kiosk session. */
+	private function begin_badge_session( $token ) {
 		if ( ! preg_match( '/^[A-Za-z0-9_-]{40,120}$/', $token ) ) {
 			self::redirect_clock( 'badge' );
 		}
@@ -109,15 +131,15 @@ final class DoughBoss_Staff_Badge {
 		?>
 		<div class="wrap doughboss-staff-badges">
 			<h1><?php esc_html_e( 'Staff QR badges', 'doughboss' ); ?></h1>
-			<p><?php esc_html_e( 'Issue one personal QR badge and short PIN to each employee. Scanning a badge never signs the kitchen screen into that employee’s WordPress account.', 'doughboss' ); ?></p>
-			<div class="notice notice-info inline"><p><?php esc_html_e( 'A QR badge is not enough on its own: the employee must also enter their personal 4–8 digit PIN. Reissuing immediately revokes the old badge. PINs cannot be viewed or recovered.', 'doughboss' ); ?></p></div>
+			<p><?php esc_html_e( 'Issue one personal QR badge and private PIN to each employee. Scanning a badge never signs the kitchen screen into that employee’s WordPress account.', 'doughboss' ); ?></p>
+			<div class="notice notice-info inline"><p><?php esc_html_e( 'A QR badge is not enough on its own: new badges require a personal 6–8 digit PIN. Reissuing immediately revokes the old badge. PINs cannot be viewed or recovered.', 'doughboss' ); ?></p></div>
 			<h2><?php esc_html_e( 'Issue or replace a badge', 'doughboss' ); ?></h2>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<?php wp_nonce_field( 'doughboss_issue_staff_badge' ); ?>
 				<input type="hidden" name="action" value="doughboss_issue_staff_badge" />
 				<table class="form-table" role="presentation"><tbody>
 				<tr><th><label for="db-badge-user"><?php esc_html_e( 'Employee', 'doughboss' ); ?></label></th><td><select id="db-badge-user" name="user_id" required><option value=""><?php esc_html_e( 'Choose an employee', 'doughboss' ); ?></option><?php foreach ( $staff as $user ) : ?><option value="<?php echo esc_attr( $user->ID ); ?>"><?php echo esc_html( $user->display_name . ' (' . $user->user_login . ')' ); ?></option><?php endforeach; ?></select><p class="description"><?php esc_html_e( 'The employee must be assigned to an active DoughBoss shop first.', 'doughboss' ); ?></p></td></tr>
-				<tr><th><label for="db-badge-pin"><?php esc_html_e( 'New PIN', 'doughboss' ); ?></label></th><td><input id="db-badge-pin" name="pin" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required type="password" /><p class="description"><?php esc_html_e( 'Choose a unique 4–8 digit PIN and give it to the employee privately. It is not printed on the badge.', 'doughboss' ); ?></p></td></tr>
+				<tr><th><label for="db-badge-pin"><?php esc_html_e( 'New PIN', 'doughboss' ); ?></label></th><td><input id="db-badge-pin" name="pin" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6,8}" minlength="6" maxlength="8" required type="password" /><p class="description"><?php esc_html_e( 'Choose a private 6–8 digit PIN and give it to the employee separately. It is not printed on the badge.', 'doughboss' ); ?></p></td></tr>
 				</tbody></table>
 				<?php submit_button( __( 'Create secure QR badge', 'doughboss' ) ); ?>
 			</form>
@@ -137,10 +159,10 @@ final class DoughBoss_Staff_Badge {
 		$user_id = isset( $_POST['user_id'] ) ? absint( $_POST['user_id'] ) : 0;
 		$pin     = isset( $_POST['pin'] ) ? trim( (string) wp_unslash( $_POST['pin'] ) ) : '';
 		$user    = $user_id ? get_userdata( $user_id ) : false;
-		if ( ! $user || ! user_can( $user, DoughBoss_Timeclock::CAPABILITY ) || ! preg_match( '/^\d{4,8}$/', $pin ) ) {
-			wp_die( esc_html__( 'Choose an eligible employee and a 4–8 digit PIN.', 'doughboss' ), esc_html__( 'Badge not issued', 'doughboss' ), array( 'response' => 400 ) );
+		if ( ! $user || ! user_can( $user, DoughBoss_Timeclock::CAPABILITY ) || ! preg_match( '/^\d{6,8}$/', $pin ) ) {
+			wp_die( esc_html__( 'Choose an eligible employee and a 6–8 digit PIN.', 'doughboss' ), esc_html__( 'Badge not issued', 'doughboss' ), array( 'response' => 400 ) );
 		}
-		$location_id = DoughBoss_Staff_Scope::assigned_location_id( $user_id );
+		$location_id = DoughBoss_Staff_Scope::attendance_location_id( $user_id );
 		if ( is_wp_error( $location_id ) || ! $location_id ) {
 			wp_die( esc_html__( 'Assign this employee to an active shop before issuing a badge.', 'doughboss' ), esc_html__( 'Shop assignment required', 'doughboss' ), array( 'response' => 400 ) );
 		}
@@ -170,7 +192,8 @@ final class DoughBoss_Staff_Badge {
 			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			wp_die( esc_html__( 'The badge could not be issued. No active badge was changed.', 'doughboss' ), esc_html__( 'Badge not issued', 'doughboss' ), array( 'response' => 500 ) );
 		}
-		self::render_issued_badge( $user, add_query_arg( 'staff_badge', rawurlencode( $token ), home_url( '/staff-clock/' ) ) );
+		self::send_bearer_response_headers();
+		self::render_issued_badge( $user, home_url( '/staff-clock/' ) . '#staff-badge=' . rawurlencode( $token ) );
 		exit;
 	}
 
@@ -181,7 +204,13 @@ final class DoughBoss_Staff_Badge {
 		check_admin_referer( 'doughboss_revoke_staff_badge_' . $badge_id );
 		global $wpdb;
 		$now = current_time( 'mysql', true );
-		$wpdb->query( $wpdb->prepare( 'UPDATE ' . self::badges_table() . ' SET status = %s, active_guard = NULL, revoked_at = %s, updated_at = %s WHERE id = %d AND status = %s AND active_guard = 1', 'revoked', $now, $now, $badge_id, 'active' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+		$revoked = $wpdb->query( $wpdb->prepare( 'UPDATE ' . self::badges_table() . ' SET status = %s, active_guard = NULL, revoked_at = %s, updated_at = %s WHERE id = %d AND status = %s AND active_guard = 1', 'revoked', $now, $now, $badge_id, 'active' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+		if ( false === $revoked ) {
+			wp_die( esc_html__( 'The badge could not be revoked because the attendance database returned an error. It may still be active; stop using it and contact an administrator.', 'doughboss' ), esc_html__( 'Badge revocation failed', 'doughboss' ), array( 'response' => 500 ) );
+		}
+		if ( 1 !== $revoked ) {
+			wp_die( esc_html__( 'This badge was not revoked because it is no longer active. Reload the badge list before trying again.', 'doughboss' ), esc_html__( 'Badge not revoked', 'doughboss' ), array( 'response' => 409 ) );
+		}
 		wp_safe_redirect( admin_url( 'admin.php?page=doughboss-staff-badges' ) );
 		exit;
 	}
@@ -203,7 +232,7 @@ final class DoughBoss_Staff_Badge {
 			self::render_scan_landing( 'badge' );
 			return true;
 		}
-		$location_id = DoughBoss_Staff_Scope::assigned_location_id( $user->ID );
+		$location_id = DoughBoss_Staff_Scope::attendance_location_id( $user->ID );
 		$location    = ! is_wp_error( $location_id ) ? DoughBoss_Locations::get( $location_id ) : null;
 		if ( ! $location || 1 !== (int) $location->is_active ) {
 			self::destroy_session();
@@ -214,7 +243,7 @@ final class DoughBoss_Staff_Badge {
 		$break = $shift ? self::open_break( $shift->id ) : null;
 		$nonce = self::session_nonce( $session );
 		?>
-		<main class="db-timeclock-shell" id="main">
+		<main class="db-timeclock-shell" id="main" data-badge-scan-action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<section class="db-timeclock-card db-timeclock-badge" aria-labelledby="db-timeclock-title">
 				<p class="db-timeclock-kicker"><?php esc_html_e( 'Dough Boss staff', 'doughboss' ); ?></p>
 				<h1 id="db-timeclock-title"><?php esc_html_e( 'Ready to record time', 'doughboss' ); ?></h1>
@@ -239,6 +268,7 @@ final class DoughBoss_Staff_Badge {
 				<p class="db-timeclock-help"><?php esc_html_e( 'This shared screen clears your badge after every action.', 'doughboss' ); ?></p>
 			</section>
 		</main>
+		<script src="<?php echo esc_url( DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-staff-badge.js?ver=' . rawurlencode( DOUGHBOSS_VERSION ) ); ?>"></script>
 		<?php
 		return true;
 	}
@@ -253,9 +283,8 @@ final class DoughBoss_Staff_Badge {
 				<?php self::render_result( $result ); ?>
 				<p><?php esc_html_e( 'Scan your personal QR badge, then enter your PIN.', 'doughboss' ); ?></p>
 				<label class="screen-reader-text" for="db-badge-scan"><?php esc_html_e( 'Scan QR badge', 'doughboss' ); ?></label>
-				<input class="db-timeclock-scan-input" id="db-badge-scan" autocomplete="off" inputmode="none" placeholder="Scan QR badge here" />
+				<input class="db-timeclock-scan-input" id="db-badge-scan" data-badge-scan-action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" autocomplete="off" inputmode="none" placeholder="Scan QR badge here" />
 				<p class="db-timeclock-help"><?php esc_html_e( 'If the scanner does not open your badge automatically, scan into this box and press Enter.', 'doughboss' ); ?></p>
-				<details class="db-timeclock-fallback"><summary><?php esc_html_e( 'Use staff account instead', 'doughboss' ); ?></summary><a class="db-timeclock-button" href="<?php echo esc_url( wp_login_url( home_url( '/staff-clock/' ) ) ); ?>"><?php esc_html_e( 'Staff sign in', 'doughboss' ); ?></a></details>
 			</section>
 		</main>
 		<script src="<?php echo esc_url( DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-staff-badge.js?ver=' . rawurlencode( DOUGHBOSS_VERSION ) ); ?>"></script>
@@ -269,24 +298,36 @@ final class DoughBoss_Staff_Badge {
 			self::destroy_session();
 			self::redirect_clock( 'badge' );
 		}
-		$badge = self::active_badge( (int) $session['badge_id'], (int) $session['user_id'] );
-		if ( ! $badge || get_transient( self::lock_key( $badge ? $badge->id : 0 ) ) ) {
-			self::destroy_session();
-			self::redirect_clock( 'badge' );
-		}
 		$pin = isset( $_POST['pin'] ) ? trim( (string) wp_unslash( $_POST['pin'] ) ) : '';
-		if ( ! preg_match( '/^\d{4,8}$/', $pin ) || ! wp_check_password( $pin, $badge->pin_hash, (int) $badge->user_id ) ) {
-			$attempts = (int) get_transient( self::attempt_key( $badge->id ) ) + 1;
-			if ( $attempts >= self::MAX_PIN_ATTEMPTS ) {
-				delete_transient( self::attempt_key( $badge->id ) );
-				set_transient( self::lock_key( $badge->id ), 1, self::LOCK_TTL );
-				self::destroy_session();
-				self::redirect_clock( 'locked' );
+		$verification = DoughBoss_Timeclock::with_user_lock(
+			(int) $session['user_id'],
+			static function () use ( $session, $pin ) {
+				$badge = self::active_badge( (int) $session['badge_id'], (int) $session['user_id'] );
+				if ( ! $badge ) {
+					return 'badge';
+				}
+				if ( get_transient( self::lock_key( $badge->id ) ) ) {
+					return 'locked';
+				}
+				if ( preg_match( '/^\d{4,8}$/', $pin ) && wp_check_password( $pin, $badge->pin_hash, (int) $badge->user_id ) ) {
+					delete_transient( self::attempt_key( $badge->id ) );
+					return 'verified';
+				}
+
+				$attempts = (int) get_transient( self::attempt_key( $badge->id ) ) + 1;
+				if ( $attempts >= self::MAX_PIN_ATTEMPTS ) {
+					delete_transient( self::attempt_key( $badge->id ) );
+					set_transient( self::lock_key( $badge->id ), 1, self::LOCK_TTL );
+					return 'locked';
+				}
+				set_transient( self::attempt_key( $badge->id ), $attempts, self::LOCK_TTL );
+				return 'pin';
 			}
-			set_transient( self::attempt_key( $badge->id ), $attempts, self::LOCK_TTL );
-			self::redirect_clock( 'pin' );
+		);
+		if ( 'verified' !== $verification ) {
+			self::destroy_session();
+			self::redirect_clock( in_array( $verification, array( 'badge', 'locked', 'pin' ), true ) ? $verification : 'error' );
 		}
-		delete_transient( self::attempt_key( $badge->id ) );
 		$session['verified'] = true;
 		self::save_session( $session );
 		wp_safe_redirect( home_url( '/staff-clock/' ) );
@@ -306,7 +347,7 @@ final class DoughBoss_Staff_Badge {
 			self::destroy_session();
 			self::redirect_clock( 'error' );
 		}
-		$location_id = DoughBoss_Staff_Scope::assigned_location_id( $user->ID );
+		$location_id = DoughBoss_Staff_Scope::attendance_location_id( $user->ID );
 		$location    = ! is_wp_error( $location_id ) ? DoughBoss_Locations::get( $location_id ) : null;
 		if ( ! $location || 1 !== (int) $location->is_active ) {
 			self::destroy_session();
@@ -471,6 +512,22 @@ final class DoughBoss_Staff_Badge {
 		setcookie( self::COOKIE, $value, $options );
 	}
 
+	/**
+	 * Keep bearer-token exchanges and one-time print pages out of caches and
+	 * referrer headers. These responses contain a QR URL that grants kiosk entry.
+	 *
+	 * @return void
+	 */
+	private static function send_bearer_response_headers() {
+		if ( headers_sent() ) {
+			return;
+		}
+		nocache_headers();
+		header( 'Cache-Control: no-store, private', true );
+		header( 'Referrer-Policy: no-referrer', true );
+		header( 'X-Robots-Tag: noindex, nofollow, noarchive', true );
+	}
+
 	/** @return void */
 	private static function redirect_clock( $result ) {
 		$url = home_url( '/staff-clock/' );
@@ -509,14 +566,14 @@ final class DoughBoss_Staff_Badge {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only scan result.
 		$result = isset( $_GET['db_badge'] ) ? sanitize_key( wp_unslash( $_GET['db_badge'] ) ) : '';
 		?>
-		<main class="db-timeclock-shell" id="main"><section class="db-timeclock-card db-timeclock-pin-card" aria-labelledby="db-timeclock-title"><p class="db-timeclock-kicker"><?php esc_html_e( 'Dough Boss staff', 'doughboss' ); ?></p><h1 id="db-timeclock-title"><?php esc_html_e( 'Enter your PIN', 'doughboss' ); ?></h1><?php self::render_result( $result ); ?><p><?php esc_html_e( 'Your badge was recognised. Enter your personal PIN to continue.', 'doughboss' ); ?></p><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="doughboss_staff_badge_pin"><input type="hidden" name="db_staff_badge_nonce" value="<?php echo esc_attr( self::session_nonce( $session ) ); ?>"><label class="screen-reader-text" for="db-badge-pin-entry"><?php esc_html_e( 'Personal PIN', 'doughboss' ); ?></label><input class="db-timeclock-pin-input" id="db-badge-pin-entry" name="pin" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required type="password" autofocus><div class="db-timeclock-keypad" data-target="db-badge-pin-entry"><?php foreach ( array( 1, 2, 3, 4, 5, 6, 7, 8, 9, 'clear', 0, 'back' ) as $key ) : ?><button type="button" data-key="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( 'back' === $key ? '⌫' : ( 'clear' === $key ? __( 'Clear', 'doughboss' ) : $key ) ); ?></button><?php endforeach; ?></div><button class="db-timeclock-button" type="submit"><?php esc_html_e( 'Continue', 'doughboss' ); ?></button></form><p class="db-timeclock-help"><?php esc_html_e( 'Five incorrect PIN attempts temporarily lock this badge for 15 minutes.', 'doughboss' ); ?></p></section></main><script src="<?php echo esc_url( DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-staff-badge.js?ver=' . rawurlencode( DOUGHBOSS_VERSION ) ); ?>"></script>
+		<main class="db-timeclock-shell" id="main" data-badge-scan-action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><section class="db-timeclock-card db-timeclock-pin-card" aria-labelledby="db-timeclock-title"><p class="db-timeclock-kicker"><?php esc_html_e( 'Dough Boss staff', 'doughboss' ); ?></p><h1 id="db-timeclock-title"><?php esc_html_e( 'Enter your PIN', 'doughboss' ); ?></h1><?php self::render_result( $result ); ?><p><?php esc_html_e( 'Your badge was recognised. Enter your personal PIN to continue.', 'doughboss' ); ?></p><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="doughboss_staff_badge_pin"><input type="hidden" name="db_staff_badge_nonce" value="<?php echo esc_attr( self::session_nonce( $session ) ); ?>"><label class="screen-reader-text" for="db-badge-pin-entry"><?php esc_html_e( 'Personal PIN', 'doughboss' ); ?></label><input class="db-timeclock-pin-input" id="db-badge-pin-entry" name="pin" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required type="password" autofocus><div class="db-timeclock-keypad" data-target="db-badge-pin-entry"><?php foreach ( array( 1, 2, 3, 4, 5, 6, 7, 8, 9, 'clear', 0, 'back' ) as $key ) : ?><button type="button" data-key="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( 'back' === $key ? '⌫' : ( 'clear' === $key ? __( 'Clear', 'doughboss' ) : $key ) ); ?></button><?php endforeach; ?></div><button class="db-timeclock-button" type="submit"><?php esc_html_e( 'Continue', 'doughboss' ); ?></button></form><p class="db-timeclock-help"><?php esc_html_e( 'Five incorrect PIN attempts temporarily lock this badge for 15 minutes.', 'doughboss' ); ?></p></section></main><script src="<?php echo esc_url( DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-staff-badge.js?ver=' . rawurlencode( DOUGHBOSS_VERSION ) ); ?>"></script>
 		<?php
 	}
 
 	/** One-time manager print page. The bearer URL is not stored after this response. */
 	private static function render_issued_badge( $user, $url ) {
 		?>
-		<div class="wrap"><h1><?php esc_html_e( 'Print staff QR badge now', 'doughboss' ); ?></h1><div class="notice notice-warning"><p><?php esc_html_e( 'This is the only time this QR link can be shown. Print or save it now. The PIN is deliberately not printed—give it to the employee privately.', 'doughboss' ); ?></p></div><section id="doughboss-staff-badge-print" style="background:#fff;border:2px solid #111;max-width:460px;padding:28px;text-align:center"><p style="font-size:14px;font-weight:800;letter-spacing:.12em">DOUGH BOSS STAFF</p><h2 style="font-size:30px"><?php echo esc_html( $user->display_name ); ?></h2><p><?php esc_html_e( 'Scan this badge at the Staff Clock, then enter your personal PIN.', 'doughboss' ); ?></p><div id="doughboss-staff-badge-qr" data-url="<?php echo esc_attr( $url ); ?>" style="display:flex;justify-content:center;margin:20px"></div><p style="font-size:12px;word-break:break-all"><code><?php echo esc_html( $url ); ?></code></p></section><p><button class="button button-primary" onclick="window.print()"><?php esc_html_e( 'Print / save as PDF', 'doughboss' ); ?></button> <a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-staff-badges' ) ); ?>"><?php esc_html_e( 'Back to badges', 'doughboss' ); ?></a></p></div><style media="print">#wpadminbar,#adminmenumain,#wpfooter,.notice,.wrap>h1,.wrap>p{display:none!important}#wpcontent{margin:0!important}</style><script src="<?php echo esc_url( DOUGHBOSS_PLUGIN_URL . 'public/vendor/qrcode-generator/qrcode.js?ver=' . rawurlencode( DOUGHBOSS_VERSION ) ); ?>"></script><script>document.addEventListener('DOMContentLoaded',function(){var m=document.getElementById('doughboss-staff-badge-qr');if(m&&typeof qrcode==='function'){var q=qrcode(0,'M');q.addData(m.getAttribute('data-url'),'Byte');q.make();m.innerHTML=q.createSvgTag({cellSize:6,margin:4,scalable:true});}});</script>
+		<div class="wrap"><h1><?php esc_html_e( 'Print staff QR badge now', 'doughboss' ); ?></h1><div class="notice notice-warning"><p><?php esc_html_e( 'This is the only time this QR badge can be shown. Print or save it now. The PIN is deliberately not printed—give it to the employee privately.', 'doughboss' ); ?></p></div><section id="doughboss-staff-badge-print" style="background:#fff;border:2px solid #111;max-width:460px;padding:28px;text-align:center"><p style="font-size:14px;font-weight:800;letter-spacing:.12em">DOUGH BOSS STAFF</p><h2 style="font-size:30px"><?php echo esc_html( $user->display_name ); ?></h2><p><?php esc_html_e( 'Scan this badge at the Staff Clock, then enter your personal PIN.', 'doughboss' ); ?></p><div id="doughboss-staff-badge-qr" data-url="<?php echo esc_attr( $url ); ?>" style="display:flex;justify-content:center;margin:20px"></div></section><p><button class="button button-primary" onclick="window.print()"><?php esc_html_e( 'Print / save as PDF', 'doughboss' ); ?></button> <a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-staff-badges' ) ); ?>"><?php esc_html_e( 'Back to badges', 'doughboss' ); ?></a></p></div><style media="print">#wpadminbar,#adminmenumain,#wpfooter,.notice,.wrap>h1,.wrap>p{display:none!important}#wpcontent{margin:0!important}</style><script src="<?php echo esc_url( DOUGHBOSS_PLUGIN_URL . 'public/vendor/qrcode-generator/qrcode.js?ver=' . rawurlencode( DOUGHBOSS_VERSION ) ); ?>"></script><script>document.addEventListener('DOMContentLoaded',function(){var m=document.getElementById('doughboss-staff-badge-qr');if(m&&typeof qrcode==='function'){var q=qrcode(0,'M');q.addData(m.getAttribute('data-url'),'Byte');q.make();m.innerHTML=q.createSvgTag({cellSize:6,margin:4,scalable:true});}});</script>
 		<?php
 	}
 

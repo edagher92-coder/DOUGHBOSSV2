@@ -20,10 +20,11 @@ const uninstall = read('uninstall.php');
 const clockCss = read('public/css/doughboss-timeclock.css');
 const badge = read('includes/class-doughboss-staff-badge.php');
 const badgeJs = read('public/js/doughboss-staff-badge.js');
+const mariadb = read('tests/mariadb-timeclock.php');
 
-test('release 2.41.0 retains staff attendance schema 1.23.0', () => {
-	assert.match(plugin, /Version:\s+2\.41\.0/);
-	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.41\.0'/);
+test('release 2.41.1 retains staff attendance schema 1.23.0', () => {
+	assert.match(plugin, /Version:\s+2\.41\.1/);
+	assert.match(plugin, /DOUGHBOSS_VERSION',\s*'2\.41\.1'/);
 	assert.match(plugin, /DOUGHBOSS_DB_VERSION',\s*'1\.23\.0'/);
 	assert.match(core, /class-doughboss-timeclock\.php/);
 	assert.match(core, /class-doughboss-staff-badge\.php/);
@@ -74,13 +75,17 @@ test('every clock mutation is bound to an individual account, capability and non
 
 test('shop check-in fails closed and managers explicitly choose in multi-shop mode', () => {
 	assert.match(scope, /function assigned_location_id\s*\(/);
+	assert.match(scope, /function attendance_location_id\s*\(/);
 	assert.match(scope, /DoughBoss_Locations::single_location_id\(\)/);
 	assert.match(scope, /doughboss_staff_location_required/);
+	assert.match(scope, /doughboss_staff_attendance_location_required/);
 	assert.match(scope, /needs an active shop assignment before it can check in/);
 	assert.match(clock, /\$manager\s*&&\s*count\(\s*\$locations\s*\)\s*>\s*1/);
 	assert.match(clock, /<select[^>]+name="location_id"[^>]+required/);
 	assert.match(clock, /<option value="">[\s\S]*?Choose a shop/);
 	assert.match(clock, /resolve_clock_in_location\s*\([\s\S]*?DoughBoss_Locations::get\(\s*\$location_id\s*\)/);
+	assert.match(clock, /DoughBoss_Staff_Scope::attendance_location_id\(\s*get_current_user_id\(\)\s*\)/);
+	assert.doesNotMatch(clock, /DoughBoss_Staff_Scope::assigned_location_id\(\s*get_current_user_id\(\)\s*\)/, 'clock actions must not inherit a sole-shop commerce fallback');
 	assert.match(clock, /\$location\s*&&\s*1\s*===\s*\(int\)\s*\$location->is_active/);
 	assert.match(clock, /Choose an active DoughBoss shop/);
 });
@@ -165,14 +170,33 @@ test('timesheet CSV neutralizes spreadsheet formulas in every text cell', () => 
 	}
 });
 
-test('manager corrections and forced closes are reasoned, atomic and audited', () => {
+test('manager corrections record a strict historical local clock-out and preserve complete provenance', () => {
 	assert.match(clock, /admin_post_doughboss_correct_shift/);
 	assert.match(clock, /function handle_correction\s*\(/);
 	assert.match(clock, /sanitize_textarea_field\(/);
 	assert.match(clock, /reason[^\n]{0,100}(?:required|empty)/i);
+	assert.match(clock, /name="clock_out_local"\s+type="datetime-local"[^>]+required/);
+	assert.match(clock, /Actual clock-out \(%s\)/);
+	assert.match(clock, /function correction_clock_out\s*\(/);
+	assert.match(clock, /\^\\d\{4\}-\\d\{2\}-\\d\{2\}T\\d\{2\}:\\d\{2\}\$/);
+	assert.match(clock, /DateTimeImmutable::createFromFormat\(\s*'!Y-m-d\\\\TH:i'/);
+	assert.match(clock, /\$local->format\(\s*'Y-m-d\\\\TH:i'\s*\)\s*!==\s*\$local_value/);
+	assert.match(clock, /setTimezone\(\s*new DateTimeZone\(\s*'UTC'\s*\)\s*\)/);
+	assert.match(clock, /\$timestamp\s*<\s*\$clock_in/);
+	assert.match(clock, /MAX_CORRECTION_FUTURE_SECONDS/);
+	assert.match(clock, /return\s+'invalid-time'/);
 	assert.match(clock, /START TRANSACTION/);
 	assert.match(clock, /COMMIT/);
 	assert.match(clock, /ROLLBACK/);
+	assert.match(clock, /DoughBoss_Staff_Badge::breaks_table\(\)[\s\S]{0,300}FOR UPDATE/);
+	assert.match(clock, /break_end_utc IS NOT NULL ORDER BY id ASC FOR UPDATE/);
+	assert.match(clock, /\$completed_breaks\s*=\s*\$wpdb->get_results[\s\S]*?if \( '' !== \$wpdb->last_error \)[\s\S]*?ROLLBACK/);
+	assert.match(clock, /\$open_break\s*=\s*\$wpdb->get_row[\s\S]*?if \( '' !== \$wpdb->last_error \)[\s\S]*?ROLLBACK/);
+	assert.match(mariadb, /add_filter\( 'query', \$fail_completed_break_read, 999 \)[\s\S]*?fails closed when break evidence cannot be read[\s\S]*?remove_filter\( 'query', \$fail_completed_break_read, 999 \)/);
+	assert.match(clock, /\$correction\['timestamp'\]\s*<\s*\$break_end/);
+	assert.match(clock, /\$correction\['timestamp'\]\s*<\s*strtotime\(\s*\$open_break->break_start_utc/);
+	assert.match(clock, /SET break_end_utc\s*=\s*%s[\s\S]*?\$correction\['utc'\]/);
+	assert.match(clock, /clock_out_utc\s*=\s*%s[\s\S]*?\$correction\['utc'\]/);
 	assert.match(clock, /doughboss_staff_shift_events/);
 	assert.match(clock, /'shift_id'\s*=>/);
 	assert.match(clock, /'event_type'\s*=>[\s\S]*?manager_closed/);
@@ -182,7 +206,20 @@ test('manager corrections and forced closes are reasoned, atomic and audited', (
 	assert.match(clock, /'before_json'\s*=>/);
 	assert.match(clock, /'after_json'\s*=>/);
 	assert.match(clock, /'occurred_at_utc'\s*=>/);
+	assert.match(clock, /function correction_audit_state\s*\([\s\S]*?'open_break'/);
+	assert.match(clock, /\['correction_clock_out_local'\]\s*=/);
 	assert.match(clock, /\$event\s*=\s*\$wpdb->insert\([\s\S]*?false\s*===\s*\$event[\s\S]*?ROLLBACK/);
+});
+
+test('manager reports and CSV exports expose manager-correction provenance without a schema change', () => {
+	assert.match(clock, /LEFT JOIN \{\$events\} e ON e\.id = \(SELECT id FROM \{\$events\} WHERE shift_id = s\.id AND event_type = 'manager_closed'/);
+	for (const field of ['correction_reason', 'correction_actor_user_id', 'correction_recorded_at_utc']) {
+		assert.match(clock, new RegExp('AS\\s+' + field), `${field} must be selected with each report row`);
+	}
+	assert.match(clock, /function correction_provenance_label\s*\(/);
+	assert.match(clock, /Manager correction by user #/);
+	assert.match(clock, /'Correction reason', 'Correction manager user ID', 'Correction recorded at'/);
+	assert.match(clock, /csv_cell\(\s*isset\( \$row->correction_reason \)/);
 });
 
 test('uninstall removes attendance data, capability and clock-only role', () => {

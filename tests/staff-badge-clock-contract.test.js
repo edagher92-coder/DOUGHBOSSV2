@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -21,6 +22,7 @@ test('QR kiosk boots from the plugin and never creates a WordPress login', () =>
 	assert.match(badge, /admin_post_nopriv_doughboss_staff_badge_pin/);
 	assert.match(badge, /admin_post_nopriv_doughboss_staff_badge_action/);
 	assert.doesNotMatch(badge, /wp_set_auth_cookie|wp_signon|wp_set_current_user/);
+	assert.doesNotMatch(badge, /Use staff account instead|wp_login_url/);
 });
 
 test('badge bearer and PIN secrets are hashed, short lived and revocable', () => {
@@ -33,9 +35,13 @@ test('badge bearer and PIN secrets are hashed, short lived and revocable', () =>
 	assert.match(badge, /ATTEMPT_PREFIX/);
 	assert.match(badge, /get_transient\(\s*self::attempt_key/);
 	assert.match(badge, /set_transient\(\s*self::attempt_key/);
+	assert.match(badge, /DoughBoss_Timeclock::with_user_lock\([\s\S]*?self::active_badge/);
+	assert.match(badge, /if \( 'verified' !== \$verification \)/);
 	assert.match(badge, /status\s*=\s*%s[\s\S]*?'revoked'/);
 	assert.doesNotMatch(activator, /\btoken\s+varchar|\bpin\s+varchar/i);
 	assert.match(activator, /token_hash\s+char\(64\)/);
+	assert.match(badge, /pattern="\[0-9\]\{6,8\}" minlength="6" maxlength="8"/);
+	assert.match(badge, /preg_match\( '\/\^\\d\{6,8\}\$\/', \$pin \)/);
 	assert.match(activator, /pin_hash\s+varchar\(255\)/);
 	assert.match(activator, /UNIQUE KEY\s+user_active_guard\s*\(user_id,active_guard\)/);
 });
@@ -50,12 +56,83 @@ test('kiosk cookie and transitions fail closed', () => {
 	assert.match(clock, /SELECT GET_LOCK\(%s,\s*5\)/);
 });
 
-test('scanner accepts only the same-site staff-clock badge URL', () => {
+test('scanner accepts only same-site staff-clock badges and posts fragment bearers', () => {
 	assert.match(badge, /REQUEST_URI[\s\S]*?home_url\(\s*'\/staff-clock\/'\s*\)/);
+	assert.match(badge, /admin_post_nopriv_doughboss_staff_badge_scan/);
+	assert.match(badge, /handle_badge_scan\(\)[\s\S]*?REQUEST_METHOD[\s\S]*?begin_badge_session/);
+	assert.match(badge, /home_url\( '\/staff-clock\/' \) \. '#staff-badge='/);
+	assert.match(badge, /data-badge-scan-action=/);
 	assert.match(kioskJs, /url\.origin\s*!==\s*window\.location\.origin/);
 	assert.match(kioskJs, /url\.pathname\.replace\([^\n]+\)\s*!==\s*'\/staff-clock'/);
+	assert.match(kioskJs, /\^#staff-badge=\(\[A-Za-z0-9_-\]\{40,120\}\)\$/);
 	assert.match(kioskJs, /url\.searchParams\.get\(\s*'staff_badge'\s*\)/);
+	assert.match(kioskJs, /doughboss_staff_badge_scan/);
+	assert.match(kioskJs, /form\.method\s*=\s*'post'/);
+	assert.match(kioskJs, /window\.history\.replaceState/);
+	assert.match(badge, /data-badge-scan-action=[\s\S]*?<\/main>\s*<script src="<\?php echo esc_url\( DOUGHBOSS_PLUGIN_URL \. 'public\/js\/doughboss-staff-badge\.js/);
+	assert.doesNotMatch(kioskJs, /window\.location\.assign/);
 	assert.doesNotMatch(kioskJs, /fetch\(|XMLHttpRequest|https?:\/\//);
+});
+
+test('a new fragment badge replaces an existing kiosk PIN or action session', () => {
+	let posts = 0;
+	let scrubs = 0;
+	const listeners = {};
+	const location = {
+		origin: 'https://doughboss.test',
+		pathname: '/staff-clock/',
+		search: '',
+		hash: '#staff-badge=' + 'A'.repeat(43),
+		get href() { return this.origin + this.pathname + this.search + this.hash; },
+	};
+	const document = {
+		body: { appendChild() {} },
+		querySelector: () => ({ getAttribute: () => 'https://doughboss.test/wp-admin/admin-post.php' }),
+		querySelectorAll: () => [],
+		getElementById: () => null,
+		createElement: (tag) => tag === 'form'
+			? { appendChild() {}, submit() { posts += 1; } }
+			: {},
+	};
+	const window = {
+		location,
+		history: { replaceState() { scrubs += 1; location.hash = ''; } },
+		addEventListener: (name, callback) => { listeners[name] = callback; },
+		setTimeout() {},
+	};
+	vm.runInNewContext(kioskJs, { URL, String, document, window });
+	assert.equal(posts, 1);
+	assert.equal(scrubs, 1);
+	location.hash = '#staff-badge=' + 'B'.repeat(43);
+	listeners.hashchange();
+	assert.equal(posts, 2);
+	assert.equal(scrubs, 2);
+});
+
+test('attendance badge flow requires an explicit active staff shop assignment', () => {
+	assert.match(scope, /function attendance_location_id/);
+	const attendanceMethod = scope.match(/function attendance_location_id[\s\S]*?\n\t}/)?.[0] || '';
+	assert.match(attendanceMethod, /get_user_meta\( \$user_id, self::LOCATION_META, true \)/);
+	assert.match(attendanceMethod, /DoughBoss_Locations::is_valid/);
+	assert.doesNotMatch(attendanceMethod, /single_location_id/);
+	assert.match(badge, /DoughBoss_Staff_Scope::attendance_location_id\( \$user_id \)/);
+	assert.match(badge, /DoughBoss_Staff_Scope::attendance_location_id\( \$user->ID \)/);
+});
+
+test('bearer exchanges and one-time badge print responses cannot be cached or leaked as referrers', () => {
+	assert.match(badge, /function send_bearer_response_headers/);
+	assert.match(badge, /nocache_headers\(\)/);
+	assert.match(badge, /Cache-Control: no-store, private/);
+	assert.match(badge, /Referrer-Policy: no-referrer/);
+	assert.match(badge, /capture_badge_scan\(\)[\s\S]*?send_bearer_response_headers\(\)/);
+	assert.match(badge, /handle_issue_badge\(\)[\s\S]*?send_bearer_response_headers\(\)/);
+});
+
+test('revocation fails visibly unless exactly one active badge changes state', () => {
+	assert.match(badge, /\$revoked\s*=\s*\$wpdb->query/);
+	assert.match(badge, /if \( false === \$revoked \)[\s\S]*?Badge revocation failed/);
+	assert.match(badge, /if \( 1 !== \$revoked \)/);
+	assert.match(badge, /Badge not revoked/);
 });
 
 test('recorded breaks are serialized and are the only worked-time deduction', () => {

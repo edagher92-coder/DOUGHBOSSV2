@@ -12,8 +12,8 @@ const guides = fs.readFileSync(path.join(root, 'includes', 'class-doughboss-guid
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss-guides.css'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'doughboss-guides.js'), 'utf8');
 
-assert.match(plugin, /Version:\s+2\.41\.0/);
-assert.match(plugin, /DOUGHBOSS_VERSION', '2\.41\.0/);
+assert.match(plugin, /Version:\s+2\.41\.1/);
+assert.match(plugin, /DOUGHBOSS_VERSION', '2\.41\.1/);
 assert.match(core, /class-doughboss-guides\.php/);
 assert.match(portals, /\^staff-guide\/\?\$/);
 assert.match(portals, /\^management-guide\/\?\$/);

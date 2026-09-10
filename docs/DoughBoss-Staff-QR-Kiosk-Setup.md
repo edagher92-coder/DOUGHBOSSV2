@@ -2,7 +2,8 @@
 
 The staff clock is designed for a shared touch screen. Employees do **not** need
 to know a WordPress username or password. Each person receives a printed QR
-badge and a private 4–8 digit PIN.
+badge and a private 6–8 digit PIN for every newly issued badge. Existing badges
+remain valid until a manager replaces or revokes them.
 
 ## What the clock records
 
@@ -13,9 +14,11 @@ badge and a private 4–8 digit PIN.
 - optional scheduled start, grace period and late minutes, snapshotted when the
   employee clocks in.
 
-It does **not** collect GPS, IP address, browser location or continuous tracking.
-It does **not** silently deduct a standard break, calculate overtime, or decide
-whether a break is paid. Those are management/payroll policy decisions.
+The DoughBoss attendance tables do **not** store GPS, IP address, browser location
+or continuous tracking. Hosting and security providers may retain ordinary access
+logs under their own policies. The clock does **not** silently deduct a standard
+break, calculate overtime, or decide whether a break is paid. Those are
+management/payroll policy decisions.
 
 ## One-time manager setup
 
@@ -53,9 +56,9 @@ badge for 15 minutes. A manager can reissue it if it is lost or compromised.
 
 Use [Staff Timesheet](https://doughboss.com.au/wp-admin/admin.php?page=doughboss-timeclock)
 to filter shifts, see actual break/worked/late time and export the detailed CSV.
-If someone forgets to clock out, a manager may use **Close now** with a required
-reason. That creates a separate permanent audit event; it does not rewrite the
-original clock-in evidence.
+If someone forgets to clock out, a manager enters the verified actual local
+clock-out date/time and a required reason. The correction records the manager,
+reason and audit time without rewriting the original clock-in evidence.
 
 ## Lenovo kiosk setup
 

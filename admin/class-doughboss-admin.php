@@ -486,7 +486,7 @@ class DoughBoss_Admin {
 		$clean['google_review_url'] = isset( $input['google_review_url'] )
 			? DoughBoss_Settings::sanitize_google_review_url( $input['google_review_url'] )
 			: ( isset( $existing['google_review_url'] ) ? DoughBoss_Settings::sanitize_google_review_url( $existing['google_review_url'] ) : '' );
-		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? max( 0, absint( $input['staff_session_days'] ) ) : 0;
+		$clean['staff_session_days'] = isset( $input['staff_session_days'] ) ? min( 30, absint( $input['staff_session_days'] ) ) : 0;
 
 		// Order Board access key is intentionally NOT part of this form — it is
 		// only ever set by handle_generate_board_key() (a random, URL-safe value)
@@ -3282,9 +3282,9 @@ JS;
 							<p class="description"><?php esc_html_e( 'Paste the exact “Ask for reviews” link from your verified Google Business Profile. Leave blank to hide review invitations. Only secure Google links are accepted.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
-						<th><label for="db-staff-session"><?php esc_html_e( 'Staff session (days)', 'doughboss' ); ?></label></th>
-						<td><input type="number" min="0" step="1" id="db-staff-session" class="small-text" name="<?php echo esc_attr( $opt ); ?>[staff_session_days]" value="<?php echo esc_attr( isset( $settings['staff_session_days'] ) ? $settings['staff_session_days'] : 0 ); ?>" />
-							<span class="description"><?php esc_html_e( 'Keep logged-in users signed in for this many days (0 = WordPress default ~2 days). Set high, e.g. 3650, so shop tablets stay signed in and never time out.', 'doughboss' ); ?></span></td>
+						<th><label for="db-staff-session"><?php esc_html_e( 'Kitchen tablet session (days)', 'doughboss' ); ?></label></th>
+						<td><input type="number" min="0" max="30" step="1" id="db-staff-session" class="small-text" name="<?php echo esc_attr( $opt ); ?>[staff_session_days]" value="<?php echo esc_attr( isset( $settings['staff_session_days'] ) ? min( 30, (int) $settings['staff_session_days'] ) : 0 ); ?>" />
+							<span class="description"><?php esc_html_e( 'Extends only the dedicated DoughBoss Kitchen role, for at most 30 days (0 uses the WordPress default). Staff clock QR badges, managers and administrators are never extended by this setting.', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
 						<th><?php esc_html_e( 'Order Board access key', 'doughboss' ); ?></th>
