@@ -232,6 +232,12 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
 .dbf-storefront .db-app.db-menu { margin-top: 0; padding-top: 0; padding-inline: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
 .dbf-storefront .db-menu-category-title, .dbf-storefront h2, .dbf-storefront h3 { font-family: 'Bebas Neue', Impact, sans-serif; letter-spacing: .025em; }
 .dbf-builder-wrap, .dbf-cart-wrap { margin-top: 34px; }
+body.db-approved-preorder-mode .dbf-page-hero--order,
+body.db-approved-preorder-mode .dbf-order-intro,
+body.db-approved-preorder-mode [data-doughboss-menu],
+body.db-approved-preorder-mode [data-doughboss-builder],
+body.db-approved-preorder-mode [data-doughboss-shop] { display: none !important; }
+body.db-approved-preorder-mode .dbf-cart-wrap { margin-top: 0; }
 .dbf-page-hero--compact { min-height: 390px; }
 .dbf-page-hero--compact .dbf-page-hero-inner { min-height: 390px; padding-block: 72px; }
 .dbf-page-hero--voucher::before { position: absolute; width: min(680px, 58vw); aspect-ratio: 1; top: 50%; right: -8%; transform: translateY(-50%); border-radius: 50%; background: radial-gradient(circle, rgba(226,35,26,.24), transparent 67%); content: ''; }

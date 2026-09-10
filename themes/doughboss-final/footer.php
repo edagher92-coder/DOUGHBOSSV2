@@ -29,7 +29,7 @@
 			<h2><?php esc_html_e( 'Contact', 'doughboss-final' ); ?></h2>
 			<ul>
 				<li><a href="tel:+61297742286">(02) 9774 2286</a></li>
-				<li><a href="mailto:orders@doughboss.com.au">orders@doughboss.com.au</a></li>
+				<li><a href="mailto:info@doughboss.com.au">info@doughboss.com.au</a></li>
 				<li><a href="mailto:catering@doughboss.com.au">catering@doughboss.com.au</a></li>
 			</ul>
 		</div>

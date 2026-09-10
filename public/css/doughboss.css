@@ -1818,6 +1818,7 @@ body.page-id-402 #primary-menu > li > a {
 	margin-bottom: 1rem;
 }
 
+.db-order-header h1,
 .db-order-header h2,
 .db-checkout-heading h3,
 .db-confirm h3,
@@ -1831,8 +1832,40 @@ body.page-id-402 #primary-menu > li > a {
 	text-transform: uppercase;
 }
 
+.db-order-header h1,
 .db-order-header h2 {
+	margin: 0;
 	font-size: clamp(2rem, 5vw, 3.3rem);
+}
+
+.db-preorder-help {
+	display: grid;
+	gap: .55rem;
+	margin-top: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-lg);
+	background: var(--db-paper-2, #fffaf2);
+}
+
+.db-preorder-help > p {
+	margin: 0;
+	color: var(--db-muted);
+}
+
+.db-preorder-contact,
+.db-preorder-retry {
+	box-sizing: border-box;
+	min-height: 44px;
+	width: fit-content;
+	max-width: 100%;
+}
+
+.db-preorder-contact {
+	display: inline-flex;
+	align-items: center;
+	font-weight: 800;
+	overflow-wrap: anywhere;
 }
 
 .db-order-header > p:last-child,

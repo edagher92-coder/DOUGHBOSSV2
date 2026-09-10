@@ -35,7 +35,7 @@ class DoughBoss_Checkout_Snapshots {
 	 * @param array  $payload      Validated order data and server cart lines.
 	 * @return array|WP_Error Persisted row.
 	 */
-	public static function store( $checkout_key, array $payload ) {
+	public static function store( $checkout_key, array $payload, $expires_at = '' ) {
 		global $wpdb;
 		$checkout_key = self::stable_key( $checkout_key );
 		if ( '' === $checkout_key ) {
@@ -58,8 +58,12 @@ class DoughBoss_Checkout_Snapshots {
 			return $existing;
 		}
 
-		$now     = current_time( 'mysql', true );
-		$expires = gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS );
+		$now       = current_time( 'mysql', true );
+		$timestamp = '' === (string) $expires_at ? time() + DAY_IN_SECONDS : strtotime( (string) $expires_at . ' UTC' );
+		if ( false === $timestamp || $timestamp < time() ) {
+			return new WP_Error( 'doughboss_snapshot_expiry', __( 'The secure payment expiry is invalid.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$expires = gmdate( 'Y-m-d H:i:s', $timestamp );
 		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			self::table(),
 			array(
@@ -105,8 +109,8 @@ class DoughBoss_Checkout_Snapshots {
 	}
 
 	/**
-	 * Read an expired snapshot only while an irreversible Square v2 payment
-	 * still requires recovery or manual reconciliation.
+	 * Read an expired snapshot only while an exact-bound irreversible Square v2
+	 * or bounded Stripe payment still requires recovery or reconciliation.
 	 *
 	 * @param string $checkout_key Stable checkout key.
 	 * @return array|null
@@ -119,12 +123,10 @@ class DoughBoss_Checkout_Snapshots {
 		}
 		$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
 		$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
-		if (
-			! is_array( $attempt )
-			|| 'square' !== (string) $attempt['provider']
-			|| 'square-v2' !== ( isset( $metadata['protocol_version'] ) ? (string) $metadata['protocol_version'] : '' )
-			|| ! in_array( (string) $attempt['status'], array( 'prepared', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch' ), true )
-		) {
+		$stripe_created_at = is_array( $attempt ) && isset( $attempt['created_at'] ) ? strtotime( (string) $attempt['created_at'] . ' UTC' ) : false;
+		$square_protected  = is_array( $attempt ) && 'square' === (string) $attempt['provider'] && 'square-v2' === ( isset( $metadata['protocol_version'] ) ? (string) $metadata['protocol_version'] : '' ) && in_array( (string) $attempt['status'], array( 'prepared', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch' ), true );
+		$stripe_protected  = is_array( $attempt ) && 'stripe' === (string) $attempt['provider'] && 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', (string) $attempt['provider_reference'] ) && in_array( (string) $attempt['status'], array( 'processing', 'unknown', 'succeeded', 'mismatch' ), true ) && false !== $stripe_created_at && $stripe_created_at <= time() && $stripe_created_at >= time() - ( 7 * DAY_IN_SECONDS );
+		if ( ! $square_protected && ! $stripe_protected ) {
 			return null;
 		}
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -198,9 +200,9 @@ class DoughBoss_Checkout_Snapshots {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$attempts = $wpdb->prefix . 'doughboss_payment_attempts';
 		$sql      = 'DELETE FROM ' . self::table() . ' WHERE expires_at < %s AND checkout_key NOT IN ('
-			. "SELECT checkout_key FROM {$attempts} WHERE provider = 'square' AND status IN ('prepared','dispatching','processing','unknown','succeeded','mismatch')"
+			. "SELECT checkout_key FROM {$attempts} WHERE (provider = 'square' AND status IN ('prepared','dispatching','processing','unknown','succeeded','mismatch')) OR (provider = 'stripe' AND provider_reference REGEXP '^cs_(test|live)_[A-Za-z0-9_]{8,191}$' AND status IN ('processing','unknown','succeeded','mismatch') AND created_at <= UTC_TIMESTAMP() AND created_at >= %s)"
 			. ') LIMIT 100';
-		$wpdb->query( $wpdb->prepare( $sql, current_time( 'mysql', true ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( $wpdb->prepare( $sql, current_time( 'mysql', true ), gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	/**

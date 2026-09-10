@@ -216,7 +216,7 @@ class DoughBoss_Stripe {
 	 * @param string $customer_email Optional prefilled customer email.
 	 * @return array|WP_Error
 	 */
-	public static function create_checkout_session( $amount_minor, $currency, array $metadata, $success_url, $cancel_url, $customer_email = '' ) {
+	public static function create_checkout_session( $amount_minor, $currency, array $metadata, $success_url, $cancel_url, $customer_email = '', $expires_at = 0 ) {
 		$amount_minor  = absint( $amount_minor );
 		$currency      = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $currency ) );
 		$checkout_key  = isset( $metadata['checkout_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['checkout_key'] ) ) : '';
@@ -287,6 +287,13 @@ class DoughBoss_Stripe {
 			}
 			return self::checkout_session_payload( $response, $attempt, $amount_minor, $currency );
 		}
+		$expires_at = absint( $expires_at );
+		if ( ! $expires_at ) {
+			$expires_at = time() + 1860;
+		}
+		if ( $expires_at && ( $expires_at < time() + ( 30 * MINUTE_IN_SECONDS ) || $expires_at > time() + DAY_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_pay_expiry', __( 'The payment link expiry is outside Stripe\'s supported window.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 
 		if ( ! DoughBoss_Payment_Attempts::claim_creation( (int) $attempt['id'] ) ) {
 			$attempt = DoughBoss_Payment_Attempts::find( (int) $attempt['id'] );
@@ -305,9 +312,7 @@ class DoughBoss_Stripe {
 		$body       = array(
 			'mode'                                                  => 'payment',
 			'payment_method_types[0]'                               => 'card',
-			// Stripe's minimum is 30 minutes. The extra minute avoids request
-			// transit making the timestamp fall just below that boundary.
-			'expires_at'                                            => time() + 1860,
+			'expires_at'                                            => $expires_at,
 			'success_url'                                           => (string) $success_url,
 			'cancel_url'                                            => (string) $cancel_url,
 			'client_reference_id'                                   => $checkout_key,

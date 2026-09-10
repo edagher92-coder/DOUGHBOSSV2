@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.43.2
+Stable tag: 2.44.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,12 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.44.0 =
+* Add a named-approver workflow that keeps pre-order requests unpaid and outside the kitchen until a server-verified Stripe payment creates one linked fulfilment order.
+* Store approval actor, timestamp, request revision, immutable fingerprint, private expiring capability and deterministic checkout identity in a fail-closed transactional schema.
+* Route order notices and public order contacts to info@doughboss.com.au, with optional approver SMS through the existing disabled-by-default ClickSend integration.
+* Keep Stripe retries byte-stable after an uncertain response, and extend isolated WordPress/MySQL coverage for approval, permission, replay, rejection and paid release behavior.
 
 = 2.43.2 =
 * Serve prebuilt responsive AVIF/WebP photography for bundled page and homepage heroes, with original JPEG fallbacks and no runtime encoder dependency.

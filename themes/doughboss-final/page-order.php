@@ -44,8 +44,8 @@ get_header();
 			<?php echo doughboss_final_shortcode_or_notice( '[doughboss_menu]', __( 'The menu is temporarily unavailable. Please try again shortly.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php if ( $ordering_open ) : ?>
 				<div class="dbf-builder-wrap"><?php echo doughboss_final_shortcode_or_notice( '[doughboss_builder]', __( 'Customization is temporarily unavailable.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
-				<div class="dbf-cart-wrap"><?php echo doughboss_final_shortcode_or_notice( '[doughboss_cart]', __( 'Checkout is temporarily unavailable.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 			<?php endif; ?>
+			<div class="dbf-cart-wrap"<?php echo $ordering_open ? '' : ' hidden'; ?>><?php echo doughboss_final_shortcode_or_notice( '[doughboss_cart]', __( 'Checkout is temporarily unavailable.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 		</section>
 	</div>
 </div>

@@ -145,6 +145,26 @@ body.doughboss-order-page .db-ordering-status p {
 	font-size: .96rem;
 }
 
+/* The hero-adjacent status card deliberately overlaps the masthead. Approved
+ * payment status lives inside an itemised order card, so it must remain in
+ * normal document flow and never cover line prices or the approved total. */
+body.doughboss-order-page .db-approved-preorder .db-ordering-status {
+	width: 100%;
+	margin: 1rem 0 0 !important;
+	padding: .9rem 1rem;
+	border-radius: 14px;
+	box-shadow: none;
+	text-align: left;
+}
+
+body.doughboss-order-page .db-approved-preorder .db-ordering-status strong {
+	font-size: clamp(1.35rem, 3vw, 1.65rem);
+}
+
+body.doughboss-order-page .db-approved-preorder .db-ordering-status p {
+	margin: 6px 0 0;
+}
+
 body.doughboss-order-page .db-shop-picker {
 	display: flex;
 	justify-content: center;

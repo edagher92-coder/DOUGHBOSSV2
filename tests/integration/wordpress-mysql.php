@@ -68,12 +68,17 @@ $GLOBALS['db_stripe_post_count']    = 0;
 $GLOBALS['db_stripe_session_gets']  = 0;
 $GLOBALS['db_stripe_intent_gets']   = 0;
 $GLOBALS['db_stripe_network_once']  = false;
+$GLOBALS['db_stripe_session_network_once'] = false;
 $GLOBALS['db_stripe_post_bodies']   = array();
 $GLOBALS['db_stripe_idempotency']   = array();
 $GLOBALS['db_stripe_sessions']      = array();
 $GLOBALS['db_stripe_intents']       = array();
 $GLOBALS['db_fail_snapshot_complete_once'] = false;
 $GLOBALS['db_fail_attempt_succeed_once']   = false;
+$GLOBALS['db_order_created_events']        = array();
+$GLOBALS['db_preorder_mail']               = array();
+$GLOBALS['db_preorder_mail_results']       = array();
+$GLOBALS['db_fail_preorder_delivery_once'] = false;
 
 /** @param bool $condition Assertion result. @param string $message Label. */
 function db_integration_assert( $condition, $message ) {
@@ -104,9 +109,100 @@ function db_integration_rest_request( $route, array $params ) {
 	return $request;
 }
 
+/** Capture only the order-created events this integration fixture observes. */
+function db_integration_capture_order_created( $order_id, $data ) {
+	$GLOBALS['db_order_created_events'][] = array(
+		'order_id' => (int) $order_id,
+		'source'   => isset( $data['order_source'] ) ? (string) $data['order_source'] : 'web',
+	);
+}
+
+/** Build one durable unpaid pre-order request through the real order writer. */
+function db_integration_create_preorder_request( $seed, $total = 14.00 ) {
+	$seed  = sanitize_key( (string) $seed );
+	$total = (float) $total;
+	return DoughBoss_Order::create(
+		array(
+			'checkout_key'   => hash( 'sha256', 'preorder-request|' . $seed ),
+			'order_source'   => 'preorder_request',
+			'order_type'     => 'pickup',
+			'location_id'    => 1,
+			'customer_name'  => 'Pre-order ' . $seed,
+			'customer_email' => 'preorder.' . $seed . '@example.invalid',
+			'customer_phone' => '0400000011',
+			'address'        => '',
+			'notes'          => 'Integration approval fixture ' . $seed,
+			'subtotal'       => $total,
+			'tax'            => 0.0,
+			'delivery_fee'   => 0.0,
+			'total'          => $total,
+			'discount'       => 0.0,
+			'voucher_code'   => '',
+			'payment_status' => 'unpaid',
+			'payment_method' => '',
+		),
+		array(
+			array(
+				'item_id'    => 9700 + (int) substr( hash( 'sha256', $seed ), 0, 3 ),
+				'name'       => 'Synthetic Pre-order ' . $seed,
+				'quantity'   => 1,
+				'unit_price' => $total,
+				'line_total' => $total,
+			),
+		)
+	);
+}
+
+/** Keep the local Stripe checkout fixture on its production-required HTTPS origin. */
+function db_integration_preorder_payment_page_url( $url ) {
+	unset( $url );
+	return 'https://doughboss.local.test/menu/';
+}
+
+/** Set a deterministic synthetic approval expiry and its matching opaque token. */
+function db_integration_set_preorder_expiry( $request_id, $expires_at ) {
+	global $wpdb;
+	$approval = DoughBoss_Preorder_Approval::get( $request_id );
+	if ( is_wp_error( $approval ) ) {
+		return '';
+	}
+	$method = new ReflectionMethod( 'DoughBoss_Preorder_Approval', 'capability_token' );
+	$method->setAccessible( true );
+	$token = $method->invoke( null, (int) $request_id, (int) $approval['approved_revision'], (string) $approval['request_fingerprint'], (string) $expires_at );
+	$updated = $wpdb->update(
+		$wpdb->prefix . 'doughboss_preorder_approvals',
+		array( 'payment_token_expires_at_utc' => (string) $expires_at, 'payment_token_hash' => hash( 'sha256', $token ) ),
+		array( 'request_order_id' => (int) $request_id ),
+		array( '%s', '%s' ),
+		array( '%d' )
+	); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	return false === $updated ? '' : $token;
+}
+
 /** Prevent the disposable checkout fixture from invoking a local mail transport. */
 function db_integration_block_mail() {
 	return true;
+}
+
+/** Capture approval mail and return a recipient-specific synthetic handoff result. */
+function db_integration_capture_preorder_mail( $preempt, $attributes ) {
+	unset( $preempt );
+	$GLOBALS['db_preorder_mail'][] = $attributes;
+	$recipient = isset( $attributes['to'] ) ? strtolower( (string) $attributes['to'] ) : '';
+	return array_key_exists( $recipient, $GLOBALS['db_preorder_mail_results'] )
+		? (bool) $GLOBALS['db_preorder_mail_results'][ $recipient ]
+		: true;
+}
+
+/** Read one captured approval mail by normalized recipient. */
+function db_integration_preorder_mail_to( $recipient ) {
+	$recipient = strtolower( (string) $recipient );
+	foreach ( $GLOBALS['db_preorder_mail'] as $mail ) {
+		if ( isset( $mail['to'] ) && $recipient === strtolower( (string) $mail['to'] ) ) {
+			return $mail;
+		}
+	}
+	return array();
 }
 
 /** Capture catering mail without invoking any transport. */
@@ -279,6 +375,10 @@ function db_integration_stripe_http( $preempt, $args, $url ) {
 
 	if ( 'GET' === $method && preg_match( '#^/v1/checkout/sessions/(cs_(?:test|live)_[A-Za-z0-9_]{8,191})$#', (string) $path, $match ) ) {
 		++$GLOBALS['db_stripe_session_gets'];
+		if ( ! empty( $GLOBALS['db_stripe_session_network_once'] ) ) {
+			$GLOBALS['db_stripe_session_network_once'] = false;
+			return new WP_Error( 'integration_stripe_session_network', 'Synthetic Stripe Session retrieval failure.' );
+		}
 		if ( ! isset( $GLOBALS['db_stripe_sessions'][ $match[1] ] ) ) {
 			return new WP_Error( 'integration_stripe_session_missing', 'Synthetic Stripe session missing.' );
 		}
@@ -472,6 +572,34 @@ function db_integration_fail_attempt_succeed( $query ) {
 	return $query;
 }
 
+/** Fail exactly one approval mail-status UPDATE without changing approval state. */
+function db_integration_fail_preorder_delivery_status( $query ) {
+	if (
+		! empty( $GLOBALS['db_fail_preorder_delivery_once'] )
+		&& 0 === strpos( ltrim( (string) $query ), 'UPDATE ' )
+		&& false !== strpos( (string) $query, 'doughboss_preorder_approvals' )
+		&& false !== strpos( (string) $query, 'payment_link_delivery_status' )
+	) {
+		$GLOBALS['db_fail_preorder_delivery_once'] = false;
+		return "UPDATE wp_doughboss_missing_preorder_delivery_table SET payment_link_delivery_status = 'failed'";
+	}
+	return $query;
+}
+
+/** Fail exactly one compare-and-set of the legacy operational order inbox. */
+function db_integration_fail_orders_email_migration( $query ) {
+	if (
+		! empty( $GLOBALS['db_fail_orders_email_migration_once'] )
+		&& 0 === strpos( ltrim( (string) $query ), 'UPDATE ' )
+		&& false !== strpos( (string) $query, 'doughboss_settings' )
+		&& false !== strpos( (string) $query, 'info@doughboss.com.au' )
+	) {
+		$GLOBALS['db_fail_orders_email_migration_once'] = false;
+		return "UPDATE wp_doughboss_missing_orders_email_option SET option_value = 'failed'";
+	}
+	return $query;
+}
+
 global $wpdb;
 
 // Fresh activation contract and reactivation idempotency.
@@ -497,9 +625,49 @@ db_integration_same( 0, $bad_engines, 'every DoughBoss table uses InnoDB' );
 db_integration_assert( DoughBoss_Activator::lifecycle_storage_ready(), 'order lifecycle storage contract is ready' );
 db_integration_assert( DoughBoss_Activator::checkout_storage_ready(), 'checkout snapshot storage contract is ready' );
 db_integration_assert( DoughBoss_Activator::payment_storage_ready(), 'payment attempt storage contract is ready' );
+db_integration_assert( DoughBoss_Activator::preorder_approval_storage_ready(), 'pre-order approval table and index contract is ready' );
+$migration_settings_original = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+$migration_settings_legacy = is_array( $migration_settings_original ) ? $migration_settings_original : array();
+$migration_settings_legacy['orders_email'] = 'orders@doughboss.com.au';
+update_option( DoughBoss_Settings::OPTION_KEY, $migration_settings_legacy, false );
+$migration_124 = new ReflectionMethod( 'DoughBoss_Migrations', 'upgrade_to_1_24_0' );
+$migration_124->setAccessible( true );
+$GLOBALS['db_fail_orders_email_migration_once'] = true;
+add_filter( 'query', 'db_integration_fail_orders_email_migration' );
+$migration_failure_message = '';
+$previous_suppress_errors = $wpdb->suppress_errors( true );
+try {
+	$migration_124->invoke( null );
+} catch ( Throwable $migration_failure ) {
+	$migration_failure_message = $migration_failure->getMessage();
+}
+$wpdb->suppress_errors( $previous_suppress_errors );
+remove_filter( 'query', 'db_integration_fail_orders_email_migration' );
+$migration_settings_failed = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+db_integration_same( false, (bool) $GLOBALS['db_fail_orders_email_migration_once'], '1.24 inbox failure fixture intercepts the exact compare-and-set' );
+db_integration_same( 'The operational order inbox could not be migrated safely.', $migration_failure_message, '1.24 inbox migration fails closed when its database write fails' );
+db_integration_same( 'orders@doughboss.com.au', is_array( $migration_settings_failed ) && isset( $migration_settings_failed['orders_email'] ) ? (string) $migration_settings_failed['orders_email'] : '', 'failed 1.24 inbox migration leaves the legacy value visible for a later retry' );
+$migration_124->invoke( null );
+$migration_settings_updated = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+db_integration_same( 'info@doughboss.com.au', is_array( $migration_settings_updated ) && isset( $migration_settings_updated['orders_email'] ) ? (string) $migration_settings_updated['orders_email'] : '', '1.24 migration persists the exact legacy order inbox replacement before checkpointing' );
+$migration_settings_updated['orders_email'] = 'custom.integration@example.invalid';
+update_option( DoughBoss_Settings::OPTION_KEY, $migration_settings_updated, false );
+$migration_124->invoke( null );
+$migration_settings_custom = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+db_integration_same( 'custom.integration@example.invalid', is_array( $migration_settings_custom ) && isset( $migration_settings_custom['orders_email'] ) ? (string) $migration_settings_custom['orders_email'] : '', '1.24 migration preserves an independently supplied custom order inbox' );
+update_option( DoughBoss_Settings::OPTION_KEY, $migration_settings_original, false );
+$preorder_approval_table = $wpdb->prefix . 'doughboss_preorder_approvals';
+$preorder_approval_table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $preorder_approval_table ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$preorder_approval_checkout_index = $wpdb->get_row( 'SHOW INDEX FROM ' . $preorder_approval_table . " WHERE Key_name = 'payment_checkout_key'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+$preorder_delivery_status_column = $wpdb->get_row( 'SHOW COLUMNS FROM ' . $preorder_approval_table . " LIKE 'payment_link_delivery_status'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+$preorder_delivery_time_column = $wpdb->get_row( 'SHOW COLUMNS FROM ' . $preorder_approval_table . " LIKE 'payment_link_delivery_attempted_at_utc'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+db_integration_same( $preorder_approval_table, $preorder_approval_table_exists, 'pre-order approval table is present after fresh activation' );
+db_integration_same( 'payment_checkout_key', isset( $preorder_approval_checkout_index->Key_name ) ? (string) $preorder_approval_checkout_index->Key_name : '', 'pre-order approval checkout key has its unique storage index' );
+db_integration_same( 'not_attempted', isset( $preorder_delivery_status_column->Default ) ? (string) $preorder_delivery_status_column->Default : '', 'pre-order approval stores an explicit default delivery outcome' );
+db_integration_same( 'YES', isset( $preorder_delivery_time_column->Null ) ? (string) $preorder_delivery_time_column->Null : '', 'pre-order approval delivery-attempt time remains nullable until an attempt occurs' );
 
 // Isolate the payment protocol fixtures from activation evidence.
-	foreach ( array( 'doughboss_order_items', 'doughboss_order_events', 'doughboss_orders', 'doughboss_payment_events', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots', 'doughboss_voucher_redemptions', 'doughboss_voucher_audit', 'doughboss_vouchers', 'doughboss_catering_enquiries' ) as $suffix ) {
+	foreach ( array( 'doughboss_order_items', 'doughboss_order_events', 'doughboss_orders', 'doughboss_preorder_approvals', 'doughboss_payment_events', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots', 'doughboss_voucher_redemptions', 'doughboss_voucher_audit', 'doughboss_vouchers', 'doughboss_catering_enquiries' ) as $suffix ) {
 		$wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . $suffix ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 	}
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_rl_%' OR option_name LIKE '_transient_timeout_doughboss_rl_%' OR option_name LIKE '_transient_doughboss_idem_%' OR option_name LIKE '_transient_timeout_doughboss_idem_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
@@ -965,7 +1133,7 @@ DoughBoss_Payment_Attempts::update( $legacy_null_id, array( 'status' => 'failed'
 // Stripe hosted Checkout lifecycle against real WordPress/MySQL. Every Stripe
 // request and every mail is intercepted; WP_HTTP_BLOCK_EXTERNAL is the final
 // guard if an unexpected request ever escapes these fixtures.
-foreach ( array( 'doughboss_order_items', 'doughboss_order_events', 'doughboss_orders', 'doughboss_payment_events', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots' ) as $suffix ) {
+foreach ( array( 'doughboss_order_items', 'doughboss_order_events', 'doughboss_orders', 'doughboss_preorder_approvals', 'doughboss_payment_events', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots' ) as $suffix ) {
 	$wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . $suffix ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 }
 $settings['payments_enabled']         = 1;
@@ -1467,6 +1635,680 @@ $stripe_webhook_retry_order    = DoughBoss_Order::get( $stripe_webhook_retry_ord
 db_integration_assert( is_array( $stripe_webhook_retry_snapshot ) && 'completed' === (string) $stripe_webhook_retry_snapshot['status'] && (int) $stripe_webhook_retry_snapshot['order_id'] === $stripe_webhook_retry_order_id, 'Stripe webhook retry heals snapshot completion linkage' );
 db_integration_assert( is_array( $stripe_webhook_retry_attempt ) && 'succeeded' === (string) $stripe_webhook_retry_attempt['status'] && ! empty( $stripe_webhook_retry_attempt['verified_at'] ), 'Stripe webhook retry heals attempt verification state' );
 db_integration_same( $stripe_webhook_retry_order ? (string) $stripe_webhook_retry_order->order_number : '', is_array( $stripe_webhook_retry_attempt ) ? (string) $stripe_webhook_retry_attempt['local_reference'] : '', 'Stripe webhook retry heals attempt order linkage' );
+
+// Approval-before-payment remains a separate durable request until a signed,
+// server-retrieved Stripe result creates its one paid fulfilment order.
+$preorder_approver = get_user_by( 'login', 'db-integration-approver' );
+if ( ! $preorder_approver ) {
+	$preorder_approver = wp_insert_user(
+		array(
+			'user_login' => 'db-integration-approver',
+			'user_pass'  => 'SyntheticIntegrationOnlyPassword',
+			'user_email' => 'db.integration.approver@example.invalid',
+			'role'       => 'administrator',
+		)
+	);
+}
+$preorder_other = get_user_by( 'login', 'db-integration-other-manager' );
+if ( ! $preorder_other ) {
+	$preorder_other = wp_insert_user(
+		array(
+			'user_login' => 'db-integration-other-manager',
+			'user_pass'  => 'SyntheticIntegrationOnlyPassword',
+			'user_email' => 'db.integration.other.manager@example.invalid',
+			'role'       => 'administrator',
+		)
+	);
+}
+$preorder_approver_id = is_wp_error( $preorder_approver ) ? 0 : (int) ( is_object( $preorder_approver ) ? $preorder_approver->ID : $preorder_approver );
+$preorder_other_id    = is_wp_error( $preorder_other ) ? 0 : (int) ( is_object( $preorder_other ) ? $preorder_other->ID : $preorder_other );
+db_integration_assert( $preorder_approver_id > 0 && $preorder_other_id > 0, 'approval fixture provisions distinct authenticated managers' );
+$settings['preorder_approver_user_id'] = $preorder_approver_id;
+$settings['ordering_open']             = 0;
+update_option( 'doughboss_settings', $settings, false );
+
+$preorder_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
+$preorder_permission_request = new WP_REST_Request( 'POST', '/doughboss/v1/admin/preorder/1/decision' );
+wp_set_current_user( $preorder_other_id );
+$preorder_permission_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_wrong_manager = $preorder_controller->verify_preorder_approver( $preorder_permission_request );
+db_integration_same( 'doughboss_preorder_approver_required', is_wp_error( $preorder_wrong_manager ) ? $preorder_wrong_manager->get_error_code() : '', 'a different authenticated manager cannot approve pre-order payment' );
+wp_set_current_user( $preorder_approver_id );
+$preorder_missing_nonce = $preorder_controller->verify_preorder_approver( new WP_REST_Request( 'POST', '/doughboss/v1/admin/preorder/1/decision' ) );
+db_integration_same( 'doughboss_bad_nonce', is_wp_error( $preorder_missing_nonce ) ? $preorder_missing_nonce->get_error_code() : '', 'the named approver still needs a valid REST nonce' );
+$preorder_permission_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_permission = $preorder_controller->verify_preorder_approver( $preorder_permission_request );
+db_integration_same( true, $preorder_permission, 'only the named approver with a valid nonce can authorize payment' );
+wp_set_current_user( 0 );
+
+$GLOBALS['db_order_created_events'] = array();
+add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
+$preorder_main = db_integration_create_preorder_request( 'approval-main', 21.00 );
+$preorder_reject = db_integration_create_preorder_request( 'approval-reject', 22.00 );
+$preorder_expired = db_integration_create_preorder_request( 'approval-expired', 23.00 );
+$preorder_spoof = db_integration_create_preorder_request( 'approval-spoof', 24.00 );
+$preorder_main_id = is_array( $preorder_main ) ? (int) $preorder_main['order_id'] : 0;
+$preorder_reject_id = is_array( $preorder_reject ) ? (int) $preorder_reject['order_id'] : 0;
+$preorder_expired_id = is_array( $preorder_expired ) ? (int) $preorder_expired['order_id'] : 0;
+$preorder_spoof_id = is_array( $preorder_spoof ) ? (int) $preorder_spoof['order_id'] : 0;
+db_integration_assert( $preorder_main_id > 0 && $preorder_reject_id > 0 && $preorder_expired_id > 0 && $preorder_spoof_id > 0, 'unpaid pre-order request fixtures are stored through the real order writer' );
+foreach ( array( $preorder_main_id, $preorder_reject_id, $preorder_expired_id, $preorder_spoof_id ) as $preorder_request_id ) {
+	$pending = DoughBoss_Preorder_Approval::ensure_pending( $preorder_request_id );
+	db_integration_same( 'pending', is_array( $pending ) ? (string) $pending['state'] : '', 'each new pre-order request starts in durable pending approval state' );
+}
+$preorder_created_before_decision = count( $GLOBALS['db_order_created_events'] );
+$preorder_pending_claim = DoughBoss_Preorder_Approval::claim_payment( $preorder_main_id, 'not-an-approved-capability' );
+db_integration_same( 'doughboss_preorder_payment_unavailable', is_wp_error( $preorder_pending_claim ) ? $preorder_pending_claim->get_error_code() : '', 'a pending request cannot claim payment with an arbitrary token' );
+$preorder_pending_order = DoughBoss_Order::get( $preorder_main_id );
+$preorder_transition_bypass = DoughBoss_Order::transition(
+	$preorder_main_id,
+	'confirmed',
+	array(
+		'expected_version' => $preorder_pending_order ? (int) $preorder_pending_order->version : 1,
+		'event_key'        => 'integration-preorder-transition-bypass-0001',
+		'actor_type'       => 'staff',
+		'actor_id'         => $preorder_approver_id,
+	)
+);
+db_integration_same( 'doughboss_preorder_decision_required', is_wp_error( $preorder_transition_bypass ) ? $preorder_transition_bypass->get_error_code() : '', 'the generic order lifecycle cannot convert an unpaid pre-order request into kitchen work' );
+$preorder_posts_before_unapproved_start = $GLOBALS['db_stripe_post_count'];
+$preorder_unapproved_start = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_main_id, 'token' => 'not-an-approved-capability' )
+	)
+);
+db_integration_same( 'doughboss_preorder_payment_unavailable', is_wp_error( $preorder_unapproved_start ) ? $preorder_unapproved_start->get_error_code() : '', 'unapproved request cannot start a Stripe Session' );
+db_integration_same( $preorder_posts_before_unapproved_start, $GLOBALS['db_stripe_post_count'], 'unapproved request sends no Stripe creation request' );
+
+$GLOBALS['db_preorder_mail'] = array();
+$GLOBALS['db_preorder_mail_results'] = array();
+add_filter( 'pre_wp_mail', 'db_integration_capture_preorder_mail', 10, 2 );
+$preorder_main_order = DoughBoss_Order::get( $preorder_main_id );
+$preorder_main_revision = $preorder_main_order ? (int) $preorder_main_order->version : 0;
+$preorder_route = '/doughboss/v1/admin/preorder/' . $preorder_main_id . '/decision';
+$preorder_decision_request = db_integration_rest_request(
+	$preorder_route,
+	array(
+		'decision'          => 'accept',
+		'contact_confirmed' => true,
+		'expected_version'  => $preorder_main_revision,
+		'event_key'         => 'integration-preorder-approve-main-0001',
+	)
+);
+wp_set_current_user( 0 );
+$preorder_anonymous_route = rest_do_request( $preorder_decision_request );
+$preorder_anonymous_data = $preorder_anonymous_route->get_data();
+db_integration_same( 'doughboss_bad_nonce', isset( $preorder_anonymous_data['code'] ) ? (string) $preorder_anonymous_data['code'] : '', 'registered approval route rejects an anonymous request before its callback' );
+wp_set_current_user( $preorder_other_id );
+$preorder_decision_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_wrong_route = rest_do_request( $preorder_decision_request );
+$preorder_wrong_data = $preorder_wrong_route->get_data();
+db_integration_same( 'doughboss_preorder_approver_required', isset( $preorder_wrong_data['code'] ) ? (string) $preorder_wrong_data['code'] : '', 'registered approval route enforces the named approver identity' );
+$preorder_spoof_order = DoughBoss_Order::get( $preorder_spoof_id );
+$preorder_stale_route_request = db_integration_rest_request(
+	'/doughboss/v1/admin/preorder/' . $preorder_spoof_id . '/decision',
+	array(
+		'decision'          => 'accept',
+		'contact_confirmed' => true,
+		'expected_version'  => $preorder_spoof_order ? (int) $preorder_spoof_order->version + 1 : 1,
+		'event_key'         => 'integration-preorder-stale-0001',
+	)
+);
+wp_set_current_user( $preorder_approver_id );
+$preorder_stale_route_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_stale_route = rest_do_request( $preorder_stale_route_request );
+$preorder_stale_data = $preorder_stale_route->get_data();
+db_integration_same( 'doughboss_preorder_revision_conflict', isset( $preorder_stale_data['code'] ) ? (string) $preorder_stale_data['code'] : '', 'registered approval route rejects a stale displayed request revision' );
+db_integration_same( 'pending', is_array( DoughBoss_Preorder_Approval::get( $preorder_spoof_id ) ) ? (string) DoughBoss_Preorder_Approval::get( $preorder_spoof_id )['state'] : '', 'stale approval attempt cannot alter durable request state' );
+$preorder_decision_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_approved_response = rest_do_request( $preorder_decision_request );
+$preorder_approved_data = $preorder_approved_response instanceof WP_REST_Response ? $preorder_approved_response->get_data() : array();
+$preorder_approved_headers = $preorder_approved_response instanceof WP_REST_Response ? $preorder_approved_response->get_headers() : array();
+$preorder_approval = isset( $preorder_approved_data['approval'] ) && is_array( $preorder_approved_data['approval'] ) ? $preorder_approved_data['approval'] : array();
+$preorder_token = isset( $preorder_approval['capability_token'] ) ? (string) $preorder_approval['capability_token'] : '';
+db_integration_assert( $preorder_approved_response instanceof WP_REST_Response && 200 === $preorder_approved_response->get_status() && 'approved_unpaid' === ( isset( $preorder_approval['state'] ) ? (string) $preorder_approval['state'] : '' ) && '' !== $preorder_token, 'registered named-approver route records an unpaid approval and returns its opaque payment capability' );
+$preorder_notification = isset( $preorder_approved_data['notification'] ) && is_array( $preorder_approved_data['notification'] ) ? $preorder_approved_data['notification'] : array();
+$preorder_payment_url = isset( $preorder_approved_data['payment_url'] ) ? (string) $preorder_approved_data['payment_url'] : '';
+$preorder_customer_mail = db_integration_preorder_mail_to( 'preorder.approval-main@example.invalid' );
+$preorder_customer_body = isset( $preorder_customer_mail['message'] ) ? (string) $preorder_customer_mail['message'] : '';
+$preorder_saved_delivery = DoughBoss_Preorder_Approval::get( $preorder_main_id );
+db_integration_same( 'accepted', isset( $preorder_notification['customer_status'] ) ? (string) $preorder_notification['customer_status'] : '', 'approval reports only synthetic WordPress customer-mail acceptance' );
+db_integration_same( 'accepted', isset( $preorder_notification['shop_status'] ) ? (string) $preorder_notification['shop_status'] : '', 'approval reports only synthetic WordPress shop-mail acceptance' );
+db_integration_same( 'accepted', is_array( $preorder_saved_delivery ) ? (string) $preorder_saved_delivery['payment_link_delivery_status'] : '', 'customer mail handoff outcome is durably recorded without changing approval state' );
+db_integration_assert( false !== strpos( $preorder_customer_body, 'original deadline' ) && false !== strpos( $preorder_customer_body, 'does not extend that deadline' ) && false === strpos( $preorder_customer_body, 'within 24 hours' ), 'approval email states the original deadline and never promises a fresh 24-hour resend window' );
+db_integration_assert( '' !== $preorder_payment_url && false !== strpos( $preorder_payment_url, '#doughboss_request=' . $preorder_main_id . '&doughboss_token=' ), 'approval returns the same-site fragment capability only to the authenticated approver' );
+db_integration_assert( isset( $preorder_approved_headers['Cache-Control'] ) && false !== strpos( (string) $preorder_approved_headers['Cache-Control'], 'no-store' ), 'approval response carrying a private capability is explicitly non-cacheable' );
+$preorder_active_ids = array();
+foreach ( DoughBoss_Order::active_orders() as $preorder_active_order ) {
+	$preorder_active_ids[] = isset( $preorder_active_order['id'] ) ? (int) $preorder_active_order['id'] : 0;
+}
+db_integration_assert( $preorder_main_order && 'preorder_request' === (string) $preorder_main_order->order_source && 'unpaid' === (string) $preorder_main_order->payment_status && ! in_array( $preorder_main_id, $preorder_active_ids, true ), 'approval leaves the request unpaid and outside the active kitchen feed' );
+db_integration_same( $preorder_created_before_decision, count( $GLOBALS['db_order_created_events'] ), 'approval itself emits no created-order hook' );
+db_integration_same( $preorder_approver_id, isset( $preorder_approval['approver_user_id'] ) ? (int) $preorder_approval['approver_user_id'] : 0, 'approval records the named approver identity' );
+db_integration_assert( ! empty( $preorder_approval['decided_at_utc'] ) && ! empty( $preorder_approval['request_fingerprint'] ), 'approval records a decision time and immutable request fingerprint' );
+
+$preorder_mail_count_before_replay = count( $GLOBALS['db_preorder_mail'] );
+$preorder_replayed_response = rest_do_request( $preorder_decision_request );
+$preorder_replayed_data = $preorder_replayed_response instanceof WP_REST_Response ? $preorder_replayed_response->get_data() : array();
+db_integration_same( $preorder_token, isset( $preorder_replayed_data['approval']['capability_token'] ) ? (string) $preorder_replayed_data['approval']['capability_token'] : '', 'approval event replay returns the same capability instead of a second decision' );
+db_integration_same( true, ! empty( $preorder_replayed_data['approval']['replayed'] ), 'approval event replay is identified by the atomic decision transaction' );
+db_integration_same( 'not_attempted', isset( $preorder_replayed_data['notification']['customer_status'] ) ? (string) $preorder_replayed_data['notification']['customer_status'] : '', 'approval event replay does not claim another customer mail handoff' );
+db_integration_same( $preorder_mail_count_before_replay, count( $GLOBALS['db_preorder_mail'] ), 'approval event replay emits no duplicate customer or shop mail' );
+db_integration_same( $preorder_created_before_decision, count( $GLOBALS['db_order_created_events'] ), 'approval event replay emits no created-order hook' );
+
+$preorder_recovery_route = '/doughboss/v1/admin/preorder/' . $preorder_main_id . '/payment-link';
+$preorder_recovery_view_request = db_integration_rest_request( $preorder_recovery_route, array( 'mode' => 'view' ) );
+wp_set_current_user( $preorder_other_id );
+$preorder_recovery_view_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_recovery_wrong = rest_do_request( $preorder_recovery_view_request );
+$preorder_recovery_wrong_data = $preorder_recovery_wrong->get_data();
+db_integration_same( 'doughboss_preorder_approver_required', isset( $preorder_recovery_wrong_data['code'] ) ? (string) $preorder_recovery_wrong_data['code'] : '', 'payment-link recovery is restricted to the exact named approver' );
+wp_set_current_user( $preorder_approver_id );
+$preorder_recovery_view_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_recovery_view = rest_do_request( $preorder_recovery_view_request );
+$preorder_recovery_view_data = $preorder_recovery_view instanceof WP_REST_Response ? $preorder_recovery_view->get_data() : array();
+$preorder_recovery_view_headers = $preorder_recovery_view instanceof WP_REST_Response ? $preorder_recovery_view->get_headers() : array();
+$preorder_before_resend = DoughBoss_Preorder_Approval::get( $preorder_main_id );
+$preorder_resend_request = db_integration_rest_request( $preorder_recovery_route, array( 'mode' => 'resend' ) );
+$preorder_resend_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_resend = rest_do_request( $preorder_resend_request );
+$preorder_resend_data = $preorder_resend instanceof WP_REST_Response ? $preorder_resend->get_data() : array();
+$preorder_after_resend = DoughBoss_Preorder_Approval::get( $preorder_main_id );
+wp_set_current_user( 0 );
+db_integration_same( $preorder_payment_url, isset( $preorder_recovery_view_data['payment_url'] ) ? (string) $preorder_recovery_view_data['payment_url'] : '', 'view recovery returns the exact original capability URL without rotating it' );
+db_integration_same( $preorder_payment_url, isset( $preorder_resend_data['payment_url'] ) ? (string) $preorder_resend_data['payment_url'] : '', 'resend returns the exact original capability URL without rotating it' );
+db_integration_assert( isset( $preorder_recovery_view_headers['Cache-Control'] ) && false !== strpos( (string) $preorder_recovery_view_headers['Cache-Control'], 'no-store' ), 'capability-bearing recovery response is explicitly non-cacheable' );
+foreach ( array( 'state', 'version', 'approved_revision', 'request_fingerprint', 'payment_token_expires_at_utc', 'payment_checkout_key', 'payment_attempt_id' ) as $stable_field ) {
+	db_integration_same( isset( $preorder_before_resend[ $stable_field ] ) ? $preorder_before_resend[ $stable_field ] : null, isset( $preorder_after_resend[ $stable_field ] ) ? $preorder_after_resend[ $stable_field ] : null, 'resend preserves approval field ' . $stable_field );
+}
+db_integration_same( 'accepted', isset( $preorder_resend_data['notification']['customer_status'] ) ? (string) $preorder_resend_data['notification']['customer_status'] : '', 'resend reports only synthetic WordPress mail acceptance' );
+
+// Mail is an external handoff, not part of the approval transaction. Exercise
+// independent customer/shop outcomes and a failed local result write.
+$preorder_mail_customer_fail = db_integration_create_preorder_request( 'approval-mail-customer-fail', 19.00 );
+$preorder_mail_customer_fail_id = is_array( $preorder_mail_customer_fail ) ? (int) $preorder_mail_customer_fail['order_id'] : 0;
+$preorder_mail_customer_fail_order = $preorder_mail_customer_fail_id ? DoughBoss_Order::get( $preorder_mail_customer_fail_id ) : null;
+DoughBoss_Preorder_Approval::ensure_pending( $preorder_mail_customer_fail_id );
+$GLOBALS['db_preorder_mail_results'] = array( 'preorder.approval-mail-customer-fail@example.invalid' => false );
+$preorder_mail_customer_fail_request = db_integration_rest_request(
+	'/doughboss/v1/admin/preorder/' . $preorder_mail_customer_fail_id . '/decision',
+	array( 'decision' => 'accept', 'contact_confirmed' => true, 'expected_version' => $preorder_mail_customer_fail_order ? (int) $preorder_mail_customer_fail_order->version : 0, 'event_key' => 'integration-preorder-mail-customer-fail-0001' )
+);
+wp_set_current_user( $preorder_approver_id );
+$preorder_mail_customer_fail_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_mail_customer_fail_response = rest_do_request( $preorder_mail_customer_fail_request );
+$preorder_mail_customer_fail_data = $preorder_mail_customer_fail_response instanceof WP_REST_Response ? $preorder_mail_customer_fail_response->get_data() : array();
+$preorder_mail_customer_fail_approval = DoughBoss_Preorder_Approval::get( $preorder_mail_customer_fail_id );
+db_integration_same( 'failed', isset( $preorder_mail_customer_fail_data['notification']['customer_status'] ) ? (string) $preorder_mail_customer_fail_data['notification']['customer_status'] : '', 'customer mail rejection is reported without claiming delivery' );
+db_integration_same( 'accepted', isset( $preorder_mail_customer_fail_data['notification']['shop_status'] ) ? (string) $preorder_mail_customer_fail_data['notification']['shop_status'] : '', 'shop copy can be accepted independently of customer mail' );
+db_integration_same( 'approved_unpaid', is_array( $preorder_mail_customer_fail_approval ) ? (string) $preorder_mail_customer_fail_approval['state'] : '', 'customer mail failure never rolls back approval or releases kitchen work' );
+db_integration_same( 'failed', is_array( $preorder_mail_customer_fail_approval ) ? (string) $preorder_mail_customer_fail_approval['payment_link_delivery_status'] : '', 'customer mail failure is durably visible for same-link recovery' );
+
+$preorder_mail_shop_fail = db_integration_create_preorder_request( 'approval-mail-shop-fail', 19.50 );
+$preorder_mail_shop_fail_id = is_array( $preorder_mail_shop_fail ) ? (int) $preorder_mail_shop_fail['order_id'] : 0;
+$preorder_mail_shop_fail_order = $preorder_mail_shop_fail_id ? DoughBoss_Order::get( $preorder_mail_shop_fail_id ) : null;
+DoughBoss_Preorder_Approval::ensure_pending( $preorder_mail_shop_fail_id );
+$GLOBALS['db_preorder_mail_results'] = array( 'info@doughboss.com.au' => false );
+$preorder_mail_shop_fail_request = db_integration_rest_request(
+	'/doughboss/v1/admin/preorder/' . $preorder_mail_shop_fail_id . '/decision',
+	array( 'decision' => 'accept', 'contact_confirmed' => true, 'expected_version' => $preorder_mail_shop_fail_order ? (int) $preorder_mail_shop_fail_order->version : 0, 'event_key' => 'integration-preorder-mail-shop-fail-0001' )
+);
+$preorder_mail_shop_fail_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$preorder_mail_shop_fail_response = rest_do_request( $preorder_mail_shop_fail_request );
+$preorder_mail_shop_fail_data = $preorder_mail_shop_fail_response instanceof WP_REST_Response ? $preorder_mail_shop_fail_response->get_data() : array();
+db_integration_same( 'accepted', isset( $preorder_mail_shop_fail_data['notification']['customer_status'] ) ? (string) $preorder_mail_shop_fail_data['notification']['customer_status'] : '', 'customer mail can be accepted independently of a failed shop copy' );
+db_integration_same( 'failed', isset( $preorder_mail_shop_fail_data['notification']['shop_status'] ) ? (string) $preorder_mail_shop_fail_data['notification']['shop_status'] : '', 'shop copy rejection is reported without relabelling customer handoff' );
+
+$preorder_mail_write_fail = db_integration_create_preorder_request( 'approval-mail-write-fail', 19.75 );
+$preorder_mail_write_fail_id = is_array( $preorder_mail_write_fail ) ? (int) $preorder_mail_write_fail['order_id'] : 0;
+$preorder_mail_write_fail_order = $preorder_mail_write_fail_id ? DoughBoss_Order::get( $preorder_mail_write_fail_id ) : null;
+DoughBoss_Preorder_Approval::ensure_pending( $preorder_mail_write_fail_id );
+$GLOBALS['db_preorder_mail_results'] = array();
+$GLOBALS['db_fail_preorder_delivery_once'] = true;
+add_filter( 'query', 'db_integration_fail_preorder_delivery_status' );
+$preorder_mail_write_fail_request = db_integration_rest_request(
+	'/doughboss/v1/admin/preorder/' . $preorder_mail_write_fail_id . '/decision',
+	array( 'decision' => 'accept', 'contact_confirmed' => true, 'expected_version' => $preorder_mail_write_fail_order ? (int) $preorder_mail_write_fail_order->version : 0, 'event_key' => 'integration-preorder-mail-write-fail-0001' )
+);
+$preorder_mail_write_fail_request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+$previous_suppress_errors = $wpdb->suppress_errors( true );
+$preorder_mail_write_fail_response = rest_do_request( $preorder_mail_write_fail_request );
+$wpdb->suppress_errors( $previous_suppress_errors );
+remove_filter( 'query', 'db_integration_fail_preorder_delivery_status' );
+$preorder_mail_write_fail_data = $preorder_mail_write_fail_response instanceof WP_REST_Response ? $preorder_mail_write_fail_response->get_data() : array();
+$preorder_mail_write_fail_approval = DoughBoss_Preorder_Approval::get( $preorder_mail_write_fail_id );
+wp_set_current_user( 0 );
+db_integration_same( false, (bool) $GLOBALS['db_fail_preorder_delivery_once'], 'delivery-status persistence fixture consumes its one injected SQL failure' );
+db_integration_same( 'delivery_status_not_persisted', isset( $preorder_mail_write_fail_data['notification']['warning'] ) ? (string) $preorder_mail_write_fail_data['notification']['warning'] : '', 'mail-status write failure is returned as uncertainty instead of false durable success' );
+db_integration_same( 'approved_unpaid', is_array( $preorder_mail_write_fail_approval ) ? (string) $preorder_mail_write_fail_approval['state'] : '', 'mail-status write failure preserves the committed approval state' );
+db_integration_same( 'not_attempted', is_array( $preorder_mail_write_fail_approval ) ? (string) $preorder_mail_write_fail_approval['payment_link_delivery_status'] : '', 'failed delivery-status write cannot claim a stored handoff result' );
+
+$preorder_invalid_token = DoughBoss_Preorder_Approval::verify_payment_token( $preorder_main_id, 'wrong-capability' );
+db_integration_same( 'doughboss_preorder_payment_token_invalid', is_wp_error( $preorder_invalid_token ) ? $preorder_invalid_token->get_error_code() : '', 'invalid approved-payment capability fails closed' );
+$preorder_ready_view = $preorder_controller->preorder_payment_view(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/view',
+		array( 'request_id' => $preorder_main_id, 'token' => $preorder_token )
+	)
+);
+$preorder_ready_view_data = $preorder_ready_view instanceof WP_REST_Response ? $preorder_ready_view->get_data() : array();
+db_integration_same( 'ready', isset( $preorder_ready_view_data['presentation_state'] ) ? (string) $preorder_ready_view_data['presentation_state'] : '', 'approved capability exposes one deterministic ready presentation state' );
+db_integration_same( true, ! empty( $preorder_ready_view_data['can_start_payment'] ), 'fresh approved capability explicitly authorizes one payment start' );
+db_integration_assert( empty( $preorder_ready_view_data['contact_tel'] ) || 1 === preg_match( '/^tel:\+[0-9]{8,15}$/', (string) $preorder_ready_view_data['contact_tel'] ), 'public help link is empty or normalized E.164 shop contact data' );
+$preorder_expired_decision = DoughBoss_Preorder_Approval::decide( $preorder_expired_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-expired-0001' );
+$preorder_expired_token = is_array( $preorder_expired_decision ) && isset( $preorder_expired_decision['capability_token'] ) ? (string) $preorder_expired_decision['capability_token'] : '';
+$wpdb->update( $preorder_approval_table, array( 'payment_token_expires_at_utc' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'request_order_id' => $preorder_expired_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$preorder_expired_token_result = DoughBoss_Preorder_Approval::verify_payment_token( $preorder_expired_id, $preorder_expired_token );
+db_integration_same( 'doughboss_preorder_payment_token_expired', is_wp_error( $preorder_expired_token_result ) ? $preorder_expired_token_result->get_error_code() : '', 'expired approved-payment capability cannot be used' );
+
+// Stripe allows a Session only from 30 minutes; DoughBoss keeps a five-minute
+// safety margin for a new creation while preserving exact existing-Session replay.
+$preorder_cutoff_results = array();
+foreach ( array( 2099 => '34:59', 2100 => '35:00', 2101 => '35:01' ) as $remaining_seconds => $cutoff_label ) {
+	$cutoff_fixture = db_integration_create_preorder_request( 'approval-cutoff-' . $remaining_seconds, 18.00 );
+	$cutoff_id = is_array( $cutoff_fixture ) ? (int) $cutoff_fixture['order_id'] : 0;
+	$cutoff_order = $cutoff_id ? DoughBoss_Order::get( $cutoff_id ) : null;
+	$cutoff_pending = $cutoff_id ? DoughBoss_Preorder_Approval::ensure_pending( $cutoff_id ) : new WP_Error( 'integration_fixture', 'Missing cutoff request.' );
+	$cutoff_decision = $cutoff_id ? DoughBoss_Preorder_Approval::decide( $cutoff_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-cutoff-' . $remaining_seconds, '', $cutoff_order ? (int) $cutoff_order->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing cutoff request.' );
+	$cutoff_expiry = gmdate( 'Y-m-d H:i:s', time() + $remaining_seconds );
+	$cutoff_token = is_array( $cutoff_pending ) && is_array( $cutoff_decision ) ? db_integration_set_preorder_expiry( $cutoff_id, $cutoff_expiry ) : '';
+	$preorder_cutoff_results[ $remaining_seconds ] = '' !== $cutoff_token ? DoughBoss_Preorder_Approval::claim_payment( $cutoff_id, $cutoff_token ) : new WP_Error( 'integration_fixture', 'Missing cutoff token.' );
+	db_integration_assert( $cutoff_id > 0 && '' !== $cutoff_token, 'new-payment cutoff fixture ' . $cutoff_label . ' is valid' );
+}
+db_integration_same( 'doughboss_preorder_payment_start_cutoff', is_wp_error( $preorder_cutoff_results[2099] ) ? $preorder_cutoff_results[2099]->get_error_code() : '', '34:59 remaining cannot claim a new Stripe Session' );
+db_integration_same( 'payment_active', is_array( $preorder_cutoff_results[2100] ) ? (string) $preorder_cutoff_results[2100]['state'] : '', '35:00 remaining is the accepted new-Session boundary' );
+db_integration_same( 'payment_active', is_array( $preorder_cutoff_results[2101] ) ? (string) $preorder_cutoff_results[2101]['state'] : '', '35:01 remaining can claim a new Stripe Session' );
+
+$preorder_reject_result = DoughBoss_Preorder_Approval::decide( $preorder_reject_id, 'reject', $preorder_approver_id, 'Integration Approver', 'integration-preorder-reject-0001' );
+$preorder_reject_replay = DoughBoss_Preorder_Approval::decide( $preorder_reject_id, 'reject', $preorder_approver_id, 'Integration Approver', 'integration-preorder-reject-0001' );
+$preorder_rejected_order = DoughBoss_Order::get( $preorder_reject_id );
+db_integration_same( 'rejected', is_array( $preorder_reject_result ) ? (string) $preorder_reject_result['state'] : '', 'rejecting a request is terminal in approval storage' );
+db_integration_same( 'rejected', is_array( $preorder_reject_replay ) ? (string) $preorder_reject_replay['state'] : '', 'rejected decision event replays without reopening the request' );
+db_integration_same( 'cancelled', $preorder_rejected_order ? (string) $preorder_rejected_order->status : '', 'rejected request is cancelled outside the kitchen lifecycle hooks' );
+
+$preorder_claim = DoughBoss_Preorder_Approval::claim_payment( $preorder_main_id, $preorder_token );
+$preorder_claim_replay = DoughBoss_Preorder_Approval::claim_payment( $preorder_main_id, $preorder_token );
+db_integration_same( 'payment_active', is_array( $preorder_claim ) ? (string) $preorder_claim['state'] : '', 'approved capability claims one payment state' );
+db_integration_same( isset( $preorder_claim['payment_checkout_key'] ) ? (string) $preorder_claim['payment_checkout_key'] : '', isset( $preorder_claim_replay['payment_checkout_key'] ) ? (string) $preorder_claim_replay['payment_checkout_key'] : '', 'payment claim replay preserves one deterministic checkout key' );
+db_integration_same( true, ! empty( $preorder_claim_replay['replayed'] ), 'second payment claim is a replay, not a second payment authorization' );
+
+$preorder_spoof_decision = DoughBoss_Preorder_Approval::decide( $preorder_spoof_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-spoof-0001', '', $preorder_spoof_order ? (int) $preorder_spoof_order->version : 0 );
+$preorder_spoof_token = is_array( $preorder_spoof_decision ) && isset( $preorder_spoof_decision['capability_token'] ) ? (string) $preorder_spoof_decision['capability_token'] : '';
+$preorder_spoof_claim = DoughBoss_Preorder_Approval::claim_payment( $preorder_spoof_id, $preorder_spoof_token );
+$preorder_spoof_final = DoughBoss_Order::create(
+	array(
+		'checkout_key'      => isset( $preorder_spoof_claim['payment_checkout_key'] ) ? (string) $preorder_spoof_claim['payment_checkout_key'] : '',
+		'order_source'      => 'web',
+		'source_request_id' => $preorder_spoof_id,
+		'order_type'        => 'pickup',
+		'location_id'       => 1,
+		'customer_name'     => 'Spoofed payment',
+		'customer_email'    => 'spoofed.payment@example.invalid',
+		'customer_phone'    => '0400000012',
+		'address'           => '',
+		'notes'             => '',
+		'subtotal'          => 24.00,
+		'tax'               => 0.0,
+		'delivery_fee'      => 0.0,
+		'total'             => 24.00,
+		'payment_status'    => 'unpaid',
+		'payment_method'    => 'stripe',
+	),
+	array( array( 'item_id' => 9799, 'name' => 'Spoofed final order', 'quantity' => 1, 'unit_price' => 24.00, 'line_total' => 24.00 ) )
+);
+db_integration_same( 'doughboss_preorder_release_forbidden', is_wp_error( $preorder_spoof_final ) ? $preorder_spoof_final->get_error_code() : '', 'unpaid final data cannot release an approved request into fulfilment' );
+db_integration_same( 'payment_active', is_array( DoughBoss_Preorder_Approval::get( $preorder_spoof_id ) ) ? (string) DoughBoss_Preorder_Approval::get( $preorder_spoof_id )['state'] : '', 'rejected final data leaves its approval unreleased' );
+
+$preorder_posts_before_start = $GLOBALS['db_stripe_post_count'];
+add_filter( 'doughboss_preorder_payment_page_url', 'db_integration_preorder_payment_page_url' );
+
+// The public capability must not bypass the shop-level online-payment switch,
+// including the non-mutating view used by the payment page bootstrap.
+$preorder_location_off = db_integration_create_preorder_request( 'approval-location-off', 25.00 );
+$preorder_location_off_id = is_array( $preorder_location_off ) ? (int) $preorder_location_off['order_id'] : 0;
+$preorder_location_off_pending = $preorder_location_off_id ? DoughBoss_Preorder_Approval::ensure_pending( $preorder_location_off_id ) : new WP_Error( 'integration_fixture', 'Missing location-off request.' );
+$preorder_location_off_order = $preorder_location_off_id ? DoughBoss_Order::get( $preorder_location_off_id ) : null;
+$preorder_location_off_decision = $preorder_location_off_id ? DoughBoss_Preorder_Approval::decide( $preorder_location_off_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-location-off-0001', '', $preorder_location_off_order ? (int) $preorder_location_off_order->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing location-off request.' );
+$preorder_location_off_token = is_array( $preorder_location_off_decision ) && isset( $preorder_location_off_decision['capability_token'] ) ? (string) $preorder_location_off_decision['capability_token'] : '';
+db_integration_assert( is_array( $preorder_location_off_pending ) && is_array( $preorder_location_off_decision ) && '' !== $preorder_location_off_token, 'location-disabled payment fixture is durably approved before disabling its shop' );
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 0 ), array( 'id' => 1 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$_SERVER['REMOTE_ADDR'] = '192.0.2.210';
+$preorder_location_off_view = $preorder_controller->preorder_payment_view(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/view',
+		array( 'request_id' => $preorder_location_off_id, 'token' => $preorder_location_off_token )
+	)
+);
+$preorder_location_off_start = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_location_off_id, 'token' => $preorder_location_off_token )
+	)
+);
+$preorder_location_off_view_data = $preorder_location_off_view instanceof WP_REST_Response ? $preorder_location_off_view->get_data() : array();
+db_integration_same( false, ! empty( $preorder_location_off_view_data['payable'] ), 'approved payment view returns a safe non-payable summary when its shop is disabled' );
+db_integration_same( 'doughboss_pay_location_off', is_wp_error( $preorder_location_off_start ) ? $preorder_location_off_start->get_error_code() : '', 'approved payment start refuses a shop whose online payments are disabled' );
+db_integration_same( $preorder_posts_before_start, $GLOBALS['db_stripe_post_count'], 'disabled shop cannot create a Stripe Session through an approved capability' );
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 1 ), array( 'id' => 1 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+// Expiry applies throughout the payment lifecycle. An abandoned, active
+// capability cannot be replayed into another payable state.
+$preorder_active_expired = db_integration_create_preorder_request( 'approval-active-expired', 26.00 );
+$preorder_active_expired_id = is_array( $preorder_active_expired ) ? (int) $preorder_active_expired['order_id'] : 0;
+$preorder_active_expired_pending = $preorder_active_expired_id ? DoughBoss_Preorder_Approval::ensure_pending( $preorder_active_expired_id ) : new WP_Error( 'integration_fixture', 'Missing active-expired request.' );
+$preorder_active_expired_order = $preorder_active_expired_id ? DoughBoss_Order::get( $preorder_active_expired_id ) : null;
+$preorder_active_expired_decision = $preorder_active_expired_id ? DoughBoss_Preorder_Approval::decide( $preorder_active_expired_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-active-expired-0001', '', $preorder_active_expired_order ? (int) $preorder_active_expired_order->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing active-expired request.' );
+$preorder_active_expired_token = is_array( $preorder_active_expired_decision ) && isset( $preorder_active_expired_decision['capability_token'] ) ? (string) $preorder_active_expired_decision['capability_token'] : '';
+$preorder_active_expired_claim = $preorder_active_expired_id ? DoughBoss_Preorder_Approval::claim_payment( $preorder_active_expired_id, $preorder_active_expired_token ) : new WP_Error( 'integration_fixture', 'Missing active-expired request.' );
+$wpdb->update( $preorder_approval_table, array( 'payment_token_expires_at_utc' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'request_order_id' => $preorder_active_expired_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$_SERVER['REMOTE_ADDR'] = '192.0.2.211';
+$preorder_active_expired_view = $preorder_controller->preorder_payment_view(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/view',
+		array( 'request_id' => $preorder_active_expired_id, 'token' => $preorder_active_expired_token )
+	)
+);
+$preorder_active_expired_reclaim = DoughBoss_Preorder_Approval::claim_payment( $preorder_active_expired_id, $preorder_active_expired_token );
+db_integration_assert( is_array( $preorder_active_expired_pending ) && is_array( $preorder_active_expired_claim ), 'expired-active fixture reaches a durable payment-active state before expiry' );
+db_integration_same( 'doughboss_preorder_payment_token_expired', is_wp_error( $preorder_active_expired_view ) ? $preorder_active_expired_view->get_error_code() : '', 'expired payment-active capability cannot expose a payable payment view' );
+db_integration_same( 'doughboss_preorder_payment_token_expired', is_wp_error( $preorder_active_expired_reclaim ) ? $preorder_active_expired_reclaim->get_error_code() : '', 'expired payment-active capability cannot be claimed again' );
+
+// A transport-ambiguous browser completion freezes this request rather than
+// returning a second payment action that could create another charge attempt.
+$preorder_ambiguous = db_integration_create_preorder_request( 'approval-ambiguous', 27.00 );
+$preorder_ambiguous_id = is_array( $preorder_ambiguous ) ? (int) $preorder_ambiguous['order_id'] : 0;
+$preorder_ambiguous_pending = $preorder_ambiguous_id ? DoughBoss_Preorder_Approval::ensure_pending( $preorder_ambiguous_id ) : new WP_Error( 'integration_fixture', 'Missing ambiguous request.' );
+$preorder_ambiguous_order = $preorder_ambiguous_id ? DoughBoss_Order::get( $preorder_ambiguous_id ) : null;
+$preorder_ambiguous_decision = $preorder_ambiguous_id ? DoughBoss_Preorder_Approval::decide( $preorder_ambiguous_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-ambiguous-0001', '', $preorder_ambiguous_order ? (int) $preorder_ambiguous_order->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing ambiguous request.' );
+$preorder_ambiguous_token = is_array( $preorder_ambiguous_decision ) && isset( $preorder_ambiguous_decision['capability_token'] ) ? (string) $preorder_ambiguous_decision['capability_token'] : '';
+$_SERVER['REMOTE_ADDR'] = '192.0.2.212';
+$preorder_ambiguous_start = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_ambiguous_id, 'token' => $preorder_ambiguous_token )
+	)
+);
+$preorder_ambiguous_start_data = $preorder_ambiguous_start instanceof WP_REST_Response ? $preorder_ambiguous_start->get_data() : array();
+$preorder_ambiguous_session = isset( $preorder_ambiguous_start_data['checkout_session'] ) ? (string) $preorder_ambiguous_start_data['checkout_session'] : '';
+$GLOBALS['db_stripe_session_network_once'] = true;
+$preorder_ambiguous_complete = $preorder_controller->preorder_payment_complete(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/complete',
+		array( 'request_id' => $preorder_ambiguous_id, 'token' => $preorder_ambiguous_token, 'session_id' => $preorder_ambiguous_session )
+	)
+);
+$preorder_ambiguous_state = DoughBoss_Preorder_Approval::get( $preorder_ambiguous_id );
+$preorder_ambiguous_view = $preorder_controller->preorder_payment_view(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/view',
+		array( 'request_id' => $preorder_ambiguous_id, 'token' => $preorder_ambiguous_token )
+	)
+);
+$preorder_ambiguous_view_data = $preorder_ambiguous_view instanceof WP_REST_Response ? $preorder_ambiguous_view->get_data() : array();
+$preorder_ambiguous_posts_before_replay = $GLOBALS['db_stripe_post_count'];
+$preorder_ambiguous_replay = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_ambiguous_id, 'token' => $preorder_ambiguous_token )
+	)
+);
+db_integration_assert( is_array( $preorder_ambiguous_pending ) && $preorder_ambiguous_start instanceof WP_REST_Response && '' !== $preorder_ambiguous_session && is_wp_error( $preorder_ambiguous_complete ), 'ambiguous browser completion fixture reaches a real provider retrieval failure' );
+db_integration_same( 'payment_held', is_array( $preorder_ambiguous_state ) ? (string) $preorder_ambiguous_state['state'] : '', 'ambiguous Stripe retrieval freezes the approved request for staff review' );
+db_integration_same( false, ! empty( $preorder_ambiguous_view_data['payable'] ), 'held approval never exposes another payable payment action' );
+db_integration_assert( is_wp_error( $preorder_ambiguous_replay ), 'held approval cannot start or replay a payment session' );
+db_integration_same( $preorder_ambiguous_posts_before_replay, $GLOBALS['db_stripe_post_count'], 'held approval emits no second Stripe Session creation request' );
+
+$preorder_posts_before_main_start = $GLOBALS['db_stripe_post_count'];
+$preorder_start_response = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_main_id, 'token' => $preorder_token )
+	)
+);
+$preorder_start_data = $preorder_start_response instanceof WP_REST_Response ? $preorder_start_response->get_data() : array();
+$preorder_session = isset( $preorder_start_data['checkout_session'] ) ? (string) $preorder_start_data['checkout_session'] : '';
+$preorder_active_approval = DoughBoss_Preorder_Approval::get( $preorder_main_id );
+db_integration_assert( $preorder_start_response instanceof WP_REST_Response && '' !== $preorder_session, 'approved request starts one Stripe Session even while normal ordering is closed' );
+db_integration_same( $preorder_posts_before_main_start + 1, $GLOBALS['db_stripe_post_count'], 'approved payment creates exactly one Stripe Session' );
+db_integration_assert( is_array( $preorder_active_approval ) && ! empty( $preorder_active_approval['payment_attempt_id'] ) && 0 === DoughBoss_Order::find_id_by_source_request( $preorder_main_id ), 'starting payment links an attempt but creates no kitchen order' );
+$preorder_snapshot = isset( $preorder_active_approval['payment_checkout_key'] ) ? DoughBoss_Checkout_Snapshots::find( (string) $preorder_active_approval['payment_checkout_key'] ) : null;
+$preorder_last_stripe_body = ! empty( $GLOBALS['db_stripe_post_bodies'] ) ? end( $GLOBALS['db_stripe_post_bodies'] ) : array();
+$preorder_original_expiry = is_array( $preorder_active_approval ) ? (string) $preorder_active_approval['payment_token_expires_at_utc'] : '';
+db_integration_same( $preorder_original_expiry, is_array( $preorder_snapshot ) ? (string) $preorder_snapshot['expires_at'] : '', 'approved snapshot uses the stable approval deadline instead of renewing retention' );
+db_integration_same( strtotime( $preorder_original_expiry . ' UTC' ), isset( $preorder_last_stripe_body['expires_at'] ) ? (int) $preorder_last_stripe_body['expires_at'] : 0, 'Stripe Checkout receives the exact stable approval deadline' );
+
+$wpdb->update( $preorder_approval_table, array( 'payment_token_expires_at_utc' => gmdate( 'Y-m-d H:i:s', time() + ( 20 * MINUTE_IN_SECONDS ) ) ), array( 'request_order_id' => $preorder_main_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$preorder_posts_before_short_replay = $GLOBALS['db_stripe_post_count'];
+$_SERVER['REMOTE_ADDR'] = '192.0.2.212';
+$preorder_short_replay = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_main_id, 'token' => $preorder_token )
+	)
+);
+$preorder_short_replay_data = $preorder_short_replay instanceof WP_REST_Response ? $preorder_short_replay->get_data() : array();
+$preorder_short_view = $preorder_controller->preorder_payment_view(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/view',
+		array( 'request_id' => $preorder_main_id, 'token' => $preorder_token )
+	)
+);
+$preorder_short_view_data = $preorder_short_view instanceof WP_REST_Response ? $preorder_short_view->get_data() : array();
+db_integration_same( $preorder_session, isset( $preorder_short_replay_data['checkout_session'] ) ? (string) $preorder_short_replay_data['checkout_session'] : '', 'a bound active Session replays below Stripe new-creation minimum' );
+db_integration_same( $preorder_posts_before_short_replay, $GLOBALS['db_stripe_post_count'], 'below-30-minute active replay sends no second Stripe creation request' );
+db_integration_same( true, ! empty( $preorder_short_view_data['can_start_payment'] ), 'active Session remains available as exact replay inside the new-creation cutoff' );
+$wpdb->update( $preorder_approval_table, array( 'payment_token_expires_at_utc' => $preorder_original_expiry ), array( 'request_order_id' => $preorder_main_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+// Expired snapshot recovery and purge use the same bounded exact-Stripe
+// predicate. Corrupt payloads, malformed/future timestamps, excluded states,
+// wrong references and attempts older than seven days all fail closed.
+$preorder_attempt = DoughBoss_Payment_Attempts::find( (int) $preorder_active_approval['payment_attempt_id'] );
+$preorder_attempt_table = $wpdb->prefix . 'doughboss_payment_attempts';
+$preorder_snapshot_table = $wpdb->prefix . 'doughboss_checkout_snapshots';
+$preorder_attempt_original = $preorder_attempt;
+$preorder_snapshot_original_hash = is_array( $preorder_snapshot ) ? (string) $preorder_snapshot['payload_hash'] : '';
+$wpdb->update( $preorder_snapshot_table, array( 'expires_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'checkout_key' => (string) $preorder_active_approval['payment_checkout_key'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$stripe_recovery_allowed_statuses = array( 'processing', 'unknown', 'succeeded', 'mismatch' );
+foreach ( $stripe_recovery_allowed_statuses as $allowed_status ) {
+	$wpdb->update( $preorder_attempt_table, array( 'status' => $allowed_status, 'provider_reference' => $preorder_session, 'created_at' => gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) + 10 ) ), array( 'id' => (int) $preorder_attempt['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	db_integration_assert( is_array( DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $preorder_active_approval['payment_checkout_key'] ) ), 'bounded Stripe recovery accepts exact ' . $allowed_status . ' attempt' );
+}
+foreach ( array( 'prepared', 'dispatching', 'failed', 'created' ) as $excluded_status ) {
+	$wpdb->update( $preorder_attempt_table, array( 'status' => $excluded_status, 'provider_reference' => $preorder_session, 'created_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'id' => (int) $preorder_attempt['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	db_integration_same( null, DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $preorder_active_approval['payment_checkout_key'] ), 'Stripe recovery rejects ' . $excluded_status . ' attempt' );
+}
+$stripe_recovery_time_cases = array(
+	'outside seven days' => gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) - 10 ),
+	'future time'        => gmdate( 'Y-m-d H:i:s', time() + 10 ),
+	'malformed time'     => 'not-a-date',
+	'missing time'       => null,
+);
+foreach ( $stripe_recovery_time_cases as $time_label => $created_at ) {
+	$wpdb->update( $preorder_attempt_table, array( 'status' => 'processing', 'provider_reference' => $preorder_session, 'created_at' => $created_at ), array( 'id' => (int) $preorder_attempt['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	db_integration_same( null, DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $preorder_active_approval['payment_checkout_key'] ), 'Stripe recovery rejects ' . $time_label );
+}
+$wpdb->update( $preorder_attempt_table, array( 'status' => 'processing', 'provider_reference' => 'pi_wrong_reference_12345678', 'created_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'id' => (int) $preorder_attempt['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+db_integration_same( null, DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $preorder_active_approval['payment_checkout_key'] ), 'Stripe recovery rejects a non-Session provider binding' );
+$wpdb->update( $preorder_attempt_table, array( 'status' => 'processing', 'provider_reference' => $preorder_session, 'created_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'id' => (int) $preorder_attempt['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$wpdb->update( $preorder_snapshot_table, array( 'payload_hash' => hash( 'sha256', 'altered-payload-hash' ) ), array( 'checkout_key' => (string) $preorder_active_approval['payment_checkout_key'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+db_integration_same( null, DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $preorder_active_approval['payment_checkout_key'] ), 'Stripe recovery rejects an altered immutable snapshot hash' );
+$wpdb->update( $preorder_snapshot_table, array( 'payload_hash' => $preorder_snapshot_original_hash ), array( 'checkout_key' => (string) $preorder_active_approval['payment_checkout_key'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+$purge_method = new ReflectionMethod( 'DoughBoss_Checkout_Snapshots', 'purge_expired' );
+$purge_method->setAccessible( true );
+$purge_method->invoke( null, true );
+db_integration_same( 1, (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . $preorder_snapshot_table . ' WHERE checkout_key = %s', (string) $preorder_active_approval['payment_checkout_key'] ) ), 'purge preserves the same exact in-horizon Stripe recovery row' );
+$wpdb->update( $preorder_attempt_table, array( 'created_at' => gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) - 10 ) ), array( 'id' => (int) $preorder_attempt['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$purge_method->invoke( null, true );
+db_integration_same( 0, (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . $preorder_snapshot_table . ' WHERE checkout_key = %s', (string) $preorder_active_approval['payment_checkout_key'] ) ), 'purge removes the same out-of-horizon Stripe recovery row' );
+$wpdb->update( $preorder_attempt_table, array( 'status' => (string) $preorder_attempt_original['status'], 'provider_reference' => (string) $preorder_attempt_original['provider_reference'], 'created_at' => (string) $preorder_attempt_original['created_at'] ), array( 'id' => (int) $preorder_attempt['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$preorder_snapshot_restored = DoughBoss_Checkout_Snapshots::store( (string) $preorder_active_approval['payment_checkout_key'], $preorder_snapshot['payload'], $preorder_original_expiry );
+db_integration_assert( is_array( $preorder_snapshot_restored ) && $preorder_original_expiry === (string) $preorder_snapshot_restored['expires_at'], 'recovery predicate test restores the original immutable snapshot without renewing its deadline' );
+
+// A signed checkout.session event still cannot release an approved request if
+// its Session reference is not the one recorded on the payment attempt. The
+// matching PaymentIntent and metadata are deliberately insufficient proof.
+$preorder_webhook_misbound = db_integration_create_preorder_request( 'approval-webhook-misbound', 28.00 );
+$preorder_webhook_misbound_id = is_array( $preorder_webhook_misbound ) ? (int) $preorder_webhook_misbound['order_id'] : 0;
+$preorder_webhook_misbound_pending = $preorder_webhook_misbound_id ? DoughBoss_Preorder_Approval::ensure_pending( $preorder_webhook_misbound_id ) : new WP_Error( 'integration_fixture', 'Missing webhook-misbound request.' );
+$preorder_webhook_misbound_order = $preorder_webhook_misbound_id ? DoughBoss_Order::get( $preorder_webhook_misbound_id ) : null;
+$preorder_webhook_misbound_decision = $preorder_webhook_misbound_id ? DoughBoss_Preorder_Approval::decide( $preorder_webhook_misbound_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-webhook-misbound-0001', '', $preorder_webhook_misbound_order ? (int) $preorder_webhook_misbound_order->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing webhook-misbound request.' );
+$preorder_webhook_misbound_token = is_array( $preorder_webhook_misbound_decision ) && isset( $preorder_webhook_misbound_decision['capability_token'] ) ? (string) $preorder_webhook_misbound_decision['capability_token'] : '';
+$_SERVER['REMOTE_ADDR'] = '192.0.2.213';
+$preorder_webhook_misbound_start = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_webhook_misbound_id, 'token' => $preorder_webhook_misbound_token )
+	)
+);
+$preorder_webhook_misbound_start_data = $preorder_webhook_misbound_start instanceof WP_REST_Response ? $preorder_webhook_misbound_start->get_data() : array();
+$preorder_webhook_misbound_session_id = isset( $preorder_webhook_misbound_start_data['checkout_session'] ) ? (string) $preorder_webhook_misbound_start_data['checkout_session'] : '';
+$preorder_webhook_misbound_session = isset( $GLOBALS['db_stripe_sessions'][ $preorder_webhook_misbound_session_id ] ) ? $GLOBALS['db_stripe_sessions'][ $preorder_webhook_misbound_session_id ] : array();
+$preorder_webhook_misbound_session['id'] = 'cs_test_' . substr( hash( 'sha256', 'misbound-session|' . $preorder_webhook_misbound_session_id ), 0, 24 );
+$preorder_webhook_misbound_session['payment_status'] = 'paid';
+$preorder_webhook_misbound_event_id = 'evt_PREORDERMISBOUNDSESSION0001';
+$preorder_webhook_misbound_body = wp_json_encode(
+	array(
+		'id'   => $preorder_webhook_misbound_event_id,
+		'type' => 'checkout.session.completed',
+		'data' => array( 'object' => $preorder_webhook_misbound_session ),
+	)
+);
+$preorder_webhook_misbound_timestamp = time();
+$preorder_webhook_misbound_signature = hash_hmac( 'sha256', $preorder_webhook_misbound_timestamp . '.' . $preorder_webhook_misbound_body, $settings['stripe_test_whsec'] );
+$preorder_webhook_misbound_request = new WP_REST_Request( 'POST', '/doughboss/v1/stripe-webhook' );
+$preorder_webhook_misbound_request->set_body( $preorder_webhook_misbound_body );
+$preorder_webhook_misbound_request->set_header( 'Stripe-Signature', 't=' . $preorder_webhook_misbound_timestamp . ',v1=' . $preorder_webhook_misbound_signature );
+$preorder_webhook_misbound_created_before = count( $GLOBALS['db_order_created_events'] );
+$preorder_webhook_misbound_result = $preorder_controller->stripe_webhook( $preorder_webhook_misbound_request );
+$preorder_webhook_misbound_approval = DoughBoss_Preorder_Approval::get( $preorder_webhook_misbound_id );
+$_SERVER['REMOTE_ADDR'] = '192.0.2.214';
+$preorder_webhook_misbound_view = $preorder_controller->preorder_payment_view(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/view',
+		array( 'request_id' => $preorder_webhook_misbound_id, 'token' => $preorder_webhook_misbound_token )
+	)
+);
+$preorder_webhook_misbound_view_data = $preorder_webhook_misbound_view instanceof WP_REST_Response ? $preorder_webhook_misbound_view->get_data() : array();
+$preorder_webhook_misbound_posts_before_replay = $GLOBALS['db_stripe_post_count'];
+$preorder_webhook_misbound_replay = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_webhook_misbound_id, 'token' => $preorder_webhook_misbound_token )
+	)
+);
+db_integration_assert( is_array( $preorder_webhook_misbound_pending ) && $preorder_webhook_misbound_start instanceof WP_REST_Response && '' !== $preorder_webhook_misbound_session_id, 'misbound webhook fixture owns a real approved-request Checkout Session' );
+db_integration_same( 'doughboss_wh_retry', is_wp_error( $preorder_webhook_misbound_result ) ? $preorder_webhook_misbound_result->get_error_code() : '', 'misbound Checkout Session event is retryable but cannot be released' );
+db_integration_same( 0, (int) DoughBoss_Order::find_id_by_source_request( $preorder_webhook_misbound_id ), 'misbound Checkout Session cannot create a paid fulfilment order from a matching PaymentIntent' );
+db_integration_same( 'payment_held', is_array( $preorder_webhook_misbound_approval ) ? (string) $preorder_webhook_misbound_approval['state'] : '', 'misbound Checkout Session freezes the approved request for staff review' );
+db_integration_same( false, ! empty( $preorder_webhook_misbound_view_data['payable'] ), 'misbound Checkout Session cannot expose another payable action' );
+db_integration_assert( is_wp_error( $preorder_webhook_misbound_replay ), 'misbound Checkout Session cannot start or replay a payment session' );
+db_integration_same( $preorder_webhook_misbound_posts_before_replay, $GLOBALS['db_stripe_post_count'], 'misbound Checkout Session emits no second Stripe Session creation request' );
+db_integration_same( $preorder_webhook_misbound_created_before, count( $GLOBALS['db_order_created_events'] ), 'misbound Checkout Session emits no created-order hook' );
+
+// A payment can settle at the edge of the approved Session deadline and reach
+// the site after the ordinary customer snapshot has expired. The already-bound
+// Stripe attempt retains that immutable snapshot for bounded paid recovery.
+$preorder_main_snapshot_expired = $wpdb->update(
+	$preorder_snapshot_table,
+	array( 'expires_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ),
+	array( 'checkout_key' => (string) $preorder_active_approval['payment_checkout_key'] )
+); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+db_integration_same( 1, (int) $preorder_main_snapshot_expired, 'paid-return fixture expires only its ordinary Stripe snapshot window' );
+db_integration_same( null, DoughBoss_Checkout_Snapshots::find( (string) $preorder_active_approval['payment_checkout_key'] ), 'expired paid-return snapshot is unavailable to ordinary reads' );
+db_integration_assert( is_array( DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $preorder_active_approval['payment_checkout_key'] ) ), 'expired paid-return snapshot remains available only through bounded irreversible-payment recovery' );
+
+$preorder_review_before_complete = DoughBoss_Order::kitchen_workload_counts( 1 );
+$preorder_created_before_main_complete = count( $GLOBALS['db_order_created_events'] );
+$preorder_complete_response = $preorder_controller->preorder_payment_complete(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/complete',
+		array( 'request_id' => $preorder_main_id, 'token' => $preorder_token, 'session_id' => $preorder_session )
+	)
+);
+$preorder_complete_data = $preorder_complete_response instanceof WP_REST_Response ? $preorder_complete_response->get_data() : array();
+$preorder_final_id = DoughBoss_Order::find_id_by_source_request( $preorder_main_id );
+$preorder_final = $preorder_final_id ? DoughBoss_Order::get( $preorder_final_id ) : null;
+$preorder_released = DoughBoss_Preorder_Approval::get( $preorder_main_id );
+$preorder_complete_outcome = is_wp_error( $preorder_complete_response ) ? $preorder_complete_response->get_error_code() : ( $preorder_complete_response instanceof WP_REST_Response ? 'response' : gettype( $preorder_complete_response ) );
+db_integration_assert( $preorder_complete_response instanceof WP_REST_Response && ! empty( $preorder_complete_data['success'] ) && $preorder_final && 'paid' === (string) $preorder_final->payment_status && 'stripe' === (string) $preorder_final->payment_method, 'server-verified paid Stripe completion creates the fulfilment order from its bounded expired snapshot (outcome: ' . $preorder_complete_outcome . ')' );
+db_integration_same( 'released', is_array( $preorder_released ) ? (string) $preorder_released['state'] : '', 'paid Stripe fulfilment atomically releases the approved request' );
+db_integration_same( $preorder_final_id, is_array( $preorder_released ) ? (int) $preorder_released['fulfillment_order_id'] : 0, 'release records the exact paid fulfilment order before hooks run' );
+db_integration_same( $preorder_created_before_main_complete + 1, count( $GLOBALS['db_order_created_events'] ), 'only the verified paid final order emits one created-order hook' );
+$preorder_requests_after_release = DoughBoss_Order::preorder_requests( 200, 1 );
+$preorder_request_ids_after_release = array_map(
+	function ( $row ) {
+		return isset( $row['id'] ) ? (int) $row['id'] : 0;
+	},
+	$preorder_requests_after_release
+);
+$preorder_review_after_complete = DoughBoss_Order::kitchen_workload_counts( 1 );
+wp_set_current_user( $preorder_approver_id );
+$preorder_morning_queue_request = new WP_REST_Request( 'GET', '/doughboss/v1/admin/preorder-requests' );
+$preorder_morning_queue_request->set_param( 'per_page', 200 );
+$preorder_morning_queue_response = $preorder_controller->admin_preorder_requests( $preorder_morning_queue_request );
+wp_set_current_user( 0 );
+$preorder_morning_queue_data = $preorder_morning_queue_response instanceof WP_REST_Response ? $preorder_morning_queue_response->get_data() : array();
+$preorder_morning_queue_ids = isset( $preorder_morning_queue_data['data'] ) && is_array( $preorder_morning_queue_data['data'] ) ? array_map(
+	function ( $row ) {
+		return isset( $row['id'] ) ? (int) $row['id'] : 0;
+	},
+	$preorder_morning_queue_data['data']
+) : array();
+db_integration_same( false, in_array( $preorder_main_id, $preorder_request_ids_after_release, true ), 'released request is removed from the durable pre-order request list' );
+db_integration_same( max( 0, (int) $preorder_review_before_complete['preorder_review'] - 1 ), isset( $preorder_review_after_complete['preorder_review'] ) ? (int) $preorder_review_after_complete['preorder_review'] : -1, 'released request no longer inflates the kitchen pre-order review count' );
+db_integration_same( false, in_array( $preorder_main_id, $preorder_morning_queue_ids, true ), 'released request is absent from the staff morning approval queue' );
+
+$preorder_complete_replay = $preorder_controller->preorder_payment_complete(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/complete',
+		array( 'request_id' => $preorder_main_id, 'token' => $preorder_token, 'session_id' => $preorder_session )
+	)
+);
+db_integration_assert( $preorder_complete_replay instanceof WP_REST_Response, 'verified Stripe completion replay is acknowledged' );
+db_integration_same( 1, (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_orders WHERE source_request_id = %d', $preorder_main_id ) ), 'duplicate finalization resolves to exactly one paid fulfilment order' );
+db_integration_same( $preorder_created_before_main_complete + 1, count( $GLOBALS['db_order_created_events'] ), 'duplicate finalization emits no second created-order hook' );
+
+// Stripe's verified session is immutable evidence. A later global currency
+// configuration change cannot relabel the already-approved AUD payment.
+$preorder_currency_drift = db_integration_create_preorder_request( 'approval-currency-drift', 29.00 );
+$preorder_currency_drift_id = is_array( $preorder_currency_drift ) ? (int) $preorder_currency_drift['order_id'] : 0;
+$preorder_currency_drift_pending = $preorder_currency_drift_id ? DoughBoss_Preorder_Approval::ensure_pending( $preorder_currency_drift_id ) : new WP_Error( 'integration_fixture', 'Missing currency-drift request.' );
+$preorder_currency_drift_order = $preorder_currency_drift_id ? DoughBoss_Order::get( $preorder_currency_drift_id ) : null;
+$preorder_currency_drift_decision = $preorder_currency_drift_id ? DoughBoss_Preorder_Approval::decide( $preorder_currency_drift_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-currency-drift-0001', '', $preorder_currency_drift_order ? (int) $preorder_currency_drift_order->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing currency-drift request.' );
+$preorder_currency_drift_token = is_array( $preorder_currency_drift_decision ) && isset( $preorder_currency_drift_decision['capability_token'] ) ? (string) $preorder_currency_drift_decision['capability_token'] : '';
+$_SERVER['REMOTE_ADDR'] = '192.0.2.215';
+$preorder_currency_drift_start = $preorder_controller->preorder_payment_start(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/start',
+		array( 'request_id' => $preorder_currency_drift_id, 'token' => $preorder_currency_drift_token )
+	)
+);
+$preorder_currency_drift_start_data = $preorder_currency_drift_start instanceof WP_REST_Response ? $preorder_currency_drift_start->get_data() : array();
+$preorder_currency_drift_session = isset( $preorder_currency_drift_start_data['checkout_session'] ) ? (string) $preorder_currency_drift_start_data['checkout_session'] : '';
+$settings['currency_code'] = 'USD';
+update_option( 'doughboss_settings', $settings, false );
+$preorder_currency_drift_complete = $preorder_controller->preorder_payment_complete(
+	db_integration_rest_request(
+		'/doughboss/v1/preorder-payment/complete',
+		array( 'request_id' => $preorder_currency_drift_id, 'token' => $preorder_currency_drift_token, 'session_id' => $preorder_currency_drift_session )
+	)
+);
+$preorder_currency_drift_final_id = DoughBoss_Order::find_id_by_source_request( $preorder_currency_drift_id );
+$preorder_currency_drift_final = $preorder_currency_drift_final_id ? DoughBoss_Order::get( $preorder_currency_drift_final_id ) : null;
+$settings['currency_code'] = 'AUD';
+update_option( 'doughboss_settings', $settings, false );
+db_integration_assert( is_array( $preorder_currency_drift_pending ) && $preorder_currency_drift_start instanceof WP_REST_Response && '' !== $preorder_currency_drift_session, 'currency-drift fixture starts one approved AUD Checkout Session before the global setting changes' );
+db_integration_assert( $preorder_currency_drift_complete instanceof WP_REST_Response && $preorder_currency_drift_final && 'paid' === (string) $preorder_currency_drift_final->payment_status, 'verified old-currency Session still creates its one paid fulfilment order after configuration drift' );
+db_integration_same( 'AUD', $preorder_currency_drift_final ? strtoupper( (string) $preorder_currency_drift_final->currency ) : '', 'verified old-currency Session persists the immutable snapshot currency instead of the new global setting' );
+remove_filter( 'doughboss_preorder_payment_page_url', 'db_integration_preorder_payment_page_url', 10 );
+remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
+remove_filter( 'pre_wp_mail', 'db_integration_capture_preorder_mail', 10 );
+wp_set_current_user( 0 );
+$settings['preorder_approver_user_id'] = 0;
+$settings['ordering_open']             = 1;
+update_option( 'doughboss_settings', $settings, false );
 remove_filter( 'pre_wp_mail', 'db_integration_capture_catering_mail', 10 );
 remove_filter( 'doughboss_orders_email', 'db_integration_no_orders_email' );
 
@@ -1730,6 +2572,38 @@ db_integration_same( $posts_before_hours, $GLOBALS['db_square_post_count'], 'pic
 DoughBoss_Locations::save_weekly_hours( 1, $original_hours );
 
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
+
+// Leave one synthetic approved/unpaid fixture for the explicit multi-process
+// pre-order start/completion harness that the PowerShell runner launches next.
+$preorder_race_settings = DoughBoss_Settings::all();
+$preorder_race_settings['payments_enabled']          = 1;
+$preorder_race_settings['payment_gateway']           = 'stripe';
+$preorder_race_settings['stripe_mode']               = 'test';
+$preorder_race_settings['stripe_test_sk']            = 'sk_test_localSyntheticIntegrationOnly000000';
+$preorder_race_settings['stripe_test_whsec']         = 'whsec_localSyntheticIntegrationOnly000000';
+$preorder_race_settings['currency_code']             = 'AUD';
+$preorder_race_settings['ordering_open']             = 0;
+$preorder_race_settings['preorder_approver_user_id'] = $preorder_approver_id;
+$preorder_race_settings['pospal_order_push_enabled'] = 0;
+update_option( 'doughboss_settings', $preorder_race_settings, false );
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 1, 'pickup_enabled' => 1, 'is_active' => 1 ), array( 'id' => 1 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$preorder_race_order = db_integration_create_preorder_request( 'approval-process-race', 31.00 );
+$preorder_race_id = is_array( $preorder_race_order ) ? (int) $preorder_race_order['order_id'] : 0;
+$preorder_race_pending = $preorder_race_id ? DoughBoss_Preorder_Approval::ensure_pending( $preorder_race_id ) : new WP_Error( 'integration_fixture', 'Missing race request.' );
+$preorder_race_source = $preorder_race_id ? DoughBoss_Order::get( $preorder_race_id ) : null;
+$preorder_race_approval = $preorder_race_id ? DoughBoss_Preorder_Approval::decide( $preorder_race_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-process-race-0001', '', $preorder_race_source ? (int) $preorder_race_source->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing race request.' );
+$preorder_race_token = is_array( $preorder_race_approval ) && isset( $preorder_race_approval['capability_token'] ) ? (string) $preorder_race_approval['capability_token'] : '';
+$preorder_race_checkout_key = is_array( $preorder_race_approval ) && isset( $preorder_race_approval['payment_checkout_key'] ) ? (string) $preorder_race_approval['payment_checkout_key'] : '';
+$preorder_race_fixture = array(
+	'request_id'  => $preorder_race_id,
+	'token'       => $preorder_race_token,
+	'checkout_key'=> $preorder_race_checkout_key,
+	'session_id'  => 'cs_test_' . substr( hash( 'sha256', 'preorder-process-race|' . $preorder_race_checkout_key ), 0, 24 ),
+	'amount'      => 3100,
+	'currency'    => 'AUD',
+);
+update_option( 'doughboss_preorder_race_fixture', $preorder_race_fixture, false );
+db_integration_assert( is_array( $preorder_race_pending ) && is_array( $preorder_race_approval ) && $preorder_race_id > 0 && '' !== $preorder_race_token && 1 === preg_match( '/^[a-f0-9]{64}$/', $preorder_race_checkout_key ), 'multi-process pre-order fixture is approved, unpaid and exact-bound before workers start' );
 
 $failed = count( $GLOBALS['db_integration_failed'] );
 if ( $failed ) {

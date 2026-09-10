@@ -15,6 +15,13 @@
 	var DATA = window.DoughBossData;
 	var I18N = DATA.i18n || {};
 	var PAY = DATA.payments || { enabled: false, pk: '' };
+	// Capture an approved-payment bearer once, then remove it from the address
+	// bar before any asynchronous bootstrap or network work. The capability is
+	// retained only inside this module closure and never enters a Referer URL.
+	var APPROVED_PREORDER = approvedPreorderCapability();
+	if (APPROVED_PREORDER) {
+		try { window.history.replaceState({}, document.title, window.location.pathname + window.location.search); } catch (ignored) {}
+	}
 	var configCache = null;
 	var locationsCache = null;
 	// A table QR opens the ordering page with a server-issued, HttpOnly context
@@ -2551,7 +2558,262 @@
 	/* Boot                                                               */
 	/* ------------------------------------------------------------------ */
 
+	function approvedPreorderCapability() {
+		var values = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+		var requestId = Number(values.get('doughboss_request') || 0);
+		var token = String(values.get('doughboss_token') || '');
+		if (!requestId || !/^[a-f0-9]{64}$/i.test(token)) { return null; }
+		return {
+			requestId: requestId,
+			token: token,
+			returning: values.get('doughboss_preorder_return') === '1',
+			cancelled: values.get('doughboss_preorder_cancel') === '1',
+			sessionId: String(values.get('session_id') || '')
+		};
+	}
+
+	function approvedPreorderPresentation(summary) {
+		summary = summary || {};
+		var allowed = ['ready', 'held', 'expired', 'payment_disabled', 'complete', 'unavailable'];
+		var state = String(summary.presentation_state || '');
+		if (allowed.indexOf(state) === -1) {
+			state = summary.complete
+				? 'complete'
+				: (summary.state === 'payment_held' ? 'held' : (summary.payable ? 'ready' : 'unavailable'));
+		}
+		var copy = {
+			ready: {
+				title: 'Approved and ready for secure payment',
+				body: 'Your request is still unpaid and has not reached the kitchen. Stripe-verified payment releases it automatically.'
+			},
+			held: {
+				title: 'Payment needs staff review',
+				body: 'Do not pay again. DoughBoss needs to check the existing payment attempt before anything reaches the kitchen.'
+			},
+			expired: {
+				title: 'This approval has expired',
+				body: 'No new payment can be started from this link. Contact DoughBoss if you still want to place the order.'
+			},
+			payment_disabled: {
+				title: 'Online payment is paused',
+				body: 'Your request remains unpaid and outside the kitchen. Contact DoughBoss for help.'
+			},
+			complete: {
+				title: 'Payment verified',
+				body: 'Your paid order has been released to DoughBoss.'
+			},
+			unavailable: {
+				title: 'Payment is not available',
+				body: 'This request cannot start a payment. Contact DoughBoss and do not submit another payment.'
+			}
+		};
+		return {
+			state: state,
+			canStart: state === 'ready' && summary.can_start_payment === true,
+			title: copy[state].title,
+			body: copy[state].body
+		};
+	}
+
+	function approvedPreorderContact(summary) {
+		var phone = String(summary && summary.contact_phone || '').trim();
+		var tel = String(summary && summary.contact_tel || '').trim();
+		if (!phone || !/^tel:\+?[0-9]{8,15}$/.test(tel)) { return null; }
+		return { phone: phone, tel: tel };
+	}
+
+	function isApprovedPreorderComplete(summary) {
+		return approvedPreorderPresentation(summary).state === 'complete';
+	}
+
+	function verifyApprovedPreorder(capability) {
+		return request('/preorder-payment/complete', {
+			method: 'POST',
+			body: {
+				request_id: capability.requestId,
+				token: capability.token,
+				session_id: capability.sessionId
+			}
+		});
+	}
+
+	function renderApprovedPreorder(root, capability) {
+		document.body.classList.add('db-approved-preorder-mode');
+		document.querySelectorAll('[data-doughboss-shop], [data-doughboss-menu], [data-doughboss-builder]').forEach(function (node) {
+			node.hidden = true;
+		});
+		var cartWrap = root.closest('.dbf-cart-wrap');
+		if (cartWrap) { cartWrap.hidden = false; }
+		root.innerHTML = '';
+		var message = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite', tabindex: '-1' });
+		var content = el('div', { class: 'db-order-shell db-approved-preorder' });
+		root.appendChild(el('header', { class: 'db-order-header' }, [
+			el('p', { class: 'db-order-kicker', text: 'Approved request' }),
+			el('h1', { text: 'Review and pay securely' }),
+			el('p', { text: 'Payment is available only for the items DoughBoss approved. The kitchen receives the order after Stripe verifies payment.' })
+		]));
+		root.appendChild(content);
+		root.appendChild(message);
+
+		function showComplete(result) {
+			content.innerHTML = '';
+			content.appendChild(el('div', { class: 'db-order-confirm', tabindex: '-1' }, [
+				el('p', { class: 'db-order-kicker', text: 'Payment verified' }),
+				el('h3', { text: 'Your order is in' }),
+				el('p', { text: result.message || 'Stripe verified payment and the order was sent to DoughBoss.' }),
+				result.order_number ? el('strong', { text: result.order_number }) : null,
+				result.tracking_url ? el('a', { class: 'db-btn', href: result.tracking_url, text: 'Track this order' }) : null
+			]));
+			message.textContent = '';
+			try { window.history.replaceState({}, document.title, window.location.pathname + window.location.search); } catch (ignored) {}
+			revealNode(content.firstChild);
+		}
+
+		function draw(summary) {
+			var presentation = approvedPreorderPresentation(summary);
+			if (isApprovedPreorderComplete(summary)) {
+				showComplete({
+					message: summary.message,
+					order_number: summary.fulfilment_number,
+					tracking_url: summary.tracking_url
+				});
+				return;
+			}
+			content.innerHTML = '';
+			var card = el('section', { class: 'db-cart-region' }, [
+				el('div', { class: 'db-cart-section-heading' }, [
+					el('h3', { text: summary.order_number || 'Approved request' }),
+					el('span', { text: summary.location_name || 'DoughBoss' })
+				])
+			]);
+			var list = el('div', { class: 'db-cart-lines' });
+			(summary.items || []).forEach(function (item) {
+				var details = [];
+				if (item.size) { details.push(item.size); }
+				if (item.toppings && item.toppings.length) {
+					details.push(item.toppings.map(function (t) { return t.label || t.name || String(t); }).join(', '));
+				}
+				list.appendChild(el('div', { class: 'db-cart-line' }, [
+					el('div', { class: 'db-cart-line-info' }, [
+						el('strong', { text: String(item.quantity || 1) + ' × ' + item.name }),
+						details.length ? el('small', { text: details.join(' · ') }) : null
+					]),
+					el('span', { class: 'db-price', text: money(item.line_total) })
+				]));
+			});
+			card.appendChild(list);
+			card.appendChild(el('div', { class: 'db-total-row db-total-row--grand' }, [
+				el('span', { text: 'Approved total' }),
+				el('strong', { text: money(summary.total) + ' ' + (summary.currency || 'AUD') })
+			]));
+			card.appendChild(el('aside', { class: 'db-ordering-status', role: 'note' }, [
+				el('strong', { text: presentation.title }),
+				el('p', { text: summary.message || presentation.body })
+			]));
+			content.appendChild(card);
+
+			if (!presentation.canStart) {
+				var contact = approvedPreorderContact(summary);
+				content.appendChild(el('section', { class: 'db-preorder-help', role: 'note' }, [
+					el('strong', { text: presentation.title }),
+					el('p', { text: presentation.body }),
+					contact ? el('a', { class: 'db-preorder-contact', href: contact.tel, text: 'Call DoughBoss on ' + contact.phone }) : null
+				]));
+				announceError(message, presentation.body);
+				return;
+			}
+			var pay = el('button', { class: 'db-btn db-btn--lg', type: 'button', text: 'Continue to Stripe · ' + money(summary.total) });
+			pay.addEventListener('click', function () {
+				pay.disabled = true;
+				pay.textContent = 'Preparing secure payment…';
+				clearError(message);
+				setPaymentMutationLock(true);
+				request('/preorder-payment/start', {
+					method: 'POST',
+					body: { request_id: capability.requestId, token: capability.token }
+				}).then(function (session) {
+					if (!session || !/^cs_(test|live)_/.test(session.checkout_session || '') || !/^https:\/\/checkout\.stripe\.com\//.test(session.checkout_url || '')) {
+						throw new Error('Stripe returned an invalid checkout session. Please call DoughBoss and do not pay again.');
+					}
+					window.location.assign(session.checkout_url);
+				}).catch(function (err) {
+					pay.disabled = false;
+					pay.textContent = 'Continue to Stripe · ' + money(summary.total);
+					setPaymentMutationLock(false);
+					announceError(message, err.message);
+				});
+			});
+			content.appendChild(el('section', { class: 'db-checkout-region' }, [
+				el('div', { class: 'db-stripe-checkout-notice', role: 'note' }, [
+					el('span', { class: 'db-secure-lock', 'aria-hidden': 'true', text: '✓' }),
+					el('div', {}, [
+						el('strong', { text: 'Secure checkout powered by Stripe' }),
+						el('span', { text: 'DoughBoss never receives or stores your card details.' })
+					])
+				]),
+				pay
+			]));
+			if (capability.cancelled && !capability.returning) {
+				message.textContent = 'Payment was cancelled. No kitchen order was created. You can use the same approved link if you still want to pay.';
+			}
+		}
+
+		function loadSummary() {
+			return request('/preorder-payment/view', {
+				method: 'POST',
+				body: { request_id: capability.requestId, token: capability.token }
+			}).then(function (summary) {
+				draw(summary);
+				return summary;
+			});
+		}
+
+		function showVerificationRetry(error) {
+			setPaymentMutationLock(false);
+			var retry = el('button', { class: 'db-btn db-preorder-retry', type: 'button', text: 'Retry payment confirmation' });
+			content.appendChild(el('section', { class: 'db-preorder-help db-preorder-verification', role: 'alert' }, [
+				el('strong', { text: 'Your payment result is not confirmed yet' }),
+				el('p', { text: 'Do not pay again. Retry the same Stripe confirmation, or contact DoughBoss if it still cannot be verified.' }),
+				retry
+			]));
+			announceError(message, error && error.message ? error.message : 'Payment could not be verified. Do not pay again.');
+			retry.addEventListener('click', function () {
+				retry.disabled = true;
+				retry.setAttribute('aria-busy', 'true');
+				retry.textContent = 'Checking the same payment...';
+				setPaymentMutationLock(true);
+				verifyApprovedPreorder(capability).then(showComplete).catch(function (retryError) {
+					retry.disabled = false;
+					retry.setAttribute('aria-busy', 'false');
+					retry.textContent = 'Retry payment confirmation';
+					setPaymentMutationLock(false);
+					announceError(message, retryError && retryError.message ? retryError.message : 'Payment still could not be verified. Do not pay again.');
+				});
+			});
+		}
+
+		if (capability.returning && /^cs_(test|live)_/.test(capability.sessionId)) {
+			message.textContent = 'Verifying Stripe payment before sending your order to the kitchen…';
+			setPaymentMutationLock(true);
+			verifyApprovedPreorder(capability).then(showComplete).catch(function (err) {
+				loadSummary().then(function (summary) {
+					if (!isApprovedPreorderComplete(summary)) { showVerificationRetry(err); }
+				}).catch(function () { showVerificationRetry(err); });
+			});
+			return;
+		}
+		loadSummary().catch(function (err) { announceError(message, err.message); });
+	}
+
 	function boot() {
+		var approvedPreorder = APPROVED_PREORDER;
+		if (approvedPreorder) {
+			document.querySelectorAll('[data-doughboss-cart]').forEach(function (root) {
+				renderApprovedPreorder(root, approvedPreorder);
+			});
+			document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
+			return;
+		}
 		// Resolve a scanned-table session before any ordering controls render, so
 		// there is no moment where a customer sees a switchable shop or fulfilment
 		// option. Non-QR pages simply continue with a null context.
@@ -2559,7 +2821,9 @@
 			document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
 			document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
 			document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);
-			document.querySelectorAll('[data-doughboss-cart]').forEach(renderCart);
+			document.querySelectorAll('[data-doughboss-cart]').forEach(function (root) {
+				renderCart(root);
+			});
 			document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
 		}).catch(function (err) {
 			// A claimed but expired/revoked table session must never silently become

@@ -187,6 +187,26 @@ body.db-alerting .db-board-bar h1::after {
 .db-preorder-contact-check input { margin-top: 0.2rem; }
 .db-preorder-eta { min-height: 40px; max-width: 13rem; }
 
+.db-preorder-delivery-warning {
+	margin-top: 0.75rem;
+	padding: 0.75rem;
+	border: 2px solid var(--dbb-danger);
+	border-radius: var(--r-sm);
+	background: #fff0f0;
+	color: #671515;
+	font-weight: 700;
+}
+
+.db-preorder-recovery {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.db-preorder-recovery .button {
+	min-height: 44px;
+}
+
 /* Kitchen tablets are commonly 768-1100px wide. Keep two live queues in
    view there; collapsing every lane to one vertical list makes a busy service
    needlessly slow. Only phones get the single-column fallback. */

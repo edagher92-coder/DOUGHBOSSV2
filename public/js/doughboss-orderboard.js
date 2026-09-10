@@ -620,19 +620,23 @@
 		feedback.hidden = !message;
 	}
 
-	function decidePreorder(o, decision, contactConfirmed, eta) {
+	function decidePreorder(o, decision, contactConfirmed) {
 		if (offline || !setPreorderBusy(o, 'preorder-' + decision, true)) { return; }
 		api('/admin/preorder/' + o.id + '/decision', 'POST', {
 			decision: decision,
 			contact_confirmed: !!contactConfirmed,
-			eta: eta || 0,
 			expected_version: o.version,
 			event_key: eventKey(o, 'preorder-' + decision)
 		}).then(function (res) {
 			var message = res && res.message ? res.message : 'Pre-order request updated.';
+			var customerStatus = res && res.notification ? res.notification.customer_status : '';
+			var deliveryWriteFailed = res && res.notification && res.notification.warning === 'delivery_status_not_persisted';
+			var deliveryWarning = decision === 'accept' && customerStatus === 'failed'
+				? ' The request is approved, but the customer email handoff failed. Use the recovery controls to copy the same payment link or resend it.'
+				: (decision === 'accept' && deliveryWriteFailed ? ' The email handoff result could not be recorded. Treat it as uncertain and use the same-link recovery controls.' : '');
 			return load().then(function () {
-				setPreorderMessage(message, false);
-				if (statusEl) { statusEl.textContent = message; }
+				setPreorderMessage(message + deliveryWarning, !!deliveryWarning);
+				if (statusEl) { statusEl.textContent = message + deliveryWarning; }
 			});
 		}).catch(function (error) {
 			var message = error.message || 'Could not update the pre-order request.';
@@ -645,10 +649,49 @@
 		});
 	}
 
+	function recoverPreorderPaymentLink(o, mode) {
+		if (offline || ['view', 'resend'].indexOf(mode) === -1 || !setPreorderBusy(o, 'preorder-payment-link-' + mode, true)) { return; }
+		return api('/admin/preorder/' + o.id + '/payment-link', 'POST', { mode: mode }).then(function (res) {
+			if (mode === 'view') {
+				var paymentUrl = String(res && res.payment_url || '');
+				var parsed;
+				try { parsed = new URL(paymentUrl, window.location.origin); } catch (ignored) { parsed = null; }
+				if (!parsed || parsed.origin !== window.location.origin || !/#doughboss_request=/.test(paymentUrl) || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+					throw new Error('Secure copy is unavailable in this browser. No payment link was placed on screen.');
+				}
+				return navigator.clipboard.writeText(paymentUrl).then(function () {
+					setPreorderMessage('The existing approved payment link was copied securely. Its original expiry has not changed.', false);
+				});
+			}
+			var customerStatus = res && res.notification ? res.notification.customer_status : '';
+			var shopStatus = res && res.notification ? res.notification.shop_status : '';
+			var writeFailed = res && res.notification && res.notification.warning === 'delivery_status_not_persisted';
+			var message = customerStatus === 'accepted'
+				? 'WordPress accepted the customer resend request. Delivery is not guaranteed, and the original payment deadline has not changed.'
+				: 'The customer resend was not accepted. Copy the same payment link securely or contact the customer directly.';
+			if (shopStatus === 'failed') { message += ' The shop copy also failed.'; }
+			if (writeFailed) { message += ' The handoff result could not be stored, so treat delivery as uncertain.'; }
+			return load().then(function () { setPreorderMessage(message, customerStatus !== 'accepted' || writeFailed); });
+		}).catch(function (error) {
+			setPreorderMessage(error.message || 'The existing payment link could not be recovered.', true);
+		}).then(function () {
+			setPreorderBusy(o, 'preorder-payment-link-' + mode, false);
+			applyConnectionState();
+		});
+	}
+
 	function preorderCard(o) {
+		var approvalState = o.approval_state || 'pending';
+		var approvalPending = approvalState === 'pending';
+		var decisionAvailable = approvalPending && o.decision_available !== false;
+		var approverName = String(o.approver_name || 'the named approver');
+		var approvalLabel = approvalPending
+			? 'Pre-order request — awaiting ' + approverName + ' review'
+			: (approvalState === 'payment_held'
+				? 'Stripe payment needs staff review — not in kitchen'
+				: (approvalState === 'payment_active' ? 'Stripe payment started — not in kitchen' : 'Approved for payment — not in kitchen'));
 		var timingConfirmed = false;
 		var rejectOpen = false;
-		var eta = 0;
 		var cardEl = el('article', {
 			class: 'db-card db-card-pending db-preorder-card',
 			'data-preorder-id': String(o.id),
@@ -656,22 +699,16 @@
 		}, []);
 		var acceptBtn = el('button', {
 			class: 'button button-primary db-preorder-accept', type: 'button',
-			text: 'Accept into kitchen', disabled: 'disabled'
+			text: 'Approve for Stripe payment', disabled: 'disabled'
 		}, []);
 		var rejectBtn = el('button', { class: 'button db-preorder-reject', type: 'button', text: 'Reject request' }, []);
 		var rejectConfirm = el('div', { class: 'db-card-actions-row', hidden: 'hidden' }, []);
-		var etaSelect = el('select', { class: 'db-preorder-eta', 'aria-label': 'Agreed pickup estimate for ' + orderTag(o) }, []);
-		etaSelect.appendChild(el('option', { value: '0', text: 'Timing agreed by phone' }));
-		ETA_CHOICES.forEach(function (minutes) {
-			etaSelect.appendChild(el('option', { value: String(minutes), text: minutes + ' minutes' }));
-		});
-		etaSelect.addEventListener('change', function () { eta = parseInt(etaSelect.value, 10) || 0; });
 		var contactCheck = el('input', { type: 'checkbox' }, []);
 		contactCheck.addEventListener('change', function () {
 			timingConfirmed = !!contactCheck.checked;
 			acceptBtn.disabled = !timingConfirmed || offline;
 		});
-		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', timingConfirmed, eta); });
+		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', timingConfirmed); });
 		rejectBtn.addEventListener('click', function () {
 			rejectOpen = !rejectOpen;
 			rejectConfirm.hidden = !rejectOpen;
@@ -687,7 +724,7 @@
 			el('span', { class: 'db-card-number', text: o.order_number || orderTag(o) }),
 			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
 		]));
-		cardEl.appendChild(el('div', { class: 'db-card-status', text: 'Pre-order request — awaiting morning review' }));
+		cardEl.appendChild(el('div', { class: 'db-card-status', text: approvalLabel }));
 		cardEl.appendChild(el('div', { class: 'db-card-contact' }, [
 			el('strong', { text: o.customer_name || 'Customer' }),
 			o.customer_phone ? el('span', { text: ' · ' + o.customer_phone }) : null
@@ -695,19 +732,32 @@
 		if (o.notes) { cardEl.appendChild(el('div', { class: 'db-card-notes', text: 'Notes: ' + o.notes })); }
 		cardEl.appendChild(el('ul', { class: 'db-card-items', 'aria-label': (o.items || []).length + ' items' }, (o.items || []).map(itemLine)));
 		cardEl.appendChild(el('div', { class: 'db-card-meta' }, [
-			el('div', { class: 'db-card-exception', role: 'alert', text: 'Unconfirmed and unpaid — call the customer to agree pickup timing before accepting.' }),
-			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid — agree the payment method with the customer.' }),
-			el('div', { class: 'db-card-exception', text: 'POSPal is deferred. After acceptance, create or confirm the POS action and issue the required manual kitchen ticket.' }),
+			el('div', { class: 'db-card-exception', role: 'alert', text: decisionAvailable
+				? 'Unconfirmed and unpaid — call the customer before approving payment.'
+				: (approvalPending ? 'Unconfirmed and unpaid — awaiting the named payment approver.' : 'Payment may now be completed through the single approved Stripe link. Do not prepare this request yet.') }),
+			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid — kitchen release stays locked until Stripe is verified.' }),
+			el('div', { class: 'db-card-exception', text: 'POSPal, printer and kitchen notifications remain blocked. A separate paid order is released automatically only after server verification.' }),
 			el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) })
 		]));
-		cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [
-			contactCheck,
-			' I called the customer and agreed pickup timing.'
-		]));
-		cardEl.appendChild(el('div', { class: 'db-card-actions' }, [
-			el('div', { class: 'db-card-actions-row' }, [etaSelect, acceptBtn, rejectBtn]),
-			rejectConfirm
-		]));
+		if (o.payment_link_delivery_status === 'failed') {
+			cardEl.appendChild(el('div', { class: 'db-preorder-delivery-warning', role: 'alert', text: 'Customer payment email was not accepted by the mail system. Approval remains recorded; use the same-link recovery controls below.' }));
+		}
+		if (o.payment_link_recovery_available) {
+			cardEl.appendChild(el('div', { class: 'db-card-actions db-preorder-recovery' }, [
+				el('button', { class: 'button db-preorder-copy-link', type: 'button', text: 'Copy payment link', onclick: function () { recoverPreorderPaymentLink(o, 'view'); } }, []),
+				el('button', { class: 'button db-preorder-resend-link', type: 'button', text: 'Resend payment email', onclick: function () { recoverPreorderPaymentLink(o, 'resend'); } }, [])
+			]));
+		}
+		if (decisionAvailable) {
+			cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [
+				contactCheck,
+				' I called the customer and agreed pickup timing.'
+			]));
+			cardEl.appendChild(el('div', { class: 'db-card-actions' }, [
+				el('div', { class: 'db-card-actions-row' }, [acceptBtn, rejectBtn]),
+				rejectConfirm
+			]));
+		}
 		return cardEl;
 	}
 
@@ -720,7 +770,7 @@
 		}
 		preorderPanel.hidden = false;
 		preorderPanel.appendChild(el('h2', { id: 'db-preorder-review-title', text: 'Morning pre-order review (' + requests.length + ')' }));
-		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. Call first, then accept or reject.' }));
+		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. The named approver calls first, then approves payment or rejects. Only verified Stripe payment creates a kitchen order.' }));
 		preorderPanel.appendChild(el('div', { class: 'db-preorder-feedback', role: 'status', hidden: 'hidden' }, []));
 		var list = el('div', { class: 'db-lanes db-preorder-list' }, requests.map(preorderCard));
 		preorderPanel.appendChild(list);

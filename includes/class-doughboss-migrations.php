@@ -84,6 +84,7 @@ class DoughBoss_Migrations {
 				'1.21.0' => 'upgrade_to_1_21_0',
 				'1.22.0' => 'upgrade_to_1_22_0',
 				'1.23.0' => 'upgrade_to_1_23_0',
+				'1.24.0' => 'upgrade_to_1_24_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -138,6 +139,45 @@ class DoughBoss_Migrations {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		if ( $audit !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $audit ) ) ) {
 			throw new RuntimeException( 'Voucher reversal audit storage was not created.' );
+		}
+	}
+
+	/** 1.24.0 — durable approval-before-payment state. */
+	private static function upgrade_to_1_24_0() {
+		global $wpdb;
+		if ( ! DoughBoss_Activator::preorder_approval_storage_ready() ) {
+			throw new RuntimeException( 'Pre-order approval storage, source-request link, or required unique indexes are incomplete or are not using InnoDB.' );
+		}
+
+		// The owner explicitly replaced the former launch inbox. Preserve any
+		// independently customised address while migrating the exact legacy
+		// DoughBoss default so existing installations receive order copies at the
+		// current operational inbox.
+		$settings = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+		if ( is_array( $settings ) && isset( $settings['orders_email'] ) && 'orders@doughboss.com.au' === strtolower( trim( (string) $settings['orders_email'] ) ) ) {
+			$legacy_serialized = maybe_serialize( $settings );
+			$settings['orders_email'] = 'info@doughboss.com.au';
+			$target_serialized = maybe_serialize( $settings );
+			// Compare-and-set the exact option bytes so a manager's concurrent
+			// custom address wins instead of being overwritten by this migration.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND BINARY option_value = BINARY %s",
+					$target_serialized,
+					DoughBoss_Settings::OPTION_KEY,
+					$legacy_serialized
+				)
+			);
+			if ( false === $updated ) {
+				throw new RuntimeException( 'The operational order inbox could not be migrated safely.' );
+			}
+			wp_cache_delete( DoughBoss_Settings::OPTION_KEY, 'options' );
+			wp_cache_delete( 'alloptions', 'options' );
+			$persisted = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+			if ( is_array( $persisted ) && isset( $persisted['orders_email'] ) && 'orders@doughboss.com.au' === strtolower( trim( (string) $persisted['orders_email'] ) ) ) {
+				throw new RuntimeException( 'The operational order inbox migration did not persist.' );
+			}
 		}
 	}
 

@@ -31,6 +31,7 @@ function extractFunction(file, name, context) {
 }
 
 const storefront = path.resolve(__dirname, '..', 'public', 'js', 'doughboss.js');
+const orderboard = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-orderboard.js');
 const square = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-square.js');
 const shopStatus = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-shop-status.js');
 const catering = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-catering.js');
@@ -640,6 +641,157 @@ test('paused client notice uses neutral copy and preserves configured messages',
 	assert.match(assets, /'comingSoonShort' => __\( 'Ordering paused'/, 'existing localization key stays compatible');
 	assert.match(assets, /'orderingComingSoon' => __\( 'Online ordering is paused'/);
 	assert.doesNotMatch(fs.readFileSync(storefront, 'utf8'), /'Coming soon'|'Online ordering coming soon'/);
+});
+
+test('paused order page keeps only the approved Stripe surface available', () => {
+	const page = fs.readFileSync(path.resolve(__dirname, '..', 'themes', 'doughboss-final', 'page-order.php'), 'utf8');
+	const source = fs.readFileSync(storefront, 'utf8');
+	const themeCss = fs.readFileSync(path.resolve(__dirname, '..', 'themes', 'doughboss-final', 'style.css'), 'utf8');
+	const orderPageCss = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'css', 'doughboss-order-page.css'), 'utf8');
+	assert.match(page, /class="dbf-cart-wrap"<\?php echo \$ordering_open \? '' : ' hidden'; \?>/,
+		'publicly paused pages render the cart host hidden instead of publishing checkout');
+	assert.match(page, /\[doughboss_cart\]/, 'the hidden host remains available for a valid approved-payment capability');
+	assert.match(source, /document\.body\.classList\.add\('db-approved-preorder-mode'\)/);
+	assert.match(source, /var cartWrap = root\.closest\('\.dbf-cart-wrap'\);\s*if \(cartWrap\) \{ cartWrap\.hidden = false; \}/,
+		'approved capability mode reveals the hidden cart host');
+	assert.ok(source.indexOf('var APPROVED_PREORDER = approvedPreorderCapability();') < source.indexOf('getTableContext().then(function ()'),
+		'the bearer is captured before asynchronous bootstrap or API reads');
+	assert.match(source, /if \(APPROVED_PREORDER\) \{\s*try \{ window\.history\.replaceState\(\{\}, document\.title, window\.location\.pathname \+ window\.location\.search\); \}/,
+		'the capability fragment is scrubbed immediately and retained only in the module closure');
+	assert.match(source, /var approvedPreorder = APPROVED_PREORDER;/, 'boot never reparses the scrubbed URL fragment');
+	assert.match(source, /function boot\(\) \{\s*var approvedPreorder = APPROVED_PREORDER;\s*if \(approvedPreorder\) \{[\s\S]*?renderApprovedPreorder\(root, approvedPreorder\);[\s\S]*?return;\s*\}[\s\S]*?getTableContext\(\)/,
+		'approved payment renders before and independently of table-session bootstrap');
+	assert.match(themeCss, /body\.db-approved-preorder-mode \.dbf-page-hero--order,[\s\S]*?\[data-doughboss-shop\] \{ display: none !important; \}/,
+		'approved capability mode suppresses the public shopping surfaces');
+	assert.match(orderPageCss, /body\.doughboss-order-page \.db-approved-preorder \.db-ordering-status \{[\s\S]*?margin: 1rem 0 0 !important;[\s\S]*?box-shadow: none;/,
+		'approved status stays in normal card flow instead of inheriting the hero-overlap treatment');
+});
+
+test('approved payment presentation is deterministic and requires explicit start authority', () => {
+	const present = extractFunction(storefront, 'approvedPreorderPresentation');
+	const asLocal = value => JSON.parse(JSON.stringify(value));
+	for (const state of ['held', 'expired', 'payment_disabled', 'complete', 'unavailable']) {
+		const result = asLocal(present({ presentation_state: state, can_start_payment: true }));
+		assert.equal(result.state, state);
+		assert.equal(result.canStart, false, state + ' cannot expose a new payment start');
+		assert.ok(result.title && result.body, state + ' has distinct customer copy');
+	}
+	assert.equal(present({ presentation_state: 'ready', can_start_payment: true }).canStart, true);
+	assert.equal(present({ presentation_state: 'ready', can_start_payment: false }).canStart, false);
+	assert.equal(present({ presentation_state: 'ready' }).canStart, false, 'missing authority fails closed');
+});
+
+test('a refreshed completed summary suppresses the payment verification retry warning', async () => {
+	const present = extractFunction(storefront, 'approvedPreorderPresentation');
+	const isComplete = extractFunction(storefront, 'isApprovedPreorderComplete', {
+		approvedPreorderPresentation: present
+	});
+	let retryShown = false;
+	await Promise.reject(new Error('Synthetic first completion failure')).catch(async () => {
+		const refreshed = await Promise.resolve({ presentation_state: 'complete', complete: true });
+		if (!isComplete(refreshed)) { retryShown = true; }
+	});
+	assert.equal(retryShown, false, 'webhook-completed state remains the only customer message');
+	assert.equal(isComplete({ presentation_state: 'held', complete: false }), false);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /loadSummary\(\)\.then\(function \(summary\) \{\s*if \(!isApprovedPreorderComplete\(summary\)\) \{ showVerificationRetry\(err\); \}/,
+		'the actual Stripe-return fallback gates its warning on the refreshed durable state');
+});
+
+test('approved payment uses only validated shop telephone links', () => {
+	const contact = extractFunction(storefront, 'approvedPreorderContact');
+	assert.deepEqual(JSON.parse(JSON.stringify(contact({ contact_phone: '02 9708 2222', contact_tel: 'tel:+61297082222' }))), {
+		phone: '02 9708 2222', tel: 'tel:+61297082222'
+	});
+	for (const value of ['', 'tel:', 'sms:+61400000000', 'tel:javascript:alert(1)', 'tel:+61 400 000 000']) {
+		assert.equal(contact({ contact_phone: '0400 000 000', contact_tel: value }), null, value || 'empty');
+	}
+});
+
+test('Stripe return and native retry verify the exact same payment without starting another', async () => {
+	const calls = [];
+	const verify = extractFunction(storefront, 'verifyApprovedPreorder', {
+		request: (route, options) => { calls.push({ route, options }); return Promise.resolve({ complete: true }); }
+	});
+	const capability = { requestId: 91, token: 'a'.repeat(64), sessionId: 'cs_test_bound' };
+	await verify(capability);
+	await verify(capability);
+	assert.equal(calls.length, 2);
+	for (const call of calls) {
+		assert.equal(call.route, '/preorder-payment/complete');
+		assert.deepEqual(JSON.parse(JSON.stringify(call.options.body)), { request_id: 91, token: 'a'.repeat(64), session_id: 'cs_test_bound' });
+	}
+	assert.doesNotMatch(verify.toString(), /preorder-payment\/start/);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /class: 'db-btn db-preorder-retry'[\s\S]*?verifyApprovedPreorder\(capability\)/);
+	assert.match(source, /if \(capability\.cancelled && !capability\.returning\)/,
+		'a client cancellation marker cannot replace the Stripe-return verification path');
+	const approvedFlowSource = source.slice(source.indexOf('function renderApprovedPreorder('), source.indexOf('function boot()'));
+	assert.doesNotMatch(approvedFlowSource, /localStorage|sessionStorage|type:\s*'hidden'.*doughboss_token|textarea.*doughboss_token/);
+});
+
+test('approved capability boot bypasses a broken or revoked table context', () => {
+	let tableReads = 0;
+	let approvedRenders = 0;
+	const cart = {};
+	const boot = extractFunction(storefront, 'boot', {
+		APPROVED_PREORDER: { requestId: 7 },
+		document: { querySelectorAll: selector => selector === '[data-doughboss-cart]' ? [cart] : [] },
+		renderApprovedPreorder: (root, capability) => { assert.equal(root, cart); assert.equal(capability.requestId, 7); approvedRenders += 1; },
+		renderTracking: () => {},
+		getTableContext: () => { tableReads += 1; return Promise.reject(new Error('revoked')); }
+	});
+	boot();
+	assert.equal(approvedRenders, 1);
+	assert.equal(tableReads, 0, 'table context cannot block or replace an approved-payment capability');
+});
+
+test('ordinary ordering still fails closed when a claimed table session is invalid', async () => {
+	let tableReads = 0;
+	const blocked = [{ appendChild(node) { this.node = node; } }, { appendChild(node) { this.node = node; } }];
+	const boot = extractFunction(storefront, 'boot', {
+		APPROVED_PREORDER: null,
+		document: {
+			querySelectorAll: selector => selector.indexOf(',') !== -1 ? blocked : []
+		},
+		renderApprovedPreorder: () => assert.fail('approved renderer must not run'),
+		renderTracking: () => {}, renderShopPicker: () => {}, renderMenu: () => {}, renderBuilder: () => {}, renderCart: () => {},
+		getTableContext: () => { tableReads += 1; return Promise.reject(new Error('revoked')); },
+		el: (tag, attrs) => ({ tag, attrs })
+	});
+	boot();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(tableReads, 1);
+	assert.equal(blocked.every(node => node.node && /scan the table QR again/.test(node.node.attrs.text)), true);
+});
+
+test('approver recovery copies only the existing bearer and reports mail handoff honestly', async () => {
+	const calls = [];
+	const copied = [];
+	const messages = [];
+	const recover = extractFunction(orderboard, 'recoverPreorderPaymentLink', {
+		offline: false,
+		setPreorderBusy: () => true,
+		api: (route, method, body) => {
+			calls.push({ route, method, body });
+			return Promise.resolve({ payment_url: 'https://doughboss.test/order/#doughboss_request=9&doughboss_token=' + 'b'.repeat(64) });
+		},
+		window: { location: { origin: 'https://doughboss.test' } },
+		navigator: { clipboard: { writeText: value => { copied.push(value); return Promise.resolve(); } } },
+		URL,
+		setPreorderMessage: (message, error) => messages.push({ message, error }),
+		applyConnectionState: () => {},
+		load: () => Promise.resolve()
+	});
+	await recover({ id: 9 }, 'view');
+	assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ route: '/admin/preorder/9/payment-link', method: 'POST', body: { mode: 'view' } }]);
+	assert.equal(copied.length, 1);
+	assert.match(messages[0].message, /existing approved payment link was copied securely/i);
+	assert.doesNotMatch(recover.toString(), /createElement|textarea|type=['"]hidden/,
+		'the bearer has no visible or hidden DOM clipboard fallback');
+	const boardSource = fs.readFileSync(orderboard, 'utf8');
+	assert.doesNotMatch(boardSource, /awaiting Kristy|Kristy calls first/);
+	assert.match(boardSource, /customerStatus === 'accepted'[\s\S]*?Delivery is not guaranteed/);
 });
 
 function previewAdapter(paused) {

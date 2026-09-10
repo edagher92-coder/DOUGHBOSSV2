@@ -39,11 +39,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::preorder_approval_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, pre-order approval, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -87,6 +87,7 @@ class DoughBoss_Activator {
 		$staff_events    = $wpdb->prefix . 'doughboss_staff_shift_events';
 		$staff_badges    = $wpdb->prefix . 'doughboss_staff_badges';
 		$staff_breaks    = $wpdb->prefix . 'doughboss_staff_breaks';
+		$preorder_approvals = $wpdb->prefix . 'doughboss_preorder_approvals';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -116,6 +117,7 @@ class DoughBoss_Activator {
 			payment_method varchar(20) NOT NULL DEFAULT '',
 			payment_intent_id varchar(191) NULL DEFAULT NULL,
 			checkout_key char(64) NULL DEFAULT NULL,
+			source_request_id bigint(20) unsigned NULL DEFAULT NULL,
 			eta_minutes int(11) NOT NULL DEFAULT 0,
 			seen_at datetime NULL DEFAULT NULL,
 			acknowledged_at datetime NULL DEFAULT NULL,
@@ -143,7 +145,37 @@ class DoughBoss_Activator {
 			KEY promised_ready_from (location_id,promised_ready_from_utc),
 			KEY fire_time (location_id,fire_at_utc),
 			UNIQUE KEY payment_intent_id (payment_intent_id),
-			UNIQUE KEY checkout_key (checkout_key)
+			UNIQUE KEY checkout_key (checkout_key),
+			UNIQUE KEY source_request_id (source_request_id)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_preorder_approvals = "CREATE TABLE {$preorder_approvals} (
+			request_order_id bigint(20) unsigned NOT NULL,
+			state varchar(32) NOT NULL DEFAULT 'pending',
+			version bigint(20) unsigned NOT NULL DEFAULT 1,
+			approved_revision bigint(20) unsigned NULL DEFAULT NULL,
+			request_fingerprint char(64) NULL DEFAULT NULL,
+			approver_user_id bigint(20) unsigned NULL DEFAULT NULL,
+			approver_name varchar(191) NOT NULL DEFAULT '',
+			decided_at_utc datetime NULL DEFAULT NULL,
+			decision_event_key varchar(191) NULL DEFAULT NULL,
+			decision_reason text NULL,
+			payment_token_hash char(64) NULL DEFAULT NULL,
+			payment_token_expires_at_utc datetime NULL DEFAULT NULL,
+			payment_checkout_key char(64) NULL DEFAULT NULL,
+			payment_attempt_id bigint(20) unsigned NULL DEFAULT NULL,
+			payment_link_delivery_status varchar(16) NOT NULL DEFAULT 'not_attempted',
+			payment_link_delivery_attempted_at_utc datetime NULL DEFAULT NULL,
+			fulfillment_order_id bigint(20) unsigned NULL DEFAULT NULL,
+			released_at_utc datetime NULL DEFAULT NULL,
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			PRIMARY KEY  (request_order_id),
+			UNIQUE KEY decision_event_key (decision_event_key),
+			UNIQUE KEY payment_checkout_key (payment_checkout_key),
+			UNIQUE KEY fulfillment_order_id (fulfillment_order_id),
+			KEY state_updated (state,updated_at_utc),
+			KEY payment_attempt_id (payment_attempt_id)
 		) ENGINE=InnoDB {$charset_collate};";
 
 		$sql_events = "CREATE TABLE {$order_events} (
@@ -634,6 +666,7 @@ class DoughBoss_Activator {
 		) ENGINE=InnoDB {$charset_collate};";
 
 		dbDelta( $sql_orders );
+		dbDelta( $sql_preorder_approvals );
 		dbDelta( $sql_items );
 		dbDelta( $sql_events );
 		dbDelta( $sql_locations );
@@ -800,6 +833,64 @@ class DoughBoss_Activator {
 			&& self::index_contract_ready( $attempts, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $snapshots, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );
+	}
+
+	/**
+	 * Verify the durable pre-order approval state and its payment-release guards.
+	 *
+	 * @return bool
+	 */
+	public static function preorder_approval_storage_ready() {
+		global $wpdb;
+
+		$orders    = $wpdb->prefix . 'doughboss_orders';
+		$approvals = $wpdb->prefix . 'doughboss_preorder_approvals';
+		foreach ( array( $orders, $approvals ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		return self::column_contract_ready(
+			$orders,
+			array(
+				'source_request_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+			)
+		)
+			&& self::column_contract_ready(
+				$approvals,
+				array(
+					'request_order_id'             => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'state'                        => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'pending' ),
+					'version'                      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+					'approved_revision'            => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'request_fingerprint'          => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+					'approver_user_id'             => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'approver_name'                => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
+					'decided_at_utc'               => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'decision_event_key'           => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+					'decision_reason'              => array( 'type' => 'text', 'null' => 'YES', 'default' => null ),
+					'payment_token_hash'           => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+					'payment_token_expires_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'payment_checkout_key'         => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+					'payment_attempt_id'           => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'payment_link_delivery_status' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'not_attempted' ),
+					'payment_link_delivery_attempted_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'fulfillment_order_id'         => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'released_at_utc'              => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'created_at_utc'               => array( 'type' => 'datetime', 'null' => 'NO' ),
+					'updated_at_utc'               => array( 'type' => 'datetime', 'null' => 'NO' ),
+				)
+			)
+			&& self::index_contract_ready( $orders, 'source_request_id', array( 'source_request_id' ), true )
+			&& self::index_contract_ready( $approvals, 'PRIMARY', array( 'request_order_id' ), true )
+			&& self::index_contract_ready( $approvals, 'decision_event_key', array( 'decision_event_key' ), true, array( 191 ) )
+			&& self::index_contract_ready( $approvals, 'payment_checkout_key', array( 'payment_checkout_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $approvals, 'fulfillment_order_id', array( 'fulfillment_order_id' ), true )
+			&& self::index_contract_ready( $approvals, 'state_updated', array( 'state', 'updated_at_utc' ), false )
+			&& self::index_contract_ready( $approvals, 'payment_attempt_id', array( 'payment_attempt_id' ), false );
 	}
 
 	/**

@@ -131,9 +131,14 @@ class DoughBoss_Settings {
 			// A deliberately separate, unpaid fallback for the Revesby launch.
 			// It captures a customer request while normal checkout is closed; it
 			// does not promise a time, reserve capacity, create a payment attempt,
-			// or enter the kitchen queue until a staff member accepts it.
+			// or enter the kitchen queue. A named approver must approve payment,
+			// and only a server-verified paid order is released to fulfilment.
 			'after_hours_preorders_enabled' => 0,
 			'after_hours_preorders_message' => 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.',
+			'preorder_approver_user_id'      => 0,
+			// Internal notification destinations must be configured in protected
+			// WordPress settings, never shipped in this public plugin source.
+			'preorder_approver_phone'        => '',
 			// Single-shop mode: the storefront JS (getConfig/getLocations in
 			// public/js/doughboss.js) hides the delivery toggle and pins the shop
 			// picker to the first active location while this is 1. Display-only —
@@ -144,7 +149,7 @@ class DoughBoss_Settings {
 			'single_location_mode' => 1,
 			// Shop inbox for ordinary online-order notifications. Catering uses its
 			// own dedicated inbox below. Blank falls back to the WordPress admin email.
-			'orders_email'    => 'orders@doughboss.com.au',
+			'orders_email'    => 'info@doughboss.com.au',
 			// Dedicated customer-facing catering contacts. Catering enquiries use
 			// this inbox rather than mixing with normal online-order notices.
 			'catering_email'  => 'catering@doughboss.com.au',
@@ -403,6 +408,29 @@ class DoughBoss_Settings {
 			$email = (string) get_option( 'admin_email' );
 		}
 		return (string) apply_filters( 'doughboss_orders_email', $email );
+	}
+
+	/**
+	 * WordPress user who alone may approve a saved pre-order request for payment.
+	 *
+	 * Zero is deliberately fail-closed: an administrator must select Kristy's
+	 * authenticated account before the approval action is available.
+	 *
+	 * @return int
+	 */
+	public static function preorder_approver_user_id() {
+		$user_id = absint( self::get( 'preorder_approver_user_id', 0 ) );
+		return $user_id && get_user_by( 'id', $user_id ) ? $user_id : 0;
+	}
+
+	/**
+	 * SMS destination for new pre-order request alerts to the approver.
+	 *
+	 * @return string Australian phone number, or an empty string when invalid.
+	 */
+	public static function preorder_approver_phone() {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'preorder_approver_phone', '' ) );
+		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '';
 	}
 
 	/**

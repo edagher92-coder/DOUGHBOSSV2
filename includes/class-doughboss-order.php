@@ -278,11 +278,30 @@ class DoughBoss_Order {
 		$payment_intent_id = isset( $data['payment_intent_id'] ) ? sanitize_text_field( $data['payment_intent_id'] ) : '';
 		$payment_intent_id = '' === $payment_intent_id ? null : $payment_intent_id;
 		$is_preorder_request = isset( $data['order_source'] ) && 'preorder_request' === sanitize_key( $data['order_source'] );
+		$source_request_id   = isset( $data['source_request_id'] ) ? absint( $data['source_request_id'] ) : 0;
 		if ( $is_preorder_request ) {
 			$payment_status = isset( $data['payment_status'] ) ? sanitize_key( $data['payment_status'] ) : 'unpaid';
 			$payment_method = isset( $data['payment_method'] ) ? sanitize_text_field( $data['payment_method'] ) : '';
 			if ( 'unpaid' !== $payment_status || '' !== $payment_method || null !== $payment_intent_id || ! empty( $data['capacity_hold_token'] ) ) {
 				return new WP_Error( 'doughboss_preorder_payment_forbidden', __( 'Pre-order requests are not confirmed orders and cannot take payment or reserve capacity.', 'doughboss' ), array( 'status' => 400 ) );
+			}
+		}
+		if (
+			$source_request_id
+			&& (
+				'paid' !== ( isset( $data['payment_status'] ) ? sanitize_key( $data['payment_status'] ) : '' )
+				|| 'stripe' !== ( isset( $data['payment_method'] ) ? sanitize_key( $data['payment_method'] ) : '' )
+				|| null === $payment_intent_id
+				|| $is_preorder_request
+			)
+		) {
+			return new WP_Error( 'doughboss_preorder_release_forbidden', __( 'A pre-order request can enter fulfilment only after its approved Stripe payment is verified.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$order_currency = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ) );
+		if ( $source_request_id ) {
+			$order_currency = isset( $data['currency'] ) ? strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $data['currency'] ) ) : '';
+			if ( 3 !== strlen( $order_currency ) ) {
+				return new WP_Error( 'doughboss_preorder_release_forbidden', __( 'The approved payment currency is invalid and cannot enter fulfilment.', 'doughboss' ), array( 'status' => 409 ) );
 			}
 		}
 
@@ -349,6 +368,7 @@ class DoughBoss_Order {
 					'table_qr_code_id' => isset( $data['table_qr_code_id'] ) ? (int) $data['table_qr_code_id'] : 0,
 					'table_session_id' => isset( $data['table_session_id'] ) ? (int) $data['table_session_id'] : 0,
 					'order_source'  => isset( $data['order_source'] ) ? sanitize_key( $data['order_source'] ) : 'web',
+					'source_request_id' => $source_request_id ? $source_request_id : null,
 					'customer_name' => $data['customer_name'],
 					'customer_email'=> $data['customer_email'],
 					'customer_phone'=> $data['customer_phone'],
@@ -360,7 +380,7 @@ class DoughBoss_Order {
 					'total'         => $data['total'],
 					'discount'      => isset( $data['discount'] ) ? $data['discount'] : 0,
 					'voucher_code'  => isset( $data['voucher_code'] ) ? $data['voucher_code'] : '',
-					'currency'      => DoughBoss_Settings::get( 'currency_code', 'AUD' ),
+					'currency'      => $order_currency,
 					'payment_status'    => isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid',
 					'payment_method'    => isset( $data['payment_method'] ) ? $data['payment_method'] : '',
 					'payment_intent_id' => $payment_intent_id,
@@ -375,7 +395,7 @@ class DoughBoss_Order {
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {
@@ -391,6 +411,10 @@ class DoughBoss_Order {
 			if ( ! $replay_id && null !== $payment_intent_id ) {
 				$replay_id   = self::find_id_by_payment_intent( $payment_intent_id, true );
 				$replayed_by = 'payment_intent_id';
+			}
+			if ( ! $replay_id && $source_request_id ) {
+				$replay_id   = self::find_id_by_source_request( $source_request_id, true );
+				$replayed_by = 'source_request_id';
 			}
 			if ( $replay_id ) {
 				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
@@ -448,6 +472,17 @@ class DoughBoss_Order {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$wpdb->query( 'ROLLBACK' );
 			return new WP_Error( 'doughboss_db_error', __( 'Could not save your order. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		// The separate paid order is the durable fulfilment release. Link it to
+		// the approved request inside this same transaction, before commit and
+		// before any order-created consumer (POS, printer, push) can observe it.
+		if ( $source_request_id ) {
+			$released = DoughBoss_Preorder_Approval::release_locked( $source_request_id, $order_id, $checkout_key );
+			if ( is_wp_error( $released ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return $released;
+			}
 		}
 
 		if ( $capacity && ! DoughBoss_Capacity::convert_locked_hold( $capacity['hold_id'], $order_id, $now ) ) {
@@ -531,20 +566,21 @@ class DoughBoss_Order {
 		global $wpdb;
 
 		$table       = self::orders_table();
+		$approvals   = $wpdb->prefix . 'doughboss_preorder_approvals';
 		$location_id = absint( $location_id );
 		$where       = '';
 		$params      = array();
 
 		if ( $location_id ) {
-			$where    = ' WHERE location_id = %d';
+			$where    = ' WHERE o.location_id = %d';
 			$params[] = $location_id;
 		}
 
 		$query = "SELECT
-			SUM(CASE WHEN ( order_source IS NULL OR order_source <> 'preorder_request' ) AND status IN ( 'pending', 'confirmed', 'preparing', 'baking' ) THEN 1 ELSE 0 END) AS make_count,
-			SUM(CASE WHEN ( order_source IS NULL OR order_source <> 'preorder_request' ) AND status IN ( 'ready', 'out_for_delivery' ) THEN 1 ELSE 0 END) AS pass_count,
-			SUM(CASE WHEN order_source = 'preorder_request' AND status = 'pending' AND payment_status = 'unpaid' THEN 1 ELSE 0 END) AS preorder_review_count
-			FROM {$table}{$where}";
+			SUM(CASE WHEN ( o.order_source IS NULL OR o.order_source <> 'preorder_request' ) AND o.status IN ( 'pending', 'confirmed', 'preparing', 'baking' ) THEN 1 ELSE 0 END) AS make_count,
+			SUM(CASE WHEN ( o.order_source IS NULL OR o.order_source <> 'preorder_request' ) AND o.status IN ( 'ready', 'out_for_delivery' ) THEN 1 ELSE 0 END) AS pass_count,
+			SUM(CASE WHEN o.order_source = 'preorder_request' AND o.status = 'pending' AND o.payment_status = 'unpaid' AND ( a.state IS NULL OR a.state <> 'released' ) THEN 1 ELSE 0 END) AS preorder_review_count
+			FROM {$table} o LEFT JOIN {$approvals} a ON a.request_order_id = o.id{$where}";
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$row = $params ? $wpdb->get_row( $wpdb->prepare( $query, $params ) ) : $wpdb->get_row( $query );
@@ -559,9 +595,9 @@ class DoughBoss_Order {
 	/**
 	 * Pending after-hours requests for the staff morning-review queue.
 	 *
-	 * Accepted requests change to the normal web channel atomically in
-	 * transition(), so they disappear from this queue and enter the KDS only
-	 * after staff action.
+	 * Approved requests remain visible while unpaid or held. The original
+	 * request disappears only after a separate verified paid order is linked;
+	 * that paid order then enters the KDS through the ordinary order feed.
 	 *
 	 * @param int $limit       Maximum rows to return.
 	 * @param int $location_id Optional shop filter (0 = all shops).
@@ -570,6 +606,7 @@ class DoughBoss_Order {
 	public static function preorder_requests( $limit = 100, $location_id = 0 ) {
 		global $wpdb;
 		$table       = self::orders_table();
+		$approvals   = $wpdb->prefix . 'doughboss_preorder_approvals';
 		$limit       = max( 1, min( 200, (int) $limit ) );
 		$location_id = absint( $location_id );
 		$statuses    = self::statuses();
@@ -578,7 +615,7 @@ class DoughBoss_Order {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT * FROM {$table} WHERE status = 'pending' AND order_source = 'preorder_request' AND payment_status = 'unpaid' AND location_id = %d ORDER BY created_at ASC LIMIT %d",
+					"SELECT o.* FROM {$table} o LEFT JOIN {$approvals} a ON a.request_order_id = o.id WHERE o.status = 'pending' AND o.order_source = 'preorder_request' AND o.payment_status = 'unpaid' AND ( a.state IS NULL OR a.state <> 'released' ) AND o.location_id = %d ORDER BY o.created_at ASC LIMIT %d",
 					$location_id,
 					$limit
 				)
@@ -587,7 +624,7 @@ class DoughBoss_Order {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT * FROM {$table} WHERE status = 'pending' AND order_source = 'preorder_request' AND payment_status = 'unpaid' ORDER BY created_at ASC LIMIT %d",
+					"SELECT o.* FROM {$table} o LEFT JOIN {$approvals} a ON a.request_order_id = o.id WHERE o.status = 'pending' AND o.order_source = 'preorder_request' AND o.payment_status = 'unpaid' AND ( a.state IS NULL OR a.state <> 'released' ) ORDER BY o.created_at ASC LIMIT %d",
 					$limit
 				)
 			);
@@ -787,6 +824,10 @@ class DoughBoss_Order {
 			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			return new WP_Error( 'doughboss_order_not_found', __( 'That order no longer exists.', 'doughboss' ), array( 'status' => 404 ) );
 		}
+		if ( self::is_preorder_request( $order ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_preorder_decision_required', __( 'A pre-order request cannot enter the kitchen lifecycle. Use its approval workflow, then verify Stripe payment.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 
 		$current_version = isset( $order->version ) ? (int) $order->version : 1;
 		if ( $current_version !== $expected_version ) {
@@ -811,13 +852,6 @@ class DoughBoss_Order {
 			'updated_at'        => $now,
 		);
 		$formats      = array( '%s', '%d', '%s', '%s' );
-		if ( self::is_preorder_request( $order ) && 'confirmed' === $status ) {
-			// A request becomes an operational order only after a staff acceptance.
-			// The status-change event preserves that audit trail; the regular source
-			// then lets normal KDS and POS flows process it without a parallel path.
-			$data['order_source'] = 'web';
-			$formats[]            = '%s';
-		}
 
 		if ( 'confirmed' === $status ) {
 			$data['accepted_at']     = $now;
@@ -1070,6 +1104,25 @@ class DoughBoss_Order {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$sql = "SELECT id FROM {$table} WHERE payment_intent_id = %s LIMIT 1" . ( $locking ? ' FOR UPDATE' : '' );
 		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $payment_intent_id ) );
+	}
+
+	/**
+	 * Resolve the one paid fulfilment order created from an approved request.
+	 *
+	 * @param int  $source_request_id Original pre-order request id.
+	 * @param bool $locking           Use a current locking read inside a transaction.
+	 * @return int Order ID or 0.
+	 */
+	public static function find_id_by_source_request( $source_request_id, $locking = false ) {
+		global $wpdb;
+		$source_request_id = absint( $source_request_id );
+		if ( ! $source_request_id ) {
+			return 0;
+		}
+		$table = self::orders_table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$sql = "SELECT id FROM {$table} WHERE source_request_id = %d LIMIT 1" . ( $locking ? ' FOR UPDATE' : '' );
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $source_request_id ) );
 	}
 
 	/**

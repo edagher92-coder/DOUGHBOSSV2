@@ -389,6 +389,11 @@ class DoughBoss_Admin {
 		$clean['after_hours_preorders_message'] = isset( $input['after_hours_preorders_message'] )
 			? sanitize_textarea_field( $input['after_hours_preorders_message'] )
 			: DoughBoss_Settings::after_hours_preorders_message();
+		$clean['preorder_approver_user_id'] = isset( $input['preorder_approver_user_id'] )
+			? absint( $input['preorder_approver_user_id'] )
+			: ( isset( $existing['preorder_approver_user_id'] ) ? absint( $existing['preorder_approver_user_id'] ) : 0 );
+		$approver_phone = isset( $input['preorder_approver_phone'] ) ? preg_replace( '/[^0-9+]/', '', (string) $input['preorder_approver_phone'] ) : '';
+		$clean['preorder_approver_phone'] = is_string( $approver_phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $approver_phone ) ? $approver_phone : '';
 		$active_locations         = DoughBoss_Locations::all( true );
 		$clean['single_location_mode'] = ! empty( $input['single_location_mode'] ) && 1 === count( $active_locations ) ? 1 : 0;
 		if ( $clean['single_location_mode'] ) {
@@ -496,7 +501,7 @@ class DoughBoss_Admin {
 		if ( isset( $input['orders_email'] ) ) {
 			$clean['orders_email'] = is_email( $input['orders_email'] ) ? sanitize_email( $input['orders_email'] ) : '';
 		} else {
-			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'orders@doughboss.com.au';
+			$clean['orders_email'] = isset( $existing['orders_email'] ) ? $existing['orders_email'] : 'info@doughboss.com.au';
 		}
 		$clean['catering_email'] = isset( $input['catering_email'] ) && is_email( $input['catering_email'] )
 			? sanitize_email( $input['catering_email'] )
@@ -3250,6 +3255,25 @@ JS;
 							<p class="description"><?php esc_html_e( 'Shown after the request is saved. Keep the wording clear that it is unconfirmed and unpaid until Revesby reviews it.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
+						<th><label for="db-preorder-approver"><?php esc_html_e( 'Payment approver', 'doughboss' ); ?></label></th>
+						<td>
+							<select id="db-preorder-approver" name="<?php echo esc_attr( $opt ); ?>[preorder_approver_user_id]">
+								<option value="0"><?php esc_html_e( 'No approver selected — payments stay locked', 'doughboss' ); ?></option>
+								<?php foreach ( get_users( array( 'orderby' => 'display_name', 'order' => 'ASC' ) ) as $approver_user ) : ?>
+									<?php if ( user_can( $approver_user, 'manage_doughboss' ) || user_can( $approver_user, 'manage_options' ) ) : ?>
+										<option value="<?php echo esc_attr( $approver_user->ID ); ?>" <?php selected( absint( isset( $settings['preorder_approver_user_id'] ) ? $settings['preorder_approver_user_id'] : 0 ), (int) $approver_user->ID ); ?>><?php echo esc_html( $approver_user->display_name . ' (' . $approver_user->user_login . ')' ); ?></option>
+									<?php endif; ?>
+								<?php endforeach; ?>
+							</select>
+							<p class="description"><?php esc_html_e( 'Only this authenticated WordPress user can approve a request for Stripe payment. Approval never sends an unpaid request to the kitchen.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="db-preorder-approver-phone"><?php esc_html_e( 'Approver SMS number', 'doughboss' ); ?></label></th>
+						<td><input type="tel" id="db-preorder-approver-phone" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[preorder_approver_phone]" value="<?php echo esc_attr( isset( $settings['preorder_approver_phone'] ) ? $settings['preorder_approver_phone'] : '' ); ?>" />
+							<p class="description"><?php esc_html_e( 'New request alerts are sent here only when ClickSend is enabled and fully configured. Replies do not approve orders; the named approver must sign in and choose Approve or Reject.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
 						<th><?php esc_html_e( 'Fulfilment', 'doughboss' ); ?></th>
 						<td>
 							<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[enable_pickup]" value="1" <?php checked( $settings['enable_pickup'], 1 ); ?> /> <?php esc_html_e( 'Pickup', 'doughboss' ); ?></label><br />
@@ -3288,7 +3312,7 @@ JS;
 					<tr>
 						<th><label for="db-orders-email"><?php esc_html_e( 'Order notification email', 'doughboss' ); ?></label></th>
 						<td><input type="email" id="db-orders-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[orders_email]" value="<?php echo esc_attr( isset( $settings['orders_email'] ) ? $settings['orders_email'] : '' ); ?>" />
-							<span class="description"><?php esc_html_e( 'Where normal online-order notifications are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
+							<span class="description"><?php esc_html_e( 'Where pre-order requests and verified paid-order notifications are sent. Leave blank to use the site admin email.', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
 						<th><label for="db-catering-email"><?php esc_html_e( 'Catering email', 'doughboss' ); ?></label></th>
