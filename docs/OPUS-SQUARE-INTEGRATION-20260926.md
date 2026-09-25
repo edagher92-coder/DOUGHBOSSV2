@@ -143,6 +143,25 @@ All commands below ran in the isolated working branch on 26 September 2026.
   crossed, one synthetic Stripe POST and one fulfillment creation.
 - `git diff --check`: exit 0. No hosted CI, push, deployment or real payment.
 
-Frozen-candidate independent assurance is pending. Overall
+## Frozen-candidate assurance
+
+Astra reviewed commit `e77c37135772c5a6712e8c033c93d7bfc14bc25c` against the
+parent above, all six changed paths and adjacent callers. Verdict: ship the
+bounded local safety patch, **8.8/10**, no blocking findings. This exceeds the
+owner's 8.5 threshold only for these local safety changes, not Square readiness.
+The reviewer independently passed four focused Square Node tests and diff
+checks, and inspected the existing admin error gate and replay contracts.
+The broader local suite evidence above was lead-run, not rerun by the reviewer.
+
+Two nonblocking test improvements are deferred to the next payment-lifecycle
+batch, owned by the lead integrator: exercise actual admin persisted state for
+pending/completed refunds, and browser post-request network failure through the
+existing failure handler. Current caller inspection supports the safety
+contract; the unchanged server replay path also passed concurrent tests.
+These improvements do not remove the real SDK/3DS, refund reconciliation and
+staffed POS/kitchen acceptance gates. No provider acceptance is claimed.
+
+This follow-up changes documentation only; the reviewed implementation remains
+unchanged. Overall
 Square integration and incorporation of every Opus finding remain **incomplete**
 until the open rows and operational gates above are independently closed.
