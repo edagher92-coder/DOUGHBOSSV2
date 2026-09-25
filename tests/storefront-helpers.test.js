@@ -129,6 +129,132 @@ assert.equal(retrySafe({ retry_safe: true, payment_pending: true }), false, 'con
 assert.equal(retrySafe({ retry_safe: false, payment_pending: false }), false, 'unknown provider outcomes remain locked');
 assert.equal(retrySafe({}), false, 'missing provider evidence remains locked');
 
+function squarePaymentHarness(options) {
+	options = options || {};
+	const requests = [];
+	const stored = [];
+	const placed = [];
+	const tokenizations = [];
+	const fields = {
+		customer_name: 'Ada Customer',
+		customer_email: 'ada@example.test',
+		customer_phone: '0400 000 000'
+	};
+	const form = {
+		querySelector: selector => {
+			const match = /^\[name="([^"]+)"\]$/.exec(selector);
+			return match && Object.prototype.hasOwnProperty.call(fields, match[1]) ? { value: fields[match[1]] } : null;
+		}
+	};
+	const validCurrency = extractFunction(square, 'validSquareCurrency');
+	const verificationDetailsFor = extractFunction(square, 'verificationDetailsFor', {
+		CONFIG: { currency: options.currency },
+		I18N: {},
+		readDisplayedTotal: () => options.total,
+		validSquareCurrency: validCurrency,
+		value: (node, name) => fields[name] || ''
+	});
+	const payAndPlace = extractFunction(square, 'payAndPlace', {
+		I18N: {},
+		orderTypeFor: () => 'pickup',
+		storedLocationId: () => 12,
+		verificationDetailsFor,
+		value: (node, name) => fields[name] || '',
+		storeSession: session => stored.push({ providerRequestStarted: session.providerRequestStarted, paymentId: session.paymentId }),
+		request: (route, requestOptions) => {
+			requests.push({ route, requestOptions });
+			return Promise.resolve(options.paymentResponse || { payment_intent: 'sq-payment-1' });
+		},
+		placeOrder: (session, orderType, locationId) => {
+			placed.push({ session, orderType, locationId });
+			return Promise.resolve({ order_id: 44 });
+		}
+	});
+	const session = {
+		form,
+		paymentAttemptKey: 'attempt-1',
+		paymentId: options.paymentId || '',
+		providerRequestStarted: false,
+		controller: {
+			ready: () => Promise.resolve({
+				card: {
+					tokenize: details => {
+						tokenizations.push(details);
+						if (options.tokenizeError) { return Promise.reject(options.tokenizeError); }
+						return Promise.resolve(options.tokenResult);
+					}
+				}
+			})
+		}
+	};
+	return { payAndPlace, session, requests, stored, placed, tokenizations };
+}
+
+test('Square puts buyer verification details into tokenization and sends only its resulting token', async () => {
+	const h = squarePaymentHarness({
+		total: '27.50',
+		currency: 'AUD',
+		tokenResult: { status: 'OK', token: 'cnon:browser-token' }
+	});
+	await h.payAndPlace(h.session);
+	assert.deepEqual(JSON.parse(JSON.stringify(h.tokenizations)), [{
+		amount: '27.50',
+		billingContact: { givenName: 'Ada Customer', email: 'ada@example.test', phone: '0400 000 000' },
+		currencyCode: 'AUD',
+		intent: 'CHARGE',
+		customerInitiated: true,
+		sellerKeyedIn: false
+	}]);
+	assert.equal(h.requests.length, 1);
+	assert.equal(h.requests[0].route, '/payment-intent');
+	assert.equal(h.requests[0].requestOptions.body.source_id, 'cnon:browser-token');
+	assert.equal(Object.prototype.hasOwnProperty.call(h.requests[0].requestOptions.body, 'verification_token'), false);
+	assert.equal(h.session.providerRequestStarted, true);
+	assert.equal(h.placed.length, 1, 'a confirmed server payment still proceeds to checkout');
+	const source = fs.readFileSync(square, 'utf8');
+	assert.doesNotMatch(source, /verifyBuyer|verificationToken|verification_token/);
+});
+
+test('Square cancelled, failed, or rejected tokenization never starts a provider request', async () => {
+	for (const outcome of [
+		{ label: 'cancelled challenge', tokenResult: { status: 'CANCELED' } },
+		{ label: 'failed challenge', tokenResult: { status: 'FAILED', errors: [{ message: 'Authentication failed' }] } },
+		{ label: 'rejected challenge', tokenizeError: new Error('Authentication rejected') }
+	]) {
+		const h = squarePaymentHarness(Object.assign({ total: '27.50', currency: 'AUD' }, outcome));
+		await assert.rejects(h.payAndPlace(h.session), undefined, outcome.label);
+		assert.equal(h.tokenizations.length, 1, outcome.label + ' reaches tokenization only');
+		assert.equal(h.requests.length, 0, outcome.label + ' cannot call /payment-intent');
+		assert.equal(h.placed.length, 0, outcome.label + ' cannot call /checkout');
+		assert.equal(h.session.providerRequestStarted, false, outcome.label + ' does not lock an unstarted provider request');
+		assert.equal(h.stored.length, 0, outcome.label + ' does not persist a provider request');
+	}
+});
+
+test('Square rejects absent display total and malformed currency before tokenization', async () => {
+	for (const options of [
+		{ label: 'missing total', total: null, currency: 'AUD' },
+		{ label: 'bad currency', total: '27.50', currency: 'aud' },
+		{ label: 'missing currency', total: '27.50', currency: '' }
+	]) {
+		const h = squarePaymentHarness(Object.assign({ tokenResult: { status: 'OK', token: 'cnon:ignored' } }, options));
+		await assert.rejects(h.payAndPlace(h.session), undefined, options.label);
+		assert.equal(h.tokenizations.length, 0, options.label + ' cannot obtain a token');
+		assert.equal(h.requests.length, 0, options.label + ' cannot call /payment-intent');
+		assert.equal(h.placed.length, 0, options.label + ' cannot call /checkout');
+		assert.equal(h.session.providerRequestStarted, false, options.label + ' leaves provider state unstarted');
+	}
+});
+
+test('Square replay with a known payment skips browser tokenization', async () => {
+	const h = squarePaymentHarness({ paymentId: 'sq-existing-payment' });
+	await h.payAndPlace(h.session);
+	assert.equal(h.tokenizations.length, 0);
+	assert.equal(h.requests.length, 0);
+	assert.equal(h.placed.length, 1);
+	assert.equal(h.session.providerRequestStarted, false);
+});
+
 const validCateringQuote = extractFunction(catering, 'validCateringQuote');
 function cateringQuote(total) {
 	return { subtotal: total, delivery_fee: 0, total, deposit_pct: 30, deposit: total * 0.3, balance: total * 0.7, lead_days: 2, currency: 'AUD' };

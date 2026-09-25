@@ -252,6 +252,21 @@ function db_integration_square_http( $preempt, $args, $url ) {
 		return $preempt;
 	}
 	$method = isset( $args['method'] ) ? strtoupper( (string) $args['method'] ) : 'GET';
+	if ( 'POST' === $method && '/v2/refunds' === wp_parse_url( (string) $url, PHP_URL_PATH ) ) {
+		$body = json_decode( (string) $args['body'], true );
+		$GLOBALS['db_square_refund_requests'][] = $body;
+		$refund = array(
+			'id' => 'sqrefundINTEGRATION00001',
+			'payment_id' => $body['payment_id'],
+			'amount_money' => $body['amount_money'],
+			'status' => $GLOBALS['db_square_refund_status'],
+		);
+		if ( 'MISMATCH' === $refund['status'] ) {
+			$refund['status'] = 'COMPLETED';
+			$refund['amount_money']['amount'] -= 1;
+		}
+		return db_integration_stripe_http_response( array( 'refund' => $refund ) );
+	}
 	if ( 'POST' === $method ) {
 		++$GLOBALS['db_square_post_count'];
 		if ( 'network_error' === $GLOBALS['db_square_http_mode'] ) {
@@ -709,6 +724,22 @@ db_integration_assert( ! is_wp_error( $replay ), 'same attempt replays successfu
 db_integration_same( 1, $GLOBALS['db_square_post_count'], 'same attempt never performs a second provider POST' );
 db_integration_same( 1, $GLOBALS['db_square_get_count'], 'same attempt reconciles through a provider GET' );
 db_integration_same( $first['id'], $replay['id'], 'replay returns the original payment reference' );
+
+// An accepted refund request is not necessarily a completed refund. Exercise
+// the real gateway facade and HTTP decoder so the admin's WP_Error gate holds.
+$GLOBALS['db_square_refund_requests'] = array();
+foreach ( array( 'PENDING', 'FAILED', 'REJECTED', 'MISMATCH', 'COMPLETED' ) as $refund_status ) {
+	$GLOBALS['db_square_refund_status'] = $refund_status;
+	$refund_result = DoughBoss_Payment::refund_via( 'square', $first['id'] );
+	db_integration_same( 'COMPLETED' !== $refund_status, is_wp_error( $refund_result ), 'refund facade refuses to mark ' . $refund_status . ' as refunded' );
+}
+$refund_requests = $GLOBALS['db_square_refund_requests'];
+db_integration_same( 5, count( $refund_requests ), 'refund scenarios reach the mocked refund transport' );
+foreach ( $refund_requests as $refund_request ) {
+	db_integration_same( $refund_requests[0]['idempotency_key'], $refund_request['idempotency_key'], 'same refund retains its idempotency key across pending and completed responses' );
+	db_integration_same( array( 'amount' => 2750, 'currency' => 'AUD' ), $refund_request['amount_money'], 'refund amount comes from the persisted payment' );
+	db_integration_same( $first['id'], $refund_request['payment_id'], 'refund uses the stored payment reference' );
+}
 
 $blocked = DoughBoss_Square::create_payment_intent( 2750, 'AUD', db_integration_square_metadata( 'attempt-two', 'checkout-two', 'cart-one' ) );
 db_integration_assert( is_wp_error( $blocked ), 'a new nonce for the same unresolved cart is blocked' );

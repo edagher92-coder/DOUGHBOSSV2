@@ -230,9 +230,9 @@
 	/**
 	 * Tokenise the card, charge it server-side, then place the order.
 	 *
-	 * No amount, currency or price is sent from the browser at any point: the
-	 * server recomputes the total from the stored cart for the charge and
-	 * re-verifies it against Square before the order row exists.
+	 * The displayed amount is supplied to Square only for its tokenization-time
+	 * buyer verification. The server recomputes the total from the stored cart
+	 * for the charge and re-verifies it against Square before an order row exists.
 	 *
 	 * @param {Object} session Per-form state.
 	 * @return {Promise}
@@ -245,57 +245,27 @@
 			return placeOrder(session, orderType, locationId);
 		}
 
+		// Square now performs any buyer verification while it tokenizes. Validate
+		// the browser-only verification evidence before asking it to tokenize, so
+		// an incomplete checkout cannot produce a card token or start a provider
+		// request. The server remains the authority for the charged amount.
+		var verificationDetails;
+		try {
+			verificationDetails = verificationDetailsFor(form);
+		} catch (err) {
+			return Promise.reject(err);
+		}
 		return session.controller.ready().then(function (parts) {
-			return parts.card.tokenize().then(function (result) {
+			return parts.card.tokenize(verificationDetails).then(function (result) {
 				if (!result || result.status !== 'OK' || !result.token) {
 					var detail = result && result.errors && result.errors.length && result.errors[0].message
 						? String(result.errors[0].message)
 						: (I18N.cardError || 'Please check your card details and try again.');
 					throw new Error(detail);
 				}
-				return { parts: parts, token: result.token, details: result.details || null };
+				return result.token;
 			});
-		}).then(function (tokenised) {
-			// 3-D Secure / Strong Customer Authentication. Square runs the
-			// challenge in the browser and returns evidence the server forwards
-			// with the charge. A failure here must NOT be swallowed: an
-			// unverified payment can be refused by the issuer later.
-			var payments = tokenised.parts.payments;
-			if (typeof payments.verifyBuyer !== 'function') {
-				return { sourceId: tokenised.token, verificationToken: '' };
-			}
-			var billing = {
-				intent: 'CHARGE_AND_STORE',
-				billingContact: {
-					givenName: value(form, 'customer_name'),
-					email: value(form, 'customer_email'),
-					phone: value(form, 'customer_phone')
-				}
-			};
-			// Square requires an amount for verifyBuyer. It is display-only
-			// evidence for the issuer's challenge screen; the CHARGED amount is
-			// always the server's own figure. Read it from the summary the
-			// server rendered rather than inventing one, and skip verification
-			// rather than guess if it cannot be read.
-			var displayTotal = readDisplayedTotal(form);
-			if (displayTotal === null) {
-				return { sourceId: tokenised.token, verificationToken: '' };
-			}
-			billing.amount = displayTotal;
-			billing.currencyCode = CONFIG.currency || 'AUD';
-			billing.intent = 'CHARGE';
-			return payments.verifyBuyer(tokenised.token, billing).then(function (verification) {
-				return {
-					sourceId: tokenised.token,
-					verificationToken: verification && verification.token ? verification.token : ''
-				};
-			}).catch(function () {
-				// Verification unavailable for this card/region. Continue with
-				// the plain token — Square (not this file) decides whether an
-				// unverified payment is acceptable.
-				return { sourceId: tokenised.token, verificationToken: '' };
-			});
-		}).then(function (source) {
+		}).then(function (sourceId) {
 			session.providerRequestStarted = true;
 			storeSession(session);
 			return request('/payment-intent', {
@@ -309,8 +279,7 @@
 					customer_phone: value(form, 'customer_phone'),
 					address: value(form, 'address'),
 					notes: value(form, 'notes'),
-					source_id: source.sourceId,
-					verification_token: source.verificationToken
+					source_id: sourceId
 				}
 			});
 		}).then(function (payment) {
@@ -340,6 +309,30 @@
 		var digits = String(node.textContent || '').replace(/[^0-9.]/g, '');
 		if (!/^\d+(\.\d{1,2})?$/.test(digits)) { return null; }
 		return digits;
+	}
+
+	function validSquareCurrency(currency) {
+		return typeof currency === 'string' && /^[A-Z]{3}$/.test(currency) ? currency : '';
+	}
+
+	function verificationDetailsFor(form) {
+		var amount = readDisplayedTotal(form);
+		var currencyCode = validSquareCurrency(CONFIG.currency);
+		if (amount === null || !currencyCode) {
+			throw new Error(I18N.cardError || 'The payment details could not be verified. Please refresh and try again.');
+		}
+		return {
+			amount: amount,
+			billingContact: {
+				givenName: value(form, 'customer_name'),
+				email: value(form, 'customer_email'),
+				phone: value(form, 'customer_phone')
+			},
+			currencyCode: currencyCode,
+			intent: 'CHARGE',
+			customerInitiated: true,
+			sellerKeyedIn: false
+		};
 	}
 
 	function placeOrder(session, orderType, locationId) {

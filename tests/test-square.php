@@ -529,3 +529,54 @@ db_test(
 		assert_same( '2024-06-04', DoughBoss_Settings::square_api_version(), 'an older valid version is honoured' );
 	}
 );
+
+/** A synthetic provider refund response: never calls Square. */
+function db_square_refund_response( $status = 'COMPLETED' ) {
+	return array( 'refund' => array(
+		'id' => 'sqrefundEXAMPLE0000000001',
+		'payment_id' => 'sqpaymentEXAMPLE0000000001',
+		'status' => $status,
+		'amount_money' => array( 'amount' => 2750, 'currency' => 'AUD' ),
+	) );
+}
+
+db_test(
+	'Square refund acceptance requires completion, not HTTP success',
+	function () {
+		$completed = db_square_refund_response();
+		assert_same( $completed, DoughBoss_Square::validate_refund_response( $completed, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ), 'completed refund preserves provider evidence' );
+		foreach ( array( 'PENDING', 'REJECTED', 'FAILED', 'UNKNOWN', '', 'completed' ) as $status ) {
+			$result = DoughBoss_Square::validate_refund_response( db_square_refund_response( $status ), 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' );
+			assert_true( is_wp_error( $result ), $status . ' cannot mark the order refunded' );
+			if ( 'PENDING' === $status ) {
+				assert_same( 'doughboss_refund_pending', $result->get_error_code(), 'pending is distinguished from completion/failure' );
+			}
+		}
+	}
+);
+
+db_test(
+	'Square completed refunds must match the exact requested payment and money',
+	function () {
+		foreach ( array( 'id' => array( '', 'short', array(), '<b>sqrefundEXAMPLE0000000001</b>' ), 'payment_id' => array( 'otherpayment0000000001', array(), '' ), 'status' => array( array(), null ) ) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_refund_response();
+				$response['refund'][ $field ] = $value;
+				assert_true( is_wp_error( DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ) ), 'malformed or mismatched ' . $field . ' refuses completion' );
+			}
+		}
+		foreach ( array( 'amount' => array( 2700, 2800, -2750, '2750', 2750.5, null, array() ), 'currency' => array( 'USD', 'aud', null, array() ) ) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_refund_response();
+				$response['refund']['amount_money'][ $field ] = $value;
+				assert_true( is_wp_error( DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ) ), 'malformed or mismatched money ' . $field . ' refuses completion' );
+			}
+		}
+		foreach ( array( array(), array( 'refund' => 'bad' ), array( 'refund' => array() ), array( 'errors' => array( array( 'code' => 'REFUND_ERROR' ) ), 'refund' => db_square_refund_response()['refund'] ) ) as $response ) {
+			assert_true( is_wp_error( DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ) ), 'absent or contradictory provider evidence refuses completion' );
+		}
+		$response = db_square_refund_response();
+		$response['refund']['amount_money']['amount'] = 1000;
+		assert_same( $response, DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 1000, 'AUD' ), 'a requested partial refund validates only its own exact amount' );
+	}
+);

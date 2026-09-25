@@ -791,7 +791,7 @@ class DoughBoss_Square {
 		}
 
 		$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
-		if ( ! $attempt ) {
+		if ( ! $attempt || 'square' !== (string) $attempt['provider'] ) {
 			return new WP_Error( 'doughboss_pay_refund', __( 'This payment has no matching record to refund against.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 
@@ -802,7 +802,7 @@ class DoughBoss_Square {
 			return new WP_Error( 'doughboss_pay_refund', __( 'Invalid refund amount.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		return self::request(
+		$response = self::request(
 			'POST',
 			'/v2/refunds',
 			array(
@@ -814,6 +814,48 @@ class DoughBoss_Square {
 				),
 			)
 		);
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+		return self::validate_refund_response( $response, $id, $refund, $currency );
+	}
+
+	/**
+	 * Only a completed, exactly bound refund may update the local paid state.
+	 * HTTP success means Square accepted the request, not that funds were returned.
+	 * Pending refunds keep the existing idempotency key and require reconciliation.
+	 *
+	 * @param array  $response     Decoded Square response.
+	 * @param string $payment_id   Stored payment reference.
+	 * @param int    $amount_minor Server-owned refund amount in cents.
+	 * @param string $currency     Stored payment currency.
+	 * @return array|WP_Error
+	 */
+	public static function validate_refund_response( array $response, $payment_id, $amount_minor, $currency ) {
+		$refund = isset( $response['refund'] ) && is_array( $response['refund'] ) ? $response['refund'] : array();
+		$money  = isset( $refund['amount_money'] ) && is_array( $refund['amount_money'] ) ? $refund['amount_money'] : array();
+		if (
+			! empty( $response['errors'] )
+			|| ! isset( $refund['id'], $refund['payment_id'], $refund['status'], $money['amount'], $money['currency'] )
+			|| ! is_string( $refund['id'] )
+			|| 1 !== preg_match( '/^[A-Za-z0-9_-]{8,192}$/', $refund['id'] )
+			|| ! is_string( $refund['payment_id'] )
+			|| ! hash_equals( (string) $payment_id, $refund['payment_id'] )
+			|| ! is_string( $refund['status'] )
+			|| ! is_int( $money['amount'] )
+			|| $money['amount'] !== $amount_minor
+			|| ! is_string( $money['currency'] )
+			|| $money['currency'] !== $currency
+		) {
+			return new WP_Error( 'doughboss_refund_unverified', __( 'Square refund could not be verified. Check this payment in Square before taking further action; this order has not been marked refunded.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( 'PENDING' === $refund['status'] ) {
+			return new WP_Error( 'doughboss_refund_pending', __( 'Square is still processing this refund. Check its status in Square; this order has not been marked refunded.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( 'COMPLETED' !== $refund['status'] ) {
+			return new WP_Error( 'doughboss_refund_not_completed', __( 'Square has not completed this refund. Check its status in Square; this order has not been marked refunded.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return $response;
 	}
 
 	/**
