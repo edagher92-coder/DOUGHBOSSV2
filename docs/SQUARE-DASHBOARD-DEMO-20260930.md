@@ -78,6 +78,8 @@ GitHub publication or deployment. The earlier handoff document remains untouched
 
 Astra reviewed frozen commit `7ede3c57ada6c142cd25eb55d54179825af60991`:
 ship this protected local preview, 8.7/10, no blockers. Root corrected both
-nonblocking findings above; a bounded review of that final delta is pending.
+nonblocking findings above. Astra reviewed final implementation
+`61283ce319b55777907a8921a2fabaff4c3e32d3` and accepted it at **8.9/10**,
+with no new findings. The unchanged backend assurance remains applicable.
 The score is not real Square readiness or deployment approval. No live code,
 settings, ordering, payments or Square provider state changed in this batch.
