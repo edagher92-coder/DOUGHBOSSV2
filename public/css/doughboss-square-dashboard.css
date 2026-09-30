@@ -1,0 +1,258 @@
+/* Owner-only Square dashboard. Scoped so other wp-admin screens stay unchanged. */
+.doughboss-square-dashboard [hidden] {
+	display: none !important;
+}
+.doughboss-square-dashboard {
+	--db-square-ink: #35241c;
+	--db-square-muted: #75645a;
+	--db-square-cream: #fffaf1;
+	--db-square-warm: #f3e3cd;
+	--db-square-accent: #9d4e2c;
+	--db-square-border: #e1c9a9;
+	background: var(--db-square-cream);
+	border: 1px solid var(--db-square-border);
+	border-radius: 12px;
+	box-shadow: 0 5px 18px rgba(77, 47, 29, 0.08);
+	color: var(--db-square-ink);
+	margin: 18px 0 28px;
+	max-width: 1180px;
+	padding: 22px;
+}
+
+.doughboss-square-dashboard__heading,
+.doughboss-square-dashboard__toolbar,
+.doughboss-square-dashboard__actions {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.doughboss-square-dashboard__heading {
+	align-items: flex-start;
+	border-bottom: 1px solid var(--db-square-border);
+	padding-bottom: 16px;
+}
+
+.doughboss-square-dashboard h2,
+.doughboss-square-dashboard h3,
+.doughboss-square-dashboard p {
+	color: inherit;
+}
+
+.doughboss-square-dashboard h2 {
+	font-size: 1.45rem;
+	margin: 0;
+}
+
+.doughboss-square-dashboard h3 {
+	font-size: 1rem;
+	margin: 0 0 10px;
+}
+
+.doughboss-square-dashboard__eyebrow {
+	color: var(--db-square-accent) !important;
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	margin: 0 0 5px;
+	text-transform: uppercase;
+}
+
+.doughboss-square-dashboard__toolbar {
+	justify-content: flex-start;
+	margin: 16px 0;
+}
+
+.doughboss-square-dashboard__toolbar .description {
+	flex: 1 1 260px;
+	margin: 0;
+}
+
+.doughboss-square-dashboard .button-primary {
+	background: var(--db-square-accent);
+	color: #fff;
+	border-color: #78361f;
+	box-shadow: none;
+	text-shadow: none;
+}
+
+.doughboss-square-dashboard .button-primary:hover,
+.doughboss-square-dashboard .button-primary:focus {
+	background: #78361f;
+	border-color: #5d2918;
+}
+
+.doughboss-square-dashboard .button-primary:disabled {
+	background: #b78a77;
+	border-color: #a87866;
+	color: #fff;
+}
+
+.doughboss-square-dashboard__notice {
+	background: #f8eddd;
+	border-left: 4px solid var(--db-square-accent);
+	margin: 0 0 16px;
+	padding: 9px 12px;
+}
+
+.doughboss-square-dashboard__grid,
+.doughboss-square-dashboard__metrics {
+	display: grid;
+	gap: 14px;
+	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.doughboss-square-dashboard__metrics {
+	margin-bottom: 14px;
+}
+
+.doughboss-square-dashboard__panel,
+.doughboss-square-dashboard__metric {
+	background: #fff;
+	border: 1px solid var(--db-square-border);
+	border-radius: 9px;
+	padding: 16px;
+}
+
+.doughboss-square-dashboard__panel--private {
+	border-style: dashed;
+}
+
+.doughboss-square-dashboard__state,
+.doughboss-square-dashboard__metric-value {
+	font-size: 1.12rem;
+	font-weight: 700;
+	margin: 0 0 8px;
+}
+
+.doughboss-square-dashboard__metric-label,
+.doughboss-square-dashboard__metric-note {
+	color: var(--db-square-muted) !important;
+	margin: 0;
+}
+
+.doughboss-square-dashboard__metric-value {
+	font-size: 1.4rem;
+	margin-top: 4px;
+}
+
+.doughboss-square-dashboard__demo-label {
+	background: #f8eddd;
+	border: 1px solid var(--db-square-border);
+	border-radius: 6px;
+	font-weight: 700;
+	margin: 0 0 14px;
+	padding: 9px 12px;
+}
+
+.doughboss-square-dashboard__list,
+.doughboss-square-dashboard__orders {
+	margin: 0;
+}
+
+.doughboss-square-dashboard__list li {
+	border-top: 1px solid #f0e5d6;
+	padding: 8px 0;
+}
+
+.doughboss-square-dashboard__list li:first-child {
+	border-top: 0;
+	padding-top: 0;
+}
+
+.doughboss-square-dashboard__sales-bars {
+	display: grid;
+	gap: 10px;
+	list-style: none;
+	margin: 0;
+}
+
+.doughboss-square-dashboard__sales-bar {
+	display: grid;
+	gap: 4px 10px;
+	grid-template-columns: 1fr auto;
+}
+
+.doughboss-square-dashboard__sales-label,
+.doughboss-square-dashboard__sales-value {
+	font-weight: 600;
+}
+
+.doughboss-square-dashboard__sales-value {
+	color: var(--db-square-muted);
+}
+
+.doughboss-square-dashboard__sales-track {
+	background: #f1dfca;
+	border-radius: 999px;
+	height: 8px;
+	overflow: hidden;
+	grid-column: 1 / -1;
+}
+
+.doughboss-square-dashboard__sales-fill {
+	background: var(--db-square-accent);
+	border-radius: inherit;
+	display: block;
+	height: 100%;
+	min-width: 0;
+	transition: width 180ms ease-out;
+}
+
+.doughboss-square-dashboard__orders {
+	display: grid;
+	gap: 10px;
+	list-style: none;
+}
+
+.doughboss-square-dashboard__orders li {
+	background: #fffaf5;
+	border-left: 3px solid var(--db-square-accent);
+	padding: 10px 12px;
+}
+
+.doughboss-square-dashboard__orders span,
+.doughboss-square-dashboard__orders strong {
+	display: block;
+}
+
+.doughboss-square-dashboard__orders span {
+	color: var(--db-square-muted);
+	margin-top: 3px;
+}
+
+.doughboss-square-dashboard :focus-visible {
+	outline: 3px solid #1d6f9c;
+	outline-offset: 2px;
+}
+
+.doughboss-dashboard__local-heading {
+	border-top: 1px solid #dcdcde;
+	margin-top: 12px;
+	max-width: 1100px;
+	padding-top: 22px;
+}
+
+@media (max-width: 600px) {
+	.doughboss-square-dashboard {
+		margin-left: 0;
+		padding: 16px;
+	}
+
+	.doughboss-square-dashboard__actions,
+	.doughboss-square-dashboard__actions .button,
+	.doughboss-square-dashboard__toolbar select {
+		width: 100%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.doughboss-square-dashboard,
+	.doughboss-square-dashboard * {
+		animation-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
+}

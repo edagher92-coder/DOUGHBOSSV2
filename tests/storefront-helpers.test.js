@@ -6,6 +6,81 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
+function squareDashboardHarness(responder) {
+	function element(tag = 'div') {
+		return { tag, children: [], style: {}, attributes: {}, listeners: {}, textContent: '', value: 'all',
+			get firstChild() { return this.children[0] || null; },
+			appendChild(child) { this.children.push(child); return child; },
+			removeChild(child) { this.children.splice(this.children.indexOf(child), 1); },
+			setAttribute(key, value) { this.attributes[key] = value; },
+			removeAttribute(key) { delete this.attributes[key]; },
+			addEventListener(key, callback) { this.listeners[key] = callback; } };
+	}
+	const controls = {};
+	['preview', 'connection', 'location', 'status', 'content'].forEach(key => { controls[key] = element(); });
+	const root = element();
+	root.querySelector = selector => controls[selector.match(/data-square-([^\]]+)/)[1]];
+	const requests = [];
+	const window = { DoughBossSquareDashboard: { restUrl: '/wp-json/doughboss/v1', nonce: 'synthetic-nonce' },
+		fetch: async (url, options) => { requests.push({ url, options }); return responder(url, options); } };
+	const document = { getElementById: () => root, createElement: element };
+	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/js/doughboss-square-dashboard.js'), 'utf8'), { window, document, Intl, Number, Array, String, Error, encodeURIComponent });
+	const textOf = node => [node.textContent, ...node.children.map(textOf)].join(' ');
+	return { controls, requests, text: () => textOf(controls.content), settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+function squareDashboardPayload(mode = 'status', location = 'all') {
+	const payload = { schema_version: 1, source: 'square', data_state: 'not_connected',
+		connection: { state: 'not_configured', environment: 'test', credentials_present: false, provider_verified: false },
+		staff: { managed_by: 'square', attendance_available: false },
+		planned_location: { label: 'Planned location', state: 'private_unmapped' },
+		locations: ['revesby', 'bankstown', 'roselands'].map(id => ({ id, name: id, state: 'unmapped' })) };
+	if (mode === 'demo') Object.assign(payload, { source: 'synthetic', data_state: 'demo', demo: true, currency: 'AUD', selected_location: location,
+		summary: { gross_sales_minor: 450, refunds_minor: 0, net_sales_minor: 450, orders: 1, average_order_minor: 450 },
+		location_summaries: [{ id: 'bankstown', name: 'Bankstown', gross_sales_minor: 450, refunds_minor: 0, net_sales_minor: 450, orders: 1, average_order_minor: 450 }],
+		sales_series: [{ label: '08:00', gross_sales_minor: 450 }],
+		orders: [{ id: 'DEMO-1', location_id: 'bankstown', location_name: 'Bankstown', customer: '<img src=x onerror=alert(1)>', status: 'Ready', amount_minor: 450,
+			items: [{ name: 'Zaatar', quantity: 1, unit_price_minor: 450 }] }] });
+	return payload;
+}
+
+test('Square dashboard starts disconnected and demo needs an explicit action', async () => {
+	const harness = squareDashboardHarness(async url => ({ ok: true, json: async () => squareDashboardPayload(url.includes('mode=demo') ? 'demo' : 'status') }));
+	await harness.settle();
+	assert.match(harness.requests[0].url, /mode=status/);
+	assert.equal(harness.requests[0].options.headers['X-WP-Nonce'], 'synthetic-nonce');
+	assert.match(harness.text(), /Not configured/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+	assert.equal(harness.controls.location.disabled, true);
+	harness.controls.preview.listeners.click();
+	await harness.settle();
+	assert.match(harness.text(), /synthetic preview/);
+	assert.match(harness.text(), /Team and attendance managed in Square/);
+	assert.match(harness.text(), /Unannounced/);
+	assert.match(harness.text(), /<img src=x onerror=alert\(1\)>/);
+	assert.equal(harness.controls.location.disabled, false);
+});
+
+test('Square dashboard request failure never falls back to demo figures', async () => {
+	const harness = squareDashboardHarness(async () => { throw new Error('network'); });
+	await harness.settle();
+	assert.match(harness.controls.status.textContent, /could not be loaded/);
+	assert.doesNotMatch(harness.text(), /Demo orders|Gross sales/);
+	assert.equal(harness.requests.length, 1);
+	assert.equal(harness.controls.content.attributes['aria-busy'], undefined);
+});
+
+test('Square dashboard refuses a response for the wrong selected shop', async () => {
+	const harness = squareDashboardHarness(async url => ({ ok: true, json: async () => squareDashboardPayload(url.includes('mode=demo') ? 'demo' : 'status', 'all') }));
+	await harness.settle();
+	harness.controls.location.value = 'bankstown';
+	harness.controls.preview.listeners.click();
+	await harness.settle();
+	assert.match(harness.requests[1].url, /location=bankstown/);
+	assert.match(harness.controls.status.textContent, /could not be loaded/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+});
+
 function extractFunction(file, name, context) {
 	const source = fs.readFileSync(file, 'utf8');
 	const marker = 'function ' + name + '(';

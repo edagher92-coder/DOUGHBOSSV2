@@ -2636,6 +2636,38 @@ $preorder_race_fixture = array(
 update_option( 'doughboss_preorder_race_fixture', $preorder_race_fixture, false );
 db_integration_assert( is_array( $preorder_race_pending ) && is_array( $preorder_race_approval ) && $preorder_race_id > 0 && '' !== $preorder_race_token && 1 === preg_match( '/^[a-f0-9]{64}$/', $preorder_race_checkout_key ), 'multi-process pre-order fixture is approved, unpaid and exact-bound before workers start' );
 
+// Owner dashboard is a protected read-only route, including its demo mode.
+$dashboard_previous_user = get_current_user_id();
+$dashboard_owner = wp_insert_user( array( 'user_login' => uniqid( 'db-dashboard-owner-' ), 'user_pass' => wp_generate_password( 32, true, true ), 'role' => 'administrator' ) );
+$dashboard_staff = wp_insert_user( array( 'user_login' => uniqid( 'db-dashboard-staff-' ), 'user_pass' => wp_generate_password( 32, true, true ), 'role' => 'subscriber' ) );
+db_integration_assert( ! is_wp_error( $dashboard_owner ) && ! is_wp_error( $dashboard_staff ), 'dashboard role fixtures created in disposable database' );
+foreach ( array( 0, is_wp_error( $dashboard_staff ) ? 0 : (int) $dashboard_staff ) as $dashboard_denied_user ) {
+	wp_set_current_user( $dashboard_denied_user );
+	$dashboard_request = new WP_REST_Request( 'GET', '/doughboss/v1/admin/square-dashboard' );
+	$dashboard_request->set_param( 'mode', 'demo' );
+	$dashboard_denied = rest_do_request( $dashboard_request );
+	db_integration_assert( 403 === $dashboard_denied->get_status() && ! isset( $dashboard_denied->get_data()['orders'] ), 'anonymous and non-manager dashboard access denied without data' );
+}
+if ( ! is_wp_error( $dashboard_owner ) ) {
+	wp_set_current_user( (int) $dashboard_owner );
+	$dashboard_request = new WP_REST_Request( 'GET', '/doughboss/v1/admin/square-dashboard' );
+	$dashboard_status_response = rest_do_request( $dashboard_request );
+	$dashboard_status_data = $dashboard_status_response->get_data();
+	db_integration_assert( 200 === $dashboard_status_response->get_status() && 'not_connected' === $dashboard_status_data['data_state'] && ! isset( $dashboard_status_data['orders'] ), 'authorized dashboard defaults to connection status without fabricated figures' );
+	db_integration_assert( false !== strpos( $dashboard_status_response->get_headers()['Cache-Control'], 'no-store' ), 'private dashboard response prohibits cache storage' );
+	$dashboard_request->set_param( 'mode', 'demo' );
+	$dashboard_request->set_param( 'location', 'bankstown' );
+	$dashboard_demo_response = rest_do_request( $dashboard_request );
+	$dashboard_demo_data = $dashboard_demo_response->get_data();
+	db_integration_assert( 200 === $dashboard_demo_response->get_status() && 'synthetic' === $dashboard_demo_data['source'] && 4 === count( $dashboard_demo_data['orders'] ), 'manager can explicitly preview isolated Bankstown demo' );
+	$dashboard_request->set_param( 'location', 'planned' );
+	db_integration_assert( 400 === rest_do_request( $dashboard_request )->get_status(), 'unannounced unmapped location cannot be selected in API' );
+	$dashboard_request->set_param( 'location', 'all' );
+	$dashboard_request->set_param( 'mode', 'live' );
+	db_integration_assert( 400 === rest_do_request( $dashboard_request )->get_status(), 'live data cannot be requested from demo contract' );
+}
+wp_set_current_user( $dashboard_previous_user );
+
 $failed = count( $GLOBALS['db_integration_failed'] );
 if ( $failed ) {
 	echo "FAILURES:\n";

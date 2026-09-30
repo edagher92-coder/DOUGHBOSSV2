@@ -283,6 +283,37 @@ class DoughBoss_Admin {
 		?>
 		<div class="wrap doughboss-dashboard">
 			<h1><?php esc_html_e( 'Operations Dashboard', 'doughboss' ); ?></h1>
+			<section id="doughboss-square-dashboard" class="doughboss-square-dashboard" aria-labelledby="doughboss-square-dashboard-title">
+				<div class="doughboss-square-dashboard__heading">
+					<div>
+						<p class="doughboss-square-dashboard__eyebrow"><?php esc_html_e( 'Owner view', 'doughboss' ); ?></p>
+						<h2 id="doughboss-square-dashboard-title"><?php esc_html_e( 'Square dashboard', 'doughboss' ); ?></h2>
+						<p class="description"><?php esc_html_e( 'Square connection status is shown separately from local DoughBoss reports below.', 'doughboss' ); ?></p>
+					</div>
+					<div class="doughboss-square-dashboard__actions">
+						<button type="button" class="button button-primary" data-square-preview><?php esc_html_e( 'Preview demo data', 'doughboss' ); ?></button>
+						<button type="button" class="button" data-square-status-button hidden><?php esc_html_e( 'Connection status', 'doughboss' ); ?></button>
+						<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>"><?php esc_html_e( 'Open settings', 'doughboss' ); ?></a>
+					</div>
+				</div>
+
+				<div class="doughboss-square-dashboard__toolbar">
+					<label for="doughboss-square-location"><?php esc_html_e( 'Demo location', 'doughboss' ); ?></label>
+					<select id="doughboss-square-location" data-square-location disabled aria-describedby="doughboss-square-location-note">
+						<option value="all"><?php esc_html_e( 'All locations', 'doughboss' ); ?></option>
+						<option value="revesby"><?php esc_html_e( 'Revesby', 'doughboss' ); ?></option>
+						<option value="bankstown"><?php esc_html_e( 'Bankstown', 'doughboss' ); ?></option>
+						<option value="roselands"><?php esc_html_e( 'Roselands', 'doughboss' ); ?></option>
+					</select>
+					<p id="doughboss-square-location-note" class="description"><?php esc_html_e( 'Available only while previewing isolated demo data. It does not change Square settings.', 'doughboss' ); ?></p>
+				</div>
+
+				<p class="doughboss-square-dashboard__notice" data-square-status role="status" aria-live="polite"><?php esc_html_e( 'Loading Square connection status…', 'doughboss' ); ?></p>
+				<div class="doughboss-square-dashboard__content" data-square-content aria-busy="true"></div>
+				<noscript><p class="notice notice-warning"><span><?php esc_html_e( 'JavaScript is required to load the Square dashboard status.', 'doughboss' ); ?></span></p></noscript>
+			</section>
+
+			<h2 class="doughboss-dashboard__local-heading"><?php esc_html_e( 'Local DoughBoss reports', 'doughboss' ); ?></h2>
 			<p class="description"><?php esc_html_e( 'Today in the site timezone. Figures use stored DoughBoss records only; this page never calls payment gateways or POSPal.', 'doughboss' ); ?></p>
 
 			<form method="get" style="margin:12px 0 20px;">
@@ -659,6 +690,30 @@ class DoughBoss_Admin {
 			)
 		);
 		wp_add_inline_script( 'doughboss-admin', $this->inline_admin_js() );
+
+		if ( 'doughboss_page_doughboss-dashboard' === $hook ) {
+			wp_enqueue_style(
+				'doughboss-square-dashboard',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-square-dashboard.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-square-dashboard',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-square-dashboard.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+			wp_localize_script(
+				'doughboss-square-dashboard',
+				'DoughBossSquareDashboard',
+				array(
+					'restUrl' => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
+					'nonce'   => wp_create_nonce( 'wp_rest' ),
+				)
+			);
+		}
 
 		if ( false !== strpos( $hook, 'doughboss-tables' ) ) {
 			wp_enqueue_script(

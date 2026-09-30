@@ -1,4 +1,49 @@
 <?php
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-dashboard.php';
+
+// Synthetic dashboard figures must never masquerade as connected provider data.
+$dashboard_original_settings = get_option( 'doughboss_settings', array() );
+doughboss_test_reset_options();
+$dashboard_status = DoughBoss_Square_Dashboard::view();
+assert_same( 'not_connected', $dashboard_status['data_state'], 'dashboard starts disconnected' );
+assert_same( 'not_configured', $dashboard_status['connection']['state'], 'missing credentials are explicit' );
+assert_false( isset( $dashboard_status['summary'] ), 'disconnected view has no invented revenue' );
+assert_false( $dashboard_status['staff']['attendance_available'], 'Square attendance is not simulated as connected' );
+assert_same( 'private_unmapped', $dashboard_status['planned_location']['state'], 'new location stays private and unmapped' );
+assert_same( 3, count( $dashboard_status['locations'] ), 'only the three confirmed shops enter selectors' );
+$dashboard_all = DoughBoss_Square_Dashboard::view( 'demo' );
+assert_same( 'synthetic', $dashboard_all['source'], 'demo identifies synthetic source' );
+assert_same( 'demo', $dashboard_all['data_state'], 'demo state is explicit' );
+assert_same( 12, count( $dashboard_all['orders'] ), 'demo includes four fictional orders per confirmed shop' );
+$dashboard_sum = array( 'gross_sales_minor' => 0, 'refunds_minor' => 0, 'net_sales_minor' => 0, 'orders' => 0 );
+foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $dashboard_shop ) {
+	$dashboard_filtered = DoughBoss_Square_Dashboard::view( 'demo', $dashboard_shop );
+	assert_same( 1, count( $dashboard_filtered['location_summaries'] ), 'location selection isolates its summary' );
+	assert_same( 4, count( $dashboard_filtered['orders'] ), 'location selection isolates its fictional orders' );
+	foreach ( $dashboard_filtered['orders'] as $dashboard_order ) {
+		assert_same( $dashboard_shop, $dashboard_order['location_id'], 'no cross-location order disclosure in selected view' );
+		$dashboard_line_total = 0;
+		foreach ( $dashboard_order['items'] as $dashboard_item ) {
+			$dashboard_line_total += $dashboard_item['quantity'] * $dashboard_item['unit_price_minor'];
+		}
+		assert_same( $dashboard_line_total, $dashboard_order['amount_minor'], 'order total equals integer-cents line totals' );
+	}
+	assert_same( 3, $dashboard_filtered['summary']['orders'], 'unpaid request is excluded from paid sales count' );
+	foreach ( $dashboard_sum as $dashboard_key => $dashboard_value ) {
+		$dashboard_sum[ $dashboard_key ] += $dashboard_filtered['summary'][ $dashboard_key ];
+	}
+}
+foreach ( $dashboard_sum as $dashboard_key => $dashboard_value ) {
+	assert_same( $dashboard_value, $dashboard_all['summary'][ $dashboard_key ], 'all-shops total is sum of each shop for ' . $dashboard_key );
+}
+assert_same( $dashboard_all['summary']['gross_sales_minor'], array_sum( array_column( $dashboard_all['sales_series'], 'gross_sales_minor' ) ), 'chart totals reconcile to gross sales' );
+assert_same( 1317, $dashboard_all['summary']['average_order_minor'], 'average order uses integer HALF_UP rounding' );
+foreach ( array( array( 'live', 'all' ), array( 'demo', 'planned' ), array( 'demo', '../revesby' ), array( array(), 'all' ), array( 'demo', array() ) ) as $dashboard_bad ) {
+	assert_true( is_wp_error( DoughBoss_Square_Dashboard::view( $dashboard_bad[0], $dashboard_bad[1] ) ), 'invalid source or location is denied, never inferred' );
+}
+assert_false( isset( $dashboard_all['access_token'] ), 'dashboard contract contains no token field' );
+doughboss_test_set_settings( $dashboard_original_settings );
+
 /**
  * DoughBoss_Square + Square settings tests.
  *

@@ -95,6 +95,20 @@ class DoughBoss_REST_Controller {
 
 		register_rest_route(
 			$ns,
+			'/admin/square-dashboard',
+			array(
+				'methods' => WP_REST_Server::READABLE,
+				'callback' => array( $this, 'get_square_dashboard' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args' => array(
+					'mode' => array( 'type' => 'string', 'enum' => array( 'status', 'demo' ), 'default' => 'status' ),
+					'location' => array( 'type' => 'string', 'enum' => array( 'all', 'revesby', 'bankstown', 'roselands' ), 'default' => 'all' ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/config',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1394,6 +1408,21 @@ class DoughBoss_REST_Controller {
 			return true;
 		}
 		return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
+	}
+
+	/** Owner-only preview. Provider reads are not implemented or implied here. */
+	public function get_square_dashboard( $request ) {
+		$permission = $this->verify_manage();
+		if ( is_wp_error( $permission ) ) {
+			return $permission;
+		}
+		$mode = $request->get_param( 'mode' );
+		$location = $request->get_param( 'location' );
+		$view = DoughBoss_Square_Dashboard::view( null === $mode ? 'status' : $mode, null === $location ? 'all' : $location );
+		if ( is_wp_error( $view ) ) {
+			return $view;
+		}
+		return new WP_REST_Response( $view, 200, array( 'Cache-Control' => 'private, no-store', 'Vary' => 'Cookie, Authorization' ) );
 	}
 
 	/**
