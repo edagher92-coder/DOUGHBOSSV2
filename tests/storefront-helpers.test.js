@@ -17,7 +17,7 @@ function squareDashboardHarness(responder) {
 			addEventListener(key, callback) { this.listeners[key] = callback; } };
 	}
 	const controls = {};
-	['preview', 'connection', 'location', 'status', 'content'].forEach(key => { controls[key] = element(); });
+	['preview', 'status-button', 'location', 'status', 'content'].forEach(key => { controls[key] = element(); });
 	const root = element();
 	root.querySelector = selector => controls[selector.match(/data-square-([^\]]+)/)[1]];
 	const requests = [];
@@ -52,6 +52,7 @@ test('Square dashboard starts disconnected and demo needs an explicit action', a
 	assert.match(harness.text(), /Not configured/);
 	assert.doesNotMatch(harness.text(), /Demo orders/);
 	assert.equal(harness.controls.location.disabled, true);
+	assert.equal(harness.controls['status-button'].hidden, true);
 	harness.controls.preview.listeners.click();
 	await harness.settle();
 	assert.match(harness.text(), /synthetic preview/);
@@ -59,6 +60,12 @@ test('Square dashboard starts disconnected and demo needs an explicit action', a
 	assert.match(harness.text(), /Unannounced/);
 	assert.match(harness.text(), /<img src=x onerror=alert\(1\)>/);
 	assert.equal(harness.controls.location.disabled, false);
+	assert.equal(harness.controls['status-button'].hidden, false);
+	harness.controls['status-button'].listeners.click();
+	await harness.settle();
+	assert.match(harness.requests[2].url, /mode=status/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+	assert.equal(harness.controls['status-button'].hidden, true);
 });
 
 test('Square dashboard request failure never falls back to demo figures', async () => {
@@ -78,6 +85,23 @@ test('Square dashboard refuses a response for the wrong selected shop', async ()
 	await harness.settle();
 	assert.match(harness.requests[1].url, /location=bankstown/);
 	assert.match(harness.controls.status.textContent, /could not be loaded/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+});
+
+test('Square dashboard retry recovers connection status without substituting demo data', async () => {
+	let attempts = 0;
+	const harness = squareDashboardHarness(async () => {
+		if (++attempts === 1) throw new Error('network');
+		return { ok: true, json: async () => squareDashboardPayload() };
+	});
+	await harness.settle();
+	const retry = harness.controls.content.children.find(child => child.tag === 'button');
+	assert.ok(retry, 'API failure offers a retry control');
+	retry.listeners.click();
+	await harness.settle();
+	assert.equal(attempts, 2);
+	assert.match(harness.controls.status.textContent, /status loaded/);
+	assert.match(harness.text(), /Not configured/);
 	assert.doesNotMatch(harness.text(), /Demo orders/);
 });
 

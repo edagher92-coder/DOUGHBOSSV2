@@ -116,7 +116,7 @@
 		var connection = create( 'section', 'doughboss-square-dashboard__panel' );
 		connection.appendChild( create( 'h3', '', 'Connection status' ) );
 		connection.appendChild( create( 'p', 'doughboss-square-dashboard__state', payload.connection.state === 'not_configured' ? 'Not configured' : 'Configured, not yet verified' ) );
-		connection.appendChild( create( 'p', 'description', payload.connection.credentials_present ? 'Credentials are present. Square has not been verified from this dashboard.' : 'No Square credentials are configured.' ) );
+		connection.appendChild( create( 'p', 'description', payload.connection.credentials_present ? 'Credentials are present. Square has not been verified from this dashboard.' : 'Square credentials are missing or incomplete.' ) );
 		connection.appendChild( create( 'p', 'description', 'Environment: ' + payload.connection.environment + '. Connected Square figures will be available after verification. Demo figures are synthetic.' ) );
 		grid.appendChild( connection );
 

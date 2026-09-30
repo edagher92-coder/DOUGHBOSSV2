@@ -57,7 +57,13 @@ as described in OPUS-SQUARE-INTEGRATION-20260926.md.
   archive. Fresh final filenames passed the complete release script. No tests
   were weakened and no old artifacts were deleted.
 
-Final plugin archive: `dist/doughboss-square-dashboard-final.zip`, source-matched
+After the frozen review, the existing test harness was corrected to exercise
+the actual status-return button, and a success-after-failure retry regression
+was added. Credential copy now accurately covers partially entered settings.
+Focused Node suite: 43/43 passed; JavaScript syntax and diff checks passed.
+The PHP/runtime contract was unchanged by these refinements.
+
+Final plugin archive: `dist/doughboss-square-dashboard-reviewed.zip`, source-matched
 2.44.0 candidate, 165 files. Theme archive is unchanged source, 1.6.2.
 Ignored local preview router under dist/ is excluded from production packaging.
 Preview is loopback-only at http://127.0.0.1:8089/ on this computer.
@@ -70,5 +76,8 @@ directed this narrowed batch after seeing 92% used / 8% remaining. That explicit
 development instruction covers this dashboard preparation, not provider calls,
 GitHub publication or deployment. The earlier handoff document remains untouched.
 
-Independent review of the frozen implementation is pending. No live code,
+Astra reviewed frozen commit `7ede3c57ada6c142cd25eb55d54179825af60991`:
+ship this protected local preview, 8.7/10, no blockers. Root corrected both
+nonblocking findings above; a bounded review of that final delta is pending.
+The score is not real Square readiness or deployment approval. No live code,
 settings, ordering, payments or Square provider state changed in this batch.
