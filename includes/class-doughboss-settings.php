@@ -247,6 +247,9 @@ class DoughBoss_Settings {
 			'square_live_location_id'   => '',
 			'square_live_webhook_key'   => '',
 			'square_live_approved'      => 0,
+			// Preparation only: shops never inherit the legacy global location ID.
+			'square_test_location_map'  => array(),
+			'square_live_location_map'  => array(),
 			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
 			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
 			// this option is only a fallback and is best left blank where env is set.
@@ -876,6 +879,60 @@ class DoughBoss_Settings {
 		$key   = self::square_live_mode() ? 'square_live_location_id' : 'square_test_location_id';
 		$value = trim( (string) self::get( $key, '' ) );
 		return preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $value ) ? $value : '';
+	}
+
+	/**
+	 * Validate explicit, environment-specific public-shop bindings.
+	 *
+	 * A duplicated provider ID removes BOTH conflicting bindings. Unknown or
+	 * planned shops cannot enter this map. IDs are configuration, not evidence
+	 * that the current Square merchant owns a location or that it is operational.
+	 *
+	 * @param mixed $input Untrusted settings value.
+	 * @return array<string,string>
+	 */
+	public static function sanitize_square_location_map( $input ) {
+		if ( ! is_array( $input ) ) {
+			return array();
+		}
+		$map = array();
+		foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $shop ) {
+			if ( ! isset( $input[ $shop ] ) || ! is_string( $input[ $shop ] ) ) {
+				continue;
+			}
+			$id = trim( $input[ $shop ] );
+			if ( preg_match( '/^[A-Za-z0-9_-]{4,64}$/D', $id ) ) {
+				$map[ $shop ] = $id;
+			}
+		}
+		$counts = array_count_values( $map );
+		foreach ( $map as $shop => $id ) {
+			if ( $counts[ $id ] > 1 ) {
+				unset( $map[ $shop ] );
+			}
+		}
+		return $map;
+	}
+
+	/** Validated bindings for the server-selected Square environment. */
+	public static function square_location_map() {
+		$key = self::square_live_mode() ? 'square_live_location_map' : 'square_test_location_map';
+		return self::sanitize_square_location_map( self::get( $key, array() ) );
+	}
+
+	/**
+	 * Exact binding for a known shop; never fall back to the global location.
+	 * This preparation seam does not authorize payment or activate the provider.
+	 *
+	 * @param string $shop Exact public shop slug.
+	 * @return string Empty when missing, malformed, ambiguous or unsupported.
+	 */
+	public static function square_shop_location_id( $shop ) {
+		if ( ! is_string( $shop ) ) {
+			return '';
+		}
+		$map = self::square_location_map();
+		return isset( $map[ $shop ] ) ? $map[ $shop ] : '';
 	}
 
 	/**

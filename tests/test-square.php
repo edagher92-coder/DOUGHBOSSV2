@@ -44,6 +44,56 @@ foreach ( array( array( 'live', 'all' ), array( 'demo', 'planned' ), array( 'dem
 assert_false( isset( $dashboard_all['access_token'] ), 'dashboard contract contains no token field' );
 doughboss_test_set_settings( $dashboard_original_settings );
 
+db_test( 'Square shop bindings are explicit, bounded and distinct', function () {
+	assert_same( array(), DoughBoss_Settings::defaults()['square_test_location_map'], 'sandbox bindings start empty' );
+	assert_same( array(), DoughBoss_Settings::defaults()['square_live_location_map'], 'production bindings start empty' );
+	foreach ( array( null, false, 42, 'LUNSCOPED' ) as $invalid ) {
+		assert_same( array(), DoughBoss_Settings::sanitize_square_location_map( $invalid ), 'malformed persisted map fails closed' );
+	}
+	$map = DoughBoss_Settings::sanitize_square_location_map( array(
+		'revesby' => ' LDEMO_REVESBY ', 'bankstown' => 'LDEMO_BANKSTOWN', 'roselands' => 'LDEMO_ROSELANDS',
+		'planned' => 'LPRIVATE', 'unknown' => 'LUNKNOWN',
+	) );
+	assert_same( array( 'revesby' => 'LDEMO_REVESBY', 'bankstown' => 'LDEMO_BANKSTOWN', 'roselands' => 'LDEMO_ROSELANDS' ), $map, 'only confirmed shops have explicit bindings' );
+	foreach ( array( '', 'abc', str_repeat( 'L', 65 ), "LVALID\nINVALID", '<script>', array( 'LARRAY' ), 12345 ) as $invalid ) {
+		assert_same( array(), DoughBoss_Settings::sanitize_square_location_map( array( 'revesby' => $invalid ) ), 'invalid provider ID cannot become a mapping' );
+	}
+	assert_same( array( 'roselands' => 'LUNIQUE' ), DoughBoss_Settings::sanitize_square_location_map( array(
+		'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE', 'roselands' => 'LUNIQUE',
+	) ), 'both ambiguous bindings are removed, not first-wins' );
+} );
+
+db_test( 'Square mapping status is environment-isolated and never connected evidence', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	try {
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY', 'bankstown' => 'LTEST_BANKSTOWN' ),
+			'square_live_location_map' => array( 'roselands' => 'LLIVE_ROSELANDS' ),
+		) ) );
+		assert_same( 'LTEST_REVESBY', DoughBoss_Settings::square_shop_location_id( 'revesby' ), 'exact sandbox shop resolves' );
+		assert_same( '', DoughBoss_Settings::square_shop_location_id( 'roselands' ), 'live ID never fills a sandbox gap' );
+		foreach ( array( 'Revesby', 'revesby ', '../revesby', 'planned', 'unknown', 1, null, array() ) as $unknown ) {
+			assert_same( '', DoughBoss_Settings::square_shop_location_id( $unknown ), 'unknown or non-exact shop denied' );
+		}
+		$status = DoughBoss_Square_Dashboard::view();
+		assert_same( 'configured_unverified', $status['locations'][0]['state'], 'saved ID remains unverified' );
+		assert_same( 'unmapped', $status['locations'][2]['state'], 'missing shop never inherits legacy global ID' );
+		assert_same( 'not_connected', $status['data_state'], 'mapping does not attest a connection' );
+		assert_false( $status['connection']['provider_verified'], 'no provider verification is invented' );
+		assert_false( isset( $status['summary'] ), 'mapping never creates revenue' );
+		assert_false( isset( $status['locations'][0]['square_location_id'] ), 'dashboard does not disclose provider IDs' );
+		assert_same( 'private_unmapped', $status['planned_location']['state'], 'planned shop stays private' );
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_mode' => 'live', 'square_live_location_map' => array( 'roselands' => 'LLIVE_ROSELANDS' ),
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY' ),
+		) ) );
+		assert_same( '', DoughBoss_Settings::square_shop_location_id( 'revesby' ), 'sandbox ID cannot enter live map' );
+		assert_same( 'LLIVE_ROSELANDS', DoughBoss_Settings::square_shop_location_id( 'roselands' ), 'only explicit live binding resolves' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
 /**
  * DoughBoss_Square + Square settings tests.
  *

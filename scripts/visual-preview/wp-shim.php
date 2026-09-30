@@ -25,6 +25,8 @@ function esc_html__( $text ) { return esc_html( $text ); }
 function esc_attr__( $text ) { return esc_attr( $text ); }
 function esc_html_e( $text ) { echo esc_html( $text ); }
 function esc_attr_e( $text ) { echo esc_attr( $text ); }
+function wp_strip_all_tags( $text ) { return trim( strip_tags( (string) $text ) ); }
+function is_wp_error() { return false; }
 function trailingslashit( $value ) { return rtrim( (string) $value, "/\\" ) . '/'; }
 function wp_getimagesize( $file ) { return getimagesize( $file ); }
 function attachment_url_to_postid() { return 0; }
@@ -108,6 +110,46 @@ function wp_footer() {
 class DoughBoss_Settings {
 	public static function ordering_open() { return ! empty( $GLOBALS['doughboss_preview_ordering_open'] ); }
 	public static function ordering_closed_message() { return 'Sample paused-state message. Check a shop for current availability.'; }
+	public static function format_price( $amount ) { return '$' . number_format( (float) $amount, 2 ); }
+}
+
+class DoughBoss_Post_Types {
+	const POST_TYPE  = 'doughboss_item';
+	const TAXONOMY   = 'doughboss_category';
+	const META_PRICE = '_doughboss_price';
+}
+
+function doughboss_preview_menu_item( $post_id ) {
+	foreach ( doughboss_preview_fixture()['menu'] as $item ) {
+		if ( (int) $item['id'] === (int) $post_id ) {
+			return $item;
+		}
+	}
+	return null;
+}
+
+function get_posts( $args = array() ) {
+	unset( $args );
+	$posts = array();
+	foreach ( doughboss_preview_fixture()['menu'] as $item ) {
+		$posts[] = (object) array(
+			'ID'           => (int) $item['id'],
+			'post_title'   => $item['name'],
+			'post_excerpt' => $item['description'],
+			'post_content' => '',
+		);
+	}
+	return $posts;
+}
+
+function get_the_terms( $post_id ) {
+	$item = doughboss_preview_menu_item( $post_id );
+	return $item ? array( (object) array( 'name' => $item['category'] ) ) : false;
+}
+
+function get_post_meta( $post_id, $key ) {
+	$item = doughboss_preview_menu_item( $post_id );
+	return $item && DoughBoss_Post_Types::META_PRICE === $key ? $item['price'] : '';
 }
 
 require $preview_repo . '/includes/class-doughboss-images.php';

@@ -105,6 +105,26 @@ test('Square dashboard retry recovers connection status without substituting dem
 	assert.doesNotMatch(harness.text(), /Demo orders/);
 });
 
+test('Square dashboard distinguishes configured mappings without treating them as connected data', async () => {
+	const configuredPayload = squareDashboardPayload();
+	configuredPayload.connection = { state: 'configured_unverified', environment: 'test', credentials_present: true, provider_verified: false };
+	configuredPayload.locations = [
+		{ id: 'revesby', name: 'revesby', state: 'unmapped' },
+		{ id: 'bankstown', name: 'bankstown', state: 'configured_unverified' }
+	];
+	const configured = squareDashboardHarness(async () => ({ ok: true, json: async () => configuredPayload }));
+	await configured.settle();
+	assert.match(configured.text(), /Mapped, not verified/);
+	assert.doesNotMatch(configured.text(), /Demo orders|Gross sales|Net sales|Average order/);
+
+	const unsupportedPayload = squareDashboardPayload();
+	unsupportedPayload.locations[0].state = 'connected';
+	const unsupported = squareDashboardHarness(async () => ({ ok: true, json: async () => unsupportedPayload }));
+	await unsupported.settle();
+	assert.match(unsupported.controls.status.textContent, /could not be loaded/);
+	assert.doesNotMatch(unsupported.text(), /Demo orders|Gross sales|Net sales|Average order/);
+});
+
 function extractFunction(file, name, context) {
 	const source = fs.readFileSync(file, 'utf8');
 	const marker = 'function ' + name + '(';
@@ -134,6 +154,111 @@ const orderboard = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-orde
 const square = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-square.js');
 const shopStatus = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-shop-status.js');
 const catering = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-catering.js');
+
+function storefrontElement(tag = 'div') {
+	const node = {
+		tag,
+		children: [],
+		attributes: {},
+		className: '',
+		textContent: '',
+		parentNode: null,
+		appendChild(child) {
+			child.parentNode = this;
+			this.children.push(child);
+			return child;
+		},
+		removeChild(child) {
+			this.children.splice(this.children.indexOf(child), 1);
+			child.parentNode = null;
+		},
+		setAttribute(key, value) {
+			this.attributes[key] = String(value);
+		},
+		getAttribute(key) {
+			return this.attributes[key] || null;
+		},
+		querySelector(selector) {
+			const match = /^\[([^\]]+)\]$/.exec(selector);
+			if (!match) return null;
+			const key = match[1];
+			for (const child of this.children) {
+				if (Object.hasOwn(child.attributes, key)) return child;
+				const descendant = child.querySelector(selector);
+				if (descendant) return descendant;
+			}
+			return null;
+		}
+	};
+	Object.defineProperty(node, 'innerHTML', {
+		set() {
+			node.children.forEach(child => { child.parentNode = null; });
+			node.children = [];
+		}
+	});
+	return node;
+}
+
+function storefrontCreate(tag, attrs) {
+	const node = storefrontElement(tag);
+	for (const [key, value] of Object.entries(attrs || {})) {
+		if (key === 'class') node.className = value;
+		else if (key === 'text') node.textContent = value;
+		else node.setAttribute(key, value);
+	}
+	return node;
+}
+
+test('menu fallback survives failed interactive reads and is replaced only by successful enhancement', async () => {
+	const showMenuFallbackError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });
+	const fallbackRoot = storefrontElement();
+	const fallback = storefrontElement();
+	fallback.setAttribute('data-doughboss-menu-fallback', '');
+	const browseItem = storefrontElement('li');
+	browseItem.textContent = 'Published browse-only item';
+	fallback.appendChild(browseItem);
+	fallbackRoot.appendChild(fallback);
+	const failedRender = extractFunction(storefront, 'renderMenu', {
+		Promise,
+		request: () => Promise.reject(new Error('network')),
+		getConfig: () => Promise.resolve({ ordering_open: false }),
+		showMenuFallbackError,
+		activeTableContext: () => null,
+		el: storefrontCreate,
+		I18N: {}
+	});
+	failedRender(fallbackRoot);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(fallbackRoot.querySelector('[data-doughboss-menu-fallback]'), fallback);
+	assert.equal(fallback.children[0], browseItem);
+	const availability = fallback.querySelector('[data-doughboss-menu-availability]');
+	assert.ok(availability, 'failed reads add an availability notice to, not instead of, the browse fallback');
+	assert.equal(availability.attributes.role, 'status');
+	assert.equal(availability.attributes['aria-live'], 'polite');
+	showMenuFallbackError(fallbackRoot, new Error('retry failed'));
+	assert.equal(fallback.children.filter(child => Object.hasOwn(child.attributes, 'data-doughboss-menu-availability')).length, 1, 'repeated failures keep one notice');
+
+	const enhancedRoot = storefrontElement();
+	const enhancedFallback = storefrontElement();
+	enhancedFallback.setAttribute('data-doughboss-menu-fallback', '');
+	enhancedRoot.appendChild(enhancedFallback);
+	const successfulRender = extractFunction(storefront, 'renderMenu', {
+		Promise,
+		request: path => {
+			assert.equal(path, '/menu');
+			return Promise.resolve([]);
+		},
+		getConfig: () => Promise.resolve({ ordering_open: false }),
+		activeTableContext: () => null,
+		el: storefrontCreate,
+		I18N: {}
+	});
+	successfulRender(enhancedRoot);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(enhancedRoot.querySelector('[data-doughboss-menu-fallback]'), null, 'a successful enhancement removes fallback content before rendering');
+	assert.equal(enhancedRoot.children.length, 1, 'successful enhancement leaves one menu experience');
+	assert.equal(enhancedRoot.children[0].className, 'db-empty');
+});
 
 const prettyUrl = extractFunction(storefront, 'restRequestUrl', {
 	DATA: { restUrl: 'https://example.test/wp-json/doughboss/v1' }

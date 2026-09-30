@@ -311,10 +311,51 @@ class DoughBoss_Shortcodes {
 			$atts,
 			'doughboss_menu'
 		);
+		$posts = get_posts(
+			array(
+				'post_type'   => DoughBoss_Post_Types::POST_TYPE,
+				'post_status' => 'publish',
+				'numberposts' => 200,
+				'orderby'     => array( 'menu_order' => 'ASC', 'title' => 'ASC' ),
+			)
+		);
+		$categories = array();
+		foreach ( $posts as $post ) {
+			$terms    = get_the_terms( $post->ID, DoughBoss_Post_Types::TAXONOMY );
+			$category = ( $terms && ! is_wp_error( $terms ) ) ? $terms[0]->name : __( 'Menu', 'doughboss' );
+			if ( ! isset( $categories[ $category ] ) ) {
+				$categories[ $category ] = array();
+			}
+			$categories[ $category ][] = $post;
+		}
 		ob_start();
 		?>
 		<div class="db-app db-menu" data-doughboss-menu data-cart-url="<?php echo esc_url( $atts['cart_url'] ); ?>">
-			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
+			<div class="db-menu-fallback" data-doughboss-menu-fallback>
+				<?php if ( empty( $categories ) ) : ?>
+					<p class="db-empty"><?php esc_html_e( 'No menu items yet.', 'doughboss' ); ?></p>
+				<?php else : ?>
+					<?php foreach ( $categories as $category => $items ) : ?>
+						<section class="db-menu-fallback-section">
+							<h2 class="db-category"><?php echo esc_html( $category ); ?></h2>
+							<ul class="db-menu-fallback-list">
+								<?php foreach ( $items as $item ) : ?>
+									<li class="db-menu-fallback-item">
+										<div class="db-menu-fallback-item-heading">
+											<h3><?php echo esc_html( $item->post_title ); ?></h3>
+											<span class="db-price"><?php echo esc_html( DoughBoss_Settings::format_price( (float) get_post_meta( $item->ID, DoughBoss_Post_Types::META_PRICE, true ) ) ); ?></span>
+										</div>
+										<?php $description = wp_strip_all_tags( $item->post_excerpt ? $item->post_excerpt : $item->post_content ); ?>
+										<?php if ( '' !== $description ) : ?>
+											<p><?php echo esc_html( $description ); ?></p>
+										<?php endif; ?>
+									</li>
+								<?php endforeach; ?>
+							</ul>
+						</section>
+					<?php endforeach; ?>
+				<?php endif; ?>
+			</div>
 		</div>
 		<?php
 		return ob_get_clean();

@@ -76,7 +76,7 @@
 		}
 
 		return payload.locations.every( function ( location ) {
-			return isObject( location ) && isNonEmptyString( location.id ) && isNonEmptyString( location.name ) && location.state === 'unmapped';
+			return isObject( location ) && isNonEmptyString( location.id ) && isNonEmptyString( location.name ) && [ 'unmapped', 'configured_unverified' ].includes( location.state );
 		} );
 	}
 
@@ -119,6 +119,16 @@
 		connection.appendChild( create( 'p', 'description', payload.connection.credentials_present ? 'Credentials are present. Square has not been verified from this dashboard.' : 'Square credentials are missing or incomplete.' ) );
 		connection.appendChild( create( 'p', 'description', 'Environment: ' + payload.connection.environment + '. Connected Square figures will be available after verification. Demo figures are synthetic.' ) );
 		grid.appendChild( connection );
+
+		var mappings = create( 'section', 'doughboss-square-dashboard__panel' );
+		mappings.appendChild( create( 'h3', '', 'Shop mapping preparation' ) );
+		var shopList = create( 'ul', 'doughboss-square-dashboard__list' );
+		payload.locations.forEach( function ( location ) {
+			shopList.appendChild( create( 'li', '', location.name + ': ' + ( location.state === 'configured_unverified' ? 'Mapped, not verified' : 'Unmapped' ) ) );
+		} );
+		mappings.appendChild( shopList );
+		mappings.appendChild( create( 'p', 'description', 'Saved mappings do not connect Square or authorize payment. Checkout routing and the approval-to-kitchen lifecycle still require acceptance.' ) );
+		grid.appendChild( mappings );
 
 		var staff = create( 'section', 'doughboss-square-dashboard__panel' );
 		staff.appendChild( create( 'h3', '', 'Team and attendance' ) );

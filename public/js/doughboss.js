@@ -474,6 +474,28 @@
 		}, []);
 	}
 
+	// The shortcode supplies a browse-only menu before JavaScript runs. Keep it
+	// available whenever the interactive config or menu read cannot complete.
+	function showMenuFallbackError(root, err) {
+		var fallback = root.querySelector('[data-doughboss-menu-fallback]');
+		var message = I18N.menuUnavailable || 'The interactive menu is unavailable. You can still browse the menu below.';
+		if (!fallback) {
+			root.appendChild(el('p', { class: 'db-menu-availability', role: 'status', 'aria-live': 'polite', text: message }));
+			return;
+		}
+		var previous = fallback.querySelector('[data-doughboss-menu-availability]');
+		if (previous && previous.parentNode) {
+			previous.parentNode.removeChild(previous);
+		}
+		fallback.appendChild(el('p', {
+			class: 'db-menu-availability',
+			'data-doughboss-menu-availability': 'true',
+			role: 'status',
+			'aria-live': 'polite',
+			text: message
+		}));
+	}
+
 	function renderMenu(root) {
 		Promise.all([request('/menu'), getConfig()]).then(function (results) {
 			var items = results[0];
@@ -659,8 +681,7 @@
 			});
 			initCartFab(root);
 		}).catch(function (err) {
-			root.innerHTML = '';
-			root.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
+			showMenuFallbackError(root, err);
 		});
 	}
 
@@ -2829,6 +2850,10 @@
 			// A claimed but expired/revoked table session must never silently become
 			// a switchable pickup order. Stop ordering and direct the guest to staff.
 			document.querySelectorAll('[data-doughboss-shop], [data-doughboss-menu], [data-doughboss-builder], [data-doughboss-cart]').forEach(function (root) {
+				if (root.matches && root.matches('[data-doughboss-menu]') && root.querySelector('[data-doughboss-menu-fallback]')) {
+					showMenuFallbackError(root, err);
+					return;
+				}
 				root.innerHTML = '';
 				root.appendChild(el('div', { class: 'db-error', role: 'alert', text: (err && err.message ? err.message : 'This table session is no longer active.') + ' Please scan the table QR again or ask a staff member for help.' }));
 			});

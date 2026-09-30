@@ -495,6 +495,19 @@ class DoughBoss_Admin {
 		$clean['square_live_access_token'] = empty( $input['clear_square_live_access_token'] ) ? $this->keep_secret( $input, $existing, 'square_live_access_token' ) : '';
 		$clean['square_live_webhook_key']  = $this->keep_secret( $input, $existing, 'square_live_webhook_key' );
 		$clean['square_live_approved']     = empty( $input['square_live_approved'] ) ? 0 : 1;
+		foreach ( array( 'test', 'live' ) as $square_environment ) {
+			$map_key = 'square_' . $square_environment . '_location_map';
+			$raw_map = array_key_exists( $map_key, $input ) ? $input[ $map_key ] : ( isset( $existing[ $map_key ] ) ? $existing[ $map_key ] : array() );
+			$clean[ $map_key ] = DoughBoss_Settings::sanitize_square_location_map( $raw_map );
+			if ( is_array( $raw_map ) ) {
+				foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $square_shop ) {
+					if ( ! empty( $raw_map[ $square_shop ] ) && ! isset( $clean[ $map_key ][ $square_shop ] ) ) {
+						add_settings_error( DoughBoss_Settings::OPTION_KEY, $map_key, __( 'Invalid or duplicated Square shop IDs were left unmapped. Each shop needs its own exact ID for the selected environment.', 'doughboss' ), 'warning' );
+						break;
+					}
+				}
+			}
+		}
 
 		// POSPal POS (Open Platform) — Revesby pilot. The secret appKey is read
 		// env-first (DOUGHBOSS_POSPAL_APPKEY); this field is only a fallback, and
@@ -3723,7 +3736,23 @@ JS;
 						</tr>
 					</table>
 
-					<h2><?php esc_html_e( 'POSPal POS (in-store coupons)', 'doughboss' ); ?></h2>
+			<h3><?php esc_html_e( 'Square shop mapping preparation', 'doughboss' ); ?></h3>
+			<p class="description"><?php esc_html_e( 'Enter only merchant-verified IDs. Sandbox and live bindings are separate; every shop must have a distinct ID. Blank or conflicting IDs stay unmapped. These fields prepare the integration only: they do not yet replace the legacy checkout routing, connect Square, or enable orders and payments. Keep ordering and payments off until the approval, payment and kitchen lifecycle has passed acceptance.', 'doughboss' ); ?></p>
+			<table class="form-table" role="presentation">
+				<?php foreach ( array( 'test' => __( 'Sandbox', 'doughboss' ), 'live' => __( 'Live', 'doughboss' ) ) as $square_environment => $square_label ) : ?>
+					<?php $map_key = 'square_' . $square_environment . '_location_map'; ?>
+					<?php $square_map = DoughBoss_Settings::sanitize_square_location_map( isset( $settings[ $map_key ] ) ? $settings[ $map_key ] : array() ); ?>
+					<?php foreach ( array( 'revesby' => 'Revesby', 'bankstown' => 'Bankstown', 'roselands' => 'Roselands' ) as $square_shop => $square_shop_name ) : ?>
+						<?php $field_id = 'db-square-map-' . $square_environment . '-' . $square_shop; ?>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $square_label . ' - ' . $square_shop_name ); ?></label></th>
+							<td><input type="text" id="<?php echo esc_attr( $field_id ); ?>" class="regular-text" maxlength="64" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[<?php echo esc_attr( $map_key ); ?>][<?php echo esc_attr( $square_shop ); ?>]" value="<?php echo esc_attr( isset( $square_map[ $square_shop ] ) ? $square_map[ $square_shop ] : '' ); ?>" /></td>
+						</tr>
+					<?php endforeach; ?>
+				<?php endforeach; ?>
+			</table>
+
+			<h2><?php esc_html_e( 'POSPal POS (in-store coupons)', 'doughboss' ); ?></h2>
 					<p class="description" style="max-width:760px;">
 						<?php esc_html_e( 'Connect the Revesby POSPal till so issued vouchers can be mirrored as member coupons and reconciled. Off by default. Enter the area host, App ID and App Key from your POSPal Open Platform account, save, then test the connection.', 'doughboss' ); ?>
 						<?php

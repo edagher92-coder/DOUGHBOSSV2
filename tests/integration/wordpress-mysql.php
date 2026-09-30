@@ -2604,6 +2604,69 @@ DoughBoss_Locations::save_weekly_hours( 1, $original_hours );
 
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 
+// Exercise the real Settings API sanitiser and persisted mapping boundary.
+require_once dirname( __DIR__, 2 ) . '/admin/class-doughboss-admin.php';
+$square_map_original = DoughBoss_Settings::all();
+$square_map_admin = new DoughBoss_Admin();
+$square_map_saved = $square_map_admin->sanitize_settings( array(
+	'square_test_location_map' => array( 'revesby' => 'LDEMO_REVESBY', 'bankstown' => 'LDEMO_BANKSTOWN', 'roselands' => 'LDEMO_ROSELANDS', 'planned' => 'LPRIVATE' ),
+	'square_live_location_map' => array( 'revesby' => 'LLIVE_REVESBY' ),
+) );
+db_integration_assert( 3 === count( $square_map_saved['square_test_location_map'] ) && ! isset( $square_map_saved['square_test_location_map']['planned'] ), 'admin mapping sanitation excludes private and unknown shops' );
+update_option( DoughBoss_Settings::OPTION_KEY, $square_map_saved );
+$square_map_omitted = $square_map_admin->sanitize_settings( array() );
+db_integration_assert( $square_map_saved['square_test_location_map'] === $square_map_omitted['square_test_location_map'] && $square_map_saved['square_live_location_map'] === $square_map_omitted['square_live_location_map'], 'a settings save without mapping fields preserves existing sandbox and live bindings' );
+$square_map_conflict = $square_map_admin->sanitize_settings( array( 'square_test_location_map' => array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE', 'roselands' => 'LDEMO_ROSELANDS' ) ) );
+db_integration_assert( array( 'roselands' => 'LDEMO_ROSELANDS' ) === $square_map_conflict['square_test_location_map'], 'admin save leaves both conflicting provider IDs unmapped' );
+$square_map_clear = $square_map_admin->sanitize_settings( array( 'square_test_location_map' => array( 'revesby' => '', 'bankstown' => '', 'roselands' => '' ) ) );
+db_integration_assert( array() === $square_map_clear['square_test_location_map'] && array( 'revesby' => 'LLIVE_REVESBY' ) === $square_map_clear['square_live_location_map'], 'explicit blank map clears only its own environment' );
+update_option( DoughBoss_Settings::OPTION_KEY, $square_map_original );
+
+// SSR menu fallback uses real published posts and taxonomy terms; it must not
+// expose drafts, raw HTML, dietary assertions, or purchase controls.
+$ssr_category = wp_insert_term( 'SSR browse fallback', DoughBoss_Post_Types::TAXONOMY );
+$ssr_term_id  = is_wp_error( $ssr_category ) ? 0 : (int) $ssr_category['term_id'];
+$ssr_first_title = 'SSR first <b>published</b> & "quoted"';
+$ssr_second_title = 'SSR second published';
+$ssr_first_id = wp_insert_post(
+	array(
+		'post_type'    => DoughBoss_Post_Types::POST_TYPE,
+		'post_status'  => 'publish',
+		'post_title'   => $ssr_first_title,
+		'post_excerpt' => 'SSR <em>plain</em> description',
+		'menu_order'   => 198,
+	)
+);
+$ssr_second_id = wp_insert_post(
+	array(
+		'post_type'   => DoughBoss_Post_Types::POST_TYPE,
+		'post_status' => 'publish',
+		'post_title'  => $ssr_second_title,
+		'menu_order'  => 199,
+	)
+);
+$ssr_draft_id = wp_insert_post(
+	array(
+		'post_type'   => DoughBoss_Post_Types::POST_TYPE,
+		'post_status' => 'draft',
+		'post_title'  => 'SSR hidden draft',
+		'menu_order'  => 1,
+	)
+);
+foreach ( array( $ssr_first_id, $ssr_second_id, $ssr_draft_id ) as $ssr_item_id ) {
+	wp_set_object_terms( $ssr_item_id, $ssr_term_id, DoughBoss_Post_Types::TAXONOMY );
+}
+update_post_meta( $ssr_first_id, DoughBoss_Post_Types::META_PRICE, '12.5' );
+update_post_meta( $ssr_second_id, DoughBoss_Post_Types::META_PRICE, '13' );
+update_post_meta( $ssr_draft_id, DoughBoss_Post_Types::META_PRICE, '99' );
+$ssr_menu_html = ( new DoughBoss_Shortcodes() )->menu();
+$ssr_first_escaped = esc_html( $ssr_first_title );
+db_integration_assert( false !== strpos( $ssr_menu_html, 'data-doughboss-menu-fallback' ) && false !== strpos( $ssr_menu_html, 'SSR browse fallback' ), 'menu shortcode emits a server-rendered browse fallback from real category terms' );
+db_integration_assert( false !== strpos( $ssr_menu_html, $ssr_first_escaped ) && false !== strpos( $ssr_menu_html, 'SSR plain description' ) && false !== strpos( $ssr_menu_html, DoughBoss_Settings::format_price( 12.5 ) ), 'SSR fallback emits escaped title, plain description and exact formatted approved price' );
+db_integration_assert( false === strpos( $ssr_menu_html, '<b>published</b>' ) && false === strpos( $ssr_menu_html, '<em>plain</em>' ) && false === strpos( $ssr_menu_html, 'SSR hidden draft' ), 'SSR fallback escapes markup and excludes unpublished menu rows' );
+db_integration_assert( strpos( $ssr_menu_html, $ssr_first_escaped ) < strpos( $ssr_menu_html, esc_html( $ssr_second_title ) ), 'SSR fallback preserves menu order within a category' );
+db_integration_assert( false === strpos( $ssr_menu_html, 'dietary' ) && false === strpos( $ssr_menu_html, '<button' ) && false === strpos( $ssr_menu_html, '<form' ), 'SSR fallback remains browse-only without dietary claims or purchase controls' );
+
 // Leave one synthetic approved/unpaid fixture for the explicit multi-process
 // pre-order start/completion harness that the PowerShell runner launches next.
 $preorder_race_settings = DoughBoss_Settings::all();

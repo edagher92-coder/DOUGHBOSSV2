@@ -34,7 +34,11 @@ class DoughBoss_Square_Dashboard {
 			'locations' => array(),
 		);
 		foreach ( $shops as $id => $name ) {
-			$view['locations'][] = array( 'id' => $id, 'name' => $name, 'state' => 'unmapped' );
+			$view['locations'][] = array(
+				'id'    => $id,
+				'name'  => $name,
+				'state' => '' !== DoughBoss_Settings::square_shop_location_id( $id ) ? 'configured_unverified' : 'unmapped',
+			);
 		}
 		if ( 'status' === $mode ) {
 			return $view;

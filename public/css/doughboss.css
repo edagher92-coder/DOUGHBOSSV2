@@ -175,6 +175,57 @@
 	box-shadow: var(--db-shadow-1);
 }
 
+/* Browse-only content emitted by [doughboss_menu] before JavaScript enhances
+ * it. No controls appear here: availability and ordering stay server-owned. */
+.db-menu-fallback-section + .db-menu-fallback-section {
+	margin-top: 1.75rem;
+}
+
+.db-menu-fallback-section .db-category {
+	margin-top: 0;
+}
+
+.db-menu-fallback-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border-top: 1px solid var(--db-border);
+}
+
+.db-menu-fallback-item {
+	padding: 0.9rem 0;
+	border-bottom: 1px solid var(--db-border);
+}
+
+.db-menu-fallback-item-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.db-menu-fallback-item h3,
+.db-menu-fallback-item p {
+	margin: 0;
+}
+
+.db-menu-fallback-item h3 {
+	font-size: 1rem;
+}
+
+.db-menu-fallback-item p {
+	margin-top: 0.3rem;
+	color: var(--db-muted);
+}
+
+.db-menu-availability {
+	margin: 0 0 1rem;
+	padding: 0.75rem 0.9rem;
+	border-left: 4px solid var(--db-accent);
+	background: #fff8f5;
+	color: var(--db-ink);
+}
+
 .db-category {
 	position: relative;
 	margin: 1.75rem 0 1rem;
