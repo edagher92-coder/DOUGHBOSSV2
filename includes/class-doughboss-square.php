@@ -532,7 +532,7 @@ class DoughBoss_Square {
 			$body['verification_token'] = $verification;
 		}
 
-		$response = self::request( 'POST', '/v2/payments', $body );
+		$response = self::request( 'POST', '/v2/payments', $body, $dispatch_binding );
 		if ( is_wp_error( $response ) ) {
 			DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $response->get_error_code() );
 			return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $response->get_error_code() );
@@ -607,7 +607,7 @@ class DoughBoss_Square {
 				'attempt_id' => (int) $attempt['id'],
 			);
 		}
-		$response = self::retrieve_payment( $reference );
+		$response = self::retrieve_mapped_payment( $reference, $shop_binding );
 		if ( is_wp_error( $response ) ) {
 			DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $response->get_error_code() );
 			return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $response->get_error_code(), $reference );
@@ -658,11 +658,34 @@ class DoughBoss_Square {
 	 * @return array|WP_Error The `payment` object, or an error.
 	 */
 	public static function retrieve_payment( $id ) {
+		return self::retrieve_payment_with_binding( $id );
+	}
+
+	/**
+	 * Retrieve a v2 payment with its already validated mapped shop binding.
+	 *
+	 * @param string $id           Square payment id.
+	 * @param array  $shop_binding Validated v2 shop binding.
+	 * @return array|WP_Error The `payment` object, or an error.
+	 */
+	private static function retrieve_mapped_payment( $id, array $shop_binding ) {
+		return self::retrieve_payment_with_binding( $id, $shop_binding );
+	}
+
+	/**
+	 * Shared payment retrieval implementation. A null binding deliberately
+	 * retains the legacy global-location transport guard.
+	 *
+	 * @param string     $id           Square payment id.
+	 * @param array|null $shop_binding Validated v2 shop binding, when present.
+	 * @return array|WP_Error The `payment` object, or an error.
+	 */
+	private static function retrieve_payment_with_binding( $id, $shop_binding = null ) {
 		$id = self::canonical_id( $id );
 		if ( '' === $id ) {
 			return new WP_Error( 'doughboss_pay_id', __( 'Invalid payment reference.', 'doughboss' ), array( 'status' => 400 ) );
 		}
-		$response = self::request( 'GET', '/v2/payments/' . rawurlencode( $id ) );
+		$response = self::request( 'GET', '/v2/payments/' . rawurlencode( $id ), array(), $shop_binding );
 		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
@@ -709,7 +732,7 @@ class DoughBoss_Square {
 			}
 		}
 
-		$payment = self::retrieve_payment( $id );
+		$payment = $is_v2 ? self::retrieve_mapped_payment( $id, $shop_binding ) : self::retrieve_payment( $id );
 		if ( is_wp_error( $payment ) ) {
 			return $payment;
 		}
@@ -1082,11 +1105,16 @@ class DoughBoss_Square {
 	 *
 	 * @param string $method HTTP method.
 	 * @param string $path   API path beginning with '/'.
-	 * @param array  $body   JSON body for write calls.
+	 * @param array      $body         JSON body for write calls.
+	 * @param array|null $shop_binding Validated v2 mapping context, when present.
 	 * @return array|WP_Error Decoded JSON, or an error.
 	 */
-	private static function request( $method, $path, array $body = array() ) {
-		if ( ! DoughBoss_Settings::square_access_token_valid() || '' === self::location_id() ) {
+	private static function request( $method, $path, array $body = array(), $shop_binding = null ) {
+		if (
+			! DoughBoss_Settings::square_access_token_valid()
+			|| ( null === $shop_binding && '' === self::location_id() )
+			|| ( null !== $shop_binding && ! self::mapped_binding_current( $shop_binding ) )
+		) {
 			return new WP_Error( 'doughboss_pay_config', __( 'Card payments are not configured.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 
@@ -1132,5 +1160,29 @@ class DoughBoss_Square {
 		}
 
 		return new WP_Error( 'doughboss_pay_api', __( 'We could not complete the card payment. Please try again or contact the shop.', 'doughboss' ), array( 'status' => 502 ) );
+	}
+
+	/**
+	 * Confirm a v2 transport context still names the current active-mode map.
+	 * Native location activity and the exact attempt-to-shop relationship are
+	 * checked by attempt_shop_binding() immediately before this request path.
+	 *
+	 * @param mixed $shop_binding Candidate mapped v2 binding.
+	 * @return bool
+	 */
+	private static function mapped_binding_current( $shop_binding ) {
+		if ( ! is_array( $shop_binding ) ) {
+			return false;
+		}
+		$shop_slug          = isset( $shop_binding['shop_slug'] ) && is_string( $shop_binding['shop_slug'] ) ? $shop_binding['shop_slug'] : '';
+		$square_location_id = isset( $shop_binding['square_location_id'] ) && is_string( $shop_binding['square_location_id'] ) ? $shop_binding['square_location_id'] : '';
+		$square_mode        = isset( $shop_binding['square_mode'] ) && is_string( $shop_binding['square_mode'] ) ? $shop_binding['square_mode'] : '';
+		$current_location   = in_array( $shop_slug, array( 'revesby', 'bankstown', 'roselands' ), true ) ? DoughBoss_Settings::square_shop_location_id( $shop_slug ) : '';
+
+		return '' !== $current_location
+			&& '' !== $square_location_id
+			&& hash_equals( $current_location, $square_location_id )
+			&& in_array( $square_mode, array( 'test', 'live' ), true )
+			&& hash_equals( self::mode(), $square_mode );
 	}
 }

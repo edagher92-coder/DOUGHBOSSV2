@@ -151,6 +151,22 @@ db_test( 'Square v2 payment payload requires its saved shop location binding', f
 	assert_same( 'doughboss_pay_create', $method->invoke( null, $matching, $legacy, 2750, 'AUD' )->get_error_code(), 'a v2 response cannot be accepted without a saved shop slug' );
 } );
 
+db_test( 'legacy Square transport retains its global location gate', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	$method   = new ReflectionMethod( 'DoughBoss_Square', 'request' );
+	$method->setAccessible( true );
+	try {
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_test_location_id'  => '',
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY' ),
+		) ) );
+		$result = $method->invoke( null, 'GET', '/v2/payments/sqpaymentEXAMPLE0000000001', array() );
+		assert_same( 'doughboss_pay_config', is_wp_error( $result ) ? $result->get_error_code() : '', 'a legacy request without an explicit mapped binding remains blocked when the global location is blank' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
 /**
  * DoughBoss_Square + Square settings tests.
  *

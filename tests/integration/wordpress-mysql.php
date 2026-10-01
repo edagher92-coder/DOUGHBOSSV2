@@ -2668,6 +2668,31 @@ foreach ( array( 'bankstown', 'roselands' ) as $binding_shop ) {
 	db_integration_assert( $binding_shop_ids[ $binding_shop ] > 0, 'synthetic ' . $binding_shop . ' native shop is persisted' );
 }
 $GLOBALS['db_square_http_mode'] = 'success';
+// A v2 map is sufficient for gateway transport; an unrelated legacy global ID
+// may be absent or malformed. Legacy callers retain their original gate.
+foreach ( array( '', 'abc', '<invalid-global>' ) as $binding_global_value ) {
+	$mapped_only = $binding_settings;
+	$mapped_only['square_test_location_id'] = $binding_global_value;
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_only, false );
+	$seed = 'mapped-only-' . hash( 'sha256', $binding_global_value );
+	$meta = db_integration_square_metadata( $seed, $seed . '-key', $seed . '-cart' );
+	$posts = $GLOBALS['db_square_post_count'];
+	$paid = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
+	db_integration_assert( ! is_wp_error( $paid ), 'valid mapped shop can dispatch with absent or malformed legacy global ID' );
+	db_integration_same( $posts + 1, $GLOBALS['db_square_post_count'], 'mapped-only creation performs exactly one synthetic POST' );
+	if ( is_wp_error( $paid ) ) { continue; }
+	$attempt = DoughBoss_Payment_Attempts::find( $paid['attempt_id'] );
+	$saved = DoughBoss_Payment_Attempts::metadata( $attempt );
+	db_integration_same( 'LINTEGRATIONLOCATION', $saved['square_location_id'], 'mapped-only attempt retains correct provider location' );
+	$last_body = end( $GLOBALS['db_square_post_bodies'] );
+	db_integration_same( 'LINTEGRATIONLOCATION', $last_body['location_id'], 'mapped-only provider dispatch uses exact shop mapping' );
+	$verified = DoughBoss_Square::retrieve_payment_intent( $paid['id'] );
+	db_integration_assert( ! is_wp_error( $verified ) && 'succeeded' === $verified['status'], 'mapped-only payment verification does not consult legacy global ID' );
+	$replayed = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
+	db_integration_assert( ! is_wp_error( $replayed ) && $paid['id'] === $replayed['id'], 'mapped-only retry replays same verified payment' );
+	db_integration_same( $posts + 1, $GLOBALS['db_square_post_count'], 'mapped-only replay and verification never POST a second charge' );
+}
+update_option( DoughBoss_Settings::OPTION_KEY, $binding_settings, false );
 $binding_posts_before = $GLOBALS['db_square_post_count'];
 $binding_rows_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_payment_attempts" );
 foreach ( array( array(), array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE' ), array( 'revesby' => array( 'LINVALID' ) ), array( 'revesby' => 'abc' ) ) as $binding_bad_map ) {
