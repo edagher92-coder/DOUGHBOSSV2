@@ -163,6 +163,18 @@ function storefrontElement(tag = 'div') {
 		className: '',
 		textContent: '',
 		parentNode: null,
+		listeners: {},
+		style: { setProperty() {} },
+		classList: { add() {}, remove() {}, toggle() {} },
+		addEventListener(type, callback) {
+			this.listeners[type] = callback;
+		},
+		getBoundingClientRect() {
+			return { top: 0, bottom: 64, height: 64 };
+		},
+		removeAttribute(key) {
+			delete this.attributes[key];
+		},
 		appendChild(child) {
 			child.parentNode = this;
 			this.children.push(child);
@@ -199,15 +211,103 @@ function storefrontElement(tag = 'div') {
 	return node;
 }
 
-function storefrontCreate(tag, attrs) {
+function storefrontCreate(tag, attrs, children) {
 	const node = storefrontElement(tag);
 	for (const [key, value] of Object.entries(attrs || {})) {
 		if (key === 'class') node.className = value;
 		else if (key === 'text') node.textContent = value;
+		else if (key === 'id') node.id = value;
 		else node.setAttribute(key, value);
 	}
+	for (const child of children || []) node.appendChild(child);
 	return node;
 }
+
+function menuEnhancementHarness(overrides = {}) {
+	const root = storefrontElement();
+	const fallback = storefrontCreate('div', { 'data-doughboss-menu-fallback': '' });
+	const browseItem = storefrontCreate('li', { text: 'Published browse-only item $4.50' });
+	fallback.appendChild(browseItem);
+	root.appendChild(fallback);
+	const showMenuFallbackError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });
+	const context = {
+		Promise,
+		request: () => Promise.resolve(overrides.items || [{ name: 'Zaatar', category: 'Manoush' }]),
+		getConfig: () => Promise.resolve({ ordering_open: false }),
+		activeTableContext: () => null,
+		el: storefrontCreate,
+		I18N: {},
+		catId: extractFunction(storefront, 'catId'),
+		menuCard: item => storefrontCreate('article', { class: 'db-card', text: item.name }),
+		initCartFab() {},
+		window: { addEventListener() {}, location: { hash: '' }, scrollY: 0 },
+		document: {},
+		showMenuFallbackError,
+		...overrides
+	};
+	const render = extractFunction(storefront, 'renderMenu', context);
+	return { root, fallback, browseItem, render: () => render(root), settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('non-empty menu enhancement supports prototype-named WordPress categories', async () => {
+	const categories = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'Manoush'];
+	const harness = menuEnhancementHarness({ items: categories.map((category, index) => ({ name: 'Item ' + index, category })) });
+	harness.render();
+	await harness.settle();
+	assert.equal(harness.root.querySelector('[data-doughboss-menu-fallback]'), null, 'successful non-empty enhancement replaces the browse fallback');
+	const headings = harness.root.children.filter(child => child.className === 'db-category');
+	const grids = harness.root.children.filter(child => child.className === 'db-grid');
+	assert.deepEqual(headings.map(heading => heading.textContent).sort(), categories.slice().sort());
+	assert.equal(grids.length, categories.length);
+	assert.deepEqual(grids.flatMap(grid => grid.children.map(card => card.textContent)).sort(), categories.map((category, index) => 'Item ' + index).sort());
+	assert.equal(harness.root.getAttribute('data-ordering-open'), 'false');
+});
+
+test('menu restores the original browse fallback after a late card-rendering failure', async () => {
+	let cardsRendered = 0;
+	const harness = menuEnhancementHarness({
+		items: [{ name: 'First item', category: 'Manoush' }, { name: 'Second item', category: 'Manoush' }],
+		getConfig: () => Promise.resolve({ ordering_open: true }),
+		menuCard: item => {
+			cardsRendered += 1;
+			if (cardsRendered === 2) throw new Error('late card rendering failure');
+			return storefrontCreate('article', { class: 'db-card', text: item.name });
+		}
+	});
+	harness.render();
+	await harness.settle();
+	assert.equal(cardsRendered, 2, 'the fault occurs after enhancement has already started');
+	assert.deepEqual(harness.root.children, [harness.fallback], 'partial interactive content is removed');
+	assert.equal(harness.fallback.children[0], harness.browseItem, 'the original server-rendered content survives');
+	assert.ok(harness.fallback.querySelector('[data-doughboss-menu-availability]'));
+	assert.equal(harness.root.getAttribute('data-ordering-open'), 'false', 'failed enhancement cannot leave an enabled ordering surface');
+});
+
+test('menu restores browse content when the last enhancement step fails', async () => {
+	let reachedFinalStep = false;
+	const harness = menuEnhancementHarness({
+		initCartFab() { reachedFinalStep = true; throw new Error('cart cue initialization failed'); }
+	});
+	harness.render();
+	await harness.settle();
+	assert.equal(reachedFinalStep, true);
+	assert.deepEqual(harness.root.children, [harness.fallback]);
+	assert.equal(harness.fallback.children[0], harness.browseItem);
+	assert.ok(harness.fallback.querySelector('[data-doughboss-menu-availability]'));
+});
+
+test('failed config reads keep browse content and a missing fallback is described honestly', async () => {
+	const harness = menuEnhancementHarness({ getConfig: () => Promise.reject(new Error('config unavailable')) });
+	harness.render();
+	await harness.settle();
+	assert.equal(harness.root.querySelector('[data-doughboss-menu-fallback]'), harness.fallback);
+	assert.equal(harness.fallback.children[0], harness.browseItem);
+	const rootWithoutFallback = storefrontElement();
+	const showError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });
+	showError(rootWithoutFallback, new Error('unavailable'));
+	assert.doesNotMatch(rootWithoutFallback.children[0].textContent, /browse.*below/i);
+	assert.match(rootWithoutFallback.children[0].textContent, /contact the shop/i);
+});
 
 test('menu fallback survives failed interactive reads and is replaced only by successful enhancement', async () => {
 	const showMenuFallbackError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });

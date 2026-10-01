@@ -16,7 +16,30 @@ db_test( 'bundled image manifest matches actual original and encoded assets', fu
 	$base = DOUGHBOSS_PLUGIN_DIR . 'public/images/';
 	$manifest = json_decode( file_get_contents( $base . 'responsive/manifest.json' ), true );
 	assert_same( 1, $manifest['version'], 'known manifest version' );
-	assert_same( 5, count( $manifest['images'] ), 'only the five rendered photographs are generated' );
+	assert_same( 17, count( $manifest['images'] ), 'exact approved rendered photographs are generated' );
+	$expected_originals = array(
+		'doughboss-feast-real-v1.jpg',
+		'menu/real-v1/zaatar-cheese.jpg',
+		'menu/real-v1/sujuk-deluxe.jpg',
+		'menu/real-v1/haloumi-pie.jpg',
+		'menu/real-v1/meat-cheese.jpg',
+		'menu/real-v1/zaatar.jpg',
+		'menu/real-v1/cheese.jpg',
+		'menu/real-v1/meat.jpg',
+		'menu/real-v1/sujuk-cheese.jpg',
+		'menu/real-v1/spinach-deluxe.jpg',
+		'menu/real-v1/pepperoni-cheese.jpg',
+		'menu/real-v1/chicken-cheese.jpg',
+		'menu/real-v1/bbq-chicken.jpg',
+		'menu/real-v1/peri-peri-chicken.jpg',
+		'menu/real-v1/spinach-pie.jpg',
+		'menu/real-v1/dough-boss-pie.jpg',
+		'menu/real-v1/aged-cheese-pie.jpg',
+	);
+	$actual_originals = array_keys( $manifest['images'] );
+	sort( $expected_originals );
+	sort( $actual_originals );
+	assert_same( $expected_originals, $actual_originals, 'exact approved original coverage' );
 	$expected = array( 'manifest.json' );
 	foreach ( $manifest['images'] as $original => $entry ) {
 		assert_true( 1 === preg_match( '#^(?:menu/real-v1/)?[a-z0-9-]+\.jpg$#D', $original ), 'safe original path' );

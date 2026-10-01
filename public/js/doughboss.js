@@ -480,7 +480,7 @@
 		var fallback = root.querySelector('[data-doughboss-menu-fallback]');
 		var message = I18N.menuUnavailable || 'The interactive menu is unavailable. You can still browse the menu below.';
 		if (!fallback) {
-			root.appendChild(el('p', { class: 'db-menu-availability', role: 'status', 'aria-live': 'polite', text: message }));
+			root.appendChild(el('p', { class: 'db-menu-availability', role: 'status', 'aria-live': 'polite', text: 'The menu is unavailable. Please contact the shop for the menu and orders.' }));
 			return;
 		}
 		var previous = fallback.querySelector('[data-doughboss-menu-availability]');
@@ -497,6 +497,9 @@
 	}
 
 	function renderMenu(root) {
+		// Keep the original server-rendered nodes, not an HTML copy. A failure
+		// after cards start rendering must restore the same browse-only menu.
+		var fallback = root.querySelector('[data-doughboss-menu-fallback]');
 		Promise.all([request('/menu'), getConfig()]).then(function (results) {
 			var items = results[0];
 			var orderingOpen = !!results[1].ordering_open;
@@ -509,7 +512,9 @@
 				return;
 			}
 
-			var groups = {};
+			// Category names are WordPress content, including valid names such as
+			// "constructor" or "__proto__". They must not resolve inherited keys.
+			var groups = Object.create(null);
 			items.forEach(function (item) {
 				(groups[item.category] = groups[item.category] || []).push(item);
 			});
@@ -681,6 +686,12 @@
 			});
 			initCartFab(root);
 		}).catch(function (err) {
+			if (fallback && fallback.parentNode !== root) {
+				root.innerHTML = '';
+				root.appendChild(fallback);
+			}
+			root.setAttribute('data-ordering-open', 'false');
+			root.classList.remove('db-menu--has-cart-fab', 'db-menu--searching');
 			showMenuFallbackError(root, err);
 		});
 	}

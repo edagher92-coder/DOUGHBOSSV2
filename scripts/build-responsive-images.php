@@ -24,6 +24,18 @@ const APPROVED_IMAGES = [
     'menu/real-v1/sujuk-deluxe.jpg',
     'menu/real-v1/haloumi-pie.jpg',
     'menu/real-v1/meat-cheese.jpg',
+    'menu/real-v1/zaatar.jpg',
+    'menu/real-v1/cheese.jpg',
+    'menu/real-v1/meat.jpg',
+    'menu/real-v1/sujuk-cheese.jpg',
+    'menu/real-v1/spinach-deluxe.jpg',
+    'menu/real-v1/pepperoni-cheese.jpg',
+    'menu/real-v1/chicken-cheese.jpg',
+    'menu/real-v1/bbq-chicken.jpg',
+    'menu/real-v1/peri-peri-chicken.jpg',
+    'menu/real-v1/spinach-pie.jpg',
+    'menu/real-v1/dough-boss-pie.jpg',
+    'menu/real-v1/aged-cheese-pie.jpg',
 ];
 
 function fail(string $message)
