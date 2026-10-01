@@ -1,7 +1,8 @@
 # Square Orders accounting-basis prerequisite
 
-Status: proposed; implementation awaits the required bounded Astra design
-review at 8.5/10 or higher. Runtime baseline: `23d74726f5b2f22032edba8f7dac16d76fadb7e4`.
+Status: revised proposal; initial design `38efe9d` scored 8.0/10, fix-first.
+Implementation awaits fresh bounded Astra design review at 8.5/10 or higher.
+Runtime baseline: `23d74726f5b2f22032edba8f7dac16d76fadb7e4`.
 This is one prerequisite of the complete Square integration, not its completion.
 
 ## Confirmed gap
@@ -47,8 +48,8 @@ It does not add a production dependency or issue a real provider request.
    existing behaviors, not proposed business changes.
 3. `totals()` reads its mode and rate once for both calculation and basis output.
    REST constructs order data from server totals and never forwards body/query
-   accounting basis. All ordinary/request creation callers must be enumerated;
-   missing metadata remains unknown rather than inferred.
+   accounting basis. The bounded caller map below controls capture versus copy;
+   missing historical metadata remains unknown rather than inferred.
 4. The order persistence boundary validates the supplied version, exact allowed
    fields, primitive types, bounded JSON size and policy tuple before storage.
    Unsupported/malformed supplied basis is an error before durable order/items.
@@ -62,11 +63,121 @@ It does not add a production dependency or issue a real provider request.
    not current settings. Where basis is known, request/snapshot equality checks
    and paid release carry it unchanged. Existing legacy payment/recovery paths
    remain compatible; future Square Orders itemization requires known basis.
-7. Additive rollback: deploy the previous code while retaining the new nullable
-   column and data. Do not drop it. New basis-bearing approval fingerprints must
-   not be processed by an older binary that lacks their contract; keep payment
-   activation disabled throughout migration/rollback and re-review affected
-   approvals before any subsequent activation.
+7. Additive rollback retains the nullable column and all metadata. Do not drop
+   it. Old binaries cannot process basis-bearing approvals. The recovery-state
+   matrix below is mandatory; payment activation OFF alone is not quiescence.
+
+## Frozen v1 codec
+
+The literal normalized object is:
+
+```json
+{
+  "version": 1,
+  "tax_inclusive": true,
+  "tax_rate": 10,
+  "discount_policy": "goods_before_tax",
+  "delivery_taxable": true
+}
+```
+
+Exactly these five keys are allowed. Version is integer 1; mode/delivery are
+booleans and must be identical for this existing pricing-policy version.
+Discount policy has only the literal value above. Rate accepts only an integer
+or finite float >= 0: no numeric strings, booleans, coercion, or rate rounding.
+Capture the same numeric value already used by totals, without re-reading the
+setting. Provider-specific admissible tax rates remain a later Orders gate;
+capturing historical facts must not pretend they are provider-compatible.
+
+One lead-owned codec validates, normalizes numeric rate to float without rounding,
+and emits keys in the literal order above via `wp_json_encode`, maximum 1024 bytes.
+An encoder failure is invalid, not absence. Decode validates then re-encodes;
+persisted non-NULL JSON must equal that canonical encoding byte-for-byte. This
+also rejects duplicate/extra keys and ambiguous alternate representations.
+Transport/snapshot uses the normalized PHP object; equality uses its canonical
+JSON bytes, not array key order, loose equality or current settings. Int/float
+representations of the same rate normalize through the same codec.
+
+Only SQL NULL (or absent field in a legacy in-memory fixture) means unknown.
+Empty string, whitespace, JSON null, scalar, empty object/array, malformed JSON,
+unsupported version, invalid types and noncanonical stored JSON are invalid.
+Do not collapse those states. The codec returns valid normalized data, explicit
+unknown, or `WP_Error`; it must not return an empty object as success.
+
+Fingerprint helper error propagation is part of this change: audit every caller
+of `fingerprint_from_order`, `fingerprint_from_locked_order`, and the public
+fingerprint method, including current approval/claim/dispatch/release callers at
+preorder-approval lines 234, 409-410, 599 and 1020-1035. Check `is_wp_error` and
+the 64-character fingerprint shape before any `hash_equals`. Invalid basis must
+return a specific deny/hold outcome before approval capability, provider dispatch
+or fulfillment, never a PHP type error or an empty/legacy fingerprint. Preserve
+the exact existing recovery identities and state-machine error conventions.
+
+## Legacy and snapshot compatibility matrix
+
+| Persisted request basis | Snapshot basis | Required result |
+| --- | --- | --- |
+| SQL NULL/legacy absent | Absent key | Preserve exact old fingerprint and snapshot shape/hash; existing recovery remains valid. |
+| Valid known basis | Same valid canonical object | Include basis in new fingerprint/snapshot and copy it to paid fulfillment. |
+| Valid known basis | Absent, NULL or different | Deny/hold before dispatch or release; never infer from settings. |
+| Legacy unknown | Unexpected known/NULL key | Deny/hold; it is not the original legacy payload. |
+| Any malformed non-NULL basis | Any | Deny/hold; no legacy fallback. |
+
+Never mutate an already stored snapshot to add metadata. Seed pre-change approved
+Stripe and Square snapshots in tests; assert identical payload hashes,
+fingerprints, approval revisions, capabilities, checkout keys, attempt identities,
+and successful existing replay/recovery after migration. NULL is omitted, not
+serialized into the legacy fingerprint or gateway snapshot.
+
+## Bounded capture/copy and readiness map
+
+Existing production `DoughBoss_Order::create()` callers in the REST controller:
+
+| Baseline line/path | Authoritative basis source |
+| --- | --- |
+| 3558: submit an unpaid approval request | Capture from the same pickup cart totals that priced the request. Ignore body/query basis. |
+| 4079: ordinary Square confirmation/recovery | Copy from the verified immutable snapshot's order data; retain unknown for legacy snapshots. |
+| 4452: ordinary checkout creation | For freshly priced unpaid checkout, capture same server totals. For paid Square or Stripe snapshot-backed checkout, copy snapshot basis only. The paid Square totals reconstruction at 4362-4378 must copy basis, never attach a fresh cart basis. |
+| 6215: Stripe webhook recovery | Copy immutable snapshot basis with its original accounting facts; unknown remains unknown. |
+
+Also capture basis in ordinary payment preparation's snapshot before money moves,
+from that same cart totals computation (current order payload at REST 2802).
+Approved Stripe (REST 3741 snapshot) and approved Square (REST 3871 snapshot)
+copy only the persisted request basis, with the compatibility matrix above.
+Common paid release in `DoughBoss_Preorder_Approval::release_locked()` requires
+the same basis-preservation validation before either gateway creates or replays
+fulfillment. Extend both the current Square comparator and the distinct Stripe
+branch at 618-627; no gateway bypass. Paid fulfillment persists the original
+known basis, or remains NULL for an unchanged legacy contract.
+
+Physical contract: existing InnoDB orders table, `accounting_basis_json` LONGTEXT,
+nullable YES, NULL default. Include it in the existing checkout storage readiness
+check using the activator's column-contract machinery, not only CREATE TABLE.
+Activator advances stored schema version only after its existing readiness gate
+including this column succeeds. Missing/mis-typed/nonnullable column or failed
+upgrade blocks new request/checkout/approval/payment provisioning before provider
+dispatch and prevents readiness/version claims. Do not drop/rewrite legacy rows.
+Recovery with missing schema remains held for the basis-aware repaired schema;
+it must not create replacement payment identities to escape a storage failure.
+
+## Rollback and recovery state matrix
+
+Before older code runs, quiesce every consumer of basis-bearing work: new starts,
+webhooks, confirmation, reconciliation, retry workers and release. Either prove
+there is no such in-flight/recoverable work, or quarantine it durably for the
+basis-aware binary. A flag disabling new ordering/payments is not sufficient.
+
+| Basis-bearing state | Rollback behavior |
+| --- | --- |
+| Approved, unpaid, no irreversible dispatch | Hold unchanged. Reapproval is permitted only by the existing state-machine proof of no money dispatch, never merely by operator assumption. |
+| Dispatching or unknown outcome | Quarantine and resume only with basis-aware code on original revision/fingerprint/checkout key/attempt/snapshot. No new key or second charge. |
+| Verified paid, not released | Quarantine original paid identity; basis-aware reconciliation/release only. No reapproval or replacement charge. |
+| Released | Preserve original paid order and release identity; old code must not replay the new approval contract or create another kitchen release. |
+
+Test this matrix locally with synthetic fixtures; no real provider calls are
+needed. Rollback readiness remains unproven until all workers/routes can be
+quiesced through supported controls; do not describe the prior binary as able to
+process new basis-bearing approvals.
 
 ## Proof and acceptance
 
