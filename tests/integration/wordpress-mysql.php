@@ -3237,6 +3237,7 @@ $square_rest_settings['square_webhook_url'] = 'https://example.invalid/wp-json/d
 update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings, false );
 $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 1, 'pickup_enabled' => 1, 'is_active' => 1 ), array( 'id' => 1 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 $square_rest_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
+add_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
 add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
 
 $square_rest_view_fixture = db_integration_approved_square_rest_fixture( 'rest-view' );
@@ -3494,6 +3495,7 @@ if ( is_array( $square_rest_recovery_fixture ) ) {
 }
 $GLOBALS['db_square_http_mode'] = 'success';
 update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings_before, false );
+remove_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
 remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 
