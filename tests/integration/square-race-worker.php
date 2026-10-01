@@ -27,6 +27,40 @@ if ( ! is_string( $race_log ) || '' === $race_log ) {
 	exit( 2 );
 }
 
+/** Stop a real PHP process only after asserting the committed crash boundary. */
+function db_square_race_crash( $stage, $attempt_id ) {
+	if ( $stage !== getenv( 'DOUGHBOSS_SQUARE_CRASH_STAGE' ) || '1' === getenv( 'DOUGHBOSS_SQUARE_CRASH_REPLAY' ) ) { return; }
+	$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
+	$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
+	$has_order = ! empty( $attempt['provider_order_reference'] );
+	$has_payment = ! empty( $attempt['provider_reference'] );
+	$expected_order = ! in_array( $stage, array( 'before_order_post', 'after_order_post' ), true );
+	$expected_payment = 'after_payment_bind' === $stage;
+	if ( ! is_array( $attempt ) || $has_order !== $expected_order || $has_payment !== $expected_payment
+		|| ( $expected_payment ? 'succeeded' : 'dispatching' ) !== $attempt['status']
+		|| null !== $attempt['verified_at'] || 'square-orders-v1' !== ( isset( $metadata['orders_protocol'] ) ? $metadata['orders_protocol'] : '' ) ) {
+		fwrite( STDERR, "Crash point does not match committed provider identities/state.\n" ); exit( 1 );
+	}
+	if ( 'approved_preorder' === $attempt['context'] ) {
+		$request_id = isset( $metadata['approval_id'] ) ? (int) $metadata['approval_id'] : 0;
+		$request = DoughBoss_Order::get( $request_id );
+		$approval = DoughBoss_Preorder_Approval::get( $request_id );
+		if ( ! $request || 'unpaid' !== $request->payment_status || DoughBoss_Order::find_id_by_source_request( $request_id )
+			|| ! is_array( $approval ) || 'payment_active' !== $approval['state'] || (int) $approval['payment_attempt_id'] !== $attempt_id ) {
+			fwrite( STDERR, "Crash point has lost approval linkage or prematurely released food.\n" ); exit( 1 );
+		}
+	}
+	$identity = array();
+	foreach ( array( 'id', 'attempt_key', 'checkout_key', 'local_reference', 'amount_minor', 'currency', 'provider_order_reference', 'provider_reference' ) as $key ) {
+		$identity[ $key ] = $attempt[ $key ];
+	}
+	$identity['orders_snapshot_hash'] = $metadata['orders_snapshot_hash'];
+	file_put_contents( getenv( 'DOUGHBOSS_RACE_LOG' ) . '.boundary.json', wp_json_encode( $identity ), LOCK_EX );
+	file_put_contents( getenv( 'DOUGHBOSS_RACE_LOG' ), 'CRASH:' . $stage . "\n", FILE_APPEND | LOCK_EX );
+	echo 'CRASH_POINT ' . $stage . "\n";
+	exit( 86 );
+}
+
 $settings = DoughBoss_Settings::all();
 $settings['payments_enabled']         = 1;
 $settings['payment_gateway']          = 'square';
@@ -47,10 +81,11 @@ add_filter(
 		$path = (string) wp_parse_url( (string) $url, PHP_URL_PATH );
 		if ( '/v2/orders' === $path || 0 === strpos( $path, '/v2/orders/' ) ) {
 			if ( 'POST' === $method ) {
-				file_put_contents( $race_log, "ORDER_POST\n", FILE_APPEND | LOCK_EX );
-				usleep( 750000 );
 				$body = json_decode( (string) $args['body'], true );
 				$attempt_id = (int) substr( $body['order']['reference_id'], strlen( 'db-attempt-' ) );
+				db_square_race_crash( 'before_order_post', $attempt_id );
+				file_put_contents( $race_log, "ORDER_POST\n", FILE_APPEND | LOCK_EX );
+				usleep( 750000 );
 				$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
 				$snapshot = $attempt ? DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $attempt['checkout_key'] ) : null;
 				$binding = $attempt ? DoughBoss_Square::shop_binding( $attempt['location_id'] ) : new WP_Error( 'missing' );
@@ -84,11 +119,15 @@ add_filter(
 				foreach ( array( 'tax' => 'total_tax_money', 'discount' => 'total_discount_money', 'total' => 'total_money' ) as $key => $field ) { $order[ $field ] = $money( $projection['amounts'][ $key ] ); }
 				foreach ( array( 'taxes' => 'tax', 'discounts' => 'discount' ) as $field => $key ) { if ( ! empty( $order[ $field ] ) ) { $order[ $field ][0]['applied_money'] = $money( $projection['amounts'][ $key ] ); } }
 				file_put_contents( $race_log . '.' . $order['id'] . '.json', wp_json_encode( $order ), LOCK_EX );
+				db_square_race_crash( 'after_order_post', $attempt_id );
 			} else {
 				$id = basename( $path );
 				$file = $race_log . '.' . $id . '.json';
 				$order = is_file( $file ) ? json_decode( file_get_contents( $file ), true ) : null;
 				if ( ! is_array( $order ) ) { return new WP_Error( 'integration_order_missing', 'Synthetic Order missing.' ); }
+				$attempt_id = (int) substr( $order['reference_id'], strlen( 'db-attempt-' ) );
+				$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
+				db_square_race_crash( empty( $attempt['provider_reference'] ) ? 'after_order_bind' : 'after_payment_bind', $attempt_id );
 				$paid_file = $race_log . '.' . $id . '.paid.json';
 				$paid = is_file( $paid_file ) ? json_decode( file_get_contents( $paid_file ), true ) : null;
 				if ( is_array( $paid ) ) {
@@ -115,6 +154,7 @@ add_filter(
 			if ( isset( $body['order_id'] ) ) {
 				$payment['order_id'] = $body['order_id'];
 				file_put_contents( $race_log . '.' . $body['order_id'] . '.paid.json', wp_json_encode( $payment ), LOCK_EX );
+				db_square_race_crash( 'after_payment_post', (int) substr( $reference, strlen( 'db-attempt-' ) ) );
 			}
 		} else {
 			$id      = rawurldecode( basename( wp_parse_url( (string) $url, PHP_URL_PATH ) ) );
@@ -145,8 +185,11 @@ add_filter(
 );
 
 $race_mode = getenv( 'DOUGHBOSS_SQUARE_RACE_MODE' );
+$crash_stage = getenv( 'DOUGHBOSS_SQUARE_CRASH_STAGE' );
+$case_seed = $crash_stage ? 'crash-' . $crash_stage : 'v1';
 if ( 'approved_preorder' === $race_mode ) {
-	$request_id = DoughBoss_Order::find_id_by_checkout_key( hash( 'sha256', 'preorder-request|square-two-process-race' ) );
+	$request_seed = $crash_stage ? 'square-crash-' . $crash_stage : 'square-two-process-race';
+	$request_id = DoughBoss_Order::find_id_by_checkout_key( hash( 'sha256', 'preorder-request|' . $request_seed ) );
 	$approval = DoughBoss_Preorder_Approval::get( $request_id );
 	if ( ! $request_id || ! is_array( $approval ) ) {
 		fwrite( STDERR, "Approved Square race fixture missing.\n" );
@@ -162,9 +205,9 @@ if ( 'approved_preorder' === $race_mode ) {
 	$result = DoughBoss_Square::create_payment_intent( 1400, 'AUD', array(
 		'checkout_key' => $approval['payment_checkout_key'],
 		'protocol_version' => 'square-v2',
-		'attempt_identity' => hash( 'sha256', 'approved-square-two-process-race' ),
+		'attempt_identity' => hash( 'sha256', $crash_stage ? 'approved-square-crash-' . $crash_stage : 'approved-square-two-process-race' ),
 		'binding_hash' => $snapshot['payload']['binding_hash'],
-		'cart_guard' => hash( 'sha256', 'approved-square-cart-two-process-race' ),
+		'cart_guard' => hash( 'sha256', $crash_stage ? 'approved-square-cart-crash-' . $crash_stage : 'approved-square-cart-two-process-race' ),
 		'source_id' => 'cnon:integration-approved-race-token',
 		'verification_token' => '',
 		'purpose' => 'order',
@@ -181,8 +224,8 @@ if ( 'approved_preorder' === $race_mode ) {
 } else {
 global $wpdb;
 $snapshot_errors = $wpdb->suppress_errors( true );
-$snapshot = DoughBoss_Checkout_Snapshots::store( hash( 'sha256', 'race-checkout-v1' ), array(
-	'binding_hash' => hash( 'sha256', 'race-binding-v1' ),
+$snapshot = DoughBoss_Checkout_Snapshots::store( hash( 'sha256', 'race-checkout-' . $case_seed ), array(
+	'binding_hash' => hash( 'sha256', 'race-binding-' . $case_seed ),
 	'order' => array( 'location_id' => 1, 'currency' => 'AUD', 'subtotal' => '32.00', 'discount' => '0.00',
 		'tax' => '2.91', 'delivery_fee' => '0.00', 'total' => '32.00',
 		'accounting_basis' => array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 10,
@@ -195,11 +238,11 @@ $result = DoughBoss_Square::create_payment_intent(
 	3200,
 	'AUD',
 	array(
-		'checkout_key'      => hash( 'sha256', 'race-checkout-v1' ),
+		'checkout_key'      => hash( 'sha256', 'race-checkout-' . $case_seed ),
 		'protocol_version'   => 'square-v2',
-		'attempt_identity'   => hash( 'sha256', 'race-attempt-v1' ),
-		'binding_hash'       => hash( 'sha256', 'race-binding-v1' ),
-		'cart_guard'         => hash( 'sha256', 'race-cart-v1' ),
+		'attempt_identity'   => hash( 'sha256', 'race-attempt-' . $case_seed ),
+		'binding_hash'       => hash( 'sha256', 'race-binding-' . $case_seed ),
+		'cart_guard'         => hash( 'sha256', 'race-cart-' . $case_seed ),
 		'source_id'          => 'cnon:integration-race-token',
 		'verification_token' => '',
 		'purpose'            => 'order',
@@ -224,8 +267,9 @@ if ( is_wp_error( $result ) ) {
 	}
 }
 
-if ( 'approved_preorder' === $race_mode ) {
-	// Converge on the same verified payment before racing kitchen release.
+if ( 'approved_preorder' === $race_mode && ( ! $crash_stage || 'after_payment_bind' === $crash_stage ) ) {
+	// Only a bound payment can converge on kitchen release. Earlier crash
+	// boundaries must remain unpaid and are asserted as held below.
 	$deadline = microtime( true ) + 8.0;
 	do {
 		$race_attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $approval['payment_checkout_key'] );
@@ -260,6 +304,34 @@ if ( 'approved_preorder' === $race_mode ) {
 	if ( is_wp_error( $created ) || empty( $created['order_id'] ) ) {
 		fwrite( STDERR, "Approved Square race fulfillment failed.\n" );
 		exit( 1 );
+	}
+}
+
+if ( $crash_stage && '1' === getenv( 'DOUGHBOSS_SQUARE_CRASH_REPLAY' ) ) {
+	$checkout_key = 'approved_preorder' === $race_mode ? $approval['payment_checkout_key'] : hash( 'sha256', 'race-checkout-' . $case_seed );
+	$held = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
+	$stored = is_array( $held ) ? DoughBoss_Payment_Attempts::metadata( $held ) : array();
+	$boundary_file = $race_log . '.boundary.json';
+	$identity = is_file( $boundary_file ) ? json_decode( file_get_contents( $boundary_file ), true ) : null;
+	if ( ! is_array( $identity ) || ! is_array( $held ) ) { fwrite( STDERR, "Crash identity evidence is missing.\n" ); exit( 1 ); }
+	foreach ( array( 'id', 'attempt_key', 'checkout_key', 'local_reference', 'amount_minor', 'currency', 'provider_order_reference', 'provider_reference' ) as $key ) {
+		if ( $identity[ $key ] !== $held[ $key ] ) { fwrite( STDERR, "Crash replay replaced an immutable identity.\n" ); exit( 1 ); }
+	}
+	if ( $identity['orders_snapshot_hash'] !== $stored['orders_snapshot_hash'] ) { fwrite( STDERR, "Crash replay changed snapshot linkage.\n" ); exit( 1 ); }
+	$has_order = ! empty( $held['provider_order_reference'] );
+	$has_payment = ! empty( $held['provider_reference'] );
+	$expected_order = ! in_array( $crash_stage, array( 'before_order_post', 'after_order_post' ), true );
+	$recoverable = 'after_payment_bind' === $crash_stage;
+	if ( ! is_array( $held ) || $has_order !== $expected_order || $has_payment !== $recoverable
+		|| 'square-orders-v1' !== ( isset( $stored['orders_protocol'] ) ? $stored['orders_protocol'] : '' )
+		|| ( $recoverable ? ( is_wp_error( $result ) || 'succeeded' !== $result['status'] ) : ( ! is_wp_error( $result ) || 'dispatching' !== $held['status'] ) ) ) {
+		fwrite( STDERR, "Crash replay changed identities or reclaimed an unresolved dispatch.\n" ); exit( 1 );
+	}
+	if ( ! $recoverable ) {
+		if ( 'approved_preorder' === $race_mode && DoughBoss_Order::find_id_by_source_request( $request_id ) ) {
+			fwrite( STDERR, "Unresolved crash reached kitchen fulfillment.\n" ); exit( 1 );
+		}
+		echo "WORKER_OK\n"; exit( 0 );
 	}
 }
 echo "WORKER_OK\n";

@@ -48,7 +48,12 @@ New-Item -ItemType Directory -Path $scratch | Out-Null
 $raceLog = Join-Path $scratch 'provider-posts.log'
 $oldRaceLog = $env:DOUGHBOSS_RACE_LOG
 $oldSquareRaceMode = $env:DOUGHBOSS_SQUARE_RACE_MODE
+$oldSquareCrashStage = $env:DOUGHBOSS_SQUARE_CRASH_STAGE
+$oldSquareCrashReplay = $env:DOUGHBOSS_SQUARE_CRASH_REPLAY
 $env:DOUGHBOSS_RACE_LOG = $raceLog
+$env:DOUGHBOSS_SQUARE_CRASH_STAGE = $null
+$env:DOUGHBOSS_SQUARE_CRASH_REPLAY = $null
+$squareCrashWorkers = New-Object 'System.Collections.Generic.List[System.Diagnostics.Process]'
 
 try {
     $workerArguments = @()
@@ -62,6 +67,32 @@ try {
     $workerArguments += $raceWorker
     $workerArguments += "--path=$wordpress"
     $workerArguments += '--skip-themes'
+
+    function Start-DoughBossSquareCrashWorker {
+        param([string] $Prefix)
+        $stdout = Join-Path $scratch "$Prefix.stdout.log"
+        $stderr = Join-Path $scratch "$Prefix.stderr.log"
+        $process = Start-Process -FilePath $php -ArgumentList $workerArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+        $null = $process.Handle
+        $squareCrashWorkers.Add($process)
+        return [PSCustomObject]@{ Process = $process; Stdout = $stdout; Stderr = $stderr }
+    }
+
+    function Wait-DoughBossSquareCrashWorker {
+        param([object] $Worker, [int] $ExpectedExit, [string] $Marker)
+        if (-not $Worker.Process.WaitForExit(30000)) {
+            $Worker.Process.Kill()
+            $Worker.Process.WaitForExit()
+            throw 'Disposable Square crash-test worker exceeded its 30-second limit.'
+        }
+        $output = if (Test-Path -LiteralPath $Worker.Stdout) { Get-Content -LiteralPath $Worker.Stdout -Raw } else { '' }
+        if ($Worker.Process.ExitCode -ne $ExpectedExit -or $output -notmatch ("(?m)^" + [regex]::Escape($Marker) + '$')) {
+            Write-Output "Square crash-test worker exit: $($Worker.Process.ExitCode); expected $ExpectedExit"
+            Write-Output $output
+            if (Test-Path -LiteralPath $Worker.Stderr) { Get-Content -LiteralPath $Worker.Stderr }
+            throw 'Square crash boundary or recovery worker failed.'
+        }
+    }
 
     foreach ($squareRaceMode in @('web', 'approved_preorder')) {
         $env:DOUGHBOSS_SQUARE_RACE_MODE = $squareRaceMode
@@ -109,10 +140,56 @@ try {
             Write-Output '2-process approved Square release: 1 fulfillment, 0 duplicate kitchen hooks'
         }
     }
+
+    foreach ($squareRaceMode in @('web', 'approved_preorder')) {
+        $env:DOUGHBOSS_SQUARE_RACE_MODE = $squareRaceMode
+        foreach ($crashStage in @('before_order_post', 'after_order_post', 'after_order_bind', 'after_payment_post', 'after_payment_bind')) {
+            $raceLog = Join-Path $scratch "crash-$squareRaceMode-$crashStage.log"
+            $env:DOUGHBOSS_RACE_LOG = $raceLog
+            $env:DOUGHBOSS_SQUARE_CRASH_STAGE = $crashStage
+            $env:DOUGHBOSS_SQUARE_CRASH_REPLAY = $null
+            $crashed = Start-DoughBossSquareCrashWorker -Prefix "crash-$squareRaceMode-$crashStage"
+            Wait-DoughBossSquareCrashWorker -Worker $crashed -ExpectedExit 86 -Marker "CRASH_POINT $crashStage"
+
+            $initial = @(Get-Content -LiteralPath $raceLog)
+            if (@($initial | Where-Object { $_ -eq 'FULFILL' }).Count -ne 0) {
+                throw 'Crash before paid verification emitted a premature kitchen hook.'
+            }
+            $env:DOUGHBOSS_SQUARE_CRASH_REPLAY = '1'
+            $replays = @()
+            foreach ($workerNumber in 1..2) {
+                $replays += Start-DoughBossSquareCrashWorker -Prefix "replay-$squareRaceMode-$crashStage-$workerNumber"
+            }
+            foreach ($replay in $replays) {
+                Wait-DoughBossSquareCrashWorker -Worker $replay -ExpectedExit 0 -Marker 'WORKER_OK'
+            }
+            $events = @(Get-Content -LiteralPath $raceLog)
+            $expectedOrderPosts = if ($crashStage -eq 'before_order_post') { 0 } else { 1 }
+            $expectedPaymentPosts = if ($crashStage -in @('after_payment_post', 'after_payment_bind')) { 1 } else { 0 }
+            $expectedFulfillments = if ($squareRaceMode -eq 'approved_preorder' -and $crashStage -eq 'after_payment_bind') { 1 } else { 0 }
+            if (@($events | Where-Object { $_ -eq 'ORDER_POST' }).Count -ne $expectedOrderPosts -or
+                @($events | Where-Object { $_ -eq 'PAYMENT_POST' }).Count -ne $expectedPaymentPosts -or
+                @($events | Where-Object { $_ -eq 'FULFILL' }).Count -ne $expectedFulfillments -or
+                @($events | Where-Object { $_ -eq "CRASH:$crashStage" }).Count -ne 1) {
+                throw "Square $squareRaceMode crash/replay $crashStage changed dispatch or kitchen counts."
+            }
+            Write-Output "Square $squareRaceMode crash/replay $crashStage`: $expectedOrderPosts Order POST, $expectedPaymentPosts Payment POST, $expectedFulfillments kitchen hook; original identities retained"
+        }
+    }
 }
 finally {
+    # Stop only exact disposable workers started by this invocation before
+    # removing their logs, including the second replay if its peer fails.
+    foreach ($process in $squareCrashWorkers) {
+        if (-not $process.HasExited) {
+            $process.Kill()
+            $process.WaitForExit()
+        }
+    }
     $env:DOUGHBOSS_RACE_LOG = $oldRaceLog
     $env:DOUGHBOSS_SQUARE_RACE_MODE = $oldSquareRaceMode
+    $env:DOUGHBOSS_SQUARE_CRASH_STAGE = $oldSquareCrashStage
+    $env:DOUGHBOSS_SQUARE_CRASH_REPLAY = $oldSquareCrashReplay
     if (Test-Path -LiteralPath $scratch) {
         $resolvedScratch = (Resolve-Path -LiteralPath $scratch).Path
         $expectedParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\')

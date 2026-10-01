@@ -3648,6 +3648,10 @@ foreach ( array( 'before-read', 'after-read' ) as $quarantine_mode ) {
 remove_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
 $approved_square_race_fixture = db_integration_approved_square_fixture( 'two-process-race' );
 db_integration_assert( is_array( $approved_square_race_fixture ), 'approved Square race leaves one immutable synthetic request for two workers' );
+foreach ( array( 'before_order_post', 'after_order_post', 'after_order_bind', 'after_payment_post', 'after_payment_bind' ) as $crash_stage ) {
+	$fixture = db_integration_approved_square_fixture( 'crash-' . $crash_stage );
+	db_integration_assert( is_array( $fixture ), 'approved Square crash fixture retains an exact source approval and snapshot: ' . $crash_stage );
+}
 foreach ( $binding_shop_ids as $binding_shop_id ) {
 	$wpdb->delete( $wpdb->prefix . 'doughboss_locations', array( 'id' => $binding_shop_id ) );
 }
@@ -4787,6 +4791,77 @@ foreach ( array( 'post_error', 'post_drift', 'get_error', 'get_drift', 'bind_wri
 	db_integration_same( $order_posts + 1, $GLOBALS['db_orders_post_count'], $orders_mode . ' retry does not repeat Order creation' );
 	db_integration_same( $payment_posts, $GLOBALS['db_square_post_count'], $orders_mode . ' retry does not charge' );
 }
+// Exercise repository failures through the complete adapter after synthetic
+// provider round trips, not only by calling the repository in isolation.
+foreach ( array( 'bind_begin', 'bind_attempt_read', 'bind_snapshot_read', 'bind_write', 'bind_final_read', 'bind_commit', 'dispatch_attempt_read', 'dispatch_snapshot_read', 'payment_bind_write', 'paid_attempt_read', 'paid_snapshot_read', 'unknown_write' ) as $storage_mode ) {
+	$fixture = $orders_transport_fixture( 'runtime-storage-' . $storage_mode );
+	$order_posts = $GLOBALS['db_orders_post_count'];
+	$payment_posts = $GLOBALS['db_square_post_count'];
+	$phase = '';
+	$fault_count = 0;
+	$GLOBALS['db_orders_http_mode'] = 'unknown_write' === $storage_mode ? 'post_error' : '';
+	$round_trip = function ( $response, $args, $url ) use ( &$phase ) {
+		$path = (string) wp_parse_url( (string) $url, PHP_URL_PATH );
+		$method = strtoupper( (string) $args['method'] );
+		if ( 'POST' === $method && '/v2/orders' === $path ) { $phase = 'order_response'; }
+		if ( 'POST' === $method && '/v2/payments' === $path ) { $phase = 'payment_response'; }
+		if ( 'GET' === $method && 0 === strpos( $path, '/v2/orders/' ) ) {
+			$phase = 'payment_response' === $phase ? 'paid_response' : 'order_read';
+		}
+		return $response;
+	};
+	$fault = function ( $sql ) use ( &$phase, &$fault_count, $storage_mode, $fixture, $wpdb ) {
+		if ( $fault_count ) { return $sql; }
+		$attempt_read = 0 === strpos( $sql, 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE id = ' . $fixture['attempt']['id'] . ' ' );
+		$snapshot_read = 0 === strpos( $sql, 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots WHERE checkout_key = ' );
+		$locked = false !== strpos( $sql, 'FOR UPDATE' );
+		$matches = ( 'order_response' === $phase && (
+			( 'bind_begin' === $storage_mode && 'START TRANSACTION' === trim( $sql ) )
+			|| ( 'bind_attempt_read' === $storage_mode && $attempt_read && $locked )
+			|| ( 'bind_snapshot_read' === $storage_mode && $snapshot_read && $locked )
+			|| ( 'bind_write' === $storage_mode && 0 === strpos( $sql, 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET provider_order_reference' ) )
+			|| ( 'bind_final_read' === $storage_mode && $attempt_read && ! $locked )
+			|| ( 'bind_commit' === $storage_mode && 'COMMIT' === trim( $sql ) )
+			|| ( 'unknown_write' === $storage_mode && 0 === strpos( $sql, 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET status = ' ) )
+		) ) || ( 'order_read' === $phase && (
+			( 'dispatch_attempt_read' === $storage_mode && $attempt_read )
+			|| ( 'dispatch_snapshot_read' === $storage_mode && $snapshot_read )
+		) ) || ( 'payment_response' === $phase && 'payment_bind_write' === $storage_mode
+			&& 0 === strpos( $sql, 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET provider_reference' ) )
+		|| ( 'paid_response' === $phase && (
+			( 'paid_attempt_read' === $storage_mode && $attempt_read )
+			|| ( 'paid_snapshot_read' === $storage_mode && $snapshot_read )
+		) );
+		if ( ! $matches ) { return $sql; }
+		++$fault_count;
+		return 'SELECT * FROM doughboss_intentionally_missing_runtime_orders_storage';
+	};
+	add_filter( 'pre_http_request', $round_trip, 11, 3 );
+	add_filter( 'query', $fault, 999 );
+	$suppress = $wpdb->suppress_errors( true );
+	$result = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $fixture['meta'] );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', $fault, 999 );
+	remove_filter( 'pre_http_request', $round_trip, 11 );
+	db_integration_same( 1, $fault_count, $storage_mode . ' full-runtime storage boundary was exercised exactly once' );
+	db_integration_assert( is_wp_error( $result ), $storage_mode . ' cannot return payment or kitchen authority' );
+	$held = DoughBoss_Payment_Attempts::find( $fixture['attempt']['id'] );
+	$paid = in_array( $storage_mode, array( 'paid_attempt_read', 'paid_snapshot_read' ), true );
+	$has_order = $paid || in_array( $storage_mode, array( 'dispatch_attempt_read', 'dispatch_snapshot_read', 'payment_bind_write' ), true );
+	db_integration_same( $paid ? 'succeeded' : ( 'unknown_write' === $storage_mode ? 'dispatching' : 'unknown' ), $held['status'], $storage_mode . ' retains paid state or its non-reclaimable hold' );
+	db_integration_same( $has_order, ! empty( $held['provider_order_reference'] ), $storage_mode . ' retains only a durably bound Order' );
+	db_integration_same( $paid, ! empty( $held['provider_reference'] ), $storage_mode . ' never invents a durable Payment binding' );
+	db_integration_same( null, $held['verified_at'], $storage_mode . ' grants no cached release authority' );
+	foreach ( array( 'id', 'attempt_key', 'checkout_key', 'local_reference', 'amount_minor', 'currency', 'safe_metadata_json' ) as $field ) {
+		db_integration_same( $fixture['attempt'][ $field ], $held[ $field ], $storage_mode . ' preserves original ' . $field );
+	}
+	$GLOBALS['db_orders_http_mode'] = '';
+	$retry = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $fixture['meta'] );
+	db_integration_same( ! $paid, is_wp_error( $retry ), $storage_mode . ' allows only read-only reconciliation of a bound Payment' );
+	db_integration_same( $order_posts + 1, $GLOBALS['db_orders_post_count'], $storage_mode . ' never repeats its original Order POST' );
+	db_integration_same( $payment_posts + ( $paid || 'payment_bind_write' === $storage_mode ? 1 : 0 ), $GLOBALS['db_square_post_count'], $storage_mode . ' never repeats a money POST after storage failure' );
+	db_integration_same( $orders_kitchen_before, count( $GLOBALS['db_order_created_events'] ), $storage_mode . ' never emits a kitchen hook' );
+}
 foreach ( array( 'paid_error', 'paid_drift', 'paid_tender', 'wrong_order' ) as $orders_mode ) {
 	$fixture = $orders_transport_fixture( $orders_mode );
 	$order_posts = $GLOBALS['db_orders_post_count'];
@@ -4857,6 +4932,23 @@ if ( ! is_wp_error( $result ) ) {
 	$fulfillment = array_merge( $fixture['order_data'], array( 'source_request_id' => $fixture['request_id'], 'payment_method' => 'square', 'payment_status' => 'paid', 'payment_intent_id' => $result['id'] ) );
 	$hooks = count( $GLOBALS['db_order_created_events'] );
 	db_integration_assert( is_wp_error( DoughBoss_Order::create( $fulfillment, $fixture['lines'] ) ), 'marked create response alone grants no durable kitchen authority' );
+	$verification_write_faults = 0;
+	$verification_write_failure = function ( $sql ) use ( &$verification_write_faults, $wpdb ) {
+		if ( 0 === strpos( $sql, 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET status = ' ) && false !== strpos( $sql, ', verified_at = ' ) ) {
+			++$verification_write_faults;
+			return 'UPDATE doughboss_intentionally_missing_verification_storage SET id = 1';
+		}
+		return $sql;
+	};
+	add_filter( 'query', $verification_write_failure, 999 );
+	$suppress = $wpdb->suppress_errors( true );
+	$verification_failed = DoughBoss_Square::retrieve_payment_intent( $result['id'] );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', $verification_write_failure, 999 );
+	db_integration_same( 1, $verification_write_faults, 'full-runtime verified authority write failure is exercised' );
+	db_integration_same( 'doughboss_pay_reconcile', is_wp_error( $verification_failed ) ? $verification_failed->get_error_code() : '', 'verification persistence failure reports an explicit storage denial' );
+	db_integration_same( null, DoughBoss_Payment_Attempts::find( $result['attempt_id'] )['verified_at'], 'failed verification write leaves no release authority' );
+	db_integration_assert( is_wp_error( DoughBoss_Order::create( $fulfillment, $fixture['lines'] ) ), 'verification write failure cannot release an approved unpaid source' );
 	$GLOBALS['db_orders_http_mode'] = 'paid_drift';
 	$denied = DoughBoss_Square::retrieve_payment_intent( $result['id'] );
 	db_integration_assert( is_wp_error( $denied ), 'linked Order drift denies server verification before release authority is persisted' );
@@ -4866,6 +4958,25 @@ if ( ! is_wp_error( $result ) ) {
 	db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'restored exact Order facts permit read-only payment verification' );
 	db_integration_assert( ! empty( DoughBoss_Payment_Attempts::find( $result['attempt_id'] )['verified_at'] ), 'successful joint verification persists release authority only after both checks' );
 	$GLOBALS['db_orders_http_mode'] = 'paid_error';
+	$hold_written = false;
+	$hold_read_faults = 0;
+	$hold_read_failure = function ( $sql ) use ( &$hold_written, &$hold_read_faults, $wpdb, $result ) {
+		if ( 0 === strpos( $sql, 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET verified_at = NULL' ) ) { $hold_written = true; }
+		if ( $hold_written && ! $hold_read_faults && 0 === strpos( $sql, 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE id = ' . $result['attempt_id'] . ' ' ) ) {
+			++$hold_read_faults;
+			return 'SELECT * FROM doughboss_intentionally_missing_verification_storage';
+		}
+		return $sql;
+	};
+	add_filter( 'query', $hold_read_failure, 999 );
+	$suppress = $wpdb->suppress_errors( true );
+	$hold_failed = DoughBoss_Square::retrieve_payment_intent( $result['id'] );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', $hold_read_failure, 999 );
+	db_integration_same( 1, $hold_read_faults, 'full-runtime hold final-read storage failure is exercised' );
+	db_integration_same( 'doughboss_pay_order_hold_storage', is_wp_error( $hold_failed ) ? $hold_failed->get_error_code() : '', 'unconfirmed hold reports explicit storage failure' );
+	db_integration_same( null, DoughBoss_Payment_Attempts::find( $result['attempt_id'] )['verified_at'], 'hold final-read failure does not restore revoked cached authority' );
+	db_integration_assert( is_wp_error( DoughBoss_Order::create( $fulfillment, $fixture['lines'] ) ), 'hold final-read failure cannot release the unpaid source' );
 	db_integration_assert( is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'later unreadable Order holds an uncommitted verified request' );
 	db_integration_same( null, DoughBoss_Payment_Attempts::find( $result['attempt_id'] )['verified_at'], 'later failing Order read revokes prior cached release authority without clearing the paid identity' );
 	db_integration_assert( is_wp_error( DoughBoss_Order::create( $fulfillment, $fixture['lines'] ) ), 'later failed Order read cannot bypass its hold via cached verification' );
