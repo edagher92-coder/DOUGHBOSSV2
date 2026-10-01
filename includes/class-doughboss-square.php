@@ -376,7 +376,8 @@ class DoughBoss_Square {
 		$cart_guard   = isset( $metadata['cart_guard'] ) ? strtolower( sanitize_text_field( (string) $metadata['cart_guard'] ) ) : '';
 		$voucher_code = isset( $metadata['voucher_code'] ) ? sanitize_text_field( (string) $metadata['voucher_code'] ) : '';
 		$voucher_key  = isset( $metadata['voucher_reservation_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['voucher_reservation_key'] ) ) : '';
-		$context      = isset( $metadata['context'] ) ? sanitize_key( (string) $metadata['context'] ) : '';
+		$purpose      = isset( $metadata['purpose'] ) ? substr( sanitize_key( (string) $metadata['purpose'] ), 0, 32 ) : 'order';
+		$context      = isset( $metadata['context'] ) ? substr( sanitize_key( (string) $metadata['context'] ), 0, 32 ) : ( $table_id ? 'table_qr' : 'web' );
 		$preorder_token = isset( $metadata['preorder_payment_token'] ) ? trim( (string) $metadata['preorder_payment_token'] ) : '';
 
 		if (
@@ -455,8 +456,8 @@ class DoughBoss_Square {
 				'attempt_key'     => $attempt_key,
 				'checkout_key'    => $checkout_key,
 				'provider'        => 'square',
-				'purpose'         => isset( $metadata['purpose'] ) ? $metadata['purpose'] : 'order',
-				'context'         => isset( $metadata['context'] ) ? $metadata['context'] : ( $table_id ? 'table_qr' : 'web' ),
+				'purpose'         => $purpose,
+				'context'         => $context,
 				'local_reference' => $cart_guard,
 				'location_id'     => $location_id,
 				'table_id'        => $table_id,
@@ -479,6 +480,8 @@ class DoughBoss_Square {
 			|| strtoupper( (string) $attempt['currency'] ) !== $currency
 			|| ! hash_equals( (string) $attempt['attempt_key'], $attempt_key )
 			|| ! hash_equals( (string) $attempt['checkout_key'], $checkout_key )
+			|| ! hash_equals( (string) $attempt['purpose'], $purpose )
+			|| ! hash_equals( (string) $attempt['context'], $context )
 			|| ! hash_equals( (string) $attempt['local_reference'], $cart_guard )
 			|| (int) $attempt['location_id'] !== $location_id
 			|| (int) $attempt['table_id'] !== $table_id
@@ -486,6 +489,10 @@ class DoughBoss_Square {
 		) {
 			return new WP_Error( 'doughboss_pay_attempt_changed', __( 'Your order changed while payment was being prepared. Please start payment again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
+		// Choose the dispatch path only from the persisted immutable attempt
+		// after the normalized caller input has matched it exactly.
+		$purpose         = (string) $attempt['purpose'];
+		$context         = (string) $attempt['context'];
 		$stored_metadata = self::attempt_metadata( $attempt );
 		$stored_binding  = self::attempt_shop_binding( $attempt );
 		if (

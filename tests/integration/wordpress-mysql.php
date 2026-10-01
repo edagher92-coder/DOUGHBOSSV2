@@ -604,6 +604,56 @@ function db_integration_fail_square_final_attempt_read( $query ) {
 	return $query;
 }
 
+/** Fail one COMMIT as a statement, leaving cleanup to the transaction owner. */
+function db_integration_fail_square_commit( $query ) {
+	if ( ! empty( $GLOBALS['db_fail_square_commit_once'] ) && 'COMMIT' === strtoupper( trim( (string) $query ) ) ) {
+		$GLOBALS['db_fail_square_commit_once'] = false;
+		return 'SELECT FROM doughboss_synthetic_commit_failure';
+	}
+	return $query;
+}
+
+/** Prove another connection can immediately lock the same guarded fixture rows. */
+function db_integration_square_rows_unlocked( $request_id, $attempt_id ) {
+	global $wpdb;
+	$probe = mysqli_init();
+	if ( ! $probe || ! $probe->real_connect( '127.0.0.1', DB_USER, DB_PASSWORD, DB_NAME, 33117 ) ) {
+		return false;
+	}
+	$probe->query( 'SET SESSION innodb_lock_wait_timeout = 1' );
+	$probe->query( 'START TRANSACTION' );
+	$orders = $probe->query( 'SELECT id FROM ' . $wpdb->prefix . 'doughboss_orders WHERE id = ' . (int) $request_id . ' FOR UPDATE' );
+	$approvals = false !== $orders ? $probe->query( 'SELECT request_order_id FROM ' . $wpdb->prefix . 'doughboss_preorder_approvals WHERE request_order_id = ' . (int) $request_id . ' FOR UPDATE' ) : false;
+	$attempts = false !== $approvals ? $probe->query( 'SELECT id FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE id = ' . (int) $attempt_id . ' FOR UPDATE' ) : false;
+	$probe->query( 'ROLLBACK' );
+	$probe->close();
+	return false !== $orders && false !== $approvals && false !== $attempts;
+}
+
+/** Schedule a real second-connection quarantine around fulfillment validation. */
+function db_integration_square_quarantine_interleave( $query ) {
+	global $wpdb;
+	$mode = isset( $GLOBALS['db_square_quarantine_mode'] ) ? $GLOBALS['db_square_quarantine_mode'] : '';
+	$before = 'before-read' === $mode && 0 === strpos( ltrim( (string) $query ), 'SELECT' ) && false !== strpos( (string) $query, 'doughboss_payment_attempts' ) && false !== strpos( (string) $query, 'provider_reference =' );
+	$after = 'after-read' === $mode && 0 === strpos( ltrim( (string) $query ), 'UPDATE' ) && false !== strpos( (string) $query, 'doughboss_preorder_approvals' ) && false !== strpos( (string) $query, "'released'" );
+	if ( ! $before && ! $after ) {
+		return $query;
+	}
+	$GLOBALS['db_square_quarantine_mode'] = '';
+	$GLOBALS['db_square_quarantine_exercised'] = true;
+	$probe = mysqli_init();
+	if ( ! $probe || ! $probe->real_connect( '127.0.0.1', DB_USER, DB_PASSWORD, DB_NAME, 33117 ) ) {
+		$GLOBALS['db_square_quarantine_probe_failed'] = true;
+		return $query;
+	}
+	$probe->query( 'SET SESSION innodb_lock_wait_timeout = 1' );
+	$changed = $probe->query( 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET status = \'mismatch\' WHERE id = ' . (int) $GLOBALS['db_square_quarantine_attempt_id'] );
+	$GLOBALS['db_square_quarantine_won'] = false !== $changed && 1 === $probe->affected_rows;
+	$GLOBALS['db_square_quarantine_blocked_by_lock'] = false === $changed && 1205 === (int) $probe->errno;
+	$probe->close();
+	return $query;
+}
+
 /** Change a synthetic shop map at the dispatch claim, before provider HTTP. */
 function db_integration_square_binding_drift( $query ) {
 	if ( ! empty( $GLOBALS['db_square_binding_drift_once'] ) && false !== strpos( (string) $query, 'doughboss_payment_attempts' ) && false !== strpos( (string) $query, "status = 'dispatching'" ) ) {
@@ -2920,6 +2970,38 @@ foreach ( array( 'bad-token', 'no-token', 'pending', 'rejected', 'expired', 'nea
 	db_integration_assert( ! is_array( $denied_attempt ) || 'prepared' === $denied_attempt['status'], 'approved Square ' . $case . ' cannot claim irreversible dispatch' );
 }
 
+foreach ( array( 'web-context', 'omitted-context', 'changed-purpose' ) as $case ) {
+	$fixture = db_integration_approved_square_fixture( 'immutable-' . $case );
+	if ( ! is_array( $fixture ) ) {
+		db_integration_assert( false, 'immutable Square ' . $case . ' fixture is available' );
+		continue;
+	}
+	$denied_meta = $fixture['metadata'];
+	$denied_meta['preorder_payment_token'] = str_repeat( 'f', 64 );
+	$denied = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $denied_meta );
+	$prepared = db_integration_approved_square_attempt( $fixture );
+	db_integration_assert( is_wp_error( $denied ) && is_array( $prepared ) && 'prepared' === $prepared['status'], 'bad capability leaves immutable approved attempt prepared for ' . $case );
+	$spoof = $fixture['metadata'];
+	if ( 'changed-purpose' === $case ) {
+		$spoof['purpose'] = 'voucher';
+	} else {
+		unset( $spoof['preorder_payment_token'] );
+		if ( 'web-context' === $case ) {
+			$spoof['context'] = 'web';
+		} else {
+			unset( $spoof['context'] );
+		}
+	}
+	$posts = $GLOBALS['db_square_post_count'];
+	$changed = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $spoof );
+	db_integration_assert( is_wp_error( $changed ), 'immutable approved Square denies ' . $case . ' route substitution' );
+	db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'immutable approved Square ' . $case . ' cannot POST' );
+	$after = db_integration_approved_square_attempt( $fixture );
+	$unlinked = DoughBoss_Preorder_Approval::get( $fixture['request_id'] );
+	db_integration_same( 'prepared', is_array( $after ) ? $after['status'] : '', 'immutable approved Square ' . $case . ' remains unclaimed' );
+	db_integration_same( 0, (int) $unlinked['payment_attempt_id'], 'immutable approved Square ' . $case . ' remains unlinked' );
+}
+
 $rollback_fixture = db_integration_approved_square_fixture( 'atomic-link-rollback' );
 if ( is_array( $rollback_fixture ) ) {
 	$posts = $GLOBALS['db_square_post_count'];
@@ -2956,6 +3038,44 @@ if ( is_array( $final_read_fixture ) ) {
 	$rolled_back_approval = DoughBoss_Preorder_Approval::get( $final_read_fixture['request_id'] );
 	db_integration_same( 'prepared', is_array( $rolled_back_attempt ) ? $rolled_back_attempt['status'] : '', 'post-link read failure rolls irreversible claim back' );
 	db_integration_same( 0, (int) $rolled_back_approval['payment_attempt_id'], 'post-link read failure rolls approval link back' );
+}
+
+foreach ( array( 'initial', 'linked' ) as $commit_case ) {
+	$fixture = db_integration_approved_square_fixture( 'commit-failure-' . $commit_case );
+	if ( ! is_array( $fixture ) ) {
+		db_integration_assert( false, 'Square COMMIT failure fixture is available' );
+		continue;
+	}
+	if ( 'linked' === $commit_case ) {
+		$started = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $fixture['metadata'] );
+		db_integration_assert( ! is_wp_error( $started ), 'linked COMMIT failure fixture has one existing dispatch' );
+	}
+	$posts = $GLOBALS['db_square_post_count'];
+	$GLOBALS['db_fail_square_commit_once'] = true;
+	$errors_before = $wpdb->suppress_errors( true );
+	add_filter( 'query', 'db_integration_fail_square_commit', 10 );
+	if ( 'linked' === $commit_case ) {
+		$commit_result = DoughBoss_Preorder_Approval::claim_square_dispatch( $fixture['request_id'], $fixture['token'], $started['attempt_id'] );
+	} else {
+		$commit_result = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $fixture['metadata'] );
+	}
+	remove_filter( 'query', 'db_integration_fail_square_commit', 10 );
+	$wpdb->suppress_errors( $errors_before );
+	db_integration_assert( is_wp_error( $commit_result ) && ! $GLOBALS['db_fail_square_commit_once'], 'Square ' . $commit_case . ' COMMIT failure is exercised and denied' );
+	db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'Square ' . $commit_case . ' COMMIT failure sends no additional POST' );
+	$attempt = db_integration_approved_square_attempt( $fixture );
+	$approval = DoughBoss_Preorder_Approval::get( $fixture['request_id'] );
+	$transaction_open = (int) $wpdb->get_var( 'SELECT @@in_transaction' );
+	db_integration_same( 0, $transaction_open, 'Square ' . $commit_case . ' failed COMMIT leaves no open transaction' );
+	db_integration_assert( db_integration_square_rows_unlocked( $fixture['request_id'], $attempt['id'] ), 'Square ' . $commit_case . ' failed COMMIT releases rows for a second connection' );
+	if ( 'initial' === $commit_case ) {
+		db_integration_same( 'prepared', $attempt['status'], 'failed initial COMMIT restores prepared attempt' );
+		db_integration_same( 0, (int) $approval['payment_attempt_id'], 'failed initial COMMIT restores unlinked approval' );
+	}
+	// Keep a deliberately failing pre-fix run from contaminating later cases.
+	if ( $transaction_open ) {
+		$wpdb->query( 'ROLLBACK' );
+	}
 }
 
 $unknown_fixture = db_integration_approved_square_fixture( 'unknown-outcome' );
@@ -3032,6 +3152,36 @@ if ( is_array( $approved_square_smoke ) && ! is_wp_error( $approved_square_payme
 	}
 }
 remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
+remove_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
+add_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
+foreach ( array( 'before-read', 'after-read' ) as $quarantine_mode ) {
+	$fixture = db_integration_approved_square_fixture( 'quarantine-' . $quarantine_mode );
+	$paid_quarantine = is_array( $fixture ) ? DoughBoss_Square::create_payment_intent( 1400, 'AUD', $fixture['metadata'] ) : null;
+	if ( ! is_array( $paid_quarantine ) ) {
+		db_integration_assert( false, 'Square quarantine race prepares valid payment' );
+		continue;
+	}
+	$verified_quarantine = DoughBoss_Square::retrieve_payment_intent( $paid_quarantine['id'] );
+	db_integration_assert( ! is_wp_error( $verified_quarantine ), 'Square quarantine race payment starts verified' );
+	$GLOBALS['db_square_quarantine_attempt_id'] = $paid_quarantine['attempt_id'];
+	$GLOBALS['db_square_quarantine_mode'] = $quarantine_mode;
+	$GLOBALS['db_square_quarantine_exercised'] = false;
+	$GLOBALS['db_square_quarantine_won'] = false;
+	$GLOBALS['db_square_quarantine_blocked_by_lock'] = false;
+	$GLOBALS['db_square_quarantine_probe_failed'] = false;
+	$fulfillment = array_merge( $fixture['order_data'], array( 'source_request_id' => $fixture['request_id'], 'payment_method' => 'square', 'payment_status' => 'paid', 'payment_intent_id' => $paid_quarantine['id'] ) );
+	add_filter( 'query', 'db_integration_square_quarantine_interleave', 10 );
+	$quarantine_release = DoughBoss_Order::create( $fulfillment, $fixture['lines'] );
+	remove_filter( 'query', 'db_integration_square_quarantine_interleave', 10 );
+	db_integration_assert( $GLOBALS['db_square_quarantine_exercised'] && ! $GLOBALS['db_square_quarantine_probe_failed'], 'Square ' . $quarantine_mode . ' quarantine interleaving runs on a second connection' );
+	if ( $GLOBALS['db_square_quarantine_won'] ) {
+		db_integration_assert( is_wp_error( $quarantine_release ), 'Square quarantine that wins before fulfillment commit denies release' );
+		db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $fixture['request_id'] ), 'winning Square quarantine creates no kitchen order' );
+	} else {
+		db_integration_assert( 'after-read' === $quarantine_mode && $GLOBALS['db_square_quarantine_blocked_by_lock'], 'Square fulfillment holds payment row until commit against concurrent quarantine' );
+		db_integration_assert( is_array( $quarantine_release ), 'serialized verified Square fulfillment can commit before later quarantine' );
+	}
+}
 remove_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
 $approved_square_race_fixture = db_integration_approved_square_fixture( 'two-process-race' );
 db_integration_assert( is_array( $approved_square_race_fixture ), 'approved Square race leaves one immutable synthetic request for two workers' );

@@ -423,6 +423,7 @@ class DoughBoss_Preorder_Approval {
 					return self::error( 'doughboss_preorder_payment_unavailable', __( 'This payment is not available for confirmation.', 'doughboss' ), 409 );
 				}
 				if ( ! self::commit() ) {
+					self::rollback();
 					return self::error( 'doughboss_preorder_store_failed', __( 'The payment dispatch could not be committed.', 'doughboss' ), 500 );
 				}
 				return new WP_Error(
@@ -450,6 +451,7 @@ class DoughBoss_Preorder_Approval {
 				return self::error( 'doughboss_preorder_store_failed', __( 'The payment dispatch could not be committed.', 'doughboss' ), 500 );
 			}
 			if ( ! self::commit() ) {
+				self::rollback();
 				return self::error( 'doughboss_preorder_store_failed', __( 'The payment dispatch could not be committed.', 'doughboss' ), 500 );
 			}
 			$row->state              = self::STATE_PAYMENT_ACTIVE;
@@ -805,7 +807,11 @@ class DoughBoss_Preorder_Approval {
 		if ( ! $fulfillment || ! $request || ! $approval || ! class_exists( 'DoughBoss_Payment_Attempts' ) || ! class_exists( 'DoughBoss_Square' ) || empty( $fulfillment->payment_intent_id ) ) {
 			return false;
 		}
-		$attempt  = DoughBoss_Payment_Attempts::find_by_provider_reference( (string) $fulfillment->payment_intent_id );
+		// Resolve the immutable attempt identity, then perform a current locking
+		// read. The outer source-order transaction can otherwise retain a stale
+		// consistent read while a concurrent worker quarantines this attempt.
+		$resolved = DoughBoss_Payment_Attempts::find_by_provider_reference( (string) $fulfillment->payment_intent_id );
+		$attempt  = is_array( $resolved ) ? self::locked_payment_attempt( (int) $resolved['id'] ) : null;
 		$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
 		$binding  = DoughBoss_Square::shop_binding( (int) $request->location_id );
 		if (
