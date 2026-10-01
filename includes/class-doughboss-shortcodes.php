@@ -352,7 +352,8 @@ class DoughBoss_Shortcodes {
 										</div>
 										<?php $description = DoughBoss_Post_Types::plain_menu_description( $item->post_excerpt ? $item->post_excerpt : $item->post_content ); ?>
 										<?php if ( '' !== $description ) : ?>
-											<p><?php echo esc_html( $description ); ?></p>
+											<?php // Escape plain text with double encoding: remaining entity syntax must match the JSON/textContent display. ?>
+											<p><?php echo htmlspecialchars( $description, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8', true ); ?></p>
 										<?php endif; ?>
 									</li>
 								<?php endforeach; ?>

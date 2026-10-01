@@ -113,12 +113,6 @@ class DoughBoss_Settings {
 	public static function format_price( $amount ) { return '$' . number_format( (float) $amount, 2 ); }
 }
 
-class DoughBoss_Post_Types {
-	const POST_TYPE  = 'doughboss_item';
-	const TAXONOMY   = 'doughboss_category';
-	const META_PRICE = '_doughboss_price';
-}
-
 function doughboss_preview_menu_item( $post_id ) {
 	foreach ( doughboss_preview_fixture()['menu'] as $item ) {
 		if ( (int) $item['id'] === (int) $post_id ) {
@@ -152,6 +146,7 @@ function get_post_meta( $post_id, $key ) {
 	return $item && DoughBoss_Post_Types::META_PRICE === $key ? $item['price'] : '';
 }
 
+require $preview_repo . '/includes/class-doughboss-post-types.php';
 require $preview_repo . '/includes/class-doughboss-images.php';
 require $preview_repo . '/themes/doughboss-final/functions.php';
 require $preview_repo . '/includes/class-doughboss-shortcodes.php';

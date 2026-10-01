@@ -3635,7 +3635,8 @@ update_post_meta( $ssr_draft_id, DoughBoss_Post_Types::META_PRICE, '99' );
 $ssr_menu_html = ( new DoughBoss_Shortcodes() )->menu();
 $plain_description = 'SSR plain description & cheese — "fresh"';
 db_integration_assert( false !== strpos( $ssr_menu_html, esc_html( $plain_description ) ), 'SSR description decodes saved entities once before HTML escaping' );
-db_integration_assert( false === strpos( $ssr_menu_html, 'do-not-render' ) && false === strpos( $ssr_menu_html, '&amp;amp;' ), 'SSR description strips encoded scripts and avoids double-escaped ampersands' );
+// Other published fixtures may deliberately retain nested entity syntax; check this prose exactly.
+db_integration_assert( false === strpos( $ssr_menu_html, 'do-not-render' ) && false !== strpos( $ssr_menu_html, '<p>' . esc_html( $plain_description ) . '</p>' ), 'SSR description strips encoded scripts and avoids double-escaped ampersands' );
 $plain_menu_row = null;
 foreach ( $rest_controller->get_menu()->get_data() as $plain_row ) {
 	if ( (int) $plain_row['id'] === (int) $ssr_first_id ) { $plain_menu_row = $plain_row; break; }
@@ -3647,6 +3648,29 @@ db_integration_assert( false !== strpos( $ssr_menu_html, $ssr_first_escaped ) &&
 db_integration_assert( false === strpos( $ssr_menu_html, '<b>published</b>' ) && false === strpos( $ssr_menu_html, '<em>plain</em>' ) && false === strpos( $ssr_menu_html, 'SSR hidden draft' ), 'SSR fallback escapes markup and excludes unpublished menu rows' );
 db_integration_assert( strpos( $ssr_menu_html, $ssr_first_escaped ) < strpos( $ssr_menu_html, esc_html( $ssr_second_title ) ), 'SSR fallback preserves menu order within a category' );
 db_integration_assert( false === strpos( $ssr_menu_html, 'dietary' ) && false === strpos( $ssr_menu_html, '<button' ) && false === strpos( $ssr_menu_html, '<form' ), 'SSR fallback remains browse-only without dietary claims or purchase controls' );
+
+// Decode once is deliberate; SSR must not interpret entity syntax left in plain JSON text.
+foreach ( array(
+	array( 'Cheese &amp;amp; herbs', 'Cheese &amp; herbs' ),
+	array( 'Literal &amp;lt;em&amp;gt;herbs&amp;lt;/em&amp;gt;', 'Literal &lt;em&gt;herbs&lt;/em&gt;' ),
+	array( 'Safe &lt;script&gt;nested-script-sentinel&lt;/script&gt; &amp;amp; herbs', 'Safe  &amp; herbs' ),
+) as $nested_description_case ) {
+	wp_update_post( array( 'ID' => $ssr_first_id, 'post_excerpt' => $nested_description_case[0] ) );
+	$nested_menu_row = null;
+	foreach ( $rest_controller->get_menu()->get_data() as $nested_row ) {
+		if ( (int) $nested_row['id'] === (int) $ssr_first_id ) { $nested_menu_row = $nested_row; break; }
+	}
+	db_integration_same( $nested_description_case[1], is_array( $nested_menu_row ) ? $nested_menu_row['description'] : null, 'nested menu entities retain intentional decode-once JSON semantics' );
+	$nested_menu_html = ( new DoughBoss_Shortcodes() )->menu();
+	$nested_paragraphs = array();
+	preg_match_all( '#<p>(.*?)</p>#s', $nested_menu_html, $nested_paragraphs );
+	$nested_display_texts = array_map( function ( $html_text ) {
+		// One HTML parse, unlike recursive decoding; tags must already be escaped.
+		return html_entity_decode( $html_text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	}, $nested_paragraphs[1] );
+	db_integration_assert( in_array( $nested_description_case[1], $nested_display_texts, true ), 'SSR rendered paragraph matches JSON/textContent for nested entities' );
+	db_integration_assert( false === strpos( $nested_menu_html, 'nested-script-sentinel' ) && false === strpos( $nested_menu_html, '<em>herbs</em>' ), 'nested entity prose never emits active markup or encoded script content' );
+}
 
 // Real menu responses must connect the new variants, not just package them.
 $responsive_item_id = wp_insert_post( array(

@@ -35,6 +35,7 @@ $source_files = array(
 	'themes/doughboss-final/front-page.php',
 	'themes/doughboss-final/page-order.php',
 	'themes/doughboss-final/template-parts/locations.php',
+	'includes/class-doughboss-post-types.php',
 	'includes/class-doughboss-shortcodes.php',
 	'includes/class-doughboss-images.php',
 	'includes/class-doughboss-menu-options.php',

@@ -17,6 +17,7 @@ assert.equal(manifest.preview_only, true);
 assert.deepEqual(manifest.pages, pages);
 assert.equal(manifest.source_commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim());
 assert.ok(manifest.source_sha256['scripts/build-visual-preview.php'], 'builder provenance required');
+assert.ok(manifest.source_sha256['includes/class-doughboss-post-types.php'], 'post types provenance required');
 
 function safeRelative(relative) {
   assert.match(relative, /^[a-zA-Z0-9_./-]+$/);
