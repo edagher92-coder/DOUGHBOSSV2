@@ -1094,6 +1094,21 @@ db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orde
 $wpdb->suppress_errors( $orders_suppress );
 db_integration_same( null, DoughBoss_Payment_Attempts::find( $orders_collision['id'] )['provider_order_reference'], 'collision leaves original attempt unbound and held' );
 $orders_legacy = $orders_fixture( 'legacy', false );
+foreach ( array( 'safe_metadata', 'metadata' ) as $tender_metadata_field ) {
+	foreach ( array( 'card', 'gift_card' ) as $legacy_added_tender ) {
+		$legacy_tender_attempt = $orders_fixture( 'legacy-tender-' . $tender_metadata_field . '-' . $legacy_added_tender, false );
+		$legacy_tender_metadata = DoughBoss_Payment_Attempts::metadata( $legacy_tender_attempt );
+		$legacy_tender_candidate = $legacy_tender_metadata;
+		$legacy_tender_candidate['square_tender_kind'] = $legacy_added_tender;
+		db_integration_same( false, DoughBoss_Payment_Attempts::update( $legacy_tender_attempt['id'], array( $tender_metadata_field => $legacy_tender_candidate ) ), 'generic ' . $tender_metadata_field . ' cannot append ' . $legacy_added_tender . ' to legacy tender identity' );
+		db_integration_same( $legacy_tender_metadata, DoughBoss_Payment_Attempts::metadata( DoughBoss_Payment_Attempts::find( $legacy_tender_attempt['id'] ) ), 'rejected legacy tender upgrade leaves exact persisted metadata unchanged' );
+	}
+}
+$legacy_compatible_metadata = DoughBoss_Payment_Attempts::metadata( $orders_legacy );
+$legacy_compatible_metadata['audit_note'] = 'synthetic-compatible-addition';
+$legacy_compatible_update = DoughBoss_Payment_Attempts::update( $orders_legacy['id'], array( 'safe_metadata' => $legacy_compatible_metadata ) );
+db_integration_assert( is_array( $legacy_compatible_update ), 'legacy tender guard preserves unrelated permitted metadata additions' );
+db_integration_same( $legacy_compatible_metadata, DoughBoss_Payment_Attempts::metadata( DoughBoss_Payment_Attempts::find( $orders_legacy['id'] ) ), 'compatible legacy update retains every existing binding and no tender marker' );
 $orders_upgrade_metadata = DoughBoss_Payment_Attempts::metadata( $orders_legacy );
 $orders_upgrade_metadata['orders_protocol'] = 'square-orders-v1';
 $orders_upgrade_metadata['orders_snapshot_hash'] = hash( 'sha256', 'not-a-snapshot' );
@@ -4112,6 +4127,13 @@ $gift_held = $gift_controller->checkout( db_integration_rest_request( '/doughbos
 db_integration_assert( is_wp_error( $gift_held ), 'unreadable linked Gift Card order holds kitchen release' );
 db_integration_same( 0, DoughBoss_Order::find_id_by_payment_intent( $gift_reference ), 'held gift payment creates no local kitchen order' );
 $GLOBALS['db_orders_http_mode'] = 'success';
+$GLOBALS['db_square_gift_mode'] = 'wrong_tender';
+$gift_wrong_tender = $gift_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $gift_checkout ) );
+db_integration_assert( is_wp_error( $gift_wrong_tender ), 'ordinary gift checkout rejects a linked bank-card tender' );
+db_integration_same( 0, DoughBoss_Order::find_id_by_payment_intent( $gift_reference ), 'wrong ordinary gift tender creates no local kitchen order' );
+db_integration_same( $gift_hooks, count( $GLOBALS['db_order_created_events'] ), 'wrong ordinary gift tender emits no kitchen hook' );
+db_integration_same( $gift_posts + 1, $GLOBALS['db_square_post_count'], 'wrong ordinary gift tender does not trigger a second payment' );
+$GLOBALS['db_square_gift_mode'] = '';
 $gift_complete = $gift_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $gift_checkout ) );
 db_integration_assert( $gift_complete instanceof WP_REST_Response, 'fresh Gift Card verification releases ordinary order' );
 db_integration_same( $gift_hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'ordinary gift creates exactly one kitchen hook' );

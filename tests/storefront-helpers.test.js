@@ -773,11 +773,17 @@ function dormantSquareModuleHarness(harnessOptions = {}) {
 		};
 	}
 	const window = {
-		DoughBossData: { payments: { enabled: false, gateway: 'square' }, restUrl: '/wp-json/doughboss/v1', currency: '$' },
-		DoughBossSquareConfig: { applicationId: '', locationId: '', sdkUrl: 'https://sandbox.web.squarecdn.com/v1/square.js' },
+		DoughBossData: { payments: { enabled: harnessOptions.ordinaryEnabled === true, gateway: 'square' }, restUrl: '/wp-json/doughboss/v1', currency: '$' },
+		DoughBossSquareConfig: {
+			applicationId: harnessOptions.ordinaryEnabled === true ? 'sq-app-test' : '',
+			locationId: harnessOptions.ordinaryEnabled === true ? 'sq-bankstown-test' : '',
+			currency: harnessOptions.ordinaryEnabled === true ? 'AUD' : '',
+			sdkUrl: 'https://sandbox.web.squarecdn.com/v1/square.js'
+		},
 		crypto: { randomUUID: () => 'synthetic-stable-key' }
 	};
 	const document = { readyState: 'loading', createElement: element, addEventListener() {},
+		querySelector: selector => selector === 'input[name="db-order-type"]:checked' ? { value: 'pickup' } : null,
 		head: { appendChild(script) {
 			scripts.push(script);
 			window.Square = { payments(applicationId, locationId) {
@@ -799,12 +805,22 @@ function dormantSquareModuleHarness(harnessOptions = {}) {
 			script.onload();
 		} }
 	};
+	if (harnessOptions.ordinaryEnabled === true) document.head.appendChild({ onload() {} });
 	vm.runInNewContext(fs.readFileSync(square, 'utf8'), { window, document, Promise, CustomEvent: function () {}, fetch: async (url, options) => {
 		calls.push({ url, body: JSON.parse(options.body) });
-		return { ok: true, json: async () => url.endsWith('/start') ? { gateway: 'square' } : (Object.hasOwn(harnessOptions, 'receipt') ? harnessOptions.receipt : { success: true, order_number: 'DB-261001-ABC123', total: 14 }) };
+		return { ok: true, json: async () => url.endsWith('/payment-intent') ? { payment_intent: 'sq-provider-id' } : (url.endsWith('/start') ? { gateway: 'square' } : (Object.hasOwn(harnessOptions, 'receipt') ? harnessOptions.receipt : { success: true, order_number: 'DB-261001-ABC123', total: 14 })) };
 	} });
 	const form = element('form');
 	form.appendChild(element('button'));
+	const originalQuerySelector = form.querySelector;
+	form.querySelector = selector => {
+		if (harnessOptions.ordinaryEnabled === true && selector === '.db-checkout-summary-total') return { textContent: '$14.00' };
+		if (harnessOptions.ordinaryEnabled === true && selector === '[name="customer_name"]') return { value: 'Synthetic customer' };
+		if (harnessOptions.ordinaryEnabled === true && selector === '[name="customer_email"]') return { value: 'synthetic@example.invalid' };
+		if (harnessOptions.ordinaryEnabled === true && selector === '[name="customer_phone"]') return { value: '0400000000' };
+		return originalQuerySelector.call(form, selector);
+	};
+	form.dispatchEvent = () => {};
 	return { window, form, calls, scripts, sdkBindings, tokenizations, fieldStarts };
 }
 
@@ -907,6 +923,31 @@ test('failed gift mount retries only gift fields and makes no premature payment 
 	assert.deepEqual(h.fieldStarts, { card: 1, gift: 3 });
 	assert.deepEqual(h.tokenizations, [undefined]);
 	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+});
+
+test('actual ordinary checkout rejects selected gift mount failure before payment then retries once', async () => {
+	const h = dormantSquareModuleHarness({ ordinaryEnabled: true, giftFailures: 1 });
+	h.window.DoughBossSquare.enhance(h.form);
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await assert.rejects(h.window.DoughBossSquare.pay(h.form), /Synthetic gift mount failure/);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 1 }, 'the selected gift failure does not remount card');
+	assert.deepEqual(h.tokenizations, [], 'a mount failure cannot reach hosted-field tokenization');
+	assert.deepEqual(h.calls, [], 'a mount failure cannot call /payment-intent or /checkout');
+
+	method.listeners.change();
+	await h.window.DoughBossSquare.pay(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 2 }, 'the successful retry remains on the selected gift tender without remounting card');
+	assert.deepEqual(h.tokenizations, [undefined], 'gift tokenization has no card verification details');
+	assert.deepEqual(h.calls.map(call => call.url), [
+		'/wp-json/doughboss/v1/payment-intent',
+		'/wp-json/doughboss/v1/checkout'
+	], 'only the successful retry starts one payment and places one order');
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+	assert.equal(h.calls[0].body.source_id, 'cnon:gift-synthetic-secure');
 });
 
 test('actual Square recovery module never loads SDK, mounts fields or tokenizes', async () => {

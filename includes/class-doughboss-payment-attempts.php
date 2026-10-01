@@ -338,8 +338,9 @@ class DoughBoss_Payment_Attempts {
 			if ( ! is_array( $candidate ) ) {
 				return false;
 			}
-			// Creation-only Orders markers must never upgrade a historical attempt.
-			foreach ( array( 'orders_protocol', 'orders_snapshot_hash' ) as $key ) {
+			// Orders and tender identity are creation-only. An absent historical
+			// tender means card and must never be upgraded by a metadata update.
+			foreach ( array( 'orders_protocol', 'orders_snapshot_hash', 'square_tender_kind' ) as $key ) {
 				if ( array_key_exists( $key, $candidate ) !== array_key_exists( $key, $existing_metadata ) ) {
 					return false;
 				}
