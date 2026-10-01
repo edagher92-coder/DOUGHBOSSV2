@@ -527,13 +527,37 @@ function db_integration_stripe_checkout_fixture_params( array $fixture, $idempot
 }
 
 /** Prepare one Square accounting fixture through the existing native REST seam. */
-function db_integration_accounting_square_fixture( $seed ) {
+function db_integration_accounting_square_fixture( $seed, $historical = false ) {
 	$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'IntegrationBasisSquare' . substr( hash( 'sha256', $seed ), 0, 24 );
 	$cart = new DoughBoss_Cart();
 	$cart->clear();
 	$cart->add( array( 'type' => 'menu', 'item_id' => 9851, 'name' => 'Synthetic basis item', 'unit_price' => 12.00, 'quantity' => 1 ) );
 	$controller = new DoughBoss_REST_Controller( $cart );
 	$params = array( 'payment_attempt_key' => $seed . '-attempt-0001', 'customer_name' => 'Basis Customer', 'customer_email' => 'basis@example.invalid', 'customer_phone' => '0400000001', 'address' => '', 'notes' => 'Historical basis fixture', 'order_type' => 'pickup', 'location_id' => 1, 'source_id' => 'cnon:basis-synthetic', 'verification_token' => 'verify:basis-synthetic' );
+	if ( $historical ) {
+		$invoke = function ( $method, array $args = array() ) use ( $controller ) {
+			$reflection = new ReflectionMethod( 'DoughBoss_REST_Controller', $method );
+			$reflection->setAccessible( true );
+			return $reflection->invokeArgs( $controller, $args );
+		};
+		$request = db_integration_rest_request( '/doughboss/v1/payment-intent', $params );
+		$binding = $invoke( 'square_binding_payload', array( 'pickup', 1, null, $params['customer_name'],
+			$params['customer_email'], $params['customer_phone'], '', $params['notes'] ) );
+		$meta = array( 'checkout_key' => $invoke( 'payment_checkout_key', array( $request, 'square-order-v2', $binding ) ),
+			'protocol_version' => 'square-v2', 'purpose' => 'order', 'context' => 'web', 'location_id' => 1,
+			'attempt_identity' => $invoke( 'payment_attempt_identity', array( $request, 'square-order-v2' ) ),
+			'binding_hash' => $invoke( 'square_binding_hash', array( $binding ) ), 'cart_guard' => $invoke( 'square_cart_guard' ) );
+		$totals = $cart->totals( 'pickup' );
+		$meta['order_type'] = 'pickup';
+		$meta['table_id'] = 0;
+		$meta['qr_code_id'] = 0;
+		$meta['voucher_code'] = '';
+		$meta['voucher_reservation_key'] = '';
+		foreach ( array( 'subtotal', 'tax', 'delivery_fee', 'discount' ) as $field ) {
+			$meta[ $field . '_minor' ] = DoughBoss_Payment::to_minor_units( $totals[ $field ] );
+		}
+		db_integration_seed_historical_square_attempt( $meta, DoughBoss_Payment::to_minor_units( $totals['total'] ) );
+	}
 	$result = $controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $params ) );
 	$data = $result instanceof WP_REST_Response ? $result->get_data() : array();
 	$reference = isset( $data['payment_intent'] ) ? (string) $data['payment_intent'] : '';
@@ -628,8 +652,8 @@ function db_integration_no_orders_email( $email ) {
 }
 
 /** Build server-owned Square v2 metadata for one synthetic attempt. */
-function db_integration_square_metadata( $attempt_seed, $checkout_seed, $guard_seed, $voucher = array() ) {
-	return array_merge(
+function db_integration_square_metadata( $attempt_seed, $checkout_seed, $guard_seed, $voucher = array(), $amount_minor = null, $discount_minor = 0 ) {
+	$metadata = array_merge(
 		array(
 			'checkout_key'      => hash( 'sha256', $checkout_seed ),
 			'protocol_version'   => 'square-v2',
@@ -647,6 +671,45 @@ function db_integration_square_metadata( $attempt_seed, $checkout_seed, $guard_s
 		),
 		$voucher
 	);
+	if ( null !== $amount_minor ) {
+		$subtotal = ( $amount_minor + $discount_minor ) / 100;
+		$payload = array(
+			'binding_hash' => $metadata['binding_hash'],
+			'order' => array( 'location_id' => $metadata['location_id'], 'currency' => 'AUD',
+				'subtotal' => $subtotal, 'discount' => $discount_minor / 100, 'tax' => 0,
+				'delivery_fee' => 0, 'total' => $amount_minor / 100,
+				'accounting_basis' => array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 0,
+					'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ) ),
+			'lines' => array( array( 'name' => 'Synthetic item ' . $attempt_seed, 'quantity' => 1,
+				'unit_price' => $subtotal, 'line_total' => $subtotal ) ),
+		);
+		$snapshot = DoughBoss_Checkout_Snapshots::store( $metadata['checkout_key'], $payload );
+		db_integration_assert( is_array( $snapshot ), 'direct fixture captures trusted economics before attempt allocation' );
+	}
+	return $metadata;
+}
+
+/** Seed an old prepared identity before dispatch; never downgrade a modern row. */
+function db_integration_seed_historical_square_attempt( array $meta, $amount_minor ) {
+	$binding = DoughBoss_Square::shop_binding( $meta['location_id'] );
+	$safe = $meta;
+	unset( $safe['checkout_key'], $safe['source_id'], $safe['verification_token'], $safe['preorder_payment_token'] );
+	if ( 'approved_preorder' === $meta['context'] ) {
+		$safe['approval_id'] = $meta['source_request_id'];
+		$safe['approval_fingerprint'] = $meta['request_fingerprint'];
+		unset( $safe['source_request_id'], $safe['request_fingerprint'] );
+	}
+	$safe['square_shop_slug'] = $binding['shop_slug'];
+	$safe['square_location_id'] = $binding['square_location_id'];
+	$safe['square_mode'] = $binding['square_mode'];
+	$attempt = DoughBoss_Payment_Attempts::create( array(
+		'attempt_key' => hash( 'sha256', 'square-v2|' . $meta['attempt_identity'] ), 'checkout_key' => $meta['checkout_key'],
+		'provider' => 'square', 'purpose' => 'order', 'context' => $meta['context'], 'location_id' => $meta['location_id'],
+		'local_reference' => $meta['cart_guard'], 'amount_minor' => $amount_minor, 'currency' => 'AUD',
+		'status' => 'prepared', 'safe_metadata' => $safe,
+	) );
+	db_integration_assert( is_array( $attempt ), 'historical fixture starts as an unmarked prepared identity' );
+	return $attempt;
 }
 
 /** Fail exactly one cart-guard read while leaving every later query intact. */
@@ -664,6 +727,10 @@ function db_integration_fail_guard_select( $query ) {
 
 /** Server-owned approved Square snapshot; all contacts and amounts are synthetic. */
 function db_integration_approved_square_fixture( $seed, $accounting_basis = null ) {
+	if ( null === $accounting_basis ) {
+		$accounting_basis = array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 0,
+			'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true );
+	}
 	$created = db_integration_create_preorder_request( 'square-' . $seed, 14.00, $accounting_basis );
 	$id = is_array( $created ) ? (int) $created['order_id'] : 0;
 	$pending = DoughBoss_Preorder_Approval::ensure_pending( $id );
@@ -704,7 +771,9 @@ function db_integration_approved_square_fixture( $seed, $accounting_basis = null
  * owner of its immutable approved-payment snapshot.
  */
 function db_integration_approved_square_rest_fixture( $seed ) {
-	$created = db_integration_create_preorder_request( 'square-rest-' . $seed, 14.00 );
+	$created = db_integration_create_preorder_request( 'square-rest-' . $seed, 14.00,
+		array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 0,
+			'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ) );
 	$id = is_array( $created ) ? (int) $created['order_id'] : 0;
 	$pending = $id ? DoughBoss_Preorder_Approval::ensure_pending( $id ) : new WP_Error( 'integration_square_rest_fixture' );
 	$order = $id ? DoughBoss_Order::get( $id ) : null;
@@ -1207,7 +1276,7 @@ db_integration_same( 0, $GLOBALS['db_square_post_count'], 'all gift card lookups
 update_option( 'doughboss_settings', $gift_lookup_settings, false );
 $settings = $gift_lookup_settings;
 
-$first_meta = db_integration_square_metadata( 'attempt-one', 'checkout-one', 'cart-one' );
+$first_meta = db_integration_square_metadata( 'attempt-one', 'checkout-one', 'cart-one', array(), 2750 );
 $first      = DoughBoss_Square::create_payment_intent( 2750, 'AUD', $first_meta );
 db_integration_assert( ! is_wp_error( $first ), 'first Square v2 request succeeds against the mocked provider' );
 db_integration_same( 1, $GLOBALS['db_square_post_count'], 'first attempt performs exactly one provider POST' );
@@ -1283,18 +1352,18 @@ db_integration_same( 'order_committed', $committed['status'], 'durable order rel
 $committed_replay = DoughBoss_Square::retrieve_payment_intent( $first['id'] );
 db_integration_same( 'succeeded', is_array( $committed_replay ) ? $committed_replay['status'] : '', 'durable committed order remains safely replayable without regressing its stored state' );
 
-$after_commit = DoughBoss_Square::create_payment_intent( 3100, 'AUD', db_integration_square_metadata( 'attempt-three', 'checkout-three', 'cart-one' ) );
+$after_commit = DoughBoss_Square::create_payment_intent( 3100, 'AUD', db_integration_square_metadata( 'attempt-three', 'checkout-three', 'cart-one', array(), 3100 ) );
 db_integration_assert( ! is_wp_error( $after_commit ), 'same cart can begin a new payment after its prior order is durable' );
 db_integration_same( 2, $GLOBALS['db_square_post_count'], 'post-commit attempt performs one new provider POST' );
 
 // Durable quarantine and winner states override stale provider observations.
-$mismatch_payment = DoughBoss_Square::create_payment_intent( 3200, 'AUD', db_integration_square_metadata( 'mismatch-attempt', 'mismatch-checkout', 'mismatch-cart' ) );
+$mismatch_payment = DoughBoss_Square::create_payment_intent( 3200, 'AUD', db_integration_square_metadata( 'mismatch-attempt', 'mismatch-checkout', 'mismatch-cart', array(), 3200 ) );
 db_integration_assert( ! is_wp_error( $mismatch_payment ), 'mismatch fixture first records a matching payment' );
 DoughBoss_Payment_Attempts::reconcile_irreversible_reference( $mismatch_payment['id'], 'mismatch', 'COMPLETED' );
 $mismatch_replay = DoughBoss_Square::retrieve_payment_intent( $mismatch_payment['id'] );
 db_integration_same( 'doughboss_pay_mismatch', is_wp_error( $mismatch_replay ) ? $mismatch_replay->get_error_code() : '', 'durable mismatch cannot be reopened by a later matching response' );
 
-$stale_payment = DoughBoss_Square::create_payment_intent( 3300, 'AUD', db_integration_square_metadata( 'stale-attempt', 'stale-checkout', 'stale-cart' ) );
+$stale_payment = DoughBoss_Square::create_payment_intent( 3300, 'AUD', db_integration_square_metadata( 'stale-attempt', 'stale-checkout', 'stale-cart', array(), 3300 ) );
 db_integration_assert( ! is_wp_error( $stale_payment ), 'stale-response fixture first records success' );
 $GLOBALS['db_square_http_mode'] = 'failed';
 $stale_failure = DoughBoss_Square::retrieve_payment_intent( $stale_payment['id'] );
@@ -1303,7 +1372,7 @@ $stale_row = DoughBoss_Payment_Attempts::find( (int) $stale_payment['attempt_id'
 db_integration_same( 'succeeded', $stale_row['status'], 'stale terminal response leaves the winning succeeded state intact' );
 
 $GLOBALS['db_square_http_mode'] = 'success';
-$mode_payment = DoughBoss_Square::create_payment_intent( 3400, 'AUD', db_integration_square_metadata( 'mode-attempt', 'mode-checkout', 'mode-cart' ) );
+$mode_payment = DoughBoss_Square::create_payment_intent( 3400, 'AUD', db_integration_square_metadata( 'mode-attempt', 'mode-checkout', 'mode-cart', array(), 3400 ) );
 $settings['square_mode'] = 'live';
 update_option( 'doughboss_settings', $settings, false );
 $mode_drift = DoughBoss_Square::retrieve_payment_intent( $mode_payment['id'] );
@@ -1313,7 +1382,7 @@ update_option( 'doughboss_settings', $settings, false );
 
 // An ambiguous provider boundary is irreversible and never re-posted.
 $GLOBALS['db_square_http_mode'] = 'network_error';
-$unknown_meta = db_integration_square_metadata( 'attempt-unknown', 'checkout-unknown', 'cart-unknown' );
+$unknown_meta = db_integration_square_metadata( 'attempt-unknown', 'checkout-unknown', 'cart-unknown', array(), 1800 );
 $unknown      = DoughBoss_Square::create_payment_intent( 1800, 'AUD', $unknown_meta );
 db_integration_assert( is_wp_error( $unknown ), 'synthetic network failure returns a safe error' );
 db_integration_same( true, is_wp_error( $unknown ) && ! empty( $unknown->get_error_data()['payment_pending'] ), 'ambiguous POST reports payment pending' );
@@ -1323,7 +1392,7 @@ db_integration_assert( is_wp_error( $unknown_replay ), 'ambiguous attempt stays 
 db_integration_same( $posts_after_unknown, $GLOBALS['db_square_post_count'], 'ambiguous attempt never posts again' );
 $unknown_row = DoughBoss_Payment_Attempts::find_by_attempt_key( hash( 'sha256', 'square-v2|' . hash( 'sha256', 'attempt-unknown' ) ) );
 db_integration_same( 'unknown', is_array( $unknown_row ) ? $unknown_row['status'] : '', 'ambiguous dispatch is durably marked unknown' );
-$unknown_snapshot = DoughBoss_Checkout_Snapshots::store( $unknown_row['checkout_key'], array( 'order' => array( 'fixture' => true ), 'lines' => array() ) );
+$unknown_snapshot = DoughBoss_Checkout_Snapshots::find( $unknown_row['checkout_key'] );
 db_integration_assert( ! is_wp_error( $unknown_snapshot ), 'unknown-payment recovery snapshot is stored' );
 $wpdb->update(
 	$wpdb->prefix . 'doughboss_checkout_snapshots',
@@ -1350,7 +1419,7 @@ db_integration_same( 0, $unprotected_count, 'forced retention purge removes an e
 
 // A failed guard SELECT is not equivalent to finding no unresolved payment.
 $GLOBALS['db_square_http_mode'] = 'success';
-$guard_fail_meta = db_integration_square_metadata( 'guard-first', 'guard-first-checkout', 'guard-read-failure' );
+$guard_fail_meta = db_integration_square_metadata( 'guard-first', 'guard-first-checkout', 'guard-read-failure', array(), 1900 );
 $guard_first     = DoughBoss_Square::create_payment_intent( 1900, 'AUD', $guard_fail_meta );
 db_integration_assert( ! is_wp_error( $guard_first ), 'guard-failure fixture creates one unresolved payment first' );
 $posts_before_guard_failure          = $GLOBALS['db_square_post_count'];
@@ -1423,7 +1492,7 @@ $voucher_meta = db_integration_square_metadata(
 	'voucher-attempt',
 	'voucher-checkout',
 	'voucher-cart',
-	array( 'voucher_code' => $voucher['code'], 'voucher_reservation_key' => $voucher_key )
+	array( 'voucher_code' => $voucher['code'], 'voucher_reservation_key' => $voucher_key ), 2000, 500
 );
 $voucher_unknown = DoughBoss_Square::create_payment_intent( 2000, 'AUD', $voucher_meta );
 db_integration_assert( is_wp_error( $voucher_unknown ), 'voucher-backed ambiguous payment fails closed' );
@@ -1453,7 +1522,7 @@ $terminal_payment = DoughBoss_Square::create_payment_intent(
 		'terminal-voucher-attempt',
 		'terminal-voucher-checkout',
 		'terminal-voucher-cart',
-		array( 'voucher_code' => $terminal_voucher['code'], 'voucher_reservation_key' => $terminal_key )
+		array( 'voucher_code' => $terminal_voucher['code'], 'voucher_reservation_key' => $terminal_key ), 2100, 400
 	)
 );
 db_integration_same( 'failed', is_array( $terminal_payment ) ? $terminal_payment['status'] : '', 'provider FAILED becomes a durable terminal attempt' );
@@ -1473,7 +1542,7 @@ $webhook_payment = DoughBoss_Square::create_payment_intent(
 		'webhook-terminal-attempt',
 		'webhook-terminal-voucher-checkout',
 		'webhook-terminal-cart',
-		array( 'voucher_code' => $webhook_voucher['code'], 'voucher_reservation_key' => $webhook_key )
+		array( 'voucher_code' => $webhook_voucher['code'], 'voucher_reservation_key' => $webhook_key ), 2200, 300
 	)
 );
 db_integration_same( 'processing', is_array( $webhook_payment ) ? $webhook_payment['status'] : '', 'voucher payment begins in a durable processing state' );
@@ -1504,13 +1573,13 @@ $retry_reserve = DoughBoss_Voucher::reserve( $retry_voucher['code'], 25, 'online
 db_integration_assert( ! is_wp_error( $retry_reserve ), 'webhook storage-retry voucher fixture is reserved' );
 $GLOBALS['db_square_http_mode'] = 'pending';
 $retry_payment = DoughBoss_Square::create_payment_intent(
-	2250,
+	2200,
 	'AUD',
 	db_integration_square_metadata(
 		'webhook-storage-retry-attempt',
 		'webhook-storage-retry-checkout',
 		'webhook-storage-retry-cart',
-		array( 'voucher_code' => $retry_voucher['code'], 'voucher_reservation_key' => $retry_key )
+		array( 'voucher_code' => $retry_voucher['code'], 'voucher_reservation_key' => $retry_key ), 2200, 300
 	)
 );
 $GLOBALS['db_square_http_mode'] = 'failed';
@@ -3188,7 +3257,7 @@ foreach ( array( '', 'abc', '<invalid-global>' ) as $binding_global_value ) {
 	$mapped_only['square_test_location_id'] = $binding_global_value;
 	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_only, false );
 	$seed = 'mapped-only-' . hash( 'sha256', $binding_global_value );
-	$meta = db_integration_square_metadata( $seed, $seed . '-key', $seed . '-cart' );
+	$meta = db_integration_square_metadata( $seed, $seed . '-key', $seed . '-cart', array(), 1250 );
 	$posts = $GLOBALS['db_square_post_count'];
 	$paid = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
 	db_integration_assert( ! is_wp_error( $paid ), 'valid mapped shop can dispatch with absent or malformed legacy global ID' );
@@ -3226,7 +3295,7 @@ db_integration_same( $binding_posts_before, $GLOBALS['db_square_post_count'], 'i
 db_integration_same( $binding_rows_before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_payment_attempts" ), 'invalid bindings do not allocate attempts' );
 
 foreach ( $binding_shop_ids as $binding_shop => $binding_shop_id ) {
-	$meta = db_integration_square_metadata( 'binding-' . $binding_shop, 'binding-key-' . $binding_shop, 'binding-cart-' . $binding_shop, array( 'location_id' => $binding_shop_id, 'square_location_id' => 'LSPOOFED', 'square_shop_slug' => 'revesby', 'square_mode' => 'live' ) );
+	$meta = db_integration_square_metadata( 'binding-' . $binding_shop, 'binding-key-' . $binding_shop, 'binding-cart-' . $binding_shop, array( 'location_id' => $binding_shop_id, 'square_location_id' => 'LSPOOFED', 'square_shop_slug' => 'revesby', 'square_mode' => 'live' ), 1300 );
 	$paid = DoughBoss_Square::create_payment_intent( 1300, 'AUD', $meta );
 	db_integration_assert( ! is_wp_error( $paid ), 'explicit ' . $binding_shop . ' map dispatches successfully' );
 	if ( is_wp_error( $paid ) ) { continue; }
@@ -3264,7 +3333,7 @@ foreach ( $binding_shop_ids as $binding_shop => $binding_shop_id ) {
 	$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'slug' => $binding_shop ), array( 'id' => $binding_shop_id ) );
 }
 
-$dispatch_meta = db_integration_square_metadata( 'binding-dispatch-drift', 'binding-dispatch-drift-key', 'binding-dispatch-drift-cart' );
+$dispatch_meta = db_integration_square_metadata( 'binding-dispatch-drift', 'binding-dispatch-drift-key', 'binding-dispatch-drift-cart', array(), 1400 );
 $GLOBALS['db_square_binding_drift_once'] = true;
 add_filter( 'query', 'db_integration_square_binding_drift' );
 $posts = $GLOBALS['db_square_post_count'];
@@ -3278,7 +3347,7 @@ db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 140
 db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'claimed drift retry makes no POST' );
 
 $GLOBALS['db_square_http_mode'] = 'location_mismatch';
-$wrong_meta = db_integration_square_metadata( 'binding-provider-wrong', 'binding-provider-wrong-key', 'binding-provider-wrong-cart' );
+$wrong_meta = db_integration_square_metadata( 'binding-provider-wrong', 'binding-provider-wrong-key', 'binding-provider-wrong-cart', array(), 1500 );
 db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1500, 'AUD', $wrong_meta ) ), 'matching money/reference but wrong provider location is denied' );
 $posts = $GLOBALS['db_square_post_count'];
 $GLOBALS['db_square_http_mode'] = 'success';
@@ -4021,7 +4090,7 @@ foreach ( array( 'stripe', 'square' ) as $basis_provider ) {
 			$basis_settings['tax_rate'] = 10;
 			update_option( DoughBoss_Settings::OPTION_KEY, $basis_settings, false );
 			$basis_seed = 'basis-' . $basis_provider . '-' . $basis_case;
-			$fixture = 'stripe' === $basis_provider ? db_integration_prepare_stripe_rest_fixture( $basis_seed, 9850 + $basis_case, 12.00 ) : db_integration_accounting_square_fixture( $basis_seed );
+			$fixture = 'stripe' === $basis_provider ? db_integration_prepare_stripe_rest_fixture( $basis_seed, 9850 + $basis_case, 12.00 ) : db_integration_accounting_square_fixture( $basis_seed, $basis_legacy );
 			if ( ! is_array( $fixture['snapshot'] ) || ! is_array( $fixture['attempt'] ) ) { continue; }
 			$basis_snapshot = $fixture['snapshot'];
 			$captured_basis = DoughBoss_Order::accounting_basis_from_payload( $basis_snapshot['payload']['order'] );
@@ -4053,7 +4122,7 @@ foreach ( array( 'stripe', 'square' ) as $basis_provider ) {
 			$paid_result = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
 			$paid_id = DoughBoss_Order::find_id_by_payment_intent( 'stripe' === $basis_provider ? $fixture['pi'] : $fixture['session'] );
 			$paid_order = $paid_id ? DoughBoss_Order::get( $paid_id ) : null;
-			db_integration_assert( $paid_result instanceof WP_REST_Response && $paid_order && 'paid' === $paid_order->payment_status, $basis_seed . ' recovers one paid order on the original payment' );
+			db_integration_assert( $paid_result instanceof WP_REST_Response && $paid_order && 'paid' === $paid_order->payment_status, $basis_seed . ' recovers one paid order on the original payment' . ( is_wp_error( $paid_result ) ? ' (' . $paid_result->get_error_code() . ')' : '' ) );
 			db_integration_same( $basis_legacy ? null : DoughBoss_Order::encode_accounting_basis( $captured_basis ), $paid_order ? $paid_order->accounting_basis_json : 'missing', $basis_seed . ' paid recovery copies known basis or preserves unknown legacy' );
 			$completed_snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $fixture['attempt']['checkout_key'] );
 			if ( ! $completed_snapshot ) { $completed_snapshot = DoughBoss_Checkout_Snapshots::find( $fixture['attempt']['checkout_key'] ); }
@@ -4299,6 +4368,16 @@ foreach ( array( 'stripe', 'square' ) as $legacy_approved_provider ) {
 		'source_id'           => 'cnon:legacy-approved-' . $legacy_approved_provider,
 		'verification_token'  => 'verify:legacy-approved-' . $legacy_approved_provider,
 	);
+	if ( 'square' === $legacy_approved_provider ) {
+		db_integration_seed_historical_square_attempt( array(
+			'checkout_key' => $legacy_approved_key, 'protocol_version' => 'square-v2', 'purpose' => 'order',
+			'context' => 'approved_preorder', 'location_id' => (int) $legacy_approved_request->location_id,
+			'attempt_identity' => hash( 'sha256', 'approved-square|' . $legacy_approved_request_id . '|' . $legacy_approved_key . '|' . $legacy_approved_params['payment_attempt_key'] ),
+			'binding_hash' => $legacy_old_binding_hash, 'cart_guard' => hash( 'sha256', 'approved-square-cart|' . $legacy_approved_request_id . '|' . $legacy_approved_key ),
+			'source_request_id' => $legacy_approved_request_id, 'approved_revision' => (int) $legacy_approved['approved_revision'],
+			'request_fingerprint' => $legacy_approved['request_fingerprint'],
+		), DoughBoss_Payment::to_minor_units( $legacy_approved_request->total ) );
+	}
 	$legacy_approved_start = $basis_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', $legacy_approved_params ) );
 	$legacy_approved_data = $legacy_approved_start instanceof WP_REST_Response ? $legacy_approved_start->get_data() : array();
 	$legacy_approved_identity = isset( $legacy_approved_data['checkout_session'] ) ? (string) $legacy_approved_data['checkout_session'] : ( isset( $legacy_approved_data['payment_intent'] ) ? (string) $legacy_approved_data['payment_intent'] : '' );
@@ -4487,14 +4566,153 @@ if ( ! is_wp_error( $dashboard_owner ) ) {
 wp_set_current_user( $dashboard_previous_user );
 
 // Itemized transport: synthetic HTTP, real durable rows and transaction failures.
-// These fixtures deliberately pre-create marked attempts. Creation-only marker
-// allocation is a separate runtime gate; do not mistake this matrix for it.
+// First exercise creation-only allocation, then deliberately pre-create marked
+// attempts for the transport matrix. Both boundaries have independent proof.
 $orders_transport_settings = get_option( 'doughboss_settings' );
 update_option( 'doughboss_settings', $gift_lookup_settings, false );
 add_filter( 'pre_http_request', 'db_integration_square_http', 10, 3 );
 $GLOBALS['db_square_http_mode'] = 'success';
 $GLOBALS['db_orders_http_mode'] = '';
 $GLOBALS['db_orders_payment_mode'] = '';
+$GLOBALS['db_orders_post_count'] = 0;
+$GLOBALS['db_orders_get_count'] = 0;
+
+// New allocation is server-owned and must fail before either provider POST.
+foreach ( array( 'missing', 'hash', 'expired', 'completed', 'order_id', 'basis', 'amount', 'currency', 'location', 'binding' ) as $allocation_case ) {
+	$seed = 'orders-allocation-denied-' . $allocation_case;
+	$meta = db_integration_square_metadata( $seed, $seed . '-key', $seed . '-cart', array(), 'missing' === $allocation_case ? null : 1250 );
+	if ( 'missing' !== $allocation_case ) {
+		$snapshot = DoughBoss_Checkout_Snapshots::find( $meta['checkout_key'] );
+		$payload = $snapshot['payload'];
+		$changes = array();
+		if ( 'hash' === $allocation_case ) { $changes['payload_hash'] = str_repeat( '0', 64 ); }
+		elseif ( 'expired' === $allocation_case ) { $changes['expires_at'] = '2000-01-01 00:00:00'; }
+		elseif ( 'completed' === $allocation_case ) { $changes['status'] = 'completed'; }
+		elseif ( 'order_id' === $allocation_case ) { $changes['order_id'] = 999999; }
+		else {
+			if ( 'basis' === $allocation_case ) { unset( $payload['order']['accounting_basis'] ); }
+			elseif ( 'amount' === $allocation_case ) { $payload['order']['total'] = '12.51'; }
+			elseif ( 'currency' === $allocation_case ) { $payload['order']['currency'] = 'USD'; }
+			elseif ( 'location' === $allocation_case ) { $payload['order']['location_id'] = 999999; }
+			elseif ( 'binding' === $allocation_case ) { $payload['binding_hash'] = hash( 'sha256', 'wrong-binding' ); }
+			$changes['payload_json'] = wp_json_encode( $payload );
+			$changes['payload_hash'] = hash( 'sha256', $changes['payload_json'] );
+		}
+		$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', $changes, array( 'checkout_key' => $meta['checkout_key'] ) );
+	}
+	$orders_before = $GLOBALS['db_orders_post_count'];
+	$payments_before = $GLOBALS['db_square_post_count'];
+	$result = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
+	db_integration_same( 'doughboss_pay_order_snapshot', is_wp_error( $result ) ? $result->get_error_code() : '', $allocation_case . ' snapshot fails closed at new allocation' );
+	db_integration_same( null, DoughBoss_Payment_Attempts::find_by_checkout_key( $meta['checkout_key'] ), $allocation_case . ' snapshot allocates no attempt' );
+	db_integration_same( $orders_before, $GLOBALS['db_orders_post_count'], $allocation_case . ' snapshot performs no Order POST' );
+	db_integration_same( $payments_before, $GLOBALS['db_square_post_count'], $allocation_case . ' snapshot performs no Payment POST' );
+}
+foreach ( array( 'attempt_key', 'checkout_key' ) as $allocation_identity_column ) {
+	$seed = 'orders-allocation-read-' . $allocation_identity_column;
+	$meta = db_integration_square_metadata( $seed, $seed . '-key', $seed . '-cart', array(), 1250 );
+	$fail_once = true;
+	$filter = function ( $query ) use ( &$fail_once, $allocation_identity_column ) {
+		if ( $fail_once && 0 === strpos( ltrim( $query ), 'SELECT' ) && false !== strpos( $query, 'doughboss_payment_attempts' )
+			&& false !== strpos( $query, 'WHERE ' . $allocation_identity_column . ' =' ) ) {
+			$fail_once = false;
+			return 'SELECT * FROM wp_doughboss_missing_identity_table';
+		}
+		return $query;
+	};
+	add_filter( 'query', $filter );
+	$suppressed = $wpdb->suppress_errors( true );
+	$orders_before = $GLOBALS['db_orders_post_count'];
+	$payments_before = $GLOBALS['db_square_post_count'];
+	$result = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
+	$wpdb->suppress_errors( $suppressed );
+	remove_filter( 'query', $filter );
+	db_integration_assert( ! $fail_once && is_wp_error( $result ), $allocation_identity_column . ' read failure is exercised and denied' );
+	db_integration_same( null, DoughBoss_Payment_Attempts::find_by_checkout_key( $meta['checkout_key'] ), 'failed identity lookup is not interpreted as absent' );
+	db_integration_same( $orders_before, $GLOBALS['db_orders_post_count'], 'failed identity read performs no Order POST' );
+	db_integration_same( $payments_before, $GLOBALS['db_square_post_count'], 'failed identity read performs no Payment POST' );
+}
+
+// Repository lookups fail closed both before insertion and in error recovery.
+foreach ( array( 'initial', 'recovery' ) as $lookup_phase ) {
+	foreach ( array( 'attempt_key', 'checkout_key', 'provider_reference' ) as $lookup_column ) {
+		$seed = 'orders-repository-read-' . $lookup_phase . '-' . $lookup_column;
+		$row = array( 'attempt_key' => hash( 'sha256', $seed ), 'checkout_key' => hash( 'sha256', $seed . '-key' ),
+			'provider' => 'square', 'purpose' => 'order', 'context' => 'web', 'location_id' => 1,
+			'amount_minor' => 1250, 'currency' => 'AUD', 'status' => 'prepared',
+			'provider_reference' => 'sqpay' . substr( hash( 'sha256', $seed ), 0, 28 ), 'safe_metadata' => array() );
+		$reads = 0;
+		$inserts = 0;
+		$filter = function ( $query ) use ( &$reads, &$inserts, $lookup_phase, $lookup_column ) {
+			if ( false === strpos( $query, 'doughboss_payment_attempts' ) ) { return $query; }
+			if ( 0 === strpos( ltrim( $query ), 'INSERT' ) ) {
+				++$inserts;
+				return 'INSERT INTO wp_doughboss_missing_identity_table (id) VALUES (1)';
+			}
+			if ( 0 === strpos( ltrim( $query ), 'SELECT' ) && false !== strpos( $query, 'WHERE ' . $lookup_column . ' =' ) ) {
+				++$reads;
+				if ( ( 'initial' === $lookup_phase ? 1 : 2 ) === $reads ) { return 'SELECT * FROM wp_doughboss_missing_identity_table'; }
+			}
+			return $query;
+		};
+		add_filter( 'query', $filter );
+		$suppressed = $wpdb->suppress_errors( true );
+		$result = DoughBoss_Payment_Attempts::create_or_find( $row );
+		$wpdb->suppress_errors( $suppressed );
+		remove_filter( 'query', $filter );
+		db_integration_same( 'initial' === $lookup_phase ? 1 : 2, $reads, $lookup_phase . ' ' . $lookup_column . ' failure is exercised' );
+		db_integration_same( false, $result, $lookup_phase . ' failed repository read is not absence or success' );
+		db_integration_same( 'initial' === $lookup_phase ? 0 : 1, $inserts, 'repository never inserts after a failed initial identity read' );
+		db_integration_same( null, DoughBoss_Payment_Attempts::find_by_checkout_key( $row['checkout_key'] ), 'repository lookup-failure fixture allocates no identity' );
+	}
+}
+$meta = db_integration_square_metadata( 'orders-forged-marker', 'orders-forged-marker-key', 'orders-forged-marker-cart',
+	array( 'orders_protocol' => 'attacker-value', 'orders_snapshot_hash' => str_repeat( '0', 64 ) ), 1250 );
+$snapshot = DoughBoss_Checkout_Snapshots::find( $meta['checkout_key'] );
+$result = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
+$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $meta['checkout_key'] );
+$stored = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
+db_integration_assert( ! is_wp_error( $result ), 'new checkout ignores forged caller Orders markers' );
+db_integration_same( 'square-orders-v1', isset( $stored['orders_protocol'] ) ? $stored['orders_protocol'] : '', 'new protocol comes only from server allocation' );
+db_integration_same( $snapshot['payload_hash'], isset( $stored['orders_snapshot_hash'] ) ? $stored['orders_snapshot_hash'] : '', 'new marker binds the exact trusted snapshot hash' );
+db_integration_same( false, DoughBoss_Payment_Attempts::update( $attempt['id'], array( 'safe_metadata' => array() ) ), 'new markers cannot be replaced after allocation' );
+
+$meta = db_integration_square_metadata( 'orders-old-prepared', 'orders-old-prepared-key', 'orders-old-prepared-cart' );
+$historical = db_integration_seed_historical_square_attempt( $meta, 1250 );
+$meta['orders_protocol'] = 'square-orders-v1';
+$meta['orders_snapshot_hash'] = str_repeat( 'a', 64 );
+$orders_before = $GLOBALS['db_orders_post_count'];
+$payments_before = $GLOBALS['db_square_post_count'];
+$result = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
+$retained = DoughBoss_Payment_Attempts::find( $historical['id'] );
+db_integration_assert( ! is_wp_error( $result ), 'old prepared unmarked identity can finish its original payment-only contract' );
+db_integration_same( $historical['safe_metadata_json'], $retained['safe_metadata_json'], 'old prepared bytes are never retrofitted with caller markers' );
+db_integration_same( $orders_before, $GLOBALS['db_orders_post_count'], 'old prepared identity makes no Order POST' );
+db_integration_same( $payments_before + 1, $GLOBALS['db_square_post_count'], 'old prepared identity makes one original Payment POST' );
+
+$meta = db_integration_square_metadata( 'orders-collision', 'orders-collision-key', 'orders-collision-cart', array(), 1250 );
+$collision = null;
+$filter = function ( $query ) use ( &$collision, $meta ) {
+	if ( null === $collision && 0 === strpos( ltrim( $query ), 'INSERT' ) && false !== strpos( $query, 'doughboss_payment_attempts' ) ) {
+		$collision = false; // Prevent recursion before seeding the historical winner.
+		$collision = db_integration_seed_historical_square_attempt( $meta, 1250 );
+	}
+	return $query;
+};
+$orders_before = $GLOBALS['db_orders_post_count'];
+$payments_before = $GLOBALS['db_square_post_count'];
+add_filter( 'query', $filter );
+$suppressed = $wpdb->suppress_errors( true );
+$result = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $meta );
+$wpdb->suppress_errors( $suppressed );
+remove_filter( 'query', $filter );
+db_integration_same( 'doughboss_pay_order_protocol', is_wp_error( $result ) ? $result->get_error_code() : '', 'allocation collision cannot downgrade the new contract' );
+$retained = DoughBoss_Payment_Attempts::find_by_checkout_key( $meta['checkout_key'] );
+db_integration_same( $collision['safe_metadata_json'], $retained['safe_metadata_json'], 'allocation collision leaves the unmarked winner untouched' );
+db_integration_same( $orders_before, $GLOBALS['db_orders_post_count'], 'collision performs no Order POST' );
+db_integration_same( $payments_before, $GLOBALS['db_square_post_count'], 'collision performs no Payment POST' );
+
+// Reset the transport-only counters; allocation assertions above stand independently.
 $GLOBALS['db_orders_post_count'] = 0;
 $GLOBALS['db_orders_get_count'] = 0;
 $orders_transport_fixture = function ( $seed ) {

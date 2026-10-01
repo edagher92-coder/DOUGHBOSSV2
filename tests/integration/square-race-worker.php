@@ -44,8 +44,64 @@ add_filter(
 			return $preempt;
 		}
 		$method = isset( $args['method'] ) ? strtoupper( (string) $args['method'] ) : 'GET';
+		$path = (string) wp_parse_url( (string) $url, PHP_URL_PATH );
+		if ( '/v2/orders' === $path || 0 === strpos( $path, '/v2/orders/' ) ) {
+			if ( 'POST' === $method ) {
+				file_put_contents( $race_log, "ORDER_POST\n", FILE_APPEND | LOCK_EX );
+				usleep( 750000 );
+				$body = json_decode( (string) $args['body'], true );
+				$attempt_id = (int) substr( $body['order']['reference_id'], strlen( 'db-attempt-' ) );
+				$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
+				$snapshot = $attempt ? DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $attempt['checkout_key'] ) : null;
+				$binding = $attempt ? DoughBoss_Square::shop_binding( $attempt['location_id'] ) : new WP_Error( 'missing' );
+				$projection = $snapshot && ! is_wp_error( $binding ) ? DoughBoss_Square_Orders::project( $snapshot['payload'], $binding, $attempt_id ) : new WP_Error( 'missing' );
+				if ( is_wp_error( $projection ) || $projection['order'] !== $body['order'] || 'dispatching' !== $attempt['status'] ) {
+					return new WP_Error( 'integration_order_projection', 'Synthetic Order projection or committed owner mismatch.' );
+				}
+				$order = $body['order'];
+				$order['id'] = 'sqorder' . substr( hash( 'sha256', $order['reference_id'] ), 0, 28 );
+				$order['version'] = 1;
+				$money = function ( $value ) use ( $projection ) { return array( 'amount' => $value, 'currency' => $projection['currency'] ); };
+				$discount_left = $projection['amounts']['discount'];
+				$tax_left = $projection['amounts']['tax'];
+				foreach ( $order['line_items'] as &$line ) {
+					$gross = (int) $line['quantity'] * $line['base_price_money']['amount'];
+					$discount = 'db-delivery' === $line['uid'] ? 0 : min( $gross, $discount_left );
+					$discount_left -= $discount;
+					$tax = empty( $line['applied_taxes'] ) ? 0 : $tax_left;
+					$tax_left -= $tax;
+					$line['gross_sales_money'] = $money( $gross );
+					$line['variation_total_price_money'] = $money( $gross );
+					$line['total_tax_money'] = $money( $tax );
+					$line['total_discount_money'] = $money( $discount );
+					$line['total_money'] = $money( $gross - $discount + ( $projection['tax_inclusive'] ? 0 : $tax ) );
+					if ( ! empty( $line['applied_taxes'] ) ) { $line['applied_taxes'][0]['applied_money'] = $money( $tax ); }
+					if ( ! empty( $order['discounts'] ) && 'db-delivery' !== $line['uid'] ) {
+						$line['applied_discounts'] = array( array( 'discount_uid' => 'db-discount', 'applied_money' => $money( $discount ) ) );
+					}
+				}
+				unset( $line );
+				foreach ( array( 'tax' => 'total_tax_money', 'discount' => 'total_discount_money', 'total' => 'total_money' ) as $key => $field ) { $order[ $field ] = $money( $projection['amounts'][ $key ] ); }
+				foreach ( array( 'taxes' => 'tax', 'discounts' => 'discount' ) as $field => $key ) { if ( ! empty( $order[ $field ] ) ) { $order[ $field ][0]['applied_money'] = $money( $projection['amounts'][ $key ] ); } }
+				file_put_contents( $race_log . '.' . $order['id'] . '.json', wp_json_encode( $order ), LOCK_EX );
+			} else {
+				$id = basename( $path );
+				$file = $race_log . '.' . $id . '.json';
+				$order = is_file( $file ) ? json_decode( file_get_contents( $file ), true ) : null;
+				if ( ! is_array( $order ) ) { return new WP_Error( 'integration_order_missing', 'Synthetic Order missing.' ); }
+				$paid_file = $race_log . '.' . $id . '.paid.json';
+				$paid = is_file( $paid_file ) ? json_decode( file_get_contents( $paid_file ), true ) : null;
+				if ( is_array( $paid ) ) {
+					$order['state'] = 'COMPLETED';
+					$order['tenders'] = array( array( 'type' => 'CARD', 'payment_id' => $paid['id'], 'amount_money' => $paid['amount_money'] ) );
+					$order['net_amount_due_money'] = array( 'amount' => 0, 'currency' => $paid['amount_money']['currency'] );
+				}
+			}
+			return array( 'headers' => array(), 'body' => wp_json_encode( array( 'order' => $order ) ),
+				'response' => array( 'code' => 200, 'message' => 'OK' ), 'cookies' => array(), 'filename' => null );
+		}
 		if ( 'POST' === $method ) {
-			file_put_contents( $race_log, "POST\n", FILE_APPEND | LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+			file_put_contents( $race_log, "PAYMENT_POST\n", FILE_APPEND | LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 			usleep( 750000 );
 			$body      = json_decode( (string) $args['body'], true );
 			$reference = isset( $body['reference_id'] ) ? (string) $body['reference_id'] : '';
@@ -56,6 +112,10 @@ add_filter(
 				'reference_id' => $reference,
 				'amount_money' => $body['amount_money'],
 			);
+			if ( isset( $body['order_id'] ) ) {
+				$payment['order_id'] = $body['order_id'];
+				file_put_contents( $race_log . '.' . $body['order_id'] . '.paid.json', wp_json_encode( $payment ), LOCK_EX );
+			}
 		} else {
 			$id      = rawurldecode( basename( wp_parse_url( (string) $url, PHP_URL_PATH ) ) );
 			$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
@@ -70,6 +130,7 @@ add_filter(
 				'reference_id' => DoughBoss_Square::attempt_reference( (int) $attempt['id'] ),
 				'amount_money' => array( 'amount' => (int) $attempt['amount_minor'], 'currency' => (string) $attempt['currency'] ),
 			);
+			if ( ! empty( $attempt['provider_order_reference'] ) ) { $payment['order_id'] = $attempt['provider_order_reference']; }
 		}
 		return array(
 			'headers'  => array(),
@@ -118,6 +179,18 @@ if ( 'approved_preorder' === $race_mode ) {
 		'preorder_payment_token' => $token_method->invoke( null, $request_id, $approval['approved_revision'], $approval['request_fingerprint'], $approval['payment_token_expires_at_utc'] ),
 	) );
 } else {
+global $wpdb;
+$snapshot_errors = $wpdb->suppress_errors( true );
+$snapshot = DoughBoss_Checkout_Snapshots::store( hash( 'sha256', 'race-checkout-v1' ), array(
+	'binding_hash' => hash( 'sha256', 'race-binding-v1' ),
+	'order' => array( 'location_id' => 1, 'currency' => 'AUD', 'subtotal' => '32.00', 'discount' => '0.00',
+		'tax' => '2.91', 'delivery_fee' => '0.00', 'total' => '32.00',
+		'accounting_basis' => array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 10,
+			'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ) ),
+	'lines' => array( array( 'name' => 'Synthetic race pizza', 'quantity' => 1, 'unit_price' => '32.00', 'line_total' => '32.00' ) ),
+) );
+$wpdb->suppress_errors( $snapshot_errors );
+if ( ! is_array( $snapshot ) ) { fwrite( STDERR, "Web Square race snapshot missing.\n" ); exit( 2 ); }
 $result = DoughBoss_Square::create_payment_intent(
 	3200,
 	'AUD',

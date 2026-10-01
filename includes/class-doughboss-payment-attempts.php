@@ -256,11 +256,14 @@ class DoughBoss_Payment_Attempts {
 		 }
 
 		$existing = self::find_by_attempt_key( $row['attempt_key'] );
+		if ( '' !== (string) $wpdb->last_error ) { return false; }
 		if ( ! $existing ) {
 			$existing = self::find_by_checkout_key( $row['checkout_key'] );
+			if ( '' !== (string) $wpdb->last_error ) { return false; }
 		}
 		if ( ! $existing && null !== $row['provider_reference'] ) {
 			$existing = self::find_by_provider_reference( $row['provider_reference'] );
+			if ( '' !== (string) $wpdb->last_error ) { return false; }
 		}
 		if ( $existing ) {
 			 return $existing;
@@ -275,11 +278,14 @@ class DoughBoss_Payment_Attempts {
 			 // A simultaneous request may have won the UNIQUE provider_reference
 			 // race. Re-read it so caller retries are idempotent rather than errors.
 			$existing = self::find_by_attempt_key( $row['attempt_key'] );
+			if ( '' !== (string) $wpdb->last_error ) { return false; }
 			if ( ! $existing ) {
 				$existing = self::find_by_checkout_key( $row['checkout_key'] );
+				if ( '' !== (string) $wpdb->last_error ) { return false; }
 			}
 			if ( ! $existing && null !== $row['provider_reference'] ) {
 				$existing = self::find_by_provider_reference( $row['provider_reference'] );
+				if ( '' !== (string) $wpdb->last_error ) { return false; }
 			}
 			return $existing;
 		 }

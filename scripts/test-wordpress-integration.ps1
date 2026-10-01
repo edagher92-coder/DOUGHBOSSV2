@@ -92,11 +92,15 @@ try {
             }
         }
 
-        $providerPosts = if (Test-Path -LiteralPath $raceLog) { @(Get-Content -LiteralPath $raceLog | Where-Object { $_ -eq 'POST' }).Count } else { 0 }
+        $providerPosts = if (Test-Path -LiteralPath $raceLog) { @(Get-Content -LiteralPath $raceLog | Where-Object { $_ -eq 'PAYMENT_POST' }).Count } else { 0 }
         if ($providerPosts -ne 1) {
             throw "Expected exactly one provider POST across two workers; observed $providerPosts."
         }
-        Write-Output "2-process Square $squareRaceMode race: 1 provider POST, 0 duplicate charges"
+        $orderPosts = if (Test-Path -LiteralPath $raceLog) { @(Get-Content -LiteralPath $raceLog | Where-Object { $_ -eq 'ORDER_POST' }).Count } else { 0 }
+        if ($orderPosts -ne 1) {
+            throw "Expected exactly one Square Order POST across two workers; observed $orderPosts."
+        }
+        Write-Output "2-process Square $squareRaceMode race: 1 Order POST, 1 Payment POST, 0 duplicate dispatches"
         if ($squareRaceMode -eq 'approved_preorder') {
             $fulfillments = @(Get-Content -LiteralPath $raceLog | Where-Object { $_ -eq 'FULFILL' }).Count
             if ($fulfillments -ne 1) {

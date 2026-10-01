@@ -493,6 +493,7 @@ class DoughBoss_Square {
 	 * @return array|WP_Error { id, status, amount, currency, attempt_id } or error.
 	 */
 	public static function create_payment_intent( $amount_minor, $currency, array $metadata = array() ) {
+		global $wpdb;
 		$amount_minor = absint( $amount_minor );
 		$currency     = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $currency ) );
 		$checkout_key = isset( $metadata['checkout_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['checkout_key'] ) ) : '';
@@ -544,7 +545,9 @@ class DoughBoss_Square {
 			$safe_metadata['checkout_key'],
 			$safe_metadata['source_id'],
 			$safe_metadata['verification_token'],
-			$safe_metadata['preorder_payment_token']
+			$safe_metadata['preorder_payment_token'],
+			$safe_metadata['orders_protocol'],
+			$safe_metadata['orders_snapshot_hash']
 		);
 		if ( 'approved_preorder' === $context ) {
 			// Payment attempts deliberately discard metadata keys containing
@@ -582,8 +585,40 @@ class DoughBoss_Square {
 			if ( $blocking ) {
 				return self::pending_error( $blocking, 'doughboss_pay_cart_pending' );
 			}
-			$attempt = DoughBoss_Payment_Attempts::create_or_find(
-				array(
+			// Existing rows, including prepared unmarked v2 retries, keep their
+			// original protocol. A failed lookup must never select new allocation.
+			$attempt = DoughBoss_Payment_Attempts::find_by_attempt_key( $attempt_key );
+			if ( '' !== (string) $wpdb->last_error ) {
+				return new WP_Error( 'doughboss_pay_storage', __( 'The payment identity could not be checked safely.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			if ( ! $attempt ) {
+				$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
+				if ( '' !== (string) $wpdb->last_error ) {
+					return new WP_Error( 'doughboss_pay_storage', __( 'The payment identity could not be checked safely.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+			}
+			if ( ! $attempt ) {
+				if ( ! DoughBoss_Activator::payment_storage_ready() ) {
+					return new WP_Error( 'doughboss_pay_storage', __( 'The payment storage is not ready.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+				$snapshot = DoughBoss_Checkout_Snapshots::find( $checkout_key );
+				if ( '' !== (string) $wpdb->last_error || ! is_array( $snapshot )
+					|| 'prepared' !== $snapshot['status'] || 0 !== (int) $snapshot['order_id']
+					|| ! isset( $snapshot['payload']['binding_hash'], $snapshot['payload']['order']['location_id'] )
+					|| ! is_string( $snapshot['payload']['binding_hash'] )
+					|| ! hash_equals( $binding_hash, $snapshot['payload']['binding_hash'] )
+					|| (string) $location_id !== (string) $snapshot['payload']['order']['location_id'] ) {
+					return new WP_Error( 'doughboss_pay_order_snapshot', __( 'The saved itemized order could not be verified. Please contact the shop.', 'doughboss' ), array( 'status' => 409 ) );
+				}
+				// This pure preflight uses a provisional reference only to validate
+				// economics. No provider sees it; dispatch projects the persisted ID.
+				$projection = DoughBoss_Square_Orders::project( $snapshot['payload'], $shop_binding, 1 );
+				if ( is_wp_error( $projection ) || $projection['amounts']['total'] !== $amount_minor || $projection['currency'] !== $currency ) {
+					return new WP_Error( 'doughboss_pay_order_snapshot', __( 'The saved itemized order could not be verified. Please contact the shop.', 'doughboss' ), array( 'status' => 409 ) );
+				}
+				$safe_metadata['orders_protocol'] = 'square-orders-v1';
+				$safe_metadata['orders_snapshot_hash'] = $snapshot['payload_hash'];
+				$attempt = DoughBoss_Payment_Attempts::create_or_find( array(
 				'attempt_key'     => $attempt_key,
 				'checkout_key'    => $checkout_key,
 				'provider'        => 'square',
@@ -597,8 +632,15 @@ class DoughBoss_Square {
 				'currency'        => $currency,
 				'status'          => 'prepared',
 				'safe_metadata'   => $safe_metadata,
-				)
-			);
+				) );
+				// A concurrent winner cannot silently downgrade a new checkout to
+				// payment-only. Never append markers to that winner or replace it.
+				$stored = is_array( $attempt ) ? self::attempt_metadata( $attempt ) : array();
+				if ( ! is_array( $attempt ) || 1 !== self::orders_protocol( $attempt )
+					|| $safe_metadata['orders_snapshot_hash'] !== $stored['orders_snapshot_hash'] ) {
+					return new WP_Error( 'doughboss_pay_order_protocol', __( 'The itemized payment identity could not be recorded safely.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+			}
 		} finally {
 			DoughBoss_Payment_Attempts::release_local_reference_lock( $cart_guard );
 		}
@@ -936,6 +978,9 @@ class DoughBoss_Square {
 		}
 		$attempt_metadata = self::attempt_metadata( $attempt );
 		$is_v2            = 'square-v2' === ( isset( $attempt_metadata['protocol_version'] ) ? (string) $attempt_metadata['protocol_version'] : '' );
+		if ( $is_v2 && 'mismatch' === $attempt['status'] ) {
+			return self::pending_error( $attempt, 'doughboss_pay_mismatch', $id );
+		}
 		$shop_binding     = null;
 		if ( $is_v2 ) {
 			// Preserve the established mode-drift contract before applying the
