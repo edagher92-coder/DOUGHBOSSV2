@@ -137,15 +137,16 @@ class DoughBoss_Square_Orders {
 	}
 
 	/**
-	 * Verify unchanged economics after a single, separately verified card payment.
+	 * Verify unchanged economics after one separately verified full-value tender.
 	 * This returns Order facts only; the caller still owns payment/release authority.
 	 */
-	public static function validate_paid_response( array $response, array $projection, array $payment, $bound_order_id ) {
-		return self::validate_response( $response, $projection, $payment, $bound_order_id );
+	public static function validate_paid_response( array $response, array $projection, array $payment, $bound_order_id, $expected_tender = 'CARD' ) {
+		return self::validate_response( $response, $projection, $payment, $bound_order_id, $expected_tender );
 	}
 
 	/** Share economic checks without stripping or normalizing provider facts. */
-	private static function validate_response( array $response, array $projection, $payment = null, $bound_order_id = '' ) {
+	private static function validate_response( array $response, array $projection, $payment = null, $bound_order_id = '', $expected_tender = 'CARD' ) {
+		if ( ! in_array( $expected_tender, array( 'CARD', 'SQUARE_GIFT_CARD' ), true ) ) { return self::error(); }
 		if ( PHP_INT_SIZE < 8 || ! isset( $projection['order'], $projection['amounts'], $projection['currency'], $projection['tax_inclusive'] )
 			|| ! is_array( $projection['order'] ) || ! is_array( $projection['amounts'] )
 			|| ! is_bool( $projection['tax_inclusive'] ) || ! is_string( $projection['currency'] )
@@ -199,7 +200,7 @@ class DoughBoss_Square_Orders {
 		if ( $paid ) {
 			$tender = reset( $tenders );
 			if ( ! is_array( $tender ) || ! isset( $tender['payment_id'], $tender['type'] )
-				|| $payment['id'] !== $tender['payment_id'] || 'CARD' !== $tender['type']
+				|| $payment['id'] !== $tender['payment_id'] || $expected_tender !== $tender['type']
 				|| self::money_amount( isset( $tender['amount_money'] ) ? $tender['amount_money'] : null, $currency ) !== $projection['amounts']['total']
 				|| ! self::zero_optional( $tender, 'tip_money', $currency )
 				|| ! self::zero_optional( $actual, 'net_amount_due_money', $currency ) ) {

@@ -215,10 +215,21 @@
 	function mountCard(form, binding) {
 		var mountId = 'db-square-card-' + String(Date.now()) + '-' + String(Math.floor(Math.random() * 10000));
 		var mount = el('div', { class: CARD_CONTAINER_CLASS, id: mountId });
+		var giftMountId = mountId + '-gift';
+		var giftMount = el('div', { class: 'db-square-gift', id: giftMountId });
+		giftMount.hidden = true;
+		var method = el('select', { id: mountId + '-method', 'aria-label': 'Payment method' }, [
+			el('option', { value: 'card', text: 'Debit or credit card' }),
+			el('option', { value: 'gift_card', text: 'Square gift card — full amount' })
+		]);
+		method.value = 'card';
 		var status = el('p', { class: 'db-pay-secure', text: 'Secure payment by Square · your card details never reach DoughBoss.' });
 		var wrap = el('div', { class: 'db-cardfield db-cardfield--square' }, [
+			el('label', { 'for': mountId + '-method', class: 'db-field-label', text: 'Payment method' }),
+			method,
 			el('span', { class: 'db-field-label', text: I18N.cardDetails || 'Card details' }),
 			mount,
+			giftMount,
 			status
 		]);
 
@@ -231,26 +242,10 @@
 			form.appendChild(wrap);
 		}
 
-		var cardPromise = squarePayments(binding).then(function (payments) {
-			return payments.card().then(function (card) {
-				return card.attach('#' + mountId).then(function () {
-					return { payments: payments, card: card };
-				});
-			});
-		}).catch(function (err) {
-			// Let a later submit retry a transient load failure.
-			cardPromise = null;
-			status.textContent = 'The secure payment form could not be loaded. Please refresh the page and try again.';
-			status.className = 'db-pay-secure db-error';
-			throw err;
-		});
-		// Mount happens before submission. Report its rejection in the existing
-		// status node, without an unhandled promise or starting a provider call.
-		cardPromise.catch(function () {});
-
-		return {
-			status: status,
-			ready: function () {
+		var cardPromise = null;
+		var giftPromise = null;
+		function selectedParts() {
+			if (method.value !== 'gift_card') {
 				if (!cardPromise) {
 					cardPromise = squarePayments(binding).then(function (payments) {
 						return payments.card().then(function (card) {
@@ -258,11 +253,64 @@
 								return { payments: payments, card: card };
 							});
 						});
+					}).catch(function (err) {
+						// Retry only when this tender is selected again.
+						cardPromise = null;
+						if (method.value !== 'gift_card') {
+							status.textContent = 'The secure payment form could not be loaded. Please refresh the page and try again.';
+							status.className = 'db-pay-secure db-error';
+						}
+						throw err;
 					});
 				}
 				return cardPromise;
 			}
+			if (!giftPromise) {
+				giftPromise = squarePayments(binding).then(function (payments) {
+					return payments.giftCard().then(function (gift) {
+						return gift.attach('#' + giftMountId).then(function () {
+							return { payments: payments, card: gift, kind: 'gift_card' };
+						});
+					});
+				}).catch(function (err) {
+					giftPromise = null;
+					if (method.value === 'gift_card') {
+						status.textContent = 'The secure gift-card form could not be loaded. Please refresh or choose card payment.';
+						status.className = 'db-pay-secure db-error';
+					}
+					throw err;
+				});
+			}
+			return giftPromise;
+		}
+		method.addEventListener('change', function () {
+			var gift = method.value === 'gift_card';
+			mount.hidden = gift;
+			giftMount.hidden = !gift;
+			status.className = 'db-pay-secure';
+			status.textContent = gift ? 'Use a Square gift card issued by this seller with enough balance for the full order. Split payment is not yet available.' : 'Secure payment by Square · your card details never reach DoughBoss.';
+			selectedParts().catch(function () {});
+		});
+		// Consume eager mount failures; a selected tender can retry on submission.
+		selectedParts().catch(function () {});
+
+		return {
+			status: status,
+			ready: function () {
+				return selectedParts();
+			}
 		};
+	}
+
+	/** Gift-card GANs stay inside Square's secure element; only its nonce leaves. */
+	function tokenizeTender(parts, verification) {
+		var kind = parts.kind === 'gift_card' ? 'gift_card' : 'card';
+		return (kind === 'gift_card' ? parts.card.tokenize() : parts.card.tokenize(verification)).then(function (result) {
+			if (!result || result.status !== 'OK' || !result.token) {
+				throw new Error(result && result.errors && result.errors[0] && result.errors[0].message ? String(result.errors[0].message) : 'Payment verification was not completed. Please check your payment details and try again.');
+			}
+			return { token: result.token, kind: kind };
+		});
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -298,16 +346,8 @@
 			return Promise.reject(err);
 		}
 		return session.controller.ready().then(function (parts) {
-			return parts.card.tokenize(verificationDetails).then(function (result) {
-				if (!result || result.status !== 'OK' || !result.token) {
-					var detail = result && result.errors && result.errors.length && result.errors[0].message
-						? String(result.errors[0].message)
-						: (I18N.cardError || 'Please check your card details and try again.');
-					throw new Error(detail);
-				}
-				return result.token;
-			});
-		}).then(function (sourceId) {
+			return tokenizeTender(parts, verificationDetails);
+		}).then(function (tender) {
 			session.providerRequestStarted = true;
 			storeSession(session);
 			return request('/payment-intent', {
@@ -321,7 +361,8 @@
 					customer_phone: value(form, 'customer_phone'),
 					address: value(form, 'address'),
 					notes: value(form, 'notes'),
-					source_id: sourceId
+					source_id: tender.token,
+					tender_kind: tender.kind
 				}
 			});
 		}).then(function (payment) {
@@ -439,15 +480,12 @@
 		try { verification = approvedVerificationDetails(session.summary); }
 		catch (err) { return Promise.reject(err); }
 		return session.controller.ready().then(function (parts) {
-			return parts.card.tokenize(verification);
-		}).then(function (result) {
-			if (!result || result.status !== 'OK' || !result.token) {
-				throw new Error('Card verification was not completed. Please check your card and try again.');
-			}
+			return tokenizeTender(parts, verification);
+		}).then(function (tender) {
 			session.providerRequestStarted = true;
 			return request('/preorder-payment/start', { method: 'POST', body: {
 				request_id: session.capability.requestId, token: session.capability.token,
-				payment_attempt_key: session.paymentAttemptKey, source_id: result.token
+				payment_attempt_key: session.paymentAttemptKey, source_id: tender.token, tender_kind: tender.kind
 			} });
 		}).then(function () { return confirmApproved(session); });
 	}

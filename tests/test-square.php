@@ -464,6 +464,73 @@ db_test( 'Square v2 native shop binding is exact, active and map-scoped', functi
 	}
 } );
 
+db_test( 'Square Gift Card selection and funding evidence are strict', function () {
+	assert_same( 'card', DoughBoss_Square::tender_kind( null ), 'omitted selection preserves card compatibility' );
+	assert_same( 'gift_card', DoughBoss_Square::tender_kind( 'gift_card' ), 'exact gift selection is supported' );
+	foreach ( array( '', 'GIFT_CARD', 'gift', 1, true, array(), new stdClass() ) as $value ) {
+		assert_true( is_wp_error( DoughBoss_Square::tender_kind( $value ) ), 'malformed selection cannot choose a tender' );
+	}
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'payment_tender_matches' );
+	$method->setAccessible( true );
+	$attempt = array( 'amount_minor' => 1250, 'currency' => 'AUD', 'safe_metadata_json' => json_encode( array( 'square_tender_kind' => 'gift_card' ) ) );
+	$payment = array( 'source_type' => 'CARD', 'status' => 'COMPLETED',
+		'card_details' => array( 'status' => 'CAPTURED', 'card' => array( 'card_brand' => 'SQUARE_GIFT_CARD' ) ),
+		'amount_money' => array( 'amount' => 1250, 'currency' => 'AUD' ) );
+	assert_true( $method->invoke( null, $payment, $attempt ), 'exact full-value captured gift evidence is supported' );
+	foreach ( array( 'CARD', 'GIFT_CARD', 'CASH', null, array() ) as $type ) {
+		$bad = $payment; $bad['source_type'] = $type;
+		assert_same( 'CARD' === $type, $method->invoke( null, $bad, $attempt ), 'Square source type is CARD, not an invented gift enum' );
+	}
+	foreach ( array( 'VISA', 'SQUARE_GIFT_CARD ', null, array() ) as $brand ) {
+		$bad = $payment; $bad['card_details']['card']['card_brand'] = $brand;
+		assert_false( $method->invoke( null, $bad, $attempt ), 'non-gift brand cannot prove gift funding' );
+	}
+	foreach ( array( 0, 1249, 1251, '1250', 1250.0, null ) as $amount ) {
+		$bad = $payment; $bad['amount_money']['amount'] = $amount;
+		assert_false( $method->invoke( null, $bad, $attempt ), 'partial/malformed money cannot prove full funding' );
+	}
+	foreach ( array( 'AUTHORIZED', 'VOIDED', '', null ) as $status ) {
+		$bad = $payment; $bad['card_details']['status'] = $status;
+		assert_false( $method->invoke( null, $bad, $attempt ), 'COMPLETED requires captured gift funds' );
+	}
+	foreach ( array( 'source_type', 'card_details', 'amount_money' ) as $field ) {
+		$bad = $payment; unset( $bad[ $field ] );
+		assert_false( $method->invoke( null, $bad, $attempt ), 'missing funding facts deny acceptance' );
+	}
+	foreach ( array( array(), array( 'square_tender_kind' => 'card' ), array( 'square_tender_kind' => 'future' ) ) as $metadata ) {
+		$bad_attempt = $attempt; $bad_attempt['safe_metadata_json'] = json_encode( $metadata );
+		assert_false( $method->invoke( null, $payment, $bad_attempt ), 'legacy/card/unknown selection cannot accept explicit gift evidence' );
+	}
+} );
+
+db_test( 'Square Gift Card linked Order accepts only one exact full-value gift tender', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$response = db_square_orders_response_fixture( $projection );
+	$id = $response['order']['id'];
+	$payment = array( 'id' => 'sqpayGIFTEXAMPLE000001', 'status' => 'COMPLETED', 'order_id' => $id,
+		'location_id' => $binding['square_location_id'], 'reference_id' => 'db-attempt-37',
+		'amount_money' => array( 'amount' => $projection['amounts']['total'], 'currency' => 'AUD' ) );
+	$response['order']['tenders'] = array( array( 'type' => 'SQUARE_GIFT_CARD', 'payment_id' => $payment['id'], 'amount_money' => $payment['amount_money'] ) );
+	$response['order']['net_amount_due_money'] = array( 'amount' => 0, 'currency' => 'AUD' );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $id, 'SQUARE_GIFT_CARD' ) ), 'exact gift tender confirms full funding' );
+	assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $id ) ), 'legacy CARD proof rejects gift tender' );
+	foreach ( array( 'CARD', 'GIFT_CARD', 'CASH', '', null ) as $type ) {
+		$bad = $response; $bad['order']['tenders'][0]['type'] = $type;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $id, 'SQUARE_GIFT_CARD' ) ), 'wrong provider tender cannot satisfy gift selection' );
+	}
+	$bad_cases = array();
+	$bad = $response; $bad['order']['tenders'][] = $bad['order']['tenders'][0]; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['amount_money']['amount']--; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['amount_money']['currency'] = 'USD'; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['payment_id'] = 'sqpayANOTHERGIFT00001'; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['net_amount_due_money']['amount'] = 1; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['tip_money'] = array( 'amount' => 1, 'currency' => 'AUD' ); $bad_cases[] = $bad;
+	foreach ( $bad_cases as $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $id, 'SQUARE_GIFT_CARD' ) ), 'ambiguous/partial/split funding stays held' );
+	}
+} );
+
 db_test( 'Square v2 payment payload requires its saved shop location binding', function () {
 	$method = new ReflectionMethod( 'DoughBoss_Square', 'payment_payload' );
 	$method->setAccessible( true );

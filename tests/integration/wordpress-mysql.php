@@ -333,6 +333,19 @@ function db_integration_square_http( $preempt, $args, $url ) {
 		}
 	}
 
+	// Synthetic Gift Card contract mirrors documented provider fields, never
+	// deriving real payment authority from an observed balance or raw GAN.
+	$is_gift = 'POST' === $method
+		? ( isset( $body['source_id'] ) && 0 === strpos( $body['source_id'], 'cnon:gift-' ) )
+		: ( isset( $stored_meta['square_tender_kind'] ) && 'gift_card' === $stored_meta['square_tender_kind'] );
+	if ( $is_gift ) {
+		$payment['source_type'] = 'CARD';
+		$payment['card_details'] = array( 'status' => 'CAPTURED', 'card' => array( 'card_brand' => 'SQUARE_GIFT_CARD' ) );
+		$gift_mode = isset( $GLOBALS['db_square_gift_mode'] ) ? $GLOBALS['db_square_gift_mode'] : '';
+		if ( 'wrong_brand' === $gift_mode ) { $payment['card_details']['card']['card_brand'] = 'VISA'; }
+		if ( 'partial' === $gift_mode ) { $payment['amount_money']['amount']--; }
+		if ( 'authorized' === $gift_mode ) { $payment['status'] = 'APPROVED'; $payment['card_details']['status'] = 'AUTHORIZED'; }
+	}
 	if ( 'COMPLETED' === $payment['status'] && isset( $payment['order_id'] ) ) {
 		$GLOBALS['db_orders_paid_payments'][ $payment['order_id'] ] = $payment['id'];
 	}
@@ -625,6 +638,11 @@ function db_integration_square_orders_http( array $args, $path ) {
 	if ( $paid ) {
 		$order['state'] = 'COMPLETED';
 		$order['tenders'] = array( array( 'type' => 'CARD', 'payment_id' => $attempt['provider_reference'], 'amount_money' => $order['total_money'] ) );
+		$tender_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		if ( isset( $tender_metadata['square_tender_kind'] ) && 'gift_card' === $tender_metadata['square_tender_kind'] ) {
+			$order['tenders'][0]['type'] = 'SQUARE_GIFT_CARD';
+			if ( 'wrong_tender' === ( isset( $GLOBALS['db_square_gift_mode'] ) ? $GLOBALS['db_square_gift_mode'] : '' ) ) { $order['tenders'][0]['type'] = 'CARD'; }
+		}
 		$order['net_amount_due_money'] = array( 'amount' => 0, 'currency' => $attempt['currency'] );
 		if ( 'paid_tender' === $mode ) { $order['tenders'][0]['payment_id'] = 'sqpayOTHERTENDER00001'; }
 	}
@@ -4040,6 +4058,112 @@ if ( is_array( $square_rest_recovery_fixture ) ) {
 	db_integration_assert( false, 'approved Square REST signed-webhook recovery fixture is available' );
 }
 $GLOBALS['db_square_http_mode'] = 'success';
+// Full-value Gift Card tender uses both real REST boundaries. Provider HTTP,
+// mail and kitchen hooks are intercepted within this disposable installation.
+$gift_tender_settings = DoughBoss_Settings::all();
+$gift_cookie = isset( $_COOKIE[ DoughBoss_Cart::COOKIE ] ) ? $_COOKIE[ DoughBoss_Cart::COOKIE ] : null;
+$GLOBALS['db_square_gift_mode'] = '';
+$GLOBALS['db_orders_http_mode'] = 'success';
+$gift_open_settings = $gift_tender_settings;
+$gift_open_settings['ordering_open'] = 1;
+update_option( DoughBoss_Settings::OPTION_KEY, $gift_open_settings, false );
+$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'IntegrationGiftCartToken1234567890';
+$gift_cart = new DoughBoss_Cart();
+$gift_cart->clear();
+$gift_cart->add( array( 'type' => 'menu', 'item_id' => 9901, 'name' => 'Synthetic Gift Pizza', 'unit_price' => 12.00, 'quantity' => 1 ) );
+$gift_controller = new DoughBoss_REST_Controller( $gift_cart );
+$gift_params = array( 'payment_attempt_key' => 'gift-rest-attempt-0001', 'customer_name' => 'Gift Fixture',
+	'customer_email' => 'gift@example.invalid', 'customer_phone' => '0400000000', 'order_type' => 'pickup',
+	'location_id' => 1, 'source_id' => 'cnon:gift-ordinary-secure', 'tender_kind' => 'gift_card' );
+$_SERVER['REMOTE_ADDR'] = '198.51.100.101';
+$gift_posts = $GLOBALS['db_square_post_count'];
+$gift_order_posts = $GLOBALS['db_orders_post_count'];
+$gift_response = $gift_controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $gift_params ) );
+$gift_data = $gift_response instanceof WP_REST_Response ? $gift_response->get_data() : array();
+$gift_reference = isset( $gift_data['payment_intent'] ) ? $gift_data['payment_intent'] : '';
+db_integration_assert( '' !== $gift_reference, 'ordinary Gift Card REST start confirms full-value linked funding' );
+db_integration_same( $gift_posts + 1, $GLOBALS['db_square_post_count'], 'ordinary Gift Card sends one payment POST' );
+db_integration_same( $gift_order_posts + 1, $GLOBALS['db_orders_post_count'], 'ordinary Gift Card sends one linked Order POST' );
+$gift_body = end( $GLOBALS['db_square_post_bodies'] );
+db_integration_same( false, isset( $gift_body['accept_partial_authorization'] ) ? $gift_body['accept_partial_authorization'] : null, 'full-value gift dispatch explicitly forbids partial authorization' );
+db_integration_same( true, isset( $gift_body['autocomplete'] ) ? $gift_body['autocomplete'] : null, 'single full-value tender completes immediately' );
+$gift_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $gift_reference );
+$gift_saved = is_array( $gift_attempt ) ? DoughBoss_Payment_Attempts::metadata( $gift_attempt ) : array();
+db_integration_same( 'gift_card', isset( $gift_saved['square_tender_kind'] ) ? $gift_saved['square_tender_kind'] : '', 'gift intent is durably immutable' );
+db_integration_assert( is_array( $gift_attempt ) && false === strpos( $gift_attempt['safe_metadata_json'], 'cnon:' ), 'gift nonce never reaches persistence' );
+if ( is_array( $gift_attempt ) ) {
+	$changed = $gift_saved; $changed['square_tender_kind'] = 'card';
+	db_integration_same( false, DoughBoss_Payment_Attempts::update( $gift_attempt['id'], array( 'safe_metadata' => $changed ) ), 'gift kind cannot be rewritten after dispatch' );
+}
+$gift_switched_params = $gift_params; $gift_switched_params['tender_kind'] = 'card';
+$gift_switched = $gift_controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $gift_switched_params ) );
+db_integration_assert( is_wp_error( $gift_switched ), 'changing tender on the same attempt cannot recharge' );
+db_integration_same( $gift_posts + 1, $GLOBALS['db_square_post_count'], 'tender switch performs no new payment POST' );
+$gift_replay = $gift_controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $gift_params ) );
+db_integration_assert( $gift_replay instanceof WP_REST_Response, 'exact Gift Card retry reuses original payment' );
+db_integration_same( $gift_posts + 1, $GLOBALS['db_square_post_count'], 'gift replay does not authorize again' );
+$gift_checkout = $gift_params;
+unset( $gift_checkout['source_id'], $gift_checkout['tender_kind'] );
+$gift_checkout['payment_intent_id'] = $gift_reference;
+$gift_checkout['idempotency_key'] = 'gift-rest-checkout-0001';
+$gift_hooks = count( $GLOBALS['db_order_created_events'] );
+$GLOBALS['db_orders_http_mode'] = 'paid_error';
+$gift_held = $gift_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $gift_checkout ) );
+db_integration_assert( is_wp_error( $gift_held ), 'unreadable linked Gift Card order holds kitchen release' );
+db_integration_same( 0, DoughBoss_Order::find_id_by_payment_intent( $gift_reference ), 'held gift payment creates no local kitchen order' );
+$GLOBALS['db_orders_http_mode'] = 'success';
+$gift_complete = $gift_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $gift_checkout ) );
+db_integration_assert( $gift_complete instanceof WP_REST_Response, 'fresh Gift Card verification releases ordinary order' );
+db_integration_same( $gift_hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'ordinary gift creates exactly one kitchen hook' );
+$gift_complete_replay = $gift_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $gift_checkout ) );
+db_integration_assert( $gift_complete_replay instanceof WP_REST_Response, 'ordinary gift receipt can be replayed' );
+db_integration_same( $gift_hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'receipt replay never releases another order' );
+update_option( DoughBoss_Settings::OPTION_KEY, $gift_tender_settings, false );
+if ( null === $gift_cookie ) { unset( $_COOKIE[ DoughBoss_Cart::COOKIE ] ); } else { $_COOKIE[ DoughBoss_Cart::COOKIE ] = $gift_cookie; }
+
+$gift_approved = db_integration_approved_square_rest_fixture( 'gift-approved-complete' );
+db_integration_assert( is_array( $gift_approved ), 'approved Gift Card fixture is available' );
+if ( is_array( $gift_approved ) ) {
+	$_SERVER['REMOTE_ADDR'] = '198.51.100.102';
+	$gift_approved_posts = $GLOBALS['db_square_post_count'];
+	$gift_approved_hooks = count( $GLOBALS['db_order_created_events'] );
+	$gift_approved_params = array( 'request_id' => $gift_approved['request_id'], 'token' => $gift_approved['token'],
+		'payment_attempt_key' => 'gift-approved-attempt-0001', 'source_id' => 'cnon:gift-approved-secure', 'tender_kind' => 'gift_card' );
+	$gift_approved_start = $square_rest_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', $gift_approved_params ) );
+	db_integration_assert( $gift_approved_start instanceof WP_REST_Response, 'approved link can start full-value gift payment while ordinary ordering is off' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $gift_approved['request_id'] ), 'approved gift start alone cannot release kitchen order' );
+	$gift_approved_row = DoughBoss_Preorder_Approval::get( $gift_approved['request_id'] );
+	$gift_approved_attempt = is_array( $gift_approved_row ) ? DoughBoss_Payment_Attempts::find( $gift_approved_row['payment_attempt_id'] ) : null;
+	$gift_approved_meta = is_array( $gift_approved_attempt ) ? DoughBoss_Payment_Attempts::metadata( $gift_approved_attempt ) : array();
+	db_integration_same( 'gift_card', isset( $gift_approved_meta['square_tender_kind'] ) ? $gift_approved_meta['square_tender_kind'] : '', 'approved gift persists exact tender intent' );
+	db_integration_same( $gift_approved['request_id'], isset( $gift_approved_meta['approval_id'] ) ? $gift_approved_meta['approval_id'] : 0, 'approved gift retains immutable staff-approved source' );
+	$gift_approved_confirm = array( 'request_id' => $gift_approved['request_id'], 'token' => $gift_approved['token'] );
+	$GLOBALS['db_square_gift_mode'] = 'wrong_tender';
+	$gift_approved_held = $square_rest_controller->preorder_payment_complete( db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', $gift_approved_confirm ) );
+	db_integration_assert( is_wp_error( $gift_approved_held ), 'bank-card linked tender cannot release an approved gift payment' );
+	db_integration_same( $gift_approved_hooks, count( $GLOBALS['db_order_created_events'] ), 'wrong gift tender has no kitchen hook' );
+	$GLOBALS['db_square_gift_mode'] = '';
+	$gift_approved_complete = $square_rest_controller->preorder_payment_complete( db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', $gift_approved_confirm ) );
+	db_integration_assert( $gift_approved_complete instanceof WP_REST_Response, 'fresh exact gift tender recovers approved kitchen release' );
+	$gift_approved_replay = $square_rest_controller->preorder_payment_complete( db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', $gift_approved_confirm ) );
+	db_integration_assert( $gift_approved_replay instanceof WP_REST_Response, 'approved gift receipt replays' );
+	db_integration_same( $gift_approved_hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'approved gift emits one kitchen hook across recovery/replay' );
+	db_integration_same( $gift_approved_posts + 1, $GLOBALS['db_square_post_count'], 'approved gift recovery never recharges' );
+}
+foreach ( array( 'partial', 'wrong_brand', 'wrong_tender', 'authorized' ) as $gift_bad_mode ) {
+	$GLOBALS['db_square_gift_mode'] = $gift_bad_mode;
+	$gift_bad_meta = db_integration_square_metadata( 'gift-bad-' . $gift_bad_mode, 'gift-bad-key-' . $gift_bad_mode, 'gift-bad-cart-' . $gift_bad_mode, array(), 1250 );
+	$gift_bad_meta['tender_kind'] = 'gift_card';
+	$gift_bad_meta['source_id'] = 'cnon:gift-bad-' . $gift_bad_mode;
+	$gift_bad_posts = $GLOBALS['db_square_post_count'];
+	$gift_bad = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $gift_bad_meta );
+	db_integration_assert( is_wp_error( $gift_bad ) || 'succeeded' !== $gift_bad['status'], 'gift ' . $gift_bad_mode . ' cannot claim fully captured funding' );
+	$gift_bad_replay = DoughBoss_Square::create_payment_intent( 1250, 'AUD', $gift_bad_meta );
+	db_integration_assert( is_wp_error( $gift_bad_replay ) || 'succeeded' !== $gift_bad_replay['status'], 'gift ' . $gift_bad_mode . ' remains held on replay' );
+	db_integration_same( $gift_bad_posts + 1, $GLOBALS['db_square_post_count'], 'gift ' . $gift_bad_mode . ' has one dispatch and no repeat charge' );
+}
+$GLOBALS['db_square_gift_mode'] = '';
+db_integration_same( false, DoughBoss_Settings::ordering_open(), 'Gift Card fixtures leave ordinary ordering closed' );
 update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings_before, false );
 remove_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
 remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
@@ -4066,7 +4190,8 @@ update_option( DoughBoss_Settings::OPTION_KEY, $square_map_original );
 // SSR menu fallback uses real published posts and taxonomy terms; it must not
 // expose drafts, raw HTML, dietary assertions, or purchase controls.
 $ssr_category = wp_insert_term( 'SSR browse fallback', DoughBoss_Post_Types::TAXONOMY );
-$ssr_term_id  = is_wp_error( $ssr_category ) ? 0 : (int) $ssr_category['term_id'];
+$ssr_term_id  = is_wp_error( $ssr_category ) ? (int) $ssr_category->get_error_data( 'term_exists' ) : (int) $ssr_category['term_id'];
+db_integration_assert( $ssr_term_id > 0, 'SSR fixture resolves its existing or newly created category' );
 $ssr_first_title = 'SSR first <b>published</b> & "quoted"';
 $ssr_second_title = 'SSR second published';
 $ssr_first_id = wp_insert_post(
@@ -4100,6 +4225,15 @@ foreach ( array( $ssr_first_id, $ssr_second_id, $ssr_draft_id ) as $ssr_item_id 
 update_post_meta( $ssr_first_id, DoughBoss_Post_Types::META_PRICE, '12.5' );
 update_post_meta( $ssr_second_id, DoughBoss_Post_Types::META_PRICE, '13' );
 update_post_meta( $ssr_draft_id, DoughBoss_Post_Types::META_PRICE, '99' );
+// Repeat runs preserve disposable historical posts. Restrict only this fixture
+// to its exact rows so the production 200-item cap cannot hide it. The real
+// publish-status, menu-order, title, escaping and description logic is unchanged.
+$ssr_fixture_query = function ( $query ) use ( $ssr_first_id, $ssr_second_id, $ssr_draft_id ) {
+	if ( DoughBoss_Post_Types::POST_TYPE === $query->get( 'post_type' ) ) {
+		$query->set( 'post__in', array( $ssr_first_id, $ssr_second_id, $ssr_draft_id ) );
+	}
+};
+add_action( 'pre_get_posts', $ssr_fixture_query, 999 );
 $ssr_menu_html = ( new DoughBoss_Shortcodes() )->menu();
 $plain_description = 'SSR plain description & cheese — "fresh"';
 db_integration_assert( false !== strpos( $ssr_menu_html, esc_html( $plain_description ) ), 'SSR description decodes saved entities once before HTML escaping' );
@@ -4139,6 +4273,8 @@ foreach ( array(
 	db_integration_assert( in_array( $nested_description_case[1], $nested_display_texts, true ), 'SSR rendered paragraph matches JSON/textContent for nested entities' );
 	db_integration_assert( false === strpos( $nested_menu_html, 'nested-script-sentinel' ) && false === strpos( $nested_menu_html, '<em>herbs</em>' ), 'nested entity prose never emits active markup or encoded script content' );
 }
+
+remove_action( 'pre_get_posts', $ssr_fixture_query, 999 );
 
 // Real menu responses must connect the new variants, not just package them.
 $responsive_item_id = wp_insert_post( array(

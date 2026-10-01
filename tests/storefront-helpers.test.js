@@ -544,6 +544,7 @@ function squarePaymentHarness(options) {
 		value: (node, name) => fields[name] || ''
 	});
 	const payAndPlace = extractFunction(square, 'payAndPlace', {
+		tokenizeTender: extractFunction(square, 'tokenizeTender'),
 		I18N: {},
 		orderTypeFor: () => 'pickup',
 		storedLocationId: () => 12,
@@ -566,6 +567,7 @@ function squarePaymentHarness(options) {
 		providerRequestStarted: false,
 		controller: {
 			ready: () => Promise.resolve({
+				kind: options.tenderKind || 'card',
 				card: {
 					tokenize: details => {
 						tokenizations.push(details);
@@ -602,6 +604,16 @@ test('Square puts buyer verification details into tokenization and sends only it
 	assert.equal(h.placed.length, 1, 'a confirmed server payment still proceeds to checkout');
 	const source = fs.readFileSync(square, 'utf8');
 	assert.doesNotMatch(source, /verifyBuyer|verificationToken|verification_token/);
+});
+
+test('Square full-value gift checkout sends only the hosted-field nonce and tender selection', async () => {
+	const h = squarePaymentHarness({ total: '27.50', currency: 'AUD', tenderKind: 'gift_card', tokenResult: { status: 'OK', token: 'cnon:gift-secure-nonce' } });
+	await h.payAndPlace(h.session);
+	assert.deepEqual(h.tokenizations, [undefined], 'gift SDK tokenize takes no bank-card buyer verification details');
+	assert.equal(h.requests[0].requestOptions.body.tender_kind, 'gift_card');
+	assert.equal(h.requests[0].requestOptions.body.source_id, 'cnon:gift-secure-nonce');
+	assert.equal(JSON.stringify(h.stored).includes('cnon:'), false, 'nonce never enters recovery storage');
+	assert.equal(h.placed.length, 1);
 });
 
 test('Square cancelled, failed, or rejected tokenization never starts a provider request', async () => {
@@ -661,7 +673,7 @@ function approvedSquareHarness(options = {}) {
 		controller: { ready: () => Promise.resolve({ card: { tokenize: details => {
 			tokenizations.push(details);
 			return Promise.resolve(options.tokenResult || { status: 'OK', token: 'cnon:approved' });
-		} } }) }
+		} }, kind: options.tenderKind || 'card' }) }
 	};
 	const request = async (route, requestOptions) => {
 		requests.push({ route, options: requestOptions });
@@ -670,6 +682,7 @@ function approvedSquareHarness(options = {}) {
 	};
 	const confirm = extractFunction(square, 'confirmApproved', { request, validApprovedSquareReceipt: extractFunction(square, 'validApprovedSquareReceipt') });
 	const pay = extractFunction(square, 'payApprovedSession', {
+		tokenizeTender: extractFunction(square, 'tokenizeTender'),
 		approvedVerificationDetails: extractFunction(square, 'approvedVerificationDetails', { validSquareCurrency: extractFunction(square, 'validSquareCurrency') }),
 		confirmApproved: confirm, request
 	});
@@ -683,7 +696,7 @@ test('approved Square uses the capability routes and no client money or provider
 	assert.equal(h.tokenizations[0].amount, '14.00');
 	assert.equal(h.tokenizations[0].currencyCode, 'AUD');
 	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/start', '/preorder-payment/complete']);
-	assert.deepEqual(Object.keys(h.requests[0].options.body).sort(), ['payment_attempt_key', 'request_id', 'source_id', 'token']);
+	assert.deepEqual(Object.keys(h.requests[0].options.body).sort(), ['payment_attempt_key', 'request_id', 'source_id', 'tender_kind', 'token']);
 	assert.deepEqual(Object.keys(h.requests[1].options.body).sort(), ['request_id', 'token']);
 	assert.equal(h.requests[0].options.body.source_id, 'cnon:approved');
 	assert.equal(h.session.providerRequestStarted, true);
@@ -696,6 +709,17 @@ test('approved Square unknown start outcome retries only confirmation without an
 	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/start', '/preorder-payment/complete']);
 	assert.equal(h.tokenizations.length, 1);
 	assert.equal(h.session.paymentAttemptKey, 'approved-attempt-1');
+});
+
+test('approved Square gift capture retains the exact approval routes and no new charge on recovery', async () => {
+	const h = approvedSquareHarness({ tenderKind: 'gift_card' });
+	await h.pay(h.session);
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(h.requests[0].options.body.tender_kind, 'gift_card');
+	assert.equal(h.requests[0].options.body.source_id, 'cnon:approved');
+	await h.pay(h.session);
+	assert.equal(h.tokenizations.length, 1);
+	assert.deepEqual(h.requests.map(x => x.route), ['/preorder-payment/start', '/preorder-payment/complete', '/preorder-payment/complete']);
 });
 
 test('approved Square reload recovery never tokenizes or starts a new payment', async () => {
@@ -738,8 +762,10 @@ function dormantSquareModuleHarness(harnessOptions = {}) {
 	const sdkBindings = [];
 	const scripts = [];
 	const tokenizations = [];
+	const fieldStarts = { card: 0, gift: 0 };
 	function element(tag = 'div') {
-		return { tag, children: [], attributes: {}, className: '', parentNode: null,
+		return { tag, children: [], attributes: {}, className: '', parentNode: null, listeners: {},
+			addEventListener(name, listener) { this.listeners[name] = listener; },
 			appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
 			insertBefore(child, target) { child.parentNode = this; this.children.splice(this.children.indexOf(target), 0, child); return child; },
 			setAttribute(key, value) { this.attributes[key] = value; },
@@ -756,10 +782,19 @@ function dormantSquareModuleHarness(harnessOptions = {}) {
 			scripts.push(script);
 			window.Square = { payments(applicationId, locationId) {
 				sdkBindings.push({ applicationId, locationId });
-				return { card: () => Promise.resolve({ attach: () => Promise.resolve(), tokenize: details => {
+				return { giftCard: () => {
+					fieldStarts.gift++;
+					if (fieldStarts.gift <= (harnessOptions.giftFailures || 0)) { return Promise.reject(new Error('Synthetic gift mount failure')); }
+					return Promise.resolve({ attach: () => Promise.resolve(), tokenize: () => {
+					tokenizations.push(undefined);
+					return Promise.resolve({ status: 'OK', token: 'cnon:gift-synthetic-secure' });
+				} }); }, card: () => {
+					fieldStarts.card++;
+					if (fieldStarts.card <= (harnessOptions.cardFailures || 0)) { return Promise.reject(new Error('Synthetic card mount failure')); }
+					return Promise.resolve({ attach: () => Promise.resolve(), tokenize: details => {
 					tokenizations.push(details);
 					return Promise.resolve({ status: 'OK', token: 'cnon:synthetic-card' });
-				} }) };
+				} }); } };
 			} };
 			script.onload();
 		} }
@@ -770,7 +805,7 @@ function dormantSquareModuleHarness(harnessOptions = {}) {
 	} });
 	const form = element('form');
 	form.appendChild(element('button'));
-	return { window, form, calls, scripts, sdkBindings, tokenizations };
+	return { window, form, calls, scripts, sdkBindings, tokenizations, fieldStarts };
 }
 
 test('actual dormant Square module loads no SDK until approved mode and binds the exact capability shop', async () => {
@@ -791,6 +826,87 @@ test('actual dormant Square module loads no SDK until approved mode and binds th
 	assert.deepEqual(h.calls.map(call => call.url), ['/wp-json/doughboss/v1/preorder-payment/start', '/wp-json/doughboss/v1/preorder-payment/complete']);
 	assert.equal(h.calls[1].body.request_id, 93);
 	assert.equal(Object.hasOwn(h.calls[1].body, 'payment_intent'), false);
+});
+
+test('actual approved module mounts Square gift fields on explicit selection and sends no GAN', async () => {
+	const h = dormantSquareModuleHarness();
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	assert.equal(method.value, 'card');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.equal(h.calls[0].body.source_id, 'cnon:gift-synthetic-secure');
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(wrap.children.find(x => x.className === 'db-square-card').hidden, true);
+	assert.equal(wrap.children.find(x => x.className === 'db-square-gift').hidden, false);
+	assert.match(wrap.children.find(x => x.tag === 'p').textContent, /Split payment is not yet available/);
+});
+
+test('failed ordinary card mount does not retry when paying with the selected gift card', async () => {
+	const h = dormantSquareModuleHarness({ cardFailures: 10 });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 1 });
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+	assert.equal(wrap.children.find(x => x.tag === 'p').className, 'db-pay-secure');
+});
+
+test('switching back to a failed card mount retries safely without a null promise', async () => {
+	const h = dormantSquareModuleHarness({ cardFailures: 2 });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await new Promise(resolve => setImmediate(resolve));
+	method.value = 'card';
+	assert.doesNotThrow(() => method.listeners.change());
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(h.calls.length, 0);
+	assert.equal(h.tokenizations.length, 0);
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 3, gift: 1 });
+	assert.equal(h.calls[0].body.tender_kind, 'card');
+});
+
+test('failed gift mount retries only gift fields and makes no premature payment call', async () => {
+	const h = dormantSquareModuleHarness({ giftFailures: 2 });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await new Promise(resolve => setImmediate(resolve));
+	await assert.rejects(h.window.DoughBossSquare.payApproved(h.form), /Synthetic gift mount failure/);
+	assert.equal(h.calls.length, 0);
+	assert.equal(h.tokenizations.length, 0);
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 3 });
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
 });
 
 test('actual Square recovery module never loads SDK, mounts fields or tokenizes', async () => {

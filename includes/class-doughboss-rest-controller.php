@@ -2725,6 +2725,11 @@ class DoughBoss_REST_Controller {
 		$phone   = sanitize_text_field( $request->get_param( 'customer_phone' ) );
 		$address = sanitize_textarea_field( $request->get_param( 'address' ) );
 		$notes   = sanitize_textarea_field( $request->get_param( 'notes' ) );
+		$tender_kind = 'card';
+		if ( 'square' === $gateway ) {
+			$tender_kind = DoughBoss_Square::tender_kind( $request->get_param( 'tender_kind' ) );
+			if ( is_wp_error( $tender_kind ) ) { return $tender_kind; }
+		}
 		// Stripe and Square both need the contact details BEFORE the money moves:
 		// Stripe because the hosted session is created from an immutable
 		// snapshot, Square because this call actually charges the card, and a
@@ -2858,6 +2863,7 @@ class DoughBoss_REST_Controller {
 			// before the attempt row is written). The AMOUNT is the one this
 			// server just computed from the stored cart — never a client value.
 			$metadata['source_id']          = sanitize_text_field( (string) $request->get_param( 'source_id' ) );
+			$metadata['tender_kind']        = $tender_kind;
 			$metadata['verification_token'] = sanitize_text_field( (string) $request->get_param( 'verification_token' ) );
 			$metadata['protocol_version']   = 'square-v2';
 			$metadata['attempt_identity']   = $attempt_identity;
@@ -3890,6 +3896,8 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	private function preorder_payment_start_square( WP_REST_Request $request ) {
+		$tender_kind = DoughBoss_Square::tender_kind( $request->get_param( 'tender_kind' ) );
+		if ( is_wp_error( $tender_kind ) ) { return $tender_kind; }
 		if ( ! DoughBoss_Square::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payment is not available right now. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
 		}
@@ -3994,6 +4002,7 @@ class DoughBoss_REST_Controller {
 				'request_fingerprint'     => (string) $approval['request_fingerprint'],
 				'preorder_payment_token'  => $token,
 				'source_id'               => sanitize_text_field( (string) $request->get_param( 'source_id' ) ),
+				'tender_kind'             => $tender_kind,
 				'verification_token'      => sanitize_text_field( (string) $request->get_param( 'verification_token' ) ),
 			)
 		);

@@ -3,7 +3,8 @@
  * Square Payments API gateway (optional, off by default).
  *
  * A thin, dependency-free wrapper over the Square Payments API used to take and
- * verify a single card payment for one storefront order. No SDK is bundled —
+ * verify one full-value card or Square Gift Card payment per storefront order.
+ * Split tender is not supported by this lifecycle. No SDK is bundled —
  * calls go through `wp_remote_*`, exactly like DoughBoss_Stripe and
  * DoughBoss_Tyro. When payments are disabled, when Square is not the selected
  * gateway, or when any credential for the active mode is missing, the whole
@@ -353,7 +354,9 @@ class DoughBoss_Square {
 		if ( is_wp_error( $projection ) ) { return $projection; }
 		$response = self::request( 'GET', '/v2/orders/' . rawurlencode( $attempt['provider_order_reference'] ), array(), $binding );
 		if ( is_wp_error( $response ) ) { return self::pending_error( $attempt, 'doughboss_pay_order_unavailable' ); }
-		$facts = DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $attempt['provider_order_reference'] );
+		$metadata = self::attempt_metadata( $attempt );
+		$expected_tender = isset( $metadata['square_tender_kind'] ) && 'gift_card' === $metadata['square_tender_kind'] ? 'SQUARE_GIFT_CARD' : 'CARD';
+		$facts = DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $attempt['provider_order_reference'], $expected_tender );
 		if ( is_wp_error( $facts ) ) { return self::pending_error( $attempt, 'doughboss_pay_order_changed' ); }
 		$fresh = DoughBoss_Payment_Attempts::find( (int) $attempt['id'] );
 		if ( ! is_array( $fresh ) || ! in_array( $fresh['status'], array( 'processing', 'unknown', 'succeeded', 'order_committed' ), true )
@@ -524,22 +527,57 @@ class DoughBoss_Square {
 	}
 
 	/**
-	 * Take a card payment for the given amount.
+	 * Strict public tender selection. Omitted input preserves card checkout.
 	 *
-	 * Required metadata: `checkout_key` (64 hex), `location_id` (DoughBoss shop
-	 * id) and `source_id` (the single-use token the Web Payments SDK produced in
-	 * the browser). `verification_token` is optional 3-D Secure evidence.
+	 * @param mixed $value Exact card/gift_card selection, or null.
+	 * @return string|WP_Error
+	 */
+	public static function tender_kind( $value ) {
+		if ( null === $value || 'card' === $value ) { return 'card'; }
+		if ( 'gift_card' === $value ) { return 'gift_card'; }
+		return new WP_Error( 'doughboss_pay_tender', __( 'Choose card or Square gift card payment.', 'doughboss' ), array( 'status' => 400, 'retry_safe' => true, 'payment_pending' => false ) );
+	}
+
+	/**
+	 * Gift-card intent is immutable, but is not evidence of funding. Require
+	 * Square's own tender facts on every create/replay/read. Historical card
+	 * attempts retain their existing contract; no provider card data is stored.
+	 */
+	private static function payment_tender_matches( array $payment, array $attempt ) {
+		$metadata = self::attempt_metadata( $attempt );
+		$details = isset( $payment['card_details'] ) && is_array( $payment['card_details'] ) ? $payment['card_details'] : array();
+		$card = isset( $details['card'] ) && is_array( $details['card'] ) ? $details['card'] : array();
+		$kind = array_key_exists( 'square_tender_kind', $metadata ) ? $metadata['square_tender_kind'] : 'card';
+		if ( 'card' === $kind ) {
+			// Preserve older sparse CARD responses, but never accept explicit
+			// contradictory source or Square gift-card evidence as bank-card proof.
+			return ( ! array_key_exists( 'source_type', $payment ) || 'CARD' === $payment['source_type'] )
+				&& ( ! isset( $card['card_brand'] ) || 'SQUARE_GIFT_CARD' !== $card['card_brand'] );
+		}
+		if ( 'gift_card' !== $metadata['square_tender_kind'] ) { return false; }
+		$money = isset( $payment['amount_money'] ) && is_array( $payment['amount_money'] ) ? $payment['amount_money'] : array();
+		return isset( $payment['source_type'], $card['card_brand'], $money['amount'], $money['currency'] )
+			&& 'CARD' === $payment['source_type'] && 'SQUARE_GIFT_CARD' === $card['card_brand']
+			&& is_int( $money['amount'] ) && $money['amount'] === (int) $attempt['amount_minor']
+			&& $money['currency'] === strtoupper( (string) $attempt['currency'] )
+			&& ( 'COMPLETED' !== ( isset( $payment['status'] ) ? $payment['status'] : '' )
+				|| ( isset( $details['status'] ) && 'CAPTURED' === $details['status'] ) );
+	}
+
+	/**
+	 * Take one full-value card or Square Gift Card payment. All economics and
+	 * shop/approval bindings come from the server; only the SDK nonce and tender
+	 * selection are browser inputs. Neither nonce nor provider card data persists.
 	 *
-	 * The amount is whatever the REST controller computed from the stored cart —
-	 * this class never reads an amount from the browser.
-	 *
-	 * @param int    $amount_minor Amount in cents.
-	 * @param string $currency     ISO currency code (e.g. AUD).
-	 * @param array  $metadata     Server-owned checkout metadata (+ source_id).
-	 * @return array|WP_Error { id, status, amount, currency, attempt_id } or error.
+	 * @param int    $amount_minor Server-computed cents.
+	 * @param string $currency     Server-computed ISO currency.
+	 * @param array  $metadata     Checkout binding plus transient SDK input.
+	 * @return array|WP_Error
 	 */
 	public static function create_payment_intent( $amount_minor, $currency, array $metadata = array() ) {
 		global $wpdb;
+		$tender_kind = self::tender_kind( array_key_exists( 'tender_kind', $metadata ) ? $metadata['tender_kind'] : null );
+		if ( is_wp_error( $tender_kind ) ) { return $tender_kind; }
 		$amount_minor = absint( $amount_minor );
 		$currency     = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $currency ) );
 		$checkout_key = isset( $metadata['checkout_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['checkout_key'] ) ) : '';
@@ -587,6 +625,8 @@ class DoughBoss_Square {
 		// storage or a log line — strip them before the attempt row is written.
 		$safe_metadata = $metadata;
 		unset(
+			$safe_metadata['tender_kind'],
+			$safe_metadata['square_tender_kind'],
 			$safe_metadata['attempt_key'],
 			$safe_metadata['checkout_key'],
 			$safe_metadata['source_id'],
@@ -607,6 +647,7 @@ class DoughBoss_Square {
 		$safe_metadata['square_shop_slug']   = $shop_binding['shop_slug'];
 		$safe_metadata['square_location_id'] = $shop_binding['square_location_id'];
 		$safe_metadata['square_mode']        = $shop_binding['square_mode'];
+		$safe_metadata['square_tender_kind'] = $tender_kind;
 
 		$attempt_key = hash( 'sha256', 'square-v2|' . $attempt_identity );
 		if ( ! DoughBoss_Payment_Attempts::acquire_local_reference_lock( $cart_guard ) ) {
@@ -713,6 +754,10 @@ class DoughBoss_Square {
 		$purpose         = (string) $attempt['purpose'];
 		$context         = (string) $attempt['context'];
 		$stored_metadata = self::attempt_metadata( $attempt );
+		$stored_tender = array_key_exists( 'square_tender_kind', $stored_metadata ) ? $stored_metadata['square_tender_kind'] : 'card';
+		if ( $stored_tender !== $tender_kind ) {
+			return self::pending_error( $attempt, 'doughboss_pay_tender_changed' );
+		}
 		$stored_binding  = self::attempt_shop_binding( $attempt );
 		if (
 			'square-v2' !== ( isset( $stored_metadata['protocol_version'] ) ? (string) $stored_metadata['protocol_version'] : '' )
@@ -824,6 +869,10 @@ class DoughBoss_Square {
 		);
 		if ( 1 === $orders_protocol ) {
 			$body['order_id'] = $attempt['provider_order_reference'];
+		}
+		if ( 'gift_card' === $tender_kind ) {
+			// This slice is full-value only. Never create an untracked partial leg.
+			$body['accept_partial_authorization'] = false;
 		}
 		if ( '' !== $verification ) {
 			$body['verification_token'] = $verification;
@@ -1070,6 +1119,7 @@ class DoughBoss_Square {
 		)
 			&& '' !== $expected_location
 			&& hash_equals( $expected_location, $payment_loc )
+			&& self::payment_tender_matches( $payment, $attempt )
 			&& self::payment_order_matches( $payment, $attempt );
 
 		if ( ! $valid ) {
@@ -1249,6 +1299,7 @@ class DoughBoss_Square {
 			|| ! preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $saved_location )
 			|| ! in_array( $saved_mode, array( 'test', 'live' ), true )
 			|| ! hash_equals( $saved_location, $payment_location )
+			|| ! self::payment_tender_matches( $payment, $attempt )
 			|| ! self::payment_order_matches( $payment, $attempt )
 		) {
 			return new WP_Error( 'doughboss_pay_create', __( 'We could not confirm the card payment. Please try again or contact the shop.', 'doughboss' ), array( 'status' => 502 ) );
