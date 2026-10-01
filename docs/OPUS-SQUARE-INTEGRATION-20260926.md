@@ -70,7 +70,7 @@ historical failure. Findings outside this plugin remain explicit follow-up work.
 | Email failures not recorded | Approval candidate records payment-link delivery state; general order/kitchen notification receipt and retry coverage still needs review. |
 | No daily totals/export/docket | Kitchen/printer/admin paths exist in candidate; verify reporting and actual printer acceptance. Square reporting remains open. |
 | DOUGHXSNOW single-use voucher concurrency passed | Opus evidence only; do not claim independently verified here. |
-| Two voucher systems | Owner decision required before cutover: choose issuance/redemption authority and migration/reconciliation policy. |
+| Two voucher systems | Owner clarified on 1 October: Square Gift Cards, not Xero, is the intended new stored-value authority. Legacy promotional issuance pause is implemented locally; preservation/redemption and a reconciled cutover remain required. No promotional code is converted into a prepaid balance. |
 | Voucher demo login/admin PINs | DOUGHXSNOW deployment gate, separate repository. Do not ship demo identity. |
 | Voucher backup/outage plan | Operational gate; restore proof and counter fallback required before print launch. |
 | Voucher batch creation needs developer | DOUGHXSNOW admin capability backlog; not silently added to this WordPress batch. |

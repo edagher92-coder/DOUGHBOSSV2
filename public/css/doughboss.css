@@ -388,6 +388,21 @@ body.page-id-402 #primary-menu > li > a {
 	box-shadow: inset 0 -5px 0 var(--db-placeholder-accent, #e52a21), var(--db-shadow-1);
 }
 
+.db-card-img > .db-menu-picture {
+	position: absolute;
+	inset: 0;
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+}
+
+.db-menu-picture > img {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+}
+
 .db-card-body {
 	padding: 1rem;
 	display: flex;

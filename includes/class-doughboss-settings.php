@@ -88,6 +88,9 @@ class DoughBoss_Settings {
 			// In-store voucher scans are paused until a named manager owns the
 			// daily receipt-to-voucher reconciliation.
 			'voucher_reconciliation_owner_id' => 0,
+			// Legacy promotional vouchers are a discount program, not stored-value
+			// cards. New issuance stays paused until the owner deliberately opens it.
+			'legacy_voucher_issuance_enabled' => 0,
 			'loyalty_points_per_dollar'  => 1,
 			'loyalty_redemption_points'  => 100,
 			'loyalty_redemption_amount'  => 5,
@@ -1635,6 +1638,19 @@ class DoughBoss_Settings {
 	 */
 	public static function sms_on_voucher_claim() {
 		return (bool) self::get( 'sms_on_voucher_claim', 0 );
+	}
+
+	/**
+	 * Whether new legacy promotional vouchers may be issued.
+	 *
+	 * This gate applies only to creating new discount vouchers. Previously
+	 * issued vouchers remain available to the existing validation, reservation
+	 * and redemption paths.
+	 *
+	 * @return bool
+	 */
+	public static function legacy_voucher_issuance_enabled() {
+		return (bool) self::get( 'legacy_voucher_issuance_enabled', 0 );
 	}
 
 	/**

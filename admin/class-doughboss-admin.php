@@ -443,6 +443,9 @@ class DoughBoss_Admin {
 		$clean['voucher_reconciliation_owner_id'] = isset( $input['voucher_reconciliation_owner_id'] )
 			? absint( $input['voucher_reconciliation_owner_id'] )
 			: ( isset( $existing['voucher_reconciliation_owner_id'] ) ? absint( $existing['voucher_reconciliation_owner_id'] ) : 0 );
+		// Checkbox omission is intentionally fail-closed: settings saves must
+		// never reopen legacy promotional voucher issuance by accident.
+		$clean['legacy_voucher_issuance_enabled'] = empty( $input['legacy_voucher_issuance_enabled'] ) ? 0 : 1;
 
 		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
 		$requested_gateway = isset( $input['payment_gateway'] ) ? sanitize_key( $input['payment_gateway'] ) : 'stripe';
@@ -3299,6 +3302,17 @@ JS;
 			<form method="post" action="options.php">
 				<?php settings_fields( self::SETTINGS_GROUP ); ?>
 				<?php $opt = DoughBoss_Settings::OPTION_KEY; ?>
+
+				<h2><?php esc_html_e( 'Legacy promotional vouchers', 'doughboss' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><label for="db-legacy-voucher-issuance-enabled"><?php esc_html_e( 'Issue new vouchers', 'doughboss' ); ?></label></th>
+						<td>
+							<label><input type="checkbox" id="db-legacy-voucher-issuance-enabled" name="<?php echo esc_attr( $opt ); ?>[legacy_voucher_issuance_enabled]" value="1" <?php checked( ! empty( $settings['legacy_voucher_issuance_enabled'] ), true ); ?> /> <?php esc_html_e( 'Allow new legacy promotional discount vouchers', 'doughboss' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Off by default. While paused, no new legacy vouchers can be issued through the website, staff screens, REST, CLI or loyalty rewards. Previously issued vouchers remain redeemable.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+				</table>
 
 				<h2><?php esc_html_e( 'Store', 'doughboss' ); ?></h2>
 				<table class="form-table" role="presentation">

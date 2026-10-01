@@ -3154,6 +3154,7 @@ class DoughBoss_REST_Controller {
 			$terms      = get_the_terms( $post->ID, DoughBoss_Post_Types::TAXONOMY );
 			$category   = ( $terms && ! is_wp_error( $terms ) ) ? $terms[0]->name : __( 'Menu', 'doughboss' );
 			$thumb      = get_the_post_thumbnail_url( $post->ID, 'medium' );
+			$image = $thumb ? $thumb : $this->menu_image_url( $post->post_title, $category );
 			$items[]    = array(
 				'id'          => $post->ID,
 				// Raw title, not get_the_title() — this is a JSON API field the
@@ -3164,7 +3165,8 @@ class DoughBoss_REST_Controller {
 				'description' => wp_strip_all_tags( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
 				'price'       => (float) get_post_meta( $post->ID, DoughBoss_Post_Types::META_PRICE, true ),
 				'type'        => get_post_meta( $post->ID, DoughBoss_Post_Types::META_TYPE, true ),
-				'image'       => $thumb ? $thumb : $this->menu_image_url( $post->post_title, $category ),
+				'image'       => $image,
+				'image_responsive' => DoughBoss_Images::responsive_for_url( $image ),
 				'category'    => $category,
 				'available'   => DoughBoss_Post_Types::is_available( $post->ID ),
 				'dietary'     => DoughBoss_Post_Types::dietary( $post->ID ),

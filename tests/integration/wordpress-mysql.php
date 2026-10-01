@@ -696,11 +696,26 @@ $settings['payment_gateway']          = 'square';
 $settings['currency_code']            = 'AUD';
 $settings['pospal_order_push_enabled'] = 0;
 $settings['square_mode']              = 'test';
+$settings['legacy_voucher_issuance_enabled'] = 0;
 $settings['square_test_app_id']       = 'sandbox-sq0idb-INTEGRATIONAPP000000';
 $settings['square_test_access_token'] = 'EAAAlocalSyntheticIntegrationToken000000';
 $settings['square_test_location_id']  = 'LINTEGRATIONLOCATION';
 $settings['square_test_webhook_key']  = 'local-synthetic-webhook-key-000000';
 $settings['square_webhook_url']       = 'https://example.invalid/wp-json/doughboss/v1/square-webhook';
+update_option( 'doughboss_settings', $settings, false );
+$paused_voucher_rows = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_vouchers" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$paused_manual_voucher = DoughBoss_Voucher::issue( array( 'type' => 'amount', 'value' => 5, 'prefix' => 'PAUSE' ) );
+$paused_campaign_voucher = DoughBoss_Voucher::claim(
+	'dough5',
+	array(
+		'customer_email' => 'pause@student.example.edu.au',
+		'customer_email_confirmation' => 'pause@student.example.edu.au',
+	)
+);
+db_integration_same( 'doughboss_voucher_issuance_paused', is_wp_error( $paused_manual_voucher ) ? $paused_manual_voucher->get_error_code() : '', 'paused manual voucher issue fails before creation' );
+db_integration_same( 'doughboss_voucher_issuance_paused', is_wp_error( $paused_campaign_voucher ) ? $paused_campaign_voucher->get_error_code() : '', 'paused active campaign cannot claim a new voucher' );
+db_integration_same( $paused_voucher_rows, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_vouchers" ), 'paused issuance does not write voucher rows' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$settings['legacy_voucher_issuance_enabled'] = 1;
 update_option( 'doughboss_settings', $settings, false );
 $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 1, 'pickup_enabled' => 1, 'is_active' => 1 ), array( 'id' => 1 ) );
 add_filter( 'pre_http_request', 'db_integration_square_http', 10, 3 );
@@ -861,6 +876,23 @@ db_integration_same( $posts_before_guard_failure, $GLOBALS['db_square_post_count
 
 // Voucher ownership survives expiry once the provider boundary is crossed.
 $GLOBALS['db_square_http_mode'] = 'network_error';
+$pause_preserved_voucher = DoughBoss_Voucher::issue( array( 'type' => 'amount', 'value' => 5, 'scope' => 'online', 'location_id' => 1, 'prefix' => 'KEEP' ) );
+db_integration_assert( ! is_wp_error( $pause_preserved_voucher ), 'existing-voucher preservation fixture issued before pause' );
+$pause_preserved_settings = DoughBoss_Settings::all();
+$pause_active_settings = $pause_preserved_settings;
+$pause_active_settings['legacy_voucher_issuance_enabled'] = 0;
+update_option( DoughBoss_Settings::OPTION_KEY, $pause_active_settings, false );
+$pause_preserved_key = hash( 'sha256', 'existing-voucher-preservation' );
+$pause_preserved_reservation = DoughBoss_Voucher::reserve( $pause_preserved_voucher['code'], 25, 'online', $pause_preserved_key, 300, 'preservation@example.invalid' );
+db_integration_assert( ! is_wp_error( $pause_preserved_reservation ), 'issued voucher can still reserve while new issuance is paused' );
+$pause_preserved_extra = array( 'idempotency_key' => 'integration-preserved-voucher', 'reservation_key' => $pause_preserved_key, 'location_id' => 1 );
+$pause_preserved_redemption = DoughBoss_Voucher::redeem( $pause_preserved_voucher['code'], 25, 'online', $pause_preserved_extra );
+$pause_preserved_replay = DoughBoss_Voucher::redeem( $pause_preserved_voucher['code'], 25, 'online', $pause_preserved_extra );
+db_integration_assert( ! is_wp_error( $pause_preserved_redemption ) && 5.0 === $pause_preserved_redemption['amount'] && $pause_preserved_redemption === $pause_preserved_replay, 'paused issuance preserves exact existing redemption and idempotent replay' );
+$pause_preserved_row = DoughBoss_Voucher::find_by_code( $pause_preserved_voucher['code'] );
+db_integration_assert( $pause_preserved_row && 'redeemed' === $pause_preserved_row->status && $pause_preserved_voucher['code'] === $pause_preserved_row->code, 'pause keeps the original voucher identity and durable redemption state' );
+db_integration_same( 1, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_voucher_redemptions WHERE voucher_id = %d", $pause_preserved_voucher['id'] ) ), 'paused existing-voucher replay keeps exactly one immutable audit record' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+update_option( DoughBoss_Settings::OPTION_KEY, $pause_preserved_settings, false );
 $voucher = DoughBoss_Voucher::issue( array( 'type' => 'amount', 'value' => 5, 'scope' => 'online', 'location_id' => 1, 'prefix' => 'IT' ) );
 db_integration_assert( ! is_wp_error( $voucher ), 'synthetic voucher is issued' );
 $voucher_key = hash( 'sha256', 'voucher-checkout' );
@@ -2666,6 +2698,36 @@ db_integration_assert( false !== strpos( $ssr_menu_html, $ssr_first_escaped ) &&
 db_integration_assert( false === strpos( $ssr_menu_html, '<b>published</b>' ) && false === strpos( $ssr_menu_html, '<em>plain</em>' ) && false === strpos( $ssr_menu_html, 'SSR hidden draft' ), 'SSR fallback escapes markup and excludes unpublished menu rows' );
 db_integration_assert( strpos( $ssr_menu_html, $ssr_first_escaped ) < strpos( $ssr_menu_html, esc_html( $ssr_second_title ) ), 'SSR fallback preserves menu order within a category' );
 db_integration_assert( false === strpos( $ssr_menu_html, 'dietary' ) && false === strpos( $ssr_menu_html, '<button' ) && false === strpos( $ssr_menu_html, '<form' ), 'SSR fallback remains browse-only without dietary claims or purchase controls' );
+
+// Real menu responses must connect the new variants, not just package them.
+$responsive_item_id = wp_insert_post( array(
+	'post_type' => DoughBoss_Post_Types::POST_TYPE, 'post_status' => 'publish', 'post_title' => 'Spinach Pie',
+) );
+update_post_meta( $responsive_item_id, DoughBoss_Post_Types::META_PRICE, '7' );
+$responsive_menu_rows = $rest_controller->get_menu()->get_data();
+$responsive_row = null;
+foreach ( $responsive_menu_rows as $responsive_menu_row ) {
+	if ( (int) $responsive_menu_row['id'] === (int) $responsive_item_id ) { $responsive_row = $responsive_menu_row; break; }
+}
+db_integration_assert( is_array( $responsive_row ) && is_array( $responsive_row['image_responsive'] ), 'real menu exposes responsive metadata for newly covered Spinach Pie' );
+db_integration_same( $responsive_row['image'], $responsive_row['image_responsive']['original'], 'real menu candidates match the selected original exactly' );
+db_integration_assert( false !== strpos( $responsive_row['image_responsive']['sources'][0]['srcset'], '/responsive/spinach-pie-480.avif 480w' ), 'real menu connects actual AVIF candidates' );
+$responsive_attachment_id = wp_insert_attachment( array( 'post_title' => 'Synthetic featured image', 'post_mime_type' => 'image/jpeg', 'guid' => 'http://doughboss.local.test/wp-content/uploads/synthetic-featured.jpg' ), false, $responsive_item_id );
+update_post_meta( $responsive_attachment_id, '_wp_attached_file', 'synthetic-featured.jpg' );
+update_post_meta( $responsive_attachment_id, '_wp_attachment_metadata', array( 'width' => 640, 'height' => 480, 'file' => 'synthetic-featured.jpg' ) );
+set_post_thumbnail( $responsive_item_id, $responsive_attachment_id );
+$responsive_featured_rows = $rest_controller->get_menu()->get_data();
+foreach ( $responsive_featured_rows as $responsive_menu_row ) {
+	if ( (int) $responsive_menu_row['id'] === (int) $responsive_item_id ) { $responsive_row = $responsive_menu_row; break; }
+}
+db_integration_assert( false !== strpos( $responsive_row['image'], 'synthetic-featured.jpg' ) && null === $responsive_row['image_responsive'], 'featured upload wins and never inherits bundled product derivatives' );
+delete_post_thumbnail( $responsive_item_id );
+wp_update_post( array( 'ID' => $responsive_item_id, 'post_title' => 'Choco Banana' ) );
+$responsive_unsupported_rows = $rest_controller->get_menu()->get_data();
+foreach ( $responsive_unsupported_rows as $responsive_menu_row ) {
+	if ( (int) $responsive_menu_row['id'] === (int) $responsive_item_id ) { $responsive_row = $responsive_menu_row; break; }
+}
+db_integration_assert( false !== strpos( $responsive_row['image'], 'choco-banana.jpg' ) && null === $responsive_row['image_responsive'], 'unsupported product preserves its original menu image' );
 
 // Leave one synthetic approved/unpaid fixture for the explicit multi-process
 // pre-order start/completion harness that the PowerShell runner launches next.

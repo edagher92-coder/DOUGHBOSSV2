@@ -168,7 +168,8 @@ class DoughBoss_Shortcodes {
 	 */
 	public function voucher_claim() {
 		$campaigns = array();
-		if ( class_exists( 'DoughBoss_Voucher' ) ) {
+		$issuance_enabled = class_exists( 'DoughBoss_Voucher' ) && DoughBoss_Settings::legacy_voucher_issuance_enabled();
+		if ( $issuance_enabled ) {
 			foreach ( DoughBoss_Voucher::campaigns() as $c ) {
 				if ( ! empty( $c['active'] ) ) {
 					$campaigns[] = $c;
@@ -180,10 +181,14 @@ class DoughBoss_Shortcodes {
 		<div class="db-app db-voucher-claim" data-doughboss-voucher-claim>
 			<div class="db-vc-card">
 				<h3 class="db-vc-title"><?php esc_html_e( 'Claim your student voucher', 'doughboss' ); ?></h3>
-				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au. We will email the code to that address and also show it here as a backup.', 'doughboss' ); ?></p>
-				<?php if ( empty( $campaigns ) ) : ?>
-					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
+				<?php if ( ! $issuance_enabled ) : ?>
+					<p class="db-vc-none"><?php esc_html_e( 'Legacy promotional vouchers are currently paused.', 'doughboss' ); ?></p>
 				<?php else : ?>
+					<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au. We will email the code to that address and also show it here as a backup.', 'doughboss' ); ?></p>
+				<?php endif; ?>
+				<?php if ( $issuance_enabled && empty( $campaigns ) ) : ?>
+					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
+				<?php elseif ( $issuance_enabled ) : ?>
 					<div class="db-vc-offers">
 						<?php foreach ( $campaigns as $c ) : ?>
 							<button type="button" class="db-vc-offer" data-campaign="<?php echo esc_attr( $c['slug'] ); ?>" aria-pressed="false">

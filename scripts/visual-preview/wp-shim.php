@@ -212,7 +212,7 @@ function doughboss_preview_render_page( $template, $ordering_open, $title ) {
 }
 
 function doughboss_preview_fixture() {
-	return array(
+	$fixture = array(
 		'menu' => array(
 			array(
 				'id' => 1001, 'name' => 'Zaatar & Cheese', 'description' => 'Sample menu description for visual review.',
@@ -245,4 +245,9 @@ function doughboss_preview_fixture() {
 			),
 		),
 	);
+	foreach ( $fixture['menu'] as &$item ) {
+		$item['image_responsive'] = DoughBoss_Images::responsive_for_url( DOUGHBOSS_PLUGIN_URL . $item['image'] );
+	}
+	unset( $item );
+	return $fixture;
 }

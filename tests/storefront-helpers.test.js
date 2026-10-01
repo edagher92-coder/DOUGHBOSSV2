@@ -223,6 +223,71 @@ function storefrontCreate(tag, attrs, children) {
 	return node;
 }
 
+function responsiveMenuItem() {
+	const prefix = 'https://example.test/plugin/public/images/';
+	return {
+		name: 'Spinach Pie & cheese', image: prefix + 'menu/real-v1/spinach-pie.jpg',
+		image_responsive: {
+			original: prefix + 'menu/real-v1/spinach-pie.jpg', width: 1080, height: 864,
+			sources: ['avif', 'webp'].map(format => ({ type: 'image/' + format,
+				srcset: [480, 800].map(width => `${prefix}responsive/spinach-pie-${width}.${format} ${width}w`).join(', ') }))
+		}
+	};
+}
+
+test('menu photographs deliver local responsive sources and a dimensioned original fallback', () => {
+	const menuPhoto = extractFunction(storefront, 'menuPhoto', { el: storefrontCreate });
+	const item = responsiveMenuItem();
+	const photo = menuPhoto(item);
+	assert.equal(photo.attributes.style, undefined, 'no parallel original CSS background download');
+	assert.equal(photo.className, 'db-card-img');
+	assert.equal(photo.children[0].tag, 'picture');
+	const [avif, webp, image] = photo.children[0].children;
+	assert.equal(avif.attributes.type, 'image/avif');
+	assert.equal(webp.attributes.type, 'image/webp');
+	assert.equal(avif.attributes.srcset, item.image_responsive.sources[0].srcset);
+	assert.match(avif.attributes.sizes, /max-width: 600px/);
+	assert.equal(image.tag, 'img');
+	assert.equal(image.attributes.src, item.image);
+	assert.equal(image.attributes.alt, item.name);
+	assert.equal(image.attributes.width, '1080');
+	assert.equal(image.attributes.height, '864');
+	assert.equal(image.attributes.loading, 'lazy');
+	assert.equal(image.attributes.decoding, 'async');
+});
+
+test('menu photographs retain originals for absent, unrelated or malformed candidates', () => {
+	const menuPhoto = extractFunction(storefront, 'menuPhoto', { el: storefrontCreate });
+	const mutations = [
+		item => { delete item.image_responsive; },
+		item => { item.image_responsive = null; },
+		item => { item.image = 'https://uploads.example.test/featured.jpg'; },
+		item => { item.image_responsive.original += '?changed'; },
+		item => { item.image_responsive.width = '1080'; },
+		item => { item.image_responsive.height = 0; },
+		item => { item.image_responsive.sources = []; },
+		item => { item.image_responsive.sources = [null]; },
+		item => { item.image_responsive.sources[0].type = 'image/svg+xml'; },
+		item => { item.image_responsive.sources[1].type = 'image/avif'; },
+		item => { item.image_responsive.sources[0].srcset = ''; },
+		item => { item.image_responsive.sources[0].srcset = 42; },
+		item => { item.image_responsive.sources[0].srcset = 'https://other.example.test/public/images/responsive/spinach-pie-480.avif 480w'; },
+		item => { item.image_responsive.sources[0].srcset = 'https://example.test/plugin/public/images/responsive/../private-480.avif 480w'; },
+		item => { item.image_responsive.sources[0].srcset = 'https://example.test/plugin/public/images/responsive/spinach-pie-480.webp 480w'; },
+		item => { item.image_responsive.sources[0].srcset = 'https://example.test/plugin/public/images/responsive/spinach-pie-480.avif 800w'; },
+		item => { item.image_responsive.width = 479; },
+		item => { item.image_responsive.sources[0].srcset += ', https://example.test/plugin/public/images/responsive/spinach-pie-480.avif 480w'; },
+		item => { item.image_responsive.sources[0].srcset += ', '; }
+	];
+	for (const mutate of mutations) {
+		const item = responsiveMenuItem();
+		mutate(item);
+		const photo = menuPhoto(item);
+		assert.equal(photo.children.length, 0, 'invalid data never partly enhances');
+		assert.equal(photo.attributes.style, 'background-image:url(' + item.image + ')', 'original delivery is preserved');
+	}
+});
+
 function menuEnhancementHarness(overrides = {}) {
 	const root = storefrontElement();
 	const fallback = storefrontCreate('div', { 'data-doughboss-menu-fallback': '' });

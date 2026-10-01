@@ -87,3 +87,26 @@ db_test( 'responsive renderer keeps escaped original markup and rejects non-bund
 	$escaped = DoughBoss_Images::picture( 'doughboss-feast-real-v1.jpg', $image, '100vw" onload="bad' );
 	assert_false( false !== strpos( $escaped, ' onload="bad' ), 'sizes cannot inject an attribute' );
 } );
+
+db_test( 'menu responsive data binds to an exact supported original URL', function () {
+	$original = DOUGHBOSS_PLUGIN_URL . 'public/images/menu/real-v1/spinach-pie.jpg';
+	$data = DoughBoss_Images::responsive_for_url( $original );
+	assert_true( is_array( $data ), 'newly covered pie exposes delivery candidates' );
+	assert_same( $original, $data['original'], 'selected original is bound exactly' );
+	$size = getimagesize( DOUGHBOSS_PLUGIN_DIR . 'public/images/menu/real-v1/spinach-pie.jpg' );
+	assert_same( array( $size[0], $size[1] ), array( $data['width'], $data['height'] ), 'original dimensions are explicit' );
+	assert_same( array( 'image/avif', 'image/webp' ), array_column( $data['sources'], 'type' ), 'both modern delivery formats are present in priority order' );
+	foreach ( $data['sources'] as $source ) {
+		assert_true( false !== strpos( $source['srcset'], '/public/images/responsive/spinach-pie-480.' ), 'new variants are connected to public presentation' );
+	}
+	foreach ( array(
+		null, 42, '', 'https://uploads.example.test/spinach-pie.jpg',
+		'https://other.example.test/public/images/menu/real-v1/spinach-pie.jpg',
+		DOUGHBOSS_PLUGIN_URL . 'public/images/menu/real-v1/choco-banana.jpg',
+		DOUGHBOSS_PLUGIN_URL . 'public/images/../private.jpg',
+		DOUGHBOSS_PLUGIN_URL . 'public/images/menu/real-v1/Spinach-Pie.jpg',
+		$original . '?version=1', $original . '#fragment',
+	) as $unsupported ) {
+		assert_same( null, DoughBoss_Images::responsive_for_url( $unsupported ), 'non-exact, external, unsupported and featured-image URLs keep their fallback' );
+	}
+} );

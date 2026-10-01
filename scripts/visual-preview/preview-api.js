@@ -42,6 +42,17 @@
 	var menu = fixture.menu.map(function (item) {
 		var copy = Object.assign({}, item);
 		copy.image = asset(item.image);
+		if (item.image_responsive) {
+			copy.image_responsive = Object.assign({}, item.image_responsive, {
+				original: asset(item.image_responsive.original),
+				sources: item.image_responsive.sources.map(function (source) {
+					return { type: source.type, srcset: source.srcset.split(',').map(function (candidate) {
+						var parts = candidate.trim().split(' ');
+						return asset(parts[0]) + ' ' + parts[1];
+					}).join(', ') };
+				})
+			});
+		}
 		return copy;
 	});
 

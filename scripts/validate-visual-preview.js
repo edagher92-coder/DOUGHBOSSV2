@@ -71,6 +71,21 @@ function validateSrcset(srcset, page) {
     previousWidth = Number(parsed[2]);
   }
 }
+const fixtureScript = fs.readFileSync(path.join(output, 'preview/menu-options.js'), 'utf8');
+const fixtureMatch = fixtureScript.match(/^window\.DoughBossPreviewOptions = (.+);\s*$/);
+assert.ok(fixtureMatch, 'preview fixture remains a JSON assignment, not executable logic');
+const fixture = JSON.parse(fixtureMatch[1]);
+const responsiveItems = fixture.menu.filter(item => item.image_responsive);
+assert.equal(responsiveItems.length, 3, 'preview covers responsive menu originals and unsupported fallbacks');
+assert.ok(responsiveItems.some(item => item.name === 'Spinach Pie'), 'new photograph coverage reaches the preview');
+for (const item of responsiveItems) {
+  const data = item.image_responsive;
+  assert.equal(data.original, manifest.base_path + item.image, 'preview candidates bind to the selected original');
+  localReference(data.original, 'paused.html');
+  assert.ok(Number.isInteger(data.width) && data.width > 0 && Number.isInteger(data.height) && data.height > 0);
+  assert.deepEqual(data.sources.map(source => source.type), ['image/avif', 'image/webp']);
+  for (const source of data.sources) validateSrcset(source.srcset, 'paused.html');
+}
 for (const page of pages) {
   const html = fs.readFileSync(path.join(output, page), 'utf8');
   assert.match(html, /name="robots" content="noindex,\s*nofollow(?:,[a-z]+)*"/);
