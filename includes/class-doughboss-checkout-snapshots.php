@@ -37,6 +37,12 @@ class DoughBoss_Checkout_Snapshots {
 	 */
 	public static function store( $checkout_key, array $payload, $expires_at = '' ) {
 		global $wpdb;
+		if ( isset( $payload['order'] ) && is_array( $payload['order'] ) ) {
+			$basis = DoughBoss_Order::accounting_basis_from_payload( $payload['order'] );
+			if ( is_wp_error( $basis ) ) {
+				return $basis;
+			}
+		}
 		$checkout_key = self::stable_key( $checkout_key );
 		if ( '' === $checkout_key ) {
 			return new WP_Error( 'doughboss_snapshot_key', __( 'The secure order snapshot is missing its checkout key.', 'doughboss' ), array( 'status' => 400 ) );
@@ -150,6 +156,9 @@ class DoughBoss_Checkout_Snapshots {
 		}
 		$payload = json_decode( (string) $row['payload_json'], true );
 		if ( ! is_array( $payload ) || ! hash_equals( (string) $row['payload_hash'], hash( 'sha256', (string) $row['payload_json'] ) ) ) {
+			return null;
+		}
+		if ( isset( $payload['order'] ) && is_array( $payload['order'] ) && is_wp_error( DoughBoss_Order::accounting_basis_from_payload( $payload['order'] ) ) ) {
 			return null;
 		}
 		$row['payload'] = $payload;

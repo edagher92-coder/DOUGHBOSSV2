@@ -1,5 +1,99 @@
 <?php
+
+if ( ! function_exists( 'wp_json_encode' ) ) {
+	/** @return string|false */
+	function wp_json_encode( $data ) {
+		return json_encode( $data );
+	}
+}
+
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-order.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-dashboard.php';
+
+db_test( 'Order accounting basis codec preserves only canonical historical facts', function () {
+	$basis = array(
+		'version'          => 1,
+		'tax_inclusive'    => true,
+		'tax_rate'         => 10,
+		'discount_policy'  => 'goods_before_tax',
+		'delivery_taxable' => true,
+	);
+	$normalized = array(
+		'version'          => 1,
+		'tax_inclusive'    => true,
+		'tax_rate'         => 10.0,
+		'discount_policy'  => 'goods_before_tax',
+		'delivery_taxable' => true,
+	);
+
+	assert_same( $normalized, DoughBoss_Order::normalize_accounting_basis( $basis ), 'the exact five accounting fields normalise in literal order' );
+	assert_same( false, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_inclusive' => false, 'delivery_taxable' => false ) ) )['tax_inclusive'], 'exclusive policy accepts matching boolean tax and delivery flags' );
+	assert_same( $normalized, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => 10.0 ) ) ), 'integer and float rates normalise identically' );
+	assert_same( 0.0, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => -0.0 ) ) )['tax_rate'], 'negative zero normalises to the same zero rate' );
+	assert_same( 7.125, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => 7.125 ) ) )['tax_rate'], 'fractional rates retain their exact supplied precision' );
+	assert_same( 999999.9999, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => 999999.9999 ) ) )['tax_rate'], 'the codec imposes no arbitrary maximum tax rate' );
+
+	$invalid_bases = array(
+		array(),
+		array_diff_key( $basis, array( 'delivery_taxable' => true ) ),
+		array_merge( $basis, array( 'extra' => true ) ),
+		array_merge( $basis, array( 'version' => 2 ) ),
+		array_merge( $basis, array( 'version' => '1' ) ),
+		array_merge( $basis, array( 'version' => true ) ),
+		array_merge( $basis, array( 'tax_inclusive' => 'true' ) ),
+		array_merge( $basis, array( 'delivery_taxable' => false ) ),
+		array_merge( $basis, array( 'discount_policy' => 'delivery_after_tax' ) ),
+		array_merge( $basis, array( 'tax_rate' => '10' ) ),
+		array_merge( $basis, array( 'tax_rate' => true ) ),
+		array_merge( $basis, array( 'tax_rate' => -0.01 ) ),
+		array_merge( $basis, array( 'tax_rate' => INF ) ),
+		array_merge( $basis, array( 'tax_rate' => NAN ) ),
+	);
+	foreach ( $invalid_bases as $invalid_basis ) {
+		assert_true( is_wp_error( DoughBoss_Order::normalize_accounting_basis( $invalid_basis ) ), 'missing, extra, version, policy, mode, and non-finite rate facts fail closed' );
+	}
+
+	$encoded = DoughBoss_Order::encode_accounting_basis( $basis );
+	assert_same( '{"version":1,"tax_inclusive":true,"tax_rate":10,"discount_policy":"goods_before_tax","delivery_taxable":true}', $encoded, 'canonical encoding preserves the frozen literal key order' );
+	assert_same( $encoded, DoughBoss_Order::encode_accounting_basis( array_merge( $basis, array( 'tax_rate' => 10.0 ) ) ), 'integer and float rate encodings are canonical equivalents' );
+	assert_same( $normalized, DoughBoss_Order::decode_accounting_basis( $encoded ), 'canonical stored JSON decodes to the normalised object' );
+	assert_same( null, DoughBoss_Order::decode_accounting_basis( null ), 'only SQL NULL stored basis remains legacy unknown' );
+
+	$noncanonical_stored = array(
+		'',
+		' ',
+		'null',
+		'true',
+		'10',
+		'"basis"',
+		'[]',
+		'{}',
+		'{',
+		'{"version":1,"tax_inclusive":true,"tax_rate":10,"tax_rate":10,"discount_policy":"goods_before_tax","delivery_taxable":true}',
+		' ' . $encoded,
+		'{"tax_rate":10,"version":1,"tax_inclusive":true,"discount_policy":"goods_before_tax","delivery_taxable":true}',
+	);
+	foreach ( $noncanonical_stored as $stored ) {
+		assert_true( is_wp_error( DoughBoss_Order::decode_accounting_basis( $stored ) ), 'non-NULL scalar, malformed, duplicate, whitespace, and noncanonical stored JSON fails closed' );
+	}
+
+	assert_same( null, DoughBoss_Order::accounting_basis_from_payload( array() ), 'a payload with no basis key remains unknown' );
+	assert_true( is_wp_error( DoughBoss_Order::accounting_basis_from_payload( array( 'accounting_basis' => null ) ) ), 'an explicit NULL transport basis is invalid rather than legacy unknown' );
+	assert_same( $normalized, DoughBoss_Order::accounting_basis_from_payload( array( 'accounting_basis' => $basis ) ), 'a present valid transport basis normalises' );
+	assert_same( $normalized, DoughBoss_Order::accounting_basis_from_order( (object) array( 'accounting_basis_json' => $encoded ) ), 'a canonical persisted order basis is available for snapshots' );
+	assert_same( null, DoughBoss_Order::accounting_basis_from_order( (object) array() ), 'an absent legacy order field remains unknown' );
+	assert_true( is_wp_error( DoughBoss_Order::accounting_basis_from_order( (object) array( 'accounting_basis_json' => '{}' ) ) ), 'a malformed non-NULL persisted basis is never legacy unknown' );
+
+	$known_order   = (object) array( 'accounting_basis_json' => $encoded );
+	$legacy_order  = (object) array( 'accounting_basis_json' => null );
+	$malformed_order = (object) array( 'accounting_basis_json' => '{}' );
+	assert_true( DoughBoss_Order::accounting_basis_matches_payload( $known_order, array( 'accounting_basis' => $basis ) ), 'known canonical order and payload basis match' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $known_order, array() ), 'known order basis cannot match an unknown payload' );
+	assert_true( DoughBoss_Order::accounting_basis_matches_payload( $legacy_order, array() ), 'legacy unknown order and absent payload basis match' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $legacy_order, array( 'accounting_basis' => $basis ) ), 'legacy unknown order cannot match a newly supplied basis' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $known_order, array( 'accounting_basis' => null ) ), 'explicit NULL payload basis holds rather than matching' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $malformed_order, array( 'accounting_basis' => $basis ) ), 'malformed persisted basis holds rather than matching' );
+} );
 
 // Synthetic dashboard figures must never masquerade as connected provider data.
 $dashboard_original_settings = get_option( 'doughboss_settings', array() );

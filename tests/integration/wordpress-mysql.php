@@ -119,11 +119,11 @@ function db_integration_capture_order_created( $order_id, $data ) {
 }
 
 /** Build one durable unpaid pre-order request through the real order writer. */
-function db_integration_create_preorder_request( $seed, $total = 14.00 ) {
+function db_integration_create_preorder_request( $seed, $total = 14.00, $accounting_basis = null ) {
 	$seed  = sanitize_key( (string) $seed );
 	$total = (float) $total;
 	return DoughBoss_Order::create(
-		array(
+		array_filter( array(
 			'checkout_key'   => hash( 'sha256', 'preorder-request|' . $seed ),
 			'order_source'   => 'preorder_request',
 			'order_type'     => 'pickup',
@@ -141,7 +141,10 @@ function db_integration_create_preorder_request( $seed, $total = 14.00 ) {
 			'voucher_code'   => '',
 			'payment_status' => 'unpaid',
 			'payment_method' => '',
-		),
+			'accounting_basis' => $accounting_basis,
+		), static function ( $value, $key ) {
+			return 'accounting_basis' !== $key || null !== $value;
+		}, ARRAY_FILTER_USE_BOTH ),
 		array(
 			array(
 				'item_id'    => 9700 + (int) substr( hash( 'sha256', $seed ), 0, 3 ),
@@ -508,6 +511,34 @@ function db_integration_stripe_checkout_fixture_params( array $fixture, $idempot
 		),
 		$overrides
 	);
+}
+
+/** Prepare one Square accounting fixture through the existing native REST seam. */
+function db_integration_accounting_square_fixture( $seed ) {
+	$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'IntegrationBasisSquare' . substr( hash( 'sha256', $seed ), 0, 24 );
+	$cart = new DoughBoss_Cart();
+	$cart->clear();
+	$cart->add( array( 'type' => 'menu', 'item_id' => 9851, 'name' => 'Synthetic basis item', 'unit_price' => 12.00, 'quantity' => 1 ) );
+	$controller = new DoughBoss_REST_Controller( $cart );
+	$params = array( 'payment_attempt_key' => $seed . '-attempt-0001', 'customer_name' => 'Basis Customer', 'customer_email' => 'basis@example.invalid', 'customer_phone' => '0400000001', 'address' => '', 'notes' => 'Historical basis fixture', 'order_type' => 'pickup', 'location_id' => 1, 'source_id' => 'cnon:basis-synthetic', 'verification_token' => 'verify:basis-synthetic' );
+	$result = $controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $params ) );
+	$data = $result instanceof WP_REST_Response ? $result->get_data() : array();
+	$reference = isset( $data['payment_intent'] ) ? (string) $data['payment_intent'] : '';
+	$attempt = '' !== $reference ? DoughBoss_Payment_Attempts::find_by_provider_reference( $reference ) : null;
+	$snapshot = is_array( $attempt ) ? DoughBoss_Checkout_Snapshots::find( $attempt['checkout_key'] ) : null;
+	db_integration_assert( $result instanceof WP_REST_Response && is_array( $attempt ) && is_array( $snapshot ), 'Square ' . $seed . ' has one native attempt and snapshot' );
+	return array( 'cart' => $cart, 'controller' => $controller, 'params' => $params, 'session' => $reference, 'attempt' => $attempt, 'snapshot' => $snapshot );
+}
+
+/** Seed the exact pre-basis payload shape without changing any payment identity. */
+function db_integration_seed_legacy_basis_snapshot( array $snapshot ) {
+	global $wpdb;
+	$payload = $snapshot['payload'];
+	unset( $payload['order']['accounting_basis'] );
+	$json = wp_json_encode( $payload );
+	$updated = $wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_json' => $json, 'payload_hash' => hash( 'sha256', $json ) ), array( 'checkout_key' => $snapshot['checkout_key'] ), array( '%s', '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	db_integration_same( 1, $updated, 'legacy fixture removes only previously unavailable basis metadata' );
+	return DoughBoss_Checkout_Snapshots::find( $snapshot['checkout_key'] );
 }
 
 /** Keep a confirmation fixture to one intercepted customer-mail attempt. */
@@ -3743,6 +3774,292 @@ foreach ( $responsive_unsupported_rows as $responsive_menu_row ) {
 }
 db_integration_assert( false !== strpos( $responsive_row['image'], 'choco-banana.jpg' ) && null === $responsive_row['image_responsive'], 'unsupported product preserves its original menu image' );
 
+// Accounting-basis migration/recovery proof; providers and mail stay intercepted.
+$basis_original_settings = DoughBoss_Settings::all();
+$basis_original_cookie = isset( $_COOKIE[ DoughBoss_Cart::COOKIE ] ) ? $_COOKIE[ DoughBoss_Cart::COOKIE ] : null;
+$basis_original_table_cookie = isset( $_COOKIE[ DoughBoss_Table_QR::COOKIE ] ) ? $_COOKIE[ DoughBoss_Table_QR::COOKIE ] : null;
+$basis_original_remote = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : null;
+unset( $_COOKIE[ DoughBoss_Table_QR::COOKIE ] );
+add_filter( 'pre_http_request', 'db_integration_square_http', 10, 3 );
+add_filter( 'pre_http_request', 'db_integration_stripe_http', 10, 3 );
+add_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
+$GLOBALS['db_square_http_mode'] = 'success';
+add_filter( 'doughboss_preorder_payment_page_url', 'db_integration_preorder_payment_page_url', 10 );
+$basis_settings = array_merge( $basis_original_settings, array( 'ordering_open' => 1, 'enable_pickup' => 1, 'payments_enabled' => 1, 'pospal_order_push_enabled' => 0, 'currency_code' => 'AUD', 'gst_inclusive' => 1, 'tax_rate' => 10, 'stripe_mode' => 'test', 'stripe_test_sk' => 'sk_test_localSyntheticIntegrationOnly000000', 'stripe_test_whsec' => 'whsec_localSyntheticIntegrationOnly000000', 'square_mode' => 'test', 'square_test_app_id' => 'sandbox-sq0idb-INTEGRATIONAPP000000', 'square_test_access_token' => 'EAAAlocalSyntheticIntegrationToken000000', 'square_test_location_map' => array( 'revesby' => 'LINTEGRATIONLOCATION', 'bankstown' => 'LINTEGRATIONBANKSTOWN', 'roselands' => 'LINTEGRATIONROSELANDS' ), 'preorder_approver_user_id' => $preorder_approver_id ) );
+$basis_case = 0;
+foreach ( array( 'stripe', 'square' ) as $basis_provider ) {
+	foreach ( array( true, false ) as $basis_inclusive ) {
+		foreach ( array( false, true ) as $basis_legacy ) {
+			++$basis_case;
+			$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 180 + $basis_case );
+			$basis_settings['payment_gateway'] = $basis_provider;
+			$basis_settings['gst_inclusive'] = $basis_inclusive ? 1 : 0;
+			$basis_settings['tax_rate'] = 10;
+			update_option( DoughBoss_Settings::OPTION_KEY, $basis_settings, false );
+			$basis_seed = 'basis-' . $basis_provider . '-' . $basis_case;
+			$fixture = 'stripe' === $basis_provider ? db_integration_prepare_stripe_rest_fixture( $basis_seed, 9850 + $basis_case, 12.00 ) : db_integration_accounting_square_fixture( $basis_seed );
+			if ( ! is_array( $fixture['snapshot'] ) || ! is_array( $fixture['attempt'] ) ) { continue; }
+			$basis_snapshot = $fixture['snapshot'];
+			$captured_basis = DoughBoss_Order::accounting_basis_from_payload( $basis_snapshot['payload']['order'] );
+			db_integration_same( $basis_inclusive, is_array( $captured_basis ) ? $captured_basis['tax_inclusive'] : null, $basis_seed . ' captures the exact inclusive/exclusive mode' );
+			db_integration_same( 10.0, is_array( $captured_basis ) ? $captured_basis['tax_rate'] : null, $basis_seed . ' captures the rate used by server pricing' );
+			$public_cart = $fixture['cart']->to_array();
+			$old_totals = array();
+			foreach ( array( 'subtotal', 'discount', 'voucher_code', 'tax', 'tax_inclusive', 'delivery_fee', 'total', 'item_count' ) as $public_total_key ) { $old_totals[ $public_total_key ] = $public_cart['totals'][ $public_total_key ]; }
+			db_integration_same( wp_json_encode( array( 'items' => $fixture['cart']->get_lines(), 'totals' => $old_totals ) ), wp_json_encode( $public_cart ), $basis_seed . ' keeps the original public cart JSON/HMAC input bytes' );
+			if ( $basis_legacy ) { $basis_snapshot = db_integration_seed_legacy_basis_snapshot( $basis_snapshot ); }
+			// This fractional rate drift leaves every existing rounded money/HMAC fact unchanged.
+			$basis_settings['tax_rate'] = 10.001;
+			update_option( DoughBoss_Settings::OPTION_KEY, $basis_settings, false );
+			$posts_before_basis_retry = $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'];
+			$retry = $fixture['controller']->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $fixture['params'] ) );
+			$retried_snapshot = DoughBoss_Checkout_Snapshots::find( $fixture['attempt']['checkout_key'] );
+			$retried_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $fixture['session'] );
+			db_integration_assert( $retry instanceof WP_REST_Response, $basis_seed . ' unchanged-price retry retains its original contract' );
+			db_integration_same( $posts_before_basis_retry, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], $basis_seed . ' retry provisions no extra payment or Session' );
+			db_integration_same( $basis_snapshot['payload_json'], is_array( $retried_snapshot ) ? $retried_snapshot['payload_json'] : '', $basis_seed . ' retains exact immutable snapshot bytes' );
+			db_integration_same( $basis_snapshot['payload_hash'], is_array( $retried_snapshot ) ? $retried_snapshot['payload_hash'] : '', $basis_seed . ' retains exact snapshot hash' );
+			foreach ( array( 'id', 'checkout_key', 'provider_reference' ) as $identity_field ) { db_integration_same( $fixture['attempt'][ $identity_field ], is_array( $retried_attempt ) ? $retried_attempt[ $identity_field ] : null, $basis_seed . ' retains original ' . $identity_field ); }
+			$changed_params = $fixture['params'];
+			$changed_params['customer_email'] = 'changed.basis@example.invalid';
+			$changed_retry = $fixture['controller']->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $changed_params ) );
+			db_integration_assert( is_wp_error( $changed_retry ), $basis_seed . ' denies changed non-basis facts instead of replacing the contract' );
+			db_integration_same( $posts_before_basis_retry, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], $basis_seed . ' changed contacts cannot create another payment identity' );
+			$checkout_params = db_integration_stripe_checkout_fixture_params( $fixture, $basis_seed . '-checkout-0001' );
+			$paid_result = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+			$paid_id = DoughBoss_Order::find_id_by_payment_intent( 'stripe' === $basis_provider ? $fixture['pi'] : $fixture['session'] );
+			$paid_order = $paid_id ? DoughBoss_Order::get( $paid_id ) : null;
+			db_integration_assert( $paid_result instanceof WP_REST_Response && $paid_order && 'paid' === $paid_order->payment_status, $basis_seed . ' recovers one paid order on the original payment' );
+			db_integration_same( $basis_legacy ? null : DoughBoss_Order::encode_accounting_basis( $captured_basis ), $paid_order ? $paid_order->accounting_basis_json : 'missing', $basis_seed . ' paid recovery copies known basis or preserves unknown legacy' );
+			$completed_snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $fixture['attempt']['checkout_key'] );
+			if ( ! $completed_snapshot ) { $completed_snapshot = DoughBoss_Checkout_Snapshots::find( $fixture['attempt']['checkout_key'] ); }
+			db_integration_same( $basis_snapshot['payload_hash'], is_array( $completed_snapshot ) ? $completed_snapshot['payload_hash'] : '', $basis_seed . ' fulfillment does not rewrite historical snapshot facts' );
+		}
+	}
+}
+
+// Approval request capture must ignore client-forged basis and survive settings drift.
+foreach ( array( 'stripe', 'square' ) as $approved_basis_provider ) {
+foreach ( array( true, false ) as $approved_basis_inclusive ) {
+	++$basis_case;
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 180 + $basis_case );
+	$basis_settings['ordering_open'] = 0;
+	$basis_settings['after_hours_preorders_enabled'] = 1;
+	$basis_settings['payment_gateway'] = $approved_basis_provider;
+	$basis_settings['gst_inclusive'] = $approved_basis_inclusive ? 1 : 0;
+	$basis_settings['tax_rate'] = 10;
+	update_option( DoughBoss_Settings::OPTION_KEY, $basis_settings, false );
+	$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'IntegrationBasisApproved' . $basis_case . 'LongToken';
+	$basis_cart = new DoughBoss_Cart();
+	$basis_cart->clear();
+	$basis_cart->add( array( 'type' => 'menu', 'item_id' => 9860 + $basis_case, 'name' => 'Synthetic approved basis', 'unit_price' => 12.00, 'quantity' => 1 ) );
+	$basis_totals = $basis_cart->totals();
+	$basis_controller = new DoughBoss_REST_Controller( $basis_cart );
+	$basis_request_params = array( 'idempotency_key' => 'approved-basis-request-' . $basis_case . '-0001', 'customer_name' => 'Synthetic Approval', 'customer_email' => 'approval.basis@example.invalid', 'customer_phone' => '0400000001', 'notes' => 'Synthetic pricing basis', 'location_id' => 1, 'accounting_basis' => array( 'version' => 999, 'tax_rate' => 99 ), 'accounting_basis_json' => '{"forged":true}' );
+	$basis_request_result = $basis_controller->preorder_request( db_integration_rest_request( '/doughboss/v1/preorder-request', $basis_request_params ) );
+	$basis_request_data = $basis_request_result instanceof WP_REST_Response ? $basis_request_result->get_data() : array();
+	$basis_request_id = isset( $basis_request_data['order_number'] ) ? (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . $wpdb->prefix . 'doughboss_orders WHERE order_number = %s', $basis_request_data['order_number'] ) ) : 0; // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+	$basis_request_order = $basis_request_id ? DoughBoss_Order::get( $basis_request_id ) : null;
+	db_integration_assert( $basis_request_order && 'unpaid' === $basis_request_order->payment_status, 'approved basis fixture is an unpaid server-created request' );
+	db_integration_same( DoughBoss_Order::encode_accounting_basis( $basis_totals['accounting_basis'] ), $basis_request_order ? $basis_request_order->accounting_basis_json : '', 'approval request ignores forged browser basis and persists the server calculation' );
+	if ( ! $basis_request_order ) { continue; }
+	$basis_decision = DoughBoss_Preorder_Approval::decide( $basis_request_id, 'approve', $preorder_approver_id, 'Integration Approver', 'approved-basis-decision-' . $basis_case . '-0001', '', (int) $basis_request_order->version );
+	$basis_token = is_array( $basis_decision ) && isset( $basis_decision['capability_token'] ) ? $basis_decision['capability_token'] : '';
+	$basis_original_fingerprint = DoughBoss_Preorder_Approval::fingerprint_request( $basis_request_id );
+	$basis_different = $basis_totals['accounting_basis'];
+	$basis_different['tax_rate'] = 10.001;
+	foreach ( array( null, '', 'null', '{"version":99}', DoughBoss_Order::encode_accounting_basis( $basis_different ) ) as $basis_tamper ) {
+		$wpdb->update( $wpdb->prefix . 'doughboss_orders', array( 'accounting_basis_json' => $basis_tamper ), array( 'id' => $basis_request_id ), array( '%s' ), array( '%d' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$basis_posts_before_tamper = $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'];
+		$basis_tampered_start = $basis_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', array( 'request_id' => $basis_request_id, 'token' => $basis_token, 'payment_attempt_key' => 'basis-tamper-0001', 'source_id' => 'cnon:basis-tamper', 'verification_token' => 'verify:basis-tamper' ) ) );
+		db_integration_assert( is_wp_error( $basis_tampered_start ), 'missing, malformed or changed recorded basis cannot authorize approved payment' );
+		db_integration_same( $basis_posts_before_tamper, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], 'basis tampering is held before any provider creation' );
+		db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $basis_request_id ), 'tampered request cannot leak a kitchen fulfillment' );
+	}
+	$wpdb->update( $wpdb->prefix . 'doughboss_orders', array( 'accounting_basis_json' => $basis_request_order->accounting_basis_json ), array( 'id' => $basis_request_id ), array( '%s' ), array( '%d' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	db_integration_same( $basis_original_fingerprint, DoughBoss_Preorder_Approval::fingerprint_request( $basis_request_id ), 'restoring exact original facts restores the same fingerprint, not a new approval' );
+	$basis_settings['tax_rate'] = 25;
+	$basis_settings['gst_inclusive'] = $approved_basis_inclusive ? 0 : 1;
+	update_option( DoughBoss_Settings::OPTION_KEY, $basis_settings, false );
+	$basis_start = $basis_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', array( 'request_id' => $basis_request_id, 'token' => $basis_token, 'payment_attempt_key' => 'basis-approved-' . $basis_case . '-0001', 'source_id' => 'cnon:basis-approved', 'verification_token' => 'verify:basis-approved' ) ) );
+	$basis_start_data = $basis_start instanceof WP_REST_Response ? $basis_start->get_data() : array();
+	$basis_session = isset( $basis_start_data['checkout_session'] ) ? $basis_start_data['checkout_session'] : '';
+	$basis_approved_snapshot = is_array( $basis_decision ) ? DoughBoss_Checkout_Snapshots::find( $basis_decision['payment_checkout_key'] ) : null;
+	db_integration_same( DoughBoss_Order::encode_accounting_basis( $basis_totals['accounting_basis'] ), DoughBoss_Order::encode_accounting_basis( is_array( $basis_approved_snapshot ) && isset( $basis_approved_snapshot['payload']['order']['accounting_basis'] ) ? $basis_approved_snapshot['payload']['order']['accounting_basis'] : null ), 'approved payment snapshot retains captured canonical basis facts after mode/rate drift' );
+	if ( 'stripe' === $approved_basis_provider && is_array( $basis_approved_snapshot ) && '' !== $basis_session ) {
+		$basis_bad_fulfillment = $basis_approved_snapshot['payload']['order'];
+		$basis_bad_fulfillment['payment_status'] = 'paid';
+		$basis_bad_fulfillment['payment_method'] = 'stripe';
+		$basis_bad_fulfillment['payment_intent_id'] = $GLOBALS['db_stripe_sessions'][ $basis_session ]['payment_intent'];
+		unset( $basis_bad_fulfillment['accounting_basis'] );
+		$basis_rows_before_release = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_orders' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$basis_items_before_release = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_order_items' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$basis_bad_release = DoughBoss_Order::create( $basis_bad_fulfillment, $basis_approved_snapshot['payload']['lines'] );
+		db_integration_assert( is_wp_error( $basis_bad_release ), 'known-basis approval rejects an unknown-basis paid fulfillment' );
+		db_integration_same( $basis_rows_before_release, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_orders' ), 'basis release mismatch rolls back the entire order insert' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		db_integration_same( $basis_items_before_release, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_order_items' ), 'basis release mismatch leaves no partial items' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	}
+	$basis_complete = $basis_controller->preorder_payment_complete( db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', array( 'request_id' => $basis_request_id, 'token' => $basis_token, 'session_id' => $basis_session ) ) );
+	$basis_final_id = DoughBoss_Order::find_id_by_source_request( $basis_request_id );
+	$basis_final_order = $basis_final_id ? DoughBoss_Order::get( $basis_final_id ) : null;
+	db_integration_assert( $basis_complete instanceof WP_REST_Response && $basis_final_order && 'paid' === $basis_final_order->payment_status, 'approved historical basis payment produces one verified paid fulfillment' );
+	db_integration_same( $basis_request_order->accounting_basis_json, $basis_final_order ? $basis_final_order->accounting_basis_json : '', 'paid release preserves the original basis bytes, not current settings' );
+}
+}
+
+// Exact pre-basis approved Stripe/Square rows retain the original fingerprint,
+// approval revision, checkout key, snapshot bytes and provider identity. A
+// corrupted durable snapshot is held before it can mint another payment.
+foreach ( array( 'stripe', 'square' ) as $legacy_approved_provider ) {
+	$_SERVER['REMOTE_ADDR'] = '198.51.100.' . ( 'stripe' === $legacy_approved_provider ? 71 : 72 );
+	$basis_settings['payment_gateway'] = $legacy_approved_provider;
+	update_option( DoughBoss_Settings::OPTION_KEY, $basis_settings, false );
+	$legacy_approved_created = db_integration_create_preorder_request( 'legacy-approved-' . $legacy_approved_provider, 18.00 );
+	$legacy_approved_request_id = is_array( $legacy_approved_created ) ? (int) $legacy_approved_created['order_id'] : 0;
+	$legacy_approved_pending = $legacy_approved_request_id ? DoughBoss_Preorder_Approval::ensure_pending( $legacy_approved_request_id ) : new WP_Error( 'integration_legacy_approved_fixture' );
+	$legacy_approved_request = $legacy_approved_request_id ? DoughBoss_Order::get( $legacy_approved_request_id ) : null;
+	$legacy_approved = $legacy_approved_request && ! is_wp_error( $legacy_approved_pending )
+		? DoughBoss_Preorder_Approval::decide( $legacy_approved_request_id, 'approve', $preorder_approver_id, 'Synthetic Legacy Approver', 'legacy-approved-decision-' . $legacy_approved_provider . '-0001', '', (int) $legacy_approved_request->version )
+		: new WP_Error( 'integration_legacy_approved_fixture' );
+	// Recreate the f7e432a4 pre-basis fingerprint projection literally. This
+	// intentionally does not call the current fingerprint helper or include an
+	// accounting-basis field, so NULL/extra metadata changes fail this proof.
+	$legacy_old_fingerprint_items = (array) $wpdb->get_results( $wpdb->prepare( 'SELECT id,item_id,name,size,toppings,quantity,unit_price,line_total FROM ' . $wpdb->prefix . 'doughboss_order_items WHERE order_id = %d ORDER BY id ASC', $legacy_approved_request_id ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+	$legacy_old_fingerprint_projection = array();
+	foreach ( array( 'id', 'order_number', 'version', 'location_id', 'status', 'order_type', 'order_source', 'customer_name', 'customer_email', 'customer_phone', 'address', 'notes', 'subtotal', 'tax', 'delivery_fee', 'total', 'discount', 'voucher_code', 'currency', 'payment_status', 'payment_method', 'promised_ready_from_utc', 'promised_ready_by_utc', 'timezone_snapshot' ) as $legacy_old_fingerprint_field ) {
+		$legacy_old_fingerprint_projection[ $legacy_old_fingerprint_field ] = isset( $legacy_approved_request->{$legacy_old_fingerprint_field} ) ? (string) $legacy_approved_request->{$legacy_old_fingerprint_field} : '';
+	}
+	$legacy_old_fingerprint_projection['items'] = $legacy_old_fingerprint_items;
+	$legacy_old_fingerprint = hash( 'sha256', wp_json_encode( $legacy_old_fingerprint_projection ) );
+	$legacy_old_snapshot_lines = (array) $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_order_items WHERE order_id = %d ORDER BY id ASC', $legacy_approved_request_id ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+	foreach ( $legacy_old_snapshot_lines as &$legacy_old_snapshot_line ) {
+		$legacy_old_snapshot_line['toppings'] = $legacy_old_snapshot_line['toppings'] ? json_decode( $legacy_old_snapshot_line['toppings'], true ) : array();
+	}
+	unset( $legacy_old_snapshot_line );
+	$legacy_approved_key = is_array( $legacy_approved ) ? (string) $legacy_approved['payment_checkout_key'] : '';
+	if ( 'stripe' === $legacy_approved_provider ) {
+		$legacy_old_order_payload = array(
+			'order_type' => (string) $legacy_approved_request->order_type, 'location_id' => (int) $legacy_approved_request->location_id, 'table_id' => 0, 'table_label' => '', 'table_qr_code_id' => 0, 'table_session_id' => 0,
+			'order_source' => 'web', 'source_request_id' => $legacy_approved_request_id, 'customer_name' => (string) $legacy_approved_request->customer_name, 'customer_email' => (string) $legacy_approved_request->customer_email, 'customer_phone' => (string) $legacy_approved_request->customer_phone,
+			'address' => (string) $legacy_approved_request->address, 'notes' => (string) $legacy_approved_request->notes, 'subtotal' => (float) $legacy_approved_request->subtotal, 'tax' => (float) $legacy_approved_request->tax, 'delivery_fee' => (float) $legacy_approved_request->delivery_fee,
+			'total' => (float) $legacy_approved_request->total, 'discount' => 0.0, 'voucher_code' => '', 'currency' => strtoupper( (string) $legacy_approved_request->currency ), 'checkout_key' => $legacy_approved_key,
+		);
+		$legacy_old_snapshot_payload = array( 'order' => $legacy_old_order_payload, 'lines' => array_values( $legacy_old_snapshot_lines ), 'approval' => array( 'request_id' => $legacy_approved_request_id, 'approved_revision' => isset( $legacy_approved['approved_revision'] ) ? (int) $legacy_approved['approved_revision'] : 0, 'request_fingerprint' => (string) $legacy_approved['request_fingerprint'] ) );
+	} else {
+		$legacy_old_order_payload = array(
+			'order_type' => (string) $legacy_approved_request->order_type, 'location_id' => (int) $legacy_approved_request->location_id, 'table_id' => 0, 'table_label' => '', 'table_qr_code_id' => 0, 'table_session_id' => 0,
+			'order_source' => 'web', 'source_request_id' => $legacy_approved_request_id, 'customer_name' => (string) $legacy_approved_request->customer_name, 'customer_email' => (string) $legacy_approved_request->customer_email, 'customer_phone' => (string) $legacy_approved_request->customer_phone,
+			'address' => (string) $legacy_approved_request->address, 'notes' => (string) $legacy_approved_request->notes, 'subtotal' => (float) $legacy_approved_request->subtotal, 'tax' => (float) $legacy_approved_request->tax, 'delivery_fee' => (float) $legacy_approved_request->delivery_fee,
+			'total' => (float) $legacy_approved_request->total, 'discount' => (float) $legacy_approved_request->discount, 'voucher_code' => (string) $legacy_approved_request->voucher_code, 'currency' => strtoupper( (string) $legacy_approved_request->currency ), 'checkout_key' => $legacy_approved_key,
+		);
+		$legacy_old_binding = DoughBoss_Square::shop_binding( (int) $legacy_approved_request->location_id );
+		$legacy_old_binding_hash = is_wp_error( $legacy_old_binding ) ? '' : hash( 'sha256', wp_json_encode( array( 'approved-square', $legacy_approved_key, $legacy_old_binding ) ) );
+		$legacy_old_snapshot_payload = array( 'order' => $legacy_old_order_payload, 'lines' => array_values( $legacy_old_snapshot_lines ), 'approval' => array( 'request_id' => $legacy_approved_request_id, 'approved_revision' => (int) $legacy_approved['approved_revision'], 'request_fingerprint' => (string) $legacy_approved['request_fingerprint'] ), 'square_binding' => $legacy_old_binding, 'binding_hash' => $legacy_old_binding_hash );
+	}
+	$legacy_old_snapshot_json = wp_json_encode( $legacy_old_snapshot_payload );
+	$legacy_approved_params = array(
+		'request_id'          => $legacy_approved_request_id,
+		'token'               => is_array( $legacy_approved ) ? (string) $legacy_approved['capability_token'] : '',
+		'payment_attempt_key' => 'legacy-approved-' . $legacy_approved_provider . '-attempt-0001',
+		'source_id'           => 'cnon:legacy-approved-' . $legacy_approved_provider,
+		'verification_token'  => 'verify:legacy-approved-' . $legacy_approved_provider,
+	);
+	$legacy_approved_start = $basis_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', $legacy_approved_params ) );
+	$legacy_approved_data = $legacy_approved_start instanceof WP_REST_Response ? $legacy_approved_start->get_data() : array();
+	$legacy_approved_identity = isset( $legacy_approved_data['checkout_session'] ) ? (string) $legacy_approved_data['checkout_session'] : ( isset( $legacy_approved_data['payment_intent'] ) ? (string) $legacy_approved_data['payment_intent'] : '' );
+	$legacy_approved_snapshot = DoughBoss_Checkout_Snapshots::find( $legacy_approved_key );
+	$legacy_approved_attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $legacy_approved_key );
+	db_integration_assert( $legacy_approved_start instanceof WP_REST_Response && $legacy_approved_request && is_array( $legacy_approved ) && '' !== $legacy_approved_identity && is_array( $legacy_approved_snapshot ) && is_array( $legacy_approved_attempt ), 'legacy approved ' . $legacy_approved_provider . ' fixture creates exact original approval, payment and snapshot identities' );
+	db_integration_same( null, $legacy_approved_request ? $legacy_approved_request->accounting_basis_json : 'missing', 'legacy approved ' . $legacy_approved_provider . ' request remains unknown rather than retrofitted' );
+	db_integration_same( $legacy_old_fingerprint, is_array( $legacy_approved ) ? $legacy_approved['request_fingerprint'] : '', 'legacy approved ' . $legacy_approved_provider . ' retains the independent pre-basis fingerprint bytes' );
+	db_integration_same( $legacy_old_fingerprint, DoughBoss_Preorder_Approval::fingerprint_request( $legacy_approved_request_id ), 'legacy approved ' . $legacy_approved_provider . ' current fingerprint remains byte-compatible with the old projection' );
+	db_integration_same( $legacy_old_snapshot_json, is_array( $legacy_approved_snapshot ) ? $legacy_approved_snapshot['payload_json'] : '', 'legacy approved ' . $legacy_approved_provider . ' snapshot retains the independent pre-basis payload bytes' );
+	db_integration_same( hash( 'sha256', $legacy_old_snapshot_json ), is_array( $legacy_approved_snapshot ) ? $legacy_approved_snapshot['payload_hash'] : '', 'legacy approved ' . $legacy_approved_provider . ' snapshot retains the independent pre-basis payload hash' );
+	db_integration_same( $legacy_approved['request_fingerprint'], is_array( $legacy_approved_snapshot ) && isset( $legacy_approved_snapshot['payload']['approval']['request_fingerprint'] ) ? $legacy_approved_snapshot['payload']['approval']['request_fingerprint'] : '', 'legacy approved ' . $legacy_approved_provider . ' snapshot retains original approval fingerprint' );
+	db_integration_same( (int) $legacy_approved['approved_revision'], is_array( $legacy_approved_snapshot ) && isset( $legacy_approved_snapshot['payload']['approval']['approved_revision'] ) ? (int) $legacy_approved_snapshot['payload']['approval']['approved_revision'] : 0, 'legacy approved ' . $legacy_approved_provider . ' snapshot retains original approval revision' );
+	db_integration_same( false, is_array( $legacy_approved_snapshot ) && isset( $legacy_approved_snapshot['payload']['order'] ) && is_array( $legacy_approved_snapshot['payload']['order'] ) && array_key_exists( 'accounting_basis', $legacy_approved_snapshot['payload']['order'] ), 'legacy approved ' . $legacy_approved_provider . ' snapshot preserves absent basis shape' );
+	$legacy_approved_posts = $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'];
+	$legacy_approved_replay = $basis_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', $legacy_approved_params ) );
+	$legacy_approved_replay_data = $legacy_approved_replay instanceof WP_REST_Response ? $legacy_approved_replay->get_data() : array();
+	$legacy_approved_replay_identity = isset( $legacy_approved_replay_data['checkout_session'] ) ? (string) $legacy_approved_replay_data['checkout_session'] : ( isset( $legacy_approved_replay_data['payment_intent'] ) ? (string) $legacy_approved_replay_data['payment_intent'] : '' );
+	$legacy_approved_replay_snapshot = DoughBoss_Checkout_Snapshots::find( $legacy_approved_key );
+	$legacy_approved_replay_attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $legacy_approved_key );
+	db_integration_same( $legacy_approved_identity, $legacy_approved_replay_identity, 'legacy approved ' . $legacy_approved_provider . ' replay retains original payment identity' );
+	db_integration_same( $legacy_approved_posts, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], 'legacy approved ' . $legacy_approved_provider . ' replay sends no provider request' );
+	db_integration_same( $legacy_approved_snapshot['payload_json'], is_array( $legacy_approved_replay_snapshot ) ? $legacy_approved_replay_snapshot['payload_json'] : '', 'legacy approved ' . $legacy_approved_provider . ' replay retains exact snapshot bytes' );
+	db_integration_same( $legacy_approved_snapshot['payload_hash'], is_array( $legacy_approved_replay_snapshot ) ? $legacy_approved_replay_snapshot['payload_hash'] : '', 'legacy approved ' . $legacy_approved_provider . ' replay retains exact snapshot hash' );
+	db_integration_same( (int) $legacy_approved_attempt['id'], is_array( $legacy_approved_replay_attempt ) ? (int) $legacy_approved_replay_attempt['id'] : 0, 'legacy approved ' . $legacy_approved_provider . ' replay retains original attempt row' );
+	db_integration_same( (string) $legacy_approved_attempt['provider_reference'], is_array( $legacy_approved_replay_attempt ) ? (string) $legacy_approved_replay_attempt['provider_reference'] : '', 'legacy approved ' . $legacy_approved_provider . ' replay retains original provider reference' );
+	$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_hash' => str_repeat( '0', 64 ) ), array( 'checkout_key' => $legacy_approved_key ), array( '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$legacy_corrupt_posts = $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'];
+	$legacy_corrupt_previous_suppression = $wpdb->suppress_errors( true );
+	$legacy_corrupt_replay = $basis_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', $legacy_approved_params ) );
+	$wpdb->suppress_errors( $legacy_corrupt_previous_suppression );
+	$legacy_corrupt_attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $legacy_approved_key );
+	db_integration_assert( is_wp_error( $legacy_corrupt_replay ), 'corrupted legacy approved ' . $legacy_approved_provider . ' snapshot is held rather than replayed' );
+	db_integration_same( $legacy_corrupt_posts, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], 'corrupted legacy approved ' . $legacy_approved_provider . ' snapshot cannot mint another payment' );
+	db_integration_same( (int) $legacy_approved_attempt['id'], is_array( $legacy_corrupt_attempt ) ? (int) $legacy_corrupt_attempt['id'] : 0, 'corrupted legacy approved ' . $legacy_approved_provider . ' snapshot retains original attempt identity' );
+	$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_hash' => $legacy_approved_snapshot['payload_hash'] ), array( 'checkout_key' => $legacy_approved_key ), array( '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+}
+
+// Invalid transport facts cannot reach snapshot/order storage, even with a valid key.
+$basis_invalid_posts = $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'];
+$basis_invalid_snapshots = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$basis_invalid_snapshot = DoughBoss_Checkout_Snapshots::store( hash( 'sha256', 'invalid-basis-snapshot' ), array( 'order' => array( 'accounting_basis' => null ) ) );
+db_integration_same( 'doughboss_accounting_basis_invalid', is_wp_error( $basis_invalid_snapshot ) ? $basis_invalid_snapshot->get_error_code() : '', 'NULL-present snapshot basis is invalid, never a legacy omission' );
+db_integration_same( $basis_invalid_snapshots, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots' ), 'invalid snapshot basis makes no durable row' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+db_integration_same( $basis_invalid_posts, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], 'invalid snapshot facts make no provider POST' );
+
+// Simulate observed bad column contracts without dropping or rewriting any data.
+$basis_contract_mode = '';
+$basis_contract_filter = function ( $sql ) use ( $wpdb, &$basis_contract_mode ) {
+	$table = $wpdb->prefix . 'doughboss_orders';
+	if ( '' === $basis_contract_mode || 'SHOW COLUMNS FROM ' . $table !== trim( $sql ) ) { return $sql; }
+	$type = 'wrong_type' === $basis_contract_mode ? "CASE WHEN COLUMN_NAME = 'accounting_basis_json' THEN 'text' ELSE COLUMN_TYPE END" : 'COLUMN_TYPE';
+	$nullable = 'not_nullable' === $basis_contract_mode ? "CASE WHEN COLUMN_NAME = 'accounting_basis_json' THEN 'NO' ELSE IS_NULLABLE END" : 'IS_NULLABLE';
+	$default = 'wrong_default' === $basis_contract_mode ? "CASE WHEN COLUMN_NAME = 'accounting_basis_json' THEN 'invalid' WHEN COLUMN_DEFAULT = 'NULL' THEN NULL ELSE COLUMN_DEFAULT END" : "CASE WHEN COLUMN_DEFAULT = 'NULL' THEN NULL ELSE COLUMN_DEFAULT END";
+	$where = 'missing' === $basis_contract_mode ? " AND COLUMN_NAME <> 'accounting_basis_json'" : '';
+	return "SELECT COLUMN_NAME AS `Field`, {$type} AS `Type`, {$nullable} AS `Null`, {$default} AS `Default` FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$table}'{$where}";
+};
+$basis_upgrade = new ReflectionMethod( 'DoughBoss_Migrations', 'upgrade_to_1_25_0' );
+$basis_upgrade->setAccessible( true );
+$basis_storage_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
+add_filter( 'query', $basis_contract_filter, 999 );
+$basis_failed_migration_version = (string) get_option( 'doughboss_db_version' );
+update_option( 'doughboss_db_version', '1.24.0', false );
+$basis_contract_mode = 'missing';
+DoughBoss_Migrations::run();
+db_integration_same( '1.24.0', (string) get_option( 'doughboss_db_version' ), 'failed accounting-basis migration cannot advance its version checkpoint' );
+update_option( 'doughboss_db_version', $basis_failed_migration_version, false );
+foreach ( array( 'missing', 'wrong_type', 'not_nullable', 'wrong_default' ) as $basis_bad_contract ) {
+	$basis_contract_mode = $basis_bad_contract;
+	db_integration_same( false, DoughBoss_Activator::checkout_storage_ready(), 'observed ' . $basis_bad_contract . ' basis column fails storage readiness' );
+	$basis_upgrade_error = '';
+	try { $basis_upgrade->invoke( null ); } catch ( RuntimeException $basis_error ) { $basis_upgrade_error = $basis_error->getMessage(); }
+	db_integration_same( 'Historical accounting-basis checkout storage is incomplete or invalid.', $basis_upgrade_error, 'invalid basis column prevents the versioned upgrade from returning success' );
+	$basis_schema_posts = $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'];
+	$basis_schema_denied = $basis_storage_controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', array() ) );
+	db_integration_same( 'doughboss_checkout_storage_unavailable', is_wp_error( $basis_schema_denied ) ? $basis_schema_denied->get_error_code() : '', 'invalid column denies payment before provider provisioning' );
+	db_integration_same( $basis_schema_posts, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], 'invalid column cannot dispatch any payment' );
+}
+$basis_contract_mode = '';
+remove_filter( 'query', $basis_contract_filter, 999 );
+db_integration_same( true, DoughBoss_Activator::checkout_storage_ready(), 'restored observed schema is ready without changing stored records' );
+$basis_version_before = (string) get_option( 'doughboss_db_version' );
+update_option( 'doughboss_db_version', '1.24.0', false );
+$basis_uncheckpointed = $basis_storage_controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', array() ) );
+db_integration_same( 'doughboss_checkout_storage_unavailable', is_wp_error( $basis_uncheckpointed ) ? $basis_uncheckpointed->get_error_code() : '', 'pending version checkpoint blocks provisioning even if the column exists' );
+DoughBoss_Migrations::run();
+db_integration_same( $basis_version_before, (string) get_option( 'doughboss_db_version' ), 'normal plugin update validates and checkpoints the additive basis migration' );
+update_option( DoughBoss_Settings::OPTION_KEY, $basis_original_settings, false );
+remove_filter( 'doughboss_preorder_payment_page_url', 'db_integration_preorder_payment_page_url', 10 );
+remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
+remove_filter( 'pre_http_request', 'db_integration_stripe_http', 10 );
+remove_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
+if ( null === $basis_original_cookie ) { unset( $_COOKIE[ DoughBoss_Cart::COOKIE ] ); } else { $_COOKIE[ DoughBoss_Cart::COOKIE ] = $basis_original_cookie; }
+if ( null === $basis_original_table_cookie ) { unset( $_COOKIE[ DoughBoss_Table_QR::COOKIE ] ); } else { $_COOKIE[ DoughBoss_Table_QR::COOKIE ] = $basis_original_table_cookie; }
+if ( null === $basis_original_remote ) { unset( $_SERVER['REMOTE_ADDR'] ); } else { $_SERVER['REMOTE_ADDR'] = $basis_original_remote; }
+
 // Leave one synthetic approved/unpaid fixture for the explicit multi-process
 // pre-order start/completion harness that the PowerShell runner launches next.
 $preorder_race_settings = DoughBoss_Settings::all();
@@ -3757,7 +4074,14 @@ $preorder_race_settings['preorder_approver_user_id'] = $preorder_approver_id;
 $preorder_race_settings['pospal_order_push_enabled'] = 0;
 update_option( 'doughboss_settings', $preorder_race_settings, false );
 $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 1, 'pickup_enabled' => 1, 'is_active' => 1 ), array( 'id' => 1 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-$preorder_race_order = db_integration_create_preorder_request( 'approval-process-race', 31.00 );
+$preorder_race_basis = array(
+	'version'         => 1,
+	'tax_inclusive'   => true,
+	'tax_rate'        => 10.0,
+	'discount_policy' => 'goods_before_tax',
+	'delivery_taxable'=> true,
+);
+$preorder_race_order = db_integration_create_preorder_request( 'approval-process-race', 31.00, $preorder_race_basis );
 $preorder_race_id = is_array( $preorder_race_order ) ? (int) $preorder_race_order['order_id'] : 0;
 $preorder_race_pending = $preorder_race_id ? DoughBoss_Preorder_Approval::ensure_pending( $preorder_race_id ) : new WP_Error( 'integration_fixture', 'Missing race request.' );
 $preorder_race_source = $preorder_race_id ? DoughBoss_Order::get( $preorder_race_id ) : null;
@@ -3774,6 +4098,7 @@ $preorder_race_fixture = array(
 );
 update_option( 'doughboss_preorder_race_fixture', $preorder_race_fixture, false );
 db_integration_assert( is_array( $preorder_race_pending ) && is_array( $preorder_race_approval ) && $preorder_race_id > 0 && '' !== $preorder_race_token && 1 === preg_match( '/^[a-f0-9]{64}$/', $preorder_race_checkout_key ), 'multi-process pre-order fixture is approved, unpaid and exact-bound before workers start' );
+db_integration_same( DoughBoss_Order::encode_accounting_basis( $preorder_race_basis ), $preorder_race_source ? $preorder_race_source->accounting_basis_json : '', 'multi-process pre-order fixture captures known basis before approval and worker barriers' );
 
 // Owner dashboard is a protected read-only route, including its demo mode.
 $dashboard_previous_user = get_current_user_id();

@@ -13,6 +13,86 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Reads and writes orders to the custom tables.
  */
 class DoughBoss_Order {
+	/** Validate the historical pricing policy without coercing supplied facts. */
+	public static function normalize_accounting_basis( $value ) {
+		$keys = array( 'version', 'tax_inclusive', 'tax_rate', 'discount_policy', 'delivery_taxable' );
+		if ( ! is_array( $value ) || count( $value ) !== count( $keys ) || array_diff( $keys, array_keys( $value ) ) ) {
+			return self::accounting_basis_error();
+		}
+		if ( 1 !== $value['version'] || ! is_bool( $value['tax_inclusive'] ) || ! is_bool( $value['delivery_taxable'] )
+			|| $value['tax_inclusive'] !== $value['delivery_taxable'] || 'goods_before_tax' !== $value['discount_policy']
+			|| ( ! is_int( $value['tax_rate'] ) && ! is_float( $value['tax_rate'] ) )
+			|| ! is_finite( (float) $value['tax_rate'] ) || $value['tax_rate'] < 0 ) {
+			return self::accounting_basis_error();
+		}
+		return array(
+			'version' => 1,
+			'tax_inclusive' => $value['tax_inclusive'],
+			'tax_rate' => 0 == $value['tax_rate'] ? 0.0 : (float) $value['tax_rate'],
+			'discount_policy' => 'goods_before_tax',
+			'delivery_taxable' => $value['delivery_taxable'],
+		);
+	}
+
+	/** @return string|WP_Error Canonical bounded JSON, never an absent value. */
+	public static function encode_accounting_basis( $value ) {
+		$basis = self::normalize_accounting_basis( $value );
+		if ( is_wp_error( $basis ) ) {
+			return $basis;
+		}
+		$json = wp_json_encode( $basis );
+		return is_string( $json ) && strlen( $json ) <= 1024 ? $json : self::accounting_basis_error();
+	}
+
+	/** Only SQL NULL is unknown; malformed/noncanonical stored facts are held. */
+	public static function decode_accounting_basis( $stored ) {
+		if ( null === $stored ) {
+			return null;
+		}
+		if ( ! is_string( $stored ) || '' === $stored || strlen( $stored ) > 1024 ) {
+			return self::accounting_basis_error();
+		}
+		$basis = self::normalize_accounting_basis( json_decode( $stored, true ) );
+		if ( is_wp_error( $basis ) ) {
+			return $basis;
+		}
+		$json = self::encode_accounting_basis( $basis );
+		if ( is_wp_error( $json ) || ! hash_equals( $json, $stored ) ) {
+			return self::accounting_basis_error();
+		}
+		return $basis;
+	}
+
+	/** @return array|null|WP_Error Stored order basis; old fixtures may omit it. */
+	public static function accounting_basis_from_order( $order ) {
+		$row = (array) $order;
+		return self::decode_accounting_basis( array_key_exists( 'accounting_basis_json', $row ) ? $row['accounting_basis_json'] : null );
+	}
+
+	/** @return array|null|WP_Error Snapshot omission is legacy; present NULL is not. */
+	public static function accounting_basis_from_payload( array $order_data ) {
+		return array_key_exists( 'accounting_basis', $order_data ) ? self::normalize_accounting_basis( $order_data['accounting_basis'] ) : null;
+	}
+
+	/** Compare canonical facts, including the explicit legacy unknown state. */
+	public static function accounting_basis_matches_payload( $order, array $order_data ) {
+		$stored = self::accounting_basis_from_order( $order );
+		$payload = self::accounting_basis_from_payload( $order_data );
+		if ( is_wp_error( $stored ) || is_wp_error( $payload ) ) {
+			return false;
+		}
+		if ( null === $stored || null === $payload ) {
+			return null === $stored && null === $payload;
+		}
+		$stored_json = self::encode_accounting_basis( $stored );
+		$payload_json = self::encode_accounting_basis( $payload );
+		return ! is_wp_error( $stored_json ) && ! is_wp_error( $payload_json ) && hash_equals( $stored_json, $payload_json );
+	}
+
+	/** @return WP_Error */
+	private static function accounting_basis_error() {
+		return new WP_Error( 'doughboss_accounting_basis_invalid', __( 'The historical pricing basis is invalid. This order requires review before payment or fulfilment.', 'doughboss' ), array( 'status' => 409 ) );
+	}
 
 	/**
 	 * Valid order statuses mapped to human labels.
@@ -263,7 +343,15 @@ class DoughBoss_Order {
 	 */
 	public static function create( array $data, array $lines ) {
 		global $wpdb;
-		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) ) {
+		$accounting_basis = self::accounting_basis_from_payload( $data );
+		if ( is_wp_error( $accounting_basis ) ) {
+			return $accounting_basis;
+		}
+		$accounting_basis_json = null === $accounting_basis ? null : self::encode_accounting_basis( $accounting_basis );
+		if ( is_wp_error( $accounting_basis_json ) ) {
+			return $accounting_basis_json;
+		}
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! class_exists( 'DoughBoss_Activator' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Online ordering is temporarily unavailable while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 
@@ -376,6 +464,7 @@ class DoughBoss_Order {
 					'notes'         => $data['notes'],
 					'subtotal'      => $data['subtotal'],
 					'tax'           => $data['tax'],
+					'accounting_basis_json' => $accounting_basis_json,
 					'delivery_fee'  => $data['delivery_fee'],
 					'total'         => $data['total'],
 					'discount'      => isset( $data['discount'] ) ? $data['discount'] : 0,
@@ -395,7 +484,7 @@ class DoughBoss_Order {
 					'created_at'    => $now,
 					'updated_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
 			);
 
 			if ( false !== $inserted ) {

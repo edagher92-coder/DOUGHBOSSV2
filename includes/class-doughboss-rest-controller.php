@@ -2664,7 +2664,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function create_payment_intent( WP_REST_Request $request ) {
-		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.15.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::payment_storage_ready() ) {
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::payment_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Card payments are paused while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 		if ( ! DoughBoss_Payment::ready() ) {
@@ -2737,6 +2737,10 @@ class DoughBoss_REST_Controller {
 		}
 
 		$totals   = $this->cart->totals( $order_type );
+		$accounting_basis = $this->accounting_basis_from_totals( $totals );
+		if ( is_wp_error( $accounting_basis ) ) {
+			return $accounting_basis;
+		}
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
 		$amount   = DoughBoss_Payment::to_minor_units( $totals['total'] );
 
@@ -2820,6 +2824,7 @@ class DoughBoss_REST_Controller {
 						'discount'          => isset( $totals['discount'] ) ? (float) $totals['discount'] : 0.0,
 						'voucher_code'      => '' !== $reserved_voucher_code ? $reserved_voucher_code : $priced_voucher_code,
 						'voucher_reservation_key' => $voucher_reservation_key,
+						'accounting_basis'   => $accounting_basis,
 						'currency'          => strtoupper( (string) $currency ),
 						'checkout_key'      => $checkout_key,
 					),
@@ -2828,7 +2833,7 @@ class DoughBoss_REST_Controller {
 			if ( 'square' === $gateway ) {
 				$snapshot_payload['binding_hash'] = $this->square_binding_hash( $square_binding );
 			}
-			$snapshot = DoughBoss_Checkout_Snapshots::store( $checkout_key, $snapshot_payload );
+			$snapshot = $this->store_ordinary_payment_snapshot( $checkout_key, $snapshot_payload );
 			if ( is_wp_error( $snapshot ) ) {
 				// Do not release here: this checkout key may already own a live
 				// Stripe Session from an earlier response. Snapshot conflicts and
@@ -3079,6 +3084,71 @@ class DoughBoss_REST_Controller {
 	 */
 	private function square_binding_hash( array $binding ) {
 		return hash_hmac( 'sha256', wp_json_encode( $binding ), wp_salt( 'auth' ) );
+	}
+
+	/**
+	 * Read the accounting facts captured by the cart calculation.
+	 *
+	 * @param array $totals Server-calculated cart totals.
+	 * @return array|WP_Error
+	 */
+	private function accounting_basis_from_totals( array $totals ) {
+		if ( ! array_key_exists( 'accounting_basis', $totals ) ) {
+			return new WP_Error( 'doughboss_accounting_basis_missing', __( 'The order accounting details could not be recorded. Please refresh and try again.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return DoughBoss_Order::normalize_accounting_basis( $totals['accounting_basis'] );
+	}
+
+	/**
+	 * Copy a recorded basis from an immutable snapshot order payload.
+	 *
+	 * @param array $source_order Immutable source order payload.
+	 * @param array $order_data   Destination payload.
+	 * @return true|WP_Error
+	 */
+	private function copy_accounting_basis_from_snapshot( array $source_order, array &$order_data ) {
+		$basis = DoughBoss_Order::accounting_basis_from_payload( $source_order );
+		if ( is_wp_error( $basis ) ) {
+			return $basis;
+		}
+		if ( null === $basis ) {
+			unset( $order_data['accounting_basis'] );
+		} else {
+			// Replace in place: reinserting a key changes immutable JSON/hash bytes.
+			$order_data['accounting_basis'] = $basis;
+		}
+		return true;
+	}
+
+	/**
+	 * Reuse only the recorded accounting facts when a protected checkout retry
+	 * already owns this payment identity. The snapshot store still performs the
+	 * exact payload-hash comparison for every other immutable fact.
+	 *
+	 * @param string $checkout_key Checkout identity.
+	 * @param array  $payload Candidate immutable payload.
+	 * @return array|WP_Error
+	 */
+	private function store_ordinary_payment_snapshot( $checkout_key, array $payload ) {
+		$existing = DoughBoss_Checkout_Snapshots::find( $checkout_key );
+		if ( ! is_array( $existing ) ) {
+			$existing = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $checkout_key );
+		}
+		if ( is_array( $existing ) ) {
+			if ( ! isset( $existing['payload']['order'] ) || ! is_array( $existing['payload']['order'] ) || ! isset( $payload['order'] ) || ! is_array( $payload['order'] ) ) {
+				return new WP_Error( 'doughboss_pay_snapshot_missing', __( 'The paid order details require manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			$copied = $this->copy_accounting_basis_from_snapshot( $existing['payload']['order'], $payload['order'] );
+			if ( is_wp_error( $copied ) ) {
+				return $copied;
+			}
+		}
+		return DoughBoss_Checkout_Snapshots::store( $checkout_key, $payload );
+	}
+
+	/** @return bool Whether a value is a canonical SHA-256 fingerprint. */
+	private function valid_fingerprint( $value ) {
+		return is_string( $value ) && 1 === preg_match( '/^[a-f0-9]{64}$/', $value );
 	}
 
 	/**
@@ -3495,7 +3565,7 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $idem ) ) {
 			return $idem;
 		}
-		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Pre-order requests are temporarily unavailable while order storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 		if ( DoughBoss_Settings::ordering_open() || ! DoughBoss_Settings::after_hours_preorders_enabled() ) {
@@ -3555,6 +3625,10 @@ class DoughBoss_REST_Controller {
 			return $location_id;
 		}
 		$totals  = $this->cart->totals( 'pickup' );
+		$accounting_basis = $this->accounting_basis_from_totals( $totals );
+		if ( is_wp_error( $accounting_basis ) ) {
+			return $accounting_basis;
+		}
 		$created = DoughBoss_Order::create(
 			array(
 				'order_type'        => 'pickup',
@@ -3575,6 +3649,7 @@ class DoughBoss_REST_Controller {
 				'payment_method'    => '',
 				'payment_intent_id' => '',
 				'checkout_key'      => $idem,
+				'accounting_basis'   => $accounting_basis,
 			),
 			$this->cart->get_lines()
 		);
@@ -3650,7 +3725,7 @@ class DoughBoss_REST_Controller {
 		}
 		if ( 'square' === DoughBoss_Settings::payment_gateway() && 'released' !== (string) $approval['state'] ) {
 			$fingerprint = DoughBoss_Preorder_Approval::fingerprint_request( $request_id );
-			if ( is_wp_error( $fingerprint ) || (int) $order->version !== (int) $approval['approved_revision'] || ! hash_equals( (string) $approval['request_fingerprint'], (string) $fingerprint ) ) {
+			if ( is_wp_error( $fingerprint ) || ! $this->valid_fingerprint( $fingerprint ) || ! isset( $approval['request_fingerprint'] ) || ! $this->valid_fingerprint( $approval['request_fingerprint'] ) || (int) $order->version !== (int) $approval['approved_revision'] || ! hash_equals( $approval['request_fingerprint'], $fingerprint ) ) {
 				return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 			}
 		}
@@ -3665,7 +3740,7 @@ class DoughBoss_REST_Controller {
 	 */
 	public function preorder_payment_start( WP_REST_Request $request ) {
 		if (
-			version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.24.0', '<' )
+			version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' )
 			|| ! DoughBoss_Activator::checkout_storage_ready()
 			|| ! DoughBoss_Activator::payment_storage_ready()
 		) {
@@ -3693,6 +3768,11 @@ class DoughBoss_REST_Controller {
 			DoughBoss_Preorder_Approval::hold_payment( $request_id );
 			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
+		$accounting_basis = DoughBoss_Order::accounting_basis_from_order( $order );
+		if ( is_wp_error( $accounting_basis ) ) {
+			DoughBoss_Preorder_Approval::hold_payment( $request_id );
+			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 		$payment_location = DoughBoss_Locations::online_payment_location( (int) $order->location_id );
 		if ( is_wp_error( $payment_location ) ) {
 			return $payment_location;
@@ -3707,8 +3787,10 @@ class DoughBoss_REST_Controller {
 		if (
 			1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key )
 			|| is_wp_error( $fingerprint )
-			|| empty( $approval['request_fingerprint'] )
-			|| ! hash_equals( (string) $approval['request_fingerprint'], (string) $fingerprint )
+			|| ! $this->valid_fingerprint( $fingerprint )
+			|| ! isset( $approval['request_fingerprint'] )
+			|| ! $this->valid_fingerprint( $approval['request_fingerprint'] )
+			|| ! hash_equals( $approval['request_fingerprint'], $fingerprint )
 		) {
 			DoughBoss_Preorder_Approval::hold_payment( $request_id );
 			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
@@ -3738,6 +3820,9 @@ class DoughBoss_REST_Controller {
 			'currency'          => $currency,
 			'checkout_key'      => $checkout_key,
 		);
+		if ( null !== $accounting_basis ) {
+			$order_data['accounting_basis'] = $accounting_basis;
+		}
 		$snapshot = DoughBoss_Checkout_Snapshots::store(
 			$checkout_key,
 			array(
@@ -3822,6 +3907,11 @@ class DoughBoss_REST_Controller {
 			DoughBoss_Preorder_Approval::hold_payment( $request_id );
 			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
+		$accounting_basis = DoughBoss_Order::accounting_basis_from_order( $order );
+		if ( is_wp_error( $accounting_basis ) ) {
+			DoughBoss_Preorder_Approval::hold_payment( $request_id );
+			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 		$payment_location = DoughBoss_Locations::online_payment_location( (int) $order->location_id );
 		$binding          = DoughBoss_Square::shop_binding( (int) $order->location_id );
 		if ( is_wp_error( $payment_location ) ) {
@@ -3836,7 +3926,7 @@ class DoughBoss_REST_Controller {
 		}
 		$checkout_key = isset( $approval['payment_checkout_key'] ) ? (string) $approval['payment_checkout_key'] : '';
 		$fingerprint  = DoughBoss_Preorder_Approval::fingerprint_request( $request_id );
-		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) || is_wp_error( $fingerprint ) || empty( $approval['request_fingerprint'] ) || ! hash_equals( (string) $approval['request_fingerprint'], (string) $fingerprint ) ) {
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) || is_wp_error( $fingerprint ) || ! $this->valid_fingerprint( $fingerprint ) || ! isset( $approval['request_fingerprint'] ) || ! $this->valid_fingerprint( $approval['request_fingerprint'] ) || ! hash_equals( $approval['request_fingerprint'], $fingerprint ) ) {
 			DoughBoss_Preorder_Approval::hold_payment( $request_id );
 			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
@@ -3867,6 +3957,9 @@ class DoughBoss_REST_Controller {
 			'currency'          => strtoupper( (string) $order->currency ),
 			'checkout_key'      => $checkout_key,
 		);
+		if ( null !== $accounting_basis ) {
+			$order_data['accounting_basis'] = $accounting_basis;
+		}
 		$binding_hash = hash( 'sha256', wp_json_encode( array( 'approved-square', $checkout_key, $binding ) ) );
 		$snapshot = DoughBoss_Checkout_Snapshots::store(
 			$checkout_key,
@@ -4032,7 +4125,8 @@ class DoughBoss_REST_Controller {
 			|| empty( $approval['payment_checkout_key'] ) || ! hash_equals( (string) $approval['payment_checkout_key'], (string) $attempt['checkout_key'] )
 			|| ! isset( $metadata['approval_id'], $metadata['approved_revision'], $metadata['approval_fingerprint'], $metadata['square_shop_slug'], $metadata['square_location_id'], $metadata['square_mode'] )
 			|| (int) $metadata['approval_id'] !== (int) $request_id || (int) $metadata['approved_revision'] !== (int) $approval['approved_revision']
-			|| ! hash_equals( (string) $approval['request_fingerprint'], (string) $metadata['approval_fingerprint'] )
+			|| ! isset( $approval['request_fingerprint'] ) || ! $this->valid_fingerprint( $approval['request_fingerprint'] ) || ! $this->valid_fingerprint( $metadata['approval_fingerprint'] )
+			|| ! hash_equals( $approval['request_fingerprint'], $metadata['approval_fingerprint'] )
 			|| ! hash_equals( (string) $binding['shop_slug'], (string) $metadata['square_shop_slug'] )
 			|| ! hash_equals( (string) $binding['square_location_id'], (string) $metadata['square_location_id'] )
 			|| ! hash_equals( (string) $binding['square_mode'], (string) $metadata['square_mode'] ) ) {
@@ -4072,6 +4166,10 @@ class DoughBoss_REST_Controller {
 			return false;
 		}
 		$order_data = $snapshot['payload']['order'];
+		$copied_basis = $this->copy_accounting_basis_from_snapshot( $snapshot['payload']['order'], $order_data );
+		if ( is_wp_error( $copied_basis ) ) {
+			return $copied_basis;
+		}
 		$order_data['payment_status'] = 'paid';
 		$order_data['payment_method'] = 'square';
 		$order_data['payment_intent_id'] = $reference;
@@ -4208,7 +4306,7 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $idem ) ) {
 			return $idem;
 		}
-		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.13.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Online ordering is temporarily unavailable while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 		$returned_reference = $request->get_param( 'payment_intent_id' );
@@ -4319,6 +4417,10 @@ class DoughBoss_REST_Controller {
 
 		$totals = $this->cart->totals( $order_type );
 		$lines  = $this->cart->get_lines();
+		$captured_accounting_basis = $this->accounting_basis_from_totals( $totals );
+		if ( is_wp_error( $captured_accounting_basis ) ) {
+			return $captured_accounting_basis;
+		}
 
 		// When a payment gateway is configured, the order is only accepted once a
 		// matching payment has actually succeeded. The amount/currency are
@@ -4358,6 +4460,13 @@ class DoughBoss_REST_Controller {
 				$payment_intent_id = $verified;
 			}
 		}
+		$order_accounting_basis = $captured_accounting_basis;
+		if ( 'paid' === $payment_status && is_array( $paid_snapshot ) && isset( $paid_snapshot['payload']['order'] ) && is_array( $paid_snapshot['payload']['order'] ) ) {
+			$order_accounting_basis = DoughBoss_Order::accounting_basis_from_payload( $paid_snapshot['payload']['order'] );
+			if ( is_wp_error( $order_accounting_basis ) ) {
+				return $order_accounting_basis;
+			}
+		}
 
 		if ( 'square' === $payment_method && is_array( $paid_snapshot ) && isset( $paid_snapshot['payload']['order'], $paid_snapshot['payload']['lines'] ) ) {
 			$saved_order = $paid_snapshot['payload']['order'];
@@ -4375,6 +4484,11 @@ class DoughBoss_REST_Controller {
 				'discount'     => (float) $saved_order['discount'],
 				'voucher_code' => (string) $saved_order['voucher_code'],
 			);
+			if ( null !== $order_accounting_basis ) {
+				$totals['accounting_basis'] = $order_accounting_basis;
+			} else {
+				unset( $totals['accounting_basis'] );
+			}
 		}
 
 		// Redeem a held voucher before the order row is written. The redeem is
@@ -4449,8 +4563,7 @@ class DoughBoss_REST_Controller {
 			$voucher_code = '';
 		}
 
-		$created = DoughBoss_Order::create(
-			array(
+		$order_data = array(
 				'order_type'     => $order_type,
 				'location_id'    => $location_id,
 				'table_id'       => $table_context ? (int) $table_context['table_id'] : 0,
@@ -4473,9 +4586,11 @@ class DoughBoss_REST_Controller {
 				'payment_method'    => $payment_method,
 				'payment_intent_id' => $payment_intent_id,
 				'checkout_key'      => $idem,
-			),
-			$lines
 		);
+		if ( null !== $order_accounting_basis ) {
+			$order_data['accounting_basis'] = $order_accounting_basis;
+		}
+		$created = DoughBoss_Order::create( $order_data, $lines );
 
 		if ( is_wp_error( $created ) ) {
 			// An unpaid or legacy unreserved attempt can safely be compensated.
@@ -4643,6 +4758,10 @@ class DoughBoss_REST_Controller {
 			return $invalid;
 		}
 		$saved = $snapshot['payload']['order'];
+		$basis = DoughBoss_Order::accounting_basis_from_payload( $saved );
+		if ( is_wp_error( $basis ) ) {
+			return $invalid;
+		}
 		foreach ( array( 'checkout_key', 'order_type', 'location_id', 'table_id', 'table_qr_code_id', 'total', 'currency', 'customer_name', 'customer_email', 'customer_phone', 'address', 'notes' ) as $field ) {
 			if ( ! isset( $saved[ $field ] ) || ! is_scalar( $saved[ $field ] ) ) {
 				return $invalid;
@@ -4715,6 +4834,7 @@ class DoughBoss_REST_Controller {
 			|| (string) $order->order_type !== (string) $saved['order_type']
 			|| (int) $order->location_id !== (int) $saved['location_id'] || (int) $order->table_id !== (int) $saved['table_id']
 			|| (int) $order->table_qr_code_id !== (int) $saved['table_qr_code_id']
+			|| ! DoughBoss_Order::accounting_basis_matches_payload( $order, $saved )
 			|| ( isset( $saved['source_request_id'] ) && (int) $order->source_request_id !== (int) $saved['source_request_id'] )
 			|| ( ! empty( $snapshot['order_id'] ) && (int) $snapshot['order_id'] !== (int) $order->id )
 			|| ( ! empty( $attempt['local_reference'] ) && ! hash_equals( (string) $attempt['local_reference'], (string) $order->order_number ) )
@@ -4994,6 +5114,10 @@ class DoughBoss_REST_Controller {
 				return new WP_Error( 'doughboss_pay_attempt_changed', __( 'The order details changed after payment started. Restore the original details or contact the shop; do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 			}
 			$saved_order      = $square_snapshot['payload']['order'];
+			$snapshot_basis   = DoughBoss_Order::accounting_basis_from_payload( $saved_order );
+			if ( is_wp_error( $snapshot_basis ) ) {
+				return new WP_Error( 'doughboss_pay_snapshot_missing', __( 'The paid order details require manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 			$expected         = DoughBoss_Payment::to_minor_units( isset( $saved_order['total'] ) ? $saved_order['total'] : 0 );
 			$snapshot_currency = strtolower( isset( $saved_order['currency'] ) ? (string) $saved_order['currency'] : '' );
 			if ( '' === $snapshot_currency || ! hash_equals( $currency, $snapshot_currency ) ) {
@@ -6077,6 +6201,10 @@ class DoughBoss_REST_Controller {
 
 		$order_data = is_array( $snapshot['payload']['order'] ) ? $snapshot['payload']['order'] : array();
 		$lines      = is_array( $snapshot['payload']['lines'] ) ? array_values( $snapshot['payload']['lines'] ) : array();
+		$copied_basis = $this->copy_accounting_basis_from_snapshot( $snapshot['payload']['order'], $order_data );
+		if ( is_wp_error( $copied_basis ) ) {
+			return $copied_basis;
+		}
 		$context    = isset( $meta['context'] ) ? sanitize_key( (string) $meta['context'] ) : '';
 		$source_request_id = isset( $order_data['source_request_id'] ) ? absint( $order_data['source_request_id'] ) : 0;
 		if ( 'approved_preorder' === $context ) {
@@ -6109,17 +6237,21 @@ class DoughBoss_REST_Controller {
 			if (
 				is_wp_error( $approval )
 				|| is_wp_error( $current_fingerprint )
+				|| ! $this->valid_fingerprint( $current_fingerprint )
 				|| ! in_array( (string) $approval['state'], array( 'payment_active', 'payment_held', 'released' ), true )
 				|| ! isset( $approval['payment_checkout_key'], $approval['request_fingerprint'], $approval['approved_revision'] )
+				|| ! $this->valid_fingerprint( $approval['request_fingerprint'] )
 				|| ! hash_equals( (string) $approval['payment_checkout_key'], $checkout_key )
-				|| ! hash_equals( (string) $approval['request_fingerprint'], (string) $current_fingerprint )
+				|| ! hash_equals( $approval['request_fingerprint'], $current_fingerprint )
 				|| $source_request_id !== ( isset( $meta['source_request_id'] ) ? absint( $meta['source_request_id'] ) : 0 )
 				|| $source_request_id !== ( isset( $approval_snapshot['request_id'] ) ? absint( $approval_snapshot['request_id'] ) : 0 )
 				|| (int) $approval['approved_revision'] !== ( isset( $meta['approved_revision'] ) ? (int) $meta['approved_revision'] : 0 )
 				|| (int) $approval['approved_revision'] !== ( isset( $approval_snapshot['approved_revision'] ) ? (int) $approval_snapshot['approved_revision'] : 0 )
 				|| ! isset( $meta['request_fingerprint'], $approval_snapshot['request_fingerprint'] )
-				|| ! hash_equals( (string) $approval['request_fingerprint'], (string) $meta['request_fingerprint'] )
-				|| ! hash_equals( (string) $approval['request_fingerprint'], (string) $approval_snapshot['request_fingerprint'] )
+				|| ! $this->valid_fingerprint( $meta['request_fingerprint'] )
+				|| ! $this->valid_fingerprint( $approval_snapshot['request_fingerprint'] )
+				|| ! hash_equals( $approval['request_fingerprint'], $meta['request_fingerprint'] )
+				|| ! hash_equals( $approval['request_fingerprint'], $approval_snapshot['request_fingerprint'] )
 				|| empty( $approval['payment_attempt_id'] )
 				|| (int) $approval['payment_attempt_id'] !== (int) $attempt['id']
 			) {

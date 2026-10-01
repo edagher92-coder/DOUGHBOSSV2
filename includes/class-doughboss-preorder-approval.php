@@ -232,6 +232,10 @@ class DoughBoss_Preorder_Approval {
 
 			$now         = self::now();
 			$fingerprint = self::fingerprint_from_locked_order( $order );
+			if ( is_wp_error( $fingerprint ) || ! is_string( $fingerprint ) || 1 !== preg_match( '/^[a-f0-9]{64}$/', $fingerprint ) ) {
+				self::rollback();
+				return is_wp_error( $fingerprint ) ? $fingerprint : self::error( 'doughboss_preorder_fingerprint_conflict', __( 'The request cannot be approved safely.', 'doughboss' ), 409 );
+			}
 			$data        = array(
 				'state'              => 'approve' === $decision ? self::STATE_APPROVED_UNPAID : self::STATE_REJECTED,
 				'approved_revision'  => 'approve' === $decision ? (int) $order->version : null,
@@ -299,7 +303,18 @@ class DoughBoss_Preorder_Approval {
 			return self::error( 'doughboss_preorder_payment_token_invalid', __( 'A valid payment capability is required.', 'doughboss' ), 403 );
 		}
 		$row = self::approval( $request_order_id );
-		return self::valid_token_row( $row, $raw_token, (bool) $allow_started, (bool) $allow_expired_started );
+		$valid = self::valid_token_row( $row, $raw_token, (bool) $allow_started, (bool) $allow_expired_started );
+		if ( is_wp_error( $valid ) ) {
+			return $valid;
+		}
+		$fingerprint = self::fingerprint_request( $request_order_id );
+		if ( is_wp_error( $fingerprint ) ) {
+			return $fingerprint;
+		}
+		if ( ! is_string( $fingerprint ) || 1 !== preg_match( '/^[a-f0-9]{64}$/', $fingerprint ) || ! hash_equals( (string) $row->request_fingerprint, $fingerprint ) ) {
+			return self::error( 'doughboss_preorder_fingerprint_conflict', __( 'The pre-order request changed after approval.', 'doughboss' ), 409 );
+		}
+		return $valid;
 	}
 
 	/**
@@ -324,11 +339,16 @@ class DoughBoss_Preorder_Approval {
 			return $started;
 		}
 		try {
+			$request = self::locked_order( $request_order_id );
 			$row   = self::locked_approval( $request_order_id );
 			$valid = self::valid_token_row( $row, $raw_token, true, false );
 			if ( is_wp_error( $valid ) ) {
 				self::rollback();
 				return $valid;
+			}
+			if ( ! $request || (int) $request->version !== (int) $row->approved_revision || ! self::fingerprint_matches( (string) $row->request_fingerprint, $request, true ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_fingerprint_conflict', __( 'The pre-order request changed after approval.', 'doughboss' ), 409 );
 			}
 			if ( self::STATE_PAYMENT_ACTIVE === $row->state ) {
 				if ( ! self::commit() ) {
@@ -407,7 +427,7 @@ class DoughBoss_Preorder_Approval {
 				|| ( ! $linked_attempt && ! self::dispatch_window_open( $row ) )
 				|| (int) $request->version !== (int) $row->approved_revision
 				|| ! $row->request_fingerprint
-				|| ! hash_equals( (string) $row->request_fingerprint, self::fingerprint_from_locked_order( $request ) )
+			|| ! self::fingerprint_matches( (string) $row->request_fingerprint, $request, true )
 			) {
 				self::rollback();
 				return self::error( 'doughboss_preorder_payment_unavailable', __( 'This pre-order request is not available for payment dispatch.', 'doughboss' ), 409 );
@@ -596,7 +616,7 @@ class DoughBoss_Preorder_Approval {
 		if ( ! $row || ! self::known_state( $row->state ) ) {
 			return self::error( 'doughboss_preorder_approval_missing', __( 'No valid pre-order approval record exists for this request.', 'doughboss' ), 404 );
 		}
-		if ( ! $request || 'preorder_request' !== $request->order_source || ! $row->request_fingerprint || ! hash_equals( (string) $row->request_fingerprint, self::fingerprint_from_locked_order( $request ) ) ) {
+		if ( ! $request || 'preorder_request' !== $request->order_source || ! $row->request_fingerprint || ! self::fingerprint_matches( (string) $row->request_fingerprint, $request, true ) ) {
 			return self::error( 'doughboss_preorder_fingerprint_conflict', __( 'The pre-order request changed after approval and cannot be released.', 'doughboss' ), 409 );
 		}
 		if ( ! $row->payment_checkout_key || ! hash_equals( (string) $row->payment_checkout_key, $checkout_key ) ) {
@@ -617,12 +637,15 @@ class DoughBoss_Preorder_Approval {
 		}
 		$stripe_verified = 'stripe' === (string) $fulfillment->payment_method && ! empty( $fulfillment->payment_intent_id );
 		$square_verified = 'square' === (string) $fulfillment->payment_method && self::square_fulfillment_matches( $fulfillment, $request, $row, $checkout_key );
+		$fulfillment_basis = DoughBoss_Order::accounting_basis_from_order( $fulfillment );
+		$basis_matches = ! is_wp_error( $fulfillment_basis ) && DoughBoss_Order::accounting_basis_matches_payload( $request, null === $fulfillment_basis ? array() : array( 'accounting_basis' => $fulfillment_basis ) );
 		if (
 			'web' !== (string) $fulfillment->order_source
 			|| 'paid' !== (string) $fulfillment->payment_status
 			|| empty( $fulfillment->checkout_key )
 			|| ! hash_equals( $checkout_key, (string) $fulfillment->checkout_key )
 			|| ! hash_equals( strtoupper( (string) $request->currency ), strtoupper( (string) $fulfillment->currency ) )
+			|| ! $basis_matches
 			|| ( ! $stripe_verified && ! $square_verified )
 		) {
 			return self::error( 'doughboss_preorder_fulfillment_unverified', __( 'Only a verified paid order can release this pre-order request.', 'doughboss' ), 409 );
@@ -724,6 +747,9 @@ class DoughBoss_Preorder_Approval {
 		$payload  = $snapshot['payload'];
 		$order    = isset( $payload['order'] ) && is_array( $payload['order'] ) ? $payload['order'] : array();
 		$approval_payload = isset( $payload['approval'] ) && is_array( $payload['approval'] ) ? $payload['approval'] : array();
+		if ( ! DoughBoss_Order::accounting_basis_matches_payload( $request, $order ) ) {
+			return false;
+		}
 		$snapshot_binding = isset( $payload['square_binding'] ) && is_array( $payload['square_binding'] ) ? $payload['square_binding'] : array();
 		if (
 			(int) ( isset( $approval_payload['request_id'] ) ? $approval_payload['request_id'] : 0 ) !== (int) $request->id
@@ -764,6 +790,9 @@ class DoughBoss_Preorder_Approval {
 		}
 		$payload = $snapshot['payload'];
 		$order   = isset( $payload['order'] ) && is_array( $payload['order'] ) ? $payload['order'] : array();
+		if ( ! DoughBoss_Order::accounting_basis_matches_payload( $fulfillment, $order ) ) {
+			return false;
+		}
 		foreach ( array( 'location_id', 'currency', 'customer_name', 'customer_email', 'customer_phone', 'address', 'notes', 'order_type', 'voucher_code' ) as $field ) {
 			if ( ! array_key_exists( $field, $order ) || ! isset( $fulfillment->$field ) || (string) $order[ $field ] !== (string) $fulfillment->$field ) {
 				return false;
@@ -887,7 +916,7 @@ class DoughBoss_Preorder_Approval {
 
 	/** @return array|WP_Error */
 	private static function storage_ready() {
-		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.24.0', '<' ) || ! class_exists( 'DoughBoss_Activator' ) || ! DoughBoss_Activator::preorder_approval_storage_ready() ) {
+		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! class_exists( 'DoughBoss_Activator' ) || ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::preorder_approval_storage_ready() ) {
 			return self::error( 'doughboss_preorder_storage_unavailable', __( 'Pre-order approval is temporarily unavailable while storage is upgraded.', 'doughboss' ), 503 );
 		}
 		return true;
@@ -1016,14 +1045,18 @@ class DoughBoss_Preorder_Approval {
 		return false !== $inserted;
 	}
 
-	/** @return string */
+	/** @return string|WP_Error */
 	private static function fingerprint_from_locked_order( $order ) {
 		return self::fingerprint_from_order( $order, true );
 	}
 
-	/** @return string */
+	/** @return string|WP_Error */
 	private static function fingerprint_from_order( $order, $locking ) {
 		global $wpdb;
+		$basis = DoughBoss_Order::accounting_basis_from_order( $order );
+		if ( is_wp_error( $basis ) ) {
+			return $basis;
+		}
 		$sql = 'SELECT id,item_id,name,size,toppings,quantity,unit_price,line_total FROM ' . self::items_table() . ' WHERE order_id = %d ORDER BY id ASC' . ( $locking ? ' FOR UPDATE' : '' );
 		$items = (array) $wpdb->get_results( $wpdb->prepare( $sql, (int) $order->id ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 		$fields = array( 'id', 'order_number', 'version', 'location_id', 'status', 'order_type', 'order_source', 'customer_name', 'customer_email', 'customer_phone', 'address', 'notes', 'subtotal', 'tax', 'delivery_fee', 'total', 'discount', 'voucher_code', 'currency', 'payment_status', 'payment_method', 'promised_ready_from_utc', 'promised_ready_by_utc', 'timezone_snapshot' );
@@ -1032,7 +1065,18 @@ class DoughBoss_Preorder_Approval {
 			$snapshot[ $field ] = isset( $order->{$field} ) ? (string) $order->{$field} : '';
 		}
 		$snapshot['items'] = $items;
-		return hash( 'sha256', wp_json_encode( $snapshot ) );
+		// Omit unknown legacy facts to preserve original fingerprint bytes.
+		if ( null !== $basis ) {
+			$snapshot['accounting_basis'] = $basis;
+		}
+		$json = wp_json_encode( $snapshot );
+		return is_string( $json ) ? hash( 'sha256', $json ) : self::error( 'doughboss_preorder_fingerprint_invalid', __( 'The request cannot be fingerprinted safely.', 'doughboss' ), 409 );
+	}
+
+	/** Guard every hash comparison against invalid historical facts. */
+	private static function fingerprint_matches( $expected, $order, $locking ) {
+		$actual = self::fingerprint_from_order( $order, $locking );
+		return ! is_wp_error( $actual ) && is_string( $actual ) && 1 === preg_match( '/^[a-f0-9]{64}$/', $expected ) && 1 === preg_match( '/^[a-f0-9]{64}$/', $actual ) && hash_equals( $expected, $actual );
 	}
 
 	/** @return array|WP_Error */

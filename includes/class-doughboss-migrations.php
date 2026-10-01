@@ -85,6 +85,7 @@ class DoughBoss_Migrations {
 				'1.22.0' => 'upgrade_to_1_22_0',
 				'1.23.0' => 'upgrade_to_1_23_0',
 				'1.24.0' => 'upgrade_to_1_24_0',
+				'1.25.0' => 'upgrade_to_1_25_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -139,6 +140,13 @@ class DoughBoss_Migrations {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		if ( $audit !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $audit ) ) ) {
 			throw new RuntimeException( 'Voucher reversal audit storage was not created.' );
+		}
+	}
+
+	/** 1.25.0 — preserve the server-used historical accounting basis, no backfill. */
+	private static function upgrade_to_1_25_0() {
+		if ( ! DoughBoss_Activator::checkout_storage_ready() ) {
+			throw new RuntimeException( 'Historical accounting-basis checkout storage is incomplete or invalid.' );
 		}
 	}
 

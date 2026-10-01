@@ -108,6 +108,7 @@ class DoughBoss_Activator {
 			notes text NULL,
 			subtotal decimal(10,2) NOT NULL DEFAULT 0.00,
 			tax decimal(10,2) NOT NULL DEFAULT 0.00,
+			accounting_basis_json longtext NULL DEFAULT NULL,
 			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
 			total decimal(10,2) NOT NULL DEFAULT 0.00,
 			discount decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -1093,6 +1094,7 @@ class DoughBoss_Activator {
 		$columns = array(
 			'payment_intent_id' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
 			'checkout_key'      => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			'accounting_basis_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
 		);
 		return self::column_contract_ready( $orders, $columns )
 			&& self::index_contract_ready( $orders, 'payment_intent_id', array( 'payment_intent_id' ), true, array( 191 ) )

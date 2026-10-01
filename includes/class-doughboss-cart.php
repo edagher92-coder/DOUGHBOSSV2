@@ -316,6 +316,7 @@ class DoughBoss_Cart {
 
 		$subtotal     = round( $subtotal, 2 );
 		$rate         = (float) DoughBoss_Settings::get( 'tax_rate', 0 );
+		$tax_inclusive = DoughBoss_Settings::gst_inclusive();
 		$delivery_fee = ( 'delivery' === $order_type ) ? round( (float) DoughBoss_Settings::get( 'delivery_fee', 0 ), 2 ) : 0.0;
 
 		// A held voucher reduces the goods (subtotal) before tax/total are
@@ -334,7 +335,7 @@ class DoughBoss_Cart {
 		}
 		$taxable = max( 0, round( $subtotal - $discount, 2 ) );
 
-		if ( DoughBoss_Settings::gst_inclusive() ) {
+		if ( $tax_inclusive ) {
 			// Prices already include GST: the total is just (discounted) goods +
 			// delivery, and tax is the GST component of that total (e.g. /11 @ 10%).
 			$total = round( $taxable + $delivery_fee, 2 );
@@ -350,10 +351,17 @@ class DoughBoss_Cart {
 			'discount'      => $discount,
 			'voucher_code'  => $voucher_code,
 			'tax'           => $tax,
-			'tax_inclusive' => DoughBoss_Settings::gst_inclusive(),
+			'tax_inclusive' => $tax_inclusive,
 			'delivery_fee'  => $delivery_fee,
 			'total'         => $total,
 			'item_count'    => $item_count,
+			'accounting_basis' => array(
+				'version' => 1,
+				'tax_inclusive' => $tax_inclusive,
+				'tax_rate' => $rate,
+				'discount_policy' => 'goods_before_tax',
+				'delivery_taxable' => $tax_inclusive,
+			),
 		);
 	}
 
@@ -373,9 +381,13 @@ class DoughBoss_Cart {
 	 * @return array
 	 */
 	public function to_array( $order_type = 'pickup' ) {
+		// Keep the shipped projection byte-compatible with Stripe checkout HMACs.
+		$items = $this->get_lines();
+		$totals = $this->totals( $order_type );
+		unset( $totals['accounting_basis'] );
 		return array(
-			'items'  => $this->get_lines(),
-			'totals' => $this->totals( $order_type ),
+			'items'  => $items,
+			'totals' => $totals,
 		);
 	}
 }
