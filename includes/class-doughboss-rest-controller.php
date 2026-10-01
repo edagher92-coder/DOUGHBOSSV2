@@ -3638,13 +3638,21 @@ class DoughBoss_REST_Controller {
 		}
 		$request_id = absint( $request->get_param( 'request_id' ) );
 		$token      = sanitize_text_field( $request->get_param( 'token' ) );
-		$approval   = DoughBoss_Preorder_Approval::verify_payment_token( $request_id, $token, true );
+		// Expiry prevents a new charge, not confirmation of an exact linked
+		// Square attempt that may already have taken money.
+		$approval   = DoughBoss_Preorder_Approval::verify_payment_token( $request_id, $token, true, 'square' === DoughBoss_Settings::payment_gateway() );
 		if ( is_wp_error( $approval ) ) {
 			return $approval;
 		}
 		$order = DoughBoss_Order::get( $request_id );
 		if ( ! $order || 'preorder_request' !== (string) $order->order_source ) {
 			return new WP_Error( 'doughboss_preorder_not_found', __( 'That pre-order request could not be found.', 'doughboss' ), array( 'status' => 404 ) );
+		}
+		if ( 'square' === DoughBoss_Settings::payment_gateway() && 'released' !== (string) $approval['state'] ) {
+			$fingerprint = DoughBoss_Preorder_Approval::fingerprint_request( $request_id );
+			if ( is_wp_error( $fingerprint ) || (int) $order->version !== (int) $approval['approved_revision'] || ! hash_equals( (string) $approval['request_fingerprint'], (string) $fingerprint ) ) {
+				return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 		}
 		return rest_ensure_response( $this->preorder_payment_payload( $order, $approval ) );
 	}
@@ -3662,6 +3670,9 @@ class DoughBoss_REST_Controller {
 			|| ! DoughBoss_Activator::payment_storage_ready()
 		) {
 			return new WP_Error( 'doughboss_preorder_payment_storage', __( 'Approved payments are paused while secure order storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		if ( 'square' === DoughBoss_Settings::payment_gateway() ) {
+			return $this->preorder_payment_start_square( $request );
 		}
 		if ( 'stripe' !== DoughBoss_Settings::payment_gateway() || ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Stripe payment is not available right now. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
@@ -3787,12 +3798,128 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Start the approved-request Square path. All checkout facts come from the
+	 * approved source record; browser input supplies SDK tokenization material
+	 * only and is never retained in the durable attempt metadata.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function preorder_payment_start_square( WP_REST_Request $request ) {
+		if ( ! DoughBoss_Square::ready() ) {
+			return new WP_Error( 'doughboss_pay_off', __( 'Card payment is not available right now. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		if ( $this->rate_limited( 'preorder_payment_start', 8, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+		$request_id = absint( $request->get_param( 'request_id' ) );
+		$token      = sanitize_text_field( $request->get_param( 'token' ) );
+		$approval   = DoughBoss_Preorder_Approval::verify_payment_token( $request_id, $token, true );
+		$order      = $request_id ? DoughBoss_Order::get( $request_id ) : null;
+		if ( is_wp_error( $approval ) ) {
+			return $approval;
+		}
+		if ( ! $order || 'preorder_request' !== (string) $order->order_source || 'unpaid' !== (string) $order->payment_status ) {
+			DoughBoss_Preorder_Approval::hold_payment( $request_id );
+			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$payment_location = DoughBoss_Locations::online_payment_location( (int) $order->location_id );
+		$binding          = DoughBoss_Square::shop_binding( (int) $order->location_id );
+		if ( is_wp_error( $payment_location ) ) {
+			return $payment_location;
+		}
+		if ( is_wp_error( $binding ) ) {
+			return $binding;
+		}
+		$approval = DoughBoss_Preorder_Approval::claim_payment( $request_id, $token );
+		if ( is_wp_error( $approval ) ) {
+			return $approval;
+		}
+		$checkout_key = isset( $approval['payment_checkout_key'] ) ? (string) $approval['payment_checkout_key'] : '';
+		$fingerprint  = DoughBoss_Preorder_Approval::fingerprint_request( $request_id );
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) || is_wp_error( $fingerprint ) || empty( $approval['request_fingerprint'] ) || ! hash_equals( (string) $approval['request_fingerprint'], (string) $fingerprint ) ) {
+			DoughBoss_Preorder_Approval::hold_payment( $request_id );
+			return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$client_key = sanitize_text_field( (string) $request->get_param( 'payment_attempt_key' ) );
+		if ( '' === $client_key || strlen( $client_key ) > 191 ) {
+			return new WP_Error( 'doughboss_pay_attempt_key', __( 'The payment session is missing. Please refresh and try again.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$order_data = array(
+			'order_type'        => (string) $order->order_type,
+			'location_id'       => (int) $order->location_id,
+			'table_id'          => 0,
+			'table_label'       => '',
+			'table_qr_code_id'  => 0,
+			'table_session_id'  => 0,
+			'order_source'      => 'web',
+			'source_request_id' => $request_id,
+			'customer_name'     => (string) $order->customer_name,
+			'customer_email'    => (string) $order->customer_email,
+			'customer_phone'    => (string) $order->customer_phone,
+			'address'           => (string) $order->address,
+			'notes'             => (string) $order->notes,
+			'subtotal'          => (float) $order->subtotal,
+			'tax'               => (float) $order->tax,
+			'delivery_fee'      => (float) $order->delivery_fee,
+			'total'             => (float) $order->total,
+			'discount'          => (float) $order->discount,
+			'voucher_code'      => (string) $order->voucher_code,
+			'currency'          => strtoupper( (string) $order->currency ),
+			'checkout_key'      => $checkout_key,
+		);
+		$binding_hash = hash( 'sha256', wp_json_encode( array( 'approved-square', $checkout_key, $binding ) ) );
+		$snapshot = DoughBoss_Checkout_Snapshots::store(
+			$checkout_key,
+			array(
+				'order'          => $order_data,
+				'lines'          => array_values( DoughBoss_Order::get_items( $request_id ) ),
+				'approval'       => array( 'request_id' => $request_id, 'approved_revision' => (int) $approval['approved_revision'], 'request_fingerprint' => (string) $approval['request_fingerprint'] ),
+				'square_binding' => $binding,
+				'binding_hash'   => $binding_hash,
+			),
+			isset( $approval['payment_token_expires_at_utc'] ) ? (string) $approval['payment_token_expires_at_utc'] : ''
+		);
+		if ( is_wp_error( $snapshot ) ) {
+			DoughBoss_Preorder_Approval::hold_payment( $request_id );
+			return $snapshot;
+		}
+		$intent = DoughBoss_Square::create_payment_intent(
+			DoughBoss_Payment::to_minor_units( (float) $order->total ),
+			(string) $order_data['currency'],
+			array(
+				'checkout_key'            => $checkout_key,
+				'purpose'                 => 'order',
+				'context'                 => 'approved_preorder',
+				'location_id'             => (int) $order->location_id,
+				'amount_minor'            => DoughBoss_Payment::to_minor_units( (float) $order->total ),
+				'protocol_version'        => 'square-v2',
+				'attempt_identity'        => hash( 'sha256', 'approved-square|' . $request_id . '|' . $checkout_key . '|' . $client_key ),
+				'binding_hash'            => $binding_hash,
+				'cart_guard'              => hash( 'sha256', 'approved-square-cart|' . $request_id . '|' . $checkout_key ),
+				'source_request_id'       => $request_id,
+				'approved_revision'       => (int) $approval['approved_revision'],
+				'request_fingerprint'     => (string) $approval['request_fingerprint'],
+				'preorder_payment_token'  => $token,
+				'source_id'               => sanitize_text_field( (string) $request->get_param( 'source_id' ) ),
+				'verification_token'      => sanitize_text_field( (string) $request->get_param( 'verification_token' ) ),
+			)
+		);
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+		return rest_ensure_response( array( 'gateway' => 'square', 'payment_intent' => (string) $intent['id'], 'amount' => (int) $intent['amount'], 'currency' => (string) $intent['currency'], 'live_mode' => DoughBoss_Square::live_mode() ) );
+	}
+
+	/**
 	 * Verify the returned Stripe Session and release one paid order.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function preorder_payment_complete( WP_REST_Request $request ) {
+		if ( 'square' === DoughBoss_Settings::payment_gateway() ) {
+			return $this->preorder_payment_complete_square( $request );
+		}
 		if ( $this->rate_limited( 'preorder_payment_complete', 12, 10 * MINUTE_IN_SECONDS ) ) {
 			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
 		}
@@ -3852,6 +3979,118 @@ class DoughBoss_REST_Controller {
 		return rest_ensure_response( $this->checkout_payload( $order, true ) );
 	}
 
+	/** @return WP_REST_Response|WP_Error */
+	private function preorder_payment_complete_square( WP_REST_Request $request ) {
+		if ( $this->rate_limited( 'preorder_payment_complete', 12, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+		$request_id = absint( $request->get_param( 'request_id' ) );
+		$token      = sanitize_text_field( $request->get_param( 'token' ) );
+		$approval   = DoughBoss_Preorder_Approval::verify_payment_token( $request_id, $token, true, true );
+		if ( is_wp_error( $approval ) ) {
+			return $approval;
+		}
+		$attempt = $this->approved_square_attempt( $approval, $request_id );
+		if ( ! is_array( $attempt ) ) {
+			return new WP_Error( 'doughboss_preorder_payment_binding', __( 'This payment is not bound to the approved request. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$reference = isset( $attempt['provider_reference'] ) ? DoughBoss_Square::canonical_id( $attempt['provider_reference'] ) : '';
+		if ( '' === $reference ) {
+			return new WP_Error( 'doughboss_preorder_payment_pending', __( 'Your payment is still being confirmed. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
+		$intent = DoughBoss_Square::retrieve_payment_intent( $reference );
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+		if ( 'succeeded' !== (string) $intent['status'] ) {
+			return new WP_Error( 'doughboss_preorder_payment_pending', __( 'Your payment is still being confirmed. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
+		$recovered = $this->recover_approved_square_order( $attempt, $reference );
+		if ( is_wp_error( $recovered ) ) {
+			return $recovered;
+		}
+		if ( ! is_array( $recovered ) ) {
+			return new WP_Error( 'doughboss_pay_snapshot_missing', __( 'The paid order details require manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return rest_ensure_response( $recovered );
+	}
+
+	/** Resolve one exact approval-linked attempt without trusting browser IDs. @return array|null */
+	private function approved_square_attempt( array $approval, $request_id ) {
+		$attempt_id = isset( $approval['payment_attempt_id'] ) ? (int) $approval['payment_attempt_id'] : 0;
+		$attempt    = $attempt_id ? DoughBoss_Payment_Attempts::find( $attempt_id ) : null;
+		$order      = DoughBoss_Order::get( (int) $request_id );
+		if ( ! is_array( $attempt ) || ! $order || 'preorder_request' !== (string) $order->order_source ) {
+			return null;
+		}
+		$metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$binding  = DoughBoss_Square::shop_binding( (int) $order->location_id );
+		if ( is_wp_error( $binding ) || 'square' !== (string) $attempt['provider'] || 'order' !== (string) $attempt['purpose'] || 'approved_preorder' !== (string) $attempt['context']
+			|| (int) $attempt['location_id'] !== (int) $order->location_id
+			|| (int) $attempt['amount_minor'] !== DoughBoss_Payment::to_minor_units( (float) $order->total )
+			|| strtoupper( (string) $attempt['currency'] ) !== strtoupper( (string) $order->currency )
+			|| empty( $approval['payment_checkout_key'] ) || ! hash_equals( (string) $approval['payment_checkout_key'], (string) $attempt['checkout_key'] )
+			|| ! isset( $metadata['approval_id'], $metadata['approved_revision'], $metadata['approval_fingerprint'], $metadata['square_shop_slug'], $metadata['square_location_id'], $metadata['square_mode'] )
+			|| (int) $metadata['approval_id'] !== (int) $request_id || (int) $metadata['approved_revision'] !== (int) $approval['approved_revision']
+			|| ! hash_equals( (string) $approval['request_fingerprint'], (string) $metadata['approval_fingerprint'] )
+			|| ! hash_equals( (string) $binding['shop_slug'], (string) $metadata['square_shop_slug'] )
+			|| ! hash_equals( (string) $binding['square_location_id'], (string) $metadata['square_location_id'] )
+			|| ! hash_equals( (string) $binding['square_mode'], (string) $metadata['square_mode'] ) ) {
+			return null;
+		}
+		return $attempt;
+	}
+
+	/** Shared browser/webhook recovery; the order transaction rechecks locked authority. @return array|false|WP_Error */
+	private function recover_approved_square_order( array $attempt, $reference ) {
+		$metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$request_id = isset( $metadata['approval_id'] ) ? absint( $metadata['approval_id'] ) : 0;
+		$approval = $request_id ? DoughBoss_Preorder_Approval::get( $request_id ) : new WP_Error( 'doughboss_preorder_payment_binding' );
+		$linked = ! is_wp_error( $approval ) && $request_id ? $this->approved_square_attempt( $approval, $request_id ) : null;
+		if ( ! is_array( $linked ) || (int) $linked['id'] !== (int) $attempt['id'] || ! hash_equals( (string) $linked['provider_reference'], (string) $reference ) ) {
+			return false;
+		}
+		// The immutable snapshot may have been consumed by the first successful
+		// transaction. A lost browser reply must replay that exact paid receipt,
+		// not create another order or require the customer to pay again.
+		$existing_id = DoughBoss_Order::find_id_by_source_request( $request_id );
+		if ( $existing_id ) {
+			$existing = DoughBoss_Order::get( $existing_id );
+			if ( ! $existing || 'released' !== (string) $approval['state'] || (int) $approval['fulfillment_order_id'] !== $existing_id
+				|| 'square' !== (string) $existing->payment_method || 'paid' !== (string) $existing->payment_status
+				|| ! hash_equals( (string) $reference, (string) $existing->payment_intent_id )
+				|| ! hash_equals( (string) $attempt['checkout_key'], (string) $existing->checkout_key )
+				|| (int) $existing->location_id !== (int) $attempt['location_id']
+				|| DoughBoss_Payment::to_minor_units( (float) $existing->total ) !== (int) $attempt['amount_minor']
+				|| strtoupper( (string) $existing->currency ) !== strtoupper( (string) $attempt['currency'] ) ) {
+				return new WP_Error( 'doughboss_preorder_payment_binding', __( 'The paid receipt requires staff review. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			return $this->checkout_payload( $existing, true );
+		}
+		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $attempt['checkout_key'] );
+		if ( ! is_array( $snapshot ) || empty( $snapshot['payload']['order'] ) || empty( $snapshot['payload']['lines'] ) ) {
+			return false;
+		}
+		$order_data = $snapshot['payload']['order'];
+		$order_data['payment_status'] = 'paid';
+		$order_data['payment_method'] = 'square';
+		$order_data['payment_intent_id'] = $reference;
+		$order_data['checkout_key'] = (string) $attempt['checkout_key'];
+		$created = DoughBoss_Order::create( $order_data, array_values( $snapshot['payload']['lines'] ) );
+		if ( is_wp_error( $created ) ) {
+			return $created;
+		}
+		DoughBoss_Payment_Attempts::mark_order_committed( $reference, (int) $created['order_id'] );
+		$order = DoughBoss_Order::get( (int) $created['order_id'] );
+		if ( ! $order ) {
+			return new WP_Error( 'doughboss_preorder_payment_order_missing', __( 'The paid order could not be loaded. Please contact the shop.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		if ( empty( $created['replayed'] ) ) {
+			$this->send_confirmation( $order );
+		}
+		return $this->checkout_payload( $order, ! empty( $created['replayed'] ) );
+	}
+
 	/**
 	 * Safe public summary for an approved request capability.
 	 *
@@ -3880,22 +4119,27 @@ class DoughBoss_REST_Controller {
 		$stripe_ready = 'stripe' === DoughBoss_Settings::payment_gateway()
 			&& DoughBoss_Payment::ready()
 			&& ! is_wp_error( $payment_location );
+		$square_binding = 'square' === DoughBoss_Settings::payment_gateway() ? DoughBoss_Square::shop_binding( (int) $order->location_id ) : new WP_Error( 'doughboss_pay_off' );
+		$square_ready = 'square' === DoughBoss_Settings::payment_gateway() && DoughBoss_Square::ready() && ! is_wp_error( $payment_location ) && ! is_wp_error( $square_binding );
+		$linked_attempt_id = isset( $approval['payment_attempt_id'] ) ? (int) $approval['payment_attempt_id'] : 0;
+		$linked_attempt = $square_ready && $linked_attempt_id ? $this->approved_square_attempt( $approval, (int) $order->id ) : null;
+		$square_confirm = $square_ready && in_array( $state, array( 'payment_active', 'payment_held' ), true ) && is_array( $linked_attempt );
 		$start_window = $unexpired && strtotime( $expires_at . ' UTC' ) >= time() + ( 35 * MINUTE_IN_SECONDS );
-		$can_start   = $stripe_ready && $unexpired && ( 'payment_active' === $state || ( 'approved_unpaid' === $state && $start_window ) );
+		$can_start   = ( $stripe_ready || $square_ready ) && $unexpired && ( 'payment_active' === $state || ( 'approved_unpaid' === $state && $start_window ) ) && ! ( $square_ready && $linked_attempt_id );
 		$payable     = $can_start;
 		$phone       = $location && isset( $location->phone ) ? sanitize_text_field( (string) $location->phone ) : '';
 		$normal_phone = class_exists( 'DoughBoss_SMS' ) ? DoughBoss_SMS::normalize_phone( $phone ) : '';
-		$presentation = $released ? 'complete' : ( 'payment_held' === $state ? 'held' : ( ! $unexpired || ( 'approved_unpaid' === $state && ! $start_window ) ? 'expired' : ( ! $stripe_ready ? 'payment_disabled' : ( $can_start ? 'ready' : 'unavailable' ) ) ) );
+		$presentation = $released ? 'complete' : ( 'payment_held' === $state ? 'held' : ( ! $unexpired || ( 'approved_unpaid' === $state && ! $start_window ) ? 'expired' : ( ! ( $stripe_ready || $square_ready ) ? 'payment_disabled' : ( $can_start ? 'ready' : 'unavailable' ) ) ) );
 		if ( $released ) {
 			$message = __( 'Payment is verified and your order has been sent to DoughBoss.', 'doughboss' );
 		} elseif ( 'payment_held' === $state ) {
-			$message = __( 'Stripe payment needs staff review. Do not pay again; contact DoughBoss.', 'doughboss' );
+			$message = __( 'Payment needs staff review. Do not pay again; contact DoughBoss.', 'doughboss' );
 		} elseif ( ! $unexpired || ( 'approved_unpaid' === $state && ! $start_window ) ) {
-			$message = __( 'This approved payment link can no longer start a new Stripe payment. Please contact DoughBoss and do not pay again.', 'doughboss' );
-		} elseif ( ! $stripe_ready ) {
-			$message = __( 'Stripe payment is not enabled for this shop right now. Please contact DoughBoss and do not pay.', 'doughboss' );
+			$message = __( 'This approved payment link can no longer start a new payment. Please contact DoughBoss and do not pay again.', 'doughboss' );
+		} elseif ( ! ( $stripe_ready || $square_ready ) ) {
+			$message = __( 'Online payment is not enabled for this shop right now. Please contact DoughBoss and do not pay.', 'doughboss' );
 		} else {
-			$message = __( 'This request is approved for payment. It is not sent to the kitchen until Stripe confirms payment.', 'doughboss' );
+			$message = __( 'This request is approved for payment. It is not sent to the kitchen until the server verifies payment.', 'doughboss' );
 		}
 		return array(
 			'success'            => true,
@@ -3907,10 +4151,13 @@ class DoughBoss_REST_Controller {
 			'currency'           => (string) $order->currency,
 			'state'              => $state,
 			'presentation_state' => $presentation,
+			'gateway'            => DoughBoss_Settings::payment_gateway(),
 			'can_start_payment'  => $can_start,
+			'can_confirm_payment'=> $square_confirm,
+			'square'             => $square_ready ? array( 'application_id' => DoughBoss_Square::publishable_key(), 'location_id' => (string) $square_binding['square_location_id'], 'live_mode' => DoughBoss_Square::live_mode() ) : null,
 			'contact_phone'      => $phone,
 			'contact_tel'        => '' === $normal_phone ? '' : 'tel:' . $normal_phone,
-			'payable'            => $payable && 'stripe' === DoughBoss_Settings::payment_gateway() && DoughBoss_Payment::ready(),
+			'payable'            => $payable && ( $stripe_ready || $square_ready ),
 			'complete'           => $released && 'paid' === (string) $released->payment_status,
 			'tracking_url'       => $released ? DoughBoss_Settings::tracking_page_url( $released->order_number ) : '',
 			'fulfilment_number'  => $released ? (string) $released->order_number : '',
@@ -6084,13 +6331,15 @@ class DoughBoss_REST_Controller {
 	 * POST /square-webhook — storefront payment reconciliation safety-net, the
 	 * Square equivalent of tyro_webhook().
 	 *
-	 * Same invariants as the Tyro webhook, deliberately NOT the Stripe one: it
-	 * never creates orders and never refunds. Square's storefront flow charges
-	 * the card synchronously and the browser's /checkout call is the only path
+	 * Ordinary cart payments retain reconciliation-only behavior. Their flow
+	 * charges the card synchronously and the browser's /checkout is the only path
 	 * that can create an order, so the one failure this endpoint exists to catch
 	 * is "Square took the money but /checkout never landed". That is surfaced on
 	 * the Orders screen for a human decision rather than auto-fulfilled — money
-	 * movement without a verified cart is never automated here.
+	 * movement without a verified cart is never automated here. The narrow
+	 * approved-request exception reuses its immutable approval-linked snapshot
+	 * and the same transactional paid fulfillment as browser confirmation.
+	 * This endpoint never initiates a charge or refund.
 	 *
 	 * Nothing in the delivered payload is trusted: the signature is checked
 	 * first, then the payment is re-read from Square and re-bound to this site's
@@ -6187,7 +6436,19 @@ class DoughBoss_REST_Controller {
 				}
 			}
 		} elseif ( 'succeeded' === $intent['status'] && ! DoughBoss_Order::payment_intent_used( $reference ) ) {
-			$this->record_unreconciled_payment( $reference, $intent );
+			$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $reference );
+			if ( is_array( $attempt ) && 'approved_preorder' === ( isset( $attempt['context'] ) ? (string) $attempt['context'] : '' ) ) {
+				$recovered = $this->recover_approved_square_order( $attempt, $reference );
+				if ( is_wp_error( $recovered ) ) {
+					DoughBoss_Payment_Attempts::complete_event( $event_key, 'retry' );
+					return $recovered;
+				}
+				if ( ! $recovered ) {
+					$this->record_unreconciled_payment( $reference, $intent );
+				}
+			} else {
+				$this->record_unreconciled_payment( $reference, $intent );
+			}
 		}
 		DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' );
 

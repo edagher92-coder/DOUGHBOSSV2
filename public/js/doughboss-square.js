@@ -1,10 +1,10 @@
 /**
  * DoughBoss — Square Web Payments card capture.
  *
- * Enqueued by PHP ONLY when Square is the active, ready payment gateway
- * (DoughBoss_Assets::enqueue()). On every other site configuration this file is
- * never loaded, and even if it were it exits immediately on the guards below,
- * so nothing here can affect the pay-at-shop or Stripe storefront.
+ * Enqueued for the selected Square gateway. Ordinary card fields require
+ * enabled checkout; approved-only mode remains dormant until the server has
+ * validated a fragment capability and returned its exact public shop binding.
+ * Neither mode affects the pay-at-shop or Stripe storefront.
  *
  * What it does
  * ------------
@@ -43,11 +43,12 @@
 	var PAY = DATA.payments || {};
 	var I18N = DATA.i18n || {};
 
-	// Hard gate. Square only ever runs when the server said Square is the
-	// active, ready gateway AND handed over both public identifiers.
-	if (!PAY.enabled || PAY.gateway !== 'square' || !CONFIG.applicationId || !CONFIG.locationId) {
+	// Ordinary checkout and capability-approved checkout have separate gates.
+	// A closed store may load this module, but not initialize payment fields.
+	if (PAY.gateway !== 'square') {
 		return;
 	}
+	var ordinaryEnabled = !!(PAY.enabled && CONFIG.applicationId && CONFIG.locationId);
 
 	var CARD_CONTAINER_CLASS = 'db-square-card';
 	var enhanced = [];
@@ -154,8 +155,46 @@
 	/* ------------------------------------------------------------------ */
 
 	var paymentsPromise = null;
+	var sdkPromise = null;
 
-	function squarePayments() {
+	function approvedSquareBinding(summary) {
+		var binding = summary && summary.square;
+		if (!summary || summary.gateway !== 'square' || !binding ||
+			typeof binding.live_mode !== 'boolean' ||
+			!/^[-A-Za-z0-9_]{5,128}$/.test(String(binding.application_id || '')) ||
+			!/^[-A-Za-z0-9_]{5,128}$/.test(String(binding.location_id || ''))) {
+			throw new Error('The approved shop payment details are not available. Contact DoughBoss.');
+		}
+		return { applicationId: binding.application_id, locationId: binding.location_id, liveMode: binding.live_mode };
+	}
+
+	function loadApprovedSquareSdk(binding) {
+		var expected = binding.liveMode ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js';
+		if (CONFIG.sdkUrl !== expected) {
+			return Promise.reject(new Error('The secure payment environment changed. Please reload your approved link.'));
+		}
+		if (window.Square && typeof window.Square.payments === 'function') { return Promise.resolve(); }
+		if (sdkPromise) { return sdkPromise; }
+		sdkPromise = new Promise(function (resolve, reject) {
+			var script = document.createElement('script');
+			script.src = expected;
+			script.async = true;
+			script.onload = function () {
+				if (window.Square && typeof window.Square.payments === 'function') { resolve(); }
+				else { reject(new Error('The secure payment form could not be loaded.')); }
+			};
+			script.onerror = function () { reject(new Error('The secure payment form could not be loaded.')); };
+			document.head.appendChild(script);
+		});
+		return sdkPromise;
+	}
+
+	function squarePayments(binding) {
+		if (binding) {
+			return loadApprovedSquareSdk(binding).then(function () {
+				return window.Square.payments(binding.applicationId, binding.locationId);
+			});
+		}
 		if (paymentsPromise) { return paymentsPromise; }
 		paymentsPromise = new Promise(function (resolve, reject) {
 			if (!window.Square || typeof window.Square.payments !== 'function') {
@@ -173,7 +212,7 @@
 	 * @param {HTMLElement} form The .db-checkout form.
 	 * @return {Object} A small controller: { ready, tokenize, destroyed }.
 	 */
-	function mountCard(form) {
+	function mountCard(form, binding) {
 		var mountId = 'db-square-card-' + String(Date.now()) + '-' + String(Math.floor(Math.random() * 10000));
 		var mount = el('div', { class: CARD_CONTAINER_CLASS, id: mountId });
 		var status = el('p', { class: 'db-pay-secure', text: 'Secure payment by Square · your card details never reach DoughBoss.' });
@@ -192,7 +231,7 @@
 			form.appendChild(wrap);
 		}
 
-		var cardPromise = squarePayments().then(function (payments) {
+		var cardPromise = squarePayments(binding).then(function (payments) {
 			return payments.card().then(function (card) {
 				return card.attach('#' + mountId).then(function () {
 					return { payments: payments, card: card };
@@ -205,12 +244,15 @@
 			status.className = 'db-pay-secure db-error';
 			throw err;
 		});
+		// Mount happens before submission. Report its rejection in the existing
+		// status node, without an unhandled promise or starting a provider call.
+		cardPromise.catch(function () {});
 
 		return {
 			status: status,
 			ready: function () {
 				if (!cardPromise) {
-					cardPromise = squarePayments().then(function (payments) {
+					cardPromise = squarePayments(binding).then(function (payments) {
 						return payments.card().then(function (card) {
 							return card.attach('#' + mountId).then(function () {
 								return { payments: payments, card: card };
@@ -335,6 +377,59 @@
 		};
 	}
 
+	function approvedVerificationDetails(summary) {
+		var amount = Number(summary && summary.total);
+		var currency = validSquareCurrency(summary && summary.currency);
+		if (!isFinite(amount) || amount <= 0 || !currency) {
+			throw new Error('The approved payment amount is not available. Please reload your approved link.');
+		}
+		return { amount: amount.toFixed(2), currencyCode: currency, intent: 'CHARGE', customerInitiated: true, sellerKeyedIn: false };
+	}
+
+	function enhanceApproved(form, summary, capability) {
+		if (sessionFor(form)) { return; }
+		var requestId = Number(capability && capability.requestId);
+		if (!isFinite(requestId) || requestId <= 0 || Math.floor(requestId) !== requestId || !/^[a-f0-9]{64}$/i.test(String(capability && capability.token || ''))) {
+			throw new Error('A valid approved payment link is required.');
+		}
+		var binding = approvedSquareBinding(summary);
+		var recovering = summary.can_confirm_payment === true;
+		if (!recovering && summary.can_start_payment !== true) {
+			throw new Error('This approved request cannot start payment.');
+		}
+		approvedVerificationDetails(summary);
+		enhanced.push({ form: form, approved: true, summary: summary, capability: capability,
+			paymentAttemptKey: uuid(), providerRequestStarted: recovering,
+			controller: recovering ? null : mountCard(form, binding) });
+	}
+
+	function confirmApproved(session) {
+		return request('/preorder-payment/complete', { method: 'POST', body: {
+			request_id: session.capability.requestId, token: session.capability.token
+		} });
+	}
+
+	function payApprovedSession(session) {
+		// Once dispatch might have started, only the server-owned linked attempt
+		// may be checked. No browser provider id, generic checkout, or new charge.
+		if (session.providerRequestStarted) { return confirmApproved(session); }
+		var verification;
+		try { verification = approvedVerificationDetails(session.summary); }
+		catch (err) { return Promise.reject(err); }
+		return session.controller.ready().then(function (parts) {
+			return parts.card.tokenize(verification);
+		}).then(function (result) {
+			if (!result || result.status !== 'OK' || !result.token) {
+				throw new Error('Card verification was not completed. Please check your card and try again.');
+			}
+			session.providerRequestStarted = true;
+			return request('/preorder-payment/start', { method: 'POST', body: {
+				request_id: session.capability.requestId, token: session.capability.token,
+				payment_attempt_key: session.paymentAttemptKey, source_id: result.token
+			} });
+		}).then(function () { return confirmApproved(session); });
+	}
+
 	function placeOrder(session, orderType, locationId) {
 		var form = session.form;
 		if (!session.checkoutAttemptId) {
@@ -406,6 +501,7 @@
 	}
 
 	function enhance(form) {
+		if (!ordinaryEnabled) { return; }
 		if (sessionFor(form)) { return; }
 		if (form.className.indexOf('db-preorder-request') !== -1) { return; }
 		if (form.querySelector('.' + CARD_CONTAINER_CLASS)) { return; }
@@ -543,6 +639,15 @@
 	// doughboss.js: hand it a checkout form and it returns a promise that
 	// resolves once the payment is taken and the order is placed.
 	window.DoughBossSquare = {
+		enhanceApproved: enhanceApproved,
+		approvedPending: function (form) { var session = sessionFor(form); return !!(session && session.approved && session.providerRequestStarted); },
+		payApproved: function (form) {
+			var session = sessionFor(form);
+			if (!session || !session.approved) { return Promise.reject(new Error('The approved payment form is not ready.')); }
+			if (session.busy) { return Promise.reject(new Error('This payment is already being checked.')); }
+			session.busy = true;
+			return payApprovedSession(session).then(function (result) { session.busy = false; return result; }, function (err) { session.busy = false; throw err; });
+		},
 		enhance: enhance,
 		pay: function (form) {
 			var session = sessionFor(form);

@@ -2643,6 +2643,9 @@
 
 	function approvedPreorderPresentation(summary) {
 		summary = summary || {};
+		if (summary.gateway === 'square' && summary.can_confirm_payment === true && !summary.complete) {
+			return { state: 'held', canStart: false, title: 'Confirming your payment', body: 'Do not pay again. Check the payment already linked to your approved request, or call DoughBoss for help.' };
+		}
 		var allowed = ['ready', 'held', 'expired', 'payment_disabled', 'complete', 'unavailable'];
 		var state = String(summary.presentation_state || '');
 		if (allowed.indexOf(state) === -1) {
@@ -2653,7 +2656,7 @@
 		var copy = {
 			ready: {
 				title: 'Approved and ready for secure payment',
-				body: 'Your request is still unpaid and has not reached the kitchen. Stripe-verified payment releases it automatically.'
+				body: 'Your request is still unpaid and has not reached the kitchen. Server-verified payment releases it automatically.'
 			},
 			held: {
 				title: 'Payment needs staff review',
@@ -2695,6 +2698,10 @@
 		return approvedPreorderPresentation(summary).state === 'complete';
 	}
 
+	function approvedSquareRecoverable(summary) {
+		return !!(summary && summary.gateway === 'square' && summary.can_confirm_payment === true);
+	}
+
 	function verifyApprovedPreorder(capability) {
 		return request('/preorder-payment/complete', {
 			method: 'POST',
@@ -2719,17 +2726,18 @@
 		root.appendChild(el('header', { class: 'db-order-header' }, [
 			el('p', { class: 'db-order-kicker', text: 'Approved request' }),
 			el('h1', { text: 'Review and pay securely' }),
-			el('p', { text: 'Payment is available only for the items DoughBoss approved. The kitchen receives the order after Stripe verifies payment.' })
+			el('p', { text: 'Payment is available only for the items DoughBoss approved. The kitchen receives the order after the server verifies payment.' })
 		]));
 		root.appendChild(content);
 		root.appendChild(message);
 
 		function showComplete(result) {
+			setPaymentMutationLock(false);
 			content.innerHTML = '';
 			content.appendChild(el('div', { class: 'db-order-confirm', tabindex: '-1' }, [
 				el('p', { class: 'db-order-kicker', text: 'Payment verified' }),
 				el('h3', { text: 'Your order is in' }),
-				el('p', { text: result.message || 'Stripe verified payment and the order was sent to DoughBoss.' }),
+				el('p', { text: result.message || 'Payment was verified and the order was sent to DoughBoss.' }),
 				result.order_number ? el('strong', { text: result.order_number }) : null,
 				result.tracking_url ? el('a', { class: 'db-btn', href: result.tracking_url, text: 'Track this order' }) : null
 			]));
@@ -2781,7 +2789,7 @@
 			]));
 			content.appendChild(card);
 
-			if (!presentation.canStart) {
+			if (!presentation.canStart && !approvedSquareRecoverable(summary)) {
 				var contact = approvedPreorderContact(summary);
 				content.appendChild(el('section', { class: 'db-preorder-help', role: 'note' }, [
 					el('strong', { text: presentation.title }),
@@ -2789,6 +2797,10 @@
 					contact ? el('a', { class: 'db-preorder-contact', href: contact.tel, text: 'Call DoughBoss on ' + contact.phone }) : null
 				]));
 				announceError(message, presentation.body);
+				return;
+			}
+			if (summary.gateway === 'square') {
+				drawSquarePayment(summary);
 				return;
 			}
 			var pay = el('button', { class: 'db-btn db-btn--lg', type: 'button', text: 'Continue to Stripe · ' + money(summary.total) });
@@ -2825,6 +2837,39 @@
 			if (capability.cancelled && !capability.returning) {
 				message.textContent = 'Payment was cancelled. No kitchen order was created. You can use the same approved link if you still want to pay.';
 			}
+		}
+
+		function drawSquarePayment(summary) {
+			var square = window.DoughBossSquare;
+			if (!square || typeof square.enhanceApproved !== 'function' || typeof square.payApproved !== 'function') {
+				announceError(message, 'The secure Square payment form is unavailable. Reload your approved link or call DoughBoss.');
+				return;
+			}
+			var recovering = approvedSquareRecoverable(summary);
+			var form = el('form', { class: 'db-checkout-region db-approved-square-payment' });
+			var pay = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: recovering ? 'Check existing payment' : 'Pay securely with Square - ' + money(summary.total) });
+			form.appendChild(el('p', { class: 'db-pay-secure', role: 'note', text: recovering ? 'Do not pay again. We will check the payment already linked to your approved request.' : 'Square securely handles your card. Your order reaches the kitchen only after the server verifies payment.' }));
+			form.appendChild(pay);
+			content.appendChild(form);
+			try { square.enhanceApproved(form, summary, capability); }
+			catch (err) { pay.disabled = true; announceError(message, err.message); return; }
+			form.addEventListener('submit', function (event) {
+				event.preventDefault();
+				if (pay.disabled) { return; }
+				pay.disabled = true;
+				pay.textContent = 'Checking secure payment...';
+				form.setAttribute('aria-busy', 'true');
+				clearError(message);
+				setPaymentMutationLock(true);
+				square.payApproved(form).then(showComplete).catch(function (err) {
+					pay.disabled = false;
+					form.setAttribute('aria-busy', 'false');
+					var pending = square.approvedPending(form);
+					pay.textContent = pending ? 'Check existing payment' : 'Pay securely with Square - ' + money(summary.total);
+					setPaymentMutationLock(pending);
+					announceError(message, pending ? 'Payment is not confirmed yet. Do not pay again. Check the existing payment or call DoughBoss. ' + (err.message || '') : err.message);
+				});
+			});
 		}
 
 		function loadSummary() {

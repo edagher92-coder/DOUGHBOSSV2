@@ -649,6 +649,253 @@ function cateringQuote(total) {
 	return { subtotal: total, delivery_fee: 0, total, deposit_pct: 30, deposit: total * 0.3, balance: total * 0.7, lead_days: 2, currency: 'AUD' };
 }
 
+function approvedSquareHarness(options = {}) {
+	const requests = [];
+	const tokenizations = [];
+	const summary = { gateway: 'square', total: 14, currency: 'AUD', square: { application_id: 'sq-app-1', location_id: 'sq-shop-bankstown', live_mode: false } };
+	const session = {
+		summary,
+		capability: { requestId: 91, token: 'a'.repeat(64) },
+		paymentAttemptKey: 'approved-attempt-1',
+		providerRequestStarted: !!options.pending,
+		controller: { ready: () => Promise.resolve({ card: { tokenize: details => {
+			tokenizations.push(details);
+			return Promise.resolve(options.tokenResult || { status: 'OK', token: 'cnon:approved' });
+		} } }) }
+	};
+	const request = async (route, requestOptions) => {
+		requests.push({ route, options: requestOptions });
+		if (options.failStart && route === '/preorder-payment/start') { throw new Error('Synthetic lost response'); }
+		return route === '/preorder-payment/start' ? { gateway: 'square', payment_intent: 'sq-provider-id' } : { order_number: 'PAID-91' };
+	};
+	const confirm = extractFunction(square, 'confirmApproved', { request });
+	const pay = extractFunction(square, 'payApprovedSession', {
+		approvedVerificationDetails: extractFunction(square, 'approvedVerificationDetails', { validSquareCurrency: extractFunction(square, 'validSquareCurrency') }),
+		confirmApproved: confirm, request
+	});
+	return { session, requests, tokenizations, pay };
+}
+
+test('approved Square uses the capability routes and no client money or provider identity', async () => {
+	const h = approvedSquareHarness();
+	const paid = await h.pay(h.session);
+	assert.equal(paid.order_number, 'PAID-91');
+	assert.equal(h.tokenizations[0].amount, '14.00');
+	assert.equal(h.tokenizations[0].currencyCode, 'AUD');
+	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/start', '/preorder-payment/complete']);
+	assert.deepEqual(Object.keys(h.requests[0].options.body).sort(), ['payment_attempt_key', 'request_id', 'source_id', 'token']);
+	assert.deepEqual(Object.keys(h.requests[1].options.body).sort(), ['request_id', 'token']);
+	assert.equal(h.requests[0].options.body.source_id, 'cnon:approved');
+	assert.equal(h.session.providerRequestStarted, true);
+});
+
+test('approved Square unknown start outcome retries only confirmation without another token or POST', async () => {
+	const h = approvedSquareHarness({ failStart: true });
+	await assert.rejects(h.pay(h.session), /lost response/);
+	await h.pay(h.session);
+	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/start', '/preorder-payment/complete']);
+	assert.equal(h.tokenizations.length, 1);
+	assert.equal(h.session.paymentAttemptKey, 'approved-attempt-1');
+});
+
+test('approved Square reload recovery never tokenizes or starts a new payment', async () => {
+	const h = approvedSquareHarness({ pending: true });
+	await h.pay(h.session);
+	assert.equal(h.tokenizations.length, 0);
+	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/complete']);
+});
+
+test('approved Square cancelled or failed card verification makes no server payment call', async () => {
+	for (const status of ['CANCELED', 'FAILED', 'OK']) {
+		const h = approvedSquareHarness({ tokenResult: { status } });
+		await assert.rejects(h.pay(h.session), /verification was not completed/);
+		assert.equal(h.requests.length, 0);
+		assert.equal(h.session.providerRequestStarted, false);
+	}
+});
+
+test('approved Square rejects invalid public shop bindings and never uses the global shop', () => {
+	const binding = extractFunction(square, 'approvedSquareBinding');
+	const summary = { gateway: 'square', square: { application_id: 'sq-app-1', location_id: 'sq-bankstown-1', live_mode: false } };
+	assert.deepEqual(JSON.parse(JSON.stringify(binding(summary))), { applicationId: 'sq-app-1', locationId: 'sq-bankstown-1', liveMode: false });
+	for (const value of [null, { gateway: 'stripe', square: summary.square }, { gateway: 'square', square: { ...summary.square, location_id: '' } }, { gateway: 'square', square: { ...summary.square, live_mode: 'false' } }]) {
+		assert.throws(() => binding(value), /shop payment details/);
+	}
+});
+
+test('approved Square SDK stays dormant on environment mismatch and uses only the exact CDN', async () => {
+	let scripts = 0;
+	const load = extractFunction(square, 'loadApprovedSquareSdk', {
+		CONFIG: { sdkUrl: 'https://sandbox.web.squarecdn.com/v1/square.js' },
+		window: {}, document: { createElement: () => { scripts++; return {}; } }, sdkPromise: null
+	});
+	await assert.rejects(load({ liveMode: true }), /environment changed/);
+	assert.equal(scripts, 0);
+});
+
+function dormantSquareModuleHarness() {
+	const calls = [];
+	const sdkBindings = [];
+	const scripts = [];
+	const tokenizations = [];
+	function element(tag = 'div') {
+		return { tag, children: [], attributes: {}, className: '', parentNode: null,
+			appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+			insertBefore(child, target) { child.parentNode = this; this.children.splice(this.children.indexOf(target), 0, child); return child; },
+			setAttribute(key, value) { this.attributes[key] = value; },
+			querySelector(selector) { return selector === 'button[type="submit"]' ? this.children.find(child => child.tag === 'button') : null; }
+		};
+	}
+	const window = {
+		DoughBossData: { payments: { enabled: false, gateway: 'square' }, restUrl: '/wp-json/doughboss/v1', currency: '$' },
+		DoughBossSquareConfig: { applicationId: '', locationId: '', sdkUrl: 'https://sandbox.web.squarecdn.com/v1/square.js' },
+		crypto: { randomUUID: () => 'synthetic-stable-key' }
+	};
+	const document = { readyState: 'loading', createElement: element, addEventListener() {},
+		head: { appendChild(script) {
+			scripts.push(script);
+			window.Square = { payments(applicationId, locationId) {
+				sdkBindings.push({ applicationId, locationId });
+				return { card: () => Promise.resolve({ attach: () => Promise.resolve(), tokenize: details => {
+					tokenizations.push(details);
+					return Promise.resolve({ status: 'OK', token: 'cnon:synthetic-card' });
+				} }) };
+			} };
+			script.onload();
+		} }
+	};
+	vm.runInNewContext(fs.readFileSync(square, 'utf8'), { window, document, Promise, CustomEvent: function () {}, fetch: async (url, options) => {
+		calls.push({ url, body: JSON.parse(options.body) });
+		return { ok: true, json: async () => url.endsWith('/start') ? { gateway: 'square' } : { order_number: 'PAID-TEST' } };
+	} });
+	const form = element('form');
+	form.appendChild(element('button'));
+	return { window, form, calls, scripts, sdkBindings, tokenizations };
+}
+
+test('actual dormant Square module loads no SDK until approved mode and binds the exact capability shop', async () => {
+	const h = dormantSquareModuleHarness();
+	assert.equal(h.scripts.length, 0);
+	assert.equal(h.sdkBindings.length, 0);
+	h.window.DoughBossSquare.enhance(h.form);
+	assert.equal(h.form.children.length, 1, 'closed ordinary checkout has no card field');
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-roselands-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.equal(h.scripts.length, 1);
+	assert.equal(h.scripts[0].src, 'https://sandbox.web.squarecdn.com/v1/square.js');
+	assert.deepEqual(h.sdkBindings, [{ applicationId: 'sq-app-test', locationId: 'sq-roselands-test' }]);
+	assert.equal(h.tokenizations.length, 1);
+	assert.deepEqual(h.calls.map(call => call.url), ['/wp-json/doughboss/v1/preorder-payment/start', '/wp-json/doughboss/v1/preorder-payment/complete']);
+	assert.equal(h.calls[1].body.request_id, 93);
+	assert.equal(Object.hasOwn(h.calls[1].body, 'payment_intent'), false);
+});
+
+test('actual Square recovery module never loads SDK, mounts fields or tokenizes', async () => {
+	const h = dormantSquareModuleHarness();
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: false, can_confirm_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 94, token: 'c'.repeat(64) });
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.equal(h.form.children.length, 1);
+	assert.equal(h.scripts.length, 0);
+	assert.equal(h.tokenizations.length, 0);
+	assert.deepEqual(h.calls.map(call => call.url), ['/wp-json/doughboss/v1/preorder-payment/complete']);
+});
+
+test('actual approved Square module rejects a missing capability before loading card fields', () => {
+	const h = dormantSquareModuleHarness();
+	assert.throws(() => h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 94, token: '' }), /valid approved payment link/);
+	assert.equal(h.form.children.length, 1);
+	assert.equal(h.scripts.length, 0);
+	assert.equal(h.calls.length, 0);
+});
+
+function approvedScreenHarness(summary, paymentError) {
+	const elements = [];
+	const calls = [];
+	const locks = [];
+	let pending = summary.can_confirm_payment === true;
+	function element(tag, attrs = {}, children = []) {
+		const node = { tag, attrs, children: [], textContent: attrs.text || '', listeners: {}, hidden: false,
+			set innerHTML(value) { this.children = []; this.textContent = value; },
+			get firstChild() { return this.children[0] || null; },
+			appendChild(child) { if (child) { this.children.push(child); } return child; },
+			addEventListener(name, callback) { this.listeners[name] = callback; },
+			setAttribute(key, value) { this.attrs[key] = value; }, closest() { return { hidden: true }; }
+		};
+		children.forEach(child => node.appendChild(child));
+		elements.push(node);
+		return node;
+	}
+	const presentation = extractFunction(storefront, 'approvedPreorderPresentation');
+	const render = extractFunction(storefront, 'renderApprovedPreorder', {
+		document: { body: { classList: { add() {} } }, querySelectorAll: () => [] },
+		window: { history: { replaceState() {} }, location: { pathname: '/order/', search: '' }, DoughBossSquare: {
+			enhanceApproved(form, state, capability) { calls.push({ type: 'enhance', form, state, capability }); },
+			payApproved(form) { calls.push({ type: 'pay', form }); pending = true; return paymentError ? Promise.reject(paymentError) : Promise.resolve({ order_number: 'PAID-97' }); },
+			approvedPending() { return pending; }
+		} },
+		el: element, money: amount => '$' + Number(amount).toFixed(2),
+		approvedPreorderPresentation: presentation,
+		isApprovedPreorderComplete: state => state.presentation_state === 'complete',
+		approvedSquareRecoverable: extractFunction(storefront, 'approvedSquareRecoverable'),
+		approvedPreorderContact: () => null,
+		setPaymentMutationLock: locked => locks.push(locked),
+		clearError: node => { node.textContent = ''; }, announceError: (node, message) => { node.textContent = message; }, revealNode() {},
+		request: async route => { calls.push({ type: 'request', route }); return summary; }
+	});
+	const root = element('main');
+	render(root, { requestId: 97, token: 'd'.repeat(64) });
+	const textOf = node => [node.textContent, ...node.children.map(textOf)].join(' ');
+	return { elements, calls, locks, text: () => textOf(root), settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('approved screen renders Square payment and confirms only after its server completion', async () => {
+	const h = approvedScreenHarness({ gateway: 'square', presentation_state: 'ready', can_start_payment: true, total: 14, currency: 'AUD', items: [] });
+	await h.settle();
+	assert.match(h.text(), /Pay securely with Square/);
+	assert.doesNotMatch(h.text(), /Continue to Stripe|after Stripe/);
+	const form = h.elements.find(node => node.tag === 'form');
+	assert.ok(form);
+	form.listeners.submit({ preventDefault() {} });
+	await h.settle();
+	assert.match(h.text(), /Payment verified/);
+	assert.equal(h.calls.filter(call => call.type === 'pay').length, 1);
+	assert.equal(h.locks.at(-1), false);
+});
+
+test('approved screen keeps uncertain Square result in confirmation-only recovery', async () => {
+	const h = approvedScreenHarness({ gateway: 'square', presentation_state: 'held', can_start_payment: false, can_confirm_payment: true, total: 14, currency: 'AUD', items: [] }, new Error('Synthetic pending'));
+	await h.settle();
+	assert.match(h.text(), /Check existing payment/);
+	const form = h.elements.find(node => node.tag === 'form');
+	form.listeners.submit({ preventDefault() {} });
+	await h.settle();
+	assert.match(h.text(), /Do not pay again/);
+	assert.doesNotMatch(h.text(), /Pay securely with Square/);
+	assert.equal(form.attrs['aria-busy'], 'false');
+	assert.equal(h.locks.at(-1), true);
+});
+
+test('closed ordering keeps Square dormant while approved recovery is explicitly scoped', () => {
+	const source = fs.readFileSync(square, 'utf8');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	assert.match(source, /function enhance\(form\) \{\s*if \(!ordinaryEnabled\) \{ return; \}/);
+	assert.match(assets, /'applicationId'\s*=> \$payments_on \? DoughBoss_Square::publishable_key\(\) : ''/);
+	assert.match(assets, /'locationId'\s*=> \$payments_on \? DoughBoss_Square::location_id\(\) : ''/);
+	const recovery = extractFunction(storefront, 'approvedSquareRecoverable');
+	assert.equal(recovery({ gateway: 'square', can_confirm_payment: true }), true);
+	assert.equal(recovery({ gateway: 'stripe', can_confirm_payment: true }), false);
+	assert.equal(recovery({ gateway: 'square', can_confirm_payment: 'true' }), false);
+});
+
 test('catering quotes reject error objects and invalid display fields', () => {
 	assert.equal(validCateringQuote(cateringQuote(100)), true);
 	assert.equal(validCateringQuote(cateringQuote(0)), true);

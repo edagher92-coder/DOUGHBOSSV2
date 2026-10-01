@@ -576,6 +576,30 @@ function db_integration_approved_square_fixture( $seed ) {
 	return array( 'request_id' => $id, 'token' => (string) $approved['capability_token'], 'approval' => $approved, 'order' => $order, 'order_data' => $data, 'lines' => $lines, 'snapshot' => $snapshot, 'metadata' => $meta );
 }
 
+/**
+ * Approved request for the REST start path. Unlike the service-level fixture,
+ * it deliberately has no checkout snapshot: the REST controller is the sole
+ * owner of its immutable approved-payment snapshot.
+ */
+function db_integration_approved_square_rest_fixture( $seed ) {
+	$created = db_integration_create_preorder_request( 'square-rest-' . $seed, 14.00 );
+	$id = is_array( $created ) ? (int) $created['order_id'] : 0;
+	$pending = $id ? DoughBoss_Preorder_Approval::ensure_pending( $id ) : new WP_Error( 'integration_square_rest_fixture' );
+	$order = $id ? DoughBoss_Order::get( $id ) : null;
+	$approved = $order && ! is_wp_error( $pending )
+		? DoughBoss_Preorder_Approval::decide( $id, 'approve', 9001, 'Synthetic Square REST Approver', 'integration-square-rest-approval-' . $seed, '', (int) $order->version )
+		: new WP_Error( 'integration_square_rest_fixture' );
+	if ( is_wp_error( $approved ) ) {
+		return $approved;
+	}
+	return array(
+		'request_id' => $id,
+		'token' => (string) $approved['capability_token'],
+		'approval' => $approved,
+		'order' => $order,
+	);
+}
+
 /** Find a synthetic approved Square attempt without exposing its capability. */
 function db_integration_approved_square_attempt( array $fixture ) {
 	return DoughBoss_Payment_Attempts::find_by_attempt_key( hash( 'sha256', 'square-v2|' . $fixture['metadata']['attempt_identity'] ) );
@@ -3191,6 +3215,286 @@ foreach ( $binding_shop_ids as $binding_shop_id ) {
 $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'slug' => $binding_original_location->slug, 'is_active' => $binding_original_location->is_active ), array( 'id' => 1 ) );
 update_option( DoughBoss_Settings::OPTION_KEY, $binding_original_settings, false );
 
+// Public approved-request Square flow: exercise the real REST controller using
+// a provider-free transport. Browser-owned fields must never replace the
+// immutable request, approval, or attempt binding retained by the server.
+$square_rest_settings_before = DoughBoss_Settings::all();
+$square_rest_settings = $square_rest_settings_before;
+$square_rest_settings['ordering_open'] = 1;
+$square_rest_settings['payments_enabled'] = 1;
+$square_rest_settings['payment_gateway'] = 'square';
+$square_rest_settings['currency_code'] = 'AUD';
+$square_rest_settings['square_mode'] = 'test';
+$square_rest_settings['square_test_app_id'] = 'sandbox-sq0idb-INTEGRATIONAPP000000';
+$square_rest_settings['square_test_access_token'] = 'EAAAlocalSyntheticIntegrationToken000000';
+$square_rest_settings['square_test_location_map'] = array(
+	'revesby' => 'LINTEGRATIONLOCATION',
+	'bankstown' => 'LINTEGRATIONBANKSTOWN',
+	'roselands' => 'LINTEGRATIONROSELANDS',
+);
+$square_rest_settings['square_test_webhook_key'] = 'local-synthetic-webhook-key-000000';
+$square_rest_settings['square_webhook_url'] = 'https://example.invalid/wp-json/doughboss/v1/square-webhook';
+update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings, false );
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 1, 'pickup_enabled' => 1, 'is_active' => 1 ), array( 'id' => 1 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$square_rest_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
+add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
+
+$square_rest_view_fixture = db_integration_approved_square_rest_fixture( 'rest-view' );
+if ( is_array( $square_rest_view_fixture ) ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.231';
+	$square_rest_view = $square_rest_controller->preorder_payment_view(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_view_fixture['request_id'], 'token' => $square_rest_view_fixture['token'] ) )
+	);
+	$square_rest_view_data = $square_rest_view instanceof WP_REST_Response ? $square_rest_view->get_data() : array();
+	db_integration_same( 'square', isset( $square_rest_view_data['gateway'] ) ? $square_rest_view_data['gateway'] : '', 'approved Square REST view exposes the configured public gateway only' );
+	db_integration_same( true, ! empty( $square_rest_view_data['can_start_payment'] ), 'approved Square REST view permits start only before an attempt is linked' );
+	db_integration_same( false, ! empty( $square_rest_view_data['can_confirm_payment'] ), 'approved Square REST view cannot confirm without an exact linked attempt' );
+	db_integration_same( 'sandbox-sq0idb-INTEGRATIONAPP000000', isset( $square_rest_view_data['square']['application_id'] ) ? $square_rest_view_data['square']['application_id'] : '', 'approved Square REST view exposes only the configured application id' );
+	db_integration_same( 'LINTEGRATIONLOCATION', isset( $square_rest_view_data['square']['location_id'] ) ? $square_rest_view_data['square']['location_id'] : '', 'approved Square REST view derives Revesby exact mapped location' );
+	db_integration_same( false, ! empty( $square_rest_view_data['square']['live_mode'] ), 'approved Square REST view reports test-mode public configuration' );
+
+	$square_rest_bad_token = $square_rest_controller->preorder_payment_view(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_view_fixture['request_id'], 'token' => str_repeat( 'a', 64 ) ) )
+	);
+	db_integration_assert( is_wp_error( $square_rest_bad_token ), 'approved Square REST view rejects an invalid capability token' );
+	foreach ( array( 'pending', 'rejected' ) as $square_rest_state ) {
+		$square_rest_denied = db_integration_approved_square_rest_fixture( 'rest-view-' . $square_rest_state );
+		if ( ! is_array( $square_rest_denied ) ) {
+			db_integration_assert( false, 'approved Square REST ' . $square_rest_state . ' fixture is available' );
+			continue;
+		}
+		$wpdb->update( $square_approval_table, array( 'state' => $square_rest_state ), array( 'request_order_id' => $square_rest_denied['request_id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 'pending' === $square_rest_state ? '232' : '233' );
+		$square_rest_denied_view = $square_rest_controller->preorder_payment_view(
+			db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_denied['request_id'], 'token' => $square_rest_denied['token'] ) )
+		);
+		db_integration_assert( is_wp_error( $square_rest_denied_view ), 'approved Square REST view rejects ' . $square_rest_state . ' requests' );
+	}
+	$square_rest_revision = db_integration_approved_square_rest_fixture( 'rest-view-revision' );
+	if ( is_array( $square_rest_revision ) ) {
+		$wpdb->update( $square_approval_table, array( 'approved_revision' => (int) $square_rest_revision['approval']['approved_revision'] + 1 ), array( 'request_order_id' => $square_rest_revision['request_id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.234';
+		$square_rest_revision_view = $square_rest_controller->preorder_payment_view(
+			db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_revision['request_id'], 'token' => $square_rest_revision['token'] ) )
+		);
+		db_integration_assert( is_wp_error( $square_rest_revision_view ), 'approved Square REST view rejects a stale revision capability' );
+	}
+} else {
+	db_integration_assert( false, 'approved Square REST view fixture is available' );
+}
+
+$square_rest_start_fixture = db_integration_approved_square_rest_fixture( 'rest-start-complete' );
+if ( is_array( $square_rest_start_fixture ) ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.235';
+	$square_rest_posts_before = $GLOBALS['db_square_post_count'];
+	$square_rest_start = $square_rest_controller->preorder_payment_start(
+		db_integration_rest_request(
+			'/doughboss/v1/preorder-payment/start',
+			array(
+				'request_id' => $square_rest_start_fixture['request_id'],
+				'token' => $square_rest_start_fixture['token'],
+				'payment_attempt_key' => 'approved-rest-start-attempt-0001',
+				'source_id' => 'cnon:approved-rest-source',
+				'verification_token' => 'verify:approved-rest-token',
+				'amount' => 1,
+				'currency' => 'USD',
+				'location_id' => 999999,
+				'payment_intent_id' => 'sqpayFORGEDBROWSERID',
+			)
+		)
+	);
+	$square_rest_start_data = $square_rest_start instanceof WP_REST_Response ? $square_rest_start->get_data() : array();
+	$square_rest_reference = isset( $square_rest_start_data['payment_intent'] ) ? (string) $square_rest_start_data['payment_intent'] : '';
+	$square_rest_approval = DoughBoss_Preorder_Approval::get( $square_rest_start_fixture['request_id'] );
+	$square_rest_attempt = is_array( $square_rest_approval ) && ! empty( $square_rest_approval['payment_attempt_id'] ) ? DoughBoss_Payment_Attempts::find( (int) $square_rest_approval['payment_attempt_id'] ) : null;
+	db_integration_assert( $square_rest_start instanceof WP_REST_Response && '' !== $square_rest_reference && is_array( $square_rest_attempt ), 'approved Square REST start creates one server-owned linked payment attempt' );
+	db_integration_same( $square_rest_posts_before + 1, $GLOBALS['db_square_post_count'], 'approved Square REST start sends exactly one provider POST' );
+	db_integration_same( 1400, is_array( $square_rest_attempt ) ? (int) $square_rest_attempt['amount_minor'] : 0, 'approved Square REST start ignores forged browser amount' );
+	db_integration_same( 'AUD', is_array( $square_rest_attempt ) ? (string) $square_rest_attempt['currency'] : '', 'approved Square REST start ignores forged browser currency' );
+	$square_rest_meta = is_array( $square_rest_attempt ) ? DoughBoss_Payment_Attempts::metadata( $square_rest_attempt ) : array();
+	db_integration_same( 'LINTEGRATIONLOCATION', isset( $square_rest_meta['square_location_id'] ) ? (string) $square_rest_meta['square_location_id'] : '', 'approved Square REST start ignores forged browser location and saves exact shop binding' );
+	db_integration_assert( ! isset( $square_rest_meta['source_id'], $square_rest_meta['verification_token'], $square_rest_meta['payment_intent_id'] ), 'approved Square REST start never persists browser tokenization or forged provider fields' );
+
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.236';
+	$square_rest_linked_view = $square_rest_controller->preorder_payment_view(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_start_fixture['request_id'], 'token' => $square_rest_start_fixture['token'] ) )
+	);
+	$square_rest_linked_data = $square_rest_linked_view instanceof WP_REST_Response ? $square_rest_linked_view->get_data() : array();
+	db_integration_same( false, ! empty( $square_rest_linked_data['can_start_payment'] ), 'approved Square REST view blocks a second start after any linked attempt' );
+	db_integration_same( true, ! empty( $square_rest_linked_data['can_confirm_payment'] ), 'approved Square REST view permits confirmation only for its exact active linked attempt' );
+
+	$square_rest_binding_fixture = db_integration_approved_square_rest_fixture( 'rest-drift-binding' );
+	if ( is_array( $square_rest_binding_fixture ) ) {
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.240';
+		$square_rest_binding_start = $square_rest_controller->preorder_payment_start(
+			db_integration_rest_request( '/doughboss/v1/preorder-payment/start', array( 'request_id' => $square_rest_binding_fixture['request_id'], 'token' => $square_rest_binding_fixture['token'], 'payment_attempt_key' => 'approved-rest-binding-attempt-0001', 'source_id' => 'cnon:approved-rest-binding-source' ) )
+		);
+		$square_rest_binding_approval = DoughBoss_Preorder_Approval::get( $square_rest_binding_fixture['request_id'] );
+		$square_rest_binding_attempt = is_array( $square_rest_binding_approval ) && ! empty( $square_rest_binding_approval['payment_attempt_id'] ) ? DoughBoss_Payment_Attempts::find( (int) $square_rest_binding_approval['payment_attempt_id'] ) : null;
+		$wpdb->update( $square_approval_table, array( 'payment_checkout_key' => hash( 'sha256', 'rest-drifted-approved-binding' ) ), array( 'request_order_id' => $square_rest_binding_fixture['request_id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.241';
+		$square_rest_drift_view = $square_rest_controller->preorder_payment_view(
+			db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_binding_fixture['request_id'], 'token' => $square_rest_binding_fixture['token'] ) )
+		);
+		$square_rest_drift_data = $square_rest_drift_view instanceof WP_REST_Response ? $square_rest_drift_view->get_data() : array();
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.242';
+		$square_rest_drift_complete = $square_rest_controller->preorder_payment_complete(
+			db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', array( 'request_id' => $square_rest_binding_fixture['request_id'], 'token' => $square_rest_binding_fixture['token'], 'payment_intent_id' => is_array( $square_rest_binding_attempt ) ? (string) $square_rest_binding_attempt['provider_reference'] : '' ) )
+		);
+		db_integration_assert( $square_rest_binding_start instanceof WP_REST_Response && is_array( $square_rest_binding_attempt ), 'approved Square REST drift fixture starts one exact linked attempt' );
+		db_integration_same( false, ! empty( $square_rest_drift_data['can_confirm_payment'] ), 'approved Square REST view never confirms a missing or drifted attempt binding' );
+		db_integration_same( 'doughboss_preorder_payment_binding', is_wp_error( $square_rest_drift_complete ) ? $square_rest_drift_complete->get_error_code() : '', 'approved Square REST complete rejects a drifted saved binding before fulfillment' );
+		db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $square_rest_binding_fixture['request_id'] ), 'approved Square REST drift binding creates no fallback kitchen order' );
+	} else {
+		db_integration_assert( false, 'approved Square REST drift-binding fixture is available' );
+	}
+
+	$square_rest_map_drift = DoughBoss_Settings::all();
+	$square_rest_map_drift['square_test_location_map']['revesby'] = 'LCHANGEDAFTERRESTSTART';
+	update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_map_drift, false );
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.237';
+	$square_rest_hooks_before = count( $GLOBALS['db_order_created_events'] );
+	$square_rest_posts_before_drift = $GLOBALS['db_square_post_count'];
+	$square_rest_drift_complete = $square_rest_controller->preorder_payment_complete(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', array( 'request_id' => $square_rest_start_fixture['request_id'], 'token' => $square_rest_start_fixture['token'], 'payment_intent_id' => 'sqpayFORGEDBROWSERID' ) )
+	);
+	db_integration_assert( is_wp_error( $square_rest_drift_complete ), 'approved Square REST complete fails closed when current shop mapping drifts from saved binding' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $square_rest_start_fixture['request_id'] ), 'approved Square REST mapping drift creates no fallback kitchen order' );
+	db_integration_same( $square_rest_hooks_before, count( $GLOBALS['db_order_created_events'] ), 'approved Square REST mapping drift fires no kitchen hook' );
+	db_integration_same( $square_rest_posts_before_drift, $GLOBALS['db_square_post_count'], 'approved Square REST mapping drift performs no additional provider POST' );
+	update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings, false );
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.238';
+	$square_rest_complete = $square_rest_controller->preorder_payment_complete(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', array( 'request_id' => $square_rest_start_fixture['request_id'], 'token' => $square_rest_start_fixture['token'], 'payment_intent_id' => 'sqpayFORGEDBROWSERID' ) )
+	);
+	$square_rest_order_id = DoughBoss_Order::find_id_by_source_request( $square_rest_start_fixture['request_id'] );
+	$square_rest_order = $square_rest_order_id ? DoughBoss_Order::get( $square_rest_order_id ) : null;
+	db_integration_assert( $square_rest_complete instanceof WP_REST_Response && $square_rest_order && 'paid' === (string) $square_rest_order->payment_status, 'approved Square REST complete trusts only the linked attempt after exact shop mapping is restored' );
+	db_integration_same( $square_rest_reference, $square_rest_order ? (string) $square_rest_order->payment_intent_id : '', 'approved Square REST complete ignores forged browser provider id' );
+	db_integration_same( $square_rest_hooks_before + 1, count( $GLOBALS['db_order_created_events'] ), 'approved Square REST complete releases exactly one kitchen order' );
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.243';
+	$square_rest_complete_replay = $square_rest_controller->preorder_payment_complete(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', array( 'request_id' => $square_rest_start_fixture['request_id'], 'token' => $square_rest_start_fixture['token'], 'payment_intent_id' => 'sqpayANOTHERFORGEDID' ) )
+	);
+	db_integration_assert( $square_rest_complete_replay instanceof WP_REST_Response, 'approved Square REST complete acknowledges the same linked payment replay (got ' . ( is_wp_error( $square_rest_complete_replay ) ? $square_rest_complete_replay->get_error_code() : gettype( $square_rest_complete_replay ) ) . ')' );
+	db_integration_same( $square_rest_hooks_before + 1, count( $GLOBALS['db_order_created_events'] ), 'approved Square REST complete replay does not release a second kitchen order' );
+} else {
+	db_integration_assert( false, 'approved Square REST start fixture is available' );
+}
+
+// An expired capability never permits a new payment. Once a server-owned
+// attempt is already linked, it remains sufficient to display only the exact
+// confirmation state so the customer does not start another charge.
+$square_rest_expired_unstarted = db_integration_approved_square_rest_fixture( 'rest-expired-unstarted' );
+if ( is_array( $square_rest_expired_unstarted ) ) {
+	$square_rest_expired_unstarted_token = db_integration_set_preorder_expiry( $square_rest_expired_unstarted['request_id'], gmdate( 'Y-m-d H:i:s', time() - 60 ) );
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.246';
+	$square_rest_expired_unstarted_view = $square_rest_controller->preorder_payment_view(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_expired_unstarted['request_id'], 'token' => $square_rest_expired_unstarted_token ) )
+	);
+	db_integration_assert( is_wp_error( $square_rest_expired_unstarted_view ), 'expired unstarted approved Square capability remains unavailable' );
+} else {
+	db_integration_assert( false, 'approved Square REST expired-unstarted fixture is available' );
+}
+$square_rest_expired_linked = db_integration_approved_square_rest_fixture( 'rest-expired-linked' );
+if ( is_array( $square_rest_expired_linked ) ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.247';
+	$square_rest_expired_linked_start = $square_rest_controller->preorder_payment_start(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/start', array( 'request_id' => $square_rest_expired_linked['request_id'], 'token' => $square_rest_expired_linked['token'], 'payment_attempt_key' => 'approved-rest-expired-linked-attempt-0001', 'source_id' => 'cnon:approved-rest-expired-linked-source' ) )
+	);
+	$square_rest_expired_linked_token = db_integration_set_preorder_expiry( $square_rest_expired_linked['request_id'], gmdate( 'Y-m-d H:i:s', time() - 60 ) );
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.248';
+	$square_rest_expired_linked_view = $square_rest_controller->preorder_payment_view(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $square_rest_expired_linked['request_id'], 'token' => $square_rest_expired_linked_token ) )
+	);
+	$square_rest_expired_linked_data = $square_rest_expired_linked_view instanceof WP_REST_Response ? $square_rest_expired_linked_view->get_data() : array();
+	db_integration_assert( $square_rest_expired_linked_start instanceof WP_REST_Response, 'expired linked Square view fixture starts its one exact attempt before expiry' );
+	db_integration_same( false, ! empty( $square_rest_expired_linked_data['can_start_payment'] ), 'expired linked approved Square capability cannot start another payment' );
+	db_integration_same( true, ! empty( $square_rest_expired_linked_data['can_confirm_payment'] ), 'expired linked approved Square capability still displays exact confirmation state' );
+} else {
+	db_integration_assert( false, 'approved Square REST expired-linked fixture is available' );
+}
+
+// An ambiguous POST without a provider reference stays manual-pending. A
+// signed event cannot invent a binding or fall back to a generic fulfillment.
+$square_rest_webhook_fixture = db_integration_approved_square_rest_fixture( 'rest-webhook-recovery' );
+if ( is_array( $square_rest_webhook_fixture ) ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.239';
+	$GLOBALS['db_square_http_mode'] = 'network_error';
+	$square_rest_webhook_start = $square_rest_controller->preorder_payment_start(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/start', array( 'request_id' => $square_rest_webhook_fixture['request_id'], 'token' => $square_rest_webhook_fixture['token'], 'payment_attempt_key' => 'approved-rest-webhook-attempt-0001', 'source_id' => 'cnon:approved-rest-webhook-source' ) )
+	);
+	$GLOBALS['db_square_http_mode'] = 'success';
+	$square_rest_webhook_approval = DoughBoss_Preorder_Approval::get( $square_rest_webhook_fixture['request_id'] );
+	$square_rest_webhook_attempt = is_array( $square_rest_webhook_approval ) && ! empty( $square_rest_webhook_approval['payment_attempt_id'] ) ? DoughBoss_Payment_Attempts::find( (int) $square_rest_webhook_approval['payment_attempt_id'] ) : null;
+	$square_rest_webhook_reference = is_array( $square_rest_webhook_attempt ) ? (string) $square_rest_webhook_attempt['provider_reference'] : '';
+	db_integration_assert( is_wp_error( $square_rest_webhook_start ) && is_array( $square_rest_webhook_attempt ) && 'unknown' === (string) $square_rest_webhook_attempt['status'], 'approved Square REST ambiguous start retains one held linked attempt for webhook recovery' );
+	$square_rest_webhook_posts = $GLOBALS['db_square_post_count'];
+	$square_rest_webhook_hooks = count( $GLOBALS['db_order_created_events'] );
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.244';
+	$square_rest_unknown_complete = $square_rest_controller->preorder_payment_complete(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/complete', array( 'request_id' => $square_rest_webhook_fixture['request_id'], 'token' => $square_rest_webhook_fixture['token'], 'payment_intent_id' => 'sqpayFORGEDNETWORKUNKNOWN' ) )
+	);
+	$square_rest_unknown_data = is_wp_error( $square_rest_unknown_complete ) ? $square_rest_unknown_complete->get_error_data() : array();
+	db_integration_assert( is_wp_error( $square_rest_unknown_complete ) && is_array( $square_rest_unknown_data ) && ! empty( $square_rest_unknown_data['payment_pending'] ), 'approved Square REST unknown dispatch remains payment-pending at browser completion' );
+	db_integration_same( $square_rest_webhook_posts, $GLOBALS['db_square_post_count'], 'approved Square REST unknown completion performs no second provider POST' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $square_rest_webhook_fixture['request_id'] ), 'approved Square REST unknown completion creates no kitchen order' );
+	db_integration_same( $square_rest_webhook_hooks, count( $GLOBALS['db_order_created_events'] ), 'approved Square REST unknown completion fires no kitchen hook' );
+	$square_rest_webhook_body = wp_json_encode( array( 'event_id' => 'evt_approved_rest_unknown_0001', 'type' => 'payment.updated', 'data' => array( 'type' => 'payment', 'id' => 'sqpayNETWORKUNKNOWNREFERENCE0001' ) ) );
+	$square_rest_webhook_signature = base64_encode( hash_hmac( 'sha256', DoughBoss_Settings::square_webhook_url() . $square_rest_webhook_body, $square_rest_settings['square_test_webhook_key'], true ) );
+	$square_rest_webhook_request = new WP_REST_Request( 'POST', '/doughboss/v1/square-webhook' );
+	$square_rest_webhook_request->set_body( $square_rest_webhook_body );
+	$square_rest_webhook_request->set_header( DoughBoss_Square::webhook_signature_header(), $square_rest_webhook_signature );
+	$square_rest_webhook = $square_rest_controller->square_webhook( $square_rest_webhook_request );
+	$square_rest_webhook_data = $square_rest_webhook instanceof WP_REST_Response ? $square_rest_webhook->get_data() : array();
+	$square_rest_webhook_order_id = DoughBoss_Order::find_id_by_source_request( $square_rest_webhook_fixture['request_id'] );
+	db_integration_same( true, ! empty( $square_rest_webhook_data['ignored'] ), 'signed Square event cannot recover an attempt lacking its provider reference' );
+	db_integration_same( $square_rest_webhook_posts, $GLOBALS['db_square_post_count'], 'unknown-reference signed webhook performs no provider POST' );
+	db_integration_same( 0, $square_rest_webhook_order_id, 'unknown-reference signed webhook creates no fallback kitchen order' );
+	db_integration_same( $square_rest_webhook_hooks, count( $GLOBALS['db_order_created_events'] ), 'unknown-reference signed webhook fires no kitchen hook' );
+} else {
+	db_integration_assert( false, 'approved Square REST unknown-webhook fixture is available' );
+}
+
+// A known, linked asynchronous payment can converge through the signed
+// webhook alone; duplicate delivery remains one exact kitchen release.
+$square_rest_recovery_fixture = db_integration_approved_square_rest_fixture( 'rest-webhook-referenced-recovery' );
+if ( is_array( $square_rest_recovery_fixture ) ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.245';
+	$GLOBALS['db_square_http_mode'] = 'pending';
+	$square_rest_recovery_start = $square_rest_controller->preorder_payment_start(
+		db_integration_rest_request( '/doughboss/v1/preorder-payment/start', array( 'request_id' => $square_rest_recovery_fixture['request_id'], 'token' => $square_rest_recovery_fixture['token'], 'payment_attempt_key' => 'approved-rest-recovery-attempt-0001', 'source_id' => 'cnon:approved-rest-recovery-source' ) )
+	);
+	$GLOBALS['db_square_http_mode'] = 'success';
+	$square_rest_recovery_approval = DoughBoss_Preorder_Approval::get( $square_rest_recovery_fixture['request_id'] );
+	$square_rest_recovery_attempt = is_array( $square_rest_recovery_approval ) && ! empty( $square_rest_recovery_approval['payment_attempt_id'] ) ? DoughBoss_Payment_Attempts::find( (int) $square_rest_recovery_approval['payment_attempt_id'] ) : null;
+	$square_rest_recovery_reference = is_array( $square_rest_recovery_attempt ) ? (string) $square_rest_recovery_attempt['provider_reference'] : '';
+	db_integration_assert( $square_rest_recovery_start instanceof WP_REST_Response && is_array( $square_rest_recovery_attempt ) && 'processing' === (string) $square_rest_recovery_attempt['status'] && '' !== $square_rest_recovery_reference, 'approved Square REST signed-webhook fixture retains a known linked pending reference' );
+	$square_rest_recovery_posts = $GLOBALS['db_square_post_count'];
+	$square_rest_recovery_hooks = count( $GLOBALS['db_order_created_events'] );
+	$square_rest_recovery_body = wp_json_encode( array( 'event_id' => 'evt_approved_rest_referenced_recovery_0001', 'type' => 'payment.updated', 'data' => array( 'type' => 'payment', 'id' => $square_rest_recovery_reference ) ) );
+	$square_rest_recovery_signature = base64_encode( hash_hmac( 'sha256', DoughBoss_Settings::square_webhook_url() . $square_rest_recovery_body, $square_rest_settings['square_test_webhook_key'], true ) );
+	$square_rest_recovery_request = new WP_REST_Request( 'POST', '/doughboss/v1/square-webhook' );
+	$square_rest_recovery_request->set_body( $square_rest_recovery_body );
+	$square_rest_recovery_request->set_header( DoughBoss_Square::webhook_signature_header(), $square_rest_recovery_signature );
+	$square_rest_recovery = $square_rest_controller->square_webhook( $square_rest_recovery_request );
+	$square_rest_recovery_data = $square_rest_recovery instanceof WP_REST_Response ? $square_rest_recovery->get_data() : array();
+	$square_rest_recovery_order_id = DoughBoss_Order::find_id_by_source_request( $square_rest_recovery_fixture['request_id'] );
+	db_integration_same( true, ! empty( $square_rest_recovery_data['received'] ), 'signed approved Square webhook acknowledges a known linked payment recovery' );
+	db_integration_same( $square_rest_recovery_posts, $GLOBALS['db_square_post_count'], 'signed approved Square webhook recovery performs no provider POST' );
+	db_integration_assert( $square_rest_recovery_order_id > 0, 'signed approved Square webhook recovers a known approved request without browser completion' );
+	db_integration_same( $square_rest_recovery_hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'signed approved Square webhook recovery releases exactly one kitchen order' );
+	$square_rest_recovery_errors = $wpdb->suppress_errors( true );
+	$square_rest_recovery_replay = $square_rest_controller->square_webhook( $square_rest_recovery_request );
+	$wpdb->suppress_errors( $square_rest_recovery_errors );
+	db_integration_assert( $square_rest_recovery_replay instanceof WP_REST_Response, 'duplicate signed approved Square webhook is acknowledged' );
+	db_integration_same( $square_rest_recovery_hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'duplicate signed approved Square webhook cannot fall back to another fulfillment' );
+} else {
+	db_integration_assert( false, 'approved Square REST signed-webhook recovery fixture is available' );
+}
+$GLOBALS['db_square_http_mode'] = 'success';
+update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings_before, false );
+remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 
 // Exercise the real Settings API sanitiser and persisted mapping boundary.

@@ -266,7 +266,10 @@ class DoughBoss_Assets {
 		// changes. Only the application id and location id are handed to the
 		// browser — both are public by design for the Web Payments SDK. The
 		// access token and webhook signature key never leave the server.
-		if ( $payments_on && 'square' === $gateway ) {
+		// A capability is carried in a URL fragment, which PHP cannot inspect.
+		// Load a dormant module for Square approved-payment links even while
+		// ordinary ordering is closed; it loads the SDK only after a valid view.
+		if ( 'square' === $gateway ) {
 			wp_enqueue_style(
 				'doughboss-square',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-square.css',
@@ -284,8 +287,9 @@ class DoughBoss_Assets {
 				'doughboss-square',
 				'DoughBossSquareConfig',
 				array(
-					'applicationId' => DoughBoss_Square::publishable_key(),
-					'locationId'    => DoughBoss_Square::location_id(),
+					'applicationId' => $payments_on ? DoughBoss_Square::publishable_key() : '',
+					'locationId'    => $payments_on ? DoughBoss_Square::location_id() : '',
+					'sdkUrl'        => DoughBoss_Square::sdk_url(),
 					'liveMode'      => DoughBoss_Settings::square_live_mode(),
 					'currency'      => strtoupper( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ),
 				)
