@@ -1,8 +1,11 @@
 # Square Orders accounting-basis prerequisite
 
-Status: revised proposal; `38efe9d` scored 8.0/10 and `aa05fdd` scored 8.3/10,
-both fix-first. The latter exposed the ordinary retry-identity migration seam.
-Implementation awaits fresh bounded Astra design review at 8.5/10 or higher.
+Status: accepted implementation design. Fresh read-only Astra review of frozen
+`21895055099047d9f5ec616bc7463feaf6888956` returned ship, **8.7/10**, on
+2 October 2026. The required 8.5/10 design threshold is met; runtime implementation
+and its separate assurance gate remain outstanding. Earlier `38efe9d` (8.0/10)
+and `aa05fdd` (8.3/10) were fix-first; the ordinary retry-identity migration seam
+was repaired before the accepted review. This status note changes no design rule.
 Runtime baseline: `23d74726f5b2f22032edba8f7dac16d76fadb7e4`.
 This is one prerequisite of the complete Square integration, not its completion.
 
