@@ -143,6 +143,118 @@ class DoughBoss_Square {
 	}
 
 	/**
+	 * Resolve the active Square location for one native DoughBoss shop.
+	 *
+	 * Square's legacy global location setting is deliberately not considered
+	 * here. A v2 payment must be bound to the exact active native shop and its
+	 * exact active-mode provider mapping, otherwise it cannot be sent or read.
+	 *
+	 * @param int $location_id Native DoughBoss location id.
+	 * @return array|WP_Error { shop_slug, square_location_id, square_mode }.
+	 */
+	public static function shop_binding( $location_id ) {
+		$location_id = absint( $location_id );
+		if ( ! $location_id || ! class_exists( 'DoughBoss_Locations' ) ) {
+			return self::shop_binding_error();
+		}
+
+		return self::shop_binding_from_location( DoughBoss_Locations::get( $location_id ), $location_id );
+	}
+
+	/**
+	 * Validate a native shop row and derive its active-mode Square binding.
+	 * Kept separate from the database lookup so the exact native-row contract is
+	 * independently testable without a WordPress database fixture.
+	 *
+	 * @param object|null $location    Native location row.
+	 * @param int         $location_id Expected native location id.
+	 * @return array|WP_Error { shop_slug, square_location_id, square_mode }.
+	 */
+	private static function shop_binding_from_location( $location, $location_id ) {
+		$location_id = absint( $location_id );
+		$native_id   = is_object( $location ) && isset( $location->id ) ? absint( $location->id ) : 0;
+		$slug        = is_object( $location ) && isset( $location->slug ) && is_scalar( $location->slug ) ? (string) $location->slug : '';
+		$is_active   = is_object( $location ) && isset( $location->is_active ) && 1 === (int) $location->is_active;
+
+		if (
+			! $location_id
+			|| $native_id !== $location_id
+			|| ! $is_active
+			|| ! in_array( $slug, array( 'revesby', 'bankstown', 'roselands' ), true )
+		) {
+			return self::shop_binding_error();
+		}
+
+		$square_location_id = DoughBoss_Settings::square_shop_location_id( $slug );
+		$mode               = self::mode();
+		if ( '' === $square_location_id || ! preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $square_location_id ) || ! in_array( $mode, array( 'test', 'live' ), true ) ) {
+			return self::shop_binding_error();
+		}
+
+		return array(
+			'shop_slug'          => $slug,
+			'square_location_id' => $square_location_id,
+			'square_mode'        => $mode,
+		);
+	}
+
+	/**
+	 * Re-validate the immutable v2 shop binding stored on an attempt against
+	 * the active native shop row and active-mode settings map.
+	 *
+	 * @param array $attempt Durable payment attempt row.
+	 * @return array|WP_Error { shop_slug, square_location_id, square_mode }.
+	 */
+	private static function attempt_shop_binding( array $attempt ) {
+		$metadata          = self::attempt_metadata( $attempt );
+		$saved_shop        = isset( $metadata['square_shop_slug'] ) && is_string( $metadata['square_shop_slug'] ) ? $metadata['square_shop_slug'] : '';
+		$saved_square_loc  = isset( $metadata['square_location_id'] ) && is_string( $metadata['square_location_id'] ) ? $metadata['square_location_id'] : '';
+		$saved_mode        = isset( $metadata['square_mode'] ) && is_string( $metadata['square_mode'] ) ? $metadata['square_mode'] : '';
+		$native_location_id = isset( $attempt['location_id'] ) ? absint( $attempt['location_id'] ) : 0;
+
+		if (
+			! $native_location_id
+			|| ! in_array( $saved_shop, array( 'revesby', 'bankstown', 'roselands' ), true )
+			|| ! preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $saved_square_loc )
+			|| ! in_array( $saved_mode, array( 'test', 'live' ), true )
+		) {
+			return self::shop_binding_error();
+		}
+
+		$current = self::shop_binding( $native_location_id );
+		if (
+			is_wp_error( $current )
+			|| ! hash_equals( $saved_shop, (string) $current['shop_slug'] )
+			|| ! hash_equals( $saved_square_loc, (string) $current['square_location_id'] )
+			|| ! hash_equals( $saved_mode, (string) $current['square_mode'] )
+		) {
+			return self::shop_binding_error();
+		}
+
+		return $current;
+	}
+
+	/**
+	 * Decode attempt metadata without accepting a malformed durable value.
+	 *
+	 * @param array $attempt Durable payment attempt row.
+	 * @return array
+	 */
+	private static function attempt_metadata( array $attempt ) {
+		$metadata = isset( $attempt['safe_metadata_json'] ) ? json_decode( (string) $attempt['safe_metadata_json'], true ) : array();
+		return is_array( $metadata ) ? $metadata : array();
+	}
+
+	/**
+	 * Generic, fail-closed error for native-shop and provider-map drift.
+	 *
+	 * @return WP_Error
+	 */
+	private static function shop_binding_error() {
+		return new WP_Error( 'doughboss_pay_shop_binding', __( 'Card payments are unavailable for this shop configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+	}
+
+	/**
 	 * Access token for the active mode (server-side only — never sent to a client).
 	 *
 	 * @return string
@@ -258,7 +370,6 @@ class DoughBoss_Square {
 		$qr_code_id   = isset( $metadata['qr_code_id'] ) ? absint( $metadata['qr_code_id'] ) : 0;
 		$source_id    = isset( $metadata['source_id'] ) ? sanitize_text_field( (string) $metadata['source_id'] ) : '';
 		$verification = isset( $metadata['verification_token'] ) ? sanitize_text_field( (string) $metadata['verification_token'] ) : '';
-		$square_loc   = self::location_id();
 		$protocol     = isset( $metadata['protocol_version'] ) ? sanitize_key( (string) $metadata['protocol_version'] ) : '';
 		$attempt_identity = isset( $metadata['attempt_identity'] ) ? strtolower( sanitize_text_field( (string) $metadata['attempt_identity'] ) ) : '';
 		$binding_hash = isset( $metadata['binding_hash'] ) ? strtolower( sanitize_text_field( (string) $metadata['binding_hash'] ) ) : '';
@@ -271,7 +382,6 @@ class DoughBoss_Square {
 			|| 3 !== strlen( $currency )
 			|| ! preg_match( '/^[a-f0-9]{64}$/', $checkout_key )
 			|| ! $location_id
-			|| '' === $square_loc
 			|| 'square-v2' !== $protocol
 			|| ! preg_match( '/^[a-f0-9]{64}$/', $attempt_identity )
 			|| ! preg_match( '/^[a-f0-9]{64}$/', $binding_hash )
@@ -287,6 +397,10 @@ class DoughBoss_Square {
 		if ( '' !== $verification && ! preg_match( '/^[A-Za-z0-9_:.-]{8,1024}$/', $verification ) ) {
 			return new WP_Error( 'doughboss_pay_source', __( 'The card verification could not be read securely. Please try again.', 'doughboss' ), array( 'status' => 400, 'retry_safe' => true, 'payment_pending' => false ) );
 		}
+		$shop_binding = self::shop_binding( $location_id );
+		if ( is_wp_error( $shop_binding ) ) {
+			return $shop_binding;
+		}
 
 		// The single-use card token and 3DS evidence must never reach durable
 		// storage or a log line — strip them before the attempt row is written.
@@ -297,8 +411,9 @@ class DoughBoss_Square {
 			$safe_metadata['source_id'],
 			$safe_metadata['verification_token']
 		);
-		$safe_metadata['square_location_id'] = $square_loc;
-		$safe_metadata['square_mode']        = self::mode();
+		$safe_metadata['square_shop_slug']   = $shop_binding['shop_slug'];
+		$safe_metadata['square_location_id'] = $shop_binding['square_location_id'];
+		$safe_metadata['square_mode']        = $shop_binding['square_mode'];
 
 		$attempt_key = hash( 'sha256', 'square-v2|' . $attempt_identity );
 		if ( ! DoughBoss_Payment_Attempts::acquire_local_reference_lock( $cart_guard ) ) {
@@ -359,15 +474,13 @@ class DoughBoss_Square {
 		) {
 			return new WP_Error( 'doughboss_pay_attempt_changed', __( 'Your order changed while payment was being prepared. Please start payment again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
-		$stored_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$stored_metadata = self::attempt_metadata( $attempt );
+		$stored_binding  = self::attempt_shop_binding( $attempt );
 		if (
 			'square-v2' !== ( isset( $stored_metadata['protocol_version'] ) ? (string) $stored_metadata['protocol_version'] : '' )
 			|| empty( $stored_metadata['binding_hash'] )
 			|| ! hash_equals( $binding_hash, (string) $stored_metadata['binding_hash'] )
-			|| empty( $stored_metadata['square_location_id'] )
-			|| ! hash_equals( $square_loc, (string) $stored_metadata['square_location_id'] )
-			|| empty( $stored_metadata['square_mode'] )
-			|| ! hash_equals( self::mode(), (string) $stored_metadata['square_mode'] )
+			|| is_wp_error( $stored_binding )
 		) {
 			return new WP_Error( 'doughboss_pay_legacy_locked', __( 'This payment attempt cannot be retried automatically. Please contact the shop before paying again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'attempt_id' => (int) $attempt['id'] ) );
 		}
@@ -395,6 +508,15 @@ class DoughBoss_Square {
 			return self::pending_error( $attempt, 'doughboss_pay_provisioning' );
 		}
 
+		// Re-read the native shop and active-mode map immediately before the
+		// irreversible provider dispatch. A drift remains blocked rather than
+		// ever risking a second charge under another shop's provider location.
+		$dispatch_binding = self::attempt_shop_binding( $attempt );
+		if ( is_wp_error( $dispatch_binding ) ) {
+			DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $dispatch_binding->get_error_code() );
+			return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $dispatch_binding->get_error_code() );
+		}
+
 		$body = array(
 			'idempotency_key' => self::idempotency_key( 'pay', $checkout_key ),
 			'source_id'       => $source_id,
@@ -402,7 +524,7 @@ class DoughBoss_Square {
 				'amount'   => $amount_minor,
 				'currency' => $currency,
 			),
-			'location_id'     => $square_loc,
+			'location_id'     => $dispatch_binding['square_location_id'],
 			'reference_id'    => self::attempt_reference( (int) $attempt['id'] ),
 			'autocomplete'    => true,
 		);
@@ -469,6 +591,10 @@ class DoughBoss_Square {
 	 * @return array|WP_Error
 	 */
 	private static function replay( $reference, array $attempt, $amount_minor, $currency ) {
+		$shop_binding = self::attempt_shop_binding( $attempt );
+		if ( is_wp_error( $shop_binding ) ) {
+			return $shop_binding;
+		}
 		if ( 'mismatch' === (string) $attempt['status'] ) {
 			return self::pending_error( $attempt, 'doughboss_pay_mismatch', $reference );
 		}
@@ -568,18 +694,19 @@ class DoughBoss_Square {
 		if ( ! $attempt ) {
 			return new WP_Error( 'doughboss_pay_attempt', __( 'The payment attempt could not be reconciled.', 'doughboss' ), array( 'status' => 409 ) );
 		}
-		$attempt_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$attempt_metadata = self::attempt_metadata( $attempt );
 		$is_v2            = 'square-v2' === ( isset( $attempt_metadata['protocol_version'] ) ? (string) $attempt_metadata['protocol_version'] : '' );
-		if (
-			$is_v2
-			&& (
-				empty( $attempt_metadata['square_location_id'] )
-				|| ! hash_equals( self::location_id(), (string) $attempt_metadata['square_location_id'] )
-				|| empty( $attempt_metadata['square_mode'] )
-				|| ! hash_equals( self::mode(), (string) $attempt_metadata['square_mode'] )
-			)
-		) {
-			return new WP_Error( 'doughboss_pay_mode_changed', __( 'This payment cannot be verified with the shop\'s current Square configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+		$shop_binding     = null;
+		if ( $is_v2 ) {
+			// Preserve the established mode-drift contract before applying the
+			// stricter native-shop/map binding checks below.
+			if ( empty( $attempt_metadata['square_mode'] ) || ! hash_equals( self::mode(), (string) $attempt_metadata['square_mode'] ) ) {
+				return new WP_Error( 'doughboss_pay_mode_changed', __( 'This payment cannot be verified with the shop\'s current Square configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			$shop_binding = self::attempt_shop_binding( $attempt );
+			if ( is_wp_error( $shop_binding ) ) {
+				return $shop_binding;
+			}
 		}
 
 		$payment = self::retrieve_payment( $id );
@@ -594,9 +721,8 @@ class DoughBoss_Square {
 		$money_currency  = isset( $money['currency'] ) ? strtoupper( sanitize_text_field( (string) $money['currency'] ) ) : '';
 		$payment_loc     = isset( $payment['location_id'] ) ? sanitize_text_field( (string) $payment['location_id'] ) : '';
 
-		$metadata = json_decode( (string) $attempt['safe_metadata_json'], true );
-		$metadata = is_array( $metadata ) ? $metadata : array();
-		$expected_location = isset( $metadata['square_location_id'] ) ? (string) $metadata['square_location_id'] : '';
+		$metadata          = $attempt_metadata;
+		$expected_location = $is_v2 ? (string) $shop_binding['square_location_id'] : ( isset( $metadata['square_location_id'] ) ? (string) $metadata['square_location_id'] : '' );
 		$metadata['checkout_key'] = (string) $attempt['checkout_key'];
 
 		// The amount is re-asserted against this site's own attempt row (which the
@@ -762,8 +888,19 @@ class DoughBoss_Square {
 		$money    = isset( $payment['amount_money'] ) && is_array( $payment['amount_money'] ) ? $payment['amount_money'] : array();
 		$amount   = isset( $money['amount'] ) ? (int) $money['amount'] : -1;
 		$returned = isset( $money['currency'] ) ? strtoupper( (string) $money['currency'] ) : '';
+		$metadata = self::attempt_metadata( $attempt );
+		$saved_shop = isset( $metadata['square_shop_slug'] ) && is_string( $metadata['square_shop_slug'] ) ? $metadata['square_shop_slug'] : '';
+		$saved_location = isset( $metadata['square_location_id'] ) && is_string( $metadata['square_location_id'] ) ? $metadata['square_location_id'] : '';
+		$saved_mode = isset( $metadata['square_mode'] ) && is_string( $metadata['square_mode'] ) ? $metadata['square_mode'] : '';
+		$payment_location = isset( $payment['location_id'] ) && is_scalar( $payment['location_id'] ) ? (string) $payment['location_id'] : '';
 
-		if ( ! self::payment_matches( $payment, $amount_minor, $currency, self::attempt_reference( isset( $attempt['id'] ) ? (int) $attempt['id'] : 0 ) ) ) {
+		if (
+			! self::payment_matches( $payment, $amount_minor, $currency, self::attempt_reference( isset( $attempt['id'] ) ? (int) $attempt['id'] : 0 ) )
+			|| ! in_array( $saved_shop, array( 'revesby', 'bankstown', 'roselands' ), true )
+			|| ! preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $saved_location )
+			|| ! in_array( $saved_mode, array( 'test', 'live' ), true )
+			|| ! hash_equals( $saved_location, $payment_location )
+		) {
 			return new WP_Error( 'doughboss_pay_create', __( 'We could not confirm the card payment. Please try again or contact the shop.', 'doughboss' ), array( 'status' => 502 ) );
 		}
 

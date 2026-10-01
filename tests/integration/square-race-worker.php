@@ -30,6 +30,7 @@ $settings['square_mode']              = 'test';
 $settings['square_test_app_id']       = 'sandbox-sq0idb-INTEGRATIONAPP000000';
 $settings['square_test_access_token'] = 'EAAAlocalSyntheticIntegrationToken000000';
 $settings['square_test_location_id']  = 'LINTEGRATIONLOCATION';
+$settings['square_test_location_map'] = array( 'revesby' => 'LINTEGRATIONLOCATION' );
 update_option( 'doughboss_settings', $settings, false );
 
 add_filter(
@@ -47,7 +48,7 @@ add_filter(
 			$payment   = array(
 				'id'           => 'sqpay' . substr( hash( 'sha256', $reference ), 0, 28 ),
 				'status'       => 'COMPLETED',
-				'location_id'  => DoughBoss_Settings::square_location_id(),
+				'location_id'  => isset( $body['location_id'] ) ? $body['location_id'] : '',
 				'reference_id' => $reference,
 				'amount_money' => $body['amount_money'],
 			);
@@ -57,10 +58,11 @@ add_filter(
 			if ( ! $attempt ) {
 				return new WP_Error( 'integration_missing_attempt', 'Synthetic attempt missing.' );
 			}
+			$stored_meta = DoughBoss_Payment_Attempts::metadata( $attempt );
 			$payment = array(
 				'id'           => $id,
 				'status'       => 'COMPLETED',
-				'location_id'  => DoughBoss_Settings::square_location_id(),
+				'location_id'  => isset( $stored_meta['square_location_id'] ) ? $stored_meta['square_location_id'] : '',
 				'reference_id' => DoughBoss_Square::attempt_reference( (int) $attempt['id'] ),
 				'amount_money' => array( 'amount' => (int) $attempt['amount_minor'], 'currency' => (string) $attempt['currency'] ),
 			);

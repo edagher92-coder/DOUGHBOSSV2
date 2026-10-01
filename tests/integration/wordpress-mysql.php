@@ -61,6 +61,7 @@ $GLOBALS['db_integration_failed'] = array();
 $GLOBALS['db_square_http_mode']   = 'success';
 $GLOBALS['db_square_post_count']  = 0;
 $GLOBALS['db_square_get_count']   = 0;
+$GLOBALS['db_square_post_bodies'] = array();
 $GLOBALS['db_fail_guard_once']    = false;
 $GLOBALS['db_catering_mail']        = array();
 $GLOBALS['db_catering_mail_result'] = true;
@@ -273,12 +274,13 @@ function db_integration_square_http( $preempt, $args, $url ) {
 			return new WP_Error( 'integration_network', 'Synthetic network failure.' );
 		}
 		$body      = isset( $args['body'] ) ? json_decode( (string) $args['body'], true ) : array();
+		$GLOBALS['db_square_post_bodies'][] = $body;
 		$reference = isset( $body['reference_id'] ) ? (string) $body['reference_id'] : '';
 		$payment_id = 'sqpay' . substr( hash( 'sha256', $reference ), 0, 28 );
 		$payment = array(
 			'id'           => $payment_id,
 			'status'       => 'failed' === $GLOBALS['db_square_http_mode'] ? 'FAILED' : ( 'pending' === $GLOBALS['db_square_http_mode'] ? 'PENDING' : 'COMPLETED' ),
-			'location_id'  => DoughBoss_Settings::square_location_id(),
+			'location_id'  => 'location_mismatch' === $GLOBALS['db_square_http_mode'] ? 'LWRONGLOCATION' : ( isset( $body['location_id'] ) ? $body['location_id'] : '' ),
 			'reference_id' => $reference,
 			'amount_money' => isset( $body['amount_money'] ) ? $body['amount_money'] : array(),
 		);
@@ -289,10 +291,11 @@ function db_integration_square_http( $preempt, $args, $url ) {
 		if ( ! $attempt ) {
 			return new WP_Error( 'integration_missing_attempt', 'Synthetic attempt missing.' );
 		}
+		$stored_meta = DoughBoss_Payment_Attempts::metadata( $attempt );
 		$payment = array(
 			'id'           => $payment_id,
 			'status'       => 'failed' === $GLOBALS['db_square_http_mode'] ? 'FAILED' : ( 'pending' === $GLOBALS['db_square_http_mode'] ? 'PENDING' : 'COMPLETED' ),
-			'location_id'  => DoughBoss_Settings::square_location_id(),
+			'location_id'  => 'location_mismatch' === $GLOBALS['db_square_http_mode'] ? 'LWRONGLOCATION' : ( isset( $stored_meta['square_location_id'] ) ? $stored_meta['square_location_id'] : '' ),
 			'reference_id' => DoughBoss_Square::attempt_reference( (int) $attempt['id'] ),
 			'amount_money' => array( 'amount' => (int) $attempt['amount_minor'], 'currency' => (string) $attempt['currency'] ),
 		);
@@ -532,6 +535,17 @@ function db_integration_fail_guard_select( $query ) {
 	return $query;
 }
 
+/** Change a synthetic shop map at the dispatch claim, before provider HTTP. */
+function db_integration_square_binding_drift( $query ) {
+	if ( ! empty( $GLOBALS['db_square_binding_drift_once'] ) && false !== strpos( (string) $query, 'doughboss_payment_attempts' ) && false !== strpos( (string) $query, "status = 'dispatching'" ) ) {
+		$GLOBALS['db_square_binding_drift_once'] = false;
+		$changed = DoughBoss_Settings::all();
+		$changed['square_test_location_map']['revesby'] = 'LCHANGEDATDISPATCH';
+		update_option( DoughBoss_Settings::OPTION_KEY, $changed, false );
+	}
+	return $query;
+}
+
 /** Fail exactly one deployment-wide legacy drain read. */
 function db_integration_fail_legacy_select( $query ) {
 	if (
@@ -699,7 +713,8 @@ $settings['square_mode']              = 'test';
 $settings['legacy_voucher_issuance_enabled'] = 0;
 $settings['square_test_app_id']       = 'sandbox-sq0idb-INTEGRATIONAPP000000';
 $settings['square_test_access_token'] = 'EAAAlocalSyntheticIntegrationToken000000';
-$settings['square_test_location_id']  = 'LINTEGRATIONLOCATION';
+$settings['square_test_location_id']  = 'LUNUSEDGLOBALLOCATION';
+$settings['square_test_location_map'] = array( 'revesby' => 'LINTEGRATIONLOCATION', 'bankstown' => 'LINTEGRATIONBANKSTOWN', 'roselands' => 'LINTEGRATIONROSELANDS' );
 $settings['square_test_webhook_key']  = 'local-synthetic-webhook-key-000000';
 $settings['square_webhook_url']       = 'https://example.invalid/wp-json/doughboss/v1/square-webhook';
 update_option( 'doughboss_settings', $settings, false );
@@ -730,6 +745,9 @@ $first_attempt = ! is_wp_error( $first ) ? DoughBoss_Payment_Attempts::find( (in
 db_integration_same( 'succeeded', is_array( $first_attempt ) ? $first_attempt['status'] : '', 'bound attempt has succeeded state' );
 $first_stored_meta = is_array( $first_attempt ) ? DoughBoss_Payment_Attempts::metadata( $first_attempt ) : array();
 db_integration_same( 'square-v2', isset( $first_stored_meta['protocol_version'] ) ? $first_stored_meta['protocol_version'] : '', 'attempt stores the v2 protocol marker' );
+db_integration_same( 'revesby', isset( $first_stored_meta['square_shop_slug'] ) ? $first_stored_meta['square_shop_slug'] : '', 'attempt stores exact server-derived shop slug' );
+db_integration_same( 'LINTEGRATIONLOCATION', isset( $first_stored_meta['square_location_id'] ) ? $first_stored_meta['square_location_id'] : '', 'attempt uses explicit map, not different global ID' );
+db_integration_same( 'LINTEGRATIONLOCATION', $GLOBALS['db_square_post_bodies'][0]['location_id'], 'provider dispatch uses mapped Revesby location' );
 db_integration_assert( ! isset( $first_stored_meta['source_id'], $first_stored_meta['verification_token'] ), 'single-use card and verification tokens are never persisted' );
 db_integration_same( false, DoughBoss_Payment_Attempts::update( (int) $first['attempt_id'], array( 'status' => 'processing' ) ), 'generic update cannot regress Square v2 state' );
 db_integration_same( false, DoughBoss_Payment_Attempts::update( (int) $first['attempt_id'], array( 'safe_metadata' => array( 'protocol_version' => 'square-v2' ) ) ), 'generic update cannot replace the immutable Square v2 binding' );
@@ -2633,6 +2651,106 @@ $location_headers = $public_locations->get_headers();
 db_integration_same( 'no-store, max-age=0', isset( $location_headers['Cache-Control'] ) ? $location_headers['Cache-Control'] : '', 'public pickup observations cannot be cached beyond their validity' );
 db_integration_same( $posts_before_hours, $GLOBALS['db_square_post_count'], 'pickup-status observation performs no provider POST' );
 DoughBoss_Locations::save_weekly_hours( 1, $original_hours );
+
+// Multi-shop Square binding matrix: synthetic provider and disposable database only.
+$binding_original_settings = DoughBoss_Settings::all();
+$binding_settings = array_merge( $settings, array(
+	'payments_enabled' => 1, 'payment_gateway' => 'square', 'square_mode' => 'test',
+	'square_test_location_id' => 'LUNUSEDGLOBALLOCATION',
+	'square_test_location_map' => array( 'revesby' => 'LINTEGRATIONLOCATION', 'bankstown' => 'LINTEGRATIONBANKSTOWN', 'roselands' => 'LINTEGRATIONROSELANDS' ),
+) );
+update_option( DoughBoss_Settings::OPTION_KEY, $binding_settings, false );
+$binding_original_location = DoughBoss_Locations::get( 1 );
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'slug' => 'revesby', 'is_active' => 1 ), array( 'id' => 1 ) );
+$binding_shop_ids = array();
+foreach ( array( 'bankstown', 'roselands' ) as $binding_shop ) {
+	$binding_shop_ids[ $binding_shop ] = DoughBoss_Locations::create( array( 'name' => ucfirst( $binding_shop ), 'slug' => $binding_shop, 'is_active' => 1, 'pickup_enabled' => 1, 'online_payment_enabled' => 1 ) );
+	db_integration_assert( $binding_shop_ids[ $binding_shop ] > 0, 'synthetic ' . $binding_shop . ' native shop is persisted' );
+}
+$GLOBALS['db_square_http_mode'] = 'success';
+$binding_posts_before = $GLOBALS['db_square_post_count'];
+$binding_rows_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_payment_attempts" );
+foreach ( array( array(), array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE' ), array( 'revesby' => array( 'LINVALID' ) ), array( 'revesby' => 'abc' ) ) as $binding_bad_map ) {
+	$changed = $binding_settings;
+	$changed['square_test_location_map'] = $binding_bad_map;
+	update_option( DoughBoss_Settings::OPTION_KEY, $changed, false );
+	$denied = DoughBoss_Square::create_payment_intent( 1200, 'AUD', db_integration_square_metadata( 'binding-invalid-map', 'binding-invalid-map-key', 'binding-invalid-map-cart' ) );
+	db_integration_assert( is_wp_error( $denied ), 'invalid shop map fails closed despite valid global ID' );
+}
+update_option( DoughBoss_Settings::OPTION_KEY, $binding_settings, false );
+foreach ( array( array( 'slug' => 'planned', 'is_active' => 1 ), array( 'slug' => 'revesby', 'is_active' => 0 ) ) as $binding_bad_shop ) {
+	$wpdb->update( $wpdb->prefix . 'doughboss_locations', $binding_bad_shop, array( 'id' => 1 ) );
+	db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1200, 'AUD', db_integration_square_metadata( 'binding-invalid-shop', 'binding-invalid-shop-key', 'binding-invalid-shop-cart' ) ) ), 'private or inactive native shop cannot dispatch' );
+}
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'slug' => 'revesby', 'is_active' => 1 ), array( 'id' => 1 ) );
+db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1200, 'AUD', db_integration_square_metadata( 'binding-unknown-shop', 'binding-unknown-shop-key', 'binding-unknown-shop-cart', array( 'location_id' => 999999 ) ) ) ), 'unknown native shop cannot dispatch' );
+db_integration_same( $binding_posts_before, $GLOBALS['db_square_post_count'], 'invalid binding matrix makes no provider POST' );
+db_integration_same( $binding_rows_before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_payment_attempts" ), 'invalid bindings do not allocate attempts' );
+
+foreach ( $binding_shop_ids as $binding_shop => $binding_shop_id ) {
+	$meta = db_integration_square_metadata( 'binding-' . $binding_shop, 'binding-key-' . $binding_shop, 'binding-cart-' . $binding_shop, array( 'location_id' => $binding_shop_id, 'square_location_id' => 'LSPOOFED', 'square_shop_slug' => 'revesby', 'square_mode' => 'live' ) );
+	$paid = DoughBoss_Square::create_payment_intent( 1300, 'AUD', $meta );
+	db_integration_assert( ! is_wp_error( $paid ), 'explicit ' . $binding_shop . ' map dispatches successfully' );
+	if ( is_wp_error( $paid ) ) { continue; }
+	$attempt = DoughBoss_Payment_Attempts::find( $paid['attempt_id'] );
+	$saved = DoughBoss_Payment_Attempts::metadata( $attempt );
+	db_integration_same( $binding_shop, isset( $saved['square_shop_slug'] ) ? $saved['square_shop_slug'] : '', 'caller cannot override native shop slug' );
+	db_integration_same( $binding_settings['square_test_location_map'][ $binding_shop ], isset( $saved['square_location_id'] ) ? $saved['square_location_id'] : '', 'caller cannot override native shop mapping' );
+	db_integration_same( 'test', isset( $saved['square_mode'] ) ? $saved['square_mode'] : '', 'caller cannot override server mode' );
+	$reads = $GLOBALS['db_square_get_count'];
+	$posts = $GLOBALS['db_square_post_count'];
+	$changed = $binding_settings;
+	$changed['square_test_location_map'][ $binding_shop ] = 'LCHANGEDSHOPLOCATION';
+	update_option( DoughBoss_Settings::OPTION_KEY, $changed, false );
+	db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1300, 'AUD', $meta ) ), 'map drift blocks payment retry' );
+	db_integration_assert( is_wp_error( DoughBoss_Square::retrieve_payment_intent( $paid['id'] ) ), 'map drift blocks verification' );
+	db_integration_same( $reads, $GLOBALS['db_square_get_count'], 'map drift stops before GET' );
+	db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'map drift stops before POST' );
+	update_option( DoughBoss_Settings::OPTION_KEY, $binding_settings, false );
+	$verified = DoughBoss_Square::retrieve_payment_intent( $paid['id'] );
+	db_integration_assert( ! is_wp_error( $verified ) && 'succeeded' === $verified['status'], 'restoring exact binding permits reconciliation' );
+	$legacy_metadata = $saved;
+	unset( $legacy_metadata['square_shop_slug'] );
+	$legacy_json = wp_json_encode( $legacy_metadata );
+	$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'safe_metadata_json' => $legacy_json ), array( 'id' => (int) $attempt['id'] ) );
+	$reads = $GLOBALS['db_square_get_count'];
+	db_integration_assert( is_wp_error( DoughBoss_Square::retrieve_payment_intent( $paid['id'] ) ), 'v2 record without immutable shop slug cannot be automatically verified' );
+	db_integration_same( $reads, $GLOBALS['db_square_get_count'], 'unbound historical v2 record stops before provider GET' );
+	$preserved_attempt = DoughBoss_Payment_Attempts::find( (int) $attempt['id'] );
+	db_integration_same( $legacy_json, $preserved_attempt['safe_metadata_json'], 'unbound historical metadata is preserved without backfill' );
+	$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'safe_metadata_json' => $attempt['safe_metadata_json'] ), array( 'id' => (int) $attempt['id'] ) );
+	$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'slug' => 'planned' ), array( 'id' => $binding_shop_id ) );
+	$reads = $GLOBALS['db_square_get_count'];
+	db_integration_assert( is_wp_error( DoughBoss_Square::retrieve_payment_intent( $paid['id'] ) ), 'native slug drift cannot reuse provider binding' );
+	db_integration_same( $reads, $GLOBALS['db_square_get_count'], 'native slug drift stops before GET' );
+	$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'slug' => $binding_shop ), array( 'id' => $binding_shop_id ) );
+}
+
+$dispatch_meta = db_integration_square_metadata( 'binding-dispatch-drift', 'binding-dispatch-drift-key', 'binding-dispatch-drift-cart' );
+$GLOBALS['db_square_binding_drift_once'] = true;
+add_filter( 'query', 'db_integration_square_binding_drift' );
+$posts = $GLOBALS['db_square_post_count'];
+$denied = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $dispatch_meta );
+remove_filter( 'query', 'db_integration_square_binding_drift' );
+db_integration_same( false, $GLOBALS['db_square_binding_drift_once'], 'fixture changes map at irreversible dispatch claim' );
+db_integration_assert( is_wp_error( $denied ), 'dispatch-time map drift is denied' );
+db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'dispatch-time drift makes no POST' );
+update_option( DoughBoss_Settings::OPTION_KEY, $binding_settings, false );
+db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1400, 'AUD', $dispatch_meta ) ), 'claimed drift cannot redispatch on retry' );
+db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'claimed drift retry makes no POST' );
+
+$GLOBALS['db_square_http_mode'] = 'location_mismatch';
+$wrong_meta = db_integration_square_metadata( 'binding-provider-wrong', 'binding-provider-wrong-key', 'binding-provider-wrong-cart' );
+db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1500, 'AUD', $wrong_meta ) ), 'matching money/reference but wrong provider location is denied' );
+$posts = $GLOBALS['db_square_post_count'];
+$GLOBALS['db_square_http_mode'] = 'success';
+db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1500, 'AUD', $wrong_meta ) ), 'wrong provider location remains held on replay' );
+db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'wrong provider location never charges twice' );
+foreach ( $binding_shop_ids as $binding_shop_id ) {
+	$wpdb->delete( $wpdb->prefix . 'doughboss_locations', array( 'id' => $binding_shop_id ) );
+}
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'slug' => $binding_original_location->slug, 'is_active' => $binding_original_location->is_active ), array( 'id' => 1 ) );
+update_option( DoughBoss_Settings::OPTION_KEY, $binding_original_settings, false );
 
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 

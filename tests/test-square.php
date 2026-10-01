@@ -94,6 +94,63 @@ db_test( 'Square mapping status is environment-isolated and never connected evid
 	}
 } );
 
+db_test( 'Square v2 native shop binding is exact, active and map-scoped', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	$method   = new ReflectionMethod( 'DoughBoss_Square', 'shop_binding_from_location' );
+	$method->setAccessible( true );
+	try {
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_test_location_id'  => 'LLEGACYGLOBAL',
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY', 'bankstown' => 'LTEST_BANKSTOWN' ),
+		) ) );
+		$revesby = (object) array( 'id' => 7, 'slug' => 'revesby', 'is_active' => 1 );
+		assert_same(
+			array( 'shop_slug' => 'revesby', 'square_location_id' => 'LTEST_REVESBY', 'square_mode' => 'test' ),
+			$method->invoke( null, $revesby, 7 ),
+			'an active native shop resolves only its exact active-mode mapping'
+		);
+
+		foreach ( array(
+			(object) array( 'id' => 7, 'slug' => 'Revesby', 'is_active' => 1 ),
+			(object) array( 'id' => 7, 'slug' => 'revesby', 'is_active' => 0 ),
+			(object) array( 'id' => 7, 'slug' => 'planned', 'is_active' => 1 ),
+			(object) array( 'id' => 8, 'slug' => 'revesby', 'is_active' => 1 ),
+			null,
+		) as $invalid_location ) {
+			assert_same( 'doughboss_pay_shop_binding', $method->invoke( null, $invalid_location, 7 )->get_error_code(), 'inactive, unknown, mismatched or non-exact native shop fails closed' );
+		}
+
+		$roselands = (object) array( 'id' => 9, 'slug' => 'roselands', 'is_active' => 1 );
+		assert_same( 'doughboss_pay_shop_binding', $method->invoke( null, $roselands, 9 )->get_error_code(), 'a supported shop without an active-mode mapping never falls back to the global Square location' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
+db_test( 'Square v2 payment payload requires its saved shop location binding', function () {
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'payment_payload' );
+	$method->setAccessible( true );
+	$attempt = array(
+		'id' => 42,
+		'safe_metadata_json' => json_encode( array(
+			'square_shop_slug'   => 'revesby',
+			'square_location_id' => 'LTEST_REVESBY',
+			'square_mode'        => 'test',
+		) ),
+	);
+	$matching = db_square_payment( 2750, 'AUD', 'db-attempt-42' );
+	$matching['location_id'] = 'LTEST_REVESBY';
+	assert_false( is_wp_error( $method->invoke( null, $matching, $attempt, 2750, 'AUD' ) ), 'provider payment at the saved shop location is accepted' );
+
+	$foreign = $matching;
+	$foreign['location_id'] = 'LTEST_BANKSTOWN';
+	assert_same( 'doughboss_pay_create', $method->invoke( null, $foreign, $attempt, 2750, 'AUD' )->get_error_code(), 'provider location must match the immutable saved shop binding' );
+
+	$legacy = $attempt;
+	$legacy['safe_metadata_json'] = json_encode( array( 'square_location_id' => 'LTEST_REVESBY', 'square_mode' => 'test' ) );
+	assert_same( 'doughboss_pay_create', $method->invoke( null, $matching, $legacy, 2750, 'AUD' )->get_error_code(), 'a v2 response cannot be accepted without a saved shop slug' );
+} );
+
 /**
  * DoughBoss_Square + Square settings tests.
  *
