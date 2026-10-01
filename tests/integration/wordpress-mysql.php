@@ -3606,7 +3606,7 @@ $ssr_first_id = wp_insert_post(
 		'post_type'    => DoughBoss_Post_Types::POST_TYPE,
 		'post_status'  => 'publish',
 		'post_title'   => $ssr_first_title,
-		'post_excerpt' => 'SSR <em>plain</em> description',
+		'post_excerpt' => 'SSR <em>plain</em> description &amp; cheese &#8212; &quot;fresh&quot; &lt;script&gt;do-not-render&lt;/script&gt;',
 		'menu_order'   => 198,
 	)
 );
@@ -3633,6 +3633,14 @@ update_post_meta( $ssr_first_id, DoughBoss_Post_Types::META_PRICE, '12.5' );
 update_post_meta( $ssr_second_id, DoughBoss_Post_Types::META_PRICE, '13' );
 update_post_meta( $ssr_draft_id, DoughBoss_Post_Types::META_PRICE, '99' );
 $ssr_menu_html = ( new DoughBoss_Shortcodes() )->menu();
+$plain_description = 'SSR plain description & cheese — "fresh"';
+db_integration_assert( false !== strpos( $ssr_menu_html, esc_html( $plain_description ) ), 'SSR description decodes saved entities once before HTML escaping' );
+db_integration_assert( false === strpos( $ssr_menu_html, 'do-not-render' ) && false === strpos( $ssr_menu_html, '&amp;amp;' ), 'SSR description strips encoded scripts and avoids double-escaped ampersands' );
+$plain_menu_row = null;
+foreach ( $rest_controller->get_menu()->get_data() as $plain_row ) {
+	if ( (int) $plain_row['id'] === (int) $ssr_first_id ) { $plain_menu_row = $plain_row; break; }
+}
+db_integration_same( $plain_description, is_array( $plain_menu_row ) ? $plain_menu_row['description'] : null, 'menu JSON supplies the same readable plain description as SSR' );
 $ssr_first_escaped = esc_html( $ssr_first_title );
 db_integration_assert( false !== strpos( $ssr_menu_html, 'data-doughboss-menu-fallback' ) && false !== strpos( $ssr_menu_html, 'SSR browse fallback' ), 'menu shortcode emits a server-rendered browse fallback from real category terms' );
 db_integration_assert( false !== strpos( $ssr_menu_html, $ssr_first_escaped ) && false !== strpos( $ssr_menu_html, 'SSR plain description' ) && false !== strpos( $ssr_menu_html, DoughBoss_Settings::format_price( 12.5 ) ), 'SSR fallback emits escaped title, plain description and exact formatted approved price' );

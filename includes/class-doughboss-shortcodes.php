@@ -350,7 +350,7 @@ class DoughBoss_Shortcodes {
 											<h3><?php echo esc_html( $item->post_title ); ?></h3>
 											<span class="db-price"><?php echo esc_html( DoughBoss_Settings::format_price( (float) get_post_meta( $item->ID, DoughBoss_Post_Types::META_PRICE, true ) ) ); ?></span>
 										</div>
-										<?php $description = wp_strip_all_tags( $item->post_excerpt ? $item->post_excerpt : $item->post_content ); ?>
+										<?php $description = DoughBoss_Post_Types::plain_menu_description( $item->post_excerpt ? $item->post_excerpt : $item->post_content ); ?>
 										<?php if ( '' !== $description ) : ?>
 											<p><?php echo esc_html( $description ); ?></p>
 										<?php endif; ?>

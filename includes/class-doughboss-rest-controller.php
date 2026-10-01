@@ -3162,7 +3162,7 @@ class DoughBoss_REST_Controller {
 				// HTML-entity-encoded title (e.g. "Chicken &#038; Cheese") would
 				// render literally instead of decoding to "&".
 				'name'        => $post->post_title,
-				'description' => wp_strip_all_tags( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
+				'description' => DoughBoss_Post_Types::plain_menu_description( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
 				'price'       => (float) get_post_meta( $post->ID, DoughBoss_Post_Types::META_PRICE, true ),
 				'type'        => get_post_meta( $post->ID, DoughBoss_Post_Types::META_TYPE, true ),
 				'image'       => $image,

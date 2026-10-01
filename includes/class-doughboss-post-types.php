@@ -23,6 +23,22 @@ class DoughBoss_Post_Types {
 	const META_DIETARY   = '_doughboss_dietary';
 
 	/**
+	 * Present saved menu prose as plain text in JSON and the HTML fallback.
+	 * Decode once before removing markup, so encoded tags cannot become active
+	 * HTML downstream. Callers must still escape for their output context.
+	 * Saved posts are never rewritten by this presentation-only normalization.
+	 *
+	 * @param string $text Saved excerpt or content.
+	 * @return string Readable plain text.
+	 */
+	public static function plain_menu_description( $text ) {
+		if ( ! is_string( $text ) ) {
+			return '';
+		}
+		return wp_strip_all_tags( html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+	}
+
+	/**
 	 * Hook registration into WordPress.
 	 *
 	 * @return void
