@@ -179,6 +179,8 @@ db_test( 'paused public voucher offer has no campaign control or claim form', fu
 	DoughBoss_Settings::update( array( 'legacy_voucher_issuance_enabled' => 0 ) );
 	$shortcodes = ( new ReflectionClass( 'DoughBoss_Shortcodes' ) )->newInstanceWithoutConstructor();
 	$html = $shortcodes->voucher_claim();
+	assert_true( false !== strpos( $html, 'Voucher updates' ), 'paused voucher title reflects the issuance pause' );
+	assert_false( false !== strpos( $html, 'Claim your student voucher' ), 'paused voucher title does not invite new claims' );
 
 	assert_true( false !== strpos( $html, 'Legacy promotional vouchers are currently paused.' ), 'public voucher area states that issuance is paused' );
 	assert_false( false !== strpos( $html, 'data-campaign=' ), 'public paused voucher area has no campaign controls' );

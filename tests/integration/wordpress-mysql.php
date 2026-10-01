@@ -1129,6 +1129,37 @@ $pause_preserved_row = DoughBoss_Voucher::find_by_code( $pause_preserved_voucher
 db_integration_assert( $pause_preserved_row && 'redeemed' === $pause_preserved_row->status && $pause_preserved_voucher['code'] === $pause_preserved_row->code, 'pause keeps the original voucher identity and durable redemption state' );
 db_integration_same( 1, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_voucher_redemptions WHERE voucher_id = %d", $pause_preserved_voucher['id'] ) ), 'paused existing-voucher replay keeps exactly one immutable audit record' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 update_option( DoughBoss_Settings::OPTION_KEY, $pause_preserved_settings, false );
+
+// Render the real page and shortcode together: paused copy must not invite claims.
+$voucher_page_settings = DoughBoss_Settings::all();
+$voucher_page_server_name = isset( $_SERVER['SERVER_NAME'] ) ? $_SERVER['SERVER_NAME'] : null;
+$_SERVER['SERVER_NAME'] = 'doughboss.local.test';
+require_once dirname( __DIR__, 2 ) . '/themes/doughboss-final/functions.php';
+foreach ( array( false, true ) as $voucher_page_enabled ) {
+	$voucher_render_settings = $voucher_page_settings;
+	$voucher_render_settings['legacy_voucher_issuance_enabled'] = $voucher_page_enabled ? 1 : 0;
+	update_option( DoughBoss_Settings::OPTION_KEY, $voucher_render_settings, false );
+	ob_start();
+	include dirname( __DIR__, 2 ) . '/themes/doughboss-final/page-vouchers.php';
+	$voucher_page_html = ob_get_clean();
+	if ( $voucher_page_enabled ) {
+		db_integration_assert( false !== strpos( $voucher_page_html, 'Claim your ' ), 'enabled voucher page preserves the student-offer heading' );
+		db_integration_assert( false !== strpos( $voucher_page_html, 'data-doughboss-voucher-claim' ), 'enabled voucher page keeps its existing shortcode' );
+		db_integration_assert( false === strpos( $voucher_page_html, 'New claims are paused.' ), 'enabled voucher page does not advertise a pause' );
+	} else {
+		db_integration_assert( false !== strpos( $voucher_page_html, 'New claims are paused.' ), 'paused voucher page states the real issuance status' );
+		db_integration_assert( false !== strpos( $voucher_page_html, 'Square Gift Cards are not available on this website yet.' ), 'paused page never claims a connected Square gift system' );
+		db_integration_assert( false === strpos( $voucher_page_html, 'Claim your ' ) && false === strpos( $voucher_page_html, 'Your student email is required.' ), 'paused page removes student claim instructions' );
+		db_integration_assert( false === strpos( $voucher_page_html, 'data-doughboss-voucher-claim' ) && false === strpos( $voucher_page_html, 'data-campaign=' ), 'paused page never invokes the claim widget or advertises offers' );
+		db_integration_assert( false !== strpos( $voucher_page_html, 'Find your shop' ), 'paused page provides help for existing voucher questions' );
+	}
+}
+update_option( DoughBoss_Settings::OPTION_KEY, $voucher_page_settings, false );
+if ( null === $voucher_page_server_name ) {
+	unset( $_SERVER['SERVER_NAME'] );
+} else {
+	$_SERVER['SERVER_NAME'] = $voucher_page_server_name;
+}
 $voucher = DoughBoss_Voucher::issue( array( 'type' => 'amount', 'value' => 5, 'scope' => 'online', 'location_id' => 1, 'prefix' => 'IT' ) );
 db_integration_assert( ! is_wp_error( $voucher ), 'synthetic voucher is issued' );
 $voucher_key = hash( 'sha256', 'voucher-checkout' );
@@ -2210,9 +2241,19 @@ foreach ( array( 2099 => '34:59', 2100 => '35:00', 2101 => '35:01' ) as $remaini
 	$cutoff_order = $cutoff_id ? DoughBoss_Order::get( $cutoff_id ) : null;
 	$cutoff_pending = $cutoff_id ? DoughBoss_Preorder_Approval::ensure_pending( $cutoff_id ) : new WP_Error( 'integration_fixture', 'Missing cutoff request.' );
 	$cutoff_decision = $cutoff_id ? DoughBoss_Preorder_Approval::decide( $cutoff_id, 'approve', $preorder_approver_id, 'Integration Approver', 'integration-preorder-cutoff-' . $remaining_seconds, '', $cutoff_order ? (int) $cutoff_order->version : 0 ) : new WP_Error( 'integration_fixture', 'Missing cutoff request.' );
-	$cutoff_expiry = gmdate( 'Y-m-d H:i:s', time() + $remaining_seconds );
-	$cutoff_token = is_array( $cutoff_pending ) && is_array( $cutoff_decision ) ? db_integration_set_preorder_expiry( $cutoff_id, $cutoff_expiry ) : '';
-	$preorder_cutoff_results[ $remaining_seconds ] = '' !== $cutoff_token ? DoughBoss_Preorder_Approval::claim_payment( $cutoff_id, $cutoff_token ) : new WP_Error( 'integration_fixture', 'Missing cutoff token.' );
+	// The exact boundary must reach the real policy check in the same second.
+	// Retry only its known cutoff error after a proven wall-clock rollover;
+	// a same-second policy regression still fails the unchanged assertion.
+	for ( $cutoff_attempt = 0; $cutoff_attempt < 3; ++$cutoff_attempt ) {
+		$cutoff_second = time();
+		$cutoff_expiry = gmdate( 'Y-m-d H:i:s', $cutoff_second + $remaining_seconds );
+		$cutoff_token = is_array( $cutoff_pending ) && is_array( $cutoff_decision ) ? db_integration_set_preorder_expiry( $cutoff_id, $cutoff_expiry ) : '';
+		$cutoff_result = '' !== $cutoff_token ? DoughBoss_Preorder_Approval::claim_payment( $cutoff_id, $cutoff_token ) : new WP_Error( 'integration_fixture', 'Missing cutoff token.' );
+		if ( 2100 !== $remaining_seconds || ! is_wp_error( $cutoff_result ) || 'doughboss_preorder_payment_start_cutoff' !== $cutoff_result->get_error_code() || time() <= $cutoff_second ) {
+			break;
+		}
+	}
+	$preorder_cutoff_results[ $remaining_seconds ] = $cutoff_result;
 	db_integration_assert( $cutoff_id > 0 && '' !== $cutoff_token, 'new-payment cutoff fixture ' . $cutoff_label . ' is valid' );
 }
 db_integration_same( 'doughboss_preorder_payment_start_cutoff', is_wp_error( $preorder_cutoff_results[2099] ) ? $preorder_cutoff_results[2099]->get_error_code() : '', '34:59 remaining cannot claim a new Stripe Session' );

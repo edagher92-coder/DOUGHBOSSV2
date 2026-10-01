@@ -180,7 +180,7 @@ class DoughBoss_Shortcodes {
 		?>
 		<div class="db-app db-voucher-claim" data-doughboss-voucher-claim>
 			<div class="db-vc-card">
-				<h3 class="db-vc-title"><?php esc_html_e( 'Claim your student voucher', 'doughboss' ); ?></h3>
+				<h3 class="db-vc-title"><?php echo $issuance_enabled ? esc_html__( 'Claim your student voucher', 'doughboss' ) : esc_html__( 'Voucher updates', 'doughboss' ); ?></h3>
 				<?php if ( ! $issuance_enabled ) : ?>
 					<p class="db-vc-none"><?php esc_html_e( 'Legacy promotional vouchers are currently paused.', 'doughboss' ); ?></p>
 				<?php else : ?>
