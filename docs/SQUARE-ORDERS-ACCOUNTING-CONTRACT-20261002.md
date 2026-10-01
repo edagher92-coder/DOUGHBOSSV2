@@ -1,6 +1,7 @@
 # Square Orders accounting-basis prerequisite
 
-Status: revised proposal; initial design `38efe9d` scored 8.0/10, fix-first.
+Status: revised proposal; `38efe9d` scored 8.0/10 and `aa05fdd` scored 8.3/10,
+both fix-first. The latter exposed the ordinary retry-identity migration seam.
 Implementation awaits fresh bounded Astra design review at 8.5/10 or higher.
 Runtime baseline: `23d74726f5b2f22032edba8f7dac16d76fadb7e4`.
 This is one prerequisite of the complete Square integration, not its completion.
@@ -136,12 +137,13 @@ Existing production `DoughBoss_Order::create()` callers in the REST controller:
 | Baseline line/path | Authoritative basis source |
 | --- | --- |
 | 3558: submit an unpaid approval request | Capture from the same pickup cart totals that priced the request. Ignore body/query basis. |
-| 4079: ordinary Square confirmation/recovery | Copy from the verified immutable snapshot's order data; retain unknown for legacy snapshots. |
+| 4079: approved Square confirmation/webhook recovery | Copy from the verified immutable snapshot's order data; retain unknown for legacy snapshots. |
 | 4452: ordinary checkout creation | For freshly priced unpaid checkout, capture same server totals. For paid Square or Stripe snapshot-backed checkout, copy snapshot basis only. The paid Square totals reconstruction at 4362-4378 must copy basis, never attach a fresh cart basis. |
 | 6215: Stripe webhook recovery | Copy immutable snapshot basis with its original accounting facts; unknown remains unknown. |
 
-Also capture basis in ordinary payment preparation's snapshot before money moves,
-from that same cart totals computation (current order payload at REST 2802).
+Also capture basis when creating a genuinely new ordinary payment snapshot before
+money moves, from that same cart totals computation (order payload at REST 2802).
+Existing ordinary retries follow the exact identity/payload contract below.
 Approved Stripe (REST 3741 snapshot) and approved Square (REST 3871 snapshot)
 copy only the persisted request basis, with the compatibility matrix above.
 Common paid release in `DoughBoss_Preorder_Approval::release_locked()` requires
@@ -178,6 +180,45 @@ Test this matrix locally with synthetic fixtures; no real provider calls are
 needed. Rollback readiness remains unproven until all workers/routes can be
 quiesced through supported controls; do not describe the prior binary as able to
 process new basis-bearing approvals.
+
+## Ordinary checkout identity and retry migration
+
+`Cart::to_array()` must retain its shipped public-cart/totals projection byte for
+byte in JSON encoding: do not add accounting basis to it. The internal `totals()`
+result can carry basis for preparation, but `to_array()` omits that new metadata
+while retaining existing key order, types and values. Every current Stripe HMAC
+producer/verifier continues using the identical projection and existing nonce,
+purpose, currency and routing inputs (REST 2752-2756, 3013-3018, 5004-5007).
+No key version, replacement nonce, global HMAC relaxation or identity reminting.
+Square's existing explicit binding payload (3054-3071) is likewise unchanged.
+This does not change approval fingerprints: known persisted basis is included
+there as specified above.
+
+Before ordinary provisioning, find and validate the existing immutable snapshot
+for that exact checkout/attempt through the current protected expiry/recovery
+rules. Validate any recorded basis; malformed/NULL-present basis is not legacy.
+Compare every other canonical order/cart/line/contact/money/routing fact to the
+candidate using the existing equality/hash discipline. Do not blindly substitute
+an old snapshot for a changed request. If non-basis facts differ, deny/hold through
+the existing state machine without a new provider/session or payment identity.
+
+If an existing valid snapshot belongs to this unchanged retry, reuse its exact
+original payload and original basis state, including absent/unknown for a legacy
+snapshot. Current pricing metadata must neither overwrite a known historical
+basis nor retrofit an unknown one. Preserve its stored bytes/hash, checkout key,
+approval/capability if applicable, attempt identity and provider reference.
+If needed, compare a candidate with the existing snapshot's basis copied/omitted,
+then replay that unchanged snapshot through `store()`; never rewrite the row or
+relax its general payload equality guard. A genuinely new snapshot, with no
+existing protected snapshot/attempt to replay, captures the newly computed basis.
+All existing blocking-attempt/irreversible-outcome guards remain prerequisites.
+
+Seed pre-change ordinary Stripe and Square snapshots/attempts. After migration,
+exercise preparation retries and paid recovery and assert unchanged HMAC/key,
+snapshot bytes/hash, attempt/provider identities and zero extra payment/session
+provisioning; unknown remains unknown. Also exercise a new attempt that captures
+basis, a known-basis retry after settings drift, and changed non-basis payload
+denial. No new identity or speculative basis may escape a failed legacy replay.
 
 ## Proof and acceptance
 
