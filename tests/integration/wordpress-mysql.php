@@ -3835,6 +3835,67 @@ foreach ( array( 'stripe', 'square' ) as $basis_provider ) {
 			$completed_snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $fixture['attempt']['checkout_key'] );
 			if ( ! $completed_snapshot ) { $completed_snapshot = DoughBoss_Checkout_Snapshots::find( $fixture['attempt']['checkout_key'] ); }
 			db_integration_same( $basis_snapshot['payload_hash'], is_array( $completed_snapshot ) ? $completed_snapshot['payload_hash'] : '', $basis_seed . ' fulfillment does not rewrite historical snapshot facts' );
+			if ( 'square' === $basis_provider && $paid_order ) {
+				$receipt_cache_key = 'doughboss_idem_' . (string) $paid_order->checkout_key;
+				$receipt_posts = $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'];
+				$receipt_hooks = $GLOBALS['db_order_created_events'];
+				$receipt_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( (string) $paid_order->payment_intent_id );
+				$receipt_original_snapshot = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots WHERE checkout_key = %s', $fixture['attempt']['checkout_key'] ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+				$receipt_other_basis = $captured_basis;
+				$receipt_other_basis['tax_rate'] = 7.0;
+				$receipt_tampers = $basis_legacy ? array( '{}', DoughBoss_Order::encode_accounting_basis( $captured_basis ) ) : array( null, '{}', DoughBoss_Order::encode_accounting_basis( $receipt_other_basis ) );
+				foreach ( array( true, false ) as $receipt_cached ) {
+					foreach ( $receipt_tampers as $receipt_tamper ) {
+						$wpdb->update( $wpdb->prefix . 'doughboss_orders', array( 'accounting_basis_json' => $receipt_tamper ), array( 'id' => $paid_id ), array( '%s' ), array( '%d' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+						if ( $receipt_cached ) { set_transient( $receipt_cache_key, $paid_result->get_data(), HOUR_IN_SECONDS ); } else { delete_transient( $receipt_cache_key ); }
+						$receipt_denied = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+						db_integration_same( 'doughboss_receipt_basis_unverified', is_wp_error( $receipt_denied ) ? $receipt_denied->get_error_code() : '', $basis_seed . ' invalid receipt facts deny ' . ( $receipt_cached ? 'cached' : 'durable' ) . ' replay' );
+						db_integration_same( $receipt_posts, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], $basis_seed . ' denied ordinary receipt creates no new provider payment' );
+						db_integration_same( $receipt_hooks, $GLOBALS['db_order_created_events'], $basis_seed . ' denied ordinary receipt emits no kitchen event' );
+						db_integration_same( $paid_id, DoughBoss_Order::find_id_by_payment_intent( (string) $paid_order->payment_intent_id ), $basis_seed . ' denied ordinary receipt retains order identity' );
+						$wpdb->update( $wpdb->prefix . 'doughboss_orders', array( 'accounting_basis_json' => $paid_order->accounting_basis_json ), array( 'id' => $paid_id ), array( '%s' ), array( '%d' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					}
+					$receipt_positive = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+					db_integration_assert( $receipt_positive instanceof WP_REST_Response, $basis_seed . ' matching known or legacy-unknown receipt replays with or without cache' );
+				}
+				if ( is_array( $receipt_original_snapshot ) && is_array( $receipt_attempt ) ) {
+					$receipt_snapshot_key = (string) $receipt_original_snapshot['checkout_key'];
+					$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'expires_at' => '2000-01-01 00:00:00' ), array( 'checkout_key' => $receipt_snapshot_key ), array( '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$receipt_expired = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+					db_integration_assert( $receipt_expired instanceof WP_REST_Response, $basis_seed . ' exact retained expired receipt remains compatible' );
+					$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_hash' => str_repeat( '0', 64 ) ), array( 'checkout_key' => $receipt_snapshot_key ), array( '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$receipt_bad_retained = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+					db_integration_same( 'doughboss_receipt_basis_unverified', is_wp_error( $receipt_bad_retained ) ? $receipt_bad_retained->get_error_code() : '', $basis_seed . ' malformed retained expired snapshot cannot use missing-history fallback' );
+					$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_hash' => $receipt_original_snapshot['payload_hash'], 'expires_at' => $receipt_original_snapshot['expires_at'] ), array( 'checkout_key' => $receipt_snapshot_key ), array( '%s', '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					// Simulate legitimate retention purge without deleting the fixture row.
+					$receipt_hidden_key = hash( 'sha256', 'receipt-retention-fixture|' . $receipt_snapshot_key );
+					$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'checkout_key' => $receipt_hidden_key ), array( 'checkout_key' => $receipt_snapshot_key ), array( '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$receipt_purged = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+					db_integration_assert( $receipt_purged instanceof WP_REST_Response, $basis_seed . ' committed paid receipt survives eligible snapshot purge without inferring settings' );
+					$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'status' => 'succeeded' ), array( 'id' => (int) $receipt_attempt['id'] ), array( '%s' ), array( '%d' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$receipt_missing_protected = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+					db_integration_same( 'doughboss_receipt_basis_unverified', is_wp_error( $receipt_missing_protected ) ? $receipt_missing_protected->get_error_code() : '', $basis_seed . ' missing protected recovery facts cannot masquerade as legitimate retention expiry' );
+					$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'status' => $receipt_attempt['status'] ), array( 'id' => (int) $receipt_attempt['id'] ), array( '%s' ), array( '%d' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'checkout_key' => $receipt_snapshot_key ), array( 'checkout_key' => $receipt_hidden_key ), array( '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				}
+				foreach ( array( 'doughboss_payment_attempts', 'doughboss_checkout_snapshots' ) as $receipt_failure_table ) {
+					$receipt_failed_read = static function ( $sql ) use ( $wpdb, $receipt_failure_table ) {
+						return false !== strpos( $sql, 'SELECT * FROM ' . $wpdb->prefix . $receipt_failure_table ) ? 'SELECT doughboss_missing_receipt_column' : $sql;
+					};
+					$receipt_old_suppress = $wpdb->suppress_errors( true );
+					add_filter( 'query', $receipt_failed_read, 999 );
+					$receipt_storage_error = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $checkout_params ) );
+					remove_filter( 'query', $receipt_failed_read, 999 );
+					$wpdb->suppress_errors( $receipt_old_suppress );
+					db_integration_same( 'doughboss_receipt_basis_unverified', is_wp_error( $receipt_storage_error ) ? $receipt_storage_error->get_error_code() : '', $basis_seed . ' failed ' . $receipt_failure_table . ' read never becomes absent historical data' );
+				}
+				$receipt_attempt_after = DoughBoss_Payment_Attempts::find_by_provider_reference( (string) $paid_order->payment_intent_id );
+				foreach ( array( 'id', 'attempt_key', 'checkout_key', 'provider_reference', 'status' ) as $receipt_identity_field ) {
+					db_integration_same( is_array( $receipt_attempt ) ? $receipt_attempt[ $receipt_identity_field ] : null, is_array( $receipt_attempt_after ) ? $receipt_attempt_after[ $receipt_identity_field ] : null, $basis_seed . ' ordinary receipt retains ' . $receipt_identity_field );
+				}
+				db_integration_same( $receipt_posts, $GLOBALS['db_stripe_post_count'] + $GLOBALS['db_square_post_count'], $basis_seed . ' receipt replay/retention checks create no provider payment' );
+				db_integration_same( $receipt_hooks, $GLOBALS['db_order_created_events'], $basis_seed . ' receipt replay/retention checks emit no kitchen event' );
+			}
 		}
 	}
 }

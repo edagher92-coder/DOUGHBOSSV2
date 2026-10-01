@@ -98,6 +98,39 @@ class DoughBoss_Checkout_Snapshots {
 	}
 
 	/**
+	 * Read retained facts for an already durable receipt, including expired rows.
+	 * Absence is distinct from invalid retained data. The caller must establish
+	 * durable paid identity and decide whether retention permits absence.
+	 *
+	 * @param string $checkout_key Exact payment-attempt checkout key.
+	 * @param int    $order_id Durable receipt order ID.
+	 * @return array|null|WP_Error
+	 */
+	public static function find_for_receipt( $checkout_key, $order_id ) {
+		global $wpdb;
+		$checkout_key = self::stable_key( $checkout_key );
+		$order_id = absint( $order_id );
+		$error = new WP_Error( 'doughboss_receipt_basis_unverified', __( 'The saved receipt requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		if ( '' === $checkout_key || ! $order_id ) {
+			return $error;
+		}
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE checkout_key = %s LIMIT 1', $checkout_key ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+		if ( ! empty( $wpdb->last_error ) ) {
+			return $error;
+		}
+		if ( null === $row ) {
+			return null;
+		}
+		$snapshot = self::decode_row( $row, true );
+		if ( ! $snapshot || ! isset( $snapshot['payload']['order'] ) || ! is_array( $snapshot['payload']['order'] )
+			|| ( ! empty( $snapshot['order_id'] ) && $order_id !== (int) $snapshot['order_id'] )
+			|| ( 'completed' === (string) $snapshot['status'] && $order_id !== (int) $snapshot['order_id'] ) ) {
+			return $error;
+		}
+		return $snapshot;
+	}
+
+	/**
 	 * Find and decode an unexpired snapshot.
 	 *
 	 * @param string $checkout_key Stable checkout key.

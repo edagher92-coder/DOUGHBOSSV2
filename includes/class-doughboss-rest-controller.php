@@ -4335,10 +4335,6 @@ class DoughBoss_REST_Controller {
 				return rest_ensure_response( $payload );
 			}
 		}
-		$cached = get_transient( 'doughboss_idem_' . $idem );
-		if ( ! $stripe_return && is_array( $cached ) ) {
-			return rest_ensure_response( $cached );
-		}
 
 		// Durable replay check precedes cart validation: a response may be lost
 		// after the winning request commits and clears the shared cart.
@@ -4346,6 +4342,10 @@ class DoughBoss_REST_Controller {
 		if ( ! $stripe_return && $existing_id ) {
 			$existing = DoughBoss_Order::get( $existing_id );
 			if ( $existing ) {
+				$receipt_valid = $this->validate_square_receipt_basis( $existing );
+				if ( is_wp_error( $receipt_valid ) ) {
+					return $receipt_valid;
+				}
 				$payload = $this->checkout_payload( $existing, true );
 				set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
 				return rest_ensure_response( $payload );
@@ -4666,6 +4666,52 @@ class DoughBoss_REST_Controller {
 		set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
 
 		return rest_ensure_response( $payload );
+	}
+
+	/**
+	 * Validate ordinary Square receipt facts before returning a durable replay.
+	 *
+	 * @param object $order Authoritative persisted receipt.
+	 * @return true|WP_Error
+	 */
+	private function validate_square_receipt_basis( $order ) {
+		if ( 'square' !== (string) $order->payment_method ) {
+			return true;
+		}
+		$error = new WP_Error( 'doughboss_receipt_basis_unverified', __( 'The saved receipt requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		$basis = DoughBoss_Order::accounting_basis_from_order( $order );
+		if ( is_wp_error( $basis ) || 'paid' !== (string) $order->payment_status || empty( $order->payment_intent_id ) ) {
+			return $error;
+		}
+		$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( (string) $order->payment_intent_id );
+		global $wpdb;
+		if ( ! empty( $wpdb->last_error ) ) {
+			return $error;
+		}
+		if ( ! $attempt ) {
+			// Pre-protocol receipts may have no attempt, but never recorded a basis.
+			return null === $basis ? true : $error;
+		}
+		if ( 'square' !== (string) $attempt['provider'] || 'order' !== (string) $attempt['purpose']
+			|| (int) $attempt['amount_minor'] !== DoughBoss_Payment::to_minor_units( $order->total )
+			|| ! hash_equals( (string) $attempt['currency'], (string) $order->currency ) ) {
+			return $error;
+		}
+		$snapshot = DoughBoss_Checkout_Snapshots::find_for_receipt( (string) $attempt['checkout_key'], (int) $order->id );
+		if ( is_wp_error( $snapshot ) ) {
+			return $snapshot;
+		}
+		if ( is_array( $snapshot ) ) {
+			return DoughBoss_Order::accounting_basis_matches_payload( $order, $snapshot['payload']['order'] ) ? true : $error;
+		}
+		$metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		// Committed receipts are eligible for retention expiry/purge. Protected,
+		// unfinished recovery is not: missing facts there remain a hold.
+		if ( 'order_committed' === (string) $attempt['status']
+			&& isset( $metadata['committed_order'] ) && (int) $metadata['committed_order'] === (int) $order->id ) {
+			return true;
+		}
+		return null === $basis && '' === ( isset( $metadata['protocol_version'] ) ? (string) $metadata['protocol_version'] : '' ) ? true : $error;
 	}
 
 	/**
