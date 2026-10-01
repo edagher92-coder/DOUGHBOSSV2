@@ -4159,6 +4159,12 @@ class DoughBoss_REST_Controller {
 				|| strtoupper( (string) $existing->currency ) !== strtoupper( (string) $attempt['currency'] ) ) {
 				return new WP_Error( 'doughboss_preorder_payment_binding', __( 'The paid receipt requires staff review. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 			}
+			// Revalidate the locked source fingerprint and both historical bases even
+			// when the original snapshot was consumed. This performs no new release.
+			$released = DoughBoss_Preorder_Approval::release( $request_id, $existing_id );
+			if ( is_wp_error( $released ) ) {
+				return $released;
+			}
 			return $this->checkout_payload( $existing, true );
 		}
 		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $attempt['checkout_key'] );

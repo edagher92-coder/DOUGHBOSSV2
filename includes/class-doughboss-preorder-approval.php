@@ -585,7 +585,8 @@ class DoughBoss_Preorder_Approval {
 			if ( ! self::commit() ) {
 				return self::error( 'doughboss_preorder_store_failed', __( 'The fulfillment release could not be committed.', 'doughboss' ), 500 );
 			}
-			return self::row( $row );
+			// release_locked() already returns the normalized approval array.
+			return $row;
 		} catch ( Throwable $e ) {
 			self::rollback();
 			return self::error( 'doughboss_preorder_store_failed', __( 'The fulfillment release could not be saved.', 'doughboss' ), 500 );
@@ -626,26 +627,31 @@ class DoughBoss_Preorder_Approval {
 			if ( $fulfillment_order_id !== (int) $row->fulfillment_order_id ) {
 				return self::error( 'doughboss_preorder_release_conflict', __( 'This pre-order request is already linked to another fulfillment order.', 'doughboss' ), 409 );
 			}
-			return self::row( $row );
-		}
-		if ( ! in_array( $row->state, array( self::STATE_PAYMENT_ACTIVE, self::STATE_PAYMENT_HELD ), true ) ) {
+		} elseif ( ! in_array( $row->state, array( self::STATE_PAYMENT_ACTIVE, self::STATE_PAYMENT_HELD ), true ) ) {
 			return self::error( 'doughboss_preorder_release_unavailable', __( 'This pre-order request is not ready for fulfillment release.', 'doughboss' ), 409 );
 		}
 		$fulfillment = self::locked_order( $fulfillment_order_id );
 		if ( ! $fulfillment ) {
 			return self::error( 'doughboss_preorder_fulfillment_missing', __( 'The fulfillment order could not be found.', 'doughboss' ), 404 );
 		}
-		$stripe_verified = 'stripe' === (string) $fulfillment->payment_method && ! empty( $fulfillment->payment_intent_id );
-		$square_verified = 'square' === (string) $fulfillment->payment_method && self::square_fulfillment_matches( $fulfillment, $request, $row, $checkout_key );
 		$fulfillment_basis = DoughBoss_Order::accounting_basis_from_order( $fulfillment );
 		$basis_matches = ! is_wp_error( $fulfillment_basis ) && DoughBoss_Order::accounting_basis_matches_payload( $request, null === $fulfillment_basis ? array() : array( 'accounting_basis' => $fulfillment_basis ) );
+		if ( ! $basis_matches ) {
+			return self::error( 'doughboss_preorder_fulfillment_unverified', __( 'The paid order accounting details require staff review. Please do not pay again.', 'doughboss' ), 409 );
+		}
+		// A receipt replay still attests historical facts; released is not a bypass.
+		// No snapshot reconstruction, provider dispatch or second kitchen release.
+		if ( self::STATE_RELEASED === $row->state ) {
+			return self::row( $row );
+		}
+		$stripe_verified = 'stripe' === (string) $fulfillment->payment_method && ! empty( $fulfillment->payment_intent_id );
+		$square_verified = 'square' === (string) $fulfillment->payment_method && self::square_fulfillment_matches( $fulfillment, $request, $row, $checkout_key );
 		if (
 			'web' !== (string) $fulfillment->order_source
 			|| 'paid' !== (string) $fulfillment->payment_status
 			|| empty( $fulfillment->checkout_key )
 			|| ! hash_equals( $checkout_key, (string) $fulfillment->checkout_key )
 			|| ! hash_equals( strtoupper( (string) $request->currency ), strtoupper( (string) $fulfillment->currency ) )
-			|| ! $basis_matches
 			|| ( ! $stripe_verified && ! $square_verified )
 		) {
 			return self::error( 'doughboss_preorder_fulfillment_unverified', __( 'Only a verified paid order can release this pre-order request.', 'doughboss' ), 409 );
