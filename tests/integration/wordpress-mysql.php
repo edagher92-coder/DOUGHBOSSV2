@@ -253,6 +253,16 @@ function db_integration_square_http( $preempt, $args, $url ) {
 		return $preempt;
 	}
 	$method = isset( $args['method'] ) ? strtoupper( (string) $args['method'] ) : 'GET';
+	if ( 'GET' === $method && 0 === strpos( (string) wp_parse_url( (string) $url, PHP_URL_PATH ), '/v2/gift-cards/' ) ) {
+		$GLOBALS['db_gift_card_requests'][] = array( 'url' => $url, 'method' => $method, 'has_body' => isset( $args['body'] ) );
+		if ( ! empty( $GLOBALS['db_gift_card_lookup_observer'] ) ) {
+			call_user_func( $GLOBALS['db_gift_card_lookup_observer'] );
+		}
+		if ( ! empty( $GLOBALS['db_gift_card_http_error'] ) ) {
+			return new WP_Error( 'synthetic_gift_card_network', 'Synthetic lookup unavailable.' );
+		}
+		return db_integration_stripe_http_response( $GLOBALS['db_gift_card_fixture'] );
+	}
 	if ( 'POST' === $method && '/v2/refunds' === wp_parse_url( (string) $url, PHP_URL_PATH ) ) {
 		$body = json_decode( (string) $args['body'], true );
 		$GLOBALS['db_square_refund_requests'][] = $body;
@@ -877,6 +887,71 @@ $settings['legacy_voucher_issuance_enabled'] = 1;
 update_option( 'doughboss_settings', $settings, false );
 $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'online_payment_enabled' => 1, 'pickup_enabled' => 1, 'is_active' => 1 ), array( 'id' => 1 ) );
 add_filter( 'pre_http_request', 'db_integration_square_http', 10, 3 );
+
+// Gift Cards are observed through GET only, even while ordinary ordering and
+// payments are off. Neither a balance nor ACTIVE state authorizes redemption.
+$gift_lookup_settings = $settings;
+$settings['ordering_open'] = 0;
+$settings['payments_enabled'] = 0;
+$settings['square_test_location_id'] = '';
+update_option( 'doughboss_settings', $settings, false );
+$gift_id = 'gftc:00113070ba5745f0b2377c1b9570cb03';
+$GLOBALS['db_gift_card_requests'] = array();
+$GLOBALS['db_gift_card_fixture'] = array( 'gift_card' => array(
+	'id' => $gift_id, 'type' => 'DIGITAL', 'state' => 'ACTIVE',
+	'balance_money' => array( 'amount' => 1250, 'currency' => 'AUD' ),
+	'gan' => 'SYNTHETIC-NOT-A-REAL-GAN', 'customer_ids' => array( 'SYNTHETIC-CUSTOMER' ),
+) );
+$gift_table_state = array();
+foreach ( array( 'doughboss_orders', 'doughboss_preorder_approvals', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots', 'doughboss_vouchers', 'doughboss_voucher_redemptions', 'doughboss_voucher_audit' ) as $gift_table ) {
+	$gift_table_state[$gift_table] = $wpdb->get_results( 'SELECT * FROM ' . $wpdb->prefix . $gift_table, ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+}
+$gift_lookup = DoughBoss_Square::retrieve_gift_card( $gift_id, 1 );
+db_integration_same( array( 'id' => $gift_id, 'type' => 'DIGITAL', 'state' => 'ACTIVE', 'balance_minor' => 1250, 'currency' => 'AUD', 'square_mode' => 'test' ), $gift_lookup, 'gift card lookup returns only a minimal provider observation while payments and ordering are closed' );
+db_integration_same( 1, count( $GLOBALS['db_gift_card_requests'] ), 'one gift card GET performed through intercepted HTTP' );
+db_integration_same( DoughBoss_Square::SANDBOX_HOST . '/v2/gift-cards/' . rawurlencode( $gift_id ), $GLOBALS['db_gift_card_requests'][0]['url'], 'gift card lookup uses sandbox and exact encoded provider ID' );
+db_integration_same( false, $GLOBALS['db_gift_card_requests'][0]['has_body'], 'balance GET sends no mutation body' );
+db_integration_same( 0, $GLOBALS['db_square_post_count'], 'gift card lookup creates no payment POST' );
+db_integration_same( 0, $GLOBALS['db_square_get_count'], 'gift card lookup does not retrieve a payment' );
+
+foreach ( array( 'map', 'mode', 'token', 'currency', 'inactive' ) as $gift_drift ) {
+	$GLOBALS['db_gift_card_lookup_observer'] = function () use ( $gift_drift ) {
+		$changed = DoughBoss_Settings::all();
+		if ( 'map' === $gift_drift ) { $changed['square_test_location_map']['revesby'] = 'LCHANGEDGIFTLOOKUP'; }
+		if ( 'mode' === $gift_drift ) { $changed['square_mode'] = 'live'; }
+		if ( 'token' === $gift_drift ) { $changed['square_test_access_token'] = 'EAAASyntheticChangedLookupToken000000'; }
+		if ( 'currency' === $gift_drift ) { $changed['currency_code'] = 'USD'; }
+		if ( 'inactive' === $gift_drift ) {
+			global $wpdb;
+			$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 0 ), array( 'id' => 1 ) );
+		}
+		update_option( 'doughboss_settings', $changed, false );
+	};
+	$gift_changed = DoughBoss_Square::retrieve_gift_card( $gift_id, 1 );
+	db_integration_same( 'doughboss_gift_card_context_changed', is_wp_error( $gift_changed ) ? $gift_changed->get_error_code() : '', 'gift card lookup denies final context drift: ' . $gift_drift );
+	$GLOBALS['db_gift_card_lookup_observer'] = null;
+	update_option( 'doughboss_settings', $settings, false );
+	$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 1 ), array( 'id' => 1 ) );
+}
+$GLOBALS['db_gift_card_http_error'] = true;
+$gift_network = DoughBoss_Square::retrieve_gift_card( $gift_id, 1 );
+db_integration_same( 'doughboss_gift_card_unavailable', is_wp_error( $gift_network ) ? $gift_network->get_error_code() : '', 'gift card network failure returns no balance' );
+$GLOBALS['db_gift_card_http_error'] = false;
+$gift_request_count = count( $GLOBALS['db_gift_card_requests'] );
+$gift_unknown = DoughBoss_Square::retrieve_gift_card( $gift_id, 999999 );
+db_integration_assert( is_wp_error( $gift_unknown ), 'unknown native shop denied before gift card lookup' );
+$gift_unconfigured = $settings;
+$gift_unconfigured['square_test_access_token'] = '';
+update_option( 'doughboss_settings', $gift_unconfigured, false );
+$gift_missing_token = DoughBoss_Square::retrieve_gift_card( $gift_id, 1 );
+db_integration_assert( is_wp_error( $gift_missing_token ), 'missing credentials deny gift card lookup' );
+db_integration_same( $gift_request_count, count( $GLOBALS['db_gift_card_requests'] ), 'invalid scope and credentials perform no provider GET' );
+foreach ( $gift_table_state as $gift_table => $gift_rows ) {
+	db_integration_same( $gift_rows, $wpdb->get_results( 'SELECT * FROM ' . $wpdb->prefix . $gift_table, ARRAY_A ), 'read-only gift card lookup preserves complete rows: ' . $gift_table ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+}
+db_integration_same( 0, $GLOBALS['db_square_post_count'], 'all gift card lookups leave charge count unchanged' );
+update_option( 'doughboss_settings', $gift_lookup_settings, false );
+$settings = $gift_lookup_settings;
 
 $first_meta = db_integration_square_metadata( 'attempt-one', 'checkout-one', 'cart-one' );
 $first      = DoughBoss_Square::create_payment_intent( 2750, 'AUD', $first_meta );

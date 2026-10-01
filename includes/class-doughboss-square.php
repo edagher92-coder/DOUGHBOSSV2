@@ -1048,6 +1048,71 @@ class DoughBoss_Square {
 	}
 
 	/**
+	 * Observe a Square-owned gift card without changing its balance or any order.
+	 *
+	 * This internal adapter has no public route. The native shop is a validated
+	 * lookup context, not proof that a merchant-wide gift card belongs to a shop.
+	 * A returned ACTIVE state/balance is an observation, never tender authority.
+	 * GANs, linked customers and the raw provider payload are deliberately omitted.
+	 *
+	 * @param string $id Square-assigned gift card ID, not a GAN or browser nonce.
+	 * @param int $location_id Exact server-owned native location ID.
+	 * @return array|WP_Error Minimal provider observation, or a fail-closed error.
+	 */
+	public static function retrieve_gift_card( $id, $location_id ) {
+		if ( ! self::valid_gift_card_id( $id ) || ! is_int( $location_id ) || $location_id <= 0 ) {
+			return new WP_Error( 'doughboss_gift_card_input', __( 'Invalid gift card lookup reference.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$binding = self::shop_binding( $location_id );
+		if ( is_wp_error( $binding ) ) {
+			return $binding;
+		}
+		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+		$token    = self::access_token();
+		if ( ! is_string( $currency ) || 1 !== preg_match( '/^[A-Z]{3}\z/', $currency ) ) {
+			return new WP_Error( 'doughboss_gift_card_config', __( 'Gift card lookup is not configured.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$response = self::request( 'GET', '/v2/gift-cards/' . rawurlencode( $id ), array(), $binding );
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error( 'doughboss_gift_card_unavailable', __( 'The gift card balance could not be checked. No gift card was changed.', 'doughboss' ), array( 'status' => 502 ) );
+		}
+		$current = self::shop_binding( $location_id );
+		if ( is_wp_error( $current ) || $current !== $binding || ! hash_equals( $token, self::access_token() )
+			|| $currency !== DoughBoss_Settings::get( 'currency_code', 'AUD' ) ) {
+			return new WP_Error( 'doughboss_gift_card_context_changed', __( 'Gift card lookup configuration changed. Check the balance again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$observation = self::gift_card_observation( $response, $id, $currency );
+		if ( is_wp_error( $observation ) ) {
+			return $observation;
+		}
+		$observation['square_mode'] = $binding['square_mode'];
+		return $observation;
+	}
+
+	/** Validate only a bounded provider ID; never normalize untrusted characters. */
+	private static function valid_gift_card_id( $id ) {
+		return is_string( $id ) && 1 === preg_match( '/^gftc:[A-Za-z0-9_-]{1,128}\z/', $id );
+	}
+
+	/** Validate and minimize a provider balance response (integer cents only). */
+	private static function gift_card_observation( array $response, $id, $currency ) {
+		$card  = isset( $response['gift_card'] ) && is_array( $response['gift_card'] ) ? $response['gift_card'] : array();
+		$money = isset( $card['balance_money'] ) && is_array( $card['balance_money'] ) ? $card['balance_money'] : array();
+		if ( ( isset( $response['errors'] ) && ( ! is_array( $response['errors'] ) || ! empty( $response['errors'] ) ) )
+			|| ! self::valid_gift_card_id( $id )
+			|| ! isset( $card['id'], $card['type'], $card['state'], $money['amount'], $money['currency'] )
+			|| ! is_string( $card['id'] ) || ! hash_equals( $id, $card['id'] )
+			|| ! in_array( $card['type'], array( 'DIGITAL', 'PHYSICAL' ), true )
+			|| ! in_array( $card['state'], array( 'ACTIVE', 'DEACTIVATED', 'BLOCKED', 'PENDING' ), true )
+			|| ! is_int( $money['amount'] ) || $money['amount'] < 0 || $money['amount'] > 9007199254740991
+			|| ! is_string( $currency ) || 1 !== preg_match( '/^[A-Z]{3}\z/', $currency )
+			|| ! is_string( $money['currency'] ) || ! hash_equals( $currency, $money['currency'] ) ) {
+			return new WP_Error( 'doughboss_gift_card_response', __( 'The gift card balance response could not be verified.', 'doughboss' ), array( 'status' => 502 ) );
+		}
+		return array( 'id' => $card['id'], 'type' => $card['type'], 'state' => $card['state'], 'balance_minor' => $money['amount'], 'currency' => $money['currency'] );
+	}
+
+	/**
 	 * Read-only credential check for the admin connectivity action.
 	 *
 	 * @return array|WP_Error

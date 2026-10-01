@@ -698,6 +698,99 @@ db_test(
 	}
 );
 
+function db_square_gift_card_response( $id = 'gftc:EXAMPLECARD123', $type = 'DIGITAL', $state = 'ACTIVE', $amount = 1250, $currency = 'AUD' ) {
+	return array(
+		'gift_card' => array(
+			'id'            => $id,
+			'type'          => $type,
+			'state'         => $state,
+			'balance_money' => array(
+				'amount'   => $amount,
+				'currency' => $currency,
+			),
+			'gan'           => 'GAN-MUST-NOT-ESCAPE',
+			'customer_id'   => 'customer-must-not-escape',
+			'extra_field'   => 'must-not-escape',
+		),
+		'extra_response_field' => 'must-not-escape',
+	);
+}
+
+db_test(
+	'Square gift card observations are minimal, exact and never spendable',
+	function () {
+		$method = new ReflectionMethod( 'DoughBoss_Square', 'gift_card_observation' );
+		$method->setAccessible( true );
+		$id = 'gftc:EXAMPLECARD123';
+		foreach ( array( 'DIGITAL', 'PHYSICAL' ) as $type ) {
+			foreach ( array( 'ACTIVE', 'DEACTIVATED', 'BLOCKED', 'PENDING' ) as $state ) {
+				$response = $method->invoke( null, db_square_gift_card_response( $id, $type, $state, 0 ), $id, 'AUD' );
+				assert_same(
+					array( 'id' => $id, 'type' => $type, 'state' => $state, 'balance_minor' => 0, 'currency' => 'AUD' ),
+					$response,
+					$type . ' ' . $state . ' zero-balance observation has no spendable flag or raw provider fields'
+				);
+			}
+		}
+		$positive = $method->invoke( null, db_square_gift_card_response( $id, 'PHYSICAL', 'ACTIVE', 1250 ), $id, 'AUD' );
+		assert_same( 1250, $positive['balance_minor'], 'gift card balance remains an exact nonnegative integer minor amount' );
+	}
+);
+
+db_test(
+	'Square gift card observations reject malformed or mismatched provider evidence',
+	function () {
+		$method = new ReflectionMethod( 'DoughBoss_Square', 'gift_card_observation' );
+		$method->setAccessible( true );
+		$id = 'gftc:EXAMPLECARD123';
+		foreach ( array(
+			'id'       => array( 'gftc:OTHER', '', 42, true, array() ),
+			'type'     => array( 'UNKNOWN', '', 42, null ),
+			'state'    => array( 'UNKNOWN', '', 42, null ),
+		) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_gift_card_response();
+				$response['gift_card'][ $field ] = $value;
+				assert_true( is_wp_error( $method->invoke( null, $response, $id, 'AUD' ) ), 'malformed or mismatched gift card ' . $field . ' is rejected' );
+			}
+		}
+		foreach ( array(
+			'amount'   => array( null, '1250', 1250.5, -1, 9007199254740992, true, array() ),
+			'currency' => array( 'USD', 'aud', '', null, 42, array() ),
+		) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_gift_card_response();
+				$response['gift_card']['balance_money'][ $field ] = $value;
+				assert_true( is_wp_error( $method->invoke( null, $response, $id, 'AUD' ) ), 'malformed or mismatched gift card money ' . $field . ' is rejected' );
+			}
+		}
+		foreach ( array( array(), array( 'gift_card' => 'bad' ), array( 'gift_card' => array() ), array( 'errors' => array( array( 'code' => 'CARD_ERROR' ) ), 'gift_card' => db_square_gift_card_response()['gift_card'] ) ) as $response ) {
+			assert_true( is_wp_error( $method->invoke( null, $response, $id, 'AUD' ) ), 'missing or contradictory gift card response is rejected' );
+		}
+		$response = db_square_gift_card_response();
+		assert_true( is_wp_error( $method->invoke( null, $response, $id, 'USD' ) ), 'configured currency mismatch is rejected' );
+	}
+);
+
+db_test(
+	'Square gift card IDs and native lookup inputs fail closed before provider access',
+	function () {
+		$valid = new ReflectionMethod( 'DoughBoss_Square', 'valid_gift_card_id' );
+		$valid->setAccessible( true );
+		foreach ( array( '', 'gftc:', 'gftc:bad id', 'gftc:bad/slash', 'GAN-EXAMPLE', 'gftc:' . str_repeat( 'a', 129 ), 42, true, null, array() ) as $invalid ) {
+			assert_false( $valid->invoke( null, $invalid ), 'invalid or native gift card ID type is rejected' );
+		}
+		foreach ( array( '', 'gftc:bad id', 'GAN-EXAMPLE', 42, true, null, array() ) as $invalid ) {
+			$result = DoughBoss_Square::retrieve_gift_card( $invalid, 1 );
+			assert_same( 'doughboss_gift_card_input', is_wp_error( $result ) ? $result->get_error_code() : '', 'invalid gift card lookup ID stops before provider access' );
+		}
+		foreach ( array( 0, -1, '1', 1.0, true, null, array() ) as $invalid_location ) {
+			$result = DoughBoss_Square::retrieve_gift_card( 'gftc:EXAMPLECARD123', $invalid_location );
+			assert_same( 'doughboss_gift_card_input', is_wp_error( $result ) ? $result->get_error_code() : '', 'native or nonpositive gift card location stops before provider access' );
+		}
+	}
+);
+
 /** A synthetic provider refund response: never calls Square. */
 function db_square_refund_response( $status = 'COMPLETED' ) {
 	return array( 'refund' => array(
