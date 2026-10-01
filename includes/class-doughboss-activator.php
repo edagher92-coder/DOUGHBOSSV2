@@ -491,6 +491,7 @@ class DoughBoss_Activator {
 			attempt_key char(64) NOT NULL,
 			provider varchar(20) NOT NULL DEFAULT 'tyro',
 			provider_reference varchar(191) NULL DEFAULT NULL,
+			provider_order_reference varchar(191) NULL DEFAULT NULL,
 			checkout_key char(64) NOT NULL,
 			purpose varchar(32) NOT NULL DEFAULT 'order',
 			context varchar(32) NOT NULL DEFAULT 'web',
@@ -510,6 +511,7 @@ class DoughBoss_Activator {
 			PRIMARY KEY  (id),
 			UNIQUE KEY attempt_key (attempt_key),
 			UNIQUE KEY provider_reference (provider_reference),
+			UNIQUE KEY provider_order_reference (provider_order_reference),
 			UNIQUE KEY checkout_key (checkout_key),
 			KEY status_updated (status,updated_at),
 			KEY local_reference (local_reference)
@@ -805,6 +807,7 @@ class DoughBoss_Activator {
 			array(
 				'attempt_key'        => array( 'type' => 'char(64)', 'null' => 'NO' ),
 				'provider_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+				'provider_order_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
 				'checkout_key'       => array( 'type' => 'char(64)', 'null' => 'NO' ),
 				'amount_minor'       => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
 				'status'             => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'created' ),
@@ -831,6 +834,7 @@ class DoughBoss_Activator {
 			)
 			&& self::index_contract_ready( $attempts, 'attempt_key', array( 'attempt_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $attempts, 'provider_reference', array( 'provider_reference' ), true, array( 191 ) )
+			&& self::index_contract_ready( $attempts, 'provider_order_reference', array( 'provider_order_reference' ), true, array( 191 ) )
 			&& self::index_contract_ready( $attempts, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $snapshots, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );

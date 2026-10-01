@@ -879,6 +879,148 @@ db_integration_same( 'payment_checkout_key', isset( $preorder_approval_checkout_
 db_integration_same( 'not_attempted', isset( $preorder_delivery_status_column->Default ) ? (string) $preorder_delivery_status_column->Default : '', 'pre-order approval stores an explicit default delivery outcome' );
 db_integration_same( 'YES', isset( $preorder_delivery_time_column->Null ) ? (string) $preorder_delivery_time_column->Null : '', 'pre-order approval delivery-attempt time remains nullable until an attempt occurs' );
 
+// Square Orders persistence: real transactions and unique indexes, no HTTP.
+$orders_table = $wpdb->prefix . 'doughboss_payment_attempts';
+$orders_posts_before = $GLOBALS['db_square_post_count'];
+$orders_fixture = function ( $seed, $marked = true ) {
+	$key = hash( 'sha256', 'orders-storage-checkout|' . $seed );
+	$payload = array(
+		'order' => array( 'location_id' => 1, 'currency' => 'AUD', 'subtotal' => '12.50',
+			'discount' => '0.00', 'tax' => '1.14', 'delivery_fee' => '0.00', 'total' => '12.50',
+			'accounting_basis' => array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 10,
+				'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ) ),
+		'lines' => array( array( 'name' => 'Synthetic pizza', 'quantity' => 1, 'unit_price' => '12.50', 'line_total' => '12.50' ) ),
+	);
+	$snapshot = DoughBoss_Checkout_Snapshots::store( $key, $payload );
+	db_integration_assert( is_array( $snapshot ), 'Orders storage fixture retains a hash-validated snapshot' );
+	$metadata = array( 'protocol_version' => 'square-v2', 'binding_hash' => hash( 'sha256', 'binding|' . $seed ),
+		'square_shop_slug' => 'revesby', 'square_location_id' => 'LORDERSTORAGETEST', 'square_mode' => 'test' );
+	if ( $marked ) {
+		$metadata['orders_protocol'] = 'square-orders-v1';
+		$metadata['orders_snapshot_hash'] = is_array( $snapshot ) ? $snapshot['payload_hash'] : '';
+	}
+	$attempt = DoughBoss_Payment_Attempts::create( array( 'attempt_key' => hash( 'sha256', 'orders-storage|' . $seed ),
+		'checkout_key' => $key, 'provider' => 'square', 'purpose' => 'order', 'context' => 'web',
+		'local_reference' => hash( 'sha256', 'guard|' . $seed ), 'location_id' => 1,
+		'amount_minor' => 1250, 'currency' => 'AUD', 'status' => 'prepared', 'safe_metadata' => $metadata ) );
+	db_integration_assert( is_array( $attempt ), 'Orders storage fixture owns one durable attempt' );
+	return $attempt;
+};
+$orders_first = $orders_fixture( 'first' );
+db_integration_same( null, $orders_first['provider_order_reference'], 'additive Order column defaults to NULL, not a guessed identity' );
+db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_first['id'], 'squareORDERSTORAGE000001', $orders_first ), 'prepared attempt cannot bind an Order before its irreversible claim' );
+db_integration_same( true, DoughBoss_Payment_Attempts::claim_irreversible_creation( $orders_first['id'] ), 'one creation owner claims compound dispatch' );
+$orders_first_bound = DoughBoss_Payment_Attempts::bind_square_order( $orders_first['id'], 'squareORDERSTORAGE000001', $orders_first );
+db_integration_assert( is_array( $orders_first_bound ), 'claimed exact tuple binds distinct provider Order identity transactionally' );
+db_integration_same( null, $orders_first_bound['provider_reference'], 'Order binding never becomes Payment identity' );
+db_integration_same( 'dispatching', $orders_first_bound['status'], 'Order binding does not grant paid or kitchen-ready state' );
+db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_first['id'], 'squareORDERSTORAGE000002', $orders_first ), 'bound Order identity cannot be replaced' );
+db_integration_same( false, DoughBoss_Payment_Attempts::claim_irreversible_creation( $orders_first['id'] ), 'bound compound dispatch cannot be reclaimed' );
+$orders_collision = $orders_fixture( 'collision' );
+DoughBoss_Payment_Attempts::claim_irreversible_creation( $orders_collision['id'] );
+$orders_suppress = $wpdb->suppress_errors( true );
+db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], 'squareORDERSTORAGE000001', $orders_collision ), 'unique Order collision rolls back without stealing another attempt identity' );
+$wpdb->suppress_errors( $orders_suppress );
+db_integration_same( null, DoughBoss_Payment_Attempts::find( $orders_collision['id'] )['provider_order_reference'], 'collision leaves original attempt unbound and held' );
+$orders_legacy = $orders_fixture( 'legacy', false );
+$orders_upgrade_metadata = DoughBoss_Payment_Attempts::metadata( $orders_legacy );
+$orders_upgrade_metadata['orders_protocol'] = 'square-orders-v1';
+$orders_upgrade_metadata['orders_snapshot_hash'] = hash( 'sha256', 'not-a-snapshot' );
+db_integration_same( false, DoughBoss_Payment_Attempts::update( $orders_legacy['id'], array( 'safe_metadata' => $orders_upgrade_metadata ) ), 'generic update cannot upgrade unmarked prepared v2 attempt into Orders protocol' );
+DoughBoss_Payment_Attempts::claim_irreversible_creation( $orders_legacy['id'] );
+db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_legacy['id'], 'squareORDERLEGACY000001', $orders_legacy ), 'unmarked historical attempt cannot acquire itemized Order linkage' );
+
+foreach ( array( 'attempt_key', 'checkout_key', 'purpose', 'context', 'local_reference', 'location_id', 'table_id', 'qr_code_id', 'amount_minor', 'currency' ) as $orders_bad_field ) {
+	$changed = $orders_collision;
+	$changed[ $orders_bad_field ] = in_array( $orders_bad_field, array( 'location_id', 'table_id', 'qr_code_id', 'amount_minor' ), true ) ? (int) $changed[ $orders_bad_field ] + 1 : 'different';
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], 'squareORDERCHANGED000001', $changed ), 'binding denies changed immutable ' . $orders_bad_field );
+}
+foreach ( array( 'protocol_version', 'binding_hash', 'square_shop_slug', 'square_location_id', 'square_mode', 'orders_protocol', 'orders_snapshot_hash' ) as $orders_bad_field ) {
+	$changed = $orders_collision;
+	$changed_metadata = DoughBoss_Payment_Attempts::metadata( $changed );
+	$changed_metadata[ $orders_bad_field ] = 'different';
+	$changed['safe_metadata_json'] = wp_json_encode( $changed_metadata );
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], 'squareORDERCHANGED000001', $changed ), 'binding denies changed immutable metadata ' . $orders_bad_field );
+}
+foreach ( array( 'bad id', str_repeat( 'a', 192 ), '', 12345678 ) as $orders_bad_id ) {
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], $orders_bad_id, $orders_collision ), 'storage rejects noncanonical or unrepresentable Order id without truncation' );
+}
+
+// Crash-boundary equivalents: every denied transaction leaves both identities intact.
+$orders_failure = '';
+$orders_failure_filter = function ( $sql ) use ( &$orders_failure, $orders_table, $wpdb ) {
+	$matches = ( 'begin' === $orders_failure && 'START TRANSACTION' === trim( $sql ) )
+		|| ( 'attempt_read' === $orders_failure && 0 === strpos( $sql, 'SELECT * FROM ' . $orders_table ) && false !== strpos( $sql, 'FOR UPDATE' ) )
+		|| ( 'snapshot_read' === $orders_failure && 0 === strpos( $sql, 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots' ) && false !== strpos( $sql, 'FOR UPDATE' ) )
+		|| ( 'write' === $orders_failure && 0 === strpos( $sql, 'UPDATE ' . $orders_table . ' SET provider_order_reference' ) )
+		|| ( 'final_read' === $orders_failure && 0 === strpos( $sql, 'SELECT * FROM ' . $orders_table ) && false === strpos( $sql, 'FOR UPDATE' ) )
+		|| ( 'commit' === $orders_failure && 'COMMIT' === trim( $sql ) );
+	return $matches ? 'SELECT * FROM doughboss_intentionally_missing_orders_storage_fixture' : $sql;
+};
+add_filter( 'query', $orders_failure_filter, 999 );
+$orders_suppress = $wpdb->suppress_errors( true );
+foreach ( array( 'begin', 'attempt_read', 'snapshot_read', 'write', 'final_read', 'commit' ) as $orders_failure_mode ) {
+	$orders_failure = $orders_failure_mode;
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], 'squareORDERFAILURE000001', $orders_collision ), 'storage failure at ' . $orders_failure_mode . ' denies binding' );
+	$orders_failure = '';
+	$held = DoughBoss_Payment_Attempts::find( $orders_collision['id'] );
+	db_integration_same( null, $held['provider_order_reference'], 'storage failure at ' . $orders_failure_mode . ' leaves no partial Order binding' );
+	db_integration_same( 'dispatching', $held['status'], 'storage failure at ' . $orders_failure_mode . ' preserves irreversible owner hold' );
+}
+$wpdb->suppress_errors( $orders_suppress );
+remove_filter( 'query', $orders_failure_filter, 999 );
+$orders_snapshot_table = $wpdb->prefix . 'doughboss_checkout_snapshots';
+$orders_saved_snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $orders_collision['checkout_key'] );
+foreach ( array( 'payload_hash' => hash( 'sha256', 'changed' ), 'payload_json' => '{}', 'status' => 'completed', 'order_id' => 1 ) as $orders_snapshot_field => $orders_snapshot_value ) {
+	$wpdb->update( $orders_snapshot_table, array( $orders_snapshot_field => $orders_snapshot_value ), array( 'checkout_key' => $orders_collision['checkout_key'] ) );
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], 'squareORDERCHANGED000001', $orders_collision ), 'locked snapshot denies changed ' . $orders_snapshot_field );
+	$wpdb->update( $orders_snapshot_table, array( $orders_snapshot_field => $orders_saved_snapshot[ $orders_snapshot_field ] ), array( 'checkout_key' => $orders_collision['checkout_key'] ) );
+}
+db_integration_assert( is_array( DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], 'squareORDERSTORAGE000002', $orders_collision ) ), 'restoring exact snapshot permits original claimed owner to bind, without another claim' );
+db_integration_same( $orders_posts_before, $GLOBALS['db_square_post_count'], 'storage matrix performs no provider POST or payment' );
+
+// Observe malformed schemas through read-only query fixtures; preserve all rows.
+$orders_contract_mode = '';
+$orders_contract_filter = function ( $sql ) use ( $wpdb, $orders_table, &$orders_contract_mode ) {
+	if ( '' === $orders_contract_mode ) { return $sql; }
+	if ( 'SHOW COLUMNS FROM ' . $orders_table === trim( $sql ) ) {
+		$type = 'wrong_type' === $orders_contract_mode ? "CASE WHEN COLUMN_NAME = 'provider_order_reference' THEN 'varchar(64)' ELSE COLUMN_TYPE END" : 'COLUMN_TYPE';
+		$null = 'not_nullable' === $orders_contract_mode ? "CASE WHEN COLUMN_NAME = 'provider_order_reference' THEN 'NO' ELSE IS_NULLABLE END" : 'IS_NULLABLE';
+		$default = 'wrong_default' === $orders_contract_mode ? "CASE WHEN COLUMN_NAME = 'provider_order_reference' THEN '' WHEN COLUMN_DEFAULT = 'NULL' THEN NULL ELSE COLUMN_DEFAULT END" : "CASE WHEN COLUMN_DEFAULT = 'NULL' THEN NULL ELSE COLUMN_DEFAULT END";
+		$where = 'missing' === $orders_contract_mode ? " AND COLUMN_NAME <> 'provider_order_reference'" : '';
+		return "SELECT COLUMN_NAME AS `Field`, {$type} AS `Type`, {$null} AS `Null`, {$default} AS `Default` FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$orders_table}'{$where}";
+	}
+	if ( "SHOW INDEX FROM {$orders_table} WHERE Key_name = 'provider_order_reference'" === trim( $sql ) && in_array( $orders_contract_mode, array( 'missing_index', 'nonunique_index', 'prefix_index', 'wrong_index_column' ), true ) ) {
+		$unique = 'nonunique_index' === $orders_contract_mode ? "CASE WHEN INDEX_NAME = 'provider_order_reference' THEN 1 ELSE NON_UNIQUE END" : 'NON_UNIQUE';
+		$column = 'wrong_index_column' === $orders_contract_mode ? "CASE WHEN INDEX_NAME = 'provider_order_reference' THEN 'provider_reference' ELSE COLUMN_NAME END" : 'COLUMN_NAME';
+		$prefix = 'prefix_index' === $orders_contract_mode ? "CASE WHEN INDEX_NAME = 'provider_order_reference' THEN 64 ELSE SUB_PART END" : 'SUB_PART';
+		$where = 'missing_index' === $orders_contract_mode ? " AND INDEX_NAME <> 'provider_order_reference'" : '';
+		return "SELECT INDEX_NAME AS Key_name, {$unique} AS Non_unique, SEQ_IN_INDEX AS Seq_in_index, {$column} AS Column_name, {$prefix} AS Sub_part FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$orders_table}' AND INDEX_NAME = 'provider_order_reference'{$where}";
+	}
+	return $sql;
+};
+add_filter( 'query', $orders_contract_filter, 999 );
+$orders_upgrade = new ReflectionMethod( 'DoughBoss_Migrations', 'upgrade_to_1_26_0' );
+$orders_upgrade->setAccessible( true );
+foreach ( array( 'missing', 'wrong_type', 'not_nullable', 'wrong_default', 'missing_index', 'nonunique_index', 'prefix_index', 'wrong_index_column' ) as $orders_bad_contract ) {
+	$orders_contract_mode = $orders_bad_contract;
+	db_integration_same( false, DoughBoss_Activator::payment_storage_ready(), 'observed ' . $orders_bad_contract . ' Order schema fails readiness' );
+	$error = '';
+	try { $orders_upgrade->invoke( null ); } catch ( RuntimeException $exception ) { $error = $exception->getMessage(); }
+	db_integration_same( 'Square Order linkage storage is incomplete or invalid.', $error, 'invalid Order schema cannot pass versioned migration' );
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_collision['id'], 'squareORDERSCHEMA000001', $orders_collision ), 'invalid Order schema cannot bind an identity' );
+}
+$orders_contract_mode = 'missing';
+update_option( 'doughboss_db_version', '1.25.0', false );
+DoughBoss_Migrations::run();
+db_integration_same( '1.25.0', (string) get_option( 'doughboss_db_version' ), 'failed Orders migration cannot advance stored schema version' );
+$orders_contract_mode = '';
+remove_filter( 'query', $orders_contract_filter, 999 );
+DoughBoss_Migrations::run();
+db_integration_same( DOUGHBOSS_DB_VERSION, (string) get_option( 'doughboss_db_version' ), 'restored schema permits additive migration checkpoint' );
+db_integration_same( 'squareORDERSTORAGE000001', DoughBoss_Payment_Attempts::find( $orders_first['id'] )['provider_order_reference'], 'additive migration preserves existing immutable Order identity' );
+db_integration_same( null, DoughBoss_Payment_Attempts::find( $orders_legacy['id'] )['provider_order_reference'], 'additive migration never backfills a legacy Order identity' );
+
 // Isolate the payment protocol fixtures from activation evidence.
 	foreach ( array( 'doughboss_order_items', 'doughboss_order_events', 'doughboss_orders', 'doughboss_preorder_approvals', 'doughboss_payment_events', 'doughboss_payment_attempts', 'doughboss_checkout_snapshots', 'doughboss_voucher_redemptions', 'doughboss_voucher_audit', 'doughboss_vouchers', 'doughboss_catering_enquiries' ) as $suffix ) {
 		$wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . $suffix ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery

@@ -332,6 +332,12 @@ class DoughBoss_Payment_Attempts {
 			if ( ! is_array( $candidate ) ) {
 				return false;
 			}
+			// Creation-only Orders markers must never upgrade a historical attempt.
+			foreach ( array( 'orders_protocol', 'orders_snapshot_hash' ) as $key ) {
+				if ( array_key_exists( $key, $candidate ) !== array_key_exists( $key, $existing_metadata ) ) {
+					return false;
+				}
+			}
 			foreach ( $existing_metadata as $key => $value ) {
 				if ( ! array_key_exists( $key, $candidate ) || $candidate[ $key ] !== $value ) {
 					return false;
@@ -419,6 +425,100 @@ class DoughBoss_Payment_Attempts {
 			)
 		);
 		return 1 === (int) $updated;
+	}
+
+	/**
+	 * Bind a distinct Order identity after verified CreateOrder, before payment.
+	 *
+	 * Owns a short transaction only; no HTTP may occur while these rows are locked.
+	 * The expected attempt is the exact pre-dispatch tuple, not browser input.
+	 * A collision, failed read/write/commit or changed snapshot retains the hold.
+	 *
+	 * @param int    $attempt_id      Durable attempt id.
+	 * @param string $order_reference Verified Square Order id.
+	 * @param array  $expected        Pre-dispatch immutable attempt row.
+	 * @return array|false Persisted row, or false without a partial binding.
+	 */
+	public static function bind_square_order( $attempt_id, $order_reference, array $expected ) {
+		global $wpdb;
+		$attempt_id = absint( $attempt_id );
+		if ( ! $attempt_id || ! is_string( $order_reference )
+			|| 1 !== preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $order_reference )
+			|| ! DoughBoss_Activator::payment_storage_ready() ) {
+			return false;
+		}
+		$expected_metadata = self::metadata( $expected );
+		if ( 'square-orders-v1' !== ( isset( $expected_metadata['orders_protocol'] ) ? $expected_metadata['orders_protocol'] : '' )
+			|| ! isset( $expected_metadata['orders_snapshot_hash'] )
+			|| ! is_string( $expected_metadata['orders_snapshot_hash'] )
+			|| ! preg_match( '/^[a-f0-9]{64}\\z/', $expected_metadata['orders_snapshot_hash'] )
+			|| false === $wpdb->query( 'START TRANSACTION' ) ) {
+			return false;
+		}
+		$committed = false;
+		try {
+			$locked = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE id = %d LIMIT 1 FOR UPDATE', $attempt_id ), ARRAY_A );
+			if ( ! is_array( $locked ) || 'square' !== $locked['provider'] || 'dispatching' !== $locked['status']
+				|| null !== $locked['provider_reference'] || null !== $locked['provider_order_reference'] ) {
+				return false;
+			}
+			foreach ( array( 'id', 'attempt_key', 'checkout_key', 'provider', 'purpose', 'context', 'local_reference', 'location_id', 'table_id', 'qr_code_id', 'amount_minor', 'currency' ) as $field ) {
+				if ( ! isset( $expected[ $field ], $locked[ $field ] ) || (string) $locked[ $field ] !== (string) $expected[ $field ] ) {
+					return false;
+				}
+			}
+			$metadata = self::metadata( $locked );
+			if ( $metadata !== $expected_metadata ) {
+				return false;
+			}
+			foreach ( array( 'protocol_version', 'binding_hash', 'square_shop_slug', 'square_location_id', 'square_mode', 'orders_protocol', 'orders_snapshot_hash' ) as $key ) {
+				if ( ! isset( $metadata[ $key ], $expected_metadata[ $key ] ) || $metadata[ $key ] !== $expected_metadata[ $key ] ) {
+					return false;
+				}
+			}
+			if ( 'square-v2' !== $metadata['protocol_version'] || ! is_string( $metadata['binding_hash'] )
+				|| ! preg_match( '/^[a-f0-9]{64}\\z/', $metadata['binding_hash'] ) ) {
+				return false;
+			}
+			$snapshot = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots WHERE checkout_key = %s LIMIT 1 FOR UPDATE', $locked['checkout_key'] ), ARRAY_A );
+			if ( ! is_array( $snapshot ) || 'prepared' !== $snapshot['status'] || 0 !== (int) $snapshot['order_id']
+				|| ! hash_equals( $metadata['orders_snapshot_hash'], (string) $snapshot['payload_hash'] )
+				|| ! hash_equals( $metadata['orders_snapshot_hash'], hash( 'sha256', (string) $snapshot['payload_json'] ) ) ) {
+				return false;
+			}
+			$payload = json_decode( (string) $snapshot['payload_json'], true );
+			if ( ! is_array( $payload ) || ! isset( $payload['order']['location_id'] )
+				|| (string) $payload['order']['location_id'] !== (string) $locked['location_id'] ) {
+				return false;
+			}
+			$projection = DoughBoss_Square_Orders::project( $payload, array(
+				'shop_slug' => $metadata['square_shop_slug'],
+				'square_location_id' => $metadata['square_location_id'],
+				'square_mode' => $metadata['square_mode'],
+			), $attempt_id );
+			if ( is_wp_error( $projection ) || (string) $projection['amounts']['total'] !== (string) $locked['amount_minor']
+				|| $projection['currency'] !== $locked['currency'] ) {
+				return false;
+			}
+			$updated = $wpdb->query( $wpdb->prepare(
+				'UPDATE ' . self::table() . ' SET provider_order_reference = %s, updated_at = %s WHERE id = %d AND status = %s AND provider_reference IS NULL AND provider_order_reference IS NULL',
+				$order_reference, self::utc_now(), $attempt_id, 'dispatching'
+			) );
+			if ( 1 !== $updated ) {
+				return false;
+			}
+			$bound = self::find( $attempt_id );
+			if ( ! is_array( $bound ) || $order_reference !== $bound['provider_order_reference']
+				|| false === $wpdb->query( 'COMMIT' ) ) {
+				return false;
+			}
+			$committed = true;
+			return $bound;
+		} finally {
+			if ( ! $committed ) {
+				$wpdb->query( 'ROLLBACK' );
+			}
+		}
 	}
 
 	/**
