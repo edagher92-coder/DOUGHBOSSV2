@@ -73,6 +73,9 @@ class DoughBoss_Square {
 	 */
 	const REFERENCE_ID_MAX = 40;
 
+	/** Current PHP request only: never persist or accept release authority from a caller. */
+	private static $approved_release_attestations = array();
+
 	/**
 	 * Whether card payments are switched on AND Square is both the selected
 	 * gateway and fully configured for the current (test/live) mode. The single
@@ -369,11 +372,54 @@ class DoughBoss_Square {
 
 	/** Failed linked checks must not leave a prior cached release authority. */
 	private static function held_order_error( $error, array $attempt ) {
+		self::forget_approved_release_attestation( isset( $attempt['provider_reference'] ) ? $attempt['provider_reference'] : '' );
 		if ( 1 === self::orders_protocol( $attempt ) && ! empty( $attempt['provider_reference'] )
 			&& ! DoughBoss_Payment_Attempts::hold_square_order_verification( $attempt ) ) {
 			return self::pending_error( $attempt, 'doughboss_pay_order_hold_storage' );
 		}
 		return $error;
+	}
+
+	/** Exact server-observed facts that a NEW marked approved release must retain. */
+	private static function approved_release_tuple( array $attempt ) {
+		if ( 1 !== self::orders_protocol( $attempt ) || 'square' !== $attempt['provider']
+			|| 'order' !== $attempt['purpose'] || 'approved_preorder' !== $attempt['context']
+			|| 'succeeded' !== $attempt['status'] || 'COMPLETED' !== $attempt['provider_status']
+			|| empty( $attempt['verified_at'] ) || empty( $attempt['provider_reference'] ) || empty( $attempt['provider_order_reference'] ) ) {
+			return null;
+		}
+		$tuple = array();
+		foreach ( array( 'id', 'attempt_key', 'checkout_key', 'provider', 'purpose', 'context', 'local_reference', 'location_id', 'table_id', 'qr_code_id', 'amount_minor', 'currency', 'provider_reference', 'provider_order_reference', 'provider_status', 'status', 'safe_metadata_json', 'verified_at' ) as $field ) {
+			if ( ! isset( $attempt[ $field ] ) || ! is_scalar( $attempt[ $field ] ) ) { return null; }
+			$tuple[ $field ] = (string) $attempt[ $field ];
+		}
+		return $tuple;
+	}
+
+	/** Any later verification attempt invalidates earlier in-process authority. */
+	private static function forget_approved_release_attestation( $reference ) {
+		foreach ( self::$approved_release_attestations as $id => $tuple ) {
+			if ( $tuple['provider_reference'] === $reference ) { unset( self::$approved_release_attestations[ $id ] ); }
+		}
+	}
+
+	/**
+	 * Consume only authority minted by successful server-side retrieval in THIS
+	 * request. Called with the current locked row, after all approval/snapshot
+	 * checks; never with browser metadata. Historical payment-only rows keep
+	 * their existing contract. Receipt replay never enters this new-release path.
+	 *
+	 * @param array $attempt Current locking-read attempt.
+	 * @return bool
+	 */
+	public static function consume_approved_release_attestation( array $attempt ) {
+		$protocol = self::orders_protocol( $attempt );
+		if ( 0 === $protocol ) { return true; }
+		$id = isset( $attempt['id'] ) ? (int) $attempt['id'] : 0;
+		$saved = isset( self::$approved_release_attestations[ $id ] ) ? self::$approved_release_attestations[ $id ] : null;
+		unset( self::$approved_release_attestations[ $id ] );
+		$current = self::approved_release_tuple( $attempt );
+		return 1 === $protocol && is_array( $saved ) && is_array( $current ) && $saved === $current;
 	}
 
 	/**
@@ -968,6 +1014,7 @@ class DoughBoss_Square {
 	 */
 	public static function retrieve_payment_intent( $id ) {
 		$id = self::canonical_id( $id );
+		self::forget_approved_release_attestation( $id );
 		if ( '' === $id ) {
 			return new WP_Error( 'doughboss_pay_id', __( 'Invalid payment reference.', 'doughboss' ), array( 'status' => 400 ) );
 		}
@@ -1050,6 +1097,16 @@ class DoughBoss_Square {
 				return new WP_Error( 'doughboss_pay_mismatch', __( 'The payment remains quarantined because it did not match this order.', 'doughboss' ), array( 'status' => 409 ) );
 			}
 			$status = 'order_committed' === $durable_status ? 'succeeded' : $durable_status;
+			$release_tuple = self::approved_release_tuple( $reconciled );
+			if ( is_array( $release_tuple ) ) {
+				foreach ( $release_tuple as $field => $value ) {
+					if ( in_array( $field, array( 'status', 'provider_status', 'verified_at' ), true ) ) { continue; }
+					if ( ! isset( $attempt[ $field ] ) || (string) $attempt[ $field ] !== $value ) {
+						return self::held_order_error( self::pending_error( $reconciled, 'doughboss_pay_order_changed' ), $reconciled );
+					}
+				}
+				self::$approved_release_attestations[ (int) $reconciled['id'] ] = $release_tuple;
+			}
 		} else {
 			// Preserve legacy webhook/manual-reconciliation inspection without
 			// allowing legacy attempts to satisfy the v2 automatic checkout path.

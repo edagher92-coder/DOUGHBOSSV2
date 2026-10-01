@@ -4999,6 +4999,114 @@ if ( ! is_wp_error( $result ) ) {
 	db_integration_same( $payment_posts + 1, $GLOBALS['db_square_post_count'], 'marked verification/release/replay never repeats CreatePayment' );
 	remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
 }
+// A failed revocation write must not let a direct create reuse old authority.
+$fixture = $orders_approval_fixture( 'revocation-write-failure' );
+$result = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $fixture['metadata'] );
+db_integration_assert( ! is_wp_error( $result ) && ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'revocation-write fixture first obtains joint paid authority' );
+if ( ! is_wp_error( $result ) ) {
+	$attempt_before = DoughBoss_Payment_Attempts::find( $result['attempt_id'] );
+	db_integration_assert( ! empty( $attempt_before['verified_at'] ), 'revocation-write fixture establishes the hazardous cached timestamp' );
+	$fulfillment = array_merge( $fixture['order_data'], array( 'source_request_id' => $fixture['request_id'], 'payment_method' => 'square', 'payment_status' => 'paid', 'payment_intent_id' => $result['id'] ) );
+	foreach ( array( 'id', 'attempt_key', 'checkout_key', 'provider', 'purpose', 'context', 'local_reference', 'location_id', 'table_id', 'qr_code_id', 'amount_minor', 'currency', 'provider_reference', 'provider_order_reference', 'provider_status', 'status', 'safe_metadata_json', 'verified_at' ) as $authority_field ) {
+		db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'attestation mismatch fixture obtains current provider verification: ' . $authority_field );
+		$changed = DoughBoss_Payment_Attempts::find( $result['attempt_id'] );
+		if ( in_array( $authority_field, array( 'id', 'location_id', 'table_id', 'qr_code_id', 'amount_minor' ), true ) ) {
+			$changed[ $authority_field ] = (int) $changed[ $authority_field ] + 1000;
+		} elseif ( 'safe_metadata_json' === $authority_field ) {
+			$metadata = DoughBoss_Payment_Attempts::metadata( $changed );
+			$metadata['orders_snapshot_hash'] = str_repeat( 'a', 64 );
+			$changed[ $authority_field ] = wp_json_encode( $metadata );
+		} else {
+			$changed[ $authority_field ] = 'changed-' . $authority_field;
+		}
+		db_integration_same( false, DoughBoss_Square::consume_approved_release_attestation( $changed ), 'caller cannot copy authority onto changed locked facts: ' . $authority_field );
+	}
+	db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'exact same-request attestation is freshly minted' );
+	$exact = DoughBoss_Payment_Attempts::find( $result['attempt_id'] );
+	db_integration_same( true, DoughBoss_Square::consume_approved_release_attestation( $exact ), 'exact verified tuple consumes one internal attestation' );
+	db_integration_same( false, DoughBoss_Square::consume_approved_release_attestation( $exact ), 'consumed attestation cannot authorize a second release' );
+	$forged = array_merge( $fulfillment, array( 'square_release_attestation' => true, 'square_verified' => true, 'verified_at' => $exact['verified_at'] ) );
+	db_integration_assert( is_wp_error( DoughBoss_Order::create( $forged, $fixture['lines'] ) ), 'caller flags and cached timestamp cannot replace consumed request-local authority' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $fixture['request_id'] ), 'forged authority leaves no partial fulfillment' );
+	db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'rollback fixture obtains new release authority' );
+	$release_commit_faults = 0;
+	$release_commit_failure = function ( $sql ) use ( &$release_commit_faults ) {
+		if ( 'COMMIT' === trim( $sql ) ) {
+			++$release_commit_faults;
+			return 'SELECT * FROM doughboss_intentionally_missing_release_commit';
+		}
+		return $sql;
+	};
+	add_filter( 'query', $release_commit_failure, 999 );
+	$suppress = $wpdb->suppress_errors( true );
+	$rolled_back = DoughBoss_Order::create( $fulfillment, $fixture['lines'] );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', $release_commit_failure, 999 );
+	db_integration_same( 1, $release_commit_faults, 'release transaction commit failure occurs after authority consumption' );
+	db_integration_assert( is_wp_error( $rolled_back ), 'release commit failure is denied and rolled back' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $fixture['request_id'] ), 'release rollback retains no partial fulfillment' );
+	db_integration_assert( is_wp_error( DoughBoss_Order::create( $fulfillment, $fixture['lines'] ) ), 'rollback does not restore consumed release authority for an unverified retry' );
+	db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'revocation fixture restores authority through a new provider verification only' );
+	$attempt_before = DoughBoss_Payment_Attempts::find( $result['attempt_id'] );
+	$revocation_write_faults = 0;
+	$revocation_write_failure = function ( $sql ) use ( &$revocation_write_faults, $wpdb ) {
+		if ( 0 === strpos( $sql, 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET verified_at = NULL' ) ) {
+			++$revocation_write_faults;
+			return 'UPDATE doughboss_intentionally_missing_revocation_storage SET id = 1';
+		}
+		return $sql;
+	};
+	$GLOBALS['db_orders_http_mode'] = 'paid_error';
+	$hooks = count( $GLOBALS['db_order_created_events'] );
+	$order_posts = $GLOBALS['db_orders_post_count'];
+	$payment_posts = $GLOBALS['db_square_post_count'];
+	add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
+	add_filter( 'query', $revocation_write_failure, 999 );
+	$suppress = $wpdb->suppress_errors( true );
+	$denied = DoughBoss_Square::retrieve_payment_intent( $result['id'] );
+	$direct = DoughBoss_Order::create( $fulfillment, $fixture['lines'] );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', $revocation_write_failure, 999 );
+	remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
+	db_integration_assert( $revocation_write_faults > 0, 'revocation UPDATE genuinely failed after existing paid verification' );
+	db_integration_same( 'doughboss_pay_order_hold_storage', is_wp_error( $denied ) ? $denied->get_error_code() : '', 'revocation failure reports explicit hold storage denial' );
+	db_integration_same( $attempt_before['verified_at'], DoughBoss_Payment_Attempts::find( $result['attempt_id'] )['verified_at'], 'failed SQL leaves the old timestamp and is not mistaken for successful revocation' );
+	db_integration_assert( is_wp_error( $direct ), 'failed revocation UPDATE cannot release food through direct create with a stale timestamp' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $fixture['request_id'] ), 'failed revocation UPDATE leaves no partial fulfillment' );
+	db_integration_same( $hooks, count( $GLOBALS['db_order_created_events'] ), 'failed revocation UPDATE emits no kitchen hook' );
+	db_integration_same( 'unpaid', DoughBoss_Order::get( $fixture['request_id'] )->payment_status, 'failed revocation UPDATE leaves the original request unpaid' );
+	db_integration_same( $order_posts, $GLOBALS['db_orders_post_count'], 'failed revocation never creates another provider Order' );
+	db_integration_same( $payment_posts, $GLOBALS['db_square_post_count'], 'failed revocation never recharges the customer' );
+	// A preexisting fulfillment row exercises the second public release entry
+	// point. Seed only this disposable fixture directly; no kitchen event fires.
+	$standalone = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_orders WHERE id = %d', $fixture['request_id'] ), ARRAY_A );
+	unset( $standalone['id'] );
+	$standalone['order_number'] = 'ATTEST-PUBLIC-' . $fixture['request_id'];
+	$standalone['order_source'] = 'web';
+	$standalone['payment_status'] = 'paid';
+	$standalone['payment_method'] = 'square';
+	$standalone['payment_intent_id'] = $result['id'];
+	$standalone['checkout_key'] = $fixture['metadata']['checkout_key'];
+	db_integration_same( 1, $wpdb->insert( $wpdb->prefix . 'doughboss_orders', $standalone ), 'second release entry fixture has a distinct synthetic paid row' );
+	$standalone_id = (int) $wpdb->insert_id;
+	$standalone_lines = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_order_items WHERE order_id = %d', $fixture['request_id'] ), ARRAY_A );
+	foreach ( $standalone_lines as $line ) {
+		unset( $line['id'] );
+		$line['order_id'] = $standalone_id;
+		db_integration_same( 1, $wpdb->insert( $wpdb->prefix . 'doughboss_order_items', $line ), 'second release entry retains exact approved item semantics' );
+	}
+	db_integration_assert( is_wp_error( DoughBoss_Preorder_Approval::release( $fixture['request_id'], $standalone_id ) ), 'public release cannot reuse stale durable verification after failed revocation' );
+	db_integration_same( 'payment_active', DoughBoss_Preorder_Approval::get( $fixture['request_id'] )['state'], 'second entry denial preserves approval state rather than partially releasing it' );
+	$GLOBALS['db_orders_http_mode'] = '';
+	db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $result['id'] ) ), 'second entry obtains new server verification before release' );
+	$standalone_release = DoughBoss_Preorder_Approval::release( $fixture['request_id'], $standalone_id );
+	db_integration_assert( is_array( $standalone_release ) && 'released' === $standalone_release['state'], 'public release consumes a new matching server attestation' );
+	$order_reads = $GLOBALS['db_orders_get_count'];
+	$payment_reads = $GLOBALS['db_square_get_count'];
+	db_integration_assert( ! is_wp_error( DoughBoss_Preorder_Approval::release( $fixture['request_id'], $standalone_id ) ), 'public historical release replay preserves its receipt without new authority' );
+	db_integration_same( $order_reads, $GLOBALS['db_orders_get_count'], 'historical public release replay performs no Order GET' );
+	db_integration_same( $payment_reads, $GLOBALS['db_square_get_count'], 'historical public release replay performs no Payment GET' );
+}
 foreach ( array( 'revoke', 'expire', 'source_revision', 'approval_link', 'shop_map' ) as $orders_approval_drift ) {
 	$fixture = $orders_approval_fixture( $orders_approval_drift );
 	$order_posts = $GLOBALS['db_orders_post_count'];

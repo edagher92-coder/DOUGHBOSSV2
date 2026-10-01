@@ -875,7 +875,9 @@ class DoughBoss_Preorder_Approval {
 			return false;
 		}
 		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $checkout_key );
-		return self::square_snapshot_matches_request( $snapshot, $request, $approval, $metadata, $binding ) && self::square_fulfillment_snapshot_matches( $fulfillment, $snapshot );
+		return self::square_snapshot_matches_request( $snapshot, $request, $approval, $metadata, $binding )
+			&& self::square_fulfillment_snapshot_matches( $fulfillment, $snapshot )
+			&& DoughBoss_Square::consume_approved_release_attestation( $attempt );
 	}
 
 	/** @return array|WP_Error */

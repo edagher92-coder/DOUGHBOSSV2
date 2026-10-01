@@ -23,6 +23,30 @@ if (-not (Test-Path -LiteralPath (Join-Path $wordpress 'wp-config.php'))) {
     throw "WordPressPath is not an installed WordPress root: $wordpress"
 }
 
+# The fixture loads its installed plugin, not these eval-file source paths.
+# Refuse stale installed bytes so a passing suite actually covers this tree.
+$sourceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$installedPlugin = Join-Path $wordpress 'wp-content\plugins\doughboss'
+$runtimeFiles = @('doughboss.php', 'uninstall.php', 'readme.txt', 'THIRD_PARTY_NOTICES.md')
+foreach ($directory in @('includes', 'admin', 'public', 'languages')) {
+    $sourceDirectory = Join-Path $sourceRoot $directory
+    if (Test-Path -LiteralPath $sourceDirectory -PathType Container) {
+        foreach ($file in Get-ChildItem -LiteralPath $sourceDirectory -Recurse -File) {
+            $runtimeFiles += $file.FullName.Substring($sourceRoot.Length + 1)
+        }
+    }
+}
+foreach ($relativePath in $runtimeFiles) {
+    $sourceFile = Join-Path $sourceRoot $relativePath
+    $installedFile = Join-Path $installedPlugin $relativePath
+    if (-not (Test-Path -LiteralPath $installedFile -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash -ne
+        (Get-FileHash -LiteralPath $installedFile -Algorithm SHA256).Hash) {
+        throw "Disposable WordPress plugin differs from the current source tree: $relativePath. Stage the current canonical plugin before testing."
+    }
+}
+Write-Output "Installed WordPress plugin source bytes: $($runtimeFiles.Count) files matched"
+
 $arguments = @()
 if ($PhpIniPath) {
     $arguments += '-c'
