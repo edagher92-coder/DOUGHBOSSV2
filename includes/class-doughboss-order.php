@@ -290,12 +290,12 @@ class DoughBoss_Order {
 			$source_request_id
 			&& (
 				'paid' !== ( isset( $data['payment_status'] ) ? sanitize_key( $data['payment_status'] ) : '' )
-				|| 'stripe' !== ( isset( $data['payment_method'] ) ? sanitize_key( $data['payment_method'] ) : '' )
+				|| ! in_array( isset( $data['payment_method'] ) ? sanitize_key( $data['payment_method'] ) : '', array( 'stripe', 'square' ), true )
 				|| null === $payment_intent_id
 				|| $is_preorder_request
 			)
 		) {
-			return new WP_Error( 'doughboss_preorder_release_forbidden', __( 'A pre-order request can enter fulfilment only after its approved Stripe payment is verified.', 'doughboss' ), array( 'status' => 409 ) );
+			return new WP_Error( 'doughboss_preorder_release_forbidden', __( 'A pre-order request can enter fulfilment only after its approved payment is verified.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		$order_currency = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ) );
 		if ( $source_request_id ) {

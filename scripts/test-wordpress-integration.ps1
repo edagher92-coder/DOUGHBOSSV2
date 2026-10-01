@@ -47,6 +47,7 @@ $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("doughboss-square-race-"
 New-Item -ItemType Directory -Path $scratch | Out-Null
 $raceLog = Join-Path $scratch 'provider-posts.log'
 $oldRaceLog = $env:DOUGHBOSS_RACE_LOG
+$oldSquareRaceMode = $env:DOUGHBOSS_SQUARE_RACE_MODE
 $env:DOUGHBOSS_RACE_LOG = $raceLog
 
 try {
@@ -62,35 +63,52 @@ try {
     $workerArguments += "--path=$wordpress"
     $workerArguments += '--skip-themes'
 
-    $workers = @()
-    foreach ($workerNumber in 1..2) {
-        $stdout = Join-Path $scratch "worker-$workerNumber.stdout.log"
-        $stderr = Join-Path $scratch "worker-$workerNumber.stderr.log"
-        $process = Start-Process -FilePath $php -ArgumentList $workerArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-        $workers += [PSCustomObject]@{ Process = $process; Stdout = $stdout; Stderr = $stderr }
-    }
-    foreach ($worker in $workers) {
-        $worker.Process.WaitForExit()
-        $worker.Process.Refresh()
-    }
-    foreach ($worker in $workers) {
-        $workerOutput = if (Test-Path -LiteralPath $worker.Stdout) { Get-Content -LiteralPath $worker.Stdout -Raw } else { '' }
-        if ($workerOutput -notmatch '(?m)^WORKER_OK$') {
-            if (Test-Path -LiteralPath $worker.Stderr) {
-                Get-Content -LiteralPath $worker.Stderr
+    foreach ($squareRaceMode in @('web', 'approved_preorder')) {
+        $env:DOUGHBOSS_SQUARE_RACE_MODE = $squareRaceMode
+        $raceLog = Join-Path $scratch "provider-posts-$squareRaceMode.log"
+        $env:DOUGHBOSS_RACE_LOG = $raceLog
+        $workers = @()
+        foreach ($workerNumber in 1..2) {
+            $stdout = Join-Path $scratch "worker-$squareRaceMode-$workerNumber.stdout.log"
+            $stderr = Join-Path $scratch "worker-$squareRaceMode-$workerNumber.stderr.log"
+            $process = Start-Process -FilePath $php -ArgumentList $workerArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            # Retain the process handle before a short-lived PHP worker exits;
+            # Windows PowerShell otherwise loses its exit-code evidence.
+            $null = $process.Handle
+            $workers += [PSCustomObject]@{ Process = $process; Stdout = $stdout; Stderr = $stderr }
+        }
+        foreach ($worker in $workers) {
+            $worker.Process.WaitForExit()
+        }
+        foreach ($worker in $workers) {
+            $workerOutput = if (Test-Path -LiteralPath $worker.Stdout) { Get-Content -LiteralPath $worker.Stdout -Raw } else { '' }
+            if ($worker.Process.ExitCode -ne 0 -or $workerOutput -notmatch '(?m)^WORKER_OK$') {
+                Write-Output "Square $squareRaceMode worker exit: $($worker.Process.ExitCode)"
+                Write-Output $workerOutput
+                if (Test-Path -LiteralPath $worker.Stderr) {
+                    Get-Content -LiteralPath $worker.Stderr
+                }
+                throw 'Square race worker did not complete successfully.'
             }
-            throw 'Square race worker did not complete successfully.'
+        }
+
+        $providerPosts = if (Test-Path -LiteralPath $raceLog) { @(Get-Content -LiteralPath $raceLog | Where-Object { $_ -eq 'POST' }).Count } else { 0 }
+        if ($providerPosts -ne 1) {
+            throw "Expected exactly one provider POST across two workers; observed $providerPosts."
+        }
+        Write-Output "2-process Square $squareRaceMode race: 1 provider POST, 0 duplicate charges"
+        if ($squareRaceMode -eq 'approved_preorder') {
+            $fulfillments = @(Get-Content -LiteralPath $raceLog | Where-Object { $_ -eq 'FULFILL' }).Count
+            if ($fulfillments -ne 1) {
+                throw "Expected exactly one approved Square fulfillment across two workers; observed $fulfillments."
+            }
+            Write-Output '2-process approved Square release: 1 fulfillment, 0 duplicate kitchen hooks'
         }
     }
-
-    $providerPosts = if (Test-Path -LiteralPath $raceLog) { @(Get-Content -LiteralPath $raceLog | Where-Object { $_ -eq 'POST' }).Count } else { 0 }
-    if ($providerPosts -ne 1) {
-        throw "Expected exactly one provider POST across two workers; observed $providerPosts."
-    }
-    Write-Output '2-process Square race: 1 provider POST, 0 duplicate charges'
 }
 finally {
     $env:DOUGHBOSS_RACE_LOG = $oldRaceLog
+    $env:DOUGHBOSS_SQUARE_RACE_MODE = $oldSquareRaceMode
     if (Test-Path -LiteralPath $scratch) {
         $resolvedScratch = (Resolve-Path -LiteralPath $scratch).Path
         $expectedParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\')

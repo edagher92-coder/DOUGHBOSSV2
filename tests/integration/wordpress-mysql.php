@@ -270,6 +270,12 @@ function db_integration_square_http( $preempt, $args, $url ) {
 	}
 	if ( 'POST' === $method ) {
 		++$GLOBALS['db_square_post_count'];
+		if ( ! empty( $GLOBALS['db_square_approval_dispatch_observer'] ) ) {
+			$observed = $GLOBALS['db_square_approval_dispatch_observer'];
+			$approval = DoughBoss_Preorder_Approval::get( $observed['request_id'] );
+			$attempt = is_array( $approval ) ? DoughBoss_Payment_Attempts::find( $approval['payment_attempt_id'] ) : null;
+			db_integration_assert( is_array( $attempt ) && 'dispatching' === $attempt['status'] && (string) $attempt['checkout_key'] === (string) $observed['checkout_key'], 'approved Square POST observes committed exact attempt link and dispatch claim' );
+		}
 		if ( 'network_error' === $GLOBALS['db_square_http_mode'] ) {
 			return new WP_Error( 'integration_network', 'Synthetic network failure.' );
 		}
@@ -531,6 +537,69 @@ function db_integration_fail_guard_select( $query ) {
 	) {
 		$GLOBALS['db_fail_guard_once'] = false;
 		return 'SELECT * FROM wp_doughboss_missing_guard_table';
+	}
+	return $query;
+}
+
+/** Server-owned approved Square snapshot; all contacts and amounts are synthetic. */
+function db_integration_approved_square_fixture( $seed ) {
+	$created = db_integration_create_preorder_request( 'square-' . $seed, 14.00 );
+	$id = is_array( $created ) ? (int) $created['order_id'] : 0;
+	$pending = DoughBoss_Preorder_Approval::ensure_pending( $id );
+	$order = $id ? DoughBoss_Order::get( $id ) : null;
+	$approved = $order && ! is_wp_error( $pending ) ? DoughBoss_Preorder_Approval::decide( $id, 'approve', 9001, 'Synthetic Square Approver', 'integration-square-approval-' . $seed, '', (int) $order->version ) : new WP_Error( 'integration_square_fixture' );
+	if ( is_wp_error( $approved ) ) { return $approved; }
+	$binding = DoughBoss_Square::shop_binding( (int) $order->location_id );
+	if ( is_wp_error( $binding ) ) { return $binding; }
+	$key = (string) $approved['payment_checkout_key'];
+	$lines = DoughBoss_Order::get_items( $id );
+	$data = array(
+		'order_type' => (string) $order->order_type, 'location_id' => (int) $order->location_id,
+		'table_id' => 0, 'table_label' => '', 'table_qr_code_id' => 0, 'table_session_id' => 0,
+		'order_source' => 'web', 'source_request_id' => $id,
+		'customer_name' => (string) $order->customer_name, 'customer_email' => (string) $order->customer_email,
+		'customer_phone' => (string) $order->customer_phone, 'address' => (string) $order->address, 'notes' => (string) $order->notes,
+		'subtotal' => (float) $order->subtotal, 'tax' => (float) $order->tax, 'delivery_fee' => (float) $order->delivery_fee,
+		'total' => (float) $order->total, 'discount' => 0.0, 'voucher_code' => '', 'currency' => (string) $order->currency, 'checkout_key' => $key,
+	);
+	$binding_hash = hash( 'sha256', 'approved-square-binding|' . $seed . '|' . $key );
+	$payload = array( 'order' => $data, 'lines' => array_values( $lines ), 'approval' => array(
+		'request_id' => $id, 'approved_revision' => (int) $approved['approved_revision'], 'request_fingerprint' => (string) $approved['request_fingerprint'],
+	), 'square_binding' => $binding, 'binding_hash' => $binding_hash );
+	$snapshot = DoughBoss_Checkout_Snapshots::store( $key, $payload, (string) $approved['payment_token_expires_at_utc'] );
+	if ( is_wp_error( $snapshot ) ) { return $snapshot; }
+	$meta = db_integration_square_metadata( 'approved-square-' . $seed, 'unused-approved-square-' . $seed, 'approved-square-cart-' . $seed, array(
+		'checkout_key' => $key, 'context' => 'approved_preorder', 'source_request_id' => $id,
+		'approved_revision' => (int) $approved['approved_revision'], 'request_fingerprint' => (string) $approved['request_fingerprint'],
+		'binding_hash' => $binding_hash, 'preorder_payment_token' => (string) $approved['capability_token'],
+	) );
+	return array( 'request_id' => $id, 'token' => (string) $approved['capability_token'], 'approval' => $approved, 'order' => $order, 'order_data' => $data, 'lines' => $lines, 'snapshot' => $snapshot, 'metadata' => $meta );
+}
+
+/** Find a synthetic approved Square attempt without exposing its capability. */
+function db_integration_approved_square_attempt( array $fixture ) {
+	return DoughBoss_Payment_Attempts::find_by_attempt_key( hash( 'sha256', 'square-v2|' . $fixture['metadata']['attempt_identity'] ) );
+}
+
+/** Inject exactly one approval-link write failure inside the dispatch transaction. */
+function db_integration_fail_square_approval_link( $query ) {
+	if ( ! empty( $GLOBALS['db_fail_square_approval_link_once'] ) && 0 === strpos( ltrim( (string) $query ), 'UPDATE' ) && false !== strpos( (string) $query, 'doughboss_preorder_approvals' ) && false !== strpos( (string) $query, 'payment_attempt_id' ) ) {
+		$GLOBALS['db_fail_square_approval_link_once'] = false;
+		return 'UPDATE wp_doughboss_missing_approval_table SET id = 1';
+	}
+	return $query;
+}
+
+/** Return no attempt exactly once after its approval link has been written. */
+function db_integration_fail_square_final_attempt_read( $query ) {
+	global $wpdb;
+	if ( ! empty( $GLOBALS['db_square_final_read_armed'] ) && 0 === strpos( ltrim( (string) $query ), 'SELECT' ) && false !== strpos( (string) $query, 'doughboss_payment_attempts' ) && false !== strpos( (string) $query, 'WHERE id =' ) && false !== strpos( (string) $query, 'LIMIT 1' ) ) {
+		$GLOBALS['db_square_final_read_armed'] = false;
+		$GLOBALS['db_square_final_read_exercised'] = true;
+		return 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE id = 0 LIMIT 1';
+	}
+	if ( 0 === strpos( ltrim( (string) $query ), 'UPDATE' ) && false !== strpos( (string) $query, 'doughboss_preorder_approvals' ) && false !== strpos( (string) $query, 'payment_attempt_id' ) ) {
+		$GLOBALS['db_square_final_read_armed'] = true;
 	}
 	return $query;
 }
@@ -2771,6 +2840,201 @@ $posts = $GLOBALS['db_square_post_count'];
 $GLOBALS['db_square_http_mode'] = 'success';
 db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1500, 'AUD', $wrong_meta ) ), 'wrong provider location remains held on replay' );
 db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'wrong provider location never charges twice' );
+
+// Approved Square dispatch must bind approval and attempt before provider HTTP.
+add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
+add_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
+$approved_square_smoke = db_integration_approved_square_fixture( 'smoke' );
+db_integration_assert( is_array( $approved_square_smoke ), 'approved Square fixture retains its immutable snapshot' );
+if ( is_array( $approved_square_smoke ) ) {
+	$posts = $GLOBALS['db_square_post_count'];
+	$paid = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $approved_square_smoke['metadata'] );
+	$approved_square_payment = $paid;
+	db_integration_assert( ! is_wp_error( $paid ), 'approved Square dispatch accepts matching capability and retained request' . ( is_wp_error( $paid ) ? ' [' . $paid->get_error_code() . ']' : '' ) );
+	db_integration_same( $posts + 1, $GLOBALS['db_square_post_count'], 'approved Square dispatch performs one synthetic POST' );
+	$linked = DoughBoss_Preorder_Approval::get( $approved_square_smoke['request_id'] );
+	if ( ! is_wp_error( $paid ) ) {
+		db_integration_same( (int) $paid['attempt_id'], (int) $linked['payment_attempt_id'], 'approved Square dispatch links exact durable attempt' );
+		$smoke_attempt = db_integration_approved_square_attempt( $approved_square_smoke );
+		$smoke_meta = DoughBoss_Payment_Attempts::metadata( $smoke_attempt );
+		db_integration_same( (int) $approved_square_smoke['request_id'], (int) $smoke_meta['approval_id'], 'approved Square safe metadata retains exact approval id' );
+		db_integration_same( $approved_square_smoke['approval']['request_fingerprint'], $smoke_meta['approval_fingerprint'], 'approved Square safe metadata retains request fingerprint' );
+		foreach ( array( 'preorder_payment_token', 'source_id', 'verification_token' ) as $secret_field ) {
+			db_integration_same( false, isset( $smoke_meta[ $secret_field ] ), 'approved Square never persists ' . $secret_field );
+		}
+	}
+}
+
+$square_approval_table = $wpdb->prefix . 'doughboss_preorder_approvals';
+$square_snapshot_table = $wpdb->prefix . 'doughboss_checkout_snapshots';
+foreach ( array( 'bad-token', 'no-token', 'pending', 'rejected', 'expired', 'near-cutoff', 'revision', 'fingerprint', 'meta-request', 'meta-revision', 'meta-fingerprint', 'meta-binding', 'amount', 'currency', 'native-location', 'snapshot-contact', 'snapshot-lines', 'snapshot-binding' ) as $case ) {
+	$fixture = db_integration_approved_square_fixture( 'denied-' . $case );
+	db_integration_assert( is_array( $fixture ), 'approved Square denial fixture prepares ' . $case );
+	if ( ! is_array( $fixture ) ) {
+		continue;
+	}
+	$meta = $fixture['metadata'];
+	$amount = 1400;
+	$currency = 'AUD';
+	if ( 'bad-token' === $case || 'no-token' === $case ) {
+		$meta['preorder_payment_token'] = 'no-token' === $case ? '' : str_repeat( 'f', 64 );
+	} elseif ( in_array( $case, array( 'pending', 'rejected' ), true ) ) {
+		$wpdb->update( $square_approval_table, array( 'state' => $case ), array( 'request_order_id' => $fixture['request_id'] ) );
+	} elseif ( in_array( $case, array( 'expired', 'near-cutoff' ), true ) ) {
+		$meta['preorder_payment_token'] = db_integration_set_preorder_expiry( $fixture['request_id'], gmdate( 'Y-m-d H:i:s', time() + ( 'expired' === $case ? -60 : 20 * MINUTE_IN_SECONDS ) ) );
+	} elseif ( 'revision' === $case ) {
+		$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->prefix}doughboss_orders SET version = version + 1 WHERE id = %d", $fixture['request_id'] ) );
+	} elseif ( 'fingerprint' === $case ) {
+		$wpdb->update( $wpdb->prefix . 'doughboss_orders', array( 'notes' => 'Synthetic post-approval drift' ), array( 'id' => $fixture['request_id'] ) );
+	} elseif ( 'meta-request' === $case ) {
+		$meta['source_request_id'] = 999999;
+	} elseif ( 'meta-revision' === $case ) {
+		++$meta['approved_revision'];
+	} elseif ( 'meta-fingerprint' === $case ) {
+		$meta['request_fingerprint'] = str_repeat( 'a', 64 );
+	} elseif ( 'meta-binding' === $case ) {
+		$meta['binding_hash'] = str_repeat( 'b', 64 );
+	} elseif ( 'amount' === $case ) {
+		$amount = 1399;
+	} elseif ( 'currency' === $case ) {
+		$currency = 'USD';
+	} elseif ( 'native-location' === $case ) {
+		$meta['location_id'] = $binding_shop_ids['bankstown'];
+	} else {
+		$payload = $fixture['snapshot']['payload'];
+		if ( 'snapshot-contact' === $case ) {
+			$payload['order']['customer_email'] = 'tampered@example.invalid';
+		} elseif ( 'snapshot-lines' === $case ) {
+			$payload['lines'][0]['name'] = 'Tampered synthetic item';
+		} else {
+			$payload['square_binding']['square_location_id'] = 'LTAMPERED';
+		}
+		$json = wp_json_encode( $payload );
+		$wpdb->update( $square_snapshot_table, array( 'payload_json' => $json, 'payload_hash' => hash( 'sha256', $json ) ), array( 'checkout_key' => $fixture['approval']['payment_checkout_key'] ) );
+	}
+	$posts = $GLOBALS['db_square_post_count'];
+	$denied = DoughBoss_Square::create_payment_intent( $amount, $currency, $meta );
+	db_integration_assert( is_wp_error( $denied ), 'approved Square denies ' . $case );
+	db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'approved Square ' . $case . ' makes no provider POST' );
+	$denied_attempt = db_integration_approved_square_attempt( $fixture );
+	db_integration_assert( ! is_array( $denied_attempt ) || 'prepared' === $denied_attempt['status'], 'approved Square ' . $case . ' cannot claim irreversible dispatch' );
+}
+
+$rollback_fixture = db_integration_approved_square_fixture( 'atomic-link-rollback' );
+if ( is_array( $rollback_fixture ) ) {
+	$posts = $GLOBALS['db_square_post_count'];
+	$GLOBALS['db_fail_square_approval_link_once'] = true;
+	$square_errors_before = $wpdb->suppress_errors( true );
+	add_filter( 'query', 'db_integration_fail_square_approval_link', 10 );
+	$rollback_result = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $rollback_fixture['metadata'] );
+	remove_filter( 'query', 'db_integration_fail_square_approval_link', 10 );
+	$wpdb->suppress_errors( $square_errors_before );
+	db_integration_assert( is_wp_error( $rollback_result ) && ! $GLOBALS['db_fail_square_approval_link_once'], 'approval-link write failure is exercised and denied' );
+	db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'approval-link write failure sends no Square POST' );
+	$rollback_attempt = db_integration_approved_square_attempt( $rollback_fixture );
+	db_integration_same( 'prepared', is_array( $rollback_attempt ) ? $rollback_attempt['status'] : '', 'failed approval link rolls dispatch claim back to prepared' );
+	$rollback_approval = DoughBoss_Preorder_Approval::get( $rollback_fixture['request_id'] );
+	db_integration_same( 0, (int) $rollback_approval['payment_attempt_id'], 'failed dispatch transaction retains no partial approval link' );
+	$GLOBALS['db_square_approval_dispatch_observer'] = array( 'request_id' => $rollback_fixture['request_id'], 'checkout_key' => $rollback_fixture['approval']['payment_checkout_key'] );
+	$rollback_retry = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $rollback_fixture['metadata'] );
+	$GLOBALS['db_square_approval_dispatch_observer'] = null;
+	db_integration_assert( ! is_wp_error( $rollback_retry ), 'atomic rollback permits one later valid dispatch' );
+	db_integration_same( $posts + 1, $GLOBALS['db_square_post_count'], 'atomic rollback retry performs one Square POST' );
+}
+
+$final_read_fixture = db_integration_approved_square_fixture( 'final-attempt-read-rollback' );
+if ( is_array( $final_read_fixture ) ) {
+	$posts = $GLOBALS['db_square_post_count'];
+	$GLOBALS['db_square_final_read_armed'] = false;
+	$GLOBALS['db_square_final_read_exercised'] = false;
+	add_filter( 'query', 'db_integration_fail_square_final_attempt_read', 10 );
+	$final_read_result = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $final_read_fixture['metadata'] );
+	remove_filter( 'query', 'db_integration_fail_square_final_attempt_read', 10 );
+	db_integration_assert( is_wp_error( $final_read_result ) && $GLOBALS['db_square_final_read_exercised'], 'post-link attempt read failure is exercised and denied' );
+	db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'post-link attempt read failure sends no Square POST' );
+	$rolled_back_attempt = db_integration_approved_square_attempt( $final_read_fixture );
+	$rolled_back_approval = DoughBoss_Preorder_Approval::get( $final_read_fixture['request_id'] );
+	db_integration_same( 'prepared', is_array( $rolled_back_attempt ) ? $rolled_back_attempt['status'] : '', 'post-link read failure rolls irreversible claim back' );
+	db_integration_same( 0, (int) $rolled_back_approval['payment_attempt_id'], 'post-link read failure rolls approval link back' );
+}
+
+$unknown_fixture = db_integration_approved_square_fixture( 'unknown-outcome' );
+if ( is_array( $unknown_fixture ) ) {
+	$posts = $GLOBALS['db_square_post_count'];
+	$GLOBALS['db_square_http_mode'] = 'network_error';
+	$unknown = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $unknown_fixture['metadata'] );
+	$GLOBALS['db_square_http_mode'] = 'success';
+	db_integration_assert( is_wp_error( $unknown ), 'approved Square ambiguous transport remains unpaid and held' );
+	db_integration_same( $posts + 1, $GLOBALS['db_square_post_count'], 'approved Square unknown outcome dispatched once' );
+	$unknown_replay = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $unknown_fixture['metadata'] );
+	db_integration_assert( is_wp_error( $unknown_replay ), 'approved Square unknown outcome cannot redispatch' );
+	db_integration_same( $posts + 1, $GLOBALS['db_square_post_count'], 'approved Square unknown replay cannot double-charge' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $unknown_fixture['request_id'] ), 'approved Square unknown outcome creates no kitchen order' );
+}
+
+if ( is_array( $approved_square_smoke ) && ! is_wp_error( $approved_square_payment ) && isset( $approved_square_payment['id'] ) ) {
+	$fulfillment = array_merge( $approved_square_smoke['order_data'], array( 'source_request_id' => $approved_square_smoke['request_id'], 'payment_method' => 'square', 'payment_status' => 'paid', 'payment_intent_id' => $approved_square_payment['id'] ) );
+	$unverified_release = DoughBoss_Order::create( $fulfillment, $approved_square_smoke['lines'] );
+	db_integration_assert( is_wp_error( $unverified_release ), 'Square create response alone cannot release approved request without durable verification' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $approved_square_smoke['request_id'] ), 'unverified Square payment cannot create kitchen order' );
+	$verified = DoughBoss_Square::retrieve_payment_intent( $approved_square_payment['id'] );
+	db_integration_assert( ! is_wp_error( $verified ) && 'succeeded' === $verified['status'], 'approved Square fulfillment requires provider-verified payment' );
+	$hooks = count( $GLOBALS['db_order_created_events'] );
+	foreach ( array( 'unpaid', 'forged-reference', 'wrong-total', 'wrong-location', 'wrong-contact', 'wrong-lines', 'different-attempt' ) as $case ) {
+		$wrong = $fulfillment;
+		$wrong_lines = $approved_square_smoke['lines'];
+		$linked_approval = DoughBoss_Preorder_Approval::get( $approved_square_smoke['request_id'] );
+		if ( 'unpaid' === $case ) {
+			$wrong['payment_status'] = 'unpaid';
+		} elseif ( 'forged-reference' === $case ) {
+			$wrong['payment_intent_id'] = 'sqpayFORGEDREFERENCE';
+		} elseif ( 'wrong-total' === $case ) {
+			$wrong['total'] = 15.00;
+		} elseif ( 'wrong-location' === $case ) {
+			$wrong['location_id'] = $binding_shop_ids['bankstown'];
+		} elseif ( 'wrong-contact' === $case ) {
+			$wrong['customer_phone'] = '0400000098';
+		} elseif ( 'wrong-lines' === $case ) {
+			$wrong_lines[0]['name'] = 'Unapproved synthetic replacement';
+		} else {
+			$wpdb->update( $square_approval_table, array( 'payment_attempt_id' => (int) $linked_approval['payment_attempt_id'] + 100000 ), array( 'request_order_id' => $approved_square_smoke['request_id'] ) );
+		}
+		$denied = DoughBoss_Order::create( $wrong, $wrong_lines );
+		if ( 'different-attempt' === $case ) {
+			$wpdb->update( $square_approval_table, array( 'payment_attempt_id' => $linked_approval['payment_attempt_id'] ), array( 'request_order_id' => $approved_square_smoke['request_id'] ) );
+		}
+		db_integration_assert( is_wp_error( $denied ), 'approved Square fulfillment denies ' . $case );
+		db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $approved_square_smoke['request_id'] ), 'denied Square ' . $case . ' leaves no partial fulfillment order' );
+		db_integration_same( $hooks, count( $GLOBALS['db_order_created_events'] ), 'denied Square ' . $case . ' fires no kitchen hook' );
+	}
+	$square_map_before_release = DoughBoss_Settings::all();
+	$square_map_changed = $square_map_before_release;
+	$square_map_changed['square_test_location_map']['revesby'] = 'LCHANGEDAFTERVERIFICATION';
+	update_option( DoughBoss_Settings::OPTION_KEY, $square_map_changed, false );
+	db_integration_assert( is_wp_error( DoughBoss_Order::create( $fulfillment, $approved_square_smoke['lines'] ) ), 'approved Square map drift after verification blocks kitchen release' );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( $approved_square_smoke['request_id'] ), 'post-verification map drift leaves no partial kitchen order' );
+	update_option( DoughBoss_Settings::OPTION_KEY, $square_map_before_release, false );
+	$wpdb->update( $square_approval_table, array( 'payment_token_expires_at_utc' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'request_order_id' => $approved_square_smoke['request_id'] ) );
+	$wpdb->update( $square_snapshot_table, array( 'expires_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'checkout_key' => $approved_square_smoke['approval']['payment_checkout_key'] ) );
+	db_integration_same( null, DoughBoss_Checkout_Snapshots::find( $approved_square_smoke['approval']['payment_checkout_key'] ), 'expired ordinary approved Square snapshot is hidden from ordinary reads' );
+	db_integration_assert( is_array( DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $approved_square_smoke['approval']['payment_checkout_key'] ) ), 'verified approved Square payment retains bounded immutable recovery snapshot' );
+	$fulfilled = DoughBoss_Order::create( $fulfillment, $approved_square_smoke['lines'] );
+	db_integration_assert( is_array( $fulfilled ) && empty( $fulfilled['replayed'] ), 'matching paid approved Square request creates one fulfillment order' );
+	$square_errors_before_replay = $wpdb->suppress_errors( true );
+	$replayed = DoughBoss_Order::create( $fulfillment, $approved_square_smoke['lines'] );
+	$wpdb->suppress_errors( $square_errors_before_replay );
+	db_integration_assert( is_array( $replayed ) && ! empty( $replayed['replayed'] ) && is_array( $fulfilled ) && $replayed['order_id'] === $fulfilled['order_id'], 'paid approved Square replay returns same fulfillment order' );
+	db_integration_same( $hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'paid approved Square release and replay fire exactly one kitchen hook' );
+	$released = DoughBoss_Preorder_Approval::get( $approved_square_smoke['request_id'] );
+	db_integration_same( 'released', $released['state'], 'paid approved Square fulfillment atomically records released approval' );
+	if ( is_array( $fulfilled ) ) {
+		db_integration_same( $fulfilled['order_id'], (int) $released['fulfillment_order_id'], 'paid approved Square approval retains exact fulfillment receipt' );
+	}
+}
+remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
+remove_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
+$approved_square_race_fixture = db_integration_approved_square_fixture( 'two-process-race' );
+db_integration_assert( is_array( $approved_square_race_fixture ), 'approved Square race leaves one immutable synthetic request for two workers' );
 foreach ( $binding_shop_ids as $binding_shop_id ) {
 	$wpdb->delete( $wpdb->prefix . 'doughboss_locations', array( 'id' => $binding_shop_id ) );
 }

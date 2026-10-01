@@ -376,6 +376,8 @@ class DoughBoss_Square {
 		$cart_guard   = isset( $metadata['cart_guard'] ) ? strtolower( sanitize_text_field( (string) $metadata['cart_guard'] ) ) : '';
 		$voucher_code = isset( $metadata['voucher_code'] ) ? sanitize_text_field( (string) $metadata['voucher_code'] ) : '';
 		$voucher_key  = isset( $metadata['voucher_reservation_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['voucher_reservation_key'] ) ) : '';
+		$context      = isset( $metadata['context'] ) ? sanitize_key( (string) $metadata['context'] ) : '';
+		$preorder_token = isset( $metadata['preorder_payment_token'] ) ? trim( (string) $metadata['preorder_payment_token'] ) : '';
 
 		if (
 			$amount_minor < 1
@@ -409,8 +411,18 @@ class DoughBoss_Square {
 			$safe_metadata['attempt_key'],
 			$safe_metadata['checkout_key'],
 			$safe_metadata['source_id'],
-			$safe_metadata['verification_token']
+			$safe_metadata['verification_token'],
+			$safe_metadata['preorder_payment_token']
 		);
+		if ( 'approved_preorder' === $context ) {
+			// Payment attempts deliberately discard metadata keys containing
+			// "source" or "request". Preserve the server-owned approval tuple
+			// under neutral durable names, while keeping the browser-path names
+			// transient and out of storage.
+			unset( $safe_metadata['source_request_id'], $safe_metadata['request_fingerprint'] );
+			$safe_metadata['approval_id']          = isset( $metadata['source_request_id'] ) ? absint( $metadata['source_request_id'] ) : 0;
+			$safe_metadata['approval_fingerprint'] = isset( $metadata['request_fingerprint'] ) ? strtolower( sanitize_text_field( (string) $metadata['request_fingerprint'] ) ) : '';
+		}
 		$safe_metadata['square_shop_slug']   = $shop_binding['shop_slug'];
 		$safe_metadata['square_location_id'] = $shop_binding['square_location_id'];
 		$safe_metadata['square_mode']        = $shop_binding['square_mode'];
@@ -492,15 +504,25 @@ class DoughBoss_Square {
 			return self::replay( $existing_reference, $attempt, $amount_minor, $currency );
 		}
 
-		if ( '' !== $voucher_code ) {
+		if ( 'approved_preorder' === $context ) {
+			$request_id = isset( $metadata['source_request_id'] ) ? absint( $metadata['source_request_id'] ) : 0;
+			if ( ! $request_id || '' === $preorder_token || ! class_exists( 'DoughBoss_Preorder_Approval' ) ) {
+				return new WP_Error( 'doughboss_preorder_payment_token_invalid', __( 'A valid pre-order payment capability is required.', 'doughboss' ), array( 'status' => 403 ) );
+			}
+			$claimed = DoughBoss_Preorder_Approval::claim_square_dispatch( $request_id, $preorder_token, (int) $attempt['id'] );
+			if ( is_wp_error( $claimed ) ) {
+				return $claimed;
+			}
+			$attempt = isset( $claimed['attempt'] ) && is_array( $claimed['attempt'] ) ? $claimed['attempt'] : $attempt;
+		} elseif ( '' !== $voucher_code ) {
 			$claimed = DoughBoss_Voucher::claim_payment_dispatch( $voucher_code, $voucher_key, (int) $attempt['id'] );
 		} else {
 			$claimed = DoughBoss_Payment_Attempts::claim_irreversible_creation( (int) $attempt['id'] );
 		}
-		if ( is_wp_error( $claimed ) ) {
+		if ( isset( $claimed ) && is_wp_error( $claimed ) ) {
 			return $claimed;
 		}
-		if ( true !== $claimed ) {
+		if ( 'approved_preorder' !== $context && true !== $claimed ) {
 			$attempt = DoughBoss_Payment_Attempts::find( (int) $attempt['id'] );
 			if ( $attempt && ! empty( $attempt['provider_reference'] ) ) {
 				return self::replay( (string) $attempt['provider_reference'], $attempt, $amount_minor, $currency );
