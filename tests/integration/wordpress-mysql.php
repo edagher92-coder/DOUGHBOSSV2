@@ -3220,7 +3220,7 @@ update_option( DoughBoss_Settings::OPTION_KEY, $binding_original_settings, false
 // immutable request, approval, or attempt binding retained by the server.
 $square_rest_settings_before = DoughBoss_Settings::all();
 $square_rest_settings = $square_rest_settings_before;
-$square_rest_settings['ordering_open'] = 1;
+$square_rest_settings['ordering_open'] = 0;
 $square_rest_settings['payments_enabled'] = 1;
 $square_rest_settings['payment_gateway'] = 'square';
 $square_rest_settings['currency_code'] = 'AUD';
@@ -3240,6 +3240,7 @@ $square_rest_controller = new DoughBoss_REST_Controller( new DoughBoss_Cart() );
 add_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
 add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
 
+db_integration_same( false, DoughBoss_Settings::ordering_open(), 'ordinary ordering remains closed before approved Square REST view' );
 $square_rest_view_fixture = db_integration_approved_square_rest_fixture( 'rest-view' );
 if ( is_array( $square_rest_view_fixture ) ) {
 	$_SERVER['REMOTE_ADDR'] = '192.0.2.231';
@@ -3284,6 +3285,7 @@ if ( is_array( $square_rest_view_fixture ) ) {
 	db_integration_assert( false, 'approved Square REST view fixture is available' );
 }
 
+db_integration_same( false, DoughBoss_Settings::ordering_open(), 'ordinary ordering remains closed before approved Square REST start' );
 $square_rest_start_fixture = db_integration_approved_square_rest_fixture( 'rest-start-complete' );
 if ( is_array( $square_rest_start_fixture ) ) {
 	$_SERVER['REMOTE_ADDR'] = '192.0.2.235';
@@ -3490,6 +3492,7 @@ if ( is_array( $square_rest_recovery_fixture ) ) {
 	$wpdb->suppress_errors( $square_rest_recovery_errors );
 	db_integration_assert( $square_rest_recovery_replay instanceof WP_REST_Response, 'duplicate signed approved Square webhook is acknowledged' );
 	db_integration_same( $square_rest_recovery_hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'duplicate signed approved Square webhook cannot fall back to another fulfillment' );
+	db_integration_same( false, DoughBoss_Settings::ordering_open(), 'ordinary ordering remains closed after approved Square completion and webhook recovery' );
 } else {
 	db_integration_assert( false, 'approved Square REST signed-webhook recovery fixture is available' );
 }

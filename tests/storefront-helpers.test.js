@@ -666,9 +666,9 @@ function approvedSquareHarness(options = {}) {
 	const request = async (route, requestOptions) => {
 		requests.push({ route, options: requestOptions });
 		if (options.failStart && route === '/preorder-payment/start') { throw new Error('Synthetic lost response'); }
-		return route === '/preorder-payment/start' ? { gateway: 'square', payment_intent: 'sq-provider-id' } : { order_number: 'PAID-91' };
+		return route === '/preorder-payment/start' ? { gateway: 'square', payment_intent: 'sq-provider-id' } : (Object.hasOwn(options, 'receipt') ? options.receipt : { success: true, order_number: 'DB-261001-ABC123', total: 14 });
 	};
-	const confirm = extractFunction(square, 'confirmApproved', { request });
+	const confirm = extractFunction(square, 'confirmApproved', { request, validApprovedSquareReceipt: extractFunction(square, 'validApprovedSquareReceipt') });
 	const pay = extractFunction(square, 'payApprovedSession', {
 		approvedVerificationDetails: extractFunction(square, 'approvedVerificationDetails', { validSquareCurrency: extractFunction(square, 'validSquareCurrency') }),
 		confirmApproved: confirm, request
@@ -679,7 +679,7 @@ function approvedSquareHarness(options = {}) {
 test('approved Square uses the capability routes and no client money or provider identity', async () => {
 	const h = approvedSquareHarness();
 	const paid = await h.pay(h.session);
-	assert.equal(paid.order_number, 'PAID-91');
+	assert.equal(paid.order_number, 'DB-261001-ABC123');
 	assert.equal(h.tokenizations[0].amount, '14.00');
 	assert.equal(h.tokenizations[0].currencyCode, 'AUD');
 	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/start', '/preorder-payment/complete']);
@@ -733,7 +733,7 @@ test('approved Square SDK stays dormant on environment mismatch and uses only th
 	assert.equal(scripts, 0);
 });
 
-function dormantSquareModuleHarness() {
+function dormantSquareModuleHarness(harnessOptions = {}) {
 	const calls = [];
 	const sdkBindings = [];
 	const scripts = [];
@@ -766,7 +766,7 @@ function dormantSquareModuleHarness() {
 	};
 	vm.runInNewContext(fs.readFileSync(square, 'utf8'), { window, document, Promise, CustomEvent: function () {}, fetch: async (url, options) => {
 		calls.push({ url, body: JSON.parse(options.body) });
-		return { ok: true, json: async () => url.endsWith('/start') ? { gateway: 'square' } : { order_number: 'PAID-TEST' } };
+		return { ok: true, json: async () => url.endsWith('/start') ? { gateway: 'square' } : (Object.hasOwn(harnessOptions, 'receipt') ? harnessOptions.receipt : { success: true, order_number: 'DB-261001-ABC123', total: 14 }) };
 	} });
 	const form = element('form');
 	form.appendChild(element('button'));
@@ -817,10 +817,53 @@ test('actual approved Square module rejects a missing capability before loading 
 	assert.equal(h.calls.length, 0);
 });
 
-function approvedScreenHarness(summary, paymentError) {
+function invalidApprovedReceipts() {
+	const valid = { success: true, order_number: 'DB-261001-ABC123', total: 14 };
+	return [null, {}, { ...valid, success: false }, { ...valid, order_number: undefined },
+		{ ...valid, order_number: '' }, { ...valid, order_number: '<img src=x>' },
+		{ ...valid, order_number: 'DB-261001-ABC123\n' }, { ...valid, total: undefined },
+		{ ...valid, total: null }, { ...valid, total: '14.00' }, { ...valid, total: NaN },
+		{ ...valid, total: Infinity }, { ...valid, total: -14 }, { ...valid, total: 0 },
+		{ ...valid, total: 14.005 }, { ...valid, total: 14.01 }];
+}
+
+test('actual Square module rejects malformed HTTP-200 receipts and never charges again', async () => {
+	for (const receipt of invalidApprovedReceipts()) {
+		const h = dormantSquareModuleHarness({ receipt });
+		h.window.DoughBossSquare.enhanceApproved(h.form, {
+			gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+			square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+		}, { requestId: 94, token: 'c'.repeat(64) });
+		await assert.rejects(h.window.DoughBossSquare.payApproved(h.form), /receipt could not be confirmed/);
+		assert.equal(h.window.DoughBossSquare.approvedPending(h.form), true);
+		await assert.rejects(h.window.DoughBossSquare.payApproved(h.form), /receipt could not be confirmed/);
+		assert.equal(h.tokenizations.length, 1);
+		assert.deepEqual(h.calls.map(call => call.url), ['/wp-json/doughboss/v1/preorder-payment/start', '/wp-json/doughboss/v1/preorder-payment/complete', '/wp-json/doughboss/v1/preorder-payment/complete']);
+		assert.equal(h.calls[2].body.token, 'c'.repeat(64), 'capability remains in the bounded recovery session');
+	}
+});
+
+test('approved receipt validation compares exact minor units and accepts a valid replay', async () => {
+	const validate = extractFunction(square, 'validApprovedSquareReceipt');
+	assert.equal(validate({ success: true, order_number: 'DB-261001-ABC123', total: 0.29 }, { total: 0.29 }), true);
+	assert.equal(validate({ success: true, order_number: 'DB-261001-ABC123', total: 14 }, { total: 14.01 }), false);
+	assert.equal(validate({ success: true, order_number: 'DB-261001-ABC123', total: 14 }, { total: '14' }), false);
+	const h = dormantSquareModuleHarness({ receipt: { success: true, order_number: 'DB-261001-ABC123', total: 14, replayed: true } });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 94, token: 'c'.repeat(64) });
+	assert.equal((await h.window.DoughBossSquare.payApproved(h.form)).success, true);
+	assert.equal((await h.window.DoughBossSquare.payApproved(h.form)).replayed, true);
+	assert.equal(h.tokenizations.length, 1);
+	assert.equal(h.calls.filter(call => call.url.endsWith('/start')).length, 1);
+});
+
+function approvedScreenHarness(summary, paymentError, options = {}) {
 	const elements = [];
 	const calls = [];
 	const locks = [];
+	const historyRemovals = [];
 	let pending = summary.can_confirm_payment === true;
 	function element(tag, attrs = {}, children = []) {
 		const node = { tag, attrs, children: [], textContent: attrs.text || '', listeners: {}, hidden: false,
@@ -837,9 +880,17 @@ function approvedScreenHarness(summary, paymentError) {
 	const presentation = extractFunction(storefront, 'approvedPreorderPresentation');
 	const render = extractFunction(storefront, 'renderApprovedPreorder', {
 		document: { body: { classList: { add() {} } }, querySelectorAll: () => [] },
-		window: { history: { replaceState() {} }, location: { pathname: '/order/', search: '' }, DoughBossSquare: {
+		window: { history: { replaceState() { historyRemovals.push(true); } }, location: { pathname: '/order/', search: '' }, DoughBossSquare: {
 			enhanceApproved(form, state, capability) { calls.push({ type: 'enhance', form, state, capability }); },
-			payApproved(form) { calls.push({ type: 'pay', form }); pending = true; return paymentError ? Promise.reject(paymentError) : Promise.resolve({ order_number: 'PAID-97' }); },
+			payApproved(form) {
+				calls.push({ type: 'pay', form }); pending = true;
+				if (paymentError) { return Promise.reject(paymentError); }
+				const confirm = extractFunction(square, 'confirmApproved', {
+					request: async () => Object.hasOwn(options, 'receipt') ? options.receipt : { success: true, order_number: 'DB-261001-ABC123', total: summary.total },
+					validApprovedSquareReceipt: extractFunction(square, 'validApprovedSquareReceipt')
+				});
+				return confirm({ summary, capability: { requestId: 97, token: 'd'.repeat(64) } });
+			},
 			approvedPending() { return pending; }
 		} },
 		el: element, money: amount => '$' + Number(amount).toFixed(2),
@@ -854,7 +905,7 @@ function approvedScreenHarness(summary, paymentError) {
 	const root = element('main');
 	render(root, { requestId: 97, token: 'd'.repeat(64) });
 	const textOf = node => [node.textContent, ...node.children.map(textOf)].join(' ');
-	return { elements, calls, locks, text: () => textOf(root), settle: () => new Promise(resolve => setImmediate(resolve)) };
+	return { elements, calls, locks, historyRemovals, text: () => textOf(root), settle: () => new Promise(resolve => setImmediate(resolve)) };
 }
 
 test('approved screen renders Square payment and confirms only after its server completion', async () => {
@@ -882,6 +933,22 @@ test('approved screen keeps uncertain Square result in confirmation-only recover
 	assert.doesNotMatch(h.text(), /Pay securely with Square/);
 	assert.equal(form.attrs['aria-busy'], 'false');
 	assert.equal(h.locks.at(-1), true);
+});
+
+test('approved screen never presents malformed HTTP-200 receipts as paid or discards recovery', async () => {
+	for (const receipt of invalidApprovedReceipts()) {
+		const h = approvedScreenHarness({ gateway: 'square', presentation_state: 'ready', can_start_payment: true, total: 14, currency: 'AUD', items: [] }, null, { receipt });
+		await h.settle();
+		const form = h.elements.find(node => node.tag === 'form');
+		form.listeners.submit({ preventDefault() {} });
+		await h.settle();
+		assert.doesNotMatch(h.text(), /Payment verified|Your order is in/);
+		assert.match(h.text(), /Do not pay again/);
+		assert.match(h.text(), /Check existing payment/);
+		assert.equal(h.locks.at(-1), true);
+		assert.equal(h.historyRemovals.length, 0);
+		assert.equal(form.attrs['aria-busy'], 'false');
+	}
 });
 
 test('closed ordering keeps Square dormant while approved recovery is explicitly scoped', () => {

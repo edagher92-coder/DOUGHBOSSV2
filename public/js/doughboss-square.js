@@ -403,10 +403,32 @@
 			controller: recovering ? null : mountCard(form, binding) });
 	}
 
+	function validApprovedSquareReceipt(receipt, summary) {
+		function minorUnits(value) {
+			if (typeof value !== 'number' || !isFinite(value) || value <= 0) { return null; }
+			var scaled = value * 100;
+			var minor = Math.round(scaled);
+			if (minor > 9007199254740991 || Math.abs(scaled - minor) > 0.000001) { return null; }
+			return minor;
+		}
+		if (!receipt || receipt.success !== true || typeof receipt.order_number !== 'string' ||
+			!/^DB-[0-9]{6}-[A-Z0-9]{6}$/.test(receipt.order_number)) { return false; }
+		var expected = minorUnits(summary && summary.total);
+		var received = minorUnits(receipt.total);
+		return expected !== null && received !== null && expected === received;
+	}
+
 	function confirmApproved(session) {
 		return request('/preorder-payment/complete', { method: 'POST', body: {
 			request_id: session.capability.requestId, token: session.capability.token
-		} });
+		} }).then(function (receipt) {
+			if (!validApprovedSquareReceipt(receipt, session.summary)) {
+				var error = new Error('The paid receipt could not be confirmed. Do not pay again; check the existing payment or call DoughBoss.');
+				error.data = { payment_pending: true, retry_safe: false };
+				throw error;
+			}
+			return receipt;
+		});
 	}
 
 	function payApprovedSession(session) {
