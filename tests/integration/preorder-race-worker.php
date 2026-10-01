@@ -332,7 +332,8 @@ if ( 'start' === $race_mode && is_wp_error( $race_result ) ) {
 }
 
 if ( is_wp_error( $race_result ) || ! ( $race_result instanceof WP_REST_Response ) ) {
-	db_preorder_race_fail( 'Race worker did not receive a successful REST response.' );
+	$race_failure_code = is_wp_error( $race_result ) ? ' (' . sanitize_key( (string) $race_result->get_error_code() ) . ')' : '';
+	db_preorder_race_fail( 'Race worker did not receive a successful REST response.' . $race_failure_code );
 }
 
 if ( 'start' === $race_mode ) {

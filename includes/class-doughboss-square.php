@@ -1265,6 +1265,25 @@ class DoughBoss_Square {
 	}
 
 	/**
+	 * A refund cannot use a request-local option cache as current authority.
+	 * Read the stored configuration directly and require the getters used by
+	 * dispatch to observe those same values. Only a digest leaves this helper;
+	 * credentials and raw options are never persisted, returned or logged.
+	 * Existing environment-secret precedence remains in the normal accessors.
+	 *
+	 * @return string|WP_Error Current stored configuration identity.
+	 */
+	private static function refund_configuration_version() {
+		global $wpdb;
+		$raw = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1", DoughBoss_Settings::OPTION_KEY ) );
+		$stored = is_string( $raw ) ? maybe_unserialize( $raw ) : null;
+		if ( ! is_string( $raw ) || ! is_array( $stored ) || $stored !== get_option( DoughBoss_Settings::OPTION_KEY, array() ) ) {
+			return new WP_Error( 'doughboss_refund_context_changed', __( 'The original payment configuration could not be verified. Check Square before issuing another refund; this order has not been marked refunded.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return hash( 'sha256', $raw );
+	}
+
+	/**
 	 * Refund a Square payment, in full or in part.
 	 *
 	 * @param string   $id           Square payment id.
@@ -1281,6 +1300,15 @@ class DoughBoss_Square {
 		if ( ! $attempt || 'square' !== (string) $attempt['provider'] ) {
 			return new WP_Error( 'doughboss_pay_refund', __( 'This payment has no matching record to refund against.', 'doughboss' ), array( 'status' => 409 ) );
 		}
+		$configuration_version = self::refund_configuration_version();
+		if ( is_wp_error( $configuration_version ) ) {
+			return $configuration_version;
+		}
+		$binding = self::attempt_shop_binding( $attempt );
+		if ( is_wp_error( $binding ) ) {
+			return $binding;
+		}
+		$token = self::access_token();
 
 		$full     = (int) $attempt['amount_minor'];
 		$currency = strtoupper( (string) $attempt['currency'] );
@@ -1299,10 +1327,27 @@ class DoughBoss_Square {
 					'amount'   => $refund,
 					'currency' => $currency,
 				),
-			)
+			),
+			$binding
 		);
 		if ( is_wp_error( $response ) ) {
 			return $response;
+		}
+		// The provider may already have acted. A changed original-payment or
+		// seller/environment context is an unknown outcome, never permission to
+		// mark the order refunded or dispatch a differently bound retry.
+		$current_configuration = self::refund_configuration_version();
+		$current_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
+		$current_binding = is_array( $current_attempt ) ? self::attempt_shop_binding( $current_attempt ) : self::shop_binding_error();
+		$unchanged = ! is_wp_error( $current_configuration ) && hash_equals( $configuration_version, $current_configuration )
+			&& ! is_wp_error( $current_binding ) && $binding === $current_binding && hash_equals( $token, self::access_token() );
+		foreach ( array( 'id', 'provider', 'provider_reference', 'location_id', 'amount_minor', 'currency', 'safe_metadata_json' ) as $field ) {
+			if ( ! isset( $attempt[ $field ], $current_attempt[ $field ] ) || (string) $attempt[ $field ] !== (string) $current_attempt[ $field ] ) {
+				$unchanged = false;
+			}
+		}
+		if ( ! $unchanged ) {
+			return new WP_Error( 'doughboss_refund_context_changed', __( 'The Square refund outcome needs reconciliation because the original payment configuration changed. Check Square before issuing another refund; this order has not been marked refunded.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		return self::validate_refund_response( $response, $id, $refund, $currency );
 	}

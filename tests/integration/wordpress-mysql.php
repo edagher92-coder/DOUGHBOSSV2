@@ -283,6 +283,9 @@ function db_integration_square_http( $preempt, $args, $url ) {
 			$refund['status'] = 'COMPLETED';
 			$refund['amount_money']['amount'] -= 1;
 		}
+		if ( isset( $GLOBALS['db_square_refund_after_response'] ) && is_callable( $GLOBALS['db_square_refund_after_response'] ) ) {
+			call_user_func( $GLOBALS['db_square_refund_after_response'], $body );
+		}
 		return db_integration_stripe_http_response( array( 'refund' => $refund ) );
 	}
 	if ( 'POST' === $method ) {
@@ -1314,6 +1317,103 @@ foreach ( $refund_requests as $refund_request ) {
 	db_integration_same( array( 'amount' => 2750, 'currency' => 'AUD' ), $refund_request['amount_money'], 'refund amount comes from the persisted payment' );
 	db_integration_same( $first['id'], $refund_request['payment_id'], 'refund uses the stored payment reference' );
 }
+
+// Refunds retain the original native shop/mode; completed responses cannot
+// override context drift. All mutations below affect disposable fixtures only.
+$refund_original_settings = DoughBoss_Settings::all();
+$refund_original_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $first['id'] );
+$GLOBALS['db_square_refund_status'] = 'COMPLETED';
+$refund_without_global = $refund_original_settings;
+$refund_without_global['square_test_location_id'] = '';
+update_option( DoughBoss_Settings::OPTION_KEY, $refund_without_global, false );
+$refund_posts_before = count( $GLOBALS['db_square_refund_requests'] );
+db_integration_assert( ! is_wp_error( DoughBoss_Payment::refund_via( 'square', $first['id'] ) ), 'refund uses exact saved shop map without a legacy global location' );
+db_integration_same( $refund_posts_before + 1, count( $GLOBALS['db_square_refund_requests'] ), 'mapped refund reaches one provider request' );
+update_option( DoughBoss_Settings::OPTION_KEY, $refund_original_settings, false );
+foreach ( array( 'map', 'mode', 'unbound' ) as $refund_drift ) {
+	$changed_settings = $refund_original_settings;
+	if ( 'map' === $refund_drift ) {
+		$changed_settings['square_test_location_map']['revesby'] = 'LREFUNDWRONGSHOP';
+	} elseif ( 'mode' === $refund_drift ) {
+		$changed_settings['square_mode'] = 'live';
+	} else {
+		$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'safe_metadata_json' => '{}' ), array( 'id' => $refund_original_attempt['id'] ) );
+	}
+	update_option( DoughBoss_Settings::OPTION_KEY, $changed_settings, false );
+	$refund_posts_before = count( $GLOBALS['db_square_refund_requests'] );
+	db_integration_assert( is_wp_error( DoughBoss_Payment::refund_via( 'square', $first['id'] ) ), 'refund rejects original-payment context drift before HTTP: ' . $refund_drift );
+	db_integration_same( $refund_posts_before, count( $GLOBALS['db_square_refund_requests'] ), 'invalid refund binding dispatches no provider request: ' . $refund_drift );
+	update_option( DoughBoss_Settings::OPTION_KEY, $refund_original_settings, false );
+	$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'safe_metadata_json' => $refund_original_attempt['safe_metadata_json'] ), array( 'id' => $refund_original_attempt['id'] ) );
+}
+foreach ( array( 'map', 'mode', 'token', 'amount', 'currency', 'metadata' ) as $refund_drift ) {
+	$GLOBALS['db_square_refund_after_response'] = function () use ( $refund_drift, $refund_original_settings, $refund_original_attempt, $wpdb ) {
+		if ( in_array( $refund_drift, array( 'map', 'mode', 'token' ), true ) ) {
+			$changed_settings = $refund_original_settings;
+			if ( 'map' === $refund_drift ) { $changed_settings['square_test_location_map']['revesby'] = 'LREFUNDCHANGEDDURINGHTTP'; }
+			if ( 'mode' === $refund_drift ) { $changed_settings['square_mode'] = 'live'; }
+			if ( 'token' === $refund_drift ) { $changed_settings['square_test_access_token'] = 'EAAAlocalSyntheticChangedRefundToken0000'; }
+			update_option( DoughBoss_Settings::OPTION_KEY, $changed_settings, false );
+		} else {
+			$field = 'amount' === $refund_drift ? 'amount_minor' : ( 'currency' === $refund_drift ? 'currency' : 'safe_metadata_json' );
+			$value = 'amount' === $refund_drift ? 1 : ( 'currency' === $refund_drift ? 'USD' : '{}' );
+			$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( $field => $value ), array( 'id' => $refund_original_attempt['id'] ) );
+		}
+	};
+	$refund_posts_before = count( $GLOBALS['db_square_refund_requests'] );
+	$refund_changed = DoughBoss_Payment::refund_via( 'square', $first['id'] );
+	unset( $GLOBALS['db_square_refund_after_response'] );
+	db_integration_same( 'doughboss_refund_context_changed', is_wp_error( $refund_changed ) ? $refund_changed->get_error_code() : '', 'completed refund with changed context requires reconciliation: ' . $refund_drift );
+	db_integration_same( $refund_posts_before + 1, count( $GLOBALS['db_square_refund_requests'] ), 'post-response drift never dispatches a second refund: ' . $refund_drift );
+	update_option( DoughBoss_Settings::OPTION_KEY, $refund_original_settings, false );
+	$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'amount_minor' => $refund_original_attempt['amount_minor'], 'currency' => $refund_original_attempt['currency'], 'safe_metadata_json' => $refund_original_attempt['safe_metadata_json'] ), array( 'id' => $refund_original_attempt['id'] ) );
+}
+$refund_original_option = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+foreach ( array( 'map', 'mode', 'token' ) as $refund_stale_drift ) {
+	// Direct DB mutation deliberately leaves this PHP request's alloptions or
+	// per-option cache warm, equivalent to another request changing settings.
+	get_option( DoughBoss_Settings::OPTION_KEY, array() );
+	$GLOBALS['db_square_refund_after_response'] = function () use ( $refund_stale_drift, $refund_original_option, $wpdb ) {
+		$changed_settings = $refund_original_option;
+		if ( 'map' === $refund_stale_drift ) { $changed_settings['square_test_location_map']['revesby'] = 'LREFUNDSTALECACHE'; }
+		if ( 'mode' === $refund_stale_drift ) { $changed_settings['square_mode'] = 'live'; }
+		if ( 'token' === $refund_stale_drift ) { $changed_settings['square_test_access_token'] = 'EAAAlocalSyntheticStaleRefundToken0000'; }
+		$wpdb->update( $wpdb->options, array( 'option_value' => maybe_serialize( $changed_settings ) ), array( 'option_name' => DoughBoss_Settings::OPTION_KEY ) );
+	};
+	$refund_posts_before = count( $GLOBALS['db_square_refund_requests'] );
+	$refund_stale_result = DoughBoss_Payment::refund_via( 'square', $first['id'] );
+	unset( $GLOBALS['db_square_refund_after_response'] );
+	db_integration_same( $refund_original_option, get_option( DoughBoss_Settings::OPTION_KEY, array() ), 'refund process really retains stale cached settings: ' . $refund_stale_drift );
+	db_integration_same( 'doughboss_refund_context_changed', is_wp_error( $refund_stale_result ) ? $refund_stale_result->get_error_code() : '', 'stale cached settings cannot authorize completed refund: ' . $refund_stale_drift );
+	db_integration_same( $refund_posts_before + 1, count( $GLOBALS['db_square_refund_requests'] ), 'stale-cache denial never dispatches a second refund: ' . $refund_stale_drift );
+	$wpdb->update( $wpdb->options, array( 'option_value' => maybe_serialize( $refund_original_option ) ), array( 'option_name' => DoughBoss_Settings::OPTION_KEY ) );
+}
+// Authoritative configuration read failure is also fail-closed, before HTTP
+// or after a potentially completed provider action. Do not refresh the cache.
+foreach ( array( 'before', 'after' ) as $refund_read_failure_phase ) {
+	$fail_refund_configuration = 'before' === $refund_read_failure_phase;
+	$refund_configuration_faults = 0;
+	$refund_configuration_read_failure = function ( $sql ) use ( &$fail_refund_configuration, &$refund_configuration_faults, $wpdb ) {
+		if ( $fail_refund_configuration && 0 === strpos( $sql, 'SELECT option_value FROM ' . $wpdb->options . ' WHERE option_name' ) ) {
+			++$refund_configuration_faults;
+			return 'SELECT option_value FROM doughboss_intentionally_missing_refund_configuration';
+		}
+		return $sql;
+	};
+	$GLOBALS['db_square_refund_after_response'] = function () use ( &$fail_refund_configuration ) { $fail_refund_configuration = true; };
+	add_filter( 'query', $refund_configuration_read_failure, 999 );
+	$refund_posts_before = count( $GLOBALS['db_square_refund_requests'] );
+	$suppress = $wpdb->suppress_errors( true );
+	$refund_read_failed = DoughBoss_Payment::refund_via( 'square', $first['id'] );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', $refund_configuration_read_failure, 999 );
+	unset( $GLOBALS['db_square_refund_after_response'] );
+	db_integration_same( 1, $refund_configuration_faults, 'authoritative refund configuration SQL read genuinely fails: ' . $refund_read_failure_phase );
+	db_integration_same( 'doughboss_refund_context_changed', is_wp_error( $refund_read_failed ) ? $refund_read_failed->get_error_code() : '', 'unreadable refund configuration refuses completion: ' . $refund_read_failure_phase );
+	db_integration_same( $refund_posts_before + ( 'after' === $refund_read_failure_phase ? 1 : 0 ), count( $GLOBALS['db_square_refund_requests'] ), 'configuration read failure never repeats refund dispatch: ' . $refund_read_failure_phase );
+}
+db_integration_assert( ! is_wp_error( DoughBoss_Payment::refund_via( 'square', $first['id'] ) ), 'restoring exact original context permits verified refund reconciliation' );
+db_integration_same( $refund_requests[0]['idempotency_key'], end( $GLOBALS['db_square_refund_requests'] )['idempotency_key'], 'context restoration retains the original refund idempotency key' );
 
 $blocked = DoughBoss_Square::create_payment_intent( 2750, 'AUD', db_integration_square_metadata( 'attempt-two', 'checkout-two', 'cart-one' ) );
 db_integration_assert( is_wp_error( $blocked ), 'a new nonce for the same unresolved cart is blocked' );
