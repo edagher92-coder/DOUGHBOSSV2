@@ -9,6 +9,197 @@ if ( ! function_exists( 'wp_json_encode' ) ) {
 
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-order.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-dashboard.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-orders.php';
+
+/** Synthetic immutable itemization; no catalog, provider or customer records. */
+function db_square_orders_projection_fixture( $inclusive = true, $discount = true, $delivery = true ) {
+	$tax = $inclusive ? ( $delivery ? 212 : 182 ) : 200;
+	if ( ! $discount ) {
+		$tax = $inclusive ? ( $delivery ? 230 : 200 ) : 220;
+	}
+	$payload = array(
+		'order' => array(
+			'currency' => 'AUD', 'subtotal' => '22.00', 'discount' => $discount ? '2.00' : '0.00',
+			'delivery_fee' => $delivery ? '3.30' : '0.00', 'tax' => $tax / 100,
+			'total' => ( 2200 - ( $discount ? 200 : 0 ) + ( $delivery ? 330 : 0 ) + ( $inclusive ? 0 : $tax ) ) / 100,
+			'accounting_basis' => array( 'version' => 1, 'tax_inclusive' => $inclusive, 'tax_rate' => 10,
+				'discount_policy' => 'goods_before_tax', 'delivery_taxable' => $inclusive ),
+		),
+		'lines' => array( array( 'name' => 'Signature pizza', 'size' => 'Large', 'quantity' => '2',
+			'unit_price' => '11.00', 'line_total' => '22.00',
+			'toppings' => array( array( 'slug' => 'add--sujuk', 'label' => 'Add sujuk', 'price' => 2.0 ),
+				array( 'slug' => 'remove--onion', 'label' => 'No onion', 'price' => 0.0 ) ),
+		) ),
+	);
+	return array( $payload, array( 'shop_slug' => 'revesby', 'square_location_id' => 'LOCATION_R_TEST', 'square_mode' => 'test' ) );
+}
+
+/** Explicit synthetic provider rollups, not a Square calculation simulation. */
+function db_square_orders_response_fixture( array $projection ) {
+	$order = $projection['order'];
+	$currency = $projection['currency'];
+	$money = function ( $amount ) use ( $currency ) { return array( 'amount' => $amount, 'currency' => $currency ); };
+	$order['id'] = 'squareORDEREXAMPLE00000001';
+	$order['version'] = 1;
+	$fee_tax = $projection['tax_inclusive'] && $projection['amounts']['delivery_fee'] > 0 ? 30 : 0;
+	foreach ( $order['line_items'] as &$row ) {
+		$is_fee = 'db-delivery' === $row['uid'];
+		$base = $row['base_price_money']['amount'] * (int) $row['quantity'];
+		$discount = $is_fee ? 0 : $projection['amounts']['discount'];
+		$tax = $is_fee ? $fee_tax : $projection['amounts']['tax'] - $fee_tax;
+		$row['item_type'] = 'ITEM';
+		$row['gross_sales_money'] = $money( $base );
+		$row['variation_total_price_money'] = $money( $base );
+		$row['total_tax_money'] = $money( $tax );
+		$row['total_discount_money'] = $money( $discount );
+		$row['total_money'] = $money( $base - $discount + ( $projection['tax_inclusive'] ? 0 : $tax ) );
+		if ( ! empty( $row['applied_taxes'] ) ) {
+			$row['applied_taxes'][0]['uid'] = 'generated-tax-' . $row['uid'];
+			$row['applied_taxes'][0]['applied_money'] = $money( $tax );
+		}
+		if ( ! $is_fee && ! empty( $order['discounts'] ) ) {
+			$row['applied_discounts'] = array( array( 'uid' => 'generated-discount', 'discount_uid' => 'db-discount', 'applied_money' => $money( $discount ) ) );
+		}
+	}
+	unset( $row );
+	foreach ( array( 'tax' => 'total_tax_money', 'discount' => 'total_discount_money', 'total' => 'total_money' ) as $key => $field ) {
+		$order[ $field ] = $money( $projection['amounts'][ $key ] );
+	}
+	foreach ( array( 'taxes' => 'tax', 'discounts' => 'discount' ) as $field => $key ) {
+		if ( ! empty( $order[ $field ] ) ) {
+			$order[ $field ][0]['applied_money'] = $money( $projection['amounts'][ $key ] );
+		}
+	}
+	return array( 'order' => $order );
+}
+
+db_test( 'Square Orders project historical itemization without charging modifiers twice', function () {
+	foreach ( array( true, false ) as $inclusive ) {
+		foreach ( array( true, false ) as $discount ) {
+			foreach ( array( true, false ) as $delivery ) {
+				list( $payload, $binding ) = db_square_orders_projection_fixture( $inclusive, $discount, $delivery );
+				$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+				assert_false( is_wp_error( $projection ), 'inclusive/exclusive discount/delivery combinations project' );
+				if ( is_wp_error( $projection ) ) { continue; }
+				assert_same( 1100, $projection['order']['line_items'][0]['base_price_money']['amount'], 'final unit price includes sujuk once' );
+				assert_same( "Size: Large\nAdd sujuk\nNo onion", $projection['order']['line_items'][0]['note'], 'all saved choices are retained without repricing' );
+				assert_same( 'db-attempt-37', $projection['order']['reference_id'], 'separate Order is correlated to original attempt' );
+				assert_same( 'OPEN', $projection['order']['state'], 'the planned Order is payable, never a DRAFT' );
+				assert_false( isset( $projection['order']['fulfillments'], $projection['order']['customer_id'] ), 'projection makes no fulfillment/customer promise' );
+				$response = db_square_orders_response_fixture( $projection );
+				assert_same( array( 'id' => 'squareORDEREXAMPLE00000001', 'version' => 1 ), DoughBoss_Square_Orders::validate_unpaid_response( $response, $projection ), 'exact synthetic item/adjustment rollups validate' );
+			}
+		}
+	}
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	$payload['order']['accounting_basis']['tax_rate'] = 0;
+	$payload['order']['tax'] = 0;
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	assert_false( isset( $projection['order']['taxes'], $projection['order']['discounts'] ), 'zero-rate/no-discount omit synthetic adjustments' );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( db_square_orders_response_fixture( $projection ), $projection ) ), 'zero adjustment response is supported' );
+} );
+
+db_test( 'Square Orders deny unknown or inconsistent immutable checkout facts', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$invalid = array();
+	foreach ( array( null, array(), array( 'version' => 2 ) ) as $basis ) {
+		$bad = $payload; $bad['order']['accounting_basis'] = $basis; $invalid[] = $bad;
+	}
+	$bad = $payload; unset( $bad['order']['accounting_basis'] ); $invalid[] = $bad;
+	foreach ( array( true, '1e1', '1.001', 0.0000000001, INF, NAN, -1, '100000000.00', array() ) as $price ) {
+		$bad = $payload; $bad['lines'][0]['unit_price'] = $price; $invalid[] = $bad;
+	}
+	foreach ( array( 0, -1, '02', '2.0', 2.1, true, 2147483648, array() ) as $quantity ) {
+		$bad = $payload; $bad['lines'][0]['quantity'] = $quantity; $invalid[] = $bad;
+	}
+	foreach ( array( 'subtotal' => '23.00', 'discount' => '23.00', 'total' => '23.31', 'tax' => '999.00', 'currency' => 'aud' ) as $key => $value ) {
+		$bad = $payload; $bad['order'][ $key ] = $value; $invalid[] = $bad;
+	}
+	$bad = $payload; $bad['lines'][0]['line_total'] = '22.01'; $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['toppings'][0]['label'] = array(); $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['toppings'] = '[malformed]'; $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['name'] = "\xff"; $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['size'] = str_repeat( 'x', 81 ); $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['toppings'] = array_fill( 0, 5, array( 'label' => str_repeat( 'x', 500 ) ) ); $invalid[] = $bad;
+	$bad = $payload; $bad['order']['accounting_basis']['tax_rate'] = 0.000000001; $invalid[] = $bad;
+	foreach ( $invalid as $index => $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::project( $bad, $binding, 37 ) ), 'invalid persisted input ' . $index . ' cannot be itemized' );
+	}
+	foreach ( array( 'shop_slug' => 'unannounced', 'square_location_id' => '<wrong>', 'square_mode' => 'production' ) as $key => $value ) {
+		$bad_binding = $binding; $bad_binding[ $key ] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $bad_binding, 37 ) ), 'invalid/private shop binding is refused' );
+	}
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, '37' ) ), 'attempt identity is not coerced' );
+} );
+
+db_test( 'Square Orders equal final totals cannot conceal altered provider facts', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$good = db_square_orders_response_fixture( $projection );
+	$invalid = array();
+	foreach ( array( 'id' => array(), 'version' => '1', 'location_id' => 'OTHER_LOCATION', 'reference_id' => 'db-attempt-38', 'state' => 'COMPLETED' ) as $key => $value ) {
+		$bad = $good; $bad['order'][ $key ] = $value; $invalid[] = $bad;
+	}
+	foreach ( array( 'fulfillments', 'tenders', 'refunds', 'returns', 'rewards', 'service_charges' ) as $key ) {
+		$bad = $good; $bad['order'][ $key ] = array( array( 'unexpected' => true ) ); $invalid[] = $bad;
+		$bad = $good; $bad['order'][ $key ] = null; $invalid[] = $bad;
+	}
+	foreach ( array( 'uid' => 'other-line', 'quantity' => '3', 'name' => 'Different pizza', 'note' => 'No choices', 'modifiers' => array( array( 'name' => 'Double-charged sujuk' ) ), 'catalog_object_id' => 'MUTABLE_CATALOG', 'item_type' => 'GIFT_CARD' ) as $key => $value ) {
+		$bad = $good; $bad['order']['line_items'][0][ $key ] = $value; $invalid[] = $bad;
+	}
+	$bad = $good; $bad['order']['line_items'][1]['uid'] = 'db-line-1'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][] = $bad['order']['line_items'][0]; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['base_price_money']['amount'] = 1200; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['base_price_money']['currency'] = 'USD'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['applied_taxes'][0]['tax_uid'] = 'other-tax'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['applied_discounts'][0]['applied_money']['amount'] = 199; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][1]['total_discount_money']['amount'] = 1; $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['percentage'] = '11'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['scope'] = 'ORDER'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['discounts'][0]['amount_money']['amount'] = 201; $invalid[] = $bad;
+	$bad = $good; $bad['order']['discounts'][0]['pricing_rule_id'] = 'RULE'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['discounts'][0]['reward_ids'] = array( 'REWARD' ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['auto_applied'] = true; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_tax_money']['amount'] = 213; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_money']['amount'] = '2330'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_money']['amount'] = 2330.0; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_tip_money'] = array( 'amount' => 1, 'currency' => 'AUD' ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['pricing_options']['auto_apply_taxes'] = true; $invalid[] = $bad;
+	$bad = $good; $bad['order']['pricing_options']['auto_apply_rewards'] = false; $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['effective_percentage'] = '11'; $invalid[] = $bad;
+	$bad = $good; unset( $bad['order']['line_items'][1]['pricing_blocklists'] ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][1]['pricing_blocklists']['blocked_discounts'][0]['discount_uid'] = 'other-discount'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][1]['pricing_blocklists']['blocked_discounts'][0]['uid'] = 'other-block'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['pricing_blocklists'] = array( 'blocked_taxes' => array( array( 'tax_uid' => 'db-tax' ) ) ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['version'] = 2147483648; $invalid[] = $bad;
+	$bad = $good; $bad['order']['rounding_adjustment'] = null; $invalid[] = $bad;
+	$bad = $good; $bad['errors'] = array( array( 'code' => 'ERROR' ) ); $invalid[] = $bad;
+	foreach ( $invalid as $index => $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $bad, $projection ) ), 'provider mismatch ' . $index . ' fails even when order total is unchanged' );
+	}
+	$good['order']['line_items'] = array_reverse( $good['order']['line_items'] );
+	unset( $good['order']['pricing_options'] );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $projection ) ), 'provider line order/default-false omission do not alter UID-bound facts' );
+} );
+
+db_test( 'Square Orders missing zero-value adjustment evidence is not integer zero', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	foreach ( array( 'subtotal', 'discount', 'tax', 'delivery_fee', 'total' ) as $field ) { $payload['order'][ $field ] = 0; }
+	$payload['lines'][0]['unit_price'] = 0;
+	$payload['lines'][0]['line_total'] = 0;
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$good = db_square_orders_response_fixture( $projection );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $projection ) ), 'zero amounts still require explicit valid applied money' );
+	foreach ( array( null, array( 'amount' => null, 'currency' => 'AUD' ), array( 'amount' => '0', 'currency' => 'AUD' ) ) as $value ) {
+		$bad = $good; $bad['order']['line_items'][0]['applied_taxes'][0]['applied_money'] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $bad, $projection ) ), 'malformed or absent money cannot compare as strict integer zero' );
+	}
+	$bad = $good; unset( $bad['order']['line_items'][0]['applied_taxes'][0]['applied_money'] );
+	assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $bad, $projection ) ), 'missing applied money fails closed, including zero' );
+	foreach ( array( array(), array( 'order' => array(), 'amounts' => array(), 'currency' => 'AUD', 'tax_inclusive' => true ) ) as $invalid_projection ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $invalid_projection ) ), 'incomplete internal projection returns an error rather than partial verification' );
+	}
+} );
 
 db_test( 'Order accounting basis codec preserves only canonical historical facts', function () {
 	$basis = array(
