@@ -99,6 +99,58 @@ db_test( 'Square Orders project historical itemization without charging modifier
 	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( db_square_orders_response_fixture( $projection ), $projection ) ), 'zero adjustment response is supported' );
 } );
 
+db_test( 'Square paid Order verification requires exact completed Payment and one matching tender', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$paid = db_square_orders_response_fixture( $projection );
+	$id = $paid['order']['id'];
+	$payment = array( 'id' => 'sqpayORDERSVERIFIED00001', 'status' => 'COMPLETED',
+		'order_id' => $id, 'location_id' => $binding['square_location_id'], 'reference_id' => 'db-attempt-37',
+		'amount_money' => array( 'amount' => $projection['amounts']['total'], 'currency' => 'AUD' ) );
+	$paid['order']['state'] = 'COMPLETED';
+	$paid['order']['tenders'] = array( array( 'payment_id' => $payment['id'], 'type' => 'CARD', 'amount_money' => $payment['amount_money'] ) );
+	$paid['order']['net_amount_due_money'] = array( 'amount' => 0, 'currency' => 'AUD' );
+	foreach ( array( 'OPEN', 'COMPLETED' ) as $state ) {
+		$good = $paid; $good['order']['state'] = $state;
+		assert_same( array( 'id' => $id, 'version' => 1 ), DoughBoss_Square_Orders::validate_paid_response( $good, $projection, $payment, $id ), 'paid economics validate without using Order state as payment authority' );
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $projection ) ), 'a paid Order cannot satisfy the unpaid dispatch check' );
+	}
+	foreach ( array( 'id', 'status', 'order_id', 'location_id', 'reference_id', 'amount_money' ) as $field ) {
+		$bad = $payment; unset( $bad[ $field ] );
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'missing Payment ' . $field . ' cannot confirm a linked Order' );
+	}
+	foreach ( array( 'APPROVED', 'PENDING', 'FAILED', 'CANCELED', 'completed', '', null ) as $status ) {
+		$bad = $payment; $bad['status'] = $status;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'anything except exact provider COMPLETED denies paid verification' );
+	}
+	foreach ( array( 'id' => 'sqpayANOTHERPAYMENT0001', 'order_id' => 'squareANOTHERORDER00001', 'location_id' => 'OTHER_LOCATION', 'reference_id' => 'db-attempt-38' ) as $field => $value ) {
+		$bad = $payment; $bad[ $field ] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'changed Payment identity/binding ' . $field . ' denies paid verification' );
+	}
+	$invalid = array();
+	foreach ( array( 'DRAFT', 'CANCELED', 'completed', null ) as $state ) { $bad = $paid; $bad['order']['state'] = $state; $invalid[] = $bad; }
+	foreach ( array( null, array(), array( $paid['order']['tenders'][0], $paid['order']['tenders'][0] ) ) as $tenders ) { $bad = $paid; $bad['order']['tenders'] = $tenders; $invalid[] = $bad; }
+	foreach ( array( 'payment_id' => 'sqpayOTHER00000001', 'type' => 'CASH', 'amount_money' => array( 'amount' => $projection['amounts']['total'] - 1, 'currency' => 'AUD' ) ) as $field => $value ) {
+		$bad = $paid; $bad['order']['tenders'][0][ $field ] = $value; $invalid[] = $bad;
+	}
+	$bad = $paid; $bad['order']['net_amount_due_money']['amount'] = 1; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['tenders'][0]['tip_money'] = array( 'amount' => 1, 'currency' => 'AUD' ); $invalid[] = $bad;
+	$bad = $paid; $bad['order']['line_items'][0]['name'] = 'Changed after payment'; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['line_items'][0]['note'] = 'Modifiers changed after payment'; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['discounts'][0]['amount_money']['amount'] -= 1; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['taxes'][0]['percentage'] = '11'; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['fulfillments'] = array( array( 'type' => 'PICKUP' ) ); $invalid[] = $bad;
+	$bad = $paid; $bad['order']['refunds'] = array( array( 'amount_money' => $payment['amount_money'] ) ); $invalid[] = $bad;
+	foreach ( $invalid as $index => $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $id ) ), 'post-payment drift ' . $index . ' remains held even with matching final total' );
+	}
+	foreach ( array( 'amount' => '2330', 'currency' => 'USD' ) as $field => $value ) {
+		$bad = $payment; $bad['amount_money'][ $field ] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'malformed Payment money cannot confirm linked Order' );
+	}
+	assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $payment, 'squareWRONGBINDING0001' ) ), 'different immutable bound Order identity denies verification' );
+} );
+
 db_test( 'Square Orders deny unknown or inconsistent immutable checkout facts', function () {
 	list( $payload, $binding ) = db_square_orders_projection_fixture();
 	$invalid = array();

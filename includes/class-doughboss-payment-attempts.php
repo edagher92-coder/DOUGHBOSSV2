@@ -649,6 +649,34 @@ class DoughBoss_Payment_Attempts {
 	}
 
 	/**
+	 * Revoke cached release authority when linked Order verification fails.
+	 * Keep the paid identity/state and cart hold; this never permits recharging.
+	 * A committed receipt is not changed by a late failing read.
+	 *
+	 * @param array $expected Exact observed marked attempt.
+	 * @return bool Whether the same attempt is held or already committed.
+	 */
+	public static function hold_square_order_verification( array $expected ) {
+		global $wpdb;
+		$metadata = self::metadata( $expected );
+		if ( 'square' !== ( isset( $expected['provider'] ) ? $expected['provider'] : '' )
+			|| 'square-orders-v1' !== ( isset( $metadata['orders_protocol'] ) ? $metadata['orders_protocol'] : '' )
+			|| empty( $expected['id'] ) || empty( $expected['provider_reference'] ) || empty( $expected['provider_order_reference'] )
+			|| ! isset( $expected['safe_metadata_json'] ) ) { return false; }
+		$changed = $wpdb->query( $wpdb->prepare(
+			'UPDATE ' . self::table() . ' SET verified_at = NULL, last_error = %s, updated_at = %s WHERE id = %d AND provider = %s AND provider_reference = %s AND provider_order_reference = %s AND safe_metadata_json = %s AND status IN (%s,%s,%s)',
+			'order_verification_held', self::utc_now(), $expected['id'], 'square', $expected['provider_reference'],
+			$expected['provider_order_reference'], $expected['safe_metadata_json'], 'processing', 'unknown', 'succeeded'
+		) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+		if ( false === $changed ) { return false; }
+		$fresh = self::find( $expected['id'] );
+		if ( ! is_array( $fresh ) || $fresh['provider_reference'] !== $expected['provider_reference']
+			|| $fresh['provider_order_reference'] !== $expected['provider_order_reference']
+			|| $fresh['safe_metadata_json'] !== $expected['safe_metadata_json'] ) { return false; }
+		return 'order_committed' === $fresh['status'] || ( in_array( $fresh['status'], array( 'processing', 'unknown', 'succeeded' ), true ) && null === $fresh['verified_at'] );
+	}
+
+	/**
 	 * Release a Square cart guard only after its paid order is durable.
 	 *
 	 * @param string $provider_reference Canonical Square payment id.

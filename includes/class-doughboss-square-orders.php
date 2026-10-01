@@ -133,6 +133,19 @@ class DoughBoss_Square_Orders {
 
 	/** Verify a fresh OPEN Order, not payment or kitchen authority. */
 	public static function validate_unpaid_response( array $response, array $projection ) {
+		return self::validate_response( $response, $projection );
+	}
+
+	/**
+	 * Verify unchanged economics after a single, separately verified card payment.
+	 * This returns Order facts only; the caller still owns payment/release authority.
+	 */
+	public static function validate_paid_response( array $response, array $projection, array $payment, $bound_order_id ) {
+		return self::validate_response( $response, $projection, $payment, $bound_order_id );
+	}
+
+	/** Share economic checks without stripping or normalizing provider facts. */
+	private static function validate_response( array $response, array $projection, $payment = null, $bound_order_id = '' ) {
 		if ( PHP_INT_SIZE < 8 || ! isset( $projection['order'], $projection['amounts'], $projection['currency'], $projection['tax_inclusive'] )
 			|| ! is_array( $projection['order'] ) || ! is_array( $projection['amounts'] )
 			|| ! is_bool( $projection['tax_inclusive'] ) || ! is_string( $projection['currency'] )
@@ -144,6 +157,7 @@ class DoughBoss_Square_Orders {
 		$actual = $response['order'];
 		$expected = $projection['order'];
 		$currency = $projection['currency'];
+		$paid = is_array( $payment );
 		if ( ! isset( $expected['location_id'], $expected['reference_id'], $expected['line_items'] )
 			|| ! is_string( $expected['location_id'] ) || ! is_string( $expected['reference_id'] )
 			|| ! is_array( $expected['line_items'] ) || empty( $expected['line_items'] ) ) {
@@ -155,16 +169,40 @@ class DoughBoss_Square_Orders {
 				return self::error();
 			}
 		}
+		if ( $paid && ( ! is_string( $bound_order_id ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $bound_order_id )
+			|| ! isset( $payment['id'], $payment['status'], $payment['order_id'], $payment['location_id'], $payment['reference_id'] )
+			|| ! is_string( $payment['id'] ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $payment['id'] )
+			|| 'COMPLETED' !== $payment['status'] || $bound_order_id !== $payment['order_id']
+			|| $payment['location_id'] !== $expected['location_id'] || $payment['reference_id'] !== $expected['reference_id']
+			|| self::money_amount( isset( $payment['amount_money'] ) ? $payment['amount_money'] : null, $currency ) !== $projection['amounts']['total']
+			|| ! self::zero_optional( $payment, 'tip_money', $currency ) ) ) {
+			return self::error();
+		}
 		if ( ! isset( $actual['id'], $actual['version'], $actual['location_id'], $actual['reference_id'], $actual['state'], $actual['line_items'] )
 			|| ! is_string( $actual['id'] ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,192}\z/', $actual['id'] )
 			|| ! is_int( $actual['version'] ) || $actual['version'] < 1 || $actual['version'] > 2147483647
 			|| $actual['location_id'] !== $expected['location_id'] || $actual['reference_id'] !== $expected['reference_id']
-			|| 'OPEN' !== $actual['state'] || ! is_array( $actual['line_items'] )
+			|| ( $paid ? ( $actual['id'] !== $bound_order_id || ! in_array( $actual['state'], array( 'OPEN', 'COMPLETED' ), true ) ) : 'OPEN' !== $actual['state'] )
+			|| ! is_array( $actual['line_items'] )
 			|| count( $actual['line_items'] ) !== count( $expected['line_items'] ) ) {
 			return self::error();
 		}
-		foreach ( array( 'fulfillments', 'tenders', 'refunds', 'returns', 'rewards', 'service_charges' ) as $field ) {
+		foreach ( array( 'fulfillments', 'refunds', 'returns', 'rewards', 'service_charges' ) as $field ) {
 			if ( array_key_exists( $field, $actual ) && ( ! is_array( $actual[ $field ] ) || ! empty( $actual[ $field ] ) ) ) {
+				return self::error();
+			}
+		}
+		$tenders = array_key_exists( 'tenders', $actual ) ? $actual['tenders'] : array();
+		if ( ! is_array( $tenders ) || ( $paid ? 1 !== count( $tenders ) : ! empty( $tenders ) ) ) {
+			return self::error();
+		}
+		if ( $paid ) {
+			$tender = reset( $tenders );
+			if ( ! is_array( $tender ) || ! isset( $tender['payment_id'], $tender['type'] )
+				|| $payment['id'] !== $tender['payment_id'] || 'CARD' !== $tender['type']
+				|| self::money_amount( isset( $tender['amount_money'] ) ? $tender['amount_money'] : null, $currency ) !== $projection['amounts']['total']
+				|| ! self::zero_optional( $tender, 'tip_money', $currency )
+				|| ! self::zero_optional( $actual, 'net_amount_due_money', $currency ) ) {
 				return self::error();
 			}
 		}
