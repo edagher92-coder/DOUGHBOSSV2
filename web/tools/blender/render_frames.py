@@ -39,6 +39,9 @@ DEFAULT_JOB = {
     "enhance": True,
     "hide_peel": False,
     "exposure": 0.0,
+    # Camera white balance (K). The 3200 K key stays warm but stops reading
+    # as orange when the "film" is balanced a little warmer than daylight.
+    "white_balance": 4300.0,
 }
 try:
     JOB = dict(DEFAULT_JOB, **RENDER_JOB)  # noqa: F821  (prepended by the caller)
@@ -141,7 +144,11 @@ def setup(size, samples):
     settings.file_format = "PNG"
     settings.color_mode = "RGBA"
     settings.color_depth = "8"
-    scene.view_settings.exposure = float(JOB["exposure"])
+    vs = scene.view_settings
+    vs.exposure = float(JOB["exposure"])
+    if JOB["white_balance"] and hasattr(vs, "use_white_balance"):
+        vs.use_white_balance = True
+        vs.white_balance_temperature = float(JOB["white_balance"])
     return scene
 
 
@@ -178,6 +185,9 @@ def render_all():
         "size": int(JOB["size"]),
         "samples": int(JOB["samples"]),
         "viewTransform": scene.view_settings.view_transform,
+        "whiteBalance": getattr(scene.view_settings, "white_balance_temperature", None)
+        if getattr(scene.view_settings, "use_white_balance", False)
+        else None,
         "posedNodes": len(hero_objects()),
         "rendered": done,
         "seconds": round(time.time() - T0, 2),

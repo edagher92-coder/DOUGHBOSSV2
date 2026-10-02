@@ -30,7 +30,7 @@ T0 = time.time()
 # ---------------------------------------------------------------------------
 # Tunables (metres, degrees). Keep in sync with docs/3d-assets.md.
 # ---------------------------------------------------------------------------
-GENERATOR = "build_exploded_manoush.py v2"
+GENERATOR = "build_exploded_manoush.py v3"
 COLLECTION_NAME = "DoughBossHero"
 MATERIAL_PREFIX = "DB_"
 SEED = 1234
@@ -126,11 +126,13 @@ C_CRUST_GOLD = srgb(204, 136, 58)
 C_CRUST_DEEP = srgb(158, 92, 38)
 C_CHAR = srgb(42, 27, 18)
 C_CRUMB = srgb(236, 216, 172)
-C_CHEESE = srgb(246, 228, 182)
-C_CHEESE_MELT = srgb(240, 208, 138)
-C_CHEESE_BROWN = srgb(184, 116, 48)
-C_CHEESE_DARK = srgb(128, 70, 28)
-C_DOUGH_TOP = srgb(232, 208, 164)
+# White akkawi-style cheese with golden blisters; kept clearly lighter than
+# the baked dough so the two layers separate when the slices fan out.
+C_CHEESE = srgb(252, 244, 222)
+C_CHEESE_MELT = srgb(247, 228, 176)
+C_CHEESE_BROWN = srgb(196, 122, 46)
+C_CHEESE_DARK = srgb(122, 64, 24)
+C_DOUGH_TOP = srgb(218, 178, 118)
 C_DOUGH_BASE = srgb(206, 150, 80)
 C_MINT = srgb(38, 112, 44)
 C_MINT_RIB = srgb(96, 150, 72)
@@ -280,7 +282,7 @@ def make_bubbles(rng, count):
     for _ in range(count):
         r = 0.80 * R * math.sqrt(rng.random())
         a = rng.random() * 2.0 * math.pi
-        out.append((r * math.cos(a), r * math.sin(a), rng.uniform(0.004, 0.011), rng.uniform(0.0008, 0.0026)))
+        out.append((r * math.cos(a), r * math.sin(a), rng.uniform(0.004, 0.012), rng.uniform(0.0012, 0.0034)))
     return out
 
 
@@ -296,7 +298,7 @@ def make_blisters(rng, count):
     ]
 
 
-BUBBLES = make_bubbles(RNG, 95)
+BUBBLES = make_bubbles(RNG, 120)
 BLISTERS = make_blisters(RNG, 112)
 CHEESE_EDGE = 0.835 * R
 DOUGH_EDGE = 0.975 * R
@@ -324,11 +326,11 @@ def cheese_bottom(_x, _y, _r):
 
 
 def cheese_colour(x, y, z, r, _a):
-    b = bubble_height(x, y) / 0.0025
+    b = bubble_height(x, y) / 0.003
     melt = 0.5 + 0.5 * n3(x * 22.0, y * 22.0, 9.1)
-    col = mix(C_CHEESE, C_CHEESE_MELT, 0.25 + 0.45 * melt)
-    patch = smoothstep(0.28, 0.6, n3(x * 30.0, y * 30.0, 5.5))
-    brown = clamp01(smoothstep(0.45, 1.0, b) * 0.85 + patch * 0.55 + smoothstep(0.74 * R, CHEESE_EDGE, r) * 0.35)
+    col = mix(C_CHEESE, C_CHEESE_MELT, 0.2 + 0.5 * melt)
+    patch = smoothstep(0.22, 0.55, n3(x * 30.0, y * 30.0, 5.5))
+    brown = clamp01(smoothstep(0.35, 0.95, b) * 0.95 + patch * 0.75 + smoothstep(0.74 * R, CHEESE_EDGE, r) * 0.45)
     col = mix(col, C_CHEESE_BROWN, brown)
     dark = smoothstep(0.85, 1.25, b) * 0.6 + smoothstep(0.5, 0.75, n3(x * 60.0, y * 60.0, 1.9)) * 0.35
     return mix(col, C_CHEESE_DARK, clamp01(dark))
@@ -442,7 +444,7 @@ def build_rim(mb, a0, a1):
 
 def build_mint(mb, rng):
     """A curved mint leaf with a creased midrib, lying along local +X."""
-    length = rng.uniform(0.022, 0.028)
+    length = rng.uniform(0.024, 0.030)
     width = length * rng.uniform(0.48, 0.58)
     curl = rng.uniform(0.10, 0.20)
     fold = rng.uniform(0.25, 0.45)
@@ -475,7 +477,7 @@ def build_mint(mb, rng):
 
 def build_chili(mb, rng):
     """A small curled chili flake: an irregular disc bent into a shallow trough."""
-    size = rng.uniform(0.0060, 0.0090)
+    size = rng.uniform(0.0070, 0.0100)
     aspect = rng.uniform(0.55, 0.8)
     curl = rng.uniform(60.0, 140.0)
     tone = rng.random()
