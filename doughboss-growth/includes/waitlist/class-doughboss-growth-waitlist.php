@@ -108,6 +108,22 @@ final class DoughBoss_Growth_Waitlist {
 	const EXPORT_STATUSES = array( 'confirmed', 'pending', 'unsubscribed', 'all' );
 
 	/**
+	 * Rows read (and sent) at a time by the staff CSV export. Fixed, so the memory it needs does not grow with the list.
+	 */
+	const EXPORT_PAGE_SIZE = 500;
+
+	/**
+	 * Failure-log codes noted by this module (DoughBoss_Growth_Failures). Codes and stages only, never personal data.
+	 */
+	const FAIL_SIGNUP_STORAGE = 'waitlist_signup_storage_failed';
+	const FAIL_SIGNUP_MAIL    = 'waitlist_signup_mail_failed';
+	const FAIL_SIGNUP_TOKEN   = 'waitlist_signup_token_failed';
+	const FAIL_OPTOUT         = 'waitlist_optout_failed';
+	const FAIL_LIMITER        = 'waitlist_limiter_failed';
+	const FAIL_PURGE          = 'waitlist_purge_failed';
+	const FAIL_CSV            = 'waitlist_csv_export_failed';
+
+	/**
 	 * Hook everything. Re-checks the flag itself for everything that needs it.
 	 *
 	 * @return void
@@ -643,10 +659,56 @@ final class DoughBoss_Growth_Waitlist {
 	/**
 	 * Apply the per-address limit for the link actions (confirm and opt-out), so a token cannot be guessed at speed.
 	 *
+	 * The opt-out does NOT call this first: see unsubscribe_attempt(), which counts only INVALID attempts.
+	 *
 	 * @return array Same shape as DoughBoss_Growth_Rate_Limit::hit().
 	 */
 	public static function limit_action() {
 		return DoughBoss_Growth_Rate_Limit::hit( 'wl:act:' . self::visitor_bucket(), self::LIMIT_ACTION, self::WINDOW_IP );
+	}
+
+	/* ------------------------------------------------------------------------------------------ */
+	/* Failures the owner can see                                                                   */
+	/* ------------------------------------------------------------------------------------------ */
+
+	/**
+	 * Note one failure for the owner: it goes to the shared failure list (DoughBoss_Growth_Failures, shown on the Growth
+	 * settings screen and on the VIP waitlist tab), and to the debug log when that is on. The code is one of the FAIL_*
+	 * names (or another snake_case name ending _failed); the context is a stage or a count and NEVER personal data (no
+	 * email, name, token, address or hash). Never throws, so noting a failure cannot be what breaks a request.
+	 *
+	 * @param string $code    Failure code.
+	 * @param array  $context Scalar facts without personal data (stage, route, counts).
+	 * @return void
+	 */
+	public static function note_failure( $code, array $context = array() ) {
+		try {
+			if ( class_exists( 'DoughBoss_Growth_Http', false ) ) {
+				DoughBoss_Growth_Http::log( $code, $context ); // Debug log, action and the failure list in one call.
+			} elseif ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+				DoughBoss_Growth_Failures::record( $code, $context );
+			}
+		} catch ( Throwable $e ) {
+			return;
+		}
+	}
+
+	/**
+	 * The most recent failure whose code starts with a prefix, from the shared failure list.
+	 *
+	 * @param string $prefix Code prefix (or a whole code).
+	 * @return array|null array( code, count, first_seen, last_seen, context ), or null when none is recorded.
+	 */
+	private static function latest_failure( $prefix ) {
+		if ( ! class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			return null;
+		}
+		foreach ( DoughBoss_Growth_Failures::all() as $record ) { // Newest first.
+			if ( 0 === strpos( $record['code'], $prefix ) ) {
+				return $record;
+			}
+		}
+		return null;
 	}
 
 	/* ------------------------------------------------------------------------------------------ */
@@ -736,11 +798,14 @@ final class DoughBoss_Growth_Waitlist {
 	/**
 	 * Store a validated sign-up and send the confirmation email.
 	 *
-	 * Every outcome except "error" looks the same to the visitor (no account enumeration): a new row, a pending
+	 * Every outcome except an error looks the same to the visitor (no account enumeration): a new row, a pending
 	 * row that is sent a fresh link, an address already confirmed, an opted-out address and a suppressed address.
+	 * Errors are told apart for the OWNER only: error_storage (a read or write that failed) and error_mail (the
+	 * confirmation email could not be sent) are each noted in the failure list with a stage, never with personal data;
+	 * the visitor gets the same neutral answer for all of them.
 	 *
 	 * @param array $clean The "clean" part of validate().
-	 * @return array { result: created|resent|noop|error }
+	 * @return array { result: created|resent|noop|error_storage|error_mail|error, stage?: string }
 	 */
 	public static function signup( array $clean ) {
 		global $wpdb;
@@ -753,7 +818,7 @@ final class DoughBoss_Growth_Waitlist {
 
 		$suppressed = self::is_suppressed( $hash );
 		if ( null === $suppressed ) {
-			return $fail;
+			return self::signup_failed( 'storage', 'suppression_read' );
 		}
 		if ( $suppressed ) {
 			return array( 'result' => 'noop' );
@@ -761,18 +826,18 @@ final class DoughBoss_Growth_Waitlist {
 
 		$row = self::row_by_hash( $hash );
 		if ( false === $row ) {
-			return $fail;
+			return self::signup_failed( 'storage', 'row_read' );
 		}
 		if ( null !== $row ) {
 			if ( self::STATUS_PENDING !== $row['status'] ) {
 				return array( 'result' => 'noop' );
 			}
-			return self::resend_confirmation( $row ) ? array( 'result' => 'resent' ) : $fail;
+			return self::resend_confirmation( $row );
 		}
 
 		$token = self::new_confirm_token();
 		if ( '' === $token ) {
-			return $fail;
+			return self::signup_failed( 'token', 'confirm_token' );
 		}
 		$now   = gmdate( 'Y-m-d H:i:s', DoughBoss_Growth::now() );
 		$table = self::table();
@@ -795,7 +860,7 @@ final class DoughBoss_Growth_Waitlist {
 		$sql  = "INSERT IGNORE INTO {$table} (" . implode( ', ', $cols ) . ') VALUES (' . implode( ', ', $marks ) . ')';
 		$rows = $wpdb->query( $wpdb->prepare( $sql, $values ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared -- placeholders are fixed above.
 		if ( false === $rows || '' !== (string) $wpdb->last_error ) {
-			return $fail;
+			return self::signup_failed( 'storage', 'insert' );
 		}
 		if ( 1 !== (int) $rows ) {
 			// Another request stored the same address a moment ago: it sends the email.
@@ -806,27 +871,60 @@ final class DoughBoss_Growth_Waitlist {
 			$found = self::row_by_hash( $hash );
 			$id    = ( is_array( $found ) && isset( $found['id'] ) ) ? (int) $found['id'] : 0;
 		}
-		if ( $id < 1 || ! self::send_confirmation_email( $id, $email, $hash, $token ) ) {
-			// Never leave a half-made sign-up: no email went out, so remove the row.
-			if ( $id > 0 ) {
-				$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE id = %d AND status = 'pending'", $id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( $id < 1 ) {
+			return self::signup_failed( 'storage', 'row_lookup' );
+		}
+		if ( ! self::send_confirmation_email( $id, $email, $hash, $token ) ) {
+			// Never leave a half-made sign-up: no email went out, so remove the row. A row that cannot be removed is a
+			// failed write the owner should see too (the person can simply sign up again: a pending row is sent a fresh link).
+			$gone = $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE id = %d AND status = 'pending'", $id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( false === $gone || '' !== (string) $wpdb->last_error ) {
+				self::note_failure( self::FAIL_SIGNUP_STORAGE, array( 'stage' => 'rollback' ) );
 			}
-			return $fail;
+			return self::signup_failed( 'mail', 'confirmation' );
 		}
 		return array( 'result' => 'created' );
+	}
+
+	/**
+	 * A sign-up error: noted for the owner (code and stage only) and returned as a distinct internal result. The visitor
+	 * is told the same neutral thing whatever the cause (see DoughBoss_Growth_Waitlist_Rest::handle_signup()).
+	 *
+	 * @param string $kind  storage, mail or token.
+	 * @param string $stage Where it failed (a short snake_case name).
+	 * @return array { result: error_storage|error_mail|error, stage: string }
+	 */
+	private static function signup_failed( $kind, $stage ) {
+		if ( 'mail' === $kind ) {
+			self::note_failure( self::FAIL_SIGNUP_MAIL, array( 'stage' => $stage ) );
+			$result = 'error_mail';
+		} elseif ( 'storage' === $kind ) {
+			self::note_failure( self::FAIL_SIGNUP_STORAGE, array( 'stage' => $stage ) );
+			$result = 'error_storage';
+		} else {
+			self::note_failure( self::FAIL_SIGNUP_TOKEN, array( 'stage' => $stage ) );
+			$result = 'error';
+		}
+		return array(
+			'result' => $result,
+			'stage'  => $stage,
+		);
 	}
 
 	/**
 	 * Give a pending row a fresh confirmation token and send the email again.
 	 *
 	 * @param array $row Pending row.
-	 * @return bool
+	 * @return array { result: resent|error_storage|error_mail|error, stage?: string }
 	 */
 	private static function resend_confirmation( array $row ) {
 		global $wpdb;
 		$token = self::new_confirm_token();
-		if ( '' === $token || empty( $row['id'] ) || empty( $row['email'] ) || empty( $row['email_hash'] ) ) {
-			return false;
+		if ( '' === $token ) {
+			return self::signup_failed( 'token', 'confirm_token' );
+		}
+		if ( empty( $row['id'] ) || empty( $row['email'] ) || empty( $row['email_hash'] ) ) {
+			return self::signup_failed( 'storage', 'resend_row' );
 		}
 		$table = self::table();
 		$rows  = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -838,9 +936,12 @@ final class DoughBoss_Growth_Waitlist {
 			)
 		);
 		if ( 1 !== (int) $rows || '' !== (string) $wpdb->last_error ) {
-			return false;
+			return self::signup_failed( 'storage', 'resend_update' );
 		}
-		return self::send_confirmation_email( (int) $row['id'], (string) $row['email'], (string) $row['email_hash'], $token );
+		if ( ! self::send_confirmation_email( (int) $row['id'], (string) $row['email'], (string) $row['email_hash'], $token ) ) {
+			return self::signup_failed( 'mail', 'resend' );
+		}
+		return array( 'result' => 'resent' );
 	}
 
 	/**
@@ -944,6 +1045,10 @@ final class DoughBoss_Growth_Waitlist {
 	/**
 	 * Opt a person out. Works whatever the waitlist flag says: a person must always be able to leave. Idempotent.
 	 *
+	 * The token is checked here, against the row, and NOTHING in this method touches the rate limiter. A storage problem
+	 * (a read, the suppression write or the status update) is an error that is noted for the owner (stage only) and is
+	 * never reported as an invalid link or as success.
+	 *
 	 * @param mixed $id    Row id from the link.
 	 * @param mixed $token Opt-out token from the link.
 	 * @return array { result: unsubscribed|invalid|error }
@@ -951,6 +1056,7 @@ final class DoughBoss_Growth_Waitlist {
 	public static function unsubscribe( $id, $token ) {
 		global $wpdb;
 		if ( ! DoughBoss_Growth_Activator::storage_ready() ) {
+			self::note_failure( self::FAIL_OPTOUT, array( 'stage' => 'storage_not_ready' ) );
 			return array( 'result' => 'error' );
 		}
 		$id = self::clean_id( $id );
@@ -959,6 +1065,7 @@ final class DoughBoss_Growth_Waitlist {
 		}
 		$row = self::row_by_id( $id );
 		if ( false === $row ) {
+			self::note_failure( self::FAIL_OPTOUT, array( 'stage' => 'row_read' ) );
 			return array( 'result' => 'error' );
 		}
 		// A missing row and a wrong token look the same: no way to probe which ids exist.
@@ -966,6 +1073,7 @@ final class DoughBoss_Growth_Waitlist {
 			return array( 'result' => 'invalid' );
 		}
 		if ( ! self::suppress( (string) $row['email_hash'], 'unsubscribed' ) ) {
+			self::note_failure( self::FAIL_OPTOUT, array( 'stage' => 'suppress' ) );
 			return array( 'result' => 'error' );
 		}
 		if ( self::STATUS_UNSUBSCRIBED === $row['status'] ) {
@@ -982,9 +1090,58 @@ final class DoughBoss_Growth_Waitlist {
 			)
 		);
 		if ( false === $rows || '' !== (string) $wpdb->last_error ) {
+			self::note_failure( self::FAIL_OPTOUT, array( 'stage' => 'update' ) );
 			return array( 'result' => 'error' );
 		}
 		return array( 'result' => 'unsubscribed' );
+	}
+
+	/**
+	 * An opt-out request from a visitor: the REST route and the email-link page both come here.
+	 *
+	 * The token is verified FIRST, and only an INVALID attempt (malformed, unknown id, wrong token) is counted against
+	 * the per-address bucket (30 an hour, shared with confirming). A valid token is never counted and never held back by
+	 * the bucket, so a shared address (a host proxy, or a mail client posting forty one-click links) cannot lock people
+	 * out of leaving the list, and neither can a limiter storage error: the limiter is not consulted for a valid token at
+	 * all. An invalid token is still limited and still fails closed when the limiter cannot count it, so a token cannot be
+	 * guessed at speed and a broken limiter never turns an invalid link into an opt-out. A failed valid opt-out (storage)
+	 * is an error, not counted, so the person can simply try again.
+	 *
+	 * @param mixed $id    Row id from the link.
+	 * @param mixed $token Opt-out token from the link.
+	 * @return array { result: unsubscribed|invalid|limited|error, retry_after: int }
+	 */
+	public static function unsubscribe_attempt( $id, $token ) {
+		$result = self::unsubscribe( $id, $token );
+		$out    = array(
+			'result'      => $result['result'],
+			'retry_after' => 0,
+		);
+		if ( 'invalid' !== $result['result'] ) {
+			return $out; // Opted out, or a storage error: neither is a bad attempt.
+		}
+		$limit = self::limit_action();
+		if ( $limit['allowed'] ) {
+			return $out; // An invalid link, counted.
+		}
+		if ( 'limited' === $limit['reason'] ) {
+			return array(
+				'result'      => 'limited',
+				'retry_after' => (int) $limit['retry_after'],
+			);
+		}
+		// The limiter could not count the invalid attempt: fail closed.
+		self::note_failure(
+			self::FAIL_LIMITER,
+			array(
+				'route'  => 'optout',
+				'reason' => isset( $limit['reason'] ) ? $limit['reason'] : 'unknown',
+			)
+		);
+		return array(
+			'result'      => 'error',
+			'retry_after' => 0,
+		);
 	}
 
 	/**
@@ -1082,7 +1239,13 @@ final class DoughBoss_Growth_Waitlist {
 	 * reduced to a suppression hash after 30 days; confirmed rows go only when the owner has set
 	 * retention_confirmed_months (until then they are never deleted automatically).
 	 *
-	 * @return array Counts: pending, unsubscribed, confirmed (all 0 on any error).
+	 * A failure is never collapsed into "nothing to do". Each count is the rows removed by that step, or null when the
+	 * step itself failed (a database error); "failed" is how many steps or rows failed. An opted-out row whose
+	 * suppression hash could not be recorded, or whose DELETE failed, is left where it is for the next run and counted
+	 * as failed. Any failure is noted in the failure list (stage names and counts only) and shown on the VIP waitlist
+	 * tab until a clean run clears it. WP-Cron discards the return value, so the note is what the owner sees.
+	 *
+	 * @return array { pending: int|null, unsubscribed: int|null, confirmed: int|null, failed: int }
 	 */
 	public static function purge() {
 		global $wpdb;
@@ -1090,16 +1253,23 @@ final class DoughBoss_Growth_Waitlist {
 			'pending'      => 0,
 			'unsubscribed' => 0,
 			'confirmed'    => 0,
+			'failed'       => 0,
 		);
 		if ( ! DoughBoss_Growth_Activator::storage_ready() ) {
 			return $out;
 		}
-		$table = self::table();
-		$now   = DoughBoss_Growth::now();
+		$table  = self::table();
+		$now    = DoughBoss_Growth::now();
+		$stages = array();
 
 		// The limiter's buckets include "wl:email:<sha256 of the address>": drop every bucket whose window ended more
-		// than a day ago, so an address hash never outlives its rate window (or an erasure) in that table.
+		// than a day ago, so an address hash never outlives its rate window (or an erasure) in that table. The limiter
+		// reports an error as 0 rows, so the database error flag is what tells a failure from an empty table.
 		DoughBoss_Growth_Rate_Limit::purge_expired();
+		if ( '' !== (string) $wpdb->last_error ) {
+			$stages[] = 'rate_buckets';
+			$out['failed']++;
+		}
 
 		$days = (int) DoughBoss_Growth_Settings::get( 'retention_pending_days', 30 );
 		if ( $days < 1 ) {
@@ -1108,7 +1278,13 @@ final class DoughBoss_Growth_Waitlist {
 		$rows = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$wpdb->prepare( "DELETE FROM {$table} WHERE status = 'pending' AND created_at < %s", gmdate( 'Y-m-d H:i:s', $now - ( $days * DAY_IN_SECONDS ) ) )
 		);
-		$out['pending'] = ( false === $rows ) ? 0 : (int) $rows;
+		if ( false === $rows || '' !== (string) $wpdb->last_error ) {
+			$out['pending'] = null;
+			$stages[]       = 'pending_delete';
+			$out['failed']++;
+		} else {
+			$out['pending'] = (int) $rows;
+		}
 
 		// Opted-out rows: make sure the suppression hash exists, then drop the details.
 		$cutoff = gmdate( 'Y-m-d H:i:s', $now - ( self::UNSUBSCRIBED_ROW_DAYS * DAY_IN_SECONDS ) );
@@ -1116,27 +1292,69 @@ final class DoughBoss_Growth_Waitlist {
 			$wpdb->prepare( "SELECT id, email_hash FROM {$table} WHERE status = 'unsubscribed' AND unsubscribed_at_utc < %s ORDER BY id ASC LIMIT 500", $cutoff ),
 			ARRAY_A
 		);
-		if ( '' === (string) $wpdb->last_error && is_array( $old ) ) {
+		if ( '' !== (string) $wpdb->last_error || ! is_array( $old ) ) {
+			$out['unsubscribed'] = null;
+			$stages[]            = 'optout_read';
+			$out['failed']++;
+		} else {
+			$removed         = 0;
+			$suppress_failed = 0;
+			$delete_failed   = 0;
 			foreach ( $old as $item ) {
 				if ( empty( $item['email_hash'] ) || empty( $item['id'] ) || ! self::suppress( (string) $item['email_hash'], 'unsubscribed' ) ) {
-					continue; // Never drop the details unless the opt-out is safely recorded.
+					$suppress_failed++; // Never drop the details unless the opt-out is safely recorded; the row waits for the next run.
+					continue;
 				}
 				$gone = $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE id = %d AND status = 'unsubscribed'", (int) $item['id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				if ( 1 === (int) $gone ) {
-					$out['unsubscribed']++;
+				if ( false === $gone || '' !== (string) $wpdb->last_error ) {
+					$delete_failed++; // The row stays for the next run.
+					continue;
 				}
+				$removed += (int) $gone; // 0 means it was already gone (an erasure got there first): not a failure.
+			}
+			$out['unsubscribed'] = $removed;
+			if ( $suppress_failed > 0 ) {
+				$stages[]      = 'suppress';
+				$out['failed'] += $suppress_failed;
+			}
+			if ( $delete_failed > 0 ) {
+				$stages[]      = 'optout_delete';
+				$out['failed'] += $delete_failed;
 			}
 		}
 
 		$months = DoughBoss_Growth_Settings::get( 'retention_confirmed_months', null );
 		if ( is_int( $months ) && $months >= 1 ) {
 			$limit = strtotime( '-' . $months . ' months', $now );
-			if ( false !== $limit ) {
+			if ( false === $limit ) {
+				$out['confirmed'] = null;
+				$stages[]         = 'confirmed_cutoff';
+				$out['failed']++;
+			} else {
 				$rows = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 					$wpdb->prepare( "DELETE FROM {$table} WHERE status = 'confirmed' AND confirmed_at_utc < %s", gmdate( 'Y-m-d H:i:s', $limit ) )
 				);
-				$out['confirmed'] = ( false === $rows ) ? 0 : (int) $rows;
+				if ( false === $rows || '' !== (string) $wpdb->last_error ) {
+					$out['confirmed'] = null;
+					$stages[]         = 'confirmed_delete';
+					$out['failed']++;
+				} else {
+					$out['confirmed'] = (int) $rows;
+				}
 			}
+		}
+
+		if ( $out['failed'] > 0 ) {
+			self::note_failure(
+				self::FAIL_PURGE,
+				array(
+					'stage'   => implode( ',', $stages ),
+					'failed'  => $out['failed'],
+					'removed' => (int) $out['pending'] + (int) $out['unsubscribed'] + (int) $out['confirmed'],
+				)
+			);
+		} elseif ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::clear( self::FAIL_PURGE ); // A clean run: an earlier failure no longer stands.
 		}
 		return $out;
 	}
@@ -1344,12 +1562,26 @@ final class DoughBoss_Growth_Waitlist {
 			return;
 		}
 
-		$limit = self::limit_action();
-		if ( ! $limit['allowed'] ) {
-			self::send_page( 'limited' === $limit['reason'] ? 429 : 503, $title, __( 'Too many attempts. Please try again later.', 'doughboss-growth' ), '' );
-			return;
+		if ( 'confirm' === $action ) {
+			$limit = self::limit_action();
+			if ( ! $limit['allowed'] ) {
+				if ( 'limited' !== $limit['reason'] ) {
+					self::note_failure(
+						self::FAIL_LIMITER,
+						array(
+							'route'  => 'confirm',
+							'reason' => isset( $limit['reason'] ) ? $limit['reason'] : 'unknown',
+						)
+					);
+				}
+				self::send_page( 'limited' === $limit['reason'] ? 429 : 503, $title, __( 'Too many attempts. Please try again later.', 'doughboss-growth' ), '' );
+				return;
+			}
+			$result = self::confirm( $id, $token );
+		} else {
+			// Leaving the list is never held back by the per-address limit: only an invalid attempt counts against it.
+			$result = self::unsubscribe_attempt( $id, $token );
 		}
-		$result = ( 'confirm' === $action ) ? self::confirm( $id, $token ) : self::unsubscribe( $id, $token );
 		switch ( $result['result'] ) {
 			case 'confirmed':
 				self::send_page( 200, $title, __( 'You are on the VIP list. Thank you.', 'doughboss-growth' ), '' );
@@ -1359,6 +1591,9 @@ final class DoughBoss_Growth_Waitlist {
 				break;
 			case 'invalid':
 				self::send_page( 400, $title, __( 'This link is not valid or has already been used.', 'doughboss-growth' ), '' );
+				break;
+			case 'limited':
+				self::send_page( 429, $title, __( 'Too many attempts. Please try again later.', 'doughboss-growth' ), '' );
 				break;
 			default:
 				self::send_page( 503, $title, __( 'We could not process this just now. Please try again later.', 'doughboss-growth' ), '' );
@@ -1429,70 +1664,138 @@ final class DoughBoss_Growth_Waitlist {
 	}
 
 	/**
-	 * Build the staff CSV. No token, no hash.
+	 * The staff CSV header row (the column set; no token, no hash).
+	 *
+	 * @return array
+	 */
+	private static function csv_header() {
+		return array( 'id', 'email', 'first_name', 'mobile', 'store_id', 'status', 'consent_marketing', 'consent_text_version', 'consent_at_utc', 'confirmed_at_utc', 'unsubscribed_at_utc', 'signup_path', 'created_at' );
+	}
+
+	/**
+	 * One staff CSV data row. Every cell is neutralised so a spreadsheet cannot run it as a formula.
+	 *
+	 * @param array $r Row from the waitlist table.
+	 * @return array
+	 */
+	private static function csv_row( array $r ) {
+		return array_map(
+			array( __CLASS__, 'csv_cell' ),
+			array(
+				$r['id'],
+				$r['email'],
+				$r['first_name'],
+				$r['mobile_e164'],
+				$r['store_pref'],
+				$r['status'],
+				$r['consent_marketing'],
+				$r['consent_text_version'],
+				$r['consent_at_utc'],
+				$r['confirmed_at_utc'],
+				$r['unsubscribed_at_utc'],
+				$r['consent_source_path'],
+				$r['created_at'],
+			)
+		);
+	}
+
+	/**
+	 * One page of the staff export: the next EXPORT_PAGE_SIZE rows after an id, oldest first.
+	 *
+	 * @param string $status   confirmed, pending, unsubscribed or all.
+	 * @param int    $after_id Last id already read (0 for the first page).
+	 * @return array|null Rows (empty when there are no more), or null on a database error.
+	 */
+	private static function export_page( $status, $after_id ) {
+		global $wpdb;
+		$table = self::table();
+		if ( 'all' === $status ) {
+			$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id > %d ORDER BY id ASC LIMIT %d", (int) $after_id, self::EXPORT_PAGE_SIZE ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		} else {
+			$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id > %d AND status = %s ORDER BY id ASC LIMIT %d", (int) $after_id, $status, self::EXPORT_PAGE_SIZE ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		}
+		$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+		if ( '' !== (string) $wpdb->last_error || ! is_array( $rows ) ) {
+			return null;
+		}
+		return $rows;
+	}
+
+	/**
+	 * Write the staff CSV to a stream, one page at a time (EXPORT_PAGE_SIZE rows), so neither memory nor the time to the
+	 * first byte grows with the list. The header and the column set are the same as ever; every cell goes through
+	 * csv_cell() (formula protection).
+	 *
+	 * If a page cannot be read part way, writing stops and the file ends with an ERROR line saying it is incomplete, and
+	 * the failure is noted for the owner: a short file must never look like a complete one. (A list that is genuinely
+	 * empty is a header-only file with no error line.)
+	 *
+	 * @param resource   $handle     Writable stream.
+	 * @param string     $status     confirmed, pending, unsubscribed or all.
+	 * @param array|null $first_page Rows of the first page when the caller has already read it (so that a failure there can
+	 *                               be reported before any byte of the file has been sent), or null to read it here.
+	 * @return bool True when the whole list was written; false when a page could not be read (the file is incomplete).
+	 */
+	public static function write_csv( $handle, $status, $first_page = null ) {
+		fputcsv( $handle, self::csv_header() );
+		$after = 0;
+		$rows  = is_array( $first_page ) ? $first_page : self::export_page( $status, $after );
+		while ( true ) {
+			if ( null === $rows ) {
+				fputcsv( $handle, array( 'ERROR', __( 'The export stopped part way because the list could not be read. This file is incomplete. Please do not use it; download it again.', 'doughboss-growth' ) ) );
+				self::note_failure( self::FAIL_CSV, array( 'stage' => 'page_read' ) );
+				return false;
+			}
+			if ( array() === $rows ) {
+				return true;
+			}
+			$count     = count( $rows );
+			$page_last = isset( $rows[ $count - 1 ]['id'] ) ? (int) $rows[ $count - 1 ]['id'] : 0;
+			if ( $page_last <= $after ) {
+				$rows = null; // A page that does not move forward would loop for ever: treat it as unreadable.
+				continue;
+			}
+			foreach ( $rows as $r ) {
+				fputcsv( $handle, self::csv_row( $r ) );
+			}
+			if ( $count < self::EXPORT_PAGE_SIZE ) {
+				return true; // A short page is the last page.
+			}
+			$after = $page_last;
+			$rows  = self::export_page( $status, $after );
+		}
+	}
+
+	/**
+	 * Build the staff CSV as a string (the same bytes the download streams). No token, no hash. The download itself
+	 * does not use this (it would hold the whole list in memory); it is for callers that need the text.
 	 *
 	 * @param string $status confirmed, pending, unsubscribed or all.
-	 * @return string|null The CSV, or null on a database error.
+	 * @return string|null The CSV, or null on a database error (never a partial file).
 	 */
 	public static function build_csv( $status ) {
-		global $wpdb;
 		if ( ! in_array( $status, self::EXPORT_STATUSES, true ) || ! DoughBoss_Growth_Activator::storage_ready() ) {
 			return null;
 		}
-		$table  = self::table();
+		$first = self::export_page( $status, 0 );
+		if ( null === $first ) {
+			return null;
+		}
 		$handle = fopen( 'php://temp', 'r+' );
 		if ( false === $handle ) {
 			return null;
 		}
-		fputcsv( $handle, array( 'id', 'email', 'first_name', 'mobile', 'store_id', 'status', 'consent_marketing', 'consent_text_version', 'consent_at_utc', 'confirmed_at_utc', 'unsubscribed_at_utc', 'signup_path', 'created_at' ) );
-		$last = 0;
-		for ( $page = 0; $page < 10000; $page++ ) {
-			if ( 'all' === $status ) {
-				$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id > %d ORDER BY id ASC LIMIT 500", $last ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			} else {
-				$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id > %d AND status = %s ORDER BY id ASC LIMIT 500", $last, $status ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			}
-			$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
-			if ( '' !== (string) $wpdb->last_error || ! is_array( $rows ) ) {
-				fclose( $handle );
-				return null;
-			}
-			if ( array() === $rows ) {
-				break;
-			}
-			foreach ( $rows as $r ) {
-				$last = (int) $r['id'];
-				fputcsv(
-					$handle,
-					array_map(
-						array( __CLASS__, 'csv_cell' ),
-						array(
-							$r['id'],
-							$r['email'],
-							$r['first_name'],
-							$r['mobile_e164'],
-							$r['store_pref'],
-							$r['status'],
-							$r['consent_marketing'],
-							$r['consent_text_version'],
-							$r['consent_at_utc'],
-							$r['confirmed_at_utc'],
-							$r['unsubscribed_at_utc'],
-							$r['consent_source_path'],
-							$r['created_at'],
-						)
-					)
-				);
-			}
-		}
+		$complete = self::write_csv( $handle, $status, $first );
 		rewind( $handle );
 		$csv = stream_get_contents( $handle );
 		fclose( $handle );
-		return is_string( $csv ) ? $csv : null;
+		return ( $complete && is_string( $csv ) ) ? $csv : null;
 	}
 
 	/**
-	 * admin-post handler for the CSV export. Capability AND nonce first.
+	 * admin-post handler for the CSV export. Capability AND nonce first. The file is streamed page by page; the first
+	 * page is read before anything is sent, so a list that cannot be read at all is still the plain error page (nothing
+	 * downloaded), and a failure after that ends the file with an ERROR line (see write_csv()).
 	 *
 	 * @return void
 	 */
@@ -1505,8 +1808,17 @@ final class DoughBoss_Growth_Waitlist {
 		if ( ! in_array( $status, self::EXPORT_STATUSES, true ) ) {
 			$status = 'confirmed';
 		}
-		$csv = self::build_csv( $status );
-		if ( null === $csv ) {
+		$first = null;
+		if ( DoughBoss_Growth_Activator::storage_ready() ) {
+			$first = self::export_page( $status, 0 );
+			if ( null === $first ) {
+				self::note_failure( self::FAIL_CSV, array( 'stage' => 'first_page' ) );
+			}
+		} else {
+			self::note_failure( self::FAIL_CSV, array( 'stage' => 'storage_not_ready' ) );
+		}
+		$out = ( null === $first ) ? false : fopen( 'php://output', 'w' );
+		if ( null === $first || false === $out ) {
 			wp_die( esc_html__( 'The export could not be built. Nothing was downloaded.', 'doughboss-growth' ), '', array( 'response' => 500 ) );
 		}
 		nocache_headers();
@@ -1515,7 +1827,8 @@ final class DoughBoss_Growth_Waitlist {
 			header( 'Content-Disposition: attachment; filename="vip-list-' . $status . '.csv"' );
 			header( 'X-Content-Type-Options: nosniff' );
 		}
-		echo $csv; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSV download, cells are formula-neutralised.
+		self::write_csv( $out, $status, $first ); // CSV download: cells are formula-neutralised in csv_row().
+		fclose( $out );
 		self::terminate();
 	}
 
@@ -1560,6 +1873,26 @@ final class DoughBoss_Growth_Waitlist {
 	}
 
 	/**
+	 * A recorded failure in plain words for the owner: what happened, the code, the stage, when and how often. No personal
+	 * data is ever in a record, so none can be shown.
+	 *
+	 * @param array $record array( code, count, first_seen, last_seen, context ) from DoughBoss_Growth_Failures::all().
+	 * @return string
+	 */
+	private static function describe_failure( array $record ) {
+		$words = array(
+			self::FAIL_SIGNUP_MAIL    => __( 'The confirmation email could not be sent.', 'doughboss-growth' ),
+			self::FAIL_SIGNUP_STORAGE => __( 'The sign-up could not be saved or checked because the database did not answer.', 'doughboss-growth' ),
+			self::FAIL_SIGNUP_TOKEN   => __( 'A secure confirmation link could not be made.', 'doughboss-growth' ),
+		);
+		$what  = isset( $words[ $record['code'] ] ) ? $words[ $record['code'] ] : __( 'A problem was recorded.', 'doughboss-growth' );
+		$when  = ( $record['last_seen'] > 0 ) ? wp_date( 'j M Y, g:i a', $record['last_seen'] ) : __( 'an unknown time', 'doughboss-growth' );
+		$stage = ( isset( $record['context']['stage'] ) && '' !== $record['context']['stage'] ) ? ', ' . $record['context']['stage'] : '';
+		/* translators: 1: what happened, 2: failure code and stage, 3: date and time last seen, 4: how many times. */
+		return sprintf( __( '%1$s (%2$s. Last seen %3$s, %4$s.)', 'doughboss-growth' ), $what, $record['code'] . $stage, $when, sprintf( _n( '%d time', '%d times', (int) $record['count'], 'doughboss-growth' ), (int) $record['count'] ) );
+	}
+
+	/**
 	 * Row counts by status.
 	 *
 	 * @return array|null Status => count, or null on a database error.
@@ -1599,11 +1932,30 @@ final class DoughBoss_Growth_Waitlist {
 		$months = DoughBoss_Growth_Settings::get( 'retention_confirmed_months', null );
 		$rows[] = array( __( 'Confirmed rows kept for', 'doughboss-growth' ), is_int( $months ) ? sprintf( /* translators: %d: months. */ _n( '%d month', '%d months', $months, 'doughboss-growth' ), $months ) : __( 'Not set: never deleted automatically', 'doughboss-growth' ) );
 		$rows[] = array( __( 'Notification webhook', 'doughboss-growth' ), ( '' !== (string) DoughBoss_Growth_Settings::get( 'notify_webhook_url', '' ) && DoughBoss_Growth_Settings::has_secret( 'DOUGHBOSS_GROWTH_WEBHOOK_SECRET' ) ) ? __( 'Configured', 'doughboss-growth' ) : __( 'Off', 'doughboss-growth' ) );
-		$counts = DoughBoss_Growth_Activator::storage_ready() ? self::counts() : null;
+		$ready  = DoughBoss_Growth_Activator::storage_ready();
+		$counts = $ready ? self::counts() : null;
 		if ( null !== $counts ) {
 			$rows[] = array( __( 'Confirmed', 'doughboss-growth' ), (string) $counts[ self::STATUS_CONFIRMED ] );
 			$rows[] = array( __( 'Waiting to confirm', 'doughboss-growth' ), (string) $counts[ self::STATUS_PENDING ] );
 			$rows[] = array( __( 'Opted out (details kept 30 days)', 'doughboss-growth' ), (string) $counts[ self::STATUS_UNSUBSCRIBED ] );
+		} elseif ( $ready ) {
+			// A failed read is not "no sign-ups": say so rather than leave the counts out.
+			$rows[] = array( __( 'Sign-up counts', 'doughboss-growth' ), __( 'The counts could not be read just now. Please reload this page.', 'doughboss-growth' ) );
+		}
+		$signup_failure = self::latest_failure( 'waitlist_signup_' );
+		$rows[]         = array( __( 'Last sign-up failure', 'doughboss-growth' ), ( null === $signup_failure ) ? __( 'None recorded', 'doughboss-growth' ) : self::describe_failure( $signup_failure ) );
+
+		$purge_failure = self::latest_failure( self::FAIL_PURGE );
+		if ( null !== $purge_failure ) {
+			$stage = isset( $purge_failure['context']['stage'] ) ? $purge_failure['context']['stage'] : '';
+			echo '<div class="notice notice-error inline"><p>' . esc_html(
+				sprintf(
+					/* translators: 1: failure code, 2: the clean-up steps that failed (may be empty). */
+					__( 'The last clean-up failed: %1$s%2$s. Some old sign-ups may not have been removed yet. It tries again at the next daily clean-up.', 'doughboss-growth' ),
+					$purge_failure['code'],
+					( '' !== $stage ) ? ' (' . $stage . ')' : ''
+				)
+			) . '</p></div>';
 		}
 		echo '<table class="widefat striped" style="max-width:720px"><tbody>';
 		foreach ( $rows as $r ) {

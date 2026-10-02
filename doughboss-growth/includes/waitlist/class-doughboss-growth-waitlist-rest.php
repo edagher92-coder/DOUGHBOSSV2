@@ -10,6 +10,10 @@
  * Every route answers with Cache-Control: no-store. Every failure fails closed: a storage problem is a 503 and nothing
  * is saved. Confirm and unsubscribe accept POST only.
  *
+ * Leaving the list is never held back by the per-address limit: the opt-out token is verified first and only an INVALID
+ * attempt counts against the bucket (DoughBoss_Growth_Waitlist::unsubscribe_attempt()). Every failure is also noted in the
+ * owner failure list (codes and stages only); the visitor is told the same neutral thing whatever the cause.
+ *
  * @package DoughBoss_Growth
  */
 
@@ -204,7 +208,7 @@ final class DoughBoss_Growth_Waitlist_Rest {
 		// 3. Limits that need no input: per hashed address and the daily circuit breaker.
 		$limit = DoughBoss_Growth_Waitlist::limit_visitor();
 		if ( ! $limit['allowed'] ) {
-			return self::limit_failure( $limit );
+			return self::limit_failure( $limit, 'signup' );
 		}
 
 		// 4. Validation.
@@ -239,12 +243,14 @@ final class DoughBoss_Growth_Waitlist_Rest {
 		// 5. Per-email limit (3 a day), after validation so junk never uses an address's quota.
 		$email_limit = DoughBoss_Growth_Waitlist::limit_email( DoughBoss_Growth_Waitlist::email_hash( $check['clean']['email'] ) );
 		if ( ! $email_limit['allowed'] ) {
-			return self::limit_failure( $email_limit );
+			return self::limit_failure( $email_limit, 'signup' );
 		}
 
 		// 6. Store and send. Only a storage or mail failure is told apart from a normal answer.
+		// Storage, mail and token errors are told apart for the owner (the failure list) but NOT for the visitor: one neutral
+		// answer, so the response cannot reveal whether an address is new (only a new or pending address sends mail).
 		$result = DoughBoss_Growth_Waitlist::signup( $check['clean'] );
-		if ( 'error' === $result['result'] ) {
+		if ( 0 === strpos( (string) $result['result'], 'error' ) ) {
 			return self::fail( 'dbgr_unavailable', __( 'We could not save your details just now. Please try again later.', 'doughboss-growth' ), 503 );
 		}
 		return self::respond(
@@ -257,16 +263,25 @@ final class DoughBoss_Growth_Waitlist_Rest {
 	}
 
 	/**
-	 * The answer for a refused rate-limit result.
+	 * The answer for a refused rate-limit result. A plain "too many attempts" is the visitor's doing; a limiter that could
+	 * not count (storage error) is a failure the owner should see, so it is noted (route and reason only).
 	 *
-	 * @param array $limit Result of the limiter.
+	 * @param array  $limit Result of the limiter.
+	 * @param string $route Which route asked (signup, confirm).
 	 * @return WP_REST_Response
 	 */
-	private static function limit_failure( array $limit ) {
+	private static function limit_failure( array $limit, $route = '' ) {
 		if ( 'limited' === $limit['reason'] ) {
 			return self::fail( 'dbgr_rate_limited', __( 'Too many attempts. Please try again later.', 'doughboss-growth' ), 429, '', (int) $limit['retry_after'] );
 		}
 		// Storage error or invalid arguments: fail closed, nothing is saved.
+		DoughBoss_Growth_Waitlist::note_failure(
+			DoughBoss_Growth_Waitlist::FAIL_LIMITER,
+			array(
+				'route'  => $route,
+				'reason' => isset( $limit['reason'] ) ? $limit['reason'] : 'unknown',
+			)
+		);
 		return self::fail( 'dbgr_unavailable', __( 'We could not save your details just now. Please try again later.', 'doughboss-growth' ), 503 );
 	}
 
@@ -282,7 +297,7 @@ final class DoughBoss_Growth_Waitlist_Rest {
 		}
 		$limit = DoughBoss_Growth_Waitlist::limit_action();
 		if ( ! $limit['allowed'] ) {
-			return self::limit_failure( $limit );
+			return self::limit_failure( $limit, 'confirm' );
 		}
 		$result = DoughBoss_Growth_Waitlist::confirm( self::param( $request, 'id' ), self::param( $request, 'token' ) );
 		if ( 'confirmed' === $result['result'] ) {
@@ -307,11 +322,9 @@ final class DoughBoss_Growth_Waitlist_Rest {
 	 * @return WP_REST_Response
 	 */
 	public static function handle_unsubscribe( $request ) {
-		$limit = DoughBoss_Growth_Waitlist::limit_action();
-		if ( ! $limit['allowed'] ) {
-			return self::limit_failure( $limit );
-		}
-		$result = DoughBoss_Growth_Waitlist::unsubscribe( self::param( $request, 'id' ), self::param( $request, 'token' ) );
+		// The token is verified first and only an invalid attempt counts against the per-address limit (a valid one is
+		// never refused for it, and a limiter storage error cannot block it). 200 only when the opt-out really happened.
+		$result = DoughBoss_Growth_Waitlist::unsubscribe_attempt( self::param( $request, 'id' ), self::param( $request, 'token' ) );
 		if ( 'unsubscribed' === $result['result'] ) {
 			return self::respond(
 				array(
@@ -323,6 +336,9 @@ final class DoughBoss_Growth_Waitlist_Rest {
 		}
 		if ( 'invalid' === $result['result'] ) {
 			return self::fail( 'dbgr_link_invalid', __( 'This link is not valid or has already been used.', 'doughboss-growth' ), 400 );
+		}
+		if ( 'limited' === $result['result'] ) {
+			return self::fail( 'dbgr_rate_limited', __( 'Too many attempts. Please try again later.', 'doughboss-growth' ), 429, '', (int) $result['retry_after'] );
 		}
 		return self::fail( 'dbgr_unavailable', __( 'We could not process this just now. Please try again later.', 'doughboss-growth' ), 503 );
 	}

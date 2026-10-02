@@ -1101,7 +1101,7 @@ db_test(
 );
 
 db_test(
-	'retention: a database error purges nothing and throws nothing; an opted-out row is never dropped unless its suppression hash was recorded',
+	'retention: a database error purges nothing, throws nothing and is reported (null, not 0); an opted-out row is never dropped unless its suppression hash was recorded',
 	function () {
 		dbgr_wl_boot();
 		$now = DoughBoss_Growth::now();
@@ -1113,7 +1113,10 @@ db_test(
 		$GLOBALS['wpdb']->fail_all();
 		$out = DoughBoss_Growth_Waitlist::purge();
 		$GLOBALS['wpdb']->clear_failures();
-		assert_same( array( 'pending' => 0, 'unsubscribed' => 0, 'confirmed' => 0 ), $out, 'all zero on error' );
+		// A failed step is null (never 0, which would read as "nothing to purge") and is counted as failed; the confirmed
+		// step does not run at all while the owner has not set a retention period, so it is a true 0. The failure list and the
+		// per-stage cases are in test-waitlist-silence.php.
+		assert_same( array( 'pending' => null, 'unsubscribed' => null, 'confirmed' => 0, 'failed' => 3 ), $out, 'null for each step that failed, never 0' );
 		assert_count( 2, dbgr_wl_rows(), 'nothing deleted on error' );
 
 		$GLOBALS['wpdb']->fail_on( '/INSERT IGNORE INTO wp_doughboss_growth_suppression/' );
