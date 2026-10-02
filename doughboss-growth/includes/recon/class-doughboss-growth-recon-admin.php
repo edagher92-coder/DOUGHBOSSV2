@@ -308,6 +308,10 @@ final class DoughBoss_Growth_Recon_Admin {
 			self::back( array( 'dbgr_recon_map' => 'invalid' ) );
 		}
 		$exists = ( 'employee' === $kind ) ? ( false !== get_userdata( $local_id ) ) : self::shop_exists( $local_id );
+		if ( null === $exists ) {
+			// The shop list could not be read: that is not the same as the shop not existing.
+			self::back( array( 'dbgr_recon_map' => 'shops_unreadable' ) );
+		}
 		if ( ! $exists ) {
 			self::back( array( 'dbgr_recon_map' => 'unknown_local' ) );
 		}
@@ -337,16 +341,27 @@ final class DoughBoss_Growth_Recon_Admin {
 				$given[]       = $key;
 			}
 		}
-		$input['business_day_cutoff_local'] = array();
+		// A cutoff is changed only by a field the form actually posted (blank = unset). A shop the form did not
+		// show (its list could not be read, or the shop is inactive) keeps its stored cutoff, never wiped.
+		$stored                             = DoughBoss_Growth_Recon_Report::params();
+		$input['business_day_cutoff_local'] = $stored['business_day_cutoff_local'];
 		if ( isset( $raw['business_day_cutoff_local'] ) && is_array( $raw['business_day_cutoff_local'] ) ) {
 			foreach ( $raw['business_day_cutoff_local'] as $shop => $hm ) {
-				if ( is_string( $hm ) && '' !== trim( $hm ) ) {
+				if ( ! is_string( $hm ) ) {
+					continue;
+				}
+				if ( '' !== trim( $hm ) ) {
 					$input['business_day_cutoff_local'][ absint( $shop ) ] = sanitize_text_field( $hm );
 					$given[] = 'cutoff_' . absint( $shop );
+				} else {
+					unset( $input['business_day_cutoff_local'][ absint( $shop ) ] );
 				}
 			}
 		}
-		$saved    = DoughBoss_Growth_Recon_Report::save_params( $input );
+		$saved = DoughBoss_Growth_Recon_Report::save_params( $input );
+		if ( false === $saved ) {
+			self::back( array( 'dbgr_recon_params' => 'not_saved' ) );
+		}
 		$rejected = array();
 		foreach ( $given as $key ) {
 			if ( 0 === strpos( $key, 'cutoff_' ) ) {
@@ -379,13 +394,28 @@ final class DoughBoss_Growth_Recon_Admin {
 		$run_id = absint( self::posted( 'run_id' ) );
 		if ( $run_id < 1 ) {
 			$latest = DoughBoss_Growth_Recon_Report::latest_run();
+			if ( false === $latest ) {
+				self::export_unreadable();
+			}
 			$run_id = is_array( $latest ) ? (int) $latest['id'] : 0;
 		}
 		$csv = ( $run_id > 0 ) ? DoughBoss_Growth_Recon_Report::csv( $run_id ) : null;
+		if ( false === $csv ) {
+			self::export_unreadable();
+		}
 		if ( null === $csv ) {
 			wp_die( esc_html__( 'There is no finished reconciliation run to export.', 'doughboss-growth' ), '', array( 'response' => 404 ) );
 		}
 		self::emit_download( 'doughboss-timesheet-check-run-' . $run_id . '.csv', $csv );
+	}
+
+	/**
+	 * Stop an export whose data could not be read. An error page, never a file and never "no run".
+	 *
+	 * @return void
+	 */
+	private static function export_unreadable() {
+		wp_die( esc_html__( 'The reconciliation run or its rows could not be read, so no file was produced. Nothing was exported. This is not the same as there being nothing to export; try again.', 'doughboss-growth' ), '', array( 'response' => 500 ) );
 	}
 
 	/**
@@ -473,30 +503,37 @@ final class DoughBoss_Growth_Recon_Admin {
 	 * Whether a plugin shop exists and is active (core public API; fails closed when unavailable).
 	 *
 	 * @param int $id Location id.
-	 * @return bool
+	 * @return bool|null Null when the shop list could not be read.
 	 */
 	private static function shop_exists( $id ) {
 		$shops = self::shops();
+		if ( null === $shops ) {
+			return null;
+		}
 		return (int) $id > 0 && isset( $shops[ (int) $id ] );
 	}
 
 	/**
 	 * Active plugin shops as id => name, from core's DoughBoss_Locations::all( true ) (resolved now, never
-	 * stored). Any error gives an empty list.
+	 * stored). Null when the list could not be read (missing class, an error, or a result that is not a
+	 * list): that is not the same as there being no shops, which is an empty array.
 	 *
-	 * @return array
+	 * @return array|null
 	 */
 	private static function shops() {
-		$out = array();
 		if ( ! class_exists( 'DoughBoss_Locations' ) || ! is_callable( array( 'DoughBoss_Locations', 'all' ) ) ) {
-			return $out;
+			return null;
 		}
 		try {
 			$rows = DoughBoss_Locations::all( true );
 		} catch ( Throwable $e ) {
-			return $out;
+			return null;
 		}
-		foreach ( (array) $rows as $shop ) {
+		if ( ! is_array( $rows ) ) {
+			return null;
+		}
+		$out = array();
+		foreach ( $rows as $shop ) {
 			$shop = (array) $shop;
 			if ( isset( $shop['id'] ) && (int) $shop['id'] > 0 ) {
 				$out[ (int) $shop['id'] ] = isset( $shop['name'] ) ? (string) $shop['name'] : '';
@@ -584,7 +621,11 @@ final class DoughBoss_Growth_Recon_Admin {
 		$environment = DoughBoss_Growth_Recon_Square::environment();
 		$params      = DoughBoss_Growth_Recon_Report::params();
 		$shops       = self::shops();
-		$ready       = DoughBoss_Growth_Activator::storage_ready() && DoughBoss_Growth_Recon_Report::tables_ready();
+		$shops_ok    = null !== $shops;
+		if ( ! $shops_ok ) {
+			$shops = array();
+		}
+		$ready = DoughBoss_Growth_Activator::storage_ready() && DoughBoss_Growth_Recon_Report::tables_ready();
 
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'Timesheet check: website clock and Square', 'doughboss-growth' ) . '</h1>';
@@ -596,6 +637,9 @@ final class DoughBoss_Growth_Recon_Admin {
 			return;
 		}
 
+		if ( ! $shops_ok ) {
+			echo '<div class="notice notice-warning inline"><p>' . esc_html__( 'The shop list could not be read, so shop names, shop mappings and per-shop business-day cutoffs are not shown. This is not the same as having no shops.', 'doughboss-growth' ) . '</p></div>';
+		}
 		$gaps = DoughBoss_Growth_Recon_Report::unset_params( array_keys( $shops ) );
 		$gaps = array_merge(
 			array( 'approval' => '[CONFIRM: Elie\'s approval to read Square staff data (personal data) before the first real run, and who owns the Square merchant account. Do not supply the labour token until both are confirmed.]' ),
@@ -617,7 +661,9 @@ final class DoughBoss_Growth_Recon_Admin {
 		$next = wp_next_scheduled( self::CRON_HOOK );
 		self::status_row( __( 'Next automatic run', 'doughboss-growth' ), false === $next ? __( 'None scheduled', 'doughboss-growth' ) : DoughBoss_Growth_Recon_Matcher::format_local( (int) $next ) );
 		$attempt = $ready ? DoughBoss_Growth_Recon_Report::last_attempt() : null;
-		if ( is_array( $attempt ) ) {
+		if ( false === $attempt ) {
+			self::status_row( __( 'Last attempt', 'doughboss-growth' ), __( 'Could not be read', 'doughboss-growth' ) );
+		} elseif ( is_array( $attempt ) ) {
 			self::status_row( __( 'Last attempt', 'doughboss-growth' ), sprintf( '#%d %s %s %s', (int) $attempt['id'], (string) $attempt['status'], (string) $attempt['reason_code'], self::local_time( $attempt['started_at'] ) ) );
 		}
 		echo '</tbody></table>';
@@ -627,12 +673,14 @@ final class DoughBoss_Growth_Recon_Admin {
 			$latest = DoughBoss_Growth_Recon_Report::latest_run();
 			if ( is_array( $latest ) ) {
 				self::render_report( $latest, $shops );
+			} elseif ( false === $latest ) {
+				echo '<div class="notice notice-error inline"><p>' . esc_html__( 'The latest finished run could not be read, so no result is shown. This is not the same as there being no finished run.', 'doughboss-growth' ) . '</p></div>';
 			} else {
 				echo '<p>' . esc_html__( 'No finished run yet.', 'doughboss-growth' ) . '</p>';
 			}
-			self::render_mappings( $environment, $shops );
+			self::render_mappings( $environment, $shops, $shops_ok );
 		}
-		self::render_params_form( $params, $shops );
+		self::render_params_form( $params, $shops, $shops_ok );
 		echo '</div>';
 	}
 
@@ -652,12 +700,25 @@ final class DoughBoss_Growth_Recon_Admin {
 		if ( '' !== $status ) {
 			$ok = in_array( strtoupper( $status ), array( 'COMPLETE' ), true );
 			echo '<div class="notice ' . esc_attr( $ok ? 'notice-success' : 'notice-warning' ) . '"><p>' . esc_html( sprintf( __( 'Run result: %1$s %2$s', 'doughboss-growth' ), strtoupper( $status ), $reason ) ) . '</p></div>';
+			if ( 'storage_write_failed' === $reason ) {
+				echo '<div class="notice notice-error"><p>' . esc_html__( 'The report storage could not be written, so no result was stored.', 'doughboss-growth' ) . '</p></div>';
+			}
 		}
 		if ( '' !== $map ) {
-			echo '<div class="notice ' . esc_attr( 'confirmed' === $map || 'revoked' === $map ? 'notice-success' : 'notice-warning' ) . '"><p>' . esc_html( sprintf( __( 'Mapping: %s', 'doughboss-growth' ), $map ) ) . '</p></div>';
+			$map_text = array(
+				'error'            => __( 'The mapping was not changed because the report storage could not be read or written.', 'doughboss-growth' ),
+				'shops_unreadable' => __( 'The shop list could not be read, so the shop was not mapped.', 'doughboss-growth' ),
+			);
+			if ( isset( $map_text[ $map ] ) ) {
+				echo '<div class="notice notice-error"><p>' . esc_html( $map_text[ $map ] ) . '</p></div>';
+			} else {
+				echo '<div class="notice ' . esc_attr( 'confirmed' === $map || 'revoked' === $map ? 'notice-success' : 'notice-warning' ) . '"><p>' . esc_html( sprintf( __( 'Mapping: %s', 'doughboss-growth' ), $map ) ) . '</p></div>';
+			}
 		}
 		if ( 'saved' === $saved ) {
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Parameters saved.', 'doughboss-growth' ) . '</p></div>';
+		} elseif ( 'not_saved' === $saved ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'The parameters could not be saved, so nothing was changed. Try again.', 'doughboss-growth' ) . '</p></div>';
 		}
 		if ( '' !== $rejected ) {
 			echo '<div class="notice notice-warning"><p>' . esc_html( sprintf( __( 'These values were refused and left unset: %s', 'doughboss-growth' ), preg_replace( '/[^a-z0-9_,]/', '', $rejected ) ) ) . '</p></div>';
@@ -721,6 +782,8 @@ final class DoughBoss_Growth_Recon_Admin {
 				echo '</tr>';
 			}
 			echo '</tbody></table>';
+		} else {
+			echo '<div class="notice notice-error inline"><p>' . esc_html__( 'The summary for this run could not be read, so no day-by-shop counts are shown.', 'doughboss-growth' ) . '</p></div>';
 		}
 
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin:12px 0">';
@@ -730,6 +793,10 @@ final class DoughBoss_Growth_Recon_Admin {
 		echo '</form>';
 
 		$rows = DoughBoss_Growth_Recon_Report::rows( (int) $run['id'], '', self::SCREEN_ROWS + 1 );
+		if ( null === $rows ) {
+			echo '<div class="notice notice-error inline"><p>' . esc_html__( 'The rows of this run could not be read, so none are shown. This is not the same as the run having no rows or no differences.', 'doughboss-growth' ) . '</p></div>';
+			return;
+		}
 		if ( count( $rows ) > self::SCREEN_ROWS ) {
 			echo '<p>' . esc_html( sprintf( __( 'Showing the first %d rows; the CSV has all of them.', 'doughboss-growth' ), self::SCREEN_ROWS ) ) . '</p>';
 			$rows = array_slice( $rows, 0, self::SCREEN_ROWS );
@@ -774,9 +841,10 @@ final class DoughBoss_Growth_Recon_Admin {
 	 *
 	 * @param string $environment Square environment.
 	 * @param array  $shops       Shops.
+	 * @param bool   $shops_ok    False when the shop list could not be read.
 	 * @return void
 	 */
-	private static function render_mappings( $environment, array $shops ) {
+	private static function render_mappings( $environment, array $shops, $shops_ok ) {
 		echo '<h2>' . esc_html__( 'Mappings (confirmed by a manager only)', 'doughboss-growth' ) . '</h2>';
 		if ( '' === $environment ) {
 			echo '<p>' . esc_html__( 'Set DOUGHBOSS_GROWTH_SQUARE_ENV to production or sandbox before confirming mappings.', 'doughboss-growth' ) . '</p>';
@@ -797,18 +865,23 @@ final class DoughBoss_Growth_Recon_Admin {
 			}
 		}
 
-		echo '<h3>' . esc_html__( 'Shops', 'doughboss-growth' ) . '</h3><table class="widefat striped" style="max-width:760px"><tbody>';
-		foreach ( $shops as $id => $name ) {
-			echo '<tr><th scope="row">' . esc_html( self::shop_label( $id, $shops ) ) . '</th><td>';
-			if ( isset( $locations[ $id ] ) ) {
-				echo esc_html( $locations[ $id ] ) . ' ';
-				self::mapping_button( 'revoke', 'location', $id, '', __( 'Remove', 'doughboss-growth' ) );
-			} else {
-				self::mapping_input( 'location', $id, __( 'Square location id', 'doughboss-growth' ) );
+		echo '<h3>' . esc_html__( 'Shops', 'doughboss-growth' ) . '</h3>';
+		if ( ! $shops_ok ) {
+			echo '<p>' . esc_html__( 'The shop list could not be read, so no shops are listed here. Existing shop mappings are unchanged.', 'doughboss-growth' ) . '</p>';
+		} else {
+			echo '<table class="widefat striped" style="max-width:760px"><tbody>';
+			foreach ( $shops as $id => $name ) {
+				echo '<tr><th scope="row">' . esc_html( self::shop_label( $id, $shops ) ) . '</th><td>';
+				if ( isset( $locations[ $id ] ) ) {
+					echo esc_html( $locations[ $id ] ) . ' ';
+					self::mapping_button( 'revoke', 'location', $id, '', __( 'Remove', 'doughboss-growth' ) );
+				} else {
+					self::mapping_input( 'location', $id, __( 'Square location id', 'doughboss-growth' ) );
+				}
+				echo '</td></tr>';
 			}
-			echo '</td></tr>';
+			echo '</tbody></table>';
 		}
-		echo '</tbody></table>';
 
 		$staff = self::staff_users();
 		echo '<h3>' . esc_html__( 'Staff', 'doughboss-growth' ) . '</h3><table class="widefat striped" style="max-width:760px"><tbody>';
@@ -937,11 +1010,12 @@ final class DoughBoss_Growth_Recon_Admin {
 	/**
 	 * Parameter form. Every field starts blank: no value is shipped.
 	 *
-	 * @param array $params Parameters.
-	 * @param array $shops  Shops.
+	 * @param array $params   Parameters.
+	 * @param array $shops    Shops.
+	 * @param bool  $shops_ok False when the shop list could not be read.
 	 * @return void
 	 */
-	private static function render_params_form( array $params, array $shops ) {
+	private static function render_params_form( array $params, array $shops, $shops_ok ) {
 		$fields = array(
 			'start_tolerance_minutes'  => __( 'Start time tolerance (minutes)', 'doughboss-growth' ),
 			'end_tolerance_minutes'    => __( 'Finish time tolerance (minutes)', 'doughboss-growth' ),
@@ -962,6 +1036,17 @@ final class DoughBoss_Growth_Recon_Admin {
 			$id    = 'dbgr-recon-' . $key;
 			$value = ( null === $params[ $key ] ) ? '' : (string) $params[ $key ];
 			echo '<tr><th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th><td><input type="text" id="' . esc_attr( $id ) . '" name="dbgr_recon[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" autocomplete="off" /></td></tr>';
+		}
+		if ( ! $shops_ok ) {
+			$kept = array();
+			foreach ( $params['business_day_cutoff_local'] as $shop => $hm ) {
+				$kept[] = '#' . (int) $shop . ' ' . $hm;
+			}
+			$note = __( 'The shop list could not be read, so cutoffs cannot be edited now. Saving keeps the stored cutoffs.', 'doughboss-growth' );
+			if ( array() !== $kept ) {
+				$note .= ' ' . sprintf( __( 'Stored: %s', 'doughboss-growth' ), implode( ', ', $kept ) );
+			}
+			echo '<tr><th scope="row">' . esc_html__( 'Business-day cutoffs', 'doughboss-growth' ) . '</th><td>' . esc_html( $note ) . '</td></tr>';
 		}
 		foreach ( $shops as $shop => $name ) {
 			$id    = 'dbgr-recon-cutoff-' . (int) $shop;

@@ -285,15 +285,17 @@ final class DoughBoss_Growth_Recon_Report {
 	}
 
 	/**
-	 * Save parameters. Returns the stored value.
+	 * Save parameters. Returns the stored value, or false when it did not persist. update_option() returns
+	 * false for an unchanged value as well as for a failed write, so success is confirmed by reading back
+	 * (as DoughBoss_Growth_Settings::apply_save() does).
 	 *
 	 * @param mixed $raw Raw input.
-	 * @return array
+	 * @return array|false
 	 */
 	public static function save_params( $raw ) {
 		$clean = self::sanitize_params( $raw );
 		update_option( self::OPTION, $clean, false );
-		return $clean;
+		return ( self::params() === $clean ) ? $clean : false;
 	}
 
 	/**
@@ -417,10 +419,22 @@ final class DoughBoss_Growth_Recon_Report {
 			$wpdb->prepare( "INSERT INTO {$table} (kind, environment, local_id, square_id, status, active_guard, confirmed_by, confirmed_at) VALUES (%s, %s, %d, %s, %s, 1, %d, %s)", $kind, $environment, $local_id, $square_id, 'confirmed', (int) $actor, $now ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		);
 		if ( 1 !== $inserted ) {
-			// A concurrent confirmation hit the unique key: report a conflict rather than a success.
-			return '' !== (string) $wpdb->last_error ? 'conflict' : 'error';
+			// Only a concurrent confirmation hitting the unique key is a conflict; any other failure is an error.
+			return self::is_duplicate_key_error() ? 'conflict' : 'error';
 		}
 		return 'confirmed';
+	}
+
+	/**
+	 * Whether the last statement failed on a unique key (MySQL/MariaDB "Duplicate entry", SQLite "UNIQUE
+	 * constraint failed"), as opposed to any other storage error.
+	 *
+	 * @return bool
+	 */
+	private static function is_duplicate_key_error() {
+		global $wpdb;
+		$error = (string) $wpdb->last_error;
+		return false !== stripos( $error, 'duplicate entry' ) || false !== stripos( $error, 'unique constraint failed' );
 	}
 
 	/**
@@ -818,6 +832,10 @@ final class DoughBoss_Growth_Recon_Report {
 			if ( 1 === $inserted ) {
 				return (int) $wpdb->insert_id;
 			}
+			if ( ! self::is_duplicate_key_error() ) {
+				// Not the unique guard: a storage failure must not be reported as another run holding the lock.
+				return 0;
+			}
 			$stale = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$wpdb->prepare( "UPDATE {$table} SET status = %s, reason_code = %s, running_guard = NULL, finished_at = %s WHERE running_guard = 1 AND status = %s AND started_at < %s", self::STATUS_FAILED, 'stale_run', DoughBoss_Growth_Recon_Reader::mysql_utc( $now ), self::STATUS_RUNNING, DoughBoss_Growth_Recon_Reader::mysql_utc( $now - self::STALE_RUN_SECONDS ) ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			);
@@ -1031,26 +1049,32 @@ final class DoughBoss_Growth_Recon_Report {
 	/**
 	 * The newest run of any status (for the "last attempt" banner).
 	 *
-	 * @return array|null
+	 * @return array|null|false Run row, null when none, false on a read error.
 	 */
 	public static function last_attempt() {
 		global $wpdb;
 		$table = self::table( 'run' );
 		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} ORDER BY id DESC LIMIT %d", 1 ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		return ( '' === (string) $wpdb->last_error && is_array( $row ) ) ? $row : null;
+		if ( '' !== (string) $wpdb->last_error ) {
+			return false;
+		}
+		return is_array( $row ) ? $row : null;
 	}
 
 	/**
 	 * One finished run by id.
 	 *
 	 * @param int $run_id Run id.
-	 * @return array|null
+	 * @return array|null|false Run row, null when it is not a finished run, false on a read error.
 	 */
 	public static function finished_run( $run_id ) {
 		global $wpdb;
 		$table = self::table( 'run' );
 		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d AND status IN (%s, %s)", (int) $run_id, self::STATUS_COMPLETE, self::STATUS_INCOMPLETE ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		return ( '' === (string) $wpdb->last_error && is_array( $row ) ) ? $row : null;
+		if ( '' !== (string) $wpdb->last_error ) {
+			return false;
+		}
+		return is_array( $row ) ? $row : null;
 	}
 
 	/**
@@ -1059,7 +1083,7 @@ final class DoughBoss_Growth_Recon_Report {
 	 * @param int    $run_id Run id.
 	 * @param string $state  State or "".
 	 * @param int    $limit  Max rows.
-	 * @return array
+	 * @return array|null Rows (an empty list when the run has none), or null on a read error.
 	 */
 	public static function rows( $run_id, $state = '', $limit = 5000 ) {
 		global $wpdb;
@@ -1073,7 +1097,7 @@ final class DoughBoss_Growth_Recon_Report {
 		$sql   .= ' ORDER BY workday_local ASC, plugin_location_id ASC, user_id ASC, id ASC LIMIT %d';
 		$args[] = max( 1, min( 50000, (int) $limit ) );
 		$rows   = $wpdb->get_results( $wpdb->prepare( $sql, $args ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
-		return ( '' === (string) $wpdb->last_error && is_array( $rows ) ) ? $rows : array();
+		return ( '' === (string) $wpdb->last_error && is_array( $rows ) ) ? $rows : null;
 	}
 
 	/**
@@ -1090,19 +1114,24 @@ final class DoughBoss_Growth_Recon_Report {
 	 * datetime or a number. Formula-like cells are neutralised anyway.
 	 *
 	 * @param int $run_id Run id.
-	 * @return string|null Null when the run is not a finished run.
+	 * @return string|null|false Null when the run is not a finished run; false when the run or its rows could
+	 *                           not be read (never a header-only file standing in for rows that were not read).
 	 */
 	public static function csv( $run_id ) {
 		$run = self::finished_run( $run_id );
-		if ( null === $run ) {
-			return null;
+		if ( ! is_array( $run ) ) {
+			return $run;
+		}
+		$rows = self::rows( $run_id, '', 50000 );
+		if ( null === $rows ) {
+			return false;
 		}
 		$handle = fopen( 'php://temp', 'w+' );
 		if ( false === $handle ) {
 			return null;
 		}
 		fputcsv( $handle, self::csv_columns(), ',', '"', '\\' );
-		foreach ( self::rows( $run_id, '', 50000 ) as $row ) {
+		foreach ( $rows as $row ) {
 			$cells = array(
 				$row['run_id'],
 				$row['workday_local'],
