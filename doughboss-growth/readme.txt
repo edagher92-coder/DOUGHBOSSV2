@@ -23,7 +23,6 @@ Features (all off by default, each enabled separately under DoughBoss, Growth):
 * Landing pages and search metadata.
 * Lead form and party-pack sizer.
 * Coming-soon section and VIP waitlist.
-* Enhanced hero.
 * Timesheet reconciliation.
 
 Safety switches:

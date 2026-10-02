@@ -62,7 +62,7 @@ final class DoughBoss_Growth_Http {
 		if ( false !== filter_var( $host, FILTER_VALIDATE_IP ) ) {
 			return false !== filter_var( $host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
 		}
-		if ( false === strpos( $host, '.' ) || 1 !== preg_match( '/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/', $host ) ) {
+		if ( false === strpos( $host, '.' ) || 1 !== preg_match( '/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/D', $host ) ) {
 			return false;
 		}
 		if ( 1 === preg_match( '/(^|\.)(localhost|local|internal|lan|home|corp|test|invalid|example)$/', $host ) ) {
@@ -184,7 +184,7 @@ final class DoughBoss_Growth_Http {
 		$out = array();
 		foreach ( $headers as $name => $value ) {
 			$lower = strtolower( (string) $name );
-			if ( 1 === preg_match( '/^(authorization|proxy-authorization|cookie|set-cookie)$/', $lower )
+			if ( 1 === preg_match( '/^(authorization|proxy-authorization|cookie|set-cookie)$/D', $lower )
 				|| 1 === preg_match( '/(signature|secret|token|key|auth|password)/', $lower ) ) {
 				$out[ $name ] = '[redacted]';
 			} else {
@@ -251,7 +251,7 @@ final class DoughBoss_Growth_Http {
 			}
 			$safe[ preg_replace( '/[^a-z0-9_]/', '', strtolower( (string) $key ) ) ] = $text;
 		}
-		$line = 'DoughBoss Growth [' . preg_replace( '/[^a-z0-9_]/', '', strtolower( (string) $event ) ) . '] ' . wp_json_encode( $safe );
+		$line = 'DoughBoss Growth [' . preg_replace( '/[^a-z0-9_]/', '', strtolower( (string) $event ) ) . '] ' . wp_json_encode( $safe, JSON_UNESCAPED_SLASHES );
 		do_action( 'doughboss_growth_log', $line, $event, $safe );
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
 			error_log( $line ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- redacted line, opt-in via WP_DEBUG_LOG.
@@ -271,7 +271,7 @@ final class DoughBoss_Growth_Http {
 		}
 		$out = array();
 		foreach ( $value as $key => $item ) {
-			if ( is_string( $key ) && 1 === preg_match( '/^(authorization|api[_-]?secret|api[_-]?key|access[_-]?token|token|secret|password|signature|email|phone|mobile|first_name|last_name|full_name|customer_name|address|ip|ip_address|user_agent|em|ph|fn|ln)$/i', $key ) ) {
+			if ( is_string( $key ) && 1 === preg_match( '/^(authorization|api[_-]?secret|api[_-]?key|access[_-]?token|token|secret|password|signature|email|phone|mobile|first_name|last_name|full_name|customer_name|address|ip|ip_address|user_agent|em|ph|fn|ln)$/Di', $key ) ) {
 				$out[ $key ] = '[redacted]';
 			} else {
 				$out[ $key ] = self::redact_value( $item );

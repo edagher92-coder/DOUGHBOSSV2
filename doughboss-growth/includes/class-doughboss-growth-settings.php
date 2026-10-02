@@ -25,7 +25,7 @@ final class DoughBoss_Growth_Settings {
 	const OPTION = 'doughboss_growth_settings';
 
 	/**
-	 * The twelve feature flags. Names are frozen by the architecture (00 section 4.2).
+	 * The eleven feature flags. Names are frozen by the architecture (00 section 4.2).
 	 */
 	const FEATURES = array(
 		'consent_banner',
@@ -38,7 +38,6 @@ final class DoughBoss_Growth_Settings {
 		'party_sizer',
 		'coming_soon',
 		'waitlist',
-		'hero_enhanced',
 		'timesheet_recon',
 	);
 
@@ -282,12 +281,12 @@ final class DoughBoss_Growth_Settings {
 			$out['features'][ $feature ] = isset( $features_in[ $feature ] ) && self::truthy( $features_in[ $feature ] );
 		}
 
-		$out['gtm_container_id'] = self::match_id( $raw, 'gtm_container_id', '/^GTM-[A-Z0-9]{4,10}$/', true );
-		$out['ga4_measurement_id'] = self::match_id( $raw, 'ga4_measurement_id', '/^G-[A-Z0-9]{4,20}$/', true );
-		$out['meta_pixel_id']      = self::match_id( $raw, 'meta_pixel_id', '/^[0-9]{8,20}$/', false );
+		$out['gtm_container_id'] = self::match_id( $raw, 'gtm_container_id', '/^GTM-[A-Z0-9]{4,10}$/D', true );
+		$out['ga4_measurement_id'] = self::match_id( $raw, 'ga4_measurement_id', '/^G-[A-Z0-9]{4,20}$/D', true );
+		$out['meta_pixel_id']      = self::match_id( $raw, 'meta_pixel_id', '/^[0-9]{8,20}$/D', false );
 
 		$version = isset( $raw['consent_text_version'] ) ? self::text( $raw['consent_text_version'], 20 ) : '';
-		if ( 1 === preg_match( '/^[A-Za-z0-9._-]{1,20}$/', $version ) ) {
+		if ( 1 === preg_match( '/^[A-Za-z0-9._-]{1,20}$/D', $version ) ) {
 			$out['consent_text_version'] = $version;
 		}
 
@@ -302,13 +301,14 @@ final class DoughBoss_Growth_Settings {
 		$out['send_hashed_identifiers']    = ( isset( $raw['send_hashed_identifiers'] ) && self::truthy( $raw['send_hashed_identifiers'] ) ) ? 1 : 0;
 		$out['seo_jsonld_with_seo_plugin'] = ( isset( $raw['seo_jsonld_with_seo_plugin'] ) && self::truthy( $raw['seo_jsonld_with_seo_plugin'] ) ) ? 1 : 0;
 
-		$pending = isset( $raw['retention_pending_days'] ) ? absint( $raw['retention_pending_days'] ) : 0;
+		$pending = isset( $raw['retention_pending_days'] ) ? self::positive_int( $raw['retention_pending_days'] ) : 0;
 		if ( $pending >= 1 ) {
 			$out['retention_pending_days'] = min( 365, $pending );
 		}
 
-		// Unset until Elie decides: no automatic deletion of confirmed rows while null.
-		$months = isset( $raw['retention_confirmed_months'] ) ? absint( $raw['retention_confirmed_months'] ) : 0;
+		// Unset until Elie decides: no automatic deletion of confirmed rows while null. A negative, zero or
+		// non-numeric value leaves it unset (absint() would turn -4 into 4, which is not what was typed).
+		$months = isset( $raw['retention_confirmed_months'] ) ? self::positive_int( $raw['retention_confirmed_months'] ) : 0;
 		if ( $months >= 1 ) {
 			$out['retention_confirmed_months'] = min( 120, $months );
 		}
@@ -390,6 +390,22 @@ final class DoughBoss_Growth_Settings {
 			$gaps['meta_pixel_id'] = '[CONFIRM: Meta pixel id from the account owned by the right entity.]';
 		}
 		return $gaps;
+	}
+
+	/**
+	 * A positive whole number from an int or a plain digit string; 0 for anything else.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	private static function positive_int( $value ) {
+		if ( is_int( $value ) ) {
+			return max( 0, $value );
+		}
+		if ( is_string( $value ) && 1 === preg_match( '/^\s*[0-9]{1,9}\s*$/D', $value ) ) {
+			return (int) trim( $value );
+		}
+		return 0;
 	}
 
 	/**
