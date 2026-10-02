@@ -531,7 +531,7 @@ db_test(
 /* ---------------------------------------------------------------------------------------------------------- */
 
 db_test(
-	'scope: no hero flag, no media plugin or media zip, and no 3D / WebGL / frame-player code anywhere in the companion',
+	'scope: no hero flag, no media plugin or media zip, and no 3D / WebGL / frame-player code in anything that ships or runs (docs/ hand-off notes may describe the cancellation)',
 	function () use ( $dbgr_plugin_dir ) {
 		$banned = array(
 			'hero' . '_enhanced',
@@ -549,7 +549,7 @@ db_test(
 		$iter = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dbgr_plugin_dir, FilesystemIterator::SKIP_DOTS ) );
 		foreach ( $iter as $file ) {
 			$path = $file->getPathname();
-			if ( ! $file->isFile() || preg_match( '#/(dist|node_modules|vendor)/#', $path ) || false !== strpos( $path, '/tests/test-core-scripts.php' ) ) {
+			if ( ! $file->isFile() || preg_match( '#/(dist|node_modules|vendor|docs)/#', $path ) || false !== strpos( $path, '/tests/test-core-scripts.php' ) ) {
 				continue;
 			}
 			$text = strtolower( (string) file_get_contents( $path ) );
