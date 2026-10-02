@@ -181,6 +181,13 @@
 	transform: translateY(-2px);
 }
 
+.db-mh-replay:disabled {
+	cursor: default;
+	box-shadow: none;
+	outline: none;
+	transform: none;
+}
+
 .db-mh-motion-note { display: none; }
 
 .db-mh-proof {
@@ -207,6 +214,7 @@
 }
 
 .db-manoush-hero.is-photo-paused .db-mh-backdrop {
+	animation: none;
 	transition: none;
 	will-change: auto;
 }

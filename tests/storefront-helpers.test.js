@@ -1860,4 +1860,111 @@ test('preview srcsets permit only existing local assets and truthful ordered wid
 	]) assert.throws(() => validate(value, 'index.html'), value);
 });
 
+function photoMotionHarness({ reduced = false, legacy = false, noControl = false, noMedia = false } = {}) {
+	const frames = [];
+	const events = {};
+	const query = { matches: reduced };
+	const listen = callback => { events.preference = callback; };
+	if (legacy) query.addListener = listen;
+	else query.addEventListener = (name, callback) => listen(callback);
+	const controls = [];
+	const heroes = [0, 1].map(() => {
+		const control = themeNode({ 'data-db-pause-label': 'Pause photo motion',
+			'data-db-resume-label': 'Resume photo motion', 'data-db-reduced-label': 'Photo motion off' });
+		control.listeners = {};
+		control.addEventListener = (name, callback) => { control.listeners[name] = callback; };
+		const hero = themeNode({}, [control]);
+		hero.querySelector = () => noControl ? null : control;
+		hero.getBoundingClientRect = () => ({ top: -100, bottom: 500, height: 600 });
+		hero.writes = [];
+		hero.style = { setProperty: (name, value) => hero.writes.push([name, value]) };
+		controls.push(control);
+		return hero;
+	});
+	const window = { innerHeight: 800, requestAnimationFrame: callback => frames.push(callback),
+		addEventListener: (name, callback) => { events[name] = callback; } };
+	if (!noMedia) window.matchMedia = () => query;
+	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/js/doughboss-manoush-hero.js'), 'utf8'), {
+		window, document: { querySelectorAll: () => heroes }, Math
+	});
+	return { frames, events, heroes, controls,
+		flush: () => { while (frames.length) frames.shift()(); },
+		preference: reduced => { query.matches = reduced; events.preference({ matches: reduced }); }
+	};
+}
+
+test('photo hero starts reduced motion with a truthful disabled control and no queued frames', () => {
+	const h = photoMotionHarness({ reduced: true });
+	for (const control of h.controls) {
+		assert.equal(control.disabled, true);
+		assert.equal(control.textContent, 'Photo motion off');
+		assert.equal(control.getAttribute('aria-label'), 'Photo motion off');
+		assert.equal(control.getAttribute('aria-pressed'), 'true');
+		control.listeners.click();
+	}
+	assert.ok(h.heroes.every(hero => hero._dbPhotoPaused === undefined), 'blocked clicks do not change manual choice');
+	h.events.scroll();
+	h.events.resize();
+	assert.equal(h.frames.length, 0);
+	assert.match(fs.readFileSync(path.join(__dirname, '../includes/class-doughboss-shortcodes.php'), 'utf8'),
+		/data-db-reduced-label="<\?php esc_attr_e\( 'Photo motion off', 'doughboss' \); \?>"/);
+});
+
+test('photo hero retains each manual pause through both system preference transitions', () => {
+	const h = photoMotionHarness();
+	h.flush();
+	h.controls[0].listeners.click();
+	const pausedWrites = h.heroes[0].writes.length;
+	assert.equal(h.controls[0].textContent, 'Resume photo motion');
+	h.preference(true);
+	assert.ok(h.controls.every(control => control.disabled && control.textContent === 'Photo motion off'));
+	h.preference(false);
+	assert.equal(h.controls[0].disabled, false);
+	assert.equal(h.controls[0].textContent, 'Resume photo motion');
+	assert.equal(h.controls[0].getAttribute('aria-pressed'), 'true');
+	assert.equal(h.heroes[0]._dbPhotoPaused, true);
+	assert.equal(h.heroes[0].classList.contains('is-photo-paused'), true);
+	assert.equal(h.controls[1].textContent, 'Pause photo motion');
+	assert.equal(h.controls[1].getAttribute('aria-pressed'), 'false');
+	h.flush();
+	h.events.scroll();
+	h.flush();
+	assert.equal(h.heroes[0].writes.length, pausedWrites, 'manual pause prevents later parallax writes');
+	assert.ok(h.heroes[1].writes.length > pausedWrites, 'unpaused hero resumes normal motion');
+	const css = fs.readFileSync(path.join(__dirname, '../public/css/doughboss-manoush-hero.css'), 'utf8');
+	assert.match(css, /\.db-manoush-hero\.is-photo-paused \.db-mh-backdrop\s*\{[^}]*animation: none;/);
+	assert.ok(css.indexOf('.is-photo-paused .db-mh-backdrop') > css.indexOf('.is-photo-ready .db-mh-backdrop'));
+});
+
+test('photo hero blocks an already queued frame when reduced motion becomes active', () => {
+	const h = photoMotionHarness();
+	assert.equal(h.frames.length, 1);
+	h.preference(true);
+	h.flush();
+	assert.ok(h.heroes.every(hero => hero.writes.length === 0));
+	h.events.scroll();
+	assert.equal(h.frames.length, 0);
+	h.preference(false);
+	h.flush();
+	assert.ok(h.controls.every(control => !control.disabled && control.textContent === 'Pause photo motion'));
+	assert.ok(h.heroes.every(hero => hero.writes.length === 2));
+});
+
+test('photo hero supports legacy preference listeners and absent controls', () => {
+	const h = photoMotionHarness({ reduced: true, legacy: true, noControl: true });
+	assert.equal(h.frames.length, 0);
+	assert.doesNotThrow(() => h.preference(false));
+	h.flush();
+	assert.ok(h.heroes.every(hero => hero.writes.length === 2));
+});
+
+test('photo hero preserves ordinary controls without matchMedia', () => {
+	const h = photoMotionHarness({ noMedia: true });
+	assert.ok(h.controls.every(control => !control.disabled && control.textContent === 'Pause photo motion'));
+	h.flush();
+	h.controls[0].listeners.click();
+	assert.equal(h.controls[0].textContent, 'Resume photo motion');
+	assert.equal(h.controls[0].getAttribute('aria-pressed'), 'true');
+});
+
 console.log('Storefront helper regression checks passed.');

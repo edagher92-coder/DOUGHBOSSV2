@@ -10,13 +10,16 @@
 	function updateControl(hero) {
 		var control = hero.querySelector('[data-db-manoush-replay]');
 		if (!control) { return; }
-		var label = hero._dbPhotoPaused
-			? control.getAttribute('data-db-resume-label')
-			: control.getAttribute('data-db-pause-label');
+		control.disabled = reduceMotion;
+		var label = reduceMotion
+			? control.getAttribute('data-db-reduced-label')
+			: (hero._dbPhotoPaused
+				? control.getAttribute('data-db-resume-label')
+				: control.getAttribute('data-db-pause-label'));
 		if (label) {
 			control.textContent = label;
 			control.setAttribute('aria-label', label);
-			control.setAttribute('aria-pressed', hero._dbPhotoPaused ? 'true' : 'false');
+			control.setAttribute('aria-pressed', reduceMotion || hero._dbPhotoPaused ? 'true' : 'false');
 		}
 	}
 
@@ -36,7 +39,7 @@
 	}
 
 	function requestPaint() {
-		if (queued) { return; }
+		if (reduceMotion || queued) { return; }
 		queued = true;
 		window.requestAnimationFrame(paint);
 	}
@@ -46,6 +49,7 @@
 		hero.classList.add('is-photo-ready');
 		if (!control) { return; }
 		control.addEventListener('click', function () {
+			if (reduceMotion) { return; }
 			hero._dbPhotoPaused = !hero._dbPhotoPaused;
 			hero.classList.toggle('is-photo-paused', hero._dbPhotoPaused);
 			updateControl(hero);
@@ -62,6 +66,7 @@
 		if (motionQuery) {
 			var preferenceChanged = function (event) {
 				reduceMotion = event.matches;
+				for (var index = 0; index < heroes.length; index += 1) { updateControl(heroes[index]); }
 				if (!reduceMotion) { requestPaint(); }
 			};
 			if (motionQuery.addEventListener) { motionQuery.addEventListener('change', preferenceChanged); }

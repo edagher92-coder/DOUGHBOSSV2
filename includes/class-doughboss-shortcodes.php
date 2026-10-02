@@ -102,7 +102,7 @@ class DoughBoss_Shortcodes {
 				<div class="db-mh-actions">
 					<a class="db-mh-action db-mh-action--primary" href="<?php echo esc_url( $atts['primary_url'] ); ?>"><?php echo esc_html( $atts['primary_label'] ); ?></a>
 					<a class="db-mh-action db-mh-action--secondary" href="<?php echo esc_url( $atts['secondary_url'] ); ?>"><?php echo esc_html( $atts['secondary_label'] ); ?></a>
-					<button class="db-mh-replay" type="button" aria-pressed="false" data-db-manoush-replay data-db-pause-label="<?php esc_attr_e( 'Pause photo motion', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume photo motion', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
+					<button class="db-mh-replay" type="button" aria-pressed="false" data-db-manoush-replay data-db-pause-label="<?php esc_attr_e( 'Pause photo motion', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume photo motion', 'doughboss' ); ?>" data-db-reduced-label="<?php esc_attr_e( 'Photo motion off', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
 				</div>
 				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'The photograph moves gently as you scroll. Pause it at any time.', 'doughboss' ); ?></span>
 			</div>
