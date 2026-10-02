@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.44.0
+Stable tag: 2.45.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,13 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.45.0 =
+* Refresh storefront asset cache keys for the locally validated release candidate; publication and provider activation remain separate operator gates.
+* Respect reduced-motion preferences in photograph controls and preserve each hero's manual pause choice across preference changes.
+* Support full-value Square Gift Card checkout with server-validated tender identity, and bind refunds to fresh original-payment context.
+* Add an inert durable split-funding ledger and internal exact-ID, GET-only recovery of approved authorizations; public split capture remains unavailable pending ownership and provider acceptance.
+* Retain browse-only and payment-activation safeguards; authorization observations are not paid-order or kitchen-release authority.
 
 = 2.44.0 =
 * Add a named-approver workflow that keeps pre-order requests unpaid and outside the kitchen until a server-verified Stripe payment creates one linked fulfilment order.
