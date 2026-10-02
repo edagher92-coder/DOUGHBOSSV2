@@ -1113,7 +1113,11 @@ test('closed ordering keeps Square dormant while approved recovery is explicitly
 	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
 	assert.match(source, /function enhance\(form\) \{\s*if \(!ordinaryEnabled\) \{ return; \}/);
 	assert.match(assets, /'applicationId'\s*=> \$payments_on \? DoughBoss_Square::publishable_key\(\) : ''/);
-	assert.match(assets, /'locationId'\s*=> \$payments_on \? DoughBoss_Square::location_id\(\) : ''/);
+	assert.match(assets, /'locationId'\s*=> \$payments_on \? \(string\) \$square_binding\['square_location_id'\] : ''/);
+	assert.doesNotMatch(assets, /'locationId'\s*=>[^\n]*DoughBoss_Square::location_id\(\)/);
+	assert.match(assets, /\$single_location_id = DoughBoss_Locations::single_location_id\(\)/);
+	assert.match(assets, /online_payment_location\( \$single_location_id \)/);
+	assert.match(assets, /ready_for_location\( \$single_location_id \)/);
 	const recovery = extractFunction(storefront, 'approvedSquareRecoverable');
 	assert.equal(recovery({ gateway: 'square', can_confirm_payment: true }), true);
 	assert.equal(recovery({ gateway: 'stripe', can_confirm_payment: true }), false);

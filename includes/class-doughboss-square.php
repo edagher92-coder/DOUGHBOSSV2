@@ -89,6 +89,19 @@ class DoughBoss_Square {
 	}
 
 	/**
+	 * Local configuration readiness for one server-resolved native shop.
+	 * Callers separately enforce online_payment_location(); this does not
+	 * attest merchant ownership or replace dispatch-time binding validation.
+	 */
+	public static function ready_for_location( $location_id ) {
+		if ( ! is_int( $location_id ) || $location_id < 1 ) {
+			return false;
+		}
+		$binding = self::shop_binding( $location_id );
+		return ! is_wp_error( $binding ) && DoughBoss_Settings::square_shop_ready( $binding['shop_slug'] );
+	}
+
+	/**
 	 * Active mode: 'test' (Square sandbox) or 'live' (Square production).
 	 *
 	 * @return string

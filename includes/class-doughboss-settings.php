@@ -1019,10 +1019,20 @@ class DoughBoss_Settings {
 	 * @return bool
 	 */
 	public static function square_ready() {
+		return self::square_ready_with_location( self::square_location_id() );
+	}
+
+	/** Local readiness for an exact active-mode shop; never inherit the global ID. */
+	public static function square_shop_ready( $shop ) {
+		return self::square_ready_with_location( self::square_shop_location_id( $shop ) );
+	}
+
+	/** Shared activation guards for legacy and explicitly mapped callers. */
+	private static function square_ready_with_location( $location_id ) {
 		return self::payments_enabled()
 			&& 'square' === self::payment_gateway()
 			&& '' !== self::square_application_id()
-			&& '' !== self::square_location_id()
+			&& '' !== $location_id
 			&& self::square_access_token_valid()
 			&& (
 				! self::square_live_mode()

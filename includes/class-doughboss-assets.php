@@ -230,6 +230,17 @@ class DoughBoss_Assets {
 		// the store is intentionally in browse-only / Coming Soon mode.
 		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
 		$gateway     = DoughBoss_Settings::payment_gateway();
+		$square_binding = null;
+		if ( 'square' === $gateway ) {
+			$single_location_id = DoughBoss_Locations::single_location_id();
+			$payments_on = DoughBoss_Settings::ordering_open() && $single_location_id
+				&& ! is_wp_error( DoughBoss_Locations::online_payment_location( $single_location_id ) )
+				&& DoughBoss_Square::ready_for_location( $single_location_id );
+			$square_binding = $payments_on ? DoughBoss_Square::shop_binding( $single_location_id ) : null;
+			if ( is_wp_error( $square_binding ) ) {
+				$payments_on = false;
+			}
+		}
 		if ( $payments_on ) {
 			if ( 'tyro' === $gateway ) {
 				// Tyro requires its PCI-scoped browser library to be loaded directly
@@ -288,7 +299,7 @@ class DoughBoss_Assets {
 				'DoughBossSquareConfig',
 				array(
 					'applicationId' => $payments_on ? DoughBoss_Square::publishable_key() : '',
-					'locationId'    => $payments_on ? DoughBoss_Square::location_id() : '',
+					'locationId'    => $payments_on ? (string) $square_binding['square_location_id'] : '',
 					'sdkUrl'        => DoughBoss_Square::sdk_url(),
 					'liveMode'      => DoughBoss_Settings::square_live_mode(),
 					'currency'      => strtoupper( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ),

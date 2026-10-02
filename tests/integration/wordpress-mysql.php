@@ -119,7 +119,7 @@ function db_integration_capture_order_created( $order_id, $data ) {
 }
 
 /** Build one durable unpaid pre-order request through the real order writer. */
-function db_integration_create_preorder_request( $seed, $total = 14.00, $accounting_basis = null ) {
+function db_integration_create_preorder_request( $seed, $total = 14.00, $accounting_basis = null, $location_id = 1 ) {
 	$seed  = sanitize_key( (string) $seed );
 	$total = (float) $total;
 	return DoughBoss_Order::create(
@@ -127,7 +127,7 @@ function db_integration_create_preorder_request( $seed, $total = 14.00, $account
 			'checkout_key'   => hash( 'sha256', 'preorder-request|' . $seed ),
 			'order_source'   => 'preorder_request',
 			'order_type'     => 'pickup',
-			'location_id'    => 1,
+			'location_id'    => (int) $location_id,
 			'customer_name'  => 'Pre-order ' . $seed,
 			'customer_email' => 'preorder.' . $seed . '@example.invalid',
 			'customer_phone' => '0400000011',
@@ -803,10 +803,10 @@ function db_integration_approved_square_fixture( $seed, $accounting_basis = null
  * it deliberately has no checkout snapshot: the REST controller is the sole
  * owner of its immutable approved-payment snapshot.
  */
-function db_integration_approved_square_rest_fixture( $seed ) {
+function db_integration_approved_square_rest_fixture( $seed, $location_id = 1 ) {
 	$created = db_integration_create_preorder_request( 'square-rest-' . $seed, 14.00,
 		array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 0,
-			'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ) );
+			'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ), $location_id );
 	$id = is_array( $created ) ? (int) $created['order_id'] : 0;
 	$pending = $id ? DoughBoss_Preorder_Approval::ensure_pending( $id ) : new WP_Error( 'integration_square_rest_fixture' );
 	$order = $id ? DoughBoss_Order::get( $id ) : null;
@@ -3892,6 +3892,254 @@ add_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
 add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
 
 db_integration_same( false, DoughBoss_Settings::ordering_open(), 'ordinary ordering remains closed before approved Square REST view' );
+// Keep all existing approved start/return tests on mapped-only configuration.
+$square_rest_settings['square_test_location_id'] = '';
+update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings, false );
+$mapped_original_rows = DoughBoss_Locations::all( false );
+$mapped_settings = $square_rest_settings;
+$mapped_settings['ordering_open'] = 1;
+$mapped_settings['single_location_mode'] = 1;
+$mapped_asset_view = static function () {
+	$old_scripts = $GLOBALS['wp_scripts'];
+	$GLOBALS['wp_scripts'] = new WP_Scripts();
+	add_filter( 'doughboss_load_assets', '__return_true' );
+	try {
+		( new DoughBoss_Assets() )->enqueue();
+		$result = array( 'sdk' => wp_script_is( 'square-web-payments', 'enqueued' ) );
+		foreach ( array( 'doughboss' => 'DoughBossData', 'doughboss-square' => 'DoughBossSquareConfig' ) as $handle => $name ) {
+			$matches = array();
+			$result[ $name ] = preg_match( '/var ' . $name . ' = (.*?);/', (string) wp_scripts()->get_data( $handle, 'data' ), $matches ) ? json_decode( $matches[1], true ) : array();
+		}
+		return $result;
+	} finally {
+		remove_filter( 'doughboss_load_assets', '__return_true' );
+		$GLOBALS['wp_scripts'] = $old_scripts;
+	}
+};
+try {
+	foreach ( $mapped_original_rows as $row ) {
+		$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 1 === (int) $row->id ? 1 : 0 ), array( 'id' => $row->id ) );
+	}
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_settings, false );
+	db_integration_same( false, DoughBoss_Payment::ready(), 'mapped-only configuration leaves legacy global readiness disabled' );
+	db_integration_same( true, DoughBoss_Square::ready_for_location( 1 ), 'exact mapped native Revesby is locally ready' );
+	$mapped_config = $square_rest_controller->get_config()->get_data();
+	$mapped_assets = $mapped_asset_view();
+	db_integration_same( true, $mapped_config['payments_enabled'], 'mapped-only single-shop REST checkout is ready' );
+	db_integration_same( true, $mapped_assets['DoughBossData']['payments']['enabled'], 'REST and ordinary asset readiness agree' );
+	db_integration_same( 'LINTEGRATIONLOCATION', $mapped_assets['DoughBossSquareConfig']['locationId'], 'ordinary SDK receives the exact mapped shop, never a legacy global ID' );
+	db_integration_same( $mapped_config['stripe_pk'], $mapped_assets['DoughBossSquareConfig']['applicationId'], 'SDK and REST app identifiers agree' );
+	db_integration_same( true, $mapped_assets['sdk'], 'mapped single-shop checkout loads the official SDK' );
+	$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'IntegrationMappedRequiredCheckout';
+	$mapped_cart = new DoughBoss_Cart();
+	$mapped_cart->clear();
+	$mapped_cart->add( array( 'type' => 'menu', 'item_id' => 9851, 'name' => 'Synthetic mapped item', 'unit_price' => 12.00, 'quantity' => 1 ) );
+	$mapped_controller = new DoughBoss_REST_Controller( $mapped_cart );
+	$mapped_orders_before = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_orders' );
+	$mapped_posts_before = $GLOBALS['db_square_post_count'];
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.175';
+	$mapped_missing = $mapped_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', array( 'idempotency_key' => 'mapped-required-checkout-0001',
+		'customer_name' => 'Mapped Customer', 'customer_email' => 'mapped@example.invalid', 'customer_phone' => '0400000001', 'order_type' => 'pickup', 'location_id' => 1 ) ) );
+	db_integration_same( 'doughboss_pay_required', is_wp_error( $mapped_missing ) ? $mapped_missing->get_error_code() : '', 'mapped-only final checkout requires verified payment' );
+	db_integration_same( $mapped_orders_before, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_orders' ), 'missing mapped payment allocates no unpaid or partial order' );
+	db_integration_same( $mapped_posts_before, $GLOBALS['db_square_post_count'], 'missing mapped payment performs no provider POST' );
+	// Scoped readiness is additive: losing a native mapping must not remove
+	// an existing legacy payment requirement and accept an unpaid order.
+	$mapped_storage_counts = static function () use ( $wpdb ) {
+		$counts = array();
+		foreach ( array( 'orders', 'checkout_snapshots', 'payment_attempts', 'voucher_redemptions' ) as $suffix ) {
+			$counts[ $suffix ] = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_' . $suffix );
+		}
+		return $counts;
+	};
+	foreach ( array( array(), array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE' ) ) as $index => $unavailable_map ) {
+		$legacy_ready_settings = $mapped_settings;
+		$legacy_ready_settings['square_test_location_id'] = 'LINTEGRATIONLOCATION';
+		$legacy_ready_settings['square_test_location_map'] = $unavailable_map;
+		update_option( DoughBoss_Settings::OPTION_KEY, $legacy_ready_settings, false );
+		db_integration_same( true, DoughBoss_Payment::ready(), 'legacy global readiness remains true with unavailable native mapping' );
+		db_integration_same( false, DoughBoss_Square::ready_for_location( 1 ), 'missing or ambiguous native mapping is unready' );
+		$counts_before = $mapped_storage_counts();
+		$posts_before = $GLOBALS['db_square_post_count'];
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 150 + $index );
+		$denied = $mapped_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', array(
+			'idempotency_key' => 'legacy-required-checkout-000' . $index,
+			'customer_name' => 'Mapped Customer', 'customer_email' => 'mapped@example.invalid',
+			'customer_phone' => '0400000001', 'order_type' => 'pickup', 'location_id' => 1,
+		) ) );
+		db_integration_same( 'doughboss_pay_required', is_wp_error( $denied ) ? $denied->get_error_code() : '', 'legacy-ready/mapped-unavailable checkout still requires payment' );
+		db_integration_same( $counts_before, $mapped_storage_counts(), 'unavailable mapping denial allocates no order, snapshot, attempt or voucher redemption' );
+		db_integration_same( $posts_before, $GLOBALS['db_square_post_count'], 'unavailable mapping denial dispatches no provider payment' );
+	}
+	// Losing initiation readiness while the payment policy is still ON must
+	// not turn a mapped-only Square shop into pay-at-shop.
+	$mapped_live_settings = array(
+		'square_mode' => 'live', 'square_live_approved' => 1,
+		'square_live_app_id' => 'sq0idp-EXAMPLELIVEAPPID0000000',
+		'square_live_access_token' => 'EAAAlocalSyntheticIntegrationToken000000',
+		'square_live_location_id' => '',
+		'square_live_location_map' => $mapped_settings['square_test_location_map'],
+		'square_live_webhook_key' => 'local-synthetic-live-webhook-key-000000',
+	);
+	$mapped_config_losses = array(
+		'missing-map' => array( 'square_test_location_map' => array() ),
+		'ambiguous-map' => array( 'square_test_location_map' => array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE' ) ),
+		'wrong-mode-map' => array( 'square_test_location_map' => array(), 'square_live_location_map' => $mapped_settings['square_test_location_map'] ),
+		'missing-app' => array( 'square_test_app_id' => '' ),
+		'missing-token' => array( 'square_test_access_token' => '' ),
+		'invalid-token' => array( 'square_test_access_token' => 'short' ),
+		'unapproved-live' => array_merge( $mapped_live_settings, array( 'square_live_approved' => 0 ) ),
+		'missing-live-webhook' => array_merge( $mapped_live_settings, array( 'square_live_webhook_key' => '' ) ),
+	);
+	$loss_index = 0;
+	foreach ( $mapped_config_losses as $loss => $overrides ) {
+		update_option( DoughBoss_Settings::OPTION_KEY, array_merge( $mapped_settings, $overrides ), false );
+		db_integration_same( true, DoughBoss_Settings::payments_enabled(), $loss . ' retains enabled payment policy' );
+		db_integration_same( false, DoughBoss_Payment::ready(), $loss . ' has no legacy initiation readiness' );
+		db_integration_same( false, DoughBoss_Square::ready_for_location( 1 ), $loss . ' has no mapped initiation readiness' );
+		$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'IntegrationMappedConfigLoss' . $loss_index;
+		$loss_cart = new DoughBoss_Cart();
+		$loss_cart->clear();
+		$loss_cart->add( array( 'type' => 'menu', 'item_id' => 9851, 'name' => 'Synthetic config-loss item', 'unit_price' => 12.00, 'quantity' => 1 ) );
+		$loss_controller = new DoughBoss_REST_Controller( $loss_cart );
+		$counts_before = $mapped_storage_counts();
+		$posts_before = $GLOBALS['db_square_post_count'] + $GLOBALS['db_orders_post_count'];
+		$hooks_before = count( $GLOBALS['db_order_created_events'] );
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 155 + $loss_index++ );
+		$denied = $loss_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', array(
+			'idempotency_key' => 'mapped-config-loss-' . $loss . '-0001',
+			'customer_name' => 'Config Loss', 'customer_email' => 'loss@example.invalid',
+			'customer_phone' => '0400000001', 'order_type' => 'pickup', 'location_id' => 1,
+		) ) );
+		db_integration_same( 'doughboss_pay_required', is_wp_error( $denied ) ? $denied->get_error_code() : '', $loss . ' cannot reinterpret enabled payments as unpaid checkout' );
+		db_integration_same( $counts_before, $mapped_storage_counts(), $loss . ' denial creates no order, snapshot, attempt or voucher redemption' );
+		db_integration_same( $posts_before, $GLOBALS['db_square_post_count'] + $GLOBALS['db_orders_post_count'], $loss . ' denial performs no Payment or Order POST' );
+		db_integration_same( $hooks_before, count( $GLOBALS['db_order_created_events'] ), $loss . ' denial emits no kitchen hook' );
+	}
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_settings, false );
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.152';
+	$mapped_return_fixture = db_integration_accounting_square_fixture( 'mapped-master-off-return' );
+	$mapped_master_off = $mapped_settings;
+	$mapped_master_off['payments_enabled'] = 0;
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_master_off, false );
+	db_integration_same( false, DoughBoss_Payment::ready(), 'master-off disables legacy payment readiness' );
+	db_integration_same( false, DoughBoss_Square::ready_for_location( 1 ), 'master-off disables mapped new-payment readiness' );
+	$mapped_return_params = db_integration_stripe_checkout_fixture_params( $mapped_return_fixture, 'mapped-master-off-checkout-0001' );
+	$posts_before = $GLOBALS['db_square_post_count'];
+	$hooks_before = count( $GLOBALS['db_order_created_events'] );
+	$mapped_paid_return = $mapped_return_fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $mapped_return_params ) );
+	$mapped_paid_id = DoughBoss_Order::find_id_by_payment_intent( $mapped_return_fixture['session'] );
+	$mapped_paid_order = $mapped_paid_id ? DoughBoss_Order::get( $mapped_paid_id ) : null;
+	db_integration_assert( $mapped_paid_return instanceof WP_REST_Response && $mapped_paid_order, 'mapped-only paid return finalizes after master switch is disabled' );
+	db_integration_same( 'paid', $mapped_paid_order ? $mapped_paid_order->payment_status : '', 'master-off returned reference is server-verified, never unpaid' );
+	db_integration_same( 'square', $mapped_paid_order ? $mapped_paid_order->payment_method : '', 'master-off return retains its original Square provider' );
+	$mapped_paid_replay = $mapped_return_fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $mapped_return_params ) );
+	db_integration_assert( $mapped_paid_replay instanceof WP_REST_Response, 'master-off mapped paid return replays the existing order' );
+	db_integration_same( $mapped_paid_id, DoughBoss_Order::find_id_by_payment_intent( $mapped_return_fixture['session'] ), 'master-off replay retains the exact paid order identity' );
+	db_integration_same( $posts_before, $GLOBALS['db_square_post_count'], 'master-off paid return and replay never initiate another charge' );
+	db_integration_same( $hooks_before + 1, count( $GLOBALS['db_order_created_events'] ), 'master-off paid return and replay emit one kitchen hook' );
+	foreach ( array( 0, 1 ) as $master_enabled ) {
+		update_option( DoughBoss_Settings::OPTION_KEY, array_merge( $mapped_settings, array( 'payments_enabled' => $master_enabled ) ), false );
+		foreach ( array( 'sqpayFORGEDNOATTEMPT0001', $mapped_return_fixture['session'] ) as $reference_index => $unusable_reference ) {
+			$counts_before = $mapped_storage_counts();
+			$all_posts_before = $GLOBALS['db_square_post_count'] + $GLOBALS['db_orders_post_count'];
+			$all_hooks_before = count( $GLOBALS['db_order_created_events'] );
+			$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 198 + $master_enabled );
+			$denied = $mapped_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', array(
+				'idempotency_key' => 'mapped-unusable-return-' . $master_enabled . '-' . $reference_index . '-0001',
+				'customer_name' => 'Different Checkout', 'customer_email' => 'different@example.invalid',
+				'customer_phone' => '0400000001', 'order_type' => 'pickup', 'location_id' => 1,
+				'payment_intent_id' => $unusable_reference,
+			) ) );
+			db_integration_assert( is_wp_error( $denied ), 'invalid or other-cart returned reference never falls back to unpaid under master ' . $master_enabled );
+			db_integration_same( $counts_before, $mapped_storage_counts(), 'unusable returned reference allocates no order, snapshot, attempt or voucher redemption' );
+			db_integration_same( $all_posts_before, $GLOBALS['db_square_post_count'] + $GLOBALS['db_orders_post_count'], 'unusable returned reference performs no provider POST' );
+			db_integration_same( $all_hooks_before, count( $GLOBALS['db_order_created_events'] ), 'unusable returned reference emits no kitchen hook' );
+		}
+	}
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_master_off, false );
+	// A missing reference with the master switch off intentionally remains
+	// pay-at-shop; do not turn mapped readiness into an activation bypass.
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.153';
+	$mapped_unpaid_result = $mapped_controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', array(
+		'idempotency_key' => 'mapped-master-off-unpaid-0001',
+		'customer_name' => 'Pay at Shop', 'customer_email' => 'shop@example.invalid',
+		'customer_phone' => '0400000001', 'order_type' => 'pickup', 'location_id' => 1,
+	) ) );
+	$mapped_unpaid_data = $mapped_unpaid_result instanceof WP_REST_Response ? $mapped_unpaid_result->get_data() : array();
+	$mapped_unpaid_order = isset( $mapped_unpaid_data['order_number'] ) ? DoughBoss_Order::get_by_number( $mapped_unpaid_data['order_number'] ) : null;
+	db_integration_assert( $mapped_unpaid_result instanceof WP_REST_Response && $mapped_unpaid_order, 'master-off/no-reference checkout preserves intentional pay-at-shop' );
+	db_integration_same( 'unpaid', $mapped_unpaid_order ? $mapped_unpaid_order->payment_status : '', 'intentional master-off pay-at-shop remains unpaid' );
+	db_integration_same( $posts_before, $GLOBALS['db_square_post_count'], 'master-off pay-at-shop never initiates a provider charge' );
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_settings, false );
+	foreach ( $mapped_original_rows as $row ) {
+		$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => (int) $row->is_active ), array( 'id' => $row->id ) );
+	}
+	$mapped_config = $square_rest_controller->get_config()->get_data();
+	$mapped_assets = $mapped_asset_view();
+	db_integration_same( false, $mapped_config['payments_enabled'], 'multi-shop ordinary bootstrap stays disabled without one server-selected shop' );
+	db_integration_same( '', $mapped_config['stripe_pk'], 'multi-shop ordinary REST app identifier stays blank' );
+	db_integration_same( false, $mapped_assets['DoughBossData']['payments']['enabled'], 'multi-shop ordinary asset gate stays disabled' );
+	db_integration_same( '', $mapped_assets['DoughBossSquareConfig']['applicationId'], 'multi-shop SDK app identifier stays blank' );
+	db_integration_same( '', $mapped_assets['DoughBossSquareConfig']['locationId'], 'multi-shop SDK location stays blank' );
+	db_integration_same( false, $mapped_assets['sdk'], 'multi-shop ordinary page does not preload the SDK' );
+	$mapped_settings['ordering_open'] = 0;
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_settings, false );
+	foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $mapped_shop ) {
+		$mapped_id = 0;
+		foreach ( $mapped_original_rows as $row ) {
+			if ( $mapped_shop === $row->slug ) { $mapped_id = (int) $row->id; }
+		}
+		if ( ! $mapped_id ) {
+			$created_location = DoughBoss_Locations::create( array( 'name' => 'Synthetic ' . $mapped_shop, 'slug' => $mapped_shop,
+				'is_active' => 0, 'online_payment_enabled' => 0, 'pickup_enabled' => 1 ) );
+			db_integration_assert( ! is_wp_error( $created_location ) && $created_location > 0, 'disposable mapped ' . $mapped_shop . ' native row exists' );
+			$mapped_id = is_wp_error( $created_location ) ? 0 : (int) $created_location;
+			if ( $mapped_id ) { $mapped_original_rows[] = DoughBoss_Locations::get( $mapped_id ); }
+		}
+		if ( ! $mapped_id ) { continue; }
+		$native_before = DoughBoss_Locations::get( $mapped_id );
+		$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 1, 'online_payment_enabled' => 1 ), array( 'id' => $mapped_id ) );
+		db_integration_same( true, DoughBoss_Square::ready_for_location( $mapped_id ), 'mapped native ' . $mapped_shop . ' readiness is exact' );
+		$shop_fixture = db_integration_approved_square_rest_fixture( 'mapped-native-' . $mapped_shop, $mapped_id );
+		db_integration_assert( is_array( $shop_fixture ), 'mapped native ' . $mapped_shop . ' approval fixture exists' );
+		if ( is_array( $shop_fixture ) ) {
+			$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 170 + $mapped_id );
+			$shop_view = $square_rest_controller->preorder_payment_view( db_integration_rest_request( '/doughboss/v1/preorder-payment/view', array( 'request_id' => $shop_fixture['request_id'], 'token' => $shop_fixture['token'] ) ) );
+			$shop_data = $shop_view instanceof WP_REST_Response ? $shop_view->get_data() : array();
+			db_integration_same( $mapped_settings['square_test_location_map'][ $mapped_shop ], isset( $shop_data['square']['location_id'] ) ? $shop_data['square']['location_id'] : '', 'approved ' . $mapped_shop . ' SDK tuple uses only its persisted native shop' );
+			db_integration_same( true, ! empty( $shop_data['can_start_payment'] ), 'closed ordinary ordering still permits approved ' . $mapped_shop . ' payment presentation' );
+		}
+		$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 0 ), array( 'id' => $mapped_id ) );
+		db_integration_same( false, DoughBoss_Square::ready_for_location( $mapped_id ), 'inactive mapped native ' . $mapped_shop . ' remains unready' );
+		$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => (int) $native_before->is_active, 'online_payment_enabled' => (int) $native_before->online_payment_enabled ), array( 'id' => $mapped_id ) );
+	}
+	$mapped_denial = db_integration_approved_square_rest_fixture( 'mapped-denial-before-claim' );
+	db_integration_assert( is_array( $mapped_denial ), 'mapped configuration-denial approval fixture is available' );
+	if ( is_array( $mapped_denial ) ) {
+		foreach ( array( array( 'payments_enabled' => 0 ), array( 'square_test_app_id' => '' ), array( 'square_test_access_token' => '' ), array( 'square_test_location_map' => array() ),
+			array( 'square_test_location_map' => array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE' ) ) ) as $index => $override ) {
+			update_option( DoughBoss_Settings::OPTION_KEY, array_merge( $mapped_settings, $override ), false );
+			$posts = $GLOBALS['db_square_post_count'];
+			$attempts = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_payment_attempts' );
+			$snapshots = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots' );
+			$_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( 185 + $index );
+			$denied = $square_rest_controller->preorder_payment_start( db_integration_rest_request( '/doughboss/v1/preorder-payment/start', array( 'request_id' => $mapped_denial['request_id'], 'token' => $mapped_denial['token'], 'payment_attempt_key' => 'mapped-denial-start-0001', 'source_id' => 'cnon:mapped-denial' ) ) );
+			$approval = DoughBoss_Preorder_Approval::get( $mapped_denial['request_id'] );
+			db_integration_assert( is_wp_error( $denied ), 'invalid mapped configuration denies approved start' );
+			db_integration_same( 'approved_unpaid', $approval['state'], 'configuration denial never claims approved payment' );
+			db_integration_same( 0, (int) $approval['payment_attempt_id'], 'configuration denial links no attempt' );
+			db_integration_same( $attempts, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_payment_attempts' ), 'configuration denial allocates no attempt' );
+			db_integration_same( $snapshots, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots' ), 'configuration denial allocates no snapshot' );
+			db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'configuration denial performs no provider POST' );
+		}
+	}
+} finally {
+	foreach ( $mapped_original_rows as $row ) {
+		$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => (int) $row->is_active ), array( 'id' => $row->id ) );
+	}
+	update_option( DoughBoss_Settings::OPTION_KEY, $square_rest_settings, false );
+}
 $square_rest_view_fixture = db_integration_approved_square_rest_fixture( 'rest-view' );
 if ( is_array( $square_rest_view_fixture ) ) {
 	$_SERVER['REMOTE_ADDR'] = '192.0.2.231';

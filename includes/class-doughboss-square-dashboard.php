@@ -17,7 +17,6 @@ class DoughBoss_Square_Dashboard {
 			return new WP_Error( 'doughboss_square_dashboard_input', __( 'Choose a supported dashboard view and location.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 		$credentials_present = '' !== DoughBoss_Settings::square_application_id()
-			&& '' !== DoughBoss_Settings::square_location_id()
 			&& DoughBoss_Settings::square_access_token_valid();
 		$view = array(
 			'schema_version' => 1,

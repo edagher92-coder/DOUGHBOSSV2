@@ -11,6 +11,51 @@ require_once dirname( __DIR__ ) . '/includes/class-doughboss-order.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-dashboard.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-orders.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment-legs.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment.php';
+
+db_test( 'Square mapped readiness preserves legacy and activation gates', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	$maps = array( 'revesby' => 'LMAPPED_REVESBY', 'bankstown' => 'LMAPPED_BANKSTOWN', 'roselands' => 'LMAPPED_ROSELANDS' );
+	try {
+		foreach ( array( 'test', 'live' ) as $mode ) {
+			$settings = db_square_settings( array( 'square_mode' => $mode, 'square_live_approved' => 1,
+				'square_test_location_id' => '', 'square_live_location_id' => '',
+				'square_test_location_map' => $maps, 'square_live_location_map' => $maps ) );
+			doughboss_test_set_settings( $settings );
+			assert_false( DoughBoss_Square::ready(), 'legacy global readiness still requires a global location' );
+			assert_false( DoughBoss_Payment::ready(), 'the zero-context facade remains global' );
+			foreach ( array_keys( $maps ) as $shop ) {
+				assert_true( DoughBoss_Settings::square_shop_ready( $shop ), 'exact mapped shop can be locally configured without a legacy ID' );
+			}
+			foreach ( array( 'planned', 'unknown', 'Revesby', 'revesby ', 1, null, array() ) as $shop ) {
+				assert_false( DoughBoss_Settings::square_shop_ready( $shop ), 'unsupported or non-exact shop never inherits a binding' );
+			}
+			$credential_prefix = 'square_' . $mode;
+			$denials = array( array( 'payments_enabled' => 0 ), array( 'payment_gateway' => 'stripe' ),
+				array( $credential_prefix . '_app_id' => '' ), array( $credential_prefix . '_access_token' => '' ),
+				array( $credential_prefix . '_access_token' => 'short' ), array( $credential_prefix . '_location_map' => array() ),
+				array( $credential_prefix . '_location_map' => array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE' ) ) );
+			if ( 'live' === $mode ) {
+				$denials[] = array( 'square_live_approved' => 0 );
+				$denials[] = array( 'square_live_webhook_key' => '' );
+			}
+			foreach ( $denials as $overrides ) {
+				doughboss_test_set_settings( array_merge( $settings, $overrides ) );
+				assert_false( DoughBoss_Settings::square_shop_ready( 'revesby' ), 'mapped readiness retains every master, credential, environment and live approval guard' );
+			}
+		}
+		foreach ( array( null, 0, -1, '1', 1.0, true, array() ) as $native_id ) {
+			assert_false( DoughBoss_Square::ready_for_location( $native_id ), 'native-location readiness rejects coercible or missing identity before storage access' );
+		}
+		doughboss_test_set_settings( db_square_settings( array( 'square_test_location_id' => '', 'square_test_location_map' => $maps ) ) );
+		$status = DoughBoss_Square_Dashboard::view();
+		assert_true( $status['connection']['credentials_present'], 'dashboard credentials do not require an obsolete global location' );
+		assert_same( 'configured_unverified', $status['connection']['state'], 'credentials are configuration, not connection proof' );
+		assert_false( $status['connection']['provider_verified'], 'valid credentials and mappings still do not attest provider verification' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
 
 db_test(
 	'split recovery rejects coercible and malformed inputs before storage or HTTP',

@@ -2610,6 +2610,15 @@ class DoughBoss_REST_Controller {
 	 */
 	public function get_config() {
 		$single_location_id = DoughBoss_Locations::single_location_id();
+		$gateway = DoughBoss_Settings::payment_gateway();
+		$payment_ready = DoughBoss_Payment::ready();
+		if ( 'square' === $gateway ) {
+			// Multi-shop pages have no server-selected ordinary SDK shop.
+			// Approved links use their separate persisted order location.
+			$payment_ready = DoughBoss_Settings::ordering_open() && $single_location_id
+				&& ! is_wp_error( DoughBoss_Locations::online_payment_location( $single_location_id ) )
+				&& DoughBoss_Square::ready_for_location( $single_location_id );
+		}
 		return rest_ensure_response(
 			array(
 				'currency_symbol' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
@@ -2634,13 +2643,13 @@ class DoughBoss_REST_Controller {
 				'after_hours_preorders_message' => DoughBoss_Settings::after_hours_preorders_message(),
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
-				'payments_enabled' => DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready(),
+				'payments_enabled' => DoughBoss_Settings::ordering_open() && $payment_ready,
 				// 'stripe_pk' kept as the field name for backward compatibility with
 				// existing storefront JS — it now carries whichever gateway's public
 				// identifier is active (Stripe publishable key or Tyro Connect marker),
 			// per 'payment_gateway' below.
-				'stripe_pk'        => DoughBoss_Payment::ready() ? DoughBoss_Payment::publishable_key() : '',
-				'payment_gateway'  => DoughBoss_Settings::payment_gateway(),
+				'stripe_pk'        => $payment_ready ? DoughBoss_Payment::publishable_key() : '',
+				'payment_gateway'  => $gateway,
 				// Mercure real-time config for the standalone Console (no secrets —
 				// only the public hub URL + topic; the publish JWT never leaves the
 				// server, and the board topic is publicly readable).
@@ -2667,7 +2676,7 @@ class DoughBoss_REST_Controller {
 		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::payment_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Card payments are paused while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
-		if ( ! DoughBoss_Payment::ready() ) {
+		if ( 'square' !== DoughBoss_Settings::payment_gateway() && ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
@@ -2712,7 +2721,7 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}
-		if ( DoughBoss_Payment::ready() ) {
+		if ( 'square' === DoughBoss_Settings::payment_gateway() || DoughBoss_Payment::ready() ) {
 			$payment_location = DoughBoss_Locations::online_payment_location( $location_id );
 			if ( is_wp_error( $payment_location ) ) {
 				return $payment_location;
@@ -2721,6 +2730,9 @@ class DoughBoss_REST_Controller {
 
 		$gateway = DoughBoss_Settings::payment_gateway();
 		$name    = sanitize_text_field( $request->get_param( 'customer_name' ) );
+		if ( 'square' === $gateway && ! DoughBoss_Square::ready_for_location( $location_id ) ) {
+			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
+		}
 		$email   = sanitize_email( $request->get_param( 'customer_email' ) );
 		$phone   = sanitize_text_field( $request->get_param( 'customer_phone' ) );
 		$address = sanitize_textarea_field( $request->get_param( 'address' ) );
@@ -3898,9 +3910,6 @@ class DoughBoss_REST_Controller {
 	private function preorder_payment_start_square( WP_REST_Request $request ) {
 		$tender_kind = DoughBoss_Square::tender_kind( $request->get_param( 'tender_kind' ) );
 		if ( is_wp_error( $tender_kind ) ) { return $tender_kind; }
-		if ( ! DoughBoss_Square::ready() ) {
-			return new WP_Error( 'doughboss_pay_off', __( 'Card payment is not available right now. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
-		}
 		if ( $this->rate_limited( 'preorder_payment_start', 8, 10 * MINUTE_IN_SECONDS ) ) {
 			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
 		}
@@ -3927,6 +3936,9 @@ class DoughBoss_REST_Controller {
 		}
 		if ( is_wp_error( $binding ) ) {
 			return $binding;
+		}
+		if ( ! DoughBoss_Square::ready_for_location( (int) $order->location_id ) ) {
+			return new WP_Error( 'doughboss_pay_off', __( 'Card payment is not available right now. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 		$approval = DoughBoss_Preorder_Approval::claim_payment( $request_id, $token );
 		if ( is_wp_error( $approval ) ) {
@@ -4233,7 +4245,7 @@ class DoughBoss_REST_Controller {
 			&& DoughBoss_Payment::ready()
 			&& ! is_wp_error( $payment_location );
 		$square_binding = 'square' === DoughBoss_Settings::payment_gateway() ? DoughBoss_Square::shop_binding( (int) $order->location_id ) : new WP_Error( 'doughboss_pay_off' );
-		$square_ready = 'square' === DoughBoss_Settings::payment_gateway() && DoughBoss_Square::ready() && ! is_wp_error( $payment_location ) && ! is_wp_error( $square_binding );
+		$square_ready = 'square' === DoughBoss_Settings::payment_gateway() && DoughBoss_Square::ready_for_location( (int) $order->location_id ) && ! is_wp_error( $payment_location ) && ! is_wp_error( $square_binding );
 		$linked_attempt_id = isset( $approval['payment_attempt_id'] ) ? (int) $approval['payment_attempt_id'] : 0;
 		$linked_attempt = $square_ready && $linked_attempt_id ? $this->approved_square_attempt( $approval, (int) $order->id ) : null;
 		$square_confirm = $square_ready && in_array( $state, array( 'payment_active', 'payment_held' ), true ) && is_array( $linked_attempt );
@@ -4452,7 +4464,12 @@ class DoughBoss_REST_Controller {
 		$returned_payment_reference = is_scalar( $returned_payment_reference ) ? sanitize_text_field( (string) $returned_payment_reference ) : '';
 		$payment_return             = '' !== $returned_payment_reference;
 		$returned_stripe_session    = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $returned_payment_reference );
-		if ( DoughBoss_Payment::ready() || $payment_return ) {
+		// Payment policy is not initiation readiness: losing a Square mapping
+		// or credential must not reinterpret enabled payments as pay-at-shop.
+		// Preserve every legacy gateway requirement and returned-reference guard.
+		$payment_required = DoughBoss_Payment::ready()
+			|| ( 'square' === DoughBoss_Settings::payment_gateway() && DoughBoss_Settings::payments_enabled() );
+		if ( $payment_required || $payment_return ) {
 			// A hosted payment can return after an operator closes card acceptance.
 			// The switch must stop new charges, but it must never reinterpret an
 			// already-paid return as pay-on-pickup. Any returned provider reference
