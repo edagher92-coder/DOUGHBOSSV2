@@ -30,7 +30,7 @@ T0 = time.time()
 # ---------------------------------------------------------------------------
 # Tunables (metres, degrees). Keep in sync with docs/3d-assets.md.
 # ---------------------------------------------------------------------------
-GENERATOR = "build_exploded_manoush.py v3"
+GENERATOR = "build_exploded_manoush.py v4"
 COLLECTION_NAME = "DoughBossHero"
 MATERIAL_PREFIX = "DB_"
 SEED = 1234
@@ -63,7 +63,10 @@ CAMERA_LENS_MM = 35.0
 CAMERA_SENSOR_MM = 36.0
 FRAME_MARGIN = 0.06
 FIT_INCLUDE_PEEL = False  # the handle may leave frame; the pizza must not
-PEEL_HANDLE_SWING_DEG = 38.0  # handle angle off the view axis, to the right
+# Handle angle off the view axis, to the right. 25 degrees lands the handle
+# on the 45-degree cut between slice0 and slice1, so the exploded crust arcs
+# straddle it instead of hovering over it.
+PEEL_HANDLE_SWING_DEG = 25.0
 
 # Mesh density (per wedge). Chosen to keep the meshopt GLB well under 600 KB.
 DOUGH_NR, DOUGH_NA = 10, 14
@@ -122,8 +125,8 @@ def newell(points):
 # Palette (picked in sRGB, stored linear)
 # ---------------------------------------------------------------------------
 C_CRUST_PALE = srgb(226, 186, 128)
-C_CRUST_GOLD = srgb(204, 136, 58)
-C_CRUST_DEEP = srgb(158, 92, 38)
+C_CRUST_GOLD = srgb(198, 142, 74)
+C_CRUST_DEEP = srgb(150, 98, 50)
 C_CHAR = srgb(42, 27, 18)
 C_CRUMB = srgb(236, 216, 172)
 # White akkawi-style cheese with golden blisters; kept clearly lighter than
@@ -142,9 +145,9 @@ C_CHILI_DARK = srgb(132, 18, 10)
 C_CHILI_ORANGE = srgb(214, 78, 22)
 # A well-used, oven-darkened peel: darker than raw timber so the pale dough
 # reads against it.
-C_WOOD = srgb(132, 90, 54)
-C_WOOD_DARK = srgb(94, 60, 34)
-C_SCORCH = srgb(48, 30, 18)
+C_WOOD = srgb(128, 98, 62)
+C_WOOD_DARK = srgb(92, 68, 42)
+C_SCORCH = srgb(46, 32, 20)
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +353,10 @@ def dough_bottom(_x, _y, _r):
 
 
 def dough_top_colour(x, y, _z, _r, _a):
-    return mix(C_DOUGH_TOP, C_CRUST_PALE, 0.5 + 0.5 * n3(x * 25.0, y * 25.0, 4.4))
+    col = mix(C_DOUGH_TOP, C_CRUST_PALE, 0.5 + 0.5 * n3(x * 25.0, y * 25.0, 4.4))
+    # Fine oven speckle so the bare dough does not read as cardboard.
+    speck = smoothstep(0.45, 0.7, n3(x * 140.0, y * 140.0, 3.3))
+    return mix(col, C_CRUST_GOLD, speck * 0.55)
 
 
 def dough_bottom_colour(x, y, _z, _r, _a):
