@@ -6,7 +6,7 @@
  * Runs against the harness's in-memory SQLite database with the module's REAL CREATE TABLE statements, so the UNIQUE
  * key, the conditional UPDATEs and the INSERT IGNORE race handling behave for real. No test makes a real request:
  * mail goes to the harness's mail log and the one webhook test uses the fake transport. The ES5 browser behaviour is
- * covered by waitlist.test.js and tilt-cards.test.js; the rendered page by web/scripts/wp-local/growth/wp05-waitlist.mjs.
+ * covered by waitlist.test.js; the rendered page by web/scripts/wp-local/growth/wp05-waitlist.mjs.
  *
  * @package DoughBoss_Growth
  */
@@ -1302,7 +1302,6 @@ db_test(
 		assert_matches( '/aria-labelledby="dbgr-cs-[0-9]+-title"/', $section, 'labelled region' );
 		assert_same( 0, preg_match( '/<li class="dbgr-card"/', $section ), 'no card without a confirmed claim' );
 		assert_true( wp_script_is( 'dbgr-waitlist', 'enqueued' ), 'the section script is enqueued' );
-		assert_false( wp_script_is( 'dbgr-tilt-cards', 'enqueued' ), 'the tilt script is NOT loaded when there are no cards' );
 	}
 );
 
@@ -1389,12 +1388,12 @@ db_test(
 		assert_same( 0, preg_match( '/dbgr-card/', $none ), 'no cards unless claim ids are supplied' );
 
 		$html = DoughBoss_Growth_Coming_Soon::shortcode( array( 'cards' => 'first-look,unconfirmed-claim,dietary-claim,not-in-ledger,Bad_Id' ) );
-		assert_same( 1, preg_match_all( '/<li class="dbgr-card" data-dbgr-tilt>/', $html ), 'exactly one card: the confirmed, clean claim' );
+		assert_same( 1, preg_match_all( '/<li class="dbgr-card">/', $html ), 'exactly one card: the confirmed, clean claim' );
 		assert_contains( 'A first look for the list', $html, 'its text' );
 		assert_not_contains( 'Not yet confirmed', $html, 'an unconfirmed claim is not shown' );
 		assert_not_contains( 'Halal', $html, 'a claim failing the lint is not shown even when confirmed' );
 		assert_same( 0, preg_match( '/style="[^"]*(transform|rotate)/', $html ), 'no inline motion in the markup' );
-		assert_true( wp_script_is( 'dbgr-tilt-cards', 'enqueued' ), 'the tilt script loads when a card exists' );
+		assert_false( wp_script_is( 'dbgr-tilt-cards', 'enqueued' ), 'no tilt script exists any more' );
 
 		add_filter(
 			'doughboss_growth_coming_soon_claim_ids',
@@ -1534,8 +1533,10 @@ db_test(
 		$tab = (string) ob_get_clean();
 		assert_contains( 'VIP waitlist', $tab, 'tab heading' );
 		assert_contains( DBGR_WL_SENDER, $tab, 'sender shown' );
-		assert_contains( '[CONFIRM: sender contact details', $tab, 'the contact-details gap is listed' );
-		assert_contains( '[CONFIRM: how long confirmed sign-ups are kept', $tab, 'the retention gap is listed' );
+		assert_contains( 'Sender contact details', $tab, 'the contact-details gap is listed' );
+		assert_contains( 'How long confirmed sign-ups are kept', $tab, 'the retention gap is listed' );
+		assert_not_contains( '[CONFIRM', $tab, 'no bracket marker reaches the owner' );
+		assert_not_contains( 'Elie', $tab, 'the owner is not named in the tab' );
 		assert_contains( 'name="action" value="doughboss_growth_export_waitlist"', $tab, 'export form' );
 		assert_contains( '_wpnonce', $tab, 'export form carries a nonce' );
 		assert_not_contains( 'jordan@example.com', $tab, 'no email on the screen' );
@@ -1617,8 +1618,8 @@ db_test(
 	'hygiene: no module file contains the working name, a hard-coded provider host, a direct HTTP call or a 3D, canvas or frame-sprite construct',
 	function () {
 		$dir   = dirname( __DIR__ );
-		$files = array_merge( glob( $dir . '/includes/waitlist/*.php' ), array( $dir . '/public/js/dbgr-waitlist.js', $dir . '/public/js/dbgr-tilt-cards.js', $dir . '/public/css/dbgr-coming-soon.css' ) );
-		assert_same( 7, count( $files ), 'the seven shipped WP-05 files exist' );
+		$files = array_merge( glob( $dir . '/includes/waitlist/*.php' ), array( $dir . '/public/js/dbgr-waitlist.js', $dir . '/public/css/dbgr-coming-soon.css' ) );
+		assert_same( 6, count( $files ), 'the six shipped WP-05 files exist' );
 		foreach ( $files as $file ) {
 			$text = (string) file_get_contents( $file );
 			assert_same( 0, preg_match( '/mini' . 's/i', $text ), 'no working name in ' . basename( $file ) );
@@ -1630,8 +1631,7 @@ db_test(
 			}
 		}
 		$css = (string) file_get_contents( $dir . '/public/css/dbgr-coming-soon.css' );
-		assert_matches( '/@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.dbgr-card__face\s*\{[^}]*transform:\s*none/s', $css, 'tilt cards are flat under reduced motion (CSS)' );
-		$tilt = (string) file_get_contents( $dir . '/public/js/dbgr-tilt-cards.js' );
-		assert_contains( 'prefers-reduced-motion: reduce', $tilt, 'and the script checks the setting live' );
+		assert_same( 0, preg_match( '/rotate[XYZ]|perspective|preserve-3d|will-change/i', $css ), 'cards are static: no 3D transform, perspective or will-change in the stylesheet' );
+		assert_false( file_exists( $dir . '/public/js/dbgr-tilt-cards.js' ), 'the tilt script is gone' );
 	}
 );

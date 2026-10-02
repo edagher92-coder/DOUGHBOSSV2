@@ -153,6 +153,7 @@ function makeEnv(options) {
     byId.accept = root.add(new FakeElement(doc, 'btn-accept', { 'data-dbgr-action': 'accept' }));
     byId.reject = root.add(new FakeElement(doc, 'btn-reject', { 'data-dbgr-action': 'reject' }));
     byId.choose = root.add(new FakeElement(doc, 'btn-choose', { 'data-dbgr-action': 'choose', 'aria-expanded': 'false' }));
+    byId.close = root.add(new FakeElement(doc, 'btn-close', { 'data-dbgr-action': 'close', hidden: '' }));
     byId['dbgr-consent-reopen'] = doc.body.add(new FakeElement(doc, 'dbgr-consent-reopen', { hidden: '', 'data-dbgr-consent-open': '1' }));
   }
   /* Optional layout: the banner's height, and (for a floating banner) the gap under it. Without it the script sees neither. */
@@ -375,6 +376,51 @@ test('Privacy choices reopens the banner with the panel showing the stored choic
   assert.strictEqual(isHidden(env.els['dbgr-consent']), true, 'second Escape closes a reopened banner (nothing changes)');
   assert.deepStrictEqual(env.doc.cookieWrites, [], 'closing does not rewrite the choice');
   assert.strictEqual(env.doc.activeElement, env.els['dbgr-consent-reopen']);
+});
+
+test('Close button: hidden on a first visit (no choice yet), and a click there does nothing', () => {
+  const env = run(makeEnv());
+  assert.strictEqual(isHidden(env.els.close), true, 'not offered before a choice');
+  click(env, env.els.close);
+  assert.strictEqual(isHidden(env.els['dbgr-consent']), false, 'a stray close action cannot dismiss the first-visit banner');
+  assert.deepStrictEqual(env.doc.cookieWrites, []);
+  assert.strictEqual(env.win.DoughBossGrowth.consent.get().chosen, false);
+});
+
+test('Close button: visible only after a choice exists (shown when the banner is reopened), hidden again with the banner', () => {
+  const env = run(makeEnv({ cookie: encodeCookie({ v: '1', m: 1, a: 0, ts: 1790899200 }) }));
+  assert.strictEqual(isHidden(env.els.close), true, 'hidden while the banner is closed');
+  click(env, env.els['dbgr-consent-reopen']);
+  assert.strictEqual(isHidden(env.els['dbgr-consent']), false);
+  assert.strictEqual(isHidden(env.els.close), false, 'offered because a choice already exists');
+});
+
+test('Close button: closes the reopened banner WITHOUT writing the cookie or announcing anything, and focus returns to Privacy choices', () => {
+  const stored = encodeCookie({ v: '1', m: 1, a: 0, ts: 1790899200 });
+  const env = run(makeEnv({ cookie: stored }));
+  env.els['dbgr-consent-reopen'].focus();
+  click(env, env.els['dbgr-consent-reopen']);
+  env.doc.fired.length = 0;
+  click(env, env.els.close);
+  assert.strictEqual(isHidden(env.els['dbgr-consent']), true, 'banner closed');
+  assert.deepStrictEqual(env.doc.cookieWrites, [], 'no cookie write');
+  assert.strictEqual(env.doc.cookieJar, stored, 'stored choice untouched');
+  assert.deepStrictEqual(env.doc.fired, [], 'no consent event');
+  assert.deepStrictEqual(gtagCalls(env), [], 'no Consent Mode update');
+  assert.strictEqual(isHidden(env.els['dbgr-consent-reopen']), false, 'Privacy choices is back');
+  assert.strictEqual(env.doc.activeElement, env.els['dbgr-consent-reopen'], 'focus returns to Privacy choices');
+  assert.deepStrictEqual(plain(env.win.DoughBossGrowth.consent.get()), { measurement: true, advertising: false, chosen: true, version: '1' });
+});
+
+test('Close button: after Accept in the same page view the reopened banner offers Close too, and it still writes nothing more', () => {
+  const env = run(makeEnv());
+  click(env, env.els.accept);
+  const writes = env.doc.cookieWrites.length;
+  click(env, env.els['dbgr-consent-reopen']);
+  assert.strictEqual(isHidden(env.els.close), false);
+  click(env, env.els.close);
+  assert.strictEqual(env.doc.cookieWrites.length, writes, 'no extra write');
+  assert.strictEqual(isHidden(env.els['dbgr-consent']), true);
 });
 
 test('Escape before any choice does NOT dismiss the banner (dismissal is not consent)', () => {

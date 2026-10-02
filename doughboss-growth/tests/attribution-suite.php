@@ -23,7 +23,7 @@ DoughBoss_Growth::load_module( 'attribution' );
 function dbgr_at_consent_cookie( $m, $a ) {
 	return wp_json_encode(
 		array(
-			'v'  => '1',
+			'v'  => '2',
 			'm'  => $m,
 			'a'  => $a,
 			'ts' => DBGR_TEST_EPOCH,
@@ -1063,7 +1063,8 @@ db_test(
 		assert_contains( 'Latest lead records', $html, 'recent leads heading' );
 		assert_not_contains( 'person@example.com', $html, 'no email' );
 		assert_not_contains( '>x<', $html, 'the click id itself is not printed' );
-		assert_contains( '[CONFIRM: how long attribution and lead records are kept', $html, 'retention gap' );
+		assert_contains( 'How long attribution and lead records are kept', $html, 'retention gap' );
+		assert_not_contains( '[CONFIRM', $html, 'no bracket marker reaches the owner' );
 		assert_contains( 'Attribution rows: enquiry', $html, 'counts per subject type' );
 	}
 );

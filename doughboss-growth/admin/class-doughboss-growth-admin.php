@@ -338,7 +338,7 @@ final class DoughBoss_Growth_Admin {
 			'gtm_requires_consent_banner'            => __( 'Tag Manager needs the consent banner on first, so it was left off.', 'doughboss-growth' ),
 			'seo_head_requires_landing_pages'        => __( 'Search metadata needs the landing pages on first, so it was left off.', 'doughboss-growth' ),
 			'server_conversions_requires_attribution' => __( 'Server-side conversions need attribution on first, so they were left off.', 'doughboss-growth' ),
-			'server_conversions_requires_destination' => __( 'Server-side conversions need at least one fully configured destination (an id with its secret, or a webhook URL), so they were left off.', 'doughboss-growth' ),
+			'server_conversions_requires_destination' => __( 'Server-side conversions need at least one fully configured destination (a GA4 or Meta id with its secret), so they were left off.', 'doughboss-growth' ),
 			'waitlist_requires_sender_legal_name'    => __( 'The waitlist needs the sender legal name first, so it was left off.', 'doughboss-growth' ),
 			'waitlist_requires_privacy_policy_url'   => __( 'The waitlist needs the privacy-policy URL first, so it was left off.', 'doughboss-growth' ),
 		);
@@ -378,7 +378,7 @@ final class DoughBoss_Growth_Admin {
 			'gtm_container_id'           => __( 'Tag Manager container id: that is not a valid id (it should look like GTM-XXXXXXX), so it was left blank. Tag Manager cannot load without one.', 'doughboss-growth' ),
 			'ga4_measurement_id'         => __( 'GA4 measurement id: that is not a valid id (it should look like G-XXXXXXXXXX), so it was left blank.', 'doughboss-growth' ),
 			'meta_pixel_id'              => __( 'Meta pixel id: that is not a valid id (digits only, 8 to 20 of them), so it was left blank.', 'doughboss-growth' ),
-			'consent_text_version'       => __( 'Consent wording version: use letters, numbers, dots, dashes and underscores only, so the default (1) is used.', 'doughboss-growth' ),
+			'consent_text_version'       => __( 'Consent wording version: use letters, numbers, dots, dashes and underscores only, so the default (2) is used.', 'doughboss-growth' ),
 			'consent_default'            => __( 'Consent default: that choice is not recognised, so "Ask first" is used.', 'doughboss-growth' ),
 			'sender_legal_name'          => __( 'Sender legal name: that text was not accepted, so it was left blank.', 'doughboss-growth' ),
 			'privacy_policy_url'         => __( 'Privacy-policy URL: that is not a usable address (use a full http or https address, or a path that starts with a slash), so it was left blank.', 'doughboss-growth' ),
@@ -480,7 +480,7 @@ final class DoughBoss_Growth_Admin {
 			'gtm_requires_consent_banner'             => __( 'the consent banner to be on', 'doughboss-growth' ),
 			'seo_head_requires_landing_pages'         => __( 'landing pages to be on', 'doughboss-growth' ),
 			'server_conversions_requires_attribution' => __( 'attribution to be on', 'doughboss-growth' ),
-			'server_conversions_requires_destination' => __( 'a fully configured destination (an id with its secret, or a webhook URL)', 'doughboss-growth' ),
+			'server_conversions_requires_destination' => __( 'a fully configured destination (a GA4 or Meta id with its secret)', 'doughboss-growth' ),
 			'waitlist_requires_sender_legal_name'     => __( 'the sender legal name', 'doughboss-growth' ),
 			'waitlist_requires_privacy_policy_url'    => __( 'the privacy-policy URL', 'doughboss-growth' ),
 		);
@@ -586,6 +586,75 @@ final class DoughBoss_Growth_Admin {
 	}
 
 	/**
+	 * A plain sentence for a recorded failure code, for the Recent failures row. Known codes get their own sentence, a
+	 * family of codes (the same module or kind of problem) gets a shared one, and anything else gets a generic sentence:
+	 * the row never shows a bare code with no explanation. The sentences say what could not be done, never what was in
+	 * the data, and promise nothing about what happened next.
+	 *
+	 * @param mixed $code A failure code from DoughBoss_Growth_Failures.
+	 * @return string
+	 */
+	public static function failure_sentence( $code ) {
+		$code  = is_string( $code ) ? $code : '';
+		$exact = array(
+			'module_load_failed'              => __( 'A part of the plugin could not start, so the feature it serves is not running. The rest of the site is not affected.', 'doughboss-growth' ),
+			'module_failed'                   => __( 'A part of the plugin hit an error and was stopped, so the feature it serves is not running. The rest of the site is not affected.', 'doughboss-growth' ),
+			'schema_failed'                   => __( 'The plugin\'s database tables could not be created or updated, so features that store data stay off.', 'doughboss-growth' ),
+			'schema_install_failed'           => __( 'The plugin\'s database tables could not be created or updated, so features that store data stay off.', 'doughboss-growth' ),
+			'schema_version_save_failed'      => __( 'The plugin could not note that its database tables are up to date, so it will check them again.', 'doughboss-growth' ),
+			'settings_version_save_failed'    => __( 'The plugin could not note which version its settings are on.', 'doughboss-growth' ),
+			'settings_migrate_failed'         => __( 'Settings saved by an older version could not be brought up to date.', 'doughboss-growth' ),
+			'settings_save_failed'            => __( 'Your settings could not be saved. Please try again.', 'doughboss-growth' ),
+			'coming_soon_save_failed'         => __( 'The coming-soon ribbon switch could not be saved.', 'doughboss-growth' ),
+			'waitlist_signup_storage_failed'  => __( 'A VIP list sign-up could not be saved.', 'doughboss-growth' ),
+			'waitlist_signup_mail_failed'     => __( 'A confirmation email for a VIP list sign-up could not be sent.', 'doughboss-growth' ),
+			'waitlist_signup_token_failed'    => __( 'The VIP list form could not prepare its spam check.', 'doughboss-growth' ),
+			'waitlist_optout_failed'          => __( 'A request to leave the VIP list could not be processed.', 'doughboss-growth' ),
+			'waitlist_limiter_failed'         => __( 'The spam limit on the VIP list form could not be checked.', 'doughboss-growth' ),
+			'waitlist_purge_failed'           => __( 'The daily clean-up of old VIP list entries did not finish.', 'doughboss-growth' ),
+			'waitlist_csv_export_failed'      => __( 'The VIP list export could not be produced.', 'doughboss-growth' ),
+			'waitlist_erase_failed'           => __( 'A privacy request to erase a VIP list entry did not complete.', 'doughboss-growth' ),
+			'waitlist_privacy_export_failed'  => __( 'A privacy request to export a VIP list entry did not complete.', 'doughboss-growth' ),
+			'waitlist_webhook_enqueue'        => __( 'A VIP list notification could not be queued.', 'doughboss-growth' ),
+			'landing_record_failed'           => __( 'A landing page could not be recorded.', 'doughboss-growth' ),
+			'landing_create_failed'           => __( 'A landing page could not be created.', 'doughboss-growth' ),
+			'landing_compose_failed'          => __( 'A landing page could not be put together, so it was not shown.', 'doughboss-growth' ),
+			'conversion_enqueue_failed'       => __( 'A conversion could not be queued for sending.', 'doughboss-growth' ),
+			'conversion_read_failed'          => __( 'A conversion record could not be read.', 'doughboss-growth' ),
+			'conversion_payload_refused'      => __( 'A conversion was held back because it did not pass the plugin\'s safety checks.', 'doughboss-growth' ),
+			'attribution_read_failed'         => __( 'Source tracking records could not be read.', 'doughboss-growth' ),
+			'attribution_write_failed'        => __( 'A source tracking record could not be saved.', 'doughboss-growth' ),
+			'recon_run_failed'                => __( 'A clock-in reconciliation run did not finish.', 'doughboss-growth' ),
+			'recon_failed'                    => __( 'A clock-in reconciliation step did not finish.', 'doughboss-growth' ),
+			'http_transport_error'            => __( 'The site could not reach an outside service.', 'doughboss-growth' ),
+			'http_status_error'               => __( 'An outside service answered with an error.', 'doughboss-growth' ),
+			'http_failed'                     => __( 'A request to an outside service failed.', 'doughboss-growth' ),
+			'http_refused'                    => __( 'A request to an outside service was not sent because it did not pass the plugin\'s safety checks.', 'doughboss-growth' ),
+		);
+		if ( isset( $exact[ $code ] ) ) {
+			return $exact[ $code ];
+		}
+		$families = array(
+			'waitlist_'    => __( 'Something went wrong with the VIP list.', 'doughboss-growth' ),
+			'landing_'     => __( 'Something went wrong with a landing page.', 'doughboss-growth' ),
+			'conversion'   => __( 'Something went wrong with server-side conversions.', 'doughboss-growth' ),
+			'outbox_'      => __( 'Something went wrong with the queue of messages waiting to be sent.', 'doughboss-growth' ),
+			'attribution_' => __( 'Something went wrong with source tracking.', 'doughboss-growth' ),
+			'recon_'       => __( 'Something went wrong with clock-in reconciliation.', 'doughboss-growth' ),
+			'square_'      => __( 'Square did not answer a request as expected.', 'doughboss-growth' ),
+			'schema_'      => __( 'Something went wrong with the plugin\'s database tables.', 'doughboss-growth' ),
+			'settings_'    => __( 'Something went wrong saving settings.', 'doughboss-growth' ),
+			'http_'        => __( 'A request to an outside service did not go through.', 'doughboss-growth' ),
+		);
+		foreach ( $families as $prefix => $sentence ) {
+			if ( 0 === strpos( $code, $prefix ) ) {
+				return $sentence;
+			}
+		}
+		return __( 'Something went wrong in the background. The code beside this message is what to quote if you ask for help.', 'doughboss-growth' );
+	}
+
+	/**
 	 * The Recent failures status row, with a Clear button when there is something to clear.
 	 *
 	 * @return void
@@ -606,7 +675,8 @@ final class DoughBoss_Growth_Admin {
 			}
 			/* translators: 1: number of times, 2: date and time the failure was last seen. */
 			$line = sprintf( _n( '%1$d time, last seen %2$s', '%1$d times, last seen %2$s', $failure['count'], 'doughboss-growth' ), $failure['count'], $when );
-			echo '<li><code>' . esc_html( $failure['code'] ) . '</code> ' . esc_html( $line ) . ( array() !== $details ? ' <span class="description">(' . esc_html( implode( ', ', $details ) ) . ')</span>' : '' ) . '</li>';
+			// A plain sentence first; the raw code and the counts stay as small secondary text for whoever supports the site.
+			echo '<li>' . esc_html( self::failure_sentence( $failure['code'] ) ) . ' <span class="description"><code>' . esc_html( $failure['code'] ) . '</code> ' . esc_html( $line ) . ( array() !== $details ? ' (' . esc_html( implode( ', ', $details ) ) . ')' : '' ) . '</span></li>';
 		}
 		echo '</ul>';
 		self::render_clear_form();
@@ -768,7 +838,7 @@ final class DoughBoss_Growth_Admin {
 		self::text_row( 'gtm_container_id', __( 'Tag Manager container id', 'doughboss-growth' ), $settings['gtm_container_id'], 'GTM-XXXXXXX' );
 		self::text_row( 'ga4_measurement_id', __( 'GA4 measurement id', 'doughboss-growth' ), $settings['ga4_measurement_id'], 'G-XXXXXXXXXX' );
 		self::text_row( 'meta_pixel_id', __( 'Meta pixel id', 'doughboss-growth' ), $settings['meta_pixel_id'], '' );
-		self::text_row( 'consent_text_version', __( 'Consent wording version', 'doughboss-growth' ), $settings['consent_text_version'], '', __( 'Raise this (for example from 1 to 2) whenever you change the banner wording, so every visitor is asked again.', 'doughboss-growth' ) );
+		self::text_row( 'consent_text_version', __( 'Consent wording version', 'doughboss-growth' ), $settings['consent_text_version'], '', __( 'Raise this (for example from 2 to 3) whenever you change the banner wording, so every visitor is asked again.', 'doughboss-growth' ) );
 		$consent_labels = self::consent_default_labels();
 		echo '<tr><th scope="row"><label for="dbgr-consent_default">' . esc_html__( 'Consent default', 'doughboss-growth' ) . '</label></th><td><select id="dbgr-consent_default" name="dbgr[consent_default]">';
 		foreach ( DoughBoss_Growth_Settings::CONSENT_DEFAULTS as $value ) {

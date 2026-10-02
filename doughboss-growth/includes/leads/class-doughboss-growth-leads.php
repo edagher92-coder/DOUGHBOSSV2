@@ -104,6 +104,7 @@ final class DoughBoss_Growth_Leads {
 		if ( DoughBoss_Growth_Settings::enabled( 'lead_form' ) ) {
 			self::ensure_recording();
 			add_shortcode( self::SHORTCODE, array( __CLASS__, 'shortcode' ) );
+			add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_style_for_post' ) );
 		}
 		if ( is_admin() ) {
 			add_action( 'doughboss_growth_admin_tabs', array( __CLASS__, 'register_tab' ) );
@@ -255,6 +256,41 @@ final class DoughBoss_Growth_Leads {
 	/* ------------------------------------------------------------------------------------------ */
 
 	/**
+	 * wp_enqueue_scripts: on a single post or page that holds the form shortcode (or the party sizer's, which shares this
+	 * stylesheet), put the stylesheet in the head so the form is styled the moment it paints.
+	 *
+	 * @return void
+	 */
+	public static function enqueue_style_for_post() {
+		if ( is_admin() || ! function_exists( 'is_singular' ) || ! is_singular() || ! function_exists( 'get_queried_object_id' ) ) {
+			return;
+		}
+		$post = get_post( get_queried_object_id() );
+		if ( ! is_object( $post ) || ! isset( $post->post_content ) || ! is_string( $post->post_content ) ) {
+			return;
+		}
+		if ( has_shortcode( $post->post_content, self::SHORTCODE ) ) {
+			wp_register_style( self::HANDLE_STYLE, DOUGHBOSS_GROWTH_URL . 'public/css/dbgr-leads.css', array(), DOUGHBOSS_GROWTH_VERSION );
+			wp_enqueue_style( self::HANDLE_STYLE );
+		}
+	}
+
+	/**
+	 * The stylesheet link to print right here, once, when the head is already past (see DoughBoss_Growth_Waitlist::early_style()).
+	 * The party sizer shares this handle, so the two never print it twice.
+	 *
+	 * @return string
+	 */
+	private static function early_style() {
+		if ( ! did_action( 'wp_head' ) || wp_style_is( self::HANDLE_STYLE, 'done' ) ) {
+			return '';
+		}
+		ob_start();
+		wp_print_styles( self::HANDLE_STYLE );
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Register and enqueue the style and script, and print the browser configuration once.
 	 *
 	 * @return void
@@ -286,7 +322,7 @@ final class DoughBoss_Growth_Leads {
 				'email'     => __( 'Please enter a valid email address.', 'doughboss-growth' ),
 				'company'   => __( 'Please enter your company name.', 'doughboss-growth' ),
 				'guests'    => __( 'Please enter how many guests, as a whole number.', 'doughboss-growth' ),
-				'sending'   => __( 'Sending...', 'doughboss-growth' ),
+				'sending'   => __( 'Sending', 'doughboss-growth' ),
 				'sent'      => __( 'Thank you. Your enquiry has been received and the catering team will be in touch.', 'doughboss-growth' ),
 				'number'    => __( 'Your enquiry number is', 'doughboss-growth' ),
 				'refresh'   => __( 'This page has expired. Please refresh it and try again.', 'doughboss-growth' ),
@@ -339,7 +375,8 @@ final class DoughBoss_Growth_Leads {
 		$consent = self::consent_text();
 		$req     = $def['company_required'];
 
-		$h  = '<form class="dbgr-lead" id="' . esc_attr( $uid ) . '" data-dbgr-lead-form data-segment="' . esc_attr( $def['segment'] ) . '" data-landing="' . esc_attr( $landing ) . '"';
+		$h  = self::early_style();
+		$h .= '<form class="dbgr-lead" id="' . esc_attr( $uid ) . '" data-dbgr-lead-form data-segment="' . esc_attr( $def['segment'] ) . '" data-landing="' . esc_attr( $landing ) . '"';
 		$h .= ' data-company-required="' . ( $req ? '1' : '0' ) . '" method="post" action="#" novalidate aria-labelledby="' . esc_attr( $uid ) . '-legend">';
 		$h .= '<div data-dbgr-lead-fields>';
 		$h .= '<p class="dbgr-lead__legend" id="' . esc_attr( $uid ) . '-legend">' . esc_html__( 'Catering enquiry', 'doughboss-growth' ) . '</p>';
@@ -350,34 +387,34 @@ final class DoughBoss_Growth_Leads {
 		$h .= self::field( $uid, 'customer_phone', __( 'Phone', 'doughboss-growth' ), 'tel', false, array( 'autocomplete' => 'tel', 'inputmode' => 'tel', 'maxlength' => (string) self::MAX_PHONE ) );
 
 		if ( array() !== $pkgs ) {
-			$h .= '<p class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-package_id">' . esc_html__( 'Package', 'doughboss-growth' ) . ' <span class="dbgr-lead__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
+			$h .= '<div class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-package_id">' . esc_html__( 'Package', 'doughboss-growth' ) . ' <span class="dbgr-lead__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
 			$h .= '<select id="' . esc_attr( $uid ) . '-package_id" name="package_id"><option value="0">' . esc_html__( 'Not sure yet', 'doughboss-growth' ) . '</option>';
 			foreach ( $pkgs as $pkg ) {
 				$h .= '<option value="' . esc_attr( (string) $pkg['id'] ) . '">' . esc_html( $pkg['name'] ) . '</option>';
 			}
-			$h .= '</select></p>';
+			$h .= '</select></div>';
 		}
 
 		$h .= self::field( $uid, 'guest_count', __( 'Number of guests', 'doughboss-growth' ), 'number', true, array( 'min' => '1', 'max' => (string) self::MAX_GUESTS, 'step' => '1', 'inputmode' => 'numeric' ) );
 		$h .= self::field( $uid, 'event_date', __( 'Event date', 'doughboss-growth' ), 'date', false, array() );
 
-		$h .= '<p class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-order_type">' . esc_html__( 'Pickup or delivery', 'doughboss-growth' ) . '</label>';
-		$h .= '<select id="' . esc_attr( $uid ) . '-order_type" name="order_type"><option value="pickup">' . esc_html__( 'Pickup', 'doughboss-growth' ) . '</option><option value="delivery">' . esc_html__( 'Delivery', 'doughboss-growth' ) . '</option></select></p>';
+		$h .= '<div class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-order_type">' . esc_html__( 'Pickup or delivery', 'doughboss-growth' ) . '</label>';
+		$h .= '<select id="' . esc_attr( $uid ) . '-order_type" name="order_type"><option value="pickup">' . esc_html__( 'Pickup', 'doughboss-growth' ) . '</option><option value="delivery">' . esc_html__( 'Delivery', 'doughboss-growth' ) . '</option></select></div>';
 
-		$h .= '<p class="dbgr-lead__field" data-dbgr-lead-address hidden><label for="' . esc_attr( $uid ) . '-address">' . esc_html__( 'Delivery address', 'doughboss-growth' ) . '</label>';
-		$h .= '<textarea id="' . esc_attr( $uid ) . '-address" name="address" rows="2" maxlength="300" autocomplete="street-address"></textarea></p>';
+		$h .= '<div class="dbgr-lead__field" data-dbgr-lead-address hidden><label for="' . esc_attr( $uid ) . '-address">' . esc_html__( 'Delivery address', 'doughboss-growth' ) . '</label>';
+		$h .= '<textarea id="' . esc_attr( $uid ) . '-address" name="address" rows="2" maxlength="300" autocomplete="street-address"></textarea></div>';
 
 		if ( array() !== $stores ) {
-			$h .= '<p class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-location_id">' . esc_html__( 'Shop', 'doughboss-growth' ) . ' <span class="dbgr-lead__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
+			$h .= '<div class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-location_id">' . esc_html__( 'Shop', 'doughboss-growth' ) . ' <span class="dbgr-lead__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
 			$h .= '<select id="' . esc_attr( $uid ) . '-location_id" name="location_id"><option value="0" data-slug="none">' . esc_html__( 'No preference', 'doughboss-growth' ) . '</option>';
 			foreach ( $stores as $id => $store ) {
 				$h .= '<option value="' . esc_attr( (string) $id ) . '" data-slug="' . esc_attr( '' !== $store['slug'] ? $store['slug'] : 'none' ) . '">' . esc_html( $store['name'] ) . '</option>';
 			}
-			$h .= '</select></p>';
+			$h .= '</select></div>';
 		}
 
-		$h .= '<p class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-notes">' . esc_html__( 'Anything else we should know', 'doughboss-growth' ) . ' <span class="dbgr-lead__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
-		$h .= '<textarea id="' . esc_attr( $uid ) . '-notes" name="notes" rows="3" maxlength="' . esc_attr( (string) self::MAX_NOTES ) . '"></textarea></p>';
+		$h .= '<div class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-notes">' . esc_html__( 'Anything else we should know', 'doughboss-growth' ) . ' <span class="dbgr-lead__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
+		$h .= '<textarea id="' . esc_attr( $uid ) . '-notes" name="notes" rows="3" maxlength="' . esc_attr( (string) self::MAX_NOTES ) . '"></textarea></div>';
 
 		// Honeypot: real visitors never see or reach it. Core accepts a filled value silently and saves nothing.
 		$h .= '<div class="dbgr-lead__hp" aria-hidden="true"><label for="' . esc_attr( $uid ) . '-hp">' . esc_html__( 'Leave this field empty', 'doughboss-growth' ) . '</label>';
@@ -385,15 +422,15 @@ final class DoughBoss_Growth_Leads {
 
 		// The marketing box is separate, optional and UNTICKED. Without the sender's legal name there is no box.
 		if ( '' !== $consent ) {
-			$h .= '<p class="dbgr-lead__consent"><label for="' . esc_attr( $uid ) . '-consent"><input type="checkbox" id="' . esc_attr( $uid ) . '-consent" name="dbgr_consent_marketing" value="1" /> <span>' . esc_html( $consent ) . '</span></label></p>';
+			$h .= '<div class="dbgr-lead__consent"><label for="' . esc_attr( $uid ) . '-consent"><input type="checkbox" id="' . esc_attr( $uid ) . '-consent" name="dbgr_consent_marketing" value="1" /> <span>' . esc_html( $consent ) . '</span></label></div>';
 			$h .= '<input type="hidden" name="dbgr_consent_text_version" value="' . esc_attr( self::consent_version() ) . '" />';
 		}
 		$privacy = DoughBoss_Growth_Settings::get( 'privacy_policy_url', '' );
 		if ( is_string( $privacy ) && '' !== $privacy ) {
-			$h .= '<p class="dbgr-lead__privacy"><a href="' . esc_url( $privacy ) . '">' . esc_html__( 'Privacy policy', 'doughboss-growth' ) . '</a></p>';
+			$h .= '<div class="dbgr-lead__privacy"><a href="' . esc_url( $privacy ) . '">' . esc_html__( 'Privacy policy', 'doughboss-growth' ) . '</a></div>';
 		}
 
-		$h .= '<p class="dbgr-lead__actions"><button type="submit" class="dbgr-lead__button">' . esc_html__( 'Send enquiry', 'doughboss-growth' ) . '</button></p>';
+		$h .= '<div class="dbgr-lead__actions"><button type="submit" class="dbgr-lead__button">' . esc_html__( 'Send enquiry', 'doughboss-growth' ) . '</button></div>';
 		$h .= '</div>';
 		$h .= '<p class="dbgr-lead__status" data-dbgr-lead-status role="status" aria-live="polite"></p>';
 		$h .= '<noscript><p class="dbgr-lead__noscript">' . esc_html__( 'This form needs JavaScript to be switched on.', 'doughboss-growth' ) . '</p></noscript>';
@@ -415,7 +452,7 @@ final class DoughBoss_Growth_Leads {
 	private static function field( $uid, $name, $label, $type, $required, array $attrs ) {
 		$id   = $uid . '-' . $name;
 		$flag = $required ? esc_html__( '(required)', 'doughboss-growth' ) : esc_html__( '(optional)', 'doughboss-growth' );
-		$out  = '<p class="dbgr-lead__field" data-dbgr-field="' . esc_attr( $name ) . '"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . ' <span class="' . ( $required ? 'dbgr-lead__req' : 'dbgr-lead__opt' ) . '">' . $flag . '</span></label>';
+		$out  = '<div class="dbgr-lead__field" data-dbgr-field="' . esc_attr( $name ) . '"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . ' <span class="' . ( $required ? 'dbgr-lead__req' : 'dbgr-lead__opt' ) . '">' . $flag . '</span></label>';
 		$out .= '<input type="' . esc_attr( $type ) . '" id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '"';
 		foreach ( $attrs as $key => $value ) {
 			$out .= ' ' . esc_attr( $key ) . '="' . esc_attr( $value ) . '"';
@@ -423,7 +460,7 @@ final class DoughBoss_Growth_Leads {
 		if ( $required ) {
 			$out .= ' required';
 		}
-		return $out . ' /></p>';
+		return $out . ' /></div>';
 	}
 
 	/* ------------------------------------------------------------------------------------------ */
@@ -486,7 +523,7 @@ final class DoughBoss_Growth_Leads {
 		echo '<p>' . esc_html__( 'Shortcodes: [doughboss_growth_lead_form variant="corporate|office_breakfast|events"] and [doughboss_growth_party_sizer].', 'doughboss-growth' ) . '</p>';
 		echo '<h3>' . esc_html__( 'Owner decisions still outstanding', 'doughboss-growth' ) . '</h3><ul class="ul-disc">';
 		foreach ( self::confirm_gaps() as $text ) {
-			echo '<li>' . esc_html( $text ) . '</li>';
+			echo '<li>' . esc_html( DoughBoss_Growth_Admin::plain_gap( $text ) ) . '</li>';
 		}
 		echo '</ul>';
 	}

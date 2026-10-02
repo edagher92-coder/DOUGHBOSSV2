@@ -74,6 +74,42 @@ final class DoughBoss_Growth_Party_Sizer {
 			return;
 		}
 		add_shortcode( self::SHORTCODE, array( __CLASS__, 'shortcode' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_style_for_post' ) );
+	}
+
+	/**
+	 * wp_enqueue_scripts: on a single post or page that holds the sizer shortcode, put the stylesheet (shared with the
+	 * lead form) in the head so the tool is styled the moment it paints.
+	 *
+	 * @return void
+	 */
+	public static function enqueue_style_for_post() {
+		if ( is_admin() || ! function_exists( 'is_singular' ) || ! is_singular() || ! function_exists( 'get_queried_object_id' ) ) {
+			return;
+		}
+		$post = get_post( get_queried_object_id() );
+		if ( ! is_object( $post ) || ! isset( $post->post_content ) || ! is_string( $post->post_content ) ) {
+			return;
+		}
+		if ( has_shortcode( $post->post_content, self::SHORTCODE ) ) {
+			wp_register_style( self::HANDLE_STYLE, DOUGHBOSS_GROWTH_URL . 'public/css/dbgr-leads.css', array(), DOUGHBOSS_GROWTH_VERSION );
+			wp_enqueue_style( self::HANDLE_STYLE );
+		}
+	}
+
+	/**
+	 * The stylesheet link to print right here, once, when the head is already past (see DoughBoss_Growth_Waitlist::early_style()).
+	 * The lead form shares this handle, so the two never print it twice.
+	 *
+	 * @return string
+	 */
+	private static function early_style() {
+		if ( ! did_action( 'wp_head' ) || wp_style_is( self::HANDLE_STYLE, 'done' ) ) {
+			return '';
+		}
+		ob_start();
+		wp_print_styles( self::HANDLE_STYLE );
+		return (string) ob_get_clean();
 	}
 
 	/**
@@ -209,7 +245,7 @@ final class DoughBoss_Growth_Party_Sizer {
 			'strings'   => array(
 				'guests'      => __( 'Please enter how many guests, as a whole number.', 'doughboss-growth' ),
 				'tooMany'     => __( 'For a group this size, please send an enquiry and the catering team will quote.', 'doughboss-growth' ),
-				'loading'     => __( 'Checking the current price...', 'doughboss-growth' ),
+				'loading'     => __( 'Checking the current price', 'doughboss-growth' ),
 				'unavailable' => __( 'We could not get a price just now. Please send an enquiry and the catering team will quote.', 'doughboss-growth' ),
 				'recommended' => __( 'Suggested package', 'doughboss-growth' ),
 				'next'        => __( 'Next size up', 'doughboss-growth' ),
@@ -244,12 +280,13 @@ final class DoughBoss_Growth_Party_Sizer {
 		++$instance;
 		$uid = 'dbgr-sz-' . $instance;
 
-		$h  = '<div class="dbgr-sizer" id="' . esc_attr( $uid ) . '" data-dbgr-sizer>';
+		$h  = self::early_style();
+		$h .= '<div class="dbgr-sizer" id="' . esc_attr( $uid ) . '" data-dbgr-sizer>';
 		$h .= '<form class="dbgr-sizer__form" novalidate method="post" action="#" aria-labelledby="' . esc_attr( $uid ) . '-title">';
 		$h .= '<p class="dbgr-sizer__title" id="' . esc_attr( $uid ) . '-title">' . esc_html__( 'Find the right package', 'doughboss-growth' ) . '</p>';
-		$h .= '<p class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-guests">' . esc_html__( 'How many guests?', 'doughboss-growth' ) . '</label>';
-		$h .= '<input type="number" id="' . esc_attr( $uid ) . '-guests" name="guests" min="1" max="' . esc_attr( (string) self::MAX_GUESTS ) . '" step="1" inputmode="numeric" required /></p>';
-		$h .= '<p class="dbgr-lead__actions"><button type="submit" class="dbgr-lead__button">' . esc_html__( 'Show package', 'doughboss-growth' ) . '</button></p>';
+		$h .= '<div class="dbgr-lead__field"><label for="' . esc_attr( $uid ) . '-guests">' . esc_html__( 'How many guests?', 'doughboss-growth' ) . '</label>';
+		$h .= '<input type="number" id="' . esc_attr( $uid ) . '-guests" name="guests" min="1" max="' . esc_attr( (string) self::MAX_GUESTS ) . '" step="1" inputmode="numeric" required /></div>';
+		$h .= '<div class="dbgr-lead__actions"><button type="submit" class="dbgr-lead__button">' . esc_html__( 'Show package', 'doughboss-growth' ) . '</button></div>';
 		$h .= '</form>';
 		$h .= '<div class="dbgr-sizer__result" data-dbgr-sizer-result role="status" aria-live="polite"></div>';
 		$link = isset( $atts['enquiry_url'] ) && is_string( $atts['enquiry_url'] ) ? esc_url( $atts['enquiry_url'] ) : '';

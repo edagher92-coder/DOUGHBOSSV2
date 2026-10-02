@@ -52,3 +52,53 @@ if ( ! function_exists( 'dbgr_test_describe_tables' ) ) {
 		);
 	}
 }
+
+if ( ! function_exists( 'wp_style_is' ) ) {
+	/**
+	 * Whether a style is enqueued, registered or done (printed). WordPress keeps "enqueued" true after printing and sets
+	 * "done"; this stub does the same, so a test can tell a style that is queued for the footer from one already printed.
+	 *
+	 * @param string $handle Handle.
+	 * @param string $list   enqueued, registered or done.
+	 * @return bool
+	 */
+	function wp_style_is( $handle, $list = 'enqueued' ) {
+		if ( ! isset( $GLOBALS['dbgr_assets']['styles'][ $handle ] ) ) {
+			return false;
+		}
+		if ( 'registered' === $list ) {
+			return true;
+		}
+		if ( 'done' === $list ) {
+			return ! empty( $GLOBALS['dbgr_assets']['styles'][ $handle ]['done'] );
+		}
+		return (bool) $GLOBALS['dbgr_assets']['styles'][ $handle ]['enqueued'];
+	}
+}
+
+if ( ! function_exists( 'wp_print_styles' ) ) {
+	/**
+	 * Print the link tag of each named style that is registered and not yet printed, and mark it done (WordPress prints a
+	 * style at most once). With no argument it prints every enqueued style not yet done, as the footer does.
+	 *
+	 * @param string|string[]|false $handles Handle(s).
+	 * @return string[] Handles printed.
+	 */
+	function wp_print_styles( $handles = false ) {
+		$names = ( false === $handles ) ? array_keys( (array) $GLOBALS['dbgr_assets']['styles'] ) : (array) $handles;
+		$done  = array();
+		foreach ( $names as $handle ) {
+			if ( ! isset( $GLOBALS['dbgr_assets']['styles'][ $handle ] ) || ! empty( $GLOBALS['dbgr_assets']['styles'][ $handle ]['done'] ) ) {
+				continue;
+			}
+			if ( false === $handles && empty( $GLOBALS['dbgr_assets']['styles'][ $handle ]['enqueued'] ) ) {
+				continue;
+			}
+			$style = $GLOBALS['dbgr_assets']['styles'][ $handle ];
+			echo "<link rel='stylesheet' id='" . $handle . "-css' href='" . $style['src'] . '?ver=' . $style['ver'] . "' media='" . $style['media'] . "' />\n";
+			$GLOBALS['dbgr_assets']['styles'][ $handle ]['done'] = true;
+			$done[] = $handle;
+		}
+		return $done;
+	}
+}

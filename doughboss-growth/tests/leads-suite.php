@@ -590,9 +590,10 @@ db_test(
 		ob_start();
 		DoughBoss_Growth_Leads::render_tab();
 		$out = (string) ob_get_clean();
-		assert_contains( 'CONFIRM: sender legal name', $out, 'sender gap shown' );
-		assert_contains( 'CONFIRM: privacy-policy URL', $out, 'privacy gap shown' );
-		assert_contains( 'CONFIRM: pieces-per-guest guidance', $out, 'guidance gap shown' );
+		assert_contains( 'Sender legal name', $out, 'sender gap shown' );
+		assert_contains( 'Privacy-policy URL', $out, 'privacy gap shown' );
+		assert_contains( 'Pieces-per-guest guidance', $out, 'guidance gap shown' );
+		assert_not_contains( '[CONFIRM', $out, 'no bracket marker reaches the owner' );
 		assert_contains( 'Not shown (no sender name)', $out, 'opt-in box status' );
 		assert_contains( 'Hidden (no confirmed claim)', $out, 'guidance status' );
 		assert_not_contains( 'person@example.com', $out, 'no personal data' );
@@ -684,5 +685,75 @@ db_test(
 		assert_contains( $version, $out, 'wording version shown' );
 		assert_not_contains( 'secret@example.com', $out, 'no email address' );
 		assert_not_contains( 'other@example.com', $out, 'no email address' );
+	}
+);
+
+/* ---------------------------------------------------------------------------------------------------------- */
+/* Polish: field wrappers are divs, the stylesheet prints early and once                                       */
+/* ---------------------------------------------------------------------------------------------------------- */
+
+db_test(
+	'polish: lead form and sizer field wrappers are divs (a theme .entry-content p rule cannot reach them), and the markup stays balanced',
+	function () {
+		dbgr_ld_boot( array( 'party_sizer' => true ) );
+		DoughBoss_Growth_Leads::init();
+		foreach ( array( dbgr_ld_form( 'variant="corporate"' ), do_shortcode( '[doughboss_growth_party_sizer]' ) ) as $html ) {
+			assert_same( 0, preg_match( '/<p class="dbgr-lead__(field|consent|privacy|actions)/', $html ), 'no paragraph wrapper left' );
+			assert_same( substr_count( $html, '<p' ), substr_count( $html, '</p>' ), 'every paragraph that is left is closed' );
+			assert_same( substr_count( $html, '<div' ), substr_count( $html, '</div>' ), 'every div is closed' );
+		}
+		$form = dbgr_ld_form( 'variant="corporate"' );
+		assert_contains( '<div class="dbgr-lead__field" data-dbgr-field="customer_name">', $form, 'a field wrapper is a div' );
+		assert_contains( '<div class="dbgr-lead__actions"><button', $form, 'the button row is a div' );
+		assert_contains( '<div class="dbgr-lead__privacy">', $form, 'the privacy row is a div' );
+	}
+);
+
+db_test(
+	'polish: once the head has printed, the lead-form stylesheet link prints once and BEFORE the form; before the head it prints nothing (the head prints it)',
+	function () {
+		dbgr_ld_boot( array( 'party_sizer' => true ) );
+		DoughBoss_Growth_Leads::init();
+		$early = dbgr_ld_form( 'variant="corporate"' );
+		assert_not_contains( '<link', $early, 'before wp_head: no inline link (the head will print the enqueued style)' );
+
+		dbgr_test_reset();
+		dbgr_ld_boot( array( 'party_sizer' => true ) );
+		DoughBoss_Growth_Leads::init();
+		DoughBoss_Growth_Leads::reset_state();
+		$GLOBALS['dbgr_done']['wp_head'] = 1;
+		$one = dbgr_ld_form( 'variant="corporate"' );
+		$two = do_shortcode( '[doughboss_growth_party_sizer]' ) . dbgr_ld_form( 'variant="events"' );
+		assert_same( 1, substr_count( $one, "id='dbgr-leads-css'" ), 'the link is printed with the first form' );
+		assert_true( strpos( $one, '<link' ) < strpos( $one, '<form' ), 'and sits before the form markup' );
+		assert_not_contains( '<link', $two, 'a sizer and a second form on the same page print no second link' );
+		assert_true( wp_style_is( 'dbgr-leads', 'done' ), 'the style is marked printed, so the footer will not print it again' );
+	}
+);
+
+db_test(
+	'polish: a single page holding a lead-form or sizer shortcode gets the stylesheet enqueued for the head; other pages do not',
+	function () {
+		dbgr_ld_boot( array( 'party_sizer' => true ) );
+		DoughBoss_Growth_Leads::init();
+		assert_true( has_action( 'wp_enqueue_scripts', array( 'DoughBoss_Growth_Leads', 'enqueue_style_for_post' ) ), 'hooked while the form is on' );
+		assert_true( has_action( 'wp_enqueue_scripts', array( 'DoughBoss_Growth_Party_Sizer', 'enqueue_style_for_post' ) ), 'and for the sizer' );
+		$with    = dbgr_test_add_post( array( 'ID' => 4101, 'post_content' => 'Hello [doughboss_growth_lead_form variant="corporate"] there' ) );
+		$sizer   = dbgr_test_add_post( array( 'ID' => 4102, 'post_content' => '[doughboss_growth_party_sizer]' ) );
+		$without = dbgr_test_add_post( array( 'ID' => 4103, 'post_content' => 'No shortcode here' ) );
+		dbgr_landing_query( $without );
+		do_action( 'wp_enqueue_scripts' );
+		assert_false( wp_style_is( 'dbgr-leads', 'enqueued' ), 'a page without the shortcode loads no style' );
+		dbgr_landing_query( $with );
+		do_action( 'wp_enqueue_scripts' );
+		assert_true( wp_style_is( 'dbgr-leads', 'enqueued' ), 'a page with the form shortcode enqueues it in the head' );
+		$GLOBALS['dbgr_assets']['styles'] = array();
+		dbgr_landing_query( $sizer );
+		do_action( 'wp_enqueue_scripts' );
+		assert_true( wp_style_is( 'dbgr-leads', 'enqueued' ), 'a page with the sizer shortcode too' );
+		$GLOBALS['dbgr_assets']['styles'] = array();
+		dbgr_landing_query( 0 );
+		do_action( 'wp_enqueue_scripts' );
+		assert_false( wp_style_is( 'dbgr-leads', 'enqueued' ), 'not a singular page: nothing' );
 	}
 );

@@ -1,5 +1,5 @@
 /*
- * DoughBoss Growth: coming-soon section, VIP waitlist form, tilt cards and the email-link pages.
+ * DoughBoss Growth: coming-soon section, VIP waitlist form, static cards and the email-link pages.
  * Every class starts with dbgr- and every custom property with --dbgr- (core already uses --dbg-*).
  * Colours are neutral defaults a theme can override on :root or on .dbgr-cs.
  * Sizes are in em (from a root that is never below 16px) so a theme with html { font-size: 62.5% } cannot shrink them;
@@ -87,7 +87,7 @@
 	outline-offset: 2px;
 }
 
-/* Tilt cards (transform only; flat for reduced motion and touch) */
+/* Cards (static and flat) */
 .dbgr-cards {
 	display: grid;
 	gap: 1em;
@@ -95,7 +95,6 @@
 	list-style: none;
 	margin: 0 0 1.5em;
 	padding: 0;
-	perspective: 800px;
 }
 
 .dbgr-card__face {
@@ -103,27 +102,10 @@
 	border: 1px solid var(--dbgr-line);
 	border-radius: var(--dbgr-radius);
 	padding: 1.25em 1em;
-	transform: rotateX(var(--dbgr-rx, 0deg)) rotateY(var(--dbgr-ry, 0deg));
-	transition: transform 0.15s ease-out;
-	will-change: transform;
 }
 
 .dbgr-card__text {
 	margin: 0;
-}
-
-.dbgr-tilt--flat .dbgr-card__face {
-	transform: none;
-	transition: none;
-	will-change: auto;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.dbgr-card__face {
-		transform: none !important;
-		transition: none !important;
-		will-change: auto;
-	}
 }
 
 /* Form. On its own (a shortcode in a page) it sits on a paper panel so a dark or patterned theme cannot hide it. */
@@ -225,6 +207,10 @@
 .dbgr-wl__privacy {
 	font-size: 0.95em;
 	margin: 0 0 16px;
+}
+
+.dbgr-wl__actions {
+	margin: 0;
 }
 
 .dbgr-wl__privacy a {

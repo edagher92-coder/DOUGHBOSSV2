@@ -260,14 +260,15 @@ db_test(
 		assert_contains( 'server_conversions_requires_attribution', $errors, 'attribution required' );
 		assert_contains( 'server_conversions_requires_destination', $errors, 'destination required' );
 
-		// A webhook URL is a destination.
+		// The waitlist notification webhook is NOT a conversion destination: no conversion is ever sent to it.
 		$result = DoughBoss_Growth_Settings::apply_save(
 			array(
 				'features'           => array( 'server_conversions' => '1', 'attribution' => '1' ),
 				'notify_webhook_url' => 'https://hooks.example-receiver.com.au/path',
 			)
 		);
-		assert_true( $result['settings']['features']['server_conversions'], 'accepted with attribution and a webhook URL' );
+		assert_false( $result['settings']['features']['server_conversions'], 'a webhook URL alone is not a conversion destination' );
+		assert_contains( 'server_conversions_requires_destination', implode( ',', $result['errors'] ), 'and the owner is told a destination is missing' );
 
 		// An id without its secret is NOT a destination; the secret is read from the environment, presence only.
 		$result = DoughBoss_Growth_Settings::apply_save(

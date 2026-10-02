@@ -8,11 +8,11 @@
  * halal claim, ingredient, date or location, and NO product-specific interest picker.
  *
  * Output:
- *  - shortcode [doughboss_growth_coming_soon cards="" surface="" form="1"]: headline, text, optional tilt cards and, when
+ *  - shortcode [doughboss_growth_coming_soon cards="" surface="" form="1"]: headline, text, optional cards and, when
  *    the waitlist is on and complete, the waitlist form;
  *  - an optional slim ribbon appended to the home hero (do_shortcode_tag on the hero shortcode), controlled by its own
  *    switch (option doughboss_growth_coming_soon, off by default);
- *  - tilt cards: shown only for ledger claims that are confirmed and sourced (none by default, so none render).
+ *  - cards (static, flat): shown only for ledger claims that are confirmed and sourced (none by default, so none render).
  *
  * Entry file for the module registry: it must stay free of side effects at include time.
  *
@@ -40,11 +40,6 @@ final class DoughBoss_Growth_Coming_Soon {
 	const SAVE_ACTION = 'doughboss_growth_save_coming_soon';
 
 	/**
-	 * Tilt script handle.
-	 */
-	const HANDLE_TILT = 'dbgr-tilt-cards';
-
-	/**
 	 * Most cards one section shows.
 	 */
 	const MAX_CARDS = 4;
@@ -65,6 +60,7 @@ final class DoughBoss_Growth_Coming_Soon {
 		}
 		add_shortcode( 'doughboss_growth_coming_soon', array( __CLASS__, 'shortcode' ) );
 		add_filter( 'doughboss_growth_ledger_blocks', array( __CLASS__, 'declare_blocks' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_style_for_post' ) );
 		if ( self::ribbon_enabled() ) {
 			add_filter( 'do_shortcode_tag', array( __CLASS__, 'filter_hero' ), 10, 4 );
 		}
@@ -279,7 +275,7 @@ final class DoughBoss_Growth_Coming_Soon {
 				$text = null;
 			}
 			if ( is_string( $text ) && '' !== $text ) {
-				$items[] = '<li class="dbgr-card" data-dbgr-tilt><div class="dbgr-card__face"><p class="dbgr-card__text">' . esc_html( $text ) . '</p></div></li>';
+				$items[] = '<li class="dbgr-card"><div class="dbgr-card__face"><p class="dbgr-card__text">' . esc_html( $text ) . '</p></div></li>';
 			}
 		}
 		if ( array() === $items ) {
@@ -295,10 +291,9 @@ final class DoughBoss_Growth_Coming_Soon {
 	/**
 	 * Enqueue the section style and the script that sends coming_soon_view (the waitlist module owns both handles).
 	 *
-	 * @param bool $with_tilt Also enqueue the tilt script.
 	 * @return void
 	 */
-	private static function enqueue( $with_tilt ) {
+	private static function enqueue() {
 		if ( ! class_exists( 'DoughBoss_Growth_Waitlist', false ) && class_exists( 'DoughBoss_Growth' ) ) {
 			DoughBoss_Growth::load_module( 'waitlist' );
 		}
@@ -306,14 +301,35 @@ final class DoughBoss_Growth_Coming_Soon {
 			return;
 		}
 		DoughBoss_Growth_Waitlist::enqueue_assets( false );
-		if ( $with_tilt ) {
-			wp_enqueue_script( self::HANDLE_TILT, DOUGHBOSS_GROWTH_URL . 'public/js/dbgr-tilt-cards.js', array(), DOUGHBOSS_GROWTH_VERSION, true );
-		}
 	}
 
 	/* ------------------------------------------------------------------------------------------ */
 	/* Shortcode and ribbon                                                                         */
 	/* ------------------------------------------------------------------------------------------ */
+
+	/**
+	 * wp_enqueue_scripts: the stylesheet in the head for a single post or page that holds the shortcode (see
+	 * DoughBoss_Growth_Waitlist::enqueue_style_for_post(), which owns the handle).
+	 *
+	 * @return void
+	 */
+	public static function enqueue_style_for_post() {
+		if ( ! class_exists( 'DoughBoss_Growth_Waitlist', false ) && class_exists( 'DoughBoss_Growth' ) ) {
+			DoughBoss_Growth::load_module( 'waitlist' );
+		}
+		if ( class_exists( 'DoughBoss_Growth_Waitlist', false ) ) {
+			DoughBoss_Growth_Waitlist::enqueue_style_for_post();
+		}
+	}
+
+	/**
+	 * The early stylesheet link for this section (empty when the head still prints it or it was printed already).
+	 *
+	 * @return string
+	 */
+	private static function early_style() {
+		return class_exists( 'DoughBoss_Growth_Waitlist', false ) ? DoughBoss_Growth_Waitlist::early_style() : '';
+	}
 
 	/**
 	 * Shortcode [doughboss_growth_coming_soon]. Returns an empty string unless the feature is on.
@@ -346,8 +362,9 @@ final class DoughBoss_Growth_Coming_Soon {
 		$cards   = self::render_cards( $ids );
 		$surface = ( 'home' === $atts['surface'] ) ? ' data-dbgr-surface="home"' : '';
 
-		self::enqueue( '' !== $cards );
-		$h  = '<section class="dbgr-cs" id="' . esc_attr( $uid ) . '" data-dbgr-coming-soon' . $surface . ' aria-labelledby="' . esc_attr( $uid ) . '-title"><div class="dbgr-cs__inner">';
+		self::enqueue();
+		$h  = self::early_style();
+		$h .= '<section class="dbgr-cs" id="' . esc_attr( $uid ) . '" data-dbgr-coming-soon' . $surface . ' aria-labelledby="' . esc_attr( $uid ) . '-title"><div class="dbgr-cs__inner">';
 		$h .= '<h2 class="dbgr-cs__title" id="' . esc_attr( $uid ) . '-title">' . esc_html( self::headline() ) . '</h2>';
 		$h .= '<p class="dbgr-cs__body">' . esc_html( self::body() ) . '</p>';
 		$h .= $cards;
@@ -410,7 +427,7 @@ final class DoughBoss_Growth_Coming_Soon {
 	 * @return string
 	 */
 	public static function render_ribbon() {
-		self::enqueue( false );
+		self::enqueue();
 		$headline = self::headline();
 		$link     = '';
 		if ( class_exists( 'DoughBoss_Growth_Waitlist', false ) && DoughBoss_Growth_Waitlist::enabled() ) {
@@ -419,7 +436,7 @@ final class DoughBoss_Growth_Coming_Soon {
 				$link = ' <a class="dbgr-cs__link" href="' . esc_url( $url ) . '">' . esc_html__( 'Join the VIP list', 'doughboss-growth' ) . '</a>';
 			}
 		}
-		return '<aside class="dbgr-cs dbgr-cs--ribbon" data-dbgr-coming-soon data-dbgr-surface="home" aria-label="' . esc_attr( $headline ) . '"><p class="dbgr-cs__ribbon-text"><strong>' . esc_html( $headline ) . '</strong> <span>' . esc_html( self::body() ) . '</span>' . $link . '</p></aside>';
+		return self::early_style() . '<div class="dbgr-cs dbgr-cs--ribbon" data-dbgr-coming-soon data-dbgr-surface="home"><p class="dbgr-cs__ribbon-text"><strong>' . esc_html( $headline ) . '</strong> <span>' . esc_html( self::body() ) . '</span>' . $link . '</p></div>';
 	}
 
 	/* ------------------------------------------------------------------------------------------ */

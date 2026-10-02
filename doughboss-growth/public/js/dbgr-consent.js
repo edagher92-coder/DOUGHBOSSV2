@@ -8,8 +8,9 @@
  *    { measurement, advertising, version } and doughboss-growth:consent-changed { measurement, advertising,
  *    version, chosen } on document;
  *  - when Tag Manager is on, sends gtag('consent', 'update', ...) so Consent Mode v2 follows the choice;
- *  - drives the server-rendered banner (Accept all, Reject all, Choose; equal prominence) and the persistent
- *    "Privacy choices" button. The banner is never dismissed without a choice, so closing it is not consent.
+ *  - drives the server-rendered banner (Accept all, Reject all, Settings; equal prominence) and the persistent
+ *    "Privacy choices" button. The banner is never dismissed without a choice, so closing it is not consent;
+ *    once a choice exists a Close button (and Escape) lets the visitor leave a reopened banner as it was, with no write.
  *
  * Configuration comes from window.DoughBossGrowthConfig (printed by the plugin). Without it this file does
  * nothing at all. Dynamic text is never written as markup: the banner is rendered by PHP and only toggled here.
@@ -39,6 +40,7 @@
 	var panel = null;
 	var reopen = null;
 	var chooseButton = null;
+	var closeButton = null; /* only shown once a choice exists, so the reopened banner can be closed without changing it */
 	var checkM = null;
 	var checkA = null;
 	var lastFocus = null;
@@ -258,6 +260,7 @@
 		}
 		lastFocus = doc.activeElement || null;
 		setHidden(reopen, true);
+		setHidden(closeButton, !state.chosen);
 		openPanel(!automatic);
 		setHidden(root, false);
 		syncPageClearance();
@@ -310,6 +313,8 @@
 			openPanel(!panelOpen());
 		} else if (action === 'save') {
 			decide(!!(checkM && checkM.checked), !!(checkA && checkA.checked));
+		} else if (action === 'close' && state.chosen) {
+			hideBanner(); /* No cookie write, no event: the stored choice is unchanged. */
 		}
 	}
 
@@ -357,6 +362,7 @@
 		checkA = doc.getElementById('dbgr-consent-a');
 		if (root) {
 			chooseButton = root.querySelector('[data-dbgr-action="choose"]');
+			closeButton = root.querySelector('[data-dbgr-action="close"]');
 			root.addEventListener('click', onBannerClick);
 			root.addEventListener('keydown', onBannerKey);
 			if (typeof win.addEventListener === 'function') {

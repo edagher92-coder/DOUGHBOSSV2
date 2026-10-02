@@ -2408,7 +2408,9 @@ if ( ! function_exists( 'wp_enqueue_script' ) ) {
 if ( ! function_exists( 'wp_register_style' ) ) {
 	/** @return bool */
 	function wp_register_style( $handle, $src = '', $deps = array(), $ver = false, $media = 'all' ) {
-		$GLOBALS['dbgr_assets']['styles'][ $handle ] = array( 'src' => $src, 'deps' => $deps, 'ver' => $ver, 'media' => $media, 'enqueued' => false );
+		// Like WordPress, a style that was already printed stays printed when its handle is registered again.
+		$printed = ! empty( $GLOBALS['dbgr_assets']['styles'][ $handle ]['done'] );
+		$GLOBALS['dbgr_assets']['styles'][ $handle ] = array( 'src' => $src, 'deps' => $deps, 'ver' => $ver, 'media' => $media, 'enqueued' => false, 'done' => $printed );
 		return true;
 	}
 }

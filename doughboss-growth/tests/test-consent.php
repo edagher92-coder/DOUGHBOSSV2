@@ -152,16 +152,18 @@ db_test(
 		assert_matches( '/id="dbgr-consent"[^>]*\shidden>/', $page['footer'], 'the banner starts hidden (the script decides)' );
 		assert_matches( '/id="dbgr-consent-reopen"[^>]*\shidden>/', $page['footer'], 'the reopen button starts hidden' );
 		assert_not_contains( 'googletagmanager', $page['head'] . $page['footer'], 'no Tag Manager reference' );
-		assert_true( wp_script_is( 'dbgr-consent' ) && wp_script_is( 'dbgr-datalayer' ), 'both scripts enqueued' );
+		assert_true( wp_script_is( 'dbgr-consent' ), 'the consent script is enqueued' );
+		assert_false( wp_script_is( 'dbgr-datalayer' ), 'the dataLayer script is NOT enqueued while Tag Manager is off' );
 		assert_true( $GLOBALS['dbgr_assets']['scripts']['dbgr-consent']['footer'], 'consent script in the footer' );
-		assert_same( array( 'dbgr-consent' ), $GLOBALS['dbgr_assets']['scripts']['dbgr-datalayer']['deps'], 'datalayer depends on consent' );
 		assert_true( isset( $GLOBALS['dbgr_assets']['styles']['dbgr-consent'] ), 'style enqueued' );
 		$config = dbgr_consent_config();
 		assert_true( is_array( $config ), 'config object printed and decodes' );
 		assert_false( $config['gtm'], 'config: gtm false' );
 		assert_same( 'deny', $config['mode'], 'config: deny mode by default' );
-		assert_same( '1', $config['consentVersion'], 'config: wording version' );
-		assert_same( array(), $config['locations'], 'config: no shop map without gtm' );
+		assert_same( '2', $config['consentVersion'], 'config: wording version' );
+		assert_false( array_key_exists( 'locations', $config ), 'config: no shop map without gtm' );
+		assert_false( array_key_exists( 'events', $config ), 'config: no event taxonomy without gtm' );
+		assert_not_contains( 'generate_lead', (string) $GLOBALS['dbgr_assets']['inline']['dbgr-consent'][0]['data'], 'no events JSON in the inline script' );
 	}
 );
 
@@ -248,6 +250,9 @@ db_test(
 		$config = dbgr_consent_config();
 		assert_true( true === $config['gtm'], 'config: gtm true' );
 		assert_true( isset( $config['events']['generate_lead']['form'] ), 'config carries the event allow-list' );
+		assert_true( wp_script_is( 'dbgr-datalayer' ), 'banner + Tag Manager ready: the dataLayer script is enqueued' );
+		assert_same( array( 'dbgr-consent' ), $GLOBALS['dbgr_assets']['scripts']['dbgr-datalayer']['deps'], 'datalayer depends on consent' );
+		assert_true( array_key_exists( 'locations', $config ), 'and the shop map key is present' );
 	}
 );
 
@@ -324,7 +329,7 @@ db_test(
 		DoughBoss_Growth_Consent::render_tab();
 		$tab = ob_get_clean();
 		assert_contains( 'Not loading', $tab, 'tab reports Tag Manager not loading' );
-		assert_contains( '[CONFIRM: a valid Tag Manager container id', $tab, 'tab names the gap' );
+		assert_contains( 'A valid Tag Manager container id', $tab, 'tab names the gap' );
 	}
 );
 
@@ -449,26 +454,26 @@ db_test(
 db_test(
 	'current(): closed when the banner is off; deny until chosen; opt_out measures before a choice; a stored choice wins; an old-wording cookie is ignored',
 	function () {
-		$_COOKIE['dbgr_consent'] = '{"v":"1","m":1,"a":1,"ts":1790899200}';
+		$_COOKIE['dbgr_consent'] = '{"v":"2","m":1,"a":1,"ts":1790899200}';
 		assert_same( array( 'measurement' => false, 'advertising' => false, 'chosen' => false, 'version' => '' ), DoughBoss_Growth_Consent::current(), 'banner off: closed even with a cookie present' );
 
 		dbgr_consent_store( array( 'consent_banner' => true ) );
 		unset( $_COOKIE['dbgr_consent'] );
-		assert_same( array( 'measurement' => false, 'advertising' => false, 'chosen' => false, 'version' => '1' ), DoughBoss_Growth_Consent::current(), 'deny mode, no cookie' );
+		assert_same( array( 'measurement' => false, 'advertising' => false, 'chosen' => false, 'version' => '2' ), DoughBoss_Growth_Consent::current(), 'deny mode, no cookie' );
 
-		$_COOKIE['dbgr_consent'] = '{"v":"1","m":1,"a":0,"ts":1790899200}';
-		assert_same( array( 'measurement' => true, 'advertising' => false, 'chosen' => true, 'version' => '1' ), DoughBoss_Growth_Consent::current(), 'stored measurement-only choice' );
-		$_COOKIE['dbgr_consent'] = '{"v":"1","m":0,"a":0,"ts":1790899200}';
-		assert_same( array( 'measurement' => false, 'advertising' => false, 'chosen' => true, 'version' => '1' ), DoughBoss_Growth_Consent::current(), 'stored reject' );
+		$_COOKIE['dbgr_consent'] = '{"v":"2","m":1,"a":0,"ts":1790899200}';
+		assert_same( array( 'measurement' => true, 'advertising' => false, 'chosen' => true, 'version' => '2' ), DoughBoss_Growth_Consent::current(), 'stored measurement-only choice' );
+		$_COOKIE['dbgr_consent'] = '{"v":"2","m":0,"a":0,"ts":1790899200}';
+		assert_same( array( 'measurement' => false, 'advertising' => false, 'chosen' => true, 'version' => '2' ), DoughBoss_Growth_Consent::current(), 'stored reject' );
 		$_COOKIE['dbgr_consent'] = '{"v":"0","m":1,"a":1,"ts":1790899200}';
-		assert_same( array( 'measurement' => false, 'advertising' => false, 'chosen' => false, 'version' => '1' ), DoughBoss_Growth_Consent::current(), 'old wording version: not a valid choice, asked again' );
+		assert_same( array( 'measurement' => false, 'advertising' => false, 'chosen' => false, 'version' => '2' ), DoughBoss_Growth_Consent::current(), 'old wording version: not a valid choice, asked again' );
 		$_COOKIE['dbgr_consent'] = 'garbage';
 		assert_same( false, DoughBoss_Growth_Consent::current()['measurement'], 'garbage cookie: denied' );
 
 		dbgr_consent_store( array( 'consent_banner' => true ), array( 'consent_default' => 'opt_out' ) );
 		unset( $_COOKIE['dbgr_consent'] );
-		assert_same( array( 'measurement' => true, 'advertising' => false, 'chosen' => false, 'version' => '1' ), DoughBoss_Growth_Consent::current(), 'opt_out: measurement on, advertising off, not chosen' );
-		$_COOKIE['dbgr_consent'] = '{"v":"1","m":0,"a":0,"ts":1790899200}';
+		assert_same( array( 'measurement' => true, 'advertising' => false, 'chosen' => false, 'version' => '2' ), DoughBoss_Growth_Consent::current(), 'opt_out: measurement on, advertising off, not chosen' );
+		$_COOKIE['dbgr_consent'] = '{"v":"2","m":0,"a":0,"ts":1790899200}';
 		assert_same( false, DoughBoss_Growth_Consent::current()['measurement'], 'opt_out: a stored reject beats the default' );
 	}
 );
@@ -516,7 +521,7 @@ db_test(
 db_test(
 	'the printed event list equals content/events.json: 13 names (no hero event), each parameter list present, no personal-data field',
 	function () {
-		dbgr_consent_page( array( 'consent_banner' => true ) );
+		dbgr_consent_page( array( 'consent_banner' => true, 'gtm' => true ), array( 'gtm_container_id' => 'GTM-ABCD123' ) );
 		$config = dbgr_consent_config();
 		$file   = json_decode( file_get_contents( DOUGHBOSS_GROWTH_DIR . 'content/events.json' ), true );
 		assert_same( $file['event_names'], array_keys( $config['events'] ), 'same names in the same order' );
@@ -568,11 +573,13 @@ db_test(
 		assert_contains( 'Consent and tags', $html, 'tab label' );
 		assert_contains( 'Loading container GTM-ABCD123', $html, 'status row' );
 		assert_contains( 'Notice and opt-out', $html, 'opt_out explained' );
-		assert_contains( '[CONFIRM: notice-and-opt-out is selected', $html, 'opt_out needs confirmation' );
-		assert_contains( '[CONFIRM: privacy-policy URL', $html, 'privacy gap' );
-		assert_contains( '[CONFIRM: Elie (and a solicitor) to review the banner wording', $html, 'wording gap' );
-		assert_contains( '[CONFIRM: inside the Tag Manager container', $html, 'container wiring gap' );
-		assert_contains( '[CONFIRM: core 2.43.2 does not tell the browser which payment method', $html, 'begin_checkout gap' );
+		assert_contains( 'Notice-and-opt-out is selected', $html, 'opt_out needs confirmation' );
+		assert_contains( 'Privacy-policy URL', $html, 'privacy gap' );
+		assert_contains( 'You (and a solicitor) to review the banner wording', $html, 'wording gap' );
+		assert_contains( 'Inside the Tag Manager container', $html, 'container wiring gap' );
+		assert_contains( 'Core 2.43.2 does not tell the browser which payment method', $html, 'begin_checkout gap' );
+		assert_not_contains( '[CONFIRM', $html, 'no bracket marker reaches the owner' );
+		assert_not_contains( 'Elie', $html, 'the owner is not named in the tab' );
 		assert_not_contains( '<script', $html, 'no script in the tab' );
 	}
 );

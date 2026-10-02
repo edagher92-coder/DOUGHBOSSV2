@@ -932,7 +932,7 @@ final class DoughBoss_Growth_Conversions {
 
 		echo '<h3>' . esc_html__( 'Owner decisions and unverified items', 'doughboss-growth' ) . '</h3><ul class="ul-disc">';
 		foreach ( self::confirm_gaps() as $text ) {
-			echo '<li>' . esc_html( $text ) . '</li>';
+			echo '<li>' . esc_html( DoughBoss_Growth_Admin::plain_gap( $text ) ) . '</li>';
 		}
 		echo '</ul>';
 

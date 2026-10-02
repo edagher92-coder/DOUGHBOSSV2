@@ -5,10 +5,10 @@
  * Feature flag: consent_banner (the gtm flag needs it). Everything is inert while the flag is off.
  *
  * What this module does when the flag is on:
- *  - prints the consent banner (Accept all, Reject all, Choose, equal prominence) and a persistent
+ *  - prints the consent banner (Accept all, Reject all, Settings, equal prominence) and a persistent
  *    "Privacy choices" button in wp_footer, and enqueues public/js/dbgr-consent.js (the banner, the
  *    dbgr_consent cookie, Consent Mode updates, the core doughboss:consent event) and
- *    public/js/dbgr-datalayer.js (typed dataLayer events, DoughBossGrowth.track);
+ *    public/js/dbgr-datalayer.js (typed dataLayer events, DoughBossGrowth.track) only when Tag Manager is on and ready;
  *  - sets core's doughboss_marketing_config to enabled = true with empty Meta and TikTok pixel ids so core's
  *    bridge keeps emitting doughboss:marketing-event but never calls fbq or ttq itself;
  *  - exposes current(), the server-side reading of the same cookie, for attribution and conversions;
@@ -326,23 +326,24 @@ final class DoughBoss_Growth_Consent {
 	 * @return array
 	 */
 	public static function browser_config() {
-		$events    = self::events();
-		$version   = DoughBoss_Growth_Settings::get( 'consent_text_version', '1' );
-		$locations = array();
-		if ( DoughBoss_Growth_Tags::ready() ) {
-			$locations = self::location_map();
-		}
-		return array(
+		$version = DoughBoss_Growth_Settings::get( 'consent_text_version', '1' );
+		$ready   = DoughBoss_Growth_Tags::ready();
+		$config  = array(
 			'consentVersion' => is_string( $version ) ? $version : '1',
 			'mode'           => DoughBoss_Growth_Tags::mode(),
-			'gtm'            => DoughBoss_Growth_Tags::ready(),
-			'events'         => (object) $events,
-			'locations'      => (object) $locations,
+			'gtm'            => $ready,
 		);
+		// The event taxonomy and the shop map are only for the dataLayer script, which is only loaded when Tag Manager is on.
+		if ( $ready ) {
+			$config['events']    = (object) self::events();
+			$config['locations'] = (object) self::location_map();
+		}
+		return $config;
 	}
 
 	/**
-	 * Enqueue the banner style and the two scripts (front end only: this runs on wp_enqueue_scripts).
+	 * Enqueue the banner style and the consent script, plus the dataLayer script only when Tag Manager is on and ready
+	 * (front end only: this runs on wp_enqueue_scripts).
 	 *
 	 * @return void
 	 */
@@ -359,7 +360,9 @@ final class DoughBoss_Growth_Consent {
 		wp_register_script( self::HANDLE_CONSENT, DOUGHBOSS_GROWTH_URL . 'public/js/dbgr-consent.js', array(), DOUGHBOSS_GROWTH_VERSION, true );
 		wp_add_inline_script( self::HANDLE_CONSENT, 'window.DoughBossGrowthConfig = ' . $config . ';', 'before' );
 		wp_enqueue_script( self::HANDLE_CONSENT );
-		wp_enqueue_script( self::HANDLE_DATALAYER, DOUGHBOSS_GROWTH_URL . 'public/js/dbgr-datalayer.js', array( self::HANDLE_CONSENT ), DOUGHBOSS_GROWTH_VERSION, true );
+		if ( DoughBoss_Growth_Tags::ready() ) {
+			wp_enqueue_script( self::HANDLE_DATALAYER, DOUGHBOSS_GROWTH_URL . 'public/js/dbgr-datalayer.js', array( self::HANDLE_CONSENT ), DOUGHBOSS_GROWTH_VERSION, true );
+		}
 	}
 
 	/* ------------------------------------------------------------------------------------------ */
@@ -383,7 +386,7 @@ final class DoughBoss_Growth_Consent {
 		echo '<div id="dbgr-consent" class="dbgr-consent" role="dialog" aria-modal="false" aria-labelledby="dbgr-consent-title" aria-describedby="dbgr-consent-desc" tabindex="-1" hidden>';
 		echo '<div class="dbgr-consent__inner">';
 		echo '<h2 id="dbgr-consent-title" class="dbgr-consent__title">' . esc_html__( 'Your privacy choices', 'doughboss-growth' ) . '</h2>';
-		echo '<p id="dbgr-consent-desc" class="dbgr-consent__text">' . esc_html__( 'We use cookies and similar technologies to keep this site working, to understand how it is used and, if you agree, to measure our advertising. Necessary cookies are always on. You can change your choice at any time with the Privacy choices button.', 'doughboss-growth' );
+		echo '<p id="dbgr-consent-desc" class="dbgr-consent__text">' . esc_html__( 'We use cookies to keep this site working, to understand how it is used and, if you agree, to measure our advertising. You can change your choice at any time with the Privacy choices button.', 'doughboss-growth' );
 		if ( is_string( $privacy ) && '' !== $privacy ) {
 			echo ' <a class="dbgr-consent__link" href="' . esc_url( $privacy ) . '">' . esc_html__( 'Read our privacy policy', 'doughboss-growth' ) . '</a>';
 		}
@@ -391,9 +394,9 @@ final class DoughBoss_Growth_Consent {
 
 		echo '<div id="dbgr-consent-panel" class="dbgr-consent__panel" hidden>';
 		echo '<fieldset class="dbgr-consent__fieldset"><legend class="dbgr-consent__legend">' . esc_html__( 'Cookie categories', 'doughboss-growth' ) . '</legend>';
-		echo '<p class="dbgr-consent__row"><label class="dbgr-consent__label"><input type="checkbox" class="dbgr-consent__check" checked="checked" disabled="disabled" /> ' . esc_html__( 'Necessary: keeps the site working. Always on.', 'doughboss-growth' ) . '</label></p>';
-		echo '<p class="dbgr-consent__row"><label class="dbgr-consent__label" for="dbgr-consent-m"><input type="checkbox" class="dbgr-consent__check" id="dbgr-consent-m" /> ' . esc_html__( 'Measurement: helps us understand how the site is used.', 'doughboss-growth' ) . '</label></p>';
-		echo '<p class="dbgr-consent__row"><label class="dbgr-consent__label" for="dbgr-consent-a"><input type="checkbox" class="dbgr-consent__check" id="dbgr-consent-a" /> ' . esc_html__( 'Advertising: lets advertising services measure how our ads perform and tailor the ads they show.', 'doughboss-growth' ) . '</label></p>';
+		echo '<div class="dbgr-consent__row"><label class="dbgr-consent__label"><input type="checkbox" class="dbgr-consent__check" checked="checked" disabled="disabled" /> ' . esc_html__( 'Necessary: keeps the site working. Always on.', 'doughboss-growth' ) . '</label></div>';
+		echo '<div class="dbgr-consent__row"><label class="dbgr-consent__label" for="dbgr-consent-m"><input type="checkbox" class="dbgr-consent__check" id="dbgr-consent-m" /> ' . esc_html__( 'Measurement: helps us understand how the site is used.', 'doughboss-growth' ) . '</label></div>';
+		echo '<div class="dbgr-consent__row"><label class="dbgr-consent__label" for="dbgr-consent-a"><input type="checkbox" class="dbgr-consent__check" id="dbgr-consent-a" /> ' . esc_html__( 'Advertising: lets advertising services measure how our ads perform and tailor the ads they show.', 'doughboss-growth' ) . '</label></div>';
 		echo '</fieldset>';
 		echo '<button type="button" class="dbgr-btn" data-dbgr-action="save">' . esc_html__( 'Save choices', 'doughboss-growth' ) . '</button>';
 		echo '</div>';
@@ -401,8 +404,9 @@ final class DoughBoss_Growth_Consent {
 		echo '<div class="dbgr-consent__actions">';
 		echo '<button type="button" class="dbgr-btn" data-dbgr-action="accept">' . esc_html__( 'Accept all', 'doughboss-growth' ) . '</button>';
 		echo '<button type="button" class="dbgr-btn" data-dbgr-action="reject">' . esc_html__( 'Reject all', 'doughboss-growth' ) . '</button>';
-		echo '<button type="button" class="dbgr-btn" data-dbgr-action="choose" aria-expanded="false" aria-controls="dbgr-consent-panel">' . esc_html__( 'Choose', 'doughboss-growth' ) . '</button>';
+		echo '<button type="button" class="dbgr-btn" data-dbgr-action="choose" aria-expanded="false" aria-controls="dbgr-consent-panel">' . esc_html__( 'Settings', 'doughboss-growth' ) . '</button>';
 		echo '</div>';
+		echo '<button type="button" class="dbgr-btn dbgr-consent__close" data-dbgr-action="close" hidden>' . esc_html__( 'Close', 'doughboss-growth' ) . '</button>';
 		echo '</div></div>';
 
 		echo '<button type="button" id="dbgr-consent-reopen" class="dbgr-consent-reopen" data-dbgr-consent-open="1" hidden>' . esc_html__( 'Privacy choices', 'doughboss-growth' ) . '</button>';
@@ -471,7 +475,7 @@ final class DoughBoss_Growth_Consent {
 		echo '<p>' . esc_html__( 'The noscript Tag Manager frame is deliberately not printed: visitors without JavaScript cannot be asked for consent.', 'doughboss-growth' ) . '</p>';
 		echo '<h3>' . esc_html__( 'Owner decisions and wiring still outstanding', 'doughboss-growth' ) . '</h3><ul class="ul-disc">';
 		foreach ( self::confirm_gaps() as $text ) {
-			echo '<li>' . esc_html( $text ) . '</li>';
+			echo '<li>' . esc_html( DoughBoss_Growth_Admin::plain_gap( $text ) ) . '</li>';
 		}
 		echo '</ul>';
 	}

@@ -325,7 +325,7 @@ final class DoughBoss_Growth_Recon_Report {
 			if ( 'run_time_local' === $key || 'lookback_days' === $key ) {
 				$out[ $key ] = '[CONFIRM: ' . $label . '.]';
 			} else {
-				$out[ $key ] = '[CONFIRM: ' . $label . '. Until Elie sets it, this check is shown as UNRATED and never as matched.]';
+				$out[ $key ] = '[CONFIRM: ' . $label . '. Until the owner sets it, this check is shown as UNRATED and never as matched.]';
 			}
 		}
 		foreach ( $shops as $shop ) {

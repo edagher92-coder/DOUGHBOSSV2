@@ -1004,7 +1004,7 @@ db_test(
 			array( 'ga4_measurement_id', 'G-12', 'ga4_measurement_id', '' ),
 			array( 'meta_pixel_id', 'abc', 'meta_pixel_id', '' ),
 			array( 'meta_pixel_id', '12345', 'meta_pixel_id', '' ),
-			array( 'consent_text_version', 'bad version!', 'consent_text_version', '1' ),
+			array( 'consent_text_version', 'bad version!', 'consent_text_version', '2' ),
 			array( 'consent_default', 'allow', 'consent_default', 'deny' ),
 			array( 'privacy_policy_url', 'privacy-policy', 'privacy_policy_url', '' ),
 			array( 'privacy_policy_url', 'example.com.au/privacy', 'privacy_policy_url', '' ),

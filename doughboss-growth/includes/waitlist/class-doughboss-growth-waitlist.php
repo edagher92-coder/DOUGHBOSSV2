@@ -155,6 +155,7 @@ final class DoughBoss_Growth_Waitlist {
 			return;
 		}
 		add_shortcode( 'doughboss_growth_waitlist', array( __CLASS__, 'shortcode' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_style_for_post' ) );
 		if ( class_exists( 'DoughBoss_Growth_Waitlist_Rest' ) ) {
 			DoughBoss_Growth_Waitlist_Rest::register();
 		}
@@ -1406,6 +1407,44 @@ final class DoughBoss_Growth_Waitlist {
 	}
 
 	/**
+	 * wp_enqueue_scripts: on a single post or page that holds one of this module's shortcodes, put the stylesheet in the
+	 * head, so the form is styled the moment it paints (otherwise it is enqueued while the shortcode renders, too late for
+	 * the head). Only the style: the script and its configuration still load in the footer when a form is rendered.
+	 *
+	 * @return void
+	 */
+	public static function enqueue_style_for_post() {
+		if ( is_admin() || ! function_exists( 'is_singular' ) || ! is_singular() || ! function_exists( 'get_queried_object_id' ) ) {
+			return;
+		}
+		$post = get_post( get_queried_object_id() );
+		if ( ! is_object( $post ) || ! isset( $post->post_content ) || ! is_string( $post->post_content ) ) {
+			return;
+		}
+		if ( has_shortcode( $post->post_content, 'doughboss_growth_waitlist' ) || has_shortcode( $post->post_content, 'doughboss_growth_coming_soon' ) ) {
+			self::register_assets();
+			wp_enqueue_style( self::HANDLE_STYLE );
+		}
+	}
+
+	/**
+	 * The stylesheet link to print right here, once, when the head is already past (a style enqueued while a shortcode
+	 * renders would otherwise print in the footer, after the markup it styles: an unstyled flash and a layout shift).
+	 * Returns the link markup (to put before the form) or an empty string when the head still has it to print, or when it
+	 * was printed already, so two forms on one page print one link.
+	 *
+	 * @return string
+	 */
+	public static function early_style() {
+		if ( ! did_action( 'wp_head' ) || wp_style_is( self::HANDLE_STYLE, 'done' ) ) {
+			return '';
+		}
+		ob_start();
+		wp_print_styles( self::HANDLE_STYLE );
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Browser configuration for dbgr-waitlist.js. No secret and no personal data.
 	 *
 	 * @return array
@@ -1418,10 +1457,10 @@ final class DoughBoss_Growth_Waitlist {
 			'strings'   => array(
 				'consent'  => __( 'Please tick the box to join the list.', 'doughboss-growth' ),
 				'email'    => __( 'Please enter a valid email address.', 'doughboss-growth' ),
-				'wait'     => __( 'One moment...', 'doughboss-growth' ),
+				'wait'     => __( 'One moment', 'doughboss-growth' ),
 				'network'  => __( 'We could not reach the server. Please try again.', 'doughboss-growth' ),
 				'generic'  => __( 'Something went wrong. Please try again later.', 'doughboss-growth' ),
-				'sending'  => __( 'Sending...', 'doughboss-growth' ),
+				'sending'  => __( 'Sending', 'doughboss-growth' ),
 				'noscript' => __( 'This form needs JavaScript to be switched on.', 'doughboss-growth' ),
 			),
 		);
@@ -1460,27 +1499,28 @@ final class DoughBoss_Growth_Waitlist {
 
 		self::enqueue_assets( true );
 
-		$h  = '<form class="dbgr-wl" id="' . esc_attr( $uid ) . '" data-dbgr-waitlist method="post" action="#" novalidate aria-labelledby="' . esc_attr( $uid ) . '-legend">';
+		$h  = self::early_style();
+		$h .= '<form class="dbgr-wl" id="' . esc_attr( $uid ) . '" data-dbgr-waitlist method="post" action="#" novalidate aria-labelledby="' . esc_attr( $uid ) . '-legend">';
 		$h .= '<div data-dbgr-wl-fields>';
-		$h .= '<p class="dbgr-wl__legend" id="' . esc_attr( $uid ) . '-legend">' . esc_html__( 'Join the VIP list', 'doughboss-growth' ) . '</p>';
+		$h .= '<p class="dbgr-wl__legend" id="' . esc_attr( $uid ) . '-legend">' . esc_html__( 'Your details', 'doughboss-growth' ) . '</p>';
 
-		$h .= '<p class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-email">' . esc_html__( 'Email', 'doughboss-growth' ) . ' <span class="dbgr-wl__req">' . esc_html__( '(required)', 'doughboss-growth' ) . '</span></label>';
-		$h .= '<input type="email" id="' . esc_attr( $uid ) . '-email" name="email" autocomplete="email" inputmode="email" maxlength="' . esc_attr( (string) self::MAX_EMAIL ) . '" required /></p>';
+		$h .= '<div class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-email">' . esc_html__( 'Email', 'doughboss-growth' ) . ' <span class="dbgr-wl__req">' . esc_html__( '(required)', 'doughboss-growth' ) . '</span></label>';
+		$h .= '<input type="email" id="' . esc_attr( $uid ) . '-email" name="email" autocomplete="email" inputmode="email" maxlength="' . esc_attr( (string) self::MAX_EMAIL ) . '" required /></div>';
 
-		$h .= '<p class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-name">' . esc_html__( 'First name', 'doughboss-growth' ) . ' <span class="dbgr-wl__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
-		$h .= '<input type="text" id="' . esc_attr( $uid ) . '-name" name="first_name" autocomplete="given-name" maxlength="' . esc_attr( (string) self::MAX_NAME ) . '" /></p>';
+		$h .= '<div class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-name">' . esc_html__( 'First name', 'doughboss-growth' ) . ' <span class="dbgr-wl__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
+		$h .= '<input type="text" id="' . esc_attr( $uid ) . '-name" name="first_name" autocomplete="given-name" maxlength="' . esc_attr( (string) self::MAX_NAME ) . '" /></div>';
 
-		$h .= '<p class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-mobile">' . esc_html__( 'Mobile', 'doughboss-growth' ) . ' <span class="dbgr-wl__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
-		$h .= '<input type="tel" id="' . esc_attr( $uid ) . '-mobile" name="mobile" autocomplete="tel" inputmode="tel" maxlength="20" /></p>';
+		$h .= '<div class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-mobile">' . esc_html__( 'Mobile', 'doughboss-growth' ) . ' <span class="dbgr-wl__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
+		$h .= '<input type="tel" id="' . esc_attr( $uid ) . '-mobile" name="mobile" autocomplete="tel" inputmode="tel" maxlength="20" /></div>';
 
 		if ( array() !== $stores ) {
-			$h .= '<p class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-store">' . esc_html__( 'Favourite shop', 'doughboss-growth' ) . ' <span class="dbgr-wl__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
+			$h .= '<div class="dbgr-wl__field"><label for="' . esc_attr( $uid ) . '-store">' . esc_html__( 'Favourite shop', 'doughboss-growth' ) . ' <span class="dbgr-wl__opt">' . esc_html__( '(optional)', 'doughboss-growth' ) . '</span></label>';
 			$h .= '<select id="' . esc_attr( $uid ) . '-store" name="store"><option value="" data-slug="none">' . esc_html__( 'No preference', 'doughboss-growth' ) . '</option>';
 			foreach ( $stores as $id => $store ) {
 				$selected = ( '' !== $wanted && ( (string) $id === $wanted || $store['slug'] === $wanted ) ) ? ' selected="selected"' : '';
 				$h       .= '<option value="' . esc_attr( (string) $id ) . '" data-slug="' . esc_attr( '' !== $store['slug'] ? $store['slug'] : 'none' ) . '"' . $selected . '>' . esc_html( $store['name'] ) . '</option>';
 			}
-			$h .= '</select></p>';
+			$h .= '</select></div>';
 		}
 
 		// Honeypot: real visitors never see or reach it. A filled value is answered with a fake success.
@@ -1488,12 +1528,12 @@ final class DoughBoss_Growth_Waitlist {
 		$h .= '<input type="text" id="' . esc_attr( $uid ) . '-website" name="website" tabindex="-1" autocomplete="off" value="" /></div>';
 
 		// The consent box is separate, unticked and required.
-		$h .= '<p class="dbgr-wl__consent"><label for="' . esc_attr( $uid ) . '-consent"><input type="checkbox" id="' . esc_attr( $uid ) . '-consent" name="consent" value="1" required /> <span>' . esc_html( $consent ) . '</span></label></p>';
+		$h .= '<div class="dbgr-wl__consent"><label for="' . esc_attr( $uid ) . '-consent"><input type="checkbox" id="' . esc_attr( $uid ) . '-consent" name="consent" value="1" required /> <span>' . esc_html( $consent ) . '</span></label></div>';
 		$h .= '<input type="hidden" name="consent_version" value="' . esc_attr( self::consent_version() ) . '" />';
 		$h .= '<input type="hidden" name="token" value="" />';
 
-		$h .= '<p class="dbgr-wl__privacy"><a href="' . esc_url( self::privacy_url() ) . '">' . esc_html__( 'Privacy policy', 'doughboss-growth' ) . '</a></p>';
-		$h .= '<p class="dbgr-wl__actions"><button type="submit" class="dbgr-wl__button">' . esc_html__( 'Join the VIP list', 'doughboss-growth' ) . '</button></p>';
+		$h .= '<div class="dbgr-wl__privacy"><a href="' . esc_url( self::privacy_url() ) . '">' . esc_html__( 'Privacy policy', 'doughboss-growth' ) . '</a></div>';
+		$h .= '<div class="dbgr-wl__actions"><button type="submit" class="dbgr-wl__button">' . esc_html__( 'Join the VIP list', 'doughboss-growth' ) . '</button></div>';
 		$h .= '</div>';
 		$h .= '<p class="dbgr-wl__status" data-dbgr-wl-status role="status" aria-live="polite"></p>';
 		$h .= '<noscript><p class="dbgr-wl__noscript">' . esc_html__( 'This form needs JavaScript to be switched on.', 'doughboss-growth' ) . '</p></noscript>';
@@ -1966,7 +2006,7 @@ final class DoughBoss_Growth_Waitlist {
 		$gaps = self::confirm_gaps();
 		echo '<h3>' . esc_html__( 'Owner decisions still outstanding', 'doughboss-growth' ) . '</h3><ul class="ul-disc">';
 		foreach ( $gaps as $text ) {
-			echo '<li>' . esc_html( $text ) . '</li>';
+			echo '<li>' . esc_html( DoughBoss_Growth_Admin::plain_gap( $text ) ) . '</li>';
 		}
 		echo '</ul>';
 

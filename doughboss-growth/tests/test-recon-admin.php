@@ -362,8 +362,10 @@ db_test(
 		$html = ob_get_clean();
 		assert_contains( 'Evidence only.', $html, 'evidence-only banner' );
 		assert_contains( 'does not calculate pay', $html, 'never a pay decision' );
-		assert_contains( '[CONFIRM: Elie&#039;s approval to read Square staff data', $html, 'approval gate shown' );
-		assert_contains( '[CONFIRM: start time tolerance', $html, 'unset parameters listed' );
+		assert_contains( 'Your approval to read Square staff data', $html, 'approval gate shown, as a plain sentence' );
+		assert_contains( 'Start time tolerance', $html, 'unset parameters listed, as plain sentences' );
+		assert_not_contains( '[CONFIRM', $html, 'no bracket marker reaches the owner' );
+		assert_not_contains( 'Elie', $html, 'the owner is never named in the owner-facing text' );
 		assert_contains( 'Ava &lt;b&gt;Bold&lt;/b&gt; &amp; Co (#11)', $html, 'name resolved at render time and escaped' );
 		assert_not_contains( '<b>Bold</b>', $html, 'no raw HTML from a display name' );
 		assert_contains( 'MANAGER_CLOSED', $html, 'flag shown' );

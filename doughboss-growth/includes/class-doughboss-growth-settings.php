@@ -109,7 +109,7 @@ final class DoughBoss_Growth_Settings {
 			'gtm_container_id'           => '',
 			'ga4_measurement_id'         => '',
 			'meta_pixel_id'              => '',
-			'consent_text_version'       => '1',
+			'consent_text_version'       => '2',
 			'consent_default'            => 'deny',
 			'sender_legal_name'          => '',
 			'privacy_policy_url'         => '',
@@ -324,7 +324,9 @@ final class DoughBoss_Growth_Settings {
 
 	/**
 	 * Whether at least one conversion destination is fully configured: an id plus its
-	 * secret (GA4, Meta) or a webhook URL. Secrets are checked for presence only.
+	 * secret (GA4 or Meta). Secrets are checked for presence only. The waitlist notification webhook (notify_webhook_url)
+	 * is NOT a conversion destination: no conversion is ever sent to it, so counting it would let server_conversions show
+	 * as on with nothing to send to.
 	 *
 	 * @param array $settings Sanitised settings.
 	 * @return bool
@@ -336,7 +338,7 @@ final class DoughBoss_Growth_Settings {
 		if ( '' !== $settings['meta_pixel_id'] && self::has_secret( 'DOUGHBOSS_GROWTH_META_CAPI_TOKEN' ) ) {
 			return true;
 		}
-		return '' !== $settings['notify_webhook_url'];
+		return false;
 	}
 
 	/**

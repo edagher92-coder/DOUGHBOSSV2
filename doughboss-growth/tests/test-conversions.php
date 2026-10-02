@@ -1466,7 +1466,8 @@ db_test(
 		assert_contains( 'GA4 destination ready', $html, 'GA4 readiness row' );
 		assert_matches( '#<td>ga4</td><td>pending</td><td>1</td>#', $html, 'queue counts by channel and status' );
 		assert_matches( '#<td>meta</td><td>pending</td><td>1</td>#', $html, 'Meta queue count' );
-		assert_contains( '[CONFIRM:', $html, 'gaps are shown' );
+		assert_not_contains( '[CONFIRM', $html, 'no bracket marker reaches the owner' );
+		assert_not_contains( 'Elie', $html, 'the owner is not named in the tab' );
 		assert_contains( 'privacy policy', $html, 'the privacy-policy gap' );
 		assert_contains( 'name="action" value="doughboss_growth_export_offline_conversions"', $html, 'export form action' );
 		assert_contains( 'name="_wpnonce"', $html, 'export form nonce' );
