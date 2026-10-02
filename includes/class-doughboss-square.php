@@ -1016,12 +1016,60 @@ class DoughBoss_Square {
 	}
 
 	/**
-	 * Retrieve a v2 payment with its already validated mapped shop binding.
+	 * Recover exact APPROVED split-leg facts by known ID, never charge or release.
+	 * Internal only: no public route, source token, capture or fulfillment proof.
+	 * A held set may return to funding after exact observation; that is storage
+	 * state, not current provider/approval authority. Cancellation stays closed.
 	 *
-	 * @param string $id           Square payment id.
-	 * @param array  $shop_binding Validated v2 shop binding.
-	 * @return array|WP_Error The `payment` object, or an error.
+	 * @return array|WP_Error Minimized durable plan, never raw provider card data.
 	 */
+	public static function reconcile_split_authorization( $attempt_id, $version, $index, $payment_id ) {
+		if ( ! is_int( $attempt_id ) || $attempt_id <= 0 || ! is_int( $version ) || $version <= 0 || $version >= PHP_INT_MAX
+			|| ! is_int( $index ) || ! in_array( $index, array( 0, 1 ), true )
+			|| ! is_string( $payment_id ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $payment_id )
+			|| 1 === preg_match( '/^[0-9]{13,19}\\z/', $payment_id ) ) {
+			return self::split_recovery_error();
+		}
+		$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
+		$plan = is_array( $attempt ) ? DoughBoss_Payment_Legs::read( $attempt ) : false;
+		if ( ! is_array( $plan ) || $version !== (int) $plan['set']['version'] || ! isset( $plan['legs'][ $index ] ) ) {
+			return self::split_recovery_error();
+		}
+		$leg = $plan['legs'][ $index ];
+		if ( ! in_array( $leg['state'], array( 'claimed', 'unknown', 'authorized' ), true )
+			|| ( 'authorized' === $leg['state'] && $payment_id !== $leg['provider_payment_reference'] ) ) {
+			return self::split_recovery_error();
+		}
+		$binding = self::attempt_shop_binding( $attempt );
+		$configuration = self::settings_context_version();
+		if ( is_wp_error( $binding ) || is_wp_error( $configuration ) || ! DoughBoss_Settings::square_access_token_valid() ) {
+			return self::split_recovery_error();
+		}
+		$token = self::access_token();
+		// The locking read has committed: provider I/O must never hold ledger locks.
+		$payment = self::retrieve_mapped_payment( $payment_id, $binding );
+		if ( is_wp_error( $payment ) || ! isset( $payment['id'] ) || $payment_id !== $payment['id']
+			|| false === DoughBoss_Payment_Legs::validate_observation( $attempt, $leg, $payment ) ) {
+			return self::split_recovery_error();
+		}
+		// Pre/post-read context consistency, NOT an atomic seller/capture lock.
+		$current_configuration = self::settings_context_version();
+		$current_binding = self::attempt_shop_binding( $attempt );
+		if ( is_wp_error( $current_configuration ) || ! hash_equals( $configuration, $current_configuration )
+			|| is_wp_error( $current_binding ) || $binding !== $current_binding || ! hash_equals( $token, self::access_token() ) ) {
+			return self::split_recovery_error();
+		}
+		// Reacquire parent/snapshot/set/leg locks and recheck exact version/identity.
+		$result = DoughBoss_Payment_Legs::observe( $attempt, $version, $index, $payment );
+		return is_array( $result ) ? $result : self::split_recovery_error();
+	}
+
+	private static function split_recovery_error() {
+		return new WP_Error( 'doughboss_split_recovery_pending', __( 'The authorization could not be verified. Do not pay again; contact the shop.', 'doughboss' ),
+			array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+	}
+
+	/** Retrieve a v2 payment using an already validated mapped shop binding. */
 	private static function retrieve_mapped_payment( $id, array $shop_binding ) {
 		return self::retrieve_payment_with_binding( $id, $shop_binding );
 	}
@@ -1324,7 +1372,7 @@ class DoughBoss_Square {
 	 *
 	 * @return string|WP_Error Current stored configuration identity.
 	 */
-	private static function refund_configuration_version() {
+	private static function settings_context_version() {
 		global $wpdb;
 		$raw = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1", DoughBoss_Settings::OPTION_KEY ) );
 		$stored = is_string( $raw ) ? maybe_unserialize( $raw ) : null;
@@ -1351,7 +1399,7 @@ class DoughBoss_Square {
 		if ( ! $attempt || 'square' !== (string) $attempt['provider'] ) {
 			return new WP_Error( 'doughboss_pay_refund', __( 'This payment has no matching record to refund against.', 'doughboss' ), array( 'status' => 409 ) );
 		}
-		$configuration_version = self::refund_configuration_version();
+		$configuration_version = self::settings_context_version();
 		if ( is_wp_error( $configuration_version ) ) {
 			return $configuration_version;
 		}
@@ -1387,7 +1435,7 @@ class DoughBoss_Square {
 		// The provider may already have acted. A changed original-payment or
 		// seller/environment context is an unknown outcome, never permission to
 		// mark the order refunded or dispatch a differently bound retry.
-		$current_configuration = self::refund_configuration_version();
+		$current_configuration = self::settings_context_version();
 		$current_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
 		$current_binding = is_array( $current_attempt ) ? self::attempt_shop_binding( $current_attempt ) : self::shop_binding_error();
 		$unchanged = ! is_wp_error( $current_configuration ) && hash_equals( $configuration_version, $current_configuration )

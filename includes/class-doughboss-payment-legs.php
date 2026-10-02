@@ -67,6 +67,15 @@ class DoughBoss_Payment_Legs {
 		} );
 	}
 
+	/** Read an existing validated plan without allocating or advancing it. */
+	public static function read( array $expected ) {
+		return self::transaction( static function () use ( $expected ) {
+			$parent = self::lock_parent( $expected );
+			$plan = false !== $parent ? self::lock_plan( $parent ) : false;
+			return false !== $plan && null !== $plan['set'] ? $plan : false;
+		} );
+	}
+
 	/** A successful claim is irreversible; clocks never grant a second owner. */
 	public static function claim( array $expected, $version, $index ) {
 		return self::mutate( $expected, $version, static function ( $parent, $plan ) use ( $index ) {

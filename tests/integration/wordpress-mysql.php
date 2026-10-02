@@ -257,6 +257,18 @@ function db_integration_square_http( $preempt, $args, $url ) {
 	}
 	$method = isset( $args['method'] ) ? strtoupper( (string) $args['method'] ) : 'GET';
 	$path = (string) wp_parse_url( (string) $url, PHP_URL_PATH );
+	if ( isset( $GLOBALS['db_split_recovery_response'] ) && 'GET' === $method && 0 === strpos( $path, '/v2/payments/' ) ) {
+		$GLOBALS['db_split_recovery_requests'][] = array( 'path' => $path, 'method' => $method, 'has_body' => isset( $args['body'] ) );
+		if ( isset( $GLOBALS['db_split_recovery_observer'] ) && is_callable( $GLOBALS['db_split_recovery_observer'] ) ) {
+			call_user_func( $GLOBALS['db_split_recovery_observer'] );
+		}
+		$response = $GLOBALS['db_split_recovery_response'];
+		if ( is_wp_error( $response ) ) { return $response; }
+		$http_response = db_integration_stripe_http_response( $response );
+		// Preserve intentionally malformed decimal economics across JSON transport.
+		$http_response['body'] = wp_json_encode( $response, JSON_PRESERVE_ZERO_FRACTION );
+		return $http_response;
+	}
 	if ( '/v2/orders' === $path || 0 === strpos( $path, '/v2/orders/' ) ) {
 		return db_integration_square_orders_http( $args, $path );
 	}
@@ -5705,6 +5717,194 @@ db_integration_same( $ledger_counts, array( (int) $wpdb->get_var( "SELECT COUNT(
 db_integration_same( $split_orders_posts, $GLOBALS['db_orders_post_count'], 'all inert split-storage cases make no Square Order HTTP POST' );
 db_integration_same( $split_payment_posts, $GLOBALS['db_square_post_count'], 'all inert split-storage cases make no Square Payment HTTP POST' );
 db_integration_same( $split_hooks, count( $GLOBALS['db_order_created_events'] ), 'all inert split-storage cases emit no fulfillment hook' );
+
+// Known-ID recovery: real transactions and rows, synthetic authenticated GET.
+$recovery_settings = get_option( 'doughboss_settings' );
+$GLOBALS['db_split_recovery_requests'] = array();
+$make_recovery = static function ( $seed, $amount = 1400 ) {
+	global $wpdb;
+	$fixture = db_integration_split_square_parent( 'recovery-' . $seed, $amount );
+	if ( ! is_array( $fixture ) ) { return false; }
+	$parent = $fixture['parent'];
+	$parent = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $parent['id'], 'sqorderRecovery' . $parent['id'], $parent );
+	if ( ! is_array( $parent ) ) { return false; }
+	db_integration_same( false, DoughBoss_Payment_Legs::read( $parent ), 'read refuses absent set without allocating it' );
+	db_integration_same( 0, (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . DoughBoss_Payment_Legs::sets_table() . ' WHERE payment_attempt_id = %d', $parent['id'] ) ), 'non-creating read retains zero sets' );
+	$plan = DoughBoss_Payment_Legs::prepare( $parent );
+	if ( ! is_array( $plan ) ) { return false; }
+	db_integration_same( $plan, DoughBoss_Payment_Legs::read( $parent ), 'read returns exact existing plan without changing version' );
+	$claimed = DoughBoss_Payment_Legs::claim( $parent, 1, 0 );
+	return is_array( $claimed ) ? array( $parent, $claimed ) : false;
+};
+$partial_recovery = $make_recovery( 'partial' );
+db_integration_assert( is_array( $partial_recovery ), 'recovery parent and claimed gift leg prepared by supported repositories' );
+if ( is_array( $partial_recovery ) ) {
+	list( $recovery_parent, $recovery_plan ) = $partial_recovery;
+	$recovery_id = 'sqpayRecoveryGift' . $recovery_parent['id'];
+	$recovery_payment = db_integration_split_observation( $recovery_parent, $recovery_plan['legs'][0], $recovery_id, 900 );
+	$recovery_payment['card_details']['card']['synthetic_private_marker'] = 'must-not-be-retained';
+	$GLOBALS['db_split_recovery_response'] = array( 'payment' => $recovery_payment );
+	$GLOBALS['db_split_recovery_observer'] = static function () use ( $recovery_parent ) {
+		db_integration_assert( db_integration_split_rows_unlocked( (int) $recovery_parent['id'] ), 'all parent/set/leg locks are released during provider GET' );
+	};
+	$recovered = DoughBoss_Square::reconcile_split_authorization( (int) $recovery_parent['id'], 2, 0, $recovery_id );
+	unset( $GLOBALS['db_split_recovery_observer'] );
+	db_integration_assert( is_array( $recovered ), 'mapped exact-ID GET reconciles partial gift authorization' );
+	if ( is_array( $recovered ) ) {
+		db_integration_same( 900, (int) $recovered['legs'][0]['authorized_amount_minor'], 'actual partial authorization is retained in integer cents' );
+		db_integration_same( $recovery_id, $recovered['legs'][0]['provider_payment_reference'], 'only exact requested provider identity is bound' );
+		db_integration_same( false, strpos( wp_json_encode( $recovered ), 'must-not-be-retained' ), 'raw provider card details are not returned or retained' );
+		db_integration_same( $recovery_parent, DoughBoss_Payment_Attempts::find( (int) $recovery_parent['id'] ), 'recovery does not advance parent status or identity' );
+		db_integration_same( $recovered, DoughBoss_Square::reconcile_split_authorization( (int) $recovery_parent['id'], 3, 0, $recovery_id ), 'exact authorized replay leaves version and facts unchanged' );
+		$requests_before = count( $GLOBALS['db_split_recovery_requests'] );
+		db_integration_assert( is_wp_error( DoughBoss_Square::reconcile_split_authorization( (int) $recovery_parent['id'], 3, 0, 'sqpayOtherKnownIdentity' ) ), 'authorized replay cannot substitute another provider ID' );
+		db_integration_same( $requests_before, count( $GLOBALS['db_split_recovery_requests'] ), 'contradictory replay identity is rejected before HTTP' );
+		$remainder = DoughBoss_Payment_Legs::prepare_remainder( $recovery_parent, 3, $recovered['legs'][0] );
+		db_integration_assert( is_array( $remainder ) && 500 === (int) $remainder['legs'][1]['requested_amount_minor'], 'recovery preserves exact server-derived card remainder' );
+		if ( is_array( $remainder ) ) {
+			$requests_before = count( $GLOBALS['db_split_recovery_requests'] );
+			db_integration_assert( is_wp_error( DoughBoss_Square::reconcile_split_authorization( (int) $recovery_parent['id'], 4, 1, 'sqpayUnclaimedCard00001' ) ), 'planned card leg cannot accept unclaimed observation' );
+			db_integration_same( $requests_before, count( $GLOBALS['db_split_recovery_requests'] ), 'planned leg has zero recovery HTTP' );
+			$card_claim = DoughBoss_Payment_Legs::claim( $recovery_parent, 4, 1 );
+			$card_id = 'sqpayRecoveryCard' . $recovery_parent['id'];
+			$GLOBALS['db_split_recovery_response'] = array( 'payment' => db_integration_split_observation( $recovery_parent, $card_claim['legs'][1], $card_id, 499 ) );
+			db_integration_assert( is_wp_error( DoughBoss_Square::reconcile_split_authorization( (int) $recovery_parent['id'], 5, 1, $card_id ) ), 'card recovery refuses less than the exact server-derived remainder' );
+			db_integration_same( $card_claim, DoughBoss_Payment_Legs::read( $recovery_parent ), 'wrong remainder preserves claimed card state' );
+			$GLOBALS['db_split_recovery_response'] = array( 'payment' => db_integration_split_observation( $recovery_parent, $card_claim['legs'][1], $card_id, 500 ) );
+			$card_recovery = DoughBoss_Square::reconcile_split_authorization( (int) $recovery_parent['id'], 5, 1, $card_id );
+			db_integration_assert( is_array( $card_recovery ) && 500 === (int) $card_recovery['legs'][1]['authorized_amount_minor'], 'exact bank-card remainder authorization is retained but not captured' );
+		}
+	}
+}
+foreach ( array( 'full', 'unknown', 'canceling' ) as $recovery_case ) {
+	$fixture = $make_recovery( $recovery_case, 900 );
+	if ( ! is_array( $fixture ) ) { db_integration_assert( false, 'recovery state fixture prepared' ); continue; }
+	list( $p, $plan ) = $fixture;
+	$version = 2;
+	if ( 'unknown' === $recovery_case ) { $plan = DoughBoss_Payment_Legs::hold_unknown( $p, 2, 0, 'authorization_unknown' ); $version = 3; }
+	if ( 'canceling' === $recovery_case ) { $plan = DoughBoss_Payment_Legs::request_cancellation( $p, 2 ); $version = 3; }
+	$id = 'sqpayRecoveryState' . $p['id'];
+	$GLOBALS['db_split_recovery_response'] = array( 'payment' => db_integration_split_observation( $p, $plan['legs'][0], $id, 900 ) );
+	$requests_before = count( $GLOBALS['db_split_recovery_requests'] );
+	db_integration_assert( is_wp_error( DoughBoss_Square::reconcile_split_authorization( (int) $p['id'], $version, 0, '' ) ), 'unknown without known ID never permits a recovery search or retry' );
+	db_integration_same( $requests_before, count( $GLOBALS['db_split_recovery_requests'] ), 'absent known ID makes zero provider requests' );
+	db_integration_same( $plan, DoughBoss_Payment_Legs::read( $p ), 'no-ID rejection leaves exact retained state unchanged' );
+	$result = DoughBoss_Square::reconcile_split_authorization( (int) $p['id'], $version, 0, $id );
+	db_integration_assert( is_array( $result ), $recovery_case . ' exact authorization recovery succeeds' );
+	if ( ! is_array( $result ) ) { continue; }
+	db_integration_same( 'canceling' === $recovery_case ? 'canceling' : 'funding', $result['set']['state'], 'exact unknown resolution restores storage funding only; cancellation stays closed' );
+	db_integration_same( false, DoughBoss_Payment_Legs::claim( $p, (int) $result['set']['version'], 0 ), 'reconciled identity never grants a second authorization owner' );
+	if ( 'canceling' === $recovery_case ) {
+		db_integration_same( false, DoughBoss_Payment_Legs::prepare_remainder( $p, (int) $result['set']['version'], $result['legs'][0] ), 'canceling recovery grants no progression' );
+	} else {
+		db_integration_same( $result, DoughBoss_Payment_Legs::prepare_remainder( $p, (int) $result['set']['version'], $result['legs'][0] ), 'full gift recovery creates no bank-card leg' );
+	}
+}
+$bad_recovery_responses = array(
+	'wrong_id' => array( 'id' => 'sqpayWrongRecoveryId' ), 'wrong_order' => array( 'order_id' => 'sqorderWrongRecovery' ),
+	'wrong_location' => array( 'location_id' => 'LWRONGRECOVERY' ), 'wrong_reference' => array( 'reference_id' => 'db-split-other-0' ),
+	'completed' => array( 'status' => 'COMPLETED' ), 'canceled' => array( 'status' => 'CANCELED' ),
+	'wrong_source' => array( 'source_type' => 'CASH' ),
+	'wrong_card_status' => array( 'card_details' => array( 'status' => 'CAPTURED' ) ),
+	'wrong_brand' => array( 'card_details' => array( 'card' => array( 'card_brand' => 'VISA' ) ) ),
+	'wrong_currency' => array( 'amount_money' => array( 'currency' => 'USD' ) ),
+	'zero' => array( 'amount_money' => array( 'amount' => 0 ) ), 'excess' => array( 'amount_money' => array( 'amount' => 1401 ) ),
+	'string_amount' => array( 'amount_money' => array( 'amount' => '900' ) ), 'float_amount' => array( 'amount_money' => array( 'amount' => 900.0 ) ),
+	'shape' => null, 'network' => null,
+);
+foreach ( $bad_recovery_responses as $label => $changes ) {
+	$fixture = $make_recovery( 'deny-' . $label );
+	if ( ! is_array( $fixture ) ) { db_integration_assert( false, $label . ' fixture prepared' ); continue; }
+	list( $p, $plan ) = $fixture;
+	$id = 'sqpayRecoveryDenied' . $p['id'];
+	$payment = db_integration_split_observation( $p, $plan['legs'][0], $id, 900 );
+	$GLOBALS['db_split_recovery_response'] = 'network' === $label ? new WP_Error( 'synthetic_network', 'Synthetic unavailable.' )
+		: ( 'shape' === $label ? array( 'payment' => 'malformed' ) : array( 'payment' => array_replace_recursive( $payment, $changes ) ) );
+	$error = DoughBoss_Square::reconcile_split_authorization( (int) $p['id'], 2, 0, $id );
+	db_integration_assert( is_wp_error( $error ), $label . ' provider observation is denied' );
+	db_integration_assert( is_wp_error( $error ) && false === $error->get_error_data()['retry_safe'], 'recovery denial never permits new payment' );
+	db_integration_same( $plan, DoughBoss_Payment_Legs::read( $p ), $label . ' preserves exact leg and set rows' );
+}
+foreach ( array( 'mapping', 'mode', 'token', 'inactive', 'uncached_settings', 'parent', 'snapshot', 'cancel', 'commit' ) as $drift ) {
+	$fixture = $make_recovery( 'drift-' . $drift );
+	if ( ! is_array( $fixture ) ) { db_integration_assert( false, $drift . ' fixture prepared' ); continue; }
+	list( $p, $plan ) = $fixture;
+	$id = 'sqpayRecoveryDrift' . $p['id'];
+	$GLOBALS['db_split_recovery_response'] = array( 'payment' => db_integration_split_observation( $p, $plan['legs'][0], $id, 900 ) );
+	$GLOBALS['db_split_recovery_observer'] = static function () use ( $drift, $p ) {
+		global $wpdb;
+		if ( in_array( $drift, array( 'mapping', 'mode', 'token' ), true ) ) {
+			$settings = get_option( 'doughboss_settings' );
+			if ( 'mapping' === $drift ) { $settings['square_test_location_map']['revesby'] = 'LCHANGEDRECOVERY'; }
+			if ( 'mode' === $drift ) { $settings['square_mode'] = 'live'; }
+			if ( 'token' === $drift ) { $settings['square_test_access_token'] = ''; }
+			update_option( 'doughboss_settings', $settings, false );
+		} elseif ( 'inactive' === $drift ) {
+			$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 0 ), array( 'id' => $p['location_id'] ) );
+		} elseif ( 'uncached_settings' === $drift ) {
+			$settings = get_option( 'doughboss_settings' );
+			$settings['square_mode'] = 'live';
+			$wpdb->update( $wpdb->options, array( 'option_value' => maybe_serialize( $settings ) ), array( 'option_name' => 'doughboss_settings' ) );
+		} elseif ( 'parent' === $drift ) {
+			$wpdb->update( DoughBoss_Payment_Attempts::table(), array( 'amount_minor' => 1401 ), array( 'id' => $p['id'] ) );
+		} elseif ( 'snapshot' === $drift ) {
+			$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_hash' => str_repeat( 'f', 64 ) ), array( 'checkout_key' => $p['checkout_key'] ) );
+		} elseif ( 'cancel' === $drift ) {
+			db_integration_assert( is_array( DoughBoss_Payment_Legs::request_cancellation( $p, 2 ) ), 'cancellation races successfully during GET' );
+		} else {
+			$GLOBALS['db_fail_square_commit_once'] = true;
+			add_filter( 'query', 'db_integration_fail_square_commit', 999 );
+		}
+	};
+	$error = DoughBoss_Square::reconcile_split_authorization( (int) $p['id'], 2, 0, $id );
+	unset( $GLOBALS['db_split_recovery_observer'] );
+	remove_filter( 'query', 'db_integration_fail_square_commit', 999 );
+	db_integration_assert( is_wp_error( $error ), $drift . ' during HTTP prevents stale observation acceptance' );
+	if ( 'uncached_settings' === $drift ) { wp_cache_delete( 'doughboss_settings', 'options' ); wp_cache_delete( 'alloptions', 'options' ); }
+	update_option( 'doughboss_settings', $recovery_settings, false );
+	if ( 'inactive' === $drift ) { $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 1 ), array( 'id' => $p['location_id'] ) ); }
+	if ( 'parent' === $drift ) { $wpdb->update( DoughBoss_Payment_Attempts::table(), array( 'amount_minor' => 1400 ), array( 'id' => $p['id'] ) ); }
+	if ( 'snapshot' === $drift ) {
+		$metadata = DoughBoss_Payment_Attempts::metadata( $p );
+		$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_hash' => $metadata['orders_snapshot_hash'] ), array( 'checkout_key' => $p['checkout_key'] ) );
+	}
+	$after = DoughBoss_Payment_Legs::read( $p );
+	if ( 'cancel' === $drift ) {
+		db_integration_assert( is_array( $after ) && 'canceling' === $after['set']['state'] && 'claimed' === $after['legs'][0]['state'], 'raced cancellation remains closed with no stale authorization' );
+	} else {
+		db_integration_same( $plan, $after, $drift . ' leaves exact pre-recovery ledger rows unchanged' );
+	}
+	if ( 'commit' === $drift ) { db_integration_same( false, $GLOBALS['db_fail_square_commit_once'], 'actual observation COMMIT fault was exercised' ); }
+}
+$preflight_fixture = $make_recovery( 'preflight' );
+if ( is_array( $preflight_fixture ) ) {
+	list( $p, $plan ) = $preflight_fixture;
+	$id = 'sqpayRecoveryPreflight' . $p['id'];
+	$GLOBALS['db_split_recovery_response'] = array( 'payment' => db_integration_split_observation( $p, $plan['legs'][0], $id, 900 ) );
+	foreach ( array( 'stale_version', 'absent_leg', 'missing_map', 'invalid_token', 'inactive', 'mode' ) as $preflight ) {
+		$changed = $recovery_settings;
+		if ( 'missing_map' === $preflight ) { $changed['square_test_location_map']['revesby'] = ''; }
+		if ( 'invalid_token' === $preflight ) { $changed['square_test_access_token'] = ''; }
+		if ( 'mode' === $preflight ) { $changed['square_mode'] = 'live'; }
+		update_option( 'doughboss_settings', $changed, false );
+		if ( 'inactive' === $preflight ) { $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 0 ), array( 'id' => $p['location_id'] ) ); }
+		$requests_before = count( $GLOBALS['db_split_recovery_requests'] );
+		$error = DoughBoss_Square::reconcile_split_authorization( (int) $p['id'], 'stale_version' === $preflight ? 1 : 2, 'absent_leg' === $preflight ? 1 : 0, $id );
+		db_integration_assert( is_wp_error( $error ), $preflight . ' is denied by recovery preflight' );
+		db_integration_same( $requests_before, count( $GLOBALS['db_split_recovery_requests'] ), $preflight . ' performs zero provider HTTP' );
+		if ( 'inactive' === $preflight ) { $wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 1 ), array( 'id' => $p['location_id'] ) ); }
+		update_option( 'doughboss_settings', $recovery_settings, false );
+		db_integration_same( $plan, DoughBoss_Payment_Legs::read( $p ), $preflight . ' retains exact durable ledger state' );
+	}
+}
+foreach ( $GLOBALS['db_split_recovery_requests'] as $request ) {
+	db_integration_same( 'GET', $request['method'], 'every split recovery provider request is GET' );
+	db_integration_same( false, $request['has_body'], 'no recovery request carries source token or request body' );
+}
+db_integration_same( $split_orders_posts, $GLOBALS['db_orders_post_count'], 'split recovery makes zero Order POSTs' );
+db_integration_same( $split_payment_posts, $GLOBALS['db_square_post_count'], 'split recovery makes zero payment POSTs' );
+db_integration_same( $split_hooks, count( $GLOBALS['db_order_created_events'] ), 'split recovery emits zero kitchen/fulfillment events' );
+unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_observer'] );
 remove_filter( 'pre_wp_mail', '__return_true', 999 );
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 update_option( 'doughboss_settings', $orders_transport_settings, false );

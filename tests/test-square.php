@@ -12,6 +12,29 @@ require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-dashboard.ph
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-orders.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment-legs.php';
 
+db_test(
+	'split recovery rejects coercible and malformed inputs before storage or HTTP',
+	function () {
+		$valid = array( 42, 2, 0, 'sqpayKnownSplit00042' );
+		$cases = array(
+			array( 0, '42' ), array( 0, 0 ), array( 0, -1 ), array( 0, 42.0 ), array( 0, true ),
+			array( 1, '2' ), array( 1, 0 ), array( 1, PHP_INT_MAX ),
+			array( 2, '0' ), array( 2, -1 ), array( 2, 2 ), array( 2, false ),
+			array( 3, null ), array( 3, 12345678 ), array( 3, array() ), array( 3, '' ),
+			array( 3, 'short' ), array( 3, ' sqpayKnownSplit00042' ), array( 3, 'sqpayKnownSplit00042 ' ),
+			array( 3, "sqpayKnownSplit00042\n" ), array( 3, 'sqpay/known00042' ),
+			array( 3, '4111111111111111' ), array( 3, str_repeat( 'x', 192 ) ),
+		);
+		foreach ( $cases as $case ) {
+			$args = $valid;
+			$args[ $case[0] ] = $case[1];
+			$error = DoughBoss_Square::reconcile_split_authorization( $args[0], $args[1], $args[2], $args[3] );
+			assert_true( is_wp_error( $error ), 'malformed recovery input is denied before repository/provider access' );
+			assert_same( false, $error->get_error_data()['retry_safe'], 'denial never permits a new payment' );
+		}
+	}
+);
+
 /** A deliberately local, inert split-leg observation fixture. */
 function db_split_leg_observation_fixture( $index = 0, $amount = 900 ) {
 	$parent = array(
