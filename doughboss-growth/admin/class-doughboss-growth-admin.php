@@ -52,6 +52,50 @@ final class DoughBoss_Growth_Admin {
 		add_action( 'admin_init', array( 'DoughBoss_Growth_Activator', 'maybe_upgrade' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'render_storage_notice' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'render_failures_notice' ) );
+		if ( is_admin() ) {
+			// The Settings link on the Plugins screen row. Registered inside wp-admin only: it has nothing to do on a public request.
+			add_filter( 'plugin_action_links_' . plugin_basename( DOUGHBOSS_GROWTH_FILE ), array( __CLASS__, 'plugin_action_links' ) );
+		}
+	}
+
+	/**
+	 * Put a Settings link first in this plugin's row on the Plugins screen, for people who can manage it.
+	 *
+	 * @param mixed $links The row's existing action links.
+	 * @return mixed
+	 */
+	public static function plugin_action_links( $links ) {
+		if ( ! is_array( $links ) || ! self::user_can_manage() ) {
+			return $links;
+		}
+		$url = add_query_arg( array( 'page' => self::PAGE_SLUG ), admin_url( 'admin.php' ) );
+		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Settings', 'doughboss-growth' ) . '</a>' );
+		return $links;
+	}
+
+	/**
+	 * An owner-facing sentence from a stored "[CONFIRM: ...]" gap text: the bracket marker removed, the first letter
+	 * capitalised, the owner's name replaced by "you" (a gap is written for the owner to read, not about him), and a full stop at
+	 * the end. The stored text is left as it is (health() and the tests read it); only what is shown changes. A module's tab
+	 * that lists its own gaps can run each one through this.
+	 *
+	 * @param mixed $text A gap text.
+	 * @return string
+	 */
+	public static function plain_gap( $text ) {
+		$text = trim( is_scalar( $text ) ? (string) $text : '' );
+		if ( 1 === preg_match( '/^\[CONFIRM:?\s*(.*?)\]?$/Ds', $text, $match ) ) {
+			$text = trim( $match[1] );
+		}
+		$text = (string) preg_replace( "/\bElie(?:'|\x{2019})s\b/u", 'your', $text );
+		$text = (string) preg_replace( '/\bElie\b/u', 'you', $text );
+		$text = (string) preg_replace( '/\byou (set|decide|approve|confirm|supply)s\b/', 'you $1', $text ); // "Elie sets it" reads "you set it".
+		$text = str_replace( 'owned by the right entity', 'owned by the right business', $text );
+		if ( '' === $text ) {
+			return '';
+		}
+		$text = strtoupper( substr( $text, 0, 1 ) ) . substr( $text, 1 );
+		return ( 1 === preg_match( '/[.!?]$/D', $text ) ) ? $text : $text . '.';
 	}
 
 	/**
@@ -335,7 +379,7 @@ final class DoughBoss_Growth_Admin {
 			'ga4_measurement_id'         => __( 'GA4 measurement id: that is not a valid id (it should look like G-XXXXXXXXXX), so it was left blank.', 'doughboss-growth' ),
 			'meta_pixel_id'              => __( 'Meta pixel id: that is not a valid id (digits only, 8 to 20 of them), so it was left blank.', 'doughboss-growth' ),
 			'consent_text_version'       => __( 'Consent wording version: use letters, numbers, dots, dashes and underscores only, so the default (1) is used.', 'doughboss-growth' ),
-			'consent_default'            => __( 'Consent default: that choice is not recognised, so deny is used.', 'doughboss-growth' ),
+			'consent_default'            => __( 'Consent default: that choice is not recognised, so "Ask first" is used.', 'doughboss-growth' ),
 			'sender_legal_name'          => __( 'Sender legal name: that text was not accepted, so it was left blank.', 'doughboss-growth' ),
 			'privacy_policy_url'         => __( 'Privacy-policy URL: that is not a usable address (use a full http or https address, or a path that starts with a slash), so it was left blank.', 'doughboss-growth' ),
 			'notify_webhook_url'         => __( 'Notification webhook URL: that is not accepted (it must be a public https address), so it was left blank.', 'doughboss-growth' ),
@@ -534,6 +578,10 @@ final class DoughBoss_Growth_Admin {
 			/* translators: %s: names of the missing or incomplete database tables. */
 			return sprintf( __( 'Not complete: %s. Features that store data stay off until this is fixed. Open this page again to retry.', 'doughboss-growth' ), implode( ', ', array_slice( $problems, 0, 8 ) ) );
 		}
+		if ( DoughBoss_Growth_Activator::storage_ready() && ! DoughBoss_Growth_Activator::schema_current() ) {
+			// An older release's tables, still usable, whose upgrade has not been recorded yet (it runs when this page is opened).
+			return __( 'Working, but the upgrade of the database tables has not finished. Open this page again to retry.', 'doughboss-growth' );
+		}
 		return DoughBoss_Growth_Activator::storage_ready() ? __( 'Ready', 'doughboss-growth' ) : __( 'Not confirmed', 'doughboss-growth' );
 	}
 
@@ -566,23 +614,72 @@ final class DoughBoss_Growth_Admin {
 	}
 
 	/**
-	 * One-line, neutral description of each feature (admin-only text).
+	 * One-line, neutral description of each feature (admin-only text), plus what to settle before switching it on.
 	 *
-	 * @return array
+	 * Element 0 is the name, 1 the description and 2 the "Before you switch this on" note shown under the checkbox on the
+	 * Settings tab. The notes are the owner gates from the release runbook (docs/RELEASE-0.1.0.md, section 4) put where the
+	 * owner works: a module's own tab only exists after its feature is on, and the docs folder is not in the plugin zip.
+	 * Written for the owner: no setting names, codes or file names that mean nothing to them.
+	 *
+	 * @return array Feature => array( name, description, before-you-switch-on note ).
 	 */
 	public static function feature_labels() {
 		return array(
-			'consent_banner'     => array( __( 'Consent banner', 'doughboss-growth' ), __( 'Asks visitors for measurement and advertising consent.', 'doughboss-growth' ) ),
-			'gtm'                => array( __( 'Tag Manager', 'doughboss-growth' ), __( 'Loads one Tag Manager container. Needs the consent banner.', 'doughboss-growth' ) ),
-			'attribution'        => array( __( 'Attribution capture', 'doughboss-growth' ), __( 'Records where an enquiry or order came from, with consent.', 'doughboss-growth' ) ),
-			'server_conversions' => array( __( 'Server-side conversions', 'doughboss-growth' ), __( 'Sends consented conversion events from the server.', 'doughboss-growth' ) ),
-			'landing_pages'      => array( __( 'Landing pages', 'doughboss-growth' ), __( 'Pages built only from confirmed claims.', 'doughboss-growth' ) ),
-			'seo_head'           => array( __( 'Search metadata', 'doughboss-growth' ), __( 'Title, description and structured data on companion pages.', 'doughboss-growth' ) ),
-			'lead_form'          => array( __( 'Lead form', 'doughboss-growth' ), __( 'Enquiry form that posts to the existing catering enquiry.', 'doughboss-growth' ) ),
-			'party_sizer'        => array( __( 'Quantity sizer', 'doughboss-growth' ), __( 'Helper that uses live catering packages.', 'doughboss-growth' ) ),
-			'coming_soon'        => array( __( 'Coming-soon section', 'doughboss-growth' ), __( 'A neutral teaser section.', 'doughboss-growth' ) ),
-			'waitlist'           => array( __( 'VIP waitlist', 'doughboss-growth' ), __( 'Collects consented sign-ups. Needs sender name and privacy-policy URL.', 'doughboss-growth' ) ),
-			'timesheet_recon'    => array( __( 'Timesheet reconciliation', 'doughboss-growth' ), __( 'Read-only comparison of staff clock records.', 'doughboss-growth' ) ),
+			'consent_banner'     => array(
+				__( 'Consent banner', 'doughboss-growth' ),
+				__( 'Asks visitors for measurement and advertising consent.', 'doughboss-growth' ),
+				__( 'Add your privacy-policy URL below and make sure the policy describes the cookies and tags your site uses. Have a solicitor check the banner wording and the three choices. Whenever you change the wording, raise the consent wording version so everyone is asked again. Leave the consent default on "Ask first" unless you have legal advice.', 'doughboss-growth' ),
+			),
+			'gtm'                => array(
+				__( 'Tag Manager', 'doughboss-growth' ),
+				__( 'Loads one Tag Manager container. Needs the consent banner.', 'doughboss-growth' ),
+				__( 'You need a Tag Manager container id from an account owned by the right business. Inside the container, Google Analytics must wait for analytics consent, and the Google Ads and Meta tags must wait for advertising consent. This plugin sends the consent signals; the container decides what fires. Your privacy policy must describe the tags.', 'doughboss-growth' ),
+			),
+			'attribution'        => array(
+				__( 'Attribution capture', 'doughboss-growth' ),
+				__( 'Records where an enquiry or order came from, with consent.', 'doughboss-growth' ),
+				__( 'Decide first how long these records are kept, and whether you need a way to export or erase a person\'s records. Nothing is deleted automatically, and these records are not covered by the WordPress personal-data tools, so removing one today needs someone with database access. Talk to your accountant or solicitor. Your privacy policy must describe the cookie that remembers where a visitor came from (kept for 90 days) and say that the source of an enquiry or order is stored with it. Nothing is recorded unless the consent banner is on.', 'doughboss-growth' ),
+			),
+			'server_conversions' => array(
+				__( 'Server-side conversions', 'doughboss-growth' ),
+				__( 'Sends consented conversion events from the server.', 'doughboss-growth' ),
+				__( 'Add the account ids on this page and the secret keys in wp-config.php (never on this page), from accounts owned by the right business. Your privacy policy must say that order and enquiry details, and advertising identifiers where the visitor agreed, are sent from the server to Google and Meta. Choose one place to count leads in Google Analytics: the server and the Tag Manager tag both send them, so leads are counted twice unless you drop one. Check each provider\'s own documentation before relying on it, and leave "Send hashed identifiers" off until your privacy policy covers it.', 'doughboss-growth' ),
+			),
+			'landing_pages'      => array(
+				__( 'Landing pages', 'doughboss-growth' ),
+				__( 'Pages built only from confirmed claims.', 'doughboss-growth' ),
+				__( 'Decide which claims you are happy to publish (lead time, service area, delivery or drop-off, dietary status, catering phone line, reviews, how the food is made). Until you confirm them the catering pages carry no claims and are hidden from search engines. The plugin only creates drafts; you publish each page yourself. If a shop is not found the page shows nothing and the Landing pages tab says why.', 'doughboss-growth' ),
+			),
+			'seo_head'           => array(
+				__( 'Search metadata', 'doughboss-growth' ),
+				__( 'Title, description and structured data on companion pages.', 'doughboss-growth' ),
+				__( 'Check each page\'s title and description under the Landing pages tab before you publish it. If an SEO plugin such as Yoast or Rank Math is active, this plugin prints no search tags unless you tick the structured-data option below, so type the title and description into the SEO plugin instead.', 'doughboss-growth' ),
+			),
+			'lead_form'          => array(
+				__( 'Lead form', 'doughboss-growth' ),
+				__( 'Enquiry form that posts to the existing catering enquiry.', 'doughboss-growth' ),
+				__( 'Enter your sender legal name first: until it is set, the marketing tick box is not shown and no marketing consent can be collected (the enquiry itself still works). Have a solicitor approve the marketing consent wording. Ticking the box only records consent; whatever sends marketing later must honour it and give a working unsubscribe. Update your privacy policy to say what an enquiry stores (company, type of customer, where it came from, and consent). Decide how long lead records are kept and whether people can ask for them to be erased: nothing is deleted automatically, and these records are not covered by the WordPress personal-data tools. Exclude the pages that hold the form from page caching on your host before switching on, or a visitor can be asked to refresh the page.', 'doughboss-growth' ),
+			),
+			'party_sizer'        => array(
+				__( 'Quantity sizer', 'doughboss-growth' ),
+				__( 'Helper that uses live catering packages.', 'doughboss-growth' ),
+				__( 'Exclude the pages that use the sizer from page caching on your host before switching it on: a cached copy that is too old makes a visitor see a "please refresh" message. The sizer shows only the packages, serve ranges and prices that DoughBoss holds. Guidance on pieces per guest stays hidden until a confirmed claim is in the claims ledger.', 'doughboss-growth' ),
+			),
+			'coming_soon'        => array(
+				__( 'Coming-soon section', 'doughboss-growth' ),
+				__( 'A neutral teaser section.', 'doughboss-growth' ),
+				__( 'Needs a valid claims ledger. Keep the headline and text general: no product, price, size, dietary claim, date or place. Wording like that is refused and the neutral default is used instead.', 'doughboss-growth' ),
+			),
+			'waitlist'           => array(
+				__( 'VIP waitlist', 'doughboss-growth' ),
+				__( 'Collects consented sign-ups. Needs sender name and privacy-policy URL.', 'doughboss-growth' ),
+				__( 'Enter the sender legal name (and ABN if shown) and the privacy-policy URL first: the waitlist will not switch on without them. Decide how long confirmed sign-ups are kept: until you do, they are never deleted automatically. Have a solicitor approve the consent wording; it covers email, and text messages only if a mobile number is given (this plugin sends no text messages). Check that the confirmation email really arrives, because mail settings on your host can send it to spam. If your host puts every visitor behind one address, the limit of five sign-ups an hour is shared by everyone; ask your developer to supply the real visitor address.', 'doughboss-growth' ),
+			),
+			'timesheet_recon'    => array(
+				__( 'Timesheet reconciliation', 'doughboss-growth' ),
+				__( 'Read-only comparison of staff clock records.', 'doughboss-growth' ),
+				__( 'Before you add the Square labour token, confirm that you approve reading Square staff data (it is personal data) and who owns the Square merchant account. Set every tolerance on the Timesheet check screen: none is built in, and until you set them each check shows as unrated and never as matched. Decide which record counts for pay when the two disagree; the report never decides.', 'doughboss-growth' ),
+			),
 		);
 	}
 
@@ -638,10 +735,10 @@ final class DoughBoss_Growth_Admin {
 
 		$gaps = DoughBoss_Growth_Settings::confirm_gaps();
 		if ( array() !== $gaps ) {
-			echo '<h2>' . esc_html__( 'Owner decisions still outstanding', 'doughboss-growth' ) . '</h2>';
-			echo '<p>' . esc_html__( 'These do not stop the plugin installing. Each blocks enabling the feature that needs it.', 'doughboss-growth' ) . '</p><ul class="ul-disc">';
+			echo '<h2>' . esc_html__( 'To decide before switching on', 'doughboss-growth' ) . '</h2>';
+			echo '<p>' . esc_html__( 'The sender legal name and the privacy-policy URL must be filled in before the waitlist will switch on. Nothing else here stops a feature switching on, but each item is a decision to make before you rely on the feature it belongs to. The note under each switch below says what else to settle first.', 'doughboss-growth' ) . '</p><ul class="ul-disc">';
 			foreach ( $gaps as $text ) {
-				echo '<li>' . esc_html( $text ) . '</li>';
+				echo '<li>' . esc_html( self::plain_gap( $text ) ) . '</li>';
 			}
 			echo '</ul>';
 		}
@@ -658,7 +755,11 @@ final class DoughBoss_Growth_Admin {
 			echo '<p><label for="' . esc_attr( $id ) . '"><input type="checkbox" id="' . esc_attr( $id ) . '" name="dbgr[features][' . esc_attr( $feature ) . ']" value="1"' . ( true === $settings['features'][ $feature ] ? ' checked="checked"' : '' ) . ' /> <strong>' . esc_html( $copy[0] ) . '</strong></label>';
 			echo '<br /><span class="description">' . esc_html( $copy[1] ) . ' ';
 			echo esc_html( self::feature_state_text( $feature ) );
-			echo '</span></p>';
+			echo '</span>';
+			if ( isset( $copy[2] ) && '' !== $copy[2] ) {
+				echo '<br /><span class="description"><strong>' . esc_html__( 'Before you switch this on:', 'doughboss-growth' ) . '</strong> ' . esc_html( $copy[2] ) . '</span>';
+			}
+			echo '</p>';
 		}
 		echo '</fieldset>';
 
@@ -667,19 +768,21 @@ final class DoughBoss_Growth_Admin {
 		self::text_row( 'gtm_container_id', __( 'Tag Manager container id', 'doughboss-growth' ), $settings['gtm_container_id'], 'GTM-XXXXXXX' );
 		self::text_row( 'ga4_measurement_id', __( 'GA4 measurement id', 'doughboss-growth' ), $settings['ga4_measurement_id'], 'G-XXXXXXXXXX' );
 		self::text_row( 'meta_pixel_id', __( 'Meta pixel id', 'doughboss-growth' ), $settings['meta_pixel_id'], '' );
-		self::text_row( 'consent_text_version', __( 'Consent wording version', 'doughboss-growth' ), $settings['consent_text_version'], '' );
+		self::text_row( 'consent_text_version', __( 'Consent wording version', 'doughboss-growth' ), $settings['consent_text_version'], '', __( 'Raise this (for example from 1 to 2) whenever you change the banner wording, so every visitor is asked again.', 'doughboss-growth' ) );
+		$consent_labels = self::consent_default_labels();
 		echo '<tr><th scope="row"><label for="dbgr-consent_default">' . esc_html__( 'Consent default', 'doughboss-growth' ) . '</label></th><td><select id="dbgr-consent_default" name="dbgr[consent_default]">';
 		foreach ( DoughBoss_Growth_Settings::CONSENT_DEFAULTS as $value ) {
-			echo '<option value="' . esc_attr( $value ) . '"' . ( $value === $settings['consent_default'] ? ' selected="selected"' : '' ) . '>' . esc_html( $value ) . '</option>';
+			$label = isset( $consent_labels[ $value ] ) ? $consent_labels[ $value ] : __( 'Another choice', 'doughboss-growth' );
+			echo '<option value="' . esc_attr( $value ) . '"' . ( $value === $settings['consent_default'] ? ' selected="selected"' : '' ) . '>' . esc_html( $label ) . '</option>';
 		}
-		echo '</select><p class="description">' . esc_html__( 'Shipped as deny: nothing is measured until the visitor chooses.', 'doughboss-growth' ) . '</p></td></tr>';
+		echo '</select><p class="description">' . esc_html__( 'Ask first is the shipped choice: nothing is measured until the visitor chooses. Notice and opt-out measures visits before the visitor chooses, so get legal advice before using it.', 'doughboss-growth' ) . '</p></td></tr>';
 		self::text_row( 'sender_legal_name', __( 'Sender legal name', 'doughboss-growth' ), $settings['sender_legal_name'], '' );
 		self::text_row( 'privacy_policy_url', __( 'Privacy-policy URL', 'doughboss-growth' ), $settings['privacy_policy_url'], 'https://' );
-		self::text_row( 'notify_webhook_url', __( 'Notification webhook URL (https only)', 'doughboss-growth' ), $settings['notify_webhook_url'], 'https://' );
+		self::text_row( 'notify_webhook_url', __( 'Notification webhook URL (https only)', 'doughboss-growth' ), $settings['notify_webhook_url'], 'https://', __( 'Optional. A secure (https) address that is sent a short signed note, with no name or email address in it, each time someone confirms their waitlist sign-up. It also needs the webhook secret set in wp-config.php. Leave it blank if you do not use one.', 'doughboss-growth' ) );
 		self::check_row( 'send_hashed_identifiers', __( 'Send hashed identifiers', 'doughboss-growth' ), (bool) $settings['send_hashed_identifiers'], __( 'Leave off until the privacy policy covers it.', 'doughboss-growth' ) );
 		self::check_row( 'seo_jsonld_with_seo_plugin', __( 'Structured data alongside an SEO plugin', 'doughboss-growth' ), (bool) $settings['seo_jsonld_with_seo_plugin'], '' );
-		self::text_row( 'retention_pending_days', __( 'Delete unconfirmed waitlist rows after (days)', 'doughboss-growth' ), (string) $settings['retention_pending_days'], '' );
-		self::text_row( 'retention_confirmed_months', __( 'Delete confirmed waitlist rows after (months)', 'doughboss-growth' ), null === $settings['retention_confirmed_months'] ? '' : (string) $settings['retention_confirmed_months'], '' );
+		self::text_row( 'retention_pending_days', __( 'Delete unconfirmed waitlist rows after (days)', 'doughboss-growth' ), (string) $settings['retention_pending_days'], '', __( 'How many days someone who has not confirmed their email stays on the list before they are deleted. A whole number from 1 to 365; the starting value is 30.', 'doughboss-growth' ) );
+		self::text_row( 'retention_confirmed_months', __( 'Delete confirmed waitlist rows after (months)', 'doughboss-growth' ), null === $settings['retention_confirmed_months'] ? '' : (string) $settings['retention_confirmed_months'], '', __( 'How many months a confirmed sign-up is kept, from 1 to 120. Leave it blank and confirmed sign-ups are never deleted automatically. Talk to your accountant or solicitor before choosing.', 'doughboss-growth' ) );
 		self::text_row( 'coming_soon_headline', __( 'Coming-soon headline', 'doughboss-growth' ), $settings['coming_soon_headline'], '' );
 		self::text_row( 'coming_soon_body', __( 'Coming-soon text', 'doughboss-growth' ), $settings['coming_soon_body'], '' );
 		self::text_row( 'coming_soon_page_slug', __( 'Coming-soon page slug', 'doughboss-growth' ), $settings['coming_soon_page_slug'], '' );
@@ -714,11 +817,29 @@ final class DoughBoss_Growth_Admin {
 	 * @param string $label       Label.
 	 * @param string $value       Value.
 	 * @param string $placeholder Placeholder.
+	 * @param string $help        Optional plain-words help shown under the box.
 	 * @return void
 	 */
-	private static function text_row( $key, $label, $value, $placeholder ) {
-		$id = 'dbgr-' . $key;
-		echo '<tr><th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th><td><input type="text" class="regular-text" id="' . esc_attr( $id ) . '" name="dbgr[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" placeholder="' . esc_attr( $placeholder ) . '" autocomplete="off" /></td></tr>';
+	private static function text_row( $key, $label, $value, $placeholder, $help = '' ) {
+		$id   = 'dbgr-' . $key;
+		$desc = ( '' !== $help ) ? ' aria-describedby="' . esc_attr( $id . '-help' ) . '"' : '';
+		echo '<tr><th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th><td><input type="text" class="regular-text" id="' . esc_attr( $id ) . '" name="dbgr[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" placeholder="' . esc_attr( $placeholder ) . '" autocomplete="off"' . $desc . ' />'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $desc is built from an escaped id.
+		if ( '' !== $help ) {
+			echo '<p class="description" id="' . esc_attr( $id . '-help' ) . '">' . esc_html( $help ) . '</p>';
+		}
+		echo '</td></tr>';
+	}
+
+	/**
+	 * What the owner sees for each stored consent default. The stored values stay as they are ("deny", "opt_out").
+	 *
+	 * @return array Stored value => label.
+	 */
+	public static function consent_default_labels() {
+		return array(
+			'deny'    => __( 'Ask first (recommended)', 'doughboss-growth' ),
+			'opt_out' => __( 'Notice and opt-out (needs legal advice)', 'doughboss-growth' ),
+		);
 	}
 
 	/**

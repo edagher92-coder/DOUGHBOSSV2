@@ -25,7 +25,7 @@ Installing and activating the plugin changes nothing a visitor can see. Every on
 | `waitlist` | VIP list with double opt-in, opt-out, privacy exporter and eraser | sender legal name, privacy-policy URL |
 | `timesheet_recon` | Read-only staff clock versus Square Team report | none (it needs a labour token before it can run) |
 
-One module is deliberately active even with every flag off: the **waitlist "always" duties** (opt-out link pages and route, privacy exporter and eraser, purge cron). A person must always be able to leave a list, be exported and be erased, so these stay registered while sign-ups are off. With every flag off they print nothing on a public page (proved by the byte comparison in section 6).
+One module is deliberately active even with every flag off: the **waitlist "always" duties** (opt-out link pages and route, privacy exporter and eraser, purge cron). A person must always be able to leave a list, be exported and be erased, so these stay registered while sign-ups are off. With every flag off they print nothing on a public page (proved by the byte comparison in section 6). Activation also schedules the daily retention purge, so deactivating and reactivating with the waitlist off keeps the retention promise.
 
 Safety switches, strongest last:
 
@@ -39,7 +39,7 @@ Safety switches, strongest last:
 1. Take a full backup (files and database) and note the time. This is the rollback point for everything below.
 2. Confirm core: DoughBoss 2.41.0 or later is active (Plugins screen). The companion shows an admin notice only, and does nothing, if core is missing or older.
 3. Upload `doughboss-growth-0.1.0.zip` (225,504 bytes, 23% of the 1,000,000-byte budget, well inside Crazy Domains' 2 MB upload limit; sha256 `a711ec964025729323a9796f3b4051c8c914452d99983eb0e9ef0cd7fb3e6b2f`, and a rebuild from the same tree is byte-identical) under Plugins, Add New, Upload Plugin. Do not use any other build.
-4. Activate. Open DoughBoss, Growth. Expected: eleven unticked boxes, a list of [CONFIRM] owner decisions, and `GET /wp-json/doughboss-growth/v1/health` (signed in as an administrator) showing every flag `false` and `storage_ready: true`.
+4. Activate. Open DoughBoss, Growth. Expected: eleven unticked boxes, a list headed "To decide before switching on" (owner decisions, in plain words, with a "Before you switch this on" note under each switch), and `GET /wp-json/doughboss-growth/v1/health` (signed in as an administrator) showing every flag `false` and `storage_ready: true`.
 5. Load `/`, `/order/`, `/catering/` and `/locations/` once. They must look exactly as before.
 6. Page caching: exclude the catering pages from full-page caching on Crazy Domains (or any cache plugin) before enabling `lead_form` or `party_sizer`. The form uses core's `wp_rest` nonce; a cached copy older than the nonce lifetime gets a 403 and the visitor sees a refresh prompt.
 7. WP-Cron: the outbox dispatch and the waitlist purge run from WP-Cron. Confirm cron fires on the host (a real server cron hitting `wp-cron.php` is better than visitor-triggered cron).
@@ -59,6 +59,8 @@ Switch on one feature at a time, check it, wait, then move on. A suggested order
 9. **`timesheet_recon`**: standalone. Only after Elie approves reading Square staff data and sets every tolerance.
 
 ## 4. Per-flag enable checklist (owner gates)
+
+The same notes are printed under each switch on the Settings tab (this document is not in the plugin zip, the Settings tab is).
 
 The owner gates are from `web/docs/wp/05-work-breakdown.md` section 4. A box that is not ticked means do not enable. After enabling each feature, run its "verify" step before the next. Rollback for every row is "untick the flag, then reload the public pages" unless the row says more.
 
@@ -172,3 +174,25 @@ php doughboss-growth/scripts/build-zip.php && php doughboss-growth/scripts/valid
 ## 7. Not verified here
 
 See section 4 of the review document. In short: no real Google, Meta, Square or mail provider was contacted; MySQL, native PHP 7.4 and 8.2 and GitHub Actions were not run; the Opus adversarial review pass was not run by this (Sonnet) package; core 2.44.0 and the Square Orders work are outside this release.
+
+## 8. Upgrading to a later version
+
+Upload the new zip over the old one (Replace current with uploaded). Nothing needs to be done by hand; the steps below say what the plugin does and what a release author must keep true.
+
+What happens on upgrade:
+
+1. The public duties carry on immediately. `storage_ready()` compares the stored schema version with `DOUGHBOSS_GROWTH_DB_MIN_COMPAT` (the oldest schema the code still runs on), not with `DOUGHBOSS_GROWTH_DB_VERSION`. Opt-out pages, exporter, eraser, purge, lead form and conversion hooks therefore keep working before anyone opens wp-admin.
+2. The first manager request in wp-admin runs the repair (`maybe_upgrade()`): dbDelta brings the tables to `DOUGHBOSS_GROWTH_DB_VERSION`, the version is recorded after every table and column is confirmed, and the daily purge event is checked. A failure is listed under Recent failures on the Settings tab and retried (at most every five minutes, at once when the Growth page is opened).
+3. The same request brings the settings option up to the current `settings_version` (see below).
+
+Rules for a release that changes the schema:
+
+- Raise `DOUGHBOSS_GROWTH_DB_VERSION` whenever a CREATE TABLE changes.
+- New columns must be nullable or have a default, so older code still runs on newer tables (a rollback to the previous zip, or the window before the repair).
+- If the new code works without the new column or index, leave `DOUGHBOSS_GROWTH_DB_MIN_COMPAT` at the previous value. If it cannot, raise it to the new version in the same release; the modules then wait for the repair (fail closed). It must never be above the schema version.
+- Never read or write a new column from code that runs while `DOUGHBOSS_GROWTH_DB_MIN_COMPAT` is still below the version that adds it.
+
+Settings:
+
+- The settings option holds `settings_version` inside itself (no extra option). Saving after a rollback keeps keys and feature flags a newer release stored, so they are not lost when the newer release returns; the form can never add a key the running version does not define.
+- To change what a stored value means, raise `DoughBoss_Growth_Settings::SETTINGS_VERSION` and add an idempotent step to `DoughBoss_Growth_Activator::migrate( $from )` (pattern in its comment). It runs once, on the first manager request or activation after the stored version is lower, works on the raw option, and returns true only on success; a failure is recorded and retried.

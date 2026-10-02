@@ -87,7 +87,9 @@ final class DoughBoss_Growth {
 	 * - always: run init() on every request whatever the flags say (still subject to needs_storage). Used by the
 	 *   waitlist: a person must always be able to opt out, and stored sign-ups must stay exportable, erasable and
 	 *   purged after the flag is switched off. Its init() does nothing public with the flag off except those.
-	 * - needs_storage: skipped until the schema is installed.
+	 * - needs_storage: skipped until the stored schema is one the code can run on (DoughBoss_Growth_Activator::storage_ready(),
+	 *   which compares with DOUGHBOSS_GROWTH_DB_MIN_COMPAT, so a plugin upgrade does not switch these modules off while the
+	 *   table upgrade waits for a manager to open wp-admin).
 	 *
 	 * Module files must define classes only (no side effects at include time): the activator includes
 	 * every present entry file to collect schema() even while its feature is off. init() must be
@@ -251,6 +253,12 @@ final class DoughBoss_Growth {
 		self::$time_override     = null;
 		self::$registry_override = null;
 		self::$base_override     = null;
+		if ( class_exists( 'DoughBoss_Growth_Settings', false ) ) {
+			DoughBoss_Growth_Settings::reset_cache();
+		}
+		if ( class_exists( 'DoughBoss_Growth_Activator', false ) ) {
+			DoughBoss_Growth_Activator::set_version_override( null, null );
+		}
 	}
 
 	/**

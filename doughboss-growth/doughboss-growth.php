@@ -9,7 +9,6 @@
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       doughboss-growth
- * Domain Path:       /languages
  *
  * @package DoughBoss_Growth
  */
@@ -26,9 +25,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'DOUGHBOSS_GROWTH_VERSION', '0.1.0' );
 
 /**
- * Companion schema version, stored in option doughboss_growth_db_version.
+ * Companion schema version: what DoughBoss_Growth_Activator::install() brings the tables up to and records in option
+ * doughboss_growth_db_version. Raise it whenever a CREATE TABLE statement changes.
  */
 define( 'DOUGHBOSS_GROWTH_DB_VERSION', '1.1.0' );
+
+/**
+ * The oldest recorded schema version this code can still run on. DoughBoss_Growth_Activator::storage_ready() compares the
+ * stored version with THIS, not with DOUGHBOSS_GROWTH_DB_VERSION, so a plugin replaced by a zip upload keeps every module
+ * running (opt-out pages, exporter, eraser, purge, lead form, conversions) while the table upgrade waits for a manager to
+ * open wp-admin. Today it equals DOUGHBOSS_GROWTH_DB_VERSION. A release that adds only nullable or defaulted columns (or
+ * indexes) that its code works without leaves it at the previous value; a release whose code cannot work on the old tables
+ * raises it to the new schema version in the same release (the modules then wait for the upgrade). It must never be above
+ * DOUGHBOSS_GROWTH_DB_VERSION. See "Upgrading" in docs/RELEASE-0.1.0.md.
+ */
+define( 'DOUGHBOSS_GROWTH_DB_MIN_COMPAT', '1.1.0' );
 
 define( 'DOUGHBOSS_GROWTH_FILE', __FILE__ );
 define( 'DOUGHBOSS_GROWTH_DIR', plugin_dir_path( __FILE__ ) );

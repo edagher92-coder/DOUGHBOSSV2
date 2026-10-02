@@ -49,6 +49,7 @@ final class DoughBoss_Growth_Activator {
 	const TRANSIENTS = array(
 		'doughboss_growth_install_retry',
 		'doughboss_growth_schema_ok',
+		'doughboss_growth_outbox_resume',
 	);
 
 	/**
@@ -88,6 +89,20 @@ final class DoughBoss_Growth_Activator {
 	);
 
 	/**
+	 * The waitlist retention purge hook (the same name as DoughBoss_Growth_Waitlist::PURGE_HOOK, which owns the callback;
+	 * a test keeps the two equal). The purge is an "always" duty: the retention promise made to people on the list must
+	 * not depend on the waitlist flag being on, so install() schedules the event itself.
+	 */
+	const PURGE_HOOK = 'doughboss_growth_retention_purge';
+
+	/**
+	 * Test seam for the schema versions: array( db version, min compat ) or null. Production code never sets it.
+	 *
+	 * @var array|null
+	 */
+	private static $version_override = null;
+
+	/**
 	 * Post statuses that are visible or about to be, and so must be drafted on deactivation.
 	 */
 	const LIVE_STATUSES = array( 'publish', 'pending', 'future', 'private' );
@@ -101,12 +116,13 @@ final class DoughBoss_Growth_Activator {
 	public static function activate() {
 		if ( class_exists( 'DoughBoss_Growth' ) && DoughBoss_Growth::core_ready() ) {
 			self::install();
+			self::maybe_migrate_settings();
 		}
 	}
 
 	/**
-	 * Deactivation hook: draft companion pages (so no raw shortcode text can show) and clear cron.
-	 * Deletes no data.
+	 * Deactivation hook: draft companion pages (so no raw shortcode text can show) and clear cron (including the waitlist
+	 * purge, which install() schedules again on the next activation). Deletes no data.
 	 *
 	 * @return void
 	 */
@@ -146,22 +162,55 @@ final class DoughBoss_Growth_Activator {
 			);
 			return false;
 		}
-		update_option( self::DB_VERSION_OPTION, DOUGHBOSS_GROWTH_DB_VERSION, true );
-		if ( ! self::storage_ready() ) {
-			self::note_failure( 'schema_version_save_failed', array( 'version' => DOUGHBOSS_GROWTH_DB_VERSION ) );
+		update_option( self::DB_VERSION_OPTION, self::db_version(), true );
+		// Read back against the CURRENT schema version, not the compatibility floor: a refused write would otherwise look like
+		// success whenever the old stored version is still compatible.
+		if ( ! self::schema_current() ) {
+			self::note_failure( 'schema_version_save_failed', array( 'version' => self::db_version() ) );
 			return false;
 		}
 		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
 			DoughBoss_Growth_Failures::clear( 'schema_install_failed' );
 			DoughBoss_Growth_Failures::clear( 'schema_version_save_failed' );
 		}
+		// The retention purge is an always-on duty of the waitlist module: schedule it here so that a deactivate and
+		// reactivate with the waitlist switched off does not silently stop the promised deletions. A scheduling failure does
+		// not undo the schema (it is recorded, and the hourly self-check tries again).
+		self::ensure_purge_scheduled();
 		return true;
 	}
 
 	/**
-	 * Admin-side self-heal for managers: run install() when the schema was never confirmed, or when a
-	 * table is missing (covers a plugin updated by zip upload and modules that add a table later).
+	 * Make sure the daily waitlist purge event exists. The callback is registered by the waitlist module (always on); this
+	 * only owns the schedule. A schedule WordPress refuses to write is recorded for the owner (code purge_schedule_failed),
+	 * and the record is removed as soon as the event exists.
+	 *
+	 * @return bool True when the event exists afterwards.
+	 */
+	public static function ensure_purge_scheduled() {
+		if ( false === wp_next_scheduled( self::PURGE_HOOK ) ) {
+			$now       = class_exists( 'DoughBoss_Growth', false ) ? DoughBoss_Growth::now() : time();
+			$scheduled = wp_schedule_event( $now + HOUR_IN_SECONDS, 'daily', self::PURGE_HOOK );
+			if ( false === $scheduled || is_wp_error( $scheduled ) ) {
+				self::note_failure( 'purge_schedule_failed', array( 'stage' => 'ensure_scheduled' ) );
+				return false;
+			}
+		}
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::clear( 'purge_schedule_failed' );
+		}
+		return true;
+	}
+
+	/**
+	 * Admin-side self-heal for managers: run install() when the schema was never confirmed, when it is behind this code's
+	 * schema version, or when a table or column is missing (covers a plugin updated by zip upload and modules that add a table
+	 * later); bring the settings option up to this code's settings version; and make sure the waitlist purge is scheduled.
 	 * The full table check runs at most hourly, or immediately when the owner opens the Growth page.
+	 *
+	 * Nothing here is needed for the modules to RUN after an upgrade: storage_ready() compares the stored schema version with
+	 * DOUGHBOSS_GROWTH_DB_MIN_COMPAT, so the public duties carry on at once and this repair follows when a manager next opens
+	 * wp-admin.
 	 *
 	 * @return void
 	 */
@@ -169,11 +218,13 @@ final class DoughBoss_Growth_Activator {
 		if ( ! DoughBoss_Growth_Admin::user_can_manage() ) {
 			return;
 		}
+		self::maybe_migrate_settings();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only routing check, no state change.
 		$page    = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 		$on_page = ( 0 === strpos( $page, 'doughboss-growth' ) );
 
-		if ( ! self::storage_ready() ) {
+		// Not at this code's schema version: never confirmed, or an older release's tables still waiting for the upgrade.
+		if ( ! self::schema_current() ) {
 			// A failing install is retried at most every five minutes, except when the owner opens
 			// the Growth page (an explicit retry).
 			if ( ! $on_page && false !== get_transient( self::RETRY_TRANSIENT ) ) {
@@ -208,18 +259,179 @@ final class DoughBoss_Growth_Activator {
 		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
 			DoughBoss_Growth_Failures::clear( 'schema_install_failed' ); // The schema is complete: an earlier failure no longer stands.
 		}
+		self::ensure_purge_scheduled(); // A lost cron event (another plugin cleared the cron list) is put back at most hourly.
 	}
 
 	/**
-	 * Cheap runtime check: has install() completed for this schema version?
+	 * The schema version this code installs (DOUGHBOSS_GROWTH_DB_VERSION).
+	 *
+	 * @return string
+	 */
+	public static function db_version() {
+		if ( null !== self::$version_override ) {
+			return self::$version_override[0];
+		}
+		return (string) DOUGHBOSS_GROWTH_DB_VERSION;
+	}
+
+	/**
+	 * The oldest stored schema version this code still runs on (DOUGHBOSS_GROWTH_DB_MIN_COMPAT). Never above the schema
+	 * version, and a missing or malformed constant falls back to the schema version (the strict reading: fail closed).
+	 *
+	 * @return string
+	 */
+	public static function min_compat_version() {
+		$db  = self::db_version();
+		$min = $db;
+		if ( null !== self::$version_override ) {
+			$min = self::$version_override[1];
+		} elseif ( defined( 'DOUGHBOSS_GROWTH_DB_MIN_COMPAT' ) ) {
+			$min = (string) constant( 'DOUGHBOSS_GROWTH_DB_MIN_COMPAT' );
+		}
+		if ( 1 !== preg_match( '/^[0-9]+\.[0-9]+\.[0-9]+$/D', $min ) || version_compare( $min, $db, '>' ) ) {
+			return $db;
+		}
+		return $min;
+	}
+
+	/**
+	 * Override the schema versions (tests only; honoured only inside the test harness). Pass null to release it.
+	 *
+	 * @param string|null $db_version Schema version this code installs.
+	 * @param string|null $min_compat Oldest stored version it runs on.
+	 * @return void
+	 */
+	public static function set_version_override( $db_version, $min_compat ) {
+		if ( ! defined( 'DBGR_TESTING' ) ) {
+			return;
+		}
+		self::$version_override = ( is_string( $db_version ) && is_string( $min_compat ) ) ? array( $db_version, $min_compat ) : null;
+	}
+
+	/**
+	 * Cheap runtime check: can the code run on the stored schema? True when the stored version is at or above
+	 * DOUGHBOSS_GROWTH_DB_MIN_COMPAT. That is deliberately NOT "is the schema fully up to date" (see schema_current()): after a
+	 * release that only adds nullable columns, the modules must keep working until a manager opens wp-admin and install() runs.
 	 *
 	 * @return bool
 	 */
 	public static function storage_ready() {
 		$stored = get_option( self::DB_VERSION_OPTION, '0' );
-		return is_string( $stored ) && '' !== $stored && version_compare( $stored, DOUGHBOSS_GROWTH_DB_VERSION, '>=' );
+		return is_string( $stored ) && '' !== $stored && version_compare( $stored, self::min_compat_version(), '>=' );
 	}
 
+	/**
+	 * Whether install() has completed for THIS code's schema version (the stored version is at or above
+	 * DOUGHBOSS_GROWTH_DB_VERSION). False after a plugin upgrade until the repair has run.
+	 *
+	 * @return bool
+	 */
+	public static function schema_current() {
+		$stored = get_option( self::DB_VERSION_OPTION, '0' );
+		return is_string( $stored ) && '' !== $stored && version_compare( $stored, self::db_version(), '>=' );
+	}
+
+	/**
+	 * Bring the settings option up to this code's settings version, once. Does nothing when there is no settings option (a
+	 * fresh install writes nothing), when the option is not an array (the sanitiser already reads it as defaults), when it is
+	 * already at this version, or when a NEWER version stored it (a rollback never lowers the stamp; the next save by this
+	 * code writes this code's version).
+	 *
+	 * @return string "none", "current", "newer", "migrated" or "failed".
+	 */
+	public static function maybe_migrate_settings() {
+		return self::run_settings_migration( array( __CLASS__, 'migrate' ) );
+	}
+
+	/**
+	 * The settings migration, with the migrator passed in so a failing one can be exercised.
+	 *
+	 * On success the stamp is written INSIDE the existing settings option (key settings_version), every other stored key
+	 * untouched, and the doughboss_growth_settings_migrated action fires with the old and new version. A migrator that
+	 * returns anything but true, or throws, leaves the stamp alone, is recorded in the failure list (settings_migrate_failed)
+	 * and is tried again on the next manager request. A stamp that cannot be written is recorded (settings_version_save_failed).
+	 *
+	 * @param callable $migrator Callable( int $from ) returning true on success.
+	 * @return string "none", "current", "newer", "migrated" or "failed".
+	 */
+	public static function run_settings_migration( $migrator ) {
+		if ( ! class_exists( 'DoughBoss_Growth_Settings', false ) ) {
+			return 'none';
+		}
+		$raw = get_option( DoughBoss_Growth_Settings::OPTION, false );
+		if ( ! is_array( $raw ) ) {
+			return 'none';
+		}
+		$from = DoughBoss_Growth_Settings::stored_version( $raw );
+		$to   = DoughBoss_Growth_Settings::SETTINGS_VERSION;
+		if ( $from === $to ) {
+			return 'current';
+		}
+		if ( $from > $to ) {
+			return 'newer';
+		}
+		try {
+			$ok = call_user_func( $migrator, $from );
+		} catch ( Throwable $e ) {
+			$ok = false;
+		}
+		if ( true !== $ok ) {
+			self::note_failure(
+				'settings_migrate_failed',
+				array(
+					'from' => $from,
+					'to'   => $to,
+				)
+			);
+			return 'failed';
+		}
+		$raw = get_option( DoughBoss_Growth_Settings::OPTION, false ); // The migrator may have changed the option.
+		if ( ! is_array( $raw ) ) {
+			return 'none';
+		}
+		$raw['settings_version'] = $to;
+		update_option( DoughBoss_Growth_Settings::OPTION, $raw, true );
+		if ( DoughBoss_Growth_Settings::stored_version() !== $to ) {
+			self::note_failure( 'settings_version_save_failed', array( 'to' => $to ) );
+			return 'failed';
+		}
+		DoughBoss_Growth_Settings::reset_cache();
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::clear( 'settings_migrate_failed' );
+			DoughBoss_Growth_Failures::clear( 'settings_version_save_failed' );
+		}
+		do_action( 'doughboss_growth_settings_migrated', $from, $to );
+		return 'migrated';
+	}
+
+	/**
+	 * Settings migration steps. Runs once, on the first manager request (or activation) after the stored settings version
+	 * is found LOWER than DoughBoss_Growth_Settings::SETTINGS_VERSION. Today it does nothing: version 1 only introduced the
+	 * version key itself, and every setting added so far has a safe default that the sanitiser applies.
+	 *
+	 * The pattern for a later release that changes what a stored value means:
+	 *
+	 *   if ( $from < 2 ) {
+	 *       $raw = get_option( DoughBoss_Growth_Settings::OPTION, array() );
+	 *       if ( is_array( $raw ) && isset( $raw['old_key'] ) && ! isset( $raw['new_key'] ) ) {
+	 *           $raw['new_key'] = $raw['old_key'];
+	 *           unset( $raw['old_key'] );
+	 *           update_option( DoughBoss_Growth_Settings::OPTION, $raw, true );
+	 *       }
+	 *   }
+	 *
+	 * Every step must be IDEMPOTENT (running it twice, or on data that is already migrated, changes nothing), because a
+	 * rollback and a second upgrade runs the same step again; it works on the RAW option so keys this code does not know
+	 * survive; and it returns true only when every step succeeded (false or an exception leaves the stamp unwritten, records
+	 * a failure and retries on the next manager request).
+	 *
+	 * @param int $from The settings version found in the stored option (0 when it had none).
+	 * @return bool True when the settings are now at the current version's shape.
+	 */
+	public static function migrate( $from ) {
+		unset( $from ); // No step yet; see the pattern above.
+		return true;
+	}
 	/**
 	 * Table names declared by a set of CREATE TABLE statements.
 	 *

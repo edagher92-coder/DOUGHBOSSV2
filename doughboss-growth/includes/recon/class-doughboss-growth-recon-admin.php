@@ -500,6 +500,101 @@ final class DoughBoss_Growth_Recon_Admin {
 	}
 
 	/**
+	 * Plain words for a run status as the owner reads it. An unknown status is never printed.
+	 *
+	 * @param string $status Run status (COMPLETE, INCOMPLETE, NOT_RUN, FAILED).
+	 * @return string
+	 */
+	public static function status_text( $status ) {
+		$map = array(
+			'COMPLETE'   => __( 'Finished.', 'doughboss-growth' ),
+			'INCOMPLETE' => __( 'Finished, but some items could not be checked.', 'doughboss-growth' ),
+			'NOT_RUN'    => __( 'Not run.', 'doughboss-growth' ),
+			'FAILED'     => __( 'Failed.', 'doughboss-growth' ),
+		);
+		$key = strtoupper( is_string( $status ) ? $status : '' );
+		return isset( $map[ $key ] ) ? $map[ $key ] : __( 'The result was not recognised.', 'doughboss-growth' );
+	}
+
+	/**
+	 * A sentence for the reason a run did not finish (or the reason the staff clock cannot be read). The codes are the
+	 * run's internal reasons; the owner never sees one. An empty code (a clean run) has no sentence and an unknown code gets
+	 * a generic one.
+	 *
+	 * @param string $code Reason code.
+	 * @return string
+	 */
+	public static function reason_text( $code ) {
+		$code = is_string( $code ) ? $code : '';
+		if ( '' === $code ) {
+			return '';
+		}
+		$map = array(
+			'feature_off'                  => __( 'The timesheet check is switched off.', 'doughboss-growth' ),
+			'companion_storage_not_ready'  => __( 'The database tables for this check are not ready yet.', 'doughboss-growth' ),
+			'run_in_progress'              => __( 'Another run is already in progress. Try again in a few minutes.', 'doughboss-growth' ),
+			'storage_write_failed'         => __( 'The result could not be saved.', 'doughboss-growth' ),
+			'storage_read_failed'          => __( 'Saved information for this check could not be read.', 'doughboss-growth' ),
+			'internal_error'               => __( 'Something unexpected went wrong while running the check.', 'doughboss-growth' ),
+			'no_location_mapping'          => __( 'No shop is matched to a Square location yet.', 'doughboss-growth' ),
+			'invalid_dates'                => __( 'The dates were not accepted. Check that From is not after To and that the range is no more than 31 days.', 'doughboss-growth' ),
+			'timezone_error'               => __( 'The Sydney time zone could not be worked out on this server.', 'doughboss-growth' ),
+			'unmapped_items'               => __( 'Some staff or shops are not matched to Square yet.', 'doughboss-growth' ),
+			'plugin_timeclock_missing'     => __( 'The DoughBoss staff clock is not available on this site.', 'doughboss-growth' ),
+			'plugin_version_too_old'       => __( 'The DoughBoss plugin is too old to read the staff clock.', 'doughboss-growth' ),
+			'plugin_db_too_old'            => __( 'The DoughBoss staff clock data needs updating before it can be read.', 'doughboss-growth' ),
+			'plugin_storage_not_ready'     => __( 'The DoughBoss staff clock tables are not ready.', 'doughboss-growth' ),
+			'plugin_read_failed'           => __( 'The staff clock records could not be read.', 'doughboss-growth' ),
+			'plugin_row_cap'               => __( 'There are too many clock records in that period to report completely. Choose a shorter period.', 'doughboss-growth' ),
+			'plugin_data_invalid'          => __( 'A staff clock record has a value the report cannot use.', 'doughboss-growth' ),
+			'square_env_missing'           => __( 'The Square environment is not set (see the Status table).', 'doughboss-growth' ),
+			'square_token_missing'         => __( 'The Square labour token is not set.', 'doughboss-growth' ),
+			'square_transport'             => __( 'Square could not be reached.', 'doughboss-growth' ),
+			'square_request_refused'       => __( 'Square could not be reached.', 'doughboss-growth' ),
+			'square_http_429'              => __( 'Square asked us to slow down. Try again later.', 'doughboss-growth' ),
+			'square_http_5xx'              => __( 'Square had a problem on its side. Try again later.', 'doughboss-growth' ),
+			'square_request_invalid'       => __( 'A request to Square was not valid.', 'doughboss-growth' ),
+			'core_location_map_missing'    => __( 'The shop-to-Square list held by DoughBoss could not be read.', 'doughboss-growth' ),
+			'core_location_map_unreadable' => __( 'The shop-to-Square list held by DoughBoss could not be read.', 'doughboss-growth' ),
+		);
+		if ( isset( $map[ $code ] ) ) {
+			return $map[ $code ];
+		}
+		if ( 1 === preg_match( '/^square_http_[0-9]{3}$/D', $code ) ) {
+			return __( 'Square refused the request.', 'doughboss-growth' );
+		}
+		if ( 0 === strpos( $code, 'square_response_' ) ) {
+			return __( 'Square sent back something the report could not use.', 'doughboss-growth' );
+		}
+		if ( 0 === strpos( $code, 'square_scope_' ) || 0 === strpos( $code, 'square_pagination_' ) ) {
+			return __( 'Square\'s answer did not match what was asked for, so the run was stopped rather than guess.', 'doughboss-growth' );
+		}
+		return __( 'The check could not run, for a reason this screen does not recognise.', 'doughboss-growth' );
+	}
+
+	/**
+	 * A sentence for the result of confirming or removing a mapping. An unknown code is never printed.
+	 *
+	 * @param string $code Result code.
+	 * @return string
+	 */
+	public static function mapping_text( $code ) {
+		$map = array(
+			'confirmed'          => __( 'Mapping confirmed.', 'doughboss-growth' ),
+			'revoked'            => __( 'Mapping removed.', 'doughboss-growth' ),
+			'absent'             => __( 'There was no mapping to remove.', 'doughboss-growth' ),
+			'exists'             => __( 'That mapping already exists. Nothing was changed.', 'doughboss-growth' ),
+			'conflict'           => __( 'That staff member or shop, or that Square id, is already matched to something else. Remove the old match first.', 'doughboss-growth' ),
+			'invalid'            => __( 'That request was not valid, so nothing was changed.', 'doughboss-growth' ),
+			'feature_off'        => __( 'The timesheet check is switched off, so nothing was changed.', 'doughboss-growth' ),
+			'square_env_missing' => __( 'The Square environment is not set, so no mapping can be saved yet.', 'doughboss-growth' ),
+			'unknown_local'      => __( 'That staff member or shop was not found, so nothing was changed.', 'doughboss-growth' ),
+		);
+		$code = is_string( $code ) ? $code : '';
+		return isset( $map[ $code ] ) ? $map[ $code ] : __( 'The mapping could not be changed.', 'doughboss-growth' );
+	}
+
+	/**
 	 * Whether a plugin shop exists and is active (core public API; fails closed when unavailable).
 	 *
 	 * @param int $id Location id.
@@ -653,7 +748,7 @@ final class DoughBoss_Growth_Recon_Admin {
 
 		echo '<h2>' . esc_html__( 'Status', 'doughboss-growth' ) . '</h2><table class="widefat striped" style="max-width:760px"><tbody>';
 		$guard = DoughBoss_Growth_Recon_Reader::guard();
-		self::status_row( __( 'Website clock readable', 'doughboss-growth' ), '' === $guard ? __( 'Yes', 'doughboss-growth' ) : $guard );
+		self::status_row( __( 'Website clock readable', 'doughboss-growth' ), '' === $guard ? __( 'Yes', 'doughboss-growth' ) : __( 'No.', 'doughboss-growth' ) . ' ' . self::reason_text( $guard ) );
 		self::status_row( __( 'Square environment (DOUGHBOSS_GROWTH_SQUARE_ENV)', 'doughboss-growth' ), '' === $environment ? __( 'Not set', 'doughboss-growth' ) : $environment );
 		self::status_row( __( 'Square labour token (DOUGHBOSS_GROWTH_SQUARE_LABOUR_TOKEN)', 'doughboss-growth' ), DoughBoss_Growth_Recon_Square::has_token() ? __( 'Set', 'doughboss-growth' ) : __( 'Not set', 'doughboss-growth' ) );
 		self::status_row( __( 'Square API version (pinned)', 'doughboss-growth' ), DoughBoss_Growth_Recon_Square::SQUARE_VERSION );
@@ -664,7 +759,7 @@ final class DoughBoss_Growth_Recon_Admin {
 		if ( false === $attempt ) {
 			self::status_row( __( 'Last attempt', 'doughboss-growth' ), __( 'Could not be read', 'doughboss-growth' ) );
 		} elseif ( is_array( $attempt ) ) {
-			self::status_row( __( 'Last attempt', 'doughboss-growth' ), sprintf( '#%d %s %s %s', (int) $attempt['id'], (string) $attempt['status'], (string) $attempt['reason_code'], self::local_time( $attempt['started_at'] ) ) );
+			self::status_row( __( 'Last attempt', 'doughboss-growth' ), trim( sprintf( '#%1$d %2$s %3$s %4$s', (int) $attempt['id'], self::status_text( (string) $attempt['status'] ), self::reason_text( (string) $attempt['reason_code'] ), self::local_time( $attempt['started_at'] ) ) ) );
 		}
 		echo '</tbody></table>';
 
@@ -699,7 +794,7 @@ final class DoughBoss_Growth_Recon_Admin {
 		// phpcs:enable
 		if ( '' !== $status ) {
 			$ok = in_array( strtoupper( $status ), array( 'COMPLETE' ), true );
-			echo '<div class="notice ' . esc_attr( $ok ? 'notice-success' : 'notice-warning' ) . '"><p>' . esc_html( sprintf( __( 'Run result: %1$s %2$s', 'doughboss-growth' ), strtoupper( $status ), $reason ) ) . '</p></div>';
+			echo '<div class="notice ' . esc_attr( $ok ? 'notice-success' : 'notice-warning' ) . '"><p>' . esc_html( sprintf( __( 'Run result: %s', 'doughboss-growth' ), trim( self::status_text( $status ) . ' ' . self::reason_text( $reason ) ) ) ) . '</p></div>';
 			if ( 'storage_write_failed' === $reason ) {
 				echo '<div class="notice notice-error"><p>' . esc_html__( 'The report storage could not be written, so no result was stored.', 'doughboss-growth' ) . '</p></div>';
 			}
@@ -712,7 +807,7 @@ final class DoughBoss_Growth_Recon_Admin {
 			if ( isset( $map_text[ $map ] ) ) {
 				echo '<div class="notice notice-error"><p>' . esc_html( $map_text[ $map ] ) . '</p></div>';
 			} else {
-				echo '<div class="notice ' . esc_attr( 'confirmed' === $map || 'revoked' === $map ? 'notice-success' : 'notice-warning' ) . '"><p>' . esc_html( sprintf( __( 'Mapping: %s', 'doughboss-growth' ), $map ) ) . '</p></div>';
+				echo '<div class="notice ' . esc_attr( 'confirmed' === $map || 'revoked' === $map ? 'notice-success' : 'notice-warning' ) . '"><p>' . esc_html( sprintf( __( 'Mapping: %s', 'doughboss-growth' ), self::mapping_text( $map ) ) ) . '</p></div>';
 			}
 		}
 		if ( 'saved' === $saved ) {
@@ -1027,7 +1122,7 @@ final class DoughBoss_Growth_Recon_Admin {
 			'lookback_days'            => __( 'Re-check this many earlier days on each run', 'doughboss-growth' ),
 			'run_time_local'           => __( 'Daily run time (Sydney, HH:MM)', 'doughboss-growth' ),
 		);
-		echo '<h2>' . esc_html__( 'Parameters (Elie decides every number; blank means not set)', 'doughboss-growth' ) . '</h2>';
+		echo '<h2>' . esc_html__( 'Parameters (you decide every number; blank means not set)', 'doughboss-growth' ) . '</h2>';
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		echo '<input type="hidden" name="action" value="' . esc_attr( self::ACTION_PARAMS ) . '" />';
 		wp_nonce_field( self::ACTION_PARAMS );

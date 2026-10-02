@@ -36,6 +36,10 @@ Safety switches:
 
 Secrets (API secrets, tokens) are read from environment variables or wp-config.php constants only and are never stored in the database, printed or logged.
 
+== Upgrading ==
+
+Upload the new zip over the old one. The companion keeps working at once; the first time an administrator opens the dashboard afterwards it finishes any database and settings upgrade. Settings saved by a newer version are kept if you go back to an older one.
+
 == Installation ==
 
 1. Upload the zip under Plugins, Add New, Upload Plugin, then activate.

@@ -25,6 +25,14 @@ final class DoughBoss_Growth_Settings {
 	const OPTION = 'doughboss_growth_settings';
 
 	/**
+	 * Version of the SHAPE of the settings option, stored inside it as "settings_version" (not a new option). Raise it when a
+	 * release changes what a stored value means (a key renamed, a value re-scaled) and add the step to
+	 * DoughBoss_Growth_Activator::migrate(); adding a key with a safe default needs no raise. A site without the key is
+	 * version 0 (saved by 0.1.0 before the key existed).
+	 */
+	const SETTINGS_VERSION = 1;
+
+	/**
 	 * The eleven feature flags. Names are frozen by the architecture (00 section 4.2).
 	 */
 	const FEATURES = array(
@@ -96,6 +104,7 @@ final class DoughBoss_Growth_Settings {
 			$features[ $feature ] = false;
 		}
 		return array(
+			'settings_version'           => self::SETTINGS_VERSION,
 			'features'                   => $features,
 			'gtm_container_id'           => '',
 			'ga4_measurement_id'         => '',
@@ -125,16 +134,100 @@ final class DoughBoss_Growth_Settings {
 	}
 
 	/**
+	 * Raw option value the memoised result below was made from (compared with ===, so a changed option is noticed at once).
+	 *
+	 * @var mixed
+	 */
+	private static $memo_raw = null;
+
+	/**
+	 * The memoised sanitised settings.
+	 *
+	 * @var array|null
+	 */
+	private static $memo_out = null;
+
+	/**
+	 * Whether the memo holds a result.
+	 *
+	 * @var bool
+	 */
+	private static $memo_valid = false;
+
+	/**
+	 * Full sanitising passes run since the start of the request (diagnostic: the tests prove the memo with it).
+	 *
+	 * @var int
+	 */
+	private static $sanitise_passes = 0;
+
+	/**
 	 * All settings, sanitised on read so a corrupted option can never produce an open state.
+	 *
+	 * Called many times a request (every enabled() check), so the sanitised result is kept for as long as the raw option is
+	 * unchanged. The memo is keyed on the raw value itself, so an option changed by anything (the save handler, another
+	 * request's write seen after a cache refresh, a test) is sanitised afresh on the next read. A corrupt value is
+	 * sanitised and memoised like any other, so it still reads as defaults (everything off).
 	 *
 	 * @return array
 	 */
 	public static function get_all() {
 		$stored = get_option( self::OPTION, array() );
-		if ( ! is_array( $stored ) ) {
-			$stored = array();
+		if ( self::$memo_valid && $stored === self::$memo_raw ) {
+			return self::$memo_out;
 		}
-		return self::sanitize( $stored );
+		$source = is_array( $stored ) ? $stored : array();
+		$out    = self::sanitize( $source );
+
+		self::$memo_raw   = $stored;
+		self::$memo_out   = $out;
+		self::$memo_valid = true;
+		return $out;
+	}
+
+	/**
+	 * Forget the memoised settings (the save handler and the test reset call this; a changed option is noticed anyway).
+	 *
+	 * @return void
+	 */
+	public static function reset_cache() {
+		self::$memo_raw   = null;
+		self::$memo_out   = null;
+		self::$memo_valid = false;
+	}
+
+	/**
+	 * How many full sanitising passes have run in this request. A diagnostic for the tests: two reads of an unchanged option
+	 * must add one, not two.
+	 *
+	 * @return int
+	 */
+	public static function sanitise_passes() {
+		return self::$sanitise_passes;
+	}
+
+	/**
+	 * The settings version recorded inside a stored settings option: 0 when the option has no (usable) version, which is how
+	 * a site saved before the key existed reads.
+	 *
+	 * @param mixed $raw The raw option value; null reads the option.
+	 * @return int
+	 */
+	public static function stored_version( $raw = null ) {
+		if ( null === $raw ) {
+			$raw = get_option( self::OPTION, false );
+		}
+		if ( ! is_array( $raw ) || ! isset( $raw['settings_version'] ) ) {
+			return 0;
+		}
+		$version = $raw['settings_version'];
+		if ( is_int( $version ) && $version >= 0 ) {
+			return $version;
+		}
+		if ( is_string( $version ) && 1 === preg_match( '/^[0-9]{1,6}$/D', $version ) ) {
+			return (int) $version;
+		}
+		return 0;
 	}
 
 	/**
@@ -255,6 +348,9 @@ final class DoughBoss_Growth_Settings {
 	 * dropped: the field is now blank or on its default) and "adjusted" (a value was kept but changed, for example capped).
 	 * Both hold field names from NOTE_FIELDS. A box left empty is not a refusal.
 	 *
+	 * The stored option also keeps any key that is already in it and that this version does not know (see
+	 * preserved_unknown()), and records settings_version. "settings" in the result is the sanitised known settings only.
+	 *
 	 * @param array $raw Raw input.
 	 * @return array { settings: array, errors: string[], saved: bool, refused: string[], adjusted: string[] }
 	 */
@@ -290,8 +386,14 @@ final class DoughBoss_Growth_Settings {
 		}
 		$clean['features'] = $candidate;
 
-		update_option( self::OPTION, $clean, true );
-		// update_option() returns false when the value is unchanged, so confirm by reading back.
+		// What is written is the sanitised known settings plus whatever a NEWER version of this plugin stored that this code
+		// does not know (see preserved_unknown()), so saving after a rollback does not wipe the newer version's settings.
+		$to_store = self::preserved_unknown( $clean );
+		update_option( self::OPTION, $to_store, true );
+		// update_option() returns false when the value is unchanged, so confirm by reading back. The memo is dropped first so
+		// the read is a real pass over what the database now holds. get_all() drops unknown keys, so it is compared with the
+		// sanitised settings, not with what was stored.
+		self::reset_cache();
 		$saved = ( $clean === self::get_all() );
 
 		return array(
@@ -301,6 +403,40 @@ final class DoughBoss_Growth_Settings {
 			'refused'  => $notes['refused'],
 			'adjusted' => $notes['adjusted'],
 		);
+	}
+
+	/**
+	 * The sanitised settings with the stored keys this code does not know carried over unchanged.
+	 *
+	 * Why: a later release can add a setting or a feature flag. If the owner then goes back to this version (a rollback, or
+	 * restoring the old zip) and saves, rewriting the option from known keys alone would silently delete the newer version's
+	 * settings, and they would be missing when the newer version returned. Only keys that are ALREADY in the stored option are
+	 * carried over, never anything from the posted form (the form is never trusted for a key this code does not define, so
+	 * secret-looking input is still dropped), and only keys with a plain snake_case name. A carried-over key is ignored by
+	 * this version's readers: get_all() and sanitize() still return known keys only.
+	 *
+	 * @param array $clean Sanitised known settings.
+	 * @return array The array to store.
+	 */
+	private static function preserved_unknown( array $clean ) {
+		$stored = get_option( self::OPTION, false );
+		if ( ! is_array( $stored ) ) {
+			return $clean;
+		}
+		$out = $clean;
+		foreach ( $stored as $key => $value ) {
+			if ( is_string( $key ) && ! array_key_exists( $key, $clean ) && 1 === preg_match( '/^[a-z][a-z0-9_]{0,63}$/D', $key ) ) {
+				$out[ $key ] = $value;
+			}
+		}
+		if ( isset( $stored['features'] ) && is_array( $stored['features'] ) ) {
+			foreach ( $stored['features'] as $flag => $value ) {
+				if ( is_string( $flag ) && ! in_array( $flag, self::FEATURES, true ) && is_bool( $value ) && 1 === preg_match( '/^[a-z][a-z0-9_]{0,63}$/D', $flag ) ) {
+					$out['features'][ $flag ] = $value;
+				}
+			}
+		}
+		return $out;
 	}
 
 	/**
@@ -325,6 +461,7 @@ final class DoughBoss_Growth_Settings {
 	 * @return array
 	 */
 	private static function sanitize_noted( array $raw, array &$notes ) {
+		++self::$sanitise_passes;
 		$out = self::defaults();
 
 		$features_in = ( isset( $raw['features'] ) && is_array( $raw['features'] ) ) ? $raw['features'] : array();
@@ -507,7 +644,10 @@ final class DoughBoss_Growth_Settings {
 	}
 
 	/**
-	 * Owner decisions still outstanding. They block ENABLING, never building.
+	 * Owner decisions still outstanding. Only the sender legal name and the privacy-policy URL actually stop a feature
+	 * switching on (the waitlist); every other item is a decision to make before relying on the feature it belongs to. The
+	 * stored text keeps the "[CONFIRM: ...]" marker (health() and the tests read it); the screens show it through
+	 * DoughBoss_Growth_Admin::plain_gap(), which the owner reads without the marker.
 	 *
 	 * @return array Code => text beginning "[CONFIRM: ...".
 	 */

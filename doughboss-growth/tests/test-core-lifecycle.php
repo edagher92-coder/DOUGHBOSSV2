@@ -238,7 +238,7 @@ db_test(
 		$plan = DoughBoss_Growth_Activator::uninstall_plan( 'wp_' );
 		assert_same( array(), $plan['violations'], 'no violations' );
 		assert_same( array( 'doughboss_growth_settings', 'doughboss_growth_db_version', 'doughboss_growth_pages', 'doughboss_growth_recon', 'doughboss_growth_coming_soon', 'doughboss_growth_failures' ), $plan['options'], 'the four frozen options, the coming-soon ribbon switch and the failure list (WP-16 observability fix)' );
-		assert_same( array( 'doughboss_growth_install_retry', 'doughboss_growth_schema_ok' ), $plan['transients'], 'companion transients' );
+		assert_same( array( 'doughboss_growth_install_retry', 'doughboss_growth_schema_ok', 'doughboss_growth_outbox_resume' ), $plan['transients'], 'companion transients' );
 		assert_same(
 			array( 'wp_doughboss_growth_waitlist', 'wp_doughboss_growth_suppression', 'wp_doughboss_growth_attribution', 'wp_doughboss_growth_lead_meta', 'wp_doughboss_growth_outbox', 'wp_doughboss_growth_rate', 'wp_doughboss_growth_recon_run', 'wp_doughboss_growth_recon_row', 'wp_doughboss_growth_recon_xref' ),
 			$plan['tables'],

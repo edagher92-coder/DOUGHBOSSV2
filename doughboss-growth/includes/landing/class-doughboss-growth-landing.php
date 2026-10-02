@@ -1609,7 +1609,7 @@ final class DoughBoss_Growth_Landing {
 	 */
 	private static function reason_text( $reason ) {
 		if ( 0 === strpos( $reason, 'core_form_copy_blocked' ) ) {
-			return __( 'The core catering form is left out because its own text fails the public-copy lint (it contains the unannounced product name). Core must neutralise that copy first.', 'doughboss-growth' );
+			return __( 'The DoughBoss catering form is left out because its own wording was not accepted: it does not meet the wording rules (it contains the unannounced product name). That wording has to be changed in DoughBoss first.', 'doughboss-growth' );
 		}
 		$map = array(
 			'claim_not_publishable'             => __( 'Waiting for a confirmed, sourced claim in the ledger.', 'doughboss-growth' ),
@@ -1619,11 +1619,12 @@ final class DoughBoss_Growth_Landing {
 			'core_form_empty'                   => __( 'The core catering form rendered nothing.', 'doughboss-growth' ),
 			'core_form_not_rendered'            => __( 'The core catering form did not render.', 'doughboss-growth' ),
 			'core_form_failed'                  => __( 'The core catering form failed to render.', 'doughboss-growth' ),
-			'core_location_missing'             => __( 'Core has no active shop with this page\'s slug, or its name or address fails the lint.', 'doughboss-growth' ),
+			'core_location_missing'             => __( 'DoughBoss has no active shop that matches this page, or the shop\'s name or address was not accepted because it does not meet the wording rules.', 'doughboss-growth' ),
 			'ledger_invalid'                    => __( 'The claims ledger is invalid or unreadable.', 'doughboss-growth' ),
 			'error'                             => __( 'An error stopped the page from composing.', 'doughboss-growth' ),
 		);
-		return isset( $map[ $reason ] ) ? $map[ $reason ] : $reason;
+		// A reason this screen does not know is never shown as a raw code.
+		return isset( $map[ $reason ] ) ? $map[ $reason ] : __( 'Not shown, for a reason this screen does not recognise.', 'doughboss-growth' );
 	}
 
 	/**
@@ -1758,7 +1759,7 @@ final class DoughBoss_Growth_Landing {
 		echo '</td><td>';
 		$texts = class_exists( 'DoughBoss_Growth_Landing_SEO' ) ? DoughBoss_Growth_Landing_SEO::texts( $key ) : null;
 		if ( null === $texts ) {
-			echo esc_html( true === $composed['ok'] ? __( 'Not available: a title or description fails the lint or is too long.', 'doughboss-growth' ) : self::reason_text( $composed['reason'] ) );
+			echo esc_html( true === $composed['ok'] ? __( 'Not available: the title or description was not accepted because it does not meet the wording rules, or it is too long.', 'doughboss-growth' ) : self::reason_text( $composed['reason'] ) );
 		} else {
 			echo '<label class="screen-reader-text" for="dbgr-lp-t-' . esc_attr( $key ) . '">' . esc_html__( 'Title', 'doughboss-growth' ) . '</label>';
 			echo '<input type="text" readonly="readonly" class="large-text" id="dbgr-lp-t-' . esc_attr( $key ) . '" value="' . esc_attr( $texts['title'] ) . '" />';

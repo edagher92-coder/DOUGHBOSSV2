@@ -977,7 +977,12 @@ db_test(
 		assert_same( 11, preg_match_all( '/name="dbgr\[features\]\[[a-z_]+\]"/', $html ), 'eleven feature checkboxes' );
 		assert_not_contains( 'checked="checked"', substr( $html, strpos( $html, '<fieldset>' ), strpos( $html, '</fieldset>' ) - strpos( $html, '<fieldset>' ) ), 'no feature box is ticked by default' );
 		assert_not_contains( 'hero', strtolower( $html ), 'no hero text on the page' );
-		assert_contains( '[CONFIRM:', $html, 'outstanding owner decisions are shown' );
+		// Owner copy: the decisions still to make are listed in plain words, under a heading that says what they are for, and
+		// without the developer bracket marker (the stored gap text keeps it; see the 'confirm gaps' test above).
+		assert_contains( 'To decide before switching on', $html, 'outstanding owner decisions are shown' );
+		assert_contains( 'Privacy-policy URL. Required before the waitlist can be enabled.', $html, 'a decision, in plain words' );
+		assert_not_contains( '[CONFIRM', $html, 'no developer marker on the owner screen' );
+		assert_not_contains( 'Each blocks enabling', $html, 'no claim that every item blocks enabling (only the waitlist items do)' );
 		assert_contains( 'Currently inactive', $html, 'features report inactive' );
 		assert_not_contains( 'minis', strtolower( $html ), 'no working name on the admin page' );
 	}
