@@ -817,6 +817,69 @@ function db_integration_approved_square_attempt( array $fixture ) {
 	return DoughBoss_Payment_Attempts::find_by_attempt_key( hash( 'sha256', 'square-v2|' . $fixture['metadata']['attempt_identity'] ) );
 }
 
+/** Build one dispatching split parent through the normal repositories, never SQL. */
+function db_integration_split_square_parent( $seed, $amount_minor = 1400, $approved = false, $orders_protocol = 'square-split-v1' ) {
+	$approval_fixture = $approved ? db_integration_approved_square_fixture( 'split-' . $seed ) : null;
+	if ( $approved && ! is_array( $approval_fixture ) ) { return false; }
+	$metadata = $approved ? $approval_fixture['metadata'] : db_integration_square_metadata( 'split-' . $seed, 'split-checkout-' . $seed, 'split-guard-' . $seed, array(), $amount_minor );
+	if ( $approved ) {
+		$metadata['approval_id'] = (int) $approval_fixture['request_id'];
+		$metadata['approved_revision'] = (int) $approval_fixture['approval']['approved_revision'];
+		$metadata['approval_fingerprint'] = (string) $approval_fixture['approval']['request_fingerprint'];
+	}
+	$snapshot = DoughBoss_Checkout_Snapshots::find( $metadata['checkout_key'] );
+	$binding = DoughBoss_Square::shop_binding( (int) $metadata['location_id'] );
+	if ( ! is_array( $snapshot ) || is_wp_error( $binding ) ) {
+		return false;
+	}
+	$metadata['orders_protocol']      = $orders_protocol;
+	$metadata['orders_snapshot_hash'] = (string) $snapshot['payload_hash'];
+	if ( in_array( $orders_protocol, array( 'legacy', 'missing_protocol' ), true ) ) {
+		unset( $metadata['orders_protocol'] );
+		if ( 'legacy' === $orders_protocol ) { unset( $metadata['orders_snapshot_hash'] ); }
+	}
+	$metadata['square_tender_kind']   = 'gift_card';
+	$metadata['square_shop_slug']     = (string) $binding['shop_slug'];
+	$metadata['square_location_id']   = (string) $binding['square_location_id'];
+	$metadata['square_mode']          = (string) $binding['square_mode'];
+	$parent = DoughBoss_Payment_Attempts::create( array(
+		'attempt_key' => hash( 'sha256', 'square-v2|' . $metadata['attempt_identity'] ),
+		'checkout_key' => $metadata['checkout_key'], 'provider' => 'square', 'purpose' => 'order', 'context' => $approved ? 'approved_preorder' : 'web',
+		'local_reference' => $metadata['cart_guard'], 'location_id' => $metadata['location_id'], 'table_id' => 0, 'qr_code_id' => 0,
+		'amount_minor' => $amount_minor, 'currency' => 'AUD', 'status' => 'prepared', 'safe_metadata' => $metadata,
+	) );
+	if ( ! is_array( $parent ) || ! DoughBoss_Payment_Attempts::claim_irreversible_creation( (int) $parent['id'] ) ) { return false; }
+	$parent = DoughBoss_Payment_Attempts::find( (int) $parent['id'] );
+	return is_array( $parent ) ? array( 'parent' => $parent, 'metadata' => $metadata, 'snapshot' => $snapshot ) : false;
+}
+
+/** Probe locks through an independent connection after a failed final COMMIT. */
+function db_integration_split_rows_unlocked( $parent_id ) {
+	global $wpdb;
+	$probe = mysqli_init();
+	if ( ! $probe || ! $probe->real_connect( '127.0.0.1', DB_USER, DB_PASSWORD, DB_NAME, 33117 ) ) { return false; }
+	$probe->query( 'SET SESSION innodb_lock_wait_timeout = 1' );
+	$probe->query( 'START TRANSACTION' );
+	$ok = true;
+	foreach ( array( 'doughboss_payment_attempts' => 'id', 'doughboss_payment_sets' => 'payment_attempt_id', 'doughboss_payment_legs' => 'payment_attempt_id' ) as $table => $column ) {
+		$ok = $ok && false !== $probe->query( 'SELECT * FROM ' . $wpdb->prefix . $table . ' WHERE ' . $column . ' = ' . (int) $parent_id . ' FOR UPDATE' );
+	}
+	$probe->query( 'ROLLBACK' );
+	$probe->close();
+	return $ok;
+}
+
+/** Build an inert Square APPROVED payment observation from an already planned leg. */
+function db_integration_split_observation( array $parent, array $leg, $payment_id, $amount ) {
+	$metadata = DoughBoss_Payment_Attempts::metadata( $parent );
+	return array(
+		'id' => $payment_id, 'order_id' => $parent['provider_order_reference'], 'location_id' => $metadata['square_location_id'],
+		'reference_id' => DoughBoss_Payment_Legs::leg_reference( (int) $parent['id'], (int) $leg['leg_index'] ),
+		'status' => 'APPROVED', 'source_type' => 'CARD', 'amount_money' => array( 'amount' => $amount, 'currency' => $parent['currency'] ),
+		'card_details' => array( 'status' => 'AUTHORIZED', 'card' => array( 'card_brand' => 0 === (int) $leg['leg_index'] ? 'SQUARE_GIFT_CARD' : 'VISA' ) ),
+	);
+}
+
 /** Inject exactly one approval-link write failure inside the dispatch transaction. */
 function db_integration_fail_square_approval_link( $query ) {
 	if ( ! empty( $GLOBALS['db_fail_square_approval_link_once'] ) && 0 === strpos( ltrim( (string) $query ), 'UPDATE' ) && false !== strpos( (string) $query, 'doughboss_preorder_approvals' ) && false !== strpos( (string) $query, 'payment_attempt_id' ) ) {
@@ -5392,6 +5455,256 @@ foreach ( array( 'revoke', 'expire', 'source_revision', 'approval_link', 'shop_m
 	db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1400, 'AUD', $fixture['metadata'] ) ), $orders_approval_drift . ' retry does not reclaim dispatch' );
 	db_integration_same( $payment_posts, $GLOBALS['db_square_post_count'], $orders_approval_drift . ' retry never charges' );
 }
+/* Inert split storage: provider responses are local arrays, not HTTP. */
+foreach ( array( 'doughboss_payment_legs', 'doughboss_payment_sets' ) as $split_fixture_table ) {
+	$wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . $split_fixture_table );
+}
+$split_orders_posts = $GLOBALS['db_orders_post_count'];
+$split_payment_posts = $GLOBALS['db_square_post_count'];
+$split_hooks         = count( $GLOBALS['db_order_created_events'] );
+/* The new storage boundary must reject accepted single/legacy parents directly. */
+foreach ( array( 'square-orders-v1', 'legacy', 'missing_protocol', 'square-unknown-v1' ) as $rejected_protocol ) {
+	$excluded = db_integration_split_square_parent( 'excluded-' . $rejected_protocol, 1400, false, $rejected_protocol );
+	db_integration_assert( is_array( $excluded ), $rejected_protocol . ' exclusion fixture is repository-created and otherwise valid' );
+	if ( ! is_array( $excluded ) ) { continue; }
+	$unchanged_parent = $excluded['parent'];
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_split_square_order( (int) $unchanged_parent['id'], 'splitExcludedOrder' . $unchanged_parent['id'], $unchanged_parent ), $rejected_protocol . ' cannot enter split Order binding' );
+	db_integration_same( false, DoughBoss_Payment_Legs::prepare( $unchanged_parent ), $rejected_protocol . ' cannot prepare a split ledger' );
+	db_integration_same( $unchanged_parent, DoughBoss_Payment_Attempts::find( (int) $unchanged_parent['id'] ), $rejected_protocol . ' retains the entire original parent including null Order identity' );
+	db_integration_same( 0, (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . DoughBoss_Payment_Legs::sets_table() . ' WHERE payment_attempt_id = %d', $unchanged_parent['id'] ) ), $rejected_protocol . ' acquires no funding set' );
+	db_integration_same( 0, (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . DoughBoss_Payment_Legs::legs_table() . ' WHERE payment_attempt_id = %d', $unchanged_parent['id'] ) ), $rejected_protocol . ' acquires no funding legs' );
+	db_integration_same( $split_orders_posts, $GLOBALS['db_orders_post_count'], $rejected_protocol . ' sends no Order request' );
+	db_integration_same( $split_payment_posts, $GLOBALS['db_square_post_count'], $rejected_protocol . ' sends no Payment request' );
+	db_integration_same( $split_hooks, count( $GLOBALS['db_order_created_events'] ), $rejected_protocol . ' emits no fulfillment' );
+}
+$split = db_integration_split_square_parent( 'partial' );
+db_integration_assert( is_array( $split ), 'split storage fixture creates a dispatching parent through the attempt repository' );
+if ( is_array( $split ) ) {
+	$parent = $split['parent'];
+	db_integration_same( false, DoughBoss_Payment_Legs::prepare( $parent ), 'unbound split parent cannot create a ledger set' );
+	$adapter_result = DoughBoss_Square::create_payment_intent( 1400, 'AUD', $split['metadata'] );
+	db_integration_assert( is_wp_error( $adapter_result ), 'legacy single-payment adapter refuses an existing split parent' );
+	db_integration_same( $split_orders_posts, $GLOBALS['db_orders_post_count'], 'rejected split parent performs no Square Order HTTP POST' );
+	db_integration_same( $split_payment_posts, $GLOBALS['db_square_post_count'], 'rejected split parent performs no Square Payment HTTP POST' );
+	db_integration_same( $split_hooks, count( $GLOBALS['db_order_created_events'] ), 'split storage never emits a kitchen hook' );
+	db_integration_same( 'dispatching', DoughBoss_Payment_Attempts::find( $parent['id'] )['status'], 'adapter rejection cannot mutate split parent status' );
+	db_integration_same( null, DoughBoss_Payment_Attempts::find( $parent['id'] )['provider_order_reference'], 'adapter rejection cannot bind an Order' );
+
+	$bound = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $parent['id'], 'sqorderSplitPartial0001', $parent );
+	db_integration_assert( is_array( $bound ) && 'sqorderSplitPartial0001' === $bound['provider_order_reference'], 'supported inert binder retains the first exact Order identity' );
+	if ( is_array( $bound ) ) {
+		db_integration_same( $bound, DoughBoss_Payment_Attempts::bind_split_square_order( (int) $parent['id'], 'sqorderSplitPartial0001', $bound ), 'exact Order-binding replay is stable' );
+		db_integration_same( false, DoughBoss_Payment_Attempts::bind_split_square_order( (int) $parent['id'], 'sqorderSplitOther00001', $bound ), 'conflicting Order identity is denied' );
+		$order_collision = db_integration_split_square_parent( 'order-collision' );
+		if ( is_array( $order_collision ) ) {
+			db_integration_same( false, DoughBoss_Payment_Attempts::bind_split_square_order( (int) $order_collision['parent']['id'], 'sqorderSplitPartial0001', $order_collision['parent'] ), 'unique Order identity cannot bind a second split parent' );
+		}
+		$changed = $bound;
+		$changed['amount_minor'] = 1401;
+		db_integration_same( false, DoughBoss_Payment_Attempts::bind_split_square_order( (int) $parent['id'], 'sqorderSplitPartial0001', $changed ), 'changed immutable parent tuple is denied on replay' );
+		$plan = DoughBoss_Payment_Legs::prepare( $bound );
+		db_integration_assert( is_array( $plan ) && 1 === (int) $plan['set']['version'] && 'funding' === $plan['set']['state'] && 1 === count( $plan['legs'] ), 'bound parent prepares one versioned gift leg' );
+		if ( is_array( $plan ) ) {
+			db_integration_same( $plan, DoughBoss_Payment_Legs::prepare( $bound ), 'prepare replay retains one exact plan and leg' );
+			db_integration_same( false, DoughBoss_Payment_Legs::claim( $bound, '1', 0 ), 'set version must be a strict positive integer' );
+			db_integration_same( false, DoughBoss_Payment_Legs::claim( $bound, 1, '0' ), 'leg index must be a strict integer' );
+			$claimed = DoughBoss_Payment_Legs::claim( $bound, 1, 0 );
+			db_integration_assert( is_array( $claimed ) && 2 === (int) $claimed['set']['version'] && 'claimed' === $claimed['legs'][0]['state'], 'gift authorization claim is one-way and increments version' );
+			if ( is_array( $claimed ) ) {
+				db_integration_same( false, DoughBoss_Payment_Legs::claim( $bound, 1, 0 ), 'stale version cannot reclaim gift authorization' );
+				$gift_payment = db_integration_split_observation( $bound, $claimed['legs'][0], 'sqpaySplitGiftPartial001', 900 );
+				$authorized = DoughBoss_Payment_Legs::observe( $bound, 2, 0, $gift_payment );
+				db_integration_assert( is_array( $authorized ) && 3 === (int) $authorized['set']['version'] && 900 === (int) $authorized['legs'][0]['authorized_amount_minor'], 'partial gift authorization records its exact approved facts' );
+				if ( is_array( $authorized ) ) {
+					db_integration_same( false, DoughBoss_Payment_Legs::observe( $bound, 2, 0, $gift_payment ), 'stale observation cannot overwrite authorized gift facts' );
+					$observation_replay = DoughBoss_Payment_Legs::observe( $bound, 3, 0, $gift_payment );
+					db_integration_assert( is_array( $observation_replay ) && 3 === (int) $observation_replay['set']['version'], 'exact approved observation replay does not increment version' );
+					$remainder = DoughBoss_Payment_Legs::prepare_remainder( $bound, 3, $authorized['legs'][0] );
+					db_integration_assert( is_array( $remainder ) && 4 === (int) $remainder['set']['version'] && 2 === count( $remainder['legs'] ) && 500 === (int) $remainder['legs'][1]['requested_amount_minor'], 'remainder is derived under lock from parent less actual gift authorization' );
+					if ( is_array( $remainder ) ) {
+						$card_claimed = DoughBoss_Payment_Legs::claim( $bound, 4, 1 );
+						db_integration_assert( is_array( $card_claimed ) && 5 === (int) $card_claimed['set']['version'], 'derived card leg can be claimed once' );
+						if ( is_array( $card_claimed ) ) {
+							$duplicate = db_integration_split_observation( $bound, $card_claimed['legs'][1], 'sqpaySplitGiftPartial001', 500 );
+							db_integration_same( false, DoughBoss_Payment_Legs::observe( $bound, 5, 1, $duplicate ), 'provider Payment identity cannot be stolen by another leg' );
+							$card_payment = db_integration_split_observation( $bound, $card_claimed['legs'][1], 'sqpaySplitCardPartial001', 500 );
+							$card_authorized = DoughBoss_Payment_Legs::observe( $bound, 5, 1, $card_payment );
+							db_integration_assert( is_array( $card_authorized ) && 6 === (int) $card_authorized['set']['version'] && 'authorized' === $card_authorized['legs'][1]['state'], 'exact non-gift remainder authorization is retained without completion' );
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+$split_full = db_integration_split_square_parent( 'full', 900 );
+db_integration_assert( is_array( $split_full ), 'full-gift split storage fixture is created' );
+if ( is_array( $split_full ) ) {
+	$full_parent = $split_full['parent'];
+	$full_bound = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $full_parent['id'], 'sqorderSplitFull000001', $full_parent );
+	$full_plan = is_array( $full_bound ) ? DoughBoss_Payment_Legs::prepare( $full_bound ) : false;
+	$full_claim = is_array( $full_plan ) ? DoughBoss_Payment_Legs::claim( $full_bound, 1, 0 ) : false;
+	$full_auth = is_array( $full_claim ) ? DoughBoss_Payment_Legs::observe( $full_bound, 2, 0, db_integration_split_observation( $full_bound, $full_claim['legs'][0], 'sqpaySplitGiftFull00001', 900 ) ) : false;
+	$full_remainder = is_array( $full_auth ) ? DoughBoss_Payment_Legs::prepare_remainder( $full_bound, 3, $full_auth['legs'][0] ) : false;
+	db_integration_assert( is_array( $full_remainder ) && 1 === count( $full_remainder['legs'] ) && 3 === (int) $full_remainder['set']['version'], 'full gift authorization produces no zero-value card leg or version bump' );
+}
+
+$split_unknown = db_integration_split_square_parent( 'unknown', 900 );
+db_integration_assert( is_array( $split_unknown ), 'unknown/cancellation split storage fixture is created' );
+if ( is_array( $split_unknown ) ) {
+	$unknown_parent = $split_unknown['parent'];
+	$unknown_bound = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $unknown_parent['id'], 'sqorderSplitUnknown0001', $unknown_parent );
+	$unknown_plan = is_array( $unknown_bound ) ? DoughBoss_Payment_Legs::prepare( $unknown_bound ) : false;
+	$unknown_claim = is_array( $unknown_plan ) ? DoughBoss_Payment_Legs::claim( $unknown_bound, 1, 0 ) : false;
+	$unknown = is_array( $unknown_claim ) ? DoughBoss_Payment_Legs::hold_unknown( $unknown_bound, 2, 0, 'authorization_timeout' ) : false;
+	db_integration_assert( is_array( $unknown ) && 'held' === $unknown['set']['state'] && 'unknown' === $unknown['legs'][0]['state'], 'ambiguous authorization becomes durable unknown state' );
+	if ( is_array( $unknown ) ) {
+		db_integration_same( false, DoughBoss_Payment_Legs::hold_unknown( $unknown_bound, 3, 0, 'cnon:source-token-must-not-persist' ), 'unknown error slot rejects source-token-shaped values' );
+		db_integration_same( false, DoughBoss_Payment_Legs::claim( $unknown_bound, 3, 0 ), 'unknown gift leg cannot be reclaimed for a new dispatch' );
+		$canceling = DoughBoss_Payment_Legs::request_cancellation( $unknown_bound, 3 );
+		db_integration_assert( is_array( $canceling ) && 'canceling' === $canceling['set']['state'] && 4 === (int) $canceling['set']['version'], 'cancellation records a durable non-payment tombstone' );
+		db_integration_same( false, DoughBoss_Payment_Legs::claim( $unknown_bound, 4, 0 ), 'cancellation race cannot create a later authorization claim' );
+		$inflight = DoughBoss_Payment_Legs::observe( $unknown_bound, 4, 0, db_integration_split_observation( $unknown_bound, $unknown['legs'][0], 'sqpaySplitUnknown00001', 900 ) );
+		db_integration_assert( is_array( $inflight ) && 'canceling' === $inflight['set']['state'] && 'authorized' === $inflight['legs'][0]['state'], 'in-flight exact observation preserves cancellation state without releasing it' );
+		db_integration_same( false, DoughBoss_Payment_Legs::prepare_remainder( $unknown_bound, 5, $inflight['legs'][0] ), 'cancellation prevents later remainder preparation' );
+	}
+}
+
+$split_commit = db_integration_split_square_parent( 'commit' );
+db_integration_assert( is_array( $split_commit ), 'failed-commit split fixture is created' );
+if ( is_array( $split_commit ) ) {
+	$GLOBALS['db_fail_square_commit_once'] = true;
+	add_filter( 'query', 'db_integration_fail_square_commit', 999 );
+	$suppress = $wpdb->suppress_errors( true );
+	$commit_result = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $split_commit['parent']['id'], 'sqorderSplitCommit0001', $split_commit['parent'] );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', 'db_integration_fail_square_commit', 999 );
+	db_integration_same( false, $commit_result, 'failed binder COMMIT fails closed' );
+	db_integration_same( null, DoughBoss_Payment_Attempts::find( $split_commit['parent']['id'] )['provider_order_reference'], 'failed binder COMMIT leaves no partial Order binding' );
+}
+
+/* A parent can never outlive a changed retained snapshot, even before binding. */
+$split_drift = db_integration_split_square_parent( 'snapshot-drift' );
+db_integration_assert( is_array( $split_drift ), 'snapshot-drift split fixture is created' );
+if ( is_array( $split_drift ) ) {
+	$drift_json = wp_json_encode( array( 'changed' => 'after-parent-allocation' ) );
+	$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_json' => $drift_json, 'payload_hash' => hash( 'sha256', $drift_json ) ), array( 'checkout_key' => $split_drift['parent']['checkout_key'] ), array( '%s', '%s' ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	db_integration_same( false, DoughBoss_Payment_Attempts::bind_split_square_order( (int) $split_drift['parent']['id'], 'sqorderSplitDrift00001', $split_drift['parent'] ), 'changed retained snapshot bytes deny Order binding' );
+	db_integration_same( null, DoughBoss_Payment_Attempts::find( $split_drift['parent']['id'] )['provider_order_reference'], 'snapshot drift cannot leave partial Order identity' );
+}
+
+/* Failed transactional stages roll back, then leave the same parent usable. */
+foreach ( array( 'prepare', 'claim' ) as $commit_stage ) {
+	$fixture = db_integration_split_square_parent( 'commit-' . $commit_stage );
+	if ( ! is_array( $fixture ) ) {
+		db_integration_assert( false, 'commit fixture exists for ' . $commit_stage );
+		continue;
+	}
+	$commit_parent = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $fixture['parent']['id'], 'sqorderSplitCommit' . ucfirst( $commit_stage ) . '01', $fixture['parent'] );
+	if ( ! is_array( $commit_parent ) ) {
+		db_integration_assert( false, 'commit fixture binds for ' . $commit_stage );
+		continue;
+	}
+	$before = 'claim' === $commit_stage ? DoughBoss_Payment_Legs::prepare( $commit_parent ) : null;
+	$GLOBALS['db_fail_square_commit_once'] = true;
+	add_filter( 'query', 'db_integration_fail_square_commit', 999 );
+	$suppress = $wpdb->suppress_errors( true );
+	$result = 'claim' === $commit_stage ? DoughBoss_Payment_Legs::claim( $commit_parent, 1, 0 ) : DoughBoss_Payment_Legs::prepare( $commit_parent );
+	$wpdb->suppress_errors( $suppress );
+	remove_filter( 'query', 'db_integration_fail_square_commit', 999 );
+	db_integration_same( false, $result, 'failed ' . $commit_stage . ' COMMIT fails closed' );
+	$after = 'claim' === $commit_stage ? DoughBoss_Payment_Legs::prepare( $commit_parent ) : DoughBoss_Payment_Legs::prepare( $commit_parent );
+	db_integration_assert( is_array( $after ) && ( 'claim' !== $commit_stage || 'planned' === $after['legs'][0]['state'] ), 'failed ' . $commit_stage . ' COMMIT leaves no partial transition and releases locks' );
+}
+/* Approved parents retain the exact snapshot approval tuple, never new authority. */
+$approved_split = db_integration_split_square_parent( 'approved-storage', 1400, true );
+db_integration_assert( is_array( $approved_split ), 'approved split parent is built through source approval and snapshot repositories' );
+if ( is_array( $approved_split ) ) {
+	$p = $approved_split['parent'];
+	$bound_approved = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $p['id'], 'splitApprovedStorageOrder001', $p );
+	$approved_plan = is_array( $bound_approved ) ? DoughBoss_Payment_Legs::prepare( $bound_approved ) : false;
+	db_integration_assert( is_array( $approved_plan ), 'matching approved tuple prepares an inert split ledger' );
+	$approved_claim = is_array( $approved_plan ) ? DoughBoss_Payment_Legs::claim( $bound_approved, 1, 0 ) : false;
+	$approved_auth = is_array( $approved_claim ) ? DoughBoss_Payment_Legs::observe( $bound_approved, 2, 0, db_integration_split_observation( $bound_approved, $approved_claim['legs'][0], 'splitApprovedPayment001', 900 ) ) : false;
+	db_integration_assert( is_array( $approved_auth ), 'approved parent records authorization without payment or fulfillment' );
+	$meta = DoughBoss_Payment_Attempts::metadata( $p );
+	db_integration_same( 0, DoughBoss_Order::find_id_by_source_request( (int) $meta['approval_id'] ), 'approved split storage does not create the kitchen order' );
+	$wrong_approval = $bound_approved;
+	$wrong_meta = $meta;
+	$wrong_meta['approved_revision']++;
+	$wrong_approval['safe_metadata_json'] = wp_json_encode( $wrong_meta );
+	db_integration_same( false, DoughBoss_Payment_Legs::prepare( $wrong_approval ), 'stale approved tuple cannot progress split storage' );
+}
+
+/* Every final COMMIT fault must retain precisely the pre-operation durable rows. */
+foreach ( array( 'prepare', 'claim', 'observe', 'remainder', 'hold', 'cancel' ) as $fault_stage ) {
+	$fixture = db_integration_split_square_parent( 'fault-matrix-' . $fault_stage );
+	db_integration_assert( is_array( $fixture ), $fault_stage . ' fault fixture creates an exact parent' );
+	if ( ! is_array( $fixture ) ) { continue; }
+	$p = $fixture['parent'];
+	$p = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $p['id'], 'splitFaultOrder' . $p['id'], $p );
+	db_integration_assert( is_array( $p ), $fault_stage . ' fault fixture binds through the supported inert operation' );
+	if ( ! is_array( $p ) ) { continue; }
+	$plan = 'prepare' === $fault_stage ? null : DoughBoss_Payment_Legs::prepare( $p );
+	if ( in_array( $fault_stage, array( 'observe', 'remainder', 'hold' ), true ) ) { $plan = DoughBoss_Payment_Legs::claim( $p, 1, 0 ); }
+	$payment = is_array( $plan ) ? db_integration_split_observation( $p, $plan['legs'][0], 'splitFaultPayment' . $p['id'], 900 ) : array();
+	if ( 'remainder' === $fault_stage ) { $plan = DoughBoss_Payment_Legs::observe( $p, 2, 0, $payment ); }
+	db_integration_assert( 'prepare' === $fault_stage || is_array( $plan ), $fault_stage . ' fault fixture has the required pre-state' );
+	if ( 'prepare' !== $fault_stage && ! is_array( $plan ) ) { continue; }
+	$version = is_array( $plan ) ? (int) $plan['set']['version'] : 1;
+	$before_set = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . DoughBoss_Payment_Legs::sets_table() . ' WHERE payment_attempt_id = %d', $p['id'] ), ARRAY_A );
+	$before_legs = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . DoughBoss_Payment_Legs::legs_table() . ' WHERE payment_attempt_id = %d ORDER BY leg_index', $p['id'] ), ARRAY_A );
+	$GLOBALS['db_fail_square_commit_once'] = true;
+	add_filter( 'query', 'db_integration_fail_square_commit', 999 );
+	$previous_errors = $wpdb->suppress_errors( true );
+	if ( 'prepare' === $fault_stage ) { $result = DoughBoss_Payment_Legs::prepare( $p ); }
+	elseif ( 'claim' === $fault_stage ) { $result = DoughBoss_Payment_Legs::claim( $p, $version, 0 ); }
+	elseif ( 'observe' === $fault_stage ) { $result = DoughBoss_Payment_Legs::observe( $p, $version, 0, $payment ); }
+	elseif ( 'remainder' === $fault_stage ) { $result = DoughBoss_Payment_Legs::prepare_remainder( $p, $version, $plan['legs'][0] ); }
+	elseif ( 'hold' === $fault_stage ) { $result = DoughBoss_Payment_Legs::hold_unknown( $p, $version, 0, 'authorization_unknown' ); }
+	else { $result = DoughBoss_Payment_Legs::request_cancellation( $p, $version ); }
+	$wpdb->suppress_errors( $previous_errors );
+	remove_filter( 'query', 'db_integration_fail_square_commit', 999 );
+	db_integration_same( false, $result, $fault_stage . ' fails closed on final COMMIT failure' );
+	db_integration_same( false, $GLOBALS['db_fail_square_commit_once'], $fault_stage . ' exercised the actual final COMMIT fault' );
+	db_integration_same( $before_set, $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . DoughBoss_Payment_Legs::sets_table() . ' WHERE payment_attempt_id = %d', $p['id'] ), ARRAY_A ), $fault_stage . ' restores exact set state/version/key on rollback' );
+	db_integration_same( $before_legs, $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . DoughBoss_Payment_Legs::legs_table() . ' WHERE payment_attempt_id = %d ORDER BY leg_index', $p['id'] ), ARRAY_A ), $fault_stage . ' restores exact leg identities/economics/states on rollback' );
+	db_integration_same( $p, DoughBoss_Payment_Attempts::find( (int) $p['id'] ), $fault_stage . ' rollback leaves parent identity untouched' );
+	db_integration_same( 0, (int) $wpdb->get_var( 'SELECT @@in_transaction' ), $fault_stage . ' rollback leaves no open transaction' );
+	db_integration_assert( db_integration_split_rows_unlocked( (int) $p['id'] ), $fault_stage . ' parent/set/leg locks are free on a second connection' );
+}
+
+/* Readiness checks reject malformed infrastructure, without touching legacy data. */
+$split_sets_table = DoughBoss_Payment_Legs::sets_table();
+$split_legs_table = DoughBoss_Payment_Legs::legs_table();
+db_integration_assert( DoughBoss_Activator::payment_ledger_storage_ready(), 'split ledger readiness starts exact' );
+$wpdb->query( "ALTER TABLE {$split_sets_table} MODIFY version bigint(20) unsigned NOT NULL DEFAULT 2" );
+db_integration_same( false, DoughBoss_Activator::payment_ledger_storage_ready(), 'wrong split version default fails readiness' );
+update_option( 'doughboss_db_version', '1.26.0' );
+$migration_error_suppression = $wpdb->suppress_errors( true );
+DoughBoss_Migrations::run();
+$wpdb->suppress_errors( $migration_error_suppression );
+// dbDelta may repair the wrong default during the migration. Either way, only
+// an exact readiness result may allow the version checkpoint to advance.
+db_integration_assert( '1.26.0' === get_option( 'doughboss_db_version' ) || ( '1.27.0' === get_option( 'doughboss_db_version' ) && DoughBoss_Activator::payment_ledger_storage_ready() ), 'migration never checkpoints an unready ledger' );
+$wpdb->query( "ALTER TABLE {$split_sets_table} MODIFY version bigint(20) unsigned NOT NULL DEFAULT 1" );
+$wpdb->query( "ALTER TABLE {$split_sets_table} ENGINE=MyISAM" );
+db_integration_same( false, DoughBoss_Activator::payment_ledger_storage_ready(), 'nontransactional split set storage fails readiness' );
+$wpdb->query( "ALTER TABLE {$split_sets_table} ENGINE=InnoDB" );
+$wpdb->query( "ALTER TABLE {$split_legs_table} DROP INDEX parent_leg, ADD UNIQUE KEY parent_leg (leg_index,payment_attempt_id)" );
+db_integration_same( false, DoughBoss_Activator::payment_ledger_storage_ready(), 'wrong composite index order fails readiness' );
+$wpdb->query( "ALTER TABLE {$split_legs_table} DROP INDEX parent_leg, ADD UNIQUE KEY parent_leg (payment_attempt_id,leg_index)" );
+db_integration_assert( DoughBoss_Activator::payment_ledger_storage_ready(), 'restored exact split storage is ready' );
+$ledger_counts = array( (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$split_sets_table}" ), (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$split_legs_table}" ) );
+update_option( 'doughboss_db_version', '1.26.0' );
+DoughBoss_Migrations::run();
+DoughBoss_Migrations::run();
+db_integration_same( '1.27.0', get_option( 'doughboss_db_version' ), 'additive migration reaches and replays exact 1.27.0 checkpoint' );
+db_integration_same( $ledger_counts, array( (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$split_sets_table}" ), (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$split_legs_table}" ) ), 'migration replay preserves every ledger row' );
+db_integration_same( $split_orders_posts, $GLOBALS['db_orders_post_count'], 'all inert split-storage cases make no Square Order HTTP POST' );
+db_integration_same( $split_payment_posts, $GLOBALS['db_square_post_count'], 'all inert split-storage cases make no Square Payment HTTP POST' );
+db_integration_same( $split_hooks, count( $GLOBALS['db_order_created_events'] ), 'all inert split-storage cases emit no fulfillment hook' );
 remove_filter( 'pre_wp_mail', '__return_true', 999 );
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 update_option( 'doughboss_settings', $orders_transport_settings, false );

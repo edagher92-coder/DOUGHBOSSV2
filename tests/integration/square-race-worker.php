@@ -27,6 +27,81 @@ if ( ! is_string( $race_log ) || '' === $race_log ) {
 	exit( 2 );
 }
 
+/** Separate ledger-only branch: no provider dispatch or fulfillment. */
+$split_mode = getenv( 'DOUGHBOSS_SPLIT_LEDGER_MODE' );
+if ( is_string( $split_mode ) && '' !== $split_mode ) {
+	$case = getenv( 'DOUGHBOSS_SPLIT_LEDGER_CASE' );
+	if ( ! in_array( $case, array( 'prepare', 'claim', 'remainder', 'cancel' ), true ) ) { exit( 2 ); }
+	add_filter( 'pre_http_request', static function () use ( $race_log ) {
+		file_put_contents( $race_log, "PROVIDER\n", FILE_APPEND | LOCK_EX );
+		return new WP_Error( 'split_test_http_denied', 'Ledger tests never call a provider.' );
+	}, 999 );
+	add_filter( 'pre_wp_mail', '__return_true', 999 );
+	add_action( 'doughboss_order_created', static function () use ( $race_log ) { file_put_contents( $race_log, "FULFILL\n", FILE_APPEND | LOCK_EX ); }, 999 );
+	$key = hash( 'sha256', 'split-race|' . $race_log );
+	$attempt_key = hash( 'sha256', 'split-race-attempt|' . $race_log );
+	if ( 'setup' === $split_mode ) {
+		$binding = hash( 'sha256', 'split-race-binding|' . $key );
+		$payload = array( 'binding_hash' => $binding, 'order' => array( 'location_id' => 1, 'currency' => 'AUD', 'subtotal' => '14.00', 'total' => '14.00', 'discount' => '0.00', 'tax' => '0.00', 'delivery_fee' => '0.00',
+			'accounting_basis' => array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 0.0, 'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ) ),
+			'lines' => array( array( 'name' => 'Synthetic split ledger item', 'quantity' => 1, 'unit_price' => '14.00', 'line_total' => '14.00' ) ) );
+		$snapshot = DoughBoss_Checkout_Snapshots::store( $key, $payload );
+		if ( ! is_array( $snapshot ) ) { fwrite( STDERR, "Split race snapshot setup failed.\n" ); exit( 1 ); }
+		$parent = DoughBoss_Payment_Attempts::create( array( 'attempt_key' => $attempt_key, 'checkout_key' => $key, 'provider' => 'square', 'purpose' => 'order', 'context' => 'web', 'status' => 'prepared', 'location_id' => 1, 'amount_minor' => 1400, 'currency' => 'AUD', 'local_reference' => hash( 'sha256', 'split-guard|' . $key ),
+			'safe_metadata' => array( 'protocol_version' => 'square-v2', 'orders_protocol' => 'square-split-v1', 'orders_snapshot_hash' => $snapshot['payload_hash'], 'binding_hash' => $binding,
+				'square_shop_slug' => 'revesby', 'square_location_id' => 'LSPLITRACELOCATION', 'square_mode' => 'test', 'square_tender_kind' => 'gift_card' ) ) );
+		if ( ! is_array( $parent ) || ! DoughBoss_Payment_Attempts::claim_irreversible_creation( (int) $parent['id'] ) ) { fwrite( STDERR, "Split race parent setup failed.\n" ); exit( 1 ); }
+		$parent = DoughBoss_Payment_Attempts::find( (int) $parent['id'] );
+		$parent = DoughBoss_Payment_Attempts::bind_split_square_order( (int) $parent['id'], 'splitRaceOrder' . $parent['id'], $parent );
+		if ( ! is_array( $parent ) ) { fwrite( STDERR, "Split race Order bind failed.\n" ); exit( 1 ); }
+		if ( 'prepare' !== $case && ! is_array( DoughBoss_Payment_Legs::prepare( $parent ) ) ) { exit( 1 ); }
+		if ( 'remainder' === $case ) {
+			$payment = array( 'id' => 'splitRacePayment' . $parent['id'], 'order_id' => $parent['provider_order_reference'], 'location_id' => 'LSPLITRACELOCATION', 'reference_id' => DoughBoss_Payment_Legs::leg_reference( (int) $parent['id'], 0 ),
+				'status' => 'APPROVED', 'source_type' => 'CARD', 'amount_money' => array( 'amount' => 900, 'currency' => 'AUD' ), 'card_details' => array( 'status' => 'AUTHORIZED', 'card' => array( 'card_brand' => 'SQUARE_GIFT_CARD' ) ) );
+			if ( ! is_array( DoughBoss_Payment_Legs::claim( $parent, 1, 0 ) ) || ! is_array( DoughBoss_Payment_Legs::observe( $parent, 2, 0, $payment ) ) ) { exit( 1 ); }
+		}
+		echo "SPLIT_SETUP_OK\n"; exit( 0 );
+	}
+	$parent = DoughBoss_Payment_Attempts::find_by_attempt_key( $attempt_key );
+	if ( ! is_array( $parent ) || 'dispatching' !== $parent['status'] || null !== $parent['provider_reference'] ) { exit( 1 ); }
+	if ( 'race' === $split_mode ) {
+		file_put_contents( $race_log, "READY\n", FILE_APPEND | LOCK_EX );
+		$deadline = microtime( true ) + 10;
+		do {
+			$lines = file( $race_log, FILE_IGNORE_NEW_LINES );
+			$ready = count( array_filter( $lines, static function ( $line ) { return 'READY' === $line; } ) );
+			if ( $ready >= 2 ) { break; }
+			usleep( 20000 );
+		} while ( microtime( true ) < $deadline );
+		if ( $ready < 2 ) { fwrite( STDERR, "Split race barrier timed out.\n" ); exit( 1 ); }
+		if ( 'prepare' === $case ) { $result = DoughBoss_Payment_Legs::prepare( $parent ); }
+		elseif ( 'remainder' === $case ) {
+			$plan = DoughBoss_Payment_Legs::prepare( $parent );
+			$result = is_array( $plan ) ? DoughBoss_Payment_Legs::prepare_remainder( $parent, 3, $plan['legs'][0] ) : false;
+		} elseif ( 'cancel' === $case && 'cancel' === getenv( 'DOUGHBOSS_SPLIT_LEDGER_ACTION' ) ) { $result = DoughBoss_Payment_Legs::request_cancellation( $parent, 1 ); }
+		else { $result = DoughBoss_Payment_Legs::claim( $parent, 1, 0 ); }
+		file_put_contents( $race_log, is_array( $result ) ? "SUCCESS\n" : "CONFLICT\n", FILE_APPEND | LOCK_EX );
+		echo "SPLIT_WORKER_OK\n"; exit( 0 );
+	}
+	if ( 'verify' === $split_mode ) {
+		$plan = DoughBoss_Payment_Legs::prepare( $parent );
+		$counts = array_count_values( file( $race_log, FILE_IGNORE_NEW_LINES ) );
+		if ( ! is_array( $plan ) || 2 !== ( isset( $counts['READY'] ) ? $counts['READY'] : 0 ) || isset( $counts['PROVIDER'] ) || isset( $counts['FULFILL'] )
+			|| ( 'prepare' === $case ? 2 : 1 ) !== ( isset( $counts['SUCCESS'] ) ? $counts['SUCCESS'] : 0 ) ) { exit( 1 ); }
+		$expected_version = 'prepare' === $case ? 1 : ( 'remainder' === $case ? 4 : 2 );
+		if ( $expected_version !== (int) $plan['set']['version'] || ( 'remainder' === $case ? 2 : 1 ) !== count( $plan['legs'] ) ) { exit( 1 ); }
+		if ( 'remainder' === $case && 500 !== (int) $plan['legs'][1]['requested_amount_minor'] ) { exit( 1 ); }
+		if ( 'claim' === $case && 'claimed' !== $plan['legs'][0]['state'] ) { exit( 1 ); }
+		if ( 'cancel' === $case ) {
+			$plan = DoughBoss_Payment_Legs::request_cancellation( $parent, (int) $plan['set']['version'] );
+			if ( ! is_array( $plan ) || 'canceling' !== $plan['set']['state'] || false !== DoughBoss_Payment_Legs::claim( $parent, (int) $plan['set']['version'], 0 ) ) { exit( 1 ); }
+		}
+		if ( DoughBoss_Payment_Attempts::find( (int) $parent['id'] ) !== $parent ) { fwrite( STDERR, "Ledger race mutated the parent.\n" ); exit( 1 ); }
+		echo "SPLIT_VERIFY_OK\n"; exit( 0 );
+	}
+	exit( 2 );
+}
+
 /** Stop a real PHP process only after asserting the committed crash boundary. */
 function db_square_race_crash( $stage, $attempt_id ) {
 	if ( $stage !== getenv( 'DOUGHBOSS_SQUARE_CRASH_STAGE' ) || '1' === getenv( 'DOUGHBOSS_SQUARE_CRASH_REPLAY' ) ) { return; }

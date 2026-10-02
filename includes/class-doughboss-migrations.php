@@ -19,6 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Migrations {
 
+	/** Additive split-funding ledger; never backfills historical payments. */
+	private static function upgrade_to_1_27_0() {
+		if ( ! DoughBoss_Activator::payment_ledger_storage_ready() ) {
+			throw new RuntimeException( 'Split funding storage is incomplete or not using InnoDB.' );
+		}
+	}
+
 	/**
 	 * Run any migrations the stored version is behind.
 	 *
@@ -87,6 +94,7 @@ class DoughBoss_Migrations {
 				'1.24.0' => 'upgrade_to_1_24_0',
 				'1.25.0' => 'upgrade_to_1_25_0',
 				'1.26.0' => 'upgrade_to_1_26_0',
+				'1.27.0' => 'upgrade_to_1_27_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {

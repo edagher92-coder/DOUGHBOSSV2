@@ -14,6 +14,90 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Activator {
 
+	/** Additive, inert funding ledger. No historical payment data is rewritten. */
+	private static function create_payment_ledger_tables() {
+		global $wpdb;
+		$sets = $wpdb->prefix . 'doughboss_payment_sets';
+		$legs = $wpdb->prefix . 'doughboss_payment_legs';
+		$collate = $wpdb->get_charset_collate();
+		dbDelta( "CREATE TABLE {$sets} (
+			payment_attempt_id bigint(20) unsigned NOT NULL,
+			version bigint(20) unsigned NOT NULL DEFAULT 1,
+			state varchar(16) NOT NULL DEFAULT 'funding',
+			binding_hash char(64) NOT NULL,
+			pay_order_key char(64) NOT NULL,
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			PRIMARY KEY  (payment_attempt_id),
+			UNIQUE KEY pay_order_key (pay_order_key)
+		) ENGINE=InnoDB {$collate};" );
+		dbDelta( "CREATE TABLE {$legs} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			payment_attempt_id bigint(20) unsigned NOT NULL,
+			leg_index tinyint(3) unsigned NOT NULL,
+			binding_hash char(64) NOT NULL,
+			tender_kind varchar(20) NOT NULL,
+			requested_amount_minor bigint(20) unsigned NOT NULL,
+			currency char(3) NOT NULL,
+			dispatch_key char(64) NOT NULL,
+			provider_payment_reference varchar(191) NULL DEFAULT NULL,
+			authorized_amount_minor bigint(20) unsigned NULL DEFAULT NULL,
+			state varchar(16) NOT NULL DEFAULT 'planned',
+			last_error varchar(64) NOT NULL DEFAULT '',
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY parent_leg (payment_attempt_id,leg_index),
+			UNIQUE KEY dispatch_key (dispatch_key),
+			UNIQUE KEY provider_payment_reference (provider_payment_reference)
+		) ENGINE=InnoDB {$collate};" );
+	}
+
+	/** Exact split-only storage gate; legacy payment readiness remains unchanged. */
+	public static function payment_ledger_storage_ready() {
+		global $wpdb;
+		$sets = $wpdb->prefix . 'doughboss_payment_sets';
+		$legs = $wpdb->prefix . 'doughboss_payment_legs';
+		foreach ( array( $sets, $legs ) as $table ) {
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! is_string( $engine ) || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+		$id = array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => null );
+		$hash = array( 'type' => 'char(64)', 'null' => 'NO', 'default' => null );
+		$time = array( 'type' => 'datetime', 'null' => 'NO', 'default' => null );
+		return self::column_contract_ready( $sets, array(
+			'payment_attempt_id' => $id,
+			'version' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+			'state' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'funding' ),
+			'binding_hash' => $hash,
+			'pay_order_key' => $hash,
+			'created_at_utc' => $time,
+			'updated_at_utc' => $time,
+		) ) && self::column_contract_ready( $legs, array(
+			'id' => array_merge( $id, array( 'extra' => 'auto_increment' ) ),
+			'payment_attempt_id' => $id,
+			'leg_index' => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => null ),
+			'binding_hash' => $hash,
+			'tender_kind' => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => null ),
+			'requested_amount_minor' => $id,
+			'currency' => array( 'type' => 'char(3)', 'null' => 'NO', 'default' => null ),
+			'dispatch_key' => $hash,
+			'provider_payment_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+			'authorized_amount_minor' => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+			'state' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'planned' ),
+			'last_error' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ),
+			'created_at_utc' => $time,
+			'updated_at_utc' => $time,
+		) ) && self::index_contract_ready( $sets, 'PRIMARY', array( 'payment_attempt_id' ), true )
+			&& self::index_contract_ready( $sets, 'pay_order_key', array( 'pay_order_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $legs, 'PRIMARY', array( 'id' ), true )
+			&& self::index_contract_ready( $legs, 'parent_leg', array( 'payment_attempt_id', 'leg_index' ), true )
+			&& self::index_contract_ready( $legs, 'dispatch_key', array( 'dispatch_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $legs, 'provider_payment_reference', array( 'provider_payment_reference' ), true, array( 191 ) );
+	}
+
 	/**
 	 * Activation routine.
 	 *
@@ -39,11 +123,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::preorder_approval_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::payment_ledger_storage_ready() && self::preorder_approval_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, pre-order approval, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, split-funding, pre-order approval, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -688,6 +772,7 @@ class DoughBoss_Activator {
 		dbDelta( $sql_payment_attempts );
 		dbDelta( $sql_payment_events );
 		dbDelta( $sql_checkout_snapshots );
+		self::create_payment_ledger_tables();
 		dbDelta( $sql_loyalty_members );
 		dbDelta( $sql_loyalty_ledger );
 		dbDelta( $sql_loyalty_tokens );
@@ -1023,6 +1108,9 @@ class DoughBoss_Activator {
 				return false;
 			}
 			$row = $actual[ $field ];
+			if ( array_key_exists( 'extra', $expected ) && ( ! isset( $row->Extra ) || strtolower( (string) $row->Extra ) !== $expected['extra'] ) ) {
+				return false;
+			}
 			// MySQL 8 omits deprecated integer display widths while MariaDB still
 			// reports them. They describe the same storage contract, so compare the
 			// semantic type while retaining exact varchar lengths and signedness.

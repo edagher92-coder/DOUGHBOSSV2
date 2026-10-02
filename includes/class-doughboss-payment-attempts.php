@@ -18,6 +18,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Payment_Attempts {
 
+	/** Record an exact split Order identity only; never attest to provider payment. */
+	public static function bind_split_square_order( $attempt_id, $order_reference, array $expected ) {
+		return DoughBoss_Payment_Legs::bind_order( $attempt_id, $order_reference, $expected );
+	}
+
 	/**
 	 * Return the plugin-owned payment attempts table.
 	 *

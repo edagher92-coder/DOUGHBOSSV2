@@ -10,6 +10,86 @@ if ( ! function_exists( 'wp_json_encode' ) ) {
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-order.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-dashboard.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-orders.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment-legs.php';
+
+/** A deliberately local, inert split-leg observation fixture. */
+function db_split_leg_observation_fixture( $index = 0, $amount = 900 ) {
+	$parent = array(
+		'id'                       => 42,
+		'currency'                 => 'AUD',
+		'provider_order_reference' => 'squareORDERsplit00042',
+		'safe_metadata_json'       => wp_json_encode( array( 'square_location_id' => 'LTESTLOCATION123' ) ),
+	);
+	$leg = array(
+		'payment_attempt_id'     => 42,
+		'leg_index'               => $index,
+		'tender_kind'             => 0 === $index ? 'gift_card' : 'card',
+		'requested_amount_minor' => $amount,
+		'currency'                => 'AUD',
+	);
+	$payment = array(
+		'id'           => 0 === $index ? 'sqpaySplitGift000042' : 'sqpaySplitCard000042',
+		'order_id'     => $parent['provider_order_reference'],
+		'location_id'  => 'LTESTLOCATION123',
+		'reference_id' => DoughBoss_Payment_Legs::leg_reference( 42, $index ),
+		'status'       => 'APPROVED',
+		'source_type'  => 'CARD',
+		'amount_money' => array( 'amount' => $amount, 'currency' => 'AUD' ),
+		'card_details' => array( 'status' => 'AUTHORIZED', 'card' => array( 'card_brand' => 0 === $index ? 'SQUARE_GIFT_CARD' : 'VISA' ) ),
+	);
+	return array( $parent, $leg, $payment );
+}
+
+db_test(
+	'split ledger observation validation accepts only exact delayed-authorisation facts',
+	function () {
+		list( $parent, $gift, $payment ) = db_split_leg_observation_fixture();
+		assert_same(
+			array( 'provider_payment_reference' => 'sqpaySplitGift000042', 'authorized_amount_minor' => 900 ),
+			DoughBoss_Payment_Legs::validate_observation( $parent, $gift, $payment ),
+			'exact gift authorization retains only its id and actual authorized minor units'
+		);
+		list( $parent, $card, $payment ) = db_split_leg_observation_fixture( 1, 500 );
+		assert_same(
+			array( 'provider_payment_reference' => 'sqpaySplitCard000042', 'authorized_amount_minor' => 500 ),
+			DoughBoss_Payment_Legs::validate_observation( $parent, $card, $payment ),
+			'exact card remainder authorization is accepted'
+		);
+		foreach ( array(
+			'wrong_order' => array( 'order_id' => 'squareORDERother00042' ),
+			'wrong_location' => array( 'location_id' => 'OTHERLOCATION123' ),
+			'wrong_reference' => array( 'reference_id' => 'db-split-42-9' ),
+			'wrong_status' => array( 'status' => 'COMPLETED' ),
+			'wrong_source' => array( 'source_type' => 'CASH' ),
+			'wrong_card_status' => array( 'card_details' => array( 'status' => 'COMPLETED', 'card' => array( 'card_brand' => 'SQUARE_GIFT_CARD' ) ) ),
+			'wrong_currency' => array( 'amount_money' => array( 'amount' => 900, 'currency' => 'USD' ) ),
+			'wrong_brand' => array( 'card_details' => array( 'status' => 'AUTHORIZED', 'card' => array( 'card_brand' => 'VISA' ) ) ),
+			'pan_shaped_id' => array( 'id' => '4111111111111111' ),
+		) as $label => $changes ) {
+			list( $parent, $gift, $payment ) = db_split_leg_observation_fixture();
+			$payment = array_replace_recursive( $payment, $changes );
+			assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $gift, $payment ), $label . ' is not a valid gift-leg observation' );
+		}
+	}
+);
+
+db_test(
+	'split ledger observation validation denies non-integer, zero, excessive, and wrong-card economics',
+	function () {
+		foreach ( array( 0, -1, 901, 900.0, '900' ) as $amount ) {
+			list( $parent, $gift, $payment ) = db_split_leg_observation_fixture();
+			$payment['amount_money']['amount'] = $amount;
+			assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $gift, $payment ), 'gift amount is strict integer and within requested amount' );
+		}
+		list( $parent, $card, $payment ) = db_split_leg_observation_fixture( 1, 500 );
+		$payment['amount_money']['amount'] = 499;
+		assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $card, $payment ), 'card remainder must equal its server-derived requested amount' );
+		$payment['card_details']['card']['card_brand'] = 'SQUARE_GIFT_CARD';
+		assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $card, $payment ), 'card remainder cannot be a second gift card authorization' );
+		assert_same( 'db-split-42-0', DoughBoss_Payment_Legs::leg_reference( 42, 0 ), 'leg reference is stable and server generated' );
+		assert_same( '', DoughBoss_Payment_Legs::leg_reference( '42', 0 ), 'leg reference refuses loosely typed parent identity' );
+	}
+);
 
 /** Synthetic immutable itemization; no catalog, provider or customer records. */
 function db_square_orders_projection_fixture( $inclusive = true, $discount = true, $delivery = true ) {

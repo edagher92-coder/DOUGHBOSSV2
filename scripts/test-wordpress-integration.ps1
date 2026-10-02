@@ -74,6 +74,9 @@ $oldRaceLog = $env:DOUGHBOSS_RACE_LOG
 $oldSquareRaceMode = $env:DOUGHBOSS_SQUARE_RACE_MODE
 $oldSquareCrashStage = $env:DOUGHBOSS_SQUARE_CRASH_STAGE
 $oldSquareCrashReplay = $env:DOUGHBOSS_SQUARE_CRASH_REPLAY
+$oldSplitLedgerMode = $env:DOUGHBOSS_SPLIT_LEDGER_MODE
+$oldSplitLedgerCase = $env:DOUGHBOSS_SPLIT_LEDGER_CASE
+$oldSplitLedgerAction = $env:DOUGHBOSS_SPLIT_LEDGER_ACTION
 $env:DOUGHBOSS_RACE_LOG = $raceLog
 $env:DOUGHBOSS_SQUARE_CRASH_STAGE = $null
 $env:DOUGHBOSS_SQUARE_CRASH_REPLAY = $null
@@ -117,6 +120,30 @@ try {
             throw 'Square crash boundary or recovery worker failed.'
         }
     }
+
+    foreach ($splitCase in @('prepare', 'claim', 'remainder', 'cancel')) {
+        $env:DOUGHBOSS_RACE_LOG = Join-Path $scratch "split-$splitCase.log"
+        $env:DOUGHBOSS_SPLIT_LEDGER_CASE = $splitCase
+        $env:DOUGHBOSS_SPLIT_LEDGER_MODE = 'setup'
+        $setupWorker = Start-DoughBossSquareCrashWorker -Prefix "split-$splitCase-setup"
+        Wait-DoughBossSquareCrashWorker -Worker $setupWorker -ExpectedExit 0 -Marker 'SPLIT_SETUP_OK'
+        $env:DOUGHBOSS_SPLIT_LEDGER_MODE = 'race'
+        $splitWorkers = @()
+        foreach ($workerNumber in 1..2) {
+            $env:DOUGHBOSS_SPLIT_LEDGER_ACTION = if ($splitCase -eq 'cancel' -and $workerNumber -eq 2) { 'cancel' } else { 'claim' }
+            $splitWorkers += Start-DoughBossSquareCrashWorker -Prefix "split-$splitCase-race-$workerNumber"
+        }
+        foreach ($worker in $splitWorkers) {
+            Wait-DoughBossSquareCrashWorker -Worker $worker -ExpectedExit 0 -Marker 'SPLIT_WORKER_OK'
+        }
+        $env:DOUGHBOSS_SPLIT_LEDGER_MODE = 'verify'
+        $verifyWorker = Start-DoughBossSquareCrashWorker -Prefix "split-$splitCase-verify"
+        Wait-DoughBossSquareCrashWorker -Worker $verifyWorker -ExpectedExit 0 -Marker 'SPLIT_VERIFY_OK'
+        Write-Output "2-process split ledger ${splitCase}: barrier crossed, exact version/leg ownership, 0 provider calls, 0 fulfillment"
+    }
+    $env:DOUGHBOSS_SPLIT_LEDGER_MODE = $null
+    $env:DOUGHBOSS_SPLIT_LEDGER_CASE = $null
+    $env:DOUGHBOSS_SPLIT_LEDGER_ACTION = $null
 
     foreach ($squareRaceMode in @('web', 'approved_preorder')) {
         $env:DOUGHBOSS_SQUARE_RACE_MODE = $squareRaceMode
@@ -214,6 +241,9 @@ finally {
     $env:DOUGHBOSS_SQUARE_RACE_MODE = $oldSquareRaceMode
     $env:DOUGHBOSS_SQUARE_CRASH_STAGE = $oldSquareCrashStage
     $env:DOUGHBOSS_SQUARE_CRASH_REPLAY = $oldSquareCrashReplay
+    $env:DOUGHBOSS_SPLIT_LEDGER_MODE = $oldSplitLedgerMode
+    $env:DOUGHBOSS_SPLIT_LEDGER_CASE = $oldSplitLedgerCase
+    $env:DOUGHBOSS_SPLIT_LEDGER_ACTION = $oldSplitLedgerAction
     if (Test-Path -LiteralPath $scratch) {
         $resolvedScratch = (Resolve-Path -LiteralPath $scratch).Path
         $expectedParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\')
