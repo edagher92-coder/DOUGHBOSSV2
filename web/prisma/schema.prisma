@@ -45,8 +45,8 @@ enum OrderStatus {
 }
 
 enum PaymentMethod {
-  STRIPE
-  PAY_AT_PICKUP
+  SQUARE
+  PAY_AT_SHOP
 }
 
 enum PaymentStatus {

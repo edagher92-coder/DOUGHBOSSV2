@@ -13,9 +13,8 @@ export type WaitlistFailureCode = "VALIDATION" | "RATE_LIMITED" | "STORAGE_UNAVA
 
 export type WaitlistResult =
   | {
+      /** Same shape for a new and an existing address, so the response never reveals who is subscribed. */
       ok: true;
-      /** false when the email was already on the list (we updated their details instead). */
-      created: boolean;
     }
   | {
       ok: false;
@@ -39,14 +38,14 @@ export type CheckoutFailureCode =
 
 export type CheckoutResult =
   | {
-      /** Card payment: send the browser to Stripe Checkout. The order exists but is unpaid until the webhook confirms it. */
+      /** Card payment: send the browser to Square checkout. The order exists but is unpaid until the webhook confirms it. */
       ok: true;
       kind: "redirect";
       orderNumber: string;
       url: string;
     }
   | {
-      /** Pay at pickup (only when the business has switched it on): the order is placed and confirmed. */
+      /** Pay at the shop (only when the business has switched it on): the order is placed and confirmed. */
       ok: true;
       kind: "confirmed";
       orderNumber: string;
@@ -65,6 +64,6 @@ export type CheckoutResult =
 
 /** Which payment routes the server has switched on — computed on the server, passed to the client as props. */
 export interface PaymentOptions {
-  stripe: boolean;
-  payAtPickup: boolean;
+  square: boolean;
+  payAtShop: boolean;
 }

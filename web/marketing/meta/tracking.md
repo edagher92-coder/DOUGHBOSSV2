@@ -249,7 +249,7 @@ Sign-off: name, date and the screenshots kept with the launch checklist.
 3. Confirm the consent flag name and the single dispatcher event (`doughboss:consent` today).
 4. Confirm the side-table fields in section 6 match 05 and the Google Ads plan (`marketing/google-ads/conversion-plan.md` uses the same `gclid` capture; `fbclid`, `fbc` and `fbp` should sit beside it).
 5. Confirm the status mapping to Meta events (section 9) matches the Google offline imports (`QUOTED` and `WON` in that plan correspond to the plugin statuses `quoted` and `confirmed or paid`; the plugin has no status literally called `WON`).
-6. `events.ts` lists `begin_checkout.payment_method` as `STRIPE | PAY_AT_PICKUP`. When Square replaces Stripe, this enum changes; section 10 assumes it will.
+6. `events.ts` lists `begin_checkout.payment_method` as `SQUARE | PAY_AT_SHOP`. It already reflects Square replacing Stripe, which section 10 assumes.
 7. `track.ts` is a no-op stub today. The final dispatcher must call `fbq` with the `eventID` option and must not duplicate the bridge's own `Lead` mapping.
 
 ## 13. Needs from the lead and the plugin architect

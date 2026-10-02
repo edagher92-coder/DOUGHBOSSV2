@@ -7,7 +7,7 @@ import { z } from "zod";
 import { MAX_CART_LINES, MAX_LINE_QUANTITY } from "./pricing";
 
 export const STORE_SLUGS = ["revesby", "bankstown", "roselands"] as const;
-export const PAYMENT_METHODS = ["STRIPE", "PAY_AT_PICKUP"] as const;
+export const PAYMENT_METHODS = ["SQUARE", "PAY_AT_SHOP"] as const;
 
 /** The exact wording a subscriber agrees to — stored with their consent timestamp. */
 export const WAITLIST_CONSENT_TEXT =

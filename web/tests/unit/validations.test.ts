@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 import {
+  PAYMENT_METHODS,
   WAITLIST_CONSENT_TEXT,
   checkoutSchema,
   fieldErrors,
@@ -22,7 +25,7 @@ const validCheckout = (over: Record<string, unknown> = {}): CheckoutInput =>
     storeSlug: "revesby",
     pickupAt: "2026-10-03T19:30:00.000Z",
     customer: { name: "Sample Person", email: "sample@example.com", phone: "0412 345 678" },
-    paymentMethod: "PAY_AT_PICKUP",
+    paymentMethod: "PAY_AT_SHOP",
     lines: [{ itemSlug: "zaatar-manoush", quantity: 2, selections: { "base-style": ["folded"] } }],
     ...over,
   }) as CheckoutInput;
@@ -175,6 +178,16 @@ describe("checkoutSchema", () => {
 
   it("rejects an unknown storeSlug", () => {
     expect(checkoutSchema.safeParse(validCheckout({ storeSlug: "parramatta" })).success).toBe(false);
+  });
+
+  it("accepts SQUARE and PAY_AT_SHOP and rejects the retired Stripe-era values", () => {
+    for (const ok of ["SQUARE", "PAY_AT_SHOP"]) expect(checkoutSchema.safeParse(validCheckout({ paymentMethod: ok })).success).toBe(true);
+    for (const old of ["STRIPE", "PAY_AT_PICKUP"]) expect(checkoutSchema.safeParse(validCheckout({ paymentMethod: old })).success).toBe(false);
+  });
+
+  it("uses the same payment method values as the analytics contract", () => {
+    const events = readFileSync(path.resolve(__dirname, "../../src/lib/analytics/events.ts"), "utf8");
+    expect(events).toContain(PAYMENT_METHODS.map((m) => `"${m}"`).join(" | "));
   });
 
   it("rejects an unknown payment method", () => {

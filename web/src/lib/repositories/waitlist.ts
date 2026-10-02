@@ -1,7 +1,11 @@
 /**
- * "Something exciting is coming" waitlist storage. Email is the unique key; a repeat
- * signup updates the contact details and keeps the EARLIEST consent timestamp (the consent that
- * actually authorised contact, per the Spam Act 2003).
+ * "Something exciting is coming" waitlist storage. Email is the unique key.
+ *
+ * A repeat signup NEVER changes the existing record: the submission is unauthenticated, so
+ * anyone who knows an address could otherwise overwrite that subscriber's name, phone or
+ * store. The original record (and its original consent, the one that actually authorised
+ * contact under the Spam Act 2003) stays as it was. Changing an existing entry needs a
+ * signed confirmation flow (an emailed link proving ownership), which is not built yet.
  */
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { StoreSlug } from "@/types/menu";
@@ -24,14 +28,6 @@ export interface WaitlistRepository {
 }
 
 const normaliseEmail = (email: string) => email.trim().toLowerCase();
-
-/** Which consent (time + the wording agreed to) is the earliest? Text always travels with its timestamp. */
-function earliestConsent(
-  a: { consentAt: Date; consentText: string },
-  b: { consentAt: Date; consentText: string },
-): { consentAt: Date; consentText: string } {
-  return b.consentAt.getTime() < a.consentAt.getTime() ? b : a;
-}
 
 // ───────────────────────── In-memory (dev and tests only) ─────────────────────────
 
@@ -58,15 +54,7 @@ export function createInMemoryWaitlistRepository(): InMemoryWaitlistRepository {
         byEmail.set(email, { ...record, email, id, notifiedAt: null });
         return { created: true, id };
       }
-      const consent = earliestConsent(existing, record);
-      byEmail.set(email, {
-        ...existing,
-        name: record.name,
-        phone: record.phone ?? existing.phone,
-        storeSlug: record.storeSlug ?? existing.storeSlug,
-        consentAt: consent.consentAt,
-        consentText: consent.consentText,
-      });
+      // Existing subscriber: leave the record untouched (see the header note).
       return { created: false, id: existing.id };
     },
     async markNotified(id) {
@@ -89,30 +77,19 @@ export function createPrismaWaitlistRepository(db: Db): WaitlistRepository {
     return row?.id ?? null;
   }
 
-  async function mergeInto(email: string, record: WaitlistRecord, sid: string | null) {
-    const existing = await db.waitlistSubscriber.findUnique({ where: { email } });
-    if (!existing) return null;
-    const consent = earliestConsent(existing, record);
-    await db.waitlistSubscriber.update({
-      where: { id: existing.id },
-      data: {
-        name: record.name,
-        ...(record.phone ? { phone: record.phone } : {}),
-        ...(sid ? { storeId: sid } : {}),
-        consentAt: consent.consentAt,
-        consentText: consent.consentText,
-      },
-    });
-    return { created: false, id: existing.id };
+  /** Existing subscriber: report it, change nothing (see the header note). */
+  async function existingId(email: string) {
+    const existing = await db.waitlistSubscriber.findUnique({ where: { email }, select: { id: true } });
+    return existing ? { created: false, id: existing.id } : null;
   }
 
   return {
     async upsert(record) {
       const email = normaliseEmail(record.email);
-      const sid = await storeId(record.storeSlug);
 
-      const merged = await mergeInto(email, record, sid);
-      if (merged) return merged;
+      const found = await existingId(email);
+      if (found) return found;
+      const sid = await storeId(record.storeSlug);
 
       try {
         const row = await db.waitlistSubscriber.create({
@@ -129,9 +106,9 @@ export function createPrismaWaitlistRepository(db: Db): WaitlistRepository {
         });
         return { created: true, id: row.id };
       } catch (err) {
-        // Two simultaneous signups with the same email: the loser merges into the winner.
+        // Two simultaneous signups with the same email: the loser reports the winner's record.
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-          const raced = await mergeInto(email, record, sid);
+          const raced = await existingId(email);
           if (raced) return raced;
         }
         throw err;

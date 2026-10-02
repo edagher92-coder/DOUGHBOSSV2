@@ -7,8 +7,9 @@ import { useNow } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { useCartCount, useCartStore } from "@/store/useCartStore";
 
+// Every href here must resolve to an id on the home page (tests/unit/page-anchors.test.ts).
+// There is no ordering section on this page yet, so there is no "Order" link: a dead anchor is worse than none.
 const NAV = [
-  { href: "#order", label: "Order" },
   { href: "#coming-soon", label: "Coming soon" },
   { href: "#locations", label: "Locations" },
 ] as const;
@@ -45,7 +46,7 @@ export function SiteHeader({ stores }: { stores: Store[] }) {
 
         <div className="flex items-center gap-2">
           <a
-            href="#order"
+            href="#locations"
             className="hidden h-10 min-w-[11.5rem] items-center gap-2 rounded-full border border-white/15 px-4 text-xs text-flour/80 transition-colors hover:border-white/30 md:inline-flex"
             aria-label={store ? `Selected store: ${store.name}. ${status?.label ?? ""}` : "Choose a store"}
           >

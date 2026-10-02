@@ -29,6 +29,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: optionalString,
   DIRECT_URL: optionalString,
+  // Names below are the existing deployed config. Payment provider is now Square and "pay at pickup" is "pay at the shop"
+  // (PaymentMethod SQUARE | PAY_AT_SHOP); the env names are left alone so existing config does not break. Rename with a deprecation alias later.
   STRIPE_SECRET_KEY: optionalString,
   STRIPE_WEBHOOK_SECRET: optionalString,
   ALLOW_PAY_AT_PICKUP: flag,

@@ -13,6 +13,7 @@
 import { mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import { MIN_QUALITY, nextQuality } from "./quality.mjs";
 
 const [renderDir, heroDirArg] = process.argv.slice(2);
 if (!renderDir) {
@@ -26,7 +27,6 @@ const SETS = [
   { name: "sm", size: 480, quality: 78, budget: 700 * 1000 },
 ];
 const POSTER_SIZE = 1200;
-const MIN_QUALITY = 50;
 
 const frames = readdirSync(renderDir).filter((f) => /^frame-\d{3}\.png$/.test(f)).sort();
 if (frames.length === 0) throw new Error(`no frame-NNN.png in ${renderDir}`);
@@ -54,7 +54,7 @@ for (const set of SETS) {
       report[set.name] = { frames: frames.length, size: set.size, quality, totalBytes: total, budgetBytes: set.budget, withinBudget: total <= set.budget };
       break;
     }
-    quality -= 6;
+    quality = nextQuality(quality);
   }
 }
 

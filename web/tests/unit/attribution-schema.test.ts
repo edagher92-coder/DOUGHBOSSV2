@@ -62,3 +62,39 @@ describe("hasAttribution", () => {
     expect(hasAttribution({ utmSource: "google" })).toBe(true);
   });
 });
+
+describe("referrerHost (bare hostname only)", () => {
+  const host = (referrerHost: unknown) => sanitiseAttribution({ referrerHost }).referrerHost;
+
+  it.each(["www.google.com", "l.facebook.com", "localhost", "xn--bcher-kva.example", "a-b.example.com.au", "  duckduckgo.com  "])(
+    "accepts %j",
+    (value) => {
+      expect(host(value)).toBe(String(value).trim());
+    },
+  );
+
+  it.each([
+    "https://www.google.com",
+    "www.google.com/search",
+    "www.google.com?q=1",
+    "www.google.com#frag",
+    "user:pass@www.google.com",
+    "user@www.google.com",
+    "www.google.com:8080",
+    "www.google .com",
+    "www.google.com\u0000",
+    "www.goo\ngle.com",
+    "www.google.com\t.au",
+    "-bad.example.com",
+    "bad-.example.com",
+    "bad..example.com",
+    ".example.com",
+    "[::1]",
+    "exa_mple.com",
+    "a".repeat(64) + ".com",
+    "",
+    "   ",
+  ])("rejects %j", (value) => {
+    expect(host(value)).toBeUndefined();
+  });
+});

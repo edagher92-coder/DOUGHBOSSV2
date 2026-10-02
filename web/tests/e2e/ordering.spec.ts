@@ -57,7 +57,7 @@ test.describe("menu and multi-location ordering (DEMO catalogue)", () => {
     await expect(page.getByTestId("menu-item-spinach-pie")).toBeVisible();
   });
 
-  test("a customer orders a Za'atar Manoush for pickup at Revesby (pay at pickup)", async ({ page }) => {
+  test("a customer orders a Za'atar Manoush for pickup at Revesby (pay at the shop)", async ({ page }) => {
     const { issues } = watchConsole(page);
     await chooseStore(page, "revesby");
     await page.getByTestId("menu-tab-manoush").click();

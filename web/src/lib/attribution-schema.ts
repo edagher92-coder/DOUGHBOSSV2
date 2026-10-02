@@ -21,6 +21,9 @@ const param = z
   .max(120)
   .refine((s) => !CONTROL_CHARS.test(s), "control characters are not allowed");
 
+/** Dot-separated DNS labels (letters, digits, inner hyphens; max 63 each). No scheme, path, query, fragment, credentials, port or whitespace. */
+const BARE_HOSTNAME = /^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+
 export const attributionSchema = z.object({
   utmSource: param.optional(),
   utmMedium: param.optional(),
@@ -35,7 +38,14 @@ export const attributionSchema = z.object({
   fbclid: param.optional(),
   msclkid: param.optional(),
   /** Host only, e.g. "www.google.com" — never a full URL. */
-  referrerHost: z.string().trim().min(1).max(253).optional(),
+  referrerHost: z
+    .string()
+    .trim()
+    .min(1)
+    .max(253)
+    .refine((s) => !CONTROL_CHARS.test(s), "control characters are not allowed")
+    .regex(BARE_HOSTNAME, "must be a bare hostname (no scheme, path, query, port or credentials)")
+    .optional(),
   /** Path only, e.g. "/catering/corporate" — never the query string. */
   landingPath: z
     .string()

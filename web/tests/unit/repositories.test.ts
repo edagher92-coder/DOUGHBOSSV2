@@ -94,17 +94,20 @@ const signup = (over: Partial<WaitlistRecord> = {}): WaitlistRecord => ({
 });
 
 describe("in-memory waitlist", () => {
-  it("creates a row, then merges a repeat signup instead of duplicating it", async () => {
+  it("creates a row, then a repeat signup neither duplicates nor changes it", async () => {
     const repo = createInMemoryWaitlistRepository();
     const first = await repo.upsert(signup());
     expect(first.created).toBe(true);
 
-    const second = await repo.upsert(signup({ phone: "+61400000000" }));
+    const second = await repo.upsert(signup({ name: "Someone Else", phone: "+61400000000", storeSlug: "revesby" }));
     expect(second).toEqual({ created: false, id: first.id });
 
     const rows = repo.all();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.phone).toBe("+61400000000");
+    // An unauthenticated repeat submission must not overwrite the subscriber's details.
+    expect(rows[0]?.name).toBe("Sam Test");
+    expect(rows[0]?.phone).toBeUndefined();
+    expect(rows[0]?.storeSlug).toBeUndefined();
   });
 
   it("treats email case-insensitively", async () => {
@@ -115,15 +118,12 @@ describe("in-memory waitlist", () => {
     expect(repo.all()[0]?.email).toBe("sam@example.test");
   });
 
-  it("keeps the EARLIEST consent timestamp, together with the wording that was agreed then", async () => {
+  it("keeps the original consent timestamp and wording on a repeat signup, whichever is earlier", async () => {
     const repo = createInMemoryWaitlistRepository();
     await repo.upsert(signup({ consentAt: new Date("2026-10-02T01:00:00Z"), consentText: "v1" }));
     await repo.upsert(signup({ consentAt: new Date("2026-10-05T01:00:00Z"), consentText: "v2" }));
-    expect(repo.all()[0]).toMatchObject({ consentAt: new Date("2026-10-02T01:00:00Z"), consentText: "v1" });
-
-    // An earlier incoming timestamp (clock skew, replayed event) wins instead.
     await repo.upsert(signup({ consentAt: new Date("2026-09-30T01:00:00Z"), consentText: "v0" }));
-    expect(repo.all()[0]).toMatchObject({ consentAt: new Date("2026-09-30T01:00:00Z"), consentText: "v0" });
+    expect(repo.all()[0]).toMatchObject({ consentAt: new Date("2026-10-02T01:00:00Z"), consentText: "v1" });
   });
 
   it("does not wipe optional fields a repeat signup leaves out", async () => {
@@ -177,19 +177,17 @@ describe("Prisma waitlist (fake client)", () => {
     });
   });
 
-  it("merges into an existing row: earliest consent kept", async () => {
+  it("an existing row is reported but never written to (no overwrite from an unauthenticated submission)", async () => {
     const db = fakeDb({ findUnique: vi.fn().mockResolvedValue(existing) });
     const repo = createPrismaWaitlistRepository(db as never);
-    const out = await repo.upsert(signup({ consentAt: new Date("2026-10-09T00:00:00Z"), consentText: "v2" }));
+    const out = await repo.upsert(signup({ name: "Someone Else", phone: "+61400000000", storeSlug: "bankstown" }));
     expect(out).toEqual({ created: false, id: "w1" });
     expect(db.waitlistSubscriber.create).not.toHaveBeenCalled();
-    expect(db.waitlistSubscriber.update.mock.calls[0]?.[0]).toMatchObject({
-      where: { id: "w1" },
-      data: { consentAt: existing.consentAt, consentText: "v1" },
-    });
+    expect(db.waitlistSubscriber.update).not.toHaveBeenCalled();
+    expect(db.waitlistSubscriber.updateMany).not.toHaveBeenCalled();
   });
 
-  it("recovers from a simultaneous-signup unique violation by merging into the winner", async () => {
+  it("recovers from a simultaneous-signup unique violation by reporting the winner's row", async () => {
     const findUnique = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(existing);
     const db = fakeDb({ findUnique, create: vi.fn().mockRejectedValue(uniqueViolation(["email"])) });
     const out = await createPrismaWaitlistRepository(db as never).upsert(signup());
@@ -221,7 +219,7 @@ const line = (over: Partial<NewOrder["lines"][number]> = {}): NewOrder["lines"][
 
 const order = (over: Partial<NewOrder> = {}): NewOrder => ({
   storeSlug: "revesby",
-  paymentMethod: "STRIPE",
+  paymentMethod: "SQUARE",
   customer: { name: "Pat Example", email: "Pat@Example.test", phone: "+61400000000" },
   pickupAt: new Date("2026-10-03T21:30:00Z"),
   lines: [line()],
@@ -438,7 +436,7 @@ describe("Prisma orders (fake client)", () => {
     customerEmail: "Pat@Example.test",
     status: "CONFIRMED",
     paymentStatus: "PAID",
-    paymentMethod: "STRIPE",
+    paymentMethod: "SQUARE",
     pickupAt: new Date("2026-10-03T21:30:00Z"),
     createdAt: new Date("2026-10-02T00:00:00Z"),
     currency: "AUD",

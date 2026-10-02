@@ -43,16 +43,22 @@ export async function joinWaitlist(input: unknown): Promise<WaitlistResult> {
       consentText: WAITLIST_CONSENT_TEXT,
     });
     // Best effort: the signup is already saved, so a dead webhook never fails the visitor.
-    const notified = await notifyWaitlistSignup({
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      storeSlug: data.storeSlug,
-      source: "coming-soon-teaser",
-      createdAt: new Date().toISOString(),
-    });
-    if (notified.delivered) await repo.markNotified(id).catch(() => undefined);
-    return { ok: true, created };
+    // Only a genuinely new signup is announced: for an existing address the submitted
+    // details are unverified and were not stored.
+    if (created) {
+      const notified = await notifyWaitlistSignup({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        storeSlug: data.storeSlug,
+        source: "coming-soon-teaser",
+        createdAt: new Date().toISOString(),
+      });
+      if (notified.delivered) await repo.markNotified(id).catch(() => undefined);
+    }
+    // Deliberately identical for new and existing addresses: the response must not reveal
+    // whether an email is already subscribed.
+    return { ok: true };
   } catch (err) {
     if (isStorageUnavailable(err)) return { ok: false, code: "STORAGE_UNAVAILABLE", message: err.message };
     return { ok: false, code: "UNKNOWN", message: "Something went wrong on our side. Please try again." };

@@ -18,7 +18,7 @@ import type { Store } from "@/types/menu";
 export const TEASER_HEADLINE = "Something exciting is coming";
 export const TEASER_BODY = "Be first to know. Join the VIP first-look list.";
 
-type Status = { kind: "idle" } | { kind: "success"; created: boolean } | { kind: "error"; message: string };
+type Status = { kind: "idle" } | { kind: "success" } | { kind: "error"; message: string };
 
 export function ComingSoonSection({ stores }: { stores: Store[] }) {
   const sectionRef = useRef<HTMLElement>(null);
@@ -65,7 +65,7 @@ export function ComingSoonSection({ stores }: { stores: Store[] }) {
       const result = await joinWaitlist(input);
       if (result.ok) {
         track("waitlist_submit", { store: parsed.data.storeSlug ?? "none" });
-        setStatus({ kind: "success", created: result.created });
+        setStatus({ kind: "success" });
       } else {
         setErrors(result.fieldErrors ?? {});
         setStatus({ kind: "error", message: result.message });
@@ -89,7 +89,7 @@ export function ComingSoonSection({ stores }: { stores: Store[] }) {
 
       {status.kind === "success" ? (
         <p role="status" data-testid="waitlist-success" className="mt-8 max-w-xl rounded-2xl border border-gold-400/40 p-5">
-          {status.created ? "You’re on the list. We’ll be in touch." : "You’re already on the list. We’ve updated your details."}
+          You’re on the list. We’ll be in touch.
         </p>
       ) : (
         <form data-testid="waitlist-form" noValidate onSubmit={onSubmit} className="mt-8 grid max-w-xl gap-5">

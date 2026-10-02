@@ -15,7 +15,7 @@ import { getPrisma } from "../db";
 import { generateOrderNumber, type Rng } from "../order-number";
 import { selectBackend } from "./select";
 
-export type PaymentMethodValue = "STRIPE" | "PAY_AT_PICKUP";
+export type PaymentMethodValue = "SQUARE" | "PAY_AT_SHOP";
 export type OrderStatusValue = "PENDING_PAYMENT" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED";
 export type PaymentStatusValue = "UNPAID" | "PAID" | "REFUNDED" | "FAILED";
 
