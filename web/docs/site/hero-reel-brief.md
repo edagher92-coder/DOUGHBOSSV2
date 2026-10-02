@@ -1,6 +1,8 @@
 # Hero blow-out reel: brief, prompt and test log
 
-Status: **draft approved for review, final render not yet spent.** Silent, 9:16, 8 s.
+Status: **9:16 final rendered (Elie approved the spend on 2 Oct 2026).** Silent, 8 s, loops.
+Final job `ae223d91-205d-4617-ad0c-6156ad6d51de`, 1080x1920, high bitrate, 96 credits. The 4:3 website-hero
+draft (`c78e8a8d`) is weaker, see "4:3 website-hero draft" below.
 Source still: the original hero photo (Higgsfield media `9fd8c0f8-60ab-41f3-8c9a-e4321fda890c`).
 Start frame and end frame are the same photo, so the reel loops.
 
@@ -43,8 +45,21 @@ Real, mouth-watering food cinematography for a modern Australian bakery with Med
 Visual rules: no smoke or haze anywhere, including the first second; no new foods or objects; no plastic or cartoon look; no lemon close-ups; no camera shake in the final second.
 ```
 
-Finalise: `draft_job_id` = `85fc27ce-...` at 1080p. Quoted cost **96 credits** (standard and high bitrate
-quoted the same on 2 Oct 2026). Balance at the time: 168 credits.
+Finalised with `draft_job_id` = `85fc27ce-...` at 1080p, high bitrate: **96 credits** (standard and high
+bitrate quoted the same). The finalise call needs the prompt and both reference images again, or it is
+rejected with a 422 (no charge). Balance after the final and the 4:3 draft: 48.25 credits.
+
+Frame check of the final: clear air throughout, no lemon moment, close-ups come out of the exploded
+pieces, clean snap-back, locked steady end frame that matches the opening frame.
+
+## 4:3 website-hero draft (`c78e8a8d-ede3-4efc-8173-fd2bb13c12b1`, 480p)
+
+Same prompt at 4:3. Its first and last frames are the real hero photo (good), and the olive oil over
+za'atar, charred mince flatbread and cheese macros look real. But the blow-out is far too gentle (pieces
+barely lift) and the macros arrive as hard cuts to a different scene, which is the continuity problem Elie
+flagged. **Not ready for the site.** Options: one more 24-credit 4:3 draft with a stronger detonation
+instruction, or use the 1080p 9:16 final for social only. A 4:3 1080p final would cost about the same as the
+9:16 (96 credits), which the current balance does not cover.
 
 ## Virality predictor: what it actually says
 
