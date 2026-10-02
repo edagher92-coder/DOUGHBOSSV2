@@ -27,7 +27,7 @@ export interface EventParams {
     store: StoreSlug;
     value_cents: number;
     item_count: number;
-    payment_method: "STRIPE" | "PAY_AT_PICKUP";
+    payment_method: "SQUARE" | "PAY_AT_SHOP";
   };
   /** Pay-at-pickup order placed (no online payment to verify). Card orders report `purchase` server-side. */
   order_placed: { store: StoreSlug; value_cents: number; item_count: number };

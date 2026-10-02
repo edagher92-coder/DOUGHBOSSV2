@@ -348,7 +348,7 @@ db_test(
 		assert_same( 1000000, DBGR_Budgets::ZIP_MAX_BYTES, 'the budget is 1.0 MB' );
 
 		$plugin = dbgr_scripts_copy_plugin();
-		mkdir( $plugin . '/content', 0777, true );
+		is_dir( $plugin . '/content' ) || mkdir( $plugin . '/content', 0777, true ); // The plugin ships a content/ folder since WP-02.
 		file_put_contents( $plugin . '/content/blob.bin', random_bytes( 1100000 ) ); // Incompressible.
 		$result = dbgr_scripts_run( $plugin . '/scripts/build-zip.php', array( $plugin . '/out.zip' ) );
 		assert_same( 1, $result['exit'], 'over budget: refused' );
@@ -510,7 +510,7 @@ db_test(
 
 		// Over budget: pad a content file in both the tree and the archive so they still agree.
 		$plugin4 = dbgr_scripts_copy_plugin();
-		mkdir( $plugin4 . '/content', 0777, true );
+		is_dir( $plugin4 . '/content' ) || mkdir( $plugin4 . '/content', 0777, true );
 		$blob = random_bytes( 1100000 );
 		file_put_contents( $plugin4 . '/content/blob.bin', $blob );
 		$entries3                               = $entries;

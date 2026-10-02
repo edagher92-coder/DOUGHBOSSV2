@@ -1,0 +1,913 @@
+{
+	"generated_by": "web/scripts/wp-oracle/export-ledger-fixtures.ts",
+	"oracle_source": {
+		"file": "web/src/content/ledger.ts",
+		"sha256": "2c276f7aedb4d166eee050f89d907f7ecfd81d8514b47e06d3e940c0e0ed2373",
+		"line_endings": "normalised to LF before hashing"
+	},
+	"cases": [
+		{
+			"name": "valid-mixed",
+			"claims": [
+				{
+					"id": "baked-fresh",
+					"text": "Baked fresh every morning",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": "doughboss.com.au/catering/",
+						"retrieved": "2026-10-02"
+					}
+				},
+				{
+					"id": "owner-said",
+					"text": "Family owned",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-confirmed",
+						"ref": "chat with Elie",
+						"confirmedOn": "2026-10-02"
+					}
+				},
+				{
+					"id": "web-listed",
+					"text": "Listed on a public directory",
+					"confirmed": true,
+					"source": {
+						"kind": "public-web",
+						"ref": "https://example.org/page",
+						"retrieved": "2026-10-02"
+					}
+				},
+				{
+					"id": "still-a-gap",
+					"text": "Delivery area wording",
+					"confirmed": false,
+					"note": "needs Elie"
+				}
+			],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [
+					"baked-fresh",
+					"owner-said",
+					"web-listed"
+				],
+				"texts": {
+					"baked-fresh": "Baked fresh every morning",
+					"owner-said": "Family owned",
+					"web-listed": "Listed on a public directory",
+					"still-a-gap": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "empty-ledger",
+			"claims": [],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [],
+				"texts": {
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "duplicate-id",
+			"claims": [
+				{
+					"id": "same-id",
+					"text": "First",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": "doughboss.com.au/catering/",
+						"retrieved": "2026-10-02"
+					}
+				},
+				{
+					"id": "same-id",
+					"text": "Second",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": "doughboss.com.au/catering/",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"same-id: duplicate id"
+				],
+				"publishable_ids": [
+					"same-id",
+					"same-id"
+				],
+				"texts": {
+					"same-id": "First",
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "duplicate-id-first-unconfirmed-second-confirmed",
+			"claims": [
+				{
+					"id": "dup",
+					"text": "Unconfirmed first",
+					"confirmed": false
+				},
+				{
+					"id": "dup",
+					"text": "Confirmed second",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": "doughboss.com.au/catering/",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"dup: duplicate id"
+				],
+				"publishable_ids": [
+					"dup"
+				],
+				"texts": {
+					"dup": "Confirmed second",
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-uppercase",
+			"claims": [
+				{
+					"id": "Baked-Fresh",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"Baked-Fresh: id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"Baked-Fresh": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-underscore",
+			"claims": [
+				{
+					"id": "baked_fresh",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"baked_fresh: id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"baked_fresh": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-leading-hyphen",
+			"claims": [
+				{
+					"id": "-baked",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"-baked: id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"-baked": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-trailing-hyphen",
+			"claims": [
+				{
+					"id": "baked-",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"baked-: id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"baked-": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-double-hyphen",
+			"claims": [
+				{
+					"id": "baked--fresh",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"baked--fresh: id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"baked--fresh": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-space",
+			"claims": [
+				{
+					"id": "baked fresh",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"baked fresh: id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"baked fresh": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-empty-id",
+			"claims": [
+				{
+					"id": "",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					": id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "non-kebab-trailing-newline",
+			"claims": [
+				{
+					"id": "baked\n",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"baked\n: id must be kebab-case"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"baked\n": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "kebab-digits-ok",
+			"claims": [
+				{
+					"id": "shop-2-hours",
+					"text": "Text",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [],
+				"texts": {
+					"shop-2-hours": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "empty-text",
+			"claims": [
+				{
+					"id": "empty",
+					"text": "",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"empty: empty text"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"empty": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "whitespace-only-text",
+			"claims": [
+				{
+					"id": "blank",
+					"text": "  \t\n ",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"blank: empty text"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"blank": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "nbsp-only-text",
+			"claims": [
+				{
+					"id": "nbsp",
+					"text": "  ",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"nbsp: empty text"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"nbsp": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "ideographic-space-only-text",
+			"claims": [
+				{
+					"id": "ideo",
+					"text": "　",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"ideo: empty text"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"ideo": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "bom-only-text",
+			"claims": [
+				{
+					"id": "bom",
+					"text": "﻿",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"bom: empty text"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"bom": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "zero-width-space-text-is-not-empty",
+			"claims": [
+				{
+					"id": "zwsp",
+					"text": "​",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [],
+				"texts": {
+					"zwsp": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-confirm-bracket",
+			"claims": [
+				{
+					"id": "p1",
+					"text": "Open [CONFIRM: hours]",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"p1: text contains a placeholder marker"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"p1": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-confirm-lowercase",
+			"claims": [
+				{
+					"id": "p2",
+					"text": "Open [confirm hours]",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"p2: text contains a placeholder marker"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"p2": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-todo",
+			"claims": [
+				{
+					"id": "p3",
+					"text": "TODO write this",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"p3: text contains a placeholder marker"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"p3": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-todo-lowercase",
+			"claims": [
+				{
+					"id": "p4",
+					"text": "todo later",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"p4: text contains a placeholder marker"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"p4": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-tbc",
+			"claims": [
+				{
+					"id": "p5",
+					"text": "Price TBC",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"p5: text contains a placeholder marker"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"p5": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-lorem",
+			"claims": [
+				{
+					"id": "p6",
+					"text": "Lorem Ipsum dolor",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"p6: text contains a placeholder marker"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"p6": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-xxx",
+			"claims": [
+				{
+					"id": "p7",
+					"text": "Call xxx",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"p7: text contains a placeholder marker"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"p7": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "placeholder-near-miss-xx",
+			"claims": [
+				{
+					"id": "p8",
+					"text": "Call xx and confirm",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [],
+				"texts": {
+					"p8": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "confirmed-without-source",
+			"claims": [
+				{
+					"id": "nosrc",
+					"text": "Baked fresh",
+					"confirmed": true
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"nosrc: confirmed but has no source"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"nosrc": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "unconfirmed-without-source",
+			"claims": [
+				{
+					"id": "gap",
+					"text": "Baked fresh",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [],
+				"texts": {
+					"gap": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "empty-ref-confirmed",
+			"claims": [
+				{
+					"id": "emptyref",
+					"text": "Baked fresh",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": "",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"emptyref: source has an empty ref"
+				],
+				"publishable_ids": [
+					"emptyref"
+				],
+				"texts": {
+					"emptyref": "Baked fresh",
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "whitespace-ref-confirmed",
+			"claims": [
+				{
+					"id": "wsref",
+					"text": "Baked fresh",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-confirmed",
+						"ref": "  \t",
+						"confirmedOn": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"wsref: source has an empty ref"
+				],
+				"publishable_ids": [
+					"wsref"
+				],
+				"texts": {
+					"wsref": "Baked fresh",
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "nbsp-ref-confirmed",
+			"claims": [
+				{
+					"id": "nbspref",
+					"text": "Baked fresh",
+					"confirmed": true,
+					"source": {
+						"kind": "public-web",
+						"ref": " ",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"nbspref: source has an empty ref"
+				],
+				"publishable_ids": [
+					"nbspref"
+				],
+				"texts": {
+					"nbspref": "Baked fresh",
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "empty-ref-unconfirmed",
+			"claims": [
+				{
+					"id": "emptyref-gap",
+					"text": "Baked fresh",
+					"confirmed": false,
+					"source": {
+						"kind": "owner-site",
+						"ref": "",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"emptyref-gap: source has an empty ref"
+				],
+				"publishable_ids": [],
+				"texts": {
+					"emptyref-gap": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "unconfirmed-with-source-not-publishable",
+			"claims": [
+				{
+					"id": "held-back",
+					"text": "Baked fresh",
+					"confirmed": false,
+					"source": {
+						"kind": "owner-site",
+						"ref": "doughboss.com.au/catering/",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [],
+				"texts": {
+					"held-back": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "several-problems-one-claim",
+			"claims": [
+				{
+					"id": "Bad_Id",
+					"text": "  ",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": " ",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"Bad_Id: id must be kebab-case",
+					"Bad_Id: empty text",
+					"Bad_Id: source has an empty ref"
+				],
+				"publishable_ids": [
+					"Bad_Id"
+				],
+				"texts": {
+					"Bad_Id": "  ",
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "several-claims-several-problems",
+			"claims": [
+				{
+					"id": "ok-one",
+					"text": "Fine",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": "doughboss.com.au/catering/",
+						"retrieved": "2026-10-02"
+					}
+				},
+				{
+					"id": "Bad Id",
+					"text": "TODO",
+					"confirmed": true
+				},
+				{
+					"id": "ok-one",
+					"text": "",
+					"confirmed": false
+				}
+			],
+			"expect": {
+				"valid": false,
+				"problems": [
+					"Bad Id: id must be kebab-case",
+					"Bad Id: text contains a placeholder marker",
+					"Bad Id: confirmed but has no source",
+					"ok-one: duplicate id",
+					"ok-one: empty text"
+				],
+				"publishable_ids": [
+					"ok-one"
+				],
+				"texts": {
+					"ok-one": "Fine",
+					"Bad Id": null,
+					"does-not-exist": null
+				}
+			}
+		},
+		{
+			"name": "unicode-text-valid",
+			"claims": [
+				{
+					"id": "arabic-greeting",
+					"text": "أهلاً وسهلاً",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-confirmed",
+						"ref": "chat with Elie",
+						"confirmedOn": "2026-10-02"
+					}
+				},
+				{
+					"id": "accents",
+					"text": "Crème brûlée",
+					"confirmed": true,
+					"source": {
+						"kind": "owner-site",
+						"ref": "doughboss.com.au/catering/",
+						"retrieved": "2026-10-02"
+					}
+				}
+			],
+			"expect": {
+				"valid": true,
+				"problems": [],
+				"publishable_ids": [
+					"arabic-greeting",
+					"accents"
+				],
+				"texts": {
+					"arabic-greeting": "أهلاً وسهلاً",
+					"accents": "Crème brûlée",
+					"does-not-exist": null
+				}
+			}
+		}
+	]
+}
