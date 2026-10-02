@@ -387,3 +387,76 @@ db_test(
 		}, 'assert_throws catches the right class' );
 	}
 );
+
+db_test(
+	'harness REST filter order: pre_dispatch, argument checks before permission, before/after callbacks, post_dispatch (as the real server)',
+	function () {
+		$trace = array();
+		register_rest_route(
+			'doughboss-growth/v1',
+			'/order-probe',
+			array(
+				'methods'             => 'POST',
+				'permission_callback' => function () use ( &$trace ) {
+					$trace[] = 'permission';
+					return true;
+				},
+				'args'                => array(
+					'must' => array( 'required' => true ),
+				),
+				'callback'            => function ( $request ) use ( &$trace ) {
+					$trace[] = 'callback';
+					return array( 'got' => $request->get_param( 'must' ), 'stash' => $request->get_param( 'stashed' ) );
+				},
+			)
+		);
+		add_filter(
+			'rest_request_before_callbacks',
+			function ( $response, $handler, $request ) use ( &$trace ) {
+				$trace[] = 'before';
+				$request->set_param( 'stashed', 'by-before-callbacks' );
+				return $response;
+			},
+			10,
+			3
+		);
+		add_filter(
+			'rest_request_after_callbacks',
+			function ( $response ) use ( &$trace ) {
+				$trace[] = 'after';
+				return $response;
+			}
+		);
+		add_filter(
+			'rest_post_dispatch',
+			function ( $response ) use ( &$trace ) {
+				$trace[] = 'post_dispatch';
+				$response->header( 'X-Post', '1' );
+				return $response;
+			}
+		);
+		$ok = dbgr_test_rest_dispatch( 'POST', '/doughboss-growth/v1/order-probe', array( 'must' => 'x' ) );
+		assert_same( array( 'before', 'permission', 'callback', 'after', 'post_dispatch' ), $trace, 'the real server order' );
+		assert_same( array( 'got' => 'x', 'stash' => 'by-before-callbacks' ), $ok->get_data(), 'a param set in before_callbacks reaches the callback (the attribution stash pattern)' );
+		assert_same( '1', $ok->get_headers()['X-Post'], 'post_dispatch can change the response' );
+
+		// Missing required argument: 400 BEFORE the permission callback, and before_callbacks still sees the error.
+		$trace  = array();
+		$bad    = dbgr_test_rest_dispatch( 'POST', '/doughboss-growth/v1/order-probe' );
+		assert_same( 400, $bad->get_status(), 'argument error' );
+		assert_false( in_array( 'permission', $trace, true ), 'permission callback not reached for an invalid request' );
+		assert_false( in_array( 'callback', $trace, true ), 'callback not reached' );
+		assert_true( in_array( 'before', $trace, true ), 'before_callbacks ran with the error' );
+		assert_true( in_array( 'post_dispatch', $trace, true ), 'post_dispatch runs for errors too' );
+
+		// rest_pre_dispatch can short-circuit.
+		remove_all_filters( 'rest_request_before_callbacks' );
+		add_filter(
+			'rest_pre_dispatch',
+			function () {
+				return new WP_REST_Response( array( 'short' => true ), 202 );
+			}
+		);
+		assert_same( 202, dbgr_test_rest_dispatch( 'POST', '/doughboss-growth/v1/order-probe', array( 'must' => 'x' ) )->get_status(), 'pre_dispatch short-circuits the route' );
+	}
+);
