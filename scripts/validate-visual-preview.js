@@ -11,8 +11,11 @@ const output = path.resolve(process.argv[2] || '_site');
 const root = path.resolve(__dirname, '..');
 const digest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const manifest = JSON.parse(fs.readFileSync(path.join(output, 'manifest.json'), 'utf8'));
-const pages = ['index.html', 'order.html', 'paused.html'];
+const pages = ['index.html', 'order.html', 'paused.html', 'partners.html', 'wholesale.html'];
 const generated = [...pages, 'preview/menu-options.js'];
+for (const template of ['page-franchising.php', 'page-wholesale.php', 'template-parts/partner-page.php']) {
+	assert.ok(manifest.source_sha256['themes/doughboss-final/' + template], 'partner template provenance is required');
+}
 assert.equal(manifest.preview_only, true);
 assert.deepEqual(manifest.pages, pages);
 assert.equal(manifest.source_commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim());
@@ -113,7 +116,24 @@ for (const page of pages) {
     assert.equal(script[2].trim(), '', 'no inline scripts');
   }
   for (const match of html.matchAll(/\b(?:src|href)="([^"]+)"/g)) localReference(match[1], page);
-  if (page !== 'index.html') assert.match(html, /<body[^>]*class="[^"]*\bdoughboss-order-page\b/);
+  if (page === 'order.html' || page === 'paused.html') {
+    assert.match(html, /<body[^>]*class="[^"]*\bdoughboss-order-page\b/);
+  } else {
+    assert.doesNotMatch(html, /<body[^>]*class="[^"]*\bdoughboss-order-page\b/);
+  }
+  if (page === 'partners.html' || page === 'wholesale.html') {
+    const hero = html.match(/<section class="dbf-page-hero">([\s\S]*?)<div class="dbf-wrap dbf-page-hero-inner">/);
+    assert.ok(hero, 'partner pages retain the shared hero');
+    assert.match(hero[1], /<picture\b/);
+    assert.match(hero[1], /<source type="image\/avif"/);
+    assert.match(hero[1], /<source type="image\/webp"/);
+    assert.match(hero[1], /src="[^"]*doughboss-feast-real-v1\.jpg"/);
+    assert.match(hero[1], /width="1080"/);
+    assert.match(hero[1], /height="864"/);
+    assert.match(hero[1], /fetchpriority="high"/);
+    assert.doesNotMatch(hero[1], /menu\/zaatar\.webp/);
+    assert.match(html, page === 'wholesale.html' ? /Bring Dough Boss to your customers\./ : /Grow with a bakery people remember\./);
+  }
 }
 for (const relative of actual.filter(file => file.endsWith('.css'))) {
   const css = fs.readFileSync(path.join(output, relative), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');

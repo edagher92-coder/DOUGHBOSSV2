@@ -34,6 +34,9 @@ $source_files = array(
 	'themes/doughboss-final/footer.php',
 	'themes/doughboss-final/front-page.php',
 	'themes/doughboss-final/page-order.php',
+	'themes/doughboss-final/page-franchising.php',
+	'themes/doughboss-final/page-wholesale.php',
+	'themes/doughboss-final/template-parts/partner-page.php',
 	'themes/doughboss-final/template-parts/locations.php',
 	'includes/class-doughboss-post-types.php',
 	'includes/class-doughboss-shortcodes.php',
@@ -141,6 +144,8 @@ try {
 		'index.html'  => array( 'template' => 'front-page.php', 'ordering_open' => true, 'title' => 'Dough Boss visual preview' ),
 		'order.html'  => array( 'template' => 'page-order.php', 'ordering_open' => true, 'title' => 'Order page visual preview' ),
 		'paused.html' => array( 'template' => 'page-order.php', 'ordering_open' => false, 'title' => 'Paused order page visual preview' ),
+		'partners.html' => array( 'template' => 'page-franchising.php', 'ordering_open' => false, 'title' => 'Partnerships visual preview' ),
+		'wholesale.html' => array( 'template' => 'page-wholesale.php', 'ordering_open' => false, 'title' => 'Wholesale visual preview' ),
 	);
 	foreach ( $pages as $filename => $page ) {
 		$html = doughboss_preview_render_page( $page['template'], $page['ordering_open'], $page['title'] );

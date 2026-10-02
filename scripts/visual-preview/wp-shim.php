@@ -36,7 +36,7 @@ function language_attributes() { echo 'lang="en-AU"'; }
 function bloginfo( $field ) { echo 'charset' === $field ? 'UTF-8' : 'Dough Boss'; }
 function wp_body_open() {
 	$base = esc_attr( $GLOBALS['doughboss_preview_base_path'] );
-	echo '<aside class="db-preview-banner" role="note"><strong>Visual preview</strong><span>Sample menu and prices only. No real orders, payments, enquiries, calls, emails or bookings. Demo settings never reach the live site.</span><nav aria-label="Preview pages"><a href="' . $base . 'index.html">Home</a><a href="' . $base . 'order.html">Sample menu</a><a href="' . $base . 'paused.html">Paused state</a></nav><span id="db-preview-action" role="status" aria-live="polite"></span></aside>';
+	echo '<aside class="db-preview-banner" role="note"><strong>Visual preview</strong><span>Sample menu and prices only. No real orders, payments, enquiries, calls, emails or bookings. Demo settings never reach the live site.</span><nav aria-label="Preview pages"><a href="' . $base . 'index.html">Home</a><a href="' . $base . 'order.html">Sample menu</a><a href="' . $base . 'paused.html">Paused state</a><a href="' . $base . 'partners.html">Partnerships</a><a href="' . $base . 'wholesale.html">Wholesale</a></nav><span id="db-preview-action" role="status" aria-live="polite"></span></aside>';
 }
 function wp_date( $format ) { return gmdate( $format ); }
 function get_option( $key, $default = false ) {
@@ -57,6 +57,8 @@ function home_url( $path = '/' ) {
 		$hash = parse_url( $path, PHP_URL_FRAGMENT );
 		return $base . 'order.html' . ( $hash ? '#' . rawurlencode( $hash ) : '' );
 	}
+	if ( '/franchising/' === $path ) { return $base . 'partners.html'; }
+	if ( '/wholesale/' === $path ) { return $base . 'wholesale.html'; }
 	return '#preview-unavailable';
 }
 function body_class() {
@@ -112,6 +114,16 @@ class DoughBoss_Settings {
 	public static function ordering_closed_message() { return 'Sample paused-state message. Check a shop for current availability.'; }
 	public static function format_price( $amount ) { return '$' . number_format( (float) $amount, 2 ); }
 }
+
+/** Only synthetic presentation routes exist; no WordPress content is loaded. */
+function is_page( $pages ) {
+	$slugs = array( 'page-order.php' => 'order', 'page-franchising.php' => 'franchising', 'page-wholesale.php' => 'wholesale' );
+	$template = $GLOBALS['doughboss_preview_template'];
+	return isset( $slugs[ $template ] ) && in_array( $slugs[ $template ], (array) $pages, true );
+}
+
+/** Preview the genuine empty-content state without reading a database. */
+function have_posts() { return false; }
 
 function doughboss_preview_menu_item( $post_id ) {
 	foreach ( doughboss_preview_fixture()['menu'] as $item ) {
@@ -191,7 +203,7 @@ function do_shortcode( $source ) {
 }
 
 function doughboss_preview_render_page( $template, $ordering_open, $title ) {
-	$allowed = array( 'front-page.php', 'page-order.php' );
+	$allowed = array( 'front-page.php', 'page-order.php', 'page-franchising.php', 'page-wholesale.php' );
 	if ( ! in_array( $template, $allowed, true ) ) {
 		throw new RuntimeException( 'Preview template is not allowlisted: ' . $template );
 	}
