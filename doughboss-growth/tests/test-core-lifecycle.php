@@ -46,7 +46,7 @@ db_test(
 		$GLOBALS['wpdb']->clear_failures();
 		// dbDelta that creates nothing (a failing CREATE) leaves tables missing.
 		$GLOBALS['wpdb']->tables_created = array();
-		$GLOBALS['wpdb']->respond( '/^SHOW TABLES/', array() );
+		$GLOBALS['wpdb']->respond( '/^SHOW TABLES/', '' );
 		assert_false( DoughBoss_Growth_Activator::install(), 'missing tables fail the install' );
 		assert_false( DoughBoss_Growth_Activator::storage_ready(), 'still not ready' );
 	}
@@ -114,7 +114,7 @@ db_test(
 	'self-heal: a failing install is retried at most every five minutes unless the Growth page is opened',
 	function () {
 		dbgr_test_login( array( 'manage_doughboss' ) );
-		$GLOBALS['wpdb']->respond( '/^SHOW TABLES/', array() ); // Tables can never be confirmed.
+		$GLOBALS['wpdb']->respond( '/^SHOW TABLES/', '' ); // Tables can never be confirmed.
 		DoughBoss_Growth_Activator::maybe_upgrade();
 		assert_count( 2, $GLOBALS['dbgr_dbdelta'], 'first attempt ran' );
 		assert_true( false !== get_transient( 'doughboss_growth_install_retry' ), 'retry throttle set' );
@@ -268,6 +268,7 @@ db_test(
 	function () {
 		$core = dbgr_lifecycle_core_state();
 		DoughBoss_Growth_Activator::install();
+		$GLOBALS['wpdb']->reset_log();
 		update_option( 'doughboss_growth_pages', array( 'a' => 1 ) );
 		update_option( 'doughboss_growth_recon', array( 'x' => 1 ) );
 		set_transient( 'doughboss_growth_install_retry', 1, 300 );

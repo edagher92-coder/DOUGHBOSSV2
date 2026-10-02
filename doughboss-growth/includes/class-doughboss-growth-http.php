@@ -65,7 +65,7 @@ final class DoughBoss_Growth_Http {
 		if ( false === strpos( $host, '.' ) || 1 !== preg_match( '/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/D', $host ) ) {
 			return false;
 		}
-		if ( 1 === preg_match( '/(^|\.)(localhost|local|internal|lan|home|corp|test|invalid|example)$/', $host ) ) {
+		if ( 1 === preg_match( '/(^|\.)(localhost|local|internal|lan|home|corp|test|invalid|example)$/D', $host ) ) {
 			return false;
 		}
 		return true;

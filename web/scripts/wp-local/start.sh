@@ -5,7 +5,7 @@
 #   scripts/wp-local/start.sh            # start (or no-op if already up)
 #   scripts/wp-local/start.sh --restart  # stop first, then start fresh (re-copies plugin/theme, re-seeds)
 #
-# Env overrides: see config.sh (WPL_PORT, WPL_PHP, WPL_WP, WPL_PLUGIN_SRC, WPL_ORDERING_OPEN, ...).
+# Env overrides: see config.sh (WPL_PORT, WPL_PHP, WPL_WP, WPL_PLUGIN_SRC, WPL_EXTRA_PLUGIN_SRC, WPL_ORDERING_OPEN, ...).
 set -euo pipefail
 # shellcheck source=config.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
@@ -61,6 +61,23 @@ tar -C "${WPL_PLUGIN_SRC}" --exclude=.git --exclude=.github --exclude=.claude --
 cp -a "${WPL_THEME_SRC}" "${WPL_SRC}/themes/doughboss-final"
 rm -f "${WPL_RUN}/out/seed-report.json"
 
+# 2b. Optional extra plugin (WPL_EXTRA_PLUGIN_SRC, default unset = nothing changes): copy it, mount it, activate it.
+EXTRA_NAME=""
+EXTRA_MOUNT=()
+EXTRA_STEP=""
+if [ -n "${WPL_EXTRA_PLUGIN_SRC}" ]; then
+  EXTRA_SRC="${WPL_EXTRA_PLUGIN_SRC%/}"
+  EXTRA_NAME="$(basename "${EXTRA_SRC}")"
+  case "${EXTRA_NAME}" in ''|*[!A-Za-z0-9._-]*|.|..) echo "ERROR: WPL_EXTRA_PLUGIN_SRC directory name '${EXTRA_NAME}' must match [A-Za-z0-9._-]+" >&2; exit 1;; esac
+  [ -f "${EXTRA_SRC}/${EXTRA_NAME}.php" ] || { echo "ERROR: ${EXTRA_SRC}/${EXTRA_NAME}.php not found (the main file must be <dir-name>/<dir-name>.php)" >&2; exit 1; }
+  rm -rf "${WPL_SRC}/plugins/${EXTRA_NAME}"
+  mkdir -p "${WPL_SRC}/plugins/${EXTRA_NAME}"
+  tar -C "${EXTRA_SRC}" --exclude=.git --exclude=.github --exclude=.claude --exclude=node_modules \
+      --exclude=tests --exclude=scripts --exclude=docs --exclude=dist -cf - . | tar -C "${WPL_SRC}/plugins/${EXTRA_NAME}" -xf -
+  EXTRA_MOUNT=(--mount "${WPL_SRC}/plugins/${EXTRA_NAME}:/wordpress/wp-content/plugins/${EXTRA_NAME}")
+  EXTRA_STEP=$'\n    { "step": "activatePlugin", "pluginPath": "'"${EXTRA_NAME}/${EXTRA_NAME}"'.php" },'
+fi
+
 # 3. Blueprint: activate theme + plugin (runs the plugin's activator), then seed.
 if [ "${WPL_ORDERING_OPEN}" = "1" ]; then OPEN=true; else OPEN=false; fi
 cat > "${WPL_BLUEPRINT}" <<JSON
@@ -71,7 +88,7 @@ cat > "${WPL_BLUEPRINT}" <<JSON
   "steps": [
     { "step": "setSiteOptions", "options": { "blogname": "Dough Boss (local runtime)" } },
     { "step": "activateTheme",  "themeFolderName": "doughboss-final" },
-    { "step": "activatePlugin", "pluginPath": "doughboss/doughboss.php" },
+    { "step": "activatePlugin", "pluginPath": "doughboss/doughboss.php" },${EXTRA_STEP}
     { "step": "runPHP", "code": "<?php require_once '/wordpress/wp-load.php'; \$GLOBALS['wpl_ordering_open'] = ${OPEN}; require '/internal/wpl/seed.php';" }
   ]
 }
@@ -85,6 +102,7 @@ setsid nohup bash -c 'echo $$ > "$1"; shift; exec "$@"' _ "${WPL_PIDFILE}" \
   --blueprint "${WPL_BLUEPRINT}" \
   --mount "${WPL_SRC}/plugins/doughboss:/wordpress/wp-content/plugins/doughboss" \
   --mount "${WPL_SRC}/themes/doughboss-final:/wordpress/wp-content/themes/doughboss-final" \
+  ${EXTRA_MOUNT[@]+"${EXTRA_MOUNT[@]}"} \
   --mount "${WPL_HERE}/php:/internal/wpl" \
   --mount "${WPL_RUN}/out:/internal/wpl-out" \
   --define-bool WP_DEBUG true --define-bool WP_DEBUG_DISPLAY false --define-bool WP_DEBUG_LOG true \

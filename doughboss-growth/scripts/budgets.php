@@ -29,6 +29,7 @@ final class DBGR_Budgets {
 	 * @return array { ok: bool, bytes: int, max: int, message: string }
 	 */
 	public static function check_zip( $path ) {
+		clearstatcache( true, $path );
 		$bytes = is_file( $path ) ? (int) filesize( $path ) : -1;
 		if ( $bytes < 1 ) {
 			return array(

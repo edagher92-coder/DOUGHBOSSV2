@@ -25,6 +25,8 @@ Features (all off by default, each enabled separately under DoughBoss, Growth):
 * Coming-soon section and VIP waitlist.
 * Timesheet reconciliation.
 
+That is eleven switches in all. Each one is off until you turn it on, and some need a prerequisite first (for example Tag Manager needs the consent banner, and the waitlist needs the sender legal name and the privacy-policy URL).
+
 Safety switches:
 
 * Turn a feature off in the Growth settings screen; the public site returns to its previous output immediately.
@@ -42,4 +44,4 @@ Secrets (API secrets, tokens) are read from environment variables or wp-config.p
 == Changelog ==
 
 = 0.1.0 =
-* Initial scaffold: settings and feature flags (all off), core gate, module registry, fail-closed rate limiter, shared outbox, HTTP wrapper, health endpoint, packaging scripts.
+* Initial scaffold: settings and eleven feature flags (all off), core gate, module registry, fail-closed rate limiter, shared outbox with retries, HTTP wrapper with log redaction, admin settings page, health endpoint, safe deactivation and uninstall.

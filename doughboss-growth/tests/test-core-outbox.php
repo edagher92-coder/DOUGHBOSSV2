@@ -65,6 +65,8 @@ db_test(
 	function () {
 		dbgr_outbox_sqlite();
 		$bad = array(
+			'newline in channel' => array( "ga4\n", 'purchase', 'order:1', 'order', '1', array( 'a' => 1 ) ),
+			'newline in event id' => array( 'ga4', 'purchase', "order:1\n", 'order', '1', array( 'a' => 1 ) ),
 			'bad channel'        => array( 'GA4', 'purchase', 'order:1', 'order', '1', array( 'a' => 1 ) ),
 			'channel too short'  => array( 'x', 'purchase', 'order:1', 'order', '1', array( 'a' => 1 ) ),
 			'event name spaces'  => array( 'ga4', 'my event', 'order:1', 'order', '1', array( 'a' => 1 ) ),

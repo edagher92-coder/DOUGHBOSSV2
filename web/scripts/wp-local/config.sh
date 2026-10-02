@@ -19,6 +19,12 @@ WPL_PLUGIN_SRC="${WPL_PLUGIN_SRC:-/tmp/wp-src/candidate-2.43.2}"
 WPL_THEME_SRC="${WPL_THEME_SRC:-${WPL_PLUGIN_SRC}/themes/doughboss-final}"
 # Scratch/state. Safe to delete when stopped.
 WPL_STATE="${WPL_STATE:-/tmp/wp-local}"
+# Optional second plugin to mount and activate next to DoughBoss (default unset: nothing extra, behaviour unchanged).
+# Point it at a plugin directory whose main file is <dir-name>/<dir-name>.php, for example the companion:
+#   WPL_EXTRA_PLUGIN_SRC=/path/to/repo/doughboss-growth scripts/wp-local/start.sh --restart
+# It is COPIED (never mounted in place, never written) to ${WPL_SRC}/plugins/<dir-name> with tests, scripts, docs, dist
+# and VCS/tooling folders left out, mounted into WordPress and activated after DoughBoss.
+WPL_EXTRA_PLUGIN_SRC="${WPL_EXTRA_PLUGIN_SRC:-}"
 # 1 = open online ordering (browse + cart UI). Payments stay OFF either way. Default 0 = the plugin's own default.
 WPL_ORDERING_OPEN="${WPL_ORDERING_OPEN:-0}"
 # How long start.sh waits for "Ready!" before giving up (seconds).
@@ -29,6 +35,6 @@ WPL_PIDFILE="${WPL_RUN}/playground.pid"
 WPL_LOG="${WPL_RUN}/playground.log"
 WPL_VFS_FILE="${WPL_RUN}/vfs-dir"       # path of Playground's native VFS dir (holds the sqlite DB)
 WPL_BLUEPRINT="${WPL_RUN}/blueprint.json"
-WPL_PG_DIR="${WPL_STATE}/pg"             # local install of @wp-playground/cli
+WPL_PG_DIR="${WPL_PG_DIR:-${WPL_STATE}/pg}"  # local install of @wp-playground/cli (overridable so parallel instances can share one install)
 WPL_PG_BIN="${WPL_PG_DIR}/node_modules/.bin/wp-playground-cli"
 WPL_SRC="${WPL_STATE}/src"               # copies mounted into WordPress

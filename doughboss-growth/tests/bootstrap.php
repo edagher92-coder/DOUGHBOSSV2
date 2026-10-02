@@ -2962,12 +2962,56 @@ class DBGR_Test_WPDB {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Whether this PHP can start a sub-process (proc_open present and not disabled).
+ * Remove a directory tree (test scratch space). Symlinks are unlinked, never followed.
+ *
+ * @param string $dir Directory.
+ * @return void
+ */
+function dbgr_test_rmdir( $dir ) {
+	if ( ! is_dir( $dir ) || is_link( $dir ) ) {
+		if ( is_link( $dir ) ) {
+			unlink( $dir );
+		}
+		return;
+	}
+	foreach ( scandir( $dir ) as $entry ) {
+		if ( '.' === $entry || '..' === $entry ) {
+			continue;
+		}
+		$path = $dir . '/' . $entry;
+		if ( is_dir( $path ) && ! is_link( $path ) ) {
+			dbgr_test_rmdir( $path );
+		} else {
+			unlink( $path );
+		}
+	}
+	rmdir( $dir );
+}
+
+/**
+ * Whether this PHP can really start a sub-process. Probed once: proc_open() may exist yet be unusable (a
+ * sandboxed or WebAssembly PHP), in which case tests that need a sub-process are skipped, not failed.
  *
  * @return bool
  */
 function dbgr_test_can_subprocess() {
-	return function_exists( 'proc_open' ) && defined( 'PHP_BINARY' ) && '' !== PHP_BINARY;
+	static $can = null;
+	if ( null !== $can ) {
+		return $can;
+	}
+	$can = false;
+	if ( function_exists( 'proc_open' ) && defined( 'PHP_BINARY' ) && '' !== PHP_BINARY && is_executable( PHP_BINARY ) ) {
+		$pipes   = array();
+		$process = @proc_open( array( PHP_BINARY, '-r', 'echo "dbgr-ok";' ), array( 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) ), $pipes );
+		if ( is_resource( $process ) ) {
+			$out = stream_get_contents( $pipes[1] );
+			fclose( $pipes[1] );
+			fclose( $pipes[2] );
+			proc_close( $process );
+			$can = ( 'dbgr-ok' === $out );
+		}
+	}
+	return $can;
 }
 
 /**

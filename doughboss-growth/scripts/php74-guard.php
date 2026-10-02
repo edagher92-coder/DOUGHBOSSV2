@@ -169,7 +169,7 @@ final class DBGR_Php74_Guard {
 				$found[] = array( $line, 'nullsafe', 'nullsafe operator (?->) needs PHP 8.0' );
 			}
 
-			if ( 'T_READONLY_WORD' === $type ) {
+			if ( 'T_READONLY_WORD' === $type && ! in_array( $prev[0], array( 'T_OBJECT_OPERATOR', 'T_DOUBLE_COLON', 'T_FUNCTION', 'T_CONST' ), true ) ) {
 				$found[] = array( $line, 'readonly', 'readonly needs PHP 8.1' );
 			}
 

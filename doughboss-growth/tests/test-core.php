@@ -37,22 +37,6 @@ function dbgr_core_module_dir( array $files ) {
 	return $dir;
 }
 
-/**
- * Remove a directory tree made by dbgr_core_module_dir().
- *
- * @param string $dir Directory.
- * @return void
- */
-function dbgr_core_rm( $dir ) {
-	if ( ! is_dir( $dir ) ) {
-		return;
-	}
-	foreach ( new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::CHILD_FIRST ) as $item ) {
-		$item->isDir() ? rmdir( $item->getPathname() ) : unlink( $item->getPathname() );
-	}
-	rmdir( $dir );
-}
-
 /* ---------------------------------------------------------------------------------------------------------- */
 /* Feature flags                                                                                               */
 /* ---------------------------------------------------------------------------------------------------------- */
@@ -193,7 +177,7 @@ CODE;
 		assert_same( array( 'admin_notices' ), array_values( array_diff( $data['hooks'], array( 'plugins_loaded' ) ) ), 'only the admin notice hook (plus the loader itself) is registered' );
 
 		// Negative control: without the constant the same saved flags are live.
-		$control = dbgr_test_subprocess( str_replace( 'DoughBoss_Growth::init();', 'DoughBoss_Growth::init();', $code ) );
+		$control = dbgr_test_subprocess( $code );
 		$live    = json_decode( $control['out'], true );
 		assert_true( is_array( $live ) && true === $live['coming'], 'control: without the kill switch the flag is on' );
 		assert_same( '', $live['reason'], 'control: companion boots without the kill switch' );
@@ -585,7 +569,7 @@ db_test(
 		assert_same( array(), $GLOBALS['dbgr_options'], 'init() wrote no option' );
 		assert_same( array(), $GLOBALS['dbgr_cron'], 'init() scheduled nothing' );
 		assert_same( array(), $GLOBALS['wpdb']->queries, 'init() ran no database query' );
-		assert_same( array(), array_diff_key( $GLOBALS['dbgr_http']['calls'], array() ), 'no outbound request' );
+		assert_same( array(), $GLOBALS['dbgr_http']['calls'], 'init() made no outbound request' );
 
 		// Negative control: hooking a public hook IS visible to the same probe.
 		add_action( 'wp_head', '__return_true' );
@@ -594,13 +578,12 @@ db_test(
 );
 
 db_test(
-	'inert: turning on one flag with no module file present changes nothing and does not error',
+	'inert: with every flag on, a module whose file is absent is simply not active (no error, no partial state)',
 	function () {
 		dbgr_core_store( array_fill_keys( DoughBoss_Growth_Settings::FEATURES, true ), array( 'sender_legal_name' => 'X Pty Ltd', 'privacy_policy_url' => '/p/', 'notify_webhook_url' => 'https://hooks.example-receiver.com.au/x' ) );
 		update_option( 'doughboss_growth_db_version', DOUGHBOSS_GROWTH_DB_VERSION );
 		DoughBoss_Growth::init();
 		$health = DoughBoss_Growth::health();
-		assert_true( in_array( true, $health['modules_present'], true ) === ( count( array_filter( $health['modules_present'] ) ) > 0 ), 'present map is consistent' );
 		foreach ( $health['modules_active'] as $key => $active ) {
 			if ( ! $health['modules_present'][ $key ] ) {
 				assert_false( $active, 'module without a file is not active: ' . $key );
@@ -661,7 +644,7 @@ db_test(
 		$health = DoughBoss_Growth::health();
 		assert_same( array( 'a' => true, 'b' => false, 'missing' => false ), $health['modules_active'], 'health reports active modules' );
 		assert_same( array( 'a' => true, 'b' => true, 'missing' => false ), $health['modules_present'], 'health reports which files exist' );
-		dbgr_core_rm( $dir );
+		dbgr_test_rmdir( $dir );
 	}
 );
 
@@ -697,7 +680,7 @@ db_test(
 		);
 		DoughBoss_Growth::init();
 		assert_same( 1, DBGR_Reg_D::$ran, 'wp-admin: admin_always module runs although its flag is off' );
-		dbgr_core_rm( $dir );
+		dbgr_test_rmdir( $dir );
 	}
 );
 
@@ -716,7 +699,7 @@ db_test(
 		update_option( 'doughboss_growth_db_version', DOUGHBOSS_GROWTH_DB_VERSION );
 		DoughBoss_Growth::init();
 		assert_same( 1, DBGR_Reg_E::$ran, 'schema installed: the module runs' );
-		dbgr_core_rm( $dir );
+		dbgr_test_rmdir( $dir );
 	}
 );
 
@@ -753,7 +736,7 @@ db_test(
 		assert_not_contains( 'secret-detail', implode( "\n", $lines ), 'exception text is not logged' );
 		assert_not_contains( 'jane@example.com', implode( "\n", $lines ), 'no personal data is logged' );
 		assert_contains( 'RuntimeException', implode( "\n", $lines ), 'only the exception class is logged' );
-		dbgr_core_rm( $dir );
+		dbgr_test_rmdir( $dir );
 	}
 );
 
@@ -776,7 +759,7 @@ db_test(
 		);
 		$tables = DoughBoss_Growth_Activator::expected_tables();
 		assert_same( array( 'wp_doughboss_growth_rate', 'wp_doughboss_growth_outbox', 'wp_doughboss_growth_waitlist' ), $tables, 'shared tables first, then the module table (a throwing schema() is skipped)' );
-		dbgr_core_rm( $dir );
+		dbgr_test_rmdir( $dir );
 	}
 );
 
