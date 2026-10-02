@@ -30,8 +30,8 @@ if (!toolsDir) {
   process.exit(2);
 }
 const req = createRequire(path.join(path.resolve(toolsDir), "package.json"));
-const { NodeIO } = req("@gltf-transform/core");
-const { ALL_EXTENSIONS, EXTMeshoptCompression } = req("@gltf-transform/extensions");
+const { Logger, NodeIO } = req("@gltf-transform/core");
+const { ALL_EXTENSIONS, EXTMeshoptCompression, KHRMeshQuantization } = req("@gltf-transform/extensions");
 const { dedup, prune, quantize, reorder } = req("@gltf-transform/functions");
 const { MeshoptEncoder, MeshoptDecoder } = req("meshoptimizer");
 
@@ -59,6 +59,8 @@ const io = new NodeIO()
   .registerDependencies({ "meshopt.encoder": MeshoptEncoder, "meshopt.decoder": MeshoptDecoder });
 
 const doc = await io.read(input);
+// Keep stdout as pure JSON (the report below); transform chatter is noise.
+doc.setLogger(new Logger(Logger.Verbosity.WARN));
 const root = doc.getRoot();
 
 // Cameras and lights are art-direction for the offline renders only; the web
@@ -78,11 +80,20 @@ for (const node of root.listNodes()) {
 }
 
 await doc.transform(
-  prune(),
+  // keepAttributes: TEXCOORD_0 has no texture bound yet, but the web app maps
+  // a top-down texture onto it at runtime, so it must survive pruning.
+  prune({ keepAttributes: true }),
   dedup(),
   quantize({ pattern: /^(NORMAL|TEXCOORD_0|COLOR_0)$/, quantizeNormal: 10, quantizeTexcoord: 12, quantizeColor: 8 }),
   reorder({ encoder: MeshoptEncoder }),
 );
+// quantize() only declares KHR_mesh_quantization when POSITION is quantised,
+// but int16 NORMALs need it too (glTF core allows float normals only).
+const quantizedNormals = root
+  .listMeshes()
+  .flatMap((m) => m.listPrimitives())
+  .some((p) => (p.getAttribute("NORMAL")?.getComponentType() ?? 5126) !== 5126);
+if (quantizedNormals) doc.createExtension(KHRMeshQuantization).setRequired(true);
 doc
   .createExtension(EXTMeshoptCompression)
   .setRequired(true)
@@ -143,6 +154,7 @@ console.log(JSON.stringify({
   vertices,
   attributes: [...attrs].sort(),
   extensionsUsed: check.getRoot().listExtensionsUsed().map((e) => e.extensionName),
+  extensionsRequired: check.getRoot().listExtensionsRequired().map((e) => e.extensionName),
   materials: check.getRoot().listMaterials().map((m) => m.getName()),
   problems,
 }, null, 2));

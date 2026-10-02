@@ -30,7 +30,7 @@ T0 = time.time()
 # ---------------------------------------------------------------------------
 # Tunables (metres, degrees). Keep in sync with docs/3d-assets.md.
 # ---------------------------------------------------------------------------
-GENERATOR = "build_exploded_manoush.py v4"
+GENERATOR = "build_exploded_manoush.py v6"
 COLLECTION_NAME = "DoughBossHero"
 MATERIAL_PREFIX = "DB_"
 SEED = 1234
@@ -53,6 +53,16 @@ EXPLODE = {
 GARNISH_RADIAL = (0.6, 1.1)
 GARNISH_LIFT = (0.5, 1.0)
 GARNISH_TUMBLE_DEG = 25.0
+
+# Blow-out ripple: (start, sweep) per layer; slice i starts at
+# start + sweep * i / 7. The ORDER is what prevents pieces passing through
+# each other: the crust ring leaves first (the cheese and dough are tucked
+# under it), garnish leaps before the cheese it sits on, and the dough slides
+# out last. Garnish trajectories are additionally checked by simulation.
+TIMING = {"rim": (0.00, 0.06), "topping": (0.12, 0.06), "dough": (0.20, 0.10)}
+GARNISH_TIMING = (0.05, 0.06, 0.03)  # start, sweep by angle, random jitter
+GARNISH_REST_LIMIT = 0.76  # outermost reach of a garnish piece at rest, x R
+SIM_STEPS = 48
 
 # Stacking order, bottom to top. The web app uses it for draw-order tweaks.
 LAYER = {"peel": 0, "dough": 1, "rim": 2, "topping": 3, "mint": 4, "chili": 5}
@@ -568,9 +578,11 @@ def build_peel(mb, handle_dir):
     for i in range(along + 1):
         s = i / along
         lx = start + s * (length + 0.012)
-        neck = smoothstep(0.0, 0.14, s)
+        # A flat tongue just under the blade top until past the furthest the
+        # exploded dough reaches (~0.23 m), so sliding dough never clips it.
+        neck = smoothstep(half + 0.06, half + 0.13, lx)
         wide = 0.030 * (1.0 - neck) + radius * neck
-        tall = 0.0040 * (1.0 - neck) + radius * neck
+        tall = 0.0028 * (1.0 - neck) + radius * neck
         end = 1.0 if lx < half + length - 0.012 else math.sqrt(max(0.0, 1.0 - ((lx - (half + length - 0.012)) / 0.012) ** 2))
         row = []
         for j in range(around):
@@ -653,7 +665,7 @@ def make_material(name, roughness, double_sided, viewport):
     return mat
 
 
-def make_object(name, mb, mat, coll, origin, uv_points=None):
+def make_object(name, mb, mat, coll, origin, with_uv=True):
     """Create a mesh object whose origin (pivot) is `origin` (world, rest)."""
     ox, oy, oz = origin
     local = [(v[0] - ox, v[1] - oy, v[2] - oz) for v in mb.verts]
@@ -663,16 +675,18 @@ def make_object(name, mb, mat, coll, origin, uv_points=None):
     me.update()
     me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
 
-    # One square top-down texture spans the whole disc: UV = rest XY / (2R).
-    pts = uv_points if uv_points is not None else mb.verts
-    vidx = [0] * len(me.loops)
-    me.loops.foreach_get("vertex_index", vidx)
-    flat = []
-    for vi in vidx:
-        flat.append(0.5 + pts[vi][0] / (2.0 * R))
-        flat.append(0.5 + pts[vi][1] / (2.0 * R))
-    uv = me.uv_layers.new(name="UVMap")
-    uv.data.foreach_set("uv", flat)
+    if with_uv:
+        # One square top-down texture spans the whole disc: UV = rest XY / (2R).
+        # Clamped because the blistered crust bulges a hair past R, and an
+        # out-of-range UV would stop the GLB optimiser quantising the set.
+        vidx = [0] * len(me.loops)
+        me.loops.foreach_get("vertex_index", vidx)
+        flat = []
+        for vi in vidx:
+            flat.append(clamp01(0.5 + mb.verts[vi][0] / (2.0 * R)))
+            flat.append(clamp01(0.5 + mb.verts[vi][1] / (2.0 * R)))
+        uv = me.uv_layers.new(name="UVMap")
+        uv.data.foreach_set("uv", flat)
 
     attr = me.color_attributes.new(name="Col", type="FLOAT_COLOR", domain="POINT")
     cols = []
@@ -723,6 +737,102 @@ def set_pose_props(obj, kind, slice_index, delay, exp_loc, exp_quat):
 
 
 # ---------------------------------------------------------------------------
+# Timeline simulation (same easing as render_frames.py and the web app)
+# ---------------------------------------------------------------------------
+def ease(p, delay):
+    t = clamp01((p - delay) / (1.0 - MAX_DELAY))
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+
+
+def wedge_of(x, y):
+    a = math.atan2(y, x) % (2.0 * math.pi)
+    return int(a // (2.0 * math.pi / SLICE_COUNT)) % SLICE_COUNT, a
+
+
+def inside_rim(x, y, z, margin, only=None):
+    """Ellipse test against the crust tube in its rest frame. With `only`,
+    the point must also fall inside that slice's wedge (one crust piece);
+    without it the whole ring counts, which is deliberately conservative."""
+    j, a = wedge_of(x, y)
+    if only is not None and j != only:
+        return False
+    rc, hw, ht = rim_frame(a)
+    zb = DOUGH_THICKNESS - 0.0035
+    zt = DOUGH_THICKNESS + ht + 0.0025
+    zc, hz = 0.5 * (zb + zt), 0.5 * (zt - zb)
+    hr = hw * 1.1 + 0.0025
+    return ((math.hypot(x, y) - rc) / (hr + margin)) ** 2 + ((z - zc) / (hz + margin)) ** 2 < 1.0
+
+
+def trajectory_clear(sample, q_rest, q_exp, traj, motion, others):
+    """True when a garnish piece's whole flight misses the moving crust,
+    the moving cheese and every garnish piece already placed."""
+    for k in range(1, SIM_STEPS + 1):
+        p = k / SIM_STEPS
+        e = ease(p, traj["delay"])
+        g = traj["rest"] + traj["disp"] * e
+        for o in others:
+            og = o["rest"] + o["disp"] * ease(p, o["delay"])
+            if (g - og).length < traj["reach"] + o["reach"] + 0.001:
+                return False
+        if e <= 0.0:
+            continue
+        rot = q_rest.slerp(q_exp, e)
+        pts = [g + rot @ v for v in sample]
+        for w in pts:
+            j, _a = wedge_of(w.x, w.y)
+            m = motion[j]
+            off = m["rim_off"] * ease(p, m["rim_delay"])
+            if inside_rim(w.x - off.x, w.y - off.y, w.z - off.z, 0.001):
+                return False
+            off = m["top_off"] * ease(p, m["top_delay"])
+            x, y, z = w.x - off.x, w.y - off.y, w.z - off.z
+            jt, _a = wedge_of(x, y)
+            if jt != j:
+                m = motion[jt]
+                off = m["top_off"] * ease(p, m["top_delay"])
+                x, y, z = w.x - off.x, w.y - off.y, w.z - off.z
+            r = math.hypot(x, y)
+            if r < CHEESE_EDGE and z < 0.02 and z < cheese_top(x, y, r) + 0.0002:
+                return False
+    return True
+
+
+def slice_timeline_violations(motion, dough_motion):
+    """Count cheese/dough surface samples that ENTER a crust piece during
+    the blow-out. Samples that start inside (the cheese and dough are tucked
+    under the crust at rest, hidden) only count if they leave and re-enter."""
+    hits = 0
+    for j in range(SLICE_COUNT):
+        a0, a1 = wedge_angles(j)
+        samples = []
+        for frac in (0.1, 0.3, 0.5, 0.7, 0.9):
+            a = a0 + (a1 - a0) * frac
+            for rr in (0.60, 0.75, 0.83):
+                x, y = rr * R * math.cos(a), rr * R * math.sin(a)
+                samples.append(("top", Vector((x, y, cheese_top(x, y, rr * R)))))
+            for rr in (0.80, 0.90, 0.97):
+                x, y = rr * R * math.cos(a), rr * R * math.sin(a)
+                samples.append(("dough", Vector((x, y, dough_top(x, y, rr * R)))))
+        for kind, pt in samples:
+            was_out = {jj: False for jj in (j - 1, j, j + 1)}
+            for k in range(SIM_STEPS + 1):
+                p = k / SIM_STEPS
+                if kind == "top":
+                    w = pt + motion[j]["top_off"] * ease(p, motion[j]["top_delay"])
+                else:
+                    w = pt + dough_motion[j][0] * ease(p, dough_motion[j][1])
+                for jj in was_out:
+                    m = motion[jj % SLICE_COUNT]
+                    off = m["rim_off"] * ease(p, m["rim_delay"])
+                    inside = inside_rim(w.x - off.x, w.y - off.y, w.z - off.z, 0.0, jj % SLICE_COUNT)
+                    if inside and was_out[jj]:
+                        hits += 1
+                    was_out[jj] = was_out[jj] or not inside
+    return hits
+
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 def build():
@@ -755,7 +865,8 @@ def build():
     # Peel (static: rest == exploded).
     mb = MeshBuilder()
     build_peel(mb, (handle.x, handle.y))
-    peel = make_object("Peel", mb, mats["peel"], coll, (0.0, 0.0, 0.0))
+    # The peel and garnish never take the disc texture, so they carry no UVs.
+    peel = make_object("Peel", mb, mats["peel"], coll, (0.0, 0.0, 0.0), with_uv=False)
     set_pose_props(peel, "peel", None, 0.0, peel.location, peel.rotation_quaternion)
     nodes.append(peel)
     verts_total += len(mb.verts)
@@ -772,7 +883,8 @@ def build():
             cheese_colour, cheese_colour, cheese_wall_colour, 0.0008,
         ),
     }
-    layer_base = {"topping": 0.04, "rim": 0.10, "dough": 0.16}
+    motion = []  # per slice: exploded offsets and delays, for the garnish check
+    dough_motion = []
     for i in range(SLICE_COUNT):
         a0, a1 = wedge_angles(i)
         mid = (i + 0.5) * span
@@ -783,16 +895,25 @@ def build():
             obj = make_object("slice%d_%s" % (i, kind), mb, mats[kind], coll, bbox_centre(mb.verts))
             radial, lift = EXPLODE[kind]
             exp_loc = obj.location + bis * (radial * R) + Vector((0.0, 0.0, lift * R))
-            delay = layer_base[kind] + 0.12 * i / (SLICE_COUNT - 1)
+            start, sweep = TIMING[kind]
+            delay = start + sweep * i / (SLICE_COUNT - 1)
             set_pose_props(obj, kind, i, delay, exp_loc, obj.rotation_quaternion)
             nodes.append(obj)
             verts_total += len(mb.verts)
+            if kind == "dough":
+                dough_motion.append((exp_loc - obj.location, delay))
+            elif kind == "rim":
+                motion.append({"rim_off": exp_loc - obj.location, "rim_delay": delay})
+            elif kind == "topping":
+                motion[i].update({"top_off": exp_loc - obj.location, "top_delay": delay})
 
     # Garnish: rejection-sampled so leaves and flakes never overlap at rest
     # or in the exploded pose.
     grng = random.Random(SEED + 1)
     placed_rest = []
     placed_exp = []
+    trajectories = []
+    rejected = {"rest": 0, "exploded": 0, "trajectory": 0}
 
     def garnish(kind, index, build_fn, clear_rest, clear_exp):
         nonlocal verts_total
@@ -805,7 +926,8 @@ def build():
             local = [(v[0] - c[0], v[1] - c[1], v[2] - c[2]) for v in mb.verts]
             yaw = sub.random() * 2.0 * math.pi
             q_rest = Quaternion((0.0, 0.0, 1.0), yaw)
-            r = 0.72 * R * math.sqrt(sub.random())
+            reach = 0.6 * size
+            r = (GARNISH_REST_LIMIT * R - reach) * math.sqrt(sub.random())
             a = sub.random() * 2.0 * math.pi
             px, py = r * math.cos(a), r * math.sin(a)
             rotated = [q_rest @ Vector(p) for p in local]
@@ -815,8 +937,8 @@ def build():
                 for p in rotated
             )
             rest = Vector((px, py, pz))
-            reach = 0.6 * size
             if any((rest - o).length < clear_rest + s + reach for o, s in placed_rest):
+                rejected["rest"] += 1
                 continue
             direction = Vector((px, py, 0.0))
             direction = direction.normalized() if direction.length > 1e-4 else Vector((math.cos(a), math.sin(a), 0.0))
@@ -824,21 +946,29 @@ def build():
             up = sub.uniform(*GARNISH_LIFT) * R
             exp_loc = rest + direction * out + Vector((0.0, 0.0, up))
             if any((exp_loc - o).length < clear_exp for o in placed_exp):
+                rejected["exploded"] += 1
                 continue
             axis = Vector((sub.uniform(-1, 1), sub.uniform(-1, 1), sub.uniform(-1, 1)))
             if axis.length < 1e-3:
                 axis = Vector((1.0, 0.0, 0.0))
             tumble = Quaternion(axis.normalized(), math.radians(sub.uniform(8.0, GARNISH_TUMBLE_DEG)))
             q_exp = tumble @ q_rest
+            ang = (math.atan2(py, px) % (2.0 * math.pi)) / (2.0 * math.pi)
+            g_start, g_sweep, g_jitter = GARNISH_TIMING
+            delay = min(MAX_DELAY, g_start + g_sweep * ang + sub.uniform(0.0, g_jitter))
+            stride = max(1, len(local) // 16)
+            sample = [Vector(v) for v in local[::stride]]
+            traj = {"rest": rest, "disp": exp_loc - rest, "delay": delay, "reach": reach}
+            if not trajectory_clear(sample, q_rest, q_exp, traj, motion, trajectories):
+                rejected["trajectory"] += 1
+                continue
+            trajectories.append(traj)
             placed_rest.append((rest, reach))
             placed_exp.append(exp_loc)
-            world_pts = [tuple(rest + p) for p in rotated]
             mb.verts = local
-            obj = make_object("%s_%02d" % (kind, index), mb, mats[kind], coll, (0.0, 0.0, 0.0), uv_points=world_pts)
+            obj = make_object("%s_%02d" % (kind, index), mb, mats[kind], coll, (0.0, 0.0, 0.0), with_uv=False)
             obj.location = rest
             obj.rotation_quaternion = q_rest
-            ang = (math.atan2(py, px) % (2.0 * math.pi)) / (2.0 * math.pi)
-            delay = min(MAX_DELAY, 0.10 * ang + sub.uniform(0.0, 0.04))
             set_pose_props(obj, kind, None, delay, exp_loc, q_exp)
             nodes.append(obj)
             verts_total += len(mb.verts)
@@ -875,6 +1005,8 @@ def build():
         "camera": cam_info,
         "nodes": out_nodes,
         "vertexTotal": verts_total,
+        "garnishRejections": rejected,
+        "sliceTimelineViolations": slice_timeline_violations(motion, dough_motion),
         "seconds": round(time.time() - T0, 2),
     }
 
