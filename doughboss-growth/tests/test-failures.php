@@ -274,6 +274,7 @@ db_test(
 			dbgr_test_advance( 5 );
 		}
 		assert_same( 20, DoughBoss_Growth_Failures::count(), 'capped at twenty' );
+		assert_same( 20, count( dbgr_fail_stored() ), 'and the stored option itself never holds more than twenty (storage is bounded, not just the reading of it)' );
 		$codes = dbgr_fail_codes();
 		assert_same( 'code_25', $codes[0], 'the newest is kept and first' );
 		assert_false( in_array( 'code_01', $codes, true ), 'the oldest was displaced' );
@@ -288,29 +289,33 @@ db_test(
 );
 
 db_test(
-	'failures API: a failure that repeats inside 60 seconds is folded in without a write (a failure on every page view costs one write a minute)',
+	'failures API: the same failure repeating inside 60 seconds is folded in without a write (a failure on every page view costs one write a minute); a different context is a new occurrence',
 	function () {
 		DoughBoss_Growth_Failures::record( 'module_failed', array( 'module' => 'a' ) );
 		$first = dbgr_fail_stored();
 		for ( $i = 0; $i < 50; $i++ ) {
 			dbgr_test_advance( 1 );
-			assert_true( DoughBoss_Growth_Failures::record( 'module_failed', array( 'module' => 'b' ) ), 'a repeat is reported as held' );
-			if ( $i >= 58 ) {
-				break;
-			}
+			assert_true( DoughBoss_Growth_Failures::record( 'module_failed', array( 'module' => 'a' ) ), 'a repeat is reported as held' );
 		}
-		assert_same( $first, dbgr_fail_stored(), 'fifty repeats inside the window left the stored option byte for byte as it was (no write)' );
+		assert_same( $first, dbgr_fail_stored(), 'fifty identical repeats inside the window left the stored option byte for byte as it was (no write)' );
 		assert_same( 1, DoughBoss_Growth_Failures::all()[0]['count'], 'one count' );
-		dbgr_test_advance( 20 ); // 70 s after the first.
+
+		// The same code with another fact (another stage or module) is not the same failure: it is kept at once, so a
+		// run that fails in three steps within one second loses none of them.
 		DoughBoss_Growth_Failures::record( 'module_failed', array( 'module' => 'b' ) );
 		$record = DoughBoss_Growth_Failures::all()[0];
-		assert_same( 2, $record['count'], 'after the window the next one counts' );
-		assert_same( array( 'module' => 'b' ), $record['context'], 'with the latest context' );
+		assert_same( 2, $record['count'], 'a different context counts at once' );
+		assert_same( array( 'module' => 'b' ), $record['context'], 'and is the context shown' );
+
+		// After the window an identical repeat counts again.
+		dbgr_test_advance( 70 );
+		DoughBoss_Growth_Failures::record( 'module_failed', array( 'module' => 'b' ) );
+		assert_same( 3, DoughBoss_Growth_Failures::all()[0]['count'], 'after the window the next one counts' );
 
 		// Exactly on the boundary counts (the window is "less than 60 seconds").
 		dbgr_test_advance( DoughBoss_Growth_Failures::REPEAT_WINDOW );
-		DoughBoss_Growth_Failures::record( 'module_failed' );
-		assert_same( 3, DoughBoss_Growth_Failures::all()[0]['count'], 'sixty seconds on the dot counts' );
+		DoughBoss_Growth_Failures::record( 'module_failed', array( 'module' => 'b' ) );
+		assert_same( 4, DoughBoss_Growth_Failures::all()[0]['count'], 'sixty seconds on the dot counts' );
 
 		// A last_seen in the future (a clock that went backwards, or a corrupt value) must not silence the code for ever.
 		update_option(

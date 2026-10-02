@@ -17,11 +17,12 @@
  *       (stage, module, channel, exception class name, status): it is redacted again here, capped at 5 keys and 80
  *       characters a value, keys that look personal (email, phone, name, address, ip, token ...) are dropped and a URL
  *       is reduced to its host. Never throws. Returns true when the failure is held in the list, false when it could not
- *       be stored. A repeat of the same code within 60 seconds of the last one is folded in WITHOUT a write, so a
- *       failure that happens on every page view costs at most one option write a minute.
+ *       be stored. A repeat of the same code WITH THE SAME CONTEXT within 60 seconds of the last one is folded in without
+ *       a write, so a failure that happens on every page view costs at most one option write a minute. A repeat with a
+ *       different context (another stage, another module) is a new occurrence and is written at once, so no stage is lost.
  *   DoughBoss_Growth_Failures::all(): array
  *       Records, newest first. Each is array( code, count, first_seen, last_seen, context ): count is the number of
- *       times recorded (repeats inside the 60 second window count once), first_seen and last_seen are UNIX times, context
+ *       times recorded (identical repeats inside the 60 second window count once), first_seen and last_seen are UNIX times, context
  *       is the redacted facts from the latest occurrence. Empty when nothing is recorded or the option is corrupt.
  *   DoughBoss_Growth_Failures::count(): int
  *       How many distinct codes are held (at most 20; when full, the code seen longest ago is dropped for a new one).
@@ -79,7 +80,7 @@ final class DoughBoss_Growth_Failures {
 	const MAX_CODE_LENGTH = 64;
 
 	/**
-	 * A repeat of a code inside this many seconds of its last occurrence is folded in without a write.
+	 * A repeat of a code with the same context inside this many seconds of its last occurrence is folded in without a write.
 	 */
 	const REPEAT_WINDOW = 60;
 
@@ -112,8 +113,8 @@ final class DoughBoss_Growth_Failures {
 
 			if ( isset( $records[ $code ] ) ) {
 				$elapsed = $now - $records[ $code ]['last_seen'];
-				if ( $elapsed >= 0 && $elapsed < self::REPEAT_WINDOW ) {
-					return true; // Already noted a moment ago: no write on a failure that repeats on every request.
+				if ( $elapsed >= 0 && $elapsed < self::REPEAT_WINDOW && $records[ $code ]['context'] === $clean ) {
+					return true; // The same failure, noted a moment ago: no write on a failure that repeats on every request.
 				}
 				$records[ $code ]['count']     = min( self::MAX_COUNT, $records[ $code ]['count'] + 1 );
 				$records[ $code ]['last_seen'] = $now;
