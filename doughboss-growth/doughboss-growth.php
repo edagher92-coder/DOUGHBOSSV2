@@ -28,7 +28,7 @@ define( 'DOUGHBOSS_GROWTH_VERSION', '0.1.0' );
 /**
  * Companion schema version, stored in option doughboss_growth_db_version.
  */
-define( 'DOUGHBOSS_GROWTH_DB_VERSION', '1.0.0' );
+define( 'DOUGHBOSS_GROWTH_DB_VERSION', '1.1.0' );
 
 define( 'DOUGHBOSS_GROWTH_FILE', __FILE__ );
 define( 'DOUGHBOSS_GROWTH_DIR', plugin_dir_path( __FILE__ ) );

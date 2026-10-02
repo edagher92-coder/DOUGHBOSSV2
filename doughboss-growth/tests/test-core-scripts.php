@@ -318,7 +318,7 @@ db_test(
 			'readme stable'    => array( 'readme.txt', 'Stable tag: 0.1.0', 'Stable tag: 0.1.2' ),
 			'changelog'        => array( 'readme.txt', '= 0.1.0 =', '= 0.0.9 =' ),
 			'non-semver'       => array( 'readme.txt', 'Stable tag: 0.1.0', 'Stable tag: trunk' ),
-			'DB version gone'  => array( 'doughboss-growth.php', "define( 'DOUGHBOSS_GROWTH_DB_VERSION', '1.0.0' );", '' ),
+			'DB version gone'  => array( 'doughboss-growth.php', "define( 'DOUGHBOSS_GROWTH_DB_VERSION', '1.1.0' );", '' ),
 		);
 		foreach ( $cases as $label => $case ) {
 			$plugin = dbgr_scripts_copy_plugin();

@@ -84,6 +84,9 @@ final class DoughBoss_Growth {
 	 * - files: further files of the same module, required (when present) just before the entry file.
 	 * - features: init() runs when ANY of these flags is effectively on.
 	 * - admin_always: also run init() inside wp-admin whatever the flags say (read-only admin screens).
+	 * - always: run init() on every request whatever the flags say (still subject to needs_storage). Used by the
+	 *   waitlist: a person must always be able to opt out, and stored sign-ups must stay exportable, erasable and
+	 *   purged after the flag is switched off. Its init() does nothing public with the flag off except those.
 	 * - needs_storage: skipped until the schema is installed.
 	 *
 	 * Module files must define classes only (no side effects at include time): the activator includes
@@ -118,7 +121,7 @@ final class DoughBoss_Growth {
 				'file'          => 'includes/attribution/class-doughboss-growth-attribution.php',
 				'class'         => 'DoughBoss_Growth_Attribution',
 				'files'         => array(),
-				'features'      => array( 'attribution' ),
+				'features'      => array( 'attribution', 'lead_form' ),
 				'admin_always'  => false,
 				'needs_storage' => true,
 			),
@@ -131,6 +134,7 @@ final class DoughBoss_Growth {
 				),
 				'features'      => array( 'waitlist' ),
 				'admin_always'  => false,
+				'always'        => true,
 				'needs_storage' => true,
 			),
 			'coming_soon' => array(
@@ -305,8 +309,39 @@ final class DoughBoss_Growth {
 		DoughBoss_Growth_Admin::init();
 		add_action( 'rest_api_init', array( __CLASS__, 'register_rest_routes' ) );
 		self::init_modules();
+		self::register_shortcode_stubs();
 
 		do_action( 'doughboss_growth_loaded' );
+	}
+
+	/**
+	 * Companion shortcode tags (frozen names, 00 section 4.2; the hero tag is cancelled).
+	 */
+	const SHORTCODES = array(
+		'doughboss_growth_landing',
+		'doughboss_growth_coming_soon',
+		'doughboss_growth_waitlist',
+		'doughboss_growth_lead_form',
+		'doughboss_growth_party_sizer',
+	);
+
+	/**
+	 * A page that holds a companion shortcode must never print the raw tag when its feature is off (modules whose
+	 * flag is off are not loaded, so nothing else registers the tag). Every companion tag that no module registered
+	 * renders an empty string. Only once the companion has a footprint (its schema is installed or it recorded
+	 * pages): before that no companion page can exist, and a fresh install stays strictly inert.
+	 *
+	 * @return void
+	 */
+	private static function register_shortcode_stubs() {
+		if ( ! DoughBoss_Growth_Activator::storage_ready() && array() === DoughBoss_Growth_Activator::page_ids( get_option( DoughBoss_Growth_Activator::PAGES_OPTION, array() ) ) ) {
+			return;
+		}
+		foreach ( self::SHORTCODES as $tag ) {
+			if ( ! shortcode_exists( $tag ) ) {
+				add_shortcode( $tag, '__return_empty_string' );
+			}
+		}
 	}
 
 	/**
@@ -351,6 +386,9 @@ final class DoughBoss_Growth {
 	 * @return bool
 	 */
 	private static function module_wanted( array $module ) {
+		if ( ! empty( $module['always'] ) ) {
+			return true;
+		}
 		if ( ! empty( $module['admin_always'] ) && is_admin() ) {
 			return true;
 		}

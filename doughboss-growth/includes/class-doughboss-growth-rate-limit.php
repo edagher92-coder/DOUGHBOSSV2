@@ -209,8 +209,33 @@ final class DoughBoss_Growth_Rate_Limit {
 		if ( ! is_string( $ip ) || false === filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 			return 'unknown';
 		}
+		$ip  = self::bucket_address( $ip );
 		$day = gmdate( 'Y-m-d', DoughBoss_Growth::now() );
 		return substr( hash_hmac( 'sha256', $ip . '|' . $day, wp_salt( 'auth' ) ), 0, 32 );
+	}
+
+	/**
+	 * The part of an address that identifies one visitor for rate limiting. An IPv6 visitor normally controls a
+	 * whole /64 (privacy addresses rotate inside it), so IPv6 is bucketed by its /64 prefix; otherwise every new
+	 * address in the same network would get a fresh per-address allowance. An IPv4-mapped IPv6 address counts as
+	 * its IPv4 address (its /64 is shared by every IPv4 visitor).
+	 *
+	 * @param string $ip A valid IP address.
+	 * @return string
+	 */
+	public static function bucket_address( $ip ) {
+		if ( false === filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+			return $ip;
+		}
+		$packed = function_exists( 'inet_pton' ) ? inet_pton( $ip ) : false;
+		if ( ! is_string( $packed ) || 16 !== strlen( $packed ) ) {
+			return $ip;
+		}
+		if ( str_repeat( "\0", 10 ) . "\xff\xff" === substr( $packed, 0, 12 ) ) {
+			$v4 = inet_ntop( substr( $packed, 12 ) );
+			return is_string( $v4 ) ? $v4 : $ip;
+		}
+		return bin2hex( substr( $packed, 0, 8 ) ) . '::/64';
 	}
 
 	/**

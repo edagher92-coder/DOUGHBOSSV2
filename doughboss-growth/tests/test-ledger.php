@@ -520,7 +520,42 @@ db_test(
 		assert_contains( 'final class DoughBoss_Growth_Ledger', $code, 'final class' );
 		assert_same( 0, preg_match( '/\bwp_remote_|\bfile_put_contents\(|update_option\(|add_option\(|set_transient\(|\$wpdb/', $code ), 'no network, file, option, transient or database write' );
 		assert_same( 0, preg_match( '/\bmatch\s*\(|\?->|\bfn\s*\(|str_contains|str_starts_with|str_ends_with/', $code ), 'no PHP 8 only syntax' );
+		if ( ! dbgr_test_can_subprocess() ) {
+			dbgr_test_skip( 'sub-process unavailable: the include-time side-effect probe needs one' );
+			return;
+		}
 		$sub = dbgr_test_subprocess( 'echo class_exists( "DoughBoss_Growth_Ledger", false ) ? "pre" : "none"; require ' . var_export( $file, true ) . '; echo class_exists( "DoughBoss_Growth_Ledger", false ) ? "-loaded" : "-missing"; echo count( $GLOBALS["dbgr_hooks"] ) === count( $GLOBALS["dbgr_hooks_baseline"] ) ? "-nohooks" : "-hooks";' );
 		assert_same( 'none-loaded-nohooks', $sub['out'], 'including the file registers no hook' );
+	}
+);
+
+db_test(
+	'ledger lint without the intl extension: full-width letters are folded by hand, other compatibility alphabets fail closed (WP-16, found on PHP 7.4 without intl)',
+	function () {
+		$fw = function ( $ascii ) {
+			$out = '';
+			foreach ( str_split( $ascii ) as $ch ) {
+				if ( ' ' === $ch ) {
+					$out .= ' ';
+					continue;
+				}
+				$out .= html_entity_decode( '&#' . ( ord( $ch ) + 0xFEE0 ) . ';', ENT_QUOTES, 'UTF-8' );
+			}
+			return $out;
+		};
+		$word = 'Mini' . 's';
+		assert_same( $word, DoughBoss_Growth_Ledger::fold_compat( $fw( $word ), false ), 'full-width letters fold to ASCII without intl' );
+		assert_same( 'Free 5%', DoughBoss_Growth_Ledger::fold_compat( $fw( 'Free 5%' ), false ), 'digits, symbols and punctuation fold too' );
+		assert_same( 'plain text', DoughBoss_Growth_Ledger::fold_compat( 'plain text', false ), 'plain text unchanged' );
+		assert_same( "caf\u{00E9}", DoughBoss_Growth_Ledger::fold_compat( "caf\u{00E9}", false ), 'ordinary accented text unchanged' );
+		// Negative controls: alphabets that cannot be folded without intl are refused (null), never passed through.
+		assert_same( null, DoughBoss_Growth_Ledger::fold_compat( "\u{24C2}ini", false ), 'enclosed alphanumerics refused' );
+		assert_same( null, DoughBoss_Growth_Ledger::fold_compat( "\u{1D40C}ini", false ), 'mathematical alphanumerics refused' );
+		assert_same( null, DoughBoss_Growth_Ledger::fold_compat( "x\u{FE59}", false ), 'small form variants refused' );
+		assert_same( null, DoughBoss_Growth_Ledger::fold_compat( array(), false ), 'a non-string is refused' );
+		// With intl (when present) the shared fold agrees on the full-width word.
+		if ( class_exists( 'Normalizer', false ) ) {
+			assert_same( $word, DoughBoss_Growth_Ledger::fold_compat( $fw( $word ), true ), 'NFKC path agrees with the manual fold' );
+		}
 	}
 );

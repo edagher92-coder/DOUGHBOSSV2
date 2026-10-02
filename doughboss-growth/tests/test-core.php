@@ -204,6 +204,24 @@ db_test(
 /* ---------------------------------------------------------------------------------------------------------- */
 
 db_test(
+	'dependencies: seo_head needs landing_pages, at save time and at runtime (WP-16 integration)',
+	function () {
+		$result = DoughBoss_Growth_Settings::apply_save( array( 'features' => array( 'seo_head' => '1' ) ) );
+		assert_false( $result['settings']['features']['seo_head'], 'seo_head forced off without landing_pages' );
+		assert_contains( 'seo_head_requires_landing_pages', implode( ',', $result['errors'] ), 'reported' );
+		assert_true( isset( DoughBoss_Growth_Admin::error_messages()['seo_head_requires_landing_pages'] ), 'the error code has admin wording' );
+
+		$result = DoughBoss_Growth_Settings::apply_save( array( 'features' => array( 'seo_head' => '1', 'landing_pages' => '1' ) ) );
+		assert_true( $result['settings']['features']['seo_head'], 'seo_head accepted with landing_pages' );
+		assert_same( array(), $result['errors'], 'no errors' );
+
+		// Negative control: a stored seo_head flag with landing_pages OFF is inert even if the option was edited directly.
+		dbgr_core_store( array( 'seo_head' => true, 'landing_pages' => false ) );
+		assert_false( DoughBoss_Growth_Settings::enabled( 'seo_head' ), 'runtime re-check: seo_head off when landing_pages is off' );
+	}
+);
+
+db_test(
 	'dependencies: gtm needs the consent banner, at save time and at runtime',
 	function () {
 		$result = DoughBoss_Growth_Settings::apply_save( array( 'features' => array( 'gtm' => '1' ) ) );

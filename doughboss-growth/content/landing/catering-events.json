@@ -1,0 +1,19 @@
+{
+	"version": 1,
+	"key": "catering-events",
+	"kind": "catering",
+	"parent": "catering",
+	"slug": "events",
+	"page_title": "Event catering",
+	"crumb": "Event catering",
+	"title": "Event Catering Enquiries",
+	"description": "Enquire about event catering from Dough Boss. Tell us the occasion, date and headcount and the catering team will confirm availability and price.",
+	"service_name": "Event catering",
+	"blocks": [
+		{ "type": "claim", "id": "catering-service-area", "heading": "Where we cater" },
+		{ "type": "claim", "id": "catering-delivery-or-drop-off", "heading": "Delivery or drop-off" },
+		{ "type": "claim", "id": "catering-lead-time", "heading": "Lead time" },
+		{ "type": "packages", "heading": "Catering packages" },
+		{ "type": "form" }
+	]
+}

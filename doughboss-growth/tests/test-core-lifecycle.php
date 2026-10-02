@@ -27,9 +27,12 @@ db_test(
 	function () {
 		assert_false( DoughBoss_Growth_Activator::storage_ready(), 'not ready before install' );
 		assert_true( DoughBoss_Growth_Activator::install(), 'install succeeds' );
-		assert_same( array( 'wp_doughboss_growth_rate', 'wp_doughboss_growth_outbox' ), DoughBoss_Growth_Activator::expected_tables(), 'the shared tables are the registered schema (modules add theirs by shipping a file)' );
-		assert_count( 2, $GLOBALS['dbgr_dbdelta'], 'dbDelta ran once per statement' );
-		assert_same( '1.0.0', get_option( 'doughboss_growth_db_version' ), 'DB version stored' );
+		$expected = DoughBoss_Growth_Activator::expected_tables();
+		assert_same( 'wp_doughboss_growth_rate', $expected[0], 'the shared rate table comes first' );
+		assert_same( 'wp_doughboss_growth_outbox', $expected[1], 'the shared outbox table comes second' );
+		assert_same( count( DoughBoss_Growth::schemas() ), count( $expected ), 'one expected table per registered schema statement (modules add theirs by shipping a file)' );
+		assert_count( count( DoughBoss_Growth::schemas() ), $GLOBALS['dbgr_dbdelta'], 'dbDelta ran once per statement' );
+		assert_same( DOUGHBOSS_GROWTH_DB_VERSION, get_option( 'doughboss_growth_db_version' ), 'DB version stored' );
 		assert_true( DoughBoss_Growth_Activator::storage_ready(), 'ready after install' );
 		assert_same( array(), DoughBoss_Growth_Activator::missing_tables(), 'no table missing' );
 	}
@@ -59,7 +62,11 @@ db_test(
 			update_option( 'doughboss_growth_db_version', $stored );
 			assert_false( DoughBoss_Growth_Activator::storage_ready(), 'not ready for stored ' . var_export( $stored, true ) );
 		}
-		foreach ( array( '1.0.0', '1.0.1', '2.0.0' ) as $stored ) {
+		// 1.0.0 was the scaffold-only schema (two shared tables). The module tables arrived in 1.1.0, so a site upgraded
+		// from 0.1.0-scaffold must NOT count as ready until the self-heal has created them.
+		update_option( 'doughboss_growth_db_version', '1.0.0' );
+		assert_false( DoughBoss_Growth_Activator::storage_ready(), 'a pre-module schema version is not ready' );
+		foreach ( array( DOUGHBOSS_GROWTH_DB_VERSION, '1.1.1', '2.0.0' ) as $stored ) {
 			update_option( 'doughboss_growth_db_version', $stored );
 			assert_true( DoughBoss_Growth_Activator::storage_ready(), 'ready for stored ' . $stored );
 		}
@@ -105,7 +112,7 @@ db_test(
 		// ...but opening the Growth page repairs it at once.
 		$_GET['page'] = 'doughboss-growth';
 		DoughBoss_Growth_Activator::maybe_upgrade();
-		assert_count( 2, $GLOBALS['dbgr_dbdelta'], 'opening the Growth page re-runs dbDelta for the missing tables' );
+		assert_count( count( DoughBoss_Growth::schemas() ), $GLOBALS['dbgr_dbdelta'], 'opening the Growth page re-runs dbDelta for the missing tables' );
 		assert_same( array(), DoughBoss_Growth_Activator::missing_tables(), 'tables restored' );
 	}
 );
@@ -116,13 +123,14 @@ db_test(
 		dbgr_test_login( array( 'manage_doughboss' ) );
 		$GLOBALS['wpdb']->respond( '/^SHOW TABLES/', '' ); // Tables can never be confirmed.
 		DoughBoss_Growth_Activator::maybe_upgrade();
-		assert_count( 2, $GLOBALS['dbgr_dbdelta'], 'first attempt ran' );
+		$n = count( DoughBoss_Growth::schemas() );
+		assert_count( $n, $GLOBALS['dbgr_dbdelta'], 'first attempt ran' );
 		assert_true( false !== get_transient( 'doughboss_growth_install_retry' ), 'retry throttle set' );
 		DoughBoss_Growth_Activator::maybe_upgrade();
-		assert_count( 2, $GLOBALS['dbgr_dbdelta'], 'throttled: no second attempt on an ordinary page' );
+		assert_count( $n, $GLOBALS['dbgr_dbdelta'], 'throttled: no second attempt on an ordinary page' );
 		$_GET['page'] = 'doughboss-growth-anything';
 		DoughBoss_Growth_Activator::maybe_upgrade();
-		assert_count( 4, $GLOBALS['dbgr_dbdelta'], 'opening a Growth page is an explicit retry' );
+		assert_count( 2 * $n, $GLOBALS['dbgr_dbdelta'], 'opening a Growth page is an explicit retry' );
 		assert_false( DoughBoss_Growth_Activator::storage_ready(), 'still not ready because the tables never appeared' );
 	}
 );
@@ -226,7 +234,7 @@ db_test(
 	function () {
 		$plan = DoughBoss_Growth_Activator::uninstall_plan( 'wp_' );
 		assert_same( array(), $plan['violations'], 'no violations' );
-		assert_same( array( 'doughboss_growth_settings', 'doughboss_growth_db_version', 'doughboss_growth_pages', 'doughboss_growth_recon' ), $plan['options'], 'the four frozen options' );
+		assert_same( array( 'doughboss_growth_settings', 'doughboss_growth_db_version', 'doughboss_growth_pages', 'doughboss_growth_recon', 'doughboss_growth_coming_soon' ), $plan['options'], 'the four frozen options plus the coming-soon ribbon switch' );
 		assert_same( array( 'doughboss_growth_install_retry', 'doughboss_growth_schema_ok' ), $plan['transients'], 'companion transients' );
 		assert_same(
 			array( 'wp_doughboss_growth_waitlist', 'wp_doughboss_growth_suppression', 'wp_doughboss_growth_attribution', 'wp_doughboss_growth_lead_meta', 'wp_doughboss_growth_outbox', 'wp_doughboss_growth_rate', 'wp_doughboss_growth_recon_run', 'wp_doughboss_growth_recon_row', 'wp_doughboss_growth_recon_xref' ),
@@ -271,6 +279,7 @@ db_test(
 		$GLOBALS['wpdb']->reset_log();
 		update_option( 'doughboss_growth_pages', array( 'a' => 1 ) );
 		update_option( 'doughboss_growth_recon', array( 'x' => 1 ) );
+		update_option( 'doughboss_growth_coming_soon', array( 'ribbon' => 1 ) );
 		set_transient( 'doughboss_growth_install_retry', 1, 300 );
 		wp_schedule_event( DBGR_TEST_EPOCH + 60, 'hourly', 'doughboss_growth_retention_purge' );
 
@@ -291,7 +300,7 @@ db_test(
 		foreach ( $core['tables'] as $table ) {
 			assert_true( in_array( $table, $GLOBALS['wpdb']->tables_created, true ), 'core table untouched: ' . $table );
 		}
-		foreach ( array( 'doughboss_growth_settings', 'doughboss_growth_db_version', 'doughboss_growth_pages', 'doughboss_growth_recon' ) as $name ) {
+		foreach ( array( 'doughboss_growth_settings', 'doughboss_growth_db_version', 'doughboss_growth_pages', 'doughboss_growth_recon', 'doughboss_growth_coming_soon' ) as $name ) {
 			assert_false( array_key_exists( $name, $GLOBALS['dbgr_options'] ), 'companion option removed: ' . $name );
 		}
 		assert_false( get_transient( 'doughboss_growth_install_retry' ), 'companion transient removed' );
@@ -344,7 +353,7 @@ db_test(
 	'frozen names: constants of the activator match the architecture (options, tables, cron hooks)',
 	function () {
 		assert_same( 9, count( DoughBoss_Growth_Activator::TABLE_SUFFIXES ), 'nine tables' );
-		assert_same( 4, count( DoughBoss_Growth_Activator::OPTIONS ), 'four options' );
+		assert_same( 5, count( DoughBoss_Growth_Activator::OPTIONS ), 'five options (the coming-soon ribbon switch is its own option)' );
 		assert_same( 3, count( DoughBoss_Growth_Activator::CRON_HOOKS ), 'three cron hooks' );
 		assert_same( 'doughboss_growth_outbox_dispatch', DoughBoss_Growth_Outbox::CRON_HOOK, 'outbox cron hook matches the activator list' );
 		assert_true( in_array( DoughBoss_Growth_Outbox::CRON_HOOK, DoughBoss_Growth_Activator::CRON_HOOKS, true ), 'outbox hook is in the uninstall list' );

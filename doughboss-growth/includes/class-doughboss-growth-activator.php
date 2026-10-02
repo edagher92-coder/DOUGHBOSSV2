@@ -59,6 +59,7 @@ final class DoughBoss_Growth_Activator {
 		'doughboss_growth_db_version',
 		'doughboss_growth_pages',
 		'doughboss_growth_recon',
+		'doughboss_growth_coming_soon',
 	);
 
 	/**
@@ -232,7 +233,14 @@ final class DoughBoss_Growth_Activator {
 	 */
 	public static function draft_companion_pages() {
 		$drafted = array();
-		foreach ( self::page_ids( get_option( self::PAGES_OPTION, array() ) ) as $page_id ) {
+		$ids     = self::page_ids( get_option( self::PAGES_OPTION, array() ) );
+		// The coming-soon page is made by hand (no create button records it), so it is found by its configured slug.
+		// It is drafted only under the same rule as every other page: its content is exactly one companion shortcode.
+		$coming = self::coming_soon_page_id();
+		if ( $coming > 0 && ! in_array( $coming, $ids, true ) ) {
+			$ids[] = $coming;
+		}
+		foreach ( $ids as $page_id ) {
 			$post = get_post( $page_id );
 			if ( ! is_object( $post ) || 'page' !== $post->post_type ) {
 				continue;
@@ -252,6 +260,23 @@ final class DoughBoss_Growth_Activator {
 			$drafted[] = $page_id;
 		}
 		return $drafted;
+	}
+
+	/**
+	 * Id of the page at the configured coming-soon slug (setting coming_soon_page_slug), or 0.
+	 *
+	 * @return int
+	 */
+	public static function coming_soon_page_id() {
+		if ( ! class_exists( 'DoughBoss_Growth_Settings' ) || ! function_exists( 'get_page_by_path' ) ) {
+			return 0;
+		}
+		$slug = DoughBoss_Growth_Settings::get( 'coming_soon_page_slug', '' );
+		if ( ! is_string( $slug ) || '' === $slug ) {
+			return 0;
+		}
+		$page = get_page_by_path( $slug, 'OBJECT', 'page' );
+		return ( is_object( $page ) && isset( $page->ID ) && (int) $page->ID > 0 ) ? (int) $page->ID : 0;
 	}
 
 	/**

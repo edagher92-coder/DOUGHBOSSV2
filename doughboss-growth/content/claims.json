@@ -42,6 +42,12 @@
 			"text": "How the food is made statement, wording to be supplied by Elie",
 			"confirmed": false,
 			"note": "Gap. Any statement about how or where the food is made needs Elie's confirmation and a source."
+		},
+		{
+			"id": "catering-pieces-per-guest",
+			"text": "Pieces per guest guidance for the party-pack sizer, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Elie to confirm a serving guide (pieces per guest) and its source. The party-pack sizer shows it only once confirmed and lint-clean; until then it shows package, serve range and price from core only."
 		}
 	]
 }

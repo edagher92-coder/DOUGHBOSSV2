@@ -202,6 +202,7 @@ final class DoughBoss_Growth_Admin {
 	public static function error_messages() {
 		return array(
 			'gtm_requires_consent_banner'            => __( 'Tag Manager needs the consent banner on first, so it was left off.', 'doughboss-growth' ),
+			'seo_head_requires_landing_pages'        => __( 'Search metadata needs the landing pages on first, so it was left off.', 'doughboss-growth' ),
 			'server_conversions_requires_attribution' => __( 'Server-side conversions need attribution on first, so they were left off.', 'doughboss-growth' ),
 			'server_conversions_requires_destination' => __( 'Server-side conversions need at least one fully configured destination (an id with its secret, or a webhook URL), so they were left off.', 'doughboss-growth' ),
 			'waitlist_requires_sender_legal_name'    => __( 'The waitlist needs the sender legal name first, so it was left off.', 'doughboss-growth' ),

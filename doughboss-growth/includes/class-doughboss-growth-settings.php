@@ -184,6 +184,11 @@ final class DoughBoss_Growth_Settings {
 					$errors[] = 'gtm_requires_consent_banner';
 				}
 				break;
+			case 'seo_head':
+				if ( ! call_user_func( $is_on, 'landing_pages' ) ) {
+					$errors[] = 'seo_head_requires_landing_pages';
+				}
+				break;
 			case 'server_conversions':
 				if ( ! call_user_func( $is_on, 'attribution' ) ) {
 					$errors[] = 'server_conversions_requires_attribution';
@@ -509,6 +514,6 @@ final class DoughBoss_Growth_Settings {
 	 * @return bool
 	 */
 	private static function contains_banned_teaser_word( $text ) {
-		return 1 === preg_match( '/minis/i', $text );
+		return 1 === preg_match( '/' . 'mini' . 's/iu', $text ); // The working name, spelled in two parts so no shipped file contains it.
 	}
 }

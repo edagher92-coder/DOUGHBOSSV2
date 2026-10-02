@@ -297,7 +297,11 @@ async function admin(base, outDir) {
     record('/health: core is ready and the companion is not inert', health.core_ready === true && health.kill_switch === false, `core ${health.core_version}`);
     record('/health: schema installed (storage_ready)', health.storage_ready === true, `db_version ${health.db_version}`);
     record('/health: companion version 0.1.0', health.plugin_version === '0.1.0');
-    record('/health: no module active (nothing enabled)', Object.values(health.modules_active || {}).every((active) => active === false));
+    // The waitlist module is registered "always" (WP-05): a person must be able to opt out, be exported and be erased even while sign-ups
+    // are switched off. With every flag off it adds no public output (the byte comparison above proves it).
+    const alwaysOn = ['waitlist'];
+    const activeModules = Object.entries(health.modules_active || {}).filter(([, active]) => active === true).map(([name]) => name);
+    record('/health: no module active except the registry "always" module (waitlist: opt-out, export, erasure)', activeModules.every((name) => alwaysOn.includes(name)), `active: ${activeModules.join(', ') || 'none'}`);
     record('/health: cache-control no-store', (healthResponse.headers.get('cache-control') || '').includes('no-store'), healthResponse.headers.get('cache-control') || '');
   }
 

@@ -60,13 +60,149 @@ final class DoughBoss_Growth_Http {
 			return false;
 		}
 		if ( false !== filter_var( $host, FILTER_VALIDATE_IP ) ) {
-			return false !== filter_var( $host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+			return self::is_public_ip( $host );
 		}
 		if ( false === strpos( $host, '.' ) || 1 !== preg_match( '/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/D', $host ) ) {
 			return false;
 		}
+		// A real top-level domain starts with a letter. This refuses the shorthand and base-8/16 spellings of an IPv4
+		// address that inet_aton() (and so the operating system's resolver) reads as an address but filter_var() does not:
+		// "127.1", "0x7f.0.0.1", "0177.0.0.1", "0xa9.254.169.254".
+		$labels = explode( '.', $host );
+		if ( 1 !== preg_match( '/^[a-z][a-z0-9-]*$/D', (string) end( $labels ) ) ) {
+			return false;
+		}
 		if ( 1 === preg_match( '/(^|\.)(localhost|local|internal|lan|home|corp|test|invalid|example)$/D', $host ) ) {
 			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether an IP address is a public, routable one. Refuses loopback, private, link-local (the cloud metadata
+	 * address 169.254.169.254), carrier-grade NAT (100.64.0.0/10), documentation, benchmarking and multicast ranges,
+	 * the unspecified address, unique-local and link-local IPv6, and IPv4-mapped IPv6 whose IPv4 part is not public.
+	 * WordPress core's own safe-URL check only covers 127/8, 10/8, 0/8, 172.16/12 and 192.168/16.
+	 *
+	 * @param mixed $ip IP address text.
+	 * @return bool
+	 */
+	public static function is_public_ip( $ip ) {
+		if ( ! is_string( $ip ) || false === filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+			return false;
+		}
+		if ( false === filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+			return false;
+		}
+		$packed = function_exists( 'inet_pton' ) ? @inet_pton( $ip ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- the address was validated above.
+		if ( ! is_string( $packed ) ) {
+			return false;
+		}
+		if ( 16 === strlen( $packed ) ) {
+			if ( str_repeat( "\0", 10 ) . "\xff\xff" === substr( $packed, 0, 12 ) ) {
+				$v4 = inet_ntop( substr( $packed, 12 ) );
+				return is_string( $v4 ) && self::is_public_ip( $v4 );
+			}
+			$first = ord( $packed[0] );
+			if ( $first >= 0xfc && $first <= 0xfd ) {
+				return false; // fc00::/7 unique local.
+			}
+			if ( 0xfe === $first && 0x80 === ( ord( $packed[1] ) & 0xc0 ) ) {
+				return false; // fe80::/10 link local.
+			}
+			if ( 0xff === $first ) {
+				return false; // ff00::/8 multicast.
+			}
+			if ( "\x20\x01\x0d\xb8" === substr( $packed, 0, 4 ) ) {
+				return false; // 2001:db8::/32 documentation.
+			}
+			return true;
+		}
+		$long = ip2long( $ip );
+		if ( false === $long ) {
+			return false;
+		}
+		foreach ( self::NON_PUBLIC_V4 as $range ) {
+			$base = ip2long( $range[0] );
+			$mask = ( 0 === $range[1] ) ? 0 : ( ~( ( 1 << ( 32 - $range[1] ) ) - 1 ) & 0xffffffff );
+			if ( false !== $base && ( ( $long & $mask ) === ( $base & $mask ) ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * IPv4 ranges that are never a public destination (on top of PHP's private and reserved flags).
+	 */
+	const NON_PUBLIC_V4 = array(
+		array( '0.0.0.0', 8 ),
+		array( '100.64.0.0', 10 ),
+		array( '169.254.0.0', 16 ),
+		array( '192.0.0.0', 24 ),
+		array( '192.0.2.0', 24 ),
+		array( '198.18.0.0', 15 ),
+		array( '198.51.100.0', 24 ),
+		array( '203.0.113.0', 24 ),
+		array( '224.0.0.0', 3 ),
+	);
+
+	/**
+	 * The addresses a host name resolves to. The doughboss_growth_http_resolve filter may supply them (tests, or a
+	 * site with its own resolver). Inside the test harness nothing is resolved unless the filter supplies a list, so no
+	 * test performs a DNS lookup.
+	 *
+	 * @param string $host Host name (not an IP literal).
+	 * @return array IP address strings; empty when nothing could be resolved.
+	 */
+	public static function resolve_host( $host ) {
+		$supplied = apply_filters( 'doughboss_growth_http_resolve', null, $host );
+		if ( is_array( $supplied ) ) {
+			return array_values( array_filter( $supplied, 'is_string' ) );
+		}
+		if ( defined( 'DBGR_TESTING' ) ) {
+			return array();
+		}
+		$ips = array();
+		$v4  = function_exists( 'gethostbynamel' ) ? gethostbynamel( $host ) : false;
+		if ( is_array( $v4 ) ) {
+			$ips = $v4;
+		}
+		if ( function_exists( 'dns_get_record' ) && defined( 'DNS_AAAA' ) ) {
+			$v6 = @dns_get_record( $host, DNS_AAAA ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- a failed AAAA lookup is not an error here.
+			if ( is_array( $v6 ) ) {
+				foreach ( $v6 as $record ) {
+					if ( is_array( $record ) && isset( $record['ipv6'] ) && is_string( $record['ipv6'] ) ) {
+						$ips[] = $record['ipv6'];
+					}
+				}
+			}
+		}
+		return $ips;
+	}
+
+	/**
+	 * Whether a URL's host may be called: an IP literal must be public, and a name must not resolve to any
+	 * non-public address (a public-looking name that points at 169.254.169.254, 10.x or loopback is refused). A name
+	 * that resolves to nothing is left to the transport, which cannot connect either. The check cannot stop DNS
+	 * rebinding between this lookup and the connection; the destinations are few and owner-configured.
+	 *
+	 * @param string $url A URL that already passed url_allowed().
+	 * @return bool
+	 */
+	public static function host_is_public( $url ) {
+		$parts = parse_url( (string) $url );
+		if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+			return false;
+		}
+		$host = strtolower( rtrim( $parts['host'], '.' ) );
+		if ( false !== filter_var( $host, FILTER_VALIDATE_IP ) ) {
+			return self::is_public_ip( $host );
+		}
+		foreach ( self::resolve_host( $host ) as $ip ) {
+			if ( ! self::is_public_ip( $ip ) ) {
+				return false;
+			}
 		}
 		return true;
 	}
@@ -96,6 +232,13 @@ final class DoughBoss_Growth_Http {
 		if ( ! self::url_allowed( $url ) ) {
 			$result['error'] = 'url_not_allowed';
 			self::log( 'http_refused', array( 'method' => $method, 'url' => self::redact_url( $url ), 'error' => 'url_not_allowed' ) );
+			return $result;
+		}
+
+		if ( ! self::host_is_public( $url ) ) {
+			$result['error']     = 'host_not_public';
+			$result['retryable'] = true; // Nothing was sent; a bad DNS answer may be transient, and the outbox caps the retries.
+			self::log( 'http_refused', array( 'method' => $method, 'url' => self::redact_url( $url ), 'error' => 'host_not_public' ) );
 			return $result;
 		}
 

@@ -378,11 +378,9 @@ final class DoughBoss_Growth_Ledger {
 		if ( ! is_string( $clean ) ) {
 			return array( 'encoding' );
 		}
-		if ( class_exists( 'Normalizer', false ) ) {
-			$folded = Normalizer::normalize( $clean, Normalizer::FORM_KC );
-			if ( is_string( $folded ) ) {
-				$clean = $folded;
-			}
+		$clean = self::fold_compat( $clean );
+		if ( null === $clean ) {
+			return array( 'encoding' );
 		}
 		$rules      = array(
 			'product_name' => '/' . 'mini' . 's/iu', // The unannounced product's working name; spelled in two parts so no shipped file contains it.
@@ -413,6 +411,41 @@ final class DoughBoss_Growth_Ledger {
 			}
 		}
 		return $violations;
+	}
+
+	/**
+	 * Fold compatibility and width forms ("full-width letters", enclosed or mathematical alphabets) to plain text so a
+	 * banned word cannot be hidden in them. With the intl extension this is Unicode NFKC. Without it (some hosts, and the
+	 * WebAssembly PHP 7.4 used for the release smoke test) the full-width ASCII block is folded by hand and the other
+	 * compatibility alphabets are refused outright (fail closed: null), because they cannot be folded safely.
+	 *
+	 * Public so the other public-copy lint (the coming-soon teaser) shares exactly one implementation.
+	 *
+	 * @param string $text     Valid UTF-8 text.
+	 * @param bool   $use_intl False forces the no-intl path (tests only).
+	 * @return string|null Folded text, or null when it cannot be folded safely.
+	 */
+	public static function fold_compat( $text, $use_intl = true ) {
+		if ( ! is_string( $text ) ) {
+			return null;
+		}
+		if ( $use_intl && class_exists( 'Normalizer', false ) ) {
+			$folded = Normalizer::normalize( $text, Normalizer::FORM_KC );
+			return is_string( $folded ) ? $folded : null;
+		}
+		if ( 1 === preg_match( '/[\x{2100}-\x{214F}\x{2460}-\x{24FF}\x{FE50}-\x{FE6F}\x{FF5F}-\x{FFEF}\x{1D400}-\x{1D7FF}\x{1F100}-\x{1F1FF}]/u', $text ) ) {
+			return null;
+		}
+		$out = preg_replace_callback(
+			'/[\x{FF01}-\x{FF5E}]/u',
+			function ( $match ) {
+				$bytes = array_values( unpack( 'C*', $match[0] ) );
+				$cp    = ( ( $bytes[0] & 0x0F ) << 12 ) | ( ( $bytes[1] & 0x3F ) << 6 ) | ( $bytes[2] & 0x3F );
+				return chr( $cp - 0xFEE0 );
+			},
+			$text
+		);
+		return is_string( $out ) ? $out : null;
 	}
 
 	/**

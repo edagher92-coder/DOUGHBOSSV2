@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "note": "Hand-written expected provider request bodies for the scenario in tests/test-conversions.php (clock 2026-10-02 00:00:00 UTC = 1790899200, first seen 2026-10-01 00:00:00 UTC = 1790812800). The GA4 client_id is checked separately (it is derived, pseudonymous and per event). @home@ is the site home URL and @token@ the Conversions API token in the test environment.",
+  "ga4_purchase_advertising_yes": {
+    "non_personalized_ads": false,
+    "events": [
+      { "name": "purchase", "params": { "transaction_id": "DB-261002-ABC123", "value": 35.99, "currency": "AUD" } }
+    ],
+    "timestamp_micros": 1790899200000000
+  },
+  "ga4_purchase_advertising_no": {
+    "non_personalized_ads": true,
+    "events": [
+      { "name": "purchase", "params": { "transaction_id": "DB-261002-ABC123", "value": 35.99, "currency": "AUD" } }
+    ],
+    "timestamp_micros": 1790899200000000
+  },
+  "ga4_refund": {
+    "non_personalized_ads": true,
+    "events": [
+      { "name": "refund", "params": { "transaction_id": "DB-261002-ABC123", "value": 35.99, "currency": "AUD" } }
+    ],
+    "timestamp_micros": 1790899200000000
+  },
+  "ga4_lead": {
+    "non_personalized_ads": false,
+    "events": [
+      { "name": "generate_lead", "params": { "form": "catering_enquiry" } }
+    ],
+    "timestamp_micros": 1790899200000000
+  },
+  "meta_purchase_fbc": {
+    "data": [
+      {
+        "event_name": "Purchase",
+        "event_time": 1790899200,
+        "event_id": "order:DB-261002-ABC123",
+        "action_source": "website",
+        "event_source_url": "@home@",
+        "user_data": { "fbc": "fb.1.1790812800000.AbCdEfGhIj1234567890" },
+        "custom_data": { "currency": "AUD", "value": 35.99, "order_id": "DB-261002-ABC123" }
+      }
+    ],
+    "access_token": "@token@"
+  },
+  "meta_lead_fbc": {
+    "data": [
+      {
+        "event_name": "Lead",
+        "event_time": 1790899200,
+        "event_id": "lead:DB-Q-7K2M4X",
+        "action_source": "website",
+        "event_source_url": "@home@",
+        "user_data": { "fbc": "fb.1.1790812800000.AbCdEfGhIj1234567890" }
+      }
+    ],
+    "access_token": "@token@"
+  }
+}

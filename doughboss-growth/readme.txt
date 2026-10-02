@@ -44,4 +44,6 @@ Secrets (API secrets, tokens) are read from environment variables or wp-config.p
 == Changelog ==
 
 = 0.1.0 =
-* Initial scaffold: settings and eleven feature flags (all off), core gate, module registry, fail-closed rate limiter, shared outbox with retries, HTTP wrapper with log redaction, admin settings page, health endpoint, safe deactivation and uninstall.
+* First release candidate. Eleven features, every one switched off after install, each enabled separately under DoughBoss, Growth: consent banner and Tag Manager loader, first-party attribution, server-side conversions (GA4 and Meta, plus an offline Google Ads export), landing pages and search metadata, corporate lead form, party-pack sizer, neutral coming-soon section, VIP waitlist (double opt-in, opt-out, privacy exporter and eraser) and a read-only timesheet reconciliation report.
+* Foundations: settings and flags with dependency checks, core gate (DoughBoss 2.41.0 or later), module registry, fail-closed rate limiter, shared outbox with retries, HTTP wrapper with log redaction, claims ledger with a public-copy lint, health endpoint, safe deactivation (landing pages go back to draft) and an uninstall that deletes nothing unless `DOUGHBOSS_GROWTH_UNINSTALL_DELETE_DATA` is set.
+* Nothing is sent to Google, Meta, Square or anyone else until the owner supplies the account ids and secrets and switches the matching feature on.

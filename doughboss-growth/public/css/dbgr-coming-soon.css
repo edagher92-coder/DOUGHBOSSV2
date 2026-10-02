@@ -1,0 +1,245 @@
+/*
+ * DoughBoss Growth: coming-soon section, VIP waitlist form, tilt cards and the email-link pages.
+ * Every class starts with dbgr- and every custom property with --dbgr- (core already uses --dbg-*).
+ * Colours are neutral defaults a theme can override on :root or on .dbgr-cs.
+ */
+.dbgr-cs,
+.dbgr-wl,
+.dbgr-wl-page {
+	--dbgr-ink: #1f1a17;
+	--dbgr-paper: #fffaf3;
+	--dbgr-accent: #8a2a1f;
+	--dbgr-accent-ink: #ffffff;
+	--dbgr-line: #cfc3b4;
+	--dbgr-ok: #1b5e20;
+	--dbgr-error: #9b1c1c;
+	--dbgr-focus: #0b57d0;
+	color: var(--dbgr-ink);
+	box-sizing: border-box;
+}
+
+.dbgr-cs *,
+.dbgr-wl *,
+.dbgr-wl-page * {
+	box-sizing: border-box;
+}
+
+/* Section */
+.dbgr-cs {
+	background: var(--dbgr-paper);
+	padding: 2.5rem 1rem;
+}
+
+.dbgr-cs__inner {
+	margin: 0 auto;
+	max-width: 44rem;
+	text-align: center;
+}
+
+.dbgr-cs__title {
+	font-size: clamp(1.6rem, 5vw, 2.4rem);
+	line-height: 1.15;
+	margin: 0 0 0.5rem;
+}
+
+.dbgr-cs__body {
+	font-size: 1.125rem;
+	margin: 0 0 1.5rem;
+}
+
+/* Ribbon */
+.dbgr-cs--ribbon {
+	background: var(--dbgr-ink);
+	color: var(--dbgr-paper);
+	padding: 0.75rem 1rem;
+	text-align: center;
+}
+
+.dbgr-cs__ribbon-text {
+	margin: 0;
+}
+
+.dbgr-cs__link {
+	color: var(--dbgr-paper);
+	font-weight: 700;
+	margin-left: 0.5rem;
+	text-decoration: underline;
+}
+
+.dbgr-cs__link:focus-visible {
+	outline: 3px solid var(--dbgr-focus);
+	outline-offset: 2px;
+}
+
+/* Tilt cards (transform only; flat for reduced motion and touch) */
+.dbgr-cards {
+	display: grid;
+	gap: 1rem;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	list-style: none;
+	margin: 0 0 1.5rem;
+	padding: 0;
+	perspective: 800px;
+}
+
+.dbgr-card__face {
+	background: #ffffff;
+	border: 1px solid var(--dbgr-line);
+	border-radius: 0.75rem;
+	padding: 1.25rem 1rem;
+	transform: rotateX(var(--dbgr-rx, 0deg)) rotateY(var(--dbgr-ry, 0deg));
+	transition: transform 0.15s ease-out;
+	will-change: transform;
+}
+
+.dbgr-card__text {
+	margin: 0;
+}
+
+.dbgr-tilt--flat .dbgr-card__face {
+	transform: none;
+	transition: none;
+	will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.dbgr-card__face {
+		transform: none !important;
+		transition: none !important;
+		will-change: auto;
+	}
+}
+
+/* Form */
+.dbgr-wl {
+	margin: 0 auto;
+	max-width: 30rem;
+	text-align: left;
+}
+
+.dbgr-wl__legend {
+	font-size: 1.25rem;
+	font-weight: 700;
+	margin: 0 0 1rem;
+}
+
+.dbgr-wl__field {
+	margin: 0 0 1rem;
+}
+
+.dbgr-wl__field label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 0.25rem;
+}
+
+.dbgr-wl__opt,
+.dbgr-wl__req {
+	font-weight: 400;
+}
+
+.dbgr-wl input[type="email"],
+.dbgr-wl input[type="text"],
+.dbgr-wl input[type="tel"],
+.dbgr-wl select {
+	background: #ffffff;
+	border: 1px solid #6d6258;
+	border-radius: 0.5rem;
+	color: var(--dbgr-ink);
+	font: inherit;
+	font-size: 1rem;
+	min-height: 2.75rem;
+	padding: 0.5rem 0.75rem;
+	width: 100%;
+}
+
+.dbgr-wl input:focus-visible,
+.dbgr-wl select:focus-visible,
+.dbgr-wl__button:focus-visible,
+.dbgr-wl__privacy a:focus-visible {
+	outline: 3px solid var(--dbgr-focus);
+	outline-offset: 2px;
+}
+
+.dbgr-wl__consent {
+	margin: 0 0 1rem;
+}
+
+.dbgr-wl__consent label {
+	align-items: flex-start;
+	display: flex;
+	gap: 0.75rem;
+}
+
+.dbgr-wl__consent input[type="checkbox"] {
+	flex: 0 0 auto;
+	height: 1.5rem;
+	margin: 0.15rem 0 0;
+	width: 1.5rem;
+}
+
+.dbgr-wl__privacy {
+	font-size: 0.95rem;
+	margin: 0 0 1rem;
+}
+
+.dbgr-wl__privacy a {
+	color: var(--dbgr-accent);
+}
+
+.dbgr-wl__button {
+	background: var(--dbgr-accent);
+	border: 0;
+	border-radius: 0.5rem;
+	color: var(--dbgr-accent-ink);
+	cursor: pointer;
+	font: inherit;
+	font-size: 1rem;
+	font-weight: 700;
+	min-height: 2.75rem;
+	padding: 0.5rem 1.5rem;
+}
+
+.dbgr-wl__button[disabled] {
+	cursor: wait;
+	opacity: 0.7;
+}
+
+.dbgr-wl__status {
+	margin: 1rem 0 0;
+	min-height: 1.5em;
+}
+
+.dbgr-wl__status--ok {
+	color: var(--dbgr-ok);
+	font-weight: 600;
+}
+
+.dbgr-wl__status--error {
+	color: var(--dbgr-error);
+	font-weight: 600;
+}
+
+/* The honeypot is moved off-screen (not display:none, which some bots skip) and hidden from assistive technology. */
+.dbgr-wl__hp {
+	height: 1px;
+	left: -10000px;
+	overflow: hidden;
+	position: absolute;
+	top: auto;
+	width: 1px;
+}
+
+/* Email-link pages */
+.dbgr-wl-page {
+	background: var(--dbgr-paper);
+	font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+	line-height: 1.5;
+	margin: 0;
+}
+
+.dbgr-wl-page__main {
+	margin: 0 auto;
+	max-width: 32rem;
+	padding: 2.5rem 1rem;
+}

@@ -1,0 +1,3061 @@
+{
+ "version": 1,
+ "note": "Synthetic fixtures only. Tolerances here are TEST values, not recommendations; the plugin ships none. Expectations are worked out by hand ('why').",
+ "defaults": {
+  "now": "2026-10-16T01:00:00Z",
+  "report_from": "2026-10-15",
+  "report_to": "2026-10-15",
+  "params": {
+   "start_tolerance_minutes": 5,
+   "end_tolerance_minutes": 5,
+   "break_tolerance_minutes": 5,
+   "net_tolerance_minutes": 10,
+   "open_alert_after_minutes": 720,
+   "max_shift_minutes": 720,
+   "near_miss_search_minutes": 120,
+   "lookback_days": 0,
+   "run_time_local": null,
+   "business_day_cutoff_local": {
+    "1": "04:00",
+    "2": "04:00"
+   }
+  },
+  "employees": {
+   "11": "TM11",
+   "12": "TM12"
+  },
+  "locations": {
+   "1": "LREV1",
+   "2": "LBNK2"
+  },
+  "blocked_locations": {}
+ },
+ "cases": [
+  {
+   "name": "perfect match, every parameter set",
+   "why": "plugin 22:00:20-06:00:40 = 480 min gross, break 1795 s = 29, net 451; Square 480 - 29 = 451; all deltas 0",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "plugin_ids": [
+      "101"
+     ],
+     "square_ids": [
+      "TCA1"
+     ],
+     "workday_local": "2026-10-15",
+     "plugin_location_id": 1,
+     "square_location_id": "LREV1",
+     "user_id": 11,
+     "team_member_id": "TM11",
+     "start_delta": 0,
+     "end_delta": 0,
+     "break_delta": 0,
+     "net_delta": 0,
+     "plugin_break": 29,
+     "square_break_all": 29,
+     "square_break_unpaid": 29,
+     "plugin_net": 451,
+     "square_net_all": 451,
+     "square_net_unpaid": 451
+    }
+   ]
+  },
+  {
+   "name": "perfect match, no parameter set",
+   "why": "same data; every comparison is unrated, never matched; calendar date used without a cutoff",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "UNRATED",
+     "codes": [
+      "UNRATED_START",
+      "UNRATED_END",
+      "UNRATED_BREAK",
+      "UNRATED_NET",
+      "UNRATED_LONG_SHIFT"
+     ],
+     "plugin_ids": [
+      "101"
+     ],
+     "square_ids": [
+      "TCA1"
+     ],
+     "workday_local": "2026-10-15",
+     "start_delta": 0,
+     "net_delta": 0
+    }
+   ],
+   "params": {
+    "start_tolerance_minutes": null,
+    "end_tolerance_minutes": null,
+    "break_tolerance_minutes": null,
+    "net_tolerance_minutes": null,
+    "open_alert_after_minutes": null,
+    "max_shift_minutes": null,
+    "near_miss_search_minutes": null,
+    "lookback_days": null,
+    "run_time_local": null,
+    "business_day_cutoff_local": {}
+   }
+  },
+  {
+   "name": "start delta equal to the tolerance",
+   "why": "in 22:05:59 floors to 22:05: +5 = tolerance passes; gross 28481 s = 474, net 445, net delta -6 within 10",
+   "shifts": [
+    {
+     "id": 102,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:05:59",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "start_delta": 5,
+     "end_delta": 0,
+     "net_delta": -6,
+     "plugin_net": 445
+    }
+   ]
+  },
+  {
+   "name": "start delta one minute over the tolerance",
+   "why": "in 22:06:00: +6 > 5; gross 28480 s = 474, net 445",
+   "shifts": [
+    {
+     "id": 103,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:06:00",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "START_DIFF"
+     ],
+     "start_delta": 6,
+     "net_delta": -6
+    }
+   ]
+  },
+  {
+   "name": "start delta with the start tolerance unset",
+   "why": "same as above but start_tolerance_minutes unset",
+   "shifts": [
+    {
+     "id": 103,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:06:00",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "UNRATED",
+     "codes": [
+      "UNRATED_START"
+     ],
+     "start_delta": 6
+    }
+   ],
+   "params": {
+    "start_tolerance_minutes": null,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 720,
+    "near_miss_search_minutes": 120,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "finish delta equal to the tolerance",
+   "why": "out 06:05:59 floors to 06:05: +5 passes; gross 29139 s = 485, net 456, +5",
+   "shifts": [
+    {
+     "id": 104,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:05:59",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "end_delta": 5,
+     "net_delta": 5
+    }
+   ]
+  },
+  {
+   "name": "finish delta one minute over the tolerance",
+   "why": "out 06:06:00: +6; gross 29140 s = 485, net 456",
+   "shifts": [
+    {
+     "id": 105,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:06:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "END_DIFF"
+     ],
+     "end_delta": 6,
+     "net_delta": 5
+    }
+   ]
+  },
+  {
+   "name": "finish delta with the finish tolerance unset",
+   "why": "end_tolerance_minutes unset",
+   "shifts": [
+    {
+     "id": 105,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:06:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "UNRATED",
+     "codes": [
+      "UNRATED_END"
+     ],
+     "end_delta": 6
+    }
+   ],
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": null,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 720,
+    "near_miss_search_minutes": 120,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "break delta equal to the tolerance",
+   "why": "plugin break 01:00:10-01:34:10 = 34 vs 29: +5 passes; net 446, -5",
+   "shifts": [
+    {
+     "id": 106,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:34:10"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "break_delta": 5,
+     "net_delta": -5,
+     "plugin_break": 34
+    }
+   ]
+  },
+  {
+   "name": "break delta one minute over the tolerance",
+   "why": "35 vs 29: +6; net 445, -6",
+   "shifts": [
+    {
+     "id": 107,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:35:10"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "BREAK_DIFF"
+     ],
+     "break_delta": 6,
+     "net_delta": -6
+    }
+   ]
+  },
+  {
+   "name": "break delta with the break tolerance unset",
+   "why": "break_tolerance_minutes unset",
+   "shifts": [
+    {
+     "id": 107,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:35:10"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "UNRATED",
+     "codes": [
+      "UNRATED_BREAK"
+     ],
+     "break_delta": 6
+    }
+   ],
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": null,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 720,
+    "near_miss_search_minutes": 120,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "net delta equal to the tolerance",
+   "why": "in 21:55 (-5), out 06:05 (+5), break 29 (0): gross 490, net 461 vs 451 = +10 passes",
+   "shifts": [
+    {
+     "id": 108,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 21:55:00",
+     "out": "2026-10-15 06:05:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:29:10"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "start_delta": -5,
+     "end_delta": 5,
+     "break_delta": 0,
+     "net_delta": 10,
+     "plugin_net": 461
+    }
+   ]
+  },
+  {
+   "name": "net delta one minute over the tolerance",
+   "why": "break 28 (-1): net 462 vs 451 = +11",
+   "shifts": [
+    {
+     "id": 109,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 21:55:00",
+     "out": "2026-10-15 06:05:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:28:10"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "NET_DIFF"
+     ],
+     "break_delta": -1,
+     "net_delta": 11
+    }
+   ]
+  },
+  {
+   "name": "net delta with the net tolerance unset",
+   "why": "net_tolerance_minutes unset",
+   "shifts": [
+    {
+     "id": 109,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 21:55:00",
+     "out": "2026-10-15 06:05:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:28:10"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "UNRATED",
+     "codes": [
+      "UNRATED_NET"
+     ],
+     "net_delta": 11
+    }
+   ],
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": null,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 720,
+    "near_miss_search_minutes": 120,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "missing in Square",
+   "why": "plugin shift only",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [],
+   "expect": [
+    {
+     "kind": "plugin_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_SQUARE"
+     ],
+     "plugin_ids": [
+      "101"
+     ],
+     "square_ids": [],
+     "plugin_net": 451,
+     "square_net_all": null,
+     "start_delta": null
+    }
+   ]
+  },
+  {
+   "name": "missing in the plugin",
+   "why": "Square timecard only; its shop is the plugin shop LREV1 is mapped to",
+   "shifts": [],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "square_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_PLUGIN"
+     ],
+     "plugin_ids": [],
+     "square_ids": [
+      "TCA1"
+     ],
+     "plugin_location_id": 1,
+     "user_id": 11,
+     "square_net_all": 451,
+     "plugin_net": null
+    }
+   ]
+  },
+  {
+   "name": "missing both ways with the near-miss distance unset",
+   "why": "09:00-12:00 vs 12:30-15:00 local do not overlap; without the parameter they are two unlinked rows",
+   "shifts": [
+    {
+     "id": 110,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 01:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCN1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T12:30:00+11:00",
+     "end_at": "2026-10-15T15:00:00+11:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T12:30:00+11:00",
+     "updated_at": "2026-10-15T15:00:00+11:00"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "plugin_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_SQUARE",
+      "UNRATED_NEAR_MISS"
+     ],
+     "plugin_ids": [
+      "110"
+     ],
+     "square_ids": []
+    },
+    {
+     "kind": "square_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_PLUGIN",
+      "UNRATED_NEAR_MISS"
+     ],
+     "plugin_ids": [],
+     "square_ids": [
+      "TCN1"
+     ]
+    }
+   ],
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 720,
+    "near_miss_search_minutes": null,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "near miss linked",
+   "why": "gap 30 <= 120: one row; start 22:00 vs 01:30 = -210, end 01:00 vs 04:00 = -180, net 180 vs 150 = +30",
+   "shifts": [
+    {
+     "id": 110,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 01:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCN1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T12:30:00+11:00",
+     "end_at": "2026-10-15T15:00:00+11:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T12:30:00+11:00",
+     "updated_at": "2026-10-15T15:00:00+11:00"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "near_miss",
+     "state": "REVIEW",
+     "codes": [
+      "START_DIFF",
+      "END_DIFF",
+      "NET_DIFF",
+      "NO_OVERLAP_NEAR_MISS"
+     ],
+     "plugin_ids": [
+      "110"
+     ],
+     "square_ids": [
+      "TCN1"
+     ],
+     "start_delta": -210,
+     "end_delta": -180,
+     "net_delta": 30
+    }
+   ]
+  },
+  {
+   "name": "near miss beyond the search distance",
+   "why": "gap 30 > 20: two missing rows, no unrated flag",
+   "shifts": [
+    {
+     "id": 110,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 01:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCN1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T12:30:00+11:00",
+     "end_at": "2026-10-15T15:00:00+11:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T12:30:00+11:00",
+     "updated_at": "2026-10-15T15:00:00+11:00"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "plugin_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_SQUARE"
+     ]
+    },
+    {
+     "kind": "square_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_PLUGIN"
+     ]
+    }
+   ],
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 720,
+    "near_miss_search_minutes": 20,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "open on the plugin side",
+   "why": "plugin open since 22:00 (420 min, under 720), Square closed 22:00-03:00: never matched",
+   "shifts": [
+    {
+     "id": 111,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": null,
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCO1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T03:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T03:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "OPEN_ONE_SIDE"
+     ],
+     "plugin_ids": [
+      "111"
+     ],
+     "square_ids": [
+      "TCO1"
+     ],
+     "start_delta": 0,
+     "end_delta": null,
+     "net_delta": null,
+     "has_open": true
+    }
+   ],
+   "now": "2026-10-15T05:00:00Z"
+  },
+  {
+   "name": "open on the Square side",
+   "why": "Square OPEN since 22:00, plugin closed",
+   "shifts": [
+    {
+     "id": 112,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 03:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCO2",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": null,
+     "status": "OPEN",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-14T22:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "OPEN_ONE_SIDE"
+     ],
+     "has_open": true
+    }
+   ],
+   "now": "2026-10-15T05:00:00Z"
+  },
+  {
+   "name": "open on both sides, recent",
+   "why": "both open 420 min: nothing to flag yet but the row is OPEN, not MATCHED",
+   "shifts": [
+    {
+     "id": 113,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": null,
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCO3",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": null,
+     "status": "OPEN",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-14T22:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "OPEN",
+     "codes": [],
+     "start_delta": 0,
+     "has_open": true
+    }
+   ],
+   "now": "2026-10-15T05:00:00Z"
+  },
+  {
+   "name": "open on both sides with no parameter set",
+   "why": "unset open alert and longest shift; still OPEN",
+   "shifts": [
+    {
+     "id": 113,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": null,
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCO3",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": null,
+     "status": "OPEN",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-14T22:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "OPEN",
+     "codes": [
+      "UNRATED_START",
+      "UNRATED_OPEN_ALERT",
+      "UNRATED_LONG_SHIFT"
+     ],
+     "has_open": true
+    }
+   ],
+   "now": "2026-10-15T05:00:00Z",
+   "params": {
+    "start_tolerance_minutes": null,
+    "end_tolerance_minutes": null,
+    "break_tolerance_minutes": null,
+    "net_tolerance_minutes": null,
+    "open_alert_after_minutes": null,
+    "max_shift_minutes": null,
+    "near_miss_search_minutes": null,
+    "lookback_days": null,
+    "run_time_local": null,
+    "business_day_cutoff_local": {}
+   }
+  },
+  {
+   "name": "open plugin shift exactly at the alert limit",
+   "why": "open since 17:00Z (04:00 local): age 720 = limit, duration 720 = limit; neither flagged",
+   "shifts": [
+    {
+     "id": 114,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 17:00:00",
+     "out": null,
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [],
+   "expect": [
+    {
+     "kind": "plugin_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_SQUARE"
+     ],
+     "workday_local": "2026-10-15",
+     "has_open": true
+    }
+   ],
+   "now": "2026-10-15T05:00:00Z"
+  },
+  {
+   "name": "open plugin shift one minute over the alert limit",
+   "why": "open since 16:59Z (03:59 local, so business day 2026-10-14, outside the report, kept because open); age 721",
+   "shifts": [
+    {
+     "id": 115,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 16:59:00",
+     "out": null,
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [],
+   "expect": [
+    {
+     "kind": "plugin_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_SQUARE",
+      "OPEN_PLUGIN_SHIFT"
+     ],
+     "workday_local": "2026-10-14",
+     "has_open": true
+    }
+   ],
+   "now": "2026-10-15T05:00:00Z",
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 1440,
+    "near_miss_search_minutes": 120,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "open Square timecard one minute over the alert limit",
+   "why": "Square OPEN since 16:59Z, age 721",
+   "shifts": [],
+   "timecards": [
+    {
+     "id": "TCO4",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T16:59:00Z",
+     "end_at": null,
+     "status": "OPEN",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T16:59:00Z",
+     "updated_at": "2026-10-14T16:59:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "square_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_PLUGIN",
+      "OPEN_SQUARE_TIMECARD"
+     ],
+     "has_open": true
+    }
+   ],
+   "now": "2026-10-15T05:00:00Z",
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 1440,
+    "near_miss_search_minutes": 120,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {
+     "1": "04:00",
+     "2": "04:00"
+    }
+   }
+  },
+  {
+   "name": "longest shift exactly at the limit",
+   "why": "both sides 22:00-10:00 = 720 min, no breaks",
+   "shifts": [
+    {
+     "id": 116,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 10:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCL1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T10:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T10:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "plugin_net": 720,
+     "square_net_all": 720
+    }
+   ]
+  },
+  {
+   "name": "longest shift one minute over the limit",
+   "why": "both sides 721 min",
+   "shifts": [
+    {
+     "id": 117,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 10:01:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCL2",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T10:01:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T10:01:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "LONG_SHIFT"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "manager closed shift",
+   "why": "perfect data, but the plugin end is a manager correction time",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": true,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "MANAGER_CLOSED"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "shift crossing midnight",
+   "why": "20:00 local 2026-10-15 to 02:00 local 2026-10-16 belongs to 2026-10-15",
+   "shifts": [
+    {
+     "id": 118,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-15 09:00:00",
+     "out": "2026-10-15 15:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCM1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T20:00:00+11:00",
+     "end_at": "2026-10-16T02:00:00+11:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T20:00:00+11:00",
+     "updated_at": "2026-10-16T02:00:00+11:00"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "workday_local": "2026-10-15",
+     "plugin_net": 360,
+     "square_net_all": 360
+    }
+   ]
+  },
+  {
+   "name": "shift after midnight but before the cutoff",
+   "why": "01:00-03:00 local 2026-10-16 is before the 04:00 cutoff, so business day 2026-10-15",
+   "shifts": [
+    {
+     "id": 119,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-15 14:00:00",
+     "out": "2026-10-15 16:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCM2",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T14:00:00Z",
+     "end_at": "2026-10-15T16:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T14:00:00Z",
+     "updated_at": "2026-10-15T16:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "workday_local": "2026-10-15"
+    }
+   ]
+  },
+  {
+   "name": "shift after midnight with no cutoff set",
+   "why": "without a cutoff it belongs to calendar day 2026-10-16, outside the reported day, so no row",
+   "shifts": [
+    {
+     "id": 119,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-15 14:00:00",
+     "out": "2026-10-15 16:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCM2",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T14:00:00Z",
+     "end_at": "2026-10-15T16:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T14:00:00Z",
+     "updated_at": "2026-10-15T16:00:00Z"
+    }
+   ],
+   "expect": [],
+   "params": {
+    "start_tolerance_minutes": 5,
+    "end_tolerance_minutes": 5,
+    "break_tolerance_minutes": 5,
+    "net_tolerance_minutes": 10,
+    "open_alert_after_minutes": 720,
+    "max_shift_minutes": 720,
+    "near_miss_search_minutes": 120,
+    "lookback_days": 0,
+    "run_time_local": null,
+    "business_day_cutoff_local": {}
+   }
+  },
+  {
+   "name": "Sydney DST gap night (clocks forward)",
+   "why": "22:00 AEST Sat 2026-10-03 (12:00Z) to 06:00 AEDT Sun (19:00Z) is 7 h = 420 min, not 8 h",
+   "shifts": [
+    {
+     "id": 120,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-03 12:00:00",
+     "out": "2026-10-03 19:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCD1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-03T22:00:00+10:00",
+     "end_at": "2026-10-04T06:00:00+11:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-03T22:00:00+10:00",
+     "updated_at": "2026-10-04T06:00:00+11:00"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "workday_local": "2026-10-03",
+     "plugin_net": 420,
+     "square_net_all": 420,
+     "start_delta": 0,
+     "end_delta": 0
+    }
+   ],
+   "now": "2026-10-05T01:00:00Z",
+   "report_from": "2026-10-03",
+   "report_to": "2026-10-03"
+  },
+  {
+   "name": "Sydney DST fold night (clocks back)",
+   "why": "22:00 AEDT Sat 2026-04-04 (11:00Z) to 06:00 AEST Sun (20:00Z) is 9 h = 540 min, not 8 h",
+   "shifts": [
+    {
+     "id": 121,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-04-04 11:00:00",
+     "out": "2026-04-04 20:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCD2",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-04-04T22:00:00+11:00",
+     "end_at": "2026-04-05T06:00:00+10:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-04-04T22:00:00+11:00",
+     "updated_at": "2026-04-05T06:00:00+10:00"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "workday_local": "2026-04-04",
+     "plugin_net": 540,
+     "square_net_all": 540
+    }
+   ],
+   "now": "2026-04-06T01:00:00Z",
+   "report_from": "2026-04-04",
+   "report_to": "2026-04-04"
+  },
+  {
+   "name": "repeated hour: two short shifts at 02:30 AEDT and 02:30 AEST",
+   "why": "1775316600 (15:30Z, 02:30 AEDT) and 1775320200 (16:30Z, 02:30 AEST) are different instants; each pairs with its own timecard",
+   "shifts": [
+    {
+     "id": 122,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-04-04 15:30:00",
+     "out": "2026-04-04 16:15:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    },
+    {
+     "id": 123,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-04-04 16:30:00",
+     "out": "2026-04-04 17:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCF1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-04-05T02:30:00+11:00",
+     "end_at": "2026-04-05T02:15:00+10:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-04-05T02:30:00+11:00",
+     "updated_at": "2026-04-05T02:15:00+10:00"
+    },
+    {
+     "id": "TCF2",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-04-05T02:30:00+10:00",
+     "end_at": "2026-04-05T03:00:00+10:00",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-04-05T02:30:00+10:00",
+     "updated_at": "2026-04-05T03:00:00+10:00"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "plugin_ids": [
+      "122"
+     ],
+     "square_ids": [
+      "TCF1"
+     ],
+     "workday_local": "2026-04-04",
+     "plugin_net": 45,
+     "square_net_all": 45
+    },
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "plugin_ids": [
+      "123"
+     ],
+     "square_ids": [
+      "TCF2"
+     ],
+     "workday_local": "2026-04-04",
+     "plugin_net": 30,
+     "square_net_all": 30
+    }
+   ],
+   "now": "2026-04-06T01:00:00Z",
+   "report_from": "2026-04-04",
+   "report_to": "2026-04-04"
+  },
+  {
+   "name": "two plugin shifts inside one Square timecard (split)",
+   "why": "plugin 22:00-01:00 (180) and 01:30-06:00 (270), no breaks; Square 22:00-06:00 with a 30-min unpaid break: union 0/0, net 450 vs 450, break 0 vs 30",
+   "shifts": [
+    {
+     "id": 201,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 01:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    },
+    {
+     "id": 202,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-15 01:30:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCS1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK2",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:30:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "split",
+     "state": "REVIEW",
+     "codes": [
+      "BREAK_DIFF",
+      "SPLIT"
+     ],
+     "plugin_ids": [
+      "201",
+      "202"
+     ],
+     "square_ids": [
+      "TCS1"
+     ],
+     "start_delta": 0,
+     "end_delta": 0,
+     "break_delta": -30,
+     "net_delta": 0,
+     "plugin_net": 450,
+     "square_net_all": 450
+    }
+   ]
+  },
+  {
+   "name": "one employee in two shops at different times",
+   "why": "08:00-12:00 at shop 1 and 13:00-17:00 at shop 2 on both sides: two clean rows",
+   "shifts": [
+    {
+     "id": 301,
+     "user": 12,
+     "loc": 1,
+     "in": "2026-10-14 21:00:00",
+     "out": "2026-10-15 01:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    },
+    {
+     "id": 302,
+     "user": 12,
+     "loc": 2,
+     "in": "2026-10-15 02:00:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCT1",
+     "team_member_id": "TM12",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T21:00:00Z",
+     "end_at": "2026-10-15T01:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T21:00:00Z",
+     "updated_at": "2026-10-15T01:00:00Z"
+    },
+    {
+     "id": "TCT2",
+     "team_member_id": "TM12",
+     "location_id": "LBNK2",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T02:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T02:00:00Z",
+     "updated_at": "2026-10-15T06:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "plugin_ids": [
+      "301"
+     ],
+     "square_ids": [
+      "TCT1"
+     ],
+     "plugin_location_id": 1,
+     "user_id": 12
+    },
+    {
+     "kind": "pair",
+     "state": "MATCHED",
+     "codes": [],
+     "plugin_ids": [
+      "302"
+     ],
+     "square_ids": [
+      "TCT2"
+     ],
+     "plugin_location_id": 2,
+     "square_location_id": "LBNK2"
+    }
+   ]
+  },
+  {
+   "name": "one employee in two shops at once in Square",
+   "why": "plugin 22:00-06:00 at shop 1; Square 22:00-06:00 at LREV1 and 01:00-03:00 at LBNK2: net 480 vs 600",
+   "shifts": [
+    {
+     "id": 303,
+     "user": 12,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCT3",
+     "team_member_id": "TM12",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:00Z"
+    },
+    {
+     "id": "TCT4",
+     "team_member_id": "TM12",
+     "location_id": "LBNK2",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-15T01:00:00Z",
+     "end_at": "2026-10-15T03:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-15T01:00:00Z",
+     "updated_at": "2026-10-15T03:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "split",
+     "state": "REVIEW",
+     "codes": [
+      "NET_DIFF",
+      "LOCATION_MISMATCH",
+      "OVERLAP_SAME_SIDE",
+      "CROSS_LOCATION_OVERLAP",
+      "SPLIT"
+     ],
+     "plugin_ids": [
+      "303"
+     ],
+     "square_ids": [
+      "TCT3",
+      "TCT4"
+     ],
+     "net_delta": -120
+    }
+   ]
+  },
+  {
+   "name": "same times, different shop",
+   "why": "plugin at shop 1, Square at LBNK2",
+   "shifts": [
+    {
+     "id": 304,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCW1",
+     "team_member_id": "TM11",
+     "location_id": "LBNK2",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "REVIEW",
+     "codes": [
+      "LOCATION_MISMATCH"
+     ],
+     "plugin_location_id": 1,
+     "square_location_id": "LBNK2"
+    }
+   ]
+  },
+  {
+   "name": "overlapping Square timecards at one shop",
+   "why": "Square 22:00-06:00 and 23:00-00:00 at LREV1 against one plugin shift: net 480 vs 540",
+   "shifts": [
+    {
+     "id": 305,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCV1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:00Z"
+    },
+    {
+     "id": "TCV2",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T23:00:00Z",
+     "end_at": "2026-10-15T00:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T23:00:00Z",
+     "updated_at": "2026-10-15T00:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "split",
+     "state": "REVIEW",
+     "codes": [
+      "NET_DIFF",
+      "OVERLAP_SAME_SIDE",
+      "SPLIT"
+     ],
+     "plugin_ids": [
+      "305"
+     ],
+     "square_ids": [
+      "TCV1",
+      "TCV2"
+     ],
+     "net_delta": -60
+    }
+   ]
+  },
+  {
+   "name": "unmapped staff on both sides",
+   "why": "user 13 and team member TM99 have no mapping: blockers, nothing else evaluated",
+   "shifts": [
+    {
+     "id": 401,
+     "user": 13,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCU1",
+     "team_member_id": "TM99",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "unmapped",
+     "state": "UNMAPPED",
+     "codes": [
+      "UNMAPPED_EMPLOYEE"
+     ],
+     "plugin_ids": [],
+     "square_ids": [
+      "TCU1"
+     ],
+     "user_id": 0,
+     "team_member_id": "TM99",
+     "plugin_location_id": 1,
+     "start_delta": null
+    },
+    {
+     "kind": "unmapped",
+     "state": "UNMAPPED",
+     "codes": [
+      "UNMAPPED_EMPLOYEE"
+     ],
+     "plugin_ids": [
+      "401"
+     ],
+     "square_ids": [],
+     "user_id": 13,
+     "team_member_id": ""
+    }
+   ]
+  },
+  {
+   "name": "unmapped shop",
+   "why": "plugin shop 3 has no Square location mapping",
+   "shifts": [
+    {
+     "id": 402,
+     "user": 11,
+     "loc": 3,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [],
+   "expect": [
+    {
+     "kind": "unmapped",
+     "state": "UNMAPPED",
+     "codes": [
+      "UNMAPPED_LOCATION"
+     ],
+     "plugin_ids": [
+      "402"
+     ],
+     "square_ids": [],
+     "plugin_location_id": 3,
+     "square_location_id": ""
+    }
+   ]
+  },
+  {
+   "name": "shop blocked because the core map disagrees",
+   "why": "shop 1 is blocked: both sides become UNMAPPED_LOCATION",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "unmapped",
+     "state": "UNMAPPED",
+     "codes": [
+      "UNMAPPED_LOCATION"
+     ],
+     "plugin_ids": [],
+     "square_ids": [
+      "TCA1"
+     ],
+     "plugin_location_id": 0,
+     "square_location_id": "LREV1"
+    },
+    {
+     "kind": "unmapped",
+     "state": "UNMAPPED",
+     "codes": [
+      "UNMAPPED_LOCATION"
+     ],
+     "plugin_ids": [
+      "101"
+     ],
+     "square_ids": [],
+     "plugin_location_id": 1
+    }
+   ],
+   "blocked_locations": {
+    "1": "core_map_disagrees"
+   }
+  },
+  {
+   "name": "Square break marked paid",
+   "why": "plugin deducts its 30-min break (net 450); Square all-break net 450, unpaid-only net 480",
+   "shifts": [
+    {
+     "id": 501,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:00",
+     "out": "2026-10-15 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:00",
+       "2026-10-15 01:30:00"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCP1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK3",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:30:00Z",
+       "is_paid": true,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "INFO",
+     "codes": [
+      "BREAK_PAID_CLASS"
+     ],
+     "plugin_net": 450,
+     "square_net_all": 450,
+     "square_net_unpaid": 480,
+     "square_break_all": 30,
+     "square_break_unpaid": 0,
+     "net_delta": 0
+    }
+   ]
+  },
+  {
+   "name": "timezone recorded differently",
+   "why": "Square says Australia/Brisbane, plugin snapshot Australia/Sydney",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Brisbane",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "INFO",
+     "codes": [
+      "TIMEZONE_MISMATCH"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Square timecard edited (version)",
+   "why": "version 3",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 3,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T06:00:30Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "INFO",
+     "codes": [
+      "SQUARE_EDITED"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Square timecard edited (updated after it ended)",
+   "why": "updated 09:00Z, three hours after the 06:00Z end",
+   "shifts": [
+    {
+     "id": 101,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-14 22:00:20",
+     "out": "2026-10-15 06:00:40",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": [
+      [
+       "2026-10-15 01:00:10",
+       "2026-10-15 01:30:05"
+      ]
+     ]
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCA1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-14T22:00:00Z",
+     "end_at": "2026-10-15T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [
+      {
+       "id": "BK1",
+       "start_at": "2026-10-15T01:00:00Z",
+       "end_at": "2026-10-15T01:29:00Z",
+       "is_paid": false,
+       "break_type_id": "BT1",
+       "name": "Break",
+       "expected_duration": "PT30M"
+      }
+     ],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-14T22:00:00Z",
+     "updated_at": "2026-10-15T09:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "pair",
+     "state": "INFO",
+     "codes": [
+      "SQUARE_EDITED"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "rows outside the reported days are left out, open rows are kept",
+   "why": "a clean pair on 2026-10-13 is outside the reported day; an open shift from 2026-10-10 is always shown",
+   "shifts": [
+    {
+     "id": 601,
+     "user": 11,
+     "loc": 1,
+     "in": "2026-10-12 22:00:00",
+     "out": "2026-10-13 06:00:00",
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    },
+    {
+     "id": 602,
+     "user": 12,
+     "loc": 1,
+     "in": "2026-10-09 22:00:00",
+     "out": null,
+     "tz": "Australia/Sydney",
+     "mc": false,
+     "breaks": []
+    }
+   ],
+   "timecards": [
+    {
+     "id": "TCX1",
+     "team_member_id": "TM11",
+     "location_id": "LREV1",
+     "timezone": "Australia/Sydney",
+     "start_at": "2026-10-12T22:00:00Z",
+     "end_at": "2026-10-13T06:00:00Z",
+     "status": "CLOSED",
+     "version": 1,
+     "breaks": [],
+     "wage": {
+      "title": "Synthetic",
+      "hourly_rate": {
+       "amount": 0,
+       "currency": "AUD"
+      }
+     },
+     "created_at": "2026-10-12T22:00:00Z",
+     "updated_at": "2026-10-13T06:00:00Z"
+    }
+   ],
+   "expect": [
+    {
+     "kind": "plugin_only",
+     "state": "REVIEW",
+     "codes": [
+      "MISSING_IN_SQUARE",
+      "OPEN_PLUGIN_SHIFT",
+      "LONG_SHIFT"
+     ],
+     "plugin_ids": [
+      "602"
+     ],
+     "square_ids": [],
+     "workday_local": "2026-10-10",
+     "user_id": 12,
+     "has_open": true
+    }
+   ]
+  }
+ ]
+}
