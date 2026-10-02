@@ -90,3 +90,14 @@ activity (lower is better) until then.
   supplier and recipe facts (claims ledger applies).
 - The 9:16 draft is re-composed by the model, so its first frame is not pixel-identical to the
   4:3 website hero. For the site hero use a 4:3 render so the start frame is the real photo.
+
+## 4:3 redraft 2 (`6d66f510-a285-4bb5-a275-d24298fa62b6`, 480p, 24 credits, 2 Oct 2026)
+
+Prompt change from the first 4:3 draft: one continuous shot with no cuts, a "violent" blow-out where each
+piece travels at least a third of the frame, and the camera staying inside the floating food. Result:
+starts and ends on the real hero photo, one continuous camera move, clear air, olive oil over za'atar,
+mince crumbs and melted cheese with oil droplets all come out of the spread. Weaker points: the blow-out is
+still gentler than the 9:16 version (pieces drift and tilt rather than fly apart), and one small lemon wedge
+floats past the lens around 4 s. Verdict: better than the first 4:3 draft, not as strong as the 9:16 final.
+Balance afterwards: 24.25 credits. A 1080p final of a 4:3 draft would cost about 96 credits, so it needs a
+top-up or an upscale route; no further spend without Elie's go.
