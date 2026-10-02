@@ -1,7 +1,7 @@
 {
   "_status": "DRAFT. Nothing here exists in any Meta ad account. Every campaign, ad set and ad is specified to launch PAUSED, and a human stages it in Dough Boss's own ad account after review. Field names follow the Marketing API vocabulary for readability; re-check each option in the Ads Manager screen when staging by hand.",
   "account": {
-    "naming": "Campaign: 'DB | Meta | Leads | <Segment>'. Ad set: '<CODE> | <Area or audience>' where CODE is CORP, EVNT, MINI or WARM. Ad: '<CODE>-<AREA>-<nn> <angle> <format>-<variant>'.",
+    "naming": "Campaign: 'DB | Meta | Leads | <Segment>'. Ad set: '<CODE> | <Area or audience>' where CODE is CORP, EVNT, SOON or WARM. Ad: '<CODE>-<AREA>-<nn> <angle> <format>-<variant>'.",
     "currency": "AUD",
     "timezone": "Australia/Sydney",
     "ad_account_id": "[CONFIRM: Dough Boss's own ad account, owned by Dough Boss's own business portfolio]",
@@ -80,7 +80,7 @@
             "mode": "advantage_plus_audience",
             "hard_controls": {
               "locations": "see location_targeting",
-              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for Minis]",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
               "exclusions": [
                 "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
               ]
@@ -147,7 +147,7 @@
             "mode": "advantage_plus_audience",
             "hard_controls": {
               "locations": "see location_targeting",
-              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for Minis]",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
               "exclusions": [
                 "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
               ]
@@ -210,7 +210,7 @@
             "mode": "advantage_plus_audience",
             "hard_controls": {
               "locations": "see location_targeting",
-              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for Minis]",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
               "exclusions": [
                 "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
               ]
@@ -309,7 +309,7 @@
             "mode": "advantage_plus_audience",
             "hard_controls": {
               "locations": "see location_targeting",
-              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for Minis]",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
               "exclusions": [
                 "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
               ]
@@ -375,33 +375,31 @@
       ]
     },
     {
-      "name": "DB | Meta | Leads | Minis Waitlist",
+      "name": "DB | Meta | Leads | Coming Soon List",
       "status": "paused",
       "phase": "later",
       "objective": "OUTCOME_LEADS",
       "special_ad_categories": [],
       "buying_type": "AUCTION",
       "conversion_location": "WEBSITE",
-      "primary_conversion": "generate_lead:minis_waitlist (Lead event, content_name = minis_waitlist, custom conversion to separate it from catering)",
+      "primary_conversion": "waitlist_submit (src/lib/analytics/events.ts; fired only after the server stores the sign-up) mapped to the Lead event with content_name = waitlist, plus a custom conversion to separate it from catering",
       "landing_pages": [
-        "/catering/minis"
+        "/"
       ],
       "budget_mode": "ad set budget",
       "budget": {
         "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
         "supporting_formulas": [
-          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
-          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "target_cost_per_lead = the most Elie will pay for one waitlist sign-up, set by Elie as a test cap. The catering break-even maths (avg_catering_order_value x gross_margin_pct x lead_to_won_rate) does NOT apply: a sign-up has no order value, and nothing about what is coming may be priced or assumed",
+          "leads_per_day_wanted = monthly_signup_goal / 30.4",
           "weekly_budget_to_exit_learning = target_cost_per_lead x optimisation_events_threshold_per_week   (threshold from Meta's learning phase page: [CONFIRM: figure])",
-          "check: if weekly_budget_to_exit_learning > weekly budget available, merge ad sets until it holds"
+          "check: if weekly_budget_to_exit_learning > weekly budget available, run it as a short, capped test or not at all"
         ],
         "daily_budget_aud": null,
         "inputs_to_confirm": [
-          "[CONFIRM: avg_catering_order_value]",
-          "[CONFIRM: gross_margin_pct on catering]",
-          "[CONFIRM: lead_to_won_rate, from the first weeks of plugin data; until then a stated guess labelled as a guess]",
-          "[CONFIRM: required_safety_margin]",
-          "[CONFIRM: monthly_lead_goal]",
+          "[CONFIRM: the most Elie will pay per waitlist sign-up, as an explicit test cap]",
+          "[CONFIRM: monthly_signup_goal]",
+          "[CONFIRM: total test budget and end date for the teaser ad, set before it starts]",
           "[CONFIRM: optimisation events needed per week to leave learning, from Meta's learning phase page]",
           "[CONFIRM: who owns the monthly media spend cap]"
         ]
@@ -411,22 +409,24 @@
         "cost_cap_aud": "[CONFIRM]"
       },
       "creative_controls": {
-        "advantage_plus_creative": "all enhancements OFF [VERIFY]"
+        "advantage_plus_creative": "all enhancements OFF, so no generated wording or imagery ships [VERIFY]"
       },
       "launch_gate": [
-        "Minis range exists and is photographed for real",
-        "Waitlist form live with Spam Act consent wording",
-        "Elie approves public announcement",
+        "Elie confirms something real is planned, so 'Something exciting is coming' is a representation about a future matter with reasonable grounds (Australian Consumer Law; docs/marketing/00-marketing-audit.md)",
+        "Elie approves the generic teaser line and the ad (teaser-direction.md rule 6)",
+        "The legal entity that will send to the list is settled, named on the form and in every message (Spam Act sender identification), and the form carries a privacy collection notice",
+        "Teaser section and waitlist form live on the landing page, with separate unticked Spam Act consent wording and a named sender",
+        "No product, price, size, dietary, halal, ingredient, date or location claim in the ad or on the landing page",
         "AANA code check done (compliance-au.md section 7)"
       ],
       "ad_sets": [
         {
-          "name": "MINI | Parents and organisers",
+          "name": "SOON | Three-store catchment",
           "status": "paused",
           "hold": true,
-          "hold_reason": "Minis range and waitlist are not live yet [CONFIRM: go-live date and photography]",
+          "hold_reason": "Generic awareness only, held until Elie approves it and the teaser page and consent form are live [CONFIRM: approval and go-live]",
           "launch_wave": 3,
-          "utm_segment": "minis",
+          "utm_segment": "coming-soon",
           "utm_area": "all-stores",
           "optimisation": {
             "goal": "OFFSITE_CONVERSIONS",
@@ -438,14 +438,13 @@
             "mode": "advantage_plus_audience",
             "hard_controls": {
               "locations": "see location_targeting",
-              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for Minis]",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for event and teaser ads]",
               "exclusions": [
                 "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
               ]
             },
             "suggestions_only": [
-              "Parents and organisers, as suggestions only; the audience is adults.",
-              "No targeting of under-18s. No cartoon-led creative aimed at children."
+              "Adults living near the three stores, as suggestions only. No product interest, no interest in any food category, and no targeting of under-18s."
             ],
             "lookalikes": "none at launch"
           },
@@ -484,15 +483,7 @@
           "placements": "advantage_plus_placements, then review the placement breakdown weekly",
           "ads": [
             {
-              "name": "MINI-ALL-01 minis-waitlist photo-a",
-              "status": "paused"
-            },
-            {
-              "name": "MINI-ALL-02 minis-organiser photo-a",
-              "status": "paused"
-            },
-            {
-              "name": "MINI-ALL-03 minis-waitlist video-a",
+              "name": "SOON-ALL-01 coming-soon graphic-a",
               "status": "paused"
             }
           ]

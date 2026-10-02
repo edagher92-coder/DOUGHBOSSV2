@@ -13,7 +13,7 @@ Rules that follow:
 1. Every food image in an ad is a real photograph or real video of Dough Boss food, shot in a Dough Boss store or at a real handover.
 2. What is photographed is what the customer receives. No props that are not supplied (extra platters, drinks, garnishes, boards). If the shot is styled, the styling is something the customer also gets, or the shot is plainly of the store and the baker, not of a catering order.
 3. An illustrative graphic may be used for a logo lock-up or a background texture only if it carries no food that could be read as the product, and Elie approves it. Our default is no.
-4. Minis: no Minis image of any kind until real Minis exist and have been photographed. No stand-ins, no stock, no render. The Minis ads stay held until then (campaigns.json).
+4. Coming-soon teaser: the one generic teaser ad (SOON-ALL-01) shows no food and no product of any kind, only a text-led Dough Boss brand graphic with the line "Something exciting is coming" (docs/site/teaser-direction.md). No stand-ins, no stock, no render, no hint of what is coming. It stays held until Elie approves it (campaigns.json).
 5. No stock photography and no generated people. No image implies a customer, a review or an endorsement that is not real.
 
 ## 2. What the ads need to show, by angle
@@ -25,7 +25,7 @@ Rules that follow:
 | meeting-spread | A meeting-room table with a real order unpacked | CORP-BKT-04, CORP-REV-03 |
 | event-party | A real party-table order | EVNT-ALL-01, EVNT-ALL-02, EVNT-ALL-04 |
 | event-community | A real order at a community or club setting, with permission | EVNT-ALL-03 |
-| minis-waitlist, minis-organiser | The real Minis, once they exist | MINI-ALL-01, 02, 03 (held) |
+| coming-soon | A text-led brand graphic only. No food, no product, no hint of what is coming | SOON-ALL-01 (held) |
 | catering-enquiry, catering-question | Reuse a proven photo from the corporate set | WARM-ALL-01, 02 (held) |
 
 Each ad needs its own picture or video. The test method (03b section 8) changes one variable at a time, so keep the base picture constant when the variable under test is the headline.
@@ -42,7 +42,7 @@ Before the shoot, `[CONFIRM: what the catering offer physically is: packaging, t
 | P2 | Lunch order laid out for a group | Bench or table, one clean overhead shot and one three-quarter angle. | team-lunch |
 | P3 | Meeting-room table with an order unpacked | A real or borrowed meeting room, with permission. No client logos, whiteboards with writing, laptops showing data or documents. | meeting-spread |
 | P4 | Party-table order | A party or event setting, with permission. No children's faces. | event-party |
-| P5 | Minis, once they exist | Real Minis only, on a clean surface, a hand for scale. | Minis (held) |
+| P5 | Retired 2026-10-02 (it was a product-specific shot; the teaser is now generic) | Do not shoot. Codes are not renumbered so the earlier briefs still line up. | none |
 | P6 | Close-up of the food, one item per frame | Overhead and side angles, one item at a time. These are cutaways for video and thumbnails. | all |
 | P7 | The baker at work | Hands shaping, topping, or taking something out of the oven. No faces unless the person has signed a release. | all |
 | P8 | Store front and sign | Each store, daytime, straight on, with the real sign visible. Bankstown, Revesby, Roselands Centro. | store trust, location copy |
@@ -64,7 +64,6 @@ Aim for short videos that make sense with the sound off. Length: keep each under
 | V3 | Party table | Packing at the store. Arrival at the event setting. The table filling up. Wide shot. End card: store name. | EVNT-ALL-04 |
 | V4 | Community table | A club, school or community setting with permission, adults only. | EVNT-ALL-03 |
 | V5 | From the oven | The baker takes a tray from the oven. A close-up of the food. A hand lifts a piece. | any, cutaway |
-| V6 | Minis (held) | Real Minis only. | MINI-ALL-03 |
 
 Do not narrate claims. No voiceover that states anything the claims rule does not allow. If audio is used, use a track the business has the rights to; Meta's own licensed music is limited to certain placements `[VERIFY]`. Prefer no music, or a track licensed to Dough Boss.
 
@@ -95,7 +94,7 @@ With Advantage+ placements on (03b section 4), Meta can run any ad in any of the
 ## 7. People, permissions and privacy
 
 - Hands only unless the person has signed a release. Staff photos need a staff release. Customers and their premises need written permission, and no client logos, screens or documents may be visible.
-- No children's faces, in any ad. Minis and event ads speak to adults.
+- No children's faces, in any ad. Teaser and event ads speak to adults.
 - Keep releases on file. `[CONFIRM: who holds them]`.
 - Never include a customer's name, order, review or a testimonial unless it is real, current and used with permission (`compliance-au.md` section 3).
 - No claims about a named company being a customer.
@@ -113,7 +112,7 @@ Creative
 - [ ] Every food image is a real photograph or video shot by the team, in a store or at a real handover.
 - [ ] No AI render, stock photo or illustrative hero image appears as the product.
 - [ ] What is shown is what the customer receives. No unsupplied props.
-- [ ] No Minis imagery of any kind unless real Minis were shot.
+- [ ] The teaser graphic shows no food, no product and no hint of what is coming.
 - [ ] No children's faces. No client logos, screens or documents visible.
 - [ ] Hands only, or a signed release is on file.
 

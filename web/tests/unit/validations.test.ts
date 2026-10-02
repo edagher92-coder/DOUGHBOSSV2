@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 import {
-  MINIS_INTERESTS,
+  WAITLIST_CONSENT_TEXT,
   checkoutSchema,
   fieldErrors,
   waitlistSchema,
@@ -13,7 +13,6 @@ const validWaitlist = (over: Record<string, unknown> = {}): WaitlistInput =>
   ({
     name: "Sample Person",
     email: "sample@example.com",
-    interests: ["MINI_ZAATAR"],
     consent: true,
     ...over,
   }) as WaitlistInput;
@@ -36,7 +35,7 @@ describe("waitlistSchema", () => {
 
   it("accepts every optional field when well formed", () => {
     const r = waitlistSchema.safeParse(
-      validWaitlist({ phone: "0412345678", partyPieces: 100, storeSlug: "bankstown", interests: [...MINIS_INTERESTS], company: "" }),
+      validWaitlist({ phone: "0412345678", storeSlug: "bankstown", company: "" }),
     );
     expect(r.success).toBe(true);
   });
@@ -92,12 +91,15 @@ describe("waitlistSchema", () => {
       expect(waitlistSchema.safeParse(validWaitlist({ company: "Acme Bots" })).success).toBe(false);
     });
 
-    it("rejects empty interests", () => {
-      expect(waitlistSchema.safeParse(validWaitlist({ interests: [] })).success).toBe(false);
+    it("has no product-specific interest picker: unknown interest fields are stripped, never stored", () => {
+      const r = waitlistSchema.parse(validWaitlist({ interests: ["SOMETHING"], partyPieces: 100 }));
+      expect(r).not.toHaveProperty("interests");
+      expect(r).not.toHaveProperty("partyPieces");
     });
 
-    it("rejects an unknown interest", () => {
-      expect(waitlistSchema.safeParse(validWaitlist({ interests: ["MINI_PIZZA"] })).success).toBe(false);
+    it("keeps the consent wording neutral: no product, size, price or date claim", () => {
+      expect(WAITLIST_CONSENT_TEXT).not.toMatch(/mini|pizza|pack|bites|halal|\$|\d/i);
+      expect(WAITLIST_CONSENT_TEXT).toMatch(/unsubscribe/i);
     });
 
     it("rejects a bad email", () => {
@@ -107,14 +109,6 @@ describe("waitlistSchema", () => {
     it("rejects an over-long email (> 254 characters)", () => {
       const long = `${"a".repeat(250)}@example.com`;
       expect(waitlistSchema.safeParse(validWaitlist({ email: long })).success).toBe(false);
-    });
-
-    it.each([5, 1001, 20.5])("rejects partyPieces %s", (partyPieces) => {
-      expect(waitlistSchema.safeParse(validWaitlist({ partyPieces })).success).toBe(false);
-    });
-
-    it.each([20, 1000])("accepts partyPieces at the boundary %s", (partyPieces) => {
-      expect(waitlistSchema.safeParse(validWaitlist({ partyPieces })).success).toBe(true);
     });
 
     it("rejects a name containing a control character", () => {
@@ -208,14 +202,14 @@ describe("checkoutSchema", () => {
 
 describe("fieldErrors", () => {
   it("returns the first message per top-level field", () => {
-    const r = waitlistSchema.safeParse(validWaitlist({ name: "A", email: "nope", interests: [] }));
+    const r = waitlistSchema.safeParse(validWaitlist({ name: "A", email: "nope", consent: false }));
     expect(r.success).toBe(false);
     if (r.success) return;
     const errors = fieldErrors(r.error);
-    expect(Object.keys(errors).sort()).toEqual(["email", "interests", "name"]);
+    expect(Object.keys(errors).sort()).toEqual(["consent", "email", "name"]);
     expect(errors.name).toBe("Please enter your name");
     expect(errors.email).toBe("Enter a valid email address");
-    expect(errors.interests).toBe("Pick at least one thing you’re keen on");
+    expect(errors.consent).toBe("Please tick the box so we’re allowed to contact you");
   });
 
   it("keeps only the first message when one field has several failures", () => {

@@ -1,6 +1,6 @@
 /**
  * Shared vocabulary for lead capture (catering/corporate enquiries) and the
- * Minis waitlist. These describe what a CUSTOMER tells us about their event —
+ * the teaser waitlist. These describe what a CUSTOMER tells us about their event —
  * they are not claims Dough Boss makes about its food.
  */
 
@@ -12,7 +12,6 @@ export const CATERING_EVENT_TYPES = [
   "PARTY",
   "WEDDING_ENGAGEMENT",
   "COMMUNITY_RELIGIOUS",
-  "MINIS_PARTY",
   "OTHER",
 ] as const;
 export type CateringEventType = (typeof CATERING_EVENT_TYPES)[number];
@@ -25,7 +24,6 @@ export const CATERING_EVENT_LABELS: Record<CateringEventType, string> = {
   PARTY: "Party or celebration",
   WEDDING_ENGAGEMENT: "Wedding or engagement",
   COMMUNITY_RELIGIOUS: "Community or religious event",
-  MINIS_PARTY: "Minis party bites",
   OTHER: "Something else",
 };
 

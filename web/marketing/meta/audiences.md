@@ -62,13 +62,13 @@ Do not use the store names as a promise of coverage. Copy says where a store is,
 - Suggestions only: interests around parties, events, community groups and school or club organising `[CONFIRM: picker options]`.
 - Adults only. Speak to organisers. No creative aimed at children (AANA Food and Beverages Code defines children as under 15 and restricts targeting occasional foods at them; EXTRACT only, https://aana.com.au/self-regulation/food-and-beverages-code/ via the compliance guide).
 
-### 4.3 Minis waitlist (HELD)
+### 4.3 Coming-soon list (HELD, generic awareness only)
 
 - Mode: Advantage+ audience, location as the hard control.
-- Suggestions only: parents and organisers. The ad speaks to the adult who plans the party and never to a child.
+- Suggestions only: adults living near the three stores. No product interest, no food-category interest, no interest built around what is coming (docs/site/teaser-direction.md rule 6). The ad speaks to adults and never to a child.
 - Minimum age hard control set to an adult age `[CONFIRM: minimum age]`.
 - No urgency, scarcity or excess-consumption language. No cartoon-led creative aimed at children.
-- Launch gate: real Minis photography, waitlist live with consent wording, Elie's approval to announce.
+- Launch gate: Elie's approval of the generic teaser ad, and the teaser page live with a separate, unticked consent checkbox. No product claim of any kind.
 
 ## 5. Customer lists (consented leads only)
 
@@ -114,13 +114,13 @@ Meta now folds lookalikes into Advantage+ audience as suggestions `[VERIFY]`. If
 
 ## 9. Naming
 
-`<CODE> | <Area or audience>` for ad sets (`CORP | Bankstown catchment`, `EVNT | Three-store catchment`, `MINI | Parents and organisers`, `WARM | Catering page visitors`). Custom audiences: `DB | CA | <source> | <window>` and `DB | EX | <what is excluded>`. Every audience records its source, consent basis, creation date and owner in a short note beside the list.
+`<CODE> | <Area or audience>` for ad sets (`CORP | Bankstown catchment`, `EVNT | Three-store catchment`, `SOON | Three-store catchment`, `WARM | Catering page visitors`). Custom audiences: `DB | CA | <source> | <window>` and `DB | EX | <what is excluded>`. Every audience records its source, consent basis, creation date and owner in a short note beside the list.
 
 ## 10. Audience review checklist (before staging)
 
 - [ ] Location is the only hard control we rely on.
 - [ ] No suggestion references religion, ethnicity, health, finances or any personal attribute.
-- [ ] Minis and event audiences are adults.
+- [ ] Teaser and event audiences are adults.
 - [ ] No customer list is uploaded without recorded consent and a policy that names Meta.
 - [ ] Every list is hashed with SHA-256 and carries no dietary or free-text data.
 - [ ] The exclusion list exists, or the ad set launches without it and the gap is noted.

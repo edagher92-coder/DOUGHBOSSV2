@@ -129,9 +129,3 @@ DB | Search | Brand,BRND | Dough Boss Catering,dough boss catering bankstown,exa
 DB | Search | Brand,BRND | Dough Boss Catering,doughboss catering,phrase,https://doughboss.com.au/catering,brand
 DB | Search | Brand,BRND | Dough Boss Catering,doughboss catering,exact,https://doughboss.com.au/catering,brand
 DB | Search | Brand,BRND | Dough Boss Catering,dough boss catering menu,phrase,https://doughboss.com.au/catering,brand
-DB | Search | Minis Waitlist (Later),MINI | Finger Food And Party Bites,finger food catering sydney,phrase,https://doughboss.com.au/catering/minis,research
-DB | Search | Minis Waitlist (Later),MINI | Finger Food And Party Bites,bite sized party food,phrase,https://doughboss.com.au/catering/minis,research
-DB | Search | Minis Waitlist (Later),MINI | Finger Food And Party Bites,party food platter delivery,phrase,https://doughboss.com.au/catering/minis,"research; transactional intent, expect poor fit with a waitlist"
-DB | Search | Minis Waitlist (Later),MINI | Mini Pizza,mini pizza party platter,phrase,https://doughboss.com.au/catering/minis,research
-DB | Search | Minis Waitlist (Later),MINI | Mini Pizza,mini pizzas party,phrase,https://doughboss.com.au/catering/minis,variant
-DB | Search | Minis Waitlist (Later),MINI | Mini Pizza,mini pizza catering,phrase,https://doughboss.com.au/catering/minis,variant

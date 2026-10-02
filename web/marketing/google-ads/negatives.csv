@@ -137,10 +137,6 @@ campaign,DB | Search | Local Store Areas Catering,party,phrase,Query sculpting: 
 campaign,DB | Search | Local Store Areas Catering,function,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
 campaign,DB | Search | Local Store Areas Catering,school,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
 campaign,DB | Search | Local Store Areas Catering,lebanese,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
-campaign,DB | Search | Minis Waitlist (Later),coupon,phrase,Promo-code seekers
-campaign,DB | Search | Minis Waitlist (Later),voucher,phrase,Promo-code seekers
-campaign,DB | Search | Minis Waitlist (Later),cake,phrase,Not a Minis product
-campaign,DB | Search | Minis Waitlist (Later),birthday cake,phrase,Not a Minis product
 campaign,DB | Search | Brand,recipe,phrase,Already account-level; kept explicit so a brand-only account view stays clean
 campaign,DB | Search | Local Store Areas Catering,corporate catering bankstown,exact,Exact route to CORP | Corporate Catering
 campaign,DB | Search | Local Store Areas Catering,office catering revesby,exact,Exact route to CORP | Office Catering

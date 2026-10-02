@@ -185,6 +185,8 @@ I found this address on {PUBLISHED_SOURCE}. If you would rather not hear from us
 
 For contacts who have already replied, asked for the overview or sent an enquiry, and then gone quiet for a few months `[CONFIRM: how long]`. Never for a cold prospect who did not reply to touches 1 to 4. One note only. If it gets no reply, stop.
 
+Who may receive it (audit rule, 2026-10-02): only (a) an outbound contact whose role address has a complete evidence record under the conspicuous-publication test and who replied, or (b) an enquirer who ticked a separate, unticked marketing-consent box that is recorded with time and wording. An enquiry-form lead without recorded marketing consent does not get this note: an enquiry alone does not establish consent to promotional follow-up (`docs/marketing/04-corporate-outreach.md` section 7, and the live form captures no consent today). `[CONFIRM: lawyer view on how long a reply or an enquiry supports a follow-up]`
+
 ```subject
 Still thinking about catering?
 ```

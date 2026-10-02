@@ -71,16 +71,6 @@
       "final_url": "https://doughboss.com.au/locations/roselands",
       "scope": ["DB | Search | Corporate Office Catering", "DB | Search | Event Function Catering", "DB | Search | Brand"],
       "status": "paused"
-    },
-    {
-      "id": "sl-minis",
-      "title": "Minis Waitlist",
-      "description1": "Join the waitlist online",
-      "description2": "Updates by email",
-      "final_url": "https://doughboss.com.au/catering/minis",
-      "scope": ["DB | Search | Minis Waitlist (Later)"],
-      "status": "paused",
-      "hold": "Later: only with the Minis campaign."
     }
   ],
   "callouts": [

@@ -20,6 +20,8 @@ How to read this file. Fenced blocks tagged `gbp-description`, `gbp-service`, `g
 | Appointment / booking link | Not applicable. Leave empty. |
 | UTM rule | utm_source=gbp, utm_medium=gbp, utm_campaign=roselands-profile, utm_content=<link variant>. All lower-case, hyphenated. |
 
+Store name check: "Roselands Centro" comes from the typed store data (src/lib/data/catalogue.ts) and is used in this profile, the Google and Meta ad copy and the outreach files. Research found the centre now appears to trade as HomeCo Roselands (docs/marketing/research/local-demand.md, cluster F). [CONFIRM: the current centre name and the name on the shop sign. If it changes, change catalogue.ts first, then nap.json and every pack, in one commit.]
+
 Why the website link goes to the store page and not the home page: a profile should point to the page about that shop, and the three shops should not all send people to the same page. Until `/locations/roselands` exists, use the interim link and swap it the day the route goes live. The swap is a one-minute edit.
 
 Before claiming anything, search Google Maps for each address and phone number. A competitor-research snippet mentioned a possible existing "Doughboss" listing at 462 Chapel Road, Bankstown, which has not been verified. If a listing already exists, claim it or request ownership through the profile's own ownership flow. Never create a second profile for the same shop. [CONFIRM the exact in-dashboard steps, because Google changes them.]
@@ -70,7 +72,7 @@ Catering enquiries | Catering for offices, events and parties. Tell us the date,
 ```
 
 
-Do not add a price to any service line. Do not add a "from" figure. Do not add Minis until the Minis claim is confirmed in the ledger and the waitlist page is live.
+Do not add a price to any service line. Do not add a "from" figure. Do not add any product or service that is not already confirmed in the ledger; nothing unannounced is named, hinted at or teased in a service or product line.
 
 ## 5. Attributes
 
@@ -143,6 +145,8 @@ Website alt-text pattern for the same images: "<what is in the photo>, Dough Bos
 
 Each post is 1,500 characters or fewer, uses no claim outside section 11, has one call to action, and contains no emoji, price, offer or exclamation mark. Publish on the Monday shown, then do not edit the text. Posts are what's-new type. Do not use Offer-type posts, because Dough Boss has no confirmed offer.
 
+Audit note (2026-10-02): the dates below are a template, not a schedule. Week 1 falls on Monday 5 October 2026, which is Labour Day, a NSW public holiday (INFERRED from the NSW rule that Labour Day is the first Monday in October; check https://www.nsw.gov.au/about-nsw/public-holidays), and the profile cannot be verified by then anyway. Start week 1 on the first Monday after the profile is verified and the special hours for the next public holiday are set. Never publish a post that states opening hours on a public holiday whose hours are unknown.
+
 #### Week 1 (from Mon 5 Oct 2026): Introduce the store
 
 ```gbp-post
@@ -160,7 +164,7 @@ Manoush at Dough Boss Roselands Centro. The menu includes za'atar manoush, chees
 - CTA button: Learn more
   - Final URL: https://doughboss.com.au/?utm_source=gbp&utm_medium=gbp&utm_campaign=roselands-profile&utm_content=post-w2-manoush#order
   - Interim URL (until the route is live): https://doughboss.com.au/menu/?utm_source=gbp&utm_medium=gbp&utm_campaign=roselands-profile&utm_content=post-w2-manoush
-- Note: Link target: the home page order section. Interim: /menu/. Online ordering is live at Revesby only, so the page must not imply Roselands pickup.
+- Note: Link target: the home page order section. Interim: /menu/. Online pickup is planned for Revesby only, and even there it is GATED until Elie confirms it is live (see revesby.md section 4), so the page must not imply Roselands pickup.
 
 #### Week 3 (from Mon 19 Oct): Pies
 
@@ -287,6 +291,7 @@ The lead should make sure each of these exists in the claims ledger as confirmed
 | descriptor-lebanese-bakery | Dough Boss is a Lebanese bakery | owner-site: live doughboss.com.au home page, "a contemporary Lebanese bakery" | Needs Elie's confirmation |
 | range-manoush-pizza-pies | The menu covers manoush, pizza and pies | owner-site: live site and src/lib/seo.ts description | Needs Elie's confirmation |
 | item-names | Za'atar, cheese, lahm bi ajin and shanklish manoush; halloumi and spinach pies | src/lib/data/catalogue.ts (items named in the project brief) | Needs Elie's confirmation that each is currently sold at this shop |
+| item-descriptions | One-line descriptions used in the week 2 post and the services list: za'atar manoush is za'atar and olive oil on dough; cheese manoush is melted cheese on dough; lahm bi ajin is a spiced minced-meat topping on dough; shanklish manoush is shanklish cheese on dough; savoury baked pies | src/lib/data/catalogue.ts item descriptions (the words "fresh" and "fresh-baked" there are deliberately not used) | Needs Elie's confirmation; added by the marketing audit, because the item-names claim covers names only |
 | catering-enquiry-quote | Customers send the date, headcount and dietary needs and Dough Boss replies with a quote | owner-confirmed: the plugin's catering enquiry and quote workflow | Needs Elie's confirmation |
 | allergen-statement | The kitchen handles common allergens, so a meal without traces cannot be promised | owner-site: live /catering/ page | Needs Elie's confirmation |
 | store-roselands-address-hours-phone | Address, hours and phone as in nap.json | owner-site: locations page; src/lib/data/catalogue.ts | Needs Elie's confirmation |

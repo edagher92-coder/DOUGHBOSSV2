@@ -10,8 +10,8 @@ Labels: OBSERVED means I read it at the cited URL on 2026-10-02, through a fetch
 
 | File | What it is |
 | --- | --- |
-| `marketing/meta/campaigns.json` | Machine-readable build: 4 campaigns, 6 ad sets, 17 ads, all `paused`, no budgets, radii or cost caps (all `[CONFIRM]`) |
-| `marketing/meta/copy.csv` | 17 ads across office breakfast, team lunch, meeting catering, event and party catering, community events, the Minis waitlist and warm retargeting, each with a UTM-tagged final URL |
+| `marketing/meta/campaigns.json` | Machine-readable build: 4 campaigns, 6 ad sets, 15 ads, all `paused`, no budgets, radii or cost caps (all `[CONFIRM]`) |
+| `marketing/meta/copy.csv` | 15 ads across office breakfast, team lunch, meeting catering, event and party catering, community events, one generic coming-soon list ad (held) and warm retargeting, each with a UTM-tagged final URL |
 | `marketing/meta/audiences.md` | Geography, broad-plus-suggestions audiences, exclusions, customer lists from consented leads only, retargeting and lookalike gates |
 | `marketing/meta/creative-brief.md` | Real-photography and video shot lists, formats, safe zones, captions, one-page review checklist |
 | `marketing/meta/tracking.md` | Pixel, Conversions API, event de-duplication, Lead mapping, domain verification, QA checklist, Square paid-order phase |
@@ -26,7 +26,7 @@ What limits the evidence, stated plainly:
 ## 1. The plan in one page
 
 1. Objective first: Leads, with the conversion happening on our own website, on the `/catering/*` pages that hold the enquiry form. Instant forms are a later A/B test, not the starting point (section 3).
-2. Four campaigns, all PAUSED at creation: Corporate Office, Events and Parties, Minis Waitlist (held), Warm Retarget (held). Six ad sets. Seventeen ads.
+2. Four campaigns, all PAUSED at creation: Corporate Office, Events and Parties, Coming Soon List (generic awareness, held), Warm Retarget (held). Six ad sets. Fifteen ads.
 3. Start broad: Advantage+ audience with the store radius as the one hard control, job-role and interest options as suggestions only, and Advantage+ placements, reviewed weekly by placement (section 4).
 4. Creative does the targeting. The first line of every ad says who it is for. Real photographs only; the AI hero images are illustrative and stay out of ads (`creative-brief.md`).
 5. Geography is a `[CONFIRM: radius]` hypothesis per store, held to the area Elie will actually serve.
@@ -101,12 +101,12 @@ OBSERVED (Marketing API, 2026-10-02, https://developers.facebook.com/docs/market
 | --- | --- | --- | --- | --- | --- |
 | DB \| Meta \| Leads \| Corporate Office | Launch | CORP Bankstown catchment (wave 1), CORP Revesby catchment (wave 1), CORP Roselands catchment (wave 2, held) | 8 | `/catering/office-breakfast`, `/catering/corporate` | `Lead` (catering enquiry) |
 | DB \| Meta \| Leads \| Events and Parties | Launch | EVNT Three-store catchment (wave 2) | 4 | `/catering/events` | `Lead` (catering enquiry) |
-| DB \| Meta \| Leads \| Minis Waitlist | Later, held | MINI Parents and organisers (wave 3, held) | 3 | `/catering/minis` | `Lead` with `content_name = minis_waitlist` |
+| DB \| Meta \| Leads \| Coming Soon List | Later, held | SOON Three-store catchment (wave 3, held) | 1 | `/` (teaser section) | `Lead` with `content_name = waitlist`, from `waitlist_submit` |
 | DB \| Meta \| Leads \| Warm Retarget | Later, held | WARM Catering page visitors (wave 3, held) | 2 | `/catering` | `Lead` (catering enquiry) |
 
 Why this shape:
 
-- One campaign per buyer intent, because corporate and event buyers want different words and a different landing page, and Minis is a different product with a different audience.
+- One campaign per buyer intent, because corporate and event buyers want different words and a different landing page, and the generic coming-soon list ad is awareness only and must stay apart from catering so waitlist sign-ups never train the catering campaigns. Per `docs/site/teaser-direction.md` rule 6, there is no product-specific campaign: one generic ad, held, with no product claim.
 - One ad set per store catchment for corporate, because the creative says where the store is and the radii differ. This is the one place I split by geography. If the budget formula (section 9) says a catchment cannot fund learning on its own, merge Bankstown and Revesby into one ad set and keep the two sets of ads.
 - Events combine the three store areas in one ad set because the event buyer is not tied to a nearby store the way an office is, and a single pool learns faster.
 - Few ads per ad set (three or four). Too many ads split a small budget into slivers that never learn.
@@ -125,7 +125,7 @@ Start with Advantage+ audience and Advantage+ placements, with the store radius 
 
 Naming: campaign `DB | Meta | Leads | <Segment>`; ad set `<CODE> | <Area or audience>`; ad `<CODE>-<AREA>-<nn> <angle> <format>-<variant>`. The same slug appears in `utm_content`.
 
-Launch order: wave 1 is Corporate Bankstown and Corporate Revesby, the two catchments with the clearest office and depot demand in `docs/marketing/research/local-demand.md` (INFERRED, ranking by closeness to a store and repeatability, not by measured volume). Wave 2 adds Events and, once confirmed, Roselands. Wave 3 is Minis and Warm, held for the reasons in `campaigns.json`.
+Launch order: wave 1 is Corporate Bankstown and Corporate Revesby, the two catchments with the clearest office and depot demand in `docs/marketing/research/local-demand.md` (INFERRED, ranking by closeness to a store and repeatability, not by measured volume). Wave 2 adds Events and, once confirmed, Roselands. Wave 3 is the generic Coming Soon List ad and Warm, held for the reasons in `campaigns.json`.
 
 ## 5. Geographic targeting (a hypothesis, per store)
 
@@ -146,7 +146,7 @@ Detail in `audiences.md`. The decisions:
 - Exclusions: people who already enquired (from a consented list, once it exists). No exclusion or targeting by religion, ethnicity or any personal attribute. Meta's ad standards bar asserting or implying personal attributes and wrongly targeting or excluding groups (OBSERVED via `compliance-au.md` section 10, https://transparency.meta.com/policies/ad-standards/).
 - Customer lists: only from consented leads, hashed with SHA-256, with the privacy policy naming Meta, and never carrying dietary or free-text data. Meta's custom audience guide says data must be SHA-256 hashed and normalised and that the advertiser must accept Meta's custom audience terms and owns the data (OBSERVED, https://developers.facebook.com/docs/marketing-api/audiences/guides/custom-audiences, 2026-10-02). Australian law adds the consent and disclosure conditions in `audiences.md` section 5 (LAWYER to check).
 - Retargeting and lookalikes are gated by consent, size and seed quality. Not at launch.
-- Minis and event ads speak to adults. Never to children (AANA code, `compliance-au.md` section 7).
+- Teaser and event ads speak to adults. Never to children (AANA code, `compliance-au.md` section 7).
 
 ## 7. Frequency and fatigue rules
 
@@ -209,6 +209,7 @@ Supporting checks:
 - Scaling rule: raise an ad set's budget in small steps, `[CONFIRM: step size]`, no more than once per review, and only when cost per qualified lead is at or under target for the review before and the saturation check in section 7 passes.
 - Media budget ceiling: `[CONFIRM: the monthly media cap and who owns it]`. No formula overrides it.
 - Meta's minimum daily budget for the chosen setup: `[VERIFY: read at staging]`.
+- The held Coming Soon List ad is the exception: a waitlist sign-up has no order value, so the catering break-even maths above does not apply to it. Its budget is a fixed, time-boxed test cap that Elie sets before it starts (`campaigns.json`), or it does not run.
 
 Metrics to compute each week, from the plugin and Ads Manager together: cost per `Lead`; qualified lead rate (qualified leads divided by leads); cost per qualified lead; quote rate; won rate; cost per won order; revenue per won order; return on ad spend as won revenue divided by spend. Report cost per qualified lead and cost per won order as the headline numbers, never cost per click.
 
@@ -272,7 +273,7 @@ The facts the copy still leans on, to confirm once and then record in the ledger
 2. "stores in Revesby, Bankstown and Roselands Centro" and the typed addresses (typed store data, re-confirm before launch).
 3. "three stores in the south-west" (EVNT-ALL-03): a store fact, not a service area. `[CONFIRM or reword]`
 4. That the business will quote for catering from the form: "we'll come back with a quote" (the brief's own wording).
-5. For Minis: that Minis are coming, that there is a waitlist, and that "ready to order" in MINI-ALL-03 is true. `[CONFIRM: all of it, and whether the name Minis may be announced]`
+5. For the coming-soon ad (SOON-ALL-01): that a list exists to join, that something real is planned (the line "Something exciting is coming" is a representation about a future matter, which the Australian Consumer Law treats as misleading unless there are reasonable grounds for it), and that Elie approves the generic line. The ad says nothing about what is coming. `[CONFIRM: approval, the basis for "coming", and the landing anchor]`
 6. Copy never says what is on the catering menu, because no item list for catering is confirmed.
 
 Compliance (practical guidance from `docs/marketing/research/compliance-au.md`, not legal advice; LAWYER where flagged):
@@ -281,7 +282,7 @@ Compliance (practical guidance from `docs/marketing/research/compliance-au.md`, 
 - Spam Act 2003: an enquiry form does not create consent to marketing email or SMS. Any follow-up marketing list needs a separate unticked opt-in with the sender named and a working unsubscribe. Customer-list ad targeting is a separate matter from messaging.
 - Privacy Act and the APPs: lead data minimised; the privacy policy names Meta and overseas storage; no dietary or free text in any Pixel or CAPI parameter; tags and server events respect one consent flag. LAWYER on the wording and on the small business exemption, because Dough Boss's turnover is not known to this slice.
 - Meta's ad standards: no personal-attribute language, no wrongful targeting or exclusion, no health or "detox" claims. Re-read before each launch (OBSERVED via the compliance guide, https://transparency.meta.com/policies/ad-standards/, 2026-10-02).
-- AANA Food and Beverages Code (best practice): Minis speaks to parents and organisers, with no urgency or excess-consumption language.
+- AANA Food and Beverages Code (best practice): the teaser speaks to adults, with no urgency or excess-consumption language.
 - Page and ad transparency: the Page and ad account use the real trading name, and any "paid for by" or business disclosure shown by Meta matches the operating entity. `[CONFIRM: entity]`
 - Reviews: no review gating, no incentives, no fake testimonials. This plan uses none.
 
@@ -308,7 +309,7 @@ Entity and ownership. The Page, Instagram account, ad account, dataset and domai
 
 ## 14. What I need from Elie
 
-The consolidated list is in my report. In summary: the operating entity and portfolio ownership; confirmation of the facts in section 12; who answers catering enquiries and when; the radius per store and the area Elie will serve; the monthly media cap; the average catering order value, margin and a stated guess at lead-to-won rate; whether Roselands takes corporate enquiries; whether Minis may be announced and how it will be ordered; the real photography; and the consent and privacy policy decisions in `tracking.md`.
+The consolidated list is in my report. In summary: the operating entity and portfolio ownership; confirmation of the facts in section 12; who answers catering enquiries and when; the radius per store and the area Elie will serve; the monthly media cap; the average catering order value, margin and a stated guess at lead-to-won rate; whether Roselands takes corporate enquiries; whether Elie approves the one generic coming-soon ad; the real photography; and the consent and privacy policy decisions in `tracking.md`.
 
 ## 15. Sources (retrieved 2026-10-02 unless stated)
 

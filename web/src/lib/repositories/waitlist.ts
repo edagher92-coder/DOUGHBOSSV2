@@ -1,9 +1,9 @@
 /**
- * Minis waitlist storage. Email is the unique key; a repeat signup merges
- * interests and keeps the EARLIEST consent timestamp (the consent that
+ * "Something exciting is coming" waitlist storage. Email is the unique key; a repeat
+ * signup updates the contact details and keeps the EARLIEST consent timestamp (the consent that
  * actually authorised contact, per the Spam Act 2003).
  */
-import { Prisma, type MinisInterest as Interest, type PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type { StoreSlug } from "@/types/menu";
 import { getPrisma } from "../db";
 import { selectBackend } from "./select";
@@ -12,8 +12,6 @@ export interface WaitlistRecord {
   name: string;
   email: string;
   phone?: string | undefined;
-  interests: Interest[];
-  partyPieces?: number | undefined;
   storeSlug?: StoreSlug | undefined;
   source?: string | undefined;
   consentAt: Date;
@@ -26,9 +24,6 @@ export interface WaitlistRepository {
 }
 
 const normaliseEmail = (email: string) => email.trim().toLowerCase();
-const mergeInterests = (existing: readonly Interest[], incoming: readonly Interest[]): Interest[] => [
-  ...new Set([...existing, ...incoming]),
-];
 
 /** Which consent (time + the wording agreed to) is the earliest? Text always travels with its timestamp. */
 function earliestConsent(
@@ -60,7 +55,7 @@ export function createInMemoryWaitlistRepository(): InMemoryWaitlistRepository {
       const existing = byEmail.get(email);
       if (!existing) {
         const id = `mem_wl_${++seq}`;
-        byEmail.set(email, { ...record, email, interests: mergeInterests([], record.interests), id, notifiedAt: null });
+        byEmail.set(email, { ...record, email, id, notifiedAt: null });
         return { created: true, id };
       }
       const consent = earliestConsent(existing, record);
@@ -68,8 +63,6 @@ export function createInMemoryWaitlistRepository(): InMemoryWaitlistRepository {
         ...existing,
         name: record.name,
         phone: record.phone ?? existing.phone,
-        interests: mergeInterests(existing.interests, record.interests),
-        partyPieces: record.partyPieces ?? existing.partyPieces,
         storeSlug: record.storeSlug ?? existing.storeSlug,
         consentAt: consent.consentAt,
         consentText: consent.consentText,
@@ -105,8 +98,6 @@ export function createPrismaWaitlistRepository(db: Db): WaitlistRepository {
       data: {
         name: record.name,
         ...(record.phone ? { phone: record.phone } : {}),
-        interests: mergeInterests(existing.interests, record.interests),
-        ...(record.partyPieces !== undefined ? { partyPieces: record.partyPieces } : {}),
         ...(sid ? { storeId: sid } : {}),
         consentAt: consent.consentAt,
         consentText: consent.consentText,
@@ -129,10 +120,8 @@ export function createPrismaWaitlistRepository(db: Db): WaitlistRepository {
             email,
             name: record.name,
             phone: record.phone ?? null,
-            interests: mergeInterests([], record.interests),
-            partyPieces: record.partyPieces ?? null,
             storeId: sid,
-            source: record.source ?? "minis-teaser",
+            source: record.source ?? "coming-soon-teaser",
             consentAt: record.consentAt,
             consentText: record.consentText,
           },

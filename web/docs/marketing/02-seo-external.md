@@ -2,7 +2,7 @@
 
 Prepared 2026-10-02 for Elie. Status: DRAFT. Nothing in this plan has been launched, submitted, posted, sent or bought. Every action below is for a human to do after review.
 
-Slice: local and off-site SEO for three Sydney south-west shops (Revesby, Bankstown, Roselands Centro), aimed at walk-in trade, corporate, office and event catering enquiries, and the upcoming Minis party-bite line.
+Slice: local and off-site SEO for three Sydney south-west shops (Revesby, Bankstown, Roselands Centro), aimed at walk-in trade, corporate, office and event catering enquiries.
 
 ## Read this first
 
@@ -23,7 +23,7 @@ Slice: local and off-site SEO for three Sydney south-west shops (Revesby, Bankst
 | Staff and utility pages | /kitchen/ and /track-order/ are in the public sitemap. | same |
 | Title tags | Home "Dough Boss \| Fresh Manoush, Pies & Catering Sydney". Locations "Dough Boss Locations \| Lebanese Bakery Sydney – Dough Boss". Catering "Dough Boss Catering \| Mini Manoush & Pies Sydney – Dough Boss". | fetch tool |
 | NAP on the site | Revesby "Shop 12/25 Selems Parade". Bankstown "462 Chapel Road" with no plaza line. Roselands "Shop MM03, Roselands Drive". Phones match the typed store data. | /locations/ (fetch tool) versus src/lib/data/catalogue.ts |
-| Catering page | Lists "mini manoush, pizzas, pies, wraps and platters", an allergen statement, no prices, lead time "depends on the date, quantity and menu mix", and a separate catering phone 0422 487 487 and catering@doughboss.com.au. The online form was noted as pending. | /catering/ (fetch tool) |
+| Catering page | Lists "mini manoush, pizzas, pies, wraps and platters", an allergen statement, no prices, lead time "depends on the date, quantity and menu mix", and a separate catering phone 0422 487 487 and catering@doughboss.com.au. The fetch summary noted the online form as pending, but the read-only code audit records a live enquiry form rendered by the `[doughboss_catering]` shortcode (docs/wp/01-storefront-map.md, section 9 table). The two disagree: load the page in a browser before relying on either. | /catering/ (fetch tool) |
 | Online ordering | The /order/ page (last modified 2026-07-31) still said "Online ordering is coming soon", which conflicts with the project brief that says Revesby pickup is live. | /order/ (fetch tool) |
 | Student vouchers | /vouchers/ and /student-vouchers/ show a $5 student voucher for education-email holders, single use, while the day's allocation lasts. No Snow Boss mention. | fetch tool |
 | Structured data | None seen in the pages read. | fetch tool |
@@ -143,7 +143,7 @@ Cadence: a third-party guideline in the seo-local reference (Sterling Sky) says 
 
 ### A11 and A12: Links and digital PR
 
-marketing/links/link-targets.csv has 25 legitimate local opportunities with sources: chambers and networking, council relationships and events, community organisations, universities and TAFE, health, press and media services, trade bodies and the Snow Boss partner. marketing/links/digital-pr-angles.md has five story angles, each with the hook, audience, facts needed, facts we can support now and what Elie must confirm, plus a held Minis angle.
+marketing/links/link-targets.csv has 25 legitimate local opportunities with sources: chambers and networking, council relationships and events, community organisations, universities and TAFE, health, press and media services, trade bodies and the Snow Boss partner. marketing/links/digital-pr-angles.md has five story angles, each with the hook, audience, facts needed, facts we can support now and what Elie must confirm, plus a note that nothing unannounced is pitched.
 
 Rules: no paid links, no link exchanges, no fake accounts, no invented quotes. Pitch real people through published contact routes, and only with facts that are in the ledger. Relationship first: most of these are conversations, not link requests.
 
@@ -151,7 +151,7 @@ The Snow Boss partnership is a real angle. The documents I read support only thi
 
 ## 5. Track B: when the new app is live
 
-This track starts only when the new routes are live on doughboss.com.au (served by the WordPress companion plugin or the app). Route contract: /, /#order, /#minis, /#locations, /catering, /catering/corporate, /catering/office-breakfast, /catering/events, /catering/minis, /locations/revesby, /locations/bankstown, /locations/roselands.
+This track starts only when the new routes are live on doughboss.com.au (served by the WordPress companion plugin or the app). Route contract: /, /#order, /#locations, /catering, /catering/corporate, /catering/office-breakfast, /catering/events, /locations/revesby, /locations/bankstown, /locations/roselands.
 
 | ID | Task | Owner | Effort (estimate) | Expected effect | Done when |
 |---|---|---|---|---|---|
@@ -180,7 +180,7 @@ Principles (https://developers.google.com/search/docs/crawling-indexing/site-mov
 | /terms-conditions/ and /privacy-policy/ | Same slugs | Keep | Legal URLs should not move; analytics and ad platforms link to them |
 | /kitchen/ and /track-order/ | None | Keep, noindex | Not search pages |
 | `doughboss_item` and `doughboss_cat_pkg` URLs | Menu in /#order | 301 only the ones that were indexed and linked | URL pattern not confirmed. [CONFIRM from Search Console after A4] |
-| New in the contract with no old page | /catering/corporate, /catering/office-breakfast, /catering/events, /catering/minis, /locations/revesby, /locations/bankstown, /locations/roselands | none | New pages. Link them from the hub and from the profiles |
+| New in the contract with no old page | /catering/corporate, /catering/office-breakfast, /catering/events, /locations/revesby, /locations/bankstown, /locations/roselands | none | New pages. Link them from the hub and from the profiles |
 
 Rules:
 

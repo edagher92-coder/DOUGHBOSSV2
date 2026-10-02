@@ -30,8 +30,10 @@ test.describe("coming-soon teaser and waitlist", () => {
 
   test("the header navigation points to the neutral anchor", async ({ page }) => {
     await page.goto("/?renderer=poster");
-    const link = page.getByRole("navigation", { name: /primary/i }).getByRole("link", { name: /coming soon/i });
-    await expect(link).toHaveAttribute("href", "#coming-soon");
+    // The primary nav is hidden below the sm breakpoint, so assert on the DOM rather than visibility.
+    const link = page.locator('nav[aria-label="Primary"] a[href="#coming-soon"]');
+    await expect(link).toHaveCount(1);
+    await expect(link).toHaveText(/coming soon/i);
     await expect(page.locator('a[href="#minis"]')).toHaveCount(0);
   });
 

@@ -48,7 +48,8 @@ export async function readCls(page: Page): Promise<number> {
 
 /** Axe scan; fails on serious or critical violations and prints each one legibly. */
 export async function expectNoSeriousA11yViolations(page: Page, label: string, exclude: string[] = []): Promise<void> {
-  let builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]);
+  // @axe-core/playwright bundles its own Playwright types; the runtime object is identical, so cast across the duplicate declaration.
+  let builder = new AxeBuilder({ page: page as never }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]);
   for (const selector of exclude) builder = builder.exclude(selector);
   const { violations } = await builder.analyze();
   const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");

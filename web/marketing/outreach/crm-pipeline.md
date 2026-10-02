@@ -51,7 +51,7 @@ The Next.js lab's `CateringLead` model (`prisma/schema.prisma`) already has `gue
 | `status` | One of the six stages |
 | `organisation`, `contact_role`, `contact_name`, `email`, `phone` | Collect the minimum. Names of private individuals only where they supply them |
 | `segment`, `nearest_store` | From `segments.csv` (`revesby`, `bankstown`, `roselands`) |
-| `eventType` | `OFFICE_BREAKFAST`, `TEAM_LUNCH`, `MEETING`, `CORPORATE_EVENT`, `PARTY`, `WEDDING_ENGAGEMENT`, `COMMUNITY_RELIGIOUS`, `MINIS_PARTY`, `OTHER` |
+| `eventType` | `OFFICE_BREAKFAST`, `TEAM_LUNCH`, `MEETING`, `CORPORATE_EVENT`, `PARTY`, `WEDDING_ENGAGEMENT`, `COMMUNITY_RELIGIOUS`, `OTHER` |
 | `guestBand` | `UP_TO_25`, `FROM_26_TO_50`, `FROM_51_TO_100`, `FROM_101_TO_250`, `OVER_250` |
 | `wantsCorporateAccount` | Boolean |
 | `recurring` | Yes, no or unknown (standing-order signal) |

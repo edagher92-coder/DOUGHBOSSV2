@@ -24,13 +24,11 @@ const read = (name: string): string => readFileSync(join(META_DIR, name), "utf8"
 const ROUTE_CONTRACT = new Set([
   "/",
   "/#order",
-  "/#minis",
   "/#locations",
   "/catering",
   "/catering/corporate",
   "/catering/office-breakfast",
   "/catering/events",
-  "/catering/minis",
   "/locations/revesby",
   "/locations/bankstown",
   "/locations/roselands",
@@ -227,10 +225,10 @@ describe("campaigns.json", () => {
     }
   });
 
-  it("keeps Minis and warm retargeting in the later phase and on hold", () => {
-    const minis = campaignsFile.campaigns.find((c) => c.name.includes("Minis"));
+  it("keeps the generic coming-soon list and warm retargeting in the later phase and on hold", () => {
+    const soon = campaignsFile.campaigns.find((c) => c.name.includes("Coming Soon"));
     const warm = campaignsFile.campaigns.find((c) => c.name.includes("Warm Retarget"));
-    for (const c of [minis, warm]) {
+    for (const c of [soon, warm]) {
       expect(c).toBeDefined();
       expect(c?.phase).toBe("later");
       for (const s of c?.ad_sets ?? []) {
@@ -273,18 +271,18 @@ describe("copy.csv", () => {
     expect(new Set(copy.map((r) => r.headline)).size).toBeGreaterThanOrEqual(8);
   });
 
-  it("covers at least 3 distinct angles, including corporate, events and Minis", () => {
+  it("covers at least 3 distinct angles, including corporate, events and the generic coming-soon list", () => {
     const angles = new Set(copy.map((r) => angleOf(r.notes ?? "")));
     expect(angles.has("")).toBe(false);
     expect(angles.size).toBeGreaterThanOrEqual(3);
     const campaigns = new Set(copy.map((r) => r.campaign));
-    for (const needle of ["Corporate", "Events", "Minis"]) {
+    for (const needle of ["Corporate", "Events", "Coming Soon"]) {
       expect([...campaigns].some((c) => c?.includes(needle)), needle).toBe(true);
     }
     const all = copy.map((r) => r.ad ?? "").join("|");
     expect(all).toMatch(/office-breakfast/);
     expect(all).toMatch(/team-lunch/);
-    expect(all).toMatch(/minis/);
+    expect(all).toMatch(/coming-soon/);
   });
 
   it("limits headline to 40, description to 30 and primary text to 300", () => {
@@ -346,11 +344,25 @@ describe("copy.csv", () => {
     }
   });
 
-  it("is addressed to adults: Minis copy speaks to organisers and parents, never to children", () => {
-    for (const r of copy.filter((x) => /minis/i.test(x.campaign ?? ""))) {
+  it("is addressed to adults: no copy speaks to children", () => {
+    for (const r of copy) {
       const text = `${r.primary_text} ${r.headline}`;
       expect(text, r.ad).not.toMatch(/\b(kids?|children|little ones|treat yourself)\b/i);
     }
+  });
+
+  it("keeps the coming-soon ad generic: exactly one, with no product, size, dietary, ingredient, date or location claim (teaser-direction.md)", () => {
+    const soon = copy.filter((x) => /coming soon/i.test(x.campaign ?? ""));
+    expect(soon).toHaveLength(1);
+    const r = soon[0];
+    expect(r?.headline).toBe("Something exciting is coming");
+    const text = `${r?.primary_text} ${r?.headline} ${r?.description}`;
+    expect(text).not.toMatch(
+      /\b(minis?|mini pizzas?|bites?|packs?|pizzas?|manoush|manakish|man'?oushe|pies?|platters?|trays?|menu|vegan|vegetarian|gluten|dairy|nut|halal|kosher|organic|ingredients?|opening|launch(es|ing)?|date|stores?|suburbs?|revesby|bankstown|roselands|catering|order(ing)?)\b/i,
+    );
+    expect(r?.cta).toBe("Sign up");
+    // Consent is handled on the landing page, never promised or implied inside the ad.
+    expect(text).not.toMatch(/\b(subscribe|newsletter|marketing|emails?|sms|text messages?)\b/i);
   });
 
   it("carries a lower-case, hyphenated UTM set on a route-contract URL on doughboss.com.au", () => {
@@ -402,9 +414,9 @@ describe("campaigns.json and copy.csv agree", () => {
     }
   });
 
-  it("holds every Minis and warm-retarget ad, and keeps held ad sets out of wave 1", () => {
+  it("holds every coming-soon and warm-retarget ad, and keeps held ad sets out of wave 1", () => {
     for (const s of adSetByName.values()) if (s.hold) expect(s.launch_wave, s.name).toBeGreaterThanOrEqual(2);
-    for (const r of copy.filter((x) => /minis|warm/i.test(x.campaign ?? ""))) {
+    for (const r of copy.filter((x) => /coming soon|warm/i.test(x.campaign ?? ""))) {
       expect(adSetByName.get(r.ad_set ?? "")?.hold, r.ad).toBe(true);
     }
   });
@@ -436,6 +448,13 @@ describe("Meta build documents", () => {
       expect(text, p).not.toMatch(/\bact_\d{6,}/);
       expect(text, p).not.toMatch(/\bEAA[A-Za-z0-9]{20,}/);
       expect(text, p).not.toMatch(/access_token=[A-Za-z0-9]{10,}/);
+    }
+  });
+
+  it("names no unannounced product anywhere in the Meta build (teaser-direction.md)", () => {
+    for (const p of OWNED_TEXT_FILES) {
+      const text = readFileSync(p, "utf8");
+      expect(text, p).not.toMatch(/\bminis?\b|\bmini[- ]pizzas?\b|party (minis|bites)|bites? packs?/i);
     }
   });
 

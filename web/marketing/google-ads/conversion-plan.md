@@ -19,17 +19,18 @@ Names are the Google Ads conversion action names. "Source" is the exact event na
 | # | Conversion action | Source | Goal | Role at launch | Count | Notes |
 |---|---|---|---|---|---|---|
 | 1 | Catering enquiry | `generate_lead` with `form = catering_enquiry` | Submit lead form | PRIMARY | One per click | The money action. Params available: `category` (event type), `guest_band`, `store` |
-| 2 | Minis waitlist | `generate_lead` with `form = minis_waitlist` | Submit lead form | Secondary until the Minis campaign runs, then primary for that campaign only | One per click | Do not let waitlist sign-ups count toward catering bidding |
-| 3 | Calls from ads | Google call asset (call reporting) | Phone call lead | PRIMARY once a minimum call length is set: `[CONFIRM: minimum call length that counts as a real enquiry]` | One per call | Only where a number is answered. Needs a catering number: `[CONFIRM: which number answers catering calls]` |
-| 4 | Click to call (website) | `click_to_call` (params `store`, `surface`) | Contact | Secondary | One per click | A tap on a phone link on the site is intent, not a conversation. Promote after calls-to-lead rate is known. Avoid double counting with row 3 (different source: site click, not ad call) |
-| 5 | Order started (pickup) | `begin_checkout` (params `store`, `value_cents`, `item_count`, `payment_method`) | Begin checkout | Secondary, Brand campaign only | One per click | Optional. Pickup ordering is live for Revesby. `[CONFIRM: events.ts payment_method values change when Square replaces Stripe]` |
-| 6 | Order placed (pay at pickup) | `order_placed` (params `store`, `value_cents`, `item_count`) | Purchase | Secondary, Brand campaign only | Every | Optional. `purchase` is deliberately not fired from the browser (see `events.ts`); card orders will report server-side |
-| 7 | Catering quote sent | Offline import, plugin `LeadStatus = QUOTED` | Qualified lead | Secondary | One per lead | Section 7 and 8 |
-| 8 | Catering order won | Offline import, plugin `LeadStatus = WON` | Purchase | Secondary at first. PRIMARY candidate once there are enough imported wins | One per lead | The conversion we actually want to buy. Value = real paid amount (section 4) |
+| 2 | Calls from ads | Google call asset (call reporting) | Phone call lead | PRIMARY once a minimum call length is set: `[CONFIRM: minimum call length that counts as a real enquiry]` | One per call | Only where a number is answered. Needs a catering number: `[CONFIRM: which number answers catering calls]` |
+| 3 | Click to call (website) | `click_to_call` (params `store`, `surface`) | Contact | Secondary | One per click | A tap on a phone link on the site is intent, not a conversation. Promote after calls-to-lead rate is known. Avoid double counting with row 2 (different source: site click, not ad call) |
+| 4 | Order started (pickup) | `begin_checkout` (params `store`, `value_cents`, `item_count`, `payment_method`) | Begin checkout | Secondary, Brand campaign only | One per click | Optional, and GATED: the brief says Revesby pickup is live, but the live /order/ page said "Online ordering is coming soon" on 2026-10-02 (`marketing/gbp/revesby.md` section 4). Create this action only after Elie confirms pickup is live and a test order goes through. `[CONFIRM: events.ts payment_method values change when Square replaces Stripe]` |
+| 5 | Order placed (pay at pickup) | `order_placed` (params `store`, `value_cents`, `item_count`) | Purchase | Secondary, Brand campaign only | Every | Optional. `purchase` is deliberately not fired from the browser (see `events.ts`); card orders will report server-side |
+| 6 | Catering quote sent | Offline import, plugin `LeadStatus = QUOTED` | Qualified lead | Secondary | One per lead | Section 7 and 8 |
+| 7 | Catering order won | Offline import, plugin `LeadStatus = WON` | Purchase | Secondary at first. PRIMARY candidate once there are enough imported wins | One per lead | The conversion we actually want to buy. Value = real paid amount (section 4) |
 
-Not imported to Google Ads, kept in GA4 for analysis only: `select_store`, `view_item`, `add_to_cart`, `remove_from_cart`, `quote_step` (diagnostic: step 1 to step 2 drop-off), `hero_explore`, `pack_size_change`, `get_directions` (a secondary conversion later is fine), `cta_click`.
+Not imported to Google Ads, kept in GA4 for analysis only: `select_store`, `view_item`, `add_to_cart`, `remove_from_cart`, `quote_step` (diagnostic: step 1 to step 2 drop-off), `hero_explore`, `coming_soon_view`, `waitlist_submit`, `get_directions` (a secondary conversion later is fine), `cta_click`.
 
 Mark `generate_lead` as a key event in GA4. Do not mark the micro-events.
+
+Waitlist sign-ups (`waitlist_submit`, and any `generate_lead` sent with `form = waitlist`) are never a Google Ads conversion action. No Google Ads campaign is built around the generic teaser (`docs/site/teaser-direction.md` rule 6), and a sign-up must never be counted as a catering lead, because it would train the catering bidding on the wrong people. The primary action stays `generate_lead` with `form = catering_enquiry` only.
 
 Why calls from ads are in the plan even though Google rates the form higher in the funnel: INFERRED, a catering buyer often just phones the store. A plan that counts only forms will under-report and make Smart Bidding think it is failing.
 
@@ -60,11 +61,11 @@ When the companion plugin ships, its dispatcher replaces these listeners and sen
 
 **Value: nothing is invented.**
 
-- Launch with no conversion value on rows 1 to 4. Count-based bidding (Maximise conversions then Target CPA) does not need it.
+- Launch with no conversion value on rows 1 to 3. Count-based bidding (Maximise conversions then Target CPA) does not need it.
 - `[CONFIRM: average catering order value]`, `[CONFIRM: gross margin %]`, `[CONFIRM: lead to won rate]` are the inputs for any estimate. Use them in two ways only:
   1. Budget and CPA maths in `03a-google-ads.md` section 8.
   2. Optionally, once confirmed, a default lead value `= average_order_value x lead_to_won_rate` applied to row 1 so that leads and wins can sit in one value-based model. Label this internally as an ESTIMATE. Do not mix it with real order values on the same action.
-- Real values come only from won orders (row 8): the amount actually paid, in AUD, taken from Square once the loop exists, or from the invoice in the manual method. `[CONFIRM: record value excluding GST, and apply it consistently]`.
+- Real values come only from won orders (row 7): the amount actually paid, in AUD, taken from Square once the loop exists, or from the invoice in the manual method. `[CONFIRM: record value excluding GST, and apply it consistently]`.
 - Guest band (`UP_TO_25`, `FROM_26_TO_50`, and so on) is a lead score, not a value. After the first real wins, compute the average won value per band from data, and only then consider band-specific values.
 - Do not use Target ROAS or value-based bidding until real values exist. OBSERVED (https://support.google.com/google-ads/answer/7065882, retrieved 2026-10-02): Google cites measuring over periods "that have at least 30 conversions, such as a month or longer (50 conversions for Target ROAS)".
 
@@ -87,7 +88,7 @@ Gates before turning it on:
 
 ## 6. End-to-end verification (do this before any spend)
 
-Run once per landing page type (corporate, office breakfast, events, store page, Minis) and again after any form or tag change. A human submits the test lead, since this plan submits nothing.
+Run once per landing page type (corporate, office breakfast, events, store page) and again after any form or tag change. A human submits the test lead, since this plan submits nothing.
 
 1. Open the landing page from a test click URL that carries a `gclid` parameter (a made-up value is fine for the plugin check; Google will not credit a fake `gclid`, so use a real ad click in step 7).
 2. Tag Manager preview and GA4 DebugView: the page view, the form steps (`quote_step` when the dispatcher exists), and `generate_lead` appear once each, with the expected `form`, `category`, `guest_band`, `store`.
@@ -108,7 +109,7 @@ Use this from the first won order. It needs no Square integration, no developer 
 1. In the plugin lead list, filter leads whose status changed to `WON` in the last week. For each, read the click ID from the lead's attribution (`gclid`, or `gbraid` or `wbraid` if that is what was captured), the won amount from the invoice or the Square order, and the date and time the payment was received.
 2. Skip leads with no click ID (phone, direct, organic), test leads, refunded or cancelled orders, and leads without ad-measurement consent (when that field exists).
 3. Build the upload CSV (below) and upload it in Google Ads under the offline conversions area. `[VERIFY: current menu path and the exact template columns by downloading the template from the account]`.
-4. Also upload `QUOTED` leads as the "Catering quote sent" action if row 7 was created. Keep that file separate.
+4. Also upload `QUOTED` leads as the "Catering quote sent" action if row 6 was created. Keep that file separate.
 5. Record the upload date and row count in the lead tracker so rows are never uploaded twice. Use the lead reference (for example `DB-Q-7K2M4X`) as the order ID to let Google ignore a duplicate. `[VERIFY: order ID field support for offline imports]`.
 
 CSV shape (columns follow the usual Google offline import template; confirm against the template you download):
@@ -213,4 +214,4 @@ Ad click (auto-tagging adds gclid / gbraid / wbraid)
 - Square Orders API overview and metadata: https://developer.squareup.com/docs/orders-api/what-it-does and https://developer.squareup.com/docs/orders-api/metadata
 - Square Invoices API overview: https://developer.squareup.com/docs/invoices-api/overview
 - Square webhook event reference: https://developer.squareup.com/docs/webhooks/v2webhook-events-tech-ref
-- `docs/square/capabilities-au.md` did not exist when this was written. The folder held `docs/square/api-integration-notes.md`, which states AU availability per capability (Invoices and Loyalty explicitly listed as supported in Australia; payment links work where Square accepts payments). Where it and this plan disagree, that file wins, and anything neither confirms is unknown.
+- `docs/square/capabilities-au.md` did not exist when this was written. The folder held `docs/square/api-integration-notes.md`, which states AU availability per capability (Invoices and Loyalty explicitly listed as supported in Australia; payment links work where Square accepts payments). Where it and this plan disagree, that file wins, and anything neither confirms is unknown. Audit note (2026-10-02): `docs/square/capabilities-au.md` now exists (retrieved 2026-10-02 by the Square slice). Reconcile the section 8.4 table against it before building section 8.

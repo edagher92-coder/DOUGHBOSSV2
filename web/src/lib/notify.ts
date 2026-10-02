@@ -1,5 +1,5 @@
 /**
- * Team notification for new Minis waitlist signups. Best effort by design: the
+ * Team notification for new waitlist signups. Best effort by design: the
  * signup is already saved, so a dead webhook must never fail the visitor's
  * request. Failures are returned (and the row stays un-notified for retry).
  */
@@ -9,8 +9,6 @@ export interface WaitlistNotification {
   name: string;
   email: string;
   phone?: string | undefined;
-  interests: string[];
-  partyPieces?: number | undefined;
   storeSlug?: string | undefined;
   source?: string | undefined;
   createdAt?: string | undefined;

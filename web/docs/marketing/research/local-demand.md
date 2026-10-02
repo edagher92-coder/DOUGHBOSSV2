@@ -1,5 +1,7 @@
 # Dough Boss: local demand clusters for corporate, office and event catering
 
+> INTERNAL RESEARCH, not customer-facing. Nothing here may be copied into an ad, post, page, listing or message unless it is a confirmed, sourced claim in `src/content/ledger.ts`. Since 2026-10-02 the public teaser is generic (`docs/site/teaser-direction.md`): "Minis" below is an internal working name only (rule 5), and every Minis offer, segment and channel in this file is PARKED. Outreach and ads use the catering offers only.
+
 Prepared 2026-10-02 for Elie. Slice: where the catering buyers are within reach of the three stores, and which public business-network and event channels a catering supplier can legitimately use.
 
 ## Read this first
@@ -75,7 +77,7 @@ Each card: what it is (OBSERVED, cited), why it buys catering (INFERRED), neares
 - What it is (SERP-extract, Wikipedia and shopping-centre trade press): a shopping centre on Roselands Drive in the City of Canterbury-Bankstown with about 150 stores, 3 floors and 3,187 parking spaces; owned and managed under changed branding as HomeCo Roselands; a development application for a redevelopment exceeding $100 million was reported (https://en.wikipedia.org/wiki/Roselands_Shopping_Centre and https://shoppingcentrenews.com.au/latest-news/industry-news/homeco-roselands-poised-to-undergo-100-million-redevelopment/, 2026-10-02). The owner site says "Centro Roselands"; the centre name appears to have changed, so confirm the current name before using it on listings and ads `[CONFIRM]`.
 - Why it buys catering (INFERRED): a centre employs retail staff and management; centre management buys event and promotion catering; neighbouring offices and the Lakemba and Punchbowl communities (cluster G) are within the same ward. Retail tenants are unlikely to be large catering buyers; the centre's management and marketing team may be.
 - Nearest store (INFERRED): Roselands, Shop MM03, 8am to 3pm daily (owner claim).
-- Best entry offer: event platters and Minis party packs for family and community occasions; breakfast spreads for centre and nearby-office meetings.
+- Best entry offer: event platters for family and community occasions; breakfast spreads for centre and nearby-office meetings. (A Minis party-pack offer was listed here; PARKED 2026-10-02.)
 - Best first channel: Roselands store Google Business Profile; community social posts; a conversation with centre management about events (not confirmed as available).
 
 ### G. Lakemba, Punchbowl and Belmore community and faith hub
@@ -86,7 +88,7 @@ Each card: what it is (OBSERVED, cited), why it buys catering (INFERRED), neares
   - Ramadan 2027 is expected to start 8 February 2027 and Eid al-Fitr on 10 March 2027, subject to moon sighting, per the companion keyword file (https://blog.wego.com/ramadan-in-australia/). Do not plan to a date until the Australian National Imams Council confirms.
 - Why it buys catering (INFERRED): faith and community organisations, community groups and families buy platters for iftars, Eid, fundraisers and celebrations. This is a values-led market where trust, correct dietary labelling and halal status matter. Halal status of Dough Boss products is `[CONFIRM]`; do not use the word "halal" in copy until certification or the exact practice is verified (see compliance-au.md).
 - Nearest store (INFERRED): Roselands (same ward as Lakemba); Bankstown for Yagoona and Birrong side.
-- Best entry offer: event platters, mezze and savoury pastry trays, breakfast and iftar-adjacent boxes, Minis party packs for family events.
+- Best entry offer: event platters, mezze and savoury pastry trays, breakfast and iftar-adjacent boxes. (A Minis party-pack offer was listed here; PARKED 2026-10-02.)
 - Best first channel: a direct, respectful enquiry to the organisations themselves through their published contact points; stallholder expression of interest via council for council-run events (see section 4).
 
 ### H. Bankstown-Lidcombe Hospital and health care
@@ -103,7 +105,7 @@ Each card: what it is (OBSERVED, cited), why it buys catering (INFERRED), neares
 - Why it matters (INFERRED): they host corporate functions and also run their own kitchens. They compete for large events, but venues often permit or need external suppliers for certain items; I have no source on their policies, so a partnership is a hypothesis only.
 - Best first channel: skip as a customer; revisit as a referral channel once there is a proven corporate offer.
 
-### J. Schools, childcare and community groups (Minis party bites)
+### J. Schools, childcare and community groups (PARKED 2026-10-02: this cluster was framed around the internal Minis line)
 
 - What it is: I did not find a named list of the largest local schools in a source I could open, so I am not naming any. "Not publicly available in this session." Schools and childcare centres are a clear category, but a named target list has to come from the NSW school locator or council's community directory, which I did not read.
 - Why it buys catering (INFERRED): parent committees, P&C fundraisers, staff days and end-of-year events. The Minis party-bite line suits birthday and family events.
@@ -119,11 +121,11 @@ Ranking is INFERRED from three criteria that can be checked: closeness to a stor
 | 1 | Small and mid offices in Bankstown CBD, Revesby strip and Chullora/Milperra business parks | Weekly or monthly repeatable orders; clear role-based contacts; same-ward delivery | Bankstown, Revesby | Office breakfast; team-lunch grazing | Google Business Profile plus search ads; role-based direct email | Delivery radius, minimums, lead time `[CONFIRM]` |
 | 2 | Industrial and trade depots (Milperra, Condell Park, Revesby, Padstow) | Large day-shift headcounts, estate clusters, new-estate growth | Revesby, Bankstown | Depot breakfast; Friday team lunch | Maps/search ads; estate-by-estate outreach | Early-morning dispatch before 7am `[CONFIRM]` |
 | 3 | Education and civic institutions (WSU, TAFE, council, library) | Recurring events; compact CBD; walkable from Bankstown store | Bankstown | Meeting platters; orientation and open-day packs | Direct to events and executive-assistant roles; chamber networking | Supplier-panel and procurement rules not public |
-| 4 | Community, faith and cultural organisations (Lakemba area) | Strong cultural fit; seasonal peaks around Ramadan and Eid; trust-based | Roselands | Event platters, mezze trays, Minis packs | Direct enquiry; council event stallholder route | Halal status `[CONFIRM]`; Ramadan 2027 dates unconfirmed |
+| 4 | Community, faith and cultural organisations (Lakemba area) | Strong cultural fit; seasonal peaks around Ramadan and Eid; trust-based | Roselands | Event platters, mezze trays | Direct enquiry; council event stallholder route | Halal status `[CONFIRM]`; Ramadan 2027 dates unconfirmed |
 | 5 | Bankstown Airport / Aeria tenants | Concentrated workforce (6,500 jobs, 160+ businesses, council figure, Nov 2023); training days | Bankstown, Revesby | Training-day breakfast and lunch | Precinct newsletter enquiry; operations managers | Precinct policy on outside suppliers unknown |
 | 6 | Health care (Bankstown-Lidcombe Hospital and clinics) | Biggest employing industry; but procurement and allergen rules unknown | Bankstown | Education-session and morning-tea platters | Direct departmental enquiry | Hospital rules on outside food |
 | 7 | Roselands centre management and neighbouring offices | Smaller, occasional | Roselands | Event platters | Store GBP; management conversation | Centre name and event policy |
-| 8 | Schools, childcare, P&Cs (Minis) | Good for Minis once launched; ad restrictions on targeting children | All | Minis party packs | Parent-facing organic social | Named school list not sourced |
+| 8 | Schools, childcare, P&Cs (PARKED) | Was framed around the internal Minis line; ad restrictions on targeting children | All | PARKED | PARKED | Named school list not sourced; removed from `marketing/outreach/segments.csv` on 2026-10-02 |
 | 9 | Clubs and function venues | Mostly competitors | n/a | n/a | Referral talk only | Policies unknown |
 
 ## 4. Public business-network and event channels where a catering supplier can legitimately get listed or sponsor

@@ -1,5 +1,7 @@
 # Dough Boss: competitor intelligence for corporate, office and event catering
 
+> INTERNAL RESEARCH, not customer-facing. Competitor names, prices and claims below are the competitors' own and must never be copied into Dough Boss copy, quotes, ads or keywords. Nothing here may reach a customer unless it is a confirmed, sourced claim in `src/content/ledger.ts`.
+
 Prepared for Elie, owner of Dough Boss. Retrieval date for every source below: 2026-10-02 (the "today" used for this brief). Method: the `competitor-intel` skill (public sources only, sourced metrics, leverage strategies), adapted to a local-services vertical.
 
 ## 0. How to read this document

@@ -56,14 +56,6 @@ enum PaymentStatus {
   FAILED
 }
 
-enum MinisInterest {
-  MINI_ZAATAR
-  MINI_CHEESE
-  MINI_MEAT
-  MINI_PIES
-  CATERING_BITES
-}
-
 // ───────────────────────────── Stores ─────────────────────────────
 
 model Store {
@@ -268,18 +260,17 @@ model OrderItem {
   @@index([orderId])
 }
 
-// ───────────────────────────── Minis waitlist ─────────────────────────────
+// ───────────────────────────── "Something exciting is coming" waitlist ─────────────────────────────
+// A VIP-first-look list and nothing more: it records no product interest, because
+// nothing about the coming thing is confirmed (docs/site/teaser-direction.md).
 
 model WaitlistSubscriber {
-  id          String          @id @default(cuid())
-  email       String          @unique // stored lower-cased
+  id          String    @id @default(cuid())
+  email       String    @unique // stored lower-cased
   name        String
   phone       String?
-  interests   MinisInterest[]
-  // Rough event size from the Party Pack Sizer (pieces), if they used it.
-  partyPieces Int?
   storeId     String?
-  source      String          @default("minis-teaser")
+  source      String    @default("coming-soon-teaser")
   // Spam Act 2003 (Cth): marketing needs express consent, so we record when
   // and what was agreed to. A row without consentAt must never be mailed.
   consentAt   DateTime
@@ -288,7 +279,7 @@ model WaitlistSubscriber {
   attribution Json?
   // Set once the team notification has been delivered (null = retry candidate).
   notifiedAt  DateTime?
-  createdAt   DateTime        @default(now())
+  createdAt   DateTime  @default(now())
 
   store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
@@ -305,7 +296,6 @@ enum CateringEventType {
   PARTY
   WEDDING_ENGAGEMENT
   COMMUNITY_RELIGIOUS
-  MINIS_PARTY
   OTHER
 }
 

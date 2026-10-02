@@ -1,6 +1,6 @@
 # Dough Boss: Australian marketing compliance guide
 
-Prepared 2026-10-02 for Elie. Slice: the rules that bind Dough Boss ads, emails, SMS, pages, posts, lead capture and reviews.
+INTERNAL RESEARCH, not customer-facing. Practical guidance for the team; nothing here is copy. Since 2026-10-02 the public teaser is generic (`docs/site/teaser-direction.md`), so the rules below that used to name the planned product line now apply to "any new or unannounced product line", and no ad, post or message may name it. Prepared 2026-10-02 for Elie. Slice: the rules that bind Dough Boss ads, emails, SMS, pages, posts, lead capture and reviews.
 
 ## Read this first
 
@@ -50,7 +50,7 @@ Claims Dough Boss is likely to make, and what each needs (INFERRED application)
 |---|---|---|
 | "Best", "number one", "the best Lebanese bakery in Sydney" | A ranking or comparison claim is a statement of fact if read literally; general puffery is judged by the overall impression, and I did not find an ACCC page that defines a safe puffery line | Prefer a specific, provable statement ("baked on site each morning") over "best". If "best" is used, hold a basis (a named award with date, a review count). LAWYER for any comparative claim against a named competitor |
 | "Authentic" / "traditional Lebanese" | Ambiguous; could imply recipe origin, ingredient origin or maker background | Say what is true and specific (recipe source, how it is made); keep a record of the basis |
-| "Fresh", "baked in-house, never frozen" (owner claim) | Specific, testable and absolute; "never" fails on one counterexample, such as frozen dough or a frozen filling | The owner must confirm it for every product advertised, including catering lines and the planned Minis. If any item uses a frozen component, restrict the claim to the items it is true for. Keep a claims ledger (see checklist) |
+| "Fresh", "baked in-house, never frozen" (owner claim) | Specific, testable and absolute; "never" fails on one counterexample, such as frozen dough or a frozen filling | The owner must confirm it for every product advertised, including catering lines and any new product line. If any item uses a frozen component, restrict the claim to the items it is true for. Keep a claims ledger (see checklist) |
 | "Halal" | FSANZ says the Food Standards Code has no halal labelling requirements and that halal claims are subject to consumer law (EXTRACT, https://www.foodstandards.gov.au/consumer/labelling/Labelling-consumervalueissues). Halal is a process claim; a customer relying on it has a strong expectation | Do not use "halal" until Elie confirms exactly what is true: certified by a named body, or practice only. If certified, name the certifier and keep the certificate current. If uncertified, do not imply certification. Halal status is publicly unknown for Dough Boss |
 | "Delivered to Bankstown and nearby" | A delivery area and timing are stakes facts | Publish a defined suburb list and lead time only once confirmed |
 | "Made in" / "baked in" Australia | Country-of-origin claims fall under ACL Part 5-3 (OBSERVED: referenced in the s 18 note) | OBSERVED: the ACCC says country-of-origin labelling is not required for food from "restaurants, cafes, take-away shops, schools, caterers", but any origin claim made "must remain true, accurate and based on reasonable grounds" (https://www.accc.gov.au/business/advertising-and-promotions/country-of-origin-food-labelling). If a "made in Australia" claim is used, confirm the ingredients and process support it |
@@ -59,7 +59,7 @@ Claims Dough Boss is likely to make, and what each needs (INFERRED application)
 What this means for our copy and campaigns
 
 - Every claim on any page, ad or email must map to a row in a claims ledger with the evidence and the date confirmed. Unconfirmed claims stay out or carry a `[CONFIRM]` marker in drafts.
-- Write specific facts, not superlatives.
+- Write specific facts, not superlatives. A teaser such as "Something exciting is coming" is a statement about a future matter: hold a dated record of what is actually planned before it is published, and use "early access" only if list members will really get it (section 12).
 - Fine print must not contradict the headline.
 
 Flag: LAWYER for any comparative claim, any health or "better for you" claim, and the exact wording of "halal".
@@ -128,7 +128,7 @@ What this means for our copy and campaigns
 
 - Cold B2B email sequences: role-addressed, relevant, evidence-recorded, with unsubscribe and sender block; stop on request within the ACMA timeframe (EXTRACT: 5 business days).
 - No purchased lists. No bulk scraping.
-- Newsletter and Minis waitlist: express opt-in, double opt-in recommended, and no pre-ticked boxes (pre-ticked boxes are my recommendation, not a statement in the sources I read).
+- Newsletter and the generic "coming soon" waitlist: express opt-in, double opt-in recommended, and no pre-ticked boxes (pre-ticked boxes are my recommendation, not a statement in the sources I read). The waitlist form names the sender and links to the privacy policy at the point of collection.
 
 Flag: REGULATOR (ACMA) for the exact current B2B consent test and the unsubscribe timeframe; the current Spam Act compilation and Spam Regulations must be checked, because I read the as-made 2003 text.
 
@@ -177,7 +177,7 @@ Plain-English rule
 - OBSERVED: "May contain" statements are voluntary and not regulated by the Code. Businesses must ensure food is safe and suitable, with training for food handlers under Standard 3.2.2A (https://www.foodstandards.gov.au/business/food-safety/allergen-management).
 - EXTRACT: A "gluten free" claim requires that the food contain no detectable gluten (and no oats or malted gluten cereals); "low gluten" means no more than 20 mg per 100 g (FSANZ Standard 1.2.7 and guidance via https://www.foodstandards.gov.au/sites/default/files/food-standards-code/proposals/Documents/P293%20FAR%20Short%20Guide.pdf).
 - EXTRACT: Halal is not regulated by the Code; halal claims are subject to consumer law (see section 1).
-- EXTRACT: The AANA Food and Beverages Advertising Code (from 1 November 2021) defines children as under 15, restricts advertising of occasional foods targeting children, and bars promotions that create a sense of urgency or encourage excessive consumption (https://aana.com.au/self-regulation/food-and-beverages-code/). Whether this self-regulatory code binds Dough Boss is not established; follow it as best practice. INFERRED relevance: the Minis line is a party-bite product.
+- EXTRACT: The AANA Food and Beverages Advertising Code (from 1 November 2021) defines children as under 15, restricts advertising of occasional foods targeting children, and bars promotions that create a sense of urgency or encourage excessive consumption (https://aana.com.au/self-regulation/food-and-beverages-code/). Whether this self-regulatory code binds Dough Boss is not established; follow it as best practice. INFERRED relevance: party and family-event food, and any teaser or new product line, could be read as aimed at families.
 
 What this means for our copy and campaigns (INFERRED)
 
@@ -185,7 +185,7 @@ What this means for our copy and campaigns (INFERRED)
 - Treat "gluten-free" as a regulated claim. A bakery that mills and handles wheat flour may not be able to show "no detectable gluten" for a product made in the same space. Prefer wording such as "made without gluten-containing ingredients" only if true, plus a cross-contact notice, and never target coeliac customers with a claim that cannot be proven. LAWYER and REGULATOR (NSW Food Authority, not read here) before any gluten-free marketing.
 - Vegan and vegetarian claims: confirm recipes and glazes (for example egg wash, dairy and gelatine) and cross-contact.
 - No health or nutrition claims such as "healthy" or "high protein" without checking Standard 1.2.7 (I did not read its health-claim rules; REGULATOR).
-- Minis: speak to parents and organisers; avoid cartoon-led imagery aimed at children and urgency language; do not offer Minis as prizes to children.
+- Party food, teasers and any new product line: speak to parents and organisers; avoid cartoon-led imagery aimed at children and urgency language; do not offer food as prizes to children.
 
 Flag: REGULATOR (NSW Food Authority and FSANZ) for allergen, gluten-free and food-service obligations in NSW; this research did not read NSW Food Act material.
 
@@ -248,7 +248,7 @@ Copy and claims
 
 1. Does every factual claim map to a row in the claims ledger with evidence and a confirmed date? Any claim marked `[CONFIRM]` is removed or cleared first.
 2. No unsupported superlatives ("best", "number one", "authentic") and no absolutes ("never", "always", "100 per cent") unless proven for every product shown.
-3. "Fresh", "baked in-house", "never frozen": has Elie confirmed this for the exact product shown (including Minis and catering lines)?
+3. "Fresh", "baked in-house", "never frozen": has Elie confirmed this for the exact product shown (including catering lines and any new product line)?
 4. "Halal": removed unless the exact basis is confirmed and, if certified, the certifier is named and current.
 5. No health, nutrition, "healthy" or gluten-free claim unless checked against FSANZ Standard 1.2.7 and cleared (see section 7).
 6. Delivery area, lead time, minimum order and set-up claims are confirmed and published as stated.
@@ -282,7 +282,7 @@ Privacy and data
 Platform and audience
 
 21. No religion, ethnicity or other personal-attribute language or targeting in ad copy.
-22. Minis ads speak to parents and organisers, not children; no urgency or excess-consumption language.
+22. Party, teaser and new-product ads speak to parents and organisers, not children; no urgency or excess-consumption language. A teaser names no product and makes no claim about it (`docs/site/teaser-direction.md`).
 23. Google Business Profile name, category and description follow the guidelines.
 24. Ad copy and landing page match; no clickbait.
 
@@ -306,7 +306,8 @@ Sign-off
 | Telemarketing Industry Standard | ACMA | Not read |
 | Small business privacy exemption and any reform | Lawyer / OAIC | Dough Boss's turnover is unknown to me |
 | Catering T&Cs unfair-contract-term review | Lawyer | Penalties apply |
-| AANA code applicability to Minis ads | Ad Standards / AANA | Binding status for Dough Boss not established |
+| AANA code applicability to party-food and teaser ads | Ad Standards / AANA | Binding status for Dough Boss not established |
+| Future-matter wording of the generic teaser ("Something exciting is coming", "VIP first look", "early access") | Lawyer | Under the ACL a representation about a future matter is taken to be misleading unless the business had reasonable grounds for it (ACL s 4: background knowledge, not re-read on 2026-10-02). The ACCC page in section 1 lists future predictions without reasonable grounds as a breach (OBSERVED). Keep a dated note of what is planned and when Elie decided it |
 
 ## Pages that could not be read (network or site policy)
 

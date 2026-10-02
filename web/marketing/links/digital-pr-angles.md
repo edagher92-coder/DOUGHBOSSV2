@@ -78,7 +78,6 @@ DRAFT. Nothing here has been pitched, sent or posted. Prepared 2026-10-02 for El
 - Facts we can currently support:
   - The live /catering/ page says catering covers "mini manoush, pizzas, pies, wraps and platters", that lead time "depends on the date, quantity and menu mix", and carries an allergen statement that the kitchen handles common allergens and cannot promise an allergen-free environment.
   - The plugin has a catering enquiry and quote workflow (per the project brief), so a customer can tell the shop the date, headcount and dietary needs and get a quote.
-  - The upcoming Minis party-bite line is planned, but it is not a public claim yet.
 - What Elie must confirm:
   - [CONFIRM: lead time, minimum order, delivery area or radius, capacity per day, early-morning dispatch, hot-food handling.]
   - [CONFIRM: whether prices can be published. The indicative per-head figures on the earlier catering page are not confirmed and must not appear in a pitch.]
@@ -103,9 +102,9 @@ DRAFT. Nothing here has been pitched, sent or posted. Prepared 2026-10-02 for El
   - [CONFIRM: operating hours and pre-order approach for iftar timing.]
   - Do not target or describe people by religion in any ad. This angle is PR and community work only, and any ad on it must name the occasion and the food, not the audience.
 
-## Held angle: Minis (party bites)
+## Held angles
 
-Not ready to pitch. The Minis line is upcoming and has no confirmed product, price or launch date. When it exists, speak to parents and organisers, not children (AANA Food and Beverages Advertising Code, compliance-au.md section 7). Pitch to family and community outlets only after the ledger confirms what Minis are.
+No pitch may announce, name or hint at anything not yet launched. A generic "something is coming" line is not a pitch hook and is not used in outreach to media. When Elie confirms and launches something, add an angle here with ledger-confirmed facts only (see `docs/site/teaser-direction.md`).
 
 ## Before any pitch goes out
 

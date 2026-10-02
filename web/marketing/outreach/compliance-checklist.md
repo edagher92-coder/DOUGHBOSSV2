@@ -30,7 +30,7 @@ Batch: ____________  Sender: ____________  Date: ____________  Checked by: _____
 - [ ] No prices, "from" figures, discounts, free offers, minimums, lead times, capacity or delivery area.
 - [ ] No tasting is mentioned unless Elie has approved cost and terms and the wording is in the ledger.
 - [ ] No testimonial, rating or review count unless real, current and permitted.
-- [ ] Minis is not mentioned until launched; any Minis message speaks to parents and organisers, not children.
+- [ ] No unannounced product is named, hinted at or teased in outreach (see `docs/site/teaser-direction.md`); any message about family or party occasions speaks to parents and organisers, not children.
 
 ## 4. Channel rules
 

@@ -7,6 +7,7 @@ Rule for the whole checklist: a human works through it, in order. A "no" at any 
 ## Part 1. Facts and permissions (before building anything)
 
 - [ ] Elie has answered the open questions in `03a-google-ads.md` section 17, or each unanswered one is accepted as a known gap with the ad group it blocks kept on hold.
+- [ ] The entity and brand-ownership question is settled in writing: the advertiser is the legal entity entitled to trade as Dough Boss and to use the name, the site and the three shop listings. Until it is, nothing is built, and above all the Brand campaign (which bids on "dough boss") does not run. `[CONFIRM: entity, ABN and the written basis for using the name]`
 - [ ] `[CONFIRM: who owns and administers the Google Ads account, GA4 property, Tag Manager container and the three Business Profiles]`. Access is in Elie's or the business's name, not a freelancer's.
 - [ ] `[CONFIRM: billing: payment profile, who pays, monthly ceiling and learning-budget ceiling]`. No budget is entered until this is written down.
 - [ ] Claims ledger: the facts listed in `03a-google-ads.md` section 11 are in `src/content/ledger.ts` as confirmed with a source, or the affected headlines are removed.
@@ -30,9 +31,9 @@ Follow `conversion-plan.md` section 6. All must pass on the real landing pages t
 
 ## Part 3. Landing pages live and fast
 
-For every final URL in `campaigns.json` (the route contract: `/`, `/catering`, `/catering/corporate`, `/catering/office-breakfast`, `/catering/events`, `/catering/minis`, `/locations/revesby`, `/locations/bankstown`, `/locations/roselands`):
+For every final URL in `campaigns.json` (the route contract: `/`, `/catering`, `/catering/corporate`, `/catering/office-breakfast`, `/catering/events`, `/locations/revesby`, `/locations/bankstown`, `/locations/roselands`):
 
-- [ ] The page is live, returns 200, is not redirected through a chain, and is indexable (unless it is the Minis page, which is held).
+- [ ] The page is live, returns 200, is not redirected through a chain, and is indexable.
 - [ ] Message match: the page headline and first screen restate the ad group's theme and the place. A visitor from "office breakfast catering" lands on office breakfast, not a general page.
 - [ ] The quote form or the enquiry call to action is visible without a long scroll on a phone. Form asks for date, headcount, event type, suburb and dietary needs (the plugin fields), and consent text is shown.
 - [ ] Phone number for the store is a tap-to-call link and the store hours are shown.
@@ -41,7 +42,6 @@ For every final URL in `campaigns.json` (the route contract: `/`, `/catering`, `
 - [ ] Prices and price basis on the page, if any, come from the ledger. Google's misrepresentation policy requires the payment model or expense to be disclosed clearly (`compliance-au.md` section 10).
 - [ ] Allergen information is available or the page says how to ask for it (FSANZ, `compliance-au.md` section 7).
 - [ ] Hours text on store pages matches the typed data used in the ads (`Open 7 Days At Revesby`, `Bankstown Open Mon To Fri`, `Roselands Open Daily`).
-- [ ] The Minis page and consent flow exist before any Minis ad group leaves hold.
 
 ## Part 4. Policy and compliance check
 
@@ -50,8 +50,6 @@ For every final URL in `campaigns.json` (the route contract: `/`, `/catering`, `
 - [ ] Re-read Google's ad policies for misrepresentation and for the sensitive categories before launch (links in `compliance-au.md` section 10). Policies change.
 - [ ] No religion or ethnicity addressing in copy. No health or diet claims. No halal, gluten-free, vegan or similar claim anywhere (parked).
 - [ ] Business Profile rules respected (`compliance-au.md` section 9): real-world name, one profile per staffed store, no review gating or incentives.
-- [ ] Spam Act: the Minis form confirmation email identifies Dough Boss, and has a working unsubscribe link, before the waitlist is advertised.
-- [ ] Minis copy speaks to adults organising an event and makes no appeal to children (AANA code as best practice).
 - [ ] LAWYER and REGULATOR items from `compliance-au.md` that touch ads are cleared or consciously accepted: privacy wording, any outbound calling (not planned), allergen and gluten-free wording.
 
 ## Part 5. Build the account PAUSED
@@ -59,16 +57,16 @@ For every final URL in `campaigns.json` (the route contract: `/`, `/catering`, `
 Done by a human from the files, in this order. Use Google Ads Editor or the web UI. Nothing is enabled during the build.
 
 - [ ] Create the account settings: AUD, Australia/Sydney, auto-tagging on, auto-apply recommendations OFF, no automatic asset creation, `eu_political_advertising` declaration answered.
-- [ ] Create the five campaigns from `campaigns.json`, each PAUSED: Search network only, Search Partners OFF, Display OFF, English, presence-only locations. Set the radius or suburb list only after `[CONFIRM: delivery area]`.
+- [ ] Create the four campaigns from `campaigns.json`, each PAUSED: Search network only, Search Partners OFF, Display OFF, English, presence-only locations. Set the radius or suburb list only after `[CONFIRM: delivery area]`.
 - [ ] Set the tracking template and `utm_campaign` per campaign (and the three store overrides in the Local campaign). Test the template on one ad.
 - [ ] Choose manual CPC with a max CPC from the break-even maths (`03a-google-ads.md` section 8). `[CONFIRM: max CPC]`. Set daily budgets from the formula, only after the inputs are confirmed.
 - [ ] Create ad groups (PAUSED), keywords from `keywords.csv` (phrase and exact only, no broad), and one RSA per ad group from `rsa.csv` including pins exactly as listed. Set path1 and path2 from `campaigns.json`.
 - [ ] Upload negatives from `negatives.csv` at the account and campaign levels. Confirm the account-level negative option exists in the UI, or use a shared list applied to every campaign.
 - [ ] Create assets from `extensions.json`: sitelinks, callouts, structured snippets. Link the Business Profile for location assets only after `[CONFIRM: verified profiles]`. Create call assets only for answered numbers.
 - [ ] Do NOT create a lead form asset. Do NOT create a Performance Max or Dynamic Search campaign. Do NOT enable broad match.
-- [ ] Keep ad groups marked `hold` in `campaigns.json` PAUSED, with a label `hold` and the reason in the notes: Drop-Off And Boxed Lunch, Mezze And Grazing, both Minis groups.
+- [ ] Keep ad groups marked `hold` in `campaigns.json` PAUSED, with a label `hold` and the reason in the notes: Drop-Off And Boxed Lunch, Mezze And Grazing.
 - [ ] Label wave 1 groups `wave-1` and wave 2 groups `wave-2`.
-- [ ] Re-count: the account matches the files (22 ad groups, 15 headlines and 4 descriptions each, 136 keyword rows, 145 negative rows). Any difference is explained in writing.
+- [ ] Re-count: the account matches the files (4 campaigns, 20 ad groups, 15 headlines and 4 descriptions each, 130 keyword rows, 141 negative rows). Any difference is explained in writing.
 
 ## Part 6. Search-terms report plan (set up before launch)
 

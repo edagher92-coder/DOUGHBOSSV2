@@ -165,4 +165,9 @@ export type StoreStatus =
 
 export type PackAppetite = "light" | "standard" | "hearty";
 
+/**
+ * INTERNAL ONLY, DORMANT. Working names for the pack-sizer library (src/lib/packs.ts).
+ * Nothing renders these: no product, size or pack is confirmed for the public site
+ * (docs/site/teaser-direction.md). Never copy these labels into customer-facing copy.
+ */
 export type MinisKind = "MINI_ZAATAR" | "MINI_CHEESE" | "MINI_MEAT" | "MINI_PIES";

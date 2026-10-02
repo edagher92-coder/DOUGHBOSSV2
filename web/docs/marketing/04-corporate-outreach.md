@@ -18,7 +18,7 @@ DRAFT for Elie. Prepared 2026-10-02 by the B2B catering sales and outbound slice
 These steps need only what exists today: the live `/catering/` page and enquiry form, the three shop phone numbers, and a person sending individual messages.
 
 1. Decide the sender. One named person with a monitored inbox and phone (`{SENDER_NAME}`, `{SENDER_ROLE}`), plus the operating entity name and address for the footer. `[CONFIRM: sender, legal entity name, ABN and postal or street address for the footer]`.
-2. Build a small prospect list by hand from the 14 segments in `segments.csv`, using only public business information (section 5).
+2. Build a small prospect list by hand from the 13 segments in `segments.csv`, using only public business information (section 5).
 3. Send touch 1 individually from a real inbox, not from a bulk tool. No email service provider is connected and none is needed to start.
 4. Point every link at the live `/catering/` form with the UTM convention in section 9, until the new routes exist.
 5. Log every prospect and outcome in a spreadsheet using the fields in `crm-pipeline.md`. Copy the enquiry-form leads into the same sheet each day.
@@ -26,7 +26,7 @@ These steps need only what exists today: the live `/catering/` page and enquiry 
 
 ### Track 2: when the WordPress companion plugin ships
 
-- Corporate pages at `/catering/corporate`, `/catering/office-breakfast`, `/catering/events`, `/catering/minis`, and store pages at `/locations/<store>`. Until they are live, every link falls back to `/catering/` (the interim URL). The swap is a find-and-replace on the base path; UTM parameters stay the same.
+- Corporate pages at `/catering/corporate`, `/catering/office-breakfast`, `/catering/events`, and store pages at `/locations/<store>`. Until they are live, every link falls back to `/catering/` (the interim URL). The swap is a find-and-replace on the base path; UTM parameters stay the same.
 - The enquiry form should capture `guestBand`, `wantsCorporateAccount`, `source`, attribution and marketing consent. Today the live plugin does not capture UTM, consent or lead source on catering enquiries (OBSERVED in `docs/wp/02-orders-square-kitchen-map.md`, section 9). See `needsFromLead` in the report and `crm-pipeline.md`.
 - Square invoice and customer sync, once the one-shop pilot is proven. Do not assume any Square feature works until the pilot says so.
 
@@ -44,7 +44,7 @@ A workplace inside reach of one of the three shops that already buys food for a 
 |---|---|---|
 | P1 | Bankstown CBD offices, Selems Parade professional offices, Milperra and Revesby depots | Repeatable weekday buying, role-based contacts, closest to a shop (INFERRED) |
 | P2 | Business parks (Condell Park, Chullora), university and TAFE, council and library, airport precinct, Lakemba community organisations, chambers | Recurring events and institutional buying, but procurement rules are unknown |
-| P3 | Hospital administration, shopping centre management, council festivals, schools and P&Cs (Minis), function venues | Rules unknown, restricted advertising context, or mostly competitors |
+| P3 | Hospital administration, shopping centre management, council festivals, function venues | Rules unknown or mostly competitors |
 
 ### Buying roles
 
@@ -68,12 +68,11 @@ The ladder moves a buyer from a small, low-risk first order to a repeating one. 
 | 1 | Office breakfast | `/catering/office-breakfast` / `/catering/` | The entry order: one meeting, one date, easy to approve |
 | 2 | Team-lunch grazing | `/catering/corporate` / `/catering/` | The second order: a regular team lunch |
 | 3 | Event platters | `/catering/events` / `/catering/` | One-off events and open days |
-| 4 | Minis party bites | `/catering/minis` / `/catering/` | Party and family occasions once the line launches; parents and organisers only |
 | Volume play | Standing orders (weekly or monthly) | `/catering/corporate` / `/catering/` | Converts a happy rung 1 or 2 customer into recurring revenue |
 
 Rules for the ladder:
 
-- Do not advertise Minis in cold outreach until the line is launched and its claims are in the ledger. The AANA code defines children as under 15 and restricts advertising of occasional foods aimed at them (EXTRACT, `docs/marketing/research/compliance-au.md` section 7). Write to parents and organisers.
+- Do not announce, name or hint at any unannounced product in outreach. See `docs/site/teaser-direction.md`: no product, price, size, dietary, halal, ingredient, date or location claim about anything coming. Outreach speaks to organisers and parents, never to children, and covers only what the ledger confirms today.
 - A standing order is a decision about price terms, cut-off, headcount changes and cancellation. `[CONFIRM: standing-order terms; lawyer to review the catering terms for unfair-contract-term risk, which applies to standard-form contracts with small businesses (EXTRACT, ACCC release cited in compliance-au.md section 8)]`.
 - Corporate buyers often want an invoice and an account. See the Square handoff in `crm-pipeline.md`.
 
@@ -107,7 +106,7 @@ The day offsets are a proposal to be tuned, `[CONFIRM: Elie approves cadence]`. 
 2. Council, university, chamber and precinct pages that publish a business contact for a role (events, facilities, administration).
 3. Business-network events the team attends in person, where a person hands over a card or opts in.
 4. People who contact Dough Boss first (enquiry form, phone, walk-in).
-5. A person's own opt-in to a newsletter or the Minis waitlist, once those exist.
+5. A person's own opt-in to a newsletter or the "VIP first look" list, once those exist (consent separate and unticked), used only for what that opt-in covers. The "VIP first look" consent is about what is coming and early access, not catering sales, so a list member is not a catering prospect unless they also ask about catering or give catering-specific consent (Spam Act consent and APP 6 both follow the purpose the person agreed to).
 
 ### Not allowed
 
@@ -155,7 +154,7 @@ Scoring applies to every lead, inbound or outbound. It uses the two fields the e
 
 - `guestBand` (from `GUEST_BANDS` in `src/types/marketing.ts`): `UP_TO_25`, `FROM_26_TO_50`, `FROM_51_TO_100`, `FROM_101_TO_250`, `OVER_250`.
 - `wantsCorporateAccount` (boolean): the customer asked for an account or invoicing.
-- `eventType`: `OFFICE_BREAKFAST`, `TEAM_LUNCH`, `MEETING`, `CORPORATE_EVENT` are corporate types; `COMMUNITY_RELIGIOUS`, `PARTY`, `WEDDING_ENGAGEMENT`, `MINIS_PARTY`, `OTHER` are not.
+- `eventType`: `OFFICE_BREAKFAST`, `TEAM_LUNCH`, `MEETING`, `CORPORATE_EVENT` are corporate types; `COMMUNITY_RELIGIOUS`, `PARTY`, `WEDDING_ENGAGEMENT`, `OTHER` are not. Any other value in the enum is treated as not corporate and is never named in outreach.
 - `eventDate`, `suburb`, `storeId`, `source`, attribution (UTM) where captured.
 
 ### Rubric (ordered, first match wins)
@@ -214,7 +213,7 @@ Lower-case, hyphenated, no spaces.
 
 | Parameter | Value for outreach |
 |---|---|
-| `utm_source` | `email`, `linkedin`, or a directory or chamber name |
+| `utm_source` | `email`, `linkedin`, `offer-sheet` (the printed one-pager's QR code), or a directory or chamber name |
 | `utm_medium` | `email` for cold email links, `organic-social` for LinkedIn, `qr` for the printed one-pager, `referral` for chamber and directory listings |
 | `utm_campaign` | `<segment>-<offer>-<area>`, for example `corporate-office-breakfast-bankstown` |
 | `utm_content` | the link variant, for example `touch-1-form`, `touch-3-form`, `one-pager-qr`, `linkedin-followup-1` |
@@ -286,7 +285,7 @@ The one-page pre-send checklist is `compliance-checklist.md`. The full guide is 
 
 | File | Purpose |
 |---|---|
-| `marketing/outreach/segments.csv` | 14 target segments tied to the local-demand evidence |
+| `marketing/outreach/segments.csv` | 13 target segments tied to the local-demand evidence |
 | `marketing/outreach/sequence-email.md` | 4-touch sequence plus re-engagement note |
 | `marketing/outreach/linkedin.md` | Connection notes and follow-ups, manual only |
 | `marketing/outreach/phone-script.md` | Opening, discovery, gatekeeper, voicemail, close |

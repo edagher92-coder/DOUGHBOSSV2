@@ -20,13 +20,11 @@ const read = (name: string): string => readFileSync(join(DIR, name), "utf8");
 const ROUTE_CONTRACT = new Set([
   "/",
   "/#order",
-  "/#minis",
   "/#locations",
   "/catering",
   "/catering/corporate",
   "/catering/office-breakfast",
   "/catering/events",
-  "/catering/minis",
   "/locations/revesby",
   "/locations/bankstown",
   "/locations/roselands",
@@ -208,11 +206,17 @@ describe("campaigns.json", () => {
     }
   });
 
-  it("keeps the Minis campaign in the later phase and on hold", () => {
-    const minis = campaignsFile.campaigns.find((c) => c.name.includes("Minis"));
-    expect(minis).toBeDefined();
-    expect(minis?.phase).toBe("later");
-    for (const g of minis?.ad_groups ?? []) expect(g.hold, g.name).toBe(true);
+  it("builds nothing around an unannounced product (teaser direction, 2026-10-02)", () => {
+    // docs/site/teaser-direction.md rule 6: no campaign, ad group, keyword, ad copy or
+    // asset may name the unannounced product. Product-specific campaigns stay parked.
+    const PRODUCT_WORDING = /\bminis?\b|\bmini\s+pizzas?\b|\bparty\s+bites\b/i;
+    for (const file of ["campaigns.json", "extensions.json", "rsa.csv", "keywords.csv", "negatives.csv"]) {
+      expect(read(file), file).not.toMatch(PRODUCT_WORDING);
+    }
+    for (const c of campaignsFile.campaigns) {
+      expect(c.phase, c.name).toBe("launch");
+      for (const g of c.ad_groups) expect(g.launch_wave, g.name).not.toBe(3);
+    }
   });
 
   it("references only ad groups that exist in keywords.csv and rsa.csv, and vice versa", () => {

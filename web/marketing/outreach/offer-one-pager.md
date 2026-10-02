@@ -64,7 +64,6 @@ Not for customers. Every item is a `[CONFIRM]` until Elie or the ledger confirms
 | `[CONFIRM: descriptor such as "Lebanese bakery" for the sheet header]` | Not a confirmed ledger claim | Elie |
 | `[CONFIRM: payment terms, deposit, cancellation, standing-order terms]` | Standard-form terms need a lawyer's review (unfair contract terms) | Elie, lawyer |
 | `[CONFIRM: tasting offer]` | Not approved; see `tasting-offer.md` | Elie |
-| `[CONFIRM: Minis]` | Not launched; children's advertising code applies to marketing | Elie |
 
 ### Sheet facts and where they come from
 
@@ -78,6 +77,6 @@ Not for customers. Every item is a `[CONFIRM]` until Elie or the ledger confirms
 
 - `[CONFIRM: legal entity name, ABN, and the address for the footer]`
 - `[CONFIRM: that the catering enquiry form and a monitored person are live and tested]`
-- Swap the interim link for the final route once `/catering/corporate` is live.
+- The sheet shows the final route `/catering/corporate`. A printed QR code cannot be changed later, so until that route is live and returns 200, print the interim `/catering/` link with the same UTM values instead. Never print a QR code that points to a page that does not exist yet.
 - Re-read the sheet against `compliance-checklist.md`; a second person signs off.
 - Check shop hours the day before printing; they come from the owner's page and may have changed.

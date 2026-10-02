@@ -14,7 +14,7 @@ export type WaitlistFailureCode = "VALIDATION" | "RATE_LIMITED" | "STORAGE_UNAVA
 export type WaitlistResult =
   | {
       ok: true;
-      /** false when the email was already on the list (we merged their interests instead). */
+      /** false when the email was already on the list (we updated their details instead). */
       created: boolean;
     }
   | {

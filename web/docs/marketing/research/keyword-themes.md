@@ -1,6 +1,8 @@
 # Dough Boss: keyword themes and search landscape (local B2B and event catering)
 
-Prepared 2026-10-02 for Elie. Companion data file: `web/marketing/keywords.csv` (68 theme rows).
+> INTERNAL RESEARCH, not customer-facing. Nothing here may be copied into an ad, post, page, listing or message unless it is a confirmed, sourced claim in `src/content/ledger.ts`. Since 2026-10-02 the public teaser is generic (`docs/site/teaser-direction.md`): the working product name that appears below is internal only (rule 5), and every product-specific cluster, page, keyword and FAQ seed for it is PARKED. Do not build, target or publish any of them until Elie confirms the product.
+
+Prepared 2026-10-02 for Elie. Companion data file: `web/marketing/keywords.csv` (66 theme rows; the two product-specific rows were removed on 2026-10-02, and the finger-food and party-food rows now map to `/catering/events`).
 
 ## Read this first
 
@@ -50,7 +52,7 @@ Short answer: yes for iftar food in this area, but I cannot size it, and caterin
 | C. Platters | Mezze, grazing, Lebanese pastry platter, manoush platter | Product-led terms; contested by specialist platter businesses on "grazing", open on "Lebanese pastry platter" |
 | D. Lebanese and Middle Eastern | Lebanese catering Sydney and Bankstown | The brand-defining head term; competitors are restaurants with catering arms |
 | E. Party and function | Party, function, birthday, pizza catering, large-group orders | Volume potential; mobile pizza caterers dominate the pizza words, so qualify with Lebanese |
-| F. Minis and finger food | Finger food, bite-sized, mini pizzas, party food | Launch-gated; page should not rank for claims the product cannot yet back |
+| F. Finger food and party food (product-specific part PARKED) | Finger food, party food. The bite-sized and mini-pizza themes for the internal working product are PARKED | Generic finger-food and party-food terms map to `/catering/events`; nothing is built around an unannounced product |
 | G. School and community | School events, fundraising, council and community events | Lowest priority; check school food-policy rules before supplying schools |
 | H. Ramadan and Eid | Iftar catering and boxes, corporate iftar, Eid platters | Seasonal sprint, 8 Feb to 10 Mar 2027 expected |
 | I. Dietary | Vegan, vegetarian, gluten-free, halal | Qualifier traffic and trust signal. Each claim needs owner confirmation |
@@ -60,12 +62,12 @@ Short answer: yes for iftar food in this area, but I cannot size it, and caterin
 
 | Page | Primary intent | Owns | Must NOT target |
 |---|---|---|---|
-| `/catering` | Hub: Lebanese catering Sydney south west, quote and order | Lebanese catering Sydney or Bankstown, catering near me, quote, region and LGA phrases, large-group orders | Corporate-qualified, breakfast-qualified, or Minis-qualified terms |
+| `/catering` | Hub: Lebanese catering Sydney south west, quote and order | Lebanese catering Sydney or Bankstown, catering near me, quote, region and LGA phrases, large-group orders | Corporate-qualified, breakfast-qualified, or product-qualified terms for anything unannounced |
 | `/catering/corporate` | Corporate and office catering | Anything containing corporate, office, staff, team, meeting, boardroom, drop-off, Christmas party | Breakfast-only and platter-only terms |
 | `/catering/office-breakfast` | Breakfast and morning tea for workplaces | Breakfast, morning tea, breakfast meeting, pastry platter for the office | Lunch and generic corporate terms |
 | `/catering/platters` (proposed) | Product: mezze, grazing, Lebanese pastry, manoush platters (no "corporate" qualifier) | Mezze platter, grazing platter, lunch grazing, Lebanese pastry platter, manoush catering | Corporate-qualified versions (those go to `/catering/corporate`) |
 | `/catering/events` | Party, function, community, school | Party, function, birthday, pizza catering, community and school events, grazing tables | Office terms |
-| `/catering/minis` | Finger food and bites (upcoming line) | Finger food, bite-sized, mini pizzas, party food | Anything about products not yet confirmed |
+| PARKED (no page) | Was a page for the internal working product. Not in the route contract and not to be built | None. Finger food and party food go to `/catering/events` | Everything: no page, keyword or ad for an unannounced product |
 | `/catering/dietary` (proposed, only if it has substantive content) | Dietary-led catering | Vegan, vegetarian, gluten-free, halal | Occasion terms. If thin, fold into `/catering` as a section |
 | `/catering/ramadan-iftar` (proposed) | Seasonal | Iftar, iftar boxes, corporate iftar, Eid platters | Year-round terms |
 | `/locations/revesby`, `/bankstown`, `/roselands` | Local: visit the store and see catering from that store | "Catering [store suburb]" and nearby suburb modifiers assigned to the nearest store | Corporate, breakfast, or product head terms |
@@ -118,7 +120,6 @@ These are INFERRED natural-language questions; validate in Search Console after 
 - Do you provide plates, serviettes, and serving gear?
 - How should I serve and keep manoush warm for a meeting?
 - What can I order for an iftar at work or for a community iftar?
-- What mini food can I order for a party or kids' birthday (once Minis launches)?
 
 Schema note (background knowledge, verify against Google's current documentation before relying on it): Google narrowed FAQ rich results several years ago, so FAQ markup should be treated as a clarity aid for people and machines, not a guaranteed rich result.
 
@@ -135,7 +136,7 @@ Schema note (background knowledge, verify against Google's current documentation
 ## Open `[CONFIRM]` items for Elie (these gate several rows)
 
 - Delivery radius and lead times for catering (rows with "nearby", same-day, drop-off).
-- Whether the products implied by rows exist: breakfast spreads contents, grazing tables with setup, boxed lunches, sweets or baklava, Minis (size, count, price, launch date).
+- Whether the products implied by rows exist: breakfast spreads contents, grazing tables with setup, boxed lunches, sweets or baklava. (The internal working product is PARKED; no size, count, price or date is planned in this file.)
 - Halal certification (the word must not be used without it), and how gluten-free and allergen handling actually works in a wheat-dough kitchen.
 - Whether catering accepts online orders, quotes only, or both; whether company accounts and invoicing exist.
 - Capacity for banquet-scale and large group orders.

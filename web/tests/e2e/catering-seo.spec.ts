@@ -12,7 +12,6 @@ const CATERING_ROUTES = [
   "/catering/corporate",
   "/catering/office-breakfast",
   "/catering/events",
-  "/catering/minis",
 ] as const;
 const LOCATION_ROUTES = ["/locations/revesby", "/locations/bankstown", "/locations/roselands"] as const;
 

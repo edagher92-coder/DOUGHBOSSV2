@@ -8,9 +8,9 @@ This is an internal planning document, so it carries `[CONFIRM: ...]` items. Any
 
 | File | What it is |
 |---|---|
-| `marketing/google-ads/campaigns.json` | Machine-readable build: 5 campaigns, 22 ad groups, settings, final URLs, tracking template, all `paused` |
-| `marketing/google-ads/keywords.csv` | 136 keyword rows (phrase and exact only), each mapped to one landing page |
-| `marketing/google-ads/negatives.csv` | 145 negative keyword rows at account and campaign level |
+| `marketing/google-ads/campaigns.json` | Machine-readable build: 4 campaigns, 20 ad groups, settings, final URLs, tracking template, all `paused` |
+| `marketing/google-ads/keywords.csv` | 130 keyword rows (phrase and exact only), each mapped to one landing page |
+| `marketing/google-ads/negatives.csv` | 141 negative keyword rows at account and campaign level |
 | `marketing/google-ads/rsa.csv` | One responsive search ad per ad group: 15 headlines, 4 descriptions, pins, character counts |
 | `marketing/google-ads/extensions.json` | Sitelinks, callouts, structured snippets, call assets, location assets, lead form recommendation |
 | `marketing/google-ads/conversion-plan.md` | Conversions, enhanced conversions, value rules, the Square closed loop and its manual interim |
@@ -25,7 +25,7 @@ Two limits on the evidence you should know about:
 
 ## 1. The plan in one page
 
-1. Start with Search only. Run four campaigns now (Corporate and Office, Events and Functions, Local Store Areas, Brand) and a fifth for Minis that stays on hold until the range and waitlist exist.
+1. Start with Search only. Run four campaigns now (Corporate and Office, Events and Functions, Local Store Areas, Brand). No campaign, ad group or keyword is built around an unannounced product; the public teaser is generic ("Something exciting is coming") and `docs/site/teaser-direction.md` rule 6 applies: a generic awareness line may be added only once Elie approves it, and a product-specific campaign stays parked until the product is confirmed.
 2. Phrase and exact match only. No broad match, no Performance Max, no AI Max or final URL expansion, no dynamic search ads, no auto-applied recommendations, no Search Partners, no Display.
 3. One theme per ad group, one landing page per ad group, one responsive search ad per ad group written for that theme.
 4. Launch the highest-intent ad groups first (wave 1, 11 groups) and add the rest once the search-terms report shows what people really type (wave 2, 9 groups). Two groups are on hold for facts only Elie can confirm.
@@ -55,11 +55,11 @@ Revisit PMax when: there are stable conversions from Search, tracking is verifie
 
 ## 3. Structure: campaigns, ad groups, landing pages
 
-Landing pages come only from the route contract: `/`, `/#order`, `/#minis`, `/#locations`, `/catering`, `/catering/corporate`, `/catering/office-breakfast`, `/catering/events`, `/catering/minis`, `/locations/revesby`, `/locations/bankstown`, `/locations/roselands`.
+Landing pages come only from the route contract: `/`, `/#order`, `/#locations`, `/catering`, `/catering/corporate`, `/catering/office-breakfast`, `/catering/events`, `/locations/revesby`, `/locations/bankstown`, `/locations/roselands`.
 
 Note on `marketing/keywords.csv`: its `suggested_page` column names three pages that are not in the contract (`/catering/platters`, `/catering/ramadan-iftar`, `/catering/dietary`). I remapped them rather than invent routes. Platter and manoush terms go to `/catering` (the hub) or `/catering/events`. Iftar, Eid and dietary terms are parked (section 4).
 
-Wave 1 launches first. Wave 2 follows after the first search-terms review. Wave 3 is later.
+Wave 1 launches first. Wave 2 follows after the first search-terms review.
 
 | Campaign | Ad group | Landing page | Wave | Status note |
 |---|---|---|---|---|
@@ -83,8 +83,6 @@ Wave 1 launches first. Wave 2 follows after the first search-terms review. Wave 
 | | LOCL Catering South West And Near Me | /catering | 2 | Broad intent: tight location targeting is essential |
 | Brand | BRND Dough Boss Brand | / | 1 | |
 | | BRND Dough Boss Catering | /catering | 1 | |
-| Minis Waitlist (Later) | MINI Finger Food And Party Bites | /catering/minis | 3 | HOLD: later |
-| | MINI Mini Pizza | /catering/minis | 3 | HOLD: later |
 
 (The real ad group names in the files carry a pipe, for example `CORP | Corporate Catering`.)
 
@@ -114,7 +112,7 @@ Every keyword in `keywords.csv` has a `notes` value: `research` means the term i
 
 ## 5. Location targeting
 
-- Setting: "Presence: people in or regularly in your targeted locations" for both include and exclude (campaigns.json `PRESENCE`). OBSERVED (https://support.google.com/google-ads/answer/2453995, retrieved 2026-10-02): the default setting uses both physical location and location of interest, and Google's own wording says targeting is "best effort" and "100% accuracy is not guaranteed". I could not read radius-specific rules on the pages I fetched. INFERRED: presence-only stops us paying to show to people who merely searched about Revesby while in Melbourne, which matters for a local delivery business.
+- Setting: "Presence: people in or regularly in your targeted locations" for both include and exclude (campaigns.json `PRESENCE`). OBSERVED (https://support.google.com/google-ads/answer/2453995, retrieved 2026-10-02): the default setting uses both physical location and location of interest, and Google's own wording says targeting is "best effort" and "100% accuracy is not guaranteed". I could not read radius-specific rules on the pages I fetched. INFERRED: presence-only stops us paying to show to people who merely searched about Revesby while in Melbourne, which matters for a local business (whether Dough Boss delivers at all is `[CONFIRM: delivery area]`).
 - Shape: radius or suburb list around each of the three stores. Starting hypothesis only: `radius_km = [CONFIRM: radius from delivery area]`. It must never be shown to customers or used as a promise. Until Elie confirms the delivery or serve area, the safer option is the suburb list in `campaigns.json` (Revesby, Padstow, Panania, Milperra, Condell Park, Bankstown, Roselands, Lakemba), which comes from search demand terms and does not claim delivery to any of them.
 - Store addresses used: 12/25 Selems Parade Revesby 2212, 462 Chapel Rd Bankstown 2200, Shop MM03 Roselands Dr Roselands 2196 (typed data, `src/lib/data/catalogue.ts`).
 - Expand only on evidence: a suburb earns a place when the search-terms report shows real queries or when the lead form shows enquiries from it.
@@ -169,15 +167,15 @@ Inputs to confirm: `[CONFIRM: average catering order value]`, `[CONFIRM: gross m
 How to use them:
 
 - If `sanity check` fails, the lead goal is not buyable at that CPC. Lower the goal, raise the target cost per lead (only if margin allows), or improve the page conversion rate before spending more.
-- Split the total across campaigns by the priority in the research: corporate and office first, events second, local third, brand a small capped slice (brand clicks are usually cheap, and the cap is set by search volume: `[CONFIRM: brand search volume from Search Console or Keyword Planner]`), Minis zero until it is live.
+- Split the total across campaigns by the priority in the research: corporate and office first, events second, local third, brand a small capped slice (brand clicks are usually cheap, and the cap is set by search volume: `[CONFIRM: brand search volume from Search Console or Keyword Planner]`).
 - The first month's spend is the cost of learning. Set a fixed learning budget ceiling that Elie is comfortable losing: `[CONFIRM: learning budget ceiling]`. Do not scale a campaign that has not produced a won order, even if it produces leads.
 - Do not state any CPA, CTR or CPC benchmark as a target in this account until it is sourced (NUMBERS RULE).
 
 ## 9. Naming, UTMs and tracking template
 
-- Campaign: `DB | Search | <Segment> <Offer>`. Ad group: `<CODE> | <Theme>` with CODE one of CORP, EVNT, LOCL, BRND, MINI. Labels: `wave-1`, `wave-2`, `hold`, `later`.
+- Campaign: `DB | Search | <Segment> <Offer>`. Ad group: `<CODE> | <Theme>` with CODE one of CORP, EVNT, LOCL, BRND. Labels: `wave-1`, `wave-2`, `hold`.
 - Final URLs carry no UTMs. A campaign-level tracking template adds them and auto-tagging adds the gclid: `{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=<slug>&utm_content=rsa-v1&utm_term={keyword}`.
-- `utm_campaign` is `<segment>-<offer>-<area>`: `corporate-office-catering-southwest`, `events-function-catering-southwest`, `local-catering-southwest` (overridden per store ad group as `local-catering-revesby`, `local-catering-bankstown`, `local-catering-roselands`), `brand-dough-boss-southwest`, `minis-waitlist-southwest`.
+- `utm_campaign` is `<segment>-<offer>-<area>`: `corporate-office-catering-southwest`, `events-function-catering-southwest`, `local-catering-southwest` (overridden per store ad group as `local-catering-revesby`, `local-catering-bankstown`, `local-catering-roselands`), `brand-dough-boss-southwest`.
 - `utm_content` is the creative variant. Change `rsa-v1` to `rsa-v2` when an ad is replaced, so results do not mix.
 - `{keyword}` returns the keyword text, which can contain spaces, so reporting should lower-case and hyphenate it. [CONFIRM: that `{keyword}` populates in the plugin's captured attribution (`utmTerm`, max 120 characters).]
 - The plugin already sanitises and stores these fields plus `gclid`, `gbraid` and `wbraid` (`src/lib/attribution-schema.ts`). The landing path is stored without the query string.
@@ -208,7 +206,6 @@ Where the benefit is stated as what the customer gets to do ("tell us the date, 
 
 - Brand ad group: the headlines `Dough Boss` and `Dough Boss Lebanese Bakery` are pinned to position 1, so the brand name always leads and the two rotate between themselves.
 - Brand catering ad group: `Dough Boss Catering` is pinned to position 1 for the same reason.
-- Minis ad groups: the headline `Join The Minis Waitlist` is pinned to position 1 and the description `Minis party bites are on a waitlist for now...` is pinned to position 1. Protects the message: it must never read as though Minis can be bought today.
 - Nothing else is pinned. Every other headline reads sensibly in any position, so there is nothing to protect. (INFERRED: pinning also tends to lower Google's ad strength rating.)
 
 Ledger dependencies. The copy leans on these facts, which Elie should put in the claims ledger once so the whole account is backed:
@@ -218,7 +215,6 @@ Ledger dependencies. The copy leans on these facts, which Elie should put in the
 3. Manoush, pizza and savoury pies are on the menu (catalogue item and category names). Catering boxes are a menu category in the catalogue. [CONFIRM: that these items can be part of a catering order.]
 4. The three stores and their addresses, hours and phone numbers (typed data; re-confirm before launch).
 5. `[CONFIRM: store hours text "Open 7 Days At Revesby", "Bankstown Open Mon To Fri", "Roselands Open Daily" are current]`.
-6. The Minis waitlist exists, and a confirmation email can be sent with an unsubscribe link.
 
 I have not run the humanizer skill over the ad copy: the lines are short, constrained to the claims rule and character limits, and I kept them plain by hand. Run it over any longer prose before it goes on a page, and never over a fact.
 
@@ -226,7 +222,7 @@ I have not run the humanizer skill over the ad copy: the lines are short, constr
 
 Detail is in `extensions.json`. Summary:
 
-- Sitelinks: quote request, corporate, office breakfast, events, the three stores, and Minis (held). Titles 25 characters or fewer, description lines 35 or fewer.
+- Sitelinks: quote request, corporate, office breakfast, events and the three stores. Titles 25 characters or fewer, description lines 35 or fewer.
 - Callouts: eight short, claim-free lines.
 - Structured snippets: "Service catalog" (corporate catering, office breakfast, event catering). A "Neighborhoods" snippet is on hold because it can read as a service-area promise.
 - Call assets: one per store with the real numbers and store-hours schedule. The Roselands number is a mobile (04) number, so confirm call reporting works for it. No call asset on the Corporate and Event campaigns until a catering number is named.
@@ -281,7 +277,7 @@ Detail is in `extensions.json`. Summary:
 - If a lead form experiment beats the site form on cost per won lead, adopt it.
 - If Elie confirms halal certification, release the halal cluster with copy from the ledger.
 - If a namesake business uses "Dough Boss", change the brand copy and consider adding a location qualifier.
-- If the Minis range launches with a purchase path, change the Minis campaign from waitlist copy to ordering copy and move its landing page.
+- If Elie later announces a new product, build its campaign only then, from confirmed facts, and not before (`docs/site/teaser-direction.md` rule 6).
 
 ## 16. Compliance notes (practical guidance, not legal advice)
 
@@ -289,7 +285,7 @@ Detail is in `extensions.json`. Summary:
 - Australian Consumer Law: the claims rule is how we stay inside misleading conduct. Every fact in the copy traces to typed store data or a ledger entry.
 - Spam Act 2003 and Privacy Act (APPs): a lead is not consent to marketing. The enquiry form stores `consentAt` and `consentText`; the plugin version must keep that. The privacy policy must say data may be shared with ad platforms before Enhanced Conversions are used (`conversion-plan.md` section 5). LAWYER to check the wording.
 - Do Not Call: the plan does not include calling leads' mobiles for marketing. Replying to an enquiry is not the same as cold calling. REGULATOR (ACMA) before any outbound calling programme.
-- Minis: the AANA Food and Beverages Advertising Code (relevance not established for Dough Boss, follow as best practice) defines children as under 15 and restricts occasional-food promotion aimed at them. The Minis ad copy speaks to adults organising an event and makes no appeal to children.
+- AANA Food and Beverages Advertising Code (relevance not established for Dough Boss, follow as best practice): it defines children as under 15 and restricts occasional-food promotion aimed at them. All ad copy speaks to adults organising an event or an office order and makes no appeal to children.
 - Google Ads account settings: the draft records `eu_political_advertising = does_not_contain` because Google asks every advertiser to declare it. [CONFIRM at account creation.]
 
 ## 17. Open questions only Elie can answer
@@ -306,7 +302,7 @@ Detail is in `extensions.json`. Summary:
 10. `[CONFIRM: last date for Christmas catering orders]`.
 11. `[CONFIRM: public holiday trading hours]` and that all typed store hours are current.
 12. The ledger entries listed in section 11.
-13. `[CONFIRM: how the Minis waitlist relates to the live site]`. The storefront audit (`docs/wp/01-storefront-map.md` section 3.8) shows four Minis-based catering packages already listed on the live `/catering` page. If Minis can already be ordered through catering, the Minis campaign framing ("waitlist for now") is wrong and should change before launch. The same audit shows a `/wholesale/` page that is not in the route contract; volume and wholesale ads cannot use it until it is added to the contract.
+13. The storefront audit (`docs/wp/01-storefront-map.md`) shows a `/wholesale/` page that is not in the route contract; volume and wholesale ads cannot use it until it is added to the contract.
 
 ## 18. Sources (all retrieved 2026-10-02)
 

@@ -75,7 +75,7 @@ Order for pickup | Order for pickup: choose your items online and collect them f
 
 - Gate: GATED. Add only after Elie confirms online pickup is live and taking real orders at Revesby. The live /order/ page read on 2026-10-02 still said 'Online ordering is coming soon', which conflicts with the brief that says pickup ordering is live. Re-check the page, place a test order, then add this.
 
-Do not add a price to any service line. Do not add a "from" figure. Do not add Minis until the Minis claim is confirmed in the ledger and the waitlist page is live.
+Do not add a price to any service line. Do not add a "from" figure. Do not add any product or service that is not already confirmed in the ledger; nothing unannounced is named, hinted at or teased in a service or product line.
 
 ## 5. Attributes
 
@@ -147,6 +147,8 @@ Website alt-text pattern for the same images: "<what is in the photo>, Dough Bos
 ## 8. Google Posts: 8-week draft calendar
 
 Each post is 1,500 characters or fewer, uses no claim outside section 11, has one call to action, and contains no emoji, price, offer or exclamation mark. Publish on the Monday shown, then do not edit the text. Posts are what's-new type. Do not use Offer-type posts, because Dough Boss has no confirmed offer.
+
+Audit note (2026-10-02): the dates below are a template, not a schedule. Week 1 falls on Monday 5 October 2026, which is Labour Day, a NSW public holiday (INFERRED from the NSW rule that Labour Day is the first Monday in October; check https://www.nsw.gov.au/about-nsw/public-holidays), and the profile cannot be verified by then anyway. Start week 1 on the first Monday after the profile is verified and the special hours for the next public holiday are set. Never publish a post that states opening hours on a public holiday whose hours are unknown.
 
 #### Week 1 (from Mon 5 Oct 2026): Introduce the store
 
@@ -288,10 +290,10 @@ The menu covers manoush, pizza and pies. Manoush includes za'atar, cheese, lahm 
 ### FAQ 7: Can I order online for pickup at Revesby?
 
 ```faq-answer
-GATED. Online pickup is available at the Revesby shop. Choose your items online, collect them from 12/25 Selems Parade and pay at the shop.
+Online pickup is available at the Revesby shop. Choose your items online, collect them from 12/25 Selems Parade and pay at the shop.
 ```
 
-- Gate: Publish only after the pickup gate clears.
+- Gate: GATED. Publish only after the pickup gate clears. (The word GATED used to sit inside the answer block, where a copy-paste would have published it; it now lives only in this note.)
 
 Questions customers will ask that we cannot answer yet. Do not publish any answer until the fact is confirmed and in the ledger:
 
@@ -311,6 +313,7 @@ The lead should make sure each of these exists in the claims ledger as confirmed
 | descriptor-lebanese-bakery | Dough Boss is a Lebanese bakery | owner-site: live doughboss.com.au home page, "a contemporary Lebanese bakery" | Needs Elie's confirmation |
 | range-manoush-pizza-pies | The menu covers manoush, pizza and pies | owner-site: live site and src/lib/seo.ts description | Needs Elie's confirmation |
 | item-names | Za'atar, cheese, lahm bi ajin and shanklish manoush; halloumi and spinach pies | src/lib/data/catalogue.ts (items named in the project brief) | Needs Elie's confirmation that each is currently sold at this shop |
+| item-descriptions | One-line descriptions used in the week 2 post and the services list: za'atar manoush is za'atar and olive oil on dough; cheese manoush is melted cheese on dough; lahm bi ajin is a spiced minced-meat topping on dough; shanklish manoush is shanklish cheese on dough; savoury baked pies | src/lib/data/catalogue.ts item descriptions (the words "fresh" and "fresh-baked" there are deliberately not used) | Needs Elie's confirmation; added by the marketing audit, because the item-names claim covers names only |
 | catering-enquiry-quote | Customers send the date, headcount and dietary needs and Dough Boss replies with a quote | owner-confirmed: the plugin's catering enquiry and quote workflow | Needs Elie's confirmation |
 | allergen-statement | The kitchen handles common allergens, so a meal without traces cannot be promised | owner-site: live /catering/ page | Needs Elie's confirmation |
 | store-revesby-address-hours-phone | Address, hours and phone as in nap.json | owner-site: locations page; src/lib/data/catalogue.ts | Needs Elie's confirmation |

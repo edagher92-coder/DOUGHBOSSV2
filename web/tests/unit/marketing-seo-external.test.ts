@@ -351,7 +351,6 @@ describe("Google Business Profile drafts", () => {
           "/catering/corporate",
           "/catering/office-breakfast",
           "/catering/events",
-          "/catering/minis",
           "/locations/revesby",
           "/locations/bankstown",
           "/locations/roselands",

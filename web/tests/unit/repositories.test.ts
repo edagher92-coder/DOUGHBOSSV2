@@ -88,7 +88,6 @@ describe("backend selection", () => {
 const signup = (over: Partial<WaitlistRecord> = {}): WaitlistRecord => ({
   name: "Sam Test",
   email: "sam@example.test",
-  interests: ["MINI_ZAATAR"],
   consentAt: new Date("2026-10-02T01:00:00Z"),
   consentText: "I agree (v1)",
   ...over,
@@ -100,14 +99,12 @@ describe("in-memory waitlist", () => {
     const first = await repo.upsert(signup());
     expect(first.created).toBe(true);
 
-    const second = await repo.upsert(signup({ interests: ["MINI_CHEESE", "MINI_ZAATAR"], phone: "+61400000000", partyPieces: 60 }));
+    const second = await repo.upsert(signup({ phone: "+61400000000" }));
     expect(second).toEqual({ created: false, id: first.id });
 
     const rows = repo.all();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.interests).toEqual(["MINI_ZAATAR", "MINI_CHEESE"]);
     expect(rows[0]?.phone).toBe("+61400000000");
-    expect(rows[0]?.partyPieces).toBe(60);
   });
 
   it("treats email case-insensitively", async () => {
@@ -131,9 +128,9 @@ describe("in-memory waitlist", () => {
 
   it("does not wipe optional fields a repeat signup leaves out", async () => {
     const repo = createInMemoryWaitlistRepository();
-    await repo.upsert(signup({ phone: "+61400000000", partyPieces: 40, storeSlug: "revesby" }));
+    await repo.upsert(signup({ phone: "+61400000000", storeSlug: "revesby" }));
     await repo.upsert(signup());
-    expect(repo.all()[0]).toMatchObject({ phone: "+61400000000", partyPieces: 40, storeSlug: "revesby" });
+    expect(repo.all()[0]).toMatchObject({ phone: "+61400000000", storeSlug: "revesby" });
   });
 
   it("markNotified stamps the row and ignores unknown ids", async () => {
@@ -151,7 +148,6 @@ describe("Prisma waitlist (fake client)", () => {
   const existing = {
     id: "w1",
     email: "sam@example.test",
-    interests: ["MINI_PIES"],
     consentAt: new Date("2026-10-01T00:00:00Z"),
     consentText: "v1",
   };
@@ -177,19 +173,19 @@ describe("Prisma waitlist (fake client)", () => {
     expect(db.waitlistSubscriber.create.mock.calls[0]?.[0].data).toMatchObject({
       email: "sam@example.test",
       storeId: "store-1",
-      source: "minis-teaser",
+      source: "coming-soon-teaser",
     });
   });
 
-  it("merges into an existing row: union of interests, earliest consent", async () => {
+  it("merges into an existing row: earliest consent kept", async () => {
     const db = fakeDb({ findUnique: vi.fn().mockResolvedValue(existing) });
     const repo = createPrismaWaitlistRepository(db as never);
-    const out = await repo.upsert(signup({ interests: ["MINI_ZAATAR"], consentAt: new Date("2026-10-09T00:00:00Z"), consentText: "v2" }));
+    const out = await repo.upsert(signup({ consentAt: new Date("2026-10-09T00:00:00Z"), consentText: "v2" }));
     expect(out).toEqual({ created: false, id: "w1" });
     expect(db.waitlistSubscriber.create).not.toHaveBeenCalled();
     expect(db.waitlistSubscriber.update.mock.calls[0]?.[0]).toMatchObject({
       where: { id: "w1" },
-      data: { interests: ["MINI_PIES", "MINI_ZAATAR"], consentAt: existing.consentAt, consentText: "v1" },
+      data: { consentAt: existing.consentAt, consentText: "v1" },
     });
   });
 
@@ -486,7 +482,7 @@ describe("Prisma orders (fake client)", () => {
 // ───────────────────────── Notifications ─────────────────────────
 
 describe("notifyWaitlistSignup", () => {
-  const payload = { name: "Sam", email: "sam@example.test", interests: ["MINI_ZAATAR"] };
+  const payload = { name: "Sam", email: "sam@example.test" };
   const withHook = () => {
     vi.stubEnv("WAITLIST_WEBHOOK_URL", "https://hooks.example/abc");
     resetEnvCache();

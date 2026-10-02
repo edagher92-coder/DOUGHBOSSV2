@@ -9,7 +9,7 @@ import { useCartCount, useCartStore } from "@/store/useCartStore";
 
 const NAV = [
   { href: "#order", label: "Order" },
-  { href: "#minis", label: "Minis" },
+  { href: "#coming-soon", label: "Coming soon" },
   { href: "#locations", label: "Locations" },
 ] as const;
 

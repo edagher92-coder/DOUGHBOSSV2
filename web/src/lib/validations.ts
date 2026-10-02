@@ -7,12 +7,11 @@ import { z } from "zod";
 import { MAX_CART_LINES, MAX_LINE_QUANTITY } from "./pricing";
 
 export const STORE_SLUGS = ["revesby", "bankstown", "roselands"] as const;
-export const MINIS_INTERESTS = ["MINI_ZAATAR", "MINI_CHEESE", "MINI_MEAT", "MINI_PIES", "CATERING_BITES"] as const;
 export const PAYMENT_METHODS = ["STRIPE", "PAY_AT_PICKUP"] as const;
 
 /** The exact wording a subscriber agrees to — stored with their consent timestamp. */
 export const WAITLIST_CONSENT_TEXT =
-  "I agree to Dough Boss contacting me about the Minis launch, taste tests and early access. I can unsubscribe at any time.";
+  "I agree to Dough Boss contacting me about what's coming and early access. I can unsubscribe at any time.";
 
 const noControlChars = (s: string) => !/[\u0000-\u001f\u007f]/.test(s);
 
@@ -46,8 +45,6 @@ export const waitlistSchema = z.object({
   name: personName,
   email,
   phone: optionalPhone,
-  interests: z.array(z.enum(MINIS_INTERESTS)).min(1, "Pick at least one thing you’re keen on").max(MINIS_INTERESTS.length),
-  partyPieces: z.number().int().min(20).max(1000).optional(),
   storeSlug: z.enum(STORE_SLUGS).optional(),
   consent: z.literal(true, { error: "Please tick the box so we’re allowed to contact you" }),
   /** Honeypot: real people never see or fill this. Bots do. */

@@ -30,13 +30,11 @@ const readOutreach = (name: string): string => readFileSync(join(OUTREACH, name)
 const ROUTE_CONTRACT = new Set([
   "/",
   "/#order",
-  "/#minis",
   "/#locations",
   "/catering",
   "/catering/corporate",
   "/catering/office-breakfast",
   "/catering/events",
-  "/catering/minis",
   "/locations/revesby",
   "/locations/bankstown",
   "/locations/roselands",
@@ -711,7 +709,7 @@ describe("04-corporate-outreach.md", () => {
   });
 
   it("covers the whole offer ladder and the standing-order volume play", () => {
-    for (const rung of ["Office breakfast", "Team-lunch grazing", "Event platters", "Minis party bites", "Standing orders"]) {
+    for (const rung of ["Office breakfast", "Team-lunch grazing", "Event platters", "Standing orders"]) {
       expect(playbook, rung).toContain(rung);
     }
   });

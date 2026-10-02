@@ -32,10 +32,10 @@ export interface EventParams {
   /** Pay-at-pickup order placed (no online payment to verify). Card orders report `purchase` server-side. */
   order_placed: { store: StoreSlug; value_cents: number; item_count: number };
 
-  // ── Lead generation (corporate / catering / Minis) ─────────────────
+  // ── Lead generation (corporate / catering / waitlist) ─────────────────
   generate_lead: {
-    form: "catering_enquiry" | "minis_waitlist";
-    /** CateringEventType or MinisInterest value, never free text. */
+    form: "catering_enquiry" | "waitlist";
+    /** CateringEventType value, never free text. */
     category?: string;
     guest_band?: string;
     store?: StoreSlug | "none";
@@ -44,7 +44,10 @@ export interface EventParams {
 
   // ── Engagement ─────────────────────────────────────────────────────
   hero_explore: { state: "exploded" | "assembled"; renderer: "webgl" | "sprites" | "poster" };
-  pack_size_change: { pieces: number; appetite: "light" | "standard" | "hearty" };
+  /** The generic "something exciting is coming" section scrolled into view. No product parameter, by design. */
+  coming_soon_view: { surface: "home" };
+  /** A waitlist form submission the SERVER confirmed (never fired on a client-only validation pass). */
+  waitlist_submit: { store?: StoreSlug | "none" };
   click_to_call: { store: StoreSlug; surface: ContactSurface };
   get_directions: { store: StoreSlug; surface: ContactSurface };
   cta_click: { cta: string; destination: string };
@@ -62,7 +65,8 @@ export const EVENT_NAMES = [
   "generate_lead",
   "quote_step",
   "hero_explore",
-  "pack_size_change",
+  "coming_soon_view",
+  "waitlist_submit",
   "click_to_call",
   "get_directions",
   "cta_click",

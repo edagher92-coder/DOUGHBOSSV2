@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- Scratch harness for the hero bundle. NEVER shipped in the plugin: it only exists so a real
+     browser can load a fresh build and report frame stats (see run.mjs). -->
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>Hero bundle harness</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; background: #070707; }
+  #wrap { width: 800px; height: 600px; background: radial-gradient(circle at 50% 55%, #6b2a0c 0%, #2a1208 45%, #070707 80%); }
+  canvas { display: block; width: 800px; height: 600px; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="800" height="600"></canvas></div>
+<script>
+  // Count real draw calls so the runner can prove pause/stop really stop rendering.
+  window.__draws = 0;
+  ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced'].forEach(function (name) {
+    var original = WebGL2RenderingContext.prototype[name];
+    WebGL2RenderingContext.prototype[name] = function () {
+      window.__draws += 1;
+      return original.apply(this, arguments);
+    };
+  });
+</script>
+<script type="module">
+  const q = new URLSearchParams(location.search);
+  const canvas = document.getElementById('c');
+  const manifest = await (await fetch('/dist/hero-manifest.json')).json();
+  manifest.baseUrl = '/dist/';
+  if (q.get('tamper')) {
+    manifest.files.find((f) => f.role === 'scene').sha384 = 'sha384-' + 'A'.repeat(64);
+  }
+  const script = manifest.files.find((f) => f.role === 'script');
+  const mod = await import('/dist/' + script.path);
+  window.__events = [];
+  const log = (type, detail) => window.__events.push({ type, detail });
+  window.__hero = mod.boot(canvas, manifest, {
+    frameBudgetMs: Number(q.get('budget') || 1000),
+    onReady: (info) => log('ready', info),
+    onFrameBudgetExceeded: (median, stats) => log('budget', { median, stats }),
+    onError: (err) => log('error', err),
+    onComplete: () => log('complete', null),
+  });
+  window.__booted = true;
+</script>
+</body>
+</html>

@@ -1,10 +1,14 @@
 /**
- * Party Pack Sizer — pure maths behind the Minis teaser slider.
+ * Party Pack Sizer — pure maths for a pack-size slider.
+ *
+ * INTERNAL ONLY, DORMANT LIBRARY CODE. It is not used by any public page: the public
+ * teaser is generic and makes no product, size or pack claim (docs/site/teaser-direction.md).
+ * The labels below are working names, never customer-facing copy.
  *
  * IMPORTANT: everything here is a *planning estimate*, not a quote and not a
  * product spec. Pieces-per-guest are common catering rules of thumb for finger
  * food and the variety split is a suggested starting mix; the team confirms
- * final quantities. The UI says so. No prices appear here — Minis aren't priced.
+ * final quantities. The UI says so. No prices appear here.
  */
 import type { MinisKind, PackAppetite } from "@/types/menu";
 

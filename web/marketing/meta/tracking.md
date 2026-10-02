@@ -34,18 +34,19 @@ Meta receives only the events that help it find buyers or that we report on. Eng
 | `events.ts` name | Meta event | Browser | Server (CAPI) | Role | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `generate_lead` with `form = catering_enquiry` | `Lead` standard event | Yes | Yes | PRIMARY optimisation event for the Corporate, Events and Warm campaigns | Custom data: `content_name = catering_enquiry`, `content_category = <category>`, `guest_band`, `store`. No free text. |
-| `generate_lead` with `form = minis_waitlist` | `Lead` standard event | Yes | Yes | PRIMARY for the Minis campaign only | `content_name = minis_waitlist`. Separate it from catering with a custom conversion on `content_name` [VERIFY: create in Events Manager; confirm rule options]. Do not let waitlist sign-ups train the catering campaigns. |
+| `waitlist_submit` (param `store`; fired only after the server confirms the sign-up) | `Lead` standard event | Yes | Yes | PRIMARY for the Coming Soon List campaign only, which is held | `content_name = waitlist`. Separate it from catering with a custom conversion on `content_name` [VERIFY: create in Events Manager; confirm rule options]. Do not let waitlist sign-ups train the catering campaigns. `events.ts` also still allows `generate_lead` with `form = waitlist`; nothing fires it today, and it must not be mapped as a second waitlist event (see section 12). |
+| `coming_soon_view` | none | No | No | GA4 only | The teaser section scrolled into view. Engagement signal, not sent to Meta. |
 | `click_to_call` | `Contact` | Yes | Optional | Secondary, report only | A tap on a phone link is intent, not a conversation. Custom data: `store`, `surface`. |
 | `get_directions` | `FindLocation` | Yes | No | Secondary, report only | Custom data: `store`, `surface`. |
-| `begin_checkout` | `InitiateCheckout` | Yes | No | Not used for the lead campaigns | Pickup ordering is live for Revesby. Relevant only if a pickup campaign is ever run. |
+| `begin_checkout` | `InitiateCheckout` | Yes | No | Not used for the lead campaigns | Revesby pickup is GATED: the brief says it is live, but the live /order/ page said "Online ordering is coming soon" on 2026-10-02 (`marketing/gbp/revesby.md` section 4). Relevant only if a pickup campaign is ever run, and only after the gate clears. |
 | `order_placed` (pay at pickup) | none | No | No | Not sent | An unpaid pay-at-shop order is not a purchase. See section 10. |
 | `purchase` (server only, verified payment) | `Purchase` | No | Yes | Later phase | Section 10. `events.ts` is explicit that purchase is never fired from the browser. |
 | `quote_step` | none | No | No | GA4 and plugin diagnostics only | Step 1 to step 2 drop-off. |
-| `select_store`, `view_item`, `add_to_cart`, `remove_from_cart`, `hero_explore`, `pack_size_change`, `cta_click` | none | No | No | Not sent to Meta | Engagement signals. Sending them adds noise and more data shared with a platform. |
+| `select_store`, `view_item`, `add_to_cart`, `remove_from_cart`, `hero_explore`, `cta_click` | none | No | No | Not sent to Meta | Engagement signals. Sending them adds noise and more data shared with a platform. |
 | Plugin status `quoted` | custom `QuoteSent` | No | Yes | Quality signal | Section 9. |
 | Plugin status `confirmed`, `deposit_paid` or `paid` | `Purchase` with real value | No | Yes | The event we want to buy | Section 9. Only when a real amount is known. |
 
-Reconcile: the plugin bridge says `generate_lead` maps to `Lead` and `Lead` is also my choice for `minis_waitlist`. If the growth slice maps the Minis waitlist to a different Meta event, change the Minis row only and keep the catering row.
+Reconcile: the plugin bridge says `generate_lead` maps to `Lead` and `Lead` is also my choice for the waitlist submit. If the growth slice maps the waitlist to a different Meta event, change the waitlist row only and keep the catering row. The event carries no product name and no interest value (docs/site/teaser-direction.md).
 
 ## 4. The `Lead` event and the `event_id` approach
 
@@ -174,7 +175,7 @@ Optimising a campaign toward `Purchase` (won leads) or `QuoteSent` is a later st
 
 ## 10. Square paid orders become server-side `Purchase` events (later phase)
 
-Status: DESIGN ONLY. It depends on things that do not exist yet. Do not build it before the dependencies below are real, and do not assume any Square feature works until `docs/square/capabilities-au.md` says so (`[CONFIRM: that file is not present; Australian availability of each Square feature is unverified here]`).
+Status: DESIGN ONLY. It depends on things that do not exist yet. Do not build it before the dependencies below are real, and do not assume any Square feature works until `docs/square/capabilities-au.md` says so and the one-shop pilot proves it. (Audit note, 2026-10-02: that file was not present when this plan was written; it now exists. Reconcile the dependencies below against it before any build.)
 
 Depends on:
 
@@ -219,7 +220,7 @@ Browser
 - [ ] With consent denied: submit a test enquiry. Test Events shows no browser event and no server event.
 - [ ] With consent granted: landing on `/catering/office-breakfast` with the full UTM string fires `PageView` once.
 - [ ] Submitting the catering form fires `Lead` once, with `content_name = catering_enquiry` and no free text, name, email or phone in any parameter (inspect the network request).
-- [ ] The minis waitlist form fires `Lead` with `content_name = minis_waitlist`, and the custom conversion separates it.
+- [ ] The waitlist form fires `Lead` with `content_name = waitlist`, and the custom conversion separates it.
 - [ ] `click_to_call` fires `Contact` once per tap; `get_directions` fires `FindLocation` once.
 
 Server
@@ -243,7 +244,7 @@ Sign-off: name, date and the screenshots kept with the launch checklist.
 
 ## 12. Reconcile with `docs/marketing/05-measurement.md` and `events.ts` when 05 lands
 
-1. Confirm `generate_lead` is the single lead event name and that `form` is `catering_enquiry | minis_waitlist` (as in `events.ts`).
+1. The neutral rename has landed: `events.ts` now has `coming_soon_view` and `waitlist_submit` (no product name), and the old product-specific pack-size event is gone. Confirm with 05 that `generate_lead` is the single catering lead event, that `waitlist_submit` is the single waitlist event, and that the leftover `form = waitlist` value on `generate_lead` is either removed from `events.ts` or documented as unused, so one sign-up can never be counted twice.
 2. Confirm 05 describes the same server-created `event_id` flow, or change one of them. Two different id schemes would break deduplication.
 3. Confirm the consent flag name and the single dispatcher event (`doughboss:consent` today).
 4. Confirm the side-table fields in section 6 match 05 and the Google Ads plan (`marketing/google-ads/conversion-plan.md` uses the same `gclid` capture; `fbclid`, `fbc` and `fbp` should sit beside it).
