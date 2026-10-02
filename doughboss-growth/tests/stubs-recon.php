@@ -234,6 +234,7 @@ function dbgr_recon_setup( array $opts = array() ) {
 	foreach ( dbgr_recon_core_ddl() as $sql ) {
 		$GLOBALS['wpdb']->create_table_from_mysql( $sql );
 	}
+	dbgr_test_describe_tables(); // install() confirms every declared column, so the fake database must report them.
 	DoughBoss_Growth_Activator::install();
 	dbgr_test_core_option( 'doughboss_db_version', '1.23.0' );
 	update_option( 'doughboss_growth_settings', array( 'features' => array( 'timesheet_recon' => (bool) $opts['feature'] ) ) );

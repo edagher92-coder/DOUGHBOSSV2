@@ -50,6 +50,7 @@ db_test(
 			'admin_init', // schema self-heal for managers
 			'admin_menu', // the Growth screen
 			'admin_notices', // inert notices
+			'admin_post_doughboss_growth_clear_failures', // Clear button for the recent failures list (capability + nonce); WP-16 observability fix
 			'admin_post_doughboss_growth_export_waitlist', // staff CSV export (capability + nonce)
 			'admin_post_doughboss_growth_save_settings', // settings save (capability + nonce)
 			'cron_schedules', // the five-minute outbox schedule

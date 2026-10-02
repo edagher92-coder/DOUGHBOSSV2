@@ -359,6 +359,9 @@ final class DoughBoss_Growth {
 			}
 			try {
 				if ( ! self::load_module( $key ) ) {
+					// A wanted module whose file or class is missing (a damaged upload) is a failure, not a silent no-op:
+					// the settings screen would otherwise show a feature as on with nothing behind it.
+					DoughBoss_Growth_Http::log( 'module_load_failed', array( 'module' => $key ) );
 					continue;
 				}
 				if ( is_callable( array( $module['class'], 'init' ) ) ) {
@@ -377,6 +380,17 @@ final class DoughBoss_Growth {
 				);
 			}
 		}
+	}
+
+	/**
+	 * Whether a module's init() ran in this request without throwing. The Growth settings screen compares this with the
+	 * flags: a feature that is on while its module is not running is reported there instead of being shown as active.
+	 *
+	 * @param string $key Registry key.
+	 * @return bool
+	 */
+	public static function module_running( $key ) {
+		return is_string( $key ) && isset( self::$active[ $key ] );
 	}
 
 	/**
@@ -508,7 +522,8 @@ final class DoughBoss_Growth {
 	}
 
 	/**
-	 * Flags and readiness booleans. Never contains a secret value, token or personal data.
+	 * Flags and readiness booleans, plus the recorded failure codes with their counts (DoughBoss_Growth_Failures).
+	 * Never contains a secret value, token or personal data.
 	 *
 	 * @return array
 	 */
@@ -539,6 +554,7 @@ final class DoughBoss_Growth {
 			'outbox_channels'  => count( DoughBoss_Growth_Outbox::channels() ),
 			'outbox_scheduled' => ( false !== wp_next_scheduled( DoughBoss_Growth_Outbox::CRON_HOOK ) ),
 			'confirm_gaps'     => array_keys( DoughBoss_Growth_Settings::confirm_gaps() ),
+			'failures'         => array_column( DoughBoss_Growth_Failures::all(), 'count', 'code' ),
 		);
 	}
 

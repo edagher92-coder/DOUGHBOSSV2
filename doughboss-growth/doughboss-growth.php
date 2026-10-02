@@ -36,6 +36,7 @@ define( 'DOUGHBOSS_GROWTH_URL', plugin_dir_url( __FILE__ ) );
 
 require_once DOUGHBOSS_GROWTH_DIR . 'includes/class-doughboss-growth-settings.php';
 require_once DOUGHBOSS_GROWTH_DIR . 'includes/class-doughboss-growth-rate-limit.php';
+require_once DOUGHBOSS_GROWTH_DIR . 'includes/class-doughboss-growth-failures.php';
 require_once DOUGHBOSS_GROWTH_DIR . 'includes/class-doughboss-growth-http.php';
 require_once DOUGHBOSS_GROWTH_DIR . 'includes/class-doughboss-growth-outbox.php';
 require_once DOUGHBOSS_GROWTH_DIR . 'includes/class-doughboss-growth-activator.php';

@@ -438,7 +438,9 @@ final class DoughBoss_Growth_Coming_Soon {
 	}
 
 	/**
-	 * admin-post handler for the ribbon switch. Capability AND nonce first.
+	 * admin-post handler for the ribbon switch. Capability AND nonce first. The switch is read back after the write and the
+	 * redirect says whether it really holds the value that was asked for (dbgr_saved 1 or 0); a failed write is also
+	 * noted under Recent failures.
 	 *
 	 * @return void
 	 */
@@ -449,12 +451,17 @@ final class DoughBoss_Growth_Coming_Soon {
 		check_admin_referer( self::SAVE_ACTION );
 		$on = isset( $_POST['ribbon'] ) && '1' === wp_unslash( $_POST['ribbon'] );
 		update_option( self::OPTION, array( 'ribbon' => $on ? 1 : 0 ), true );
+		// update_option() returns false for "unchanged" as well as for "failed", so the truth is what reads back.
+		$saved = ( self::ribbon_enabled() === $on );
+		if ( ! $saved ) {
+			DoughBoss_Growth_Http::log( 'coming_soon_save_failed', array( 'stage' => 'ribbon_switch' ) );
+		}
 		wp_safe_redirect(
 			add_query_arg(
 				array(
 					'page'       => DoughBoss_Growth_Admin::PAGE_SLUG,
 					'tab'        => 'coming-soon',
-					'dbgr_saved' => '1',
+					'dbgr_saved' => $saved ? '1' : '0',
 				),
 				admin_url( 'admin.php' )
 			)
@@ -471,10 +478,18 @@ final class DoughBoss_Growth_Coming_Soon {
 		$headline = self::headline();
 		$body     = self::body();
 		echo '<h2>' . esc_html__( 'Coming soon', 'doughboss-growth' ) . '</h2>';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only result flag after a redirect.
+		$saved = isset( $_GET['dbgr_saved'] ) ? sanitize_key( wp_unslash( $_GET['dbgr_saved'] ) ) : '';
+		if ( '1' === $saved ) {
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Coming-soon settings saved.', 'doughboss-growth' ) . '</p></div>';
+		} elseif ( '0' === $saved ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'The coming-soon settings could not be saved, so the home ribbon is unchanged. The problem is listed under Recent failures on the Settings tab.', 'doughboss-growth' ) . '</p></div>';
+		}
 		echo '<p>' . esc_html__( 'The section says only that something is coming. Edit the two lines on the Settings tab. Product names, prices, sizes, dietary or halal wording, numbers and dates are not allowed and fall back to the neutral wording.', 'doughboss-growth' ) . '</p>';
 		echo '<table class="widefat striped" style="max-width:720px"><tbody>';
 		echo '<tr><th scope="row">' . esc_html__( 'Headline shown', 'doughboss-growth' ) . '</th><td>' . esc_html( $headline ) . ( self::was_replaced( 'coming_soon_headline', $headline ) ? ' ' . esc_html__( '(your saved headline failed the check, so the neutral one is used)', 'doughboss-growth' ) : '' ) . '</td></tr>';
 		echo '<tr><th scope="row">' . esc_html__( 'Text shown', 'doughboss-growth' ) . '</th><td>' . esc_html( $body ) . ( self::was_replaced( 'coming_soon_body', $body ) ? ' ' . esc_html__( '(your saved text failed the check, so the neutral one is used)', 'doughboss-growth' ) : '' ) . '</td></tr>';
+		echo '<tr><th scope="row">' . esc_html__( 'Home ribbon (saved)', 'doughboss-growth' ) . '</th><td>' . ( self::ribbon_enabled() ? esc_html__( 'On', 'doughboss-growth' ) : esc_html__( 'Off', 'doughboss-growth' ) ) . '</td></tr>';
 		$url = self::page_url();
 		echo '<tr><th scope="row">' . esc_html__( 'Coming-soon page', 'doughboss-growth' ) . '</th><td>' . ( '' !== $url ? esc_html( $url ) : esc_html__( 'No published page with that slug. Create a page with the shortcode [doughboss_growth_coming_soon] and publish it.', 'doughboss-growth' ) ) . '</td></tr>';
 		echo '</tbody></table>';

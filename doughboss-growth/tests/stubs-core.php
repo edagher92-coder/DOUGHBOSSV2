@@ -22,3 +22,33 @@ if ( ! class_exists( 'DoughBoss_Settings', false ) ) {
 	class DoughBoss_Settings {
 	}
 }
+
+if ( ! function_exists( 'dbgr_test_describe_tables' ) ) {
+	/**
+	 * Make the fake database answer "SHOW COLUMNS FROM `table`" as MySQL would for a table that dbDelta created correctly.
+	 *
+	 * DoughBoss_Growth_Activator::install() confirms every declared column, not just the table, so a test that expects
+	 * install() to succeed must call this once (the answer comes from the real CREATE TABLE statements, or from the real
+	 * SQLite table when the test uses use_sqlite()). A test that wants a failed ALTER registers its own responder
+	 * INSTEAD: the first responder that matches wins.
+	 *
+	 * @return void
+	 */
+	function dbgr_test_describe_tables() {
+		$GLOBALS['wpdb']->respond(
+			'/^SHOW COLUMNS FROM `([A-Za-z0-9_]+)`/',
+			function ( $sql ) {
+				preg_match( '/^SHOW COLUMNS FROM `([A-Za-z0-9_]+)`/', $sql, $m );
+				if ( $GLOBALS['wpdb']->is_sqlite() ) {
+					$names = array();
+					foreach ( $GLOBALS['wpdb']->sqlite_raw( 'PRAGMA table_info(' . $m[1] . ')' ) as $row ) {
+						$names[] = $row['name'];
+					}
+					return $names;
+				}
+				$expected = DoughBoss_Growth_Activator::expected_columns();
+				return isset( $expected[ $m[1] ] ) ? $expected[ $m[1] ] : array();
+			}
+		);
+	}
+}

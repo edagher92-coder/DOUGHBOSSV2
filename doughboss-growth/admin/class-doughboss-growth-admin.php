@@ -29,6 +29,11 @@ final class DoughBoss_Growth_Admin {
 	const ACTION_SAVE = 'doughboss_growth_save_settings';
 
 	/**
+	 * admin-post action and nonce action for clearing the recent failures list.
+	 */
+	const ACTION_CLEAR_FAILURES = 'doughboss_growth_clear_failures';
+
+	/**
 	 * Tabs registered by modules: slug => array( label, callback ).
 	 *
 	 * @var array
@@ -43,8 +48,10 @@ final class DoughBoss_Growth_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 20 );
 		add_action( 'admin_post_' . self::ACTION_SAVE, array( __CLASS__, 'handle_save' ) );
+		add_action( 'admin_post_' . self::ACTION_CLEAR_FAILURES, array( __CLASS__, 'handle_clear_failures' ) );
 		add_action( 'admin_init', array( 'DoughBoss_Growth_Activator', 'maybe_upgrade' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'render_storage_notice' ) );
+		add_action( 'admin_notices', array( __CLASS__, 'render_failures_notice' ) );
 	}
 
 	/**
@@ -123,8 +130,82 @@ final class DoughBoss_Growth_Admin {
 	}
 
 	/**
+	 * Whether the current admin request is one of the Growth screens (the settings page or a module page whose slug starts
+	 * with the settings page slug).
+	 *
+	 * @return bool
+	 */
+	private static function on_growth_screen() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only routing check, no state change.
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		return 0 === strpos( $page, self::PAGE_SLUG );
+	}
+
+	/**
+	 * Notice on every Growth screen while failures are recorded, with a Clear button. Without it a module that threw, a
+	 * table that could not be completed or a refused request left no trace on a site without WP_DEBUG_LOG.
+	 *
+	 * @return void
+	 */
+	public static function render_failures_notice() {
+		if ( ! self::user_can_manage() || ! self::on_growth_screen() ) {
+			return;
+		}
+		$count = DoughBoss_Growth_Failures::count();
+		if ( $count < 1 ) {
+			return;
+		}
+		$url = add_query_arg( array( 'page' => self::PAGE_SLUG ), admin_url( 'admin.php' ) );
+		echo '<div class="notice notice-error"><p><strong>' . esc_html__( 'DoughBoss Growth recorded problems that it could not show you at the time.', 'doughboss-growth' ) . '</strong> ';
+		/* translators: %d: number of different problems recorded. */
+		echo esc_html( sprintf( _n( '%d problem is listed under Recent failures.', '%d problems are listed under Recent failures.', $count, 'doughboss-growth' ), $count ) );
+		echo ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Open the Settings tab', 'doughboss-growth' ) . '</a></p>';
+		self::render_clear_form();
+		echo '</div>';
+	}
+
+	/**
+	 * The Clear button for the recent failures list: a POST form with a nonce.
+	 *
+	 * @return void
+	 */
+	private static function render_clear_form() {
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin:0 0 .5em">';
+		echo '<input type="hidden" name="action" value="' . esc_attr( self::ACTION_CLEAR_FAILURES ) . '" />';
+		wp_nonce_field( self::ACTION_CLEAR_FAILURES );
+		submit_button( __( 'Clear', 'doughboss-growth' ), 'secondary', 'submit', false );
+		echo '</form>';
+	}
+
+	/**
+	 * Handle the Clear button. Capability AND nonce first. The result shown afterwards is read back from storage, so
+	 * "cleared" is only said when the list really is empty.
+	 *
+	 * @return void
+	 */
+	public static function handle_clear_failures() {
+		if ( ! self::user_can_manage() ) {
+			wp_die( esc_html__( 'You do not have permission to change these settings.', 'doughboss-growth' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( self::ACTION_CLEAR_FAILURES );
+		DoughBoss_Growth_Failures::clear();
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'         => self::PAGE_SLUG,
+					'dbgr_cleared' => ( 0 === DoughBoss_Growth_Failures::count() ) ? '1' : '0',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	/**
 	 * Handle the settings form. Capability AND nonce first; sanitising and the dependency rules are
-	 * applied by DoughBoss_Growth_Settings::apply_save().
+	 * applied by DoughBoss_Growth_Settings::apply_save(). The redirect carries what was saved, which
+	 * dependency rules switched a feature off, and which typed values were refused or adjusted, so the
+	 * notice that follows says what really happened rather than what was intended.
 	 *
 	 * @return void
 	 */
@@ -144,6 +225,15 @@ final class DoughBoss_Growth_Admin {
 		);
 		if ( array() !== $result['errors'] ) {
 			$args['dbgr_err'] = implode( ',', $result['errors'] );
+		}
+		if ( array() !== $result['refused'] ) {
+			$args['dbgr_refused'] = implode( ',', $result['refused'] );
+		}
+		if ( array() !== $result['adjusted'] ) {
+			$args['dbgr_adjusted'] = implode( ',', $result['adjusted'] );
+		}
+		if ( ! $result['saved'] ) {
+			DoughBoss_Growth_Http::log( 'settings_save_failed', array( 'stage' => 'read_back' ) );
 		}
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
@@ -211,6 +301,271 @@ final class DoughBoss_Growth_Admin {
 	}
 
 	/**
+	 * Labels of the fields apply_save() can refuse or adjust (the same wording as the form).
+	 *
+	 * @return array Field => label.
+	 */
+	public static function field_labels() {
+		return array(
+			'gtm_container_id'           => __( 'Tag Manager container id', 'doughboss-growth' ),
+			'ga4_measurement_id'         => __( 'GA4 measurement id', 'doughboss-growth' ),
+			'meta_pixel_id'              => __( 'Meta pixel id', 'doughboss-growth' ),
+			'consent_text_version'       => __( 'Consent wording version', 'doughboss-growth' ),
+			'consent_default'            => __( 'Consent default', 'doughboss-growth' ),
+			'sender_legal_name'          => __( 'Sender legal name', 'doughboss-growth' ),
+			'privacy_policy_url'         => __( 'Privacy-policy URL', 'doughboss-growth' ),
+			'notify_webhook_url'         => __( 'Notification webhook URL', 'doughboss-growth' ),
+			'retention_pending_days'     => __( 'Delete unconfirmed waitlist rows after (days)', 'doughboss-growth' ),
+			'retention_confirmed_months' => __( 'Delete confirmed waitlist rows after (months)', 'doughboss-growth' ),
+			'coming_soon_headline'       => __( 'Coming-soon headline', 'doughboss-growth' ),
+			'coming_soon_body'           => __( 'Coming-soon text', 'doughboss-growth' ),
+			'coming_soon_page_slug'      => __( 'Coming-soon page slug', 'doughboss-growth' ),
+		);
+	}
+
+	/**
+	 * What happened to a value that was typed but dropped, field by field. None of these says what the value was; the
+	 * teaser lines never repeat a rejected word.
+	 *
+	 * @return array Field => sentence.
+	 */
+	public static function refusal_messages() {
+		return array(
+			'gtm_container_id'           => __( 'Tag Manager container id: that is not a valid id (it should look like GTM-XXXXXXX), so it was left blank. Tag Manager cannot load without one.', 'doughboss-growth' ),
+			'ga4_measurement_id'         => __( 'GA4 measurement id: that is not a valid id (it should look like G-XXXXXXXXXX), so it was left blank.', 'doughboss-growth' ),
+			'meta_pixel_id'              => __( 'Meta pixel id: that is not a valid id (digits only, 8 to 20 of them), so it was left blank.', 'doughboss-growth' ),
+			'consent_text_version'       => __( 'Consent wording version: use letters, numbers, dots, dashes and underscores only, so the default (1) is used.', 'doughboss-growth' ),
+			'consent_default'            => __( 'Consent default: that choice is not recognised, so deny is used.', 'doughboss-growth' ),
+			'sender_legal_name'          => __( 'Sender legal name: that text was not accepted, so it was left blank.', 'doughboss-growth' ),
+			'privacy_policy_url'         => __( 'Privacy-policy URL: that is not a usable address (use a full http or https address, or a path that starts with a slash), so it was left blank.', 'doughboss-growth' ),
+			'notify_webhook_url'         => __( 'Notification webhook URL: that is not accepted (it must be a public https address), so it was left blank.', 'doughboss-growth' ),
+			'retention_pending_days'     => __( 'Delete unconfirmed waitlist rows after (days): enter a whole number of 1 or more, so the default of 30 days is used.', 'doughboss-growth' ),
+			'retention_confirmed_months' => __( 'Delete confirmed waitlist rows after (months): enter a whole number of 1 or more. Until you do, confirmed rows are never deleted automatically.', 'doughboss-growth' ),
+			'coming_soon_headline'       => __( 'Coming-soon headline: that wording is not allowed, so the neutral headline is used.', 'doughboss-growth' ),
+			'coming_soon_body'           => __( 'Coming-soon text: that wording is not allowed, so the neutral text is used.', 'doughboss-growth' ),
+			'coming_soon_page_slug'      => __( 'Coming-soon page slug: that is not a usable address, so the default (coming-soon) is used.', 'doughboss-growth' ),
+		);
+	}
+
+	/**
+	 * The save notices that follow a redirect from handle_save(): what was refused, what was adjusted. Only field names
+	 * apply_save() can return are honoured, whatever the query string says.
+	 *
+	 * @param array $refused  Field names.
+	 * @param array $adjusted Field names.
+	 * @return array List of sentences.
+	 */
+	private static function save_change_lines( array $refused, array $adjusted ) {
+		$lines    = array();
+		$known    = DoughBoss_Growth_Settings::NOTE_FIELDS;
+		$messages = self::refusal_messages();
+		$labels   = self::field_labels();
+		foreach ( $refused as $field ) {
+			if ( in_array( $field, $known, true ) && isset( $messages[ $field ] ) ) {
+				$lines[] = $messages[ $field ];
+			}
+		}
+		foreach ( $adjusted as $field ) {
+			if ( in_array( $field, $known, true ) && isset( $labels[ $field ] ) ) {
+				/* translators: %s: the name of a setting. */
+				$lines[] = sprintf( __( '%s: the value was shortened, capped or cleaned to fit what is allowed. Check that the box shows what you meant.', 'doughboss-growth' ), $labels[ $field ] );
+			}
+		}
+		return $lines;
+	}
+
+	/**
+	 * Whether a feature is really working, not merely ticked.
+	 *
+	 * "off": the box is not ticked. "waiting": ticked, but something it needs is missing or a safety rule is holding it
+	 * off (reasons say what). "not_running": ticked and allowed, yet its module did not start in this request (it threw or
+	 * its file is missing: the Recent failures list has the detail). "active": ticked, allowed, its cheap runtime checks
+	 * pass and every module that serves it is running. The checks are those the modules apply themselves; they read
+	 * settings and hooks only and never start a module.
+	 *
+	 * @param string $feature Feature key.
+	 * @return array { state: string, reasons: string[] }
+	 */
+	public static function feature_status( $feature ) {
+		$settings = DoughBoss_Growth_Settings::get_all();
+		if ( ! isset( $settings['features'][ $feature ] ) || true !== $settings['features'][ $feature ] ) {
+			return array(
+				'state'   => 'off',
+				'reasons' => array(),
+			);
+		}
+		if ( ! DoughBoss_Growth_Settings::enabled( $feature ) ) {
+			return array(
+				'state'   => 'waiting',
+				'reasons' => self::blocked_reasons( $feature, $settings ),
+			);
+		}
+		$gaps = self::runtime_gaps( $feature, $settings );
+		if ( array() !== $gaps ) {
+			return array(
+				'state'   => 'waiting',
+				'reasons' => $gaps,
+			);
+		}
+		foreach ( DoughBoss_Growth::modules() as $key => $module ) {
+			if ( in_array( $feature, $module['features'], true ) && ! DoughBoss_Growth::module_running( $key ) ) {
+				return array(
+					'state'   => 'not_running',
+					'reasons' => array( (string) $key ),
+				);
+			}
+		}
+		return array(
+			'state'   => 'active',
+			'reasons' => array(),
+		);
+	}
+
+	/**
+	 * Why a ticked feature is not allowed to run: the kill switch, an unmet prerequisite, or another safety rule.
+	 *
+	 * @param string $feature  Feature key.
+	 * @param array  $settings Sanitised settings.
+	 * @return array Sentences (no full stop).
+	 */
+	private static function blocked_reasons( $feature, array $settings ) {
+		if ( DoughBoss_Growth_Settings::kill_switch() ) {
+			return array( __( 'the DOUGHBOSS_GROWTH_DISABLE switch in wp-config.php to be removed', 'doughboss-growth' ) );
+		}
+		$texts   = array(
+			'gtm_requires_consent_banner'             => __( 'the consent banner to be on', 'doughboss-growth' ),
+			'seo_head_requires_landing_pages'         => __( 'landing pages to be on', 'doughboss-growth' ),
+			'server_conversions_requires_attribution' => __( 'attribution to be on', 'doughboss-growth' ),
+			'server_conversions_requires_destination' => __( 'a fully configured destination (an id with its secret, or a webhook URL)', 'doughboss-growth' ),
+			'waitlist_requires_sender_legal_name'     => __( 'the sender legal name', 'doughboss-growth' ),
+			'waitlist_requires_privacy_policy_url'    => __( 'the privacy-policy URL', 'doughboss-growth' ),
+		);
+		$reasons = array();
+		foreach ( DoughBoss_Growth_Settings::unmet_requirements( $feature, $settings, array( 'DoughBoss_Growth_Settings', 'enabled' ) ) as $code ) {
+			if ( isset( $texts[ $code ] ) ) {
+				$reasons[] = $texts[ $code ];
+			}
+		}
+		if ( array() === $reasons ) {
+			$reasons[] = __( 'a safety check that is holding it off (for example the claims ledger being valid)', 'doughboss-growth' );
+		}
+		return $reasons;
+	}
+
+	/**
+	 * What an allowed feature still needs before it does anything visible. Each check is the one the feature's own module
+	 * makes at run time, using settings, hooks and the module's class when it is already loaded.
+	 *
+	 * @param string $feature  Feature key.
+	 * @param array  $settings Sanitised settings.
+	 * @return array Sentences (no full stop).
+	 */
+	private static function runtime_gaps( $feature, array $settings ) {
+		$gaps = array();
+		foreach ( DoughBoss_Growth::modules() as $module ) {
+			if ( ! empty( $module['needs_storage'] ) && in_array( $feature, $module['features'], true ) && ! DoughBoss_Growth_Activator::storage_ready() ) {
+				$gaps[] = __( 'the database tables (see Database tables above)', 'doughboss-growth' );
+				break;
+			}
+		}
+		switch ( $feature ) {
+			case 'gtm':
+				if ( '' === $settings['gtm_container_id'] ) {
+					$gaps[] = __( 'a valid Tag Manager container id', 'doughboss-growth' );
+				} elseif ( class_exists( 'DoughBoss_Growth_Tags', false ) && ! DoughBoss_Growth_Tags::ready() ) {
+					$gaps[] = __( 'the event list file, which is missing or invalid', 'doughboss-growth' );
+				}
+				break;
+			case 'attribution':
+				if ( ! DoughBoss_Growth_Settings::enabled( 'consent_banner' ) ) {
+					$gaps[] = __( 'the consent banner to be on (nothing is captured without it)', 'doughboss-growth' );
+				}
+				break;
+			case 'lead_form':
+				$recording = array( 'DoughBoss_Growth_Attribution', 'on_enquiry_created' );
+				if ( ! class_exists( 'DoughBoss_Growth_Attribution', false ) || false === has_filter( 'doughboss_catering_enquiry_created', $recording ) ) {
+					$gaps[] = __( 'the lead record to be wired up, which did not start', 'doughboss-growth' );
+				}
+				break;
+			case 'waitlist':
+				if ( class_exists( 'DoughBoss_Growth_Waitlist', false ) && ! DoughBoss_Growth_Waitlist::configured() ) {
+					$gaps[] = __( 'a sender legal name that passes the wording check, and a privacy-policy URL', 'doughboss-growth' );
+				}
+				break;
+			case 'timesheet_recon':
+				if ( ! DoughBoss_Growth_Settings::has_secret( 'DOUGHBOSS_GROWTH_SQUARE_LABOUR_TOKEN' ) ) {
+					$gaps[] = __( 'a Square labour token (set DOUGHBOSS_GROWTH_SQUARE_LABOUR_TOKEN in wp-config.php)', 'doughboss-growth' );
+				}
+				break;
+		}
+		return $gaps;
+	}
+
+	/**
+	 * The label after a feature description: what is true now, not what is ticked.
+	 *
+	 * @param string $feature Feature key.
+	 * @return string
+	 */
+	private static function feature_state_text( $feature ) {
+		$status = self::feature_status( $feature );
+		if ( 'active' === $status['state'] ) {
+			return __( '(Currently active.)', 'doughboss-growth' );
+		}
+		if ( 'waiting' === $status['state'] ) {
+			/* translators: %s: what the feature is waiting for. */
+			return sprintf( __( '(On, waiting for: %s.)', 'doughboss-growth' ), implode( '; ', $status['reasons'] ) );
+		}
+		if ( 'not_running' === $status['state'] ) {
+			return __( '(On, but not running: see Recent failures above.)', 'doughboss-growth' );
+		}
+		return __( '(Currently inactive.)', 'doughboss-growth' );
+	}
+
+	/**
+	 * The Database tables status: Ready only when the version is stored AND every expected table and column is there.
+	 * This runs a check per table, so it runs only while the Settings tab is open.
+	 *
+	 * @return string
+	 */
+	private static function database_status() {
+		$problems = DoughBoss_Growth_Activator::schema_problems();
+		if ( array() !== $problems ) {
+			/* translators: %s: names of the missing or incomplete database tables. */
+			return sprintf( __( 'Not complete: %s. Features that store data stay off until this is fixed. Open this page again to retry.', 'doughboss-growth' ), implode( ', ', array_slice( $problems, 0, 8 ) ) );
+		}
+		return DoughBoss_Growth_Activator::storage_ready() ? __( 'Ready', 'doughboss-growth' ) : __( 'Not confirmed', 'doughboss-growth' );
+	}
+
+	/**
+	 * The Recent failures status row, with a Clear button when there is something to clear.
+	 *
+	 * @return void
+	 */
+	private static function render_failures_row() {
+		$failures = DoughBoss_Growth_Failures::all();
+		echo '<tr><th scope="row">' . esc_html__( 'Recent failures', 'doughboss-growth' ) . '</th><td>';
+		if ( array() === $failures ) {
+			echo esc_html__( 'None recorded', 'doughboss-growth' ) . '</td></tr>';
+			return;
+		}
+		echo '<ul style="margin:0 0 .5em">';
+		foreach ( $failures as $failure ) {
+			$when    = ( $failure['last_seen'] > 0 ) ? wp_date( 'j M Y, g:i a', $failure['last_seen'] ) : __( 'an unknown time', 'doughboss-growth' );
+			$details = array();
+			foreach ( $failure['context'] as $key => $value ) {
+				$details[] = $key . ': ' . $value;
+			}
+			/* translators: 1: number of times, 2: date and time the failure was last seen. */
+			$line = sprintf( _n( '%1$d time, last seen %2$s', '%1$d times, last seen %2$s', $failure['count'], 'doughboss-growth' ), $failure['count'], $when );
+			echo '<li><code>' . esc_html( $failure['code'] ) . '</code> ' . esc_html( $line ) . ( array() !== $details ? ' <span class="description">(' . esc_html( implode( ', ', $details ) ) . ')</span>' : '' ) . '</li>';
+		}
+		echo '</ul>';
+		self::render_clear_form();
+		echo '</td></tr>';
+	}
+
+	/**
 	 * One-line, neutral description of each feature (admin-only text).
 	 *
 	 * @return array
@@ -241,12 +596,23 @@ final class DoughBoss_Growth_Admin {
 		$messages = self::error_messages();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only result flags after a redirect.
-		$saved = isset( $_GET['dbgr_saved'] ) ? sanitize_key( wp_unslash( $_GET['dbgr_saved'] ) ) : '';
-		$errs  = isset( $_GET['dbgr_err'] ) ? explode( ',', sanitize_text_field( wp_unslash( $_GET['dbgr_err'] ) ) ) : array();
+		$saved    = isset( $_GET['dbgr_saved'] ) ? sanitize_key( wp_unslash( $_GET['dbgr_saved'] ) ) : '';
+		$errs     = isset( $_GET['dbgr_err'] ) ? explode( ',', sanitize_text_field( wp_unslash( $_GET['dbgr_err'] ) ) ) : array();
+		$refused  = isset( $_GET['dbgr_refused'] ) ? explode( ',', sanitize_text_field( wp_unslash( $_GET['dbgr_refused'] ) ) ) : array();
+		$adjusted = isset( $_GET['dbgr_adjusted'] ) ? explode( ',', sanitize_text_field( wp_unslash( $_GET['dbgr_adjusted'] ) ) ) : array();
+		$cleared  = isset( $_GET['dbgr_cleared'] ) ? sanitize_key( wp_unslash( $_GET['dbgr_cleared'] ) ) : '';
 		// phpcs:enable
 
-		if ( '1' === $saved ) {
+		$changes = self::save_change_lines( $refused, $adjusted );
+		if ( '1' === $saved && array() === $changes ) {
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Settings saved.', 'doughboss-growth' ) . '</p></div>';
+		} elseif ( '1' === $saved ) {
+			// Saved, but not everything typed survived: say so instead of a plain "Settings saved."
+			echo '<div class="notice notice-warning"><p><strong>' . esc_html__( 'Settings saved, but not everything you typed was kept:', 'doughboss-growth' ) . '</strong></p><ul class="ul-disc">';
+			foreach ( $changes as $line ) {
+				echo '<li>' . esc_html( $line ) . '</li>';
+			}
+			echo '</ul></div>';
 		} elseif ( '0' === $saved ) {
 			echo '<div class="notice notice-error"><p>' . esc_html__( 'Settings could not be saved.', 'doughboss-growth' ) . '</p></div>';
 		}
@@ -255,13 +621,19 @@ final class DoughBoss_Growth_Admin {
 				echo '<div class="notice notice-warning"><p>' . esc_html( $messages[ $code ] ) . '</p></div>';
 			}
 		}
+		if ( '1' === $cleared ) {
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Recent failures cleared.', 'doughboss-growth' ) . '</p></div>';
+		} elseif ( '0' === $cleared ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'The recent failures could not be cleared.', 'doughboss-growth' ) . '</p></div>';
+		}
 
 		echo '<h2>' . esc_html__( 'Status', 'doughboss-growth' ) . '</h2>';
 		echo '<table class="widefat striped" style="max-width:640px"><tbody>';
 		self::status_row( __( 'Companion version', 'doughboss-growth' ), DOUGHBOSS_GROWTH_VERSION );
 		self::status_row( __( 'DoughBoss version', 'doughboss-growth' ), DoughBoss_Growth::core_version() );
-		self::status_row( __( 'Database tables', 'doughboss-growth' ), DoughBoss_Growth_Activator::storage_ready() ? __( 'Ready', 'doughboss-growth' ) : __( 'Not confirmed', 'doughboss-growth' ) );
+		self::status_row( __( 'Database tables', 'doughboss-growth' ), self::database_status() );
 		self::status_row( __( 'Kill switch (DOUGHBOSS_GROWTH_DISABLE)', 'doughboss-growth' ), DoughBoss_Growth_Settings::kill_switch() ? __( 'On: everything is stopped', 'doughboss-growth' ) : __( 'Off', 'doughboss-growth' ) );
+		self::render_failures_row();
 		echo '</tbody></table>';
 
 		$gaps = DoughBoss_Growth_Settings::confirm_gaps();
@@ -285,7 +657,7 @@ final class DoughBoss_Growth_Admin {
 			$id = 'dbgr-feature-' . $feature;
 			echo '<p><label for="' . esc_attr( $id ) . '"><input type="checkbox" id="' . esc_attr( $id ) . '" name="dbgr[features][' . esc_attr( $feature ) . ']" value="1"' . ( true === $settings['features'][ $feature ] ? ' checked="checked"' : '' ) . ' /> <strong>' . esc_html( $copy[0] ) . '</strong></label>';
 			echo '<br /><span class="description">' . esc_html( $copy[1] ) . ' ';
-			echo DoughBoss_Growth_Settings::enabled( $feature ) ? esc_html__( '(Currently active.)', 'doughboss-growth' ) : esc_html__( '(Currently inactive.)', 'doughboss-growth' );
+			echo esc_html( self::feature_state_text( $feature ) );
 			echo '</span></p>';
 		}
 		echo '</fieldset>';

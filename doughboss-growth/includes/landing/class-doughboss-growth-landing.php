@@ -106,9 +106,11 @@ final class DoughBoss_Growth_Landing {
 	const MAX_PACKAGES = 50;
 
 	/**
-	 * Result codes of the create button, with a human sentence for each.
+	 * Result codes of the create button, with a human sentence for each. "record_failed" belongs to one page (it was
+	 * created or adopted but WordPress would not save the record of it); "error" is the whole request stopping with an
+	 * error and carries no page key.
 	 */
-	const RESULT_CODES = array( 'created', 'adopted', 'exists', 'parent_missing', 'slug_taken', 'insert_failed', 'trashed' );
+	const RESULT_CODES = array( 'created', 'adopted', 'exists', 'parent_missing', 'slug_taken', 'insert_failed', 'trashed', 'record_failed', 'error' );
 
 	/**
 	 * Per-request caches.
@@ -1519,6 +1521,16 @@ final class DoughBoss_Growth_Landing {
 		}
 		if ( $next !== $raw ) {
 			update_option( DoughBoss_Growth_Activator::PAGES_OPTION, $next, true );
+			// The write call cannot tell "failed" from "unchanged", so confirm by reading the record back. Pages that were
+			// created or adopted but are not recorded are reported as such (a click on the button again adopts them).
+			if ( get_option( DoughBoss_Growth_Activator::PAGES_OPTION, array() ) !== $next ) {
+				foreach ( $out as $key => $code ) {
+					if ( 'created' === $code || 'adopted' === $code ) {
+						$out[ $key ] = 'record_failed';
+					}
+				}
+				DoughBoss_Growth_Http::log( 'landing_record_failed', array( 'stage' => 'pages_option' ) );
+			}
 		}
 		return $out;
 	}
@@ -1540,7 +1552,7 @@ final class DoughBoss_Growth_Landing {
 			}
 		} catch ( Throwable $e ) {
 			DoughBoss_Growth_Http::log( 'landing_create_failed', array( 'error' => get_class( $e ) ) );
-			$parts = array( 'error' );
+			$parts = array( 'error' ); // Shown as an error notice by render_result_notice(): never a blank redirect.
 		}
 		wp_safe_redirect(
 			add_query_arg(
@@ -1583,6 +1595,8 @@ final class DoughBoss_Growth_Landing {
 			'slug_taken'    => __( 'Not created: another page already uses this address.', 'doughboss-growth' ),
 			'insert_failed' => __( 'Not created: WordPress could not save the page.', 'doughboss-growth' ),
 			'trashed'       => __( 'Left alone: the page is in the bin.', 'doughboss-growth' ),
+			'record_failed' => __( 'The page exists, but WordPress could not save the record of it, so it is not listed here yet. Click the button again to record it.', 'doughboss-growth' ),
+			'error'         => __( 'Something went wrong while creating the pages, so some may not exist yet. Nothing was published. The problem is listed under Recent failures on the Settings tab. Click the button again to retry.', 'doughboss-growth' ),
 		);
 		return isset( $map[ $code ] ) ? $map[ $code ] : '';
 	}
@@ -1695,18 +1709,23 @@ final class DoughBoss_Growth_Landing {
 		if ( '' === $raw ) {
 			return;
 		}
-		$defs  = self::definitions();
-		$lines = array();
+		$defs   = self::definitions();
+		$lines  = array();
+		$failed = false;
 		foreach ( explode( ',', $raw ) as $part ) {
 			$bits = explode( '.', $part );
-			if ( 2 === count( $bits ) && isset( $defs[ $bits[0] ] ) && in_array( $bits[1], self::RESULT_CODES, true ) ) {
+			if ( 1 === count( $bits ) && 'error' === $bits[0] ) {
+				$lines[] = self::result_text( 'error' ); // The whole request stopped: there is no page key.
+				$failed  = true;
+			} elseif ( 2 === count( $bits ) && isset( $defs[ $bits[0] ] ) && in_array( $bits[1], self::RESULT_CODES, true ) ) {
 				$lines[] = $defs[ $bits[0] ]['parent'] . '/' . $defs[ $bits[0] ]['slug'] . ': ' . self::result_text( $bits[1] );
+				$failed  = $failed || 'insert_failed' === $bits[1] || 'record_failed' === $bits[1];
 			}
 		}
 		if ( array() === $lines ) {
 			return;
 		}
-		echo '<div class="notice notice-info is-dismissible"><ul>';
+		echo '<div class="notice ' . ( $failed ? 'notice-error' : 'notice-info is-dismissible' ) . '"><ul>';
 		foreach ( $lines as $line ) {
 			echo '<li>' . esc_html( $line ) . '</li>';
 		}

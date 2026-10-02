@@ -66,6 +66,26 @@ final class DoughBoss_Growth_Settings {
 	const DEFAULT_COMING_SOON_BODY     = 'Be first to know';
 
 	/**
+	 * Text and number fields whose saved value can differ from what was typed. apply_save() reports these (and only
+	 * these) in its "refused" and "adjusted" lists, so a value that was silently blanked or defaulted is shown to the owner.
+	 */
+	const NOTE_FIELDS = array(
+		'gtm_container_id',
+		'ga4_measurement_id',
+		'meta_pixel_id',
+		'consent_text_version',
+		'consent_default',
+		'sender_legal_name',
+		'privacy_policy_url',
+		'notify_webhook_url',
+		'retention_pending_days',
+		'retention_confirmed_months',
+		'coming_soon_headline',
+		'coming_soon_body',
+		'coming_soon_page_slug',
+	);
+
+	/**
 	 * Default settings. Every feature false.
 	 *
 	 * @return array
@@ -230,11 +250,20 @@ final class DoughBoss_Growth_Settings {
 	 * Sanitise and persist settings from a raw (already unslashed) array, enforcing the
 	 * dependency rules: a feature whose prerequisites are unmet is forced OFF and reported.
 	 *
+	 * "saved" says whether what was stored reads back identical to what was sanitised. It does NOT say the owner's input
+	 * survived sanitising, so two more lists are returned for the save notice: "refused" (a value was typed but was
+	 * dropped: the field is now blank or on its default) and "adjusted" (a value was kept but changed, for example capped).
+	 * Both hold field names from NOTE_FIELDS. A box left empty is not a refusal.
+	 *
 	 * @param array $raw Raw input.
-	 * @return array { settings: array, errors: string[], saved: bool }
+	 * @return array { settings: array, errors: string[], saved: bool, refused: string[], adjusted: string[] }
 	 */
 	public static function apply_save( array $raw ) {
-		$clean  = self::sanitize( $raw );
+		$notes  = array(
+			'refused'  => array(),
+			'adjusted' => array(),
+		);
+		$clean  = self::sanitize_noted( $raw, $notes );
 		$errors = array();
 
 		$candidate = $clean['features'];
@@ -269,6 +298,8 @@ final class DoughBoss_Growth_Settings {
 			'settings' => $clean,
 			'errors'   => array_values( array_unique( $errors ) ),
 			'saved'    => $saved,
+			'refused'  => $notes['refused'],
+			'adjusted' => $notes['adjusted'],
 		);
 	}
 
@@ -279,6 +310,21 @@ final class DoughBoss_Growth_Settings {
 	 * @return array
 	 */
 	public static function sanitize( array $raw ) {
+		$notes = array(
+			'refused'  => array(),
+			'adjusted' => array(),
+		);
+		return self::sanitize_noted( $raw, $notes );
+	}
+
+	/**
+	 * The body of sanitize(), also reporting which typed values were dropped ("refused") or changed ("adjusted").
+	 *
+	 * @param array $raw   Raw settings.
+	 * @param array $notes Filled with refused and adjusted field names.
+	 * @return array
+	 */
+	private static function sanitize_noted( array $raw, array &$notes ) {
 		$out = self::defaults();
 
 		$features_in = ( isset( $raw['features'] ) && is_array( $raw['features'] ) ) ? $raw['features'] : array();
@@ -289,19 +335,39 @@ final class DoughBoss_Growth_Settings {
 		$out['gtm_container_id'] = self::match_id( $raw, 'gtm_container_id', '/^GTM-[A-Z0-9]{4,10}$/D', true );
 		$out['ga4_measurement_id'] = self::match_id( $raw, 'ga4_measurement_id', '/^G-[A-Z0-9]{4,20}$/D', true );
 		$out['meta_pixel_id']      = self::match_id( $raw, 'meta_pixel_id', '/^[0-9]{8,20}$/D', false );
+		foreach ( array( 'gtm_container_id', 'ga4_measurement_id', 'meta_pixel_id' ) as $id_key ) {
+			if ( '' === $out[ $id_key ] && '' !== self::supplied( $raw, $id_key ) ) {
+				self::note( $notes, 'refused', $id_key );
+			}
+		}
 
 		$version = isset( $raw['consent_text_version'] ) ? self::text( $raw['consent_text_version'], 20 ) : '';
 		if ( 1 === preg_match( '/^[A-Za-z0-9._-]{1,20}$/D', $version ) ) {
 			$out['consent_text_version'] = $version;
+		} elseif ( '' !== self::supplied( $raw, 'consent_text_version' ) ) {
+			self::note( $notes, 'refused', 'consent_text_version' );
 		}
 
 		if ( isset( $raw['consent_default'] ) && is_string( $raw['consent_default'] ) && in_array( $raw['consent_default'], self::CONSENT_DEFAULTS, true ) ) {
 			$out['consent_default'] = $raw['consent_default'];
+		} elseif ( '' !== self::supplied( $raw, 'consent_default' ) ) {
+			self::note( $notes, 'refused', 'consent_default' );
 		}
 
 		$out['sender_legal_name']  = isset( $raw['sender_legal_name'] ) ? self::text( $raw['sender_legal_name'], 120 ) : '';
 		$out['privacy_policy_url'] = isset( $raw['privacy_policy_url'] ) ? self::page_url( $raw['privacy_policy_url'] ) : '';
 		$out['notify_webhook_url'] = isset( $raw['notify_webhook_url'] ) ? self::https_url( $raw['notify_webhook_url'] ) : '';
+		foreach ( array( 'sender_legal_name', 'privacy_policy_url', 'notify_webhook_url' ) as $kept_key ) {
+			$typed = self::supplied( $raw, $kept_key );
+			if ( '' === $typed ) {
+				continue;
+			}
+			if ( '' === $out[ $kept_key ] ) {
+				self::note( $notes, 'refused', $kept_key );
+			} elseif ( self::squash( $typed ) !== $out[ $kept_key ] ) {
+				self::note( $notes, 'adjusted', $kept_key );
+			}
+		}
 
 		$out['send_hashed_identifiers']    = ( isset( $raw['send_hashed_identifiers'] ) && self::truthy( $raw['send_hashed_identifiers'] ) ) ? 1 : 0;
 		$out['seo_jsonld_with_seo_plugin'] = ( isset( $raw['seo_jsonld_with_seo_plugin'] ) && self::truthy( $raw['seo_jsonld_with_seo_plugin'] ) ) ? 1 : 0;
@@ -309,6 +375,11 @@ final class DoughBoss_Growth_Settings {
 		$pending = isset( $raw['retention_pending_days'] ) ? self::positive_int( $raw['retention_pending_days'] ) : 0;
 		if ( $pending >= 1 ) {
 			$out['retention_pending_days'] = min( 365, $pending );
+			if ( $pending > 365 ) {
+				self::note( $notes, 'adjusted', 'retention_pending_days' );
+			}
+		} elseif ( '' !== self::supplied( $raw, 'retention_pending_days' ) ) {
+			self::note( $notes, 'refused', 'retention_pending_days' ); // Zero, negative or not a whole number: the default stays.
 		}
 
 		// Unset until Elie decides: no automatic deletion of confirmed rows while null. A negative, zero or
@@ -316,23 +387,90 @@ final class DoughBoss_Growth_Settings {
 		$months = isset( $raw['retention_confirmed_months'] ) ? self::positive_int( $raw['retention_confirmed_months'] ) : 0;
 		if ( $months >= 1 ) {
 			$out['retention_confirmed_months'] = min( 120, $months );
+			if ( $months > 120 ) {
+				self::note( $notes, 'adjusted', 'retention_confirmed_months' );
+			}
+		} elseif ( '' !== self::supplied( $raw, 'retention_confirmed_months' ) ) {
+			self::note( $notes, 'refused', 'retention_confirmed_months' ); // Stays unset: confirmed rows are never deleted automatically.
 		}
 
 		$headline = isset( $raw['coming_soon_headline'] ) ? self::text( $raw['coming_soon_headline'], 80 ) : '';
 		if ( '' !== $headline && ! self::contains_banned_teaser_word( $headline ) ) {
 			$out['coming_soon_headline'] = $headline;
+			if ( self::squash( self::supplied( $raw, 'coming_soon_headline' ) ) !== $headline ) {
+				self::note( $notes, 'adjusted', 'coming_soon_headline' );
+			}
+		} elseif ( '' !== self::supplied( $raw, 'coming_soon_headline' ) ) {
+			self::note( $notes, 'refused', 'coming_soon_headline' );
 		}
 		$body = isset( $raw['coming_soon_body'] ) ? self::text( $raw['coming_soon_body'], 240 ) : '';
 		if ( '' !== $body && ! self::contains_banned_teaser_word( $body ) ) {
 			$out['coming_soon_body'] = $body;
+			if ( self::squash( self::supplied( $raw, 'coming_soon_body' ) ) !== $body ) {
+				self::note( $notes, 'adjusted', 'coming_soon_body' );
+			}
+		} elseif ( '' !== self::supplied( $raw, 'coming_soon_body' ) ) {
+			self::note( $notes, 'refused', 'coming_soon_body' );
 		}
 
 		$slug = isset( $raw['coming_soon_page_slug'] ) && is_string( $raw['coming_soon_page_slug'] ) ? sanitize_title( $raw['coming_soon_page_slug'] ) : '';
 		if ( '' !== $slug ) {
 			$out['coming_soon_page_slug'] = $slug;
+			if ( strtolower( self::supplied( $raw, 'coming_soon_page_slug' ) ) !== $slug ) {
+				self::note( $notes, 'adjusted', 'coming_soon_page_slug' );
+			}
+		} elseif ( '' !== self::supplied( $raw, 'coming_soon_page_slug' ) ) {
+			self::note( $notes, 'refused', 'coming_soon_page_slug' );
 		}
 
 		return $out;
+	}
+
+	/**
+	 * What the owner typed for a field, trimmed; an empty string when the box was left empty or the key is absent.
+	 * A value that is not text at all (an array posted by hand) counts as typed junk.
+	 *
+	 * @param array  $raw Raw input.
+	 * @param string $key Field.
+	 * @return string
+	 */
+	private static function supplied( array $raw, $key ) {
+		if ( ! array_key_exists( $key, $raw ) ) {
+			return '';
+		}
+		$value = $raw[ $key ];
+		if ( is_array( $value ) || is_object( $value ) ) {
+			return '[not text]';
+		}
+		if ( null === $value || is_bool( $value ) ) {
+			return '';
+		}
+		return trim( (string) $value );
+	}
+
+	/**
+	 * Runs of white space reduced to one space, as the text sanitiser does, so a value is compared with its
+	 * sanitised form and only a real change is reported.
+	 *
+	 * @param string $text Text.
+	 * @return string
+	 */
+	private static function squash( $text ) {
+		return trim( (string) preg_replace( '/[\r\n\t ]+/', ' ', (string) $text ) );
+	}
+
+	/**
+	 * Add a field to the refused or adjusted list (once).
+	 *
+	 * @param array  $notes Notes.
+	 * @param string $kind  "refused" or "adjusted".
+	 * @param string $key   Field name.
+	 * @return void
+	 */
+	private static function note( array &$notes, $kind, $key ) {
+		if ( ! in_array( $key, $notes[ $kind ], true ) ) {
+			$notes[ $kind ][] = $key;
+		}
 	}
 
 	/**

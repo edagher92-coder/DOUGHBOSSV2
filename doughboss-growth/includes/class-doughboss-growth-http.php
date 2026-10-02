@@ -385,8 +385,10 @@ final class DoughBoss_Growth_Http {
 	}
 
 	/**
-	 * Write a redacted log line. Fires doughboss_growth_log with the line and writes to error_log
-	 * only when WP_DEBUG_LOG is on. Values are scalars, redacted and truncated; bodies are never logged.
+	 * Write a redacted log line. Fires doughboss_growth_log with the line, writes to error_log only when WP_DEBUG_LOG
+	 * is on, and, when the event is a failure (see DoughBoss_Growth_Failures::code_for_event()), notes it in the failure
+	 * list the owner sees on the Growth settings screen. Without that third sink a default production site would lose
+	 * every failure. Values are scalars, redacted and truncated; bodies are never logged.
 	 *
 	 * @param string $event   Short event name.
 	 * @param array  $context Scalar context.
@@ -405,6 +407,9 @@ final class DoughBoss_Growth_Http {
 			$safe[ preg_replace( '/[^a-z0-9_]/', '', strtolower( (string) $key ) ) ] = $text;
 		}
 		$line = 'DoughBoss Growth [' . preg_replace( '/[^a-z0-9_]/', '', strtolower( (string) $event ) ) . '] ' . wp_json_encode( $safe, JSON_UNESCAPED_SLASHES );
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::from_log( (string) $event, $safe ); // Never throws; writes only when this event is a failure.
+		}
 		do_action( 'doughboss_growth_log', $line, $event, $safe );
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
 			error_log( $line ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- redacted line, opt-in via WP_DEBUG_LOG.

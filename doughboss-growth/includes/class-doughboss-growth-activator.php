@@ -60,6 +60,7 @@ final class DoughBoss_Growth_Activator {
 		'doughboss_growth_pages',
 		'doughboss_growth_recon',
 		'doughboss_growth_coming_soon',
+		'doughboss_growth_failures',
 	);
 
 	/**
@@ -118,9 +119,13 @@ final class DoughBoss_Growth_Activator {
 
 	/**
 	 * Create or update every registered table with dbDelta, then verify them.
-	 * The version is recorded only when every expected table exists (fail closed).
 	 *
-	 * @return bool
+	 * The version is recorded only when every expected table exists AND carries every column its CREATE TABLE declares
+	 * (dbDelta can fail to ALTER a table that already exists, and a table-existence check alone would then record the new
+	 * version over a table that is missing a column), and the version really was stored (fail closed). A failure is
+	 * recorded in the failure list the owner sees, and a later success removes that record.
+	 *
+	 * @return bool True only when the schema is confirmed and the version is stored.
 	 */
 	public static function install() {
 		if ( ! function_exists( 'dbDelta' ) ) {
@@ -130,10 +135,26 @@ final class DoughBoss_Growth_Activator {
 		foreach ( $schemas as $sql ) {
 			dbDelta( $sql );
 		}
-		if ( array() !== self::missing_tables( $schemas ) ) {
+		$problems = self::schema_problems( $schemas );
+		if ( array() !== $problems ) {
+			self::note_failure(
+				'schema_install_failed',
+				array(
+					'problems' => count( $problems ),
+					'first'    => implode( ',', array_slice( self::short_names( $problems ), 0, 3 ) ),
+				)
+			);
 			return false;
 		}
 		update_option( self::DB_VERSION_OPTION, DOUGHBOSS_GROWTH_DB_VERSION, true );
+		if ( ! self::storage_ready() ) {
+			self::note_failure( 'schema_version_save_failed', array( 'version' => DOUGHBOSS_GROWTH_DB_VERSION ) );
+			return false;
+		}
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::clear( 'schema_install_failed' );
+			DoughBoss_Growth_Failures::clear( 'schema_version_save_failed' );
+		}
 		return true;
 	}
 
@@ -166,15 +187,27 @@ final class DoughBoss_Growth_Activator {
 			}
 			return;
 		}
-		if ( ! $on_page && false !== get_transient( self::SCHEMA_OK_TRANSIENT ) ) {
+		// The schema was confirmed once. Re-check at most hourly (and not at all inside the retry window after a failed
+		// repair), or at once when the owner opens the Growth page.
+		if ( ! $on_page && ( false !== get_transient( self::SCHEMA_OK_TRANSIENT ) || false !== get_transient( self::RETRY_TRANSIENT ) ) ) {
 			return;
 		}
-		if ( array() !== self::missing_tables() ) {
-			self::install();
+		if ( array() !== self::schema_problems() ) {
 			delete_transient( self::SCHEMA_OK_TRANSIENT );
+			if ( self::install() ) {
+				set_transient( self::SCHEMA_OK_TRANSIENT, 1, HOUR_IN_SECONDS );
+				delete_transient( self::RETRY_TRANSIENT );
+			} else {
+				// Without this a broken table made every admin request run SHOW TABLES and dbDelta again.
+				set_transient( self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS );
+			}
 			return;
 		}
 		set_transient( self::SCHEMA_OK_TRANSIENT, 1, HOUR_IN_SECONDS );
+		delete_transient( self::RETRY_TRANSIENT );
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::clear( 'schema_install_failed' ); // The schema is complete: an earlier failure no longer stands.
+		}
 	}
 
 	/**
@@ -224,6 +257,149 @@ final class DoughBoss_Growth_Activator {
 			}
 		}
 		return $missing;
+	}
+
+	/**
+	 * Everything that stops the schema being confirmed: the expected tables that do not exist, then, for each table that
+	 * does exist, every declared column it lacks ("table.column"). A table whose columns cannot be read at all is listed
+	 * as "table (columns unreadable)": it is not confirmed, so it is a problem (fail closed).
+	 *
+	 * @param array|null $schemas Statements; defaults to every registered schema.
+	 * @return array Table names, "table.column" and "table (columns unreadable)" entries. Empty when the schema is complete.
+	 */
+	public static function schema_problems( $schemas = null ) {
+		if ( null === $schemas ) {
+			$schemas = DoughBoss_Growth::schemas();
+		}
+		$missing  = self::missing_tables( $schemas );
+		$problems = $missing;
+		foreach ( self::expected_columns( $schemas ) as $name => $columns ) {
+			if ( in_array( $name, $missing, true ) ) {
+				continue;
+			}
+			$present = self::table_columns( $name );
+			if ( null === $present ) {
+				$problems[] = $name . ' (columns unreadable)';
+				continue;
+			}
+			foreach ( $columns as $column ) {
+				if ( ! in_array( strtolower( $column ), $present, true ) ) {
+					$problems[] = $name . '.' . $column;
+				}
+			}
+		}
+		return $problems;
+	}
+
+	/**
+	 * The columns each CREATE TABLE statement declares.
+	 *
+	 * @param array|null $schemas Statements; defaults to every registered schema.
+	 * @return array Table name => list of column names.
+	 */
+	public static function expected_columns( $schemas = null ) {
+		if ( null === $schemas ) {
+			$schemas = DoughBoss_Growth::schemas();
+		}
+		$out = array();
+		foreach ( $schemas as $sql ) {
+			if ( is_string( $sql ) && 1 === preg_match( '/^\s*CREATE TABLE\s+`?([A-Za-z0-9_]+)`?/i', $sql, $match ) ) {
+				$out[ $match[1] ] = self::declared_columns( $sql );
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Column names declared by one CREATE TABLE statement (keys, indexes and constraints are not columns).
+	 *
+	 * @param mixed $sql CREATE TABLE statement.
+	 * @return array
+	 */
+	public static function declared_columns( $sql ) {
+		if ( ! is_string( $sql ) || 1 !== preg_match( '/^\s*CREATE TABLE\s+`?[A-Za-z0-9_]+`?\s*\((.*)\)[^)]*;?\s*$/is', $sql, $match ) ) {
+			return array();
+		}
+		$columns = array();
+		$depth   = 0;
+		$buffer  = '';
+		$parts   = array();
+		$body    = $match[1];
+		$length  = strlen( $body );
+		for ( $i = 0; $i < $length; $i++ ) {
+			$char = $body[ $i ];
+			if ( '(' === $char ) {
+				++$depth;
+			} elseif ( ')' === $char ) {
+				--$depth;
+			}
+			if ( ',' === $char && 0 === $depth ) {
+				$parts[] = $buffer;
+				$buffer  = '';
+				continue;
+			}
+			$buffer .= $char;
+		}
+		$parts[] = $buffer;
+		foreach ( $parts as $part ) {
+			$part = trim( $part );
+			if ( '' === $part || 1 === preg_match( '/^(?:PRIMARY\s+KEY|UNIQUE\s+(?:KEY|INDEX)|UNIQUE|KEY|INDEX|FULLTEXT|SPATIAL|CONSTRAINT|FOREIGN\s+KEY|CHECK)\b/i', $part ) ) {
+				continue;
+			}
+			if ( 1 === preg_match( '/^`?([A-Za-z0-9_]+)`?\s/', $part . ' ', $name ) ) {
+				$columns[] = $name[1];
+			}
+		}
+		return $columns;
+	}
+
+	/**
+	 * The column names a table really has, lower-cased, or null when the database cannot say.
+	 *
+	 * @param string $table Table name (already validated by expected_columns()).
+	 * @return array|null
+	 */
+	private static function table_columns( $table ) {
+		global $wpdb;
+		if ( 1 !== preg_match( '/^[A-Za-z0-9_]+$/D', (string) $table ) ) {
+			return null;
+		}
+		$columns = $wpdb->get_col( "SHOW COLUMNS FROM `{$table}`", 0 ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- the name is a validated identifier from the companion's own schema.
+		if ( ! is_array( $columns ) || array() === $columns ) {
+			return null;
+		}
+		return array_map( 'strtolower', array_map( 'strval', $columns ) );
+	}
+
+	/**
+	 * Table names without the WordPress prefix, for a short failure context.
+	 *
+	 * @param array $problems Entries from schema_problems().
+	 * @return array
+	 */
+	private static function short_names( array $problems ) {
+		$out = array();
+		foreach ( $problems as $problem ) {
+			$out[] = (string) preg_replace( '/^[A-Za-z0-9_]*?doughboss_growth_/', '', (string) $problem );
+		}
+		return $out;
+	}
+
+	/**
+	 * Record a failure. Goes through Http::log() when it is loaded (debug log, action and the owner-visible list in one
+	 * call), else straight to the failure list. This file is also loaded alone by uninstall.php, so nothing here may
+	 * assume the other classes exist.
+	 *
+	 * @param string $code    Failure code.
+	 * @param array  $context Scalar facts without personal data.
+	 * @return void
+	 */
+	private static function note_failure( $code, array $context ) {
+		if ( class_exists( 'DoughBoss_Growth_Http', false ) ) {
+			DoughBoss_Growth_Http::log( $code, $context );
+		} elseif ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::record( $code, $context );
+		}
 	}
 
 	/**
