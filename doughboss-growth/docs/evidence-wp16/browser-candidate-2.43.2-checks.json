@@ -1,6 +1,6 @@
 {
   "base": "http://127.0.0.1:9416",
-  "passed": 185,
+  "passed": 188,
   "failed": 0,
   "fatal": null,
   "checks": [
@@ -180,7 +180,7 @@
       "detail": "7 pages"
     },
     {
-      "name": "B server_conversions: switched on alone (with attribution (and a destination: the never-called webhook URL)): effective in /health",
+      "name": "B server_conversions: switched on alone (with attribution (and a conversion destination: a dummy GA4 measurement id plus the dummy API secret constant from the scratch file; the outbound guard refuses any request)): effective in /health",
       "ok": true,
       "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
     },
@@ -980,6 +980,21 @@
       "detail": ""
     },
     {
+      "name": "OUTBOUND guard is live: a probe request to a non-local host was refused by the runtime filter",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "OUTBOUND server-side requests that reached the network: 0 (every non-local attempt was recorded and refused)",
+      "ok": true,
+      "detail": "attempts recorded and refused (excluding the probe): 0"
+    },
+    {
+      "name": "NOTE outbound attempts (recorded and refused, probe excluded) after phases A-D: 0",
+      "ok": true,
+      "note": true
+    },
+    {
       "name": "E deactivating the plugin moves the six landing pages back to draft (no raw tag is ever shown on them)",
       "ok": true,
       "detail": "draft,draft,draft,draft,draft,draft"
@@ -1003,6 +1018,16 @@
       "name": "cleanup: every flag off, plugin active, throwaway pages deleted, landing pages drafts",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "OUTBOUND whole run (A-E and cleanup): every non-local server-side request was recorded and refused, none reached the network",
+      "ok": true,
+      "detail": "attempts: 0"
+    },
+    {
+      "name": "NOTE outbound attempts (recorded and refused, probe excluded) whole run: 0",
+      "ok": true,
+      "note": true
     },
     {
       "name": "the runtime debug log gained no PHP warning, notice, deprecation or fatal error",

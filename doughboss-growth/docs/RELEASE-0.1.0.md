@@ -38,11 +38,18 @@ Safety switches, strongest last:
 
 1. Take a full backup (files and database) and note the time. This is the rollback point for everything below.
 2. Confirm core: DoughBoss 2.41.0 or later is active (Plugins screen). The companion shows an admin notice only, and does nothing, if core is missing or older.
-3. Upload `doughboss-growth-0.1.0.zip` (225,504 bytes, 23% of the 1,000,000-byte budget, well inside Crazy Domains' 2 MB upload limit; sha256 `a711ec964025729323a9796f3b4051c8c914452d99983eb0e9ef0cd7fb3e6b2f`, and a rebuild from the same tree is byte-identical) under Plugins, Add New, Upload Plugin. Do not use any other build.
+3. Upload `doughboss-growth-0.1.0.zip` (270,365 bytes, 51 files, 27% of the 1,000,000-byte budget, well inside Crazy Domains' 2 MB upload limit; sha256 `1b61a7280327e90da9ca5a6e3f0ea3e75e152b52be1bb8751f37a5a2bffa7df2`, and a rebuild from the same tree is byte-identical) under Plugins, Add New, Upload Plugin. Do not use any other build.
 4. Activate. Open DoughBoss, Growth. Expected: eleven unticked boxes, a list headed "To decide before switching on" (owner decisions, in plain words, with a "Before you switch this on" note under each switch), and `GET /wp-json/doughboss-growth/v1/health` (signed in as an administrator) showing every flag `false` and `storage_ready: true`.
 5. Load `/`, `/order/`, `/catering/` and `/locations/` once. They must look exactly as before.
 6. Page caching: exclude the catering pages from full-page caching on Crazy Domains (or any cache plugin) before enabling `lead_form` or `party_sizer`. The form uses core's `wp_rest` nonce; a cached copy older than the nonce lifetime gets a 403 and the visitor sees a refresh prompt.
 7. WP-Cron: the outbox dispatch and the waitlist purge run from WP-Cron. Confirm cron fires on the host (a real server cron hitting `wp-cron.php` is better than visitor-triggered cron).
+
+### What the polish pass added (an installer should know)
+
+- Settings, Status table: a new "Recent failures" row lists the last problems the companion recorded (stored in the option `doughboss_growth_failures`, not autoloaded; removed on uninstall with the other options).
+- `consent_text_version` now defaults to 2 and the banner wording changed. **NEEDS LEGAL REVIEW before `consent_banner` is switched on.** Raise the version again after any further wording change.
+- A webhook alone no longer counts as a conversion destination: `server_conversions` needs GA4 or Meta configured.
+- The tilt cards (a decorative effect on the landing pages) are removed.
 
 ## 3. Rollout order
 
@@ -140,22 +147,22 @@ The companion never writes a core table, option, post type, role or capability; 
 
 ## 6. Evidence
 
-All results are from the integration run on 2026-10-02 on the build machine. Detail, failures found and fixed, and what was not run are in `web/docs/wp/06-growth-release-review.md`.
+The PHP, Node, build and browser results below were re-run on 2026-10-02 after the polish pass; rows marked "not re-run" are from the earlier build. Detail, failures found and fixed, and what was not run are in `web/docs/wp/06-growth-release-review.md`.
 
 | Check | Result |
 | --- | --- |
-| `php tests/run.php`, PHP 8.3.6, core source for the parity test pointed at 2.43.2 and then at 2.41.0 | 5,602 assertions, 5,602 passed, 0 failed, 0 skipped, 0 foreign writes (both). Without a core source: 5,597 passed, 1 visibly skipped parity test |
-| Same suite, real PHP 7.4.33 (WebAssembly build from the installed Playground CLI) | 5,336 passed, 0 failed, 25 skipped (tests that need a sub-process, listed by the runner) |
-| `php -l` on every PHP file | 70 of 70 clean on 8.3.6 and on 7.4.33 |
-| `php scripts/php74-guard.php` | 70 files, no violations, on 8.3.6 and on 7.4.33 |
-| `node --test tests/*.test.js` (Node 22) | 144 tests passed (attribution 29, consent 22, core 24, datalayer 26, lead-form 12, party-sizer 12, tilt-cards 8, waitlist 11), 0 skipped |
-| ES5 gate `scripts/es5-check.mjs` | 7 files, no violations; a planted arrow function fails it (negative control) |
-| Build, validate, budget | one zip, 51 files, 225,504 bytes (23% of 1,000,000); `validate-zip.php` and `budgets.php` OK; a second build is byte-identical; refuses to overwrite; a tampered archive fails validation (negative control); no file in the zip contains the working name |
-| `web`: `npx vitest run`, `npx eslint scripts/wp-local/growth/` | 780 passed; eslint clean |
-| Inert test (`wp01-inert.mjs`): `/`, `/order/`, `/catering/`, `/locations/` with and without the companion, every flag off, nonces masked | **Identical** against the candidate core 2.43.2 (sha256 703e0491913c, c8d155f9b852, f24ecb533f15, 33ed18056e1a) and against the live-line baseline 2.41.0 (1ecb636b5982, 3b54956a8f12, cdfc2b0110e6, d242cc9e4ab5) |
-| Browser run `wp16-full.mjs` on the candidate (PHP 8.2, WordPress 7.1, SQLite) | 185 checks passed, 0 failed: each of the eleven flags alone (switched on, effective, expectation met, no first-party console error or failed request, matching admin screen loads, switched off to byte-identical pages), all eleven together, desktop 1280x800 and Pixel 7 screenshots of `/`, the coming-soon page and the six landing pages (plus the form and waitlist pages), axe, banner accept, every admin screen, deactivate and reactivate, clean debug and server logs |
-| Same run on the baseline 2.41.0 | 185 checks passed, 0 failed |
-| Smoke on PHP 7.4 runtime (candidate core, flags off then all on) | Home page sha identical to the PHP 8.2 capture; 100 checks passed, 0 failed |
+| `php tests/run.php`, PHP 8.3.6, core source for the parity test pointed at 2.43.2 and then at 2.41.0 | 7,712 assertions, 7,712 passed, 0 failed, 0 skipped, 0 foreign writes (both). Without a core source: 7,707 passed, 1 visibly skipped parity test |
+| Same suite, real PHP 7.4.33 (WebAssembly build from the installed Playground CLI) | Not re-run after the polish pass (the figure from the earlier build, 5,336 passed, 0 failed, 25 skipped, no longer applies). Re-run before relying on PHP 7.4 |
+| `php -l` on every PHP file | 77 of 77 clean on 8.3.6 (not re-run on 7.4.33 since the polish pass) |
+| `php scripts/php74-guard.php` | 77 files, no violations, on 8.3.6 (not re-run on 7.4.33 since the polish pass) |
+| `node --test tests/*.test.js` (Node 22) | 162 tests passed (attribution 29, consent 33, core 24, datalayer 26, lead-form 21, party-sizer 12, waitlist 17), 0 skipped |
+| ES5 gate `scripts/es5-check.mjs` | 6 files, no violations (the negative control, a planted arrow function, was not re-run) |
+| Build, validate, budget | one zip, 51 files, 270,365 bytes (27% of 1,000,000); `validate-zip.php` and `budgets.php` OK; a second build is byte-identical (checked with `cmp`); the builder refuses to overwrite (earlier check; the old zip had to be deleted first); no file in the zip contains the working name (earlier check) |
+| `web`: `npx vitest run`, `npx tsc --noEmit -p .` | 780 passed (29 test files); tsc clean. (`npx eslint scripts/wp-local/growth/` was not re-run) |
+| Inert test (`wp01-inert.mjs`), from the earlier build and not re-run after the polish pass: `/`, `/order/`, `/catering/`, `/locations/` with and without the companion, every flag off, nonces masked | **Identical** against the candidate core 2.43.2 (sha256 703e0491913c, c8d155f9b852, f24ecb533f15, 33ed18056e1a) and against the live-line baseline 2.41.0 (1ecb636b5982, 3b54956a8f12, cdfc2b0110e6, d242cc9e4ab5) |
+| Browser run `wp16-full.mjs` on the candidate (PHP 8.2, WordPress 7.1, SQLite) | 188 checks passed, 0 failed, 0 outbound requests reached the network (every non-local server-side request recorded and refused): each of the eleven flags alone (switched on, effective, expectation met, no first-party console error or failed request, matching admin screen loads, switched off to byte-identical pages), all eleven together, desktop 1280x800 and Pixel 7 screenshots of `/`, the coming-soon page and the six landing pages (plus the form and waitlist pages), axe, banner accept, every admin screen, deactivate and reactivate, clean debug and server logs |
+| Same run on the baseline 2.41.0 | 188 checks passed, 0 failed, 0 outbound requests |
+| Smoke on PHP 7.4 runtime (candidate core, flags off then all on), from the earlier build and not re-run | Home page sha identical to the PHP 8.2 capture; 100 checks passed, 0 failed |
 | Core isolation | Of 26 core tables, only the two the scratch seed deliberately writes changed (the fake test shops); no core option and no role or capability changed (`docs/evidence-wp16/core-isolation.txt`) |
 | axe | No violation inside companion markup on any page, desktop or mobile. Core and theme violations that this work did not cause: colour contrast on `/`, `aria-allowed-role` on `/order/`, heading order on `/locations/` (candidate) |
 
