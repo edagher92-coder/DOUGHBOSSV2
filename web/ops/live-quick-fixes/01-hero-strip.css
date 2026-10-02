@@ -1,0 +1,15 @@
+/*
+ * Dough Boss quick fix 1: remove the black strip on the right of inner-page heroes.
+ *
+ * Cause: the theme sets .dbf-page-hero-bg to width: 108% with inset: -4% so the photo bleeds past
+ * the edges, but the theme's global "img { max-width: 100% }" caps the image at the container
+ * width. The image then starts 4% left of the container and ends 4% short of the right edge.
+ * (Measured on the live site: about 51 px at 1280 px wide, about 16 px at 390 px wide.)
+ *
+ * Where to put it: WPCode > Code Snippets > Add Snippet > "Add Your Custom Code", type CSS,
+ * location "Site Wide Header" (or Appearance > Customize > Additional CSS).
+ * Undo: deactivate the snippet (or delete this rule).
+ */
+.dbf-page-hero .dbf-page-hero-bg {
+	max-width: none;
+}

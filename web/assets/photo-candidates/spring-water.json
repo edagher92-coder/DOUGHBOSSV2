@@ -1,0 +1,19 @@
+{
+  "status": "AI-GENERATED CANDIDATE. Not a photograph of a Dough Boss product. Do not publish until Elie has checked it against the real product (crust, size, portion, toppings) and approved it.",
+  "menuItem": "Spring Water",
+  "category": "Drinks",
+  "replaces": "real-v1/spring-water.jpg (third-party brand label visible)",
+  "liveDescription": "Still, chilled. [CONFIRM the bottle actually sold; a branded one needs a supplier pack shot]",
+  "provider": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "variant": "flare (default)",
+  "quality": "high",
+  "resolution": "2k",
+  "aspectRatio": "5:4",
+  "styleReference": null,
+  "jobId": "17dd505e-e335-4b52-b0f9-257120314b76",
+  "generatedDate": "2026-10-02",
+  "creditsCharged": 2.75,
+  "prompt": "Professional product photograph for a Lebanese bakery menu. A plain warm off-white seamless background with a soft natural shadow, soft even daylight, natural colours, no vignette. Straight-on view of one chilled clear plastic still-water bottle with a plain white screw cap and a completely blank plain label, no brand, no words, no logo, light condensation on the bottle, centred with about 10 percent clear margin on every side, sharp focus. No text, no people, no hands, no watermark. 5:4 frame.",
+  "webExport": "1600x1280 WebP q82; original 2240x1792 PNG held in the Higgsfield job"
+}

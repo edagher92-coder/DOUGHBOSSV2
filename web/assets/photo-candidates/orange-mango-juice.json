@@ -1,0 +1,19 @@
+{
+  "status": "AI-GENERATED CANDIDATE. Not a photograph of a Dough Boss product. Do not publish until Elie has checked it against the real product (crust, size, portion, toppings) and approved it.",
+  "menuItem": "Orange & Mango Juice",
+  "category": "Drinks",
+  "replaces": "menu/juice.webp (shared by 11 drinks)",
+  "liveDescription": "[no description] serving format [CONFIRM]",
+  "provider": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "variant": "flare (default)",
+  "quality": "high",
+  "resolution": "2k",
+  "aspectRatio": "5:4",
+  "styleReference": null,
+  "jobId": "9f09cfcd-021b-4e67-9c9a-5cf9d9bd227f",
+  "generatedDate": "2026-10-02",
+  "creditsCharged": 2.75,
+  "prompt": "Professional product photograph for a Lebanese bakery menu. A plain warm off-white seamless background with a soft natural shadow, soft even daylight, natural colours, no vignette. Straight-on view of one plain clear drinking glass with no branding, filled with thick orange-yellow orange and mango juice, with one fresh orange slice and one fresh mango slice on the rim, centred with about 10 percent clear margin on every side, sharp focus. No straw, no other garnish. No text, no logos, no people, no hands, no watermark. 5:4 frame.",
+  "webExport": "1600x1280 WebP q82; original 2240x1792 PNG held in the Higgsfield job"
+}

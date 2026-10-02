@@ -1,0 +1,19 @@
+{
+  "status": "AI-GENERATED CANDIDATE. Not a photograph of a Dough Boss product. Do not publish until Elie has checked it against the real product (crust, size, portion, toppings) and approved it.",
+  "menuItem": "Sujuk Special",
+  "category": "Pizza",
+  "replaces": "menu/dough-boss-special.webp (300 px, tight crop)",
+  "liveDescription": "Sujuk, tomato, mushroom, capsicum, onion, black olives & cheese on a tomato base.",
+  "provider": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "variant": "flare (default)",
+  "quality": "high",
+  "resolution": "2k",
+  "aspectRatio": "5:4",
+  "styleReference": "real-v1/zaatar-cheese.jpg (live photo) via image_references",
+  "jobId": "acde6492-0696-4a60-9ab8-bdd61f3da7c0",
+  "generatedDate": "2026-10-02",
+  "creditsCharged": 2.75,
+  "prompt": "Professional menu photograph for Dough Boss, a Lebanese bakery in Sydney, in the same clean, honest, appetising style as the reference photo (match its lighting, background and colour treatment, not its subject). Straight top-down view, the whole item centred with about 10 percent clear margin on every side, on a plain warm off-white seamless surface with a soft natural shadow. Soft even daylight from one side with a white bounce on the other, natural colours, no extra saturation, no vignette, sharp focus across the whole item, realistic baked texture. 5:4 frame. No text, no logos, no branded packaging, no props, no garnish that is not part of the item, no people, no hands, no watermark.\n\nSubject: Sujuk Special pizza. A whole round pizza on a tomato base, as served. Show exactly and only these toppings, all clearly visible: sujuk (spiced beef sausage) slices, tomato, mushroom, capsicum, onion, black olives and melted cheese. Do not add any other topping.",
+  "webExport": "1600x1280 WebP q82; original 2240x1792 PNG held in the Higgsfield job"
+}

@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "three_version": "0.186.1",
+  "esbuild_version": "0.28.2",
+  "target": "es2018",
+  "source_sha256": "f3d3e587279d423e8fe7a2d83787a976f7bae0876fa51cb859c62424ce0f4a5a",
+  "built_at": "2026-10-02T11:52:15Z",
+  "sources": [
+    {
+      "path": "public/hero/exploded-manoush.glb",
+      "sha256": "0efda41a39ba2090f360498238042c5fd74926b1beaca41c2c9337cf473f7851"
+    },
+    {
+      "path": "public/hero/manifest.json",
+      "sha256": "10a7a17055a026f0d0d1611f1dd72076fe812c525137c26e8501a868487ead96"
+    },
+    {
+      "path": "tools/wp-hero/boot-core.ts",
+      "sha256": "eaacedfb91072dbee4dcd215c2a29a4adb70a1643cfe6ce2b8b571f8f63cb31c"
+    },
+    {
+      "path": "tools/wp-hero/budget.mjs",
+      "sha256": "f2d3ea6be14fdd4955395e3d4356f45926d9dd81a1d883b20e251e9816329687"
+    },
+    {
+      "path": "tools/wp-hero/build.mjs",
+      "sha256": "d9d0ca8f3357d82d0844aee47a2ae8716e9515152f841522de491b8485db1f66"
+    },
+    {
+      "path": "tools/wp-hero/contract.mjs",
+      "sha256": "225585dd8d7af783ee0fc4eb9e329ff5a4ea4eee5ab872d663d68d05c27ceeae"
+    },
+    {
+      "path": "tools/wp-hero/entry.ts",
+      "sha256": "f0db332b0d9b24c42d5fcf8c2db62b4cfa1d9b12ba147279b5a12a3cfb9f17c1"
+    },
+    {
+      "path": "tools/wp-hero/manifest.mjs",
+      "sha256": "c2d688f9989ac5ded84a8d5ab2f8875424196bcad09b4735a0910f8b856b1754"
+    },
+    {
+      "path": "tools/wp-hero/pose.ts",
+      "sha256": "fa2e4116768341eea36920ea70dd7008ce8a73a34104706216b7263e8275eea3"
+    },
+    {
+      "path": "tools/wp-hero/scene.ts",
+      "sha256": "03fa757d513fa1ebd4f57366a0229241fbbce8d449534b3ec5731346e772e4c1"
+    },
+    {
+      "path": "tools/wp-hero/stats.ts",
+      "sha256": "d628a1a8febadc1a0ad8c4d9e3512b17e3f1ddfce506461fc8ca4072bf87a14d"
+    }
+  ],
+  "files": [
+    {
+      "role": "script",
+      "path": "hero-webgl.fbe9bf8e.js",
+      "bytes": 656978,
+      "sha384": "sha384-F9IkqcCsJuHpG6flRWJY7sZsdwlkuCJQnlRaOHxxPNu/GNml0gkgHaxMe9LGpd4O"
+    },
+    {
+      "role": "scene",
+      "path": "hero-scene.0efda41a.glb",
+      "bytes": 515376,
+      "sha384": "sha384-ixpHOwRUJj1nVEc2UuWBE3uZFa8qO+pk9QTu33JnF1PkbkdQFLACBvysqWfCT8ov"
+    }
+  ],
+  "scene": {
+    "nodeCount": 53,
+    "radiusMetres": 0.15
+  },
+  "frames": {
+    "included": false,
+    "count": 0,
+    "approval": null,
+    "sizes": null
+  },
+  "budgets": {
+    "scriptRawBytes": 656978,
+    "scriptRawLimit": 665600,
+    "scriptGzipBytes": 170006,
+    "scriptGzipLimit": 174080,
+    "glbBytes": 515376,
+    "glbLimit": 563200
+  },
+  "confirm": [
+    "[CONFIRM] Elie must approve the ES5 exception for the generated ES2018 module hero-webgl.<sha8>.js (docs/wp/00 section 3.3); until then tier 2 must not ship.",
+    "[CONFIRM] Tier-1 frames are NOT in this build: Elie has not recorded approval for the stylised 3D renders (or a real photo shoot). Add tools/wp-hero/frames-approval.json to include them (docs/wp/00 section 3.3)."
+  ]
+}

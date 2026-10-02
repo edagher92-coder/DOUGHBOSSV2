@@ -1,0 +1,19 @@
+{
+  "status": "AI-GENERATED CANDIDATE. Not a photograph of a Dough Boss product. Do not publish until Elie has checked it against the real product (crust, size, portion, toppings) and approved it.",
+  "menuItem": "Dough Boss Wrap",
+  "category": "Wraps",
+  "replaces": "menu/dough-boss-wrap.webp (300 px, bare flatbread)",
+  "liveDescription": "Sujuk, fresh tomato, pickled cucumber, lettuce & cheese, topped with mayo.",
+  "provider": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "variant": "flare (default)",
+  "quality": "high",
+  "resolution": "2k",
+  "aspectRatio": "5:4",
+  "styleReference": "real-v1/zaatar-cheese.jpg (live photo) via image_references",
+  "jobId": "c5f0411f-469b-4b00-9081-585e1c79b97d",
+  "generatedDate": "2026-10-02",
+  "creditsCharged": 2.75,
+  "prompt": "Professional menu photograph for Dough Boss, a Lebanese bakery in Sydney, in the same clean, honest, appetising style as the reference photo (match its lighting, background and colour treatment, not its subject). Viewed from about 45 degrees above, the item centred with about 10 percent clear margin on every side, on a plain warm off-white seamless surface with a soft natural shadow. Soft even daylight from one side with a white bounce on the other, natural colours, no extra saturation, no vignette, sharp focus across the whole item, realistic baked texture. 5:4 frame. No text, no logos, no branded packaging, no props, no garnish that is not part of the item, no people, no hands, no watermark.\n\nSubject: Dough Boss Wrap. A toasted Lebanese wrap cut in half on the diagonal so the filling is visible. The filling is exactly and only: sujuk (spiced beef sausage) slices, fresh tomato, pickled cucumber, lettuce and cheese, with a line of mayo on top. Do not add any other ingredient.",
+  "webExport": "1600x1280 WebP q82; original 2240x1792 PNG held in the Higgsfield job"
+}

@@ -157,10 +157,19 @@ export function createBoot(getDeps: () => BootDeps) {
       }
     };
 
+    // Re-evaluate whether frames may run: cancel a pending one when hidden, schedule one when visible.
+    const sync = (): void => {
+      if (visible()) {
+        wake();
+      } else {
+        cancelFrame();
+      }
+    };
+
     const onVisibility = (): void => {
       frameWindow.breakSequence();
       lastTs = null;
-      wake();
+      sync();
     };
 
     const teardown = (): void => {
@@ -329,7 +338,7 @@ export function createBoot(getDeps: () => BootDeps) {
             frameWindow.breakSequence();
             lastTs = null;
           }
-          wake();
+          sync();
         });
         observer.observe(canvas);
       } catch {

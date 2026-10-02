@@ -1,5 +1,8 @@
 # 00 Architecture: extend the WordPress system (companion plugin + bounded core release)
 
+> **HERO UPDATE 2026-10-02 (owner decision, binding):** Elie ruled out a 3D hero ("3D here is a no no"). **WP-09 and WP-10 are cancelled**, the `hero_enhanced` flag and the `doughboss-growth-media` plugin are dropped, and no WebGL, canvas, frame-sprite or generated-art hero is built. Sections of this document about the hero, tiers, frames or the media pack are superseded. See `docs/site/hero-decision.md`.
+
+
 Owner: Elie Dagher. Prepared 2026-10-02 by the architect slice. Read-only study; nothing was installed, deployed, committed or called. Work breakdown: `05-work-breakdown.md`.
 
 **Conventions.** **B** = `/tmp/wp-src/baseline-2.41.0`, **C** = `/tmp/wp-src/candidate-2.43.2`. Paths without a prefix are C and relative to the worktree; `B:` marks baseline lines. `web/` paths are in `/home/user/DOUGHBOSSV2/web/`. **OBSERVED** = I read it in code/docs or ran it (my own runs are listed in section 8). **INFERRED** = my reasoning. Every number in this document is either cited or is a proposed engineering budget, labelled as such. No secrets or customer data appear here.

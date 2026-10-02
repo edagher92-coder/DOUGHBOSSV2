@@ -1,5 +1,8 @@
 # 05 Work breakdown: companion plugin `doughboss-growth` and core 2.44.0 (Square Orders)
 
+> **HERO UPDATE 2026-10-02 (owner decision, binding):** Elie ruled out a 3D hero ("3D here is a no no"). **WP-09 and WP-10 are cancelled**, the `hero_enhanced` flag and the `doughboss-growth-media` plugin are dropped, and no WebGL, canvas, frame-sprite or generated-art hero is built. Sections of this document about the hero, tiers, frames or the media pack are superseded. See `docs/site/hero-decision.md`.
+
+
 Companion to `00-architecture-extend-wordpress.md` (cited as `00 §n`). Prepared 2026-10-02 by the architect slice. 16 work packages (WP-01 to WP-16). Nothing here authorises a merge, deploy, live change, provider call or real transaction; each of those stays a separate approval by Elie.
 
 ## 0. Rules every package inherits
