@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Dough Boss x Snow Boss">
+  <rect width="64" height="64" rx="14" fill="#050608"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="12.5" fill="none" stroke="#a9dcff" stroke-opacity="0.35" stroke-width="1.5"/>
+  <text x="32" y="38" text-anchor="middle" font-family="Montserrat, Arial, Helvetica, sans-serif" font-size="20" font-weight="800" letter-spacing="-0.5" fill="#a9dcff">DB<tspan fill="#ff9d2e" font-size="14">×</tspan>SB</text>
+</svg>

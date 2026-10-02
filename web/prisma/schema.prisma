@@ -1,0 +1,366 @@
+// Dough Boss — storefront schema (PostgreSQL / Supabase).
+//
+// Conventions
+//  - Money is ALWAYS integer cents (AUD). No floats, no Decimal.
+//  - A NULL price means "not confirmed". It is never rendered as $0 and the
+//    server refuses to sell an item whose price is NULL (see src/lib/pricing.ts).
+//  - Orders snapshot name + price at purchase time so later menu edits never
+//    rewrite history.
+//  - Opening hours are minutes-from-midnight in the store's local timezone
+//    (Australia/Sydney), one row per day-of-week window, so DST is handled at
+//    read time by Intl rather than baked into data.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Supabase: pooled URL in DATABASE_URL, direct URL here for migrations
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum DietaryTag {
+  HALAL
+  VEGETARIAN
+  VEGAN
+  NUT_FREE
+  GLUTEN_FREE
+}
+
+enum ModifierSelection {
+  SINGLE // radio — e.g. Folded vs Flat
+  MULTIPLE // checkboxes — e.g. Extra Cheese, Add Veggies
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  STRIPE
+  PAY_AT_PICKUP
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum MinisInterest {
+  MINI_ZAATAR
+  MINI_CHEESE
+  MINI_MEAT
+  MINI_PIES
+  CATERING_BITES
+}
+
+// ───────────────────────────── Stores ─────────────────────────────
+
+model Store {
+  id            String   @id @default(cuid())
+  slug          String   @unique // revesby | bankstown | roselands
+  name          String
+  addressLine1  String
+  addressLine2  String?
+  suburb        String
+  state         String   @default("NSW")
+  postcode      String
+  phone         String // E.164, e.g. +61297742286
+  timezone      String   @default("Australia/Sydney")
+  mapsUrl       String?
+  acceptsOnline Boolean  @default(true)
+  // Minutes between "order placed" and the earliest pickup slot.
+  // [CONFIRM] with each kitchen — seeded as a conservative default.
+  prepMinutes   Int      @default(20)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hours         StoreHours[]
+  closures      StoreClosure[]
+  menuItems     StoreMenuItem[]
+  orders        Order[]
+  subscribers   WaitlistSubscriber[]
+  cateringLeads CateringLead[]
+}
+
+model StoreHours {
+  id        String @id @default(cuid())
+  storeId   String
+  // 0 = Sunday … 6 = Saturday (matches JS Date#getDay)
+  dayOfWeek Int
+  opensMin  Int // minutes from local midnight, e.g. 6:30am = 390
+  closesMin Int // minutes from local midnight, exclusive, e.g. 2:30pm = 870
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, dayOfWeek, opensMin])
+  @@index([storeId])
+}
+
+// Public holidays, stocktakes, ad-hoc closures. Source data does not list
+// public-holiday trading, so these are entered by staff, not assumed.
+model StoreClosure {
+  id      String  @id @default(cuid())
+  storeId String
+  date    String // local calendar date, YYYY-MM-DD
+  reason  String?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, date])
+}
+
+// ───────────────────────────── Menu ─────────────────────────────
+
+model Category {
+  id        String   @id @default(cuid())
+  slug      String   @unique // manoush | pizza | pies | wraps | catering | drinks-sweets
+  name      String
+  blurb     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  items MenuItem[]
+}
+
+model MenuItem {
+  id                String       @id @default(cuid())
+  slug              String       @unique
+  categoryId        String
+  name              String
+  description       String
+  // NULL = price not confirmed → shown as "Price to be confirmed", not orderable.
+  priceCents        Int?
+  // Provenance of a confirmed price (where + when it was confirmed). A
+  // non-null priceCents without a priceSource must never be seeded.
+  priceSource       String?
+  imageUrl          String?
+  isSpicy           Boolean      @default(false)
+  dietaryTags       DietaryTag[]
+  // Allergen/dietary claims are only shown once staff have verified them.
+  // NULL = unverified: UI says "check with the store" and filters treat the
+  // item as unknown rather than a match.
+  dietaryVerifiedAt DateTime?
+  isActive          Boolean      @default(true)
+  sortOrder         Int          @default(0)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  category       Category                @relation(fields: [categoryId], references: [id])
+  modifierGroups MenuItemModifierGroup[]
+  stores         StoreMenuItem[]
+  orderItems     OrderItem[]
+
+  @@index([categoryId, sortOrder])
+}
+
+// Per-store availability ("86'd at Roselands today"). Deliberately NO price
+// override: the domain model has one price per item, and an override that the
+// pricing code silently ignored would be a pricing bug.
+model StoreMenuItem {
+  storeId     String
+  menuItemId  String
+  isAvailable Boolean @default(true)
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@id([storeId, menuItemId])
+}
+
+model ModifierGroup {
+  id        String            @id @default(cuid())
+  slug      String            @unique // e.g. "base-style", "extras"
+  name      String
+  selection ModifierSelection @default(MULTIPLE)
+  minSelect Int               @default(0)
+  maxSelect Int               @default(10)
+  sortOrder Int               @default(0)
+
+  modifiers Modifier[]
+  items     MenuItemModifierGroup[]
+}
+
+model Modifier {
+  id              String  @id @default(cuid())
+  groupId         String
+  slug            String
+  name            String
+  // Added to the item price. NULL = price not confirmed → modifier not orderable.
+  priceDeltaCents Int?
+  isDefault       Boolean @default(false)
+  isActive        Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  group ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, slug])
+}
+
+model MenuItemModifierGroup {
+  menuItemId String
+  groupId    String
+
+  menuItem MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  group    ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([menuItemId, groupId])
+}
+
+// ───────────────────────────── Orders ─────────────────────────────
+
+model Order {
+  id                    String        @id @default(cuid())
+  // Human-readable, e.g. DB-REV-4F7K2Q. Shown to the customer and used for pickup.
+  orderNumber           String        @unique
+  storeId               String
+  status                OrderStatus   @default(PENDING_PAYMENT)
+  paymentMethod         PaymentMethod
+  paymentStatus         PaymentStatus @default(UNPAID)
+  customerName          String
+  customerEmail         String
+  customerPhone         String
+  notes                 String?
+  pickupAt              DateTime // absolute instant (UTC); rendered in the store's timezone
+  subtotalCents         Int
+  totalCents            Int
+  currency              String        @default("AUD")
+  stripeSessionId       String?       @unique
+  stripePaymentIntentId String?
+  // Where the order came from (UTM + ad click IDs, sanitised: see src/lib/attribution-schema.ts).
+  attribution           Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  store Store       @relation(fields: [storeId], references: [id])
+  items OrderItem[]
+
+  @@index([storeId, pickupAt])
+  @@index([customerEmail])
+}
+
+model OrderItem {
+  id             String  @id @default(cuid())
+  orderId        String
+  menuItemId     String?
+  // Snapshots — never read live menu data to render a past order.
+  nameSnapshot   String
+  unitPriceCents Int // base price + modifier deltas, per unit
+  quantity       Int
+  lineTotalCents Int
+  modifiers      Json // [{ groupSlug, slug, name, priceDeltaCents }]
+  note           String?
+
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+}
+
+// ───────────────────────────── Minis waitlist ─────────────────────────────
+
+model WaitlistSubscriber {
+  id          String          @id @default(cuid())
+  email       String          @unique // stored lower-cased
+  name        String
+  phone       String?
+  interests   MinisInterest[]
+  // Rough event size from the Party Pack Sizer (pieces), if they used it.
+  partyPieces Int?
+  storeId     String?
+  source      String          @default("minis-teaser")
+  // Spam Act 2003 (Cth): marketing needs express consent, so we record when
+  // and what was agreed to. A row without consentAt must never be mailed.
+  consentAt   DateTime
+  consentText String
+  // Where the signup came from (sanitised UTM + click IDs).
+  attribution Json?
+  // Set once the team notification has been delivered (null = retry candidate).
+  notifiedAt  DateTime?
+  createdAt   DateTime        @default(now())
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+// ───────────────────────────── Catering / corporate leads ─────────────────────────────
+
+enum CateringEventType {
+  OFFICE_BREAKFAST
+  TEAM_LUNCH
+  MEETING
+  CORPORATE_EVENT
+  PARTY
+  WEDDING_ENGAGEMENT
+  COMMUNITY_RELIGIOUS
+  MINIS_PARTY
+  OTHER
+}
+
+// Headcount bands: volume is the lead-scoring signal for corporate work.
+enum GuestBand {
+  UP_TO_25
+  FROM_26_TO_50
+  FROM_51_TO_100
+  FROM_101_TO_250
+  OVER_250
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  TASTING_OFFERED
+  QUOTED
+  WON
+  LOST
+}
+
+model CateringLead {
+  id                    String            @id @default(cuid())
+  // Human-readable reference given to the customer, e.g. DB-Q-7K2M4X.
+  reference             String            @unique
+  name                  String
+  company               String?
+  email                 String // stored lower-cased
+  phone                 String
+  eventType             CateringEventType
+  guestBand             GuestBand
+  // Local calendar date as entered (YYYY-MM-DD).
+  eventDate             String?
+  suburb                String?
+  storeId               String?
+  // The CUSTOMER'S dietary requirements. These are not claims Dough Boss makes about its food.
+  dietary               DietaryTag[]
+  wantsCorporateAccount Boolean           @default(false)
+  notes                 String?
+  // Which page/form the lead came from, e.g. "catering-corporate".
+  source                String            @default("catering-enquiry")
+  // Where the visitor came from (sanitised UTM + click IDs).
+  attribution           Json?
+  // Spam Act 2003 (Cth): when and what the customer agreed to.
+  consentAt             DateTime
+  consentText           String
+  status                LeadStatus        @default(NEW)
+  // Set once the team notification has been delivered (null = retry candidate).
+  notifiedAt            DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([email])
+}
