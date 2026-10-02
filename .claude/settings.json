@@ -69,7 +69,7 @@
     "community-other@hq-marketplace": false,
     "community-sales-crm@hq-marketplace": false,
     "community-security-research@hq-marketplace": false,
-    "community-seo-web@hq-marketplace": false,
+    "community-seo-web@hq-marketplace": true,
     "community-social-media@hq-marketplace": false,
     "community-video-audio-media@hq-marketplace": false,
     "community-writing-editing@hq-marketplace": false,
