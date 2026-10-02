@@ -503,11 +503,23 @@ final class DoughBoss_Growth_Leads {
 			return;
 		}
 		$table = DoughBoss_Growth_Attribution::lead_meta_table();
-		$total = $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no variables; table name built from the WordPress prefix and a constant.
-		$rows  = $wpdb->get_results( "SELECT enquiry_id, segment, company_name, consent_marketing, consent_text_version, created_at FROM {$table} ORDER BY id DESC LIMIT 10", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no variables; table name built from the WordPress prefix and a constant.
+		// Each read is judged straight after it runs: a database error makes get_var() return null (which (int) prints as a calm
+		// 0) and get_results() an empty list (which would print "None yet."), neither of which is true.
+		$total        = $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no variables; table name built from the WordPress prefix and a constant.
+		$total_failed = ( null === $total || '' !== (string) $wpdb->last_error );
+		$rows         = $wpdb->get_results( "SELECT enquiry_id, segment, company_name, consent_marketing, consent_text_version, created_at FROM {$table} ORDER BY id DESC LIMIT 10", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no variables; table name built from the WordPress prefix and a constant.
+		$rows_failed  = ( '' !== (string) $wpdb->last_error || ! is_array( $rows ) );
 		echo '<h3>' . esc_html__( 'Latest lead records', 'doughboss-growth' ) . '</h3>';
-		echo '<p data-dbgr-lead-count>' . esc_html( sprintf( /* translators: %d: number of lead records. */ __( 'Lead records: %d', 'doughboss-growth' ), (int) $total ) ) . '</p>';
-		if ( ! is_array( $rows ) || array() === $rows ) {
+		if ( $total_failed ) {
+			echo '<p data-dbgr-lead-count>' . esc_html__( 'Lead records: could not be read', 'doughboss-growth' ) . '</p>';
+		} else {
+			echo '<p data-dbgr-lead-count>' . esc_html( sprintf( /* translators: %d: number of lead records. */ __( 'Lead records: %d', 'doughboss-growth' ), (int) $total ) ) . '</p>';
+		}
+		if ( $rows_failed ) {
+			echo '<p>' . esc_html__( 'The latest lead records could not be read.', 'doughboss-growth' ) . '</p>';
+			return;
+		}
+		if ( array() === $rows ) {
 			echo '<p>' . esc_html__( 'None yet.', 'doughboss-growth' ) . '</p>';
 			return;
 		}

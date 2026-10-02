@@ -386,9 +386,11 @@ db_test(
 		DoughBoss_Growth_Outbox::dispatch();
 		assert_same( 'pending', dbgr_outbox_rows()[0]['status'], 'a meta handler leaves the ga4 row alone' );
 
-		// maybe_resume(): once a handler exists and a row waits, the schedule comes back.
+		// maybe_resume(): once a handler exists and a row waits, the schedule comes back (for a manager: the admin-side
+		// safety net costs a visitor or a subscriber nothing, see test-conversions-silence.php).
 		DoughBoss_Growth_Outbox::reset_handlers();
 		DoughBoss_Growth_Outbox::register_channel( 'ga4', '__return_true' );
+		dbgr_test_login( array( 'manage_doughboss' ) );
 		DoughBoss_Growth_Outbox::maybe_resume();
 		assert_true( false !== wp_next_scheduled( 'doughboss_growth_outbox_dispatch' ), 'schedule restored for a waiting row' );
 	}

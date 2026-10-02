@@ -600,6 +600,50 @@ db_test(
 );
 
 db_test(
+	'admin tab (silence rule): a lead count or list that could not be read says so; it is never printed as 0 or "None yet."',
+	function () {
+		dbgr_ld_boot();
+		DoughBoss_Growth_Leads::init();
+		dbgr_ld_register_core_route();
+		dbgr_ld_enquire( array( 'customer_email' => 'secret@example.com', 'dbgr_company' => 'Smith & Sons' ) );
+		$render = function () {
+			ob_start();
+			DoughBoss_Growth_Leads::render_tab();
+			return (string) ob_get_clean();
+		};
+		$healthy = $render();
+		assert_contains( 'Lead records: 1', $healthy, 'control: the lead is counted' );
+		assert_contains( 'Smith &amp; Sons', $healthy, 'control: the lead is listed' );
+
+		$GLOBALS['wpdb']->fail_on( '/SELECT COUNT\(\*\) FROM wp_doughboss_growth_lead_meta/' );
+		$html = $render();
+		$GLOBALS['wpdb']->clear_failures();
+		assert_contains( 'Lead records: could not be read', $html, 'a failed count says it could not be read' );
+		assert_not_contains( 'Lead records: 0', $html, 'and is not printed as 0' );
+		assert_contains( 'Smith &amp; Sons', $html, 'the list that did load is still shown' );
+
+		$GLOBALS['wpdb']->fail_on( '/SELECT enquiry_id, segment, company_name, consent_marketing, consent_text_version, created_at FROM wp_doughboss_growth_lead_meta/' );
+		$html = $render();
+		$GLOBALS['wpdb']->clear_failures();
+		assert_contains( 'The latest lead records could not be read.', $html, 'a failed list says it could not be read' );
+		assert_not_contains( 'None yet.', $html, 'and is not "None yet."' );
+		assert_contains( 'Lead records: 1', $html, 'the count that worked is still shown' );
+
+		$GLOBALS['wpdb']->fail_all( true );
+		$html = $render();
+		$GLOBALS['wpdb']->clear_failures();
+		assert_not_contains( 'None yet.', $html, 'with every read failing nothing is "None yet."' );
+		assert_not_contains( 'Lead records: 0', $html, 'and nothing is 0' );
+
+		// Control: a genuinely empty table still says so.
+		$GLOBALS['wpdb']->sqlite_raw( 'DELETE FROM wp_doughboss_growth_lead_meta' );
+		$html = $render();
+		assert_contains( 'Lead records: 0', $html, 'control: an empty table is 0' );
+		assert_contains( 'None yet.', $html, 'control: an empty list is "None yet."' );
+	}
+);
+
+db_test(
 	'no foreign writes: rendering, enquiring and the tab write only doughboss_growth names',
 	function () {
 		dbgr_ld_boot( array( 'party_sizer' => true ) );

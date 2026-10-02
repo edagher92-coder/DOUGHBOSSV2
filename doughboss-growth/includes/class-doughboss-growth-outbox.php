@@ -8,6 +8,14 @@
  * for an operator. A row left in_flight past the lease is quarantined, never re-sent automatically
  * (a re-send could double-count a conversion).
  *
+ * A run is bounded: at most BATCH rows and about TIME_BUDGET_SECONDS of work, because every delivery can wait ten
+ * seconds on a provider and a host that kills a long request would leave a delivered row in_flight, which the
+ * quarantine rule then parks as ambiguous. Rows not reached stay pending and go out on the next run.
+ *
+ * Nothing here fails quietly (the house silence rule): a state change that could not be written, a read that failed
+ * and a cron event that could not be scheduled are listed in DoughBoss_Growth_Failures, and a failed read is never
+ * taken for "nothing is waiting" (that would clear the cron and stall the queue).
+ *
  * Payloads must not contain raw personal data; enqueue() refuses them.
  *
  * @package DoughBoss_Growth
@@ -45,9 +53,22 @@ final class DoughBoss_Growth_Outbox {
 	const MAX_ATTEMPTS = 5;
 
 	/**
-	 * Rows claimed per sweep.
+	 * Rows claimed per sweep. Each delivery may wait ten seconds on a provider (and a blocking DNS lookup before that),
+	 * so a long batch can outlive the host's request limit; ten rows every five minutes is still 120 an hour.
 	 */
-	const BATCH = 25;
+	const BATCH = 10;
+
+	/**
+	 * Seconds of work after which a sweep stops claiming rows (checked before each claim, so the delivery in progress
+	 * is never cut). The rows it did not reach stay pending.
+	 */
+	const TIME_BUDGET_SECONDS = 20;
+
+	/**
+	 * Timing transient for the admin-side resume check, and its length in seconds (fifteen minutes).
+	 */
+	const RESUME_TRANSIENT = 'doughboss_growth_outbox_resume';
+	const RESUME_INTERVAL  = 900;
 
 	/**
 	 * Seconds an in_flight claim is honoured before the row is quarantined.
@@ -60,6 +81,13 @@ final class DoughBoss_Growth_Outbox {
 	 * @var array Channel => callable.
 	 */
 	private static $handlers = array();
+
+	/**
+	 * Test seam: the time budget in seconds, honoured only inside the test harness (null = the real budget).
+	 *
+	 * @var float|null
+	 */
+	private static $budget_override = null;
 
 	/**
 	 * Hook the cron schedule, the dispatcher and the admin-side resume check.
@@ -162,7 +190,43 @@ final class DoughBoss_Growth_Outbox {
 	 * @return void
 	 */
 	public static function reset_handlers() {
-		self::$handlers = array();
+		self::$handlers        = array();
+		self::$budget_override = null;
+	}
+
+	/**
+	 * Set the dispatch time budget (tests only; ignored outside the harness). Pass null to release it.
+	 *
+	 * @param float|int|null $seconds Budget in seconds, or null.
+	 * @return void
+	 */
+	public static function set_time_budget_override( $seconds ) {
+		if ( ! defined( 'DBGR_TESTING' ) ) {
+			return;
+		}
+		self::$budget_override = ( null === $seconds ) ? null : max( 0.0, (float) $seconds );
+	}
+
+	/**
+	 * Seconds a sweep may spend before it stops claiming rows.
+	 *
+	 * @return float
+	 */
+	private static function time_budget() {
+		return ( null !== self::$budget_override ) ? self::$budget_override : (float) self::TIME_BUDGET_SECONDS;
+	}
+
+	/**
+	 * List a failure for the owner (the Recent failures list on the Growth settings screen). Never throws.
+	 *
+	 * @param string $code    Failure code.
+	 * @param array  $context Scalar facts without personal data.
+	 * @return void
+	 */
+	private static function note_failure( $code, array $context ) {
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::record( $code, $context );
+		}
 	}
 
 	/**
@@ -268,19 +332,31 @@ final class DoughBoss_Growth_Outbox {
 	}
 
 	/**
-	 * Make sure the dispatch cron event exists.
+	 * Make sure the dispatch cron event exists. A schedule that cannot be written (a locked cron option, a refused
+	 * event) is listed for the owner: the row is queued either way, but nothing would send it.
 	 *
-	 * @return void
+	 * @return bool True when the event exists afterwards.
 	 */
 	public static function ensure_scheduled() {
-		if ( false === wp_next_scheduled( self::CRON_HOOK ) ) {
-			wp_schedule_event( DoughBoss_Growth::now() + MINUTE_IN_SECONDS, self::CRON_SCHEDULE, self::CRON_HOOK );
+		if ( false !== wp_next_scheduled( self::CRON_HOOK ) ) {
+			return true;
 		}
+		$scheduled = wp_schedule_event( DoughBoss_Growth::now() + MINUTE_IN_SECONDS, self::CRON_SCHEDULE, self::CRON_HOOK );
+		if ( false === $scheduled || is_wp_error( $scheduled ) ) {
+			self::note_failure( 'outbox_schedule_failed', array( 'stage' => 'ensure_scheduled' ) );
+			return false;
+		}
+		return true;
 	}
 
 	/**
-	 * Admin-side: if a channel handler is registered and rows are waiting but nothing is scheduled
+	 * Admin-side safety net: if a channel handler is registered and rows are waiting but nothing is scheduled
 	 * (the cron was cleared while a feature was off), schedule it again.
+	 *
+	 * It runs on every admin_init, which includes admin-ajax for logged-out visitors, and "a handler registered and no
+	 * cron" is the normal idle state, so it must cost almost nothing: only a manager gets past the capability check, and a
+	 * transient lets a manager count the waiting rows at most once every fifteen minutes. enqueue() already schedules the
+	 * cron, so this only repairs the rare case where that was lost.
 	 *
 	 * @return void
 	 */
@@ -288,7 +364,13 @@ final class DoughBoss_Growth_Outbox {
 		if ( array() === self::$handlers || false !== wp_next_scheduled( self::CRON_HOOK ) ) {
 			return;
 		}
-		if ( self::waiting_count() > 0 ) {
+		$can = class_exists( 'DoughBoss_Growth_Admin', false ) ? DoughBoss_Growth_Admin::user_can_manage() : current_user_can( 'manage_options' );
+		if ( ! $can || false !== get_transient( self::RESUME_TRANSIENT ) ) {
+			return;
+		}
+		set_transient( self::RESUME_TRANSIENT, 1, self::RESUME_INTERVAL );
+		$waiting = self::waiting_count();
+		if ( null !== $waiting && $waiting > 0 ) {
 			self::ensure_scheduled();
 		}
 	}
@@ -296,7 +378,8 @@ final class DoughBoss_Growth_Outbox {
 	/**
 	 * Rows waiting for a registered channel.
 	 *
-	 * @return int
+	 * @return int|null The count, or null when it could not be read (listed as a failure): a failed read is not "nothing is
+	 *                  waiting", and a caller must not act on it as if it were.
 	 */
 	public static function waiting_count() {
 		global $wpdb;
@@ -312,6 +395,10 @@ final class DoughBoss_Growth_Outbox {
 				$channels
 			)
 		);
+		if ( null === $count || '' !== (string) $wpdb->last_error ) {
+			self::note_failure( 'outbox_read_failed', array( 'stage' => 'waiting_count' ) );
+			return null;
+		}
 		return (int) $count;
 	}
 
@@ -331,6 +418,7 @@ final class DoughBoss_Growth_Outbox {
 		if ( DoughBoss_Growth_Settings::kill_switch() ) {
 			return $summary;
 		}
+		$started  = microtime( true );
 		$channels = self::channels();
 		if ( array() === $channels ) {
 			// Nothing can be delivered while every feature that uses the outbox is off: stop the cron.
@@ -352,6 +440,9 @@ final class DoughBoss_Growth_Outbox {
 			)
 		);
 		$summary['quarantined'] = ( false === $quarantined ) ? 0 : (int) $quarantined;
+		if ( false === $quarantined ) {
+			self::note_failure( 'outbox_update_failed', array( 'state' => 'quarantine' ) );
+		}
 
 		// 2. Candidate ids for registered channels only.
 		$placeholders = implode( ', ', array_fill( 0, count( $channels ), '%s' ) );
@@ -362,11 +453,16 @@ final class DoughBoss_Growth_Outbox {
 				$args
 			)
 		);
-		if ( ! is_array( $ids ) ) {
+		if ( ! is_array( $ids ) || '' !== (string) $wpdb->last_error ) {
+			// An empty answer from a failed read is not "nothing is due". Nothing is claimed and the cron is left alone.
+			self::note_failure( 'outbox_read_failed', array( 'stage' => 'due_rows' ) );
 			return $summary;
 		}
 
 		foreach ( $ids as $id ) {
+			if ( ( microtime( true ) - $started ) >= self::time_budget() ) {
+				break; // Out of time: the rows not reached stay pending and go out on the next run.
+			}
 			$row = self::claim( (int) $id );
 			if ( null === $row ) {
 				continue; // Another worker won this row.
@@ -382,7 +478,7 @@ final class DoughBoss_Growth_Outbox {
 			}
 		}
 
-		if ( 0 === self::waiting_count() ) {
+		if ( 0 === self::waiting_count() ) { // null (could not be read) is not 0: the cron stays so the rows are tried again.
 			wp_clear_scheduled_hook( self::CRON_HOOK );
 		}
 		return $summary;
@@ -413,6 +509,20 @@ final class DoughBoss_Growth_Outbox {
 			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", (int) $id ),
 			ARRAY_A
 		);
+		if ( '' !== (string) $wpdb->last_error ) {
+			// The claim is ours but the row could not be read back, so no handler has seen it. Hand it back instead of leaving
+			// it in flight, where the quarantine rule would park a row that was never sent as "ambiguous".
+			self::note_failure( 'outbox_read_failed', array( 'stage' => 'claim' ) );
+			$released = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->prepare(
+					"UPDATE {$table} SET status = 'pending', updated_at = %s WHERE id = %d AND status = 'in_flight'",
+					$claim_ts,
+					(int) $id
+				)
+			);
+			self::check_write( $released, array(), 'release' );
+			return null;
+		}
 		return is_array( $row ) ? $row : null;
 	}
 
@@ -492,7 +602,7 @@ final class DoughBoss_Growth_Outbox {
 			$state = 'terminal';
 		}
 		if ( 'sent' === $state ) {
-			$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$result = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				$wpdb->prepare(
 					"UPDATE {$table} SET status = 'sent', attempts = %d, last_error = '', updated_at = %s WHERE id = %d AND status = 'in_flight'",
 					$attempts,
@@ -500,10 +610,11 @@ final class DoughBoss_Growth_Outbox {
 					$id
 				)
 			);
+			self::check_write( $result, $row, 'sent' );
 			return 'sent';
 		}
 		if ( 'terminal' === $state ) {
-			$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$result = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				$wpdb->prepare(
 					"UPDATE {$table} SET status = 'failed_terminal', attempts = %d, last_error = %s, updated_at = %s WHERE id = %d AND status = 'in_flight'",
 					$attempts,
@@ -512,9 +623,10 @@ final class DoughBoss_Growth_Outbox {
 					$id
 				)
 			);
+			self::check_write( $result, $row, 'terminal' );
 			return 'terminal';
 		}
-		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$result = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$wpdb->prepare(
 				"UPDATE {$table} SET status = 'pending', attempts = %d, last_error = %s, next_attempt_at = %s, updated_at = %s WHERE id = %d AND status = 'in_flight'",
 				$attempts,
@@ -524,7 +636,31 @@ final class DoughBoss_Growth_Outbox {
 				$id
 			)
 		);
+		self::check_write( $result, $row, 'retry' );
 		return 'retry';
+	}
+
+	/**
+	 * List a failed state write. When the write after a delivery fails the row stays in_flight, and ten minutes later the
+	 * quarantine rule parks it as "ambiguous" although it may have been delivered: the owner is told now, not then.
+	 * An UPDATE that matched no row (another worker already moved it) is not an error.
+	 *
+	 * @param int|false $result Result of $wpdb->query().
+	 * @param array     $row    The claimed row (for its channel), or an empty array.
+	 * @param string    $state  The state the row was meant to reach.
+	 * @return void
+	 */
+	private static function check_write( $result, array $row, $state ) {
+		global $wpdb;
+		if ( false !== $result && '' === (string) $wpdb->last_error ) {
+			return;
+		}
+		$channel = isset( $row['channel'] ) ? (string) preg_replace( '/[^a-z0-9_]/', '', strtolower( (string) $row['channel'] ) ) : '';
+		$context = array( 'state' => $state );
+		if ( '' !== $channel ) {
+			$context['channel'] = $channel;
+		}
+		self::note_failure( 'outbox_update_failed', $context );
 	}
 
 	/**

@@ -508,9 +508,13 @@ final class DoughBoss_Growth_Attribution {
 	/**
 	 * Read the stored attribution for a subject (for the lead form and the conversions module).
 	 *
+	 * Three answers, and callers must tell them apart: an array (the row), null (there is no row, or the subject is not
+	 * acceptable: ordinary, nothing to report) and false (the database could not be read: the failure is listed for the
+	 * owner, and a caller must NOT treat it as "no row", which would turn a storage fault into "no consent").
+	 *
 	 * @param string $type Subject type: payment_ref, order, enquiry or waitlist.
 	 * @param mixed  $id   Subject id.
-	 * @return array|null array( 'attribution' => array, 'consent' => array, 'captured_at' => string ) or null when there is no row.
+	 * @return array|null|false array( 'attribution' => array, 'consent' => array, 'captured_at' => string ), null when there is no row, false when the read failed.
 	 */
 	public static function for_subject( $type, $id ) {
 		global $wpdb;
@@ -527,9 +531,25 @@ final class DoughBoss_Growth_Attribution {
 			),
 			ARRAY_A
 		);
+		if ( '' !== (string) $wpdb->last_error ) {
+			self::log_event( 'attribution_read_failed', 'subject' );
+			return false;
+		}
 		if ( ! is_array( $row ) ) {
 			return null;
 		}
+		return self::decode_row( $row );
+	}
+
+	/**
+	 * A stored attribution row (as selected from the attribution table) in the shape for_subject() returns. Public so a
+	 * reader that already holds the row (the offline export reads a page of them at once) decodes it exactly as
+	 * for_subject() does, instead of asking the database again for each one.
+	 *
+	 * @param array $row Row with attribution_json, consent_json and (optional) captured_at.
+	 * @return array array( 'attribution' => array, 'consent' => array, 'captured_at' => string ).
+	 */
+	public static function decode_row( array $row ) {
 		$attribution = json_decode( isset( $row['attribution_json'] ) ? (string) $row['attribution_json'] : '', true );
 		$consent     = json_decode( isset( $row['consent_json'] ) ? (string) $row['consent_json'] : '', true );
 		$consent     = is_array( $consent ) ? $consent : array();
@@ -852,6 +872,8 @@ final class DoughBoss_Growth_Attribution {
 					self::write_subject( 'order', $id, $stored['attribution'], $stored['consent'] );
 					return;
 				}
+				// null: nothing was stored under that reference. false: the read failed (for_subject() has already listed it).
+				// Either way the visitor's own cookie, with their consent as it is right now, is the only other source.
 			}
 			$consent     = self::consent_snapshot();
 			$attribution = self::current_attribution( $consent );
@@ -968,14 +990,19 @@ final class DoughBoss_Growth_Attribution {
 			global $wpdb;
 			$attribution = self::attribution_table();
 			$lead_meta   = self::lead_meta_table();
+			// A count that could not be read is said so, never printed as 0: a database error makes get_var() return null, which
+			// (int) turns into a calm "0" next to a table that may hold thousands of rows.
+			$unread = __( 'Could not be read', 'doughboss-growth' );
 			foreach ( self::SUBJECT_TYPES as $type ) {
 				$count  = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 					$wpdb->prepare( "SELECT COUNT(*) FROM {$attribution} WHERE subject_type = %s", $type ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name built from the WordPress prefix and a constant.
 				);
-				$rows[] = array( sprintf( /* translators: %s: subject type. */ __( 'Attribution rows: %s', 'doughboss-growth' ), $type ), (string) (int) $count );
+				$failed = ( null === $count || '' !== (string) $wpdb->last_error );
+				$rows[] = array( sprintf( /* translators: %s: subject type. */ __( 'Attribution rows: %s', 'doughboss-growth' ), $type ), $failed ? $unread : (string) (int) $count );
 			}
 			$leads  = $wpdb->get_var( "SELECT COUNT(*) FROM {$lead_meta}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no variables; table name built from the WordPress prefix and a constant.
-			$rows[] = array( __( 'Lead records', 'doughboss-growth' ), (string) (int) $leads );
+			$failed = ( null === $leads || '' !== (string) $wpdb->last_error );
+			$rows[] = array( __( 'Lead records', 'doughboss-growth' ), $failed ? $unread : (string) (int) $leads );
 		}
 		foreach ( $rows as $row ) {
 			echo '<tr><th scope="row">' . esc_html( $row[0] ) . '</th><td>' . esc_html( $row[1] ) . '</td></tr>';
@@ -1002,8 +1029,13 @@ final class DoughBoss_Growth_Attribution {
 		global $wpdb;
 		$lead_meta = self::lead_meta_table();
 		$rows      = $wpdb->get_results( "SELECT enquiry_id, segment, attribution_json, created_at FROM {$lead_meta} ORDER BY id DESC LIMIT 10", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no variables; table name built from the WordPress prefix and a constant.
+		$failed    = ( '' !== (string) $wpdb->last_error || ! is_array( $rows ) ); // A failed read must not look like an empty list.
 		echo '<h3>' . esc_html__( 'Latest lead records', 'doughboss-growth' ) . '</h3>';
-		if ( ! is_array( $rows ) || array() === $rows ) {
+		if ( $failed ) {
+			echo '<p>' . esc_html__( 'The latest lead records could not be read.', 'doughboss-growth' ) . '</p>';
+			return;
+		}
+		if ( array() === $rows ) {
 			echo '<p>' . esc_html__( 'None yet.', 'doughboss-growth' ) . '</p>';
 			return;
 		}

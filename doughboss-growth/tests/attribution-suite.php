@@ -578,7 +578,7 @@ db_test(
 		$GLOBALS['wpdb']->fail_all( true );
 		$consent = array( 'measurement' => true, 'advertising' => false, 'chosen' => true, 'version' => '1' );
 		assert_false( DoughBoss_Growth_Attribution::write_subject( 'order', 1, array( 'utmSource' => 'a' ), $consent ), 'write fails closed' );
-		assert_same( null, DoughBoss_Growth_Attribution::for_subject( 'order', 1 ), 'read fails closed' );
+		assert_same( false, DoughBoss_Growth_Attribution::for_subject( 'order', 1 ), 'a read error is false (not null, which means "no row"), so no caller can mistake a storage fault for "no consent"' );
 	}
 );
 
@@ -1065,6 +1065,79 @@ db_test(
 		assert_not_contains( '>x<', $html, 'the click id itself is not printed' );
 		assert_contains( '[CONFIRM: how long attribution and lead records are kept', $html, 'retention gap' );
 		assert_contains( 'Attribution rows: enquiry', $html, 'counts per subject type' );
+	}
+);
+
+db_test(
+	'admin tab (silence rule): a count or list that could not be read says so; it is never printed as 0 or "None yet."',
+	function () {
+		dbgr_at_boot();
+		dbgr_at_register_core_routes();
+		dbgr_at_visitor( 1, 1, dbgr_at_campaign() );
+		dbgr_at_enquire( array( 'dbgr_segment' => 'corporate' ) );
+		$render = function () {
+			ob_start();
+			DoughBoss_Growth_Attribution::render_tab();
+			return (string) ob_get_clean();
+		};
+		$healthy = $render();
+		assert_contains( 'Attribution rows: enquiry</th><td>1</td>', $healthy, 'control: the enquiry row is counted' );
+		assert_contains( 'Lead records</th><td>1</td>', $healthy, 'control: the lead record is counted' );
+		assert_not_contains( 'could not be read', strtolower( $healthy ), 'control: nothing is reported unread' );
+
+		$GLOBALS['wpdb']->fail_on( '/SELECT COUNT\(\*\) FROM wp_doughboss_growth_attribution/' );
+		$html = $render();
+		$GLOBALS['wpdb']->clear_failures();
+		foreach ( DoughBoss_Growth_Attribution::SUBJECT_TYPES as $type ) {
+			assert_contains( 'Attribution rows: ' . $type . '</th><td>Could not be read</td>', $html, 'a failed count for ' . $type . ' says it could not be read' );
+			assert_not_contains( 'Attribution rows: ' . $type . '</th><td>0</td>', $html, 'and is not printed as 0 (' . $type . ')' );
+		}
+		assert_contains( 'Lead records</th><td>1</td>', $html, 'a count that worked is still shown' );
+
+		$GLOBALS['wpdb']->fail_on( '/SELECT COUNT\(\*\) FROM wp_doughboss_growth_lead_meta/' );
+		$html = $render();
+		$GLOBALS['wpdb']->clear_failures();
+		assert_contains( 'Lead records</th><td>Could not be read</td>', $html, 'a failed lead count says it could not be read' );
+		assert_not_contains( 'Lead records</th><td>0</td>', $html, 'and is not printed as 0' );
+
+		$GLOBALS['wpdb']->fail_on( '/SELECT enquiry_id, segment, attribution_json, created_at FROM wp_doughboss_growth_lead_meta/' );
+		$html = $render();
+		$GLOBALS['wpdb']->clear_failures();
+		assert_contains( 'The latest lead records could not be read.', $html, 'a failed list says it could not be read' );
+		assert_not_contains( 'None yet.', $html, 'and is not "None yet."' );
+		assert_not_contains( '<table class="widefat striped" style="max-width:900px">', $html, 'no half-read table' );
+
+		// Control: a genuinely empty store still says so.
+		$GLOBALS['wpdb']->sqlite_raw( 'DELETE FROM wp_doughboss_growth_lead_meta' );
+		$GLOBALS['wpdb']->sqlite_raw( 'DELETE FROM wp_doughboss_growth_attribution' );
+		$html = $render();
+		assert_contains( 'None yet.', $html, 'control: an empty list is "None yet."' );
+		assert_contains( 'Lead records</th><td>0</td>', $html, 'control: an empty count is 0' );
+	}
+);
+
+db_test(
+	'order (silence rule): a failed payment-reference read is listed, and the order still falls back to the visitor\'s own cookie',
+	function () {
+		dbgr_at_boot();
+		DoughBoss_Growth_Attribution::init();
+		DoughBoss_Growth_Attribution::write_subject( 'payment_ref', 'sq_pay_data', dbgr_at_campaign(), array( 'measurement' => true, 'advertising' => true, 'chosen' => true, 'version' => '1' ) );
+		dbgr_at_visitor( 1, 0, array( 'utmSource' => 'fromcookie' ) );
+		DoughBoss_Order::$rows[ 41 ] = (object) array( 'payment_intent_id' => 'sq_pay_data' );
+		$GLOBALS['wpdb']->fail_on( '/FROM wp_doughboss_growth_attribution WHERE subject_type = \'payment_ref\'/' );
+		do_action( 'doughboss_order_created', 41, array() );
+		$GLOBALS['wpdb']->clear_failures();
+		$codes = array_column( DoughBoss_Growth_Failures::all(), 'code' );
+		assert_true( in_array( 'attribution_read_failed', $codes, true ), 'the failed read is on the owner-visible failure list' );
+		$order = DoughBoss_Growth_Attribution::for_subject( 'order', 41 );
+		assert_same( 'fromcookie', $order['attribution']['utmSource'], 'the order still takes the visitor\'s own cookie, as when no reference is stored' );
+		assert_same( false, $order['consent']['advertising'], 'with the consent they hold now' );
+		DoughBoss_Growth_Failures::clear();
+
+		// Control: a reference that is simply not stored is not a failure.
+		DoughBoss_Order::$rows[ 42 ] = (object) array( 'payment_intent_id' => 'sq_pay_unknown' );
+		do_action( 'doughboss_order_created', 42, array() );
+		assert_same( array(), array_column( DoughBoss_Growth_Failures::all(), 'code' ), 'control: no stored reference is not a failure' );
 	}
 );
 

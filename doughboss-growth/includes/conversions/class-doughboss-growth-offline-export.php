@@ -24,6 +24,15 @@
  *
  * Enquiry times and totals are read through core's own accessor DoughBoss_Catering::get(). The list of enquiry ids
  * comes from the companion's own attribution table, so only enquiries with a stored consent record are ever looked at.
+ * Each page of that table is read WITH the stored attribution and consent (one query per page of 200, newest first), so
+ * an enquiry without advertising consent or a Google click id costs no further query and core is never asked about it.
+ *
+ * A file that only looks complete is worse than no file: the operator uploads it and concludes nothing converted. So the
+ * download is REFUSED (with a message saying why, nothing sent) when the build could not read what it needs: core's
+ * lookup is gone or throws, core gave back nothing usable for any enquiry, or the file was cut short at the row or page
+ * cap (the cap drops the oldest enquiries, and the operator is told to choose a shorter window). The same failures are
+ * listed in DoughBoss_Growth_Failures. The ordinary reasons for leaving an enquiry out (no consent, no click id, outside
+ * the window, lost) are counted in build()'s "skipped" and are never a refusal.
  *
  * Entry file: classes only, no side effects at include time.
  *
@@ -96,8 +105,10 @@ final class DoughBoss_Growth_Offline_Export {
 	 * @param string $stage both, quoted or paid.
 	 * @param int    $from  Window start (UNIX time, inclusive).
 	 * @param int    $to    Window end (UNIX time, inclusive).
-	 * @return array|null array( csv => string, rows => int, skipped => array reason => count ), or null when the
-	 *                    input is invalid or storage cannot be read (nothing is exported).
+	 * @return array|null array( csv => string, rows => int, skipped => array reason => count, failed => array reason =>
+	 *                    count, truncated => bool ), or null when the input is invalid or storage cannot be read (nothing is
+	 *                    exported). "failed" holds the system failures (no_core_accessor, read_failed, core_unusable): when it
+	 *                    is not empty, or the file is truncated, the file must not be handed over (see refusal_message()).
 	 */
 	public static function build( $stage, $from, $to ) {
 		global $wpdb;
@@ -110,41 +121,62 @@ final class DoughBoss_Growth_Offline_Export {
 		if ( ! class_exists( 'DoughBoss_Growth_Attribution', false ) && ! DoughBoss_Growth::load_module( 'attribution' ) ) {
 			return null;
 		}
-		$table   = DoughBoss_Growth_Attribution::attribution_table();
-		$rows    = array();
-		$skipped = array();
-		$last    = 0;
-		$done    = false;
+		$table     = DoughBoss_Growth_Attribution::attribution_table();
+		$rows      = array();
+		$skipped   = array();
+		$meta      = array(
+			'reached' => 0, // Enquiries core's lookup answered for.
+			'usable'  => 0, // Of those, the ones with a number, AUD currency and a readable total.
+		);
+		$cursor    = PHP_INT_MAX; // Newest first: a cap drops the oldest enquiries, never the newest.
+		$truncated = false;
+		$done      = false;
 		for ( $page = 0; $page < self::MAX_PAGES && ! $done; $page++ ) {
-			$ids = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$entries = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$wpdb->prepare(
-					"SELECT id, subject_id FROM {$table} WHERE subject_type = %s AND id > %d ORDER BY id ASC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name built from the WordPress prefix and a constant.
+					"SELECT id, subject_id, attribution_json, consent_json FROM {$table} WHERE subject_type = %s AND id < %d ORDER BY id DESC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name built from the WordPress prefix and a constant.
 					'enquiry',
-					$last,
+					$cursor,
 					self::PAGE
 				),
 				ARRAY_A
 			);
-			if ( ! is_array( $ids ) || '' !== (string) $wpdb->last_error ) {
+			if ( ! is_array( $entries ) || '' !== (string) $wpdb->last_error ) {
 				return null;
 			}
-			if ( array() === $ids ) {
-				$done = true;
-				break;
-			}
-			foreach ( $ids as $entry ) {
-				$last = (int) $entry['id'];
-				self::collect( (int) $entry['subject_id'], $stage, $from, $to, $rows, $skipped );
+			foreach ( $entries as $entry ) {
+				$cursor = (int) $entry['id'];
+				self::collect( $entry, $stage, $from, $to, $rows, $skipped, $meta );
 				if ( count( $rows ) >= self::MAX_ROWS ) {
 					$skipped['truncated'] = 1;
+					$truncated            = true;
 					$done                 = true;
 					break;
 				}
 			}
+			if ( count( $entries ) < self::PAGE ) {
+				$done = true; // A short page is the last page.
+			}
 		}
 		if ( ! $done ) {
 			$skipped['truncated'] = 1;
+			$truncated            = true;
 		}
+
+		// System failures: what the operator must be told about instead of being handed a file that looks complete.
+		$failed = array();
+		foreach ( array( 'no_core_accessor', 'read_failed' ) as $reason ) {
+			if ( ! empty( $skipped[ $reason ] ) ) {
+				$failed[ $reason ] = (int) $skipped[ $reason ];
+			}
+		}
+		if ( $meta['reached'] > 0 && 0 === $meta['usable'] ) {
+			$failed['core_unusable'] = $meta['reached']; // Core answered, but never with a usable enquiry: its row shape has changed.
+		}
+		foreach ( $failed as $reason => $count ) {
+			self::note_failure( 'offline_export_' . $reason, array( 'count' => $count ) );
+		}
+
 		usort( $rows, array( __CLASS__, 'compare_rows' ) );
 
 		$lines = array( self::csv_line( self::HEADER ) );
@@ -152,14 +184,50 @@ final class DoughBoss_Growth_Offline_Export {
 			$lines[] = self::csv_line( array( $row['gclid'], $row['name'], $row['time'], $row['value'], 'AUD', $row['order_id'] ) );
 		}
 		return array(
-			'csv'     => implode( '', $lines ),
-			'rows'    => count( $rows ),
-			'skipped' => $skipped,
+			'csv'       => implode( '', $lines ),
+			'rows'      => count( $rows ),
+			'skipped'   => $skipped,
+			'failed'    => $failed,
+			'truncated' => $truncated,
 		);
 	}
 
 	/**
-	 * Sort order: time, then enquiry number, then conversion name.
+	 * Why a built export must NOT be downloaded, in words for the operator, or '' when it is safe to hand over. A result
+	 * with a system failure (core's lookup gone, failing, or never returning a usable enquiry) is refused even when other
+	 * rows were written: a file that quietly misses enquiries looks complete. So is a result cut short at the cap.
+	 *
+	 * @param array $result Result of build().
+	 * @return string Message (plain text; escape it on output), or ''.
+	 */
+	public static function refusal_message( array $result ) {
+		$failed = ( isset( $result['failed'] ) && is_array( $result['failed'] ) ) ? $result['failed'] : array();
+		if ( array() !== $failed ) {
+			$parts = array();
+			foreach ( $failed as $reason => $count ) {
+				$count = max( 1, (int) $count );
+				if ( 'no_core_accessor' === $reason ) {
+					/* translators: %d: number of enquiries. */
+					$parts[] = sprintf( _n( 'DoughBoss no longer offers the enquiry lookup this export uses (%d enquiry affected)', 'DoughBoss no longer offers the enquiry lookup this export uses (%d enquiries affected)', $count, 'doughboss-growth' ), $count );
+				} elseif ( 'read_failed' === $reason ) {
+					/* translators: %d: number of enquiries. */
+					$parts[] = sprintf( _n( '%d enquiry could not be read from DoughBoss', '%d enquiries could not be read from DoughBoss', $count, 'doughboss-growth' ), $count );
+				} else {
+					/* translators: %d: number of enquiries. */
+					$parts[] = sprintf( _n( 'DoughBoss gave back no usable details for the %d enquiry checked', 'DoughBoss gave back no usable details for any of the %d enquiries checked', $count, 'doughboss-growth' ), $count );
+				}
+			}
+			return __( 'The export was stopped because DoughBoss could not supply the enquiries it needs: ', 'doughboss-growth' ) . implode( '; ', $parts ) . '. ' . __( 'A file made now would look complete but would be missing enquiries. Nothing was downloaded. See Recent failures on the DoughBoss, Growth screen, then try again.', 'doughboss-growth' );
+		}
+		if ( ! empty( $result['truncated'] ) ) {
+			return __( 'There are more enquiries than one file can safely hold, so a file made now would be cut short without any sign of it. Nothing was downloaded. Enter a shorter date range (the From and To boxes) and try again.', 'doughboss-growth' );
+		}
+		return '';
+	}
+
+	/**
+	 * Sort order: time, then enquiry number, then conversion name, then the attribution row id (only ever decides between
+	 * two enquiries that share a number and a time, so the file is the same whichever way the table was walked).
 	 *
 	 * @param array $a Row.
 	 * @param array $b Row.
@@ -170,30 +238,38 @@ final class DoughBoss_Growth_Offline_Export {
 			return ( $a['ts'] < $b['ts'] ) ? -1 : 1;
 		}
 		$by_number = strcmp( $a['order_id'], $b['order_id'] );
-		return ( 0 !== $by_number ) ? $by_number : strcmp( $a['name'], $b['name'] );
+		if ( 0 !== $by_number ) {
+			return $by_number;
+		}
+		$by_name = strcmp( $a['name'], $b['name'] );
+		if ( 0 !== $by_name ) {
+			return $by_name;
+		}
+		$seq_a = isset( $a['seq'] ) ? (int) $a['seq'] : 0;
+		$seq_b = isset( $b['seq'] ) ? (int) $b['seq'] : 0;
+		return ( $seq_a < $seq_b ) ? -1 : ( ( $seq_a > $seq_b ) ? 1 : 0 );
 	}
 
 	/**
 	 * Add the rows of one enquiry (zero, one or two).
 	 *
-	 * @param int    $id      Enquiry id.
+	 * @param array  $entry   Attribution row: id, subject_id, attribution_json, consent_json (already read with the page).
 	 * @param string $stage   both, quoted or paid.
 	 * @param int    $from    Window start.
 	 * @param int    $to      Window end.
 	 * @param array  $rows    Rows so far (by reference).
 	 * @param array  $skipped Skip counts so far (by reference).
+	 * @param array  $meta    Counters of what core's lookup answered (by reference): reached, usable.
 	 * @return void
 	 */
-	private static function collect( $id, $stage, $from, $to, array &$rows, array &$skipped ) {
+	private static function collect( array $entry, $stage, $from, $to, array &$rows, array &$skipped, array &$meta ) {
+		$id  = isset( $entry['subject_id'] ) ? (int) $entry['subject_id'] : 0;
+		$seq = isset( $entry['id'] ) ? (int) $entry['id'] : 0;
 		if ( $id < 1 ) {
 			self::skip( $skipped, 'bad_subject' );
 			return;
 		}
-		$stored = DoughBoss_Growth_Attribution::for_subject( 'enquiry', $id );
-		if ( ! is_array( $stored ) ) {
-			self::skip( $skipped, 'no_record' );
-			return;
-		}
+		$stored = DoughBoss_Growth_Attribution::decode_row( $entry ); // The same decoding for_subject() applies; no further query.
 		if ( true !== ( isset( $stored['consent']['advertising'] ) ? $stored['consent']['advertising'] : false ) ) {
 			self::skip( $skipped, 'no_advertising_consent' );
 			return;
@@ -211,7 +287,13 @@ final class DoughBoss_Growth_Offline_Export {
 			self::skip( $skipped, 'no_core_accessor' );
 			return;
 		}
-		$enquiry = call_user_func( array( 'DoughBoss_Catering', 'get' ), $id );
+		try {
+			$enquiry = call_user_func( array( 'DoughBoss_Catering', 'get' ), $id );
+		} catch ( Throwable $e ) {
+			self::skip( $skipped, 'read_failed' ); // Core's lookup failed: counted, listed and the download refused, never skipped as "no enquiry".
+			return;
+		}
+		$meta['reached']++;
 		if ( ! is_array( $enquiry ) ) {
 			self::skip( $skipped, 'no_enquiry' );
 			return;
@@ -231,6 +313,7 @@ final class DoughBoss_Growth_Offline_Export {
 			self::skip( $skipped, 'no_valid_amount' );
 			return;
 		}
+		$meta['usable']++;
 		$value = ( $cents > 0 ) ? sprintf( '%d.%02d', intdiv( $cents, 100 ), $cents % 100 ) : '';
 
 		if ( 'both' === $stage || 'quoted' === $stage ) {
@@ -238,7 +321,7 @@ final class DoughBoss_Growth_Offline_Export {
 			if ( null === $at ) {
 				self::skip( $skipped, 'not_quoted' );
 			} elseif ( $at >= $from && $at <= $to ) {
-				$rows[] = self::row( $gclid, self::NAME_QUOTED, $at, $value, $number );
+				$rows[] = self::row( $gclid, self::NAME_QUOTED, $at, $value, $number, $seq );
 			} else {
 				self::skip( $skipped, 'outside_window' );
 			}
@@ -251,7 +334,7 @@ final class DoughBoss_Growth_Offline_Export {
 			} elseif ( null === $at ) {
 				self::skip( $skipped, 'not_paid' );
 			} elseif ( $at >= $from && $at <= $to ) {
-				$rows[] = self::row( $gclid, self::NAME_WON, $at, $value, $number );
+				$rows[] = self::row( $gclid, self::NAME_WON, $at, $value, $number, $seq );
 			} else {
 				self::skip( $skipped, 'outside_window' );
 			}
@@ -266,9 +349,10 @@ final class DoughBoss_Growth_Offline_Export {
 	 * @param int    $ts       Event time.
 	 * @param string $value    Value with two decimals, or ''.
 	 * @param string $order_id Enquiry number.
+	 * @param int    $seq      Attribution row id (the last tie-break when sorting).
 	 * @return array
 	 */
-	private static function row( $gclid, $name, $ts, $value, $order_id ) {
+	private static function row( $gclid, $name, $ts, $value, $order_id, $seq = 0 ) {
 		return array(
 			'gclid'    => $gclid,
 			'name'     => $name,
@@ -276,6 +360,7 @@ final class DoughBoss_Growth_Offline_Export {
 			'time'     => gmdate( 'Y-m-d H:i:s', $ts ) . '+0000',
 			'value'    => $value,
 			'order_id' => $order_id,
+			'seq'      => $seq,
 		);
 	}
 
@@ -288,6 +373,19 @@ final class DoughBoss_Growth_Offline_Export {
 	 */
 	private static function skip( array &$skipped, $reason ) {
 		$skipped[ $reason ] = isset( $skipped[ $reason ] ) ? $skipped[ $reason ] + 1 : 1;
+	}
+
+	/**
+	 * List a failure for the owner (the Recent failures list on the Growth settings screen). Never throws.
+	 *
+	 * @param string $code    Failure code.
+	 * @param array  $context Scalar facts without personal data.
+	 * @return void
+	 */
+	private static function note_failure( $code, array $context ) {
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::record( $code, $context );
+		}
 	}
 
 	/* ------------------------------------------------------------------------------------------ */
@@ -407,8 +505,8 @@ final class DoughBoss_Growth_Offline_Export {
 	}
 
 	/**
-	 * Download handler. Capability AND nonce first, then the feature flag; a bad date or a storage problem downloads
-	 * nothing.
+	 * Download handler. Capability AND nonce first, then the feature flag; a bad date, a storage problem, a lookup that
+	 * failed or a file that would be cut short downloads nothing and says why.
 	 *
 	 * @return void
 	 */
@@ -438,6 +536,10 @@ final class DoughBoss_Growth_Offline_Export {
 		$result = self::build( $stage, (int) $from, (int) $to );
 		if ( null === $result ) {
 			wp_die( esc_html__( 'The export could not be built. Nothing was downloaded.', 'doughboss-growth' ), '', array( 'response' => 500 ) );
+		}
+		$refusal = self::refusal_message( $result );
+		if ( '' !== $refusal ) {
+			wp_die( esc_html( $refusal ), '', array( 'response' => 422 ) ); // A file that only looks complete is worse than none.
 		}
 		nocache_headers();
 		if ( ! headers_sent() ) {
@@ -471,7 +573,7 @@ final class DoughBoss_Growth_Offline_Export {
 			return;
 		}
 		echo '<h3>' . esc_html__( 'Google Ads offline conversions (CSV)', 'doughboss-growth' ) . '</h3>';
-		echo '<p>' . esc_html__( 'A file of catering enquiries that were quoted or paid, with the Google click id, for upload in Google Ads under offline conversions. Only enquiries whose visitor agreed to advertising measurement and who arrived with a Google click id are included. Enquiries with no click id, with only a gbraid or wbraid id, or that were lost are left out. The value is the enquiry total held in DoughBoss. Nothing is uploaded for you.', 'doughboss-growth' ) . '</p>';
+		echo '<p>' . esc_html__( 'A file of catering enquiries that were quoted or paid, with the Google click id, for upload in Google Ads under offline conversions. Only enquiries whose visitor agreed to advertising measurement and who arrived with a Google click id are included. Enquiries with no click id, with only a gbraid or wbraid id, or that were lost are left out. The value is the enquiry total held in DoughBoss. If the file could not be made complete, nothing is downloaded and the page says why. Nothing is uploaded for you.', 'doughboss-growth' ) . '</p>';
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		echo '<input type="hidden" name="action" value="' . esc_attr( self::ACTION ) . '" />';
 		wp_nonce_field( self::ACTION );

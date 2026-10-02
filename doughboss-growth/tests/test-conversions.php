@@ -1152,7 +1152,8 @@ db_test(
 		assert_same( array(), dbgr_cv_rows(), 'a throwing enquiry lookup queued nothing' );
 
 		$GLOBALS['wpdb']->fail_on( '/FROM wp_doughboss_growth_attribution/' );
-		assert_same( array( 'ga4' => 'no_consent', 'meta' => 'no_consent' ), DoughBoss_Growth_Conversions::process_order( 17, 'purchase', '' ), 'an unreadable consent record is no consent' );
+		assert_same( array( 'ga4' => 'read_failed', 'meta' => 'read_failed' ), DoughBoss_Growth_Conversions::process_order( 17, 'purchase', '' ), 'an unreadable consent record is read_failed (the event is dropped and the failure listed), never no_consent' );
+		assert_same( array(), dbgr_cv_rows(), 'and nothing was queued (fail closed)' );
 		$GLOBALS['wpdb']->clear_failures();
 
 		$GLOBALS['wpdb']->fail_on( '/INSERT IGNORE INTO wp_doughboss_growth_outbox/' );

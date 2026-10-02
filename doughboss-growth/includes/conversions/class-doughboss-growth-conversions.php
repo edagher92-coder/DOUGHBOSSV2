@@ -20,6 +20,12 @@
  *    re-check the consent flags carried in the payload before any request is made;
  *  - the weekly Google Ads offline-conversion CSV is built by class-doughboss-growth-offline-export.php.
  *
+ * Nothing is dropped quietly (the house silence rule). The ordinary reasons for not queueing an event (not paid yet, no
+ * consent, nothing the platform could match) stay silent: they are the business working as designed. The abnormal ones
+ * (the order or enquiry cannot be found, has no usable number or amount, core's lookup is gone, the stored consent could
+ * not be read, a payload was refused) are listed in DoughBoss_Growth_Failures, and a failed read is never reported as
+ * "no consent".
+ *
  * Queued payloads hold no name, email, phone, address, notes, IP address or user agent. Hashed email and phone are only
  * ever added for Meta, only when the send_hashed_identifiers setting is on AND the visitor gave advertising consent.
  * Money is held as integer cents and converted to a decimal AUD number once, in the handler. The filter
@@ -86,6 +92,14 @@ final class DoughBoss_Growth_Conversions {
 		'ga4'  => array( 'purchase', 'refund', 'generate_lead' ),
 		'meta' => array( 'purchase', 'generate_lead' ),
 	);
+
+	/**
+	 * Skip reasons that mean something is wrong with the data or the system, not with the business case: each is listed
+	 * as a failure (conversion_skipped_<reason>) so the owner sees it. Every other reason (inactive, bad_input, not_paid,
+	 * not_a_refund_of_a_paid_order and the per-channel no_consent, no_match_keys, not_configured, duplicate) is normal and
+	 * silent.
+	 */
+	const ABNORMAL_SKIPS = array( 'no_order', 'no_order_number', 'no_valid_amount', 'no_core_accessor', 'no_enquiry', 'no_enquiry_number' );
 
 	/* ------------------------------------------------------------------------------------------ */
 	/* Wiring                                                                                       */
@@ -206,7 +220,8 @@ final class DoughBoss_Growth_Conversions {
 	 * @param string $event    purchase or refund.
 	 * @param string $previous Previous payment status (a refund needs "paid").
 	 * @return array Channel => status (queued, duplicate, rejected, error, no_consent, not_configured, no_match_keys,
-	 *               unsupported), or array( 'skipped' => reason ) when nothing could be considered.
+	 *               unsupported, read_failed), or array( 'skipped' => reason ) when nothing could be considered. read_failed
+	 *               means the stored consent could not be read: the event was NOT judged and NOT queued (it is not no_consent).
 	 */
 	public static function process_order( $order_id, $event, $previous ) {
 		$id = is_numeric( $order_id ) ? (int) $order_id : 0;
@@ -216,9 +231,12 @@ final class DoughBoss_Growth_Conversions {
 		if ( ! self::active() ) {
 			return array( 'skipped' => 'inactive' );
 		}
+		if ( ! self::core_accessor( 'DoughBoss_Order' ) ) {
+			return self::skipped( 'no_core_accessor', $event );
+		}
 		$order = self::load_order( $id );
 		if ( null === $order ) {
-			return array( 'skipped' => 'no_order' );
+			return self::skipped( 'no_order', $event );
 		}
 		$status = ( isset( $order->payment_status ) && is_string( $order->payment_status ) ) ? $order->payment_status : '';
 		if ( 'purchase' === $event && 'paid' !== $status ) {
@@ -229,12 +247,15 @@ final class DoughBoss_Growth_Conversions {
 		}
 		$number = self::clean_ref( isset( $order->order_number ) ? $order->order_number : '' );
 		if ( '' === $number ) {
-			return array( 'skipped' => 'no_order_number' );
+			return self::skipped( 'no_order_number', $event );
 		}
 		$currency = ( isset( $order->currency ) && is_string( $order->currency ) ) ? strtoupper( trim( $order->currency ) ) : '';
 		$cents    = self::to_cents( isset( $order->total ) ? $order->total : null );
 		if ( self::CURRENCY !== $currency || null === $cents || $cents < 1 ) {
-			return array( 'skipped' => 'no_valid_amount' );
+			if ( self::CURRENCY === $currency && 0 === $cents ) {
+				return array( 'skipped' => 'no_valid_amount' ); // A genuine zero total (a fully discounted order) is not a purchase, and not a fault.
+			}
+			return self::skipped( 'no_valid_amount', $event ); // An amount or currency core did not give us in a readable form.
 		}
 		$base    = array(
 			'v'              => self::PAYLOAD_VERSION,
@@ -266,13 +287,16 @@ final class DoughBoss_Growth_Conversions {
 		if ( ! self::active() ) {
 			return array( 'skipped' => 'inactive' );
 		}
+		if ( ! self::core_accessor( 'DoughBoss_Catering' ) ) {
+			return self::skipped( 'no_core_accessor', 'generate_lead' );
+		}
 		$enquiry = self::load_enquiry( $id );
 		if ( null === $enquiry ) {
-			return array( 'skipped' => 'no_enquiry' );
+			return self::skipped( 'no_enquiry', 'generate_lead' );
 		}
 		$number = self::clean_ref( isset( $enquiry['enquiry_number'] ) ? $enquiry['enquiry_number'] : '' );
 		if ( '' === $number ) {
-			return array( 'skipped' => 'no_enquiry_number' );
+			return self::skipped( 'no_enquiry_number', 'generate_lead' );
 		}
 		$base    = array(
 			'v'          => self::PAYLOAD_VERSION,
@@ -287,6 +311,43 @@ final class DoughBoss_Growth_Conversions {
 			'phone' => isset( $enquiry['customer_phone'] ) ? $enquiry['customer_phone'] : '',
 		);
 		return self::queue( $base, 'enquiry', $id, $contact );
+	}
+
+	/**
+	 * Whether core's accessor class and its get() method exist (a core change can remove either).
+	 *
+	 * @param string $class Core class name.
+	 * @return bool
+	 */
+	private static function core_accessor( $class ) {
+		return class_exists( $class ) && is_callable( array( $class, 'get' ) );
+	}
+
+	/**
+	 * A skip result. An abnormal reason (see ABNORMAL_SKIPS) is also listed as a failure, with only the event name as context.
+	 *
+	 * @param string $reason Skip reason.
+	 * @param string $event  purchase, refund or generate_lead.
+	 * @return array array( 'skipped' => reason ).
+	 */
+	private static function skipped( $reason, $event ) {
+		if ( in_array( $reason, self::ABNORMAL_SKIPS, true ) ) {
+			self::note_failure( 'conversion_skipped_' . $reason, array( 'event' => $event ) );
+		}
+		return array( 'skipped' => $reason );
+	}
+
+	/**
+	 * List a failure for the owner (the Recent failures list on the Growth settings screen). Never throws.
+	 *
+	 * @param string $code    Failure code.
+	 * @param array  $context Scalar facts without personal data.
+	 * @return void
+	 */
+	private static function note_failure( $code, array $context ) {
+		if ( class_exists( 'DoughBoss_Growth_Failures', false ) ) {
+			DoughBoss_Growth_Failures::record( $code, $context );
+		}
 	}
 
 	/**
@@ -347,6 +408,21 @@ final class DoughBoss_Growth_Conversions {
 	 */
 	private static function queue( array $base, $subject_type, $subject_id, array $contact ) {
 		$stored = self::stored_subject( $subject_type, $subject_id );
+		if ( false === $stored ) {
+			// The stored consent could not be read. The event is neither queued nor judged: this is NOT "no consent".
+			self::note_failure(
+				'conversion_read_failed',
+				array(
+					'event' => $base['event'],
+					'stage' => 'attribution',
+				)
+			);
+			$out = array();
+			foreach ( self::CHANNELS as $channel ) {
+				$out[ $channel ] = 'read_failed';
+			}
+			return $out;
+		}
 		if ( null === $stored ) {
 			return array(
 				'ga4'  => 'no_consent',
@@ -361,17 +437,21 @@ final class DoughBoss_Growth_Conversions {
 	}
 
 	/**
-	 * The attribution and consent record stored with an order or enquiry (WP-04), or null when there is none.
+	 * The attribution and consent record stored with an order or enquiry (WP-04).
 	 *
 	 * @param string $subject_type order or enquiry.
 	 * @param int    $subject_id   Subject id.
-	 * @return array|null
+	 * @return array|null|false The record; null when there is none (the visitor gave no consent record, which is ordinary);
+	 *                          false when it could not be read (the database failed, or the attribution module is missing).
 	 */
 	private static function stored_subject( $subject_type, $subject_id ) {
 		if ( ! class_exists( 'DoughBoss_Growth_Attribution', false ) && ! DoughBoss_Growth::load_module( 'attribution' ) ) {
-			return null;
+			return false;
 		}
 		$stored = DoughBoss_Growth_Attribution::for_subject( $subject_type, $subject_id );
+		if ( false === $stored ) {
+			return false;
+		}
 		if ( ! is_array( $stored ) || ! isset( $stored['consent'] ) || ! is_array( $stored['consent'] ) ) {
 			return null;
 		}
@@ -420,6 +500,15 @@ final class DoughBoss_Growth_Conversions {
 
 		$checked = self::validate_payload( $payload, $channel );
 		if ( null === $checked ) {
+			// Built by this class from verified fields, so a refusal here is a fault (or a core row of an unexpected shape).
+			self::note_failure(
+				'conversion_payload_rejected',
+				array(
+					'channel' => $channel,
+					'event'   => $base['event'],
+					'stage'   => 'validate',
+				)
+			);
 			return 'rejected';
 		}
 		$filtered = apply_filters( 'doughboss_growth_conversion_payload', $checked, $channel, $checked['event'] );
@@ -441,6 +530,15 @@ final class DoughBoss_Growth_Conversions {
 				array(
 					'channel' => $channel,
 					'event'   => $final['event'],
+				)
+			);
+		} elseif ( 'rejected' === $status ) {
+			self::note_failure(
+				'conversion_payload_rejected',
+				array(
+					'channel' => $channel,
+					'event'   => $final['event'],
+					'stage'   => 'enqueue',
 				)
 			);
 		}
@@ -737,6 +835,64 @@ final class DoughBoss_Growth_Conversions {
 	}
 
 	/**
+	 * Outbox rows that need a person, for EVERY channel in the queue (this module's two and the waitlist's), by channel and
+	 * last error: rows given up on (failed_terminal) and rows that have been waiting over an hour (a retry in progress is
+	 * normally minutes, so an hour means something is stuck). last_error is an error code already redacted by the outbox.
+	 *
+	 * @return array|null List of array( channel, status, last_error, n ), empty when the queue is healthy, or null when it
+	 *                    could not be read (the caller must say so rather than show a quiet queue).
+	 */
+	private static function queue_problems() {
+		global $wpdb;
+		$table  = DoughBoss_Growth_Outbox::table();
+		$cutoff = gmdate( 'Y-m-d H:i:s', DoughBoss_Growth::now() - HOUR_IN_SECONDS );
+		$rows   = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare(
+				"SELECT channel, status, last_error, COUNT(*) AS n FROM {$table} WHERE status = %s OR ( status = %s AND created_at < %s ) GROUP BY channel, status, last_error ORDER BY channel, status, n DESC LIMIT 60", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name built from the WordPress prefix and a constant.
+				'failed_terminal',
+				'pending',
+				$cutoff
+			),
+			ARRAY_A
+		);
+		if ( ! is_array( $rows ) || '' !== (string) $wpdb->last_error ) {
+			return null;
+		}
+		return $rows;
+	}
+
+	/**
+	 * The notice above the queue counts: which channels have messages that were given up on or are stuck, with the last
+	 * error. Shown for every channel, not only ga4 and meta. When the check itself cannot run it says so.
+	 *
+	 * @return void
+	 */
+	private static function render_queue_problems() {
+		$problems = self::queue_problems();
+		if ( null === $problems ) {
+			echo '<div class="notice notice-warning inline" data-dbgr-queue-problems><p>' . esc_html__( 'The queue could not be checked for messages that did not go through, so the counts below may not show everything.', 'doughboss-growth' ) . '</p></div>';
+			return;
+		}
+		if ( array() === $problems ) {
+			return;
+		}
+		echo '<div class="notice notice-error inline" data-dbgr-queue-problems><p><strong>' . esc_html__( 'Some messages to Google, Meta or other services did not go through.', 'doughboss-growth' ) . '</strong></p><ul class="ul-disc">';
+		foreach ( $problems as $row ) {
+			$n     = max( 1, (int) $row['n'] );
+			$error = ( '' !== (string) $row['last_error'] ) ? (string) $row['last_error'] : __( 'none recorded', 'doughboss-growth' );
+			if ( 'failed_terminal' === $row['status'] ) {
+				/* translators: 1: number of messages, 2: the last error recorded. */
+				$text = sprintf( _n( '%1$d message was given up on and will not be sent again (last error: %2$s).', '%1$d messages were given up on and will not be sent again (last error: %2$s).', $n, 'doughboss-growth' ), $n, $error );
+			} else {
+				/* translators: 1: number of messages, 2: the last error recorded. */
+				$text = sprintf( _n( '%1$d message has been waiting for over an hour (last error: %2$s).', '%1$d messages have been waiting for over an hour (last error: %2$s).', $n, 'doughboss-growth' ), $n, $error );
+			}
+			echo '<li><code>' . esc_html( (string) $row['channel'] ) . '</code> ' . esc_html( $text ) . '</li>';
+		}
+		echo '</ul></div>';
+	}
+
+	/**
 	 * Render the tab: status, queue counts, gaps and the offline export form. Secrets are never shown, only whether
 	 * each is set.
 	 *
@@ -759,6 +915,7 @@ final class DoughBoss_Growth_Conversions {
 
 		$counts = self::outbox_counts();
 		echo '<h3>' . esc_html__( 'Queue', 'doughboss-growth' ) . '</h3>';
+		self::render_queue_problems();
 		if ( null === $counts ) {
 			echo '<p>' . esc_html__( 'The queue could not be read.', 'doughboss-growth' ) . '</p>';
 		} elseif ( array() === $counts ) {
