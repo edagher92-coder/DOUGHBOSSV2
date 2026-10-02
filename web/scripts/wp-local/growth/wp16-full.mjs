@@ -63,7 +63,9 @@ const countWorkingName = (text) => (text.match(WORKING_NAME) || []).length;
 
 const DUMMY = {
   gtm: "GTM-TEST123", // a dummy container id; the request for it is aborted by this script
-  webhook: "https://hooks.example-receiver.com.au/never-called", // never called: the runtime has WP-Cron disabled and no order is placed
+  webhook: "https://hooks.example-receiver.com.au/never-called", // waitlist notification only; NOT a conversion destination (Settings::destination_configured), never called
+  ga4Id: "G-TEST0000", // obviously fake GA4 measurement id, valid for /^G-[A-Z0-9]{4,20}$/D; the conversion destination for server_conversions
+  ga4Secret: "wp16-dummy-not-a-real-secret", // defined as a constant in the scratch file (the plugin reads env or constant); the outbound guard refuses every request that would use it
   sender: "Example Trading Pty Ltd", // placeholder used only on this throwaway site
   privacy: "/privacy-policy/",
 };
@@ -276,6 +278,25 @@ try {
 /** WP-16 SCRATCH (runtime copy only, never in the source tree). Two fake-address shops and test packages through core's own classes. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 add_filter( 'option_blog_public', function () { return '1'; } );
+// Dummy GA4 API secret so a GA4 destination counts as configured. Fake value; never leaves the machine (see the guard below).
+if ( ! defined( 'DOUGHBOSS_GROWTH_GA4_API_SECRET' ) ) { define( 'DOUGHBOSS_GROWTH_GA4_API_SECRET', '${DUMMY.ga4Secret}' ); }
+// OUTBOUND GUARD: every server-side HTTP request to a non-local host is recorded (host + path only, no query or body) and REFUSED
+// before any socket is opened. Registered at priority 0 so nothing runs ahead of it.
+add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
+	$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+	if ( in_array( $host, array( '127.0.0.1', 'localhost', '::1', '[::1]' ), true ) ) { return $pre; }
+	$log   = get_option( 'wp16_http_attempts', array() );
+	$log[] = array( 'host' => $host, 'path' => (string) wp_parse_url( $url, PHP_URL_PATH ), 'method' => isset( $args['method'] ) ? $args['method'] : 'GET', 'probe' => 'wp16-probe.invalid' === $host );
+	update_option( 'wp16_http_attempts', $log, false );
+	return new WP_Error( 'wp16_blocked', 'WP-16 runtime refuses all external HTTP' );
+}, 0, 3 );
+add_action( 'init', function () {
+	if ( ! isset( $_GET['wp16_http'] ) || ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) { return; }
+	$probe = wp_remote_get( 'https://wp16-probe.invalid/probe' ); // proves the guard is live: must come back as our WP_Error
+	header( 'Content-Type: application/json' );
+	echo wp_json_encode( array( 'probe_refused' => is_wp_error( $probe ) && 'wp16_blocked' === $probe->get_error_code(), 'attempts' => get_option( 'wp16_http_attempts', array() ) ) );
+	exit;
+} );
 add_action( 'init', function () {
 	if ( ! isset( $_GET['wp16_seed'] ) || ! is_user_logged_in() || ! current_user_can( 'manage_options' ) || ! class_exists( 'DoughBoss_Locations' ) ) { return; }
 	$have = array();
@@ -386,8 +407,8 @@ add_action( 'init', function () {
       },
     },
     server_conversions: {
-      fields: { "dbgr[features][attribution]": "1", "dbgr[features][server_conversions]": "1", "dbgr[notify_webhook_url]": DUMMY.webhook },
-      prereq: "attribution (and a destination: the never-called webhook URL)",
+      fields: { "dbgr[features][attribution]": "1", "dbgr[features][server_conversions]": "1", "dbgr[ga4_measurement_id]": DUMMY.ga4Id },
+      prereq: "attribution (and a conversion destination: a dummy GA4 measurement id plus the dummy API secret constant from the scratch file; the outbound guard refuses any request)",
       tab: "&tab=conversions",
       expect: async () => {
         h = await health(adminContext);
@@ -520,7 +541,7 @@ add_action( 'init', function () {
   await saveSettings(adminContext, {});
 
   /* ---------- C: all together ---------- */
-  const ALL = { ...Object.fromEntries(FLAGS.map((f) => [`dbgr[features][${f}]`, "1"])), "dbgr[gtm_container_id]": DUMMY.gtm, "dbgr[consent_default]": "deny", "dbgr[privacy_policy_url]": DUMMY.privacy, "dbgr[sender_legal_name]": DUMMY.sender, "dbgr[notify_webhook_url]": DUMMY.webhook };
+  const ALL = { ...Object.fromEntries(FLAGS.map((f) => [`dbgr[features][${f}]`, "1"])), "dbgr[gtm_container_id]": DUMMY.gtm, "dbgr[consent_default]": "deny", "dbgr[privacy_policy_url]": DUMMY.privacy, "dbgr[sender_legal_name]": DUMMY.sender, "dbgr[notify_webhook_url]": DUMMY.webhook, "dbgr[ga4_measurement_id]": DUMMY.ga4Id };
   const savedAll = await saveSettings(adminContext, ALL);
   h = await health(adminContext);
   record("C every flag switched on together: all eleven effective", savedAll.status === 302 && FLAGS.every((f) => h.flags[f] === true), FLAGS.filter((f) => h.flags[f] !== true).join(","));
@@ -593,6 +614,15 @@ add_action( 'init', function () {
   const diffAll = differences(R0, after);
   record("D all flags off and the landing pages drafted: every public page is BYTE-IDENTICAL to the flags-off reference", Object.values(h.flags).every((v) => v === false) && diffAll.length === 0, diffAll.join("; "));
 
+  /* ---------- outbound guard: nothing may have left the machine (flags were on in B and C) ---------- */
+  {
+    const g = await (await adminContext.request.get(`${BASE}/?wp16_http=1`)).json().catch(() => null);
+    const attempts = g ? g.attempts.filter((a) => !a.probe) : null;
+    record("OUTBOUND guard is live: a probe request to a non-local host was refused by the runtime filter", !!g && g.probe_refused === true);
+    record("OUTBOUND server-side requests that reached the network: 0 (every non-local attempt was recorded and refused)", !!g && g.probe_refused === true, `attempts recorded and refused (excluding the probe): ${attempts ? attempts.length : "unknown"}${attempts && attempts.length ? " -> " + attempts.map((a) => `${a.method} ${a.host}${a.path}`).join("; ") : ""}`);
+    note(`outbound attempts (recorded and refused, probe excluded) after phases A-D: ${attempts ? attempts.length : "unknown"}`);
+  }
+
   /* ---------- E: deactivate and reactivate ---------- */
   await saveSettings(adminContext, { "dbgr[features][landing_pages]": "1" });
   for (const p of await landingPages(adminContext)) await setStatus(adminContext, p.id, "publish");
@@ -625,6 +655,13 @@ add_action( 'init', function () {
   for (const id of Object.values(created)) await deletePage(adminContext, id);
   h = await health(adminContext);
   record("cleanup: every flag off, plugin active, throwaway pages deleted, landing pages drafts", Object.values(h.flags).every((v) => v === false));
+
+  {
+    const g = await (await adminContext.request.get(`${BASE}/?wp16_http=1`)).json().catch(() => null);
+    const attempts = g ? g.attempts.filter((a) => !a.probe) : null;
+    record("OUTBOUND whole run (A-E and cleanup): every non-local server-side request was recorded and refused, none reached the network", !!g && g.probe_refused === true, `attempts: ${attempts ? attempts.length : "unknown"}${attempts && attempts.length ? " -> " + attempts.map((a) => `${a.method} ${a.host}${a.path}`).join("; ") : ""}`);
+    note(`outbound attempts (recorded and refused, probe excluded) whole run: ${attempts ? attempts.length : "unknown"}`);
+  }
 
   const logAfter = logPath ? logSize(logPath) : null;
   if (logPath && logBefore !== null) {
