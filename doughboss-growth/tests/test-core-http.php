@@ -117,6 +117,31 @@ db_test(
 );
 
 db_test(
+	'http request: header names must be plain tokens and values lose line breaks (no header injection)',
+	function () {
+		$seen = null;
+		dbgr_test_http_expect(
+			'https://api.example-receiver.com.au/h',
+			function ( $url, $args ) use ( &$seen ) {
+				$seen = $args;
+				return dbgr_test_http_response( 200, 'ok' );
+			},
+			array( 'times' => 0 )
+		);
+		DoughBoss_Growth_Http::request( 'GET', 'https://api.example-receiver.com.au/h', array( 'headers' => array( 'X-Ok' => "value\r\nX-Injected: yes" ) ) );
+		assert_same( 'valueX-Injected: yes', $seen['headers']['X-Ok'], 'CR and LF are stripped from a header value (no second header can start)' );
+		$calls_before = count( dbgr_test_http_calls() );
+		foreach ( array( "X-Bad\r\nInjected" => 'v', 'Bad Name' => 'v', '' => 'v', 0 => 'v' ) as $name => $value ) {
+			$result = DoughBoss_Growth_Http::request( 'GET', 'https://api.example-receiver.com.au/h', array( 'headers' => array( $name => $value ) ) );
+			assert_same( 'header_not_allowed', $result['error'], 'refused header name ' . var_export( $name, true ) );
+		}
+		$result = DoughBoss_Growth_Http::request( 'GET', 'https://api.example-receiver.com.au/h', array( 'headers' => array( 'X-Arr' => array( 'a' ) ) ) );
+		assert_same( 'header_not_allowed', $result['error'], 'a non-scalar header value is refused' );
+		assert_same( $calls_before, count( dbgr_test_http_calls() ), 'no refused request reached the transport' );
+	}
+);
+
+db_test(
 	'http request: failures are classified (retryable vs not) and transport errors never carry the error text',
 	function () {
 		dbgr_test_http_expect( 'https://api.example-receiver.com.au/a', dbgr_test_http_response( 500, 'boom' ) );

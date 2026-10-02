@@ -99,7 +99,17 @@ final class DoughBoss_Growth_Http {
 			return $result;
 		}
 
-		$headers = ( isset( $args['headers'] ) && is_array( $args['headers'] ) ) ? $args['headers'] : array();
+		$headers = array();
+		$given   = ( isset( $args['headers'] ) && is_array( $args['headers'] ) ) ? $args['headers'] : array();
+		foreach ( $given as $name => $value ) {
+			// A header name must be a plain token and a value a scalar without line breaks (no header injection).
+			if ( ! is_string( $name ) || 1 !== preg_match( '/^[A-Za-z0-9-]{1,64}$/D', $name ) || ! is_scalar( $value ) ) {
+				$result['error'] = 'header_not_allowed';
+				self::log( 'http_refused', array( 'method' => $method, 'url' => self::redact_url( $url ), 'error' => 'header_not_allowed' ) );
+				return $result;
+			}
+			$headers[ $name ] = str_replace( array( "\r", "\n", "\0" ), '', (string) $value );
+		}
 		$body    = isset( $args['body'] ) ? $args['body'] : null;
 		if ( array_key_exists( 'json', $args ) ) {
 			$encoded = wp_json_encode( $args['json'] );

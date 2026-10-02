@@ -2085,8 +2085,10 @@ if ( ! function_exists( 'register_rest_route' ) ) {
 }
 
 /**
- * Dispatch a request to a registered REST route, running the permission callback and argument
- * validation/sanitising like the real server. Returns a WP_REST_Response (errors are converted).
+ * Dispatch a request to a registered REST route, in the order the real REST server uses:
+ * rest_pre_dispatch, route and method match, required / validated / sanitised arguments,
+ * rest_request_before_callbacks, the permission callback, the callback, rest_request_after_callbacks,
+ * rest_post_dispatch. Returns a WP_REST_Response (errors are converted).
  *
  * @param string $method  HTTP method.
  * @param string $route   Full route, for example /doughboss-growth/v1/health.
@@ -2096,7 +2098,19 @@ if ( ! function_exists( 'register_rest_route' ) ) {
  * @return WP_REST_Response
  */
 function dbgr_test_rest_dispatch( $method, $route, array $params = array(), array $headers = array(), $body = '' ) {
-	$method = strtoupper( $method );
+	$method  = strtoupper( $method );
+	$request = new WP_REST_Request( $method, $route );
+	foreach ( $params as $key => $value ) {
+		$request->set_param( $key, $value );
+	}
+	$request->set_headers( $headers );
+	$request->set_body( $body );
+
+	$pre = apply_filters( 'rest_pre_dispatch', null, null, $request );
+	if ( null !== $pre ) {
+		return dbgr_test_rest_finish( $pre, $request );
+	}
+
 	foreach ( $GLOBALS['dbgr_rest_routes'] as $pattern => $endpoints ) {
 		if ( 1 !== preg_match( '#^' . $pattern . '$#', $route, $matches ) ) {
 			continue;
@@ -2106,32 +2120,20 @@ function dbgr_test_rest_dispatch( $method, $route, array $params = array(), arra
 			if ( ! in_array( $method, $allowed, true ) ) {
 				continue;
 			}
-			$request = new WP_REST_Request( $method, $route );
-			foreach ( $params as $key => $value ) {
-				$request->set_param( $key, $value );
-			}
 			foreach ( $matches as $key => $value ) {
 				if ( is_string( $key ) ) {
 					$request->set_param( $key, $value );
 				}
 			}
-			$request->set_headers( $headers );
-			$request->set_body( $body );
 
-			if ( isset( $endpoint['permission_callback'] ) ) {
-				$permitted = call_user_func( $endpoint['permission_callback'], $request );
-				if ( is_wp_error( $permitted ) ) {
-					return dbgr_test_error_response( $permitted );
-				}
-				if ( ! $permitted ) {
-					return new WP_REST_Response( array( 'code' => 'rest_forbidden', 'message' => 'Sorry, you are not allowed to do that.', 'data' => array( 'status' => rest_authorization_required_code() ) ), rest_authorization_required_code() );
-				}
-			}
+			// 1. Arguments: required, validated, sanitised (before any permission check, as WordPress does).
+			$result = null;
 			if ( isset( $endpoint['args'] ) && is_array( $endpoint['args'] ) ) {
 				foreach ( $endpoint['args'] as $name => $spec ) {
 					if ( ! $request->has_param( $name ) ) {
 						if ( ! empty( $spec['required'] ) ) {
-							return new WP_REST_Response( array( 'code' => 'rest_missing_callback_param', 'message' => 'Missing parameter(s): ' . $name, 'data' => array( 'status' => 400 ) ), 400 );
+							$result = new WP_Error( 'rest_missing_callback_param', 'Missing parameter(s): ' . $name, array( 'status' => 400 ) );
+							break;
 						}
 						if ( array_key_exists( 'default', $spec ) ) {
 							$request->set_param( $name, $spec['default'] );
@@ -2139,21 +2141,52 @@ function dbgr_test_rest_dispatch( $method, $route, array $params = array(), arra
 						continue;
 					}
 					if ( isset( $spec['validate_callback'] ) && ! call_user_func( $spec['validate_callback'], $request->get_param( $name ), $request, $name ) ) {
-						return new WP_REST_Response( array( 'code' => 'rest_invalid_param', 'message' => 'Invalid parameter(s): ' . $name, 'data' => array( 'status' => 400 ) ), 400 );
+						$result = new WP_Error( 'rest_invalid_param', 'Invalid parameter(s): ' . $name, array( 'status' => 400 ) );
+						break;
 					}
 					if ( isset( $spec['sanitize_callback'] ) ) {
 						$request->set_param( $name, call_user_func( $spec['sanitize_callback'], $request->get_param( $name ), $request, $name ) );
 					}
 				}
 			}
-			$result = call_user_func( $endpoint['callback'], $request );
-			if ( is_wp_error( $result ) ) {
-				return dbgr_test_error_response( $result );
+
+			// 2. rest_request_before_callbacks sees the response so far (null, or an argument error).
+			$result = apply_filters( 'rest_request_before_callbacks', $result, $endpoint, $request );
+
+			// 3. Permission, then the callback.
+			if ( ! is_wp_error( $result ) && null === $result ) {
+				if ( isset( $endpoint['permission_callback'] ) ) {
+					$permitted = call_user_func( $endpoint['permission_callback'], $request );
+					if ( is_wp_error( $permitted ) ) {
+						$result = $permitted;
+					} elseif ( ! $permitted ) {
+						$result = new WP_Error( 'rest_forbidden', 'Sorry, you are not allowed to do that.', array( 'status' => rest_authorization_required_code() ) );
+					}
+				}
+				if ( null === $result ) {
+					$result = call_user_func( $endpoint['callback'], $request );
+				}
 			}
-			return rest_ensure_response( $result );
+
+			// 4. rest_request_after_callbacks, then conversion and rest_post_dispatch.
+			$result = apply_filters( 'rest_request_after_callbacks', $result, $endpoint, $request );
+			return dbgr_test_rest_finish( $result, $request );
 		}
 	}
-	return new WP_REST_Response( array( 'code' => 'rest_no_route', 'message' => 'No route was found matching the URL and request method.', 'data' => array( 'status' => 404 ) ), 404 );
+	return dbgr_test_rest_finish( new WP_Error( 'rest_no_route', 'No route was found matching the URL and request method.', array( 'status' => 404 ) ), $request );
+}
+
+/**
+ * Turn a callback result into a response and run rest_post_dispatch.
+ *
+ * @param mixed           $result  Result, WP_Error or response.
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function dbgr_test_rest_finish( $result, $request ) {
+	$response = is_wp_error( $result ) ? dbgr_test_error_response( $result ) : rest_ensure_response( $result );
+	$filtered = apply_filters( 'rest_post_dispatch', $response, null, $request );
+	return ( $filtered instanceof WP_REST_Response ) ? $filtered : $response;
 }
 
 /**
