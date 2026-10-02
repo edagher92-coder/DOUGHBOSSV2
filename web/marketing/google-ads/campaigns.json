@@ -1,0 +1,758 @@
+{
+  "_status": "DRAFT. Nothing here exists in any Google Ads account. Every campaign and ad group launches PAUSED and a human stages it after review.",
+  "account": {
+    "naming": "Campaign: 'DB | Search | <Segment> <Offer>'. Ad group: '<CODE> | <Theme>' where CODE is CORP, EVNT, LOCL, BRND or MINI. Labels: wave-1, wave-2, hold, later.",
+    "currency": "AUD",
+    "timezone": "Australia/Sydney",
+    "auto_tagging": true,
+    "final_url_format": "Final URLs carry no UTMs. The campaign tracking template adds them with ValueTrack ({lpurl}, {keyword}); gclid arrives by auto-tagging.",
+    "account_level_negatives": "see negatives.csv, level=account"
+  },
+  "campaigns": [
+    {
+      "name": "DB | Search | Corporate Office Catering",
+      "status": "paused",
+      "type": "SEARCH",
+      "phase": "launch",
+      "goal": "leads",
+      "primary_conversion": "generate_lead:catering_enquiry",
+      "networks": {
+        "search": true,
+        "search_partners": false,
+        "display": false
+      },
+      "languages": [
+        "en"
+      ],
+      "location_targeting": {
+        "mode": "suburb list or radius around each store, chosen after delivery area is confirmed",
+        "positive_geo_target_type": "PRESENCE",
+        "negative_geo_target_type": "PRESENCE",
+        "stores": [
+          {
+            "slug": "revesby",
+            "address": "12/25 Selems Parade, Revesby NSW 2212"
+          },
+          {
+            "slug": "bankstown",
+            "address": "462 Chapel Rd, Bankstown NSW 2200"
+          },
+          {
+            "slug": "roselands",
+            "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+          }
+        ],
+        "radius_km": "[CONFIRM: radius from delivery area]",
+        "radius_note": "Starting hypothesis only, never a fact: begin no wider than the delivery area Elie confirms and widen only on search-terms evidence.",
+        "suburb_list_hypothesis": [
+          "Revesby",
+          "Padstow",
+          "Panania",
+          "Milperra",
+          "Condell Park",
+          "Bankstown",
+          "Roselands",
+          "Lakemba"
+        ],
+        "suburb_list_source": "marketing/keywords.csv local themes (demand terms, not a delivery promise)"
+      },
+      "ad_schedule": {
+        "form_enquiries": "all hours (the form takes enquiries when the shops are shut)",
+        "call_assets": "store opening hours only (typed store data), and only for numbers someone answers",
+        "bid_adjustments": "none at launch; set only after 4 weeks of hour-of-day conversion data",
+        "enquiry_handling_hours": "[CONFIRM: who answers and when]"
+      },
+      "bidding": {
+        "phase": 1,
+        "strategy": "MANUAL_CPC",
+        "max_cpc_aud": "[CONFIRM: max CPC from break-even maths]",
+        "enhanced_cpc": false,
+        "next": "MAXIMIZE_CONVERSIONS after tracking is verified and the campaign has recorded conversions, then TARGET_CPA when the last 30 days hold roughly 30 conversions (Google evaluation guidance)"
+      },
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
+          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "clicks_per_day_needed = leads_per_day_wanted / lead_conversion_rate",
+          "check: daily_budget >= clicks_per_day_needed x expected_avg_cpc"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: average catering order value]",
+          "[CONFIRM: gross margin %]",
+          "[CONFIRM: lead to won rate]",
+          "[CONFIRM: monthly lead goal]",
+          "[CONFIRM: expected CPC, from Keyword Planner after the account exists]",
+          "[CONFIRM: total monthly ads budget ceiling]"
+        ]
+      },
+      "keyword_match_types_at_launch": [
+        "phrase",
+        "exact"
+      ],
+      "broad_match": "off",
+      "ai_max_and_final_url_expansion": "off",
+      "auto_apply_recommendations": "off",
+      "dynamic_search_ads": "off",
+      "eu_political_advertising": "does_not_contain",
+      "tracking_template": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=corporate-office-catering-southwest&utm_content=rsa-v1&utm_term={keyword}",
+      "utm_campaign": "corporate-office-catering-southwest",
+      "auto_tagging": true,
+      "ad_groups": [
+        {
+          "name": "CORP | Corporate Catering",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Corporate catering head terms",
+          "final_url": "https://doughboss.com.au/catering/corporate",
+          "path1": "catering",
+          "path2": "corporate",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "CORP | Office Catering",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Office catering",
+          "final_url": "https://doughboss.com.au/catering/corporate",
+          "path1": "catering",
+          "path2": "office",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "CORP | Staff And Team Lunch",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "theme": "Staff and team lunch, including weekly",
+          "final_url": "https://doughboss.com.au/catering/corporate",
+          "path1": "catering",
+          "path2": "team-lunch",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "CORP | Drop-Off And Boxed Lunch",
+          "status": "paused",
+          "hold": true,
+          "hold_reason": "Hold until Elie confirms catering drop-off or delivery is offered and where. Copy only says 'ask about', but searchers want a yes or no.",
+          "launch_wave": 2,
+          "theme": "Drop-off, boxed lunch and delivery-intent terms",
+          "final_url": "https://doughboss.com.au/catering/corporate",
+          "path1": "catering",
+          "path2": "boxed-lunch",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "CORP | Meeting And Boardroom",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "theme": "Meeting and boardroom catering",
+          "final_url": "https://doughboss.com.au/catering/corporate",
+          "path1": "catering",
+          "path2": "meetings",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "CORP | Office Christmas Party",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Office Christmas and end-of-year party catering (seasonal)",
+          "final_url": "https://doughboss.com.au/catering/corporate",
+          "path1": "catering",
+          "path2": "christmas",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "CORP | Office Breakfast And Morning Tea",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Office breakfast, morning tea and breakfast meetings",
+          "final_url": "https://doughboss.com.au/catering/office-breakfast",
+          "path1": "catering",
+          "path2": "breakfast",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        }
+      ]
+    },
+    {
+      "name": "DB | Search | Event Function Catering",
+      "status": "paused",
+      "type": "SEARCH",
+      "phase": "launch",
+      "goal": "leads",
+      "primary_conversion": "generate_lead:catering_enquiry",
+      "networks": {
+        "search": true,
+        "search_partners": false,
+        "display": false
+      },
+      "languages": [
+        "en"
+      ],
+      "location_targeting": {
+        "mode": "suburb list or radius around each store, chosen after delivery area is confirmed",
+        "positive_geo_target_type": "PRESENCE",
+        "negative_geo_target_type": "PRESENCE",
+        "stores": [
+          {
+            "slug": "revesby",
+            "address": "12/25 Selems Parade, Revesby NSW 2212"
+          },
+          {
+            "slug": "bankstown",
+            "address": "462 Chapel Rd, Bankstown NSW 2200"
+          },
+          {
+            "slug": "roselands",
+            "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+          }
+        ],
+        "radius_km": "[CONFIRM: radius from delivery area]",
+        "radius_note": "Starting hypothesis only, never a fact: begin no wider than the delivery area Elie confirms and widen only on search-terms evidence.",
+        "suburb_list_hypothesis": [
+          "Revesby",
+          "Padstow",
+          "Panania",
+          "Milperra",
+          "Condell Park",
+          "Bankstown",
+          "Roselands",
+          "Lakemba"
+        ],
+        "suburb_list_source": "marketing/keywords.csv local themes (demand terms, not a delivery promise)"
+      },
+      "ad_schedule": {
+        "form_enquiries": "all hours (the form takes enquiries when the shops are shut)",
+        "call_assets": "store opening hours only (typed store data), and only for numbers someone answers",
+        "bid_adjustments": "none at launch; set only after 4 weeks of hour-of-day conversion data",
+        "enquiry_handling_hours": "[CONFIRM: who answers and when]"
+      },
+      "bidding": {
+        "phase": 1,
+        "strategy": "MANUAL_CPC",
+        "max_cpc_aud": "[CONFIRM: max CPC from break-even maths]",
+        "enhanced_cpc": false,
+        "next": "MAXIMIZE_CONVERSIONS after tracking is verified and the campaign has recorded conversions, then TARGET_CPA when the last 30 days hold roughly 30 conversions (Google evaluation guidance)"
+      },
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
+          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "clicks_per_day_needed = leads_per_day_wanted / lead_conversion_rate",
+          "check: daily_budget >= clicks_per_day_needed x expected_avg_cpc"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: average catering order value]",
+          "[CONFIRM: gross margin %]",
+          "[CONFIRM: lead to won rate]",
+          "[CONFIRM: monthly lead goal]",
+          "[CONFIRM: expected CPC, from Keyword Planner after the account exists]",
+          "[CONFIRM: total monthly ads budget ceiling]"
+        ]
+      },
+      "keyword_match_types_at_launch": [
+        "phrase",
+        "exact"
+      ],
+      "broad_match": "off",
+      "ai_max_and_final_url_expansion": "off",
+      "auto_apply_recommendations": "off",
+      "dynamic_search_ads": "off",
+      "eu_political_advertising": "does_not_contain",
+      "tracking_template": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=events-function-catering-southwest&utm_content=rsa-v1&utm_term={keyword}",
+      "utm_campaign": "events-function-catering-southwest",
+      "auto_tagging": true,
+      "ad_groups": [
+        {
+          "name": "EVNT | Party And Function Catering",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Party and function catering",
+          "final_url": "https://doughboss.com.au/catering/events",
+          "path1": "catering",
+          "path2": "events",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "EVNT | Birthday And Celebration",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "theme": "Birthday and celebration catering",
+          "final_url": "https://doughboss.com.au/catering/events",
+          "path1": "catering",
+          "path2": "birthdays",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "EVNT | Pizza Catering And Group Orders",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "theme": "Pizza catering and large group orders",
+          "final_url": "https://doughboss.com.au/catering/events",
+          "path1": "catering",
+          "path2": "pizza",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "EVNT | School And Community Events",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "theme": "School, fundraiser and community event catering (low priority)",
+          "final_url": "https://doughboss.com.au/catering/events",
+          "path1": "catering",
+          "path2": "community",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "EVNT | Lebanese Catering",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Lebanese catering and Lebanese bakery catering",
+          "final_url": "https://doughboss.com.au/catering",
+          "path1": "catering",
+          "path2": "lebanese",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "EVNT | Manoush And Pastry Catering",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "theme": "Manoush and savoury pastry catering",
+          "final_url": "https://doughboss.com.au/catering",
+          "path1": "catering",
+          "path2": "manoush",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "EVNT | Mezze And Grazing",
+          "status": "paused",
+          "hold": true,
+          "hold_reason": "Hold: mezze and grazing appear only on the owner's catering page (not confirmed in the claims ledger) and no /catering/platters route exists in the contract. Release when Elie confirms the offer and a landing section exists.",
+          "launch_wave": 2,
+          "theme": "Mezze and grazing platters",
+          "final_url": "https://doughboss.com.au/catering",
+          "path1": "catering",
+          "path2": "mezze",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        }
+      ]
+    },
+    {
+      "name": "DB | Search | Local Store Areas Catering",
+      "status": "paused",
+      "type": "SEARCH",
+      "phase": "launch",
+      "goal": "leads",
+      "primary_conversion": "generate_lead:catering_enquiry",
+      "networks": {
+        "search": true,
+        "search_partners": false,
+        "display": false
+      },
+      "languages": [
+        "en"
+      ],
+      "location_targeting": {
+        "mode": "suburb list or radius around each store, chosen after delivery area is confirmed",
+        "positive_geo_target_type": "PRESENCE",
+        "negative_geo_target_type": "PRESENCE",
+        "stores": [
+          {
+            "slug": "revesby",
+            "address": "12/25 Selems Parade, Revesby NSW 2212"
+          },
+          {
+            "slug": "bankstown",
+            "address": "462 Chapel Rd, Bankstown NSW 2200"
+          },
+          {
+            "slug": "roselands",
+            "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+          }
+        ],
+        "radius_km": "[CONFIRM: radius from delivery area]",
+        "radius_note": "Starting hypothesis only, never a fact: begin no wider than the delivery area Elie confirms and widen only on search-terms evidence.",
+        "suburb_list_hypothesis": [
+          "Revesby",
+          "Padstow",
+          "Panania",
+          "Milperra",
+          "Condell Park",
+          "Bankstown",
+          "Roselands",
+          "Lakemba"
+        ],
+        "suburb_list_source": "marketing/keywords.csv local themes (demand terms, not a delivery promise)"
+      },
+      "ad_schedule": {
+        "form_enquiries": "all hours (the form takes enquiries when the shops are shut)",
+        "call_assets": "store opening hours only (typed store data), and only for numbers someone answers",
+        "bid_adjustments": "none at launch; set only after 4 weeks of hour-of-day conversion data",
+        "enquiry_handling_hours": "[CONFIRM: who answers and when]"
+      },
+      "bidding": {
+        "phase": 1,
+        "strategy": "MANUAL_CPC",
+        "max_cpc_aud": "[CONFIRM: max CPC from break-even maths]",
+        "enhanced_cpc": false,
+        "next": "MAXIMIZE_CONVERSIONS after tracking is verified and the campaign has recorded conversions, then TARGET_CPA when the last 30 days hold roughly 30 conversions (Google evaluation guidance)"
+      },
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
+          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "clicks_per_day_needed = leads_per_day_wanted / lead_conversion_rate",
+          "check: daily_budget >= clicks_per_day_needed x expected_avg_cpc"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: average catering order value]",
+          "[CONFIRM: gross margin %]",
+          "[CONFIRM: lead to won rate]",
+          "[CONFIRM: monthly lead goal]",
+          "[CONFIRM: expected CPC, from Keyword Planner after the account exists]",
+          "[CONFIRM: total monthly ads budget ceiling]"
+        ]
+      },
+      "keyword_match_types_at_launch": [
+        "phrase",
+        "exact"
+      ],
+      "broad_match": "off",
+      "ai_max_and_final_url_expansion": "off",
+      "auto_apply_recommendations": "off",
+      "dynamic_search_ads": "off",
+      "eu_political_advertising": "does_not_contain",
+      "tracking_template": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=local-catering-southwest&utm_content=rsa-v1&utm_term={keyword}",
+      "utm_campaign": "local-catering-southwest",
+      "auto_tagging": true,
+      "ad_groups": [
+        {
+          "name": "LOCL | Catering Revesby",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Catering searches in the Revesby store catchment",
+          "final_url": "https://doughboss.com.au/locations/revesby",
+          "path1": "catering",
+          "path2": "revesby",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4,
+          "tracking_template_override": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=local-catering-revesby&utm_content=rsa-v1&utm_term={keyword}"
+        },
+        {
+          "name": "LOCL | Catering Bankstown",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Catering searches in the Bankstown store catchment",
+          "final_url": "https://doughboss.com.au/locations/bankstown",
+          "path1": "catering",
+          "path2": "bankstown",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4,
+          "tracking_template_override": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=local-catering-bankstown&utm_content=rsa-v1&utm_term={keyword}"
+        },
+        {
+          "name": "LOCL | Catering Roselands",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Catering searches in the Roselands store catchment",
+          "final_url": "https://doughboss.com.au/locations/roselands",
+          "path1": "catering",
+          "path2": "roselands",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4,
+          "tracking_template_override": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=local-catering-roselands&utm_content=rsa-v1&utm_term={keyword}"
+        },
+        {
+          "name": "LOCL | Catering South West And Near Me",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "theme": "Regional and near-me catering searches",
+          "final_url": "https://doughboss.com.au/catering",
+          "path1": "catering",
+          "path2": "south-west",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        }
+      ]
+    },
+    {
+      "name": "DB | Search | Brand",
+      "status": "paused",
+      "type": "SEARCH",
+      "phase": "launch",
+      "goal": "protect brand clicks and store/phone actions",
+      "primary_conversion": "generate_lead:catering_enquiry",
+      "networks": {
+        "search": true,
+        "search_partners": false,
+        "display": false
+      },
+      "languages": [
+        "en"
+      ],
+      "location_targeting": {
+        "mode": "suburb list or radius around each store, chosen after delivery area is confirmed",
+        "positive_geo_target_type": "PRESENCE",
+        "negative_geo_target_type": "PRESENCE",
+        "stores": [
+          {
+            "slug": "revesby",
+            "address": "12/25 Selems Parade, Revesby NSW 2212"
+          },
+          {
+            "slug": "bankstown",
+            "address": "462 Chapel Rd, Bankstown NSW 2200"
+          },
+          {
+            "slug": "roselands",
+            "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+          }
+        ],
+        "radius_km": "[CONFIRM: radius from delivery area]",
+        "radius_note": "Starting hypothesis only, never a fact: begin no wider than the delivery area Elie confirms and widen only on search-terms evidence.",
+        "suburb_list_hypothesis": [
+          "Revesby",
+          "Padstow",
+          "Panania",
+          "Milperra",
+          "Condell Park",
+          "Bankstown",
+          "Roselands",
+          "Lakemba"
+        ],
+        "suburb_list_source": "marketing/keywords.csv local themes (demand terms, not a delivery promise)"
+      },
+      "ad_schedule": {
+        "form_enquiries": "all hours (the form takes enquiries when the shops are shut)",
+        "call_assets": "store opening hours only (typed store data), and only for numbers someone answers",
+        "bid_adjustments": "none at launch; set only after 4 weeks of hour-of-day conversion data",
+        "enquiry_handling_hours": "[CONFIRM: who answers and when]"
+      },
+      "bidding": {
+        "phase": 1,
+        "strategy": "MANUAL_CPC",
+        "max_cpc_aud": "[CONFIRM: max CPC from break-even maths]",
+        "enhanced_cpc": false,
+        "next": "Keep manual or MAXIMIZE_CLICKS with a CPC cap; brand does not need target CPA"
+      },
+      "budget": {
+        "formula": "daily_budget = expected_brand_clicks_per_day x expected_brand_cpc, capped low; brand clicks are cheap and capped by search volume",
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: brand search volume from Search Console or Keyword Planner]",
+          "[CONFIRM: tolerance for spend on brand clicks that would have arrived free]"
+        ],
+        "supporting_formulas": []
+      },
+      "keyword_match_types_at_launch": [
+        "phrase",
+        "exact"
+      ],
+      "broad_match": "off",
+      "ai_max_and_final_url_expansion": "off",
+      "auto_apply_recommendations": "off",
+      "dynamic_search_ads": "off",
+      "eu_political_advertising": "does_not_contain",
+      "tracking_template": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=brand-dough-boss-southwest&utm_content=rsa-v1&utm_term={keyword}",
+      "utm_campaign": "brand-dough-boss-southwest",
+      "auto_tagging": true,
+      "ad_groups": [
+        {
+          "name": "BRND | Dough Boss Brand",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Brand defence, stores and hours",
+          "final_url": "https://doughboss.com.au/",
+          "path1": "stores",
+          "path2": "hours",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "BRND | Dough Boss Catering",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "theme": "Brand plus catering",
+          "final_url": "https://doughboss.com.au/catering",
+          "path1": "catering",
+          "path2": "enquiry",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        }
+      ]
+    },
+    {
+      "name": "DB | Search | Minis Waitlist (Later)",
+      "status": "paused",
+      "type": "SEARCH",
+      "phase": "later",
+      "goal": "waitlist sign-ups",
+      "primary_conversion": "generate_lead:minis_waitlist",
+      "networks": {
+        "search": true,
+        "search_partners": false,
+        "display": false
+      },
+      "languages": [
+        "en"
+      ],
+      "location_targeting": {
+        "mode": "suburb list or radius around each store, chosen after delivery area is confirmed",
+        "positive_geo_target_type": "PRESENCE",
+        "negative_geo_target_type": "PRESENCE",
+        "stores": [
+          {
+            "slug": "revesby",
+            "address": "12/25 Selems Parade, Revesby NSW 2212"
+          },
+          {
+            "slug": "bankstown",
+            "address": "462 Chapel Rd, Bankstown NSW 2200"
+          },
+          {
+            "slug": "roselands",
+            "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+          }
+        ],
+        "radius_km": "[CONFIRM: radius from delivery area]",
+        "radius_note": "Starting hypothesis only, never a fact: begin no wider than the delivery area Elie confirms and widen only on search-terms evidence.",
+        "suburb_list_hypothesis": [
+          "Revesby",
+          "Padstow",
+          "Panania",
+          "Milperra",
+          "Condell Park",
+          "Bankstown",
+          "Roselands",
+          "Lakemba"
+        ],
+        "suburb_list_source": "marketing/keywords.csv local themes (demand terms, not a delivery promise)"
+      },
+      "ad_schedule": {
+        "form_enquiries": "all hours (the form takes enquiries when the shops are shut)",
+        "call_assets": "store opening hours only (typed store data), and only for numbers someone answers",
+        "bid_adjustments": "none at launch; set only after 4 weeks of hour-of-day conversion data",
+        "enquiry_handling_hours": "[CONFIRM: who answers and when]"
+      },
+      "bidding": {
+        "phase": 1,
+        "strategy": "MANUAL_CPC",
+        "max_cpc_aud": "[CONFIRM: max CPC from break-even maths]",
+        "enhanced_cpc": false,
+        "next": "MAXIMIZE_CONVERSIONS after tracking is verified and the campaign has recorded conversions, then TARGET_CPA when the last 30 days hold roughly 30 conversions (Google evaluation guidance)"
+      },
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
+          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "clicks_per_day_needed = leads_per_day_wanted / lead_conversion_rate",
+          "check: daily_budget >= clicks_per_day_needed x expected_avg_cpc"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: average catering order value]",
+          "[CONFIRM: gross margin %]",
+          "[CONFIRM: lead to won rate]",
+          "[CONFIRM: monthly lead goal]",
+          "[CONFIRM: expected CPC, from Keyword Planner after the account exists]",
+          "[CONFIRM: total monthly ads budget ceiling]"
+        ]
+      },
+      "keyword_match_types_at_launch": [
+        "phrase",
+        "exact"
+      ],
+      "broad_match": "off",
+      "ai_max_and_final_url_expansion": "off",
+      "auto_apply_recommendations": "off",
+      "dynamic_search_ads": "off",
+      "eu_political_advertising": "does_not_contain",
+      "tracking_template": "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign=minis-waitlist-southwest&utm_content=rsa-v1&utm_term={keyword}",
+      "utm_campaign": "minis-waitlist-southwest",
+      "auto_tagging": true,
+      "ad_groups": [
+        {
+          "name": "MINI | Finger Food And Party Bites",
+          "status": "paused",
+          "hold": true,
+          "hold_reason": "Later: do not enable until the Minis range, waitlist form and consent text are live and Elie confirms what may be said about Minis.",
+          "launch_wave": 3,
+          "theme": "Finger food and bite-sized party food (waitlist only)",
+          "final_url": "https://doughboss.com.au/catering/minis",
+          "path1": "minis",
+          "path2": "waitlist",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        },
+        {
+          "name": "MINI | Mini Pizza",
+          "status": "paused",
+          "hold": true,
+          "hold_reason": "Later: as above. Mini pizza searchers want to buy now; expect low conversion until Minis can be ordered.",
+          "launch_wave": 3,
+          "theme": "Mini pizza party searches (waitlist only)",
+          "final_url": "https://doughboss.com.au/catering/minis",
+          "path1": "minis",
+          "path2": "mini-pizza",
+          "rsa_headlines": 15,
+          "rsa_descriptions": 4
+        }
+      ]
+    }
+  ]
+}

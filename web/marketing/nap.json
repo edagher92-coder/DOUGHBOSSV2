@@ -1,0 +1,173 @@
+{
+  "$comment": "DRAFT. Single source of truth for Name / Address / Phone (NAP) on every listing, profile, directory and schema block. Written by hand from src/lib/data/catalogue.ts (STORES); tests/unit/marketing-seo-external.test.ts proves every store field below equals STORES exactly. If STORES changes, this file must change in the same commit. Internal planning file: it may carry [CONFIRM] markers, but nothing here is pasted onto a customer-facing surface without being checked against the claims ledger.",
+  "version": 1,
+  "preparedOn": "2026-10-02",
+  "business": {
+    "listingName": "Dough Boss",
+    "listingNameStatus": "[CONFIRM: exact signage wording per store]",
+    "listingNameRule": "Use the real-world name exactly as shown on the shopfront sign. Do not add a suburb, a keyword, a tagline or the words catering, bakery or Lebanese to the listing name. Google's guideline: the name must reflect the real-world name used consistently on the storefront, website and stationery, with no marketing taglines (https://support.google.com/business/answer/3038177, retrieved 2026-10-02).",
+    "schemaNamePattern": "Dough Boss <store name>",
+    "schemaNameNote": "src/lib/seo.ts emits 'Dough Boss Revesby', 'Dough Boss Bankstown' and 'Dough Boss Roselands Centro' as the Bakery name. That differs from the GBP listing name 'Dough Boss'. [CONFIRM: Elie to choose one rule. Recommendation: GBP listing name 'Dough Boss' on all three; keep the suburb form in schema and page titles, because the address is what tells the three apart.]",
+    "website": "https://doughboss.com.au",
+    "instagram": "https://instagram.com/doughboss",
+    "instagramSource": "Owner-published site footer and src/lib/seo.ts INSTAGRAM_URL. [CONFIRM: handle is owned and active.]",
+    "legalEntityAndAbn": "[CONFIRM: operating entity name and ABN. Needed for the Spam Act sender block, Apple Business Connect and ABN-linked directories.]",
+    "publicEmails": [
+      {
+        "label": "General orders",
+        "address": "orders@doughboss.com.au",
+        "source": "Live doughboss.com.au footer and /locations/ page, read 2026-10-02 through a summarising fetch tool",
+        "status": "[CONFIRM: monitored mailbox]"
+      },
+      {
+        "label": "Catering",
+        "address": "catering@doughboss.com.au",
+        "source": "Live doughboss.com.au /catering/ page, read 2026-10-02 through a summarising fetch tool",
+        "status": "[CONFIRM: monitored mailbox]"
+      }
+    ],
+    "additionalPhones": [
+      {
+        "label": "Catering line printed on the live /catering/ page",
+        "e164": "+61422487487",
+        "display": "0422 487 487",
+        "source": "Live doughboss.com.au /catering/ page, a tel: link labelled 'Call catering', read 2026-10-02",
+        "status": "[CONFIRM: is this the official catering number, who answers it, and should it appear on listings? It is not in src/lib/data/catalogue.ts, so it is NOT part of per-store NAP. Never put it on a store's GBP as the primary phone.]"
+      }
+    ],
+    "doNotUseOnListings": [
+      "Personal email addresses",
+      "Any phone number that is not the store's own line (primary phone) unless the table above is confirmed",
+      "A tracking number as the primary phone (it breaks citation matching). Use call tracking only as an additional number, and only after Elie agrees"
+    ]
+  },
+  "canonicalAddressFormat": {
+    "rule": "Write the address exactly as in each store's 'canonical' string below. Use 'Rd', 'Pde', 'Dr', 'Ave' as typed in STORES. Put the unit or shop number as typed ('12/25', 'Shop MM03'). Do not write 'Shop 12/25' or 'Road'.",
+    "status": "[CONFIRM: check each address in the Australia Post address lookup and in Google's address autocomplete before the first profile is claimed. Re-check the Roselands centre name, because the centre may now trade under a new name.]"
+  },
+  "publicHolidayHours": {
+    "known": false,
+    "note": "Public-holiday trading hours are not stated in any source we hold. Do not list any holiday as open or closed. [CONFIRM: per-store public-holiday hours; then set them as GBP special hours at least two weeks ahead.]"
+  },
+  "stores": [
+    {
+      "slug": "revesby",
+      "name": "Revesby",
+      "addressLine1": "12/25 Selems Parade",
+      "suburb": "Revesby",
+      "state": "NSW",
+      "postcode": "2212",
+      "phone": "+61297742286",
+      "phoneDisplay": "(02) 9774 2286",
+      "timezone": "Australia/Sydney",
+      "mapsUrl": "https://www.google.com/maps/search/?api=1&query=12%2F25%20Selems%20Parade%20Revesby%20NSW%202212",
+      "hours": [
+        { "dayOfWeek": 0, "opensMin": 390, "closesMin": 870 },
+        { "dayOfWeek": 1, "opensMin": 390, "closesMin": 870 },
+        { "dayOfWeek": 2, "opensMin": 390, "closesMin": 870 },
+        { "dayOfWeek": 3, "opensMin": 390, "closesMin": 870 },
+        { "dayOfWeek": 4, "opensMin": 390, "closesMin": 870 },
+        { "dayOfWeek": 5, "opensMin": 390, "closesMin": 870 },
+        { "dayOfWeek": 6, "opensMin": 390, "closesMin": 870 }
+      ],
+      "hoursSummary": "Open 7 days, 6:30am – 2:30pm",
+      "note": "Flagship store and online pickup hub.",
+      "listing": {
+        "listingName": "Dough Boss",
+        "canonicalAddress": "12/25 Selems Parade, Revesby NSW 2212",
+        "phoneE164": "+61297742286",
+        "phoneDisplay": "(02) 9774 2286",
+        "hours24": "Mon-Sun 06:30-14:30",
+        "gbpWebsiteUrlFinal": "https://doughboss.com.au/locations/revesby?utm_source=gbp&utm_medium=gbp&utm_campaign=revesby-profile&utm_content=website-link",
+        "gbpWebsiteUrlInterim": "https://doughboss.com.au/locations/?utm_source=gbp&utm_medium=gbp&utm_campaign=revesby-profile&utm_content=website-link",
+        "addressVariantsSeenOnLiveSite": ["Shop 12/25 Selems Parade, Revesby NSW 2212"]
+      },
+      "provenance": {
+        "source": "src/lib/data/catalogue.ts STORES, itself copied from the owner-published locations page (DOUGHXSNOW web/locations/index.html). The live doughboss.com.au /locations/ page agrees on phone and hours (read 2026-10-02, summarising fetch tool).",
+        "confirmedByOwner": false,
+        "retrieved": "2026-10-02",
+        "caveat": "Re-confirm before any listing is submitted. The sources do not state public-holiday hours."
+      }
+    },
+    {
+      "slug": "bankstown",
+      "name": "Bankstown",
+      "addressLine1": "462 Chapel Rd",
+      "addressLine2": "Little Saigon Plaza, cnr Kitchener Pde & French Ave",
+      "suburb": "Bankstown",
+      "state": "NSW",
+      "postcode": "2200",
+      "phone": "+61287646783",
+      "phoneDisplay": "(02) 8764 6783",
+      "timezone": "Australia/Sydney",
+      "mapsUrl": "https://www.google.com/maps/search/?api=1&query=462%20Chapel%20Rd%20Bankstown%20NSW%202200",
+      "hours": [
+        { "dayOfWeek": 1, "opensMin": 420, "closesMin": 840 },
+        { "dayOfWeek": 2, "opensMin": 420, "closesMin": 840 },
+        { "dayOfWeek": 3, "opensMin": 420, "closesMin": 840 },
+        { "dayOfWeek": 4, "opensMin": 420, "closesMin": 840 },
+        { "dayOfWeek": 5, "opensMin": 420, "closesMin": 840 }
+      ],
+      "hoursSummary": "Mon–Fri, 7:00am – 2:00pm",
+      "note": "Home of Dough Boss Bankstown — and soon Snow Boss, in the same store.",
+      "listing": {
+        "listingName": "Dough Boss",
+        "canonicalAddress": "462 Chapel Rd, Bankstown NSW 2200",
+        "canonicalAddressWithPlaza": "Little Saigon Plaza, cnr Kitchener Pde & French Ave, 462 Chapel Rd, Bankstown NSW 2200",
+        "addressNote": "Put the plaza and cross-street line in the GBP address line 2 only if Google accepts it. Citations use the one-line canonical address (street, suburb, state, postcode) so they match.",
+        "phoneE164": "+61287646783",
+        "phoneDisplay": "(02) 8764 6783",
+        "hours24": "Mon-Fri 07:00-14:00",
+        "gbpWebsiteUrlFinal": "https://doughboss.com.au/locations/bankstown?utm_source=gbp&utm_medium=gbp&utm_campaign=bankstown-profile&utm_content=website-link",
+        "gbpWebsiteUrlInterim": "https://doughboss.com.au/locations/?utm_source=gbp&utm_medium=gbp&utm_campaign=bankstown-profile&utm_content=website-link",
+        "addressVariantsSeenOnLiveSite": ["462 Chapel Road, Bankstown NSW 2200"]
+      },
+      "provenance": {
+        "source": "src/lib/data/catalogue.ts STORES, copied from the owner-published locations page. The live doughboss.com.au /locations/ page agrees on phone and hours (read 2026-10-02, summarising fetch tool) and writes 'Chapel Road' with no plaza line.",
+        "confirmedByOwner": false,
+        "retrieved": "2026-10-02",
+        "caveat": "A competitor-research snippet mentioned a 'Doughboss' listing at 462 Chapel Road, Bankstown. Treat it as a lead for a duplicate-listing check, not a fact. Search Google Maps for existing listings before creating anything."
+      }
+    },
+    {
+      "slug": "roselands",
+      "name": "Roselands Centro",
+      "addressLine1": "Shop MM03, Roselands Dr",
+      "suburb": "Roselands",
+      "state": "NSW",
+      "postcode": "2196",
+      "phone": "+61466353133",
+      "phoneDisplay": "0466 353 133",
+      "timezone": "Australia/Sydney",
+      "mapsUrl": "https://www.google.com/maps/search/?api=1&query=Roselands%20Centro%20Roselands%20Dr%20Roselands%20NSW%202196",
+      "hours": [
+        { "dayOfWeek": 0, "opensMin": 480, "closesMin": 900 },
+        { "dayOfWeek": 1, "opensMin": 480, "closesMin": 900 },
+        { "dayOfWeek": 2, "opensMin": 480, "closesMin": 900 },
+        { "dayOfWeek": 3, "opensMin": 480, "closesMin": 900 },
+        { "dayOfWeek": 4, "opensMin": 480, "closesMin": 900 },
+        { "dayOfWeek": 5, "opensMin": 480, "closesMin": 900 },
+        { "dayOfWeek": 6, "opensMin": 480, "closesMin": 900 }
+      ],
+      "hoursSummary": "Daily, 8:00am – 3:00pm",
+      "listing": {
+        "listingName": "Dough Boss",
+        "canonicalAddress": "Shop MM03, Roselands Dr, Roselands NSW 2196",
+        "phoneE164": "+61466353133",
+        "phoneDisplay": "0466 353 133",
+        "phoneNote": "A 04 mobile-format number. Google and directories accept it, but confirm it is answered during trading hours, because a missed call on a listing is a lost enquiry. [CONFIRM: who answers it.]",
+        "hours24": "Mon-Sun 08:00-15:00",
+        "centreNameNote": "The owner site says 'Roselands Centro'. Public sources suggest the centre may now trade as HomeCo Roselands. [CONFIRM: current centre name as shown on the lease and the shopfront before it goes on any listing.]",
+        "gbpWebsiteUrlFinal": "https://doughboss.com.au/locations/roselands?utm_source=gbp&utm_medium=gbp&utm_campaign=roselands-profile&utm_content=website-link",
+        "gbpWebsiteUrlInterim": "https://doughboss.com.au/locations/?utm_source=gbp&utm_medium=gbp&utm_campaign=roselands-profile&utm_content=website-link",
+        "addressVariantsSeenOnLiveSite": ["Shop MM03, Roselands Drive, Roselands NSW 2196"]
+      },
+      "provenance": {
+        "source": "src/lib/data/catalogue.ts STORES, copied from the owner-published locations page. The live doughboss.com.au /locations/ page agrees on phone and hours (read 2026-10-02, summarising fetch tool).",
+        "confirmedByOwner": false,
+        "retrieved": "2026-10-02",
+        "caveat": "Re-confirm before any listing is submitted. The sources do not state public-holiday hours."
+      }
+    }
+  ]
+}

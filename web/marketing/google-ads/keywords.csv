@@ -1,0 +1,137 @@
+campaign,ad_group,keyword,match_type,final_url,notes
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate catering bankstown,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate catering bankstown,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate catering sydney south west,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate catering revesby,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate catering revesby,exact,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate catering south west sydney,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate catering,phrase,https://doughboss.com.au/catering/corporate,"variant; head term, expect wider reach, watch search terms"
+DB | Search | Corporate Office Catering,CORP | Corporate Catering,corporate lunch catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Catering,office catering revesby,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Office Catering,office catering revesby,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Office Catering,office catering sydney,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Office Catering,office catering bankstown,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Catering,office catering bankstown,exact,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Catering,office catering south west sydney,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Catering,office catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,staff lunch catering,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,staff lunch catering,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,team lunch catering lebanese,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,team lunch catering lebanese,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,team lunch catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,lunch catering sydney,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,lunch catering sydney,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,weekly office lunch catering,phrase,https://doughboss.com.au/catering/corporate,research; recurring-order intent
+DB | Search | Corporate Office Catering,CORP | Staff And Team Lunch,weekly office lunch catering,exact,https://doughboss.com.au/catering/corporate,research; recurring-order intent
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,drop-off catering bankstown,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,drop-off catering bankstown,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,boxed lunch catering office,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,boxed lunch catering office,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,office lunch delivery near me,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,drop off catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,boxed lunches office,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Drop-Off And Boxed Lunch,lunch grazing boxes office,phrase,https://doughboss.com.au/catering/corporate,research; moved from Mezze and Grazing because it is office intent
+DB | Search | Corporate Office Catering,CORP | Meeting And Boardroom,meeting catering platters delivered,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Meeting And Boardroom,boardroom lunch catering sydney,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Meeting And Boardroom,boardroom lunch catering sydney,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Meeting And Boardroom,meeting catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Meeting And Boardroom,boardroom catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Meeting And Boardroom,boardroom catering,exact,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Christmas Party,christmas party catering office,phrase,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Office Christmas Party,christmas party catering office,exact,https://doughboss.com.au/catering/corporate,research
+DB | Search | Corporate Office Catering,CORP | Office Christmas Party,office christmas party catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Christmas Party,office christmas party catering,exact,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Christmas Party,christmas catering office,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Christmas Party,end of year office party catering,phrase,https://doughboss.com.au/catering/corporate,variant
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,office breakfast catering sydney,phrase,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,office breakfast catering sydney,exact,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,breakfast catering bankstown,phrase,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,breakfast catering bankstown,exact,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,morning tea platters office,phrase,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,breakfast meeting catering manoush,phrase,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,breakfast platter delivery,phrase,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,pastry platter office delivery,phrase,https://doughboss.com.au/catering/office-breakfast,research
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,office morning tea catering,phrase,https://doughboss.com.au/catering/office-breakfast,variant
+DB | Search | Corporate Office Catering,CORP | Office Breakfast And Morning Tea,office morning tea catering,exact,https://doughboss.com.au/catering/office-breakfast,variant
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,party catering south west sydney,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,party catering south west sydney,exact,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,function catering bankstown,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,function catering bankstown,exact,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,lebanese party platters,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,function catering,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,party catering bankstown,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Party And Function Catering,party catering,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Birthday And Celebration,birthday party platters bankstown,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Birthday And Celebration,birthday party platters bankstown,exact,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Birthday And Celebration,birthday party catering,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Birthday And Celebration,birthday catering,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Birthday And Celebration,birthday catering,exact,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Birthday And Celebration,celebration catering,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Pizza Catering And Group Orders,pizza catering sydney party,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Pizza Catering And Group Orders,pizza catering sydney party,exact,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Pizza Catering And Group Orders,large group pizza order sydney,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Pizza Catering And Group Orders,large group pizza order sydney,exact,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Pizza Catering And Group Orders,lebanese pizza party platter,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Pizza Catering And Group Orders,pizza catering,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | Pizza Catering And Group Orders,pizza party catering,phrase,https://doughboss.com.au/catering/events,variant
+DB | Search | Event Function Catering,EVNT | School And Community Events,school event catering sydney,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | School And Community Events,school fundraiser food platters,phrase,https://doughboss.com.au/catering/events,"research; informational, low priority"
+DB | Search | Event Function Catering,EVNT | School And Community Events,community event catering canterbury bankstown,phrase,https://doughboss.com.au/catering/events,research
+DB | Search | Event Function Catering,EVNT | Lebanese Catering,lebanese catering sydney,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Lebanese Catering,lebanese catering sydney,exact,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Lebanese Catering,lebanese catering bankstown,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Lebanese Catering,lebanese catering bankstown,exact,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Lebanese Catering,lebanese bakery catering near me,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Lebanese Catering,lebanese catering,phrase,https://doughboss.com.au/catering,variant
+DB | Search | Event Function Catering,EVNT | Lebanese Catering,lebanese catering revesby,phrase,https://doughboss.com.au/catering,variant
+DB | Search | Event Function Catering,EVNT | Manoush And Pastry Catering,manoush catering platter,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Manoush And Pastry Catering,bulk manoush order za'atar,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Manoush And Pastry Catering,lebanese savoury pastry platter,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Manoush And Pastry Catering,fatayer sambousek catering platter,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Manoush And Pastry Catering,manoush catering,phrase,https://doughboss.com.au/catering,variant
+DB | Search | Event Function Catering,EVNT | Manoush And Pastry Catering,manoush catering,exact,https://doughboss.com.au/catering,variant
+DB | Search | Event Function Catering,EVNT | Mezze And Grazing,mezze platter delivery sydney,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Mezze And Grazing,grazing platters sydney,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Mezze And Grazing,grazing table catering sydney,phrase,https://doughboss.com.au/catering,research
+DB | Search | Event Function Catering,EVNT | Mezze And Grazing,mezze style grazing table lebanese,phrase,https://doughboss.com.au/catering,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Revesby,catering revesby,phrase,https://doughboss.com.au/locations/revesby,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Revesby,catering revesby,exact,https://doughboss.com.au/locations/revesby,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Revesby,catering padstow,phrase,https://doughboss.com.au/locations/revesby,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Revesby,catering panania,phrase,https://doughboss.com.au/locations/revesby,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Revesby,catering milperra,phrase,https://doughboss.com.au/locations/revesby,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Bankstown,catering bankstown,phrase,https://doughboss.com.au/locations/bankstown,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Bankstown,catering bankstown,exact,https://doughboss.com.au/locations/bankstown,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Bankstown,catering condell park,phrase,https://doughboss.com.au/locations/bankstown,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Roselands,catering roselands,phrase,https://doughboss.com.au/locations/roselands,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Roselands,catering roselands,exact,https://doughboss.com.au/locations/roselands,research
+DB | Search | Local Store Areas Catering,LOCL | Catering Roselands,catering lakemba,phrase,https://doughboss.com.au/locations/roselands,research
+DB | Search | Local Store Areas Catering,LOCL | Catering South West And Near Me,catering south west sydney,phrase,https://doughboss.com.au/catering,research
+DB | Search | Local Store Areas Catering,LOCL | Catering South West And Near Me,catering south west sydney,exact,https://doughboss.com.au/catering,research
+DB | Search | Local Store Areas Catering,LOCL | Catering South West And Near Me,catering canterbury bankstown,phrase,https://doughboss.com.au/catering,research
+DB | Search | Local Store Areas Catering,LOCL | Catering South West And Near Me,catering near me,phrase,https://doughboss.com.au/catering,"research; high volume risk, location targeting must be tight"
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss,phrase,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss,exact,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,doughboss,phrase,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,doughboss,exact,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss bakery,phrase,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss bakery,exact,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss bankstown,phrase,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss bankstown,exact,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss revesby,phrase,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss revesby,exact,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss roselands,phrase,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss roselands,exact,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Brand,dough boss lebanese bakery,phrase,https://doughboss.com.au/,brand
+DB | Search | Brand,BRND | Dough Boss Catering,dough boss catering,phrase,https://doughboss.com.au/catering,brand
+DB | Search | Brand,BRND | Dough Boss Catering,dough boss catering,exact,https://doughboss.com.au/catering,brand
+DB | Search | Brand,BRND | Dough Boss Catering,dough boss catering bankstown,phrase,https://doughboss.com.au/catering,brand
+DB | Search | Brand,BRND | Dough Boss Catering,dough boss catering bankstown,exact,https://doughboss.com.au/catering,brand
+DB | Search | Brand,BRND | Dough Boss Catering,doughboss catering,phrase,https://doughboss.com.au/catering,brand
+DB | Search | Brand,BRND | Dough Boss Catering,doughboss catering,exact,https://doughboss.com.au/catering,brand
+DB | Search | Brand,BRND | Dough Boss Catering,dough boss catering menu,phrase,https://doughboss.com.au/catering,brand
+DB | Search | Minis Waitlist (Later),MINI | Finger Food And Party Bites,finger food catering sydney,phrase,https://doughboss.com.au/catering/minis,research
+DB | Search | Minis Waitlist (Later),MINI | Finger Food And Party Bites,bite sized party food,phrase,https://doughboss.com.au/catering/minis,research
+DB | Search | Minis Waitlist (Later),MINI | Finger Food And Party Bites,party food platter delivery,phrase,https://doughboss.com.au/catering/minis,"research; transactional intent, expect poor fit with a waitlist"
+DB | Search | Minis Waitlist (Later),MINI | Mini Pizza,mini pizza party platter,phrase,https://doughboss.com.au/catering/minis,research
+DB | Search | Minis Waitlist (Later),MINI | Mini Pizza,mini pizzas party,phrase,https://doughboss.com.au/catering/minis,variant
+DB | Search | Minis Waitlist (Later),MINI | Mini Pizza,mini pizza catering,phrase,https://doughboss.com.au/catering/minis,variant
