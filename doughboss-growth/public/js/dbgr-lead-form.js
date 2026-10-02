@@ -87,13 +87,112 @@
 		return node ? trim(node.value) : '';
 	}
 
-	function setStatus(form, message, kind) {
+	/**
+	 * The status line (below the button) is for what the server said and for success. When focusNode is true the line is
+	 * made focusable and focused, so a keyboard or screen reader user lands on the confirmation after the form collapses.
+	 */
+	function setStatus(form, message, kind, focusNode) {
 		var node = form.querySelector('[data-dbgr-lead-status]');
 		if (!node) {
 			return;
 		}
 		node.textContent = message;
 		node.className = 'dbgr-lead__status' + (kind ? ' dbgr-lead__status--' + kind : '');
+		if (focusNode === true && typeof node.focus === 'function') {
+			node.setAttribute('tabindex', '-1');
+			node.focus();
+		}
+	}
+
+	/* ---- field-level errors: the message sits next to its own field and the field says it is invalid ---- */
+
+	function errorId(node) {
+		var id = node.getAttribute('id');
+		return (id ? id : 'dbgr-lead-' + String(node.getAttribute('name') || 'field')) + '-err';
+	}
+
+	function hasToken(list, token) {
+		return (' ' + trim(list).replace(/\s+/g, ' ') + ' ').indexOf(' ' + token + ' ') !== -1;
+	}
+
+	function addToken(list, token) {
+		var current = trim(list);
+		if (hasToken(current, token)) {
+			return current;
+		}
+		return current === '' ? token : current + ' ' + token;
+	}
+
+	function removeToken(list, token) {
+		var parts = trim(list).split(/\s+/);
+		var kept = [];
+		var i;
+		for (i = 0; i < parts.length; i += 1) {
+			if (parts[i] !== '' && parts[i] !== token) {
+				kept.push(parts[i]);
+			}
+		}
+		return kept.join(' ');
+	}
+
+	/** Put message in <span id="<field id>-err" class="dbgr-lead__err"> after the field (reused on the next try). */
+	function fieldError(node, message) {
+		var id = errorId(node);
+		var span = document.getElementById(id);
+		var anchor = node;
+		if (!span) {
+			span = document.createElement('span');
+			span.setAttribute('id', id);
+			span.className = 'dbgr-lead__err';
+			/* A checkbox sits inside its label: put the message after the label so it is not read as part of the name. */
+			if (anchor.parentNode && String(anchor.parentNode.nodeName).toLowerCase() === 'label') {
+				anchor = anchor.parentNode;
+			}
+			if (anchor.parentNode) {
+				anchor.parentNode.insertBefore(span, anchor.nextSibling);
+			}
+		}
+		span.hidden = false;
+		span.textContent = message;
+		node.setAttribute('aria-invalid', 'true');
+		node.setAttribute('aria-describedby', addToken(node.getAttribute('aria-describedby'), id));
+	}
+
+	function clearFieldError(node) {
+		var id = errorId(node);
+		var span = document.getElementById(id);
+		var rest = removeToken(node.getAttribute('aria-describedby'), id);
+		node.removeAttribute('aria-invalid');
+		if (rest === '') {
+			node.removeAttribute('aria-describedby');
+		} else {
+			node.setAttribute('aria-describedby', rest);
+		}
+		if (span) {
+			span.textContent = '';
+			span.hidden = true;
+		}
+	}
+
+	/** An invalid field is cleared as soon as the visitor edits it (one delegated listener per form). */
+	function clearOnEdit(form) {
+		function onEdit(event) {
+			var target = event ? event.target : null;
+			if (target && typeof target.getAttribute === 'function' && target.getAttribute('aria-invalid') === 'true') {
+				clearFieldError(target);
+			}
+		}
+		form.addEventListener('input', onEdit);
+		form.addEventListener('change', onEdit);
+	}
+
+	/** Today as YYYY-MM-DD in the visitor's own calendar, for the event date picker's earliest day. */
+	function todayIso() {
+		var d = new Date();
+		function two(n) {
+			return (n < 10 ? '0' : '') + n;
+		}
+		return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
 	}
 
 	/** A whole number from digits only, within 1..max; otherwise 0. */
@@ -146,13 +245,14 @@
 		var busy = false;
 		var button = form.querySelector('button[type="submit"]');
 		var orderType = field(form, 'order_type');
+		var eventDate = field(form, 'event_date');
 		var address = form.querySelector('[data-dbgr-lead-address]');
 		var max = (cfg && cfg.maxGuests > 0) ? cfg.maxGuests : 1000;
 
 		function release() {
 			busy = false;
 			if (button) {
-				button.disabled = false;
+				button.removeAttribute('aria-disabled');
 			}
 			form.removeAttribute('aria-busy');
 		}
@@ -179,12 +279,42 @@
 			}
 		}
 
-		function fail(message, name) {
-			var node = name ? field(form, name) : null;
-			setStatus(form, message, 'error');
-			if (node && typeof node.focus === 'function') {
-				node.focus();
+		/**
+		 * Run every check, mark every bad field, focus the first bad one (in page order). Returns the guest count when the
+		 * form is fine, 0 when it is not.
+		 */
+		function validate() {
+			var first = null;
+			var failed = false;
+			var email = valueOf(form, 'customer_email');
+			var guests = wholeGuests(valueOf(form, 'guest_count'), max);
+			function check(name, bad, message) {
+				var node = field(form, name);
+				if (!bad) {
+					if (node) {
+						clearFieldError(node);
+					}
+					return;
+				}
+				failed = true;
+				if (!node) {
+					setStatus(form, message, 'error'); /* no field to attach it to */
+					return;
+				}
+				fieldError(node, message);
+				if (!first) {
+					first = node;
+				}
 			}
+			setStatus(form, '', ''); /* a message from an earlier try is out of date now */
+			check('customer_name', valueOf(form, 'customer_name') === '', text('name', ''));
+			check('dbgr_company', form.getAttribute('data-company-required') === '1' && valueOf(form, 'dbgr_company') === '', text('company', ''));
+			check('customer_email', email.length < 5 || email.indexOf('@') < 1 || email.lastIndexOf('.') < email.indexOf('@') + 2 || email.lastIndexOf('.') === email.length - 1, text('email', ''));
+			check('guest_count', guests < 1, text('guests', ''));
+			if (first && typeof first.focus === 'function') {
+				first.focus();
+			}
+			return failed ? 0 : guests;
 		}
 
 		function send(guests) {
@@ -231,7 +361,7 @@
 						message = message + ' ' + text('number', '') + ' ' + number + '.';
 						track('generate_lead', { form: 'catering_enquiry', category: segment, guest_band: band, store: slug });
 					}
-					setStatus(form, message, 'ok');
+					setStatus(form, message, 'ok', true);
 					return;
 				}
 				if (status === 0) {
@@ -249,7 +379,6 @@
 		}
 
 		form.addEventListener('submit', function (event) {
-			var email;
 			var guests;
 			if (event && typeof event.preventDefault === 'function') {
 				event.preventDefault();
@@ -257,35 +386,25 @@
 			if (busy) {
 				return;
 			}
-			if (valueOf(form, 'customer_name') === '') {
-				fail(text('name', ''), 'customer_name');
-				return;
-			}
-			email = valueOf(form, 'customer_email');
-			if (email.length < 5 || email.indexOf('@') < 1 || email.lastIndexOf('.') < email.indexOf('@') + 2 || email.lastIndexOf('.') === email.length - 1) {
-				fail(text('email', ''), 'customer_email');
-				return;
-			}
-			if (form.getAttribute('data-company-required') === '1' && valueOf(form, 'dbgr_company') === '') {
-				fail(text('company', ''), 'dbgr_company');
-				return;
-			}
-			guests = wholeGuests(valueOf(form, 'guest_count'), max);
+			guests = validate();
 			if (guests < 1) {
-				fail(text('guests', ''), 'guest_count');
 				return;
 			}
 			busy = true;
 			if (button) {
-				button.disabled = true;
+				button.setAttribute('aria-disabled', 'true'); /* not disabled: keyboard focus must stay on the button */
 			}
 			form.setAttribute('aria-busy', 'true');
 			setStatus(form, text('sending', ''), '');
 			send(guests);
 		});
 
+		clearOnEdit(form);
 		if (orderType) {
 			orderType.addEventListener('change', syncAddress);
+		}
+		if (eventDate && !eventDate.getAttribute('min')) {
+			eventDate.setAttribute('min', todayIso());
 		}
 		syncAddress();
 	}

@@ -42,6 +42,9 @@
 	var checkM = null;
 	var checkA = null;
 	var lastFocus = null;
+	var savedScroll = null; /* the page's own inline scroll-padding-bottom and padding-bottom, put back when the banner is hidden */
+	var savedPadding = null;
+	var basePadding = 0; /* the root element's bottom padding before the banner added to it */
 
 	/* ---- cookie ---- */
 
@@ -184,6 +187,65 @@
 		if (chooseButton) {
 			chooseButton.setAttribute('aria-expanded', open ? 'true' : 'false');
 		}
+		syncPageClearance(); /* the banner is taller with the panel open */
+	}
+
+	/*
+	 * The banner is fixed to the bottom of the screen, so a keyboard user tabbing down the page would land on controls that
+	 * sit underneath it (WCAG 2.4.11, Focus Not Obscured). While it is showing the page keeps that much of the bottom of the
+	 * viewport clear in two ways: scroll-padding-bottom makes the browser scroll a focused element clear of the banner, and
+	 * padding-bottom on the root element lets the very end of the page (the footer links) scroll up above it. Both are the
+	 * page's own inline values put back when the banner closes.
+	 */
+	function bannerCover() {
+		var rect;
+		var height = doc.documentElement && typeof doc.documentElement.clientHeight === 'number' ? doc.documentElement.clientHeight : 0;
+		if (height > 0 && typeof root.getBoundingClientRect === 'function') {
+			rect = root.getBoundingClientRect();
+			if (rect && typeof rect.top === 'number' && height - rect.top > 0) {
+				return Math.ceil(height - rect.top); /* includes the gap under a floating banner on wide screens */
+			}
+		}
+		return typeof root.offsetHeight === 'number' ? root.offsetHeight : 0;
+	}
+
+	function pagePadding() {
+		var value = 0;
+		try {
+			if (typeof win.getComputedStyle === 'function') {
+				value = parseFloat(win.getComputedStyle(doc.documentElement).paddingBottom);
+			}
+		} catch (e) {
+			value = 0;
+		}
+		return isNaN(value) ? 0 : value;
+	}
+
+	function syncPageClearance() {
+		var style = doc.documentElement ? doc.documentElement.style : null;
+		var cover;
+		if (!style || !root) {
+			return;
+		}
+		if (root.hasAttribute('hidden')) {
+			if (savedScroll !== null) {
+				style.scrollPaddingBottom = savedScroll;
+				style.paddingBottom = savedPadding;
+				savedScroll = null;
+				savedPadding = null;
+			}
+			return;
+		}
+		cover = bannerCover();
+		if (cover > 0) {
+			if (savedScroll === null) {
+				savedScroll = style.scrollPaddingBottom || '';
+				savedPadding = style.paddingBottom || '';
+				basePadding = pagePadding();
+			}
+			style.scrollPaddingBottom = cover + 'px';
+			style.paddingBottom = (basePadding + cover) + 'px';
+		}
 	}
 
 	function canFocus(el) {
@@ -198,6 +260,7 @@
 		setHidden(reopen, true);
 		openPanel(!automatic);
 		setHidden(root, false);
+		syncPageClearance();
 		if (typeof root.focus === 'function') {
 			root.focus();
 		}
@@ -208,6 +271,7 @@
 			return;
 		}
 		setHidden(root, true);
+		syncPageClearance();
 		setHidden(reopen, false);
 		if (canFocus(lastFocus) && !root.contains(lastFocus)) {
 			lastFocus.focus();
@@ -295,6 +359,9 @@
 			chooseButton = root.querySelector('[data-dbgr-action="choose"]');
 			root.addEventListener('click', onBannerClick);
 			root.addEventListener('keydown', onBannerKey);
+			if (typeof win.addEventListener === 'function') {
+				win.addEventListener('resize', syncPageClearance); /* rotation or a wider window changes how much it covers */
+			}
 		}
 		doc.addEventListener('click', onDocumentClick);
 

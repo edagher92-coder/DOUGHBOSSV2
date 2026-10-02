@@ -37,10 +37,17 @@ class Emitter {
   }
 }
 
+/* Every element made with (or later given) an id, so the fake document can answer getElementById. */
+const REGISTRY = {};
+let UID = 0;
+
 class El extends Emitter {
-  constructor(attrs) {
+  constructor(attrs, nodeName) {
     super();
     this.attrs = Object.assign({}, attrs || {});
+    this.nodeName = nodeName || 'DIV';
+    this.parentNode = null;
+    this.children = [];
     this.value = '';
     this.checked = false;
     this.hidden = false;
@@ -48,12 +55,18 @@ class El extends Emitter {
     this.textContent = '';
     this.className = '';
     this.focused = false;
+    if (this.attrs.id) {
+      REGISTRY[this.attrs.id] = this;
+    }
   }
   getAttribute(name) {
     return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null;
   }
   setAttribute(name, value) {
     this.attrs[name] = String(value);
+    if (name === 'id') {
+      REGISTRY[String(value)] = this;
+    }
   }
   removeAttribute(name) {
     delete this.attrs[name];
@@ -61,16 +74,41 @@ class El extends Emitter {
   focus() {
     this.focused = true;
   }
+  add(child) {
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
+  insertBefore(node, ref) {
+    const at = ref ? this.children.indexOf(ref) : -1;
+    node.parentNode = this;
+    if (at === -1) {
+      this.children.push(node);
+    } else {
+      this.children.splice(at, 0, node);
+    }
+    return node;
+  }
+  get nextSibling() {
+    if (!this.parentNode) {
+      return null;
+    }
+    const siblings = this.parentNode.children;
+    return siblings[siblings.indexOf(this) + 1] || null;
+  }
 }
 
 function makeForm(options) {
   const opts = Object.assign({ stores: false }, options || {});
   const form = new El();
   const f = {};
+  UID += 1;
   ['email', 'first_name', 'mobile', 'website', 'consent_version', 'token'].forEach((n) => {
-    f[n] = new El({ name: n });
+    f[n] = new El({ name: n, id: 'dbgr-wl-' + UID + '-' + n }, 'INPUT');
+    new El({}, 'P').add(f[n]); // each field sits in its own paragraph, as the PHP markup has it
   });
-  f.consent = new El({ name: 'consent' });
+  f.consent = new El({ name: 'consent', id: 'dbgr-wl-' + UID + '-consent' }, 'INPUT');
+  new El({}, 'P').add(new El({}, 'LABEL')).add(f.consent); // inside its label, as in the markup
   f.consent_version.value = 'wl-0123456789ab';
   if (opts.stores) {
     f.store = new El({ name: 'store' });
@@ -90,8 +128,8 @@ function makeForm(options) {
       set() {},
     });
   }
-  const button = new El({ type: 'submit' });
-  const status = new El({ 'data-dbgr-wl-status': '' });
+  const button = new El({ type: 'submit' }, 'BUTTON');
+  const status = new El({ 'data-dbgr-wl-status': '' }, 'P');
   const fields = new El({ 'data-dbgr-wl-fields': '' });
   form.f = f;
   form.button = button;
@@ -125,6 +163,8 @@ function load(options) {
   const clock = { now: 1700000000000 };
   const doc = new Emitter();
   doc.readyState = 'complete';
+  doc.getElementById = (id) => REGISTRY[id] || null;
+  doc.createElement = (tag) => new El({}, String(tag).toUpperCase());
   doc.querySelectorAll = (selector) => {
     if (selector === 'form[data-dbgr-waitlist]') {
       return opts.forms;
@@ -242,6 +282,16 @@ function fill(form, email, consent) {
   form.f.consent.checked = consent;
 }
 
+/** The error span the script made for a field (null when none). */
+function errOf(form, name) {
+  return REGISTRY[form.f[name].getAttribute('id') + '-err'] || null;
+}
+
+/** Fire the delegated input listener the way a browser does: the event reaches the form with the field as its target. */
+function edit(form, name, type) {
+  form.dispatch(type || 'input', { type: type || 'input', target: form.f[name] });
+}
+
 /* ------------------------------------------------------------------ tests */
 
 test('waitlist.js: loads and fetches a form token on load; never throws without a config; sends nothing else', () => {
@@ -258,24 +308,33 @@ test('waitlist.js: loads and fetches a form token on load; never throws without 
   assert.strictEqual(none.requests.length, 0, 'no config: no request');
 });
 
-test('waitlist.js: an empty or malformed email and an unticked consent box stop the submit, show the message, send no POST', () => {
+test('waitlist.js: an empty or malformed email and an unticked consent box stop the submit, mark their own field, send no POST', () => {
   const form = makeForm();
   const page = load({ forms: [form] });
   page.requests[0].answer(200, { token: '1700000000.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' });
 
   fill(form, '', true);
   assert.ok(submit(form), 'the default browser submit is always prevented');
-  assert.strictEqual(form.status.textContent, 'EMAIL_MSG');
-  assert.match(form.status.className, /dbgr-wl__status--error/);
+  assert.strictEqual(errOf(form, 'email').textContent, 'EMAIL_MSG', 'the message sits with the email box');
+  assert.strictEqual(errOf(form, 'email').className, 'dbgr-wl__err', 'styling hook');
+  assert.strictEqual(errOf(form, 'email').getAttribute('id'), form.f.email.getAttribute('id') + '-err', 'id is <field id>-err');
+  assert.strictEqual(form.f.email.getAttribute('aria-invalid'), 'true');
+  assert.strictEqual(form.f.email.getAttribute('aria-describedby'), errOf(form, 'email').getAttribute('id'));
+  assert.strictEqual(form.status.textContent, '', 'the bottom status is not used for field errors');
   fill(form, 'not-an-email', true);
   submit(form);
-  assert.strictEqual(form.status.textContent, 'EMAIL_MSG');
+  assert.strictEqual(errOf(form, 'email').textContent, 'EMAIL_MSG');
   assert.strictEqual(form.f.email.focused, true, 'focus goes to the email box');
+  assert.strictEqual(form.f.consent.getAttribute('aria-invalid'), null, 'the ticked consent box is not marked');
 
   fill(form, 'jordan@example.com', false);
+  form.f.email.focused = false;
   submit(form);
-  assert.strictEqual(form.status.textContent, 'CONSENT_MSG', 'consent is required');
+  assert.strictEqual(errOf(form, 'consent').textContent, 'CONSENT_MSG', 'consent is required');
+  assert.strictEqual(form.f.consent.getAttribute('aria-invalid'), 'true');
   assert.strictEqual(form.f.consent.focused, true, 'focus goes to the consent box');
+  assert.strictEqual(form.f.email.getAttribute('aria-invalid'), null, 'the email error was cleared once the email was fine');
+  assert.strictEqual(errOf(form, 'email').textContent, '');
   assert.strictEqual(page.requests.filter((r) => r.method === 'POST').length, 0, 'no POST was ever sent');
   assert.strictEqual(page.timers.length, 0, 'nothing was scheduled');
 });
@@ -294,7 +353,8 @@ test('waitlist.js: a submit waits until the token is old enough, then POSTs the 
   assert.strictEqual(page.timers.length, 1, 'a timer was set');
   assert.ok(page.timers[0].ms >= 2299 && page.timers[0].ms <= 2301, 'waits 3 s + 0.3 s minus the age: ' + page.timers[0].ms);
   assert.strictEqual(form.status.textContent, 'WAIT_MSG');
-  assert.strictEqual(form.button.disabled, true, 'the button is disabled while waiting');
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), 'true', 'the button is aria-disabled while waiting');
+  assert.strictEqual(form.button.disabled, false, 'and NOT disabled, so keyboard focus is not dropped');
   assert.strictEqual(form.getAttribute('aria-busy'), 'true');
 
   page.clock.now += 2300;
@@ -355,9 +415,11 @@ test('waitlist.js: success is shown only after the server says success; waitlist
   assert.strictEqual(form.status.textContent, '<b>Thanks.</b> Check your email.', 'shown as plain text, not markup');
   assert.match(form.status.className, /dbgr-wl__status--ok/);
   assert.strictEqual(form.fields.hidden, true, 'the fields are hidden');
+  assert.strictEqual(form.status.getAttribute('tabindex'), '-1', 'the confirmation can take focus');
+  assert.strictEqual(form.status.focused, true, 'focus lands on the confirmation after the form collapses');
   assert.strictEqual(form.f.email.value, '', 'email cleared');
   assert.strictEqual(form.f.consent.checked, false, 'consent box cleared');
-  assert.strictEqual(form.button.disabled, false, 'button released');
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), null, 'button released');
   assert.deepStrictEqual(plain(page.tracked), [{ name: 'waitlist_submit', params: { store: 'bankstown' } }]);
 
   // A shop with no analytics slug and "no preference" both report "none".
@@ -393,7 +455,8 @@ test('waitlist.js: failures show the server message and never track; 429 and 503
     assert.strictEqual(form.status.textContent, c.text, 'message for status ' + c.status);
     assert.match(form.status.className, /dbgr-wl__status--error/);
     assert.strictEqual(form.fields.hidden, false, 'the form stays so the person can retry: ' + c.status);
-    assert.strictEqual(form.button.disabled, false, 'button released: ' + c.status);
+    assert.strictEqual(form.button.getAttribute('aria-disabled'), null, 'button released: ' + c.status);
+    assert.strictEqual(form.status.focused, false, 'a failure does not steal focus: ' + c.status);
     assert.strictEqual(page.tracked.length, 0, 'a failure is never tracked: ' + c.status);
   });
 
@@ -422,7 +485,128 @@ test('waitlist.js: if the token cannot be fetched the submit fails with the netw
   page.requests[1].answer(503, { code: 'dbgr_unavailable' });
   assert.strictEqual(form.status.textContent, 'NETWORK_MSG');
   assert.strictEqual(page.requests.filter((r) => r.method === 'POST').length, 0, 'no POST without a token');
-  assert.strictEqual(form.button.disabled, false, 'button released');
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), null, 'button released');
+});
+
+test('waitlist.js: email and consent are BOTH reported on one submit; the first (email) is focused; the consent message sits after its label, not inside it', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  page.requests[0].answer(200, { token: '1700000000.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' });
+  fill(form, '', false);
+  submit(form);
+  assert.strictEqual(errOf(form, 'email').textContent, 'EMAIL_MSG');
+  assert.strictEqual(errOf(form, 'consent').textContent, 'CONSENT_MSG', 'the second problem is reported too, not only the first');
+  assert.strictEqual(form.f.email.getAttribute('aria-invalid'), 'true');
+  assert.strictEqual(form.f.consent.getAttribute('aria-invalid'), 'true');
+  assert.strictEqual(form.f.email.focused, true, 'focus goes to the first invalid field');
+  assert.strictEqual(form.f.consent.focused, false);
+  const label = form.f.consent.parentNode;
+  assert.strictEqual(label.nodeName, 'LABEL');
+  assert.strictEqual(label.children.indexOf(errOf(form, 'consent')), -1, 'not inside the label (it would become part of the checkbox name)');
+  assert.strictEqual(label.parentNode.children.indexOf(errOf(form, 'consent')), label.parentNode.children.indexOf(label) + 1, 'directly after the label');
+  const emailWrap = form.f.email.parentNode;
+  assert.strictEqual(emailWrap.children.indexOf(errOf(form, 'email')), emailWrap.children.indexOf(form.f.email) + 1, 'email message directly after the email box');
+  assert.strictEqual(form.status.textContent, '', 'the bottom status stays empty');
+});
+
+test('waitlist.js: the error span is reused; editing or ticking clears only that field (input and change)', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  page.requests[0].answer(200, { token: '1700000000.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' });
+  fill(form, 'nope', false);
+  submit(form);
+  const emailErr = errOf(form, 'email');
+  submit(form);
+  assert.strictEqual(errOf(form, 'email'), emailErr, 'the same span is reused');
+  assert.strictEqual(form.f.email.parentNode.children.length, 2, 'no second span');
+
+  edit(form, 'email');
+  assert.strictEqual(form.f.email.getAttribute('aria-invalid'), null);
+  assert.strictEqual(form.f.email.getAttribute('aria-describedby'), null);
+  assert.strictEqual(emailErr.textContent, '');
+  assert.strictEqual(emailErr.hidden, true);
+  assert.strictEqual(form.f.consent.getAttribute('aria-invalid'), 'true', 'the consent error is still there');
+  form.f.consent.checked = true;
+  edit(form, 'consent', 'change');
+  assert.strictEqual(form.f.consent.getAttribute('aria-invalid'), null, 'ticking the box clears its error');
+  assert.strictEqual(errOf(form, 'consent').textContent, '');
+  assert.doesNotThrow(() => edit(form, 'first_name'), 'editing an untouched field does nothing');
+  assert.doesNotThrow(() => form.dispatch('input', { type: 'input' }), 'an event with no target is ignored');
+});
+
+test('waitlist.js: an existing aria-describedby is kept; a stale server message is cleared on the next try', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  page.requests[0].answer(200, { token: '1700000000.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' });
+  form.f.email.setAttribute('aria-describedby', 'theme-hint');
+  fill(form, 'nope', true);
+  submit(form);
+  const id = form.f.email.getAttribute('id') + '-err';
+  assert.strictEqual(form.f.email.getAttribute('aria-describedby'), 'theme-hint ' + id);
+  edit(form, 'email');
+  assert.strictEqual(form.f.email.getAttribute('aria-describedby'), 'theme-hint', 'the theme\'s own token survives');
+
+  // A server message sits in the bottom status; the next failed try replaces it with the field error only.
+  const f2 = makeForm();
+  const p2 = load({ forms: [f2] });
+  p2.requests[0].answer(200, { token: '1700000000.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' });
+  p2.clock.now += 5000;
+  fill(f2, 'jordan@example.com', true);
+  submit(f2);
+  p2.timers[0] && p2.timers[0].fn();
+  p2.requests.filter((r) => r.method === 'POST')[0].answer(429, { success: false, code: 'dbgr_rate_limited', message: 'Too many attempts.' });
+  assert.strictEqual(f2.status.textContent, 'Too many attempts.');
+  assert.strictEqual(f2.f.email.getAttribute('aria-invalid'), null, 'a server error is not pinned to a field');
+  fill(f2, '', true);
+  submit(f2);
+  assert.strictEqual(f2.status.textContent, '', 'the old server message is cleared');
+  assert.strictEqual(errOf(f2, 'email').textContent, 'EMAIL_MSG');
+});
+
+test('waitlist.js: aria-disabled (not disabled) while the token is fetched, the wait runs and the POST is in flight; a double submit sends once; released after a failure', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  page.requests[0].answer(200, { token: '1700000000.cccccccccccccccccccccccccccccccc' });
+  page.clock.now += 5000;
+  fill(form, 'jordan@example.com', true);
+  form.button.focus();
+  submit(form);
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), 'true');
+  assert.strictEqual(form.button.disabled, false);
+  page.timers[0] && page.timers[0].fn();
+  submit(form);
+  assert.strictEqual(page.requests.filter((r) => r.method === 'POST').length, 1, 'the busy guard stops the second send');
+  page.requests.filter((r) => r.method === 'POST')[0].answer(500, null);
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), null, 'released');
+  assert.strictEqual(form.status.focused, false, 'a failure leaves focus alone');
+});
+
+test('waitlist.js: success focuses the confirmation (made focusable) only after the server says success', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  page.requests[0].answer(200, { token: '1700000000.dddddddddddddddddddddddddddddddd' });
+  page.clock.now += 5000;
+  fill(form, 'jordan@example.com', true);
+  submit(form);
+  page.timers[0] && page.timers[0].fn();
+  assert.strictEqual(form.status.focused, false, 'not before the answer');
+  assert.strictEqual(form.status.getAttribute('tabindex'), null);
+  page.requests.filter((r) => r.method === 'POST')[0].answer(200, { success: true, message: 'Thanks.' });
+  assert.strictEqual(form.status.getAttribute('tabindex'), '-1');
+  assert.strictEqual(form.status.focused, true);
+  assert.match(form.status.className, /dbgr-wl__status--ok/);
+});
+
+test('waitlist.js: with no consent box in the markup the submit is blocked and the message goes to the status line', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  page.requests[0].answer(200, { token: '1700000000.eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' });
+  fill(form, 'jordan@example.com', true);
+  delete form.f.consent;
+  submit(form);
+  assert.strictEqual(page.requests.filter((r) => r.method === 'POST').length, 0);
+  assert.strictEqual(page.timers.length, 0);
+  assert.strictEqual(form.status.textContent, 'CONSENT_MSG', 'nothing to attach it to, so it is the bottom status');
 });
 
 test('coming_soon_view: sent once when the home section first scrolls into view, with surface home; not before; not for a section that is not marked', () => {
@@ -481,6 +665,7 @@ test('waitlist.js source: ES5 only, no markup injection, no storage, no outbound
   assert.doesNotMatch(SOURCE, /mini(s)/i, 'no working name');
   assert.match(SOURCE, /textContent/, 'dynamic text uses textContent');
   assert.match(SOURCE, /'use strict'/);
+  assert.doesNotMatch(SOURCE, /\.disabled\s*=/, 'the button is never set disabled (aria-disabled keeps focus on it)');
 });
 
 test('waitlist.js: passes the ES5 gate; a planted arrow function in a copy fails it (negative control)', { skip: HAVE_ACORN ? false : 'acorn not found (set ACORN_PATH to an acorn package directory)' }, () => {

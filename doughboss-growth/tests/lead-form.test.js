@@ -37,10 +37,17 @@ class Emitter {
   }
 }
 
+/* Every element made with (or later given) an id, so the fake document can answer getElementById. */
+const REGISTRY = {};
+let UID = 0;
+
 class El extends Emitter {
-  constructor(attrs) {
+  constructor(attrs, nodeName) {
     super();
     this.attrs = Object.assign({}, attrs || {});
+    this.nodeName = nodeName || 'DIV';
+    this.parentNode = null;
+    this.children = [];
     this.value = '';
     this.checked = false;
     this.hidden = false;
@@ -48,12 +55,18 @@ class El extends Emitter {
     this.textContent = '';
     this.className = '';
     this.focused = false;
+    if (this.attrs.id) {
+      REGISTRY[this.attrs.id] = this;
+    }
   }
   getAttribute(name) {
     return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null;
   }
   setAttribute(name, value) {
     this.attrs[name] = String(value);
+    if (name === 'id') {
+      REGISTRY[String(value)] = this;
+    }
   }
   removeAttribute(name) {
     delete this.attrs[name];
@@ -61,19 +74,44 @@ class El extends Emitter {
   focus() {
     this.focused = true;
   }
+  add(child) {
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
+  insertBefore(node, ref) {
+    const at = ref ? this.children.indexOf(ref) : -1;
+    node.parentNode = this;
+    if (at === -1) {
+      this.children.push(node);
+    } else {
+      this.children.splice(at, 0, node);
+    }
+    return node;
+  }
+  get nextSibling() {
+    if (!this.parentNode) {
+      return null;
+    }
+    const siblings = this.parentNode.children;
+    return siblings[siblings.indexOf(this) + 1] || null;
+  }
 }
 
 function makeForm(options) {
   const opts = Object.assign({ segment: 'corporate', company: true, consent: true, stores: true }, options || {});
   const form = new El({ 'data-segment': opts.segment, 'data-landing': 'catering-' + opts.segment, 'data-company-required': opts.company ? '1' : '0' });
   const f = {};
+  UID += 1;
   ['customer_name', 'dbgr_company', 'customer_email', 'customer_phone', 'package_id', 'guest_count', 'event_date', 'order_type', 'address', 'notes', 'hp'].forEach((n) => {
-    f[n] = new El({ name: n });
+    f[n] = new El({ name: n, id: 'dbgr-ld-' + UID + '-' + n }, 'INPUT');
+    new El({}, 'P').add(f[n]); // each field sits in its own paragraph, as the PHP markup has it
   });
   f.order_type.value = 'pickup';
   f.package_id.value = '0';
   if (opts.consent) {
-    f.dbgr_consent_marketing = new El({ name: 'dbgr_consent_marketing' });
+    f.dbgr_consent_marketing = new El({ name: 'dbgr_consent_marketing', id: 'dbgr-ld-' + UID + '-consent' }, 'INPUT');
+    new El({}, 'P').add(new El({}, 'LABEL')).add(f.dbgr_consent_marketing); // inside its label, as in the markup
     f.dbgr_consent_text_version = new El({ name: 'dbgr_consent_text_version' });
     f.dbgr_consent_text_version.value = 'ld-0123456789ab';
   }
@@ -91,8 +129,8 @@ function makeForm(options) {
       set() {},
     });
   }
-  const button = new El({ type: 'submit' });
-  const status = new El({ 'data-dbgr-lead-status': '' });
+  const button = new El({ type: 'submit' }, 'BUTTON');
+  const status = new El({ 'data-dbgr-lead-status': '' }, 'P');
   const fields = new El({ 'data-dbgr-lead-fields': '' });
   const address = new El({ 'data-dbgr-lead-address': '' });
   address.hidden = true;
@@ -131,6 +169,8 @@ function load(options) {
   const doc = new Emitter();
   doc.readyState = 'complete';
   doc.querySelectorAll = (selector) => (selector === 'form[data-dbgr-lead-form]' ? opts.forms : []);
+  doc.getElementById = (id) => REGISTRY[id] || null;
+  doc.createElement = (tag) => new El({}, String(tag).toUpperCase());
   class FakeXHR {
     constructor() {
       this.headers = {};
@@ -208,6 +248,16 @@ function fillValid(form, extra) {
   });
 }
 
+/** The error span the script made for a field (null when none). */
+function errOf(form, name) {
+  return REGISTRY[form.f[name].getAttribute('id') + '-err'] || null;
+}
+
+/** Fire the delegated input listener the way a browser does: the event reaches the form with the field as its target. */
+function edit(form, name, type) {
+  form.dispatch(type || 'input', { type: type || 'input', target: form.f[name] });
+}
+
 /* ------------------------------------------------------------------ tests */
 
 test('lead-form.js: with a configuration it sends nothing until submitted; without one the form is inert and never posts', () => {
@@ -252,9 +302,15 @@ test('lead-form.js: client validation stops a bad submit before any request (nam
     c.mutate(form);
     assert.strictEqual(submit(form), true, c.name + ': default prevented');
     assert.strictEqual(page.requests.length, 0, c.name + ': no request');
-    assert.strictEqual(form.status.textContent, c.msg, c.name + ': message');
+    const span = errOf(form, c.focus);
+    assert.ok(span, c.name + ': an error span was made next to the field');
+    assert.strictEqual(span.textContent, c.msg, c.name + ': message sits with the field');
+    assert.strictEqual(span.className, 'dbgr-lead__err', c.name + ': styling hook');
+    assert.strictEqual(span.getAttribute('id'), form.f[c.focus].getAttribute('id') + '-err', c.name + ': id is <field id>-err');
+    assert.strictEqual(form.f[c.focus].getAttribute('aria-invalid'), 'true', c.name + ': field marked invalid');
+    assert.strictEqual(form.f[c.focus].getAttribute('aria-describedby'), span.getAttribute('id'), c.name + ': field described by its message');
     assert.strictEqual(form.f[c.focus].focused, true, c.name + ': focus moved to the field');
-    assert.match(form.status.className, /dbgr-lead__status--error/, c.name + ': error styling');
+    assert.strictEqual(form.status.textContent, '', c.name + ': the bottom status is not used for field errors');
   });
   // Negative control: the same form with valid values DOES send, so the rejections above are the validator's doing.
   const ok = makeForm();
@@ -298,7 +354,8 @@ test('lead-form.js: posts core field names with core\'s nonce header and the dbg
     dbgr_segment: 'corporate',
     dbgr_landing_key: 'catering-corporate',
   }, 'exact payload; the consent keys are absent while the box is unticked');
-  assert.strictEqual(form.button.disabled, true, 'button disabled while sending');
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), 'true', 'button is aria-disabled while sending');
+  assert.strictEqual(form.button.disabled, false, 'and NOT disabled, so keyboard focus is not dropped');
   assert.strictEqual(form.getAttribute('aria-busy'), 'true');
   assert.strictEqual(form.status.textContent, 'SENDING_MSG');
 });
@@ -344,9 +401,11 @@ test('lead-form.js: success shows the message and enquiry number, sends generate
   assert.strictEqual(form.status.textContent, 'SENT_MSG NUMBER_MSG E-1234.');
   assert.match(form.status.className, /dbgr-lead__status--ok/);
   assert.strictEqual(form.fields.hidden, true, 'fields hidden after success');
+  assert.strictEqual(form.status.getAttribute('tabindex'), '-1', 'the confirmation can take focus');
+  assert.strictEqual(form.status.focused, true, 'focus lands on the confirmation after the form collapses');
   assert.strictEqual(form.f.customer_email.value, '', 'personal data cleared');
   assert.strictEqual(form.f.dbgr_consent_marketing.checked, false, 'consent box cleared');
-  assert.strictEqual(form.button.disabled, false);
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), null, 'button released');
   assert.deepStrictEqual(plain(page.tracked), [{ name: 'generate_lead', params: { form: 'catering_enquiry', category: 'corporate', guest_band: '25-49', store: 'bankstown' } }]);
   assert.doesNotMatch(JSON.stringify(page.tracked), /@|E-1234|Test Person|Acme/, 'no personal data and no enquiry number in the event');
 });
@@ -403,7 +462,8 @@ test('lead-form.js: rejected enquiries show the right message, send no event, ke
     assert.deepStrictEqual(plain(page.tracked), [], 'status ' + c.status + ': no lead event');
     assert.strictEqual(form.f.customer_email.value, 'person@example.com', 'status ' + c.status + ': typed values kept');
     assert.strictEqual(form.fields.hidden, false, 'status ' + c.status + ': form still shown');
-    assert.strictEqual(form.button.disabled, false, 'status ' + c.status + ': button re-enabled');
+    assert.strictEqual(form.button.getAttribute('aria-disabled'), null, 'status ' + c.status + ': button re-enabled');
+    assert.strictEqual(form.status.focused, false, 'status ' + c.status + ': a failure does not steal focus');
   });
 });
 
@@ -449,6 +509,180 @@ test('lead-form.js: the delivery address row shows only for delivery', () => {
   assert.strictEqual(form.address.hidden, true, 'hidden again');
 });
 
+test('lead-form.js: every failing field is reported at once, in page order; only the first is focused; no request is sent', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  // Nothing filled in: name, company (required for corporate), email and guests are all wrong.
+  assert.strictEqual(submit(form), true);
+  assert.strictEqual(page.requests.length, 0);
+  ['customer_name', 'dbgr_company', 'customer_email', 'guest_count'].forEach((name) => {
+    const msg = { customer_name: 'NAME_MSG', dbgr_company: 'COMPANY_MSG', customer_email: 'EMAIL_MSG', guest_count: 'GUESTS_MSG' }[name];
+    assert.strictEqual(errOf(form, name).textContent, msg, name + ' reported');
+    assert.strictEqual(form.f[name].getAttribute('aria-invalid'), 'true', name + ' invalid');
+  });
+  assert.strictEqual(form.f.customer_name.focused, true, 'focus goes to the first invalid field in page order');
+  ['dbgr_company', 'customer_email', 'guest_count'].forEach((name) => {
+    assert.strictEqual(form.f[name].focused, false, name + ' is not focused');
+  });
+  assert.strictEqual(form.f.customer_phone.getAttribute('aria-invalid'), null, 'a field that was fine is not marked');
+  assert.strictEqual(errOf(form, 'customer_phone'), null, 'and has no message');
+  assert.strictEqual(form.status.textContent, '', 'the bottom status stays empty');
+
+  // Page order, not check order: a missing company is focused before a bad email.
+  const order = makeForm();
+  load({ forms: [order] });
+  fillValid(order);
+  order.f.dbgr_company.value = '';
+  order.f.customer_email.value = 'nope';
+  submit(order);
+  assert.strictEqual(order.f.dbgr_company.focused, true, 'company comes before email on the page');
+  assert.strictEqual(order.f.customer_email.focused, false);
+});
+
+test('lead-form.js: the error span is made once, sits right after its field and is reused on the next try', () => {
+  const form = makeForm();
+  load({ forms: [form] });
+  fillValid(form, { customer_email: 'bad' });
+  submit(form);
+  const first = errOf(form, 'customer_email');
+  const wrapper = form.f.customer_email.parentNode;
+  assert.strictEqual(wrapper.children.indexOf(first), wrapper.children.indexOf(form.f.customer_email) + 1, 'directly after the field');
+  assert.strictEqual(first.nodeName, 'SPAN');
+  submit(form);
+  assert.strictEqual(errOf(form, 'customer_email'), first, 'the same span is reused');
+  assert.strictEqual(wrapper.children.length, 2, 'no second span was added');
+  assert.strictEqual(first.hidden, false);
+  assert.strictEqual(first.textContent, 'EMAIL_MSG');
+});
+
+test('lead-form.js: editing an invalid field clears its own error (input and change), and only its own', () => {
+  const form = makeForm();
+  load({ forms: [form] });
+  submit(form); // all four wrong
+  edit(form, 'customer_name');
+  assert.strictEqual(form.f.customer_name.getAttribute('aria-invalid'), null, 'invalid flag removed');
+  assert.strictEqual(form.f.customer_name.getAttribute('aria-describedby'), null, 'description removed');
+  assert.strictEqual(errOf(form, 'customer_name').textContent, '', 'message emptied');
+  assert.strictEqual(errOf(form, 'customer_name').hidden, true, 'and hidden');
+  assert.strictEqual(form.f.customer_email.getAttribute('aria-invalid'), 'true', 'the others are left alone');
+  assert.strictEqual(errOf(form, 'customer_email').textContent, 'EMAIL_MSG');
+  edit(form, 'customer_email', 'change');
+  assert.strictEqual(form.f.customer_email.getAttribute('aria-invalid'), null, 'a change event clears it too');
+  // Typing in a field that is not invalid does nothing (and does not throw).
+  assert.doesNotThrow(() => edit(form, 'customer_phone'));
+  assert.strictEqual(form.f.customer_phone.getAttribute('aria-describedby'), null);
+  // A bare event with no target never throws.
+  assert.doesNotThrow(() => form.dispatch('input', { type: 'input' }));
+});
+
+test('lead-form.js: fixing the fields and resubmitting clears the old errors and sends; a stale server message is cleared on a new try', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  submit(form);
+  fillValid(form);
+  submit(form);
+  assert.strictEqual(page.requests.length, 1, 'valid now: sent');
+  ['customer_name', 'dbgr_company', 'customer_email', 'guest_count'].forEach((name) => {
+    assert.strictEqual(form.f[name].getAttribute('aria-invalid'), null, name + ' no longer invalid');
+    assert.strictEqual(form.f[name].getAttribute('aria-describedby'), null, name + ' no longer described');
+    assert.strictEqual(errOf(form, name).textContent, '', name + ' message gone');
+  });
+
+  // A server error sits in the bottom status; the next failed try replaces it with field errors only.
+  const form2 = makeForm();
+  const page2 = load({ forms: [form2] });
+  fillValid(form2);
+  submit(form2);
+  page2.requests[0].answer(429, { message: 'Too many.' });
+  assert.strictEqual(form2.status.textContent, 'LIMIT_MSG');
+  assert.strictEqual(form2.f.customer_email.getAttribute('aria-invalid'), null, 'a server error is not pinned to a field');
+  form2.f.customer_name.value = '';
+  submit(form2);
+  assert.strictEqual(form2.status.textContent, '', 'the old server message is cleared');
+  assert.strictEqual(errOf(form2, 'customer_name').textContent, 'NAME_MSG');
+});
+
+test('lead-form.js: an existing aria-describedby is kept; only the script\'s own id is added and removed', () => {
+  const form = makeForm();
+  load({ forms: [form] });
+  fillValid(form, { customer_email: 'bad' });
+  form.f.customer_email.setAttribute('aria-describedby', 'theme-hint');
+  submit(form);
+  const id = form.f.customer_email.getAttribute('id') + '-err';
+  assert.strictEqual(form.f.customer_email.getAttribute('aria-describedby'), 'theme-hint ' + id);
+  submit(form);
+  assert.strictEqual(form.f.customer_email.getAttribute('aria-describedby'), 'theme-hint ' + id, 'not added twice');
+  edit(form, 'customer_email');
+  assert.strictEqual(form.f.customer_email.getAttribute('aria-describedby'), 'theme-hint', 'the theme\'s own token survives');
+});
+
+test('lead-form.js: while sending the button is aria-disabled, never disabled, so keyboard focus is not lost; a double submit still sends once', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  fillValid(form);
+  form.button.focus();
+  submit(form);
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), 'true');
+  assert.strictEqual(form.button.disabled, false);
+  submit(form);
+  assert.strictEqual(page.requests.length, 1, 'the busy guard, not the disabled attribute, stops the second send');
+  page.requests[0].answer(500, null);
+  assert.strictEqual(form.button.getAttribute('aria-disabled'), null, 'released after the answer');
+  submit(form);
+  assert.strictEqual(page.requests.length, 2, 'a retry works after a failure');
+});
+
+test('lead-form.js: success moves focus to the confirmation (made focusable); a rejected send does not', () => {
+  const ok = makeForm();
+  const page = load({ forms: [ok] });
+  fillValid(ok);
+  submit(ok);
+  assert.strictEqual(ok.status.focused, false, 'not focused while sending');
+  page.requests[0].answer(200, { success: true, enquiry_number: 'E-1' });
+  assert.strictEqual(ok.fields.hidden, true);
+  assert.strictEqual(ok.status.getAttribute('tabindex'), '-1');
+  assert.strictEqual(ok.status.focused, true);
+  assert.match(ok.status.className, /dbgr-lead__status--ok/);
+
+  const bad = makeForm();
+  const page2 = load({ forms: [bad] });
+  fillValid(bad);
+  submit(bad);
+  page2.requests[0].answer(500, null);
+  assert.strictEqual(bad.status.focused, false, 'a failure leaves focus where it was');
+  assert.strictEqual(bad.status.getAttribute('tabindex'), null);
+});
+
+test('lead-form.js: the event date picker starts at today (visitor calendar) unless the markup already sets a minimum', () => {
+  const two = (n) => String(n).padStart(2, '0');
+  const iso = (d) => d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
+  const form = makeForm();
+  const before = iso(new Date());
+  load({ forms: [form] });
+  const after = iso(new Date());
+  assert.match(form.f.event_date.getAttribute('min'), /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok([before, after].indexOf(form.f.event_date.getAttribute('min')) !== -1, 'today, read from the clock');
+
+  const own = makeForm();
+  own.f.event_date.setAttribute('min', '2031-01-01');
+  load({ forms: [own] });
+  assert.strictEqual(own.f.event_date.getAttribute('min'), '2031-01-01', 'a minimum already in the markup is kept');
+
+  const inert = makeForm();
+  load({ config: false, forms: [inert] });
+  assert.strictEqual(inert.f.event_date.getAttribute('min'), null, 'an inert form is left alone');
+});
+
+test('lead-form.js: a required field that is missing from the markup still blocks the send and says why in the status line', () => {
+  const form = makeForm();
+  const page = load({ forms: [form] });
+  fillValid(form);
+  delete form.f.dbgr_company; // markup without the company box, but the form says it is required
+  submit(form);
+  assert.strictEqual(page.requests.length, 0, 'not sent');
+  assert.strictEqual(form.status.textContent, 'COMPANY_MSG', 'nothing to attach it to, so it is the bottom status');
+});
+
 test('lead-form.js source: ES5 only, no markup injection, no storage, no hard-coded host, no direct tag, no working name', () => {
   assert.doesNotMatch(SOURCE, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\b|new Function/);
   assert.doesNotMatch(SOURCE, /localStorage|sessionStorage|document\.cookie|indexedDB/, 'nothing is stored in the browser');
@@ -457,6 +691,7 @@ test('lead-form.js source: ES5 only, no markup injection, no storage, no hard-co
   assert.doesNotMatch(SOURCE, new RegExp('mini' + 's', 'i'), 'no working name');
   assert.match(SOURCE, /textContent/, 'dynamic text uses textContent');
   assert.match(SOURCE, /'use strict'/);
+  assert.doesNotMatch(SOURCE, /\.disabled\s*=/, 'the button is never set disabled (aria-disabled keeps focus on it)');
 });
 
 test('lead-form.js: passes the ES5 gate; a planted arrow function in a copy fails it (negative control)', { skip: HAVE_ACORN ? false : 'acorn not found (set ACORN_PATH to an acorn package directory)' }, () => {

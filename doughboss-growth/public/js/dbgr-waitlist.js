@@ -73,17 +73,107 @@
 		return form.querySelector('[name="' + name + '"]');
 	}
 
-	function setStatus(form, message, kind) {
+	function trim(value) {
+		return String(value === null || value === undefined ? '' : value).replace(/^\s+|\s+$/g, '');
+	}
+
+	/**
+	 * The status line (below the button) is for what the server said and for success. When focusNode is true the line is
+	 * made focusable and focused, so a keyboard or screen reader user lands on the confirmation after the form collapses.
+	 */
+	function setStatus(form, message, kind, focusNode) {
 		var node = form.querySelector('[data-dbgr-wl-status]');
 		if (!node) {
 			return;
 		}
 		node.textContent = message;
 		node.className = 'dbgr-wl__status' + (kind ? ' dbgr-wl__status--' + kind : '');
+		if (focusNode === true && typeof node.focus === 'function') {
+			node.setAttribute('tabindex', '-1');
+			node.focus();
+		}
 	}
 
-	function trim(value) {
-		return String(value === null || value === undefined ? '' : value).replace(/^\s+|\s+$/g, '');
+	/* ---- field-level errors: the message sits next to its own field and the field says it is invalid ---- */
+
+	function errorId(node) {
+		var id = node.getAttribute('id');
+		return (id ? id : 'dbgr-wl-' + String(node.getAttribute('name') || 'field')) + '-err';
+	}
+
+	function hasToken(list, token) {
+		return (' ' + trim(list).replace(/\s+/g, ' ') + ' ').indexOf(' ' + token + ' ') !== -1;
+	}
+
+	function addToken(list, token) {
+		var current = trim(list);
+		if (hasToken(current, token)) {
+			return current;
+		}
+		return current === '' ? token : current + ' ' + token;
+	}
+
+	function removeToken(list, token) {
+		var parts = trim(list).split(/\s+/);
+		var kept = [];
+		var i;
+		for (i = 0; i < parts.length; i += 1) {
+			if (parts[i] !== '' && parts[i] !== token) {
+				kept.push(parts[i]);
+			}
+		}
+		return kept.join(' ');
+	}
+
+	/** Put message in <span id="<field id>-err" class="dbgr-wl__err"> after the field (reused on the next try). */
+	function fieldError(node, message) {
+		var id = errorId(node);
+		var span = document.getElementById(id);
+		var anchor = node;
+		if (!span) {
+			span = document.createElement('span');
+			span.setAttribute('id', id);
+			span.className = 'dbgr-wl__err';
+			/* A checkbox sits inside its label: put the message after the label so it is not read as part of the name. */
+			if (anchor.parentNode && String(anchor.parentNode.nodeName).toLowerCase() === 'label') {
+				anchor = anchor.parentNode;
+			}
+			if (anchor.parentNode) {
+				anchor.parentNode.insertBefore(span, anchor.nextSibling);
+			}
+		}
+		span.hidden = false;
+		span.textContent = message;
+		node.setAttribute('aria-invalid', 'true');
+		node.setAttribute('aria-describedby', addToken(node.getAttribute('aria-describedby'), id));
+	}
+
+	function clearFieldError(node) {
+		var id = errorId(node);
+		var span = document.getElementById(id);
+		var rest = removeToken(node.getAttribute('aria-describedby'), id);
+		node.removeAttribute('aria-invalid');
+		if (rest === '') {
+			node.removeAttribute('aria-describedby');
+		} else {
+			node.setAttribute('aria-describedby', rest);
+		}
+		if (span) {
+			span.textContent = '';
+			span.hidden = true;
+		}
+	}
+
+	/** An invalid field is cleared as soon as the visitor edits it (one delegated listener per form). */
+	function clearOnEdit(form) {
+		function onEdit(event) {
+			var target = event ? event.target : null;
+			if (target && typeof target.getAttribute === 'function' && target.getAttribute('aria-invalid') === 'true') {
+				clearFieldError(target);
+			}
+		}
+		form.addEventListener('input', onEdit);
+		form.addEventListener('change', onEdit);
 	}
 
 	function wire(form) {
@@ -114,7 +204,7 @@
 		function release() {
 			state.busy = false;
 			if (button) {
-				button.disabled = false;
+				button.removeAttribute('aria-disabled');
 			}
 			form.removeAttribute('aria-busy');
 		}
@@ -156,7 +246,7 @@
 					if (fields) {
 						fields.hidden = true;
 					}
-					setStatus(form, typeof data.message === 'string' && data.message !== '' ? data.message : text('generic', ''), 'ok');
+					setStatus(form, typeof data.message === 'string' && data.message !== '' ? data.message : text('generic', ''), 'ok', true);
 					track('waitlist_submit', { store: slug });
 					return;
 				}
@@ -174,32 +264,54 @@
 			});
 		}
 
+		/**
+		 * Run both checks, mark every bad field and focus the first bad one (in page order). True when the form is fine.
+		 */
+		function validate() {
+			var emailNode = field(form, 'email');
+			var consent = field(form, 'consent');
+			var email = trim(emailNode.value);
+			var first = null;
+			var failed = false;
+			function check(node, bad, message) {
+				if (!bad) {
+					if (node) {
+						clearFieldError(node);
+					}
+					return;
+				}
+				failed = true;
+				if (!node) {
+					setStatus(form, message, 'error'); /* no field to attach it to */
+					return;
+				}
+				fieldError(node, message);
+				if (!first) {
+					first = node;
+				}
+			}
+			setStatus(form, '', ''); /* a message from an earlier try is out of date now */
+			check(emailNode, email === '' || email.indexOf('@') < 1, text('email', ''));
+			check(consent, !consent || !consent.checked, text('consent', ''));
+			if (first && typeof first.focus === 'function') {
+				first.focus();
+			}
+			return !failed;
+		}
+
 		form.addEventListener('submit', function (event) {
-			var email;
-			var consent;
 			if (event && typeof event.preventDefault === 'function') {
 				event.preventDefault();
 			}
 			if (state.busy) {
 				return;
 			}
-			email = trim(field(form, 'email').value);
-			consent = field(form, 'consent');
-			if (email === '' || email.indexOf('@') < 1) {
-				setStatus(form, text('email', ''), 'error');
-				field(form, 'email').focus();
-				return;
-			}
-			if (!consent || !consent.checked) {
-				setStatus(form, text('consent', ''), 'error');
-				if (consent) {
-					consent.focus();
-				}
+			if (!validate()) {
 				return;
 			}
 			state.busy = true;
 			if (button) {
-				button.disabled = true;
+				button.setAttribute('aria-disabled', 'true'); /* not disabled: keyboard focus must stay on the button */
 			}
 			form.setAttribute('aria-busy', 'true');
 			setStatus(form, text('sending', ''), '');
@@ -222,6 +334,7 @@
 			});
 		});
 
+		clearOnEdit(form);
 		fetchToken(function () {});
 	}
 

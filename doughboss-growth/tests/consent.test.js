@@ -108,7 +108,7 @@ class FakeElement extends Emitter {
 
 /** Build a window + document with the server-rendered banner (same ids and data attributes as the PHP markup). */
 function makeEnv(options) {
-  const opts = Object.assign({ config: { consentVersion: '1', mode: 'deny', gtm: true }, banner: true, cookie: '', https: true, readyState: 'complete' }, options || {});
+  const opts = Object.assign({ config: { consentVersion: '1', mode: 'deny', gtm: true }, banner: true, cookie: '', https: true, readyState: 'complete', layout: null }, options || {});
   const doc = new Emitter();
   doc.focusLog = [];
   doc.cookieWrites = [];
@@ -155,6 +155,16 @@ function makeEnv(options) {
     byId.choose = root.add(new FakeElement(doc, 'btn-choose', { 'data-dbgr-action': 'choose', 'aria-expanded': 'false' }));
     byId['dbgr-consent-reopen'] = doc.body.add(new FakeElement(doc, 'dbgr-consent-reopen', { hidden: '', 'data-dbgr-consent-open': '1' }));
   }
+  /* Optional layout: the banner's height, and (for a floating banner) the gap under it. Without it the script sees neither. */
+  doc.documentElement = { style: { scrollPaddingBottom: '', paddingBottom: '' }, clientHeight: opts.layout ? opts.layout.viewport : 0 };
+  if (opts.layout && byId['dbgr-consent']) {
+    const banner = byId['dbgr-consent'];
+    banner.layout = opts.layout;
+    Object.defineProperty(banner, 'offsetHeight', { get() { return banner.hasAttribute('hidden') ? 0 : banner.layout.height; } });
+    if (opts.layout.useRect) {
+      banner.getBoundingClientRect = () => ({ top: banner.layout.viewport - banner.layout.height - (banner.layout.gap || 0) });
+    }
+  }
   doc.getElementById = (id) => byId[id] || null;
   doc.createEvent = () => {
     throw new Error('createEvent not used in this environment');
@@ -163,6 +173,13 @@ function makeEnv(options) {
 
   const win = { document: doc, location: { protocol: opts.https ? 'https:' : 'http:' }, CustomEvent: FakeEvent };
   win.window = win;
+  win.listeners = {};
+  win.addEventListener = (type, fn) => {
+    (win.listeners[type] = win.listeners[type] || []).push(fn);
+  };
+  if (opts.layout) {
+    win.getComputedStyle = () => ({ paddingBottom: opts.layout.pagePadding || '0px' });
+  }
   if (opts.config) {
     win.DoughBossGrowthConfig = opts.config;
   }
@@ -416,6 +433,85 @@ test('no banner markup on the page (for example a theme that strips the footer):
   const env = run(makeEnv({ banner: false, cookie: encodeCookie({ v: '1', m: 1, a: 0, ts: 1790899200 }) }));
   assert.strictEqual(env.doc.fired.length, 2);
   assert.doesNotThrow(() => env.win.DoughBossGrowth.consent.open());
+});
+
+/* ---------------------------------------------------------------- the fixed banner must not hide focus (WCAG 2.4.11) */
+
+const padding = (env) => env.doc.documentElement.style.scrollPaddingBottom;
+const pageBottom = (env) => env.doc.documentElement.style.paddingBottom;
+
+test('scroll padding: while the banner shows the page keeps its height clear at the bottom; closing clears it', () => {
+  const env = run(makeEnv({ layout: { viewport: 800, height: 300 } }));
+  assert.strictEqual(padding(env), '300px', 'the first-visit banner reserves its own height');
+  assert.strictEqual(pageBottom(env), '300px', 'and the end of the page can scroll up above it (footer links stay reachable)');
+  click(env, env.els.reject);
+  assert.strictEqual(padding(env), '', 'cleared when the banner closes');
+  assert.strictEqual(pageBottom(env), '', 'the page padding goes too');
+});
+
+test('scroll padding: no banner shown (a stored choice) sets nothing; reopening sets it, Escape clears it', () => {
+  const env = run(makeEnv({ cookie: encodeCookie({ v: '1', m: 0, a: 0, ts: 1790899200 }), layout: { viewport: 800, height: 280 } }));
+  assert.strictEqual(padding(env), '', 'nothing reserved while the banner is closed');
+  click(env, env.els['dbgr-consent-reopen']);
+  assert.strictEqual(padding(env), '280px', 'reopened: reserved');
+  key(env, env.els.choose, 'Escape'); // the panel is open (Privacy choices opens it), so the first Escape closes the panel
+  key(env, env.els.choose, 'Escape'); // the second closes the reopened banner
+  assert.strictEqual(isHidden(env.els['dbgr-consent']), true);
+  assert.strictEqual(padding(env), '', 'cleared again');
+});
+
+test('scroll padding: opening the choices panel makes the banner taller, so the reserved space follows', () => {
+  const env = run(makeEnv({ layout: { viewport: 800, height: 300 } }));
+  env.els['dbgr-consent'].layout.height = 520;
+  click(env, env.els.choose);
+  assert.strictEqual(padding(env), '520px');
+  assert.strictEqual(pageBottom(env), '520px');
+  env.els['dbgr-consent'].layout.height = 300;
+  click(env, env.els.choose);
+  assert.strictEqual(padding(env), '300px', 'and shrinks back when the panel closes');
+  assert.strictEqual(pageBottom(env), '300px', 'the page padding does not pile up on each change');
+});
+
+test('scroll padding: a floating banner (wide screens) also reserves the gap under it, measured from the viewport', () => {
+  const env = run(makeEnv({ layout: { viewport: 800, height: 250, gap: 16, useRect: true } }));
+  assert.strictEqual(padding(env), '266px', 'height 250 + the 16px gap under it');
+});
+
+test('scroll padding: it follows a resize or rotation while the banner is showing', () => {
+  const env = run(makeEnv({ layout: { viewport: 800, height: 300 } }));
+  env.els['dbgr-consent'].layout.height = 380;
+  assert.ok(env.win.listeners.resize && env.win.listeners.resize.length === 1, 'one resize listener');
+  env.win.listeners.resize[0]();
+  assert.strictEqual(padding(env), '380px');
+  click(env, env.els.reject);
+  env.els['dbgr-consent'].layout.height = 400;
+  env.win.listeners.resize[0]();
+  assert.strictEqual(padding(env), '', 'a resize with the banner closed leaves the page alone');
+});
+
+test('scroll padding: a page that already set its own bottom scroll padding and padding gets them back when the banner closes; its own padding is added to, not replaced', () => {
+  const env = makeEnv({ layout: { viewport: 800, height: 300, pagePadding: '10px' } });
+  env.doc.documentElement.style.scrollPaddingBottom = '72px';
+  env.doc.documentElement.style.paddingBottom = '10px';
+  run(env);
+  assert.strictEqual(padding(env), '300px');
+  assert.strictEqual(pageBottom(env), '310px', 'the root element\'s own 10px stays and the banner\'s height is added to it');
+  env.els['dbgr-consent'].layout.height = 340;
+  env.win.listeners.resize[0]();
+  assert.strictEqual(pageBottom(env), '350px', 'a change replaces the banner\'s share only: it does not add up');
+  click(env, env.els.accept);
+  assert.strictEqual(padding(env), '72px', 'the theme\'s own value is restored, not wiped');
+  assert.strictEqual(pageBottom(env), '10px');
+});
+
+test('scroll padding: nothing breaks when the page has no document element, no layout API or no banner', () => {
+  assert.doesNotThrow(() => run(makeEnv({ banner: false })));
+  const bare = makeEnv({ layout: { viewport: 800, height: 300 } });
+  delete bare.doc.documentElement;
+  assert.doesNotThrow(() => { run(bare); click(bare, bare.els.reject); }, 'no document element at all');
+  const env = run(makeEnv());
+  assert.strictEqual(padding(env), '', 'no layout information: nothing reserved');
+  assert.doesNotThrow(() => click(env, env.els.accept));
 });
 
 /* ---------------------------------------------------------------- the inline snippet printed by PHP */
