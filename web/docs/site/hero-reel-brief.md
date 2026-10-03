@@ -101,3 +101,57 @@ still gentler than the 9:16 version (pieces drift and tilt rather than fly apart
 floats past the lens around 4 s. Verdict: better than the first 4:3 draft, not as strong as the 9:16 final.
 Balance afterwards: 24.25 credits. A 1080p final of a 4:3 draft would cost about 96 credits, so it needs a
 top-up or an upscale route; no further spend without Elie's go.
+
+## Minis in the background (teaser), 3 Oct 2026
+
+Elie's direction: the Mediterranean minis sit in the back of the shot, warming up, "brewing" as a sign that
+something is coming. Not the focal point, but the thing the eye keeps going back to. Creative direction
+only: no on-screen text, and the word "Minis" stays off every public surface (`teaser-direction.md`).
+
+What the minis are (from our own records, not invented): the live catering packages list mini za'atar,
+mixed, meat, cheese pizza and spinach minis by the dozen (`docs/wp/01-storefront-map.md` rows 538 to 540).
+The tray shows mini cheese manoush, mini za'atar manoush, mini meat flatbreads and spinach triangles.
+
+**New 9:16 start and end frame:** Higgsfield media `7b325e42-5697-4c59-8527-ef4940ab5208` (1080x1920).
+How it was made:
+1. Canvas 1080x1920 with the real hero photo pasted at y = 500, grey above and below.
+2. `gpt_image_2_5` filled the table and added a steel tray at the top edge, mostly out of frame, in warmer
+   oven light (job `7e41ecfe`), then one edit pass for deep-golden cheese minis (job `25e82fa6`). Further edit
+   passes made the za'atar and meat look patterned and artificial, so that loop was stopped.
+3. The za'atar and meat minis were re-textured with the real za'atar manoush and meat flatbread from the hero
+   photo, re-lit to the tray's glow (so they match the full-size items in the spread).
+4. The real hero photo was pasted back pixel-exact at (0, 499) with a 40 px feathered blend at the top and
+   bottom seams. The middle of the frame is therefore the real photograph, not a re-render.
+Image spend: 2 credits (four 0.25-credit pairs). Balance after: 21.25 credits.
+
+**Video prompt for this frame** (not yet rendered): same structure as variant A, with two additions. The
+tray never moves and is never hit by the flying food, only its cheese bubbles and its oil glints; and in
+the held beat (4.4 to 5.1 s) the camera drifts up for one brief look at the tray before the snap-back.
+Model `seedance_2_5`, `omni_reference`, 9:16, 8 s, `generate_audio: false`, `start_image` and `end_image` both media `7b325e42-...`.
+
+```
+Real, mouth-watering food cinematography for a modern Australian bakery with Mediterranean roots. Shot like a premium food documentary on a cinema macro lens: natural, believable, appetising, never CGI. The first and last frame are the exact reference image, every item in exactly the same position. Warm natural window light and true-to-life colour. The air stays perfectly clear: NO smoke, NO fog, NO haze, NO steam, NO mist, NO particle clouds at any point; the dark timber table stays crisp. Only individual real physical bits move: flakes, crumbs, seeds, droplets, strings of cheese. No text, logos, people or hands. The small lemon wedges stay tiny and far from the lens.
+
+THE TRAY AT THE TOP: a dark steel tray of fresh mini bakery bites sits at the top edge of the frame in a pool of warm amber oven light. It NEVER moves, never blows apart and is never touched by the flying food: it stays exactly in place for the whole clip, quietly alive, the cheese on the golden cheese minis gently bubbling and glistening, olive oil sheen catching the light on the za'atar minis, crisp golden pastry edges on the spinach triangles. It is always visible but never the centre of the frame: something waiting.
+
+0.0 to 0.2 s: the image, still.
+0.2 to 1.0 s: DETONATION of the main spread only, in crisp slow motion. The flatbreads, pizzas and folded pies in the middle blow apart outward and upward, toppings peeling off molten cheese on long glossy mozzarella strings that stretch and snap, juicy browned mince crumbs springing off the meat flatbread, individual za'atar flakes and sesame seeds scattering, golden extra-virgin olive oil droplets glinting. Real motion blur, physically believable. The tray at the top stays perfectly still.
+1.0 to 3.0 s: weightless slow-motion hang with a slow push-in and rack focus from piece to piece: the cheese pull stretching, a golden ribbon of olive oil pouring over dark green za'atar, glistening mince, golden crust edges. The camera stays among the floating pieces, never cutting.
+3.0 to 4.4 s: keep gliding through the suspended food in macro, cheese bubbling, oil sheen, sesame sparkling.
+4.4 to 5.1 s: a held beat as everything hovers. The camera drifts gently up past the floating pieces toward the glowing tray for one brief, tempting look at the mini bites, bubbling cheese and oil sheen in warm light, then eases back.
+5.1 to 7.2 s: reverse speed-ramp SNAP-BACK, every piece of the main spread rushing back onto its own base and into its original place, cheese strings retracting, oil and za'atar returning. The tray never moves.
+7.2 to 8.0 s: settles exactly onto the original image with a soft landing, perfectly locked steady camera, no shake, holds still. The tray still glows at the top.
+
+Visual rules: one continuous shot, no cuts; no smoke, steam or haze anywhere; no new foods or objects; the tray and its minis never fly, move or change; no plastic or cartoon look; no lemon close-ups; no camera shake in the final second.
+```
+
+A 9:16 8 s draft costs 24 credits, more than the balance,
+so it waits on a top-up and Elie's go. After a draft passes the team rating page, the 1080p final is
+about 96 credits.
+
+**Honesty notes:** the minis on the tray are AI-made (with real Dough Boss textures on two of them). Swap
+in a real photo of the minis as soon as one exists. A visible tray of minis is a product hint, so this
+version should only go public once Elie is happy for the teaser to show product.
+
+**Not done yet:** a 16:9 desktop version of the frame (tray along one edge), the video draft, and the
+team rating.
