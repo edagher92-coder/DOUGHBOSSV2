@@ -322,7 +322,7 @@ final class DoughBoss_Growth_Box_Admin {
 		} elseif ( ! $on ) {
 			$state = __( 'Off. Tick "Home hero video" above and save to turn it on.', 'doughboss-growth-box' );
 		} elseif ( $failed > 0 ) {
-			$state = __( 'On, but not running: the home hero on this site is not drawn the way this plugin expects (a core update may have changed it), so it left the photo hero alone. Saving this screen tries again.', 'doughboss-growth-box' );
+			$state = __( 'On, but not running: the home hero on this site is not drawn the way this plugin expects (a core update may have changed it), so it left the photo hero alone. Saving this screen tries again: save, load the home page once, then look here again.', 'doughboss-growth-box' );
 		} elseif ( ! $poster ) {
 			$state = __( 'On, but not running: the first-frame picture is missing. Install DoughBoss Growth Media 0.2.0.', 'doughboss-growth-box' );
 		} elseif ( ! $have ) {
