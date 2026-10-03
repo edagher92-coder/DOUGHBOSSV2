@@ -1,0 +1,53 @@
+{
+	"version": 1,
+	"claims": [
+		{
+			"id": "catering-lead-time",
+			"text": "Catering lead time statement, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Elie to confirm the real catering lead time and where it is published (web/docs/wp/00-architecture-extend-wordpress.md, owner gate 7). Nothing is shown until this is confirmed and sourced."
+		},
+		{
+			"id": "catering-service-area",
+			"text": "Catering service area statement, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Elie to confirm which suburbs or regions catering serves. The Service schema areaServed is built only from this claim once confirmed."
+		},
+		{
+			"id": "catering-delivery-or-drop-off",
+			"text": "Catering delivery or drop-off statement, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Elie to confirm whether catering is delivered or dropped off, and any conditions."
+		},
+		{
+			"id": "dietary-status",
+			"text": "Dietary information statement, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Needs Elie's confirmation with evidence before any dietary or halal wording exists. Note the public-copy lint rejects dietary words outright, so enabling one is a separate owner decision (see the WP-02 hand-off)."
+		},
+		{
+			"id": "catering-phone-line",
+			"text": "Catering phone line statement, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. A catering number appears on the live catering page but is not in the typed store data. Elie to confirm it is official and that it may appear on landing pages (web/docs/marketing/02-seo-external.md, section A2)."
+		},
+		{
+			"id": "google-reviews-statement",
+			"text": "Customer reviews statement, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Any rating or review claim needs a dated public source. Rating schema stays off until this is confirmed."
+		},
+		{
+			"id": "baked-in-house-statement",
+			"text": "How the food is made statement, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Any statement about how or where the food is made needs Elie's confirmation and a source."
+		},
+		{
+			"id": "catering-pieces-per-guest",
+			"text": "Pieces per guest guidance for the party-pack sizer, wording to be supplied by Elie",
+			"confirmed": false,
+			"note": "Gap. Elie to confirm a serving guide (pieces per guest) and its source. The party-pack sizer shows it only once confirmed and lint-clean; until then it shows package, serve range and price from core only."
+		}
+	]
+}

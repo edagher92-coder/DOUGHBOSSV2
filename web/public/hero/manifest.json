@@ -1,0 +1,1821 @@
+{
+  "version": 1,
+  "generator": "tools/blender/build_exploded_manoush.py via Higgsfield 3D Jutsu (Blender 5.2.0 LTS)",
+  "poseDataSha256": "49bb5b33250222ce5e32419a92eda5ebf95474e551c6e405be31e6ab5f6034ea",
+  "radiusMetres": 0.15,
+  "sliceCount": 8,
+  "up": "Y",
+  "units": "metres",
+  "glb": {
+    "src": "/hero/exploded-manoush.glb",
+    "bytes": 515376,
+    "compression": "EXT_meshopt_compression"
+  },
+  "camera": {
+    "position": [
+      -0.1716,
+      0.361281,
+      0.519705
+    ],
+    "target": [
+      -0.001109,
+      0.012239,
+      0.051284
+    ],
+    "fovDeg": 54.432,
+    "fovAxis": "vertical (square 1:1 render; widen for other aspects)",
+    "lensMm": 35
+  },
+  "animation": {
+    "progress": "p in [0, 1]; frame k of N is p = k / (N - 1)",
+    "nodeT": "t = clamp((p - delay) / (1 - maxDelay), 0, 1)",
+    "easing": "smootherstep: e = t^3 * (t * (6t - 15) + 10)",
+    "interpolation": "position = lerp(rest, exploded, e); quaternion = slerp(rest, exploded, e)",
+    "maxDelay": 0.3
+  },
+  "nodes": [
+    {
+      "name": "Peel",
+      "kind": "peel",
+      "slice": null,
+      "layer": 0,
+      "rest": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0
+    },
+    {
+      "name": "slice0_dough",
+      "kind": "dough",
+      "slice": 0,
+      "layer": 1,
+      "rest": {
+        "position": [
+          0.074025,
+          0.003251,
+          -0.052161
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.150245,
+          0.003251,
+          -0.083732
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.2
+    },
+    {
+      "name": "slice0_rim",
+      "kind": "rim",
+      "slice": 0,
+      "layer": 2,
+      "rest": {
+        "position": [
+          0.117381,
+          0.013286,
+          -0.052114
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.235176,
+          0.028286,
+          -0.100906
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0
+    },
+    {
+      "name": "slice0_topping",
+      "kind": "topping",
+      "slice": 0,
+      "layer": 3,
+      "rest": {
+        "position": [
+          0.063025,
+          0.009999,
+          -0.04441
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.160032,
+          0.062499,
+          -0.084591
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.12
+    },
+    {
+      "name": "slice1_dough",
+      "kind": "dough",
+      "slice": 1,
+      "layer": 1,
+      "rest": {
+        "position": [
+          0.052161,
+          0.00327,
+          -0.074025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.083732,
+          0.00327,
+          -0.150245
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.2143
+    },
+    {
+      "name": "slice1_rim",
+      "kind": "rim",
+      "slice": 1,
+      "layer": 2,
+      "rest": {
+        "position": [
+          0.052108,
+          0.013462,
+          -0.117661
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.1009,
+          0.028462,
+          -0.235456
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.0086
+    },
+    {
+      "name": "slice1_topping",
+      "kind": "topping",
+      "slice": 1,
+      "layer": 3,
+      "rest": {
+        "position": [
+          0.04441,
+          0.00958,
+          -0.063025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.084591,
+          0.06208,
+          -0.160032
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.1286
+    },
+    {
+      "name": "slice2_dough",
+      "kind": "dough",
+      "slice": 2,
+      "layer": 1,
+      "rest": {
+        "position": [
+          -0.052161,
+          0.003294,
+          -0.074025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.083732,
+          0.003294,
+          -0.150245
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.2286
+    },
+    {
+      "name": "slice2_rim",
+      "kind": "rim",
+      "slice": 2,
+      "layer": 2,
+      "rest": {
+        "position": [
+          -0.052085,
+          0.014755,
+          -0.117641
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.100878,
+          0.029755,
+          -0.235436
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.0171
+    },
+    {
+      "name": "slice2_topping",
+      "kind": "topping",
+      "slice": 2,
+      "layer": 3,
+      "rest": {
+        "position": [
+          -0.04441,
+          0.009953,
+          -0.063025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.084591,
+          0.062453,
+          -0.160032
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.1371
+    },
+    {
+      "name": "slice3_dough",
+      "kind": "dough",
+      "slice": 3,
+      "layer": 1,
+      "rest": {
+        "position": [
+          -0.074025,
+          0.003267,
+          -0.052161
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.150245,
+          0.003267,
+          -0.083732
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.2429
+    },
+    {
+      "name": "slice3_rim",
+      "kind": "rim",
+      "slice": 3,
+      "layer": 2,
+      "rest": {
+        "position": [
+          -0.117229,
+          0.014106,
+          -0.052109
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.235024,
+          0.029106,
+          -0.100902
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.0257
+    },
+    {
+      "name": "slice3_topping",
+      "kind": "topping",
+      "slice": 3,
+      "layer": 3,
+      "rest": {
+        "position": [
+          -0.063025,
+          0.010074,
+          -0.04441
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.160032,
+          0.062574,
+          -0.084591
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.1457
+    },
+    {
+      "name": "slice4_dough",
+      "kind": "dough",
+      "slice": 4,
+      "layer": 1,
+      "rest": {
+        "position": [
+          -0.074025,
+          0.003266,
+          0.052161
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.150245,
+          0.003266,
+          0.083732
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.2571
+    },
+    {
+      "name": "slice4_rim",
+      "kind": "rim",
+      "slice": 4,
+      "layer": 2,
+      "rest": {
+        "position": [
+          -0.117162,
+          0.012956,
+          0.052312
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.234956,
+          0.027956,
+          0.101104
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.0343
+    },
+    {
+      "name": "slice4_topping",
+      "kind": "topping",
+      "slice": 4,
+      "layer": 3,
+      "rest": {
+        "position": [
+          -0.063025,
+          0.009693,
+          0.04441
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.160032,
+          0.062193,
+          0.084591
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.1543
+    },
+    {
+      "name": "slice5_dough",
+      "kind": "dough",
+      "slice": 5,
+      "layer": 1,
+      "rest": {
+        "position": [
+          -0.052161,
+          0.003256,
+          0.074025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.083732,
+          0.003256,
+          0.150245
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.2714
+    },
+    {
+      "name": "slice5_rim",
+      "kind": "rim",
+      "slice": 5,
+      "layer": 2,
+      "rest": {
+        "position": [
+          -0.052329,
+          0.01369,
+          0.117392
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.101121,
+          0.02869,
+          0.235186
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.0429
+    },
+    {
+      "name": "slice5_topping",
+      "kind": "topping",
+      "slice": 5,
+      "layer": 3,
+      "rest": {
+        "position": [
+          -0.04441,
+          0.009925,
+          0.063025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.084591,
+          0.062425,
+          0.160032
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.1629
+    },
+    {
+      "name": "slice6_dough",
+      "kind": "dough",
+      "slice": 6,
+      "layer": 1,
+      "rest": {
+        "position": [
+          0.052161,
+          0.003279,
+          0.074025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.083732,
+          0.003279,
+          0.150245
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.2857
+    },
+    {
+      "name": "slice6_rim",
+      "kind": "rim",
+      "slice": 6,
+      "layer": 2,
+      "rest": {
+        "position": [
+          0.052345,
+          0.013048,
+          0.116989
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.101137,
+          0.028048,
+          0.234784
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.0514
+    },
+    {
+      "name": "slice6_topping",
+      "kind": "topping",
+      "slice": 6,
+      "layer": 3,
+      "rest": {
+        "position": [
+          0.04441,
+          0.010857,
+          0.063025
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.084591,
+          0.063357,
+          0.160032
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.1714
+    },
+    {
+      "name": "slice7_dough",
+      "kind": "dough",
+      "slice": 7,
+      "layer": 1,
+      "rest": {
+        "position": [
+          0.074025,
+          0.003269,
+          0.052161
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.150245,
+          0.003269,
+          0.083732
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.3
+    },
+    {
+      "name": "slice7_rim",
+      "kind": "rim",
+      "slice": 7,
+      "layer": 2,
+      "rest": {
+        "position": [
+          0.116873,
+          0.013633,
+          0.052339
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.234668,
+          0.028633,
+          0.101131
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.06
+    },
+    {
+      "name": "slice7_topping",
+      "kind": "topping",
+      "slice": 7,
+      "layer": 3,
+      "rest": {
+        "position": [
+          0.063025,
+          0.009641,
+          0.04441
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.160032,
+          0.062141,
+          0.084591
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "delay": 0.18
+    },
+    {
+      "name": "mint_00",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          0.004911,
+          0.011233,
+          -0.076507
+        ],
+        "quaternion": [
+          0,
+          -0.484462,
+          0,
+          0.874812
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.010759,
+          0.113702,
+          -0.167616
+        ],
+        "quaternion": [
+          -0.083465,
+          -0.63409,
+          0.005363,
+          0.768723
+        ]
+      },
+      "delay": 0.0791
+    },
+    {
+      "name": "mint_01",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          0.041373,
+          0.011476,
+          -0.002806
+        ],
+        "quaternion": [
+          0,
+          0.884253,
+          0,
+          0.467009
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.135113,
+          0.094196,
+          -0.009165
+        ],
+        "quaternion": [
+          -0.025215,
+          0.896326,
+          -0.076999,
+          0.435931
+        ]
+      },
+      "delay": 0.0634
+    },
+    {
+      "name": "mint_02",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          0.023864,
+          0.011423,
+          -0.049255
+        ],
+        "quaternion": [
+          0,
+          0.689077,
+          0,
+          0.724689
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.063748,
+          0.131047,
+          -0.131574
+        ],
+        "quaternion": [
+          0.019997,
+          0.609633,
+          0.106236,
+          0.785278
+        ]
+      },
+      "delay": 0.0728
+    },
+    {
+      "name": "mint_03",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          0.071727,
+          0.013613,
+          0.043595
+        ],
+        "quaternion": [
+          0,
+          0.874659,
+          0,
+          0.484738
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.205634,
+          0.111828,
+          0.124983
+        ],
+        "quaternion": [
+          -0.085287,
+          0.880203,
+          -0.047606,
+          0.464437
+        ]
+      },
+      "delay": 0.1111
+    },
+    {
+      "name": "mint_04",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          -0.050206,
+          0.012932,
+          0.074678
+        ],
+        "quaternion": [
+          0,
+          0.983697,
+          0,
+          0.179836
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.125719,
+          0.103719,
+          0.187
+        ],
+        "quaternion": [
+          -0.070426,
+          0.969046,
+          -0.074249,
+          0.224673
+        ]
+      },
+      "delay": 0.1086
+    },
+    {
+      "name": "mint_05",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          -0.086555,
+          0.013572,
+          -0.018082
+        ],
+        "quaternion": [
+          0,
+          -0.315538,
+          0,
+          0.948913
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.187901,
+          0.152244,
+          -0.039254
+        ],
+        "quaternion": [
+          -0.108895,
+          -0.258148,
+          0.146155,
+          0.948757
+        ]
+      },
+      "delay": 0.1052
+    },
+    {
+      "name": "mint_06",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          0.058879,
+          0.015265,
+          -0.069164
+        ],
+        "quaternion": [
+          0,
+          0.997861,
+          0,
+          0.065377
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.146674,
+          0.145894,
+          -0.172294
+        ],
+        "quaternion": [
+          -0.062086,
+          0.996143,
+          -0.033911,
+          0.051912
+        ]
+      },
+      "delay": 0.0741
+    },
+    {
+      "name": "mint_07",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          -0.037377,
+          0.012434,
+          -0.087872
+        ],
+        "quaternion": [
+          0,
+          0.177289,
+          0,
+          0.984159
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.082371,
+          0.158785,
+          -0.193652
+        ],
+        "quaternion": [
+          -0.099382,
+          0.119266,
+          0.072742,
+          0.985194
+        ]
+      },
+      "delay": 0.087
+    },
+    {
+      "name": "mint_08",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          -0.06042,
+          0.013196,
+          0.007394
+        ],
+        "quaternion": [
+          0,
+          0.978332,
+          0,
+          0.207044
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.192732,
+          0.161139,
+          0.023587
+        ],
+        "quaternion": [
+          0.035948,
+          0.947707,
+          -0.084999,
+          0.305506
+        ]
+      },
+      "delay": 0.0975
+    },
+    {
+      "name": "mint_09",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          -0.002413,
+          0.011244,
+          0.022653
+        ],
+        "quaternion": [
+          0,
+          -0.890624,
+          0,
+          0.454741
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.016653,
+          0.119686,
+          0.15634
+        ],
+        "quaternion": [
+          0.018114,
+          -0.964381,
+          0.046423,
+          0.259782
+        ]
+      },
+      "delay": 0.1089
+    },
+    {
+      "name": "mint_10",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          0.015923,
+          0.0135,
+          0.058042
+        ],
+        "quaternion": [
+          0,
+          0.953584,
+          0,
+          0.301126
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.041774,
+          0.103736,
+          0.152273
+        ],
+        "quaternion": [
+          0.001272,
+          0.974805,
+          -0.064958,
+          0.213388
+        ]
+      },
+      "delay": 0.0988
+    },
+    {
+      "name": "mint_11",
+      "kind": "mint",
+      "slice": null,
+      "layer": 4,
+      "rest": {
+        "position": [
+          -0.081737,
+          0.012909,
+          0.03807
+        ],
+        "quaternion": [
+          0,
+          -0.017795,
+          0,
+          0.999842
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.217955,
+          0.099013,
+          0.101517
+        ],
+        "quaternion": [
+          -0.094962,
+          0.011445,
+          -0.02757,
+          0.995033
+        ]
+      },
+      "delay": 0.1038
+    },
+    {
+      "name": "chili_00",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.106346,
+          0.010812,
+          0.010845
+        ],
+        "quaternion": [
+          0,
+          -0.920491,
+          0,
+          0.390765
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.256802,
+          0.127858,
+          0.026188
+        ],
+        "quaternion": [
+          0.076665,
+          -0.870345,
+          0.155237,
+          0.461003
+        ]
+      },
+      "delay": 0.1142
+    },
+    {
+      "name": "chili_01",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.071888,
+          0.01099,
+          -0.030413
+        ],
+        "quaternion": [
+          0,
+          -0.735272,
+          0,
+          0.677772
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.165824,
+          0.157383,
+          -0.070154
+        ],
+        "quaternion": [
+          0.073499,
+          -0.648393,
+          0.030933,
+          0.757118
+        ]
+      },
+      "delay": 0.0786
+    },
+    {
+      "name": "chili_02",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.048295,
+          0.010595,
+          -0.092213
+        ],
+        "quaternion": [
+          0,
+          -0.3699,
+          0,
+          0.929072
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.116636,
+          0.137178,
+          -0.222699
+        ],
+        "quaternion": [
+          0.043742,
+          -0.301581,
+          0.153048,
+          0.94006
+        ]
+      },
+      "delay": 0.0713
+    },
+    {
+      "name": "chili_03",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          -0.026413,
+          0.010822,
+          0.001298
+        ],
+        "quaternion": [
+          0,
+          0.009231,
+          0,
+          0.999957
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.137517,
+          0.155156,
+          0.006759
+        ],
+        "quaternion": [
+          0.177243,
+          -0.083786,
+          0.049869,
+          0.979325
+        ]
+      },
+      "delay": 0.1063
+    },
+    {
+      "name": "chili_04",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          -0.069364,
+          0.012645,
+          -0.073247
+        ],
+        "quaternion": [
+          0,
+          0.192086,
+          0,
+          0.981378
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.165103,
+          0.111182,
+          -0.174346
+        ],
+        "quaternion": [
+          0.057088,
+          0.303058,
+          0.135732,
+          0.941527
+        ]
+      },
+      "delay": 0.093
+    },
+    {
+      "name": "chili_05",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          -0.033244,
+          0.010827,
+          0.030025
+        ],
+        "quaternion": [
+          0,
+          -0.930147,
+          0,
+          0.367187
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.148163,
+          0.090685,
+          0.133815
+        ],
+        "quaternion": [
+          -0.050962,
+          -0.900331,
+          -0.078608,
+          0.425004
+        ]
+      },
+      "delay": 0.0878
+    },
+    {
+      "name": "chili_06",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.025116,
+          0.010787,
+          0.032532
+        ],
+        "quaternion": [
+          0,
+          -0.649721,
+          0,
+          0.760172
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.09254,
+          0.105487,
+          0.119861
+        ],
+        "quaternion": [
+          -0.106897,
+          -0.580851,
+          -0.060797,
+          0.804667
+        ]
+      },
+      "delay": 0.108
+    },
+    {
+      "name": "chili_07",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.083085,
+          0.010681,
+          0.019461
+        ],
+        "quaternion": [
+          0,
+          -0.394912,
+          0,
+          0.918719
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.200172,
+          0.140144,
+          0.046886
+        ],
+        "quaternion": [
+          0.117605,
+          -0.355968,
+          0.014293,
+          0.926959
+        ]
+      },
+      "delay": 0.1199
+    },
+    {
+      "name": "chili_08",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.004506,
+          0.010864,
+          -0.109016
+        ],
+        "quaternion": [
+          0,
+          0.163964,
+          0,
+          0.986466
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.008758,
+          0.145698,
+          -0.211892
+        ],
+        "quaternion": [
+          0.025328,
+          0.016648,
+          0.125327,
+          0.991652
+        ]
+      },
+      "delay": 0.0763
+    },
+    {
+      "name": "chili_09",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.023833,
+          0.014816,
+          0.086366
+        ],
+        "quaternion": [
+          0,
+          -0.013306,
+          0,
+          0.999911
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.057813,
+          0.117061,
+          0.209503
+        ],
+        "quaternion": [
+          0.047592,
+          0.085162,
+          0.16386,
+          0.981648
+        ]
+      },
+      "delay": 0.0999
+    },
+    {
+      "name": "chili_10",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          -0.021813,
+          0.010521,
+          -0.031115
+        ],
+        "quaternion": [
+          0,
+          -0.475465,
+          0,
+          0.879735
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.096087,
+          0.105659,
+          -0.137064
+        ],
+        "quaternion": [
+          0.180629,
+          -0.427086,
+          0.050613,
+          0.884539
+        ]
+      },
+      "delay": 0.0996
+    },
+    {
+      "name": "chili_11",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          -0.057385,
+          0.015062,
+          -0.055831
+        ],
+        "quaternion": [
+          0,
+          0.568771,
+          0,
+          0.822496
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.172925,
+          0.131962,
+          -0.168241
+        ],
+        "quaternion": [
+          0.039469,
+          0.473679,
+          0.143631,
+          0.868009
+        ]
+      },
+      "delay": 0.084
+    },
+    {
+      "name": "chili_12",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.065954,
+          0.010434,
+          0.072532
+        ],
+        "quaternion": [
+          0,
+          0.500595,
+          0,
+          0.865682
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.162499,
+          0.118051,
+          0.178706
+        ],
+        "quaternion": [
+          -0.006908,
+          0.423304,
+          -0.191099,
+          0.885577
+        ]
+      },
+      "delay": 0.1099
+    },
+    {
+      "name": "chili_13",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          -0.018526,
+          0.011517,
+          0.049234
+        ],
+        "quaternion": [
+          0,
+          0.99544,
+          0,
+          0.095388
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.074128,
+          0.155781,
+          0.196996
+        ],
+        "quaternion": [
+          0.120997,
+          0.991075,
+          -0.051589,
+          0.021651
+        ]
+      },
+      "delay": 0.1047
+    },
+    {
+      "name": "chili_14",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          0.048396,
+          0.010423,
+          0.090171
+        ],
+        "quaternion": [
+          0,
+          0.086369,
+          0,
+          0.996263
+        ]
+      },
+      "exploded": {
+        "position": [
+          0.116544,
+          0.092872,
+          0.217144
+        ],
+        "quaternion": [
+          -0.107936,
+          -0.044202,
+          0.132829,
+          0.984252
+        ]
+      },
+      "delay": 0.1066
+    },
+    {
+      "name": "chili_15",
+      "kind": "chili",
+      "slice": null,
+      "layer": 5,
+      "rest": {
+        "position": [
+          -0.035766,
+          0.011007,
+          0.01212
+        ],
+        "quaternion": [
+          0,
+          0.67755,
+          0,
+          0.735477
+        ]
+      },
+      "exploded": {
+        "position": [
+          -0.165006,
+          0.119739,
+          0.055916
+        ],
+        "quaternion": [
+          -0.053165,
+          0.589591,
+          -0.030287,
+          0.805381
+        ]
+      },
+      "delay": 0.1075
+    }
+  ],
+  "frames": {
+    "count": 24,
+    "alpha": true,
+    "sizes": {
+      "lg": {
+        "width": 840,
+        "height": 840,
+        "pattern": "/hero/frames/lg/frame-%03d.webp",
+        "totalBytes": 768644
+      },
+      "sm": {
+        "width": 480,
+        "height": 480,
+        "pattern": "/hero/frames/sm/frame-%03d.webp",
+        "totalBytes": 519842
+      }
+    }
+  },
+  "posters": {
+    "assembled": {
+      "src": "/hero/poster-assembled.webp",
+      "width": 1200,
+      "height": 1200,
+      "alpha": true,
+      "bytes": 32954
+    },
+    "exploded": {
+      "src": "/hero/poster-exploded.webp",
+      "width": 1200,
+      "height": 1200,
+      "alpha": true,
+      "bytes": 66686
+    }
+  }
+}

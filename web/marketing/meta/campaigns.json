@@ -1,0 +1,603 @@
+{
+  "_status": "DRAFT. Nothing here exists in any Meta ad account. Every campaign, ad set and ad is specified to launch PAUSED, and a human stages it in Dough Boss's own ad account after review. Field names follow the Marketing API vocabulary for readability; re-check each option in the Ads Manager screen when staging by hand.",
+  "account": {
+    "naming": "Campaign: 'DB | Meta | Leads | <Segment>'. Ad set: '<CODE> | <Area or audience>' where CODE is CORP, EVNT, SOON or WARM. Ad: '<CODE>-<AREA>-<nn> <angle> <format>-<variant>'.",
+    "currency": "AUD",
+    "timezone": "Australia/Sydney",
+    "ad_account_id": "[CONFIRM: Dough Boss's own ad account, owned by Dough Boss's own business portfolio]",
+    "facebook_page": "[CONFIRM: Dough Boss Facebook Page]",
+    "instagram_account": "[CONFIRM: Dough Boss Instagram account; src/lib/seo.ts lists https://instagram.com/doughboss, handle ownership unconfirmed]",
+    "dataset_pixel_id": "[CONFIRM: dataset (pixel) ID created for doughboss.com.au]",
+    "legal_entity": "[CONFIRM: operating entity and ABN for billing and the ad disclosure; see tracking.md]",
+    "special_ad_category": "NONE (food and catering are outside the four categories; Meta marketing API docs, retrieved 2026-10-02)",
+    "url_parameters": "Final URLs carry their UTMs in the URL itself, lower-case and hyphenated, because Meta's dynamic macros produce capitals and spaces. Pattern: utm_source=meta&utm_medium=paid-social&utm_campaign=<segment>-<offer>-<area>&utm_content=<creative-variant>. Placement is read from Ads Manager breakdowns, not from the URL.",
+    "tenant_note": "This file is for Dough Boss only. It uses no other business's ad account, page, pixel, token or audience."
+  },
+  "campaigns": [
+    {
+      "name": "DB | Meta | Leads | Corporate Office",
+      "status": "paused",
+      "phase": "launch",
+      "objective": "OUTCOME_LEADS",
+      "special_ad_categories": [],
+      "buying_type": "AUCTION",
+      "conversion_location": "WEBSITE",
+      "primary_conversion": "generate_lead:catering_enquiry (Meta standard event Lead)",
+      "landing_pages": [
+        "/catering/office-breakfast",
+        "/catering/corporate"
+      ],
+      "budget_mode": "ad set budgets (campaign budget off) so a thin catchment is not starved or flooded",
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
+          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "weekly_budget_to_exit_learning = target_cost_per_lead x optimisation_events_threshold_per_week   (threshold from Meta's learning phase page: [CONFIRM: figure])",
+          "check: if weekly_budget_to_exit_learning > weekly budget available, merge ad sets until it holds"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: avg_catering_order_value]",
+          "[CONFIRM: gross_margin_pct on catering]",
+          "[CONFIRM: lead_to_won_rate, from the first weeks of plugin data; until then a stated guess labelled as a guess]",
+          "[CONFIRM: required_safety_margin]",
+          "[CONFIRM: monthly_lead_goal]",
+          "[CONFIRM: optimisation events needed per week to leave learning, from Meta's learning phase page]",
+          "[CONFIRM: who owns the monthly media spend cap]"
+        ]
+      },
+      "bidding": {
+        "strategy": "highest_volume (lowest cost) at launch",
+        "cost_cap_aud": "[CONFIRM: cost cap from break-even maths, only after enough Lead events]"
+      },
+      "creative_controls": {
+        "advantage_plus_creative": "all text and image enhancements OFF at launch so no unreviewed wording ships [VERIFY: option names in Ads Manager]"
+      },
+      "launch_gate": [
+        "Test lead seen end to end in plugin, Test Events and Events Manager",
+        "Domain verified",
+        "Real photography in hand",
+        "Elie has approved every ad against creative-brief.md checklist",
+        "Enquiry mailbox and phone answered during agreed hours [CONFIRM: who and when]"
+      ],
+      "ad_sets": [
+        {
+          "name": "CORP | Bankstown catchment",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "utm_segment": "corporate",
+          "utm_area": "bankstown",
+          "optimisation": {
+            "goal": "OFFSITE_CONVERSIONS",
+            "conversion_event": "Lead",
+            "conversion_location": "WEBSITE",
+            "attribution_setting": "[CONFIRM: record the attribution window Ads Manager offers at staging and keep it constant]"
+          },
+          "audience": {
+            "mode": "advantage_plus_audience",
+            "hard_controls": {
+              "locations": "see location_targeting",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
+              "exclusions": [
+                "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
+              ]
+            },
+            "suggestions_only": [
+              "Job-role and industry interests relevant to office, facilities and event roles. Pick from the Ads Manager picker only; availability changes and some options have been removed [CONFIRM: what the picker offers today].",
+              "No suggestion may reference religion, ethnicity, health, finances or any other personal attribute."
+            ],
+            "lookalikes": "none at launch"
+          },
+          "location_targeting": {
+            "stores": [
+              {
+                "slug": "bankstown",
+                "address": "462 Chapel Rd, Bankstown NSW 2200"
+              }
+            ],
+            "radius_km": "[CONFIRM: radius]",
+            "location_types": "[CONFIRM: living in this location versus living in or recently in this location]",
+            "radius_note": "Starting hypothesis only: begin no wider than the area Elie confirms Dough Boss will serve, then widen on evidence. Never a delivery promise.",
+            "suburb_hypothesis": [
+              "Bankstown",
+              "Chullora",
+              "Condell Park",
+              "Yagoona"
+            ],
+            "suburb_source": "council ward pages in docs/marketing/research/local-demand.md; demand hypotheses, not a service area"
+          },
+          "placements": "advantage_plus_placements, then review the placement breakdown weekly",
+          "ads": [
+            {
+              "name": "CORP-BKT-01 office-breakfast photo-a",
+              "status": "paused"
+            },
+            {
+              "name": "CORP-BKT-02 office-breakfast video-a",
+              "status": "paused"
+            },
+            {
+              "name": "CORP-BKT-03 team-lunch photo-a",
+              "status": "paused"
+            },
+            {
+              "name": "CORP-BKT-04 meeting-spread photo-a",
+              "status": "paused"
+            }
+          ]
+        },
+        {
+          "name": "CORP | Revesby catchment",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 1,
+          "utm_segment": "corporate",
+          "utm_area": "revesby",
+          "optimisation": {
+            "goal": "OFFSITE_CONVERSIONS",
+            "conversion_event": "Lead",
+            "conversion_location": "WEBSITE",
+            "attribution_setting": "[CONFIRM: record the attribution window Ads Manager offers at staging and keep it constant]"
+          },
+          "audience": {
+            "mode": "advantage_plus_audience",
+            "hard_controls": {
+              "locations": "see location_targeting",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
+              "exclusions": [
+                "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
+              ]
+            },
+            "suggestions_only": [
+              "Job-role and industry interests relevant to office, facilities and event roles. Pick from the Ads Manager picker only; availability changes and some options have been removed [CONFIRM: what the picker offers today].",
+              "No suggestion may reference religion, ethnicity, health, finances or any other personal attribute."
+            ],
+            "lookalikes": "none at launch"
+          },
+          "location_targeting": {
+            "stores": [
+              {
+                "slug": "revesby",
+                "address": "12/25 Selems Parade, Revesby NSW 2212"
+              }
+            ],
+            "radius_km": "[CONFIRM: radius]",
+            "location_types": "[CONFIRM: living in this location versus living in or recently in this location]",
+            "radius_note": "Starting hypothesis only: begin no wider than the area Elie confirms Dough Boss will serve, then widen on evidence. Never a delivery promise.",
+            "suburb_hypothesis": [
+              "Revesby",
+              "Padstow",
+              "Milperra",
+              "Panania"
+            ],
+            "suburb_source": "council ward pages in docs/marketing/research/local-demand.md; demand hypotheses, not a service area"
+          },
+          "placements": "advantage_plus_placements, then review the placement breakdown weekly",
+          "ads": [
+            {
+              "name": "CORP-REV-01 office-breakfast photo-a",
+              "status": "paused"
+            },
+            {
+              "name": "CORP-REV-02 team-lunch photo-a",
+              "status": "paused"
+            },
+            {
+              "name": "CORP-REV-03 meeting-spread video-a",
+              "status": "paused"
+            }
+          ]
+        },
+        {
+          "name": "CORP | Roselands catchment",
+          "status": "paused",
+          "hold": true,
+          "hold_reason": "Corporate catering from the Roselands Centro store is not confirmed [CONFIRM: does Roselands take corporate enquiries]",
+          "launch_wave": 2,
+          "utm_segment": "corporate",
+          "utm_area": "roselands",
+          "optimisation": {
+            "goal": "OFFSITE_CONVERSIONS",
+            "conversion_event": "Lead",
+            "conversion_location": "WEBSITE",
+            "attribution_setting": "[CONFIRM: record the attribution window Ads Manager offers at staging and keep it constant]"
+          },
+          "audience": {
+            "mode": "advantage_plus_audience",
+            "hard_controls": {
+              "locations": "see location_targeting",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
+              "exclusions": [
+                "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
+              ]
+            },
+            "suggestions_only": [
+              "Job-role and industry interests relevant to office, facilities and event roles. Pick from the Ads Manager picker only; availability changes and some options have been removed [CONFIRM: what the picker offers today].",
+              "No suggestion may reference religion, ethnicity, health, finances or any other personal attribute."
+            ],
+            "lookalikes": "none at launch"
+          },
+          "location_targeting": {
+            "stores": [
+              {
+                "slug": "roselands",
+                "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+              }
+            ],
+            "radius_km": "[CONFIRM: radius]",
+            "location_types": "[CONFIRM: living in this location versus living in or recently in this location]",
+            "radius_note": "Starting hypothesis only: begin no wider than the area Elie confirms Dough Boss will serve, then widen on evidence. Never a delivery promise.",
+            "suburb_hypothesis": [
+              "Roselands",
+              "Lakemba"
+            ],
+            "suburb_source": "council ward pages in docs/marketing/research/local-demand.md; demand hypotheses, not a service area"
+          },
+          "placements": "advantage_plus_placements, then review the placement breakdown weekly",
+          "ads": [
+            {
+              "name": "CORP-ROS-01 team-lunch photo-a",
+              "status": "paused"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DB | Meta | Leads | Events and Parties",
+      "status": "paused",
+      "phase": "launch",
+      "objective": "OUTCOME_LEADS",
+      "special_ad_categories": [],
+      "buying_type": "AUCTION",
+      "conversion_location": "WEBSITE",
+      "primary_conversion": "generate_lead:catering_enquiry (Meta standard event Lead)",
+      "landing_pages": [
+        "/catering/events"
+      ],
+      "budget_mode": "ad set budget",
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
+          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "weekly_budget_to_exit_learning = target_cost_per_lead x optimisation_events_threshold_per_week   (threshold from Meta's learning phase page: [CONFIRM: figure])",
+          "check: if weekly_budget_to_exit_learning > weekly budget available, merge ad sets until it holds"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: avg_catering_order_value]",
+          "[CONFIRM: gross_margin_pct on catering]",
+          "[CONFIRM: lead_to_won_rate, from the first weeks of plugin data; until then a stated guess labelled as a guess]",
+          "[CONFIRM: required_safety_margin]",
+          "[CONFIRM: monthly_lead_goal]",
+          "[CONFIRM: optimisation events needed per week to leave learning, from Meta's learning phase page]",
+          "[CONFIRM: who owns the monthly media spend cap]"
+        ]
+      },
+      "bidding": {
+        "strategy": "highest_volume (lowest cost) at launch",
+        "cost_cap_aud": "[CONFIRM: cost cap from break-even maths]"
+      },
+      "creative_controls": {
+        "advantage_plus_creative": "all text and image enhancements OFF at launch [VERIFY: option names in Ads Manager]"
+      },
+      "launch_gate": [
+        "Same gate as the Corporate campaign",
+        "Event enquiry route staffed for weekend enquiries [CONFIRM]"
+      ],
+      "ad_sets": [
+        {
+          "name": "EVNT | Three-store catchment",
+          "status": "paused",
+          "hold": false,
+          "hold_reason": null,
+          "launch_wave": 2,
+          "utm_segment": "events",
+          "utm_area": "all-stores",
+          "optimisation": {
+            "goal": "OFFSITE_CONVERSIONS",
+            "conversion_event": "Lead",
+            "conversion_location": "WEBSITE",
+            "attribution_setting": "[CONFIRM: record the attribution window Ads Manager offers at staging and keep it constant]"
+          },
+          "audience": {
+            "mode": "advantage_plus_audience",
+            "hard_controls": {
+              "locations": "see location_targeting",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for events]",
+              "exclusions": [
+                "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
+              ]
+            },
+            "suggestions_only": [
+              "Interests around parties, events and community organising, chosen from the picker as suggestions only [CONFIRM: picker options].",
+              "Audience is adults. No suggestion targets or implies children."
+            ],
+            "lookalikes": "none at launch"
+          },
+          "location_targeting": {
+            "stores": [
+              {
+                "slug": "revesby",
+                "address": "12/25 Selems Parade, Revesby NSW 2212"
+              },
+              {
+                "slug": "bankstown",
+                "address": "462 Chapel Rd, Bankstown NSW 2200"
+              },
+              {
+                "slug": "roselands",
+                "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+              }
+            ],
+            "radius_km": "[CONFIRM: radius]",
+            "location_types": "[CONFIRM: living in this location versus living in or recently in this location]",
+            "radius_note": "Starting hypothesis only: begin no wider than the area Elie confirms Dough Boss will serve, then widen on evidence. Never a delivery promise.",
+            "suburb_hypothesis": [
+              "Revesby",
+              "Padstow",
+              "Milperra",
+              "Panania",
+              "Bankstown",
+              "Chullora",
+              "Condell Park",
+              "Yagoona",
+              "Roselands",
+              "Lakemba"
+            ],
+            "suburb_source": "council ward pages in docs/marketing/research/local-demand.md; demand hypotheses, not a service area"
+          },
+          "placements": "advantage_plus_placements, then review the placement breakdown weekly",
+          "ads": [
+            {
+              "name": "EVNT-ALL-01 event-party photo-a",
+              "status": "paused"
+            },
+            {
+              "name": "EVNT-ALL-02 event-party photo-b",
+              "status": "paused"
+            },
+            {
+              "name": "EVNT-ALL-03 event-community video-a",
+              "status": "paused"
+            },
+            {
+              "name": "EVNT-ALL-04 event-party video-a",
+              "status": "paused"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DB | Meta | Leads | Coming Soon List",
+      "status": "paused",
+      "phase": "later",
+      "objective": "OUTCOME_LEADS",
+      "special_ad_categories": [],
+      "buying_type": "AUCTION",
+      "conversion_location": "WEBSITE",
+      "primary_conversion": "waitlist_submit (src/lib/analytics/events.ts; fired only after the server stores the sign-up) mapped to the Lead event with content_name = waitlist, plus a custom conversion to separate it from catering",
+      "landing_pages": [
+        "/"
+      ],
+      "budget_mode": "ad set budget",
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = the most Elie will pay for one waitlist sign-up, set by Elie as a test cap. The catering break-even maths (avg_catering_order_value x gross_margin_pct x lead_to_won_rate) does NOT apply: a sign-up has no order value, and nothing about what is coming may be priced or assumed",
+          "leads_per_day_wanted = monthly_signup_goal / 30.4",
+          "weekly_budget_to_exit_learning = target_cost_per_lead x optimisation_events_threshold_per_week   (threshold from Meta's learning phase page: [CONFIRM: figure])",
+          "check: if weekly_budget_to_exit_learning > weekly budget available, run it as a short, capped test or not at all"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: the most Elie will pay per waitlist sign-up, as an explicit test cap]",
+          "[CONFIRM: monthly_signup_goal]",
+          "[CONFIRM: total test budget and end date for the teaser ad, set before it starts]",
+          "[CONFIRM: optimisation events needed per week to leave learning, from Meta's learning phase page]",
+          "[CONFIRM: who owns the monthly media spend cap]"
+        ]
+      },
+      "bidding": {
+        "strategy": "highest_volume (lowest cost) at launch",
+        "cost_cap_aud": "[CONFIRM]"
+      },
+      "creative_controls": {
+        "advantage_plus_creative": "all enhancements OFF, so no generated wording or imagery ships [VERIFY]"
+      },
+      "launch_gate": [
+        "Elie confirms something real is planned, so 'Something exciting is coming' is a representation about a future matter with reasonable grounds (Australian Consumer Law; docs/marketing/00-marketing-audit.md)",
+        "Elie approves the generic teaser line and the ad (teaser-direction.md rule 6)",
+        "The legal entity that will send to the list is settled, named on the form and in every message (Spam Act sender identification), and the form carries a privacy collection notice",
+        "Teaser section and waitlist form live on the landing page, with separate unticked Spam Act consent wording and a named sender",
+        "No product, price, size, dietary, halal, ingredient, date or location claim in the ad or on the landing page",
+        "AANA code check done (compliance-au.md section 7)"
+      ],
+      "ad_sets": [
+        {
+          "name": "SOON | Three-store catchment",
+          "status": "paused",
+          "hold": true,
+          "hold_reason": "Generic awareness only, held until Elie approves it and the teaser page and consent form are live [CONFIRM: approval and go-live]",
+          "launch_wave": 3,
+          "utm_segment": "coming-soon",
+          "utm_area": "all-stores",
+          "optimisation": {
+            "goal": "OFFSITE_CONVERSIONS",
+            "conversion_event": "Lead",
+            "conversion_location": "WEBSITE",
+            "attribution_setting": "[CONFIRM: record the attribution window Ads Manager offers at staging and keep it constant]"
+          },
+          "audience": {
+            "mode": "advantage_plus_audience",
+            "hard_controls": {
+              "locations": "see location_targeting",
+              "min_age": "[CONFIRM: minimum age; working-age hypothesis for B2B, adults only for event and teaser ads]",
+              "exclusions": [
+                "Existing catering enquirers: consented, hashed customer list, once it exists (audiences.md section 5)"
+              ]
+            },
+            "suggestions_only": [
+              "Adults living near the three stores, as suggestions only. No product interest, no interest in any food category, and no targeting of under-18s."
+            ],
+            "lookalikes": "none at launch"
+          },
+          "location_targeting": {
+            "stores": [
+              {
+                "slug": "revesby",
+                "address": "12/25 Selems Parade, Revesby NSW 2212"
+              },
+              {
+                "slug": "bankstown",
+                "address": "462 Chapel Rd, Bankstown NSW 2200"
+              },
+              {
+                "slug": "roselands",
+                "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+              }
+            ],
+            "radius_km": "[CONFIRM: radius]",
+            "location_types": "[CONFIRM: living in this location versus living in or recently in this location]",
+            "radius_note": "Starting hypothesis only: begin no wider than the area Elie confirms Dough Boss will serve, then widen on evidence. Never a delivery promise.",
+            "suburb_hypothesis": [
+              "Revesby",
+              "Padstow",
+              "Milperra",
+              "Panania",
+              "Bankstown",
+              "Chullora",
+              "Condell Park",
+              "Yagoona",
+              "Roselands",
+              "Lakemba"
+            ],
+            "suburb_source": "council ward pages in docs/marketing/research/local-demand.md; demand hypotheses, not a service area"
+          },
+          "placements": "advantage_plus_placements, then review the placement breakdown weekly",
+          "ads": [
+            {
+              "name": "SOON-ALL-01 coming-soon graphic-a",
+              "status": "paused"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DB | Meta | Leads | Warm Retarget",
+      "status": "paused",
+      "phase": "later",
+      "objective": "OUTCOME_LEADS",
+      "special_ad_categories": [],
+      "buying_type": "AUCTION",
+      "conversion_location": "WEBSITE",
+      "primary_conversion": "generate_lead:catering_enquiry (Meta standard event Lead)",
+      "landing_pages": [
+        "/catering"
+      ],
+      "budget_mode": "ad set budget, small by design",
+      "budget": {
+        "formula": "daily_budget = target_cost_per_lead x leads_per_day_wanted",
+        "supporting_formulas": [
+          "target_cost_per_lead = avg_catering_order_value x gross_margin_pct x lead_to_won_rate x (1 - required_safety_margin)",
+          "leads_per_day_wanted = monthly_lead_goal / 30.4",
+          "weekly_budget_to_exit_learning = target_cost_per_lead x optimisation_events_threshold_per_week   (threshold from Meta's learning phase page: [CONFIRM: figure])",
+          "check: if weekly_budget_to_exit_learning > weekly budget available, merge ad sets until it holds"
+        ],
+        "daily_budget_aud": null,
+        "inputs_to_confirm": [
+          "[CONFIRM: avg_catering_order_value]",
+          "[CONFIRM: gross_margin_pct on catering]",
+          "[CONFIRM: lead_to_won_rate, from the first weeks of plugin data; until then a stated guess labelled as a guess]",
+          "[CONFIRM: required_safety_margin]",
+          "[CONFIRM: monthly_lead_goal]",
+          "[CONFIRM: optimisation events needed per week to leave learning, from Meta's learning phase page]",
+          "[CONFIRM: who owns the monthly media spend cap]"
+        ]
+      },
+      "bidding": {
+        "strategy": "highest_volume (lowest cost)",
+        "cost_cap_aud": "[CONFIRM]"
+      },
+      "creative_controls": {
+        "advantage_plus_creative": "all enhancements OFF [VERIFY]"
+      },
+      "launch_gate": [
+        "Consent-gated pixel has built the website audience",
+        "Audience size meets Meta's minimum to deliver [CONFIRM: figure]",
+        "Consent wording and privacy policy name Meta"
+      ],
+      "ad_sets": [
+        {
+          "name": "WARM | Catering page visitors",
+          "status": "paused",
+          "hold": true,
+          "hold_reason": "Needs a consented website audience of deliverable size [CONFIRM: window and minimum size]",
+          "launch_wave": 3,
+          "utm_segment": "warm",
+          "utm_area": "all-stores",
+          "optimisation": {
+            "goal": "OFFSITE_CONVERSIONS",
+            "conversion_event": "Lead",
+            "conversion_location": "WEBSITE",
+            "attribution_setting": "[CONFIRM: record and keep constant]"
+          },
+          "audience": {
+            "mode": "custom_audience",
+            "hard_controls": {
+              "locations": "see location_targeting",
+              "min_age": "[CONFIRM]",
+              "exclusions": [
+                "People who already submitted a catering enquiry (consented, hashed list or the Lead event audience)"
+              ]
+            },
+            "suggestions_only": [],
+            "custom_audiences": [
+              "Visitors to /catering and /catering/* pages in the last [CONFIRM: window] days, from the consent-gated pixel only"
+            ],
+            "lookalikes": "none"
+          },
+          "location_targeting": {
+            "stores": [
+              {
+                "slug": "revesby",
+                "address": "12/25 Selems Parade, Revesby NSW 2212"
+              },
+              {
+                "slug": "bankstown",
+                "address": "462 Chapel Rd, Bankstown NSW 2200"
+              },
+              {
+                "slug": "roselands",
+                "address": "Shop MM03, Roselands Dr, Roselands NSW 2196"
+              }
+            ],
+            "radius_km": "[CONFIRM: radius]",
+            "location_types": "[CONFIRM]",
+            "radius_note": "Hypothesis only.",
+            "suburb_hypothesis": [],
+            "suburb_source": "n/a"
+          },
+          "placements": "advantage_plus_placements",
+          "ads": [
+            {
+              "name": "WARM-ALL-01 catering-enquiry photo-a",
+              "status": "paused"
+            },
+            {
+              "name": "WARM-ALL-02 catering-question video-a",
+              "status": "paused"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

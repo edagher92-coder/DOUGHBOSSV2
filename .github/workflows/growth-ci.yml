@@ -1,0 +1,122 @@
+name: Growth companion CI
+
+# Checks for the doughboss-growth companion plugin only. It reads no repository or organisation
+# credentials, needs only read access to the code, and never contacts a provider.
+
+on:
+  pull_request:
+    paths:
+      - "doughboss-growth/**"
+      - ".github/workflows/growth-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "doughboss-growth/**"
+      - ".github/workflows/growth-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: growth-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: PHP ${{ matrix.php-version }} lint, 7.4 guard, tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["7.4", "8.2"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring, pdo_sqlite, sqlite3, tokenizer, zip
+          coverage: none
+
+      - name: PHP syntax (php -l on every file)
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' file; do
+            php -l "$file" >/dev/null
+            count=$((count + 1))
+          done < <(find doughboss-growth -type d \( -name .git -o -name dist -o -name vendor -o -name node_modules \) -prune -o -type f -name '*.php' -print0)
+          echo "php -l clean on $count files"
+
+      - name: PHP 7.4 syntax guard (runs on both versions; flags match, nullsafe, typed properties, fn, str_contains and friends)
+        run: php doughboss-growth/scripts/php74-guard.php doughboss-growth
+
+      - name: PHP tests
+        run: php doughboss-growth/tests/run.php
+
+  node:
+    name: Node ES5 gate and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install acorn in a scratch directory (nothing is added to the repository)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/acorn-tool" --no-audit --no-fund acorn@8
+          echo "ACORN_PATH=$RUNNER_TEMP/acorn-tool/node_modules/acorn" >> "$GITHUB_ENV"
+
+      - name: ES5 gate on hand-written front-end JavaScript (public/vendor is skipped)
+        run: node doughboss-growth/scripts/es5-check.mjs
+
+      - name: Node syntax and dependency-free tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do node --check "$file"; done < <(
+            find doughboss-growth -type d \( -name .git -o -name dist -o -name vendor -o -name node_modules \) -prune -o -type f -name '*.js' -print0
+          )
+          while IFS= read -r -d '' file; do node --test "$file"; done < <(
+            find doughboss-growth -type d \( -name .git -o -name dist -o -name vendor -o -name node_modules \) -prune -o -type f -name '*.test.js' -print0
+          )
+
+  archive:
+    name: Build and validate the plugin archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zip
+          coverage: none
+
+      - name: Build the code zip (refuses overwrite, enforces version match and the 1.0 MB budget)
+        run: php doughboss-growth/scripts/build-zip.php "$RUNNER_TEMP/doughboss-growth.zip"
+
+      - name: Validate layout, current-tree bytes and budget
+        run: php doughboss-growth/scripts/validate-zip.php "$RUNNER_TEMP/doughboss-growth.zip"
+
+      - name: Byte budget report
+        run: php doughboss-growth/scripts/budgets.php "$RUNNER_TEMP/doughboss-growth.zip"
+
+      - name: Reproducible build (two builds are byte-identical)
+        run: |
+          php doughboss-growth/scripts/build-zip.php "$RUNNER_TEMP/second.zip"
+          sha256sum "$RUNNER_TEMP/doughboss-growth.zip" "$RUNNER_TEMP/second.zip"
+          cmp "$RUNNER_TEMP/doughboss-growth.zip" "$RUNNER_TEMP/second.zip"
+
+      - name: Keep the validated zip for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: doughboss-growth-zip
+          path: ${{ runner.temp }}/doughboss-growth.zip
+          if-no-files-found: error
+          retention-days: 14

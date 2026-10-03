@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+playwright-report/
+test-results/
+tests/e2e/screens/
+coverage/
+
+# Temporary per-agent browser test pages (mounted at /lab/<name> by scripts/preview-copy.sh)
+labs/

@@ -1,0 +1,33 @@
+{
+  "illustrative": true,
+  "notice": "ILLUSTRATIVE AI-GENERATED IMAGE. Not a photograph of any Dough Boss product, store or ingredient. Do not present it to customers as the real product (no menu, ordering, pricing or 'what you get' context).",
+  "provider": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "variant": "flare (model default)",
+  "generatedDate": "2026-10-02",
+  "creditsCharged": 2.75,
+  "creditsNote": "preflight get_cost quote; total account balance change across both images verified in docs/3d-assets.md",
+  "file": "manoush-blowout-still.webp",
+  "purpose": "Mood reference for the hero blow-out (exploded pizza on black).",
+  "jobId": "bfe850f2-88c6-4e08-825e-7ddd38f05b9e",
+  "params": {
+    "aspect_ratio": "16:9",
+    "quality": "high",
+    "resolution": "2k",
+    "count": 1,
+    "use_unlim": false
+  },
+  "prompt": "Dramatic exploded-view food photograph of a Lebanese cheese manoush pizza bursting apart in mid-air: eight wedge slices flying outward from the centre, the melted white cheese layer lifting off the dough, blistered golden crust pieces with charred spots, fresh mint leaves and red chili flakes tumbling, a little flour dust and a few glowing embers, warm orange oven light from the upper left with a soft rim light, pure black background, cinematic wide shot, high detail, photoreal, no text, no logo, no people",
+  "original": {
+    "format": "png",
+    "width": 2688,
+    "height": 1520,
+    "sha256": "c15f15d8afffaea6a9d7776b017d2a9dcdd481e697f26139337a1be6fa8301bd"
+  },
+  "delivered": {
+    "format": "webp",
+    "width": 1920,
+    "height": 1086,
+    "quality": 80
+  }
+}

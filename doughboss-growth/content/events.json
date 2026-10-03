@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "source": "web/src/lib/analytics/events.ts",
+  "source_sha256": "ffda028206edaae03bc8f870f0fcdf30c220b9837873da5e25b6fa4b54e59268",
+  "generated_by": "web/scripts/wp-oracle/export-events.ts",
+  "event_names": ["select_store", "view_item", "add_to_cart", "remove_from_cart", "begin_checkout", "order_placed", "generate_lead", "quote_step", "coming_soon_view", "waitlist_submit", "click_to_call", "get_directions", "cta_click"],
+  "events": {
+    "select_store": {
+      "params": {
+        "store": {"type": "enum", "values": ["revesby", "bankstown", "roselands"], "optional": false}
+      }
+    },
+    "view_item": {
+      "params": {
+        "item_slug": {"type": "string", "optional": false},
+        "item_name": {"type": "string", "optional": false},
+        "category": {"type": "string", "optional": false}
+      }
+    },
+    "add_to_cart": {
+      "params": {
+        "item_slug": {"type": "string", "optional": false},
+        "item_name": {"type": "string", "optional": false},
+        "quantity": {"type": "integer", "optional": false},
+        "value_cents": {"type": "integer", "optional": false}
+      }
+    },
+    "remove_from_cart": {
+      "params": {
+        "item_slug": {"type": "string", "optional": false},
+        "quantity": {"type": "integer", "optional": false}
+      }
+    },
+    "begin_checkout": {
+      "params": {
+        "store": {"type": "enum", "values": ["revesby", "bankstown", "roselands"], "optional": false},
+        "value_cents": {"type": "integer", "optional": false},
+        "item_count": {"type": "integer", "optional": false},
+        "payment_method": {"type": "enum", "values": ["SQUARE", "PAY_AT_SHOP"], "optional": false}
+      }
+    },
+    "order_placed": {
+      "params": {
+        "store": {"type": "enum", "values": ["revesby", "bankstown", "roselands"], "optional": false},
+        "value_cents": {"type": "integer", "optional": false},
+        "item_count": {"type": "integer", "optional": false}
+      }
+    },
+    "generate_lead": {
+      "params": {
+        "form": {"type": "enum", "values": ["catering_enquiry", "waitlist"], "optional": false},
+        "category": {"type": "string", "optional": true},
+        "guest_band": {"type": "string", "optional": true},
+        "store": {"type": "enum", "values": ["revesby", "bankstown", "roselands", "none"], "optional": true}
+      }
+    },
+    "quote_step": {
+      "params": {
+        "step": {"type": "enum", "values": [1, 2], "optional": false}
+      }
+    },
+    "coming_soon_view": {
+      "params": {
+        "surface": {"type": "enum", "values": ["home"], "optional": false}
+      }
+    },
+    "waitlist_submit": {
+      "params": {
+        "store": {"type": "enum", "values": ["revesby", "bankstown", "roselands", "none"], "optional": true}
+      }
+    },
+    "click_to_call": {
+      "params": {
+        "store": {"type": "enum", "values": ["revesby", "bankstown", "roselands"], "optional": false},
+        "surface": {"type": "enum", "values": ["header", "footer", "store_picker", "location_page", "cart", "catering_page"], "optional": false}
+      }
+    },
+    "get_directions": {
+      "params": {
+        "store": {"type": "enum", "values": ["revesby", "bankstown", "roselands"], "optional": false},
+        "surface": {"type": "enum", "values": ["header", "footer", "store_picker", "location_page", "cart", "catering_page"], "optional": false}
+      }
+    },
+    "cta_click": {
+      "params": {
+        "cta": {"type": "string", "optional": false},
+        "destination": {"type": "string", "optional": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,54 @@
+/* DoughBoss Growth Catering Box: the site-wide strip. Printed inline (no extra request), so keep it small. */
+.dbgr-strip {
+	background-color: #f7f5f0;
+	background-image: var(--dbgr-liner, none);
+	background-repeat: repeat;
+	background-size: 236px 236px;
+	border-block: 1px solid rgba(13, 13, 13, .12);
+	padding: 28px 0;
+}
+.dbgr-strip-in {
+	box-sizing: border-box;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 14px 28px;
+	width: min(1240px, calc(100% - 40px));
+	margin-inline: auto;
+	padding: 22px 28px;
+	border-radius: 16px;
+	background: #0a0807;
+	color: #eee8de;
+}
+.dbgr-strip-head {
+	margin: 0;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: clamp(30px, 5vw, 46px);
+	font-weight: 400;
+	letter-spacing: .01em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+.dbgr-strip .dbgr-dot { color: #e2231a; }
+.dbgr-strip .dbgr-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 48px;
+	padding: 12px 24px;
+	border: 1px solid #b71912;
+	border-radius: 999px;
+	background: #b71912;
+	color: #fff;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 20px;
+	letter-spacing: .06em;
+	line-height: 1;
+	text-decoration: none;
+}
+.dbgr-strip .dbgr-btn:hover { background: #e2231a; border-color: #e2231a; }
+.dbgr-strip .dbgr-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px #0a0807; }
+@media (prefers-reduced-motion: no-preference) {
+	.dbgr-strip .dbgr-btn { transition: background-color .2s ease, border-color .2s ease; }
+}

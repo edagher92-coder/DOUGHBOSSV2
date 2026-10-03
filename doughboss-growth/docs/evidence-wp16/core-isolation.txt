@@ -1,0 +1,5 @@
+Core isolation, candidate 2.43.2 run (state before the flag matrix vs after everything, incl. deactivate/reactivate)
+Core tables compared by row count and content hash: 26. Changed: wp_doughboss_location_hours, wp_doughboss_locations (the SCRATCH seed of two fake-address shops through core's own class; not the companion).
+Core options (doughboss_* not doughboss_growth_*) changed: none. wp_user_roles (roles and capabilities) changed: no.
+Companion tables present: wp_doughboss_growth_attribution, wp_doughboss_growth_lead_meta, wp_doughboss_growth_outbox, wp_doughboss_growth_rate, wp_doughboss_growth_recon_row, wp_doughboss_growth_recon_run, wp_doughboss_growth_recon_xref, wp_doughboss_growth_suppression, wp_doughboss_growth_waitlist
+Companion options created: doughboss_growth_pages, doughboss_growth_settings

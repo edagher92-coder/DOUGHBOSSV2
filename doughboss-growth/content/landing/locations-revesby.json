@@ -1,0 +1,15 @@
+{
+	"version": 1,
+	"key": "locations-revesby",
+	"kind": "location",
+	"parent": "locations",
+	"slug": "revesby",
+	"location_slug": "revesby",
+	"page_title": "Revesby",
+	"crumb": "{name}",
+	"title": "{name} Shop Details",
+	"description": "Dough Boss {name} shop: {details}.",
+	"blocks": [
+		{ "type": "location", "heading": "Find the shop", "slots": [ "address", "phone", "hours" ] }
+	]
+}

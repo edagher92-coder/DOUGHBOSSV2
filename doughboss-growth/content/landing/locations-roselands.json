@@ -1,0 +1,15 @@
+{
+	"version": 1,
+	"key": "locations-roselands",
+	"kind": "location",
+	"parent": "locations",
+	"slug": "roselands",
+	"location_slug": "roselands",
+	"page_title": "Roselands",
+	"crumb": "{name}",
+	"title": "{name} Shop Details",
+	"description": "Dough Boss {name} shop: {details}.",
+	"blocks": [
+		{ "type": "location", "heading": "Find the shop", "slots": [ "address", "phone", "hours" ] }
+	]
+}

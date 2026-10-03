@@ -1,0 +1,19 @@
+{
+	"version": 1,
+	"key": "catering-corporate",
+	"kind": "catering",
+	"parent": "catering",
+	"slug": "corporate",
+	"page_title": "Corporate catering",
+	"crumb": "Corporate catering",
+	"title": "Corporate Catering Enquiries",
+	"description": "Enquire about corporate catering from Dough Boss. Share your date and headcount and the catering team will confirm availability and price.",
+	"service_name": "Corporate catering",
+	"blocks": [
+		{ "type": "claim", "id": "catering-service-area", "heading": "Where we cater" },
+		{ "type": "claim", "id": "catering-delivery-or-drop-off", "heading": "Delivery or drop-off" },
+		{ "type": "claim", "id": "catering-lead-time", "heading": "Lead time" },
+		{ "type": "packages", "heading": "Catering packages" },
+		{ "type": "form" }
+	]
+}

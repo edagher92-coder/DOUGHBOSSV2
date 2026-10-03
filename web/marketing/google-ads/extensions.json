@@ -1,0 +1,181 @@
+{
+  "_status": "DRAFT. Nothing here exists in any Google Ads account. Assets are created PAUSED/unlinked and attached by a human after review. Store names, addresses, hours and phones are copied from src/lib/data/catalogue.ts (typed store data); re-confirm them before upload because the catalogue notes the source does not list public-holiday trading.",
+  "limits": {
+    "sitelink_title_max": 25,
+    "sitelink_description_max": 35,
+    "callout_max": 25,
+    "structured_snippet_value_max": 25,
+    "structured_snippet_values_min": 3,
+    "structured_snippet_values_max": 10
+  },
+  "sitelinks": [
+    {
+      "id": "sl-quote",
+      "title": "Request A Catering Quote",
+      "description1": "Date, headcount, dietary needs",
+      "description2": "Tell us and we'll quote",
+      "final_url": "https://doughboss.com.au/catering",
+      "scope": ["DB | Search | Corporate Office Catering", "DB | Search | Event Function Catering", "DB | Search | Local Store Areas Catering", "DB | Search | Brand"],
+      "status": "paused"
+    },
+    {
+      "id": "sl-corporate",
+      "title": "Corporate Catering",
+      "description1": "For offices and teams",
+      "description2": "Meetings and team lunches",
+      "final_url": "https://doughboss.com.au/catering/corporate",
+      "scope": ["DB | Search | Event Function Catering", "DB | Search | Local Store Areas Catering", "DB | Search | Brand"],
+      "status": "paused"
+    },
+    {
+      "id": "sl-breakfast",
+      "title": "Office Breakfast",
+      "description1": "Breakfast and morning tea",
+      "description2": "Enquire online",
+      "final_url": "https://doughboss.com.au/catering/office-breakfast",
+      "scope": ["DB | Search | Corporate Office Catering", "DB | Search | Local Store Areas Catering", "DB | Search | Brand"],
+      "status": "paused"
+    },
+    {
+      "id": "sl-events",
+      "title": "Event Catering",
+      "description1": "Parties and functions",
+      "description2": "Send your date and headcount",
+      "final_url": "https://doughboss.com.au/catering/events",
+      "scope": ["DB | Search | Corporate Office Catering", "DB | Search | Local Store Areas Catering", "DB | Search | Brand"],
+      "status": "paused"
+    },
+    {
+      "id": "sl-revesby",
+      "title": "Revesby Store",
+      "description1": "12/25 Selems Parade",
+      "description2": "Call (02) 9774 2286",
+      "final_url": "https://doughboss.com.au/locations/revesby",
+      "scope": ["DB | Search | Corporate Office Catering", "DB | Search | Event Function Catering", "DB | Search | Brand"],
+      "status": "paused"
+    },
+    {
+      "id": "sl-bankstown",
+      "title": "Bankstown Store",
+      "description1": "462 Chapel Rd",
+      "description2": "Call (02) 8764 6783",
+      "final_url": "https://doughboss.com.au/locations/bankstown",
+      "scope": ["DB | Search | Corporate Office Catering", "DB | Search | Event Function Catering", "DB | Search | Brand"],
+      "status": "paused"
+    },
+    {
+      "id": "sl-roselands",
+      "title": "Roselands Centro Store",
+      "description1": "Shop MM03, Roselands Dr",
+      "description2": "Call 0466 353 133",
+      "final_url": "https://doughboss.com.au/locations/roselands",
+      "scope": ["DB | Search | Corporate Office Catering", "DB | Search | Event Function Catering", "DB | Search | Brand"],
+      "status": "paused"
+    }
+  ],
+  "callouts": [
+    { "text": "Catering Quote Requests", "scope": "account" },
+    { "text": "Corporate And Office", "scope": "account" },
+    { "text": "Events And Functions", "scope": "account" },
+    { "text": "Office Breakfast", "scope": "account" },
+    { "text": "Add Dietary Needs", "scope": "account" },
+    { "text": "South West Sydney Stores", "scope": "account" },
+    { "text": "Call Or Enquire Online", "scope": "account" },
+    { "text": "Lebanese Bakery", "scope": "account" }
+  ],
+  "structured_snippets": [
+    {
+      "header": "Service catalog",
+      "values": ["Corporate catering", "Office breakfast", "Event catering"],
+      "scope": "account",
+      "status": "paused"
+    },
+    {
+      "header": "Neighborhoods",
+      "values": ["Revesby", "Bankstown", "Roselands"],
+      "scope": "account",
+      "status": "paused",
+      "hold": "Hold: a 'Neighborhoods' header can read as a service-area promise. Release only when Elie confirms the delivery area."
+    }
+  ],
+  "call_assets": [
+    {
+      "store": "revesby",
+      "phone_e164": "+61297742286",
+      "phone_display": "(02) 9774 2286",
+      "country": "AU",
+      "schedule": { "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], "start": "06:30", "end": "14:30", "timezone": "Australia/Sydney" },
+      "schedule_source": "src/lib/data/catalogue.ts store hours",
+      "attach_to": ["DB | Search | Local Store Areas Catering: LOCL | Catering Revesby", "DB | Search | Brand"],
+      "call_reporting": true,
+      "count_calls_as_conversion_after_seconds": "[CONFIRM: minimum call length that counts as a real enquiry]",
+      "status": "paused"
+    },
+    {
+      "store": "bankstown",
+      "phone_e164": "+61287646783",
+      "phone_display": "(02) 8764 6783",
+      "country": "AU",
+      "schedule": { "days": ["mon", "tue", "wed", "thu", "fri"], "start": "07:00", "end": "14:00", "timezone": "Australia/Sydney" },
+      "schedule_source": "src/lib/data/catalogue.ts store hours",
+      "attach_to": ["DB | Search | Local Store Areas Catering: LOCL | Catering Bankstown", "DB | Search | Brand"],
+      "call_reporting": true,
+      "count_calls_as_conversion_after_seconds": "[CONFIRM: minimum call length that counts as a real enquiry]",
+      "status": "paused"
+    },
+    {
+      "store": "roselands",
+      "phone_e164": "+61466353133",
+      "phone_display": "0466 353 133",
+      "country": "AU",
+      "schedule": { "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], "start": "08:00", "end": "15:00", "timezone": "Australia/Sydney" },
+      "schedule_source": "src/lib/data/catalogue.ts store hours",
+      "attach_to": ["DB | Search | Local Store Areas Catering: LOCL | Catering Roselands", "DB | Search | Brand"],
+      "call_reporting": true,
+      "count_calls_as_conversion_after_seconds": "[CONFIRM: minimum call length that counts as a real enquiry]",
+      "status": "paused",
+      "note": "This is a 04 mobile number. Confirm in Google Ads that call reporting (forwarding number) works for it before relying on call conversions."
+    },
+    {
+      "store": "catering-desk",
+      "phone_e164": "[CONFIRM: which number answers catering calls]",
+      "phone_display": "[CONFIRM: which number answers catering calls]",
+      "country": "AU",
+      "schedule": "[CONFIRM: who answers and when]",
+      "attach_to": ["DB | Search | Corporate Office Catering", "DB | Search | Event Function Catering"],
+      "status": "not-created",
+      "note": "Do not attach any call asset to the Corporate and Event campaigns until Elie names the number and the people who answer it. An unanswered call from an ad is paid-for and lost."
+    }
+  ],
+  "location_assets": {
+    "method": "Link the Business Profile (Google Ads > Assets > Locations > link account); do not type addresses by hand.",
+    "stores": ["Revesby", "Bankstown", "Roselands Centro"],
+    "prerequisites": [
+      "[CONFIRM: a verified Business Profile exists for each of the three stores]",
+      "[CONFIRM: who is owner or manager on each profile and can approve the Google Ads link]"
+    ],
+    "rules": [
+      "One profile per real, staffed store. Do not create a 'Dough Boss Catering' profile at an unstaffed address (docs/marketing/research/compliance-au.md section 9).",
+      "The profile name must be the real-world name."
+    ],
+    "attach_to": "all five campaigns once linked; use location asset targeting only if the delivery area is confirmed",
+    "status": "not-linked"
+  },
+  "lead_form": {
+    "recommendation": "do_not_use_at_launch",
+    "reasons": [
+      "The plugin enquiry form is the system of record: it captures the guest band, event type, dietary needs, consent text and attribution (src/lib/attribution-schema.ts, CateringLead) that the quote workflow and the closed loop depend on. A Google-hosted form would split leads into a second inbox with no gclid in our database.",
+      "Lead form assets must serve with conversion-focused bidding and a lead form conversion goal (Google Ads Help, https://support.google.com/google-ads/answer/9423234, retrieved 2026-10-02), which is the wrong bidding phase for a new account with no conversion history.",
+      "Delivery needs a webhook, Zapier or manual CSV (the same page lists CSV for 30 days, email, API for 60 days, webhook, Zapier). That is another integration to build and secure before it earns anything.",
+      "Lead forms need a privacy policy link and the Spam Act consent wording to be right inside Google's form. We cannot test that wording on our own page first.",
+      "Availability for an Australian account in this vertical is unverified: [CONFIRM: lead form assets are offered to this account]."
+    ],
+    "revisit_when": "The site form is converting and 60 days of search-terms data exist. Test a lead form on one ad group only, as an experiment, and compare cost per qualified (won) lead, not cost per form."
+  },
+  "not_used": [
+    "Price assets: no prices may be stated until the ledger confirms them.",
+    "Promotion assets: no offers or discounts are confirmed.",
+    "Image assets: add only real Dough Boss photography Elie owns; none are staged here.",
+    "Business name and logo assets: add when brand files are supplied."
+  ]
+}

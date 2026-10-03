@@ -1,0 +1,33 @@
+{
+  "illustrative": true,
+  "notice": "ILLUSTRATIVE AI-GENERATED IMAGE. Not a photograph of any Dough Boss product, store or ingredient. Do not present it to customers as the real product (no menu, ordering, pricing or 'what you get' context).",
+  "provider": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "variant": "flare (model default)",
+  "generatedDate": "2026-10-02",
+  "creditsCharged": 2.75,
+  "creditsNote": "preflight get_cost quote; total account balance change across both images verified in docs/3d-assets.md",
+  "file": "manoush-topdown-reference.webp",
+  "purpose": "Top-down texture/art reference for the procedural topping and dough colours.",
+  "jobId": "9b0768a1-8d6e-4623-bf26-ad77f71af4c5",
+  "params": {
+    "aspect_ratio": "1:1",
+    "quality": "high",
+    "resolution": "2k",
+    "count": 1,
+    "use_unlim": false
+  },
+  "prompt": "Top-down overhead photograph of a whole round Lebanese manoush flatbread, about 30 cm, topped with melted white akkawi-style cheese with golden-brown blistered spots, scattered fresh mint leaves and small red chili flakes, golden blistered crust edge with a few charred spots, centred on a dark slate surface with the whole flatbread in frame, soft even overhead lighting, photoreal, no text, no logo, no hands, no utensils",
+  "original": {
+    "format": "png",
+    "width": 2048,
+    "height": 2048,
+    "sha256": "b78b6744225e7239f6a99a87d61a0296313c387b31b26088f69ef12749ccf7d8"
+  },
+  "delivered": {
+    "format": "webp",
+    "width": 2048,
+    "height": 2048,
+    "quality": 76
+  }
+}

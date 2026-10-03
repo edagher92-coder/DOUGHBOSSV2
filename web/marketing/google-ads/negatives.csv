@@ -1,0 +1,142 @@
+level,scope,keyword,match_type,reason
+account,account,jobs,phrase,"Job seekers, not buyers"
+account,account,job,phrase,"Job seekers, not buyers"
+account,account,careers,phrase,"Job seekers, not buyers"
+account,account,employment,phrase,"Job seekers, not buyers"
+account,account,vacancy,phrase,"Job seekers, not buyers"
+account,account,hiring,phrase,"Job seekers, not buyers"
+account,account,recipe,phrase,Recipe and DIY intent
+account,account,recipes,phrase,Recipe and DIY intent
+account,account,how to make,phrase,Recipe and DIY intent
+account,account,diy,phrase,Recipe and DIY intent
+account,account,pizza dough,phrase,Home baking intent
+account,account,dough mixer,phrase,Equipment intent
+account,account,cooking class,phrase,Training intent
+account,account,course,phrase,Training intent
+account,account,training,phrase,Training intent
+account,account,franchise,phrase,Franchise enquiries are not our offer
+account,account,free,phrase,Price-shopper and freebie intent; no free offer exists
+account,account,cheap,phrase,Price-shopper intent; ads make no price claims
+account,account,catering equipment,phrase,Equipment buyers
+account,account,catering supplies,phrase,Supply buyers
+account,account,catering jobs,phrase,Job seekers
+account,account,catering course,phrase,Training intent
+account,account,catering business,phrase,Start-up advice intent
+account,account,catering licence,phrase,Start-up advice intent
+account,account,catering insurance,phrase,Start-up advice intent
+account,account,catering van,phrase,Vehicle intent
+account,account,food truck,phrase,Different service
+account,account,melbourne,phrase,"Interstate: outside the three-store area (location targeting is the main control, this is a backstop)"
+account,account,brisbane,phrase,"Interstate: outside the three-store area (location targeting is the main control, this is a backstop)"
+account,account,canberra,phrase,"Interstate: outside the three-store area (location targeting is the main control, this is a backstop)"
+account,account,perth,phrase,"Interstate: outside the three-store area (location targeting is the main control, this is a backstop)"
+account,account,adelaide,phrase,"Interstate: outside the three-store area (location targeting is the main control, this is a backstop)"
+account,account,hobart,phrase,"Interstate: outside the three-store area (location targeting is the main control, this is a backstop)"
+account,account,darwin,phrase,"Interstate: outside the three-store area (location targeting is the main control, this is a backstop)"
+campaign,DB | Search | Corporate Office Catering,coupon,phrase,Promo-code seekers; no offer exists and ads make none
+campaign,DB | Search | Corporate Office Catering,voucher,phrase,"Promo-code seekers; vouchers are a retail feature, not a catering offer"
+campaign,DB | Search | Corporate Office Catering,promo code,phrase,Promo-code seekers
+campaign,DB | Search | Corporate Office Catering,student discount,phrase,"Retail voucher intent, not catering"
+campaign,DB | Search | Corporate Office Catering,pizza delivery,phrase,"Consumer takeaway intent, not catering"
+campaign,DB | Search | Corporate Office Catering,pizza near me,phrase,Consumer takeaway intent
+campaign,DB | Search | Corporate Office Catering,takeaway,phrase,Consumer takeaway intent
+campaign,DB | Search | Corporate Office Catering,restaurant,phrase,Dine-in intent
+campaign,DB | Search | Corporate Office Catering,uber eats,phrase,Delivery-app intent
+campaign,DB | Search | Corporate Office Catering,menulog,phrase,Delivery-app intent
+campaign,DB | Search | Corporate Office Catering,doordash,phrase,Delivery-app intent
+campaign,DB | Search | Corporate Office Catering,dominos,phrase,Competitor/consumer takeaway intent
+campaign,DB | Search | Corporate Office Catering,pizza hut,phrase,Competitor/consumer takeaway intent
+campaign,DB | Search | Corporate Office Catering,ooshman,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Corporate Office Catering,el jannah,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Corporate Office Catering,al aseel,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Corporate Office Catering,feedwell,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Corporate Office Catering,dough boss,phrase,Route brand searches to the Brand campaign
+campaign,DB | Search | Corporate Office Catering,doughboss,phrase,Route brand searches to the Brand campaign
+campaign,DB | Search | Corporate Office Catering,halal,phrase,TEMP: no confirmed halal claim exists; release only when Elie confirms exactly what is true and it is in the ledger
+campaign,DB | Search | Corporate Office Catering,gluten free,phrase,TEMP: regulated claim; dietary cluster parked until verified (compliance-au.md section 7)
+campaign,DB | Search | Corporate Office Catering,coeliac,phrase,TEMP: regulated claim; dietary cluster parked until verified
+campaign,DB | Search | Corporate Office Catering,vegan,phrase,TEMP: dietary cluster parked until recipes are verified
+campaign,DB | Search | Corporate Office Catering,vegetarian,phrase,TEMP: dietary cluster parked until recipes are verified
+campaign,DB | Search | Corporate Office Catering,dairy free,phrase,TEMP: dietary cluster parked until verified
+campaign,DB | Search | Corporate Office Catering,nut free,phrase,TEMP: allergen claim; parked until verified
+campaign,DB | Search | Event Function Catering,coupon,phrase,Promo-code seekers; no offer exists and ads make none
+campaign,DB | Search | Event Function Catering,voucher,phrase,"Promo-code seekers; vouchers are a retail feature, not a catering offer"
+campaign,DB | Search | Event Function Catering,promo code,phrase,Promo-code seekers
+campaign,DB | Search | Event Function Catering,student discount,phrase,"Retail voucher intent, not catering"
+campaign,DB | Search | Event Function Catering,pizza delivery,phrase,"Consumer takeaway intent, not catering"
+campaign,DB | Search | Event Function Catering,pizza near me,phrase,Consumer takeaway intent
+campaign,DB | Search | Event Function Catering,takeaway,phrase,Consumer takeaway intent
+campaign,DB | Search | Event Function Catering,restaurant,phrase,Dine-in intent
+campaign,DB | Search | Event Function Catering,uber eats,phrase,Delivery-app intent
+campaign,DB | Search | Event Function Catering,menulog,phrase,Delivery-app intent
+campaign,DB | Search | Event Function Catering,doordash,phrase,Delivery-app intent
+campaign,DB | Search | Event Function Catering,dominos,phrase,Competitor/consumer takeaway intent
+campaign,DB | Search | Event Function Catering,pizza hut,phrase,Competitor/consumer takeaway intent
+campaign,DB | Search | Event Function Catering,ooshman,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Event Function Catering,el jannah,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Event Function Catering,al aseel,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Event Function Catering,feedwell,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Event Function Catering,dough boss,phrase,Route brand searches to the Brand campaign
+campaign,DB | Search | Event Function Catering,doughboss,phrase,Route brand searches to the Brand campaign
+campaign,DB | Search | Event Function Catering,halal,phrase,TEMP: no confirmed halal claim exists; release only when Elie confirms exactly what is true and it is in the ledger
+campaign,DB | Search | Event Function Catering,gluten free,phrase,TEMP: regulated claim; dietary cluster parked until verified (compliance-au.md section 7)
+campaign,DB | Search | Event Function Catering,coeliac,phrase,TEMP: regulated claim; dietary cluster parked until verified
+campaign,DB | Search | Event Function Catering,vegan,phrase,TEMP: dietary cluster parked until recipes are verified
+campaign,DB | Search | Event Function Catering,vegetarian,phrase,TEMP: dietary cluster parked until recipes are verified
+campaign,DB | Search | Event Function Catering,dairy free,phrase,TEMP: dietary cluster parked until verified
+campaign,DB | Search | Event Function Catering,nut free,phrase,TEMP: allergen claim; parked until verified
+campaign,DB | Search | Local Store Areas Catering,coupon,phrase,Promo-code seekers; no offer exists and ads make none
+campaign,DB | Search | Local Store Areas Catering,voucher,phrase,"Promo-code seekers; vouchers are a retail feature, not a catering offer"
+campaign,DB | Search | Local Store Areas Catering,promo code,phrase,Promo-code seekers
+campaign,DB | Search | Local Store Areas Catering,student discount,phrase,"Retail voucher intent, not catering"
+campaign,DB | Search | Local Store Areas Catering,pizza delivery,phrase,"Consumer takeaway intent, not catering"
+campaign,DB | Search | Local Store Areas Catering,pizza near me,phrase,Consumer takeaway intent
+campaign,DB | Search | Local Store Areas Catering,takeaway,phrase,Consumer takeaway intent
+campaign,DB | Search | Local Store Areas Catering,restaurant,phrase,Dine-in intent
+campaign,DB | Search | Local Store Areas Catering,uber eats,phrase,Delivery-app intent
+campaign,DB | Search | Local Store Areas Catering,menulog,phrase,Delivery-app intent
+campaign,DB | Search | Local Store Areas Catering,doordash,phrase,Delivery-app intent
+campaign,DB | Search | Local Store Areas Catering,dominos,phrase,Competitor/consumer takeaway intent
+campaign,DB | Search | Local Store Areas Catering,pizza hut,phrase,Competitor/consumer takeaway intent
+campaign,DB | Search | Local Store Areas Catering,ooshman,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Local Store Areas Catering,el jannah,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Local Store Areas Catering,al aseel,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Local Store Areas Catering,feedwell,phrase,Competitor name; conquesting parked
+campaign,DB | Search | Local Store Areas Catering,dough boss,phrase,Route brand searches to the Brand campaign
+campaign,DB | Search | Local Store Areas Catering,doughboss,phrase,Route brand searches to the Brand campaign
+campaign,DB | Search | Local Store Areas Catering,halal,phrase,TEMP: no confirmed halal claim exists; release only when Elie confirms exactly what is true and it is in the ledger
+campaign,DB | Search | Local Store Areas Catering,gluten free,phrase,TEMP: regulated claim; dietary cluster parked until verified (compliance-au.md section 7)
+campaign,DB | Search | Local Store Areas Catering,coeliac,phrase,TEMP: regulated claim; dietary cluster parked until verified
+campaign,DB | Search | Local Store Areas Catering,vegan,phrase,TEMP: dietary cluster parked until recipes are verified
+campaign,DB | Search | Local Store Areas Catering,vegetarian,phrase,TEMP: dietary cluster parked until recipes are verified
+campaign,DB | Search | Local Store Areas Catering,dairy free,phrase,TEMP: dietary cluster parked until verified
+campaign,DB | Search | Local Store Areas Catering,nut free,phrase,TEMP: allergen claim; parked until verified
+campaign,DB | Search | Corporate Office Catering,birthday,phrase,Event intent belongs in the Event campaign
+campaign,DB | Search | Corporate Office Catering,wedding,phrase,Event intent belongs in the Event campaign
+campaign,DB | Search | Corporate Office Catering,engagement,phrase,Event intent belongs in the Event campaign
+campaign,DB | Search | Corporate Office Catering,baby shower,phrase,Event intent belongs in the Event campaign
+campaign,DB | Search | Corporate Office Catering,kids party,phrase,Event intent belongs in the Event campaign
+campaign,DB | Search | Corporate Office Catering,bridal shower,phrase,Event intent belongs in the Event campaign
+campaign,DB | Search | Corporate Office Catering,breakfast near me,phrase,"Consumer cafe intent, not catering"
+campaign,DB | Search | Corporate Office Catering,brunch,phrase,"Consumer cafe intent, not catering"
+campaign,DB | Search | Event Function Catering,office,phrase,Corporate intent belongs in the Corporate campaign
+campaign,DB | Search | Event Function Catering,corporate,phrase,Corporate intent belongs in the Corporate campaign
+campaign,DB | Search | Event Function Catering,staff,phrase,Corporate intent belongs in the Corporate campaign
+campaign,DB | Search | Event Function Catering,boardroom,phrase,Corporate intent belongs in the Corporate campaign
+campaign,DB | Search | Event Function Catering,workplace,phrase,Corporate intent belongs in the Corporate campaign
+campaign,DB | Search | Event Function Catering,meeting,phrase,Corporate intent belongs in the Corporate campaign
+campaign,DB | Search | Event Function Catering,office christmas party,phrase,Corporate intent belongs in the Corporate campaign
+campaign,DB | Search | Local Store Areas Catering,corporate,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,office,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,workplace,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,boardroom,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,meeting,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,staff,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,birthday,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,party,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,function,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,school,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Local Store Areas Catering,lebanese,phrase,Query sculpting: this theme is owned by a more specific campaign with a better-matched landing page
+campaign,DB | Search | Brand,recipe,phrase,Already account-level; kept explicit so a brand-only account view stays clean
+campaign,DB | Search | Local Store Areas Catering,corporate catering bankstown,exact,Exact route to CORP | Corporate Catering
+campaign,DB | Search | Local Store Areas Catering,office catering revesby,exact,Exact route to CORP | Office Catering

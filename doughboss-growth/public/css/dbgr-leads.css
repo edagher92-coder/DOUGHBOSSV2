@@ -1,0 +1,260 @@
+/*
+ * DoughBoss Growth: corporate lead form and party-pack sizer.
+ * Every class starts with dbgr- and every custom property with --dbgr- (core already uses --dbg-*).
+ * Colours are neutral defaults a theme can override on .dbgr-lead or .dbgr-sizer.
+ * Sizes are in em (from a root that is never below 16px) so a theme with html { font-size: 62.5% } cannot shrink them;
+ * touch targets are in px.
+ */
+.dbgr-lead,
+.dbgr-sizer {
+	--dbgr-ink: #1f1a17;
+	--dbgr-paper: #fffaf3;
+	--dbgr-accent: #8a2a1f;
+	--dbgr-accent-hover: #6f2018;
+	--dbgr-accent-ink: #ffffff;
+	/* Decorative card borders only. Anything the visitor has to find or operate uses --dbgr-field (3:1 or better). */
+	--dbgr-line: #cfc3b4;
+	--dbgr-field: #6d6258;
+	--dbgr-ok: #1b5e20;
+	--dbgr-error: #9b1c1c;
+	--dbgr-focus: #0b57d0;
+	--dbgr-radius: 8px;
+	background: var(--dbgr-paper);
+	border: 1px solid var(--dbgr-line);
+	border-radius: var(--dbgr-radius);
+	box-sizing: border-box;
+	color: var(--dbgr-ink);
+	font-size: max(1rem, 16px);
+	margin: 0 auto 1.5em;
+	max-width: 36em;
+	padding: 1.25em;
+	position: relative;
+}
+
+.dbgr-lead *,
+.dbgr-sizer * {
+	box-sizing: border-box;
+}
+
+.dbgr-lead__legend,
+.dbgr-sizer__title {
+	color: inherit;
+	font-size: 1.25em;
+	font-weight: 700;
+	margin: 0 0 0.8em;
+}
+
+.dbgr-lead__field,
+.dbgr-lead__consent,
+.dbgr-lead__privacy,
+.dbgr-lead__actions {
+	margin: 0 0 1em;
+}
+
+.dbgr-lead__field[hidden] {
+	display: none;
+}
+
+.dbgr-lead__field label {
+	color: var(--dbgr-ink);
+	display: block;
+	font-weight: 600;
+	margin-bottom: 0.25em;
+}
+
+.dbgr-lead__req,
+.dbgr-lead__opt {
+	font-weight: 400;
+}
+
+.dbgr-lead input[type="text"],
+.dbgr-lead input[type="email"],
+.dbgr-lead input[type="tel"],
+.dbgr-lead input[type="number"],
+.dbgr-lead input[type="date"],
+.dbgr-lead select,
+.dbgr-lead textarea,
+.dbgr-sizer input[type="number"] {
+	background: #ffffff;
+	border: 1px solid var(--dbgr-field);
+	border-radius: var(--dbgr-radius);
+	color: var(--dbgr-ink);
+	font: inherit;
+	font-size: max(1rem, 16px);
+	min-height: 44px;
+	padding: 0.5em 0.75em;
+	width: 100%;
+}
+
+.dbgr-lead textarea {
+	resize: vertical;
+}
+
+/* Field-level errors: the message sits under its own field and the field is marked invalid for assistive technology. */
+.dbgr-lead__err {
+	color: var(--dbgr-error);
+	display: block;
+	font-weight: 600;
+	margin-top: 0.25em;
+}
+
+.dbgr-lead__err[hidden] {
+	display: none;
+}
+
+.dbgr-lead [aria-invalid="true"] {
+	border-color: var(--dbgr-error);
+	box-shadow: 0 0 0 1px var(--dbgr-error);
+}
+
+.dbgr-lead input:focus-visible,
+.dbgr-lead select:focus-visible,
+.dbgr-lead textarea:focus-visible,
+.dbgr-lead button:focus-visible,
+.dbgr-lead a:focus-visible,
+.dbgr-lead__status:focus-visible,
+.dbgr-sizer input:focus-visible,
+.dbgr-sizer button:focus-visible,
+.dbgr-sizer a:focus-visible {
+	outline: 3px solid var(--dbgr-focus);
+	outline-offset: 2px;
+}
+
+/* The honeypot is off-screen, not display:none (some bots skip hidden fields). */
+.dbgr-lead__hp {
+	height: 1px;
+	left: -10000px;
+	overflow: hidden;
+	position: absolute;
+	width: 1px;
+}
+
+.dbgr-lead__consent label {
+	align-items: flex-start;
+	color: var(--dbgr-ink);
+	display: flex;
+	gap: 0.5em;
+}
+
+.dbgr-lead__consent input {
+	flex: none;
+	height: 24px;
+	margin: 0;
+	width: 24px;
+}
+
+.dbgr-lead__privacy a,
+.dbgr-sizer__cta a {
+	color: var(--dbgr-accent);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+.dbgr-lead__privacy a:hover,
+.dbgr-sizer__cta a:hover {
+	color: var(--dbgr-accent-hover);
+}
+
+/* The 2px transparent border keeps an edge in forced-colours mode; the padding is reduced by the same 2px so the size is unchanged. */
+.dbgr-lead__button {
+	background: var(--dbgr-accent);
+	border: 2px solid transparent;
+	border-radius: var(--dbgr-radius);
+	color: var(--dbgr-accent-ink);
+	cursor: pointer;
+	font: inherit;
+	font-size: max(1rem, 16px);
+	font-weight: 700;
+	min-height: 44px;
+	padding: calc(0.5em - 2px) calc(1.5em - 2px);
+}
+
+.dbgr-lead__button:hover {
+	background: var(--dbgr-accent-hover);
+}
+
+.dbgr-lead__button:active {
+	transform: translateY(1px);
+}
+
+/* Busy: aria-disabled (not the disabled attribute) so keyboard focus stays on the button and the contrast stays above AA. */
+.dbgr-lead__button[aria-disabled="true"],
+.dbgr-lead__button[aria-disabled="true"]:hover {
+	background: var(--dbgr-field);
+	cursor: progress;
+}
+
+.dbgr-lead__button[aria-disabled="true"]:active {
+	transform: none;
+}
+
+.dbgr-lead__status {
+	margin: 0.5em 0 0;
+	min-height: 1.5em;
+	scroll-margin-top: max(6rem, 96px);
+}
+
+.dbgr-lead__status:focus:not(:focus-visible) {
+	outline: none;
+}
+
+.dbgr-lead__status--ok {
+	color: var(--dbgr-ok);
+	font-weight: 600;
+}
+
+.dbgr-lead__status--error {
+	color: var(--dbgr-error);
+	font-weight: 600;
+}
+
+/* Sizer */
+.dbgr-sizer__card {
+	background: #ffffff;
+	border: 1px solid var(--dbgr-line);
+	border-radius: var(--dbgr-radius);
+	margin: 0 0 0.75em;
+	padding: 0.75em 1em;
+}
+
+.dbgr-sizer__result p {
+	margin: 0 0 6px;
+}
+
+.dbgr-sizer__label {
+	color: var(--dbgr-accent);
+	font-size: 0.875em;
+	font-weight: 700;
+}
+
+.dbgr-sizer__name {
+	font-size: 1.125em;
+	font-weight: 700;
+}
+
+.dbgr-sizer__price {
+	font-size: 1.25em;
+	font-weight: 700;
+}
+
+.dbgr-sizer__note {
+	font-size: 0.9em;
+}
+
+@media (max-width: 29.99rem) {
+	.dbgr-lead__button {
+		width: 100%;
+	}
+}
+
+/* Forced colours: author colours are replaced, so give the card, the invalid state and the busy button edges that survive. */
+@media (forced-colors: active) {
+	.dbgr-lead,
+	.dbgr-sizer {
+		border: 1px solid CanvasText;
+	}
+
+	.dbgr-lead [aria-invalid="true"] {
+		border-width: 3px;
+	}
+}

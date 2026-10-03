@@ -1,0 +1,19 @@
+{
+  "status": "AI-GENERATED CANDIDATE. Not a photograph of a Dough Boss product. Do not publish until Elie has checked it against the real product (crust, size, portion, toppings) and approved it.",
+  "menuItem": "Apple Juice",
+  "category": "Drinks",
+  "replaces": "menu/juice.webp (shared by 11 drinks)",
+  "liveDescription": "[no description] serving format [CONFIRM]",
+  "provider": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "variant": "flare (default)",
+  "quality": "high",
+  "resolution": "2k",
+  "aspectRatio": "5:4",
+  "styleReference": null,
+  "jobId": "7f7f6efe-d72d-4046-9545-1b94b3e2e9e1",
+  "generatedDate": "2026-10-02",
+  "creditsCharged": 2.75,
+  "prompt": "Professional product photograph for a Lebanese bakery menu. A plain warm off-white seamless background with a soft natural shadow, soft even daylight, natural colours, no vignette. Straight-on view of one plain clear drinking glass with no branding, filled with cloudy pale-golden apple juice, centred with about 10 percent clear margin on every side, sharp focus. No garnish, no straw. No text, no logos, no people, no hands, no watermark. 5:4 frame.",
+  "webExport": "1600x1280 WebP q82; original 2240x1792 PNG held in the Higgsfield job"
+}

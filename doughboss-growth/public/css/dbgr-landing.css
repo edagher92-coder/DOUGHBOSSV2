@@ -1,0 +1,192 @@
+/*
+ * DoughBoss Growth: landing pages (catering and shop pages).
+ * Every class starts with dbgr-lp and every custom property with --dbgr- (core already uses --dbg-*).
+ * Colours are neutral defaults a theme can override on :root or on .dbgr-lp. No animation, no web fonts.
+ * Sizes are in em (from a root that is never below 16px) so a theme with html { font-size: 62.5% } cannot shrink them.
+ */
+.dbgr-lp {
+	--dbgr-ink: #1f1a17;
+	--dbgr-paper: #fffaf3;
+	--dbgr-accent: #8a2a1f;
+	--dbgr-accent-hover: #6f2018;
+	--dbgr-line: #cfc3b4;
+	--dbgr-focus: #0b57d0;
+	--dbgr-radius: 8px;
+	box-sizing: border-box;
+	color: var(--dbgr-ink);
+	font-size: max(1rem, 16px);
+	margin: 0 auto;
+	max-width: 56em;
+	padding: 1.5em 1em 2.5em;
+}
+
+.dbgr-lp *,
+.dbgr-lp *::before,
+.dbgr-lp *::after {
+	box-sizing: inherit;
+}
+
+/* Links are underlined explicitly: a theme that removes the underline would leave only colour (2:1 against the body text) to find them. */
+.dbgr-lp a {
+	color: var(--dbgr-accent);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+.dbgr-lp a:hover {
+	color: var(--dbgr-accent-hover);
+}
+
+.dbgr-lp a:focus-visible {
+	outline: 3px solid var(--dbgr-focus);
+	outline-offset: 2px;
+}
+
+/* Breadcrumb */
+.dbgr-lp__crumbs {
+	font-size: 0.9em;
+	margin: 0 0 24px;
+}
+
+.dbgr-lp__crumbs ol {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 8px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.dbgr-lp__crumbs li + li::before {
+	content: "/";
+	margin-right: 8px;
+	opacity: 0.6;
+}
+
+/* Blocks */
+.dbgr-lp__block {
+	background: var(--dbgr-paper);
+	border: 1px solid var(--dbgr-line);
+	border-radius: var(--dbgr-radius);
+	margin: 0 0 1.25em;
+	padding: 1.25em;
+}
+
+/* The form and the sizer draw their own card, so inside a block they drop theirs rather than nest one in another. */
+.dbgr-lp__block .dbgr-lead,
+.dbgr-lp__block .dbgr-sizer {
+	background: none;
+	border: 0;
+	border-radius: 0;
+	margin-bottom: 0;
+	padding: 0;
+}
+
+.dbgr-lp__heading {
+	color: inherit;
+	font-size: clamp(1.25em, 3.5vw, 1.6em);
+	line-height: 1.2;
+	margin: 0 0 12px;
+}
+
+.dbgr-lp__text,
+.dbgr-lp__address,
+.dbgr-lp__phone {
+	font-size: 1.05em;
+	line-height: 1.5;
+	margin: 0 0 12px;
+}
+
+.dbgr-lp__address {
+	font-style: normal;
+}
+
+.dbgr-lp__label {
+	color: inherit;
+	font-size: 0.85em;
+	letter-spacing: 0.04em;
+	margin: 16px 0 4px;
+	text-transform: uppercase;
+}
+
+.dbgr-lp__label:first-of-type {
+	margin-top: 0;
+}
+
+/* Opening hours */
+.dbgr-lp__hours {
+	display: grid;
+	gap: 0.25em 1em;
+	grid-template-columns: max-content 1fr;
+	margin: 0;
+}
+
+.dbgr-lp__hours dt {
+	font-weight: 600;
+}
+
+.dbgr-lp__hours dd {
+	margin: 0;
+}
+
+/* Package cards */
+.dbgr-lp__packages {
+	display: grid;
+	gap: 1em;
+	grid-template-columns: 1fr;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.dbgr-lp__package {
+	background: #ffffff;
+	border: 1px solid var(--dbgr-line);
+	border-radius: var(--dbgr-radius);
+	padding: 1em;
+}
+
+.dbgr-lp__package-name {
+	color: inherit;
+	font-size: 1.15em;
+	line-height: 1.25;
+	margin: 0 0 4px;
+}
+
+.dbgr-lp__serves {
+	margin: 0 0 0.25em;
+}
+
+.dbgr-lp__price {
+	font-size: 1.25em;
+	font-weight: 700;
+	margin: 0 0 8px;
+}
+
+.dbgr-lp__includes {
+	margin: 0;
+	padding-left: 1.1em;
+}
+
+/* FAQ */
+.dbgr-lp__faq + .dbgr-lp__faq {
+	border-top: 1px solid var(--dbgr-line);
+	margin-top: 0.75em;
+	padding-top: 0.75em;
+}
+
+.dbgr-lp__question {
+	color: inherit;
+	font-size: 1.05em;
+	margin: 0 0 4px;
+}
+
+@media (min-width: 40rem) {
+	.dbgr-lp {
+		padding: 2em 1.5em 3em;
+	}
+
+	.dbgr-lp__packages {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}

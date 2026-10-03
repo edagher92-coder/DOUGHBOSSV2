@@ -1,0 +1,528 @@
+{
+  "base": "http://127.0.0.1:9416",
+  "passed": 100,
+  "failed": 0,
+  "fatal": null,
+  "checks": [
+    {
+      "name": "A starting state: companion active, every flag off, and no module active except the registry \"always\" module (waitlist: opt-out, export, erasure)",
+      "ok": true,
+      "detail": "core 2.43.2, companion 0.1.0, active: waitlist"
+    },
+    {
+      "name": "A the companion has exactly eleven flags and none is a hero flag",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A scratch seed: core reports the three shops by slug (two have fake test addresses)",
+      "ok": true,
+      "detail": "bankstown, revesby, roselands"
+    },
+    {
+      "name": "A three throwaway pages hold the companion shortcodes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A reference capture: all seven public pages answer 200",
+      "ok": true,
+      "detail": "/:200 /order/:200 /catering/:200 /locations/:200 /coming-soon/:200 /lead-test/:200 /waitlist-test/:200"
+    },
+    {
+      "name": "A reference capture is deterministic (two captures identical after masking nonces)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A flags off: no page mentions the companion, no raw shortcode text, no PHP notice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "NOTE the working name appears in core's OWN markup with every companion flag off on: /catering/ x1 (not companion output; WP-06 change request 2: core 2.44.0 must neutralise its catering form copy)",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "A negative control: the comparison detects a one-byte change",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "NOTE phase B (one flag at a time) skipped by WP16_SKIP_MATRIX=1; phases C, D and E run",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "C every flag switched on together: all eleven effective",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C every module with a flag is active and storage is ready",
+      "ok": true,
+      "detail": "ledger,consent,attribution,waitlist,coming_soon,landing,leads,conversions,recon"
+    },
+    {
+      "name": "C the six landing pages exist as drafts (re-used or created)",
+      "ok": true,
+      "detail": "create: HTTP 302"
+    },
+    {
+      "name": "C / (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C / (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C / (desktop): the consent banner is visible on the first visit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C / (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C / (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C / (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C / (mobile): the consent banner is visible on the first visit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C / (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /order/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /order/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /order/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /order/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /order/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /order/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 1)"
+    },
+    {
+      "name": "C /catering/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x1 (core's own: 1)"
+    },
+    {
+      "name": "C /catering/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /coming-soon/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /coming-soon/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /coming-soon/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /coming-soon/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /coming-soon/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /coming-soon/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /lead-test/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /lead-test/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /lead-test/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /lead-test/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /lead-test/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /lead-test/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /waitlist-test/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /waitlist-test/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /waitlist-test/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /waitlist-test/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /waitlist-test/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /waitlist-test/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/corporate/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/corporate/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/corporate/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/corporate/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/corporate/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/corporate/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/office-breakfast/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/office-breakfast/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/events/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/events/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/events/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/events/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/events/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/events/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/revesby/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/revesby/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/revesby/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/revesby/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/revesby/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/revesby/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/bankstown/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/bankstown/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/bankstown/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/bankstown/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/bankstown/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/bankstown/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/roselands/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/roselands/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/roselands/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/roselands/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/roselands/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/roselands/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "NOTE axe violations outside companion markup (core or theme, not changed by this work): / desktop -> color-contrast(1); / mobile -> color-contrast(1); /order/ desktop -> aria-allowed-role(1); /order/ mobile -> aria-allowed-role(1); /locations/ desktop -> heading-order(1); /locations/ mobile -> heading-order(1)",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "C accepting the banner stores the choice (cookie) and the banner stays closed after reload, with no first-party error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C every companion admin screen loads with every flag on (11 screens)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "D all flags off and the landing pages drafted: every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "E deactivating the plugin moves the six landing pages back to draft (no raw tag is ever shown on them)",
+      "ok": true,
+      "detail": "draft,draft,draft,draft,draft,draft"
+    },
+    {
+      "name": "E while deactivated the health route is gone",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "NOTE after deactivation, pages the OWNER wrote with a companion shortcode show the raw tag: /lead-test/, /waitlist-test/ (documented: set such pages to draft or remove the shortcode before deactivating)",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "E reactivating restores the plugin with the saved settings kept (landing_pages still on, nothing else)",
+      "ok": true,
+      "detail": "{\"consent_banner\":false,\"gtm\":false,\"attribution\":false,\"server_conversions\":false,\"landing_pages\":true,\"seo_head\":false,\"lead_form\":false,\"party_sizer\":false,\"coming_soon\":false,\"waitlist\":false,\"timesheet_recon\":false}"
+    },
+    {
+      "name": "cleanup: every flag off, plugin active, throwaway pages deleted, landing pages drafts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the runtime debug log gained no PHP warning, notice, deprecation or fatal error",
+      "ok": true,
+      "detail": "log grew 0 bytes"
+    },
+    {
+      "name": "the runtime server log (PHP output) gained no warning, notice, deprecation, fatal error or uncaught exception",
+      "ok": true,
+      "detail": "log grew 0 bytes"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+	"version": 1,
+	"key": "catering-office-breakfast",
+	"kind": "catering",
+	"parent": "catering",
+	"slug": "office-breakfast",
+	"page_title": "Office breakfast catering",
+	"crumb": "Office breakfast catering",
+	"title": "Office Breakfast Catering Enquiries",
+	"description": "Planning an office breakfast? Send your date and headcount to Dough Boss catering and the team will confirm availability and price.",
+	"service_name": "Office breakfast catering",
+	"blocks": [
+		{ "type": "claim", "id": "catering-service-area", "heading": "Where we cater" },
+		{ "type": "claim", "id": "catering-delivery-or-drop-off", "heading": "Delivery or drop-off" },
+		{ "type": "claim", "id": "catering-lead-time", "heading": "Lead time" },
+		{ "type": "packages", "heading": "Catering packages" },
+		{ "type": "form" }
+	]
+}

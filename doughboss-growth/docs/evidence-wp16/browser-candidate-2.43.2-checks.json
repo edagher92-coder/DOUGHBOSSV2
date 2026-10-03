@@ -1,0 +1,1043 @@
+{
+  "base": "http://127.0.0.1:9416",
+  "passed": 188,
+  "failed": 0,
+  "fatal": null,
+  "checks": [
+    {
+      "name": "A starting state: companion active, every flag off, and no module active except the registry \"always\" module (waitlist: opt-out, export, erasure)",
+      "ok": true,
+      "detail": "core 2.43.2, companion 0.1.0, active: waitlist"
+    },
+    {
+      "name": "A the companion has exactly eleven flags and none is a hero flag",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A scratch seed: core reports the three shops by slug (two have fake test addresses)",
+      "ok": true,
+      "detail": "bankstown, revesby, roselands"
+    },
+    {
+      "name": "A three throwaway pages hold the companion shortcodes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A reference capture: all seven public pages answer 200",
+      "ok": true,
+      "detail": "/:200 /order/:200 /catering/:200 /locations/:200 /coming-soon/:200 /lead-test/:200 /waitlist-test/:200"
+    },
+    {
+      "name": "A reference capture is deterministic (two captures identical after masking nonces)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A flags off: no page mentions the companion, no raw shortcode text, no PHP notice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "NOTE the working name appears in core's OWN markup with every companion flag off on: /catering/ x1 (not companion output; WP-06 change request 2: core 2.44.0 must neutralise its catering form copy)",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "A negative control: the comparison detects a one-byte change",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B consent_banner: switched on alone: effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE consent_banner: effective flags during this step: consent_banner",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B consent_banner: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/"
+    },
+    {
+      "name": "B consent_banner: the banner markup is on the home page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B consent_banner: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B consent_banner: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B consent_banner: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B consent_banner: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B gtm: switched on alone (with consent_banner): effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE gtm: effective flags during this step: gtm, consent_banner",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B gtm: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/"
+    },
+    {
+      "name": "B gtm: one Tag Manager loader snippet, the dummy container id and Consent Mode defaults denied are in the head",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B gtm: no noscript Tag Manager iframe (visitors without JavaScript cannot be asked for consent)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B gtm: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B gtm: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B gtm: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B gtm: before any consent the only tracking request is the Tag Manager loader",
+      "ok": true,
+      "detail": "1 loader request(s), 0 other tracking request(s)"
+    },
+    {
+      "name": "B gtm: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B attribution: switched on alone: effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE attribution: effective flags during this step: attribution",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B attribution: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/"
+    },
+    {
+      "name": "B attribution: the module is active and its tables exist",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B attribution: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B attribution: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B attribution: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B attribution: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B server_conversions: switched on alone (with attribution (and a conversion destination: a dummy GA4 measurement id plus the dummy API secret constant from the scratch file; the outbound guard refuses any request)): effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE server_conversions: effective flags during this step: server_conversions, attribution",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B server_conversions: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/"
+    },
+    {
+      "name": "B server_conversions: the conversions module is active",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B server_conversions: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B server_conversions: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B server_conversions: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B server_conversions: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B landing_pages: switched on alone: effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE landing_pages: effective flags during this step: landing_pages",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B landing_pages: the create button makes six DRAFT pages (nothing is published)",
+      "ok": true,
+      "detail": "6 page(s): corporate:draft events:draft office-breakfast:draft bankstown:draft revesby:draft roselands:draft"
+    },
+    {
+      "name": "B landing_pages: a draft landing page is not public",
+      "ok": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "B landing_pages: published, all six answer 200 with no raw shortcode, no PHP notice and no working name",
+      "ok": true,
+      "detail": "/catering/corporate/:200 /catering/office-breakfast/:200 /catering/events/:200 /locations/revesby/:200 /locations/bankstown/:200 /locations/roselands/:200"
+    },
+    {
+      "name": "B landing_pages: six distinct <title> elements (one each)",
+      "ok": true,
+      "detail": "Corporate catering &#8211; Dough Boss (local runtime) | Office breakfast catering &#8211; Dough Boss (local runtime) | Event catering &#8211; Dough Boss (local runtime) | Revesby &#8211; Dough Boss (local runtime) | Bankstown &#8211; Dough Boss (local runtime) | Roselands &#8211; Dough Boss (local runtime)"
+    },
+    {
+      "name": "B landing_pages: the page body is the companion's own markup (class dbgr-lp) and no meta description of its own is added without seo_head",
+      "ok": true,
+      "detail": "core JSON-LD scripts per page without seo_head: 0,0,0,0,0,0"
+    },
+    {
+      "name": "NOTE landing_pages: with the six pages published WordPress itself marks the hub pages as parents (body class page-parent); the byte-identical check runs after the pages are drafted again",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B landing_pages: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B landing_pages: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B seo_head: switched on alone (with landing_pages): effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE seo_head: effective flags during this step: seo_head, landing_pages",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B seo_head: every landing page gains exactly one JSON-LD script and has exactly one meta description",
+      "ok": true,
+      "detail": "JSON-LD scripts without seo_head 0,0,0,0,0,0 and with it 1,1,1,1,1,1"
+    },
+    {
+      "name": "B seo_head: no property the ledger cannot source (no geo, sameAs, aggregateRating, priceRange)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "NOTE seo_head: with the six pages published WordPress itself marks the hub pages as parents (body class page-parent); the byte-identical check runs after the pages are drafted again",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B seo_head: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B seo_head: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "NOTE after the flags are off the published landing pages answer: /catering/corporate/:200 /catering/office-breakfast/:200 /catering/events/:200 /locations/revesby/:200 /locations/bankstown/:200 /locations/roselands/:200",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B landing_pages + seo_head: with the flags off a published landing page shows no raw shortcode text and its JSON-LD count falls back to core's own",
+      "ok": true,
+      "detail": "JSON-LD scripts now 0,0,0,0,0,0 (core only: 0,0,0,0,0,0)"
+    },
+    {
+      "name": "B landing_pages + seo_head: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B lead_form: switched on alone: effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE lead_form: effective flags during this step: lead_form",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B lead_form: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/ /lead-test/"
+    },
+    {
+      "name": "B lead_form: the lead form is on its page and the sender name gap hides the marketing-consent box",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B lead_form: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B lead_form: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B lead_form: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B lead_form: /lead-test/ no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B lead_form: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B party_sizer: switched on alone: effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE party_sizer: effective flags during this step: party_sizer",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B party_sizer: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/ /lead-test/"
+    },
+    {
+      "name": "B party_sizer: the sizer is on its page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B party_sizer: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B party_sizer: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B party_sizer: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B party_sizer: /lead-test/ no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B party_sizer: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B coming_soon: switched on alone: effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE coming_soon: effective flags during this step: coming_soon",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B coming_soon: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/ /coming-soon/"
+    },
+    {
+      "name": "B coming_soon: the neutral section is on its page and says only that something is coming",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B coming_soon: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B coming_soon: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B coming_soon: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B coming_soon: /coming-soon/ no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B coming_soon: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B waitlist: switched on alone (with sender legal name and privacy-policy URL): effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE waitlist: effective flags during this step: waitlist",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B waitlist: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/ /waitlist-test/"
+    },
+    {
+      "name": "B waitlist: the form is present, its consent box exists, is required and is NOT ticked",
+      "ok": true,
+      "detail": "1 consent checkbox(es)"
+    },
+    {
+      "name": "B waitlist: the sender is named on the form",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B waitlist: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B waitlist: admin screen loads",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B waitlist: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B waitlist: /waitlist-test/ no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B waitlist: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "B timesheet_recon: switched on alone: effective in /health",
+      "ok": true,
+      "detail": "/wp-admin/admin.php?page=doughboss-growth&dbgr_saved=1"
+    },
+    {
+      "name": "NOTE timesheet_recon: effective flags during this step: timesheet_recon",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "B timesheet_recon: the pages it touches answer 200, no PHP notice, the companion adds no occurrence of the working name",
+      "ok": true,
+      "detail": "/"
+    },
+    {
+      "name": "B timesheet_recon: the module is active and has NO public effect",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B timesheet_recon: the report screen loads (nothing was run, Square was never called)",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "B timesheet_recon: no page shows raw companion shortcode text",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "B timesheet_recon: / no first-party console error, no failed first-party request",
+      "ok": true,
+      "detail": "HTTP 200 "
+    },
+    {
+      "name": "B timesheet_recon: switched off, every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": "7 pages"
+    },
+    {
+      "name": "C every flag switched on together: all eleven effective",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C every module with a flag is active and storage is ready",
+      "ok": true,
+      "detail": "ledger,consent,attribution,waitlist,coming_soon,landing,leads,conversions,recon"
+    },
+    {
+      "name": "C the six landing pages exist as drafts (re-used or created)",
+      "ok": true,
+      "detail": "create: HTTP 302"
+    },
+    {
+      "name": "C / (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C / (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C / (desktop): the consent banner is visible on the first visit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C / (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C / (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C / (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C / (mobile): the consent banner is visible on the first visit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C / (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /order/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /order/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /order/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /order/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /order/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /order/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x1 (core's own: 1)"
+    },
+    {
+      "name": "C /catering/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x1 (core's own: 1)"
+    },
+    {
+      "name": "C /catering/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "1 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /coming-soon/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /coming-soon/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /coming-soon/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /coming-soon/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /coming-soon/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /coming-soon/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /lead-test/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /lead-test/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /lead-test/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /lead-test/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /lead-test/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /lead-test/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /waitlist-test/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /waitlist-test/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /waitlist-test/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /waitlist-test/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /waitlist-test/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /waitlist-test/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/corporate/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/corporate/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/corporate/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/corporate/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/corporate/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/corporate/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/office-breakfast/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/office-breakfast/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/office-breakfast/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/events/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/events/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/events/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /catering/events/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /catering/events/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /catering/events/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/revesby/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/revesby/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/revesby/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/revesby/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/revesby/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/revesby/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/bankstown/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/bankstown/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/bankstown/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/bankstown/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/bankstown/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/bankstown/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/roselands/ (desktop): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/roselands/ (desktop): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/roselands/ (desktop): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "C /locations/roselands/ (mobile): answers 200, no first-party console error, no failed first-party request, no horizontal scroll",
+      "ok": true,
+      "detail": "HTTP 200; scroll overflow 0px; "
+    },
+    {
+      "name": "C /locations/roselands/ (mobile): before any consent only the Tag Manager loader is requested, and the companion adds no working name",
+      "ok": true,
+      "detail": "1 loader, 0 other tracking, working name x0 (core's own: 0)"
+    },
+    {
+      "name": "C /locations/roselands/ (mobile): axe finds no violation in companion markup",
+      "ok": true,
+      "detail": "0 violation(s) elsewhere on the page"
+    },
+    {
+      "name": "NOTE axe violations outside companion markup (core or theme, not changed by this work): / desktop -> color-contrast(1); / mobile -> color-contrast(1); /order/ desktop -> aria-allowed-role(1); /order/ mobile -> aria-allowed-role(1); /locations/ desktop -> heading-order(1); /locations/ mobile -> heading-order(1)",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "C accepting the banner stores the choice (cookie) and the banner stays closed after reload, with no first-party error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "C every companion admin screen loads with every flag on (11 screens)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "D all flags off and the landing pages drafted: every public page is BYTE-IDENTICAL to the flags-off reference",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "OUTBOUND guard is live: a probe request to a non-local host was refused by the runtime filter",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "OUTBOUND server-side requests that reached the network: 0 (every non-local attempt was recorded and refused)",
+      "ok": true,
+      "detail": "attempts recorded and refused (excluding the probe): 0"
+    },
+    {
+      "name": "NOTE outbound attempts (recorded and refused, probe excluded) after phases A-D: 0",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "E deactivating the plugin moves the six landing pages back to draft (no raw tag is ever shown on them)",
+      "ok": true,
+      "detail": "draft,draft,draft,draft,draft,draft"
+    },
+    {
+      "name": "E while deactivated the health route is gone",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "NOTE after deactivation, pages the OWNER wrote with a companion shortcode show the raw tag: /lead-test/, /waitlist-test/ (documented: set such pages to draft or remove the shortcode before deactivating)",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "E reactivating restores the plugin with the saved settings kept (landing_pages still on, nothing else)",
+      "ok": true,
+      "detail": "{\"consent_banner\":false,\"gtm\":false,\"attribution\":false,\"server_conversions\":false,\"landing_pages\":true,\"seo_head\":false,\"lead_form\":false,\"party_sizer\":false,\"coming_soon\":false,\"waitlist\":false,\"timesheet_recon\":false}"
+    },
+    {
+      "name": "cleanup: every flag off, plugin active, throwaway pages deleted, landing pages drafts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "OUTBOUND whole run (A-E and cleanup): every non-local server-side request was recorded and refused, none reached the network",
+      "ok": true,
+      "detail": "attempts: 0"
+    },
+    {
+      "name": "NOTE outbound attempts (recorded and refused, probe excluded) whole run: 0",
+      "ok": true,
+      "note": true
+    },
+    {
+      "name": "the runtime debug log gained no PHP warning, notice, deprecation or fatal error",
+      "ok": true,
+      "detail": "log grew 0 bytes"
+    },
+    {
+      "name": "the runtime server log (PHP output) gained no warning, notice, deprecation, fatal error or uncaught exception",
+      "ok": true,
+      "detail": "log grew 0 bytes"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+/*
+ * DoughBoss Growth: home hero video. Loaded only on the front page while "Home hero video" is on and its files are found.
+ * Breakpoint mirrors core (public/css/doughboss-manoush-hero.css): phones are max-width 720px, desktop is min-width 721px.
+ * Stacking: the video sits inside .db-mh-backdrop (z-index -3, so core's parallax moves it with the poster), above the
+ * backdrop's own background image, and below core's ::before gradient (-2) and the copy (1).
+ */
+
+/* Owner rule: no steam or smoke. The server edit removes the element; this is the belt to that brace. */
+.has-dbgr-video .db-mh-steam { display: none; }
+
+.has-dbgr-video .db-mh-backdrop {
+	background-color: #0a0908;
+	background-position: 50% 0;
+	background-repeat: no-repeat;
+}
+
+.dbgr-hero-video {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: 50% 0;
+	opacity: 0;
+	transition: opacity .4s ease;
+	pointer-events: none;
+	background: transparent;
+}
+
+.dbgr-hero-video.is-playing { opacity: 1; }
+
+/* "Concept preview" label. Not a link. Cream on charcoal. */
+.dbgr-hero-chip {
+	position: absolute;
+	z-index: 2;
+	top: .9rem;
+	right: .9rem;
+	padding: .4em .9em;
+	border-radius: 999px;
+	background: rgba(10, 8, 7, .72);
+	color: #eee8de;
+	font: 600 .7rem/1.1 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	letter-spacing: .14em;
+	text-transform: uppercase;
+	pointer-events: none;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+/* Desktop: the poster and the video are a tall panel on the RIGHT half, top aligned. It crops at the bottom by the hero's
+   own overflow, and fades into the black under the headline so the copy keeps its contrast. */
+@media (min-width: 721px) {
+	.has-dbgr-video .db-mh-backdrop {
+		background-size: 50% auto;
+		background-position: 100% 0;
+		-webkit-mask-image: linear-gradient(90deg, transparent 46%, #000 62%);
+		mask-image: linear-gradient(90deg, transparent 46%, #000 62%);
+	}
+
+	.dbgr-hero-video {
+		left: 50%;
+		width: 50%;
+		height: auto;
+		aspect-ratio: 9 / 16;
+	}
+
+	.dbgr-hero-chip {
+		top: auto;
+		bottom: 1rem;
+		right: 1rem;
+	}
+}
+
+/* Reduced motion: poster only. The label stays, because the picture is still a concept. */
+@media (prefers-reduced-motion: reduce) {
+	.dbgr-hero-video { display: none; }
+}

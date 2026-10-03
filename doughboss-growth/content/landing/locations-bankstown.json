@@ -1,0 +1,15 @@
+{
+	"version": 1,
+	"key": "locations-bankstown",
+	"kind": "location",
+	"parent": "locations",
+	"slug": "bankstown",
+	"location_slug": "bankstown",
+	"page_title": "Bankstown",
+	"crumb": "{name}",
+	"title": "{name} Shop Details",
+	"description": "Dough Boss {name} shop: {details}.",
+	"blocks": [
+		{ "type": "location", "heading": "Find the shop", "slots": [ "address", "phone", "hours" ] }
+	]
+}

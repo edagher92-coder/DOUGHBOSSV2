@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "note": "Every public line. Tier A = the owner's own published words (pack/sections/brand-identity.md 'Verified lines we may print' and pack/sections/marketing.md Tier A). DRAFT lines print nothing until an administrator approves them on the settings screen. Never add a price, a phone number, a count, a lead time, 'halal', 'gluten free', 'best', or the word Minis.",
+  "lines": {
+    "headline": { "text": "FEED THE WHOLE TABLE.", "tier": "A", "source": "brand-identity.md verified lines; live catering heading" },
+    "tagline": { "text": "Office runs, footy nights and functions.", "tier": "A", "source": "brand-identity.md positioning, quoted from the live site" },
+    "plan_line": { "text": "Tell us what you need and we'll help plan the spread.", "tier": "A", "source": "brand-identity.md positioning, quoted from the live site" },
+    "cta_plan": { "text": "Plan catering", "tier": "A", "source": "marketing.md Tier A; live site button" },
+    "step_1": { "text": "Tell us the occasion", "tier": "A", "source": "marketing.md Tier A; live catering page step title" },
+    "step_2": { "text": "Build the right mix", "tier": "A", "source": "marketing.md Tier A; live catering page step title" },
+    "step_3": { "text": "Confirm before we bake", "tier": "A", "source": "marketing.md Tier A; live catering page step title" },
+    "shops": { "text": "REVESBY · BANKSTOWN · ROSELANDS", "tier": "A", "source": "brand-identity.md verified lines (location line)" },
+    "allergen": { "text": "Allergen information available on request.", "tier": "A", "source": "brand-identity.md verified lines (FSANZ display-or-on-request basis)" },
+    "email": { "text": "catering@doughboss.com.au", "tier": "A", "source": "brand-identity.md verified lines; live footer" },
+    "chip": { "text": "Concept preview", "tier": "A", "source": "required label on every concept image (owner rule for this build)" },
+    "caption_artwork": { "text": "Artwork. The box is in development.", "tier": "DRAFT", "source": "web-plan PLAN.md section 3.1, wording not yet approved (B2)" },
+    "caption_render": { "text": "Concept preview of the Dough Boss catering box.", "tier": "DRAFT", "source": "web-plan PLAN.md section 3.1, wording not yet approved (B2)" },
+    "caption_sample": { "text": "The handwriting on the label is sample text.", "tier": "DRAFT", "source": "drafted for the B2 approval, wording not yet approved" },
+    "cta_concept": { "text": "See the box concept", "tier": "DRAFT", "source": "web-plan PLAN.md placement row 2, wording not yet approved (B3)" }
+  }
+}
