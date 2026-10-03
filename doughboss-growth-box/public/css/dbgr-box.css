@@ -1,0 +1,181 @@
+/*
+ * DoughBoss Growth Catering Box: story page, bands, badge, divider.
+ * Prefix dbgr- (the theme owns dbf-, core owns db-). Loaded only on a page that holds one of the shortcodes
+ * or an automatic band. Colours are the live site's tokens, with the theme variables used when present.
+ */
+.dbgr-story,
+.dbgr-band {
+	--dbgr-char: var(--dbf-char, #0a0807);
+	--dbgr-cream: var(--dbf-cream, #eee8de);
+	--dbgr-paper: var(--dbf-paper, #f7f5f0);
+	--dbgr-ember: var(--dbf-ember, #e2231a);
+	--dbgr-btn: #b71912;
+	--dbgr-ink: #0d0d0d;
+	--dbgr-soft: #4a4640;
+	--dbgr-display: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+}
+
+/* Headline and lead */
+.dbgr-h {
+	margin: 0 0 .35em;
+	font-family: var(--dbgr-display);
+	font-size: clamp(38px, 6vw, 64px);
+	font-weight: 400;
+	letter-spacing: .01em;
+	line-height: .96;
+	text-transform: uppercase;
+}
+.dbgr-h--lead { font-size: clamp(30px, 4.6vw, 48px); }
+.dbgr-dot { color: var(--dbgr-ember); }
+.dbgr-lead { margin: 0 0 1em; font-size: 1.1em; line-height: 1.5; }
+
+/* Figures, the concept chip and captions */
+.dbgr-fig { position: relative; margin: 0; max-width: 100%; }
+.dbgr-media { position: relative; overflow: hidden; border-radius: 14px; background: var(--dbgr-char, #0a0807); }
+.dbgr-media picture,
+.dbgr-media img { display: block; width: 100%; height: auto; }
+.dbgr-chip {
+	position: absolute;
+	z-index: 2;
+	top: 10px;
+	left: 10px;
+	max-width: calc(100% - 20px);
+	padding: 6px 11px;
+	border: 1px solid rgba(238, 232, 222, .55);
+	border-radius: 999px;
+	background: rgba(10, 8, 7, .88);
+	color: #eee8de;
+	font: 600 12px/1.1 'Barlow', system-ui, sans-serif;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+	pointer-events: none;
+}
+.dbgr-cap { display: block; padding: 10px 2px 0; color: var(--dbgr-soft, #4a4640); font-size: 14px; line-height: 1.45; }
+.dbgr-cap-line { display: block; }
+.dbgr-fig--wide { max-width: 560px; }
+.dbgr-fig--portrait { max-width: 460px; }
+.dbgr-fig--seal { max-width: 300px; }
+.dbgr-fig--macro { max-width: 460px; }
+.dbgr-fig--band { max-width: 460px; width: 100%; }
+/* The seal artwork is a flat disc on a white square: let the white drop out on the paper, and keep the chip whole. */
+.dbgr-fig--seal .dbgr-media { overflow: visible; background: transparent; border-radius: 0; }
+.dbgr-fig--seal .dbgr-img { mix-blend-mode: multiply; }
+
+/* Story page */
+.dbgr-story { display: grid; gap: 40px; margin-block: 8px 24px; }
+.dbgr-sec { min-width: 0; }
+.dbgr-sec--intro { text-align: left; }
+.dbgr-sec--closed,
+.dbgr-sec--order,
+.dbgr-sec--info { text-align: left; }
+.dbgr-pair { display: grid; align-items: start; justify-items: center; gap: 28px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.dbgr-steps { margin: 0 0 1.2em; padding-left: 1.25em; line-height: 1.7; }
+.dbgr-fine { margin: 0 0 .4em; color: var(--dbgr-soft, #4a4640); font-size: 15px; }
+.dbgr-fine--shops { letter-spacing: .12em; }
+.dbgr-admin-note {
+	margin: 0 0 16px;
+	padding: 10px 14px;
+	border-left: 4px solid #b71912;
+	background: #fff3f2;
+	color: #0d0d0d;
+	font-size: 14px;
+}
+
+/* Buttons and links */
+.dbgr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 8px; }
+.dbgr-story a.dbgr-btn,
+.dbgr-band a.dbgr-btn,
+a.dbgr-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 48px;
+	padding: 12px 24px;
+	border: 1px solid var(--dbgr-btn, #b71912);
+	border-radius: 999px;
+	background: var(--dbgr-btn, #b71912);
+	color: #fff;
+	font-family: var(--dbgr-display, 'Bebas Neue', Impact, sans-serif);
+	font-size: 20px;
+	letter-spacing: .06em;
+	line-height: 1;
+	text-decoration: none;
+}
+.dbgr-story a.dbgr-btn:hover,
+.dbgr-band a.dbgr-btn:hover,
+a.dbgr-btn:hover { background: var(--dbgr-ember, #e2231a); border-color: var(--dbgr-ember, #e2231a); color: #fff; }
+.dbgr-band a.dbgr-btn--ghost { background: transparent; border-color: currentColor; color: var(--dbgr-cream, #eee8de); }
+.dbgr-band a.dbgr-btn--ghost:hover { background: rgba(238, 232, 222, .14); border-color: currentColor; color: var(--dbgr-cream, #eee8de); }
+.dbgr-btn:focus-visible,
+.dbgr-link:focus-visible,
+.dbgr-badge:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px #0a0807; }
+.dbgr-link { color: inherit; text-underline-offset: 3px; }
+
+/* Liner pattern divider */
+.dbgr-divider {
+	height: 56px;
+	border-block: 1px solid rgba(13, 13, 13, .12);
+	background-color: var(--dbgr-paper, #f7f5f0);
+	background-image: var(--dbgr-liner, none);
+	background-repeat: repeat;
+	background-size: 236px 236px;
+	background-position: 0 -20px;
+}
+.dbgr-story .dbgr-divider { border-radius: 4px; }
+
+/* Band under a hero */
+.dbgr-band { background: var(--dbgr-char, #0a0807); color: var(--dbgr-cream, #eee8de); }
+.dbgr-band-in {
+	box-sizing: border-box;
+	display: grid;
+	align-items: center;
+	gap: 22px 40px;
+	width: min(1240px, calc(100% - 40px));
+	margin-inline: auto;
+	padding: 36px 0;
+}
+.dbgr-band-in--img { grid-template-columns: minmax(0, 1fr) minmax(0, 460px); }
+.dbgr-band .dbgr-h { margin-bottom: .2em; }
+.dbgr-band .dbgr-lead { margin-bottom: 1em; }
+.dbgr-band .dbgr-cap { color: #cfc8bb; }
+.dbgr-band .dbgr-fig--band { justify-self: end; }
+@media (max-width: 900px) {
+	.dbgr-band-in--img { grid-template-columns: minmax(0, 1fr); }
+	.dbgr-band .dbgr-fig--band { justify-self: start; }
+}
+
+/* Seal badge */
+.dbgr-badge {
+	position: relative;
+	display: inline-block;
+	width: 112px;
+	height: 112px;
+	border-radius: 50%;
+	color: #0a0807;
+	text-decoration: none;
+	vertical-align: middle;
+}
+.dbgr-badge picture,
+.dbgr-badge-img { display: block; width: 112px; height: 112px; }
+.dbgr-badge-text {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	font-family: var(--dbgr-display, 'Bebas Neue', Impact, sans-serif);
+	font-size: 20px;
+	letter-spacing: .06em;
+	line-height: 1.02;
+	text-align: center;
+	text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.dbgr-btn { transition: background-color .2s ease, border-color .2s ease; }
+}
+@media print {
+	.dbgr-band,
+	.dbgr-divider { display: none; }
+}
