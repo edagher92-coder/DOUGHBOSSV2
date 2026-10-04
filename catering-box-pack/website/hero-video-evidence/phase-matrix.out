@@ -1,0 +1,38 @@
+PASS desktop DPR1 (video 761 css px wide x1 = 761): source "av1-720" (wanted "av1-720")
+PASS desktop DPR2 (761 x2 = 1522): source "av1-1080" (wanted "av1-1080")
+PASS phone DPR1 (405 x1): source "av1-720" (wanted "av1-720")
+PASS phone DPR2 (405 x2 = 810 > 800): source "av1-1080" (wanted "av1-1080")
+PASS phone DPR3, downlink 10: source "av1-1080" (wanted "av1-1080")
+PASS phone DPR3, downlink 5 (>= 5 counts as fast): source "av1-1080" (wanted "av1-1080")
+PASS phone DPR3, downlink 4.9: source "av1-720" (wanted "av1-720")
+PASS phone DPR3, downlink unknown (0): source "av1-1080" (wanted "av1-1080")
+PASS poster only for {"saveData":true,"effectiveType":"4g","downlink":10}: source null (wanted null)
+PASS   no src, zero video requests
+PASS poster only for {"saveData":false,"effectiveType":"3g","downlink":1}: source null (wanted null)
+PASS   no src, zero video requests
+PASS poster only for {"saveData":false,"effectiveType":"2g","downlink":0.2}: source null (wanted null)
+PASS   no src, zero video requests
+PASS poster only for {"saveData":false,"effectiveType":"slow-2g","downlink":0.05}: source null (wanted null)
+PASS   no src, zero video requests
+PASS no AV1 -> HEVC (desktop DPR2): source "hevc-1080" (wanted "hevc-1080")
+PASS no AV1 -> HEVC (desktop DPR1): source "hevc-720" (wanted "hevc-720")
+PASS no AV1, no HEVC -> H.264 (only a 720 file exists, desktop DPR2 wants 1080): source "h264-720" (wanted "h264-720")
+PASS no codec at all -> poster only: source null (wanted null)
+PASS   no src
+PASS av1-1080 missing on a DPR2 desktop -> av1-720: source "av1-720" (wanted "av1-720")
+PASS av1-720 missing on a DPR1 desktop -> av1-1080: source "av1-1080" (wanted "av1-1080")
+PASS both AV1 files missing, this Chromium cannot play HEVC or H.264 -> poster only: source null (wanted null)
+PASS both AV1 files missing, every codec reported playable -> hevc-1080: source "hevc-1080" (wanted "hevc-1080")
+NOTE this Chromium's canPlayType: {"av1":"probably","hevc":"","h264":""}
+PASS every file missing -> poster only: source null (wanted null)
+NOTE core button removed; buttons now: [{"cls":"db-mh-replay","text":"Pause video","pressed":"false"}]
+PASS core's pause button missing: our own matching button was added (same db-mh-replay class)
+PASS   our button pauses the video
+PASS   it flips to 'Play video' with aria-pressed=true
+PASS   and plays again
+PASS no pause control available at all: the video does not start (WCAG 2.2.2 fail-closed)
+PASS video request fails: stays on the poster (opacity 0, no is-playing)
+PASS video request fails: no uncaught page error (the browser logs the failed request itself: 1 console line(s))
+
+phase C: 33 passed, 0 failed
+exit 0

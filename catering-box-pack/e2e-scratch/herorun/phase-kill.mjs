@@ -1,0 +1,26 @@
+// Phase D (core B): the kill switch DBGRBOX_DISABLE overrides everything, via an mu-plugin that defines it.
+import { chromium, BASE, HERE, STATE, ok, note, tally, adminLogin, anon, get, heroStatus, fs, log } from "./lib.mjs";
+const browser = await chromium.launch();
+const { p } = await adminLogin(browser);
+const a = await anon();
+const base = fs.readFileSync(HERE + "/out/baseline-home.html", "utf8");
+const on = await get(a, "/");
+ok(/has-dbgr-video/.test(on) && on !== base, "precondition: hero video is ON");
+const vfs = fs.readFileSync(STATE + "/run/vfs-dir", "utf8").trim();
+const mu = vfs + "/wordpress/wp-content/mu-plugins";
+fs.mkdirSync(mu, { recursive: true });
+fs.writeFileSync(mu + "/dbgr-kill.php", "<?php\ndefine( 'DBGRBOX_DISABLE', true );\n");
+const killed = await get(a, "/");
+ok(killed === base, "DBGRBOX_DISABLE set, switch ON, files present: home is byte-identical to the plugin-inactive baseline (" + killed.length + " bytes)");
+ok(!/dbgr|growth-box/i.test(killed), "  and carries no trace of the plugin");
+await p.goto(BASE + "/wp-admin/admin.php?page=doughboss-growth-box");
+const txt = await p.textContent("#wpbody-content");
+ok(/DBGRBOX_DISABLE is set in wp-config\.php/.test(txt) && /Stopped by DBGRBOX_DISABLE/.test(txt), "  settings screen says it is stopped by the kill switch");
+fs.unlinkSync(mu + "/dbgr-kill.php");
+const back = await get(a, "/");
+ok(/has-dbgr-video/.test(back), "kill switch removed: hero video is back without any other change");
+fs.writeFileSync(HERE + "/out/phase-kill.log", log.join("\n"));
+await browser.close();
+const t = tally();
+console.log(`\nphase D: ${t.pass} passed, ${t.fail} failed`);
+process.exit(t.fail ? 1 : 0);

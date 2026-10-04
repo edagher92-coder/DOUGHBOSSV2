@@ -1,0 +1,264 @@
+{
+ "version": 1,
+ "media_version": "0.1.0",
+ "generated": "2026-10-03",
+ "rules": "status is concept or real. A slot with ai_food true is never rendered unless status is real. A concept slot always prints the Concept preview chip and its page is noindex.",
+ "slots": {
+  "closed": {
+   "kind": "render",
+   "status": "concept",
+   "ai_food": false,
+   "w": 828,
+   "h": 1035,
+   "alt": "Concept render of the Dough Boss catering box, closed, on a steel bench",
+   "variants": {
+    "avif": [
+     [
+      640,
+      "w1-closed-640.58228849.avif"
+     ],
+     [
+      828,
+      "w1-closed-828.724fd2ba.avif"
+     ]
+    ],
+    "webp": [
+     [
+      640,
+      "w1-closed-640.cdf3ba5d.webp"
+     ],
+     [
+      828,
+      "w1-closed-828.35529caa.webp"
+     ]
+    ],
+    "jpg": [
+     [
+      640,
+      "w1-closed-640.07584c52.jpg"
+     ],
+     [
+      828,
+      "w1-closed-828.4928ccac.jpg"
+     ]
+    ]
+   }
+  },
+  "seal_macro": {
+   "kind": "render",
+   "status": "concept",
+   "ai_food": false,
+   "w": 828,
+   "h": 1035,
+   "alt": "Concept render of the hand-written seal on the corner of the Dough Boss catering box",
+   "max_css_px": 640,
+   "variants": {
+    "avif": [
+     [
+      640,
+      "w4-seal-640.dfa4d8fb.avif"
+     ],
+     [
+      828,
+      "w4-seal-828.eba694be.avif"
+     ]
+    ],
+    "webp": [
+     [
+      640,
+      "w4-seal-640.6f8d7a61.webp"
+     ],
+     [
+      828,
+      "w4-seal-828.e81f3982.webp"
+     ]
+    ],
+    "jpg": [
+     [
+      640,
+      "w4-seal-640.2cf6d967.jpg"
+     ],
+     [
+      828,
+      "w4-seal-828.a62e1118.jpg"
+     ]
+    ]
+   }
+  },
+  "closed_band": {
+   "kind": "render",
+   "status": "concept",
+   "ai_food": false,
+   "w": 828,
+   "h": 662,
+   "alt": "Concept render of the Dough Boss catering box, closed",
+   "variants": {
+    "avif": [
+     [
+      640,
+      "w1-band-640.8b8b4a91.avif"
+     ],
+     [
+      828,
+      "w1-band-828.a02e9599.avif"
+     ]
+    ],
+    "webp": [
+     [
+      640,
+      "w1-band-640.9be8eb13.webp"
+     ],
+     [
+      828,
+      "w1-band-828.1432ad6a.webp"
+     ]
+    ],
+    "jpg": [
+     [
+      640,
+      "w1-band-640.94b464e7.jpg"
+     ],
+     [
+      828,
+      "w1-band-828.d37e5172.jpg"
+     ]
+    ]
+   }
+  },
+  "closed_art": {
+   "kind": "artwork",
+   "status": "concept",
+   "ai_food": false,
+   "w": 960,
+   "h": 844,
+   "alt": "Flat artwork of the Dough Boss catering box lid: Feed the whole table",
+   "variants": {
+    "avif": [
+     [
+      640,
+      "closed-art-640.fedcd921.avif"
+     ],
+     [
+      960,
+      "closed-art-960.e2251d00.avif"
+     ]
+    ],
+    "webp": [
+     [
+      640,
+      "closed-art-640.8990b2bc.webp"
+     ],
+     [
+      960,
+      "closed-art-960.368f5e64.webp"
+     ]
+    ],
+    "jpg": [
+     [
+      640,
+      "closed-art-640.07ff093c.jpg"
+     ],
+     [
+      960,
+      "closed-art-960.af70539d.jpg"
+     ]
+    ]
+   }
+  },
+  "seal_art": {
+   "kind": "artwork",
+   "status": "concept",
+   "ai_food": false,
+   "w": 599,
+   "h": 599,
+   "alt": "Flat artwork of the blank seal label for the Dough Boss catering box",
+   "variants": {
+    "avif": [
+     [
+      300,
+      "seal-art-300.e6e217d1.avif"
+     ],
+     [
+      599,
+      "seal-art-599.cd80a740.avif"
+     ]
+    ],
+    "webp": [
+     [
+      300,
+      "seal-art-300.644feb64.webp"
+     ],
+     [
+      599,
+      "seal-art-599.ae452d02.webp"
+     ]
+    ],
+    "jpg": [
+     [
+      300,
+      "seal-art-300.de54f6f7.jpg"
+     ],
+     [
+      599,
+      "seal-art-599.2512e61f.jpg"
+     ]
+    ]
+   }
+  },
+  "liner_tile": {
+   "kind": "decor",
+   "status": "real",
+   "ai_food": false,
+   "w": 472,
+   "h": 472,
+   "display_px": 236,
+   "alt": "",
+   "note": "Repeating DOUGH BOSS. pattern, a brand device. Not a product depiction.",
+   "files": {
+    "png": "liner-tile-472.9c19e9e3.png",
+    "webp": "liner-tile-472.f303f989.webp"
+   }
+  },
+  "seal_badge": {
+   "kind": "decor",
+   "status": "real",
+   "ai_food": false,
+   "w": 112,
+   "h": 112,
+   "alt": "",
+   "note": "Kraft disc and ember ring from the seal artwork with the text removed. A brand device. Not a product depiction.",
+   "variants": {
+    "avif": [
+     [
+      112,
+      "seal-badge-112.f2c8b2a0.avif"
+     ],
+     [
+      224,
+      "seal-badge-224.6c24b5ed.avif"
+     ]
+    ],
+    "webp": [
+     [
+      112,
+      "seal-badge-112.f9557031.webp"
+     ],
+     [
+      224,
+      "seal-badge-224.c026fb57.webp"
+     ]
+    ],
+    "png": [
+     [
+      112,
+      "seal-badge-112.9edb854a.png"
+     ],
+     [
+      224,
+      "seal-badge-224.224aae55.png"
+     ]
+    ]
+   }
+  }
+ }
+}

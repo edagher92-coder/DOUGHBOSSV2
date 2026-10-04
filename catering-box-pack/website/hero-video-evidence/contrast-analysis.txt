@@ -1,0 +1,38 @@
+== d768 (768x1024) worst-case contrast of the real text colour against the lightest 2% of the background behind it, over 7 frame(s)
+   kicker            20.04:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+   headline          20.04:1  (frame 0.5s, bg luminance 0.002, font 58px)  need 3.0:1  ok
+   paragraph         13.88:1  (frame 0.5s, bg luminance 0.002, font 17px)  need 4.5:1  ok
+   secondary-button  20.00:1  (frame 0.5s, bg luminance 0.002, font 14px)  need 4.5:1  ok
+   pause-button      20.09:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+   proof             20.04:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+== d1024 (1024x768) worst-case contrast of the real text colour against the lightest 2% of the background behind it, over 7 frame(s)
+   kicker            20.04:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+   headline          20.04:1  (frame 0.5s, bg luminance 0.002, font 72px)  need 3.0:1  ok
+   paragraph         13.88:1  (frame 0.5s, bg luminance 0.002, font 17px)  need 4.5:1  ok
+   secondary-button  20.00:1  (frame 0.5s, bg luminance 0.002, font 14px)  need 4.5:1  ok
+   pause-button      20.09:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+== d1280 (1280x720) worst-case contrast of the real text colour against the lightest 2% of the background behind it, over 7 frame(s)
+   kicker            20.04:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+   headline          20.04:1  (frame 0.5s, bg luminance 0.002, font 90px)  need 3.0:1  ok
+   paragraph         13.88:1  (frame 0.5s, bg luminance 0.002, font 21px)  need 4.5:1  ok
+   secondary-button  20.01:1  (frame 0.5s, bg luminance 0.002, font 14px)  need 4.5:1  ok
+   pause-button      20.00:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+== d1440 (1440x900) worst-case contrast of the real text colour against the lightest 2% of the background behind it, over 7 frame(s)
+   kicker            20.04:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+   headline          20.04:1  (frame 0.5s, bg luminance 0.002, font 101px)  need 3.0:1  ok
+   paragraph         13.88:1  (frame 0.5s, bg luminance 0.002, font 21px)  need 4.5:1  ok
+   secondary-button  20.07:1  (frame 0.5s, bg luminance 0.002, font 14px)  need 4.5:1  ok
+   pause-button      20.00:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+== d1920 (1920x1080) worst-case contrast of the real text colour against the lightest 2% of the background behind it, over 7 frame(s)
+   kicker            20.04:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+   headline          20.04:1  (frame 0.5s, bg luminance 0.002, font 108px)  need 3.0:1  ok
+   paragraph         13.88:1  (frame 0.5s, bg luminance 0.002, font 21px)  need 4.5:1  ok
+   secondary-button  20.09:1  (frame 0.5s, bg luminance 0.002, font 14px)  need 4.5:1  ok
+   pause-button      20.00:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+   proof             20.04:1  (frame 0.5s, bg luminance 0.002, font 12px)  need 4.5:1  ok
+== phone (390x844) worst-case contrast of the real text colour against the lightest 2% of the background behind it, over 7 frame(s)
+   kicker            13.17:1  (frame 8s, bg luminance 0.030, font 12px)  need 4.5:1  ok
+   headline          14.19:1  (frame 8s, bg luminance 0.024, font 47px)  need 3.0:1  ok
+   paragraph         10.85:1  (frame 8s, bg luminance 0.017, font 17px)  need 4.5:1  ok
+   pause-button      18.51:1  (frame 3.5s, bg luminance 0.007, font 12px)  need 4.5:1  ok
+   proof             18.87:1  (frame 0.5s, bg luminance 0.006, font 10px)  need 4.5:1  ok
