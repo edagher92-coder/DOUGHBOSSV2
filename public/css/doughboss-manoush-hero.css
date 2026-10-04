@@ -1,0 +1,275 @@
+/** Authentic DoughBoss photographic hero. No generated food layers. */
+.db-manoush-hero {
+	--db-mh-photo-y: 0px;
+	--db-mh-photo-scale: 1.035;
+	align-items: end;
+	background: #0a0908;
+	border-radius: clamp(18px, 2.2vw, 32px);
+	box-sizing: border-box;
+	color: #fff;
+	display: grid;
+	isolation: isolate;
+	min-height: clamp(610px, 76vh, 820px);
+	/* The backdrop is deliberately inset:-2% and scaled for the parallax, so it
+	 * is always wider than the hero. `clip` contains it exactly like `hidden`
+	 * without making the hero a scroll container (`hidden` leaves a programmatic
+	 * scrollLeft that scroll anchoring can nudge). `hidden` stays as fallback. */
+	overflow: hidden;
+	overflow: clip;
+	padding: clamp(6.8rem, 14vw, 10.5rem) clamp(1.25rem, 6.5vw, 6rem) clamp(2rem, 5vw, 4.5rem);
+	position: relative;
+}
+
+.db-mh-backdrop {
+	background-position: 64% 50%;
+	background-size: cover;
+	filter: saturate(.92) contrast(1.04);
+	inset: -2%;
+	pointer-events: none;
+	position: absolute;
+	transform: translate3d(0, var(--db-mh-photo-y), 0) scale(var(--db-mh-photo-scale));
+	transform-origin: 64% 50%;
+	transition: transform 100ms linear;
+	will-change: transform;
+	z-index: -3;
+}
+
+.db-manoush-hero.is-photo-ready .db-mh-backdrop {
+	animation: db-mh-photo-arrive 1.15s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes db-mh-photo-arrive {
+	0% { filter: saturate(.72) contrast(.96) blur(7px); opacity: .3; }
+	100% { filter: saturate(.92) contrast(1.04) blur(0); opacity: 1; }
+}
+
+/* One quiet ambient cue: oven warmth rising in the home hero only. */
+.db-mh-steam {
+	height: 180px;
+	pointer-events: none;
+	position: absolute;
+	width: 150px;
+	z-index: -1;
+}
+
+.db-mh-steam span {
+	animation: db-mh-steam-rise 6.8s ease-in-out infinite;
+	background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .17), transparent);
+	border-radius: 50%;
+	filter: blur(8px);
+	height: 132px;
+	left: 45%;
+	opacity: 0;
+	position: absolute;
+	transform: translate3d(-50%, 42px, 0) rotate(-8deg) scaleX(.5);
+	width: 30px;
+}
+
+.db-mh-steam span:nth-child(2) { animation-delay: -2.2s; left: 27%; }
+.db-mh-steam span:nth-child(3) { animation-delay: -4.5s; left: 65%; }
+
+@keyframes db-mh-steam-rise {
+	0%, 12% { opacity: 0; transform: translate3d(-50%, 44px, 0) rotate(-10deg) scaleX(.46); }
+	35% { opacity: .28; }
+	72% { opacity: .12; }
+	100% { opacity: 0; transform: translate3d(-28%, -54px, 0) rotate(13deg) scaleX(.86); }
+}
+
+.db-manoush-hero::before {
+	background:
+		linear-gradient(90deg, rgba(7, 7, 6, .97) 0%, rgba(7, 7, 6, .84) 36%, rgba(7, 7, 6, .30) 68%, rgba(7, 7, 6, .08)),
+		linear-gradient(0deg, rgba(7, 7, 6, .68), transparent 46%);
+	content: '';
+	inset: 0;
+	pointer-events: none;
+	position: absolute;
+	z-index: -2;
+}
+
+.db-mh-copy {
+	max-width: 660px;
+	position: relative;
+	z-index: 1;
+}
+
+.db-mh-kicker {
+	color: #ffb749;
+	font-size: .76rem;
+	font-weight: 900;
+	letter-spacing: .2em;
+	margin: 0 0 1rem;
+	text-transform: uppercase;
+}
+
+.db-mh-copy h2 {
+	color: inherit;
+	font-family: Impact, 'Arial Narrow', sans-serif;
+	font-size: clamp(4rem, 8.5vw, 8.2rem);
+	font-weight: 500;
+	letter-spacing: .015em;
+	line-height: .83;
+	margin: 0;
+	max-width: 8ch;
+	text-transform: uppercase;
+}
+
+.db-mh-copy > p:not(.db-mh-kicker) {
+	font-size: clamp(1rem, 1.7vw, 1.28rem);
+	line-height: 1.55;
+	margin: 1.35rem 0 1.7rem;
+	max-width: 580px;
+}
+
+.db-mh-actions {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: .75rem;
+}
+
+.db-mh-action,
+.db-mh-replay {
+	align-items: center;
+	border: 1px solid rgba(255, 255, 255, .76);
+	border-radius: 999px;
+	box-sizing: border-box;
+	cursor: pointer;
+	display: inline-flex;
+	font: inherit;
+	font-size: .9rem;
+	font-weight: 850;
+	justify-content: center;
+	min-height: 50px;
+	padding: .75rem 1.3rem;
+	text-decoration: none;
+	transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+/* #e52a21 put white at 4.48:1 — just under AA for this 14.4px label. #d81f16
+ * is the same tomato one step down and measures 5.09:1. */
+.db-mh-action--primary {
+	background: #d81f16;
+	border-color: #d81f16;
+	color: #fff;
+}
+
+.db-mh-action--secondary,
+.db-mh-replay {
+	background: rgba(9, 9, 8, .28);
+	color: #fff;
+}
+
+.db-mh-replay {
+	font-size: .75rem;
+	min-height: 44px;
+	opacity: .8;
+	padding-inline: 1rem;
+}
+
+.db-mh-action:hover,
+.db-mh-action:focus-visible,
+.db-mh-replay:hover,
+.db-mh-replay:focus-visible {
+	box-shadow: 0 10px 24px rgba(0, 0, 0, .28);
+	outline: 2px solid #fff;
+	outline-offset: 3px;
+	transform: translateY(-2px);
+}
+
+.db-mh-motion-note { display: none; }
+
+.db-mh-proof {
+	align-items: start;
+	border-top: 1px solid rgba(255, 255, 255, .24);
+	display: grid;
+	gap: .8rem 1.5rem;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin-top: clamp(2.5rem, 7vw, 6.2rem);
+	max-width: 660px;
+	padding-top: 1rem;
+}
+
+.db-mh-proof span {
+	font-size: .76rem;
+	line-height: 1.35;
+}
+
+.db-mh-proof strong {
+	display: block;
+	font-size: .78rem;
+	letter-spacing: .11em;
+	text-transform: uppercase;
+}
+
+.db-manoush-hero.is-photo-paused .db-mh-backdrop {
+	transition: none;
+	will-change: auto;
+}
+
+.db-manoush-hero.is-photo-paused .db-mh-steam span { animation-play-state: paused; opacity: 0; }
+
+@media (max-width: 720px) {
+	.db-manoush-hero {
+		min-height: 780px;
+		padding: 7.5rem 1.1rem 1.35rem;
+	}
+
+	.db-mh-backdrop {
+		background-position: 57% 50%;
+		transform-origin: 57% 50%;
+	}
+
+	.db-manoush-hero::before {
+		background: linear-gradient(0deg, rgba(7, 7, 6, .98) 0%, rgba(7, 7, 6, .78) 59%, rgba(7, 7, 6, .20) 100%);
+	}
+
+	.db-mh-copy { padding-top: 27vh; }
+
+	.db-mh-copy h2 {
+		font-size: clamp(3.3rem, 16vw, 4.15rem);
+		line-height: .84;
+		max-width: 7.5ch;
+	}
+
+	.db-mh-copy > p:not(.db-mh-kicker) {
+		font-size: .96rem;
+		line-height: 1.45;
+		margin: 1rem 0 1.15rem;
+	}
+
+	.db-mh-actions { gap: .6rem; }
+	.db-mh-action { min-height: 48px; }
+	.db-mh-replay { flex-basis: auto; }
+
+	.db-mh-proof {
+		gap: .55rem;
+		grid-template-columns: repeat(3, 1fr);
+		margin-top: 1.5rem;
+	}
+
+	.db-mh-proof span { font-size: .65rem; }
+	.db-mh-proof strong { font-size: .67rem; }
+}
+
+@media (max-width: 390px) {
+	.db-manoush-hero { border-radius: 18px; }
+	.db-mh-action--secondary { display: none; }
+	.db-mh-replay { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.db-mh-backdrop {
+		inset: 0;
+		transform: none !important;
+		transition: none;
+		will-change: auto;
+	}
+
+	.db-mh-action,
+	.db-mh-replay { transition: none; }
+
+	.db-manoush-hero.is-photo-ready .db-mh-backdrop,
+	.db-mh-steam span { animation: none; }
+
+	.db-mh-steam { display: none; }
+}

@@ -1,0 +1,481 @@
+/**
+ * DoughBoss — catering page styles.
+ *
+ * Black-and-white brand with a single Ember-Red accent (per the rebuild design
+ * system). Scoped under .db-catering so it never bleeds into the theme.
+ */
+.db-catering {
+	--dbc-ink: #0d0d0d;
+	--dbc-slate: #1a1a1a;
+	--dbc-paper: #ffffff;
+	--dbc-mist: #6b6b6b;
+	--dbc-line: #e4e1da;
+	--dbc-ember: #111111; /* mono brand accent (ex-red) — matches the 2026 ink/paper logo */
+	--dbc-radius: 12px;
+	--db-r-sm: 10px;
+	--db-r-md: 14px;
+	--db-r-lg: 18px;
+	--db-r-xl: 24px;
+	--db-r-pill: 999px;
+	--db-shadow-1: 0 1px 2px rgba(20, 16, 12, 0.05), 0 4px 12px rgba(20, 16, 12, 0.06);
+	--db-shadow-2: 0 2px 6px rgba(20, 16, 12, 0.07), 0 12px 28px rgba(20, 16, 12, 0.10);
+	--db-ease: cubic-bezier(0.32, 0.72, 0.33, 1);
+	--db-t-fast: 150ms;
+	--db-t-med: 220ms;
+	color: var(--dbc-ink);
+	max-width: 1100px;
+	margin: 0 auto;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+.db-catering * {
+	box-sizing: border-box;
+}
+
+/* Honeypot — hidden from people, catches bots (audit anti-spam). */
+.db-catering .dbc-hp {
+	position: absolute !important;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.db-catering .dbc-head {
+	margin: 0 0 18px;
+}
+
+.db-catering .dbc-kicker {
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--dbc-ember);
+	margin: 0 0 4px;
+}
+
+.db-catering .dbc-h2 {
+	font-size: clamp(26px, 4vw, 40px);
+	line-height: 1.02;
+	margin: 0 0 6px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.db-catering .dbc-sub {
+	color: var(--dbc-mist);
+	margin: 0;
+}
+
+.db-catering .dbc-empty {
+	color: var(--dbc-mist);
+	padding: 18px;
+	border: 1px dashed var(--dbc-line);
+	border-radius: var(--dbc-radius);
+}
+
+/* Packages */
+.db-catering .dbc-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+	gap: 16px;
+	margin: 0 0 44px;
+	min-inline-size: 0;
+}
+
+.db-catering .dbc-card {
+	display: flex;
+	flex-direction: column;
+	text-align: left;
+	padding: 0;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	background: var(--dbc-paper);
+	cursor: pointer;
+	overflow: hidden;
+	box-shadow: var(--db-shadow-1);
+	transition: border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-med) var(--db-ease), transform var(--db-t-med) var(--db-ease);
+	font: inherit;
+	color: inherit;
+}
+
+@media (hover: hover) {
+	.db-catering .dbc-card:hover {
+		box-shadow: var(--db-shadow-2);
+		transform: translateY(-2px);
+	}
+}
+
+.db-catering .dbc-card.is-selected {
+	border-color: var(--dbc-ember);
+	box-shadow: 0 0 0 2px var(--dbc-ember);
+}
+
+.db-catering .dbc-card-img {
+	display: block;
+	height: 130px;
+	background-size: cover;
+	background-position: center;
+	background-color: var(--dbc-slate);
+}
+
+.db-catering .dbc-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 14px 15px 16px;
+}
+
+.db-catering .dbc-card-name {
+	font-size: 19px;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.3px;
+}
+
+.db-catering .dbc-card-serves {
+	font-size: 12px;
+	color: var(--dbc-mist);
+}
+
+.db-catering .dbc-card-desc {
+	font-size: 13px;
+	color: var(--dbc-mist);
+	margin-top: 2px;
+}
+
+.db-catering .dbc-card-price {
+	margin-top: 6px;
+	font-size: 22px;
+	font-weight: 800;
+	color: var(--dbc-ember);
+}
+
+/* Builder / form */
+.db-catering .dbc-builder {
+	border-top: 1px solid var(--dbc-line);
+	padding-top: 28px;
+}
+
+.db-catering .dbc-form {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	max-width: 760px;
+}
+
+.db-catering .dbc-selected {
+	background: #faf9f6;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-md);
+	padding: 10px 13px;
+	font-size: 14px;
+}
+
+.db-catering .dbc-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+}
+
+.db-catering .dbc-row > .dbc-field {
+	flex: 1 1 150px;
+}
+
+.db-catering .dbc-field[hidden] { display: none; }
+.db-catering .dbc-radio input[type="radio"] { width: auto; padding: 0; }
+.db-catering .dbc-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.db-catering .dbc-field > span {
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.db-catering .dbc-field input,
+.db-catering .dbc-field textarea {
+	font: inherit;
+	padding: 11px 13px;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-sm);
+	background: #fff;
+	color: var(--dbc-ink);
+	width: 100%;
+	transition: border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
+}
+
+.db-catering .dbc-field input:focus,
+.db-catering .dbc-field textarea:focus {
+	outline: none;
+	border-color: var(--dbc-ember);
+	box-shadow: 0 0 0 3px rgba(226, 35, 26, 0.15);
+}
+
+.db-catering .dbc-ful {
+	border: 0;
+	margin: 0;
+	padding: 0;
+}
+
+.db-catering .dbc-radio {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-right: 16px;
+	font-weight: 500;
+	touch-action: manipulation;
+}
+
+/* Pickup/Delivery renders as a 13px radio. The label is the real target, so on
+ * touch give it a 44px row and scale the control to match the menu options. */
+@media (pointer: coarse) {
+	.db-catering .dbc-radio {
+		min-height: 44px;
+		padding-right: 4px;
+		gap: 9px;
+	}
+
+	.db-catering .dbc-radio input[type="radio"] {
+		width: 22px;
+		height: 22px;
+		flex: 0 0 auto;
+		accent-color: var(--dbc-ember, #e2231a);
+	}
+}
+
+/* Quote box */
+.db-catering .dbc-quote {
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-lg);
+	padding: 16px 18px;
+	background: #faf9f6;
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-catering .dbc-quote-line {
+	display: flex;
+	justify-content: space-between;
+	padding: 4px 0;
+	font-size: 15px;
+}
+
+.db-catering .dbc-quote-deposit {
+	color: var(--dbc-ember);
+	font-size: 17px;
+	border-top: 1px dashed var(--dbc-line);
+	border-bottom: 1px dashed var(--dbc-line);
+	margin: 4px 0;
+	padding: 8px 0;
+}
+
+.db-catering .dbc-quote-note {
+	display: block;
+	font-size: 13px;
+	color: var(--dbc-mist);
+	margin-top: 6px;
+}
+
+.db-catering .dbc-error:not(:empty) {
+	color: #b3261e;
+	font-weight: 600;
+	font-size: 14px;
+}
+
+.db-catering .dbc-submit {
+	align-self: flex-start;
+	font: inherit;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: #fff;
+	background: var(--dbc-ember);
+	border: 0;
+	border-radius: var(--db-r-pill);
+	padding: 14px 30px;
+	min-height: 48px;
+	cursor: pointer;
+	transition: filter var(--db-t-fast) var(--db-ease), transform var(--db-t-fast) var(--db-ease);
+}
+
+.db-catering .dbc-submit:active:not(:disabled) {
+	transform: scale(0.98);
+}
+
+.db-catering .dbc-submit:hover {
+	filter: brightness(0.92);
+}
+
+.db-catering .dbc-submit:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+/* Success */
+.db-catering .dbc-success {
+	text-align: center;
+	border: 1px solid rgba(20, 16, 12, 0.06);
+	border-radius: var(--db-r-xl);
+	padding: 44px 24px;
+	background: #faf9f6;
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-catering .dbc-success-check {
+	width: 56px;
+	height: 56px;
+	margin: 0 auto 14px;
+	border-radius: 50%;
+	background: var(--dbc-ember);
+	color: #fff;
+	font-size: 30px;
+	line-height: 56px;
+}
+
+.db-catering .dbc-success-num {
+	font-size: 17px;
+}
+
+/* Deposit payment panel */
+.db-catering .dbc-pay {
+	max-width: 420px;
+	margin: 18px auto 0;
+	text-align: left;
+}
+
+.db-catering .dbc-pay-label {
+	display: block;
+	font-size: 13px;
+	font-weight: 700;
+	margin-bottom: 5px;
+}
+
+.db-catering .dbc-card-element {
+	padding: 13px 14px;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-sm);
+	background: #fff;
+	margin-bottom: 12px;
+}
+
+.db-catering .dbc-pay .dbc-submit {
+	width: 100%;
+	text-align: center;
+}
+
+.db-catering .dbc-pay-secure {
+	text-align: center;
+	font-size: 12px;
+	margin: 10px 0 0;
+}
+
+.db-catering .dbc-review-invite {
+	display: grid;
+	gap: 6px;
+	max-width: 430px;
+	margin: 20px auto 0;
+	padding: 16px;
+	text-align: left;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-md);
+	background: #f4f0e8;
+}
+.db-catering .dbc-review-invite span { color: var(--dbc-muted); font-size: 14px; }
+.db-catering .dbc-review-invite__actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.db-catering .dbc-review-invite a { width: fit-content; color: var(--dbc-ember); font-weight: 800; text-underline-offset: 3px; }
+
+.db-catering .dbc-contact,
+.db-catering .dbc-how,
+.db-catering .dbc-faq {
+	margin: 0 auto 34px;
+	padding: clamp(22px, 4vw, 38px);
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-lg);
+	background: var(--dbc-paper);
+}
+
+.db-catering .dbc-contact-actions,
+.db-catering .dbc-how-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+	margin: 22px 0 0;
+}
+
+.db-catering .dbc-contact-card {
+	display: grid;
+	gap: 5px;
+	padding: 18px;
+	color: var(--dbc-ink);
+	text-decoration: none;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-md);
+	background: #fff;
+}
+
+.db-catering .dbc-contact-card:hover,
+.db-catering .dbc-contact-card:focus-visible {
+	border-color: var(--dbc-ember);
+	box-shadow: 0 8px 24px rgb(17 17 17 / 9%);
+}
+
+.db-catering .dbc-contact-card span { color: var(--dbc-ember); overflow-wrap: anywhere; }
+
+.db-catering .dbc-coming-soon {
+	margin: 18px 0 0;
+	padding: 12px 14px;
+	color: var(--dbc-ink);
+	border-left: 4px solid var(--dbc-ember);
+	border-radius: 0 var(--db-r-sm) var(--db-r-sm) 0;
+	background: #f4f0e8;
+}
+
+.db-catering .dbc-how-grid {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	padding: 0;
+	list-style: none;
+}
+
+.db-catering .dbc-how-grid li {
+	display: grid;
+	align-content: start;
+	gap: 8px;
+	padding: 18px;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-md);
+	background: #fff;
+}
+
+.db-catering .dbc-how-grid li > span { color: var(--dbc-ember); font-weight: 900; }
+.db-catering .dbc-how-grid p,
+.db-catering .dbc-faq p { margin: 0; color: var(--dbc-muted); }
+.db-catering .dbc-app { margin: 0 0 34px; }
+.db-catering .dbc-faq details { border-top: 1px solid var(--dbc-line); }
+.db-catering .dbc-faq summary { cursor: pointer; padding: 16px 34px 16px 0; font-weight: 800; }
+.db-catering .dbc-faq details p { padding: 0 0 18px; }
+
+@media (max-width: 540px) {
+	.db-catering .dbc-submit {
+		align-self: stretch;
+		text-align: center;
+	}
+	.db-catering .dbc-contact-actions,
+	.db-catering .dbc-how-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Accessibility: respect reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+	.db-catering *,
+	.db-catering *::before,
+	.db-catering *::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}

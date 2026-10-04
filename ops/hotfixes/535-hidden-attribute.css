@@ -1,0 +1,7 @@
+/* HOTFIX 2026-09-07 — DoughBoss 2.41.0 CSS: author display rules were beating the
+   [hidden] attribute, so the voucher form showed before an offer was chosen (and
+   then submitted silently) and the catering address box showed for pickup; the
+   catering radios inherited the 100%-width text-input rule. Remove after 2.41.1. */
+.db-vc-form[hidden] { display: none !important; }
+.db-catering .dbc-field[hidden] { display: none !important; }
+.db-catering .dbc-radio input[type="radio"] { width: auto; padding: 0; }

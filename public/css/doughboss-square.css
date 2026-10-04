@@ -1,0 +1,35 @@
+/**
+ * DoughBoss — Square card field styling.
+ *
+ * Loaded only when Square is the active, ready payment gateway. Everything is
+ * scoped under .db-cardfield--square / .db-square-card so it cannot affect any
+ * other storefront surface. Square renders the card inputs inside its own
+ * iframe, so this only styles the container around it.
+ */
+
+.db-cardfield--square {
+	display: block;
+	margin: 1rem 0;
+}
+
+.db-cardfield--square .db-field-label {
+	display: block;
+	margin-bottom: 0.4rem;
+	font-weight: 600;
+}
+
+.db-square-card {
+	min-height: 90px;
+	padding: 0.25rem 0;
+}
+
+.db-cardfield--square .db-pay-secure {
+	margin: 0.5rem 0 0;
+	font-size: 0.85em;
+	opacity: 0.75;
+}
+
+.db-cardfield--square .db-pay-secure.db-error {
+	opacity: 1;
+	color: #b32d2e;
+}

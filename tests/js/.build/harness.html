@@ -1,0 +1,3711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DoughBoss v2.5 harness</title>
+<style>
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#efe9df;padding:24px}
+.harness-section{max-width:960px;margin:0 auto 32px}
+.harness-section > h1{font-size:20px}
+</style>
+<style>
+/**
+ * DoughBoss storefront styles — v2.5
+ *
+ * Design direction: "wood-fired, not app-store". Warm paper surfaces, charcoal
+ * ink, one tomato red reserved exclusively for action, basil/oven semantics.
+ *
+ * Theme-survival rules baked in here (see the v2.5 audit §4.5):
+ *   1. Every component selector is authored as `.db-app .x` (0,2,0) so a
+ *      theme's `.entry-content button` (0,1,1) cannot win.
+ *   2. NO `@layer`. An unlayered theme declaration beats *any* layered
+ *      declaration regardless of specificity, and virtually every WordPress
+ *      theme is unlayered — layering would hand the theme every conflict.
+ *   3. `!important` appears on exactly three properties: `box-sizing`, the
+ *      focus `outline`, and `font-size` on form controls (the iOS zoom floor).
+ *   4. No bare `rem` anywhere — a theme running `html{font-size:62.5%}` would
+ *      otherwise shrink the whole plugin. Every dimension is a px token.
+ *   5. Fonts `inherit` by default; no webfont is loaded.
+ *   6. Every surface declares its own background, so a dark theme cannot leave
+ *      dark-on-dark text.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Tokens                                                             */
+/* ------------------------------------------------------------------ */
+
+.db-app {
+	/* Surfaces — warm paper, never pure grey */
+	--db-cream: #FBF7F0;
+	--db-surface: #FFFFFF;
+	--db-surface-2: #F5EFE4;
+
+	/* Ink */
+	--db-ink: #1A1614;
+	--db-ink-2: #4A4038;
+	--db-muted: #6F655C;
+
+	/* Lines */
+	--db-hairline: #E4DACB;
+	--db-line: #9C8B78;
+
+	/* Action — tomato. ONLY for interactive/primary. */
+	--db-tomato: #C8371C;
+	--db-tomato-700: #A82815;
+	--db-tomato-050: #FCEBE7;
+
+	/* Semantics */
+	--db-basil: #1F6B3B;
+	--db-basil-050: #E7F2E9;
+	--db-oven: #8A4200;
+	--db-oven-050: #FDF0E1;
+	--db-danger: #8C1D18;
+	--db-pending-050: #F1EADF;
+
+	--db-focus: #1A1614;
+
+	/* Type — inherit the theme by default; no webfont is loaded. */
+	--db-font-body: inherit;
+	--db-font-display: inherit;
+
+	--db-fs-xs: 13px;
+	--db-fs-sm: 14px;
+	--db-fs-md: 16px;
+	--db-fs-lg: 18px;
+	--db-fs-xl: 22px;
+	--db-fs-2xl: 28px;
+	--db-fs-3xl: 36px;
+	--db-lh-tight: 1.15;
+	--db-lh-body: 1.55;
+
+	/* Space */
+	--db-s1: 4px;
+	--db-s2: 8px;
+	--db-s3: 12px;
+	--db-s4: 16px;
+	--db-s5: 24px;
+	--db-s6: 32px;
+	--db-s7: 48px;
+
+	/* Radii */
+	--db-r-sm: 8px;
+	--db-r-md: 12px;
+	--db-r-lg: 18px;
+	--db-r-pill: 999px;
+
+	/* Warm-tinted elevation, not the generic neutral SaaS drop */
+	--db-shadow-1: 0 1px 2px rgba(26, 22, 20, .06), 0 1px 1px rgba(26, 22, 20, .04);
+	--db-shadow-2: 0 2px 4px rgba(26, 22, 20, .05), 0 12px 28px -14px rgba(26, 22, 20, .22);
+
+	/* Minimum comfortable touch target */
+	--db-tap: 44px;
+
+	font-family: var(--db-font-body);
+	font-size: var(--db-fs-md);
+	line-height: var(--db-lh-body);
+	color: var(--db-ink);
+	background: var(--db-cream);
+	contain: layout style;
+	isolation: isolate;
+}
+
+/* ------------------------------------------------------------------ */
+/* Targeted theme reset — only what themes reliably break             */
+/* ------------------------------------------------------------------ */
+
+.db-app,
+.db-app *,
+.db-app *::before,
+.db-app *::after {
+	box-sizing: border-box !important;
+}
+
+.db-app button {
+	font: inherit;
+	font-size: var(--db-fs-md) !important;
+	letter-spacing: normal;
+	text-transform: none;
+	line-height: var(--db-lh-body);
+	margin: 0;
+	cursor: pointer;
+}
+
+.db-app input,
+.db-app textarea,
+.db-app select {
+	font: inherit;
+	/* 16px floor: below it iOS Safari zooms the viewport on focus. */
+	font-size: var(--db-fs-md) !important;
+	letter-spacing: normal;
+	text-transform: none;
+	margin: 0;
+	background: var(--db-surface);
+	color: var(--db-ink);
+}
+
+.db-app ul,
+.db-app ol {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.db-app a {
+	color: var(--db-tomato-700);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.db-app img {
+	max-width: 100%;
+	height: auto;
+	border-radius: 0;
+	display: block;
+}
+
+.db-app fieldset {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+}
+
+.db-app legend {
+	padding: 0;
+	margin: 0 0 var(--db-s2);
+	float: none;
+	width: auto;
+}
+
+.db-app p {
+	margin: 0 0 var(--db-s3);
+}
+
+.db-app p:last-child {
+	margin-bottom: 0;
+}
+
+/* Theme-proof focus indicator: dark outline + white inner ring so it reads
+   on cream, on white and on the tomato button alike. */
+.db-app a:focus-visible,
+.db-app button:focus-visible,
+.db-app input:focus-visible,
+.db-app select:focus-visible,
+.db-app textarea:focus-visible,
+.db-app [tabindex]:focus-visible {
+	outline: 3px solid var(--db-focus) !important;
+	outline-offset: 2px;
+	box-shadow: 0 0 0 2px #fff;
+	border-radius: var(--db-r-sm);
+}
+
+/* The plugin toggles visibility with the `hidden` property. Doubling the
+   attribute lifts this to (0,3,0) so it beats every component `display`
+   rule below without reaching for !important. */
+.db-app [hidden][hidden] {
+	display: none;
+}
+
+.db-app .db-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Headings, generic text                                             */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-category,
+.db-app .db-builder-heading,
+.db-app .db-cart-heading,
+.db-app .db-checkout-heading,
+.db-app .db-confirm-title,
+.db-app .db-track-heading,
+.db-app .db-track-title,
+.db-app .db-card-title {
+	font-family: var(--db-font-display);
+	color: var(--db-ink);
+	line-height: var(--db-lh-tight);
+	margin: 0 0 var(--db-s3);
+}
+
+.db-app .db-category {
+	font-size: var(--db-fs-xl);
+	margin: var(--db-s6) 0 var(--db-s4);
+	padding-bottom: var(--db-s2);
+	border-bottom: 2px solid var(--db-hairline);
+}
+
+.db-app .db-category:first-child {
+	margin-top: 0;
+}
+
+.db-app .db-loading,
+.db-app .db-empty {
+	padding: var(--db-s5);
+	text-align: center;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-error {
+	color: var(--db-danger);
+	font-weight: 600;
+}
+
+.db-app .db-panel {
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s5);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-panel--error {
+	border-color: var(--db-danger);
+	background: var(--db-tomato-050);
+}
+
+.db-app .db-phone-line {
+	font-size: var(--db-fs-sm);
+	color: var(--db-ink-2);
+	margin-top: var(--db-s3);
+}
+
+.db-app .db-price,
+.db-app .db-total-value,
+.db-app .db-option-price,
+.db-app .db-line-total,
+.db-app .db-builder-price-value,
+.db-app .db-orderbar-total,
+.db-app .db-cart-badge-total {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum" 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                            */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--db-s2);
+	min-height: var(--db-tap);
+	padding: var(--db-s3) var(--db-s5);
+	background: var(--db-tomato);
+	color: #fff;
+	border: 1px solid var(--db-tomato);
+	border-radius: var(--db-r-md);
+	font-weight: 600;
+	text-decoration: none;
+	text-align: center;
+	transition: background .15s ease, box-shadow .15s ease;
+}
+
+.db-app a.db-btn {
+	color: #fff;
+	text-decoration: none;
+}
+
+.db-app .db-btn:hover:not(:disabled) {
+	background: var(--db-tomato-700);
+	border-color: var(--db-tomato-700);
+}
+
+.db-app .db-btn:disabled,
+.db-app .db-btn[aria-disabled="true"] {
+	background: var(--db-surface-2);
+	border-color: var(--db-line);
+	color: var(--db-muted);
+	cursor: not-allowed;
+}
+
+.db-app .db-btn--lg {
+	width: 100%;
+	padding: var(--db-s4) var(--db-s5);
+	font-size: var(--db-fs-lg) !important;
+	margin-top: var(--db-s2);
+}
+
+.db-app .db-btn--ghost {
+	background: var(--db-surface);
+	color: var(--db-tomato-700);
+	border-color: var(--db-line);
+}
+
+.db-app a.db-btn--ghost {
+	color: var(--db-tomato-700);
+}
+
+.db-app .db-btn--ghost:hover:not(:disabled) {
+	background: var(--db-tomato-050);
+	border-color: var(--db-tomato);
+}
+
+.db-app .db-link {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--db-tomato-700);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* Closed banner                                                      */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-closed {
+	background: var(--db-oven-050);
+	border: 1px solid var(--db-oven);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s4) var(--db-s5);
+	margin-bottom: var(--db-s5);
+	color: var(--db-oven);
+}
+
+.db-app .db-closed-title {
+	display: block;
+	font-size: var(--db-fs-lg);
+	color: var(--db-oven);
+	margin-bottom: var(--db-s1);
+}
+
+.db-app .db-closed-body {
+	color: var(--db-ink-2);
+	font-size: var(--db-fs-sm);
+	margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Menu                                                               */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-catnav {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	margin: 0 0 var(--db-s4);
+	padding: var(--db-s2) 0;
+	background: var(--db-cream);
+	border-bottom: 1px solid var(--db-hairline);
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: thin;
+}
+
+.db-app .db-catnav-list {
+	display: flex;
+	gap: var(--db-s2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	min-width: max-content;
+}
+
+.db-app .db-catnav-item {
+	margin: 0;
+}
+
+.db-app .db-catpill {
+	display: inline-flex;
+	align-items: center;
+	min-height: 36px;
+	padding: 0 var(--db-s4);
+	background: var(--db-surface);
+	color: var(--db-ink-2);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-pill);
+	font-size: var(--db-fs-sm);
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.db-app .db-catpill:hover {
+	background: var(--db-surface-2);
+	color: var(--db-ink);
+}
+
+.db-app .db-catpill[aria-current="true"] {
+	background: var(--db-tomato);
+	border-color: var(--db-tomato);
+	color: #fff;
+}
+
+.db-app .db-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: var(--db-s4);
+}
+
+.db-app .db-card {
+	display: flex;
+	flex-direction: column;
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	overflow: hidden;
+	box-shadow: var(--db-shadow-1);
+	transition: box-shadow .15s ease, transform .15s ease;
+	content-visibility: auto;
+	contain-intrinsic-size: 0 280px;
+}
+
+.db-app .db-card:hover {
+	box-shadow: var(--db-shadow-2);
+}
+
+.db-app .db-card--unavailable,
+.db-app .db-card--soldout {
+	opacity: .82;
+}
+
+.db-app .db-card-media {
+	position: relative;
+	background: var(--db-surface-2);
+	aspect-ratio: 4 / 3;
+	overflow: hidden;
+}
+
+.db-app .db-card-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	background: var(--db-surface-2);
+}
+
+/* A warm, flat "not photographed yet" tile — deliberately not a diagonal
+   stripe, which reads as a broken image. */
+.db-app .db-card-img--placeholder {
+	background: var(--db-surface-2);
+	position: relative;
+}
+
+.db-app .db-card-img--placeholder::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 56px;
+	height: 56px;
+	transform: translate(-50%, -50%);
+	border: 2px solid var(--db-hairline);
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 6px var(--db-surface-2), inset 0 0 0 8px var(--db-hairline);
+}
+
+.db-app .db-badge {
+	display: inline-block;
+	border-radius: var(--db-r-pill);
+	padding: var(--db-s1) var(--db-s3);
+	font-size: var(--db-fs-xs);
+	font-weight: 700;
+	background: var(--db-pending-050);
+	color: var(--db-ink);
+}
+
+.db-app .db-badge--soldout {
+	position: absolute;
+	top: var(--db-s3);
+	left: var(--db-s3);
+	background: var(--db-ink);
+	color: #fff;
+}
+
+.db-app .db-cart-line .db-badge--soldout {
+	position: static;
+	margin-top: var(--db-s1);
+	align-self: flex-start;
+}
+
+.db-app .db-card-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	gap: var(--db-s2);
+	padding: var(--db-s4);
+	background: var(--db-surface);
+}
+
+.db-app .db-card-title {
+	font-size: var(--db-fs-lg);
+	margin: 0;
+}
+
+.db-app .db-card-desc {
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+	margin: 0;
+	flex: 1;
+}
+
+.db-app .db-card-note {
+	color: var(--db-danger);
+	font-size: var(--db-fs-xs);
+	margin: 0;
+	font-weight: 600;
+}
+
+.db-app .db-card-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--db-s3);
+	margin-top: var(--db-s2);
+}
+
+.db-app .db-price {
+	font-family: var(--db-font-display);
+	font-size: var(--db-fs-lg);
+	font-weight: 700;
+	color: var(--db-ink);
+}
+
+/* ------------------------------------------------------------------ */
+/* Builder                                                            */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-builder-inner {
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s5);
+	max-width: 620px;
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-builder-heading {
+	font-size: var(--db-fs-xl);
+}
+
+.db-app .db-fieldset {
+	margin-bottom: var(--db-s5);
+	background: var(--db-surface);
+}
+
+.db-app .db-legend {
+	font-size: var(--db-fs-sm);
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	color: var(--db-ink-2);
+}
+
+.db-app .db-options {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s2);
+}
+
+.db-app .db-options--inline {
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+
+.db-app .db-option {
+	display: flex;
+	align-items: center;
+	gap: var(--db-s3);
+	min-height: var(--db-tap);
+	padding: var(--db-s2) var(--db-s3);
+	background: var(--db-surface);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+	cursor: pointer;
+	transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+
+.db-app .db-options--inline .db-option {
+	flex: 1 1 160px;
+}
+
+.db-app .db-option:hover {
+	background: var(--db-surface-2);
+}
+
+/* Selectable-card treatment. The native control stays visible on purpose. */
+.db-app .db-option:has(:checked) {
+	background: var(--db-tomato-050);
+	border-color: var(--db-tomato);
+	box-shadow: inset 0 0 0 1px var(--db-tomato);
+}
+
+.db-app .db-option-input {
+	width: 18px;
+	height: 18px;
+	flex: 0 0 auto;
+	accent-color: var(--db-tomato);
+}
+
+.db-app .db-option-label {
+	flex: 1;
+}
+
+.db-app .db-option-price {
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-builder-foot {
+	display: flex;
+	align-items: center;
+	gap: var(--db-s4);
+	padding-top: var(--db-s4);
+	border-top: 1px solid var(--db-hairline);
+	background: var(--db-surface);
+}
+
+.db-app .db-builder-price {
+	display: block;
+	font-family: var(--db-font-display);
+	font-size: var(--db-fs-2xl);
+	font-weight: 800;
+	line-height: var(--db-lh-tight);
+	color: var(--db-ink);
+}
+
+.db-app .db-builder-foot .db-btn--lg {
+	margin-top: 0;
+	width: auto;
+	flex: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cart                                                               */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-cart-inner {
+	background: var(--db-cream);
+}
+
+.db-app .db-cart-heading {
+	font-size: var(--db-fs-xl);
+}
+
+.db-app .db-empty-cart {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--db-s4);
+	padding: var(--db-s6) var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-empty-cart .db-empty {
+	border: 0;
+	padding: 0;
+	background: transparent;
+}
+
+.db-app .db-recent {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--db-s2) var(--db-s3);
+	padding: var(--db-s3) var(--db-s4);
+	margin-bottom: var(--db-s4);
+	background: var(--db-surface-2);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-md);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-recent-number {
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+}
+
+.db-app .db-cart-lines {
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	overflow: hidden;
+}
+
+.db-app .db-cart-line {
+	display: flex;
+	align-items: center;
+	gap: var(--db-s4);
+	padding: var(--db-s4);
+	background: var(--db-surface);
+	border-bottom: 1px solid var(--db-hairline);
+}
+
+.db-app .db-cart-line:last-child {
+	border-bottom: 0;
+}
+
+.db-app .db-cart-line--unavailable {
+	background: var(--db-surface-2);
+}
+
+.db-app .db-cart-line-info {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s1);
+	min-width: 0;
+}
+
+.db-app .db-line-name {
+	font-weight: 700;
+}
+
+.db-app .db-line-sub {
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-line-controls {
+	display: flex;
+	align-items: center;
+	gap: var(--db-s4);
+	flex: 0 0 auto;
+}
+
+.db-app .db-qty-wrap {
+	display: flex;
+	align-items: center;
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+	background: var(--db-surface);
+	overflow: hidden;
+}
+
+.db-app .db-step {
+	width: var(--db-tap);
+	min-height: var(--db-tap);
+	background: var(--db-surface);
+	border: 0;
+	color: var(--db-ink);
+	font-size: var(--db-fs-lg) !important;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.db-app .db-step:hover {
+	background: var(--db-surface-2);
+}
+
+.db-app .db-qty {
+	width: 56px;
+	min-height: var(--db-tap);
+	padding: var(--db-s2) var(--db-s1);
+	text-align: center;
+	border: 0;
+	border-left: 1px solid var(--db-hairline);
+	border-right: 1px solid var(--db-hairline);
+	border-radius: 0;
+	background: var(--db-surface);
+	font-variant-numeric: tabular-nums;
+}
+
+.db-app .db-line-total {
+	min-width: 72px;
+	text-align: right;
+}
+
+.db-app .db-edit,
+.db-app .db-remove {
+	min-height: var(--db-tap);
+	min-width: var(--db-tap);
+	padding: 0 var(--db-s3);
+	background: var(--db-surface);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+	color: var(--db-danger);
+	font-size: var(--db-fs-sm) !important;
+	font-weight: 600;
+}
+
+.db-app .db-remove:hover {
+	background: var(--db-tomato-050);
+	border-color: var(--db-danger);
+}
+
+.db-app .db-edit {
+	color: var(--db-ink-2);
+}
+
+.db-app .db-edit:hover {
+	background: var(--db-surface-2);
+	border-color: var(--db-ink-2);
+}
+
+/* Fulfilment ------------------------------------------------------- */
+
+.db-app .db-fulfilment {
+	margin: var(--db-s5) 0;
+	padding: var(--db-s4);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+/* Totals ----------------------------------------------------------- */
+
+.db-app .db-totals {
+	padding: var(--db-s4);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-total-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--db-s4);
+	padding: var(--db-s1) 0;
+	color: var(--db-ink-2);
+}
+
+.db-app .db-total-row--grand {
+	margin-top: var(--db-s2);
+	padding-top: var(--db-s3);
+	border-top: 2px solid var(--db-hairline);
+	font-family: var(--db-font-display);
+	font-size: var(--db-fs-xl);
+	font-weight: 800;
+	color: var(--db-ink);
+}
+
+.db-app .db-tax-note {
+	margin: var(--db-s1) 0 0;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-min-order {
+	margin: var(--db-s3) 0 0;
+	font-size: var(--db-fs-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/* Checkout                                                           */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-checkout {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s4);
+	margin-top: var(--db-s5);
+	padding: var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-checkout-heading {
+	font-size: var(--db-fs-lg);
+	margin: 0;
+}
+
+.db-app .db-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s1);
+}
+
+.db-app .db-label {
+	font-size: var(--db-fs-sm);
+	font-weight: 600;
+	color: var(--db-ink-2);
+}
+
+.db-app .db-input {
+	width: 100%;
+	min-height: var(--db-tap);
+	padding: var(--db-s3);
+	background: var(--db-surface);
+	color: var(--db-ink);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+}
+
+.db-app textarea.db-input {
+	min-height: 84px;
+	resize: vertical;
+}
+
+.db-app .db-input[aria-invalid="true"] {
+	border-color: var(--db-danger);
+	box-shadow: inset 0 0 0 1px var(--db-danger);
+}
+
+.db-app .db-field-error {
+	margin: 0;
+	color: var(--db-danger);
+	font-size: var(--db-fs-sm);
+	font-weight: 600;
+}
+
+.db-app .db-due-line {
+	margin: 0;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.db-app .db-pay-note {
+	margin: 0;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+	text-align: center;
+}
+
+.db-app .db-checkout-msg {
+	min-height: 20px;
+	font-size: var(--db-fs-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sticky order bar (mobile)                                          */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-orderbar {
+	display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Receipt                                                            */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-confirm {
+	background: var(--db-surface);
+	border: 2px solid var(--db-basil);
+	border-radius: var(--db-r-lg);
+	padding: var(--db-s6) var(--db-s5);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-confirm-title {
+	font-size: var(--db-fs-2xl);
+	color: var(--db-basil);
+}
+
+.db-app .db-confirm-number {
+	font-size: var(--db-fs-lg);
+}
+
+.db-app .db-confirm-number strong {
+	font-variant-numeric: tabular-nums;
+	letter-spacing: .02em;
+}
+
+.db-app .db-item-list {
+	margin: var(--db-s4) 0;
+	padding: 0;
+	border-top: 1px solid var(--db-hairline);
+}
+
+.db-app .db-item-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--db-s1) var(--db-s3);
+	padding: var(--db-s3) 0;
+	border-bottom: 1px solid var(--db-hairline);
+	background: var(--db-surface);
+}
+
+.db-app .db-item-name {
+	font-weight: 600;
+}
+
+.db-app .db-item-sub {
+	flex: 1 1 100%;
+	order: 3;
+	color: var(--db-muted);
+	font-size: var(--db-fs-sm);
+}
+
+.db-app .db-totals--receipt {
+	border: 0;
+	padding: 0;
+	background: var(--db-surface);
+}
+
+.db-app .db-confirm-email,
+.db-app .db-confirm-track {
+	margin-top: var(--db-s4);
+}
+
+.db-app .db-print {
+	margin-top: var(--db-s4);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tracking                                                           */
+/* ------------------------------------------------------------------ */
+
+.db-app .db-track-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s3);
+	max-width: 420px;
+	padding: var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+}
+
+.db-app .db-track-form input {
+	width: 100%;
+	min-height: var(--db-tap);
+	padding: var(--db-s3);
+	background: var(--db-surface);
+	color: var(--db-ink);
+	border: 1px solid var(--db-line);
+	border-radius: var(--db-r-sm);
+}
+
+.db-app .db-track-heading {
+	font-size: var(--db-fs-lg);
+	margin: 0;
+}
+
+.db-app .db-track-card {
+	max-width: 420px;
+	margin-top: var(--db-s4);
+	padding: var(--db-s5);
+	background: var(--db-surface);
+	border: 1px solid var(--db-hairline);
+	border-radius: var(--db-r-lg);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-app .db-track-title {
+	font-size: var(--db-fs-lg);
+}
+
+/* Status pills — tint + text, never colour alone. */
+.db-app .db-pill {
+	display: inline-block;
+	padding: var(--db-s1) var(--db-s4);
+	border-radius: var(--db-r-pill);
+	font-size: var(--db-fs-sm);
+	font-weight: 700;
+	background: var(--db-pending-050);
+	color: var(--db-ink);
+}
+
+.db-app .db-pill--pending {
+	background: var(--db-pending-050);
+	color: var(--db-ink);
+}
+
+.db-app .db-pill--preparing {
+	background: var(--db-oven-050);
+	color: var(--db-oven);
+}
+
+.db-app .db-pill--ready {
+	background: var(--db-basil-050);
+	color: var(--db-basil);
+}
+
+.db-app .db-pill--cancelled {
+	background: var(--db-tomato-050);
+	color: var(--db-danger);
+}
+
+/* ------------------------------------------------------------------ */
+/* Cart badge                                                         */
+/* ------------------------------------------------------------------ */
+
+.db-app.db-cart-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--db-s2);
+	min-height: var(--db-tap);
+	padding: var(--db-s2) var(--db-s4);
+	background: var(--db-tomato);
+	color: #fff;
+	border: 1px solid var(--db-tomato);
+	border-radius: var(--db-r-pill);
+	text-decoration: none;
+	font-weight: 700;
+	contain: none;
+}
+
+.db-app.db-cart-badge:hover {
+	background: var(--db-tomato-700);
+	color: #fff;
+}
+
+.db-app .db-cart-badge-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 24px;
+	height: 24px;
+	padding: 0 var(--db-s1);
+	background: #fff;
+	color: var(--db-tomato-700);
+	border-radius: var(--db-r-pill);
+	font-size: var(--db-fs-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+.db-app .db-cart-badge-icon {
+	font-size: var(--db-fs-lg);
+	line-height: 1;
+}
+
+.db-app .db-cart-badge-label {
+	font-size: var(--db-fs-sm);
+}
+
+.db-app.db-cart-badge--empty {
+	background: var(--db-surface);
+	color: var(--db-ink-2);
+	border-color: var(--db-line);
+}
+
+.db-app.db-cart-badge--empty .db-cart-badge-count {
+	background: var(--db-surface-2);
+	color: var(--db-ink-2);
+}
+
+/* ------------------------------------------------------------------ */
+/* Toasts                                                             */
+/* ------------------------------------------------------------------ */
+
+.db-app.db-toasts {
+	position: fixed;
+	left: 50%;
+	bottom: max(16px, env(safe-area-inset-bottom));
+	transform: translateX(-50%);
+	z-index: 99999;
+	display: flex;
+	flex-direction: column;
+	gap: var(--db-s2);
+	width: min(420px, calc(100vw - 32px));
+	background: transparent;
+	pointer-events: none;
+	contain: none;
+}
+
+.db-app .db-toast {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--db-s4);
+	padding: var(--db-s3) var(--db-s4);
+	background: var(--db-ink);
+	color: #fff;
+	border-radius: var(--db-r-md);
+	box-shadow: var(--db-shadow-2);
+	font-size: var(--db-fs-sm);
+	pointer-events: auto;
+}
+
+.db-app .db-toast--error {
+	background: var(--db-danger);
+}
+
+.db-app .db-toast-action {
+	flex: 0 0 auto;
+	min-height: 36px;
+	padding: var(--db-s1) var(--db-s3);
+	background: #fff;
+	color: var(--db-ink);
+	border: 0;
+	border-radius: var(--db-r-sm);
+	font-size: var(--db-fs-sm) !important;
+	font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile                                                             */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 768px) {
+	/* Keep the running price and the Add button on screen while the
+	   customer works through a long topping list. */
+	.db-app .db-builder-foot {
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
+		margin: 0 calc(var(--db-s5) * -1) calc(var(--db-s5) * -1);
+		padding: var(--db-s3) var(--db-s5);
+		padding-bottom: max(var(--db-s3), env(safe-area-inset-bottom));
+		background: var(--db-surface);
+		border-top: 1px solid var(--db-hairline);
+		box-shadow: 0 -12px 28px -18px rgba(26, 22, 20, .35);
+	}
+
+	.db-app .db-builder-price {
+		font-size: var(--db-fs-xl);
+	}
+
+	.db-app .db-orderbar {
+		position: sticky;
+		bottom: 0;
+		z-index: 3;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--db-s4);
+		min-height: 56px;
+		margin-top: var(--db-s5);
+		padding: var(--db-s3) var(--db-s4);
+		padding-bottom: max(var(--db-s3), env(safe-area-inset-bottom));
+		background: var(--db-cream);
+		border-top: 1px solid var(--db-hairline);
+		box-shadow: 0 -12px 28px -18px rgba(26, 22, 20, .35);
+	}
+
+	.db-app .db-orderbar[hidden] {
+		display: none;
+	}
+
+	.db-app .db-orderbar-info {
+		display: flex;
+		flex-direction: column;
+		line-height: var(--db-lh-tight);
+	}
+
+	.db-app .db-orderbar-label {
+		font-size: var(--db-fs-xs);
+		color: var(--db-muted);
+	}
+
+	.db-app .db-orderbar-total {
+		font-family: var(--db-font-display);
+		font-size: var(--db-fs-xl);
+	}
+
+	.db-app .db-orderbar-btn {
+		flex: 0 0 auto;
+	}
+
+	/* Clear the sticky order bar so a toast never sits on the CTA. */
+	.db-app.db-toasts {
+		bottom: max(76px, calc(env(safe-area-inset-bottom) + 68px));
+	}
+}
+
+@media (max-width: 560px) {
+	.db-app .db-cart-line {
+		flex-wrap: wrap;
+		gap: var(--db-s3);
+		padding: var(--db-s3);
+	}
+
+	.db-app .db-cart-line-info {
+		flex: 1 1 100%;
+	}
+
+	/* Row two: stepper, price, Remove — all still >= 44px, and the row must
+	   fit 390px without the container's overflow clipping Remove. */
+	.db-app .db-line-controls {
+		flex: 1 1 100%;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: var(--db-s2);
+	}
+
+	.db-app .db-qty {
+		width: 48px;
+	}
+
+	.db-app .db-line-total {
+		min-width: 0;
+	}
+
+	.db-app .db-remove {
+		padding: 0 var(--db-s2);
+	}
+
+	.db-app .db-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.db-app .db-builder-inner {
+		padding: var(--db-s4);
+	}
+
+	.db-app .db-checkout {
+		padding: var(--db-s4);
+	}
+
+	.db-app .db-options--inline {
+		flex-direction: column;
+	}
+
+	/* Stacked: the 160px basis would become a 160px-tall row. */
+	.db-app .db-options--inline .db-option {
+		flex: 0 0 auto;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.db-app *,
+	.db-app *::before,
+	.db-app *::after {
+		transition: none;
+		animation: none;
+		scroll-behavior: auto;
+	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Print — the customer's receipt is the only thing worth ink         */
+/* ------------------------------------------------------------------ */
+
+@media print {
+	.db-app .db-toasts,
+	.db-app .db-orderbar,
+	.db-app .db-print,
+	.db-app .db-cart-badge {
+		display: none;
+	}
+
+	.db-app {
+		background: #fff;
+		color: #000;
+		contain: none;
+	}
+
+	.db-app .db-confirm {
+		border: 1px solid #000;
+		box-shadow: none;
+		padding: 0;
+	}
+
+	.db-app .db-confirm-title {
+		color: #000;
+		font-size: 20px;
+	}
+
+	.db-app .db-item-row,
+	.db-app .db-totals--receipt {
+		background: #fff;
+	}
+
+	.db-app .db-link {
+		color: #000;
+		text-decoration: underline;
+	}
+}
+
+</style>
+</head>
+<body>
+<div class="harness-section"><h1>Cart badge</h1><a class="db-app db-cart-badge" data-doughboss-cart-badge href="/cart/" hidden><span class="db-cart-badge-icon" aria-hidden="true">🛒</span><span class="db-cart-badge-count"></span><span class="db-cart-badge-total"></span><span class="db-cart-badge-label">View cart</span></a></div>
+<div class="harness-section"><h1>Menu</h1><div class="db-app" data-doughboss-menu><div class="db-loading">Loading…</div></div></div>
+<div class="harness-section"><h1>Builder</h1><div class="db-app" data-doughboss-builder><div class="db-loading">Loading…</div></div></div>
+<div class="harness-section"><h1>Cart</h1><div class="db-app" data-doughboss-cart><div class="db-loading">Loading…</div></div></div>
+<div class="harness-section"><h1>Tracking</h1><div class="db-app db-tracking" data-doughboss-tracking data-heading-level="2"><form class="db-track-form"><h2 class="db-track-heading">Track your order</h2><div class="db-field"><label class="db-label" for="db-track-number">Order number</label><input class="db-input" type="text" id="db-track-number" name="number" required autocomplete="off" autocapitalize="characters" enterkeyhint="next" /></div><div class="db-field"><label class="db-label" for="db-track-email">Email</label><input class="db-input" type="email" id="db-track-email" name="email" required autocomplete="email" inputmode="email" enterkeyhint="go" /></div><button type="submit" class="db-btn db-btn--lg">Find my order</button></form><div class="db-track-result" aria-live="polite"></div></div></div>
+<script>
+
+(function () {
+	var params = new URLSearchParams(location.search);
+	var CLOSED = params.get('closed') === '1';
+
+	var CONFIG = {
+		currency_symbol: '$',
+		currency_code: 'AUD',
+		tax_rate: 10,
+		tax_label: 'GST',
+		tax_inclusive: true,
+		delivery_fee: 5,
+		min_order: 0,
+		enable_pickup: true,
+		enable_delivery: true,
+		ordering_open: !CLOSED,
+		sizes: [
+			{ slug: 'small', label: 'Small (10")', price: 12 },
+			{ slug: 'medium', label: 'Medium (13")', price: 16 },
+			{ slug: 'large', label: 'Large (16")', price: 20 }
+		],
+		toppings: [
+			{ slug: 'pepperoni', label: 'Pepperoni', price: 3 },
+			{ slug: 'mushrooms', label: 'Mushrooms', price: 2.5 },
+			{ slug: 'olives', label: 'Olives', price: 2 },
+			{ slug: 'extra-cheese', label: 'Extra cheese', price: 3.5 },
+			{ slug: 'basil', label: 'Fresh basil', price: 1.5 }
+		],
+		pay_note: 'No payment now — pay when you collect.',
+		store_phone: '0400 000 000'
+	};
+
+	window.DoughBossData = {
+		restUrl: '/wp-json/doughboss/v1',
+		nonce: 'test-nonce-1',
+		currency: '$',
+		i18n: {},
+		config: CONFIG,
+		storePhone: '0400 000 000',
+		headingLevel: 2,
+		menuUrl: '/order-online/',
+		trackingUrl: '/track-order/'
+	};
+
+	var MENU = [
+		{ id: 101, name: 'Margherita', description: 'San Marzano, fior di latte, basil.', price: 18, type: 'menu', image: '', srcset: '', image_width: 800, image_height: 600, category: 'Pizzas', available: true },
+		{ id: 102, name: 'Diavola', description: 'Spicy salami, chilli, mozzarella.', price: 22, type: 'menu', image: '', srcset: '', image_width: 800, image_height: 600, category: 'Pizzas', available: true },
+		{ id: 103, name: 'Garlic bread', description: 'Wood-fired, garlic butter.', price: 8, type: 'menu', image: '', srcset: '', image_width: 800, image_height: 600, category: 'Sides', available: true },
+		{ id: 104, name: 'Nonna\'s cannoli', description: 'Sold out today.', price: 6, type: 'menu', image: '', srcset: '', image_width: 800, image_height: 600, category: 'Sides', available: false }
+	];
+
+	var ITEMS = [];
+	var keySeq = 0;
+
+	function round(n) { return Math.round(n * 100) / 100; }
+
+	function totalsFor(orderType) {
+		var subtotal = 0;
+		var count = 0;
+		ITEMS.forEach(function (l) { subtotal += l.line_total; count += l.quantity; });
+		subtotal = round(subtotal);
+		var deliveryFee = (orderType === 'delivery' && ITEMS.length) ? CONFIG.delivery_fee : 0;
+		var tax = round(subtotal * CONFIG.tax_rate / (100 + CONFIG.tax_rate));
+		var total = round(subtotal + deliveryFee);
+		return {
+			subtotal: subtotal,
+			tax: tax,
+			delivery_fee: deliveryFee,
+			total: total,
+			item_count: count,
+			tax_inclusive: true,
+			tax_label: CONFIG.tax_label,
+			tax_rate: CONFIG.tax_rate,
+			min_order: CONFIG.min_order,
+			min_order_met: CONFIG.min_order <= 0 || subtotal >= CONFIG.min_order
+		};
+	}
+
+	function cartObject(orderType) {
+		return { items: ITEMS.map(function (l) { return l; }), totals: totalsFor(orderType) };
+	}
+
+	function json(body, status) {
+		return new Response(JSON.stringify(body), {
+			status: status || 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	function addLine(body) {
+		var line;
+		if (body.type === 'custom') {
+			var size = CONFIG.sizes.filter(function (s) { return s.slug === body.size; })[0] || CONFIG.sizes[0];
+			var tops = (body.toppings || []).map(function (slug) {
+				return CONFIG.toppings.filter(function (tp) { return tp.slug === slug; })[0];
+			}).filter(Boolean);
+			var unit = size.price + tops.reduce(function (a, tp) { return a + tp.price; }, 0);
+			keySeq++;
+			line = {
+				key: 'c' + keySeq,
+				type: 'custom',
+				item_id: 0,
+				name: 'Custom Pizza',
+				size: size.label,
+				size_slug: size.slug,
+				toppings: tops,
+				unit_price: round(unit),
+				quantity: body.quantity || 1,
+				line_total: round(unit * (body.quantity || 1)),
+				available: true
+			};
+			ITEMS.push(line);
+			return line;
+		}
+
+		var item = MENU.filter(function (m) { return m.id === Number(body.item_id); })[0];
+		if (!item) { return null; }
+		var existing = ITEMS.filter(function (l) { return l.type === 'menu' && l.item_id === item.id; })[0];
+		if (existing) {
+			existing.quantity += (body.quantity || 1);
+			existing.line_total = round(existing.unit_price * existing.quantity);
+			return existing;
+		}
+		keySeq++;
+		line = {
+			key: 'm' + keySeq,
+			type: 'menu',
+			item_id: item.id,
+			name: item.name,
+			size: '',
+			toppings: [],
+			unit_price: item.price,
+			quantity: body.quantity || 1,
+			line_total: round(item.price * (body.quantity || 1)),
+			available: true
+		};
+		ITEMS.push(line);
+		return line;
+	}
+
+	window.__dbRequests = [];
+
+	window.fetch = function (url, opts) {
+		opts = opts || {};
+		var u = String(url);
+		var qs = u.indexOf('?') === -1 ? '' : u.slice(u.indexOf('?') + 1);
+		var pathOnly = u.split('?')[0].replace('/wp-json/doughboss/v1', '');
+		var body = opts.body ? JSON.parse(opts.body) : {};
+		var orderType = /order_type=delivery/.test(qs) ? 'delivery' : 'pickup';
+		window.__dbRequests.push((opts.method || 'GET') + ' ' + u);
+
+		return new Promise(function (resolve) {
+			setTimeout(function () {
+				if (pathOnly === '/config') { return resolve(json(CONFIG)); }
+				if (pathOnly === '/nonce') { return resolve(json({ nonce: 'test-nonce-2' })); }
+				if (pathOnly === '/menu') { return resolve(json(MENU)); }
+				if (pathOnly === '/cart') { return resolve(json(cartObject(orderType))); }
+
+				if (pathOnly === '/cart/add') {
+					if (!CONFIG.ordering_open) {
+						return resolve(json({ code: 'doughboss_closed', message: 'Online ordering is currently closed.', data: { status: 403 } }, 403));
+					}
+					var added = addLine(body);
+					if (!added) { return resolve(json({ code: 'doughboss_not_found', message: 'Item not found.', data: { status: 404 } }, 404)); }
+					var out = cartObject(body.order_type || 'pickup');
+					out.added = added;
+					return resolve(json(out));
+				}
+
+				if (pathOnly === '/cart/update') {
+					ITEMS.forEach(function (l) {
+						if (l.key === body.key) {
+							l.quantity = body.quantity;
+							l.line_total = round(l.unit_price * l.quantity);
+						}
+					});
+					if (body.quantity <= 0) {
+						ITEMS = ITEMS.filter(function (l) { return l.key !== body.key; });
+					}
+					return resolve(json(cartObject(body.order_type || 'pickup')));
+				}
+
+				if (pathOnly === '/cart/remove') {
+					ITEMS = ITEMS.filter(function (l) { return l.key !== body.key; });
+					return resolve(json(cartObject(body.order_type || 'pickup')));
+				}
+
+				if (pathOnly === '/cart/clear') {
+					ITEMS = [];
+					return resolve(json(cartObject('pickup')));
+				}
+
+				if (pathOnly === '/checkout') {
+					if (!CONFIG.ordering_open) {
+						return resolve(json({ code: 'doughboss_closed', message: 'Online ordering is currently closed.', data: { status: 403 } }, 403));
+					}
+					if (!ITEMS.length) {
+						return resolve(json({ code: 'doughboss_cart_expired', message: 'Your cart is empty.', data: { status: 400 } }, 400));
+					}
+					var t = totalsFor(body.order_type);
+					ITEMS = [];
+					return resolve(json({
+						success: true,
+						order_number: 'DB-260906-A7K2',
+						total: t.total,
+						message: 'Thanks! Your order has been received.',
+						email_sent: true,
+						tracking_url: '/track-order/?number=DB-260906-A7K2'
+					}));
+				}
+
+				if (pathOnly === '/order/track') {
+					return resolve(json({
+						order_number: body.number,
+						status: 'preparing',
+						status_label: 'In the oven',
+						order_type: 'pickup',
+						total: 26,
+						currency: 'AUD',
+						created_at: '2026-09-06T18:00:00+10:00',
+						items: [{ name: 'Margherita', quantity: 1, size: '', toppings: [], line_total: 18 }]
+					}));
+				}
+
+				resolve(json({ code: 'rest_no_route', message: 'No route.', data: { status: 404 } }, 404));
+			}, 10);
+		});
+	};
+}());
+
+</script>
+<script>
+/**
+ * DoughBoss storefront — v2.5
+ *
+ * Hydrates the four [data-doughboss-*] shortcode containers by talking to the
+ * doughboss/v1 REST API. No framework, no jQuery, no build step. ES5 syntax
+ * only (var/function) because this file ships unminified to arbitrary browsers.
+ *
+ * Public surface (unchanged):
+ *   [data-doughboss-menu]      — menu grid (server-rendered when data-doughboss-ssr="1")
+ *   [data-doughboss-builder]   — custom pizza builder
+ *   [data-doughboss-cart]      — cart + checkout + receipt
+ *   [data-doughboss-tracking]  — order tracking
+ *   [data-doughboss-cart-badge]— cart count/total badge (any number of them)
+ *   window.DoughBossData       — { restUrl, nonce, currency, i18n, config, storePhone, headingLevel, menuUrl? }
+ *
+ * ---------------------------------------------------------------------------
+ * I18N KEYS USED (every one is `I18N[key] || 'fallback'`).
+ * Pass these through wp_localize_script as DoughBossData.i18n.
+ * Placeholders are {braced} and substituted client-side.
+ * ---------------------------------------------------------------------------
+ *  addToCart            "Add to cart"
+ *  added                "Added!"
+ *  addedToCart          "{name} added to your order."
+ *  adding               "Adding…"
+ *  soldOut              "Sold out"
+ *  soldOutNote          "This item is unavailable right now."
+ *  menuEmpty            "No menu items yet."
+ *  menuHeading          "Menu"
+ *  menuCategories       "Menu categories"
+ *  loadFailed           "We couldn't load this right now."
+ *  retry                "Try again"
+ *  callUs               "Call us on"
+ *  genericError         "Something went wrong. Please try again."
+ *  builderHeading       "Build your pizza"
+ *  builderNoSizes       "No pizza sizes configured yet."
+ *  size                 "Size"
+ *  toppings             "Toppings"
+ *  noToppings           "No toppings"
+ *  updatePizza          "Update pizza"
+ *  editingPizza         "Editing your custom pizza — update it and add it back."
+ *  yourOrder            "Your order"
+ *  emptyCart            "Your cart is empty."
+ *  browseMenu           "Browse the menu"
+ *  quantityFor          "Quantity for {name}"
+ *  decreaseQuantity     "Decrease quantity for {name}"
+ *  increaseQuantity     "Increase quantity for {name}"
+ *  edit                 "Edit"
+ *  editItem             "Edit {name}"
+ *  remove               "Remove"
+ *  removeItem           "Remove {name} from cart"
+ *  removedItem          "{name} removed."
+ *  undo                 "Undo"
+ *  restored             "{name} put back in your order."
+ *  subtotal             "Subtotal"
+ *  delivery             "Delivery"
+ *  total                "Total"
+ *  taxIncluded          "Includes {label} {amount}"
+ *  minOrder             "Minimum order {amount}"
+ *  fulfilment           "How would you like your order?"
+ *  pickup               "Pickup"
+ *  delivery_option      "Delivery"
+ *  checkout             "Checkout"
+ *  fieldName            "Name"
+ *  fieldEmail           "Email"
+ *  fieldPhone           "Phone"
+ *  fieldAddress         "Delivery address"
+ *  fieldNotes           "Notes (optional)"
+ *  placeOrder           "Place order"
+ *  placing              "Placing order…"
+ *  totalDuePickup       "Total due on pickup"
+ *  totalDueDelivery     "Total due on delivery"
+ *  errRequiredName      "Please enter your name."
+ *  errRequiredEmail     "Please enter your email address."
+ *  errInvalidEmail      "Please enter a valid email address."
+ *  errRequiredPhone     "Please enter a phone number."
+ *  errRequiredAddress   "Please enter your delivery address."
+ *  errClosed            "Online ordering is currently closed."
+ *  errCartExpired       "Your cart has expired. Please add your items again."
+ *  errRateLimited       "Too many attempts, please wait a minute."
+ *  errPricesChanged     "Some prices changed — please review your order."
+ *  closedTitle          "Online ordering is currently closed."
+ *  closedBody           "We're not taking online orders at the moment."
+ *  confirmTitle         "Thanks! Your order has been received."
+ *  confirmNumber        "Your order number is"
+ *  confirmEmail         "We've emailed {email} — check your junk folder if it doesn't arrive."
+ *  trackOrder           "Track your order"
+ *  printReceipt         "Print receipt"
+ *  questionsCall        "Questions? Call"
+ *  recentOrder          "Your recent order"
+ *  trackIt              "Track it"
+ *  trackHeading         "Track your order"
+ *  trackNumber          "Order number"
+ *  trackEmail           "Email"
+ *  trackSubmit          "Find my order"
+ *  trackSearching       "Looking up your order…"
+ *  orderLabel           "Order"
+ *  cartBadgeLabel       "View cart — {count} items, {total}"
+ */
+(function () {
+	'use strict';
+
+	if (typeof window.DoughBossData === 'undefined') {
+		return;
+	}
+
+	var DATA = window.DoughBossData;
+	var I18N = DATA.i18n || {};
+	var CONFIG = DATA.config || null;
+	var uidSeq = 0;
+	var toastRegion = null;
+
+	/* ------------------------------------------------------------------ */
+	/* Small helpers                                                      */
+	/* ------------------------------------------------------------------ */
+
+	function t(key, fallback) {
+		var v = I18N[key];
+		return (typeof v === 'string' && v !== '') ? v : fallback;
+	}
+
+	function sub(str, vals) {
+		return String(str).replace(/\{(\w+)\}/g, function (match, key) {
+			return Object.prototype.hasOwnProperty.call(vals, key) ? String(vals[key]) : match;
+		});
+	}
+
+	function uid(prefix) {
+		uidSeq += 1;
+		return 'db-' + prefix + '-' + uidSeq;
+	}
+
+	function each(list, fn) {
+		if (!list) { return; }
+		for (var i = 0; i < list.length; i++) {
+			fn(list[i], i);
+		}
+	}
+
+	function num(value) {
+		var n = Number(value);
+		return isFinite(n) ? n : 0;
+	}
+
+	function money(amount) {
+		var symbol = DATA.currency;
+		if (typeof symbol !== 'string' || symbol === '') {
+			symbol = (CONFIG && CONFIG.currency_symbol) ? CONFIG.currency_symbol : '$';
+		}
+		return symbol + num(amount).toFixed(2);
+	}
+
+	function headingLevel() {
+		var n = parseInt(DATA.headingLevel, 10);
+		if (!(n >= 2 && n <= 4)) { n = 2; }
+		return n;
+	}
+
+	function hTag(offset) {
+		var n = headingLevel() + (offset || 0);
+		if (n > 6) { n = 6; }
+		if (n < 1) { n = 1; }
+		return 'h' + n;
+	}
+
+	function storePhone() {
+		if (typeof DATA.storePhone === 'string' && DATA.storePhone !== '') { return DATA.storePhone; }
+		if (CONFIG && typeof CONFIG.store_phone === 'string' && CONFIG.store_phone !== '') { return CONFIG.store_phone; }
+		return '';
+	}
+
+	function telHref(phone) {
+		return 'tel:' + String(phone).replace(/[^\d+]/g, '');
+	}
+
+	function menuUrl() {
+		return (typeof DATA.menuUrl === 'string' && DATA.menuUrl !== '') ? DATA.menuUrl : '#';
+	}
+
+	function debounce(fn, wait) {
+		var timer = null;
+		return function () {
+			var args = arguments;
+			var self = this;
+			if (timer) { clearTimeout(timer); }
+			timer = setTimeout(function () {
+				timer = null;
+				fn.apply(self, args);
+			}, wait);
+		};
+	}
+
+	/**
+	 * Element builder.
+	 *
+	 * Any key containing "-" (data-*, aria-*), plus `role` and `for`, goes
+	 * through setAttribute — assigning those as properties creates a dead
+	 * expando and silently drops the attribute. There is deliberately no
+	 * `html:` branch; build content from text nodes and child elements.
+	 */
+	function el(tag, attrs, children) {
+		var node = document.createElement(tag);
+		attrs = attrs || {};
+		Object.keys(attrs).forEach(function (key) {
+			var value = attrs[key];
+			if (value === null || value === undefined || value === false) { return; }
+			if (key === 'class') {
+				node.className = value;
+			} else if (key === 'text') {
+				node.textContent = value;
+			} else if (key.indexOf('-') !== -1 || key === 'role' || key === 'for') {
+				node.setAttribute(key, value);
+			} else {
+				node[key] = value;
+			}
+		});
+		(children || []).forEach(function (child) {
+			if (child === null || child === undefined || child === false) { return; }
+			node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+		});
+		return node;
+	}
+
+	function clear(node) {
+		node.innerHTML = '';
+		return node;
+	}
+
+	function closestEl(node, className) {
+		var current = node;
+		while (current && current.nodeType === 1) {
+			if (current.classList && current.classList.contains(className)) { return current; }
+			current = current.parentNode;
+		}
+		return null;
+	}
+
+	function srOnly(text) {
+		return el('span', { class: 'db-sr-only', text: text });
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Toasts (replaces every alert())                                     */
+	/* ------------------------------------------------------------------ */
+
+	function toastHost() {
+		if (toastRegion && toastRegion.parentNode) { return toastRegion; }
+		toastRegion = el('div', {
+			class: 'db-app db-toasts',
+			role: 'status',
+			'aria-live': 'polite',
+			'aria-atomic': 'false'
+		});
+		document.body.appendChild(toastRegion);
+		return toastRegion;
+	}
+
+	/**
+	 * @param {string} message
+	 * @param {Object} opts { error: bool, duration: ms, actionLabel: string, onAction: fn }
+	 */
+	function toast(message, opts) {
+		opts = opts || {};
+		var host = toastHost();
+		var node = el('div', {
+			class: 'db-toast' + (opts.error ? ' db-toast--error' : ''),
+			role: opts.error ? 'alert' : null
+		}, [el('span', { class: 'db-toast-text', text: message })]);
+
+		var timer = null;
+		function dismiss() {
+			if (timer) { clearTimeout(timer); timer = null; }
+			if (node.parentNode) { node.parentNode.removeChild(node); }
+		}
+
+		if (opts.actionLabel && opts.onAction) {
+			var action = el('button', { class: 'db-toast-action', type: 'button', text: opts.actionLabel });
+			action.addEventListener('click', function () {
+				dismiss();
+				opts.onAction();
+			});
+			node.appendChild(action);
+		}
+
+		host.appendChild(node);
+		timer = setTimeout(dismiss, opts.duration || 4000);
+		return dismiss;
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* REST                                                                */
+	/* ------------------------------------------------------------------ */
+
+	function refreshNonce() {
+		return fetch(DATA.restUrl + '/nonce', {
+			method: 'GET',
+			credentials: 'same-origin',
+			cache: 'no-store',
+			headers: { 'Accept': 'application/json' }
+		}).then(function (res) {
+			return res.json();
+		}).then(function (json) {
+			if (json && json.nonce) { DATA.nonce = json.nonce; }
+			return DATA.nonce;
+		});
+	}
+
+	function request(path, options, retried) {
+		options = options || {};
+		var method = options.method || 'GET';
+		var headers = { 'Accept': 'application/json' };
+		if (method !== 'GET') {
+			headers['Content-Type'] = 'application/json';
+			headers['X-WP-Nonce'] = DATA.nonce;
+		}
+
+		return fetch(DATA.restUrl + path, {
+			method: method,
+			credentials: 'same-origin',
+			headers: headers,
+			body: options.body ? JSON.stringify(options.body) : undefined
+		}).then(function (res) {
+			if (res.headers && typeof res.headers.get === 'function') {
+				var fresh = res.headers.get('X-WP-Nonce');
+				if (fresh) { DATA.nonce = fresh; }
+			}
+			return res.text().then(function (body) {
+				var json = null;
+				if (body) {
+					try { json = JSON.parse(body); } catch (e) { json = null; }
+				}
+				if (!res.ok) {
+					var code = (json && json.code) ? json.code : '';
+					var badNonce = (code === 'doughboss_bad_nonce' || code === 'rest_cookie_invalid_nonce');
+					if (res.status === 403 && badNonce && method !== 'GET' && !retried) {
+						return refreshNonce().then(function () {
+							return request(path, options, true);
+						});
+					}
+					var err = new Error((json && json.message) || t('genericError', 'Something went wrong. Please try again.'));
+					err.code = code;
+					err.status = res.status;
+					err.data = (json && json.data) ? json.data : null;
+					throw err;
+				}
+				return json;
+			});
+		});
+	}
+
+	function getConfig() {
+		if (CONFIG) { return Promise.resolve(CONFIG); }
+		return request('/config').then(function (cfg) {
+			CONFIG = cfg;
+			return cfg;
+		});
+	}
+
+	function orderingOpen() {
+		return !(CONFIG && CONFIG.ordering_open === false);
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Cart broadcast + badges                                             */
+	/* ------------------------------------------------------------------ */
+
+	function makeEvent(name, detail) {
+		var evt;
+		if (typeof window.CustomEvent === 'function') {
+			evt = new window.CustomEvent(name, { detail: detail, bubbles: false });
+		} else {
+			evt = document.createEvent('CustomEvent');
+			evt.initCustomEvent(name, false, false, detail);
+		}
+		return evt;
+	}
+
+	function updateBadges(cart) {
+		var totals = (cart && cart.totals) ? cart.totals : { item_count: 0, total: 0 };
+		var count = num(totals.item_count);
+		var totalText = money(totals.total);
+		each(document.querySelectorAll('[data-doughboss-cart-badge]'), function (badge) {
+			var countNode = badge.querySelector('.db-cart-badge-count');
+			var totalNode = badge.querySelector('.db-cart-badge-total');
+			if (countNode) { countNode.textContent = String(count); }
+			if (totalNode) { totalNode.textContent = totalText; }
+			if (count > 0) {
+				badge.classList.remove('db-cart-badge--empty');
+				// The shortcode ships the badge `hidden` so an empty one never
+				// flashes before JS knows the count.
+				badge.hidden = false;
+			} else {
+				badge.classList.add('db-cart-badge--empty');
+			}
+			badge.setAttribute('aria-label', sub(t('cartBadgeLabel', 'View cart — {count} items, {total}'), {
+				count: count,
+				total: totalText
+			}));
+		});
+	}
+
+	/** Broadcast a cart object that just came back from the API. */
+	function emitCart(cart, sourceRoot) {
+		if (!cart) { return; }
+		updateBadges(cart);
+		document.dispatchEvent(makeEvent('doughboss:cart', { cart: cart, source: sourceRoot || null }));
+		document.dispatchEvent(makeEvent('doughboss:cart-updated', { cart: cart, source: sourceRoot || null }));
+	}
+
+	function hasCartCookie() {
+		return String(document.cookie || '').indexOf('doughboss_cart') !== -1;
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* localStorage: last order                                            */
+	/* ------------------------------------------------------------------ */
+
+	var LAST_ORDER_KEY = 'doughboss_last_order';
+	var IDEM_KEY = 'doughboss_idempotency_key';
+	var SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
+	function readLastOrder() {
+		try {
+			var raw = window.localStorage.getItem(LAST_ORDER_KEY);
+			if (!raw) { return null; }
+			var parsed = JSON.parse(raw);
+			if (!parsed || !parsed.number) { return null; }
+			var placed = Date.parse(parsed.placed_at || '');
+			if (!isFinite(placed) || (Date.now() - placed) > SEVEN_DAYS) {
+				window.localStorage.removeItem(LAST_ORDER_KEY);
+				return null;
+			}
+			return parsed;
+		} catch (e) {
+			return null;
+		}
+	}
+
+	function writeLastOrder(record) {
+		try {
+			window.localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(record));
+		} catch (e) { /* storage unavailable — non-fatal */ }
+	}
+
+	function makeUuid() {
+		if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+			return window.crypto.randomUUID();
+		}
+		var bytes;
+		if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+			bytes = new Uint8Array(16);
+			window.crypto.getRandomValues(bytes);
+		} else {
+			bytes = [];
+			for (var i = 0; i < 16; i++) { bytes.push(Math.floor(Math.random() * 256)); }
+		}
+		bytes[6] = (bytes[6] & 0x0f) | 0x40;
+		bytes[8] = (bytes[8] & 0x3f) | 0x80;
+		var hex = [];
+		for (var j = 0; j < 16; j++) {
+			hex.push(('0' + bytes[j].toString(16)).slice(-2));
+		}
+		return hex.slice(0, 4).join('') + '-' + hex.slice(4, 6).join('') + '-' +
+			hex.slice(6, 8).join('') + '-' + hex.slice(8, 10).join('') + '-' + hex.slice(10, 16).join('');
+	}
+
+	/** One idempotency key per cart session, reused across retries. */
+	function idempotencyKey() {
+		var key = null;
+		try { key = window.sessionStorage.getItem(IDEM_KEY); } catch (e) { key = null; }
+		if (!key) {
+			key = makeUuid();
+			try { window.sessionStorage.setItem(IDEM_KEY, key); } catch (e2) { /* ignore */ }
+		}
+		return key;
+	}
+
+	function clearIdempotencyKey() {
+		try { window.sessionStorage.removeItem(IDEM_KEY); } catch (e) { /* ignore */ }
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Shared UI fragments                                                 */
+	/* ------------------------------------------------------------------ */
+
+	function phoneLine(leadText) {
+		var phone = storePhone();
+		if (!phone) { return null; }
+		return el('p', { class: 'db-phone-line' }, [
+			document.createTextNode(leadText + ' '),
+			el('a', { class: 'db-link', href: telHref(phone), text: phone })
+		]);
+	}
+
+	function closedPanel() {
+		return el('div', { class: 'db-closed', role: 'status' }, [
+			el('strong', { class: 'db-closed-title', text: t('closedTitle', 'Online ordering is currently closed.') }),
+			el('p', { class: 'db-closed-body', text: t('closedBody', "We're not taking online orders at the moment.") }),
+			phoneLine(t('callUs', 'Call us on'))
+		]);
+	}
+
+	function errorPanel(message, onRetry) {
+		var kids = [el('p', { class: 'db-error', text: message })];
+		if (onRetry) {
+			var btn = el('button', { class: 'db-btn db-btn--ghost', type: 'button', text: t('retry', 'Try again') });
+			btn.addEventListener('click', onRetry);
+			kids.push(btn);
+		}
+		var phone = phoneLine(t('callUs', 'Call us on'));
+		if (phone) { kids.push(phone); }
+		return el('div', { class: 'db-panel db-panel--error', role: 'alert' }, kids);
+	}
+
+	/** 10s watchdog on a first paint: swap "Loading…" for something actionable. */
+	function loadWatchdog(root, onRetry) {
+		var done = false;
+		var timer = setTimeout(function () {
+			if (done) { return; }
+			clear(root);
+			root.removeAttribute('aria-busy');
+			root.appendChild(errorPanel(t('loadFailed', "We couldn't load this right now."), onRetry));
+		}, 10000);
+		return function () {
+			done = true;
+			clearTimeout(timer);
+		};
+	}
+
+	function statusModifier(status) {
+		var s = String(status || '').toLowerCase();
+		if (s === 'cancelled' || s === 'canceled' || s === 'refunded') { return 'cancelled'; }
+		if (s === 'ready' || s === 'out_for_delivery' || s === 'completed' || s === 'delivered') { return 'ready'; }
+		if (s === 'confirmed' || s === 'preparing' || s === 'in_oven' || s === 'in_the_oven') { return 'preparing'; }
+		return 'pending';
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Menu                                                                */
+	/* ------------------------------------------------------------------ */
+
+	/**
+	 * @param {Element} btn
+	 * @param {Object} body  /cart/add payload
+	 * @param {Object} opts  { label, onAdded, restore }
+	 */
+	function addToCart(btn, body, opts) {
+		opts = opts || {};
+		if (btn.getAttribute('aria-busy') === 'true') { return; }
+		var original = btn.textContent;
+		function restoreLabel() {
+			btn.textContent = opts.restore ? opts.restore() : original;
+		}
+		btn.setAttribute('aria-busy', 'true');
+		btn.textContent = t('adding', 'Adding…');
+		request('/cart/add', { method: 'POST', body: body }).then(function (res) {
+			btn.removeAttribute('aria-busy');
+			btn.textContent = t('added', 'Added!');
+			toast(sub(t('addedToCart', '{name} added to your order.'), { name: opts.label || '' }));
+			emitCart(res);
+			if (opts.onAdded) { opts.onAdded(res); }
+			setTimeout(restoreLabel, 1400);
+		}).catch(function (err) {
+			btn.removeAttribute('aria-busy');
+			restoreLabel();
+			toast(err.message, { error: true });
+		});
+	}
+
+	function bindAddButtons(root) {
+		each(root.querySelectorAll('.db-add'), function (btn) {
+			if (btn.getAttribute('data-db-bound') === '1') { return; }
+			btn.setAttribute('data-db-bound', '1');
+			var card = closestEl(btn, 'db-card');
+			if (!card) { return; }
+			var itemId = btn.getAttribute('data-item-id') || card.getAttribute('data-item-id');
+			var available = card.getAttribute('data-available') !== '0';
+			var titleNode = card.querySelector('.db-card-title');
+			var label = titleNode ? titleNode.textContent : t('addToCart', 'Add to cart');
+
+			if (!available || !orderingOpen()) {
+				btn.disabled = true;
+				btn.setAttribute('aria-disabled', 'true');
+				return;
+			}
+			btn.addEventListener('click', function () {
+				addToCart(btn, { type: 'menu', item_id: Number(itemId), quantity: 1 }, { label: label });
+			});
+		});
+	}
+
+	function menuCard(item) {
+		var available = item.available !== false;
+		var media;
+		if (item.image) {
+			var imgAttrs = {
+				class: 'db-card-img',
+				src: item.image,
+				alt: item.name,
+				loading: 'lazy',
+				decoding: 'async',
+				sizes: '(max-width: 560px) 100vw, 320px'
+			};
+			if (item.image_width) { imgAttrs.width = item.image_width; }
+			if (item.image_height) { imgAttrs.height = item.image_height; }
+			if (item.srcset) { imgAttrs.srcset = item.srcset; }
+			media = el('img', imgAttrs);
+		} else {
+			media = el('div', { class: 'db-card-img db-card-img--placeholder', 'aria-hidden': 'true' });
+		}
+
+		var mediaWrap = el('div', { class: 'db-card-media' }, [
+			media,
+			available ? null : el('span', { class: 'db-badge db-badge--soldout', text: t('soldOut', 'Sold out') })
+		]);
+
+		var btnAttrs = { class: 'db-btn db-add', type: 'button', text: t('addToCart', 'Add to cart') };
+		var btn = el('button', btnAttrs);
+
+		var card = el('article', {
+			class: 'db-card' + (available ? '' : ' db-card--unavailable'),
+			'data-item-id': String(item.id),
+			'data-available': available ? '1' : '0'
+		}, [
+			mediaWrap,
+			el('div', { class: 'db-card-body' }, [
+				el(hTag(1), { class: 'db-card-title', text: item.name }),
+				item.description ? el('p', { class: 'db-card-desc', text: item.description }) : null,
+				available ? null : el('p', { class: 'db-card-note', text: t('soldOutNote', 'This item is unavailable right now.') }),
+				el('div', { class: 'db-card-foot' }, [
+					el('span', { class: 'db-price', text: money(item.price) }),
+					btn
+				])
+			])
+		]);
+		return card;
+	}
+
+	/**
+	 * Sticky category pill scroller + scroll-spy. Reads the rendered headings,
+	 * so it works identically for the server-rendered and fetched menus.
+	 */
+	function buildCategoryNav(root) {
+		var headings = root.querySelectorAll('.db-category');
+		if (headings.length < 2) { return; }
+		if (root.querySelector('.db-catnav')) { return; }
+
+		var list = el('ul', { class: 'db-catnav-list' });
+		var pills = {};
+
+		each(headings, function (heading) {
+			if (!heading.id) { heading.id = uid('cat'); }
+			heading.setAttribute('tabindex', '-1');
+			var pill = el('a', {
+				class: 'db-catpill',
+				href: '#' + heading.id,
+				text: heading.textContent
+			});
+			pill.addEventListener('click', function (e) {
+				e.preventDefault();
+				if (heading.scrollIntoView) { heading.scrollIntoView({ block: 'start' }); }
+				heading.focus();
+			});
+			pills[heading.id] = pill;
+			list.appendChild(el('li', { class: 'db-catnav-item' }, [pill]));
+		});
+
+		var nav = el('nav', { class: 'db-catnav', 'aria-label': t('menuCategories', 'Menu categories') }, [list]);
+		root.insertBefore(nav, headings[0]);
+
+		function setActive(id) {
+			Object.keys(pills).forEach(function (key) {
+				if (key === id) {
+					pills[key].setAttribute('aria-current', 'true');
+				} else {
+					pills[key].removeAttribute('aria-current');
+				}
+			});
+		}
+		setActive(headings[0].id);
+
+		if (typeof window.IntersectionObserver !== 'function') { return; }
+		var visible = {};
+		var observer = new window.IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				visible[entry.target.id] = entry.isIntersecting;
+			});
+			for (var i = 0; i < headings.length; i++) {
+				if (visible[headings[i].id]) { setActive(headings[i].id); return; }
+			}
+		}, { rootMargin: '-72px 0px -70% 0px', threshold: 0 });
+
+		each(headings, function (heading) { observer.observe(heading); });
+	}
+
+	function renderMenu(root) {
+		root.classList.add('db-app');
+
+		if (root.getAttribute('data-doughboss-ssr') === '1') {
+			if (!orderingOpen()) { root.insertBefore(closedPanel(), root.firstChild); }
+			buildCategoryNav(root);
+			bindAddButtons(root);
+			return;
+		}
+
+		root.setAttribute('aria-busy', 'true');
+		var cancel = loadWatchdog(root, function () { renderMenu(root); });
+
+		request('/menu').then(function (items) {
+			cancel();
+			clear(root);
+			root.removeAttribute('aria-busy');
+
+			if (!orderingOpen()) { root.appendChild(closedPanel()); }
+
+			if (!items || !items.length) {
+				root.appendChild(el('p', { class: 'db-empty', text: t('menuEmpty', 'No menu items yet.') }));
+				return;
+			}
+
+			var order = [];
+			var groups = {};
+			items.forEach(function (item) {
+				var cat = item.category || t('menuHeading', 'Menu');
+				if (!groups[cat]) { groups[cat] = []; order.push(cat); }
+				groups[cat].push(item);
+			});
+
+			order.forEach(function (category) {
+				root.appendChild(el(hTag(0), { class: 'db-category', text: category }));
+				var grid = el('div', { class: 'db-grid' });
+				groups[category].forEach(function (item) {
+					grid.appendChild(menuCard(item));
+				});
+				root.appendChild(grid);
+			});
+
+			buildCategoryNav(root);
+			bindAddButtons(root);
+		}).catch(function (err) {
+			cancel();
+			clear(root);
+			root.removeAttribute('aria-busy');
+			root.appendChild(errorPanel(err.message, function () { renderMenu(root); }));
+		});
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Pizza builder                                                       */
+	/* ------------------------------------------------------------------ */
+
+	function renderBuilder(root) {
+		root.classList.add('db-app');
+		root.setAttribute('aria-busy', 'true');
+		var cancel = loadWatchdog(root, function () { renderBuilder(root); });
+
+		getConfig().then(function (cfg) {
+			cancel();
+			clear(root);
+			root.removeAttribute('aria-busy');
+
+			var sizes = cfg.sizes || [];
+			if (!sizes.length) {
+				root.appendChild(el('p', { class: 'db-empty', text: t('builderNoSizes', 'No pizza sizes configured yet.') }));
+				return;
+			}
+
+			var instance = uid('builder');
+			var open = orderingOpen();
+			var state = { size: sizes[0], toppings: {}, order: [], replaceKey: null };
+			var sizeInputs = {};
+			var topInputs = {};
+
+			var priceValue = el('span', { class: 'db-builder-price-value' });
+			var priceDesc = el('span', { class: 'db-sr-only' });
+			var priceOut = el('output', {
+				class: 'db-builder-price',
+				role: 'status',
+				'aria-live': 'polite',
+				'aria-atomic': 'true'
+			}, [priceValue, document.createTextNode(' '), priceDesc]);
+
+			function computeTotal() {
+				var total = num(state.size.price);
+				state.order.forEach(function (slug) {
+					if (state.toppings[slug]) { total += num(state.toppings[slug].price); }
+				});
+				return total;
+			}
+
+			function describe() {
+				var labels = [];
+				state.order.forEach(function (slug) {
+					if (state.toppings[slug]) { labels.push(state.toppings[slug].label); }
+				});
+				var toppingText = labels.length ? labels.join(', ') : t('noToppings', 'No toppings');
+				return state.size.label + ' — ' + toppingText;
+			}
+
+			var announce = debounce(function () {
+				priceValue.textContent = money(computeTotal());
+				priceDesc.textContent = describe();
+			}, 300);
+
+			// Sizes.
+			var sizeWrap = el('div', { class: 'db-options' });
+			sizes.forEach(function (size, idx) {
+				var input = el('input', {
+					class: 'db-option-input',
+					type: 'radio',
+					name: 'db-size-' + instance,
+					value: size.slug
+				});
+				if (idx === 0) { input.checked = true; }
+				sizeInputs[size.slug] = { input: input, size: size };
+				input.addEventListener('change', function () {
+					state.size = size;
+					announce();
+				});
+				sizeWrap.appendChild(el('label', { class: 'db-option' }, [
+					input,
+					el('span', { class: 'db-option-label', text: size.label }),
+					el('span', { class: 'db-option-price', text: money(size.price) })
+				]));
+			});
+
+			// Toppings.
+			var toppings = cfg.toppings || [];
+			var topWrap = el('div', { class: 'db-options' });
+			toppings.forEach(function (top) {
+				var input = el('input', {
+					class: 'db-option-input',
+					type: 'checkbox',
+					name: 'db-topping-' + instance,
+					value: top.slug
+				});
+				topInputs[top.slug] = { input: input, topping: top };
+				input.addEventListener('change', function () {
+					if (input.checked) {
+						state.toppings[top.slug] = top;
+						if (state.order.indexOf(top.slug) === -1) { state.order.push(top.slug); }
+					} else {
+						delete state.toppings[top.slug];
+						var at = state.order.indexOf(top.slug);
+						if (at !== -1) { state.order.splice(at, 1); }
+					}
+					announce();
+				});
+				topWrap.appendChild(el('label', { class: 'db-option' }, [
+					input,
+					el('span', { class: 'db-option-label', text: top.label }),
+					el('span', { class: 'db-option-price', text: '+' + money(top.price) })
+				]));
+			});
+
+			var addBtn = el('button', {
+				class: 'db-btn db-btn--lg db-builder-add',
+				type: 'button',
+				text: t('addToCart', 'Add to cart')
+			});
+			if (!open) {
+				addBtn.disabled = true;
+				addBtn.setAttribute('aria-disabled', 'true');
+			}
+			function addLabel() {
+				return state.replaceKey ? t('updatePizza', 'Update pizza') : t('addToCart', 'Add to cart');
+			}
+
+			addBtn.addEventListener('click', function () {
+				var replacing = state.replaceKey;
+				addToCart(addBtn, {
+					type: 'custom',
+					size: state.size.slug,
+					toppings: state.order.slice(),
+					quantity: 1
+				}, {
+					label: state.size.label,
+					restore: addLabel,
+					onAdded: function () {
+						if (!replacing) { return; }
+						// Add first, then drop the original line — an add that
+						// fails must never cost the customer their build.
+						state.replaceKey = null;
+						request('/cart/remove', { method: 'POST', body: { key: replacing } })
+							.then(function (cart) { emitCart(cart); })
+							.catch(function (err) { toast(err.message, { error: true }); });
+					}
+				});
+			});
+
+			/** Re-hydrate from an existing custom cart line ("Edit"). */
+			document.addEventListener('doughboss:edit-custom', function (e) {
+				var detail = (e && e.detail) ? e.detail : null;
+				if (!detail || !detail.key) { return; }
+
+				var entry = sizeInputs[detail.size_slug];
+				if (entry) {
+					entry.input.checked = true;
+					state.size = entry.size;
+				}
+
+				state.toppings = {};
+				state.order = [];
+				var wanted = detail.toppings || [];
+				Object.keys(topInputs).forEach(function (slug) {
+					var on = wanted.indexOf(slug) !== -1;
+					topInputs[slug].input.checked = on;
+					if (on) {
+						state.toppings[slug] = topInputs[slug].topping;
+						state.order.push(slug);
+					}
+				});
+
+				state.replaceKey = detail.key;
+				addBtn.textContent = addLabel();
+				priceValue.textContent = money(computeTotal());
+				priceDesc.textContent = describe();
+
+				if (root.scrollIntoView) { root.scrollIntoView({ block: 'start' }); }
+				if (entry && entry.input.focus) { entry.input.focus(); }
+				toast(t('editingPizza', 'Editing your custom pizza — update it and add it back.'));
+			});
+
+			var inner = el('div', { class: 'db-builder-inner' }, [
+				el(hTag(0), { class: 'db-builder-heading', text: t('builderHeading', 'Build your pizza') }),
+				open ? null : closedPanel(),
+				el('fieldset', { class: 'db-fieldset' }, [
+					el('legend', { class: 'db-legend', text: t('size', 'Size') }),
+					sizeWrap
+				]),
+				toppings.length ? el('fieldset', { class: 'db-fieldset' }, [
+					el('legend', { class: 'db-legend', text: t('toppings', 'Toppings') }),
+					topWrap
+				]) : null,
+				el('div', { class: 'db-builder-foot' }, [priceOut, addBtn])
+			]);
+
+			root.appendChild(inner);
+
+			priceValue.textContent = money(computeTotal());
+			priceDesc.textContent = describe();
+		}).catch(function (err) {
+			cancel();
+			clear(root);
+			root.removeAttribute('aria-busy');
+			root.appendChild(errorPanel(err.message, function () { renderBuilder(root); }));
+		});
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Cart + checkout                                                     */
+	/* ------------------------------------------------------------------ */
+
+	function defaultOrderType(cfg) {
+		if (cfg.enable_pickup) { return 'pickup'; }
+		if (cfg.enable_delivery) { return 'delivery'; }
+		return 'pickup';
+	}
+
+	function totalDueLabel(orderType) {
+		return orderType === 'delivery'
+			? t('totalDueDelivery', 'Total due on delivery')
+			: t('totalDuePickup', 'Total due on pickup');
+	}
+
+	/** Optimistic totals recompute while a quantity mutation is in flight. */
+	function projectTotals(totals, delta) {
+		var next = {};
+		Object.keys(totals).forEach(function (k) { next[k] = totals[k]; });
+		var rate = num(totals.tax_rate);
+		next.subtotal = Math.max(0, num(totals.subtotal) + delta);
+		if (totals.tax_inclusive) {
+			next.tax = rate > 0 ? (next.subtotal * rate) / (100 + rate) : 0;
+			next.total = next.subtotal + num(totals.delivery_fee);
+		} else {
+			next.tax = rate > 0 ? (next.subtotal * rate) / 100 : 0;
+			next.total = next.subtotal + next.tax + num(totals.delivery_fee);
+		}
+		next.min_order_met = num(totals.min_order) <= 0 || next.subtotal >= num(totals.min_order);
+		return next;
+	}
+
+	function renderCart(root) {
+		root.classList.add('db-app');
+		root.setAttribute('aria-busy', 'true');
+
+		var state = {
+			cfg: null,
+			cart: null,
+			orderType: null,
+			orderPlaced: false,
+			built: false,
+			lineNodes: null,
+			renderedKeys: null,
+			fields: {},
+			els: {}
+		};
+
+		var cancel = loadWatchdog(root, function () { boot(); });
+
+		function boot() {
+			root.setAttribute('aria-busy', 'true');
+			getConfig().then(function (cfg) {
+				state.cfg = cfg;
+				if (!state.orderType) { state.orderType = defaultOrderType(cfg); }
+				return request('/cart?order_type=' + encodeURIComponent(state.orderType));
+			}).then(function (cart) {
+				cancel();
+				root.removeAttribute('aria-busy');
+				build();
+				apply(cart);
+				updateBadges(cart);
+			}).catch(function (err) {
+				cancel();
+				clear(root);
+				root.removeAttribute('aria-busy');
+				root.appendChild(errorPanel(err.message, function () { boot(); }));
+			});
+		}
+
+		/* -------------------------------------------------------------- */
+		/* Shell — built exactly once                                      */
+		/* -------------------------------------------------------------- */
+
+		function build() {
+			if (state.built) { return; }
+			state.built = true;
+			clear(root);
+
+			var inner = el('div', { class: 'db-cart-inner' });
+
+			if (!orderingOpen()) { inner.appendChild(closedPanel()); }
+
+			state.els.recent = el('div', { class: 'db-recent', hidden: true });
+			inner.appendChild(state.els.recent);
+
+			state.els.empty = el('div', { class: 'db-empty-cart', hidden: true }, [
+				el('p', { class: 'db-empty', text: t('emptyCart', 'Your cart is empty.') }),
+				el('a', { class: 'db-btn db-btn--ghost', href: menuUrl(), text: t('browseMenu', 'Browse the menu') })
+			]);
+			inner.appendChild(state.els.empty);
+
+			state.els.order = el('div', { class: 'db-order' });
+			state.els.heading = el(hTag(0), { class: 'db-cart-heading', text: t('yourOrder', 'Your order') });
+			state.els.lines = el('div', { class: 'db-cart-lines' });
+			state.els.fulfilment = el('fieldset', { class: 'db-fieldset db-fulfilment' });
+			state.els.totals = el('div', { class: 'db-totals' });
+			state.els.form = buildCheckoutForm();
+
+			state.els.order.appendChild(state.els.heading);
+			state.els.order.appendChild(state.els.lines);
+			state.els.order.appendChild(state.els.fulfilment);
+			state.els.order.appendChild(state.els.totals);
+			state.els.order.appendChild(state.els.form);
+			inner.appendChild(state.els.order);
+
+			state.els.bar = buildOrderBar();
+			inner.appendChild(state.els.bar);
+
+			root.appendChild(inner);
+			drawFulfilment();
+		}
+
+		/* -------------------------------------------------------------- */
+		/* Redraw entry point                                              */
+		/* -------------------------------------------------------------- */
+
+		function apply(cart) {
+			if (state.orderPlaced) { return; }
+			state.cart = cart;
+			var empty = !cart || !cart.items || !cart.items.length;
+
+			state.els.empty.hidden = !empty;
+			state.els.order.hidden = empty;
+			state.els.bar.hidden = empty;
+
+			drawRecent(empty);
+			if (empty) { return; }
+
+			drawLines();
+			drawTotals(cart.totals);
+		}
+
+		function drawRecent(cartIsEmpty) {
+			var recent = state.els.recent;
+			clear(recent);
+			var last = readLastOrder();
+			if (!cartIsEmpty || !last) {
+				recent.hidden = true;
+				return;
+			}
+			recent.hidden = false;
+			var kids = [
+				el('strong', { class: 'db-recent-title', text: t('recentOrder', 'Your recent order') }),
+				el('span', { class: 'db-recent-number', text: last.number })
+			];
+			var href = trackingHref(last);
+			kids.push(el('a', { class: 'db-link', href: href, text: t('trackIt', 'Track it') }));
+			kids.forEach(function (k) { recent.appendChild(k); });
+		}
+
+		function trackingHref(last) {
+			var base = (typeof DATA.trackingUrl === 'string' && DATA.trackingUrl !== '') ? DATA.trackingUrl : '';
+			if (!base) { return '#'; }
+			var join = base.indexOf('?') === -1 ? '?' : '&';
+			return base + join + 'number=' + encodeURIComponent(last.number) + '&email=' + encodeURIComponent(last.email || '');
+		}
+
+		/* -------------------------------------------------------------- */
+		/* Lines                                                           */
+		/* -------------------------------------------------------------- */
+
+		/**
+		 * Patches the rendered lines in place when the item set is unchanged,
+		 * so the stepper the customer is holding is never destroyed mid-tap.
+		 */
+		function drawLines(force) {
+			var keys = state.cart.items.map(function (line) { return line.key; }).join('|');
+
+			if (!force && state.lineNodes && keys === state.renderedKeys) {
+				state.cart.items.forEach(function (line) {
+					var entry = state.lineNodes[line.key];
+					if (entry) { entry.sync(line); }
+				});
+				return;
+			}
+
+			var host = clear(state.els.lines);
+			state.lineNodes = {};
+			state.renderedKeys = keys;
+			state.cart.items.forEach(function (line) {
+				var entry = cartLine(line);
+				state.lineNodes[line.key] = entry;
+				host.appendChild(entry.node);
+			});
+		}
+
+		function cartLine(line) {
+			var subParts = [];
+			if (line.size) { subParts.push(line.size); }
+			if (line.toppings && line.toppings.length) {
+				subParts.push(line.toppings.map(function (top) { return top.label; }).join(', '));
+			}
+
+			var lineTotal = el('span', { class: 'db-price db-line-total', text: money(line.line_total) });
+
+			var qty = el('input', {
+				class: 'db-qty',
+				type: 'number',
+				min: '1',
+				max: '50',
+				step: '1',
+				inputmode: 'numeric',
+				value: String(line.quantity),
+				'aria-label': sub(t('quantityFor', 'Quantity for {name}'), { name: line.name })
+			});
+
+			var lastQty = num(line.quantity);
+
+			var push = debounce(function () {
+				var target = clampQty(qty.value, lastQty);
+				if (target === lastQty) { return; }
+				var previous = lastQty;
+				lastQty = target;
+				var delta = (target - previous) * num(line.unit_price);
+				optimistic(delta, lineTotal, num(line.unit_price) * target);
+
+				request('/cart/update', { method: 'POST', body: { key: line.key, quantity: target, order_type: state.orderType } })
+					.then(function (cart) {
+						apply(cart);
+						updateBadges(cart);
+						emitCart(cart, root);
+					})
+					.catch(function (err) {
+						lastQty = previous;
+						qty.value = String(previous);
+						apply(state.cart);
+						toast(err.message, { error: true });
+					});
+			}, 350);
+
+			function clampQty(value, fallback) {
+				var n = parseInt(value, 10);
+				if (!isFinite(n)) { n = fallback; }
+				if (n < 1) { n = 1; }
+				if (n > 50) { n = 50; }
+				return n;
+			}
+
+			function step(by) {
+				qty.value = String(clampQty(num(qty.value) + by, lastQty));
+				push();
+			}
+
+			var minus = el('button', {
+				class: 'db-step db-step--minus',
+				type: 'button',
+				text: '−',
+				'aria-label': sub(t('decreaseQuantity', 'Decrease quantity for {name}'), { name: line.name })
+			});
+			minus.addEventListener('click', function () { step(-1); });
+
+			var plus = el('button', {
+				class: 'db-step db-step--plus',
+				type: 'button',
+				text: '+',
+				'aria-label': sub(t('increaseQuantity', 'Increase quantity for {name}'), { name: line.name })
+			});
+			plus.addEventListener('click', function () { step(1); });
+
+			qty.addEventListener('input', push);
+			qty.addEventListener('change', push);
+
+			var remove = el('button', {
+				class: 'db-remove',
+				type: 'button',
+				text: t('remove', 'Remove'),
+				'aria-label': sub(t('removeItem', 'Remove {name} from cart'), { name: line.name })
+			});
+			remove.addEventListener('click', function () {
+				remove.setAttribute('aria-busy', 'true');
+				request('/cart/remove', { method: 'POST', body: { key: line.key, order_type: state.orderType } })
+					.then(function (cart) {
+						apply(cart);
+						updateBadges(cart);
+						emitCart(cart, root);
+						// The removed row took focus with it — land somewhere sane.
+						var landing = state.els.order.hidden ? state.els.empty : state.els.heading;
+						if (landing && landing.focus) {
+							landing.setAttribute('tabindex', '-1');
+							landing.focus();
+						}
+						offerUndo(line);
+					})
+					.catch(function (err) {
+						remove.removeAttribute('aria-busy');
+						toast(err.message, { error: true });
+					});
+			});
+
+			// "Edit" only makes sense for a custom build, and only when a
+			// builder is actually on this page to re-hydrate.
+			var edit = null;
+			if (line.type === 'custom' && document.querySelector('[data-doughboss-builder]')) {
+				edit = el('button', {
+					class: 'db-edit',
+					type: 'button',
+					text: t('edit', 'Edit'),
+					'aria-label': sub(t('editItem', 'Edit {name}'), { name: line.name })
+				});
+				edit.addEventListener('click', function () {
+					document.dispatchEvent(makeEvent('doughboss:edit-custom', {
+						key: line.key,
+						size_slug: line.size_slug || '',
+						toppings: (line.toppings || []).map(function (top) { return top.slug; })
+					}));
+				});
+			}
+
+			var controls = el('div', { class: 'db-line-controls' }, [
+				el('div', { class: 'db-qty-wrap' }, [minus, qty, plus]),
+				lineTotal,
+				edit,
+				remove
+			]);
+
+			var node = el('div', {
+				class: 'db-cart-line' + (line.available === false ? ' db-cart-line--unavailable' : ''),
+				'data-line-key': line.key
+			}, [
+				el('div', { class: 'db-cart-line-info' }, [
+					el('strong', { class: 'db-line-name', text: line.name }),
+					subParts.length ? el('small', { class: 'db-line-sub', text: subParts.join(' · ') }) : null,
+					line.available === false
+						? el('span', { class: 'db-badge db-badge--soldout', text: t('soldOut', 'Sold out') })
+						: null
+				]),
+				controls
+			]);
+
+			return {
+				node: node,
+				sync: function (fresh) {
+					lastQty = num(fresh.quantity);
+					if (document.activeElement !== qty) { qty.value = String(fresh.quantity); }
+					lineTotal.textContent = money(fresh.line_total);
+					if (fresh.available === false) {
+						node.classList.add('db-cart-line--unavailable');
+					} else {
+						node.classList.remove('db-cart-line--unavailable');
+					}
+				}
+			};
+		}
+
+		function optimistic(delta, lineTotalNode, newLineTotal) {
+			if (lineTotalNode) { lineTotalNode.textContent = money(newLineTotal); }
+			if (state.cart && state.cart.totals) {
+				var projected = projectTotals(state.cart.totals, delta);
+				drawTotals(projected, true);
+			}
+		}
+
+		function offerUndo(line) {
+			var body;
+			if (line.type === 'custom') {
+				body = {
+					type: 'custom',
+					size: line.size_slug || line.size,
+					toppings: (line.toppings || []).map(function (top) { return top.slug; }),
+					quantity: line.quantity
+				};
+			} else {
+				body = { type: 'menu', item_id: line.item_id, quantity: line.quantity };
+			}
+
+			toast(sub(t('removedItem', '{name} removed.'), { name: line.name }), {
+				duration: 6000,
+				actionLabel: t('undo', 'Undo'),
+				onAction: function () {
+					request('/cart/add', { method: 'POST', body: body }).then(function (cart) {
+						apply(cart);
+						updateBadges(cart);
+						emitCart(cart, root);
+						toast(sub(t('restored', '{name} put back in your order.'), { name: line.name }));
+					}).catch(function (err) {
+						toast(err.message, { error: true });
+					});
+				}
+			});
+		}
+
+		/* -------------------------------------------------------------- */
+		/* Totals                                                          */
+		/* -------------------------------------------------------------- */
+
+		function drawTotals(totals, pending) {
+			var host = clear(state.els.totals);
+			host.setAttribute('aria-busy', pending ? 'true' : 'false');
+
+			host.appendChild(totalRow(t('subtotal', 'Subtotal'), totals.subtotal, ''));
+
+			if (!totals.tax_inclusive && num(totals.tax) > 0) {
+				host.appendChild(totalRow(totals.tax_label || 'Tax', totals.tax, ''));
+			}
+			if (num(totals.delivery_fee) > 0) {
+				host.appendChild(totalRow(t('delivery', 'Delivery'), totals.delivery_fee, ''));
+			}
+
+			host.appendChild(totalRow(t('total', 'Total'), totals.total, 'db-total-row--grand'));
+
+			if (totals.tax_inclusive && num(totals.tax) > 0) {
+				host.appendChild(el('p', {
+					class: 'db-tax-note',
+					text: sub(t('taxIncluded', 'Includes {label} {amount}'), {
+						label: totals.tax_label || 'GST',
+						amount: money(totals.tax)
+					})
+				}));
+			}
+
+			var blocked = num(totals.min_order) > 0 && totals.min_order_met === false;
+			if (blocked) {
+				host.appendChild(el('p', {
+					class: 'db-error db-min-order',
+					text: sub(t('minOrder', 'Minimum order {amount}'), { amount: money(totals.min_order) })
+				}));
+			}
+
+			var disable = blocked || !orderingOpen();
+			if (state.fields.submit) {
+				state.fields.submit.disabled = disable;
+				if (disable) {
+					state.fields.submit.setAttribute('aria-disabled', 'true');
+				} else {
+					state.fields.submit.removeAttribute('aria-disabled');
+				}
+			}
+			if (state.els.barBtn) {
+				state.els.barBtn.disabled = disable;
+			}
+			if (state.els.barTotal) {
+				state.els.barTotal.textContent = money(totals.total);
+			}
+			if (state.els.barLabel) {
+				state.els.barLabel.textContent = totalDueLabel(state.orderType);
+			}
+			if (state.els.dueLine) {
+				state.els.dueLine.textContent = totalDueLabel(state.orderType) + ': ' + money(totals.total);
+			}
+		}
+
+		function totalRow(label, amount, extraClass) {
+			return el('div', { class: 'db-total-row' + (extraClass ? ' ' + extraClass : '') }, [
+				el('span', { class: 'db-total-label', text: label }),
+				el('span', { class: 'db-total-value', text: money(amount) })
+			]);
+		}
+
+		/* -------------------------------------------------------------- */
+		/* Fulfilment                                                      */
+		/* -------------------------------------------------------------- */
+
+		function drawFulfilment() {
+			var cfg = state.cfg || {};
+			var host = clear(state.els.fulfilment);
+			host.appendChild(el('legend', { class: 'db-legend', text: t('fulfilment', 'How would you like your order?') }));
+
+			var group = el('div', { class: 'db-options db-options--inline' });
+			var instance = uid('type');
+
+			function typeOption(value, label) {
+				var input = el('input', {
+					class: 'db-option-input',
+					type: 'radio',
+					name: 'db-order-type-' + instance,
+					value: value
+				});
+				if (value === state.orderType) { input.checked = true; }
+				input.addEventListener('change', function () {
+					if (!input.checked) { return; }
+					setOrderType(value);
+				});
+				return el('label', { class: 'db-option' }, [
+					input,
+					el('span', { class: 'db-option-label', text: label })
+				]);
+			}
+
+			if (cfg.enable_pickup) { group.appendChild(typeOption('pickup', t('pickup', 'Pickup'))); }
+			if (cfg.enable_delivery) { group.appendChild(typeOption('delivery', t('delivery_option', 'Delivery'))); }
+			host.appendChild(group);
+		}
+
+		/** Toggles the address field and re-fetches totals only. Never rebuilds the form. */
+		function setOrderType(value) {
+			state.orderType = value;
+			var addressField = state.fields.address;
+			if (addressField) {
+				var isDelivery = value === 'delivery';
+				addressField.wrap.hidden = !isDelivery;
+				addressField.input.required = isDelivery;
+				if (!isDelivery) { clearFieldError(addressField); }
+			}
+			state.els.totals.setAttribute('aria-busy', 'true');
+			request('/cart?order_type=' + encodeURIComponent(value)).then(function (cart) {
+				if (state.orderPlaced) { return; }
+				state.cart = cart;
+				drawTotals(cart.totals);
+				updateBadges(cart);
+			}).catch(function (err) {
+				state.els.totals.setAttribute('aria-busy', 'false');
+				toast(err.message, { error: true });
+			});
+		}
+
+		/* -------------------------------------------------------------- */
+		/* Checkout form — built once, never rebuilt                       */
+		/* -------------------------------------------------------------- */
+
+		function makeField(spec) {
+			var id = uid('field');
+			var errId = id + '-error';
+			var input;
+			if (spec.multiline) {
+				input = el('textarea', { class: 'db-input', id: id, name: spec.name, rows: 3 });
+			} else {
+				input = el('input', { class: 'db-input', id: id, name: spec.name, type: spec.type || 'text' });
+			}
+			if (spec.autocomplete) { input.setAttribute('autocomplete', spec.autocomplete); }
+			if (spec.inputmode) { input.setAttribute('inputmode', spec.inputmode); }
+			if (spec.enterkeyhint) { input.setAttribute('enterkeyhint', spec.enterkeyhint); }
+			if (spec.required) { input.required = true; }
+
+			var error = el('p', { class: 'db-field-error', id: errId, hidden: true });
+			var wrap = el('div', { class: 'db-field' }, [
+				el('label', { class: 'db-label', for: id, text: spec.label }),
+				input,
+				error
+			]);
+
+			var field = {
+				name: spec.name,
+				input: input,
+				error: error,
+				errId: errId,
+				wrap: wrap,
+				validate: spec.validate || null
+			};
+
+			input.addEventListener('blur', function () { validateField(field); });
+			input.addEventListener('input', function () {
+				if (input.getAttribute('aria-invalid') === 'true') { clearFieldError(field); }
+			});
+
+			return field;
+		}
+
+		function setFieldError(field, message) {
+			field.error.textContent = message;
+			field.error.hidden = false;
+			field.input.setAttribute('aria-invalid', 'true');
+			field.input.setAttribute('aria-describedby', field.errId);
+		}
+
+		function clearFieldError(field) {
+			field.error.textContent = '';
+			field.error.hidden = true;
+			field.input.removeAttribute('aria-invalid');
+			field.input.removeAttribute('aria-describedby');
+		}
+
+		function validateField(field) {
+			if (field.wrap.hidden) { clearFieldError(field); return true; }
+			if (!field.validate) { return true; }
+			var message = field.validate(String(field.input.value || '').trim());
+			if (message) {
+				setFieldError(field, message);
+				return false;
+			}
+			clearFieldError(field);
+			return true;
+		}
+
+		function buildCheckoutForm() {
+			var form = el('form', { class: 'db-checkout' });
+			form.setAttribute('novalidate', 'novalidate');
+
+			state.fields.name = makeField({
+				name: 'customer_name',
+				label: t('fieldName', 'Name'),
+				type: 'text',
+				autocomplete: 'name',
+				enterkeyhint: 'next',
+				required: true,
+				validate: function (v) { return v ? '' : t('errRequiredName', 'Please enter your name.'); }
+			});
+
+			state.fields.email = makeField({
+				name: 'customer_email',
+				label: t('fieldEmail', 'Email'),
+				type: 'email',
+				autocomplete: 'email',
+				inputmode: 'email',
+				enterkeyhint: 'next',
+				required: true,
+				validate: function (v) {
+					if (!v) { return t('errRequiredEmail', 'Please enter your email address.'); }
+					if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { return t('errInvalidEmail', 'Please enter a valid email address.'); }
+					return '';
+				}
+			});
+
+			state.fields.phone = makeField({
+				name: 'customer_phone',
+				label: t('fieldPhone', 'Phone'),
+				type: 'tel',
+				autocomplete: 'tel',
+				inputmode: 'tel',
+				enterkeyhint: 'next',
+				required: true,
+				validate: function (v) { return v ? '' : t('errRequiredPhone', 'Please enter a phone number.'); }
+			});
+
+			state.fields.address = makeField({
+				name: 'address',
+				label: t('fieldAddress', 'Delivery address'),
+				multiline: true,
+				autocomplete: 'street-address',
+				enterkeyhint: 'next',
+				validate: function (v) {
+					return v ? '' : t('errRequiredAddress', 'Please enter your delivery address.');
+				}
+			});
+
+			state.fields.notes = makeField({
+				name: 'notes',
+				label: t('fieldNotes', 'Notes (optional)'),
+				multiline: true,
+				enterkeyhint: 'done'
+			});
+
+			state.fields.address.wrap.hidden = state.orderType !== 'delivery';
+			state.fields.address.input.required = state.orderType === 'delivery';
+
+			var submit = el('button', {
+				class: 'db-btn db-btn--lg db-submit',
+				type: 'submit',
+				text: t('placeOrder', 'Place order')
+			});
+			state.fields.submit = submit;
+
+			var msg = el('div', {
+				class: 'db-checkout-msg',
+				role: 'status',
+				'aria-live': 'polite',
+				'aria-atomic': 'true'
+			});
+			state.els.msg = msg;
+
+			state.els.dueLine = el('p', { class: 'db-due-line' });
+
+			var payNote = (state.cfg && state.cfg.pay_note) ? String(state.cfg.pay_note) : '';
+
+			form.appendChild(el(hTag(1), { class: 'db-checkout-heading', text: t('checkout', 'Checkout') }));
+			[state.fields.name, state.fields.email, state.fields.phone, state.fields.address, state.fields.notes]
+				.forEach(function (field) { form.appendChild(field.wrap); });
+			form.appendChild(state.els.dueLine);
+			form.appendChild(submit);
+			if (payNote) { form.appendChild(el('p', { class: 'db-pay-note', text: payNote })); }
+			form.appendChild(msg);
+
+			form.addEventListener('submit', function (e) {
+				e.preventDefault();
+				submitOrder();
+			});
+
+			return form;
+		}
+
+		function buildOrderBar() {
+			var label = el('span', { class: 'db-orderbar-label' });
+			var total = el('strong', { class: 'db-orderbar-total' });
+			var btn = el('button', { class: 'db-btn db-orderbar-btn', type: 'button', text: t('placeOrder', 'Place order') });
+			state.els.barLabel = label;
+			state.els.barTotal = total;
+			state.els.barBtn = btn;
+
+			btn.addEventListener('click', function () {
+				var firstBad = firstInvalidField();
+				if (firstBad) {
+					if (firstBad.wrap.scrollIntoView) { firstBad.wrap.scrollIntoView({ block: 'center' }); }
+					firstBad.input.focus();
+					return;
+				}
+				submitOrder();
+			});
+
+			return el('div', { class: 'db-orderbar', hidden: true }, [
+				el('div', { class: 'db-orderbar-info' }, [label, total]),
+				btn
+			]);
+		}
+
+		function activeFields() {
+			return [state.fields.name, state.fields.email, state.fields.phone, state.fields.address];
+		}
+
+		function firstInvalidField() {
+			var list = activeFields();
+			for (var i = 0; i < list.length; i++) {
+				if (!validateField(list[i])) { return list[i]; }
+			}
+			return null;
+		}
+
+		function fieldByServerKey(key) {
+			var map = {
+				customer_name: state.fields.name,
+				customer_email: state.fields.email,
+				customer_phone: state.fields.phone,
+				address: state.fields.address
+			};
+			return map[key] || null;
+		}
+
+		function setMessage(text, isError) {
+			var msg = state.els.msg;
+			clear(msg);
+			msg.className = 'db-checkout-msg' + (isError ? ' db-error' : '');
+			if (text) { msg.appendChild(document.createTextNode(text)); }
+		}
+
+		function setMessageWithMenuLink(text) {
+			var msg = state.els.msg;
+			clear(msg);
+			msg.className = 'db-checkout-msg db-error';
+			msg.appendChild(document.createTextNode(text + ' '));
+			msg.appendChild(el('a', { class: 'db-link', href: menuUrl(), text: t('browseMenu', 'Browse the menu') }));
+		}
+
+		function submitOrder() {
+			if (state.orderPlaced) { return; }
+			var submit = state.fields.submit;
+			if (submit.disabled) { return; }
+
+			var firstBad = firstInvalidField();
+			if (firstBad) {
+				setMessage('', false);
+				if (firstBad.wrap.scrollIntoView) { firstBad.wrap.scrollIntoView({ block: 'center' }); }
+				firstBad.input.focus();
+				return;
+			}
+
+			submit.disabled = true;
+			submit.textContent = t('placing', 'Placing order…');
+			if (state.els.barBtn) { state.els.barBtn.disabled = true; }
+			setMessage('', false);
+
+			var email = String(state.fields.email.input.value || '').trim();
+			var payload = {
+				order_type: state.orderType,
+				customer_name: String(state.fields.name.input.value || '').trim(),
+				customer_email: email,
+				customer_phone: String(state.fields.phone.input.value || '').trim(),
+				address: state.orderType === 'delivery' ? String(state.fields.address.input.value || '').trim() : '',
+				notes: String(state.fields.notes.input.value || '').trim(),
+				idempotency_key: idempotencyKey()
+			};
+
+			request('/checkout', { method: 'POST', body: payload }).then(function (res) {
+				state.orderPlaced = true;
+				clearIdempotencyKey();
+				writeLastOrder({
+					number: res.order_number,
+					email: email,
+					placed_at: new Date().toISOString(),
+					total: res.total
+				});
+				renderReceipt(res, payload);
+				// The server clears the cart on success; zero the badges without
+				// broadcasting a cart change (which would redraw over the receipt).
+				updateBadges({ items: [], totals: { item_count: 0, total: 0 } });
+			}).catch(function (err) {
+				restoreSubmit();
+				handleCheckoutError(err);
+			});
+		}
+
+		function restoreSubmit() {
+			state.fields.submit.disabled = false;
+			state.fields.submit.textContent = t('placeOrder', 'Place order');
+			if (state.els.barBtn) { state.els.barBtn.disabled = false; }
+		}
+
+		function handleCheckoutError(err) {
+			var data = err.data || {};
+
+			if (data.errors) {
+				var firstField = null;
+				Object.keys(data.errors).forEach(function (key) {
+					var field = fieldByServerKey(key);
+					if (!field) { return; }
+					setFieldError(field, data.errors[key]);
+					if (!firstField) { firstField = field; }
+				});
+				setMessage(err.message, true);
+				if (firstField) {
+					if (firstField.wrap.scrollIntoView) { firstField.wrap.scrollIntoView({ block: 'center' }); }
+					firstField.input.focus();
+				}
+				return;
+			}
+
+			if (err.code === 'doughboss_closed') {
+				setMessage(err.message || t('errClosed', 'Online ordering is currently closed.'), true);
+				state.fields.submit.disabled = true;
+				state.fields.submit.setAttribute('aria-disabled', 'true');
+				if (state.els.barBtn) { state.els.barBtn.disabled = true; }
+				return;
+			}
+
+			if (err.code === 'doughboss_empty' || err.code === 'doughboss_cart_expired') {
+				setMessageWithMenuLink(t('errCartExpired', 'Your cart has expired. Please add your items again.'));
+				return;
+			}
+
+			if (err.code === 'doughboss_rate_limited' || err.status === 429) {
+				setMessage(t('errRateLimited', 'Too many attempts, please wait a minute.'), true);
+				return;
+			}
+
+			if (err.code === 'doughboss_prices_changed') {
+				if (data.cart) {
+					state.cart = data.cart;
+					drawLines(true);
+					drawTotals(data.cart.totals);
+					updateBadges(data.cart);
+				}
+				setMessage(t('errPricesChanged', 'Some prices changed — please review your order.'), true);
+				return;
+			}
+
+			setMessage(err.message, true);
+		}
+
+		/* -------------------------------------------------------------- */
+		/* Receipt — replaces the cart region and is never redrawn         */
+		/* -------------------------------------------------------------- */
+
+		function renderReceipt(res, payload) {
+			var cart = state.cart || { items: [], totals: {} };
+			clear(root);
+
+			var items = el('ul', { class: 'db-item-list' });
+			(cart.items || []).forEach(function (line) {
+				var parts = [];
+				if (line.size) { parts.push(line.size); }
+				if (line.toppings && line.toppings.length) {
+					parts.push(line.toppings.map(function (top) { return top.label; }).join(', '));
+				}
+				items.appendChild(el('li', { class: 'db-item-row' }, [
+					el('span', { class: 'db-item-name', text: line.quantity + '× ' + line.name }),
+					parts.length ? el('small', { class: 'db-item-sub', text: parts.join(' · ') }) : null,
+					el('span', { class: 'db-price', text: money(line.line_total) })
+				]));
+			});
+
+			var totals = cart.totals || {};
+			var totalsBlock = el('div', { class: 'db-totals db-totals--receipt' });
+			if (totals.subtotal !== undefined) {
+				totalsBlock.appendChild(totalRow(t('subtotal', 'Subtotal'), totals.subtotal, ''));
+			}
+			if (!totals.tax_inclusive && num(totals.tax) > 0) {
+				totalsBlock.appendChild(totalRow(totals.tax_label || 'Tax', totals.tax, ''));
+			}
+			if (num(totals.delivery_fee) > 0) {
+				totalsBlock.appendChild(totalRow(t('delivery', 'Delivery'), totals.delivery_fee, ''));
+			}
+			totalsBlock.appendChild(totalRow(totalDueLabel(payload.order_type), res.total, 'db-total-row--grand'));
+			if (totals.tax_inclusive && num(totals.tax) > 0) {
+				totalsBlock.appendChild(el('p', {
+					class: 'db-tax-note',
+					text: sub(t('taxIncluded', 'Includes {label} {amount}'), {
+						label: totals.tax_label || 'GST',
+						amount: money(totals.tax)
+					})
+				}));
+			}
+
+			var kids = [
+				el(hTag(0), { class: 'db-confirm-title', text: res.message || t('confirmTitle', 'Thanks! Your order has been received.') }),
+				el('p', { class: 'db-confirm-number' }, [
+					document.createTextNode(t('confirmNumber', 'Your order number is') + ' '),
+					el('strong', { text: res.order_number })
+				]),
+				items.childNodes.length ? items : null,
+				totalsBlock
+			];
+
+			if (payload.customer_email) {
+				kids.push(el('p', {
+					class: 'db-confirm-email',
+					text: sub(t('confirmEmail', "We've emailed {email} — check your junk folder if it doesn't arrive."), { email: payload.customer_email })
+				}));
+			}
+
+			if (res.tracking_url) {
+				kids.push(el('p', { class: 'db-confirm-track' }, [
+					el('a', { class: 'db-link', href: res.tracking_url, text: t('trackOrder', 'Track your order') })
+				]));
+			}
+
+			var phone = phoneLine(t('questionsCall', 'Questions? Call'));
+			if (phone) { kids.push(phone); }
+
+			var printBtn = el('button', { class: 'db-btn db-btn--ghost db-print', type: 'button', text: t('printReceipt', 'Print receipt') });
+			printBtn.addEventListener('click', function () { window.print(); });
+			kids.push(printBtn);
+
+			var confirm = el('div', { class: 'db-confirm', role: 'status', tabindex: '-1' }, kids);
+			root.appendChild(confirm);
+			if (confirm.focus) { confirm.focus(); }
+		}
+
+		/* -------------------------------------------------------------- */
+		/* External cart changes (another shortcode on the page)           */
+		/* -------------------------------------------------------------- */
+
+		document.addEventListener('doughboss:cart', function (e) {
+			if (state.orderPlaced) { return; }
+			if (!state.built) { return; }
+			var detail = e.detail || {};
+			if (detail.source === root) { return; }
+			if (!detail.cart) { return; }
+
+			if (state.orderType === 'delivery') {
+				// Totals from a mutation elsewhere don't know this root's
+				// fulfilment choice, so re-price for delivery.
+				request('/cart?order_type=delivery').then(function (cart) {
+					if (state.orderPlaced) { return; }
+					apply(cart);
+				}).catch(function () { apply(detail.cart); });
+			} else {
+				apply(detail.cart);
+			}
+		});
+
+		boot();
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Order tracking                                                      */
+	/* ------------------------------------------------------------------ */
+
+	function queryParam(name) {
+		var match = new RegExp('[?&]' + name + '=([^&#]*)').exec(window.location.search);
+		return match ? decodeURIComponent(match[1].replace(/\+/g, ' ')) : '';
+	}
+
+	function renderTracking(root) {
+		root.classList.add('db-app');
+
+		var form = root.querySelector('.db-track-form');
+		var result = root.querySelector('.db-track-result');
+		var numberInput;
+		var emailInput;
+
+		if (!result) {
+			result = el('div', { class: 'db-track-result' });
+			root.appendChild(result);
+		}
+
+		if (form) {
+			numberInput = form.querySelector('[name="number"]');
+			emailInput = form.querySelector('[name="email"]');
+		} else {
+			var numberId = uid('track-number');
+			var emailId = uid('track-email');
+			numberInput = el('input', {
+				class: 'db-input', id: numberId, name: 'number', type: 'text',
+				autocomplete: 'off', enterkeyhint: 'next'
+			});
+			emailInput = el('input', {
+				class: 'db-input', id: emailId, name: 'email', type: 'email',
+				autocomplete: 'email', inputmode: 'email', enterkeyhint: 'go'
+			});
+			form = el('form', { class: 'db-track-form' }, [
+				el(hTag(0), { class: 'db-track-heading', text: t('trackHeading', 'Track your order') }),
+				el('div', { class: 'db-field' }, [
+					el('label', { class: 'db-label', for: numberId, text: t('trackNumber', 'Order number') }),
+					numberInput
+				]),
+				el('div', { class: 'db-field' }, [
+					el('label', { class: 'db-label', for: emailId, text: t('trackEmail', 'Email') }),
+					emailInput
+				]),
+				el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: t('trackSubmit', 'Find my order') })
+			]);
+			root.insertBefore(form, result);
+		}
+
+		if (!numberInput || !emailInput) { return; }
+
+		function lookup() {
+			var number = String(numberInput.value || '').trim();
+			var email = String(emailInput.value || '').trim();
+			if (!number || !email) { return; }
+
+			clear(result);
+			result.setAttribute('aria-busy', 'true');
+			result.appendChild(el('p', { class: 'db-loading', text: t('trackSearching', 'Looking up your order…') }));
+
+			request('/order/track', { method: 'POST', body: { number: number, email: email } })
+				.then(function (order) {
+					clear(result);
+					result.setAttribute('aria-busy', 'false');
+					result.appendChild(trackCard(order));
+				})
+				.catch(function (err) {
+					clear(result);
+					result.setAttribute('aria-busy', 'false');
+					result.appendChild(el('p', { class: 'db-error', role: 'alert', text: err.message }));
+				});
+		}
+
+		form.addEventListener('submit', function (e) {
+			e.preventDefault();
+			lookup();
+		});
+
+		// Prefill: query params win, then the locally stored last order.
+		var qNumber = queryParam('number');
+		var qEmail = queryParam('email');
+		if (qNumber) { numberInput.value = qNumber; }
+		if (qEmail) { emailInput.value = qEmail; }
+
+		if (!qNumber || !qEmail) {
+			var last = readLastOrder();
+			if (last) {
+				if (!numberInput.value) { numberInput.value = last.number; }
+				if (!emailInput.value && last.email) { emailInput.value = last.email; }
+			}
+		}
+
+		if (qNumber && qEmail) { lookup(); }
+	}
+
+	function trackCard(order) {
+		var items = el('ul', { class: 'db-item-list' });
+		(order.items || []).forEach(function (it) {
+			var parts = [];
+			if (it.size) { parts.push(it.size); }
+			if (it.toppings && it.toppings.length) {
+				parts.push(it.toppings.map(function (top) {
+					return typeof top === 'string' ? top : top.label;
+				}).join(', '));
+			}
+			items.appendChild(el('li', { class: 'db-item-row' }, [
+				el('span', { class: 'db-item-name', text: it.quantity + '× ' + it.name }),
+				parts.length ? el('small', { class: 'db-item-sub', text: parts.join(' · ') }) : null,
+				el('span', { class: 'db-price', text: money(it.line_total) })
+			]));
+		});
+
+		return el('div', { class: 'db-track-card' }, [
+			el(hTag(1), { class: 'db-track-title', text: t('orderLabel', 'Order') + ' ' + order.order_number }),
+			el('p', {
+				class: 'db-pill db-pill--' + statusModifier(order.status),
+				text: order.status_label || order.status
+			}),
+			items.childNodes.length ? items : null,
+			el('div', { class: 'db-totals db-totals--receipt' }, [
+				el('div', { class: 'db-total-row db-total-row--grand' }, [
+					el('span', { class: 'db-total-label', text: t('total', 'Total') }),
+					el('span', { class: 'db-total-value', text: money(order.total) })
+				])
+			])
+		]);
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Boot                                                                */
+	/* ------------------------------------------------------------------ */
+
+	function bootBadges() {
+		var badges = document.querySelectorAll('[data-doughboss-cart-badge]');
+		if (!badges.length) { return; }
+		each(badges, function (badge) { badge.classList.add('db-app'); });
+		if (!hasCartCookie()) {
+			updateBadges({ items: [], totals: { item_count: 0, total: 0 } });
+			return;
+		}
+		request('/cart').then(function (cart) {
+			updateBadges(cart);
+		}).catch(function () { /* badge is non-critical */ });
+	}
+
+	function boot() {
+		toastHost();
+		each(document.querySelectorAll('[data-doughboss-menu]'), renderMenu);
+		each(document.querySelectorAll('[data-doughboss-builder]'), renderBuilder);
+		each(document.querySelectorAll('[data-doughboss-cart]'), renderCart);
+		each(document.querySelectorAll('[data-doughboss-tracking]'), renderTracking);
+		bootBadges();
+	}
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', boot);
+	} else {
+		boot();
+	}
+}());
+
+</script>
+</body>
+</html>
