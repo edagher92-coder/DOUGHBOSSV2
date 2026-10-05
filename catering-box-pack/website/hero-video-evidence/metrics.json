@@ -1,0 +1,344 @@
+{
+ "desktop": {
+  "a": {
+   "lcp": {
+    "t": 1296,
+    "size": 537227,
+    "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+    "tag": "DIV",
+    "cls": "db-mh-backdrop"
+   },
+   "cls": 0.014411100963702418,
+   "srcAtLoad": null,
+   "video": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "source": "av1-720",
+    "paused": false,
+    "t": 0,
+    "ready": 0,
+    "w": 0,
+    "h": 0,
+    "cls": "dbgr-hero-video",
+    "opacity": "0",
+    "display": "block",
+    "rect": [
+     712,
+     129,
+     761,
+     1352
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "heldMp4": 1,
+   "mp4": [
+    {
+     "url": "/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+     "afterLoadMs": 110
+    }
+   ],
+   "posterRequests": 1
+  },
+  "b": {
+   "s3": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "source": "av1-720",
+    "paused": false,
+    "t": 3.39,
+    "ready": 4,
+    "w": 720,
+    "h": 1280,
+    "cls": "dbgr-hero-video is-playing",
+    "opacity": "1",
+    "display": "block",
+    "rect": [
+     712,
+     129,
+     761,
+     1352
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "s9": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "source": "av1-720",
+    "paused": false,
+    "t": 9.34,
+    "ready": 4,
+    "w": 720,
+    "h": 1280,
+    "cls": "dbgr-hero-video is-playing",
+    "opacity": "1",
+    "display": "block",
+    "rect": [
+     712,
+     129,
+     761,
+     1352
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "lcp": {
+    "t": 1256,
+    "size": 537227,
+    "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+    "tag": "DIV",
+    "cls": "db-mh-backdrop"
+   },
+   "lcpAll": [
+    {
+     "t": 1256,
+     "size": 537227,
+     "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+     "tag": "DIV",
+     "cls": "db-mh-backdrop"
+    }
+   ],
+   "cls": 0.0144,
+   "srcAtLoad": null,
+   "mp4": [
+    {
+     "url": "/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+     "afterLoadMs": 57
+    }
+   ],
+   "posterRequests": 1
+  },
+  "d": {
+   "paused": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4",
+    "source": "av1-720",
+    "paused": true,
+    "t": 9.45,
+    "ready": 4,
+    "w": 720,
+    "h": 1280,
+    "cls": "dbgr-hero-video is-playing",
+    "opacity": "1",
+    "display": "block",
+    "rect": [
+     712,
+     129,
+     761,
+     1352
+    ],
+    "heroPaused": true,
+    "muted": true,
+    "err": 0
+   }
+  },
+  "c": {
+   "video": {
+    "src": null,
+    "currentSrc": "",
+    "source": null,
+    "paused": true,
+    "t": 0,
+    "ready": 0,
+    "w": 0,
+    "h": 0,
+    "cls": "dbgr-hero-video",
+    "opacity": "0",
+    "display": "none",
+    "rect": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "mp4": 0,
+   "errors": [],
+   "lcp": {
+    "t": 1176,
+    "size": 516032,
+    "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+    "tag": "DIV",
+    "cls": "db-mh-backdrop"
+   }
+  }
+ },
+ "phone": {
+  "a": {
+   "lcp": {
+    "t": 1256,
+    "size": 275656,
+    "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+    "tag": "DIV",
+    "cls": "db-mh-backdrop"
+   },
+   "cls": 0,
+   "srcAtLoad": null,
+   "video": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "source": "av1-1080",
+    "paused": false,
+    "t": 0,
+    "ready": 0,
+    "w": 0,
+    "h": 0,
+    "cls": "dbgr-hero-video",
+    "opacity": "0",
+    "display": "block",
+    "rect": [
+     -17,
+     106,
+     422,
+     727
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "heldMp4": 1,
+   "mp4": [
+    {
+     "url": "/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+     "afterLoadMs": 78
+    }
+   ],
+   "posterRequests": 1
+  },
+  "b": {
+   "s3": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "source": "av1-1080",
+    "paused": false,
+    "t": 3.53,
+    "ready": 4,
+    "w": 1080,
+    "h": 1920,
+    "cls": "dbgr-hero-video is-playing",
+    "opacity": "1",
+    "display": "block",
+    "rect": [
+     -17,
+     106,
+     422,
+     727
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "s9": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "source": "av1-1080",
+    "paused": false,
+    "t": 9.44,
+    "ready": 4,
+    "w": 1080,
+    "h": 1920,
+    "cls": "dbgr-hero-video is-playing",
+    "opacity": "1",
+    "display": "block",
+    "rect": [
+     -17,
+     106,
+     422,
+     727
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "lcp": {
+    "t": 1176,
+    "size": 275656,
+    "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+    "tag": "DIV",
+    "cls": "db-mh-backdrop"
+   },
+   "lcpAll": [
+    {
+     "t": 1176,
+     "size": 275656,
+     "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+     "tag": "DIV",
+     "cls": "db-mh-backdrop"
+    }
+   ],
+   "cls": 0,
+   "srcAtLoad": null,
+   "mp4": [
+    {
+     "url": "/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+     "afterLoadMs": 78
+    }
+   ],
+   "posterRequests": 1
+  },
+  "d": {
+   "paused": {
+    "src": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "currentSrc": "http://127.0.0.1:9411/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4",
+    "source": "av1-1080",
+    "paused": true,
+    "t": 9.52,
+    "ready": 4,
+    "w": 1080,
+    "h": 1920,
+    "cls": "dbgr-hero-video is-playing",
+    "opacity": "1",
+    "display": "block",
+    "rect": [
+     -17,
+     106,
+     422,
+     727
+    ],
+    "heroPaused": true,
+    "muted": true,
+    "err": 0
+   }
+  },
+  "c": {
+   "video": {
+    "src": null,
+    "currentSrc": "",
+    "source": null,
+    "paused": true,
+    "t": 0,
+    "ready": 0,
+    "w": 0,
+    "h": 0,
+    "cls": "dbgr-hero-video",
+    "opacity": "0",
+    "display": "none",
+    "rect": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "heroPaused": false,
+    "muted": true,
+    "err": 0
+   },
+   "mp4": 0,
+   "errors": [],
+   "lcp": {
+    "t": 1244,
+    "size": 275656,
+    "url": "http://127.0.0.1:9411/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600",
+    "tag": "DIV",
+    "cls": "db-mh-backdrop"
+   }
+  }
+ }
+}

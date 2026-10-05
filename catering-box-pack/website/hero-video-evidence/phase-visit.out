@@ -1,0 +1,61 @@
+PASS desktop (a): no src on the video at the window load event
+PASS desktop (a): video invisible (opacity 0), no is-playing class, at 0 s while its request is held (src set after load: true)
+PASS desktop (a): LCP element is the poster (/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600, 1296 ms, db-mh-backdrop)
+PASS desktop (a): zero console errors
+PASS desktop (a): the poster is requested once (1) although it is preloaded, a background and the video poster
+NOTE desktop (b): source chosen av1-720 (/wp-content/uploads/2026/10/dbgr-hero-loop-720-av1.mp4), video 720x1280, element 712x129x761x1352, DPR 1
+PASS desktop (b): AV1 chosen (av1-720)
+PASS desktop (b): video playing and faded in at 3.39s (opacity 1)
+PASS desktop (b): still playing at 9.34s
+PASS desktop (b): muted, no media error
+PASS desktop (b): every video request starts after the window load event (first 57 ms after load; 1 request(s))
+PASS desktop (b): video had no src at the load event
+PASS desktop (b): zero console errors
+PASS desktop (b): CLS 0.0144 (Good is under 0.1; compare with the switch-off baseline in phase-cls)
+PASS desktop (b): LCP candidate is the poster, 1256 ms
+PASS desktop (b): poster requested once (1)
+NOTE desktop (d): core button text "Pause photo motion" aria-pressed=false
+PASS desktop (d): after clicking core's pause button video.paused === true (t=9.45s, hero.is-photo-paused true)
+PASS desktop (d): the frame stays frozen while paused (9.45s -> 9.45s)
+PASS desktop (d): pressing again resumes it (9.45s -> 10.27s)
+PASS desktop: video pauses when the hero scrolls out of view
+PASS desktop: video resumes when the hero scrolls back
+PASS desktop: video pauses when the tab is hidden
+PASS desktop: video resumes when the tab is visible again
+PASS desktop: a user pause is not undone by scrolling away and back
+PASS desktop (c): reduced motion: no src set, display none, paused
+PASS desktop (c): reduced motion: zero video requests
+PASS desktop (c): zero console errors
+PASS desktop (c): the Concept preview label still shows (the poster is still a concept)
+PASS phone (a): no src on the video at the window load event
+PASS phone (a): video invisible (opacity 0), no is-playing class, at 0 s while its request is held (src set after load: true)
+PASS phone (a): LCP element is the poster (/wp-content/plugins/doughboss-growth-media/assets/hero/dbgr-hero-poster-1080.webp?ver=1767225600, 1256 ms, db-mh-backdrop)
+PASS phone (a): zero console errors
+PASS phone (a): the poster is requested once (1) although it is preloaded, a background and the video poster
+NOTE phone (b): source chosen av1-1080 (/wp-content/uploads/2026/10/dbgr-hero-loop-1080-av1.mp4), video 1080x1920, element -17x106x422x727, DPR 2
+PASS phone (b): AV1 chosen (av1-1080)
+PASS phone (b): video playing and faded in at 3.53s (opacity 1)
+PASS phone (b): still playing at 9.44s
+PASS phone (b): muted, no media error
+PASS phone (b): every video request starts after the window load event (first 78 ms after load; 1 request(s))
+PASS phone (b): video had no src at the load event
+PASS phone (b): zero console errors
+PASS phone (b): CLS 0 (Good is under 0.1; compare with the switch-off baseline in phase-cls)
+PASS phone (b): LCP candidate is the poster, 1176 ms
+PASS phone (b): poster requested once (1)
+NOTE phone (d): core button text "Pause photo motion" aria-pressed=false
+PASS phone (d): after clicking core's pause button video.paused === true (t=9.52s, hero.is-photo-paused true)
+PASS phone (d): the frame stays frozen while paused (9.52s -> 9.52s)
+PASS phone (d): pressing again resumes it (9.52s -> 10.33s)
+PASS phone: video pauses when the hero scrolls out of view
+PASS phone: video resumes when the hero scrolls back
+PASS phone: video pauses when the tab is hidden
+PASS phone: video resumes when the tab is visible again
+PASS phone: a user pause is not undone by scrolling away and back
+PASS phone (c): reduced motion: no src set, display none, paused
+PASS phone (c): reduced motion: zero video requests
+PASS phone (c): zero console errors
+PASS phone (c): the Concept preview label still shows (the poster is still a concept)
+
+phase B: 54 passed, 0 failed
+exit 0

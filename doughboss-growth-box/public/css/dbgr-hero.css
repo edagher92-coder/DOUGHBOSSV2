@@ -30,7 +30,8 @@
 
 .dbgr-hero-video.is-playing { opacity: 1; }
 
-/* "Concept preview" label. Not a link. Cream on charcoal. */
+/* "Concept preview" label. Not a link. Cream on charcoal. It sits at the TOP right at every width: the home hero is taller
+   than a 1440x900 or 1280x720 window, so a bottom-right label would be below the fold on first view. */
 .dbgr-hero-chip {
 	position: absolute;
 	z-index: 2;
@@ -49,13 +50,14 @@
 }
 
 /* Desktop: the poster and the video are a tall panel on the RIGHT half, top aligned. It crops at the bottom by the hero's
-   own overflow, and fades into the black under the headline so the copy keeps its contrast. */
+   own overflow, and fades into the black under the headline so the copy keeps its contrast. The fade starts exactly at the
+   panel's left edge (50%), so there is no visible seam. */
 @media (min-width: 721px) {
 	.has-dbgr-video .db-mh-backdrop {
 		background-size: 50% auto;
 		background-position: 100% 0;
-		-webkit-mask-image: linear-gradient(90deg, transparent 46%, #000 62%);
-		mask-image: linear-gradient(90deg, transparent 46%, #000 62%);
+		-webkit-mask-image: linear-gradient(90deg, transparent 50%, #000 64%);
+		mask-image: linear-gradient(90deg, transparent 50%, #000 64%);
 	}
 
 	.dbgr-hero-video {
@@ -65,10 +67,14 @@
 		aspect-ratio: 9 / 16;
 	}
 
-	.dbgr-hero-chip {
-		top: auto;
-		bottom: 1rem;
-		right: 1rem;
+	/* The words stay in the left half, clear of the panel, at every desktop and tablet width (core lets the copy run up to
+	   660px, and the theme up to 39rem, which on a tablet or a small laptop would put the paragraph over the picture and
+	   spoil its contrast). The percentage is of the hero's content width, so half of it ends exactly where the panel begins.
+	   The extra class beats the theme's .dbf-hero .db-mh-copy rule. */
+	.db-manoush-hero.has-dbgr-video .db-mh-copy,
+	.db-manoush-hero.has-dbgr-video .db-mh-proof {
+		max-width: 46%;
+		max-width: min(660px, calc(50% - 1rem));
 	}
 }
 
