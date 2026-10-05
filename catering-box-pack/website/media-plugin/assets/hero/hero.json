@@ -1,0 +1,21 @@
+{
+ "version": 1,
+ "media_version": "0.2.0",
+ "generated": "2026-10-03",
+ "slot": "home_hero_video",
+ "status": "concept",
+ "ai_food": true,
+ "owner_decision": "Elie, 3 October 2026: 'Add the video to the website hero'. This supersedes the 2 October 'keep the photo hero' ruling for the HOME hero video only. The video and its first-frame poster show AI-generated food and a concept box. The visible 'Concept preview' label (default on) carries the honesty, and the home page is deliberately NOT noindexed. The Catering Box plugin's switch 'Home hero video' (default off) is the on/off decision.",
+ "posters": {
+  "webp-1080": { "file": "dbgr-hero-poster-1080.webp", "w": 1080, "h": 1920, "note": "Frame 0 of the video. Used as the hero background, the preload and the video poster. Required." },
+  "webp-720": { "file": "dbgr-hero-poster-720.webp", "w": 720, "h": 1280, "note": "Frame 0, phone size. Shipped for a later phone-size switch; not used yet." }
+ },
+ "videos": {
+  "note": "Not in this zip: each is 1.4 to 1.9 MB and the host caps an upload at 2 MB. Upload them under Media, Add New. Silent, 9:16, 10.5 s, a seamless loop. A file with the same name placed in this folder is used in preference to the Media Library.",
+  "av1-720": "dbgr-hero-loop-720-av1.mp4",
+  "av1-1080": "dbgr-hero-loop-1080-av1.mp4",
+  "hevc-720": "dbgr-hero-loop-720-hevc.mp4",
+  "hevc-1080": "dbgr-hero-loop-1080-hevc.mp4",
+  "h264-720": "dbgr-hero-loop-720-h264.mp4"
+ }
+}

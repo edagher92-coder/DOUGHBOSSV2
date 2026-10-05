@@ -1,0 +1,82 @@
+{
+ "photo hero (switch OFF) desktop": [
+  {
+   "cls": 0.0159,
+   "lcpMs": 1252,
+   "lcpUrl": "doughboss-feast-real-v1.jpg",
+   "lcpBytes": 673299
+  },
+  {
+   "cls": 0.0157,
+   "lcpMs": 1152,
+   "lcpUrl": "doughboss-feast-real-v1.jpg",
+   "lcpBytes": 673299
+  },
+  {
+   "cls": 0.0157,
+   "lcpMs": 1264,
+   "lcpUrl": "doughboss-feast-real-v1.jpg",
+   "lcpBytes": 673299
+  }
+ ],
+ "photo hero (switch OFF) phone": [
+  {
+   "cls": 0,
+   "lcpMs": 1092,
+   "lcpUrl": "doughboss-feast-real-v1.jpg",
+   "lcpBytes": 275656
+  },
+  {
+   "cls": 0,
+   "lcpMs": 1116,
+   "lcpUrl": "doughboss-feast-real-v1.jpg",
+   "lcpBytes": 275656
+  },
+  {
+   "cls": 0,
+   "lcpMs": 1132,
+   "lcpUrl": "doughboss-feast-real-v1.jpg",
+   "lcpBytes": 275656
+  }
+ ],
+ "video hero (switch ON) desktop": [
+  {
+   "cls": 0.0144,
+   "lcpMs": 1372,
+   "lcpUrl": "dbgr-hero-poster-1080.webp?ver=1767225600",
+   "lcpBytes": 537227
+  },
+  {
+   "cls": 0.0144,
+   "lcpMs": 1200,
+   "lcpUrl": "dbgr-hero-poster-1080.webp?ver=1767225600",
+   "lcpBytes": 521295
+  },
+  {
+   "cls": 0.0144,
+   "lcpMs": 1252,
+   "lcpUrl": "dbgr-hero-poster-1080.webp?ver=1767225600",
+   "lcpBytes": 521295
+  }
+ ],
+ "video hero (switch ON) phone": [
+  {
+   "cls": 0,
+   "lcpMs": 1200,
+   "lcpUrl": "dbgr-hero-poster-1080.webp?ver=1767225600",
+   "lcpBytes": 275656
+  },
+  {
+   "cls": 0,
+   "lcpMs": 1128,
+   "lcpUrl": "dbgr-hero-poster-1080.webp?ver=1767225600",
+   "lcpBytes": 275656
+  },
+  {
+   "cls": 0,
+   "lcpMs": 1116,
+   "lcpUrl": "dbgr-hero-poster-1080.webp?ver=1767225600",
+   "lcpBytes": 275656
+  }
+ ]
+}

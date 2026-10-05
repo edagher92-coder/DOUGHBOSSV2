@@ -1,0 +1,46 @@
+{
+ "d768": {
+  "kicker": 20.04,
+  "headline": 20.04,
+  "paragraph": 13.88,
+  "secondary-button": 20.0,
+  "pause-button": 20.09,
+  "proof": 20.04
+ },
+ "d1024": {
+  "kicker": 20.04,
+  "headline": 20.04,
+  "paragraph": 13.88,
+  "secondary-button": 20.0,
+  "pause-button": 20.09
+ },
+ "d1280": {
+  "kicker": 20.04,
+  "headline": 20.04,
+  "paragraph": 13.88,
+  "secondary-button": 20.01,
+  "pause-button": 20.0
+ },
+ "d1440": {
+  "kicker": 20.04,
+  "headline": 20.04,
+  "paragraph": 13.88,
+  "secondary-button": 20.07,
+  "pause-button": 20.0
+ },
+ "d1920": {
+  "kicker": 20.04,
+  "headline": 20.04,
+  "paragraph": 13.88,
+  "secondary-button": 20.09,
+  "pause-button": 20.0,
+  "proof": 20.04
+ },
+ "phone": {
+  "kicker": 13.17,
+  "headline": 14.19,
+  "paragraph": 10.85,
+  "pause-button": 18.51,
+  "proof": 18.87
+ }
+}

@@ -1,0 +1,992 @@
+{
+ "generated": "2026-10-03",
+ "encoder": {
+  "avif": "Pillow native libavif, q55, speed 4, 8-bit (no bit-depth option in Pillow encoder)",
+  "webp": "q75 method 6",
+  "jpeg": "progressive q80 optimized 4:2:0"
+ },
+ "colour": "sRGB; sources untagged 8-bit RGB; all metadata stripped",
+ "assets": [
+  {
+   "id": "w1",
+   "slug": "closed-box",
+   "crop": "original",
+   "source_px": [
+    2560,
+    3200
+   ],
+   "widths": [
+    2560,
+    1920,
+    1280,
+    828,
+    640
+   ],
+   "formats": {
+    "avif": {
+     "2560": {
+      "file": "w1-closed-box-2560.avif",
+      "bytes": 294533,
+      "height": 3200
+     },
+     "1920": {
+      "file": "w1-closed-box-1920.avif",
+      "bytes": 181484,
+      "height": 2400
+     },
+     "1280": {
+      "file": "w1-closed-box-1280.avif",
+      "bytes": 91750,
+      "height": 1600
+     },
+     "828": {
+      "file": "w1-closed-box-828.avif",
+      "bytes": 43739,
+      "height": 1035
+     },
+     "640": {
+      "file": "w1-closed-box-640.avif",
+      "bytes": 27730,
+      "height": 800
+     }
+    },
+    "webp": {
+     "2560": {
+      "file": "w1-closed-box-2560.webp",
+      "bytes": 322568,
+      "height": 3200
+     },
+     "1920": {
+      "file": "w1-closed-box-1920.webp",
+      "bytes": 197834,
+      "height": 2400
+     },
+     "1280": {
+      "file": "w1-closed-box-1280.webp",
+      "bytes": 102126,
+      "height": 1600
+     },
+     "828": {
+      "file": "w1-closed-box-828.webp",
+      "bytes": 47616,
+      "height": 1035
+     },
+     "640": {
+      "file": "w1-closed-box-640.webp",
+      "bytes": 30342,
+      "height": 800
+     }
+    },
+    "jpg": {
+     "2560": {
+      "file": "w1-closed-box-2560.jpg",
+      "bytes": 756703,
+      "height": 3200
+     },
+     "1920": {
+      "file": "w1-closed-box-1920.jpg",
+      "bytes": 451685,
+      "height": 2400
+     },
+     "1280": {
+      "file": "w1-closed-box-1280.jpg",
+      "bytes": 222021,
+      "height": 1600
+     },
+     "828": {
+      "file": "w1-closed-box-828.jpg",
+      "bytes": 101570,
+      "height": 1035
+     },
+     "640": {
+      "file": "w1-closed-box-640.jpg",
+      "bytes": 63158,
+      "height": 800
+     }
+    }
+   }
+  },
+  {
+   "id": "w2",
+   "slug": "stack-of-three",
+   "crop": "original",
+   "source_px": [
+    2048,
+    1360
+   ],
+   "widths": [
+    1920,
+    1280,
+    828,
+    640
+   ],
+   "formats": {
+    "avif": {
+     "1920": {
+      "file": "w2-stack-of-three-1920.avif",
+      "bytes": 107515,
+      "height": 1275
+     },
+     "1280": {
+      "file": "w2-stack-of-three-1280.avif",
+      "bytes": 59589,
+      "height": 850
+     },
+     "828": {
+      "file": "w2-stack-of-three-828.avif",
+      "bytes": 30146,
+      "height": 550
+     },
+     "640": {
+      "file": "w2-stack-of-three-640.avif",
+      "bytes": 20163,
+      "height": 425
+     }
+    },
+    "webp": {
+     "1920": {
+      "file": "w2-stack-of-three-1920.webp",
+      "bytes": 130854,
+      "height": 1275
+     },
+     "1280": {
+      "file": "w2-stack-of-three-1280.webp",
+      "bytes": 71070,
+      "height": 850
+     },
+     "828": {
+      "file": "w2-stack-of-three-828.webp",
+      "bytes": 36724,
+      "height": 550
+     },
+     "640": {
+      "file": "w2-stack-of-three-640.webp",
+      "bytes": 24900,
+      "height": 425
+     }
+    },
+    "jpg": {
+     "1920": {
+      "file": "w2-stack-of-three-1920.jpg",
+      "bytes": 285541,
+      "height": 1275
+     },
+     "1280": {
+      "file": "w2-stack-of-three-1280.jpg",
+      "bytes": 144153,
+      "height": 850
+     },
+     "828": {
+      "file": "w2-stack-of-three-828.jpg",
+      "bytes": 69408,
+      "height": 550
+     },
+     "640": {
+      "file": "w2-stack-of-three-640.jpg",
+      "bytes": 44984,
+      "height": 425
+     }
+    }
+   }
+  },
+  {
+   "id": "w3",
+   "slug": "open-box",
+   "crop": "original",
+   "source_px": [
+    2560,
+    3200
+   ],
+   "widths": [
+    2560,
+    1920,
+    1280,
+    828,
+    640
+   ],
+   "formats": {
+    "avif": {
+     "2560": {
+      "file": "w3-open-box-2560.avif",
+      "bytes": 397160,
+      "height": 3200
+     },
+     "1920": {
+      "file": "w3-open-box-1920.avif",
+      "bytes": 256304,
+      "height": 2400
+     },
+     "1280": {
+      "file": "w3-open-box-1280.avif",
+      "bytes": 131110,
+      "height": 1600
+     },
+     "828": {
+      "file": "w3-open-box-828.avif",
+      "bytes": 62870,
+      "height": 1035
+     },
+     "640": {
+      "file": "w3-open-box-640.avif",
+      "bytes": 39499,
+      "height": 800
+     }
+    },
+    "webp": {
+     "2560": {
+      "file": "w3-open-box-2560.webp",
+      "bytes": 448662,
+      "height": 3200
+     },
+     "1920": {
+      "file": "w3-open-box-1920.webp",
+      "bytes": 295310,
+      "height": 2400
+     },
+     "1280": {
+      "file": "w3-open-box-1280.webp",
+      "bytes": 157802,
+      "height": 1600
+     },
+     "828": {
+      "file": "w3-open-box-828.webp",
+      "bytes": 77412,
+      "height": 1035
+     },
+     "640": {
+      "file": "w3-open-box-640.webp",
+      "bytes": 50558,
+      "height": 800
+     }
+    },
+    "jpg": {
+     "2560": {
+      "file": "w3-open-box-2560.jpg",
+      "bytes": 986611,
+      "height": 3200
+     },
+     "1920": {
+      "file": "w3-open-box-1920.jpg",
+      "bytes": 606544,
+      "height": 2400
+     },
+     "1280": {
+      "file": "w3-open-box-1280.jpg",
+      "bytes": 301153,
+      "height": 1600
+     },
+     "828": {
+      "file": "w3-open-box-828.jpg",
+      "bytes": 139516,
+      "height": 1035
+     },
+     "640": {
+      "file": "w3-open-box-640.jpg",
+      "bytes": 87281,
+      "height": 800
+     }
+    }
+   }
+  },
+  {
+   "id": "w4",
+   "slug": "seal-macro",
+   "crop": "original",
+   "source_px": [
+    1792,
+    2240
+   ],
+   "widths": [
+    1280,
+    828,
+    640
+   ],
+   "formats": {
+    "avif": {
+     "1280": {
+      "file": "w4-seal-macro-1280.avif",
+      "bytes": 144122,
+      "height": 1600
+     },
+     "828": {
+      "file": "w4-seal-macro-828.avif",
+      "bytes": 70569,
+      "height": 1035
+     },
+     "640": {
+      "file": "w4-seal-macro-640.avif",
+      "bytes": 45196,
+      "height": 800
+     }
+    },
+    "webp": {
+     "1280": {
+      "file": "w4-seal-macro-1280.webp",
+      "bytes": 177022,
+      "height": 1600
+     },
+     "828": {
+      "file": "w4-seal-macro-828.webp",
+      "bytes": 88024,
+      "height": 1035
+     },
+     "640": {
+      "file": "w4-seal-macro-640.webp",
+      "bytes": 55276,
+      "height": 800
+     }
+    },
+    "jpg": {
+     "1280": {
+      "file": "w4-seal-macro-1280.jpg",
+      "bytes": 306104,
+      "height": 1600
+     },
+     "828": {
+      "file": "w4-seal-macro-828.jpg",
+      "bytes": 142724,
+      "height": 1035
+     },
+     "640": {
+      "file": "w4-seal-macro-640.jpg",
+      "bytes": 88795,
+      "height": 800
+     }
+    }
+   }
+  },
+  {
+   "id": "w7",
+   "slug": "tile-cheese",
+   "crop": "original",
+   "source_px": [
+    1700,
+    1700
+   ],
+   "widths": [
+    1280,
+    828,
+    640,
+    400
+   ],
+   "formats": {
+    "avif": {
+     "1280": {
+      "file": "w7-tile-cheese-1280.avif",
+      "bytes": 108824,
+      "height": 1280
+     },
+     "828": {
+      "file": "w7-tile-cheese-828.avif",
+      "bytes": 46536,
+      "height": 828
+     },
+     "640": {
+      "file": "w7-tile-cheese-640.avif",
+      "bytes": 28282,
+      "height": 640
+     },
+     "400": {
+      "file": "w7-tile-cheese-400.avif",
+      "bytes": 11166,
+      "height": 400
+     }
+    },
+    "webp": {
+     "1280": {
+      "file": "w7-tile-cheese-1280.webp",
+      "bytes": 106584,
+      "height": 1280
+     },
+     "828": {
+      "file": "w7-tile-cheese-828.webp",
+      "bytes": 44816,
+      "height": 828
+     },
+     "640": {
+      "file": "w7-tile-cheese-640.webp",
+      "bytes": 26810,
+      "height": 640
+     },
+     "400": {
+      "file": "w7-tile-cheese-400.webp",
+      "bytes": 10732,
+      "height": 400
+     }
+    },
+    "jpg": {
+     "1280": {
+      "file": "w7-tile-cheese-1280.jpg",
+      "bytes": 220055,
+      "height": 1280
+     },
+     "828": {
+      "file": "w7-tile-cheese-828.jpg",
+      "bytes": 93670,
+      "height": 828
+     },
+     "640": {
+      "file": "w7-tile-cheese-640.jpg",
+      "bytes": 56008,
+      "height": 640
+     },
+     "400": {
+      "file": "w7-tile-cheese-400.jpg",
+      "bytes": 22475,
+      "height": 400
+     }
+    }
+   }
+  },
+  {
+   "id": "w8",
+   "slug": "tile-zaatar",
+   "crop": "original",
+   "source_px": [
+    2048,
+    2048
+   ],
+   "widths": [
+    1280,
+    828,
+    640,
+    400
+   ],
+   "formats": {
+    "avif": {
+     "1280": {
+      "file": "w8-tile-zaatar-1280.avif",
+      "bytes": 122047,
+      "height": 1280
+     },
+     "828": {
+      "file": "w8-tile-zaatar-828.avif",
+      "bytes": 54667,
+      "height": 828
+     },
+     "640": {
+      "file": "w8-tile-zaatar-640.avif",
+      "bytes": 32983,
+      "height": 640
+     },
+     "400": {
+      "file": "w8-tile-zaatar-400.avif",
+      "bytes": 13397,
+      "height": 400
+     }
+    },
+    "webp": {
+     "1280": {
+      "file": "w8-tile-zaatar-1280.webp",
+      "bytes": 139572,
+      "height": 1280
+     },
+     "828": {
+      "file": "w8-tile-zaatar-828.webp",
+      "bytes": 64154,
+      "height": 828
+     },
+     "640": {
+      "file": "w8-tile-zaatar-640.webp",
+      "bytes": 39780,
+      "height": 640
+     },
+     "400": {
+      "file": "w8-tile-zaatar-400.webp",
+      "bytes": 16460,
+      "height": 400
+     }
+    },
+    "jpg": {
+     "1280": {
+      "file": "w8-tile-zaatar-1280.jpg",
+      "bytes": 255026,
+      "height": 1280
+     },
+     "828": {
+      "file": "w8-tile-zaatar-828.jpg",
+      "bytes": 111783,
+      "height": 828
+     },
+     "640": {
+      "file": "w8-tile-zaatar-640.jpg",
+      "bytes": 67633,
+      "height": 640
+     },
+     "400": {
+      "file": "w8-tile-zaatar-400.jpg",
+      "bytes": 27334,
+      "height": 400
+     }
+    }
+   }
+  },
+  {
+   "id": "w9",
+   "slug": "tile-meat",
+   "crop": "original",
+   "source_px": [
+    2048,
+    2048
+   ],
+   "widths": [
+    1280,
+    828,
+    640,
+    400
+   ],
+   "formats": {
+    "avif": {
+     "1280": {
+      "file": "w9-tile-meat-1280.avif",
+      "bytes": 111364,
+      "height": 1280
+     },
+     "828": {
+      "file": "w9-tile-meat-828.avif",
+      "bytes": 51086,
+      "height": 828
+     },
+     "640": {
+      "file": "w9-tile-meat-640.avif",
+      "bytes": 30639,
+      "height": 640
+     },
+     "400": {
+      "file": "w9-tile-meat-400.avif",
+      "bytes": 11927,
+      "height": 400
+     }
+    },
+    "webp": {
+     "1280": {
+      "file": "w9-tile-meat-1280.webp",
+      "bytes": 125310,
+      "height": 1280
+     },
+     "828": {
+      "file": "w9-tile-meat-828.webp",
+      "bytes": 54324,
+      "height": 828
+     },
+     "640": {
+      "file": "w9-tile-meat-640.webp",
+      "bytes": 33338,
+      "height": 640
+     },
+     "400": {
+      "file": "w9-tile-meat-400.webp",
+      "bytes": 13248,
+      "height": 400
+     }
+    },
+    "jpg": {
+     "1280": {
+      "file": "w9-tile-meat-1280.jpg",
+      "bytes": 237429,
+      "height": 1280
+     },
+     "828": {
+      "file": "w9-tile-meat-828.jpg",
+      "bytes": 103136,
+      "height": 828
+     },
+     "640": {
+      "file": "w9-tile-meat-640.jpg",
+      "bytes": 61880,
+      "height": 640
+     },
+     "400": {
+      "file": "w9-tile-meat-400.jpg",
+      "bytes": 24458,
+      "height": 400
+     }
+    }
+   }
+  },
+  {
+   "id": "w10",
+   "slug": "tile-spinach",
+   "crop": "original",
+   "source_px": [
+    1640,
+    1640
+   ],
+   "widths": [
+    1280,
+    828,
+    640,
+    400
+   ],
+   "formats": {
+    "avif": {
+     "1280": {
+      "file": "w10-tile-spinach-1280.avif",
+      "bytes": 80587,
+      "height": 1280
+     },
+     "828": {
+      "file": "w10-tile-spinach-828.avif",
+      "bytes": 42217,
+      "height": 828
+     },
+     "640": {
+      "file": "w10-tile-spinach-640.avif",
+      "bytes": 30984,
+      "height": 640
+     },
+     "400": {
+      "file": "w10-tile-spinach-400.avif",
+      "bytes": 12742,
+      "height": 400
+     }
+    },
+    "webp": {
+     "1280": {
+      "file": "w10-tile-spinach-1280.webp",
+      "bytes": 88066,
+      "height": 1280
+     },
+     "828": {
+      "file": "w10-tile-spinach-828.webp",
+      "bytes": 43292,
+      "height": 828
+     },
+     "640": {
+      "file": "w10-tile-spinach-640.webp",
+      "bytes": 28480,
+      "height": 640
+     },
+     "400": {
+      "file": "w10-tile-spinach-400.webp",
+      "bytes": 11760,
+      "height": 400
+     }
+    },
+    "jpg": {
+     "1280": {
+      "file": "w10-tile-spinach-1280.jpg",
+      "bytes": 192722,
+      "height": 1280
+     },
+     "828": {
+      "file": "w10-tile-spinach-828.jpg",
+      "bytes": 93834,
+      "height": 828
+     },
+     "640": {
+      "file": "w10-tile-spinach-640.jpg",
+      "bytes": 58847,
+      "height": 640
+     },
+     "400": {
+      "file": "w10-tile-spinach-400.jpg",
+      "bytes": 23902,
+      "height": 400
+     }
+    }
+   }
+  },
+  {
+   "id": "w11",
+   "slug": "catering-hero",
+   "crop": "original",
+   "source_px": [
+    3840,
+    2160
+   ],
+   "widths": [
+    2560,
+    1920,
+    1280,
+    828,
+    640
+   ],
+   "formats": {
+    "avif": {
+     "2560": {
+      "file": "w11-catering-hero-2560.avif",
+      "bytes": 148046,
+      "height": 1440
+     },
+     "1920": {
+      "file": "w11-catering-hero-1920.avif",
+      "bytes": 94682,
+      "height": 1080
+     },
+     "1280": {
+      "file": "w11-catering-hero-1280.avif",
+      "bytes": 49500,
+      "height": 720
+     },
+     "828": {
+      "file": "w11-catering-hero-828.avif",
+      "bytes": 24514,
+      "height": 466
+     },
+     "640": {
+      "file": "w11-catering-hero-640.avif",
+      "bytes": 15216,
+      "height": 360
+     }
+    },
+    "webp": {
+     "2560": {
+      "file": "w11-catering-hero-2560.webp",
+      "bytes": 173158,
+      "height": 1440
+     },
+     "1920": {
+      "file": "w11-catering-hero-1920.webp",
+      "bytes": 112030,
+      "height": 1080
+     },
+     "1280": {
+      "file": "w11-catering-hero-1280.webp",
+      "bytes": 59022,
+      "height": 720
+     },
+     "828": {
+      "file": "w11-catering-hero-828.webp",
+      "bytes": 29056,
+      "height": 466
+     },
+     "640": {
+      "file": "w11-catering-hero-640.webp",
+      "bytes": 18742,
+      "height": 360
+     }
+    },
+    "jpg": {
+     "2560": {
+      "file": "w11-catering-hero-2560.jpg",
+      "bytes": 371526,
+      "height": 1440
+     },
+     "1920": {
+      "file": "w11-catering-hero-1920.jpg",
+      "bytes": 228953,
+      "height": 1080
+     },
+     "1280": {
+      "file": "w11-catering-hero-1280.jpg",
+      "bytes": 113971,
+      "height": 720
+     },
+     "828": {
+      "file": "w11-catering-hero-828.jpg",
+      "bytes": 53371,
+      "height": 466
+     },
+     "640": {
+      "file": "w11-catering-hero-640.jpg",
+      "bytes": 33244,
+      "height": 360
+     }
+    }
+   }
+  },
+  {
+   "id": "w11",
+   "slug": "catering-hero",
+   "crop": "9:16 phone (focus x70% y35%)",
+   "source_px": [
+    1215,
+    2160
+   ],
+   "widths": [
+    1080,
+    828,
+    640
+   ],
+   "formats": {
+    "avif": {
+     "1080": {
+      "file": "w11-catering-hero-9x16-1080.avif",
+      "bytes": 107562,
+      "height": 1920
+     },
+     "828": {
+      "file": "w11-catering-hero-9x16-828.avif",
+      "bytes": 70526,
+      "height": 1472
+     },
+     "640": {
+      "file": "w11-catering-hero-9x16-640.avif",
+      "bytes": 46482,
+      "height": 1138
+     }
+    },
+    "webp": {
+     "1080": {
+      "file": "w11-catering-hero-9x16-1080.webp",
+      "bytes": 130272,
+      "height": 1920
+     },
+     "828": {
+      "file": "w11-catering-hero-9x16-828.webp",
+      "bytes": 87118,
+      "height": 1472
+     },
+     "640": {
+      "file": "w11-catering-hero-9x16-640.webp",
+      "bytes": 58556,
+      "height": 1138
+     }
+    },
+    "jpg": {
+     "1080": {
+      "file": "w11-catering-hero-9x16-1080.jpg",
+      "bytes": 265567,
+      "height": 1920
+     },
+     "828": {
+      "file": "w11-catering-hero-9x16-828.jpg",
+      "bytes": 169694,
+      "height": 1472
+     },
+     "640": {
+      "file": "w11-catering-hero-9x16-640.jpg",
+      "bytes": 108859,
+      "height": 1138
+     }
+    }
+   }
+  },
+  {
+   "id": "w1",
+   "slug": "closed-box",
+   "crop": "1.91:1 OG 1200x630",
+   "source_px": [
+    2560,
+    1344
+   ],
+   "widths": [
+    1200
+   ],
+   "formats": {
+    "avif": {
+     "1200": {
+      "file": "w1-closed-box-og-1200.avif",
+      "bytes": 47229,
+      "height": 630
+     }
+    },
+    "webp": {
+     "1200": {
+      "file": "w1-closed-box-og-1200.webp",
+      "bytes": 56810,
+      "height": 630
+     }
+    },
+    "jpg": {
+     "1200": {
+      "file": "w1-closed-box-og-1200.jpg",
+      "bytes": 112951,
+      "height": 630
+     }
+    }
+   }
+  },
+  {
+   "id": "w3",
+   "slug": "open-box",
+   "crop": "1:1 square 1200x1200",
+   "source_px": [
+    2560,
+    2560
+   ],
+   "widths": [
+    1200
+   ],
+   "formats": {
+    "avif": {
+     "1200": {
+      "file": "w3-open-box-1x1-1200.avif",
+      "bytes": 107084,
+      "height": 1200
+     }
+    },
+    "webp": {
+     "1200": {
+      "file": "w3-open-box-1x1-1200.webp",
+      "bytes": 132736,
+      "height": 1200
+     }
+    },
+    "jpg": {
+     "1200": {
+      "file": "w3-open-box-1x1-1200.jpg",
+      "bytes": 239325,
+      "height": 1200
+     }
+    }
+   }
+  }
+ ],
+ "totals": {
+  "bytes_all": 15667698,
+  "by_format": {
+   "avif": 3503768,
+   "webp": 4018326,
+   "jpg": 8145604
+  },
+  "files": 129
+ },
+ "cap_flags": [
+  {
+   "check": "4:5 1280 JPG",
+   "file": "w1-closed-box-1280.jpg",
+   "bytes": 222021,
+   "cap_bytes": 150000
+  },
+  {
+   "check": "4:5 1280 WEBP",
+   "file": "w3-open-box-1280.webp",
+   "bytes": 157802,
+   "cap_bytes": 150000
+  },
+  {
+   "check": "4:5 1280 JPG",
+   "file": "w3-open-box-1280.jpg",
+   "bytes": 301153,
+   "cap_bytes": 150000
+  },
+  {
+   "check": "4:5 1280 WEBP",
+   "file": "w4-seal-macro-1280.webp",
+   "bytes": 177022,
+   "cap_bytes": 150000
+  },
+  {
+   "check": "4:5 1280 JPG",
+   "file": "w4-seal-macro-1280.jpg",
+   "bytes": 306104,
+   "cap_bytes": 150000
+  },
+  {
+   "check": "tile 640 JPG",
+   "file": "w7-tile-cheese-640.jpg",
+   "bytes": 56008,
+   "cap_bytes": 45000
+  },
+  {
+   "check": "tile 640 JPG",
+   "file": "w8-tile-zaatar-640.jpg",
+   "bytes": 67633,
+   "cap_bytes": 45000
+  },
+  {
+   "check": "tile 640 JPG",
+   "file": "w9-tile-meat-640.jpg",
+   "bytes": 61880,
+   "cap_bytes": 45000
+  },
+  {
+   "check": "tile 640 JPG",
+   "file": "w10-tile-spinach-640.jpg",
+   "bytes": 58847,
+   "cap_bytes": 45000
+  }
+ ]
+}

@@ -9,7 +9,7 @@ Written 2026-10-04. Cold start: read this, then `INSTALL.md`. Use Australian Eng
   2. It adds the home page hero video.
 - The pictures and video are not in this plugin. They live in a separate media plugin, `doughboss-growth-media`, which the plugin finds by filename stem in the Media Library.
 - Branches and pull requests:
-  - This branch is `codex/catering-box-0.2.0`. It is the same code as draft PR #70 (branch `ccr-ba2d93d9-lbw916`, head 51d8e1c), plus `tests/` and this file.
+  - This branch is `codex/catering-box-0.2.0`. It is the same code as draft PR #70 (branch `ccr-ba2d93d9-lbw916`, head 51d8e1c), plus `tests/`, this file and the pack in `../catering-box-pack/`.
   - PR #69 (0.1.0) is merged into the default branch `claude/awesome-johnson-bkjh83`.
 - Live site: the plugin is not installed yet. Elie installs the zips by hand (see `INSTALL.md`).
 - No CI covers this folder. `.github/workflows/growth-ci.yml` only triggers on `doughboss-growth/**`.
@@ -84,16 +84,15 @@ Porting them, and adding a box CI workflow, are open work items (§5).
 3. Owner decisions B1 to B5 (`INSTALL.md`). Merge of PR #70 is waiting on Elie.
 4. Phase 2: swap in real photographs through a new media zip. No code change is needed.
 
-## 6. The pack (not in this branch yet)
+## 6. The pack
 
-The catering box design pack is held back until the repository is private:
+The catering box design and production pack is in `catering-box-pack/` at the repo root. Start with `catering-box-pack/README.md`. It holds:
 
-- internal brand and catering pack PDF;
-- product data sheet (PDS rev A);
-- factory tech pack DB-TP-CAT-001 rev A;
-- merch tech packs;
+- the PDFs: internal pack, PDS rev A, factory tech pack rev A, merch tech packs;
 - dieline v2 (PDF and DXF);
-- the sources and build scripts for all of the above;
-- the hero video build scripts and web MP4s.
+- the section sources and build scripts;
+- the artwork flats and photo masters;
+- the media plugin source;
+- the hero video scripts and MP4s.
 
-It will be added to this branch once Elie switches the repository to Private. Until then, ask Elie for it rather than recreating any of it.
+Elie approved committing it with the repository still public (2026-10-04). Nothing in it is approved for public marketing use. The status rules at the top of that README apply.

@@ -1,0 +1,8 @@
+PASS precondition: hero video is ON
+PASS DBGRBOX_DISABLE set, switch ON, files present: home is byte-identical to the plugin-inactive baseline (37038 bytes)
+PASS   and carries no trace of the plugin
+PASS   settings screen says it is stopped by the kill switch
+PASS kill switch removed: hero video is back without any other change
+
+phase D: 5 passed, 0 failed
+exit 0
