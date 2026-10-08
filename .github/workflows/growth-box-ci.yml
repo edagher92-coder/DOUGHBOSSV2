@@ -1,0 +1,158 @@
+name: Growth Catering Box CI
+
+# This workflow verifies the additive code plugin only. It needs read-only repository access, has
+# no secrets, and does not contact WordPress, a host, payment, media, or other external providers.
+
+on:
+  pull_request:
+    paths:
+      - "doughboss-growth-box/**"
+      - "doughboss-growth/scripts/php74-guard.php"
+      - "doughboss-growth/scripts/es5-check.mjs"
+      - "catering-box-pack/website/build_media_zip.py"
+      - "catering-box-pack/website/validate_media_zip.py"
+      - "catering-box-pack/website/test_validate_media_zip.py"
+      - "catering-box-pack/website/media-plugin/**"
+      - ".github/workflows/growth-box-ci.yml"
+  push:
+    branches:
+      - claude/awesome-johnson-bkjh83
+    paths:
+      - "doughboss-growth-box/**"
+      - "doughboss-growth/scripts/php74-guard.php"
+      - "doughboss-growth/scripts/es5-check.mjs"
+      - "catering-box-pack/website/build_media_zip.py"
+      - "catering-box-pack/website/validate_media_zip.py"
+      - "catering-box-pack/website/test_validate_media_zip.py"
+      - "catering-box-pack/website/media-plugin/**"
+      - ".github/workflows/growth-box-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: growth-box-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: PHP ${{ matrix.php-version }} lint, guard and tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["7.4", "8.2"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: zip
+          coverage: none
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' file; do
+            php -l "$file" >/dev/null
+            count=$((count + 1))
+          done < <(find doughboss-growth-box -type d \( -name .git -o -name dist -o -name vendor -o -name node_modules \) -prune -o -type f -name '*.php' -print0)
+          echo "php -l clean on $count files"
+
+      - name: PHP 7.4 compatibility guard
+        run: php doughboss-growth/scripts/php74-guard.php doughboss-growth-box
+
+      - name: PHP behaviour and archive-validator tests
+        run: |
+          set -euo pipefail
+          php doughboss-growth-box/tests/transform_test.php
+          php doughboss-growth-box/tests/stem_test.php
+          php doughboss-growth-box/tests/validate_zip_test.php
+
+  node:
+    name: Node ES5 gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install acorn in a scratch directory
+        run: |
+          npm install --prefix "$RUNNER_TEMP/acorn-tool" --no-audit --no-fund acorn@8
+          echo "ACORN_PATH=$RUNNER_TEMP/acorn-tool/node_modules/acorn" >> "$GITHUB_ENV"
+
+      - name: ES5 gate on the box front-end JavaScript
+        run: node doughboss-growth/scripts/es5-check.mjs doughboss-growth-box/public
+
+      - name: Node syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do node --check "$file"; done < <(
+            find doughboss-growth-box -type d \( -name .git -o -name dist -o -name vendor -o -name node_modules \) -prune -o -type f -name '*.js' -print0
+          )
+
+  archive:
+    name: Deterministic code archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zip
+          coverage: none
+
+      - name: Build the code zip
+        run: php doughboss-growth-box/scripts/build-zip.php "$RUNNER_TEMP/doughboss-growth-box.zip"
+
+      - name: Validate canonical runtime layout, bytes and release metadata
+        run: php doughboss-growth-box/scripts/validate-zip.php "$RUNNER_TEMP/doughboss-growth-box.zip"
+
+      - name: Byte budget report
+        run: php doughboss-growth-box/scripts/budgets.php "$RUNNER_TEMP/doughboss-growth-box.zip"
+
+      - name: Reproducible build
+        run: |
+          php doughboss-growth-box/scripts/build-zip.php "$RUNNER_TEMP/second.zip"
+          sha256sum "$RUNNER_TEMP/doughboss-growth-box.zip" "$RUNNER_TEMP/second.zip"
+          cmp "$RUNNER_TEMP/doughboss-growth-box.zip" "$RUNNER_TEMP/second.zip"
+
+      - name: Test the independent media archive validator
+        run: |
+          python3 -B - <<'PY'
+          import sys
+          import unittest
+
+          suite = unittest.defaultTestLoader.discover(
+              "catering-box-pack/website", pattern="test_validate_media_zip.py"
+          )
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if result.testsRun == 0:
+              print("Release gate discovered no media validator tests.", file=sys.stderr)
+          if result.skipped:
+              print("Release gate requires every media validator test to run; skips are not passes.", file=sys.stderr)
+          sys.exit(0 if result.wasSuccessful() and result.testsRun > 0 and not result.skipped else 1)
+          PY
+
+      - name: Build the separate media zip
+        run: python3 catering-box-pack/website/build_media_zip.py "$RUNNER_TEMP/doughboss-growth-media.zip"
+
+      - name: Independently validate the separate media zip
+        run: python3 -B catering-box-pack/website/validate_media_zip.py "$RUNNER_TEMP/doughboss-growth-media.zip"
+
+      - name: Keep the validated code zip for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: doughboss-growth-box-code-zip
+          path: ${{ runner.temp }}/doughboss-growth-box.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -22,6 +22,7 @@ const dump = (node: unknown) => JSON.stringify(node, (_k, v) => (typeof v === "f
 describe("home page store loading", () => {
   it("loads stores through getStores(), the single data path", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(data.getStores).mockResolvedValueOnce(STORES);
     const tree = await HomePage();
     expect(data.getStores).toHaveBeenCalled();
     expect(dump(tree)).toContain(STORES[0]!.slug);

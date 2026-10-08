@@ -1,12 +1,12 @@
 // Verifies the three live quick fixes against a LOCAL runtime that mirrors the live baseline plugin and theme.
 // The runtime loads the snippets through a harness; add ?qf=0 to any URL to see the page without them.
 // Usage: BASE=http://127.0.0.1:9420 node verify-quick-fixes.cjs
-const { chromium } = require('../../node_modules/playwright-core');
 const BASE = process.env.BASE || 'http://127.0.0.1:9420';
 const results = [];
 function check(name, ok, detail) { results.push({ name, ok: !!ok, detail }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? '  ' + detail : '')); }
 
 (async () => {
+  const { chromium } = await import('playwright-core');
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   // 1. hero strip
   for (const [label, vp] of [['1280', { width: 1280, height: 800 }], ['390', { width: 390, height: 844 }]]) {
