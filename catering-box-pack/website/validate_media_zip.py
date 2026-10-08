@@ -299,6 +299,11 @@ def validate(archive_path: Path, source: Path) -> tuple[str, int, int, int, str]
             declared_total = 0
             for info in infos:
                 name = info.filename
+                # zipfile truncates names at NUL (and may normalise separators).
+                # Validate the stored name, not only the parser's canonical alias.
+                raw_name = info.orig_filename
+                if raw_name != name or "\x00" in raw_name:
+                    fail(f"normalized or NUL archive entry name is not allowed: {raw_name!r}")
                 relative = canonical_relative(name)
                 if name in seen:
                     fail(f"duplicate archive entry: {name}")

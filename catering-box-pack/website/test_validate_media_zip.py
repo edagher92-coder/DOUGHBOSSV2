@@ -237,6 +237,31 @@ class ValidateMediaZipTests(unittest.TestCase):
         (missing_copy / "assets" / "hero" / "dbgr-hero-poster-720.webp").unlink()
         self.assert_rejected(self.archive("valid-missing-source.zip"), "source file set", missing_copy)
 
+    def test_refuses_complete_payload_with_nul_normalized_entry_name(self) -> None:
+        target = PREFIX + "readme.txt"
+        body = dict(source_entries(SOURCE))[target]
+        for suffix in ("alias", "/../../extra.php"):
+            with self.subTest(suffix=suffix):
+                stored_name = target + "!" + suffix
+                archive = self.archive(
+                    "nul-name-" + str(len(suffix)) + ".zip",
+                    remove={target},
+                    extras=[(stored_name, body)],
+                )
+                # Keep every payload/CRC and both name-field lengths intact.
+                # ZipInfo's writer truncates NUL itself, so mutate the local and
+                # central name fields after producing a complete valid archive.
+                raw = archive.read_bytes()
+                needle = stored_name.encode("utf-8")
+                self.assertEqual(raw.count(needle), 2)
+                raw_name = target + "\x00" + suffix
+                archive.write_bytes(raw.replace(needle, raw_name.encode("utf-8")))
+                with zipfile.ZipFile(archive) as parsed:
+                    info = parsed.getinfo(target)
+                    self.assertEqual(info.filename, target)
+                    self.assertEqual(info.orig_filename, raw_name)
+                self.assert_rejected(archive, "normalized or NUL archive entry")
+
     def test_unexpected_source_symlink_errors_are_failures_not_skips(self) -> None:
         for error in (PermissionError("unexpected permission failure"), OSError("unexpected host failure")):
             with self.subTest(error=type(error).__name__):

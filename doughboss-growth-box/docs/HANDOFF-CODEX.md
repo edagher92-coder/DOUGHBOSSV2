@@ -40,6 +40,14 @@ The resumed integration pass freshly reran the canonical-LF web `npm.cmd run che
 
 Independent workflow verification identified a release-proof gap: plain unittest reports success even when the required filesystem symlink control is skipped. The Box workflow now checks the actual unittest result and requires successful tests, at least one discovered test and zero skipped tests. Exact extracted workflow-runner synthetic controls prove pass => exit 0, skip/failure/empty => exit 1. The real Windows run is refused for its missing symlink proof, not misreported as Linux acceptance. Both workflow files parse using the existing locked YAML dependency. This repair does not alter local test skip behaviour, remove a negative control or establish hosted/Linux success. The combined candidate remains assurance-ready but incomplete.
 
+### Raw ZIP-name remediation after frozen Astra review
+
+The combined candidate was frozen locally as `9a378f2048794ab0d3755e3b5ab0ba504fe1e998` (parent `ca4a3fc9a13993874b98fee774bf16e997ab7d08`). User-mandated read-only Astra returned fix-first / 8.3 out of 10, below the 8.5 threshold, with one reproduced P2: Python zipfile truncates an embedded-NUL raw name in `filename`, while `orig_filename` preserves it. A complete 44-file payload with a noncanonical original name was falsely accepted. This is strict archive-name false acceptance, not proof of an extractor traversal or live-site compromise.
+
+Root repaired the guard before canonicalisation: reject an original name containing NUL or differing from the parser's normalised filename. The existing suite now includes a complete-payload regression with two original-name suffix variants (plain alias and traversal-shaped tail), preserving payloads, CRCs and local/central name-field lengths. It proves that the parser presents the canonical-looking filename and the differing original name before checking rejection.
+
+Focused validation on the changed candidate: `python.exe -B -m unittest -q catering-box-pack/website/test_validate_media_zip.py` exit 0, **ten total / nine passed / one explicit Windows symlink NOT_RUN skip**. The unchanged canonical media ZIP still validates: 44 files, payload 1,756,616 bytes, archive 1,759,393 bytes, unchanged SHA256 `1fa926626e4ad30142cd224fa4fe92d150d120c385a1e596bd2acd69a3ff3b60`. Diff check passes. The zero-skips hosted gate is unchanged and will reject the remaining local environment limitation. The P2 is repaired in source; fresh frozen follow-up assurance remains required before acceptance. No hosted, provider, backup or installation gate is waived.
+
 ## 1. Goal and status
 
 - Deliverable: `doughboss-growth-box`, a standalone WordPress plugin (0.2.0). It does two things:
