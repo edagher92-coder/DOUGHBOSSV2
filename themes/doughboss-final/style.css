@@ -320,6 +320,8 @@ body.db-approved-preorder-mode .dbf-cart-wrap { margin-top: 0; }
 
 @media (max-width: 900px) {
 	.admin-bar .dbf-header { top: 46px; }
+	/* Keep the open-state launch banner beneath the scrim (z98) and header/drawer (z100); normal banner remains z102. */
+	body.dbf-menu-open .dbf-launch-bar { z-index: 97; }
 	.dbf-header-inner { grid-template-columns: auto 1fr auto; min-height: 64px; }
 	.dbf-menu-toggle { display: inline-flex; justify-self: end; }
 	.dbf-nav { position: fixed; z-index: 99; top: 0; right: 0; bottom: 0; width: min(390px, 88vw); max-height: 100vh; max-height: 100dvh; padding: 26px 30px 40px; overflow-y: auto; visibility: hidden; transform: translateX(105%); background: var(--dbf-coal); box-shadow: -30px 0 60px rgba(0,0,0,.35); pointer-events: none; transition: transform .22s var(--dbf-ease), visibility 0s linear .22s; }
