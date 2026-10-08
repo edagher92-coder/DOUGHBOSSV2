@@ -10,7 +10,7 @@ on:
       - ".github/workflows/growth-ci.yml"
   push:
     branches:
-      - main
+      - claude/awesome-johnson-bkjh83
     paths:
       - "doughboss-growth/**"
       - ".github/workflows/growth-ci.yml"
@@ -27,12 +27,21 @@ jobs:
   php:
     name: PHP ${{ matrix.php-version }} lint, 7.4 guard, tests
     runs-on: ubuntu-latest
+    env:
+      DBGR_CORE_SRC: ${{ github.workspace }}/core-compat
     strategy:
       fail-fast: false
       matrix:
         php-version: ["7.4", "8.2"]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check out pinned core 2.41 source for compatibility checks
+        uses: actions/checkout@v4
+        with:
+          ref: 76deb569ceb1665d766f4c87659d40b7cc4f54b5
+          path: core-compat
+          persist-credentials: false
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -60,12 +69,31 @@ jobs:
   node:
     name: Node ES5 gate and tests
     runs-on: ubuntu-latest
+    env:
+      DBGR_CORE_SRC: ${{ github.workspace }}/core-compat
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check out pinned core 2.41 source for compatibility checks
+        uses: actions/checkout@v4
+        with:
+          ref: 76deb569ceb1665d766f4c87659d40b7cc4f54b5
+          path: core-compat
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zip
+          coverage: none
+
+      - name: Install locked exporter tools without lifecycle scripts
+        working-directory: web
+        run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
 
       - name: Install acorn in a scratch directory (nothing is added to the repository)
         run: |

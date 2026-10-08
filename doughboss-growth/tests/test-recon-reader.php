@@ -309,7 +309,9 @@ PHP;
 		if ( ! is_array( $data ) ) {
 			return;
 		}
-		assert_same( $src . '/includes/class-doughboss-timeclock.php', $data['real'], 'the REAL core class was loaded' );
+		$expected_core_file = realpath( $src . '/includes/class-doughboss-timeclock.php' );
+		assert_true( false !== $expected_core_file, 'the expected real core file exists' );
+		assert_same( $expected_core_file, $data['real'], 'the REAL core class was loaded' );
 		assert_same( '', $data['guard'], 'reader guard passes against real core accessors' );
 		assert_same( 80, $data['count'], 'all 80 seeded shifts read' );
 		assert_same( array(), $data['mismatch'], 'companion net == real core worked_minutes() for every seeded shift' );

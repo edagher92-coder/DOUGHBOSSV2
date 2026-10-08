@@ -1,16 +1,16 @@
 // READ-ONLY check against the real live pages: loads each page, injects the snippets into MY browser's copy of the page only
 // (nothing is sent to or stored on the site), then measures the result. No forms, no clicks that change state.
-const fs = require('fs');
-const { chromium } = require('../../node_modules/@playwright/test');
-const css = fs.readFileSync(__dirname + '/01-hero-strip.css', 'utf8');
-const js = fs.readFileSync(__dirname + '/02-menu-photo-labels.js', 'utf8');
 (async () => {
+  const fs = await import('node:fs');
+  const { chromium } = await import('@playwright/test');
+  const css = fs.readFileSync(__dirname + '/01-hero-strip.css', 'utf8');
+  const js = fs.readFileSync(__dirname + '/02-menu-photo-labels.js', 'utf8');
   const b = await chromium.launch({ args: ['--ignore-certificate-errors'] });
   // The sandbox network only allows requests made from Node, so route every request through route.fetch with retries (the proxy sometimes drops parallel fetches).
-  async function routeThrough(ctx) { await ctx.route('**/*', async (route) => { let last; for (let a = 0; a < 6; a++) { try { const r = await route.fetch({ timeout: 45000 }); if (r.status() < 500) { return route.fulfill({ response: r }); } last = r; } catch (e) { /* retry */ } await new Promise((x) => setTimeout(x, 600 * (a + 1))); } if (last) { return route.fulfill({ response: last }); } return route.abort(); }); }
+  async function routeThrough(ctx) { await ctx.route('**/*', async (route) => { let last; for (let a = 0; a < 6; a++) { try { const r = await route.fetch({ timeout: 45000 }); if (r.status() < 500) { return route.fulfill({ response: r }); } last = r; } catch { /* retry */ } await new Promise((x) => setTimeout(x, 600 * (a + 1))); } if (last) { return route.fulfill({ response: last }); } return route.abort(); }); }
   let failed = 0;
   const log = (ok, name, detail) => { if (!ok) failed++; console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? '  ' + detail : '')); };
-  async function load(p, url) { for (let i = 0; i < 3; i++) { try { await p.goto(url, { waitUntil: 'load', timeout: 60000 }); return true; } catch (e) { await p.waitForTimeout(3000); } } return false; }
+  async function load(p, url) { for (let i = 0; i < 3; i++) { try { await p.goto(url, { waitUntil: 'load', timeout: 60000 }); return true; } catch { await p.waitForTimeout(3000); } } return false; }
   for (const [label, vp] of [['1280', { width: 1280, height: 800 }], ['390', { width: 390, height: 844 }]]) {
     for (const path of ['/order/', '/locations/', '/about-us/', '/franchising/']) {
       const ctx = await b.newContext({ viewport: vp }); await routeThrough(ctx); const p = await ctx.newPage();

@@ -478,12 +478,12 @@ test('NEGATIVE CONTROL for the contract test: a source without the selectors fai
 });
 
 const WEB_ROOT = path.resolve(PLUGIN_DIR, '..', 'web');
-const TSX = path.join(WEB_ROOT, 'node_modules', '.bin', 'tsx');
+const TSX = path.join(WEB_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const EXPORTER = path.join(WEB_ROOT, 'scripts', 'wp-oracle', 'export-events.ts');
-const SKIP_TSX = fs.existsSync(TSX) && fs.existsSync(EXPORTER) ? false : 'web/node_modules/.bin/tsx or the exporter not found next to the plugin';
+const SKIP_TSX = fs.existsSync(TSX) && fs.existsSync(EXPORTER) ? false : 'web/node_modules/tsx/dist/cli.mjs or the exporter not found next to the plugin';
 
 test('events.json equals the TypeScript export (export-events.ts --check)', { skip: SKIP_TSX }, () => {
-  const result = spawnSync(TSX, [EXPORTER, '--check'], { encoding: 'utf8', env: Object.assign({}, process.env, { NODE_PATH: path.join(WEB_ROOT, 'node_modules') }) });
+  const result = spawnSync(process.execPath, [TSX, EXPORTER, '--check'], { encoding: 'utf8', env: Object.assign({}, process.env, { NODE_PATH: path.join(WEB_ROOT, 'node_modules') }) });
   assert.strictEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /up to date/);
 });

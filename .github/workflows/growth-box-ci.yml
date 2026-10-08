@@ -10,6 +10,8 @@ on:
       - "doughboss-growth/scripts/php74-guard.php"
       - "doughboss-growth/scripts/es5-check.mjs"
       - "catering-box-pack/website/build_media_zip.py"
+      - "catering-box-pack/website/validate_media_zip.py"
+      - "catering-box-pack/website/test_validate_media_zip.py"
       - "catering-box-pack/website/media-plugin/**"
       - ".github/workflows/growth-box-ci.yml"
   push:
@@ -20,6 +22,8 @@ on:
       - "doughboss-growth/scripts/php74-guard.php"
       - "doughboss-growth/scripts/es5-check.mjs"
       - "catering-box-pack/website/build_media_zip.py"
+      - "catering-box-pack/website/validate_media_zip.py"
+      - "catering-box-pack/website/test_validate_media_zip.py"
       - "catering-box-pack/website/media-plugin/**"
       - ".github/workflows/growth-box-ci.yml"
   workflow_dispatch:
@@ -122,8 +126,28 @@ jobs:
           sha256sum "$RUNNER_TEMP/doughboss-growth-box.zip" "$RUNNER_TEMP/second.zip"
           cmp "$RUNNER_TEMP/doughboss-growth-box.zip" "$RUNNER_TEMP/second.zip"
 
-      - name: Build and validate the separate media zip
+      - name: Test the independent media archive validator
+        run: |
+          python3 -B - <<'PY'
+          import sys
+          import unittest
+
+          suite = unittest.defaultTestLoader.discover(
+              "catering-box-pack/website", pattern="test_validate_media_zip.py"
+          )
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if result.testsRun == 0:
+              print("Release gate discovered no media validator tests.", file=sys.stderr)
+          if result.skipped:
+              print("Release gate requires every media validator test to run; skips are not passes.", file=sys.stderr)
+          sys.exit(0 if result.wasSuccessful() and result.testsRun > 0 and not result.skipped else 1)
+          PY
+
+      - name: Build the separate media zip
         run: python3 catering-box-pack/website/build_media_zip.py "$RUNNER_TEMP/doughboss-growth-media.zip"
+
+      - name: Independently validate the separate media zip
+        run: python3 -B catering-box-pack/website/validate_media_zip.py "$RUNNER_TEMP/doughboss-growth-media.zip"
 
       - name: Keep the validated code zip for review
         uses: actions/upload-artifact@v4
