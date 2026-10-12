@@ -75,6 +75,34 @@ ok( is_string( $o9 ) && false !== strpos( $o9, 'class="foo db-manoush-hero bar h
 $dc = str_replace( 'class="db-manoush-hero db-manoush-hero--home"', 'data-class="db-manoush-hero"', $hero );
 ok( null === $T( $dc, $vid, $chip ), 'data-class="db-manoush-hero" is not a hero section' );
 
+// 11-17. Core 2.43+ draws the backdrop as an <img> (real core 2.44.0 markup captured from the local runtime).
+$h44    = file_get_contents( __DIR__ . '/fixtures/core-2.44.0-home-hero.html' );
+$def    = 'http://127.0.0.1:9411/wp-content/plugins/doughboss/public/images/doughboss-feast-real-v1.jpg';
+$pst    = 'https://x.test/p.webp?ver=1';
+ok( false !== strpos( $h44, '<picture class="db-responsive-picture">' ) && false !== strpos( $h44, '<img class="db-mh-backdrop" src="' . $def . '"' ), 'fixture: real core 2.44.0 hero with a picture-wrapped <img> backdrop' );
+// 11. what core 2.44.0 draws when this plugin hands it the poster: a plain <img> (not an attachment, not the default)
+$plain = preg_replace( '#<picture class="db-responsive-picture">.*?</picture>#s', '<img class="db-mh-backdrop" src="' . esc_url( $pst ) . '" alt="" loading="eager" decoding="async" fetchpriority="high">', $h44, 1 );
+$o11   = $T( $plain . $band, $vid, $chip, $pst );
+ok( is_string( $o11 ) && 1 === preg_match( '/<div class="db-mh-backdrop" style="background-image:url\(\'https:\/\/x\.test\/p\.webp\?ver=1\'\)" aria-hidden="true"><video class="dbgr-hero-video"[^>]*><\/video><\/div><span class="dbgr-hero-chip">/', $o11 ), '2.44 plain <img>: replaced by the 2.41 div with the poster, video inside, chip after' );
+ok( is_string( $o11 ) && false === strpos( $o11, '<img class="db-mh-backdrop"' ) && false === strpos( $o11, 'db-mh-steam' ) && false !== strpos( $o11, 'has-dbgr-video' ), '2.44 plain <img>: image gone, steam removed, class added' );
+ok( is_string( $o11 ) && substr( $o11, -strlen( $band ) ) === $band, '2.44 plain <img>: band after the hero untouched' );
+// 12. picture-wrapped <img> whose src is the poster: the whole picture (with its <source> tags) goes
+$pic = str_replace( 'src="' . $def . '"', 'src="' . esc_url( $pst ) . '"', $h44 );
+$o12 = $T( $pic, $vid, $chip, $pst );
+ok( is_string( $o12 ) && false === strpos( $o12, '<picture' ) && false === strpos( $o12, '<source' ) && false !== strpos( $o12, 'dbgr-hero-video' ), '2.44 picture-wrapped <img>: picture and sources replaced by the div' );
+// 13. the image is not the poster (core ignored the attribute): fail closed
+ok( null === $T( $h44, $vid, $chip, $pst ), '2.44 <img> that is not the poster: fails closed' );
+// 14. no poster given: fail closed
+ok( null === $T( $plain, $vid, $chip ), '2.44 <img> with no poster passed: fails closed' );
+// 15. two image backdrops: fail closed
+$two = str_replace( '<div class="db-mh-steam"', '<img class="db-mh-backdrop" src="' . esc_url( $pst ) . '" alt=""><div class="db-mh-steam"', $plain );
+ok( null === $T( $two, $vid, $chip, $pst ), 'two <img> backdrops: fails closed' );
+// 16. both an <img> and a div backdrop: fail closed
+$both = str_replace( '<div class="db-mh-steam"', '<div class="db-mh-backdrop" aria-hidden="true"></div><div class="db-mh-steam"', $plain );
+ok( null === $T( $both, $vid, $chip, $pst ), '<img> and div backdrops together: fails closed' );
+// 17. the 2.41 path ignores the new argument
+ok( $T( $hero, $vid, $chip, $pst ) === $T( $hero, $vid, $chip ), '2.41 markup: same result with or without the poster argument' );
+
 echo "\n";
 echo "done $pass passed, $fail failed\n";
 exit( $fail ? 1 : 0 );

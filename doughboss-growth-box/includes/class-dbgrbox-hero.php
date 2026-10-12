@@ -30,7 +30,7 @@
  *   to DoughBoss_Growth_Box_Inject::page_has_concept(). If the "Concept image in the bands" switch is also on, that
  *   existing rule still noindexes the home page (see INSTALL.md).
  *
- * Fails closed: if the core markup is not what this expects (a newer core draws the hero backdrop as an <img>, for
+ * Fails closed: if the core markup is not what this expects (an unknown future layout, for
  * example), the output is returned as core made it, with the poster address put back to the original, so a core update
  * can never break the hero or leave an unlabelled concept picture on the page. The photo hero then simply stays.
  *
@@ -211,7 +211,7 @@ final class DoughBoss_Growth_Box_Hero {
 				$text = DoughBoss_Growth_Box_Render::copy( 'chip' );
 				$chip = '<span class="dbgr-hero-chip">' . esc_html( '' === $text ? 'Concept preview' : $text ) . '</span>';
 			}
-			$edited = self::transform( $output, self::video_html( $found, $poster ), $chip );
+			$edited = self::transform( $output, self::video_html( $found, $poster ), $chip, $poster );
 			if ( null !== $edited ) {
 				return $edited;
 			}
@@ -292,17 +292,22 @@ final class DoughBoss_Growth_Box_Hero {
 	 *
 	 * Inside the first <section class="db-manoush-hero ..."> only:
 	 * - adds has-dbgr-video to that section;
-	 * - puts $video_html inside the EMPTY <div class="db-mh-backdrop" ...></div> (the live markup draws the poster as a
-	 *   CSS background, so the div is empty; a backdrop drawn as an <img>, or with anything in it, is not recognised);
+	 * - puts $video_html inside the EMPTY <div class="db-mh-backdrop" ...></div> (core up to 2.42 draws the poster as a
+	 *   CSS background, so the div is empty; a div backdrop with anything in it is not recognised);
+	 * - core 2.43 and later draw the backdrop as ONE <img class="db-mh-backdrop">, optionally inside core's
+	 *   <picture class="db-responsive-picture">. When $poster is given and that image's src is the poster, the image (and its
+	 *   picture wrapper) is replaced by the same div core 2.41 drew, with the poster as its CSS background, so both cores end
+	 *   with the same markup and one stylesheet serves both;
 	 * - removes the .db-mh-steam element (strict: only that element and its empty spans);
 	 * - adds $chip_html (the label, already escaped, or an empty string for no label) straight after the backdrop.
 	 *
 	 * @param string $html       Core's output.
 	 * @param string $video_html The video element.
 	 * @param string $chip_html  The label markup, or an empty string.
+	 * @param string $poster     The poster address, unescaped. Needed only for the <img> backdrop of core 2.43 and later.
 	 * @return string|null The edited output, or null when the markup is not found (the caller then fails closed).
 	 */
-	public static function transform( $html, $video_html, $chip_html ) {
+	public static function transform( $html, $video_html, $chip_html, $poster = '' ) {
 		if ( ! is_string( $html ) || '' === $html || '' === $video_html ) {
 			return null;
 		}
@@ -326,6 +331,11 @@ final class DoughBoss_Growth_Box_Hero {
 			return null;
 		}
 		$inner = substr( $html, $start + strlen( $tag ), $end - $start - strlen( $tag ) );
+
+		$inner = self::img_backdrop_to_div( $inner, $poster );
+		if ( null === $inner ) {
+			return null;
+		}
 
 		$backdrop = '/(<div\b[^>]*\sclass="(?:[^"]*\s)?db-mh-backdrop(?:\s[^"]*)?"[^>]*>)(\s*)(<\/div>)/';
 		if ( 1 !== preg_match_all( $backdrop, $inner ) ) {
@@ -352,5 +362,44 @@ final class DoughBoss_Growth_Box_Hero {
 		}
 
 		return substr( $html, 0, $start ) . $new_tag . $inner . substr( $html, $end );
+	}
+
+	/**
+	 * Core 2.43+ backdrop: turn the single <img class="db-mh-backdrop"> (and core's picture wrapper around it, if any) into
+	 * the empty div core 2.41 drew, so the rest of transform() works unchanged. Section markup with no <img> backdrop (core
+	 * 2.41) is returned as it is.
+	 *
+	 * @param string $inner  The section's inner markup.
+	 * @param string $poster The poster address, unescaped.
+	 * @return string|null The markup, or null when an image backdrop is present but not in a shape this recognises.
+	 */
+	private static function img_backdrop_to_div( $inner, $poster ) {
+		$img   = '/<img\b(?=[^>]*\sclass="(?:[^"]*\s)?db-mh-backdrop(?:\s[^"]*)?")[^>]*>/';
+		$count = preg_match_all( $img, $inner, $all );
+		if ( 0 === $count ) {
+			return $inner;
+		}
+		if ( 1 !== $count || '' === $poster || 1 === preg_match( '/<div\b[^>]*\sclass="(?:[^"]*\s)?db-mh-backdrop[\s"]/', $inner ) ) {
+			return null; // More than one image, no poster to draw, or both kinds of backdrop at once.
+		}
+		$tag = $all[0][0];
+		if ( 1 !== preg_match( '/\ssrc="([^"]*)"/', $tag, $src ) || esc_url( $poster ) !== $src[1] ) {
+			return null; // The image is not the poster this class asked core to draw.
+		}
+		$div = '<div class="db-mh-backdrop" style="background-image:url(\'' . esc_url( $poster ) . '\')" aria-hidden="true"></div>';
+
+		// Core's responsive wrapper: <picture class="db-responsive-picture"> <source ...> ... <img ...> </picture>.
+		$picture = '/<picture\b[^>]*>(?:(?!<\/?picture\b).)*?' . preg_quote( $tag, '/' ) . '\s*<\/picture>/s';
+		$out     = preg_replace( $picture, $div, $inner, 1, $n );
+		if ( ! is_string( $out ) ) {
+			return null;
+		}
+		if ( 1 !== $n ) {
+			$out = str_replace( $tag, $div, $inner, $n );
+			if ( 1 !== $n ) {
+				return null;
+			}
+		}
+		return $out;
 	}
 }

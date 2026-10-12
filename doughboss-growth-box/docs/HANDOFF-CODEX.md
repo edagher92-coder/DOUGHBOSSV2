@@ -2,6 +2,16 @@
 
 Written 2026-10-04. Cold start: read this, then `INSTALL.md`. Use Australian English. The owner is Elie.
 
+## 0. Update, 12 October 2026: box 0.2.1 and core 2.44.0
+
+- **Box 0.2.1:** the home hero video now works on DoughBoss core 2.43 and later. Those cores draw the backdrop as an `<img>`, optionally inside `<picture class="db-responsive-picture">`. `transform()` replaces that image with the same `<div class="db-mh-backdrop" style="background-image:...">` that core 2.41 draws, so one stylesheet serves both cores. It only does this when the image is the poster; any other shape still fails closed.
+- **Core 2.44.0:** the 2.43.2 release line merged into the default line, with the unannounced product name removed from public copy (finding F-2).
+- **Verified 12 Oct:**
+  - Box unit tests: transform 34/34 (10 new cases on real core 2.44.0 markup, fixture `tests/fixtures/core-2.44.0-home-hero.html`), stems 13/13.
+  - Browser phases A-D (admin, visit, matrix, kill switch): 128/128 on core 2.44.0 and 128/128 on core 2.41.0.
+  - Core: 412/412 PHP assertions, 27/27 JS tests. Zips validate.
+- Sections 1 onwards describe 0.2.0 and still apply.
+
 ## 1. Goal and status
 
 - Deliverable: `doughboss-growth-box`, a standalone WordPress plugin (0.2.0). It does two things:
