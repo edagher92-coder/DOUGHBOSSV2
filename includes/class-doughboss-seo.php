@@ -86,8 +86,8 @@ class DoughBoss_SEO {
 		$content = $post instanceof WP_Post ? $post->post_content : '';
 		if ( is_page( 'catering' ) || has_shortcode( $content, 'doughboss_catering' ) ) {
 			return array(
-				'title'       => __( 'Dough Boss Catering | Mini Manoush & Pies Sydney', 'doughboss' ),
-				'description' => __( 'Plan a fresh Sydney catering spread with mini zaatar, cheese and meat manoush plus spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
+				'title'       => __( 'Dough Boss Catering | Manoush & Pies Sydney', 'doughboss' ),
+				'description' => __( 'Plan a fresh Sydney catering spread with zaatar, cheese and meat manoush plus spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
 			);
 		}
 		if ( is_page( array( 'menu', 'order' ) ) || has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {

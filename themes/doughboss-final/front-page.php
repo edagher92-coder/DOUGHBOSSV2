@@ -64,7 +64,7 @@
 		<div class="dbf-catering-copy">
 			<p class="dbf-eyebrow">Catering, made fresh</p>
 			<h2 class="dbf-heading">Feed the whole table.</h2>
-			<p>Mini manoush, pizzas, pies, wraps and generous platters for work, family and celebrations. Contact our catering team and we'll help build the right menu.</p>
+			<p>Manoush, pizzas, pies, wraps and generous platters for work, family and celebrations. Contact our catering team and we'll help build the right menu.</p>
 			<a class="dbf-button" href="<?php echo esc_url( home_url( '/catering/' ) ); ?>">Plan your catering</a>
 		</div>
 		<div class="dbf-catering-media"><?php echo doughboss_final_asset_image( 'doughboss-feast-real-v1.jpg', 'A real Dough Boss catering spread', array( 'loading' => 'lazy', 'decoding' => 'async' ) ); ?></div>
