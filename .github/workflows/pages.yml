@@ -43,9 +43,11 @@ jobs:
           php scripts/build-visual-preview.php _site /DOUGHBOSSV2/
           node scripts/validate-visual-preview.js _site
       - uses: actions/configure-pages@v5
+      - name: Validate current immutable phone preview snapshot
+        run: node scripts/validate-phone-preview.js phone-preview
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: _site
+          path: phone-preview
 
   deploy:
     needs: build
