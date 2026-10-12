@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       DoughBoss Growth Catering Box
  * Description:       Shortcodes for the Dough Boss catering box story page, the band under the hero, a site-wide "Feed the whole table." strip and a seal badge, plus an optional looping video in the home hero. Every feature switch ships off. Images come from the separate DoughBoss Growth Media plugin.
- * Version:           0.2.0
+ * Version:           0.2.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            DoughBoss
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Current version. Must match the header above, readme.txt "Stable tag" and the first changelog heading
  * (scripts/build-zip.php enforces the four-way match).
  */
-define( 'DBGRBOX_VERSION', '0.2.0' );
+define( 'DBGRBOX_VERSION', '0.2.1' );
 define( 'DBGRBOX_FILE', __FILE__ );
 define( 'DBGRBOX_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DBGRBOX_URL', plugin_dir_url( __FILE__ ) );

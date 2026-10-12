@@ -1,11 +1,11 @@
-# Installing the catering box pages and the home hero video (version 0.2.0)
+# Installing the catering box pages and the home hero video (version 0.2.1)
 
 For Elie. Plain words, in order. Nothing public changes until you tick a switch.
 
 You will use two zips (Plugins, Add New, Upload Plugin) and, for the video, five MP4 files (Media, Add New):
 
 1. `doughboss-growth-media-0.2.0.zip` (the pictures, about 1.8 MB, no code)
-2. `doughboss-growth-box-0.2.0.zip` (the code, about 43 KB)
+2. `doughboss-growth-box-0.2.1.zip` (the code, about 43 KB)
 3. Five video files, each under the host's 2 MB upload limit:
    `dbgr-hero-loop-720-av1.mp4`, `dbgr-hero-loop-1080-av1.mp4`, `dbgr-hero-loop-720-hevc.mp4`, `dbgr-hero-loop-1080-hevc.mp4`, `dbgr-hero-loop-720-h264.mp4`
 
@@ -17,7 +17,7 @@ This replaces the 2 October "keep the photo hero" decision for the home hero vid
 
 1. **Media, Add New.** Drag the five MP4 files in. Do not rename them: the plugin finds them by file name. (If WordPress adds `-1` to a name because you uploaded one twice, that is fine, the newest one is used.)
 2. **Plugins, Add New, Upload Plugin.** Choose `doughboss-growth-media-0.2.0.zip`. If WordPress says the plugin already exists, click **Replace current with uploaded**. This adds the first-frame picture of the video.
-3. Upload `doughboss-growth-box-0.2.0.zip` the same way (**Replace current with uploaded** if you already have 0.1.0), then **Activate** if it asks. Everything stays off.
+3. Upload `doughboss-growth-box-0.2.1.zip` the same way (**Replace current with uploaded** if you already have 0.1.0), then **Activate** if it asks. Everything stays off.
 4. Open **DoughBoss, Catering box**. Scroll to **Home hero video** at the bottom: the table should show all five videos and both pictures as found. Then tick **Home hero video** (leave **Show "Concept preview" label on the hero video** ticked), click **Save changes**, and purge any cache plugin or CDN.
 5. Check it on a phone and on a computer, in a private window:
    - the home page hero shows the picture straight away, with a small "Concept preview" label in the top right corner;
@@ -56,7 +56,7 @@ About 15 minutes. Nothing public changes until step 7.
 ### Install
 
 1. WordPress admin, Plugins, Add New, **Upload Plugin**. Choose `doughboss-growth-media-0.2.0.zip`. Click **Install Now**, then **Activate**. It does nothing by itself.
-2. Upload `doughboss-growth-box-0.2.0.zip` the same way. Click **Install Now**, then **Activate**.
+2. Upload `doughboss-growth-box-0.2.1.zip` the same way. Click **Install Now**, then **Activate**.
 3. Open **DoughBoss, Catering box** in the left menu. If there is no DoughBoss menu, it is under **Settings, Catering box**. Every feature switch is off (only the "Concept preview" label for the hero video starts ticked, and it does nothing until the video is on).
 4. Open the home page, the catering page and the menu page in a private window. They must look exactly as they did before.
 5. On the Catering box screen, look at **Image slots**. You should see `closed_art`, `closed`, `seal_art`, `seal_macro`, `closed_band`, `liner_tile` and `seal_badge`, each showing **ok**. If one says **missing** or **no media plugin**, the media zip is not active.
