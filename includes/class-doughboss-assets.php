@@ -228,12 +228,18 @@ class DoughBoss_Assets {
 		$deps        = array( 'doughboss-marketing', 'doughboss-shop-status' );
 		// A configured gateway must not initialize browser payment fields while
 		// the store is intentionally in browse-only / Coming Soon mode.
-		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
+		// Ordinary gateway bootstrap is deliberately unavailable while requests
+		// need staff approval (or the policy cannot be read safely). Approved
+		// request links have their own capability-bound payment path and do not use
+		// this ordinary storefront readiness flag.
+		$staff_approval_policy = DoughBoss_Settings::staff_approval_policy();
+		$ordinary_checkout_allowed = 'legacy' === ( isset( $staff_approval_policy['mode'] ) ? (string) $staff_approval_policy['mode'] : '' );
+		$payments_on = $ordinary_checkout_allowed && DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
 		$gateway     = DoughBoss_Settings::payment_gateway();
 		$square_binding = null;
 		if ( 'square' === $gateway ) {
 			$single_location_id = DoughBoss_Locations::single_location_id();
-			$payments_on = DoughBoss_Settings::ordering_open() && $single_location_id
+			$payments_on = $ordinary_checkout_allowed && DoughBoss_Settings::ordering_open() && $single_location_id
 				&& ! is_wp_error( DoughBoss_Locations::online_payment_location( $single_location_id ) )
 				&& DoughBoss_Square::ready_for_location( $single_location_id );
 			$square_binding = $payments_on ? DoughBoss_Square::shop_binding( $single_location_id ) : null;

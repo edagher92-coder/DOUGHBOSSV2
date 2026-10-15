@@ -9,6 +9,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class DoughBoss_Square_Dashboard {
+	/** Resolve one exact supported native shop; never fall back to a global mapping. */
+	public static function observe_catalogue( $shop ) {
+		if ( ! is_string( $shop ) || ! in_array( $shop, array( 'revesby', 'bankstown', 'roselands' ), true ) ) {
+			return new WP_Error( 'doughboss_square_catalogue_shop', __( 'Choose one supported shop for this read-only observation.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		global $wpdb;
+		$matches = array_values( array_filter( DoughBoss_Locations::all( true ), static function ( $location ) use ( $shop ) { return isset( $location->slug ) && $shop === $location->slug; } ) );
+		if ( ! empty( $wpdb->last_error ) || 1 !== count( $matches ) ) {
+			return new WP_Error( 'doughboss_square_catalogue_shop', __( 'The exact active shop could not be resolved. No Square catalogue was requested.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return DoughBoss_Square::observe_catalogue( (int) $matches[0]->id );
+	}
+
 	/** Build an owner-only view without database writes or provider requests. */
 	public static function view( $mode = 'status', $location = 'all' ) {
 		$shops = array( 'revesby' => 'Revesby', 'bankstown' => 'Bankstown', 'roselands' => 'Roselands' );
@@ -31,6 +44,7 @@ class DoughBoss_Square_Dashboard {
 			'staff' => array( 'managed_by' => 'square', 'attendance_available' => false ),
 			'planned_location' => array( 'label' => 'Planned location', 'state' => 'private_unmapped' ),
 			'locations' => array(),
+			'readiness' => self::readiness(),
 		);
 		foreach ( $shops as $id => $name ) {
 			$view['locations'][] = array(
@@ -78,6 +92,41 @@ class DoughBoss_Square_Dashboard {
 		}
 		self::finish_summary( $view['summary'] );
 		return $view;
+	}
+
+	/** Local setup evidence only: configuration and demo records cannot attest provider capability. */
+	private static function readiness() {
+		$pin = DoughBoss_Settings::square_api_version();
+		$minimum = '2025-05-21';
+		$valid_pin = checkdate( (int) substr( $pin, 5, 2 ), (int) substr( $pin, 8, 2 ), (int) substr( $pin, 0, 4 ) );
+		return array(
+			'schema_version' => 1,
+			'state' => 'not_attested',
+			'merchant_verification' => 'not_attested',
+			'location_verification' => 'not_attested',
+			'permissions' => 'not_attested',
+			'account_eligibility' => 'not_attested',
+			'api' => array(
+				'configured_pin' => $pin,
+				'timecards_minimum' => $minimum,
+				'timecards_version_state' => ! $valid_pin ? 'invalid_pin' : ( strcmp( $pin, $minimum ) < 0 ? 'below_minimum' : 'meets_minimum' ),
+			),
+			'sync_state' => 'not_recorded',
+			'last_successful_sync' => null,
+			'capabilities' => array(
+				'payments_refunds' => 'not_attested',
+				'gift_card_balance_redemption' => 'not_attested',
+				'gift_card_purchase_delivery' => 'not_implemented',
+				'gift_card_split_checkout' => 'disabled',
+				'loyalty' => 'not_implemented',
+				'loyalty_subscription' => 'not_attested',
+				'catalogue_inventory' => 'not_implemented',
+				'timecards' => 'not_implemented',
+				'staff_permissions_passcodes_payroll' => 'dashboard_only',
+				'team_sales_tip_activity_reports' => 'unsupported',
+				'reporting_costing' => 'not_implemented',
+			),
+		);
 	}
 
 	private static function empty_summary() {

@@ -185,6 +185,13 @@ class DoughBoss_Preorder_Approval {
 		}
 		try {
 			$event = self::locked_event( $event_key );
+			// HTTP-entry permission is not durable decision authority. Rebind the
+			// exact actor to the current server policy inside this transaction.
+			$policy = DoughBoss_Settings::staff_approval_policy( true );
+			if ( 'unavailable' === $policy['mode'] || ! DoughBoss_Settings::staff_approval_actor_valid( $policy ) || $actor_user_id !== $policy['approver_id'] ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_approver_required', __( 'The currently configured payment approver must review this request.', 'doughboss' ), 403 );
+			}
 			if ( $event ) {
 				if ( (int) $event->request_order_id !== $request_order_id || ! self::decision_matches_state( $decision, $event->state ) ) {
 					self::rollback();

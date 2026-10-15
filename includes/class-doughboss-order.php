@@ -120,7 +120,7 @@ class DoughBoss_Order {
 	 */
 	public static function status_label_for( $order ) {
 		if ( self::is_preorder_request( $order ) ) {
-			return __( 'Pre-order request — pending morning review', 'doughboss' );
+			return __( 'Pre-order request — awaiting staff review', 'doughboss' );
 		}
 		if ( isset( $order->order_type ) && 'dine_in' === $order->order_type ) {
 			if ( 'ready' === $order->status ) {
@@ -135,7 +135,7 @@ class DoughBoss_Order {
 	}
 
 	/**
-	 * Whether an order row is an unpaid after-hours request awaiting staff review.
+	 * Whether an order row is an unpaid request awaiting staff review.
 	 *
 	 * @param object|array $order Order row.
 	 * @return bool
@@ -214,7 +214,7 @@ class DoughBoss_Order {
 		if ( self::is_preorder_request( $row ) ) {
 			return array(
 				'status' => 'preorder_pending_review',
-				'label'  => __( 'Pre-order request received — Revesby will review it first thing in the morning. It is not confirmed or paid.', 'doughboss' ),
+				'label'  => __( 'Pre-order request received — awaiting staff review. It is not confirmed or paid.', 'doughboss' ),
 			);
 		}
 		$map        = array(
@@ -263,7 +263,7 @@ class DoughBoss_Order {
 		}
 		if ( 'pending' === $status ) {
 			if ( self::is_preorder_request( $row ) ) {
-				return array( 'status' => 'preorder_pending_review', 'label' => __( 'Pre-order request pending morning review', 'doughboss' ) );
+				return array( 'status' => 'preorder_pending_review', 'label' => __( 'Pre-order request awaiting staff review', 'doughboss' ) );
 			}
 			return array( 'status' => 'awaiting_acceptance', 'label' => __( 'Awaiting staff acceptance', 'doughboss' ) );
 		}
@@ -403,6 +403,112 @@ class DoughBoss_Order {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
 			return new WP_Error( 'doughboss_db_error', __( 'Could not start your order safely. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+
+		// A duplicate receipt never creates a new kitchen order. Resolve that
+		// bounded replay before looking at today's intake policy so historical
+		// bookkeeping can be repaired without reopening direct fulfilment.
+		$replay_id = self::find_id_by_checkout_key( $checkout_key, true );
+		$replayed_by = 'checkout_key';
+		if ( ! $replay_id && null !== $payment_intent_id ) {
+			$replay_id   = self::find_id_by_payment_intent( $payment_intent_id, true );
+			$replayed_by = 'payment_intent_id';
+		}
+		if ( ! $replay_id && $source_request_id ) {
+			$replay_id   = self::find_id_by_source_request( $source_request_id, true );
+			$replayed_by = 'source_request_id';
+		}
+		if ( $replay_id ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return array( 'order_id' => $replay_id, 'replayed' => true, 'replayed_by' => $replayed_by );
+		}
+
+		// The option row is locked with the prospective order. A settings change
+		// cannot race from approval-required to legacy between the entry check and
+		// this durable creation boundary.
+		$policy = DoughBoss_Settings::staff_approval_policy( true );
+		if ( ! is_array( $policy ) || ! isset( $policy['mode'], $policy['ordering_open'], $policy['after_hours'], $policy['pickup_enabled'] ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_staff_approval_unavailable', __( 'Order approval settings are unavailable. Please try again later.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+
+		if ( $is_preorder_request ) {
+			$raw_location_id = isset( $data['location_id'] ) ? $data['location_id'] : null;
+			$canonical_location = ( is_int( $raw_location_id ) && $raw_location_id > 0 )
+				|| ( is_string( $raw_location_id ) && preg_match( '/^[1-9][0-9]*$/D', $raw_location_id ) && (string) (int) $raw_location_id === $raw_location_id );
+			$location = $canonical_location && class_exists( 'DoughBoss_Locations' ) ? DoughBoss_Locations::get( (int) $raw_location_id ) : null;
+			$location_slug = $location && isset( $location->slug ) ? (string) $location->slug : '';
+			$valid_request_location = $location
+				&& 1 === (int) $location->is_active
+				&& ! empty( $location->pickup_enabled )
+				&& ! empty( $policy['pickup_enabled'] )
+				&& in_array( $location_slug, array( 'revesby', 'bankstown', 'roselands' ), true )
+				&& ( 'required' === (string) $policy['mode'] || 'revesby' === $location_slug );
+			$required_mode_open = 'required' === (string) $policy['mode']
+				&& DoughBoss_Settings::staff_approval_actor_valid( $policy )
+				&& ( ! empty( $policy['ordering_open'] ) || ( empty( $policy['ordering_open'] ) && ! empty( $policy['after_hours'] ) ) );
+			$legacy_after_hours_open = 'legacy' === (string) $policy['mode']
+				&& DoughBoss_Settings::staff_approval_actor_valid( $policy )
+				&& empty( $policy['ordering_open'] )
+				&& ! empty( $policy['after_hours'] );
+			if ( ! $valid_request_location || ( ! $required_mode_open && ! $legacy_after_hours_open ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_preorder_unavailable', __( 'Pre-order requests are not available right now.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+		} elseif ( ! $source_request_id && in_array( isset( $data['order_source'] ) ? sanitize_key( $data['order_source'] ) : 'web', array( 'web', 'table_qr' ), true ) ) {
+			// A paid reconciliation hold is terminal for automatic fulfilment,
+			// including after a later deliberate legacy-policy change. Square's
+			// payment identity differs from the browser receipt key: lock its exact
+			// provider reference, the same row locked by the paid hold writer.
+			$is_square_payment = null !== $payment_intent_id && 'paid' === ( isset( $data['payment_status'] ) ? $data['payment_status'] : '' )
+				&& 'square' === ( isset( $data['payment_method'] ) ? $data['payment_method'] : '' );
+			$attempt_query = $is_square_payment
+				? $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE provider = %s AND provider_reference = %s LIMIT 1 FOR UPDATE', 'square', $payment_intent_id )
+				: $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE checkout_key = %s LIMIT 1 FOR UPDATE', $checkout_key );
+			$held_attempt = $wpdb->get_row( $attempt_query, ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+			if ( ! empty( $wpdb->last_error ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_payment_state_unavailable', __( 'Payment state cannot be verified. Please do not pay again.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			$held_metadata = is_array( $held_attempt ) ? DoughBoss_Payment_Attempts::metadata( $held_attempt ) : array();
+			if ( $is_square_payment ) {
+				// A foreign/provider/voucher attempt cannot authorize an ordinary
+				// order. Keep receipt idempotency independent of payment identity.
+				$snapshot = is_array( $held_attempt ) ? DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $held_attempt['checkout_key'] ) : null;
+				$saved = is_array( $snapshot ) && isset( $snapshot['payload']['order'] ) && is_array( $snapshot['payload']['order'] ) ? $snapshot['payload']['order'] : array();
+				$valid_payment = is_array( $held_attempt ) && ! empty( $saved ) && empty( $wpdb->last_error )
+					&& 'order' === (string) $held_attempt['purpose'] && (string) $held_attempt['context'] === ( isset( $data['order_source'] ) ? $data['order_source'] : 'web' )
+					&& 'square-v2' === ( isset( $held_metadata['protocol_version'] ) ? $held_metadata['protocol_version'] : '' )
+					&& 'succeeded' === (string) $held_attempt['status'] && 'COMPLETED' === strtoupper( (string) $held_attempt['provider_status'] )
+					&& (int) $held_attempt['amount_minor'] === DoughBoss_Payment::to_minor_units( isset( $data['total'] ) ? $data['total'] : 0 )
+					&& strtoupper( (string) $held_attempt['currency'] ) === $order_currency
+					&& (int) $held_attempt['location_id'] === (int) ( isset( $data['location_id'] ) ? $data['location_id'] : 0 )
+					&& isset( $saved['checkout_key'], $snapshot['payload']['binding_hash'], $held_metadata['binding_hash'], $snapshot['payload']['lines'] )
+					&& is_array( $snapshot['payload']['lines'] )
+					&& hash_equals( (string) $held_attempt['checkout_key'], (string) $saved['checkout_key'] )
+					&& hash_equals( (string) $held_metadata['binding_hash'], (string) $snapshot['payload']['binding_hash'] )
+					&& strtoupper( (string) ( isset( $saved['currency'] ) ? $saved['currency'] : '' ) ) === $order_currency
+					&& array_values( $lines ) === array_values( $snapshot['payload']['lines'] )
+					&& self::accounting_basis_from_payload( $saved ) === $accounting_basis;
+				foreach ( array( 'location_id', 'order_type', 'table_id', 'table_qr_code_id', 'table_session_id', 'order_source', 'customer_name', 'customer_email', 'customer_phone', 'address', 'notes', 'voucher_code' ) as $field ) {
+					if ( ! array_key_exists( $field, $saved ) || (string) $saved[ $field ] !== (string) ( isset( $data[ $field ] ) ? $data[ $field ] : '' ) ) { $valid_payment = false; }
+				}
+				foreach ( array( 'subtotal', 'tax', 'delivery_fee', 'discount', 'total' ) as $field ) {
+					if ( ! isset( $saved[ $field ], $data[ $field ] ) || DoughBoss_Payment::to_minor_units( $saved[ $field ] ) !== DoughBoss_Payment::to_minor_units( $data[ $field ] ) ) { $valid_payment = false; }
+				}
+				if ( ! $valid_payment ) {
+					$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+					return new WP_Error( 'doughboss_payment_state_unavailable', __( 'Payment state cannot be verified. Please do not pay again.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+			}
+			if ( array_key_exists( 'reconciliation_hold', $held_metadata ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_paid_reconciliation_required', __( 'Your payment is retained for staff reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			if ( in_array( (string) $policy['mode'], array( 'required', 'unavailable' ), true ) ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_staff_approval_required', __( 'This order requires staff approval before payment and fulfilment.', 'doughboss' ), array( 'status' => 409 ) );
+			}
 		}
 
 		$capacity = null;

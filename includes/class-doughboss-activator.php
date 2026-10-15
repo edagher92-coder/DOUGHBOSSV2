@@ -14,6 +14,83 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class DoughBoss_Activator {
 
+	/**
+	 * Additive catalogue-operation receipts, separate from orders and payments.
+	 * Schema reserve only; no writer/provenance/verified claim.
+	 */
+	private static function create_catalogue_operations_table() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_square_catalogue_operations';
+		$collate = $wpdb->get_charset_collate();
+		dbDelta( "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			operation_key char(64) NOT NULL,
+			provider_idempotency_key char(36) NOT NULL,
+			version bigint(20) unsigned NOT NULL DEFAULT 1,
+			state varchar(16) NOT NULL DEFAULT 'prepared',
+			source_algorithm varchar(32) NOT NULL,
+			source_json longtext NOT NULL,
+			source_hash char(64) NOT NULL,
+			target_json longtext NOT NULL,
+			target_hash char(64) NOT NULL,
+			request_json longtext NOT NULL,
+			request_hash char(64) NOT NULL,
+			approved_by bigint(20) unsigned NOT NULL,
+			approved_at_utc datetime NOT NULL,
+			receipt_json longtext NULL DEFAULT NULL,
+			receipt_hash char(64) NULL DEFAULT NULL,
+			approval_evidence_json longtext NULL DEFAULT NULL,
+			approval_evidence_hash char(64) NULL DEFAULT NULL,
+			readback_json longtext NULL DEFAULT NULL,
+			readback_hash char(64) NULL DEFAULT NULL,
+			last_error varchar(64) NOT NULL DEFAULT '',
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			dispatched_at_utc datetime NULL DEFAULT NULL,
+			verified_at_utc datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY operation_key (operation_key),
+			UNIQUE KEY provider_idempotency_key (provider_idempotency_key)
+		) ENGINE=InnoDB {$collate};" );
+	}
+
+	/** Fail closed for a partial schema, nontransactional engine or weakened keys. */
+	public static function catalogue_operations_storage_ready() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_square_catalogue_operations';
+		$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+		if ( ! empty( $wpdb->last_error ) || 'INNODB' !== strtoupper( (string) $engine ) ) { return false; }
+		$id = array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => null );
+		$hash = array( 'type' => 'char(64)', 'null' => 'NO', 'default' => null );
+		$json = array( 'type' => 'longtext', 'null' => 'NO', 'default' => null );
+		$time = array( 'type' => 'datetime', 'null' => 'NO', 'default' => null );
+		return self::column_contract_ready( $table, array(
+			'id' => array_merge( $id, array( 'extra' => 'auto_increment' ) ),
+			'operation_key' => $hash,
+			'provider_idempotency_key' => array( 'type' => 'char(36)', 'null' => 'NO', 'default' => null ),
+			'version' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+			'state' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'prepared' ),
+			'source_algorithm' => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => null ),
+			'source_json' => $json, 'source_hash' => $hash,
+			'target_json' => $json, 'target_hash' => $hash,
+			'request_json' => $json, 'request_hash' => $hash,
+			'approved_by' => $id, 'approved_at_utc' => $time,
+			'receipt_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+			'receipt_hash' => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			// Schema reserve only; no writer/provenance/verified claim.
+			'approval_evidence_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+			'approval_evidence_hash' => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			'readback_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+			'readback_hash' => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			'last_error' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ),
+			'created_at_utc' => $time, 'updated_at_utc' => $time,
+			'dispatched_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'verified_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+		) ) && self::index_contract_ready( $table, 'PRIMARY', array( 'id' ), true )
+			&& self::index_contract_ready( $table, 'operation_key', array( 'operation_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $table, 'provider_idempotency_key', array( 'provider_idempotency_key' ), true, array( 36 ) );
+	}
+
 	/** Additive, inert funding ledger. No historical payment data is rewritten. */
 	private static function create_payment_ledger_tables() {
 		global $wpdb;
@@ -123,11 +200,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::payment_ledger_storage_ready() && self::preorder_approval_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::payment_ledger_storage_ready() && self::catalogue_operations_storage_ready() && self::preorder_approval_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, split-funding, pre-order approval, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, split-funding, catalogue-operation, pre-order approval, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -773,6 +850,7 @@ class DoughBoss_Activator {
 		dbDelta( $sql_payment_events );
 		dbDelta( $sql_checkout_snapshots );
 		self::create_payment_ledger_tables();
+		self::create_catalogue_operations_table();
 		dbDelta( $sql_loyalty_members );
 		dbDelta( $sql_loyalty_ledger );
 		dbDelta( $sql_loyalty_tokens );

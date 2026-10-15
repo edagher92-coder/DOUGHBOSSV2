@@ -689,6 +689,160 @@ class DoughBoss_Payment_Attempts {
 	}
 
 	/**
+	 * Durably retain one already-verified Stripe Checkout payment when current
+	 * policy prevents creation of its ordinary fulfilment order.
+	 *
+	 * This accepts only the provider facts that the caller has already verified;
+	 * it makes no HTTP request and deliberately does not acknowledge an event.
+	 * The exact attempt, still-prepared snapshot and competing order identities
+	 * are locked together so a paid hold cannot overwrite a completed receipt.
+	 *
+	 * @param string $checkout_key         Durable checkout identity.
+	 * @param string $checkout_session_id  Exact Stripe Checkout Session identity.
+	 * @param string $payment_intent_id    Canonical paid Stripe PaymentIntent.
+	 * @param int    $amount_minor         Verified paid amount.
+	 * @param string $currency             Verified paid ISO currency.
+	 * @param string $hold_reason          Stable, operator-safe reconciliation reason.
+	 * @return array|false Held attempt, including exact replay, or false without a durable hold.
+	 */
+	public static function hold_paid_stripe_order( $checkout_key, $checkout_session_id, $payment_intent_id, $amount_minor, $currency, $hold_reason ) {
+		global $wpdb;
+
+		$checkout_key        = self::stable_key( $checkout_key );
+		$checkout_session_id = self::provider_reference( $checkout_session_id );
+		$payment_intent_id   = self::provider_reference( $payment_intent_id );
+		$currency            = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $currency ) );
+		$hold_reason         = self::short_key( $hold_reason, 64 );
+		$amount_valid        = is_int( $amount_minor ) || ( is_string( $amount_minor ) && preg_match( '/^[1-9][0-9]*\z/', $amount_minor ) );
+		$amount_minor        = $amount_valid ? (int) $amount_minor : 0;
+
+		if (
+			'' === $checkout_key
+			|| 1 !== preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}\z/', $checkout_session_id )
+			|| 1 !== preg_match( '/^pi_[A-Za-z0-9_]{8,191}\z/', $payment_intent_id )
+			|| ! $amount_valid
+			|| $amount_minor < 1
+			|| 3 !== strlen( $currency )
+			|| '' === $hold_reason
+			|| ! DoughBoss_Activator::payment_storage_ready()
+			|| ! class_exists( 'DoughBoss_Order' )
+			|| false === $wpdb->query( 'START TRANSACTION' ) // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		) {
+			return false;
+		}
+
+		$committed = false;
+		try {
+			$locked = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE checkout_key = %s LIMIT 1 FOR UPDATE', $checkout_key ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if (
+				! is_array( $locked )
+				|| 'stripe' !== (string) $locked['provider']
+				|| 'order' !== (string) $locked['purpose']
+				|| ! in_array( (string) $locked['context'], array( 'web', 'table_qr' ), true )
+				|| ! hash_equals( $checkout_key, (string) $locked['checkout_key'] )
+				|| ! hash_equals( $checkout_session_id, (string) $locked['provider_reference'] )
+				|| ! empty( $locked['provider_order_reference'] )
+				|| $amount_minor !== (int) $locked['amount_minor']
+				|| ! hash_equals( $currency, strtoupper( (string) $locked['currency'] ) )
+				|| ! in_array( (string) $locked['status'], array( 'processing', 'unknown', 'succeeded' ), true )
+			) {
+				return false;
+			}
+
+			$snapshot = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_checkout_snapshots WHERE checkout_key = %s LIMIT 1 FOR UPDATE', $checkout_key ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if (
+				! is_array( $snapshot )
+				|| 'prepared' !== (string) $snapshot['status']
+				|| 0 !== (int) $snapshot['order_id']
+				|| ! hash_equals( (string) $snapshot['payload_hash'], hash( 'sha256', (string) $snapshot['payload_json'] ) )
+			) {
+				return false;
+			}
+			$payload = json_decode( (string) $snapshot['payload_json'], true );
+			$order   = is_array( $payload ) && isset( $payload['order'] ) && is_array( $payload['order'] ) ? $payload['order'] : array();
+			if (
+				empty( $order )
+				|| ! hash_equals( $checkout_key, isset( $order['checkout_key'] ) ? (string) $order['checkout_key'] : '' )
+				|| $amount_minor !== DoughBoss_Payment::to_minor_units( isset( $order['total'] ) ? (float) $order['total'] : -1 )
+				|| ! hash_equals( $currency, strtoupper( isset( $order['currency'] ) ? (string) $order['currency'] : '' ) )
+				|| (int) $locked['location_id'] !== (int) ( isset( $order['location_id'] ) ? $order['location_id'] : 0 )
+				|| (int) $locked['table_id'] !== (int) ( isset( $order['table_id'] ) ? $order['table_id'] : 0 )
+				|| (int) $locked['qr_code_id'] !== (int) ( isset( $order['table_qr_code_id'] ) ? $order['table_qr_code_id'] : 0 )
+				|| ( 'web' === (string) $locked['context'] && 'web' !== ( isset( $order['order_source'] ) ? (string) $order['order_source'] : 'web' ) )
+				|| ( 'table_qr' === (string) $locked['context'] && 'table_qr' !== ( isset( $order['order_source'] ) ? (string) $order['order_source'] : '' ) )
+			) {
+				return false;
+			}
+
+			if ( DoughBoss_Order::find_id_by_checkout_key( $checkout_key, true ) || DoughBoss_Order::find_id_by_payment_intent( $payment_intent_id, true ) ) {
+				return false;
+			}
+
+			$metadata = self::metadata( $locked );
+			if (
+				( isset( $metadata['stripe_payment_intent_id'] ) && ! hash_equals( $payment_intent_id, (string) $metadata['stripe_payment_intent_id'] ) )
+				|| ( isset( $metadata['reconciliation_hold'] ) && ! hash_equals( $hold_reason, (string) $metadata['reconciliation_hold'] ) )
+			) {
+				return false;
+			}
+			$metadata['stripe_payment_intent_id'] = $payment_intent_id;
+			$metadata['reconciliation_hold']      = $hold_reason;
+			$metadata_json                        = self::safe_metadata_json( $metadata );
+			if ( false === $metadata_json ) {
+				return false;
+			}
+
+			$already_held = 'succeeded' === (string) $locked['status']
+				&& 'succeeded' === (string) $locked['provider_status']
+				&& ! empty( $locked['verified_at'] )
+				&& hash_equals( $metadata_json, isset( $locked['safe_metadata_json'] ) ? (string) $locked['safe_metadata_json'] : '' );
+			if ( ! $already_held ) {
+				$updated = $wpdb->query( $wpdb->prepare(
+					'UPDATE ' . self::table() . ' SET status = %s, provider_status = %s, safe_metadata_json = %s, last_error = %s, verified_at = %s, updated_at = %s WHERE id = %d AND provider = %s AND purpose = %s AND context = %s AND checkout_key = %s AND provider_reference = %s AND provider_order_reference IS NULL AND amount_minor = %d AND currency = %s AND safe_metadata_json = %s',
+					'succeeded', 'succeeded', $metadata_json, $hold_reason, self::utc_now(), self::utc_now(), (int) $locked['id'], 'stripe', 'order', (string) $locked['context'], $checkout_key, $checkout_session_id, $amount_minor, $currency, isset( $locked['safe_metadata_json'] ) ? (string) $locked['safe_metadata_json'] : ''
+				) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+				if ( 1 !== $updated ) {
+					return false;
+				}
+			}
+
+			$held = self::find( (int) $locked['id'] );
+			if (
+				! is_array( $held )
+				|| 'succeeded' !== (string) $held['status']
+				|| 'succeeded' !== (string) $held['provider_status']
+				|| empty( $held['verified_at'] )
+				|| ! hash_equals( $checkout_session_id, (string) $held['provider_reference'] )
+				|| ! hash_equals( $metadata_json, isset( $held['safe_metadata_json'] ) ? (string) $held['safe_metadata_json'] : '' )
+				|| false === $wpdb->query( 'COMMIT' ) // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			) {
+				return false;
+			}
+			$committed = true;
+		} finally {
+			if ( ! $committed ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+		}
+
+		$verified = self::find( (int) $locked['id'] );
+		if (
+			! is_array( $verified )
+			|| 'succeeded' !== (string) $verified['status']
+			|| 'succeeded' !== (string) $verified['provider_status']
+			|| empty( $verified['verified_at'] )
+			|| ! hash_equals( $checkout_session_id, (string) $verified['provider_reference'] )
+			|| ! hash_equals( $metadata_json, isset( $verified['safe_metadata_json'] ) ? (string) $verified['safe_metadata_json'] : '' )
+			|| DoughBoss_Order::find_id_by_checkout_key( $checkout_key )
+			|| DoughBoss_Order::find_id_by_payment_intent( $payment_intent_id )
+		) {
+			return false;
+		}
+
+		return $verified;
+	}
+
+	/**
 	 * Release a Square cart guard only after its paid order is durable.
 	 *
 	 * @param string $provider_reference Canonical Square payment id.

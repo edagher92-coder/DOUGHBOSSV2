@@ -306,6 +306,18 @@ class DoughBoss_Admin {
 						<option value="roselands"><?php esc_html_e( 'Roselands', 'doughboss' ); ?></option>
 					</select>
 					<p id="doughboss-square-location-note" class="description"><?php esc_html_e( 'Available only while previewing isolated demo data. It does not change Square settings.', 'doughboss' ); ?></p>
+					<label for="doughboss-square-catalogue-shop"><?php esc_html_e( 'Catalogue observation shop', 'doughboss' ); ?></label>
+					<select id="doughboss-square-catalogue-shop" data-square-catalogue-shop>
+						<option value="revesby"><?php esc_html_e( 'Revesby', 'doughboss' ); ?></option>
+						<option value="bankstown"><?php esc_html_e( 'Bankstown', 'doughboss' ); ?></option>
+						<option value="roselands"><?php esc_html_e( 'Roselands', 'doughboss' ); ?></option>
+					</select>
+					<button type="button" class="button" data-square-locations-read aria-describedby="doughboss-square-locations-note"><?php esc_html_e( 'Read Square locations and access', 'doughboss' ); ?></button>
+					<button type="button" class="button" data-square-source-read><?php esc_html_e( 'Review website menu source', 'doughboss' ); ?></button>
+					<button type="button" class="button" data-square-catalogue-read><?php esc_html_e( 'Read Square catalogue', 'doughboss' ); ?></button>
+					<button type="button" class="button" data-square-prepare-review hidden><?php esc_html_e( 'Prepare catalogue mapping', 'doughboss' ); ?></button>
+					<p id="doughboss-square-locations-note" class="description"><?php esc_html_e( 'The location and access check reads Square credential identity and visible locations using MERCHANT_PROFILE_READ. It compares exact saved IDs for the three shops; it does not save mappings, grant staff access, verify settlement or enable payments.', 'doughboss' ); ?></p>
+					<p class="description"><?php esc_html_e( 'Website-source review reads the global website menu, not shop-specific availability. Square-catalogue review reads the selected observed shop. Prepare catalogue mapping requires explicit shop, availability, tax and photo review and saves local prepared intent only; it never imports items or enables payments. These actions do not perform an import, sync, inventory, payment or settings write. Square catalogue reads require ITEMS_READ and MERCHANT_PROFILE_READ.', 'doughboss' ); ?></p>
 				</div>
 
 				<p class="doughboss-square-dashboard__notice" data-square-status role="status" aria-live="polite"><?php esc_html_e( 'Loading Square connection status…', 'doughboss' ); ?></p>
@@ -314,7 +326,7 @@ class DoughBoss_Admin {
 			</section>
 
 			<h2 class="doughboss-dashboard__local-heading"><?php esc_html_e( 'Local DoughBoss reports', 'doughboss' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Today in the site timezone. Figures use stored DoughBoss records only; this page never calls payment gateways or POSPal.', 'doughboss' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Today in the site timezone. These local reports use stored DoughBoss records only and do not call payment gateways or POSPal. The separate explicit Square catalogue action above performs read-only provider requests.', 'doughboss' ); ?></p>
 
 			<form method="get" style="margin:12px 0 20px;">
 				<input type="hidden" name="page" value="doughboss-dashboard" />
@@ -413,6 +425,8 @@ class DoughBoss_Admin {
 		$clean['enable_pickup']   = empty( $input['enable_pickup'] ) ? 0 : 1;
 		$clean['enable_delivery'] = empty( $input['enable_delivery'] ) ? 0 : 1;
 		$clean['ordering_open']   = empty( $input['ordering_open'] ) ? 0 : 1;
+		// A missing/invalid field is not permission to bypass named staff review.
+		$clean['staff_approval_required'] = isset( $input['staff_approval_required'] ) && in_array( $input['staff_approval_required'], array( 0, '0' ), true ) ? 0 : 1;
 		$clean['ordering_closed_message'] = isset( $input['ordering_closed_message'] )
 			? sanitize_textarea_field( $input['ordering_closed_message'] )
 			: DoughBoss_Settings::ordering_closed_message();
@@ -727,6 +741,8 @@ class DoughBoss_Admin {
 				array(
 					'restUrl' => esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 					'nonce'   => wp_create_nonce( 'wp_rest' ),
+					// Draft UX binding only; REST still checks the current user/session.
+					'actorId' => get_current_user_id(),
 				)
 			);
 		}
@@ -3322,6 +3338,13 @@ JS;
 							<span class="description"><?php esc_html_e( 'Leave this off for the Coming Soon launch. Menu browsing stays live, while checkout, payments and new orders remain blocked.', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
+						<th><label for="db-staff-approval-required"><?php esc_html_e( 'Staff review before payment', 'doughboss' ); ?></label></th>
+						<td><select id="db-staff-approval-required" name="<?php echo esc_attr( $opt ); ?>[staff_approval_required]">
+							<option value="1" <?php selected( ! empty( $settings['staff_approval_required'] ), true ); ?>><?php esc_html_e( 'Required — unpaid request, named staff approval, then payment', 'doughboss' ); ?></option>
+							<option value="0" <?php selected( empty( $settings['staff_approval_required'] ), true ); ?>><?php esc_html_e( 'Legacy direct checkout — explicit compatibility exception', 'doughboss' ); ?></option>
+						</select><p class="description"><?php esc_html_e( 'Required by default. Accept orders must also be enabled before new pickup requests are accepted. Select an exact capable WordPress approver below. Approval alone never releases an order to the kitchen.', 'doughboss' ); ?></p></td>
+					</tr>
+					<tr>
 						<th><label for="db-ordering-closed-message"><?php esc_html_e( 'Coming Soon message', 'doughboss' ); ?></label></th>
 						<td><textarea id="db-ordering-closed-message" class="large-text" rows="3" name="<?php echo esc_attr( $opt ); ?>[ordering_closed_message]"><?php echo esc_textarea( $settings['ordering_closed_message'] ); ?></textarea>
 							<p class="description"><?php esc_html_e( 'Shown above the cart and by the [doughboss_ordering_status] shortcode while ordering is paused.', 'doughboss' ); ?></p></td>
@@ -3347,7 +3370,7 @@ JS;
 									<?php endif; ?>
 								<?php endforeach; ?>
 							</select>
-							<p class="description"><?php esc_html_e( 'Only this authenticated WordPress user can approve a request for Stripe payment. Approval never sends an unpaid request to the kitchen.', 'doughboss' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Only this authenticated WordPress user can approve a request for the configured payment gateway. Approval never sends an unpaid request to the kitchen.', 'doughboss' ); ?></p>
 						</td>
 					</tr>
 					<tr>

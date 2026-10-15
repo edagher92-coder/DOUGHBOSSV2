@@ -137,6 +137,7 @@ class DoughBoss_Settings {
 			// or enter the kitchen queue. A named approver must approve payment,
 			// and only a server-verified paid order is released to fulfilment.
 			'after_hours_preorders_enabled' => 0,
+			'staff_approval_required' => 1,
 			'after_hours_preorders_message' => 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.',
 			'preorder_approver_user_id'      => 0,
 			// Internal notification destinations must be configured in protected
@@ -882,6 +883,59 @@ class DoughBoss_Settings {
 		$key   = self::square_live_mode() ? 'square_live_location_id' : 'square_test_location_id';
 		$value = trim( (string) self::get( $key, '' ) );
 		return preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $value ) ? $value : '';
+	}
+
+	/**
+	 * Parse only the server-owned approval policy, without coercing corrupt data.
+	 * Missing policy requires approval; only an explicit valid zero allows legacy
+	 * direct checkout. Never expose this context or its identity to the browser.
+	 *
+	 * @param mixed $stored Stored settings, not merged defaults or client input.
+	 * @return array Validated policy context.
+	 */
+	public static function parse_staff_approval_policy( $stored ) {
+		$context = array( 'mode' => 'unavailable', 'ordering_open' => false, 'after_hours' => false, 'pickup_enabled' => false, 'approver_id' => 0 );
+		if ( ! is_array( $stored ) ) { return $context; }
+		$values = array();
+		foreach ( array( 'staff_approval_required' => 1, 'ordering_open' => 0, 'after_hours_preorders_enabled' => 0, 'enable_pickup' => 1 ) as $key => $default ) {
+			$value = array_key_exists( $key, $stored ) ? $stored[ $key ] : $default;
+			if ( ! in_array( $value, array( 0, 1, '0', '1', false, true ), true ) ) { return $context; }
+			$values[ $key ] = (bool) $value;
+		}
+		$actor = isset( $stored['preorder_approver_user_id'] ) ? $stored['preorder_approver_user_id'] : 0;
+		if ( ! is_int( $actor ) && ( ! is_string( $actor ) || ! preg_match( '/^(?:0|[1-9][0-9]*)$/D', $actor ) ) ) { return $context; }
+		if ( $actor < 0 || (string) (int) $actor !== (string) $actor ) { return $context; }
+		return array(
+			'mode' => $values['staff_approval_required'] ? 'required' : 'legacy',
+			'ordering_open' => $values['ordering_open'],
+			'after_hours' => $values['after_hours_preorders_enabled'],
+			'pickup_enabled' => $values['enable_pickup'],
+			'approver_id' => (int) $actor,
+		);
+	}
+
+	/**
+	 * Read policy directly from durable storage, not WordPress's option cache.
+	 * The row can be locked at a transaction's consequential creation boundary.
+	 *
+	 * @param bool $lock Lock the existing settings row inside a transaction.
+	 * @return array Validated policy, unavailable on a failed/unreadable read.
+	 */
+	public static function staff_approval_policy( $lock = false ) {
+		global $wpdb;
+		if ( ! isset( $wpdb->options ) || ! method_exists( $wpdb, 'get_var' ) ) {
+			return self::parse_staff_approval_policy( null );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- action-time authority must bypass cached options.
+		$raw = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1" . ( $lock ? ' FOR UPDATE' : '' ), self::OPTION_KEY ) );
+		if ( ! empty( $wpdb->last_error ) ) { return self::parse_staff_approval_policy( null ); }
+		return self::parse_staff_approval_policy( null === $raw ? array() : ( is_string( $raw ) ? maybe_unserialize( $raw ) : null ) );
+	}
+
+	/** @return bool Whether the exact configured actor currently has decision authority. */
+	public static function staff_approval_actor_valid( array $policy ) {
+		return ! empty( $policy['approver_id'] ) && get_userdata( $policy['approver_id'] )
+			&& ( user_can( $policy['approver_id'], 'manage_doughboss' ) || user_can( $policy['approver_id'], 'manage_options' ) );
 	}
 
 	/**

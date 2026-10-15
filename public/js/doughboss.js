@@ -348,6 +348,64 @@
 		return locs.length ? Number(locs[0].id) : 0;
 	}
 
+	function menuLocationId() {
+		var table = activeTableContext();
+		return table ? Number(table.location.id) : currentLocationId(locationsCache || []);
+	}
+
+	// Refresh only the cards on shop changes. Cart lines and search state survive.
+	function watchMenuAvailability(root, cards, orderingOpen, locationId) {
+		var revision = 0;
+		var notice = null;
+		function paint(items, id) {
+			var indexed = Object.create(null);
+			(items || []).forEach(function (item) { indexed[item.id] = item; });
+			cards.forEach(function (entry) {
+				var item = indexed[entry.item.id] || Object.assign({}, entry.item, { available: false });
+				var card = menuCard(item, orderingOpen && id > 0, id);
+				card.setAttribute('data-search-text', entry.card.getAttribute('data-search-text') || '');
+				card.hidden = entry.card.hidden;
+				entry.card.parentNode.replaceChild(card, entry.card);
+				entry.card = card;
+				entry.item = item;
+			});
+		}
+		root._dbMenuRefresh = function () {
+			var id = menuLocationId();
+			if (id === locationId) { return; }
+			locationId = id;
+			var pending = ++revision;
+			if (activeMobileCustomizer) { releaseMobileCustomizer(activeMobileCustomizer, true); }
+			paint([], id); // Stale cards cannot add while the new scope is loading.
+			root.setAttribute('aria-busy', 'true');
+			if (!notice) {
+				notice = el('p', { role: 'status', 'aria-live': 'polite', class: 'db-menu-availability' });
+				root.appendChild(notice);
+			}
+			notice.textContent = 'Checking availability at your selected shop…';
+			request('/menu' + (id > 0 ? '?location_id=' + encodeURIComponent(id) : '')).then(function (items) {
+				if (pending !== revision || id !== menuLocationId()) { return; }
+				if (!Array.isArray(items) || id < 1) { throw new Error('Choose an active shop to order.'); }
+				paint(items, id);
+				notice.textContent = '';
+				root.removeAttribute('aria-busy');
+			}).catch(function () {
+				if (pending !== revision) { return; }
+				notice.textContent = 'Availability could not be checked. Please choose your shop again or contact the shop.';
+				locationId = 0; // A deliberate same-shop retry may refresh the read.
+				root.removeAttribute('aria-busy');
+			});
+		};
+		if (!root._dbMenuShopListener) {
+			root._dbMenuShopListener = true;
+			document.addEventListener('doughboss:shop-changed', function () {
+				if (root._dbMenuRefresh) { root._dbMenuRefresh(); }
+			});
+		}
+		// The selected shop may have changed during the first menu response.
+		if (menuLocationId() !== locationId) { root._dbMenuRefresh(); }
+	}
+
 	function shopSelect(locs, current, onChange) {
 		var sel = el('select', { class: 'db-shop-select', 'aria-label': I18N.chooseShop || 'Choose your shop' });
 		locs.forEach(function (loc) {
@@ -500,9 +558,14 @@
 		// Keep the original server-rendered nodes, not an HTML copy. A failure
 		// after cards start rendering must restore the same browse-only menu.
 		var fallback = root.querySelector('[data-doughboss-menu-fallback]');
-		Promise.all([request('/menu'), getConfig()]).then(function (results) {
+		Promise.all([getLocations(), getConfig()]).then(function (context) {
+			var id = menuLocationId();
+			return request('/menu' + (id > 0 ? '?location_id=' + encodeURIComponent(id) : '')).then(function (items) {
+				return [items, context[1], id];
+			});
+		}).then(function (results) {
 			var items = results[0];
-			var orderingOpen = !!results[1].ordering_open;
+			var orderingOpen = !!results[1].ordering_open && results[2] > 0;
 			root.innerHTML = '';
 			root.setAttribute('data-ordering-open', orderingOpen ? 'true' : 'false');
 			var tableContext = activeTableContext();
@@ -598,11 +661,13 @@
 			}
 
 			var sections = [];
+			var menuCards = [];
 			categories.forEach(function (category) {
 				var heading = el('h2', { class: 'db-category', id: catId(category), text: category });
 				var grid = el('div', { class: 'db-grid', 'aria-labelledby': catId(category) });
 				groups[category].forEach(function (item) {
-					var card = menuCard(item, orderingOpen);
+					var card = menuCard(item, orderingOpen, results[2]);
+					menuCards.push({ item: item, card: card });
 					card.setAttribute('data-search-text', String(item.name || '') + ' ' + String(item.description || '') + ' ' + category);
 					grid.appendChild(card);
 				});
@@ -685,6 +750,7 @@
 				}
 			});
 			initCartFab(root);
+			watchMenuAvailability(root, menuCards, !!results[1].ordering_open, results[2]);
 		}).catch(function (err) {
 			if (fallback && fallback.parentNode !== root) {
 				root.innerHTML = '';
@@ -918,7 +984,7 @@
 		return media;
 	}
 
-	function menuCard(item, orderingOpen) {
+	function menuCard(item, orderingOpen, locationId) {
 		var soldOut = item.available === false;
 		var options = Array.isArray(item.options) ? item.options : [];
 		var selections = {};
@@ -968,6 +1034,10 @@
 		}
 
 		function addItem(sourceButton) {
+			if (!locationId || locationId !== menuLocationId()) {
+				dbToast('Please check availability at your selected shop before adding this item.');
+				return;
+			}
 			var submittedOptions = selectedOptions();
 			var submittedPrice = currentPrice();
 			var sheet = sourceButton.closest ? sourceButton.closest('.db-customizer-sheet') : null;
@@ -976,7 +1046,7 @@
 			setActionState(I18N.adding || 'Adding…', true);
 			setOptionState(true);
 			if (sheet) { sheet.setAttribute('aria-busy', 'true'); }
-			request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, options: submittedOptions, quantity: 1 } })
+			request('/cart/add', { method: 'POST', body: { type: 'menu', item_id: item.id, location_id: locationId, options: submittedOptions, quantity: 1 } })
 				.then(function () {
 					setActionState(I18N.added || 'Added!', true);
 					dbPop(sourceButton);
@@ -1335,8 +1405,19 @@
 			cartRegion.innerHTML = '';
 			var tableContext = activeTableContext();
 			var orderingOpen = !!cfg.ordering_open;
-			journey.element.hidden = !orderingOpen;
-			if (!orderingOpen) {
+			// This is display guidance only: the server remains authoritative for
+			// the approval policy and rejects any stale or forged direct checkout.
+			// Require an explicit true value so older static previews that do not
+			// publish the new flag retain their existing legacy presentation.
+			var staffApprovalRequired = cfg && cfg.staff_approval_required === true;
+			var staffApprovalRequestsEnabled = cfg && cfg.staff_approval_requests_enabled === true;
+			journey.element.hidden = !orderingOpen || staffApprovalRequired;
+			if (staffApprovalRequired) {
+				orderTitle.textContent = 'Review and request';
+				orderIntro.textContent = staffApprovalRequestsEnabled
+					? 'Send your order request for staff review. It remains unpaid until approved.'
+					: 'Order requests are unavailable right now. Please try again later.';
+			} else if (!orderingOpen) {
 				orderTitle.textContent = 'Browse now, request for later';
 				orderIntro.textContent = 'Online checkout and payment are closed. If pre-orders are available, your request stays unpaid until staff call and confirm it.';
 			} else if (payingOnline()) {
@@ -1424,13 +1505,33 @@
 			// Closed-hours Revesby requests intentionally use a separate unpaid path.
 			// It never renders card controls or calls /payment-intent; the server
 			// independently checks the same owner flag before saving anything.
-			if (!orderingOpen) {
+			if (!orderingOpen && !staffApprovalRequired) {
 				if (cfg.after_hours_preorders_enabled && !tableContext) {
 					checkoutEl = preorderRequestForm(cfg, function () { return locationId; }, function () {
 						orderComplete = true;
 						cartRegion.innerHTML = '';
 					});
 					checkoutRegion.appendChild(checkoutEl.form);
+				}
+				return;
+			}
+
+			// Explicit server-approved request intake replaces ordinary checkout
+			// during open approval-required ordering. Reuse the payment-free request
+			// form, and never fall through to voucher or gateway checkout setup.
+			if (staffApprovalRequired) {
+				if (staffApprovalRequestsEnabled && !tableContext) {
+					checkoutEl = preorderRequestForm(cfg, function () { return locationId; }, function () {
+						orderComplete = true;
+						cartRegion.innerHTML = '';
+					});
+					checkoutRegion.appendChild(checkoutEl.form);
+				} else {
+					checkoutRegion.appendChild(el('p', {
+						class: 'db-ordering-status',
+						role: 'status',
+						text: 'Order requests are unavailable right now. Please try again later.'
+					}));
 				}
 				return;
 			}
@@ -1684,10 +1785,32 @@
 		};
 	}
 
-	// Closed-hours request form. It deliberately does not share checkoutForm():
-	// checkoutForm can mount Stripe/Tyro fields, while this path must remain
+	// Request form. It deliberately does not share checkoutForm(): checkoutForm
+	// can mount Stripe/Tyro fields, while every request path must remain
 	// payment-free even if a gateway is configured for normal trading hours.
 	function preorderRequestForm(cfg, getLocationId, onRequestComplete) {
+		var approvalRequiredMode = !!(cfg && cfg.staff_approval_required === true);
+		var copy = approvalRequiredMode ? {
+			acknowledgement: 'I understand this request is unpaid and awaiting staff review. Pickup details will be confirmed only after review.',
+			submit: 'Send request',
+			title: 'Send your order request',
+			status: 'Your request is awaiting staff review. It is not confirmed or paid.',
+			successTitle: 'Request received for review',
+			successStatus: 'Your request is awaiting review. It is not confirmed or paid.',
+			successFollowUp: 'Staff will review your request before confirming it.',
+			analyticsName: 'Order request',
+			analyticsCategory: 'Staff approval request'
+		} : {
+			acknowledgement: 'I understand this is an unconfirmed, unpaid request. Revesby will call to arrange pickup timing before confirming.',
+			submit: 'Send pre-order request',
+			title: 'Send a Revesby pre-order request',
+			status: (cfg && cfg.after_hours_preorders_message) || 'Your request is not confirmed or paid. Revesby will review it first thing in the morning.',
+			successTitle: 'Pre-order request received',
+			successStatus: 'Revesby will review your request first thing in the morning.',
+			successFollowUp: 'Revesby will call to arrange pickup timing before confirming.',
+			analyticsName: 'After-hours preorder request',
+			analyticsCategory: 'Preorder'
+		};
 		var form = el('form', { class: 'db-checkout db-preorder-request' });
 		var msg = el('div', { class: 'db-checkout-msg', 'aria-live': 'polite' });
 		var name = field('text', 'customer_name', 'Name', true);
@@ -1701,14 +1824,16 @@
 		var acknowledgementInput = el('input', { type: 'checkbox', required: true });
 		var acknowledgement = el('label', { class: 'db-option' }, [
 			acknowledgementInput,
-			el('span', { text: 'I understand this is an unconfirmed, unpaid request. Revesby will call to arrange pickup timing before confirming.' })
+			el('span', { text: copy.acknowledgement })
 		]);
-		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: 'Send pre-order request' });
+		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: copy.submit });
 		var requestAttemptId = null;
 
-		form.appendChild(el('h3', { text: 'Send a Revesby pre-order request' }));
-		form.appendChild(el('p', { class: 'db-ordering-status', text: (cfg && cfg.after_hours_preorders_message) || 'Your request is not confirmed or paid. Revesby will review it first thing in the morning.' }));
-		form.appendChild(el('p', { class: 'db-ordering-status', text: 'Pickup timing will be arranged by phone before Revesby confirms your request.' }));
+		form.appendChild(el('h3', { text: copy.title }));
+		form.appendChild(el('p', { class: 'db-ordering-status', text: copy.status }));
+		if (!approvalRequiredMode) {
+			form.appendChild(el('p', { class: 'db-ordering-status', text: 'Pickup timing will be arranged by phone before Revesby confirms your request.' }));
+		}
 		[name, email, phone, notes, acknowledgement, submit, msg].forEach(function (node) { form.appendChild(node); });
 
 		form.addEventListener('submit', function (e) {
@@ -1737,15 +1862,15 @@
 				if (parent) {
 					parent.innerHTML = '';
 					parent.appendChild(el('div', { class: 'db-order-confirm' }, [
-						el('h3', { text: 'Pre-order request received' }),
-						el('p', { text: res.message || 'Revesby will review your request first thing in the morning.' }),
-						el('p', { text: 'Request ' + (res.order_number || '') + ' is unconfirmed and unpaid. No payment has been taken.' }),
-						el('p', { text: 'Revesby will call to arrange pickup timing before confirming.' })
+						el('h3', { text: copy.successTitle }),
+						el('p', { text: approvalRequiredMode ? copy.successStatus : (res.message || copy.successStatus) }),
+						el('p', { text: 'Request ' + (res.order_number || '') + (approvalRequiredMode ? ' is awaiting review and unpaid. No payment has been taken.' : ' is unconfirmed and unpaid. No payment has been taken.') }),
+						el('p', { text: copy.successFollowUp })
 					]));
 				}
 				trackCommerce('generate_lead', {
-					content_name: 'After-hours preorder request',
-					content_category: 'Preorder',
+					content_name: copy.analyticsName,
+					content_category: copy.analyticsCategory,
 					currency: 'AUD',
 					location_id: getLocationId ? getLocationId() : storedLocationId(),
 					channel: 'web'
@@ -1754,7 +1879,7 @@
 				notifyCartChanged();
 			}).catch(function (err) {
 				submit.disabled = false;
-				submit.textContent = 'Send pre-order request';
+				submit.textContent = copy.submit;
 				announceError(msg, err.message || (I18N.genericError || 'Something went wrong.'));
 			});
 		});

@@ -85,6 +85,12 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-tyro.php';
 		require_once $dir . 'class-doughboss-mpgs.php';
 		require_once $dir . 'class-doughboss-square.php';
+		require_once $dir . 'class-doughboss-square-catalogue-source.php';
+		require_once $dir . 'class-doughboss-square-catalogue-operations.php';
+		require_once $dir . 'class-doughboss-square-catalogue-comparison.php';
+		require_once $dir . 'class-doughboss-square-catalogue-request.php';
+		require_once $dir . 'class-doughboss-square-catalogue-preparation.php';
+		require_once $dir . 'class-doughboss-square-catalogue-review.php';
 		require_once $dir . 'class-doughboss-square-orders.php';
 		require_once $dir . 'class-doughboss-square-dashboard.php';
 		require_once $dir . 'class-doughboss-payment.php';

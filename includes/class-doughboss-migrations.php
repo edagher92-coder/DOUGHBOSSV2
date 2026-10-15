@@ -18,6 +18,19 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Applies pending schema/data migrations in order.
  */
 class DoughBoss_Migrations {
+	/** Schema reserve only; no writer/provenance/verified claim. */
+	private static function upgrade_to_1_29_0() {
+		if ( ! DoughBoss_Activator::catalogue_operations_storage_ready() ) {
+			throw new RuntimeException( 'Square catalogue operation audit-field storage is incomplete or not using InnoDB.' );
+		}
+	}
+
+	/** Catalogue receipts are additive; no historical order/payment rows are changed. */
+	private static function upgrade_to_1_28_0() {
+		if ( ! DoughBoss_Activator::catalogue_operations_storage_ready() ) {
+			throw new RuntimeException( 'Square catalogue operation storage is incomplete or not using InnoDB.' );
+		}
+	}
 
 	/** Additive split-funding ledger; never backfills historical payments. */
 	private static function upgrade_to_1_27_0() {
@@ -95,6 +108,8 @@ class DoughBoss_Migrations {
 				'1.25.0' => 'upgrade_to_1_25_0',
 				'1.26.0' => 'upgrade_to_1_26_0',
 				'1.27.0' => 'upgrade_to_1_27_0',
+				'1.28.0' => 'upgrade_to_1_28_0',
+				'1.29.0' => 'upgrade_to_1_29_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {

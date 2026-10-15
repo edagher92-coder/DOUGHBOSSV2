@@ -43,6 +43,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Minimal Square Payments client.
  */
 class DoughBoss_Square {
+	/** Catalogue only: one location response plus at most five list responses, each at most 4 MiB. */
+	const CATALOGUE_MAX_TOP_LEVEL = 2048;
+	const CATALOGUE_MAX_OCCURRENCES = 4096;
+	const CATALOGUE_MAX_RESPONSE_BYTES = 4194304;
+	const CATALOGUE_MAX_PAGES = 5;
+	/** Local batch bound matching approved target capacity, not API-pin certification. */
+	const CATALOGUE_MAX_REFERENCES = 1000;
 
 	/**
 	 * Square sandbox API origin.
@@ -213,6 +220,701 @@ class DoughBoss_Square {
 			'square_location_id' => $square_location_id,
 			'square_mode'        => $mode,
 		);
+	}
+
+	/** Explicit owner-only account observation. No mapping, approval or provider write is performed. */
+	public static function observe_locations( callable $authorize ) {
+		$permission = self::profile_authorized( $authorize );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$context = self::profile_context();
+		$permission = self::profile_authorized( $authorize );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		if ( is_wp_error( $context ) ) { return $context; }
+		$identity = null;
+		$current = static function () use ( $authorize, $context, &$identity ) {
+			$permission = self::profile_authorized( $authorize );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			$fresh = self::profile_context();
+			$permission = self::profile_authorized( $authorize );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			if ( is_wp_error( $fresh ) || $context !== $fresh ) { return self::profile_error( 409 ); }
+			// The second owner callback may itself change configuration/native rows.
+			// Re-read after that work before dispatch or disclosure; a pre-callback
+			// snapshot is not evidence that the captured context is still current.
+			$terminal = self::profile_context();
+			if ( is_wp_error( $terminal ) || $context !== $terminal ) { return self::profile_error( 409 ); }
+			// Keep expiry last: both owner checks and locking reads can cross it.
+			if ( null !== $identity ) { return self::validate_locations_observation_expiry( array( 'application_id' => $identity['application_id'], 'merchant_id' => $identity['merchant_id'], 'credential_scopes' => $identity['scopes'], 'credential_expires_at' => $identity['expires_at'] ) ); }
+			return true;
+		};
+		foreach ( array( array( 'POST', '/oauth2/token/status' ), array( 'GET', '/v2/locations' ), array( 'POST', '/oauth2/token/status' ) ) as $index => $call ) {
+			$permission = $current();
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			$response = self::profile_request( $call[0], $call[1], $context );
+			$permission = $current();
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			if ( is_wp_error( $response ) ) { return self::profile_error(); }
+			if ( 1 === $index ) {
+				$locations = self::profile_locations( $response, $identity['merchant_id'] );
+				if ( is_wp_error( $locations ) ) { return $locations; }
+			} else {
+				$observed = self::catalogue_identity( $response, $context['application_id'] );
+				if ( is_wp_error( $observed ) || ! in_array( 'MERCHANT_PROFILE_READ', $observed['scopes'], true ) || ( 2 === $index && $identity !== $observed ) ) { return self::profile_error(); }
+				$identity = $observed;
+			}
+		}
+		$view = self::profile_view( $identity, $locations, $context );
+		$permission = $current();
+		return is_wp_error( $permission ) ? $permission : $view;
+	}
+
+	/** Last server-clock expiry check only; never authorizes a mapping or provider action. */
+	public static function validate_locations_observation_expiry( array $view ) {
+		if ( ! isset( $view['application_id'], $view['merchant_id'], $view['credential_scopes'], $view['credential_expires_at'] ) ) { return self::profile_error(); }
+		$identity = self::catalogue_identity( array( 'client_id' => $view['application_id'], 'merchant_id' => $view['merchant_id'], 'scopes' => $view['credential_scopes'], 'expires_at' => $view['credential_expires_at'] ), DoughBoss_Settings::square_application_id() );
+		return is_wp_error( $identity ) ? self::profile_error() : true;
+	}
+
+	private static function profile_error( $status = 502 ) {
+		return new WP_Error( 'doughboss_square_locations_unavailable', __( 'Current Square locations could not be observed safely. No mapping or payment permission has been changed.', 'doughboss' ), array( 'status' => $status ) );
+	}
+
+	private static function profile_authorized( callable $authorize ) {
+		try { $permission = $authorize(); } catch ( Throwable $error ) { $permission = false; }
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		return true === $permission ? true : new WP_Error( 'doughboss_forbidden', __( 'Current owner browser authority could not be verified.', 'doughboss' ), array( 'status' => 403 ) );
+	}
+
+	/** Current locking reads bypass open REPEATABLE READ snapshots; nothing is persisted. */
+	private static function profile_context() {
+		global $wpdb;
+		try {
+			$raw = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name=%s LIMIT 1 FOR UPDATE", DoughBoss_Settings::OPTION_KEY ) );
+			if ( ! empty( $wpdb->last_error ) || ! is_string( $raw ) ) { return self::profile_error( 409 ); }
+			$stored = maybe_unserialize( $raw );
+			if ( ! is_array( $stored ) || $stored !== get_option( DoughBoss_Settings::OPTION_KEY, array() ) ) { return self::profile_error( 409 ); }
+			$mode = DoughBoss_Settings::square_mode();
+			if ( array_key_exists( 'square_mode', $stored ) && ! in_array( $stored['square_mode'], array( 'test', 'live' ), true ) ) { return self::profile_error( 409 ); }
+			$map_key = 'square_' . $mode . '_location_map';
+			$map = array_key_exists( $map_key, $stored ) ? $stored[ $map_key ] : array();
+			if ( ! is_array( $map ) ) { return self::profile_error( 409 ); }
+			$rows = $wpdb->get_results( "SELECT id,slug,is_active FROM {$wpdb->prefix}doughboss_locations WHERE slug IN ('revesby','bankstown','roselands') ORDER BY id FOR UPDATE" );
+			if ( ! empty( $wpdb->last_error ) || ! is_array( $rows ) ) { return self::profile_error( 409 ); }
+			$shops = self::profile_shops( $rows, $map );
+			$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+			$app = DoughBoss_Settings::square_application_id();
+			$pin = DoughBoss_Settings::square_api_version();
+			if ( is_wp_error( $shops ) || ! DoughBoss_Settings::square_access_token_valid() || '' === $app || ! is_string( $currency ) || ! preg_match( '/^[A-Z]{3}$/D', strtoupper( $currency ) ) || ! preg_match( '/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $pin, $date ) || ! checkdate( (int) $date[2], (int) $date[3], (int) $date[1] ) ) { return self::profile_error( 409 ); }
+			return array( 'settings_version' => hash( 'sha256', $raw ), 'token' => self::access_token(), 'application_id' => $app, 'environment' => $mode, 'api_version' => $pin, 'currency' => $currency, 'website_shops' => $shops );
+		} catch ( Throwable $error ) { return self::profile_error( 409 ); }
+	}
+
+	/** Validate raw maps before any normalizing getter can erase ambiguity. */
+	private static function profile_shops( array $rows, array $map ) {
+		if ( 3 !== count( $rows ) ) { return self::profile_error( 409 ); }
+		$native = array(); $native_ids = array(); $provider_ids = array(); $shops = array();
+		foreach ( $rows as $row ) {
+			if ( ! is_object( $row ) || ! isset( $row->id, $row->slug, $row->is_active ) || ! is_string( $row->slug ) || ! in_array( $row->slug, array( 'revesby', 'bankstown', 'roselands' ), true ) || ! in_array( $row->is_active, array( 1, '1' ), true ) || ( ! is_int( $row->id ) && ( ! is_string( $row->id ) || ! preg_match( '/^[1-9][0-9]{0,15}$/D', $row->id ) ) ) ) { return self::profile_error( 409 ); }
+			$id = (int) $row->id;
+			if ( $id < 1 || $id > 9007199254740991 || isset( $native[ $row->slug ] ) || isset( $native_ids[ $id ] ) ) { return self::profile_error( 409 ); }
+			$native[ $row->slug ] = $id; $native_ids[ $id ] = true;
+		}
+		foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $slug ) {
+			$configured = array_key_exists( $slug, $map ) ? $map[ $slug ] : '';
+			if ( ! is_string( $configured ) || ( '' !== $configured && ( ! preg_match( '/^[A-Za-z0-9_-]{4,64}$/D', $configured ) || isset( $provider_ids[ $configured ] ) ) ) ) { return self::profile_error( 409 ); }
+			if ( '' !== $configured ) { $provider_ids[ $configured ] = true; }
+			$shops[] = array( 'slug' => $slug, 'native_location_id' => $native[ $slug ], 'configured_location_id' => '' === $configured ? null : $configured );
+		}
+		return $shops;
+	}
+
+	/** Dedicated account reader: mapped payment transport remains deliberately unchanged. */
+	private static function profile_request( $method, $path, array $context ) {
+		if ( ! ( ( 'POST' === $method && '/oauth2/token/status' === $path ) || ( 'GET' === $method && '/v2/locations' === $path ) ) ) { return self::profile_error(); }
+		try {
+			$host = 'live' === $context['environment'] ? self::PRODUCTION_HOST : self::SANDBOX_HOST;
+			$response = wp_remote_request( $host . $path, array( 'method' => $method, 'timeout' => 10, 'redirection' => 0, 'sslverify' => true, 'limit_response_size' => self::CATALOGUE_MAX_RESPONSE_BYTES + 1, 'headers' => array( 'Authorization' => 'Bearer ' . $context['token'], 'Square-Version' => $context['api_version'], 'Content-Type' => 'application/json', 'Accept' => 'application/json' ) ) );
+			if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) { return self::profile_error(); }
+			return self::profile_decode( wp_remote_retrieve_body( $response ) );
+		} catch ( Throwable $error ) { return self::profile_error(); }
+	}
+
+	/** Preserve wire object/list distinctions and reject duplicate keys at every nesting level. */
+	private static function profile_decode( $body ) {
+		if ( ! is_string( $body ) || strlen( $body ) > self::CATALOGUE_MAX_RESPONSE_BYTES ) { return self::profile_error(); }
+		$wire = json_decode( $body, false, 128 );
+		if ( JSON_ERROR_NONE !== json_last_error() || ! $wire instanceof stdClass || property_exists( $wire, 'errors' ) ) { return self::profile_error(); }
+		if ( ! preg_match_all( '/"(?:[^"\\\\]|\\\\.)*"|[{}\[\]:,]/s', $body, $matches ) ) { return self::profile_error(); }
+		$stack = array(); $tokens = $matches[0];
+		foreach ( $tokens as $index => $token ) {
+			if ( '{' === $token || '[' === $token ) { $stack[] = array( 'object' => '{' === $token, 'keys' => array() ); }
+			elseif ( '}' === $token || ']' === $token ) { array_pop( $stack ); }
+			elseif ( '"' === $token[0] && isset( $tokens[ $index + 1 ] ) && ':' === $tokens[ $index + 1 ] ) {
+				$top = count( $stack ) - 1; $key = '#' . json_decode( $token );
+				if ( $top < 0 || ! $stack[ $top ]['object'] || isset( $stack[ $top ]['keys'][ $key ] ) ) { return self::profile_error(); }
+				$stack[ $top ]['keys'][ $key ] = true;
+			}
+		}
+		if ( property_exists( $wire, 'locations' ) ) {
+			if ( ! is_array( $wire->locations ) || count( $wire->locations ) > 128 ) { return self::profile_error(); }
+			foreach ( $wire->locations as $location ) {
+				if ( ! $location instanceof stdClass || ( property_exists( $location, 'capabilities' ) && ! is_array( $location->capabilities ) ) ) { return self::profile_error(); }
+			}
+		}
+		$decoded = self::catalogue_decode( $body );
+		return is_wp_error( $decoded ) ? self::profile_error() : $decoded;
+	}
+
+	private static function profile_locations( $response, $merchant_id ) {
+		if ( ! is_array( $response ) || array_key_exists( 'errors', $response ) || ! array_key_exists( 'locations', $response ) || ! is_array( $response['locations'] ) || array_values( $response['locations'] ) !== $response['locations'] || count( $response['locations'] ) > 128 || array_key_exists( 'cursor', $response ) ) { return self::profile_error(); }
+		$locations = array(); $seen = array();
+		foreach ( $response['locations'] as $location ) {
+			if ( ! is_array( $location ) || ! isset( $location['id'], $location['merchant_id'], $location['status'], $location['currency'] ) || ! self::catalogue_id( $location['id'] ) || isset( $seen[ $location['id'] ] ) || ! is_string( $location['merchant_id'] ) || ! hash_equals( $merchant_id, $location['merchant_id'] ) || ! in_array( $location['status'], array( 'ACTIVE', 'INACTIVE' ), true ) || ! is_string( $location['currency'] ) || ! preg_match( '/^[A-Z]{3}$/D', $location['currency'] ) ) { return self::profile_error(); }
+			$name = array_key_exists( 'name', $location ) ? $location['name'] : null;
+			if ( array_key_exists( 'name', $location ) && ( ! is_string( $name ) || '' === $name || strlen( $name ) > 1024 || 1 !== preg_match( '//u', $name ) || preg_match_all( '/./us', $name, $characters ) + preg_match_all( '/[\x{10000}-\x{10FFFF}]/u', $name, $surrogates ) > 200 ) ) { return self::profile_error(); }
+			$country = array_key_exists( 'country', $location ) ? $location['country'] : null;
+			if ( null !== $country && ( ! is_string( $country ) || ! preg_match( '/^[A-Z]{2}$/D', $country ) ) ) { return self::profile_error(); }
+			$present = array_key_exists( 'capabilities', $location ); $capabilities = $present ? $location['capabilities'] : array(); $unique = array();
+			if ( ! is_array( $capabilities ) || array_values( $capabilities ) !== $capabilities || count( $capabilities ) > 32 ) { return self::profile_error(); }
+			foreach ( $capabilities as $capability ) {
+				if ( ! is_string( $capability ) || ! preg_match( '/^[A-Z][A-Z0-9_]{0,63}$/D', $capability ) || isset( $unique[ $capability ] ) ) { return self::profile_error(); }
+				$unique[ $capability ] = true;
+			}
+			sort( $capabilities, SORT_STRING ); $seen[ $location['id'] ] = true;
+			$locations[] = array( 'id' => $location['id'], 'name' => $name, 'merchant_id' => $merchant_id, 'status' => $location['status'], 'currency' => $location['currency'], 'country' => $country, 'capabilities_present' => $present, 'capabilities' => $capabilities );
+		}
+		return $locations;
+	}
+
+	private static function profile_view( array $identity, array $locations, array $context ) {
+		$ids = array(); foreach ( $locations as $location ) { $ids[ $location['id'] ] = true; }
+		$shops = $context['website_shops'];
+		foreach ( $shops as &$shop ) { $shop['presence'] = null === $shop['configured_location_id'] ? 'unmapped' : ( isset( $ids[ $shop['configured_location_id'] ] ) ? 'configured_id_observed' : 'configured_id_not_observed' ); } unset( $shop );
+		return array( 'schema_version' => 1, 'source' => 'square', 'data_state' => 'location_observation', 'observed_at' => gmdate( 'Y-m-d\TH:i:s\Z' ), 'application_id' => $identity['application_id'], 'merchant_id' => $identity['merchant_id'], 'environment' => $context['environment'], 'api_version' => $context['api_version'], 'credential_scopes' => $identity['scopes'], 'credential_expires_at' => $identity['expires_at'], 'provider_locations' => $locations, 'website_shops' => $shops, 'limitations' => array( 'merchant_ownership' => 'unapproved', 'store_access' => 'unverified', 'settlement' => 'unverified', 'payment_enablement' => 'unverified', 'website_availability' => 'unverified' ), 'provider_writes_allowed' => false, 'mapping_approved' => false, 'dispatch_allowed' => false );
+	}
+
+	/** Internal credential introspection only; no approval, import readiness or provider mutation. */
+	public static function observe_catalogue_identity( $location_id ) {
+		$error = self::catalogue_identity_error();
+		if ( ! is_int( $location_id ) || $location_id < 1 || ! DoughBoss_Settings::square_access_token_valid() || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
+		$binding = self::shop_binding( $location_id );
+		if ( is_wp_error( $binding ) ) { return $error; }
+		$token = self::access_token();
+		$app = DoughBoss_Settings::square_application_id();
+		$pin = DoughBoss_Settings::square_api_version();
+		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+		if ( ! is_string( $currency ) ) { return $error; }
+		$currency = strtoupper( $currency );
+		if ( ! preg_match( '/^[A-Z]{3}$/D', $currency ) || ! preg_match( '/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $pin, $date ) || ! checkdate( (int) $date[2], (int) $date[3], (int) $date[1] ) ) { return $error; }
+		$scope_current = static function () use ( $location_id, $binding, $token, $app, $pin, $currency ) {
+			$current_currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+			return $binding === self::shop_binding( $location_id ) && DoughBoss_Settings::square_access_token_valid()
+				&& hash_equals( $token, self::access_token() ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
+				&& hash_equals( $pin, DoughBoss_Settings::square_api_version() ) && is_string( $current_currency ) && $currency === strtoupper( $current_currency );
+		};
+		if ( ! $scope_current() ) { return $error; }
+		// Square documents this POST as read-only introspection with bearer auth and no body.
+		$response = self::request( 'POST', '/oauth2/token/status', array(), $binding, true );
+		if ( is_wp_error( $response ) || ! $scope_current() ) { return $error; }
+		$identity = self::catalogue_identity( $response, $app );
+		if ( is_wp_error( $identity ) || ! $scope_current() ) { return $error; }
+		return array_merge( $identity, array(
+			'schema_version' => 1,
+			'data_state' => 'credential_identity_observed',
+			'environment' => $binding['square_mode'],
+			// This is the configured/sent pin, not an attestation of import-field compatibility.
+			'api_version' => $pin,
+			'shop' => array( 'id' => $location_id, 'slug' => $binding['shop_slug'], 'square_location_id' => $binding['square_location_id'] ),
+			'observed_at' => gmdate( 'Y-m-d\TH:i:s\Z' ),
+		) );
+	}
+
+	/** Internal exact current reference readback; no authenticity or tax-applicability approval. */
+	public static function observe_catalogue_references( $location_id, array $references ) {
+		return self::observe_catalogue_reference_view( $location_id, $references, false );
+	}
+
+	/** Explicit owner-review opt-in; safe IMAGE metadata is provider-reported, not authenticated. */
+	public static function observe_catalogue_review_references( $location_id, array $references ) {
+		return self::observe_catalogue_reference_view( $location_id, $references, true );
+	}
+
+	private static function observe_catalogue_reference_view( $location_id, array $references, $owner_review ) {
+		$error = self::catalogue_reference_error();
+		$body = self::catalogue_reference_request( $references );
+		if ( is_wp_error( $body ) || ! is_int( $location_id ) || $location_id < 1 || ! DoughBoss_Settings::square_access_token_valid() || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
+		$binding = self::shop_binding( $location_id );
+		if ( is_wp_error( $binding ) ) { return $error; }
+		$token = self::access_token();
+		$app = DoughBoss_Settings::square_application_id();
+		$pin = DoughBoss_Settings::square_api_version();
+		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+		if ( ! is_string( $currency ) ) { return $error; }
+		$currency = strtoupper( $currency );
+		if ( ! preg_match( '/^[A-Z]{3}$/D', $currency ) || ! preg_match( '/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $pin, $date ) || ! checkdate( (int) $date[2], (int) $date[3], (int) $date[1] ) ) { return $error; }
+		$scope_current = static function () use ( $location_id, $binding, $token, $app, $pin, $currency ) {
+			$current_currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+			return $binding === self::shop_binding( $location_id ) && DoughBoss_Settings::square_access_token_valid()
+				&& hash_equals( $token, self::access_token() ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
+				&& hash_equals( $pin, DoughBoss_Settings::square_api_version() ) && is_string( $current_currency ) && $currency === strtoupper( $current_currency );
+		};
+		if ( ! $scope_current() ) { return $error; }
+		$objects = array();
+		if ( count( $references ) > 0 ) {
+			$response = self::request( 'POST', '/v2/catalog/batch-retrieve', $body, $binding, true );
+			if ( is_wp_error( $response ) || ! $scope_current() ) { return $error; }
+			$objects = self::catalogue_references( $response, $references, $currency, $owner_review );
+			if ( is_wp_error( $objects ) ) { return $error; }
+		}
+		if ( ! $scope_current() ) { return $error; }
+		return array( 'schema_version' => 1, 'data_state' => 'exact_references_observed', 'environment' => $binding['square_mode'],
+			'api_version' => $pin, 'shop' => array( 'id' => $location_id, 'slug' => $binding['shop_slug'], 'square_location_id' => $binding['square_location_id'] ),
+			'observed_at' => gmdate( 'Y-m-d\TH:i:s\Z' ), 'objects' => $objects );
+	}
+
+	/** Explicit owner-requested current catalogue observation; GET only, no sync. */
+	public static function observe_catalogue( $location_id ) {
+		$error = self::catalogue_error();
+		if ( ! is_int( $location_id ) || $location_id < 1 || ! DoughBoss_Settings::square_access_token_valid() || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
+		$binding = self::shop_binding( $location_id );
+		if ( is_wp_error( $binding ) ) { return $error; }
+		$token = self::access_token();
+		$app = DoughBoss_Settings::square_application_id();
+		$pin = DoughBoss_Settings::square_api_version();
+		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+		if ( ! is_string( $currency ) ) { return $error; }
+		$currency = strtoupper( $currency );
+		if ( ! preg_match( '/^[A-Z]{3}$/D', $currency ) ) { return $error; }
+		$scope_current = static function () use ( $location_id, $binding, $token, $app, $pin, $currency ) {
+			$current_currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
+			return $binding === self::shop_binding( $location_id ) && DoughBoss_Settings::square_access_token_valid()
+				&& hash_equals( $token, self::access_token() ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
+				&& hash_equals( $pin, DoughBoss_Settings::square_api_version() ) && is_string( $current_currency ) && $currency === strtoupper( $current_currency );
+		};
+		if ( ! $scope_current() ) { return $error; }
+		$response = self::request( 'GET', '/v2/locations/' . rawurlencode( $binding['square_location_id'] ), array(), $binding, true );
+		if ( is_wp_error( $response ) || ! $scope_current() || array_key_exists( 'errors', $response ) || ! isset( $response['location'] ) ) { return $error; }
+		$location = self::catalogue_location( $response['location'], $binding['square_location_id'], $currency );
+		if ( is_wp_error( $location ) ) { return $error; }
+		$types = array( 'ITEM', 'ITEM_VARIATION', 'MODIFIER_LIST', 'MODIFIER', 'IMAGE', 'TAX', 'CATEGORY' );
+		$objects = array();
+		$ids = array();
+		$identities = array();
+		$cursors = array();
+		$cursor = '';
+		$count = 0;
+		$top_level_count = 0;
+		for ( $page = 1; $page <= self::CATALOGUE_MAX_PAGES; ++$page ) {
+			if ( ! $scope_current() ) { return $error; }
+			$path = '/v2/catalog/list?types=' . rawurlencode( implode( ',', $types ) );
+			if ( '' !== $cursor ) { $path .= '&cursor=' . rawurlencode( $cursor ); }
+			$response = self::request( 'GET', $path, array(), $binding, true );
+			if ( is_wp_error( $response ) || ! $scope_current() || array_key_exists( 'errors', $response ) ) { return $error; }
+			// ListCatalog omits objects for an empty library. Only an absent
+			// objects field on a terminal successful JSON object means empty.
+			if ( ! array_key_exists( 'objects', $response ) && ( ! array_key_exists( 'cursor', $response ) || '' === $response['cursor'] ) ) { $response['objects'] = array(); }
+			if ( ! isset( $response['objects'] ) || ! is_array( $response['objects'] )
+				|| array_values( $response['objects'] ) !== $response['objects'] || $top_level_count + count( $response['objects'] ) > self::CATALOGUE_MAX_TOP_LEVEL ) { return $error; }
+			$top_level_count += count( $response['objects'] );
+			foreach ( $response['objects'] as $object ) {
+				$projected = self::catalogue_object( $object, $currency, $count );
+				if ( is_wp_error( $projected ) || ! self::catalogue_register_identity( $projected, $identities ) ) { return $error; }
+				if ( isset( $ids[ $projected['id'] ] ) ) { continue; }
+				$ids[ $projected['id'] ] = true;
+				$objects[] = $projected;
+			}
+			if ( ! array_key_exists( 'cursor', $response ) || '' === $response['cursor'] ) {
+				if ( ! $scope_current() ) { return $error; }
+				$counts = array_fill_keys( $types, 0 );
+				foreach ( $objects as $object ) { ++$counts[ $object['type'] ]; }
+				return array( 'schema_version' => 1, 'source' => 'square', 'data_state' => 'catalogue_observed', 'observed_at' => gmdate( 'Y-m-d\TH:i:s\Z' ),
+					'environment' => $binding['square_mode'], 'shop' => array( 'id' => $location_id, 'slug' => $binding['shop_slug'] ), 'location' => $location,
+					'reconciliation' => array( 'merchant_identity' => 'observed_owner_reconciliation_required', 'catalogue' => 'current_listing_only', 'pricing' => 'base_price_and_raw_overrides_only', 'inventory' => 'not_observed' ),
+					'catalogue' => array( 'types' => $types, 'pages' => $page, 'object_count' => count( $objects ), 'counts' => $counts, 'objects' => $objects ) );
+			}
+			$cursor = $response['cursor'];
+			if ( ! is_string( $cursor ) || strlen( $cursor ) > 2048 || preg_match( '/[\x00-\x20\x7f]/', $cursor ) || isset( $cursors[ $cursor ] ) || self::CATALOGUE_MAX_PAGES === $page ) { return $error; }
+			$cursors[ $cursor ] = true;
+		}
+		return $error;
+	}
+
+	/** Exact reference intent only; never ask for a historical catalogue or related objects. */
+	private static function catalogue_reference_request( array $references ) {
+		$error = self::catalogue_reference_error();
+		if ( array_values( $references ) !== $references || count( $references ) > self::CATALOGUE_MAX_REFERENCES ) { return $error; }
+		$ids = array();
+		foreach ( $references as $reference ) {
+			if ( ! is_array( $reference ) ) { return $error; }
+			$keys = array_keys( $reference ); sort( $keys, SORT_STRING );
+			if ( array( 'id', 'type', 'version' ) !== $keys || ! self::catalogue_id( $reference['id'] )
+				|| ! in_array( $reference['type'], array( 'IMAGE', 'TAX' ), true ) || ! is_int( $reference['version'] )
+				|| $reference['version'] <= 0 || $reference['version'] > 9007199254740991 || isset( $ids[ $reference['id'] ] ) ) { return $error; }
+			$ids[ $reference['id'] ] = $reference['id'];
+		}
+		$object_ids = array_values( $ids );
+		$body = array( 'object_ids' => $object_ids, 'include_related_objects' => false, 'include_deleted_objects' => true );
+		$json = wp_json_encode( $body );
+		return is_string( $json ) && strlen( $json ) <= self::CATALOGUE_MAX_RESPONSE_BYTES ? $body : $error;
+	}
+
+	/** Reconcile every exact requested reference before returning any minimized evidence. */
+	private static function catalogue_references( $response, array $references, $currency, $owner_review = false ) {
+		$error = self::catalogue_reference_error();
+		if ( is_wp_error( self::catalogue_reference_request( $references ) ) || ! is_array( $response ) || array_key_exists( 'errors', $response )
+			|| ! isset( $response['objects'] ) || ! is_array( $response['objects'] ) || array_values( $response['objects'] ) !== $response['objects']
+			|| count( $response['objects'] ) !== count( $references ) || ( array_key_exists( 'related_objects', $response ) && array() !== $response['related_objects'] ) ) { return $error; }
+		$expected = array();
+		foreach ( $references as $reference ) { $expected[ $reference['id'] ] = $reference; }
+		$objects = array(); $count = 0;
+		foreach ( $response['objects'] as $object ) {
+			$projection_input = $object;
+			if ( true === $owner_review && is_array( $projection_input ) && isset( $projection_input['type'] ) && in_array( $projection_input['type'], array( 'IMAGE', 'TAX' ), true ) ) {
+				$field = strtolower( $projection_input['type'] ) . '_data';
+				if ( isset( $projection_input[ $field ] ) && is_array( $projection_input[ $field ] ) ) { unset( $projection_input[ $field ]['name'] ); }
+			}
+			$projected = self::catalogue_object( $projection_input, $currency, $count );
+			if ( is_wp_error( $projected ) || ! isset( $expected[ $projected['id'] ] ) || isset( $objects[ $projected['id'] ] )
+				|| $expected[ $projected['id'] ]['type'] !== $projected['type'] || $expected[ $projected['id'] ]['version'] !== $projected['version']
+				|| false !== $projected['is_deleted'] || count( $projected['embedded_objects'] ) > 0 ) { return $error; }
+			$data = array();
+			if ( 'TAX' === $projected['type'] ) {
+				foreach ( array( 'percentage', 'calculation_phase', 'inclusion_type', 'enabled', 'applies_to_custom_amounts', 'applies_to_product_set_id' ) as $fact ) {
+					if ( is_array( $projected['data'] ) && array_key_exists( $fact, $projected['data'] ) ) { $data[ $fact ] = $projected['data'][ $fact ]; }
+				}
+			}
+			if ( true === $owner_review ) {
+				$data['name'] = self::catalogue_review_name( isset( $object[ strtolower( $projected['type'] ) . '_data' ]['name'] ) ? $object[ strtolower( $projected['type'] ) . '_data' ]['name'] : null );
+				if ( 'IMAGE' === $projected['type'] ) {
+					$data['url'] = self::catalogue_review_image_url( isset( $object['image_data']['url'] ) ? $object['image_data']['url'] : null );
+					$data['evidence_available'] = null !== $data['url'] && null !== $data['name'];
+					$data['evidence_source'] = 'provider_reported';
+					$data['authenticity_verified'] = false;
+					$data['licence_verified'] = false;
+				}
+			}
+			$objects[ $projected['id'] ] = array( 'id' => $projected['id'], 'type' => $projected['type'], 'version' => $projected['version'], 'is_deleted' => false, 'data' => count( $data ) ? $data : new stdClass() );
+		}
+		ksort( $objects, SORT_STRING );
+		return array_values( $objects );
+	}
+
+	/** No URL fetching, DNS, proxying, or preload. Conservative public-looking HTTPS only. */
+	private static function catalogue_review_image_url( $value ) {
+		if ( ! is_string( $value ) || strlen( $value ) > 2048 || preg_match( '/[^\x21-\x7e]/', $value ) || false !== strpos( $value, '\\' ) || false !== strpos( $value, '@' ) || ! preg_match( '~^https://([A-Za-z0-9.-]+)(?::443)?(/[^?#]*)?$~D', $value, $parts ) ) { return null; }
+		$host = strtolower( $parts[1] ); $labels = explode( '.', $host );
+		if ( strlen( $host ) > 253 || count( $labels ) < 2 || ! preg_match( '/^[a-z]{2,63}$/D', end( $labels ) ) || preg_match( '/(?:^|\.)(?:localhost|local|internal|lan|home|test|invalid|example|onion)$/D', $host ) ) { return null; }
+		foreach ( $labels as $label ) { if ( strlen( $label ) > 63 || ! preg_match( '/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/D', $label ) ) { return null; } }
+		$path = isset( $parts[2] ) ? $parts[2] : '';
+		if ( preg_match( '/%(?![0-9A-Fa-f]{2})/', $path ) || preg_match( '/%(?:0[0-9a-f]|1[0-9a-f]|7f|5c|25|2f|3a|40|23|3f)/i', $path ) ) { return null; }
+		return $value;
+	}
+
+	private static function catalogue_review_name( $value ) {
+		if ( ! is_string( $value ) || strlen( $value ) > 200 || '' === trim( $value ) || 1 !== preg_match( '//u', $value ) || preg_match( '/[\p{C}]/u', $value ) ) { return null; }
+		$name = sanitize_text_field( $value );
+		return '' === trim( $name ) ? null : $name;
+	}
+
+	private static function catalogue_reference_error() {
+		return new WP_Error( 'doughboss_square_catalogue_reference_unavailable', __( 'Exact Square catalogue references could not be observed safely. No catalogue preparation was authorized.', 'doughboss' ), array( 'status' => 502 ) );
+	}
+
+	/** Validate only documented token-status facts; no credential or readiness evidence is inferred. */
+	private static function catalogue_identity( $response, $application_id ) {
+		$error = self::catalogue_identity_error();
+		if ( ! is_array( $response ) || array_key_exists( 'errors', $response )
+			|| ! isset( $response['client_id'], $response['merchant_id'], $response['scopes'], $response['expires_at'] )
+			|| ! self::catalogue_id( $response['client_id'] ) || ! self::catalogue_id( $response['merchant_id'] )
+			|| strlen( $response['merchant_id'] ) < 8 || strlen( $response['merchant_id'] ) > 191
+			|| ! is_string( $application_id ) || ! hash_equals( $application_id, $response['client_id'] )
+			|| ! is_array( $response['scopes'] ) || array_values( $response['scopes'] ) !== $response['scopes'] || count( $response['scopes'] ) > 128
+			|| ! is_string( $response['expires_at'] ) ) { return $error; }
+		$scopes = array();
+		foreach ( $response['scopes'] as $scope ) {
+			if ( ! is_string( $scope ) || ! preg_match( '/^[A-Z][A-Z0-9_]{0,127}$/D', $scope ) || isset( $scopes[ $scope ] ) ) { return $error; }
+			$scopes[ $scope ] = true;
+		}
+		$expiry = $response['expires_at'];
+		// Validate the original grammar before removing any fractional bytes;
+		// otherwise a malformed double fraction could be normalized into a valid date.
+		if ( '' !== $expiry && ! preg_match( '/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/D', $expiry ) ) { return $error; }
+		// PHP 7.4 cannot parse every RFC3339 fractional precision. Validate the
+		// calendar/zone and compare whole seconds conservatively; retain wire evidence.
+		$clock_expiry = preg_replace( '/\.[0-9]{1,9}(?=Z|[+-])/', '', $expiry );
+		if ( '' !== $expiry && ( ! self::catalogue_timestamp( $clock_expiry ) || strtotime( $clock_expiry ) <= time() ) ) { return $error; }
+		$scopes = array_keys( $scopes );
+		sort( $scopes, SORT_STRING );
+		return array( 'application_id' => $response['client_id'], 'merchant_id' => $response['merchant_id'], 'scopes' => $scopes, 'expires_at' => $expiry );
+	}
+
+	private static function catalogue_identity_error() {
+		return new WP_Error( 'doughboss_square_catalogue_identity_unavailable', __( 'Square credential identity could not be observed safely. No catalogue preparation was authorized.', 'doughboss' ), array( 'status' => 502 ) );
+	}
+
+	/** Never expose provider errors, headers, credentials or partial observations. */
+	private static function catalogue_error() {
+		return new WP_Error( 'doughboss_square_catalogue_unavailable', __( 'Square catalogue observation could not be completed safely. Check the exact shop mapping and read permissions, then explicitly retry. No partial catalogue was returned.', 'doughboss' ), array( 'status' => 502 ) );
+	}
+
+	/** Keep wire container identity before associative decoding can erase it. Catalogue only. */
+	private static function catalogue_decode( $body ) {
+		if ( ! is_string( $body ) || strlen( $body ) > self::CATALOGUE_MAX_RESPONSE_BYTES ) { return self::catalogue_error(); }
+		$wire = json_decode( $body );
+		if ( ! $wire instanceof stdClass ) { return self::catalogue_error(); }
+		// Introspection scopes are a JSON list, never an object erased by associative decoding.
+		if ( property_exists( $wire, 'scopes' ) && ! is_array( $wire->scopes ) ) { return self::catalogue_error(); }
+		if ( property_exists( $wire, 'related_objects' ) && ( ! is_array( $wire->related_objects ) || count( $wire->related_objects ) > 0 ) ) { return self::catalogue_error(); }
+		if ( property_exists( $wire, 'location' ) && ( ! $wire->location instanceof stdClass
+			|| ( property_exists( $wire->location, 'capabilities' ) && ! is_array( $wire->location->capabilities ) ) ) ) { return self::catalogue_error(); }
+		if ( property_exists( $wire, 'objects' ) ) {
+			if ( ! is_array( $wire->objects ) || count( $wire->objects ) > self::CATALOGUE_MAX_TOP_LEVEL ) { return self::catalogue_error(); }
+			$count = 0;
+			foreach ( $wire->objects as $object ) { if ( ! self::catalogue_wire_object( $object, $count ) ) { return self::catalogue_error(); } }
+		}
+		return json_decode( $body, true );
+	}
+
+	/** Validate the catalogue's actual JSON object/list containers, including embedded facts. */
+	private static function catalogue_wire_object( $object, &$count, $nested = false ) {
+		if ( ++$count > self::CATALOGUE_MAX_OCCURRENCES || ! $object instanceof stdClass || ! isset( $object->type ) || ! is_string( $object->type ) ) { return false; }
+		foreach ( array( 'present_at_location_ids', 'absent_at_location_ids' ) as $field ) {
+			if ( property_exists( $object, $field ) && ! is_array( $object->{$field} ) ) { return false; }
+		}
+		$field = strtolower( $object->type ) . '_data';
+		if ( ! property_exists( $object, $field ) ) { return isset( $object->is_deleted ) && true === $object->is_deleted; }
+		if ( ! $object->{$field} instanceof stdClass ) { return false; }
+		$data = $object->{$field};
+		if ( property_exists( $data, 'price_money' ) && ! $data->price_money instanceof stdClass ) { return false; }
+		foreach ( array( 'image_ids', 'tax_ids', 'categories', 'location_overrides', 'modifier_list_info', 'variations', 'modifiers' ) as $list ) {
+			if ( ! property_exists( $data, $list ) ) { continue; }
+			if ( ! is_array( $data->{$list} ) || count( $data->{$list} ) > 500 ) { return false; }
+			if ( in_array( $list, array( 'image_ids', 'tax_ids' ), true ) ) { continue; }
+			foreach ( $data->{$list} as $entry ) {
+				if ( ! $entry instanceof stdClass ) { return false; }
+				if ( in_array( $list, array( 'variations', 'modifiers' ), true ) ) {
+					if ( $nested || ! self::catalogue_wire_object( $entry, $count, true ) ) { return false; }
+				} elseif ( 'location_overrides' === $list && property_exists( $entry, 'price_money' ) && ! $entry->price_money instanceof stdClass ) { return false; }
+				elseif ( 'modifier_list_info' === $list && property_exists( $entry, 'modifier_overrides' ) ) {
+					if ( ! is_array( $entry->modifier_overrides ) || count( $entry->modifier_overrides ) > 100 ) { return false; }
+					foreach ( $entry->modifier_overrides as $override ) { if ( ! $override instanceof stdClass ) { return false; } }
+				}
+			}
+		}
+		return true;
+	}
+
+	/** One exact fact set per provider identity across pages, parents and children. */
+	private static function catalogue_register_identity( array $object, array &$identities ) {
+		$facts = wp_json_encode( $object );
+		if ( false === $facts || ( isset( $identities[ $object['id'] ] ) && ! hash_equals( $identities[ $object['id'] ], $facts ) ) ) { return false; }
+		$identities[ $object['id'] ] = $facts;
+		foreach ( $object['embedded_objects'] as $child ) { if ( ! self::catalogue_register_identity( $child, $identities ) ) { return false; } }
+		return true;
+	}
+
+	/** Validate location evidence without asserting a trusted business mapping. */
+	private static function catalogue_location( $location, $expected_id, $currency ) {
+		if ( ! is_array( $location ) || ! isset( $location['id'], $location['status'], $location['currency'], $location['merchant_id'] )
+			|| ! is_string( $location['id'] ) || ! hash_equals( $expected_id, $location['id'] )
+			|| ! in_array( $location['status'], array( 'ACTIVE', 'INACTIVE' ), true ) || $currency !== $location['currency']
+			|| ! self::catalogue_id( $location['merchant_id'] ) ) { return self::catalogue_error(); }
+		$capabilities = array_key_exists( 'capabilities', $location ) ? $location['capabilities'] : array();
+		if ( ! is_array( $capabilities ) || array_values( $capabilities ) !== $capabilities || count( $capabilities ) > 32 ) { return self::catalogue_error(); }
+		foreach ( $capabilities as $capability ) {
+			if ( ! is_string( $capability ) || ! preg_match( '/^[A-Z][A-Z0-9_]{0,63}$/D', $capability ) ) { return self::catalogue_error(); }
+		}
+		return array( 'id' => $location['id'], 'status' => $location['status'], 'currency' => $location['currency'], 'merchant_id' => $location['merchant_id'],
+			'capabilities_present' => array_key_exists( 'capabilities', $location ), 'capabilities' => $capabilities );
+	}
+
+	private static function catalogue_id( $value ) {
+		return is_string( $value ) && 1 === preg_match( '/^[A-Za-z0-9:_-]{1,192}$/D', $value );
+	}
+
+	private static function catalogue_ids( $values ) {
+		if ( ! is_array( $values ) || array_values( $values ) !== $values || count( $values ) > 500 ) { return false; }
+		foreach ( $values as $id ) { if ( ! self::catalogue_id( $id ) ) { return false; } }
+		return $values;
+	}
+
+	private static function catalogue_money( $value, $currency ) {
+		return is_array( $value ) && isset( $value['amount'], $value['currency'] ) && is_int( $value['amount'] ) && $value['amount'] >= 0 && $value['amount'] <= 9007199254740991 && $currency === $value['currency']
+			? array( 'amount' => $value['amount'], 'currency' => $currency ) : false;
+	}
+
+	private static function catalogue_timestamp( $value ) {
+		if ( ! is_string( $value ) || ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-](\d{2}):(\d{2}))$/D', $value, $parts ) ) { return false; }
+		return checkdate( (int) $parts[2], (int) $parts[3], (int) $parts[1] ) && (int) $parts[4] <= 23 && (int) $parts[5] <= 59 && (int) $parts[6] <= 59
+			&& ( 'Z' === $parts[7] || ( (int) $parts[8] <= 23 && (int) $parts[9] <= 59 ) ) && false !== strtotime( $value );
+	}
+
+	/** Minimise provider objects; preserve raw presence/override facts, not prices inferred from them. */
+	private static function catalogue_object( $object, $currency, &$count, $nested = false ) {
+		$error = self::catalogue_error();
+		if ( ++$count > self::CATALOGUE_MAX_OCCURRENCES || ! is_array( $object ) || ! isset( $object['id'], $object['type'] ) || ! self::catalogue_id( $object['id'] )
+			|| ! in_array( $object['type'], array( 'ITEM', 'ITEM_VARIATION', 'MODIFIER_LIST', 'MODIFIER', 'IMAGE', 'TAX', 'CATEGORY' ), true ) ) { return $error; }
+		$out = array( 'id' => $object['id'], 'type' => $object['type'], 'version' => null, 'updated_at' => null, 'is_deleted' => null, 'presence' => array(), 'data' => array(), 'embedded_objects' => array() );
+		if ( array_key_exists( 'version', $object ) ) {
+			if ( ! is_int( $object['version'] ) || $object['version'] < 0 || $object['version'] > 9007199254740991 ) { return $error; }
+			$out['version'] = $object['version'];
+		}
+		if ( array_key_exists( 'updated_at', $object ) ) {
+			if ( ! self::catalogue_timestamp( $object['updated_at'] ) ) { return $error; }
+			$out['updated_at'] = $object['updated_at'];
+		}
+		foreach ( array( 'is_deleted', 'present_at_all_locations' ) as $field ) {
+			if ( array_key_exists( $field, $object ) && ! is_bool( $object[ $field ] ) ) { return $error; }
+		}
+		$out['is_deleted'] = isset( $object['is_deleted'] ) ? $object['is_deleted'] : null;
+		$out['presence']['present_at_all_locations'] = isset( $object['present_at_all_locations'] ) ? $object['present_at_all_locations'] : null;
+		foreach ( array( 'present_at_location_ids', 'absent_at_location_ids' ) as $field ) {
+			$out['presence'][ $field ] = array_key_exists( $field, $object ) ? self::catalogue_ids( $object[ $field ] ) : null;
+			if ( false === $out['presence'][ $field ] ) { return $error; }
+		}
+		$field = strtolower( $object['type'] ) . '_data';
+		if ( ! isset( $object[ $field ] ) || ! is_array( $object[ $field ] ) ) {
+			if ( true !== $out['is_deleted'] ) { return $error; }
+			$out['data'] = new stdClass();
+			return $out;
+		}
+		$data = $object[ $field ];
+		// Square documents SKU as an optional string, with no field-specific maximum.
+		// The existing local whole-response byte ceiling bounds this exact observation.
+		if ( 'ITEM_VARIATION' === $object['type'] && array_key_exists( 'sku', $data ) ) {
+			if ( ! is_string( $data['sku'] ) || strlen( $data['sku'] ) > self::CATALOGUE_MAX_RESPONSE_BYTES || 1 !== preg_match( '//u', $data['sku'] ) ) { return $error; }
+			$out['data']['sku'] = $data['sku'];
+		}
+		if ( array_key_exists( 'name', $data ) ) {
+			if ( ! is_string( $data['name'] ) || strlen( $data['name'] ) > 1024 || 1 !== preg_match( '//u', $data['name'] ) ) { return $error; }
+			$out['data']['name'] = $data['name'];
+		}
+		if ( 'MODIFIER_LIST' === $object['type'] && array_key_exists( 'selection_type', $data ) ) {
+			if ( ! in_array( $data['selection_type'], array( 'SINGLE', 'MULTIPLE' ), true ) ) { return $error; }
+			$out['data']['selection_type'] = $data['selection_type'];
+		}
+		if ( 'MODIFIER' === $object['type'] && array_key_exists( 'ordinal', $data ) ) {
+			if ( ! is_int( $data['ordinal'] ) || $data['ordinal'] < -2147483648 || $data['ordinal'] > 2147483647 ) { return $error; }
+			$out['data']['ordinal'] = $data['ordinal'];
+		}
+		if ( 'TAX' === $object['type'] ) {
+			if ( array_key_exists( 'percentage', $data ) ) {
+				if ( ! is_string( $data['percentage'] ) || strlen( $data['percentage'] ) < 1 || strlen( $data['percentage'] ) > 32 || ! preg_match( '/^[0-9]+(?:\.[0-9]+)?$/D', $data['percentage'] ) ) { return $error; }
+				$out['data']['percentage'] = $data['percentage'];
+			}
+			foreach ( array( 'calculation_phase' => array( 'TAX_SUBTOTAL_PHASE', 'TAX_TOTAL_PHASE' ), 'inclusion_type' => array( 'ADDITIVE', 'INCLUSIVE' ) ) as $fact => $allowed ) {
+				if ( array_key_exists( $fact, $data ) ) {
+					if ( ! in_array( $data[ $fact ], $allowed, true ) ) { return $error; }
+					$out['data'][ $fact ] = $data[ $fact ];
+				}
+			}
+			foreach ( array( 'enabled', 'applies_to_custom_amounts' ) as $fact ) {
+				if ( array_key_exists( $fact, $data ) ) {
+					if ( ! is_bool( $data[ $fact ] ) ) { return $error; }
+					$out['data'][ $fact ] = $data[ $fact ];
+				}
+			}
+			if ( array_key_exists( 'applies_to_product_set_id', $data ) ) {
+				// Optional nullable provider fact: null declares no ID, not unrestricted tax.
+				if ( null !== $data['applies_to_product_set_id'] && ! self::catalogue_id( $data['applies_to_product_set_id'] ) ) { return $error; }
+				$out['data']['applies_to_product_set_id'] = $data['applies_to_product_set_id'];
+			}
+		}
+		foreach ( array( 'item_id', 'modifier_list_id', 'category_id' ) as $ref ) {
+			if ( array_key_exists( $ref, $data ) ) {
+				if ( ! self::catalogue_id( $data[ $ref ] ) ) { return $error; }
+				$out['data'][ $ref ] = $data[ $ref ];
+			}
+		}
+		foreach ( array( 'image_ids', 'tax_ids' ) as $ref ) {
+			if ( array_key_exists( $ref, $data ) ) {
+				$out['data'][ $ref ] = self::catalogue_ids( $data[ $ref ] );
+				if ( false === $out['data'][ $ref ] ) { return $error; }
+			}
+		}
+		if ( array_key_exists( 'categories', $data ) ) {
+			if ( ! is_array( $data['categories'] ) || array_values( $data['categories'] ) !== $data['categories'] || count( $data['categories'] ) > 500 ) { return $error; }
+			$out['data']['category_ids'] = array();
+			foreach ( $data['categories'] as $category ) {
+				if ( ! is_array( $category ) || ! isset( $category['id'] ) || ! self::catalogue_id( $category['id'] ) ) { return $error; }
+				$out['data']['category_ids'][] = $category['id'];
+			}
+		}
+		foreach ( array( 'price_money', 'pricing_type', 'on_by_default', 'track_inventory', 'sold_out' ) as $fact ) {
+			if ( ! array_key_exists( $fact, $data ) ) { continue; }
+			$value = $data[ $fact ];
+			if ( 'price_money' === $fact ) { $value = self::catalogue_money( $value, $currency ); if ( false === $value ) { return $error; } }
+			elseif ( 'pricing_type' === $fact ) { if ( ! in_array( $value, array( 'FIXED_PRICING', 'VARIABLE_PRICING' ), true ) ) { return $error; } }
+			elseif ( ! is_bool( $value ) ) { return $error; }
+			$out['data'][ $fact ] = $value;
+		}
+		if ( array_key_exists( 'location_overrides', $data ) ) {
+			if ( ! is_array( $data['location_overrides'] ) || array_values( $data['location_overrides'] ) !== $data['location_overrides'] || count( $data['location_overrides'] ) > 100 ) { return $error; }
+			$out['data']['location_overrides'] = array();
+			foreach ( $data['location_overrides'] as $override ) {
+				if ( ! is_array( $override ) || ! isset( $override['location_id'] ) || ! self::catalogue_id( $override['location_id'] ) ) { return $error; }
+				$raw = array( 'location_id' => $override['location_id'] );
+				foreach ( array( 'price_money', 'pricing_type', 'track_inventory', 'sold_out' ) as $fact ) {
+					if ( ! array_key_exists( $fact, $override ) ) { continue; }
+					$value = $override[ $fact ];
+					if ( 'price_money' === $fact ) { $value = self::catalogue_money( $value, $currency ); if ( false === $value ) { return $error; } }
+					elseif ( 'pricing_type' === $fact ) { if ( ! in_array( $value, array( 'FIXED_PRICING', 'VARIABLE_PRICING' ), true ) ) { return $error; } }
+					elseif ( ! is_bool( $value ) ) { return $error; }
+					$raw[ $fact ] = $value;
+				}
+				if ( array_key_exists( 'sold_out_valid_until', $override ) ) {
+					if ( ! self::catalogue_timestamp( $override['sold_out_valid_until'] ) ) { return $error; }
+					$raw['sold_out_valid_until'] = $override['sold_out_valid_until'];
+				}
+				if ( array_key_exists( 'inventory_alert_type', $override ) ) {
+					if ( ! is_string( $override['inventory_alert_type'] ) || ! preg_match( '/^[A-Z_]{1,64}$/D', $override['inventory_alert_type'] ) ) { return $error; }
+					$raw['inventory_alert_type'] = $override['inventory_alert_type'];
+				}
+				if ( array_key_exists( 'inventory_alert_threshold', $override ) ) {
+					if ( ! is_int( $override['inventory_alert_threshold'] ) || $override['inventory_alert_threshold'] < 0 || $override['inventory_alert_threshold'] > 9007199254740991 ) { return $error; }
+					$raw['inventory_alert_threshold'] = $override['inventory_alert_threshold'];
+				}
+				$out['data']['location_overrides'][] = $raw;
+			}
+		}
+		if ( array_key_exists( 'modifier_list_info', $data ) ) {
+			if ( ! is_array( $data['modifier_list_info'] ) || array_values( $data['modifier_list_info'] ) !== $data['modifier_list_info'] || count( $data['modifier_list_info'] ) > 100 ) { return $error; }
+			$out['data']['modifier_list_info'] = array();
+			foreach ( $data['modifier_list_info'] as $info ) {
+				if ( ! is_array( $info ) || ! isset( $info['modifier_list_id'] ) || ! self::catalogue_id( $info['modifier_list_id'] ) ) { return $error; }
+				$raw = array( 'modifier_list_id' => $info['modifier_list_id'] );
+				foreach ( array( 'min_selected_modifiers', 'max_selected_modifiers', 'enabled' ) as $fact ) {
+					if ( ! array_key_exists( $fact, $info ) ) { continue; }
+					if ( 'enabled' === $fact ? ! is_bool( $info[ $fact ] ) : ( ! is_int( $info[ $fact ] ) || $info[ $fact ] < -1 || $info[ $fact ] > 9007199254740991 ) ) { return $error; }
+					$raw[ $fact ] = $info[ $fact ];
+				}
+				if ( array_key_exists( 'modifier_overrides', $info ) ) {
+					if ( ! is_array( $info['modifier_overrides'] ) || array_values( $info['modifier_overrides'] ) !== $info['modifier_overrides'] || count( $info['modifier_overrides'] ) > 100 ) { return $error; }
+					$raw['modifier_overrides'] = array();
+					foreach ( $info['modifier_overrides'] as $override ) {
+						if ( ! is_array( $override ) || ! isset( $override['modifier_id'] ) || ! self::catalogue_id( $override['modifier_id'] ) || ( array_key_exists( 'on_by_default', $override ) && ! is_bool( $override['on_by_default'] ) ) ) { return $error; }
+						$entry = array( 'modifier_id' => $override['modifier_id'] );
+						if ( isset( $override['on_by_default'] ) ) { $entry['on_by_default'] = $override['on_by_default']; }
+						$raw['modifier_overrides'][] = $entry;
+					}
+				}
+				$out['data']['modifier_list_info'][] = $raw;
+			}
+		}
+		foreach ( array( 'variations' => 'ITEM_VARIATION', 'modifiers' => 'MODIFIER' ) as $embedded => $type ) {
+			if ( ! array_key_exists( $embedded, $data ) ) { continue; }
+			if ( $nested || ! is_array( $data[ $embedded ] ) || array_values( $data[ $embedded ] ) !== $data[ $embedded ] || count( $data[ $embedded ] ) > 100 ) { return $error; }
+			$out['data'][ 'variations' === $embedded ? 'variation_ids' : 'modifier_ids' ] = array();
+			foreach ( $data[ $embedded ] as $child ) {
+				if ( ! is_array( $child ) || ! isset( $child['type'] ) || $type !== $child['type'] ) { return $error; }
+				$projected = self::catalogue_object( $child, $currency, $count, true );
+				if ( is_wp_error( $projected ) || ( 'variations' === $embedded && ( ! is_array( $projected['data'] ) || ! isset( $projected['data']['item_id'] ) || $object['id'] !== $projected['data']['item_id'] ) ) ) { return $error; }
+				$out['data'][ 'variations' === $embedded ? 'variation_ids' : 'modifier_ids' ][] = $projected['id'];
+				$out['embedded_objects'][] = $projected;
+			}
+		}
+		if ( array() === $out['data'] ) { $out['data'] = new stdClass(); }
+		return $out;
 	}
 
 	/**
@@ -1656,9 +2358,10 @@ class DoughBoss_Square {
 	 * @param string $path   API path beginning with '/'.
 	 * @param array      $body         JSON body for write calls.
 	 * @param array|null $shop_binding Validated v2 mapping context, when present.
+	 * @param bool $require_object Validate wire object/list containers for catalogue reads only.
 	 * @return array|WP_Error Decoded JSON, or an error.
 	 */
-	private static function request( $method, $path, array $body = array(), $shop_binding = null ) {
+	private static function request( $method, $path, array $body = array(), $shop_binding = null, $require_object = false ) {
 		if (
 			! DoughBoss_Settings::square_access_token_valid()
 			|| ( null === $shop_binding && '' === self::location_id() )
@@ -1677,6 +2380,7 @@ class DoughBoss_Square {
 				'Accept'         => 'application/json',
 			),
 		);
+		if ( $require_object ) { $args['limit_response_size'] = self::CATALOGUE_MAX_RESPONSE_BYTES + 1; }
 		if ( 'GET' !== $args['method'] && ! empty( $body ) ) {
 			$args['body'] = wp_json_encode( $body );
 		}
@@ -1688,7 +2392,12 @@ class DoughBoss_Square {
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		$response_body = wp_remote_retrieve_body( $response );
+		if ( $require_object ) {
+			if ( ! is_string( $response_body ) || strlen( $response_body ) > self::CATALOGUE_MAX_RESPONSE_BYTES ) { return self::catalogue_error(); }
+			$data = self::catalogue_decode( $response_body );
+			if ( is_wp_error( $data ) ) { return $data; }
+		} else { $data = json_decode( $response_body, true ); }
 
 		if ( $code >= 200 && $code < 300 && is_array( $data ) ) {
 			return $data;

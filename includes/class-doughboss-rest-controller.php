@@ -92,6 +92,42 @@ class DoughBoss_REST_Controller {
 	 */
 	public function register_routes() {
 		$ns = DOUGHBOSS_REST_NAMESPACE;
+		register_rest_route( $ns, '/admin/square-catalogue-prepare', array(
+			'methods' => WP_REST_Server::CREATABLE,
+			'callback' => array( $this, 'prepare_square_catalogue' ),
+			'permission_callback' => array( $this, 'verify_square_catalogue_reader' ),
+		) );
+		register_rest_route( $ns, '/admin/square-catalogue-source', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'get_square_catalogue_source' ),
+			'permission_callback' => array( $this, 'verify_square_catalogue_reader' ),
+		) );
+		register_rest_route( $ns, '/admin/square-catalogue-operation-status', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'get_square_catalogue_operation_status' ),
+			'permission_callback' => array( $this, 'verify_square_catalogue_reader' ),
+		) );
+		register_rest_route( $ns, '/admin/square-catalogue-review-context', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'get_square_catalogue_review_context' ),
+			'permission_callback' => array( $this, 'verify_square_catalogue_reader' ),
+		) );
+
+		register_rest_route(
+			$ns,
+			'/admin/square-catalogue',
+			array(
+				'methods' => WP_REST_Server::READABLE,
+				'callback' => array( $this, 'get_square_catalogue' ),
+				'permission_callback' => array( $this, 'verify_square_catalogue_reader' ),
+				'args' => array( 'location' => array( 'type' => 'string', 'enum' => array( 'revesby', 'bankstown', 'roselands' ), 'required' => true ) ),
+			)
+		);
+		register_rest_route( $ns, '/admin/square-locations', array(
+			'methods' => WP_REST_Server::READABLE,
+			'callback' => array( $this, 'get_square_locations' ),
+			'permission_callback' => array( $this, 'verify_square_catalogue_reader' ),
+		) );
 
 		register_rest_route(
 			$ns,
@@ -124,6 +160,7 @@ class DoughBoss_REST_Controller {
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_menu' ),
 				'permission_callback' => '__return_true',
+				'args'               => array( 'location_id' => array( 'validate_callback' => array( $this, 'validate_staff_approval_location_param' ) ) ),
 			)
 		);
 
@@ -183,6 +220,7 @@ class DoughBoss_REST_Controller {
 					'options'  => array(
 						'default' => array(),
 					),
+					'location_id' => array( 'validate_callback' => array( $this, 'validate_staff_approval_location_param' ) ),
 					'quantity' => array(
 						'default'           => 1,
 						'sanitize_callback' => 'absint',
@@ -692,8 +730,7 @@ class DoughBoss_REST_Controller {
 						'sanitize_callback' => 'sanitize_key',
 					),
 					'location_id' => array(
-						'default'           => 0,
-						'sanitize_callback' => 'absint',
+						'validate_callback' => array( $this, 'validate_staff_approval_location_param' ),
 					),
 					'payment_attempt_key' => array(
 						'required'          => true,
@@ -758,7 +795,7 @@ class DoughBoss_REST_Controller {
 						'sanitize_callback' => 'sanitize_textarea_field',
 					),
 					'location_id'       => array(
-						'sanitize_callback' => 'absint',
+						'validate_callback' => array( $this, 'validate_staff_approval_location_param' ),
 					),
 					'payment_intent_id' => array(
 						'sanitize_callback' => 'sanitize_text_field',
@@ -788,7 +825,11 @@ class DoughBoss_REST_Controller {
 					'customer_email' => array( 'required' => true, 'sanitize_callback' => 'sanitize_email' ),
 					'customer_phone' => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
 					'notes'          => array( 'default' => '', 'sanitize_callback' => 'sanitize_textarea_field' ),
-					'location_id'    => array( 'sanitize_callback' => 'absint' ),
+					// Validate, rather than sanitize, this public native identifier. The
+					// approval-required resolver must see the original representation so
+					// booleans, floats, aliases, whitespace and leading zeroes cannot be
+					// coerced into a different shop authority.
+					'location_id'    => array( 'validate_callback' => array( $this, 'validate_staff_approval_location_param' ) ),
 					'idempotency_key'=> array( 'sanitize_callback' => 'sanitize_text_field' ),
 				),
 			)
@@ -1410,7 +1451,343 @@ class DoughBoss_REST_Controller {
 		return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
 	}
 
-	/** Owner-only preview. Provider reads are not implemented or implied here. */
+	/** Explicit owner-only provider read, requiring both management capability and REST nonce. */
+	public function verify_square_catalogue_reader( WP_REST_Request $request ) {
+		$permission = $this->verify_manage();
+		return is_wp_error( $permission ) ? $permission : $this->verify_nonce( $request );
+	}
+
+	/** Explicit owner browser action; never accepts caller-selected account or location context. */
+	public function get_square_locations( WP_REST_Request $request ) {
+		$permission = $this->verify_square_catalogue_reader( $request );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$url = $request->get_url_params();
+		$json = $request->get_json_params();
+		if ( 'GET' !== $request->get_method() || array() !== $request->get_query_params() || ( null !== $request->get_body() && '' !== $request->get_body() ) || array() !== $request->get_body_params() || array() !== $request->get_file_params() || ( null !== $json && array() !== $json ) || ( array() !== $url && array( 'namespace' => DOUGHBOSS_REST_NAMESPACE ) !== $url ) ) {
+			return new WP_Error( 'doughboss_square_locations_input', __( 'Square location observation does not accept caller context.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$actor = get_current_user_id(); $session_token = wp_get_session_token();
+		$authorize = function () use ( $request, $actor, $session_token ) {
+			if ( $actor !== get_current_user_id() || ! is_string( $session_token ) || '' === $session_token || ! hash_equals( $session_token, wp_get_session_token() ) ) { return new WP_Error( 'doughboss_forbidden', __( 'Current owner browser authority could not be verified.', 'doughboss' ), array( 'status' => 403 ) ); }
+			$permission = $this->verify_square_catalogue_reader( $request );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			$permission = $this->square_catalogue_current_authority( $actor, $session_token );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			if ( $actor !== get_current_user_id() || ! hash_equals( $session_token, wp_get_session_token() ) ) { return new WP_Error( 'doughboss_forbidden', __( 'Current owner browser authority could not be verified.', 'doughboss' ), array( 'status' => 403 ) ); }
+			return $this->verify_square_catalogue_reader( $request );
+		};
+		$view = DoughBoss_Square::observe_locations( $authorize );
+		if ( is_wp_error( $view ) ) { return $view; }
+		// The service's terminal guard performs this exact owner/session callback,
+		// then rechecks its full captured context and expiry before returning.
+		// No extra owner callback may invalidate that evidence after the guard.
+		return new WP_REST_Response( $view, 200, array( 'Cache-Control' => 'private, no-store', 'Vary' => 'Cookie, Authorization' ) );
+	}
+
+	public function get_square_catalogue( WP_REST_Request $request ) {
+		$permission = $this->verify_square_catalogue_reader( $request );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$query = $request->get_query_params(); $body = $request->get_body();
+		if ( array( 'location' ) !== array_keys( $query ) || ( null !== $body && '' !== $body )
+			|| ! is_string( $query['location'] ) || ! in_array( $query['location'], array( 'revesby', 'bankstown', 'roselands' ), true ) ) {
+			return new WP_Error( 'doughboss_square_catalogue_input', __( 'Choose only one supported shop for this read.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$actor = get_current_user_id();
+		$session_token = wp_get_session_token();
+		$authorize = function () use ( $request, $actor, $session_token ) {
+			if ( $actor !== get_current_user_id() || ! hash_equals( $session_token, wp_get_session_token() ) ) { return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) ); }
+			$permission = $this->verify_square_catalogue_reader( $request );
+			return is_wp_error( $permission ) ? $permission : $this->square_catalogue_current_authority( $actor, $session_token );
+		};
+		$permission = $authorize(); if ( is_wp_error( $permission ) ) { return $permission; }
+		$menu = $this->read_square_catalogue_menu(); if ( is_wp_error( $menu ) ) { return $menu; }
+		$source = DoughBoss_Square_Catalogue_Source::snapshot( $menu ); if ( is_wp_error( $source ) ) { return $source; }
+		$permission = $authorize(); if ( is_wp_error( $permission ) ) { return $permission; }
+		$view = DoughBoss_Square_Dashboard::observe_catalogue( $query['location'] );
+		if ( is_wp_error( $view ) ) { return $view; }
+		$permission = $authorize(); if ( is_wp_error( $permission ) ) { return $permission; }
+		$menu = $this->read_square_catalogue_menu(); if ( is_wp_error( $menu ) ) { return $menu; }
+		$after = DoughBoss_Square_Catalogue_Source::snapshot( $menu );
+		if ( is_wp_error( $after ) || $source !== $after ) {
+			return new WP_Error( 'doughboss_square_catalogue_source_changed', __( 'The complete current source changed during this read. No comparison was returned.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$comparison = DoughBoss_Square_Catalogue_Comparison::compare( $source, $view );
+		if ( is_wp_error( $comparison ) ) { return $comparison; }
+		$permission = $authorize(); if ( is_wp_error( $permission ) ) { return $permission; }
+		$view['source_comparison'] = $comparison;
+		return new WP_REST_Response( $view, 200, array( 'Cache-Control' => 'private, no-store', 'Vary' => 'Cookie, Authorization' ) );
+	}
+
+	/** Owner-approved preparation only; never dispatches a provider mutation. */
+	public function prepare_square_catalogue( WP_REST_Request $request ) {
+		$permission = $this->verify_square_catalogue_reader( $request );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$approval = $request->get_json_params();
+		if ( ! $request->is_json_content_type() || ! is_array( $approval ) || array_values( $approval ) === $approval ) {
+			return new WP_Error( 'doughboss_square_preparation_invalid', __( 'A complete catalogue approval is required.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$actor = get_current_user_id();
+		$session_token = wp_get_session_token();
+		$authorize = function () use ( $request, $actor, $session_token ) {
+			if ( $actor !== get_current_user_id() ) { return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) ); }
+			$permission = $this->verify_square_catalogue_reader( $request );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			return $this->square_catalogue_current_authority( $actor, $session_token );
+		};
+		$read_menu = function () {
+			return $this->read_square_catalogue_menu();
+		};
+		$result = DoughBoss_Square_Catalogue_Preparation::prepare( $approval, $read_menu, $authorize );
+		if ( is_wp_error( $result ) ) { return $result; }
+		$permission = $authorize();
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		return new WP_REST_Response( $result, 200, array( 'Cache-Control' => 'private, no-store', 'Vary' => 'Cookie, Authorization' ) );
+	}
+
+	/** Owner review observation only; no durable approval or provider dispatch. */
+	public function get_square_catalogue_review_context( WP_REST_Request $request ) {
+		$permission = $this->verify_square_catalogue_reader( $request );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$query = $request->get_query_params();
+		// Programmatically constructed WP REST requests leave an absent body null.
+		// Admit only absent or exact empty bytes, never a nonempty/coerced body.
+		$body = $request->get_body();
+		if ( array( 'shops' ) !== array_keys( $query ) || ( null !== $body && '' !== $body ) ) {
+			return new WP_Error( 'doughboss_square_catalogue_review_input', __( 'Choose only the supported shops for owner review.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$slugs = DoughBoss_Square_Catalogue_Review::shops( $query['shops'] );
+		if ( is_wp_error( $slugs ) ) { return $slugs; }
+		$actor = get_current_user_id(); $session_token = wp_get_session_token();
+		$authorize = function () use ( $request, $actor, $session_token ) {
+			if ( $actor !== get_current_user_id() ) { return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) ); }
+			$permission = $this->verify_square_catalogue_reader( $request );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			$permission = $this->square_catalogue_current_authority( $actor, $session_token );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			if ( $actor !== get_current_user_id() || ! hash_equals( $session_token, wp_get_session_token() ) ) { return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) ); }
+			return $this->verify_square_catalogue_reader( $request );
+		};
+		$read_menu = function () { return $this->read_square_catalogue_menu(); };
+		$result = DoughBoss_Square_Catalogue_Review::observe( $slugs, $read_menu, $authorize );
+		if ( is_wp_error( $result ) ) { return $result; }
+		$permission = $authorize();
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		return new WP_REST_Response( $result, 200, array( 'Cache-Control' => 'private, no-store', 'Vary' => 'Cookie, Authorization' ) );
+	}
+
+	/** Original-owner recovery only. Absence is not proof that no operation is in flight. */
+	public function get_square_catalogue_operation_status( WP_REST_Request $request ) {
+		$permission = $this->verify_square_catalogue_reader( $request );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$headers = array( 'Cache-Control' => 'private, no-store', 'Vary' => 'Cookie, Authorization' );
+		$key = $request->get_param( 'operation_key' );
+		if ( ! is_string( $key ) || ! preg_match( '/^[a-f0-9]{64}$/D', $key ) ) {
+			return new WP_REST_Response( array( 'code' => 'doughboss_square_operation_key_invalid', 'same_key_replay_required' => true, 'new_operation_key_allowed' => false, 'dispatch_allowed' => false ), 400, $headers );
+		}
+		$actor = get_current_user_id();
+		$session_token = wp_get_session_token();
+		$authorize = function () use ( $request, $actor, $session_token ) {
+			if ( $actor !== get_current_user_id() ) { return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) ); }
+			$permission = $this->verify_square_catalogue_reader( $request );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			$permission = $this->square_catalogue_current_authority( $actor, $session_token );
+			if ( is_wp_error( $permission ) ) { return $permission; }
+			if ( $actor !== get_current_user_id() || ! hash_equals( $session_token, wp_get_session_token() ) ) {
+				return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
+			}
+			return $this->verify_square_catalogue_reader( $request );
+		};
+		$permission = $authorize();
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$status = 503;
+		$view = array( 'code' => 'doughboss_square_operation_status_unavailable', 'same_key_replay_required' => true, 'new_operation_key_allowed' => false, 'dispatch_allowed' => false );
+		try {
+			$row = DoughBoss_Square_Catalogue_Operations::find( $key );
+			if ( ! is_wp_error( $row ) && ( null === $row || $row['operation_key'] === $key ) ) {
+				$view = $this->square_catalogue_operation_status_view( $row, $actor );
+				$status = isset( $view['code'] ) ? 404 : 200;
+			}
+		} catch ( Throwable $error ) { /* No storage or provider internals are disclosed. */ }
+		$permission = $authorize();
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		return new WP_REST_Response( $view, $status, $headers );
+	}
+
+	/** Project only rows already validated by Operations::find; never return stored payloads. */
+	private function square_catalogue_operation_status_view( $row, $actor ) {
+		if ( null === $row || (int) $row['approved_by'] !== $actor ) {
+			return array( 'code' => 'operation_not_observed', 'same_key_replay_required' => true, 'new_operation_key_allowed' => false, 'dispatch_allowed' => false );
+		}
+		return array( 'schema_version' => 1, 'operation_key' => $row['operation_key'], 'state' => $row['state'], 'version' => (int) $row['version'],
+			'approved_at' => $row['approved_at_utc'], 'updated_at' => $row['updated_at_utc'],
+			'source_hash' => $row['source_hash'], 'target_hash' => $row['target_hash'], 'request_hash' => $row['request_hash'],
+			'receipt_present' => null !== $row['receipt_json'], 'verified_at' => $row['verified_at_utc'],
+			// Eligibility only: preparation must still revalidate the identical approval.
+			'preparation_replay_available' => 'prepared' === $row['state'], 'same_key_replay_required' => 'prepared' === $row['state'],
+			'dispatch_allowed' => false, 'new_operation_key_allowed' => false );
+	}
+
+	/** Trusted native menu read; never accepts caller-supplied items, prices or hashes. */
+	public function get_square_catalogue_source( WP_REST_Request $request ) {
+		$permission = $this->verify_square_catalogue_reader( $request );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		$actor = get_current_user_id();
+		$menu = $this->read_square_catalogue_menu();
+		if ( is_wp_error( $menu ) ) { return $menu; }
+		$snapshot = DoughBoss_Square_Catalogue_Source::snapshot( $menu );
+		if ( is_wp_error( $snapshot ) ) { return $snapshot; }
+		$permission = $this->verify_square_catalogue_reader( $request );
+		if ( is_wp_error( $permission ) ) { return $permission; }
+		if ( $actor !== get_current_user_id() ) {
+			return new WP_Error( 'doughboss_forbidden', __( 'The operator identity changed during the source read.', 'doughboss' ), array( 'status' => 403 ) );
+		}
+		$snapshot['source'] = 'wordpress_menu';
+		$snapshot['global_availability_only'] = true;
+		$snapshot['provider_writes_allowed'] = false;
+		return new WP_REST_Response( $snapshot, 200, array( 'Cache-Control' => 'private, no-store', 'Vary' => 'Cookie, Authorization' ) );
+	}
+
+	/** Complete trusted native menu shared by observation and preparation. */
+	private function read_square_catalogue_menu() {
+		global $wpdb;
+		$menu_response = $this->get_menu();
+		if ( is_wp_error( $menu_response ) ) { return $menu_response; }
+		if ( ! ( $menu_response instanceof WP_REST_Response ) || ! empty( $wpdb->last_error ) ) {
+			return new WP_Error( 'doughboss_square_source_unavailable', __( 'The website menu could not be read completely.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$menu = $menu_response->get_data();
+		// get_menu currently caps published posts at 200. Never attest a capped read.
+		if ( ! is_array( $menu ) || count( $menu ) >= 200 ) {
+			return new WP_Error( 'doughboss_square_source_limit', __( 'The website menu source needs a complete uncapped read before transfer.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		if ( ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) { return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) ); }
+		try { $this->square_catalogue_source_cache_parity( $menu );
+		} catch ( Throwable $error ) { return new WP_Error( 'doughboss_square_source_unavailable', __( 'The current database menu could not be verified completely. No preparation was authorized.', 'doughboss' ), array( 'status' => 503 ) ); }
+		return $menu;
+	}
+
+	/** Keep the native producer; prove its caches agree with current locking database reads. */
+	private function square_catalogue_source_cache_parity( array $menu ) {
+		global $wpdb;
+		$tables = array( $wpdb->posts, $wpdb->postmeta, $wpdb->terms, $wpdb->term_taxonomy, $wpdb->term_relationships, $wpdb->options );
+		$statuses = $wpdb->get_results( $wpdb->prepare( 'SHOW TABLE STATUS WHERE Name IN (' . implode( ',', array_fill( 0, count( $tables ), '%s' ) ) . ')', $tables ), ARRAY_A );
+		$this->square_source_need( empty( $wpdb->last_error ) && is_array( $statuses ) && count( $statuses ) === count( $tables ) );
+		foreach ( $statuses as $table ) { $this->square_source_need( isset( $table['Engine'] ) && 'INNODB' === strtoupper( $table['Engine'] ) ); }
+		$errors = $wpdb->suppress_errors( true );
+		try {
+			$isolation = $wpdb->get_var( 'SELECT @@SESSION.transaction_isolation' );
+			if ( ! empty( $wpdb->last_error ) ) { $isolation = $wpdb->get_var( 'SELECT @@SESSION.tx_isolation' ); }
+			$this->square_source_need( empty( $wpdb->last_error ) && in_array( strtoupper( str_replace( ' ', '-', (string) $isolation ) ), array( 'REPEATABLE-READ', 'SERIALIZABLE' ), true ) );
+		} finally { $wpdb->suppress_errors( $errors ); }
+		// These current reads do not reuse a transaction's older consistent-read view.
+		// InnoDB RR/SERIALIZABLE next-key locks also protect missing keys/membership inserts.
+		$fields = 'ID,post_title,post_excerpt,post_content,post_status,post_type,post_parent,post_mime_type,guid,menu_order';
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT {$fields} FROM {$wpdb->posts} WHERE post_type=%s AND post_status='publish' ORDER BY menu_order ASC,post_title ASC LIMIT 200 FOR UPDATE", DoughBoss_Post_Types::POST_TYPE ), ARRAY_A );
+		$this->square_source_need( empty( $wpdb->last_error ) && is_array( $rows ) && count( $rows ) < 200 && count( $rows ) === count( $menu ) );
+		$cached = get_posts( array( 'post_type' => DoughBoss_Post_Types::POST_TYPE, 'post_status' => 'publish', 'numberposts' => 200, 'orderby' => array( 'menu_order' => 'ASC', 'title' => 'ASC' ) ) );
+		$this->square_source_need( is_array( $cached ) && count( $cached ) === count( $rows ) );
+		$ids = array(); $cached_by_id = array(); $menu_ids = array();
+		foreach ( $cached as $post ) { $this->square_source_need( is_object( $post ) && isset( $post->ID ) ); $cached_by_id[ (int) $post->ID ] = $post; }
+		foreach ( $menu as $item ) { $this->square_source_need( is_array( $item ) && isset( $item['id'] ) && is_int( $item['id'] ) ); $menu_ids[] = $item['id']; }
+		foreach ( $rows as $row ) {
+			$id = (int) $row['ID']; $this->square_source_need( isset( $cached_by_id[ $id ] ) );
+			foreach ( $row as $field => $value ) { $this->square_source_need( isset( $cached_by_id[ $id ]->$field ) && (string) $value === (string) $cached_by_id[ $id ]->$field ); }
+			$ids[] = $id;
+		}
+		$ordered_ids = $ids; sort( $ordered_ids, SORT_NUMERIC ); sort( $menu_ids, SORT_NUMERIC );
+		$this->square_source_need( $ordered_ids === $menu_ids && count( $cached_by_id ) === count( $ids ) );
+		$this->square_source_meta_parity( $ids, array( DoughBoss_Post_Types::META_PRICE, DoughBoss_Post_Types::META_TYPE, DoughBoss_Post_Types::META_AVAILABLE, DoughBoss_Post_Types::META_DIETARY, '_thumbnail_id' ) );
+		$attachments = array();
+		foreach ( $ids as $id ) {
+			$thumbnail = (int) get_post_thumbnail_id( $id );
+			if ( $thumbnail > 0 ) { $attachments[ $thumbnail ] = $thumbnail; }
+		}
+		if ( count( $attachments ) ) {
+			$rows = $wpdb->get_results( "SELECT {$fields} FROM {$wpdb->posts} WHERE ID IN (" . implode( ',', $attachments ) . ') ORDER BY ID FOR UPDATE', ARRAY_A );
+			$this->square_source_need( empty( $wpdb->last_error ) && is_array( $rows ) );
+			$existing = array_column( $rows, null, 'ID' );
+			foreach ( $attachments as $id ) {
+				$post = get_post( $id );
+				if ( ! isset( $existing[ $id ] ) ) { $this->square_source_need( null === $post ); continue; }
+				$this->square_source_need( is_object( $post ) );
+				foreach ( $existing[ $id ] as $field => $value ) { $this->square_source_need( isset( $post->$field ) && (string) $value === (string) $post->$field ); }
+			}
+			$this->square_source_meta_parity( array_values( $attachments ), array( '_wp_attached_file', '_wp_attachment_metadata' ) );
+		}
+		if ( count( $ids ) ) {
+			$terms = $wpdb->get_results( $wpdb->prepare( "SELECT tr.object_id,t.term_id,t.name FROM {$wpdb->term_relationships} tr INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id=tr.term_taxonomy_id INNER JOIN {$wpdb->terms} t ON t.term_id=tt.term_id WHERE tr.object_id IN (" . implode( ',', $ids ) . ') AND tt.taxonomy=%s ORDER BY tr.object_id,t.term_id LIMIT 4097 FOR UPDATE', DoughBoss_Post_Types::TAXONOMY ), ARRAY_A );
+			$this->square_source_need( empty( $wpdb->last_error ) && is_array( $terms ) && count( $terms ) <= 4096 );
+			$expected = array(); foreach ( $terms as $term ) { $expected[ (int) $term['object_id'] ][ (int) $term['term_id'] ] = $term['name']; }
+			foreach ( $ids as $id ) {
+				$actual_terms = get_the_terms( $id, DoughBoss_Post_Types::TAXONOMY );
+				$this->square_source_need( ! is_wp_error( $actual_terms ) );
+				$actual = array(); foreach ( is_array( $actual_terms ) ? $actual_terms : array() as $term ) { $actual[ (int) $term->term_id ] = $term->name; }
+				$current = isset( $expected[ $id ] ) ? $expected[ $id ] : array(); ksort( $current ); ksort( $actual );
+				$this->square_source_need( $current === $actual );
+			}
+		}
+		$option_names = array( 'siteurl', 'home', 'upload_path', 'upload_url_path', 'uploads_use_yearmonth_folders', 'blog_charset' );
+		$options = $wpdb->get_results( $wpdb->prepare( "SELECT option_name,option_value FROM {$wpdb->options} WHERE option_name IN (" . implode( ',', array_fill( 0, count( $option_names ), '%s' ) ) . ') ORDER BY option_name FOR UPDATE', $option_names ), ARRAY_A );
+		$this->square_source_need( empty( $wpdb->last_error ) && is_array( $options ) );
+		$values = array_column( $options, 'option_value', 'option_name' );
+		foreach ( $option_names as $name ) { $expected = isset( $values[ $name ] ) ? maybe_unserialize( $values[ $name ] ) : false; $this->square_source_need( $expected === get_option( $name, false ) ); }
+	}
+
+	private function square_source_meta_parity( array $ids, array $keys ) {
+		if ( ! count( $ids ) ) { return; }
+		global $wpdb;
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT post_id,meta_key,meta_value FROM {$wpdb->postmeta} WHERE post_id IN (" . implode( ',', $ids ) . ') AND meta_key IN (' . implode( ',', array_fill( 0, count( $keys ), '%s' ) ) . ') ORDER BY meta_id LIMIT 4097 FOR UPDATE', $keys ), ARRAY_A );
+		$this->square_source_need( empty( $wpdb->last_error ) && is_array( $rows ) && count( $rows ) <= 4096 );
+		$expected = array();
+		foreach ( $rows as $row ) { if ( ! array_key_exists( $row['meta_key'], isset( $expected[ (int) $row['post_id'] ] ) ? $expected[ (int) $row['post_id'] ] : array() ) ) { $expected[ (int) $row['post_id'] ][ $row['meta_key'] ] = maybe_unserialize( $row['meta_value'] ); } }
+		// The locking query proves absence, but WordPress may supply a registered
+		// default for an absent row (for example type=standard, availability=1).
+		foreach ( $ids as $id ) { foreach ( $keys as $key ) { $value = isset( $expected[ $id ] ) && array_key_exists( $key, $expected[ $id ] ) ? $expected[ $id ][ $key ] : get_metadata_default( 'post', $id, $key, true ); $this->square_source_need( $value === get_post_meta( $id, $key, true ) ); } }
+	}
+
+	private function square_source_need( $condition ) { if ( ! $condition ) { throw new RuntimeException( 'Current native source not proven.' ); } }
+
+	/** Browser preparation requires current DB-backed cookie, capability and role state. */
+	private function square_catalogue_current_authority( $actor, $session_token ) {
+		global $wpdb;
+		try {
+			// Alternate authentication/session stores and multisite authority are not
+			// attested by this narrow seam. There is deliberately no CLI bypass.
+			$this->square_source_need( ! is_multisite() && is_int( $actor ) && $actor > 0 && is_string( $session_token ) && '' !== $session_token && hash_equals( $session_token, wp_get_session_token() ) );
+			$this->square_source_need( get_class( WP_Session_Tokens::get_instance( $actor ) ) === 'WP_User_Meta_Session_Tokens' );
+			$tables = array( $wpdb->users, $wpdb->usermeta, $wpdb->options );
+			$statuses = $wpdb->get_results( $wpdb->prepare( 'SHOW TABLE STATUS WHERE Name IN (' . implode( ',', array_fill( 0, count( $tables ), '%s' ) ) . ')', $tables ), ARRAY_A );
+			$this->square_source_need( empty( $wpdb->last_error ) && is_array( $statuses ) && count( $statuses ) === count( $tables ) );
+			foreach ( $statuses as $table ) { $this->square_source_need( isset( $table['Engine'] ) && 'INNODB' === strtoupper( $table['Engine'] ) ); }
+			$errors = $wpdb->suppress_errors( true );
+			try {
+				$isolation = $wpdb->get_var( 'SELECT @@SESSION.transaction_isolation' );
+				if ( ! empty( $wpdb->last_error ) ) { $isolation = $wpdb->get_var( 'SELECT @@SESSION.tx_isolation' ); }
+				$this->square_source_need( empty( $wpdb->last_error ) && in_array( strtoupper( str_replace( ' ', '-', (string) $isolation ) ), array( 'REPEATABLE-READ', 'SERIALIZABLE' ), true ) );
+			} finally { $wpdb->suppress_errors( $errors ); }
+			$user = wp_get_current_user();
+			$row = $wpdb->get_row( $wpdb->prepare( "SELECT ID,user_login,user_pass,user_status FROM {$wpdb->users} WHERE ID=%d FOR UPDATE", $actor ), ARRAY_A );
+			$this->square_source_need( empty( $wpdb->last_error ) && is_array( $row ) );
+			foreach ( $row as $field => $value ) { $this->square_source_need( isset( $user->data->$field ) && (string) $value === (string) $user->data->$field ); }
+			$cap_key = $wpdb->get_blog_prefix() . 'capabilities';
+			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT meta_key,meta_value FROM {$wpdb->usermeta} WHERE user_id=%d AND meta_key IN (%s,%s) ORDER BY umeta_id LIMIT 3 FOR UPDATE", $actor, $cap_key, 'session_tokens' ), ARRAY_A );
+			$this->square_source_need( empty( $wpdb->last_error ) && is_array( $rows ) && 2 === count( $rows ) );
+			$values = array();
+			foreach ( $rows as $meta ) { $this->square_source_need( ! array_key_exists( $meta['meta_key'], $values ) ); $values[ $meta['meta_key'] ] = maybe_unserialize( $meta['meta_value'] ); }
+			$this->square_source_need( isset( $values[ $cap_key ], $values['session_tokens'] ) && is_array( $values[ $cap_key ] ) && is_array( $values['session_tokens'] ) && $values[ $cap_key ] === $user->caps && $values[ $cap_key ] === get_user_meta( $actor, $cap_key, true ) && $values['session_tokens'] === get_user_meta( $actor, 'session_tokens', true ) );
+			$verifier = hash( 'sha256', $session_token );
+			$this->square_source_need( isset( $values['session_tokens'][ $verifier ]['expiration'] ) && is_int( $values['session_tokens'][ $verifier ]['expiration'] ) && $values['session_tokens'][ $verifier ]['expiration'] >= time() );
+			$roles = wp_roles();
+			$raw_roles = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name=%s FOR UPDATE", $roles->role_key ) );
+			$this->square_source_need( empty( $wpdb->last_error ) && is_string( $raw_roles ) && maybe_unserialize( $raw_roles ) === $roles->roles && maybe_unserialize( $raw_roles ) === get_option( $roles->role_key ) );
+			$this->square_source_need( $actor === wp_validate_auth_cookie( '', 'logged_in' ) && ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) );
+			return true;
+		} catch ( Throwable $error ) {
+			return new WP_Error( 'doughboss_forbidden', __( 'Current owner browser authority could not be verified. Sign in again before preparing.', 'doughboss' ), array( 'status' => 403 ) );
+		}
+	}
+
+	/** Owner-only preview. This status/demo route never requests provider data. */
 	public function get_square_dashboard( $request ) {
 		$permission = $this->verify_manage();
 		if ( is_wp_error( $permission ) ) {
@@ -1445,8 +1822,9 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $allowed ) ) {
 			return $allowed;
 		}
-		$approver_id = DoughBoss_Settings::preorder_approver_user_id();
-		if ( ! $approver_id ) {
+		$policy = DoughBoss_Settings::staff_approval_policy();
+		$approver_id = isset( $policy['approver_id'] ) ? (int) $policy['approver_id'] : 0;
+		if ( ! DoughBoss_Settings::staff_approval_actor_valid( $policy ) ) {
 			return new WP_Error( 'doughboss_preorder_approver_unconfigured', __( 'Choose the named payment approver in DoughBoss settings before approving requests.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 		if ( (int) get_current_user_id() !== $approver_id ) {
@@ -1605,6 +1983,81 @@ class DoughBoss_REST_Controller {
 			return (float) $totals['total'];
 		}
 		return 0.0;
+	}
+
+	/**
+	 * Whether a required-policy request intake may create a new durable request.
+	 *
+	 * @param array $policy Authoritative, server-owned policy context.
+	 * @return bool
+	 */
+	private function staff_approval_requests_enabled( array $policy ) {
+		return 'required' === ( isset( $policy['mode'] ) ? (string) $policy['mode'] : '' )
+			&& DoughBoss_Settings::staff_approval_actor_valid( $policy )
+			&& ! empty( $policy['pickup_enabled'] )
+			&& ( ! empty( $policy['ordering_open'] ) || ! empty( $policy['after_hours'] ) );
+	}
+
+	/**
+	 * Fail closed before an ordinary payment attempt or checkout can dispatch.
+	 *
+	 * @return true|WP_Error
+	 */
+	private function ordinary_checkout_policy_error() {
+		$policy = DoughBoss_Settings::staff_approval_policy();
+		if ( 'legacy' === ( isset( $policy['mode'] ) ? (string) $policy['mode'] : '' ) ) {
+			return true;
+		}
+		if ( 'required' === ( isset( $policy['mode'] ) ? (string) $policy['mode'] : '' ) ) {
+			return new WP_Error( 'doughboss_staff_approval_required', __( 'This order needs staff approval before payment. Submit a pickup request instead.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return new WP_Error( 'doughboss_staff_approval_unavailable', __( 'Online checkout is temporarily unavailable while staff approval is configured.', 'doughboss' ), array( 'status' => 503 ) );
+	}
+
+	/**
+	 * A corrupt/unreadable policy may not start a fresh approved-link payment.
+	 * Existing irreversible completion/recovery stays on its separate path.
+	 *
+	 * @return true|WP_Error
+	 */
+	private function approved_payment_policy_error() {
+		$policy = DoughBoss_Settings::staff_approval_policy();
+		if ( 'unavailable' === ( isset( $policy['mode'] ) ? (string) $policy['mode'] : '' ) ) {
+			return new WP_Error( 'doughboss_preorder_payment_policy_unavailable', __( 'Approved payment is temporarily unavailable while staff approval is configured. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return true;
+	}
+
+	/**
+	 * Return one exact positive native integer ID, or false without coercion.
+	 *
+	 * @param mixed $value Raw REST parameter.
+	 * @return int|false
+	 */
+	private function canonical_native_location_id( $value ) {
+		if ( is_int( $value ) ) {
+			return $value > 0 ? $value : false;
+		}
+		if ( ! is_string( $value ) || ! preg_match( '/^[1-9][0-9]*$/D', $value ) ) {
+			return false;
+		}
+		$max = (string) PHP_INT_MAX;
+		if ( strlen( $value ) > strlen( $max ) || ( strlen( $value ) === strlen( $max ) && strcmp( $value, $max ) > 0 ) ) {
+			return false;
+		}
+		return (int) $value;
+	}
+
+	/**
+	 * REST schema validation for one public native approval-request location.
+	 *
+	 * @param mixed           $value Submitted value.
+	 * @param WP_REST_Request $request REST request.
+	 * @param string          $param Parameter name.
+	 * @return bool
+	 */
+	public function validate_staff_approval_location_param( $value, $request = null, $param = '' ) {
+		return false !== $this->canonical_native_location_id( $value );
 	}
 
 	/**
@@ -2611,11 +3064,18 @@ class DoughBoss_REST_Controller {
 	public function get_config() {
 		$single_location_id = DoughBoss_Locations::single_location_id();
 		$gateway = DoughBoss_Settings::payment_gateway();
-		$payment_ready = DoughBoss_Payment::ready();
+		$staff_approval_policy = DoughBoss_Settings::staff_approval_policy();
+		$staff_approval_required = 'legacy' !== ( isset( $staff_approval_policy['mode'] ) ? (string) $staff_approval_policy['mode'] : '' );
+		$staff_approval_requests_enabled = 'required' === $staff_approval_policy['mode']
+			&& DoughBoss_Settings::staff_approval_actor_valid( $staff_approval_policy )
+			&& ! empty( $staff_approval_policy['pickup_enabled'] )
+			&& ( ! empty( $staff_approval_policy['ordering_open'] ) || ! empty( $staff_approval_policy['after_hours'] ) );
+		$ordinary_checkout_allowed = 'legacy' === ( isset( $staff_approval_policy['mode'] ) ? (string) $staff_approval_policy['mode'] : '' );
+		$payment_ready = $ordinary_checkout_allowed && DoughBoss_Payment::ready();
 		if ( 'square' === $gateway ) {
 			// Multi-shop pages have no server-selected ordinary SDK shop.
 			// Approved links use their separate persisted order location.
-			$payment_ready = DoughBoss_Settings::ordering_open() && $single_location_id
+			$payment_ready = $ordinary_checkout_allowed && DoughBoss_Settings::ordering_open() && $single_location_id
 				&& ! is_wp_error( DoughBoss_Locations::online_payment_location( $single_location_id ) )
 				&& DoughBoss_Square::ready_for_location( $single_location_id );
 		}
@@ -2641,6 +3101,10 @@ class DoughBoss_REST_Controller {
 				// while normal checkout is closed and this explicit owner gate is on.
 				'after_hours_preorders_enabled' => ! DoughBoss_Settings::ordering_open() && DoughBoss_Settings::after_hours_preorders_enabled(),
 				'after_hours_preorders_message' => DoughBoss_Settings::after_hours_preorders_message(),
+				// These booleans intentionally reveal mode availability only. The
+				// configured approver identity and policy internals remain server-only.
+				'staff_approval_required' => (bool) $staff_approval_required,
+				'staff_approval_requests_enabled' => (bool) $staff_approval_requests_enabled,
 				'sizes'           => DoughBoss_Settings::sizes(),
 				'toppings'        => DoughBoss_Settings::toppings(),
 				'payments_enabled' => DoughBoss_Settings::ordering_open() && $payment_ready,
@@ -2675,6 +3139,10 @@ class DoughBoss_REST_Controller {
 	public function create_payment_intent( WP_REST_Request $request ) {
 		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::payment_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Card payments are paused while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$ordinary_policy_error = $this->ordinary_checkout_policy_error();
+		if ( is_wp_error( $ordinary_policy_error ) ) {
+			return $ordinary_policy_error;
 		}
 		if ( 'square' !== DoughBoss_Settings::payment_gateway() && ! DoughBoss_Payment::ready() ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payments are not available right now.', 'doughboss' ), array( 'status' => 400 ) );
@@ -2783,6 +3251,8 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $attempt_identity ) || is_wp_error( $cart_guard ) ) {
 			return is_wp_error( $attempt_identity ) ? $attempt_identity : $cart_guard;
 		}
+		$availability_error = $this->payment_availability_error( $this->cart->get_lines(), $location_id, $checkout_key );
+		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 
 		$voucher_reservation_key  = '';
 		$reserved_voucher_code    = '';
@@ -3227,7 +3697,12 @@ class DoughBoss_REST_Controller {
 	 *
 	 * @return WP_REST_Response
 	 */
-	public function get_menu() {
+	public function get_menu( WP_REST_Request $request = null ) {
+		$location_id = null;
+		if ( $request && null !== $request->get_param( 'location_id' ) ) {
+			$location_id = $this->resolve_menu_location( $request->get_param( 'location_id' ) );
+			if ( is_wp_error( $location_id ) ) { return $location_id; }
+		}
 		$posts = get_posts(
 			array(
 				'post_type'      => DoughBoss_Post_Types::POST_TYPE,
@@ -3256,13 +3731,15 @@ class DoughBoss_REST_Controller {
 				'image'       => $image,
 				'image_responsive' => DoughBoss_Images::responsive_for_url( $image ),
 				'category'    => $category,
-				'available'   => DoughBoss_Post_Types::is_available( $post->ID ),
+				'available'   => null === $location_id ? DoughBoss_Post_Types::is_available( $post->ID ) : DoughBoss_Post_Types::is_available_at( $post->ID, $location_id ),
 				'dietary'     => DoughBoss_Post_Types::dietary( $post->ID ),
 				'options'     => DoughBoss_Menu_Options::for_item( $category, $post->post_title ),
 			);
 		}
 
-		return rest_ensure_response( $items );
+		$response = rest_ensure_response( $items );
+		$response->header( 'Cache-Control', 'no-store, max-age=0' );
+		return $response;
 	}
 
 	/**
@@ -3408,6 +3885,12 @@ class DoughBoss_REST_Controller {
 		if ( ! DoughBoss_Post_Types::is_available( $item_id ) ) {
 			/* translators: %s: menu item name. */
 			return new WP_Error( 'doughboss_sold_out', sprintf( __( 'Sorry, %s is sold out right now.', 'doughboss' ), $post->post_title ), array( 'status' => 409 ) );
+		}
+		if ( null !== $request->get_param( 'location_id' ) ) {
+			$location_id = $this->resolve_menu_location( $request->get_param( 'location_id' ) );
+			if ( is_wp_error( $location_id ) ) { return $location_id; }
+			$availability_error = $this->menu_lines_availability_error( array( array( 'type' => 'menu', 'item_id' => $item_id ) ), $location_id );
+			if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 		}
 
 		$price = (float) get_post_meta( $item_id, DoughBoss_Post_Types::META_PRICE, true );
@@ -3586,9 +4069,6 @@ class DoughBoss_REST_Controller {
 		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Pre-order requests are temporarily unavailable while order storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
-		if ( DoughBoss_Settings::ordering_open() || ! DoughBoss_Settings::after_hours_preorders_enabled() ) {
-			return new WP_Error( 'doughboss_preorder_unavailable', __( 'Pre-order requests are not available right now.', 'doughboss' ), array( 'status' => 503 ) );
-		}
 		if ( $this->rate_limited( 'preorder_request', 4, 10 * MINUTE_IN_SECONDS ) ) {
 			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429 ) );
 		}
@@ -3605,9 +4085,20 @@ class DoughBoss_REST_Controller {
 					$this->send_preorder_request_notification( $existing );
 					do_action( 'doughboss_preorder_request_created', (int) $existing->id );
 				}
-				return rest_ensure_response( $this->preorder_payload( $existing, true ) );
+				$existing_policy = DoughBoss_Settings::staff_approval_policy();
+				return rest_ensure_response( $this->preorder_payload( $existing, true, 'required' === (string) $existing_policy['mode'] ) );
 			}
 			return new WP_Error( 'doughboss_preorder_conflict', __( 'This request key has already been used for another order. Refresh and try again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+
+		$policy = DoughBoss_Settings::staff_approval_policy();
+		$staff_approval_required = 'required' === (string) $policy['mode'];
+		if ( $staff_approval_required ) {
+			if ( ! $this->staff_approval_requests_enabled( $policy ) ) {
+				return new WP_Error( 'doughboss_preorder_unavailable', __( 'Pre-order requests are not available right now.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+		} elseif ( 'legacy' !== (string) $policy['mode'] || ! empty( $policy['ordering_open'] ) || empty( $policy['after_hours'] ) ) {
+			return new WP_Error( 'doughboss_preorder_unavailable', __( 'Pre-order requests are not available right now.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 
 		if ( $this->cart->is_empty() ) {
@@ -3638,14 +4129,23 @@ class DoughBoss_REST_Controller {
 			return new WP_Error( 'doughboss_invalid', implode( ' ', $errors ), array( 'status' => 400 ) );
 		}
 
-		$location_id = $this->resolve_revesby_preorder_location( $request->get_param( 'location_id' ) );
+		$location_id = $staff_approval_required
+			? $this->resolve_staff_approval_request_location( $request->get_param( 'location_id' ) )
+			: $this->resolve_revesby_preorder_location( $request->get_param( 'location_id' ) );
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}
+		$availability_error = $this->menu_lines_availability_error( $this->cart->get_lines(), $location_id );
+		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 		$totals  = $this->cart->totals( 'pickup' );
 		$accounting_basis = $this->accounting_basis_from_totals( $totals );
 		if ( is_wp_error( $accounting_basis ) ) {
 			return $accounting_basis;
+		}
+		// Re-read the authoritative policy immediately before durable creation.
+		// The order layer owns the final transactional authority check.
+		if ( $staff_approval_required && ! $this->staff_approval_requests_enabled( DoughBoss_Settings::staff_approval_policy() ) ) {
+			return new WP_Error( 'doughboss_preorder_unavailable', __( 'Pre-order requests are not available right now.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 		$created = DoughBoss_Order::create(
 			array(
@@ -3690,7 +4190,7 @@ class DoughBoss_REST_Controller {
 			do_action( 'doughboss_preorder_request_created', (int) $order->id );
 		}
 
-		return rest_ensure_response( $this->preorder_payload( $order, $replayed ) );
+		return rest_ensure_response( $this->preorder_payload( $order, $replayed, $staff_approval_required ) );
 	}
 
 	/**
@@ -3700,7 +4200,7 @@ class DoughBoss_REST_Controller {
 	 * @param bool   $replayed Whether this is an idempotent replay.
 	 * @return array
 	 */
-	private function preorder_payload( $order, $replayed ) {
+	private function preorder_payload( $order, $replayed, $staff_approval_required = false ) {
 		return array(
 			'success'          => true,
 			'order_number'     => $order->order_number,
@@ -3712,10 +4212,14 @@ class DoughBoss_REST_Controller {
 			'payment_status'   => 'unpaid',
 			'timing'           => array(
 				'mode'             => 'phone',
-				'label'            => __( 'Pickup timing will be arranged by phone before Revesby confirms this request.', 'doughboss' ),
+				'label'            => $staff_approval_required
+					? __( 'Our team will review this pickup request before payment is made available.', 'doughboss' )
+					: __( 'Pickup timing will be arranged by phone before Revesby confirms this request.', 'doughboss' ),
 				'contact_required' => true,
 			),
-			'message'          => DoughBoss_Settings::after_hours_preorders_message(),
+			'message'          => $staff_approval_required
+				? __( 'Your pickup request is awaiting review. Payment is not due until it is approved.', 'doughboss' )
+				: DoughBoss_Settings::after_hours_preorders_message(),
 		);
 	}
 
@@ -3747,7 +4251,16 @@ class DoughBoss_REST_Controller {
 				return new WP_Error( 'doughboss_preorder_payment_changed', __( 'This approved request changed and requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 			}
 		}
-		return rest_ensure_response( $this->preorder_payment_payload( $order, $approval ) );
+		$payload = $this->preorder_payment_payload( $order, $approval );
+		if ( is_wp_error( $this->approved_payment_policy_error() ) ) {
+			$payload['payment_ready'] = false;
+			$payload['can_start_payment'] = false;
+			$payload['payable'] = false;
+			$payload['presentation_state'] = 'unavailable';
+			$payload['square'] = null;
+			$payload['message'] = __( 'Approved payment is temporarily unavailable while staff approval is configured. Please contact the shop and do not try another payment link.', 'doughboss' );
+		}
+		return rest_ensure_response( $payload );
 	}
 
 	/**
@@ -3763,6 +4276,10 @@ class DoughBoss_REST_Controller {
 			|| ! DoughBoss_Activator::payment_storage_ready()
 		) {
 			return new WP_Error( 'doughboss_preorder_payment_storage', __( 'Approved payments are paused while secure order storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$policy_error = $this->approved_payment_policy_error();
+		if ( is_wp_error( $policy_error ) ) {
+			return $policy_error;
 		}
 		if ( 'square' === DoughBoss_Settings::payment_gateway() ) {
 			return $this->preorder_payment_start_square( $request );
@@ -3795,6 +4312,8 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $payment_location ) ) {
 			return $payment_location;
 		}
+		$availability_error = $this->payment_availability_error( $lines, (int) $order->location_id, (string) $verified_approval['payment_checkout_key'] );
+		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 		$approval = DoughBoss_Preorder_Approval::claim_payment( $request_id, $token );
 		if ( is_wp_error( $approval ) ) {
 			return $approval;
@@ -3908,6 +4427,10 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	private function preorder_payment_start_square( WP_REST_Request $request ) {
+		$policy_error = $this->approved_payment_policy_error();
+		if ( is_wp_error( $policy_error ) ) {
+			return $policy_error;
+		}
 		$tender_kind = DoughBoss_Square::tender_kind( $request->get_param( 'tender_kind' ) );
 		if ( is_wp_error( $tender_kind ) ) { return $tender_kind; }
 		if ( $this->rate_limited( 'preorder_payment_start', 8, 10 * MINUTE_IN_SECONDS ) ) {
@@ -3940,6 +4463,8 @@ class DoughBoss_REST_Controller {
 		if ( ! DoughBoss_Square::ready_for_location( (int) $order->location_id ) ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payment is not available right now. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
 		}
+		$availability_error = $this->payment_availability_error( DoughBoss_Order::get_items( $request_id ), (int) $order->location_id, (string) $approval['payment_checkout_key'] );
+		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 		$approval = DoughBoss_Preorder_Approval::claim_payment( $request_id, $token );
 		if ( is_wp_error( $approval ) ) {
 			return $approval;
@@ -4373,6 +4898,28 @@ class DoughBoss_REST_Controller {
 			}
 		}
 
+		// Existing paid orders above may safely replay bookkeeping after a policy
+		// transition. Everything below can begin a new ordinary fulfilment path.
+		$ordinary_policy_error = $this->ordinary_checkout_policy_error();
+		if ( ! $stripe_return && '' !== $returned_reference ) {
+			$returned_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $returned_reference );
+			$returned_metadata = is_array( $returned_attempt ) ? DoughBoss_Payment_Attempts::metadata( $returned_attempt ) : array();
+			if ( is_wp_error( $ordinary_policy_error ) || isset( $returned_metadata['reconciliation_hold'] ) ) {
+				$square_hold = $this->hold_square_return_for_reconciliation( $request, $returned_attempt );
+				if ( is_wp_error( $square_hold ) ) { return $square_hold; }
+			}
+		}
+		if ( is_wp_error( $ordinary_policy_error ) ) {
+			if ( $stripe_return ) {
+				$held = $this->hold_stripe_return_for_reconciliation( $returned_reference );
+				if ( is_wp_error( $held ) ) {
+					return $held;
+				}
+				return new WP_Error( 'doughboss_paid_reconciliation_required', __( 'Your paid order is awaiting secure staff reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true ) );
+			}
+			return $ordinary_policy_error;
+		}
+
 		// Gate the provider lookup below as well as ordinary checkout work. A
 		// returned Stripe Session id is still untrusted input, and resolving it
 		// must not provide an unauthenticated amplification path to Stripe.
@@ -4463,6 +5010,11 @@ class DoughBoss_REST_Controller {
 		$returned_payment_reference = $request->get_param( 'payment_intent_id' );
 		$returned_payment_reference = is_scalar( $returned_payment_reference ) ? sanitize_text_field( (string) $returned_payment_reference ) : '';
 		$payment_return             = '' !== $returned_payment_reference;
+		$returned_attempt = $payment_return ? DoughBoss_Payment_Attempts::find_by_provider_reference( $returned_payment_reference ) : null;
+		if ( ! $this->availability_replay_attempt( $returned_attempt, $location_id ) ) {
+			$availability_error = $this->menu_lines_availability_error( $lines, $location_id );
+			if ( is_wp_error( $availability_error ) ) { return $availability_error; }
+		}
 		$returned_stripe_session    = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $returned_payment_reference );
 		// Payment policy is not initiation readiness: losing a Square mapping
 		// or credential must not reinterpret enabled payments as pay-at-shop.
@@ -4741,6 +5293,119 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Preserve an exact session-owned ordinary Square return after policy drift.
+	 * Uses retained provider-validated facts only; never charges or fulfils.
+	 *
+	 * @return WP_Error|null Null only when this is not an ordinary Square attempt.
+	 */
+	private function hold_square_return_for_reconciliation( WP_REST_Request $request, $attempt ) {
+		if ( ! is_array( $attempt ) || 'square' !== (string) $attempt['provider']
+			|| 'order' !== (string) $attempt['purpose'] || ! in_array( (string) $attempt['context'], array( 'web', 'table_qr' ), true ) ) {
+			return null;
+		}
+		$invalid = new WP_Error( 'doughboss_pay_attempt', __( 'This payment return could not be verified. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+		$metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$identity = $this->payment_attempt_identity( $request, 'square-order-v2' );
+		if ( 'square-v2' !== ( isset( $metadata['protocol_version'] ) ? $metadata['protocol_version'] : '' )
+			|| ! hash_equals( (string) $attempt['provider_reference'], sanitize_text_field( (string) $request->get_param( 'payment_intent_id' ) ) )
+			|| is_wp_error( $identity ) || ! isset( $metadata['attempt_identity'], $metadata['cart_guard'], $metadata['binding_hash'], $metadata['square_mode'] )
+			|| ! hash_equals( (string) $metadata['attempt_identity'], $identity )
+			|| ! hash_equals( (string) $metadata['cart_guard'], $this->square_cart_guard() ) ) {
+			return $invalid;
+		}
+		$table = $this->table_order_context();
+		if ( is_wp_error( $table ) ) { return $invalid; }
+		$type = $table ? 'dine_in' : ( 'delivery' === sanitize_key( $request->get_param( 'order_type' ) ) ? 'delivery' : 'pickup' );
+		$location = $table ? (int) $table['location_id'] : $this->canonical_native_location_id( $request->get_param( 'location_id' ) );
+		if ( null === $request->get_param( 'location_id' ) && ! $table ) { $location = DoughBoss_Locations::single_location_id(); }
+		$binding = $this->square_binding_payload( $type, $location, $table,
+			sanitize_text_field( $request->get_param( 'customer_name' ) ), sanitize_email( $request->get_param( 'customer_email' ) ),
+			sanitize_text_field( $request->get_param( 'customer_phone' ) ), sanitize_textarea_field( $request->get_param( 'address' ) ), sanitize_textarea_field( $request->get_param( 'notes' ) ) );
+		// Configuration drift cannot erase already captured payment evidence.
+		$binding['square_mode'] = (string) $metadata['square_mode'];
+		if ( ! hash_equals( (string) $metadata['binding_hash'], $this->square_binding_hash( $binding ) ) ) { return $invalid; }
+		$pending = new WP_Error( 'doughboss_pay_incomplete', __( 'Your payment is awaiting secure confirmation or staff reconciliation. Please do not pay again; retry this same page or contact the shop.', 'doughboss' ), array( 'status' => 503, 'payment_pending' => true, 'retry_safe' => false ) );
+		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $attempt['checkout_key'] );
+		if ( ! is_array( $snapshot ) || ! isset( $snapshot['payload']['order'], $snapshot['payload']['lines'], $snapshot['payload']['binding_hash'] ) ) { return $pending; }
+		$saved = $snapshot['payload']['order'];
+		if ( ! is_array( $saved ) || ! is_array( $snapshot['payload']['lines'] )
+			|| ! isset( $saved['checkout_key'], $saved['total'], $saved['currency'], $saved['order_type'], $saved['location_id'], $saved['table_id'], $saved['table_qr_code_id'] )
+			|| ! hash_equals( (string) $attempt['checkout_key'], (string) $snapshot['checkout_key'] )
+			|| ! hash_equals( (string) $attempt['checkout_key'], (string) $saved['checkout_key'] )
+			|| ! hash_equals( (string) $metadata['binding_hash'], (string) $snapshot['payload']['binding_hash'] )
+			|| (int) $attempt['amount_minor'] !== DoughBoss_Payment::to_minor_units( $saved['total'] )
+			|| strtoupper( (string) $attempt['currency'] ) !== strtoupper( (string) $saved['currency'] )
+			|| (int) $attempt['location_id'] !== (int) $saved['location_id'] || (int) $saved['location_id'] !== $location
+			|| (string) $saved['order_type'] !== $type
+			|| (int) $attempt['table_id'] !== (int) $saved['table_id'] || (int) $attempt['qr_code_id'] !== (int) $saved['table_qr_code_id']
+			|| is_wp_error( DoughBoss_Order::accounting_basis_from_payload( $saved ) ) ) { return $pending; }
+		if ( 'succeeded' !== (string) $attempt['status'] || 'COMPLETED' !== strtoupper( (string) $attempt['provider_status'] ) ) { return $pending; }
+
+		// Serialize with the final ordinary order writer. Once saved, the hold is
+		// terminal even if an operator later restores legacy checkout policy.
+		global $wpdb;
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) { return $pending; }
+		$held = false;
+		try {
+			$locked = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE id = %d LIMIT 1 FOR UPDATE', (int) $attempt['id'] ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+			if ( ! is_array( $locked ) || ! empty( $wpdb->last_error ) ) { return $pending; }
+			foreach ( array( 'provider', 'purpose', 'context', 'checkout_key', 'provider_reference', 'amount_minor', 'currency', 'location_id', 'table_id', 'qr_code_id', 'safe_metadata_json', 'status', 'provider_status' ) as $field ) {
+				if ( (string) $locked[ $field ] !== (string) $attempt[ $field ] ) { return $pending; }
+			}
+			if ( DoughBoss_Order::payment_intent_used( (string) $attempt['provider_reference'] ) || ! empty( $wpdb->last_error ) ) { return $pending; }
+			if ( isset( $metadata['reconciliation_hold'] ) && 'staff_approval_review_required' !== $metadata['reconciliation_hold'] ) { return $pending; }
+			$metadata['reconciliation_hold'] = 'staff_approval_review_required';
+			$updated = DoughBoss_Payment_Attempts::metadata( $locked ) === $metadata ? $locked : DoughBoss_Payment_Attempts::update( (int) $attempt['id'], array( 'safe_metadata' => $metadata ) );
+			if ( ! is_array( $updated ) || DoughBoss_Payment_Attempts::metadata( $updated ) !== $metadata ) { return $pending; }
+			$held = false !== $wpdb->query( 'COMMIT' );
+		} finally {
+			if ( ! $held ) { $wpdb->query( 'ROLLBACK' ); }
+		}
+		if ( ! $held || ! $this->record_unreconciled_payment( (string) $attempt['provider_reference'], array( 'amount' => (int) $attempt['amount_minor'], 'currency' => strtolower( (string) $attempt['currency'] ) ) ) ) { return $pending; }
+		return new WP_Error( 'doughboss_paid_reconciliation_required', __( 'Your paid order is awaiting secure staff reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+	}
+
+	/**
+	 * Preserve a verified ordinary Stripe return as a durable manual hold.
+	 *
+	 * This is entered only after ordinary checkout is blocked by the current
+	 * policy. It verifies the exact Checkout Session and canonical PaymentIntent
+	 * before reusing the signed-event recovery hold boundary; it never creates an
+	 * ordinary order, sends confirmation, or treats the payment as unpaid.
+	 *
+	 * @param string $session_id Stripe Checkout Session id.
+	 * @return true|WP_Error
+	 */
+	private function hold_stripe_return_for_reconciliation( $session_id ) {
+		$expected_prefix = 'live' === DoughBoss_Settings::stripe_mode() ? 'cs_live_' : 'cs_test_';
+		if ( 'stripe' !== DoughBoss_Settings::payment_gateway() || 0 !== strpos( (string) $session_id, $expected_prefix ) ) {
+			return new WP_Error( 'doughboss_pay_mode_changed', __( 'This payment session cannot be verified with the shop\'s current payment configuration. Please contact the shop before trying again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$intent = DoughBoss_Stripe::retrieve_checkout_payment( $session_id );
+		if ( is_wp_error( $intent ) ) {
+			return $intent;
+		}
+		$pi_id = isset( $intent['id'] ) ? DoughBoss_Stripe::canonical_id( $intent['id'] ) : '';
+		$metadata = isset( $intent['metadata'] ) && is_array( $intent['metadata'] ) ? $intent['metadata'] : array();
+		$checkout_key = isset( $metadata['checkout_key'] ) ? strtolower( sanitize_text_field( (string) $metadata['checkout_key'] ) ) : '';
+		if ( 'succeeded' !== ( isset( $intent['status'] ) ? (string) $intent['status'] : '' ) || '' === $pi_id || 1 !== preg_match( '/^[a-f0-9]{64}$/', $checkout_key ) ) {
+			return new WP_Error( 'doughboss_stripe_hold_pending', __( 'The paid order is awaiting secure reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$snapshot = $this->stripe_order_snapshot( $checkout_key, $session_id, true );
+		if ( is_wp_error( $snapshot ) ) {
+			return $snapshot;
+		}
+		$held = $this->recover_stripe_order( $pi_id, $intent, $metadata );
+		if ( is_wp_error( $held ) ) {
+			return $held;
+		}
+		if ( ! $held ) {
+			return new WP_Error( 'doughboss_stripe_hold_pending', __( 'The paid order is awaiting secure reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return true;
+	}
+
+	/**
 	 * Resolve a paid Stripe order without trusting now-stale cart totals.
 	 *
 	 * @param WP_REST_Request $request Checkout request containing the returned Session id.
@@ -5006,6 +5671,40 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Resolve one public native pickup location for approval-required intake.
+	 *
+	 * This deliberately does not reuse the ordinary resolver: a multi-shop
+	 * approval request cannot infer a branch, coerce an alias, or route to an
+	 * unannounced future location. The persisted integer is then protected by
+	 * the order layer's transactional active/pickup recheck.
+	 *
+	 * @param mixed $requested_id Submitted native location id.
+	 * @return int|WP_Error
+	 */
+	private function resolve_staff_approval_request_location( $requested_id ) {
+		$location_id = $this->canonical_native_location_id( $requested_id );
+		if ( false === $location_id ) {
+			return new WP_Error( 'doughboss_location_required', __( 'Please choose an active pickup shop.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$location = null;
+		foreach ( DoughBoss_Locations::all( true ) as $candidate ) {
+			if ( $candidate && isset( $candidate->id ) && $location_id === (int) $candidate->id ) {
+				$location = $candidate;
+				break;
+			}
+		}
+		if ( ! $location || empty( $location->pickup_enabled ) ) {
+			return new WP_Error( 'doughboss_location_required', __( 'Please choose an active pickup shop.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$slug = isset( $location->slug ) ? (string) $location->slug : '';
+		if ( ! in_array( $slug, array( 'revesby', 'bankstown', 'roselands' ), true ) ) {
+			return new WP_Error( 'doughboss_location_required', __( 'Please choose an active pickup shop.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		return $location_id;
+	}
+
+	/**
 	 * Resolve the launch-only location for an after-hours request.
 	 *
 	 * The normal location resolver still guards active-store routing. This extra
@@ -5042,20 +5741,18 @@ class DoughBoss_REST_Controller {
 	 * @return int|WP_Error
 	 */
 	private function resolve_order_location( $requested_id, $order_type ) {
-		$active = DoughBoss_Locations::all( true );
+		$active = DoughBoss_Post_Types::availability_locations();
 		$count  = count( $active );
 
 		if ( 0 === $count ) {
-			return 0;
+			return new WP_Error( 'doughboss_location_required', __( 'Please choose an active shop.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		if ( 1 === $count ) {
+		if ( 1 === $count && null === $requested_id ) {
 			$location = $active[0];
 		} else {
-			$requested_id = absint( $requested_id );
-			if ( ! $requested_id || ! DoughBoss_Locations::is_valid( $requested_id ) ) {
-				return new WP_Error( 'doughboss_location_required', __( 'Please choose an active shop.', 'doughboss' ), array( 'status' => 400 ) );
-			}
+			$requested_id = $this->resolve_menu_location( $requested_id );
+			if ( is_wp_error( $requested_id ) ) { return $requested_id; }
 			$location = DoughBoss_Locations::get( $requested_id );
 		}
 
@@ -5067,6 +5764,50 @@ class DoughBoss_REST_Controller {
 		}
 
 		return (int) $location->id;
+	}
+
+	/** Resolve only an exact native ID in the active public shop set. */
+	private function resolve_menu_location( $requested_id ) {
+		$id = $this->canonical_native_location_id( $requested_id );
+		foreach ( DoughBoss_Post_Types::availability_locations() as $location ) {
+			if ( false !== $id && $id === (int) $location->id ) { return $id; }
+		}
+		return new WP_Error( 'doughboss_location_required', __( 'Please choose an active shop.', 'doughboss' ), array( 'status' => 400 ) );
+	}
+
+	/** Recheck saved menu lines; never remove a line or change its shared price. */
+	private function menu_lines_availability_error( array $lines, $location_id ) {
+		$location = $this->resolve_menu_location( $location_id );
+		if ( is_wp_error( $location ) ) { return $location; }
+		if ( empty( $lines ) ) { return new WP_Error( 'doughboss_empty', __( 'Your cart is empty.', 'doughboss' ), array( 'status' => 400 ) ); }
+		foreach ( $lines as $line ) {
+			if ( ! is_array( $line ) || ! isset( $line['item_id'] ) ) {
+				return new WP_Error( 'doughboss_no_item', __( 'Please review your cart before ordering.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			// Persisted order item rows do not retain the transient cart's type.
+			$type = isset( $line['type'] ) ? $line['type'] : ( (int) $line['item_id'] > 0 ? 'menu' : 'custom' );
+			if ( 'custom' === $type && in_array( $line['item_id'], array( 0, '0' ), true ) && ! empty( $line['size'] ) ) { continue; }
+			$item_id = $this->canonical_native_location_id( $line['item_id'] );
+			$post = 'menu' === $type && false !== $item_id ? get_post( $item_id ) : null;
+			if ( ! $post || DoughBoss_Post_Types::POST_TYPE !== $post->post_type || 'publish' !== $post->post_status
+				|| ! DoughBoss_Post_Types::is_available_at( $post->ID, $location ) ) {
+				return new WP_Error( 'doughboss_sold_out', __( 'An item in your cart is unavailable at the selected shop. Please review your cart or choose another shop.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+		}
+		return null;
+	}
+
+	/** A recorded initiated attempt may reconcile, never authorize a fresh charge. */
+	private function availability_replay_attempt( $attempt, $location_id ) {
+		return is_int( $location_id ) && $location_id > 0 && is_array( $attempt ) && isset( $attempt['status'], $attempt['location_id'] )
+			&& $this->canonical_native_location_id( $attempt['location_id'] ) === $location_id
+			&& in_array( $attempt['status'], array( 'provisioning', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch', 'order_committed' ), true );
+	}
+
+	private function payment_availability_error( array $lines, $location_id, $checkout_key ) {
+		$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
+		if ( $this->availability_replay_attempt( $attempt, $location_id ) ) { return null; }
+		return $this->menu_lines_availability_error( $lines, $location_id );
 	}
 
 	/**
@@ -5104,6 +5845,12 @@ class DoughBoss_REST_Controller {
 		// find this order. See DoughBoss_Tyro::canonical_id().
 		$is_stripe_checkout = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $raw_id );
 		$stored_attempt     = class_exists( 'DoughBoss_Payment_Attempts' ) ? DoughBoss_Payment_Attempts::find_by_provider_reference( $raw_id ) : null;
+		if ( is_array( $stored_attempt ) ) {
+			$stored_metadata = DoughBoss_Payment_Attempts::metadata( $stored_attempt );
+			if ( isset( $stored_metadata['reconciliation_hold'] ) && 'staff_approval_review_required' === (string) $stored_metadata['reconciliation_hold'] ) {
+				return new WP_Error( 'doughboss_paid_reconciliation_required', __( 'This paid order is awaiting secure staff reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true ) );
+			}
+		}
 		$is_square_attempt  = is_array( $stored_attempt ) && 'square' === (string) $stored_attempt['provider'];
 		if ( $is_stripe_checkout ) {
 			$expected_prefix = 'live' === DoughBoss_Settings::stripe_mode() ? 'cs_live_' : 'cs_test_';
@@ -5481,9 +6228,10 @@ class DoughBoss_REST_Controller {
 		foreach ( $requests as &$preorder ) {
 			$approval = DoughBoss_Preorder_Approval::get( (int) $preorder['id'] );
 			$approval_state = is_wp_error( $approval ) ? 'pending' : (string) $approval['state'];
-			$approver_id = DoughBoss_Settings::preorder_approver_user_id();
+			$policy = DoughBoss_Settings::staff_approval_policy();
+			$approver_id = isset( $policy['approver_id'] ) ? (int) $policy['approver_id'] : 0;
 			$configured_approver = $approver_id ? get_userdata( $approver_id ) : null;
-			$can_decide = $approver_id
+			$can_decide = DoughBoss_Settings::staff_approval_actor_valid( $policy )
 				&& (int) get_current_user_id() === $approver_id
 				&& ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) );
 			$preorder['approval_state'] = $approval_state;
@@ -5520,6 +6268,12 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function admin_preorder_decision( WP_REST_Request $request ) {
+		// Permission callbacks run before dispatch; re-read the exact actor policy
+		// immediately before a durable accept/reject attempt as well.
+		$permission = $this->verify_preorder_approver( $request );
+		if ( is_wp_error( $permission ) ) {
+			return $permission;
+		}
 		$order_id = absint( $request->get_param( 'id' ) );
 		$decision = sanitize_key( $request->get_param( 'decision' ) );
 		$order    = DoughBoss_Order::get( $order_id );
@@ -6247,6 +7001,38 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Bind paid recovery evidence to the attempt's exact hosted Session.
+	 * A PaymentIntent-only event needs a read of that retained Session; matching
+	 * checkout metadata and money alone cannot establish their association.
+	 *
+	 * @return true|WP_Error
+	 */
+	private function validate_stripe_recovery_session( array $attempt, $pi_id, array $obj, $checkout_key, $approved_request = false ) {
+		$error_code = $approved_request ? 'doughboss_preorder_payment_binding' : 'doughboss_stripe_payment_binding';
+		$provider_session_id = isset( $attempt['provider_reference'] ) ? sanitize_text_field( (string) $attempt['provider_reference'] ) : '';
+		if ( 1 !== preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $provider_session_id ) ) {
+			return new WP_Error( $error_code, __( 'The paid order is missing its exact Stripe session link. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$session_check = $obj;
+		if ( ! isset( $session_check['checkout_session_id'], $session_check['checkout_session_reference'], $session_check['checkout_session_amount'], $session_check['checkout_session_currency'] ) ) {
+			$session_check = DoughBoss_Stripe::retrieve_checkout_payment( $provider_session_id );
+			if ( is_wp_error( $session_check ) ) { return $session_check; }
+		}
+		$session_pi = isset( $session_check['id'] ) ? DoughBoss_Stripe::canonical_id( $session_check['id'] ) : '';
+		if (
+			! isset( $session_check['checkout_session_id'], $session_check['checkout_session_reference'], $session_check['checkout_session_amount'], $session_check['checkout_session_currency'] )
+			|| ! hash_equals( $provider_session_id, (string) $session_check['checkout_session_id'] )
+			|| ! hash_equals( $checkout_key, strtolower( (string) $session_check['checkout_session_reference'] ) )
+			|| ! hash_equals( $pi_id, $session_pi )
+			|| (int) $session_check['checkout_session_amount'] !== (int) $attempt['amount_minor']
+			|| strtoupper( (string) $session_check['checkout_session_currency'] ) !== strtoupper( (string) $attempt['currency'] )
+		) {
+			return new WP_Error( $error_code, __( 'The paid order does not match its exact Stripe session. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return true;
+	}
+
+	/**
 	 * Fulfil a signed, paid Stripe event from the immutable server snapshot.
 	 *
 	 * This is the browser-close recovery path. Stripe metadata contains only the
@@ -6286,29 +7072,8 @@ class DoughBoss_REST_Controller {
 		$context    = isset( $meta['context'] ) ? sanitize_key( (string) $meta['context'] ) : '';
 		$source_request_id = isset( $order_data['source_request_id'] ) ? absint( $order_data['source_request_id'] ) : 0;
 		if ( 'approved_preorder' === $context ) {
-			$provider_session_id = isset( $attempt['provider_reference'] ) ? sanitize_text_field( (string) $attempt['provider_reference'] ) : '';
-			$session_check = $obj;
-			if ( ! isset( $session_check['checkout_session_id'], $session_check['checkout_session_reference'], $session_check['checkout_session_amount'], $session_check['checkout_session_currency'] ) ) {
-				if ( 1 !== preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $provider_session_id ) ) {
-					return new WP_Error( 'doughboss_preorder_payment_binding', __( 'The paid request is missing its exact Stripe session link. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
-				}
-				$session_check = DoughBoss_Stripe::retrieve_checkout_payment( $provider_session_id );
-				if ( is_wp_error( $session_check ) ) {
-					return $session_check;
-				}
-			}
-			$session_pi = isset( $session_check['id'] ) ? DoughBoss_Stripe::canonical_id( $session_check['id'] ) : '';
-			if (
-				1 !== preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $provider_session_id )
-				|| ! isset( $session_check['checkout_session_id'], $session_check['checkout_session_reference'], $session_check['checkout_session_amount'], $session_check['checkout_session_currency'] )
-				|| ! hash_equals( $provider_session_id, (string) $session_check['checkout_session_id'] )
-				|| ! hash_equals( $checkout_key, strtolower( (string) $session_check['checkout_session_reference'] ) )
-				|| ! hash_equals( $pi_id, $session_pi )
-				|| (int) $session_check['checkout_session_amount'] !== (int) $attempt['amount_minor']
-				|| strtoupper( (string) $session_check['checkout_session_currency'] ) !== strtoupper( (string) $attempt['currency'] )
-			) {
-				return new WP_Error( 'doughboss_preorder_payment_binding', __( 'The paid request does not match its exact Stripe session. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
-			}
+			$session_binding = $this->validate_stripe_recovery_session( $attempt, $pi_id, $obj, $checkout_key, true );
+			if ( is_wp_error( $session_binding ) ) { return $session_binding; }
 			$approval_snapshot = isset( $snapshot['payload']['approval'] ) && is_array( $snapshot['payload']['approval'] ) ? $snapshot['payload']['approval'] : array();
 			$approval = $source_request_id ? DoughBoss_Preorder_Approval::get( $source_request_id ) : new WP_Error( 'doughboss_preorder_payment_binding' );
 			$current_fingerprint = $source_request_id ? DoughBoss_Preorder_Approval::fingerprint_request( $source_request_id ) : '';
@@ -6369,6 +7134,52 @@ class DoughBoss_REST_Controller {
 				return new WP_Error( 'doughboss_preorder_payment_binding', __( 'This payment is already linked to a different order. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 			}
 			return $this->finalize_stripe_order( $snapshot, $existing, $pi_id );
+		}
+		$attempt_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$previously_held = isset( $attempt_metadata['reconciliation_hold'] )
+			&& 'staff_approval_review_required' === (string) $attempt_metadata['reconciliation_hold'];
+		if ( ! $source_request_id && 'approved_preorder' !== $context && $previously_held ) {
+			// A durable ordinary paid hold remains a human-reconciliation outcome
+			// even if an operator later enables legacy checkout. Re-persist its exact
+			// identity for a retryable signed event, but never fulfil it here.
+			$session_binding = $this->validate_stripe_recovery_session( $attempt, $pi_id, $obj, $checkout_key );
+			if ( is_wp_error( $session_binding ) ) { return $session_binding; }
+			$held = DoughBoss_Payment_Attempts::hold_paid_stripe_order(
+				$checkout_key,
+				isset( $attempt['provider_reference'] ) ? (string) $attempt['provider_reference'] : '',
+				$pi_id,
+				(int) $attempt['amount_minor'],
+				(string) $attempt['currency'],
+				'staff_approval_review_required'
+			);
+			if ( ! $held ) {
+				return new WP_Error( 'doughboss_stripe_hold_pending', __( 'The paid order is awaiting secure reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 503 ) );
+			}
+			return true;
+		}
+		// A signed Stripe webhook can arrive for a legacy ordinary Checkout after
+		// the operator changes policy. Preserve the verified paid evidence through
+		// the dedicated durable hold before acknowledging the event, but never turn
+		// it into a new kitchen order or confirmation. Existing orders above remain
+		// eligible only for their bounded bookkeeping replay.
+		if ( ! $source_request_id && 'approved_preorder' !== $context ) {
+			$policy = DoughBoss_Settings::staff_approval_policy();
+			if ( 'legacy' !== ( isset( $policy['mode'] ) ? (string) $policy['mode'] : '' ) ) {
+				$session_binding = $this->validate_stripe_recovery_session( $attempt, $pi_id, $obj, $checkout_key );
+				if ( is_wp_error( $session_binding ) ) { return $session_binding; }
+				$held = DoughBoss_Payment_Attempts::hold_paid_stripe_order(
+					$checkout_key,
+					isset( $attempt['provider_reference'] ) ? (string) $attempt['provider_reference'] : '',
+					$pi_id,
+					(int) $attempt['amount_minor'],
+					(string) $attempt['currency'],
+					'staff_approval_review_required'
+				);
+				if ( ! $held ) {
+					return new WP_Error( 'doughboss_stripe_hold_pending', __( 'The paid order is awaiting secure reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+				return true;
+			}
 		}
 		if ( $source_request_id ) {
 			$existing_source_id = DoughBoss_Order::find_id_by_source_request( $source_request_id );
@@ -6996,6 +7807,10 @@ class DoughBoss_REST_Controller {
 	 */
 	private function send_preorder_request_notification( $order ) {
 		$blog    = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
+		$shop = DoughBoss_Locations::get( (int) $order->location_id );
+		$shop_label = $shop ? sanitize_text_field( (string) $shop->name ) : __( 'Selected pickup shop', 'doughboss' );
+		$policy = DoughBoss_Settings::staff_approval_policy();
+		$generic_review = ! $shop || 'revesby' !== (string) $shop->slug || 'required' === $policy['mode'];
 		$subject = sprintf( __( '[%1$s] Revesby pre-order request received — pending confirmation', 'doughboss' ), $blog );
 		$body    = sprintf(
 			/* translators: 1: customer name, 2: order number, 3: formatted amount. */
@@ -7004,6 +7819,10 @@ class DoughBoss_REST_Controller {
 			$order->order_number,
 			DoughBoss_Settings::format_price( $order->total )
 		);
+		if ( $generic_review ) {
+			$subject = sprintf( __( '[%1$s] Pickup request received — awaiting review', 'doughboss' ), $blog );
+			$body = sprintf( __( "Hi %1\$s,\n\nWe received your pickup request %2\$s for %3\$s. It is unpaid and awaiting review; this is not a confirmed order.\n\nThe team must approve the request before payment is available. No pickup time or kitchen preparation is confirmed. Please do not travel to the shop until your order is confirmed.\n\nThank you,\nDough Boss", 'doughboss' ), (string) $order->customer_name, (string) $order->order_number, $shop_label );
+		}
 
 		if ( is_email( $order->customer_email ) && false === wp_mail( $order->customer_email, $subject, $body ) ) {
 			error_log( 'DoughBoss mail: preorder request email to customer failed for #' . $order->order_number ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
@@ -7026,6 +7845,7 @@ class DoughBoss_REST_Controller {
 			'' !== (string) $order->notes ? (string) $order->notes : __( 'None provided', 'doughboss' ),
 			$review_url
 		);
+		$staff_body = sprintf( __( 'Pickup shop: %s', 'doughboss' ), $shop_label ) . "\n\n" . $staff_body;
 		$approver = get_userdata( DoughBoss_Settings::preorder_approver_user_id() );
 		$recipients = array( $orders_email, 'info@doughboss.com.au', $approver && ! empty( $approver->user_email ) ? (string) $approver->user_email : '' );
 		$recipients = array_values( array_unique( array_filter( array_map( 'strtolower', $recipients ), 'is_email' ) ) );
@@ -7068,7 +7888,7 @@ class DoughBoss_REST_Controller {
 				: get_date_from_gmt( gmdate( 'Y-m-d H:i:s', $deadline_timestamp ), 'D j M Y, g:ia' );
 			$subject = sprintf( __( '[%1$s] Request %2$s approved for secure payment', 'doughboss' ), $blog, (string) $order->order_number );
 			$body = sprintf(
-				"Hi %1\$s,\n\n%5\$s has approved request %2\$s for %3\$s. It is still unpaid and has not been sent to the kitchen.\n\nUse this private link and start payment before the original deadline, %6\$s:\n%4\$s\n\nResending this email does not extend that deadline. DoughBoss will send the order to the kitchen only after Stripe confirms payment on the server. If the page says payment is pending, do not pay again — contact the shop.\n\nThank you,\nDough Boss",
+				"Hi %1\$s,\n\n%5\$s has approved request %2\$s for %3\$s. It is still unpaid and has not been sent to the kitchen.\n\nUse this private link and start payment before the original deadline, %6\$s:\n%4\$s\n\nResending this email does not extend that deadline. DoughBoss will send the order to the kitchen only after the payment provider confirms payment on the server. If the page says payment is pending, do not pay again — contact the shop.\n\nThank you,\nDough Boss",
 				(string) $order->customer_name,
 				(string) $order->order_number,
 				DoughBoss_Settings::format_price( (float) $order->total ),

@@ -40,6 +40,7 @@ class DoughBoss_SEO {
 	public function init() {
 		add_filter( 'document_title_parts', array( $this, 'title_parts' ) );
 		add_filter( 'robots_txt', array( $this, 'robots_txt' ), 20, 2 );
+		add_filter( 'wp_robots', array( $this, 'robots' ), 20 );
 		add_action( 'wp_head', array( $this, 'head' ), 5 );
 	}
 
@@ -93,7 +94,9 @@ class DoughBoss_SEO {
 		if ( is_page( array( 'menu', 'order' ) ) || has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {
 			return array(
 				'title'       => __( 'Dough Boss Menu | Manoush, Pizza & Pies Sydney', 'doughboss' ),
-				'description' => __( 'Browse fresh-baked manoush, pizza, golden pies and wraps. Order pickup from Dough Boss Revesby.', 'doughboss' ),
+				'description' => DoughBoss_Settings::ordering_open()
+					? __( 'Browse fresh-baked manoush, pizza, golden pies and wraps. Order pickup from Dough Boss Revesby.', 'doughboss' )
+					: __( 'Browse the Dough Boss menu of manoush, pizza, pies and wraps. Online ordering is paused.', 'doughboss' ),
 			);
 		}
 		if ( is_page( 'locations' ) ) {
@@ -126,6 +129,23 @@ class DoughBoss_SEO {
 			return $output;
 		}
 		return rtrim( $output ) . "\nSitemap: " . esc_url_raw( home_url( '/wp-sitemap.xml' ) ) . "\n";
+	}
+	/**
+	 * Add preview hints to WordPress's single robots tag without overriding restrictions.
+	 *
+	 * @param array<string,mixed> $robots Existing WordPress robots directives.
+	 * @return array<string,mixed>
+	 */
+	public function robots( $robots ) {
+		if ( ! is_array( $robots ) || $this->dedicated_seo_plugin_active() || ! $this->relevant_page() || ! get_option( 'blog_public', 1 ) ) {
+			return $robots;
+		}
+		foreach ( array( 'noindex', 'nofollow', 'nosnippet', 'noimageindex' ) as $restriction ) {
+			if ( ! empty( $robots[ $restriction ] ) ) {
+				return $robots;
+			}
+		}
+		return $robots + array( 'max-image-preview' => 'large', 'max-snippet' => '-1', 'max-video-preview' => '-1' );
 	}
 
 	/**
@@ -249,11 +269,10 @@ class DoughBoss_SEO {
 			return;
 		}
 		$copy  = $this->page_copy();
-		$url   = get_permalink();
+		$url   = wp_get_canonical_url( get_post() ) ?: get_permalink();
 		$image = DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-social-card.jpg';
 		?>
 		<meta name="description" content="<?php echo esc_attr( $copy['description'] ); ?>" />
-		<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
 		<meta property="og:type" content="website" />
 		<meta property="og:locale" content="en_AU" />
 		<meta property="og:site_name" content="<?php echo esc_attr( get_bloginfo( 'name' ) ?: 'Dough Boss' ); ?>" />
