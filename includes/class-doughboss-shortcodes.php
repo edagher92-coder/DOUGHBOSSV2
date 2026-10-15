@@ -242,7 +242,7 @@ class DoughBoss_Shortcodes {
 		$email_body    = rawurlencode( "Event date:\nGuest count:\nPreferred pickup time:\nDietary notes:\n" );
 		ob_start();
 		?>
-		<div class="db-app db-catering" data-doughboss-catering>
+		<div class="db-app db-catering" data-doughboss-catering data-notice-days="<?php echo esc_attr( (string) DoughBoss_Catering::min_notice_business_days() ); ?>">
 			<section class="dbc-contact" aria-labelledby="dbc-contact-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'Catering enquiries', 'doughboss' ); ?></p>
 				<h2 class="dbc-h2" id="dbc-contact-title"><?php esc_html_e( 'Tell us what you need', 'doughboss' ); ?></h2>

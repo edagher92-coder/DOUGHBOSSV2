@@ -597,6 +597,39 @@ class DoughBoss_Payment_Attempts {
 	}
 
 	/**
+	 * Close an irreversible dispatch that Square provably refused before any
+	 * money moved (no payment id was ever returned and Square answered with a
+	 * payment-method error, or the pre-payment Order could not be created).
+	 * `failed` is not a blocking state, so the customer can retry with a fresh
+	 * attempt key and therefore a fresh Square idempotency key.
+	 *
+	 * @param int    $attempt_id Attempt id.
+	 * @param string $last_error Safe error label.
+	 * @return bool
+	 */
+	public static function mark_irreversible_failed( $attempt_id, $last_error = '' ) {
+		global $wpdb;
+		$attempt_id = absint( $attempt_id );
+		if ( ! $attempt_id ) {
+			return false;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				'UPDATE ' . self::table() . ' SET status = %s, last_error = %s, updated_at = %s WHERE id = %d AND provider = %s AND provider_reference IS NULL AND status IN (%s,%s)',
+				'failed',
+				self::safe_error( $last_error ),
+				self::utc_now(),
+				$attempt_id,
+				'square',
+				'dispatching',
+				'processing'
+			)
+		);
+		return 1 === (int) $updated;
+	}
+
+	/**
 	 * Reconcile a bound Square v2 reference without weakening terminal states.
 	 *
 	 * A provider retrieval may resolve processing/unknown to a terminal result,

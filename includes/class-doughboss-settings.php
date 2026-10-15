@@ -158,6 +158,8 @@ class DoughBoss_Settings {
 			// this inbox rather than mixing with normal online-order notices.
 			'catering_email'  => 'catering@doughboss.com.au',
 			'catering_phone'  => '0422487487',
+			// Minimum catering notice in business days (Sat/Sun don't count).
+			'catering_min_notice_business_days' => 2,
 			// Public WordPress page containing [doughboss_order_tracking].
 			// Blank is safe: emails still include the order number and matching-
 			// email instructions, but no potentially broken tracking link.
@@ -251,6 +253,8 @@ class DoughBoss_Settings {
 			'square_live_location_id'   => '',
 			'square_live_webhook_key'   => '',
 			'square_live_approved'      => 0,
+			// Accrue Square Loyalty points on paid web orders (existing members only).
+			'square_loyalty_accrual'    => 1,
 			// Preparation only: shops never inherit the legacy global location ID.
 			'square_test_location_map'  => array(),
 			'square_live_location_map'  => array(),

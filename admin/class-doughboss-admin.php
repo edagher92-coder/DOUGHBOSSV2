@@ -512,6 +512,12 @@ class DoughBoss_Admin {
 		$clean['square_live_access_token'] = empty( $input['clear_square_live_access_token'] ) ? $this->keep_secret( $input, $existing, 'square_live_access_token' ) : '';
 		$clean['square_live_webhook_key']  = $this->keep_secret( $input, $existing, 'square_live_webhook_key' );
 		$clean['square_live_approved']     = empty( $input['square_live_approved'] ) ? 0 : 1;
+		if ( isset( $input['square_loyalty_accrual_present'] ) ) {
+			$clean['square_loyalty_accrual'] = empty( $input['square_loyalty_accrual'] ) ? 0 : 1;
+		}
+		if ( isset( $input['catering_min_notice_business_days'] ) ) {
+			$clean['catering_min_notice_business_days'] = max( 0, min( 30, (int) $input['catering_min_notice_business_days'] ) );
+		}
 		foreach ( array( 'test', 'live' ) as $square_environment ) {
 			$map_key = 'square_' . $square_environment . '_location_map';
 			$raw_map = array_key_exists( $map_key, $input ) ? $input[ $map_key ] : ( isset( $existing[ $map_key ] ) ? $existing[ $map_key ] : array() );
@@ -944,6 +950,31 @@ class DoughBoss_Admin {
 			}).catch(function (error) {
 				quoteBtn.disabled = false;
 				alert(error.message || 'Could not save quote.');
+			});
+			return;
+		}
+
+		var sqBtn = e.target.closest('.db-catering-sqinv');
+		if (sqBtn) {
+			e.preventDefault();
+			var sqLeg = sqBtn.getAttribute('data-leg');
+			if (!window.confirm('Email the customer a Square ' + sqLeg + ' invoice for this enquiry?')) { return; }
+			sqBtn.disabled = true;
+			fetch(DoughBossAdmin.restUrl + '/admin/catering/' + sqBtn.getAttribute('data-enquiry') + '/square-invoice', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': DoughBossAdmin.nonce },
+				body: JSON.stringify({ leg: sqLeg })
+			}).then(function (r) {
+				return r.json().catch(function () { return {}; }).then(function (data) {
+					if (!r.ok) { throw new Error(data.message || 'Could not send the Square invoice.'); }
+					return data;
+				});
+			}).then(function (data) {
+				sqBtn.textContent = 'Invoice ' + String(data.status || 'sent').toLowerCase() + ' — $' + Number(data.amount).toFixed(2);
+				if (data.public_url) { var a = document.createElement('a'); a.href = data.public_url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = ' View'; sqBtn.parentNode.appendChild(a); }
+			}).catch(function (error) {
+				sqBtn.disabled = false;
+				alert(error.message || 'Could not send the Square invoice.');
 			});
 			return;
 		}
@@ -2073,6 +2104,16 @@ JS;
 											</option>
 										<?php endforeach; ?>
 									</select>
+									<?php
+									$sq_ready = class_exists( 'DoughBoss_Square_Invoices' ) && ( current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' ) ) && (float) $row['quote_total'] > 0 && ! in_array( (string) $row['status'], array( 'lost', 'fulfilled' ), true );
+									$dep_paid = DoughBoss_Catering::is_paid( $row, DoughBoss_Catering::LEG_DEPOSIT );
+									$bal_paid = DoughBoss_Catering::is_paid( $row, DoughBoss_Catering::LEG_BALANCE );
+									if ( $sq_ready && ! $dep_paid && ( '' === (string) $row['deposit_intent_id'] || DoughBoss_Square_Invoices::is_invoice_intent( (string) $row['deposit_intent_id'] ) ) ) :
+										?>
+										<p style="margin:6px 0 0;"><button type="button" class="button button-small db-catering-sqinv" data-enquiry="<?php echo esc_attr( $row['id'] ); ?>" data-leg="deposit"><?php echo '' === (string) $row['deposit_intent_id'] ? esc_html__( 'Send Square deposit invoice', 'doughboss' ) : esc_html__( 'Check / resend deposit invoice', 'doughboss' ); ?></button></p>
+									<?php elseif ( $sq_ready && $dep_paid && ! $bal_paid && (float) $row['balance_amount'] > 0 && ( '' === (string) $row['balance_intent_id'] || DoughBoss_Square_Invoices::is_invoice_intent( (string) $row['balance_intent_id'] ) ) ) : ?>
+										<p style="margin:6px 0 0;"><button type="button" class="button button-small db-catering-sqinv" data-enquiry="<?php echo esc_attr( $row['id'] ); ?>" data-leg="balance"><?php echo '' === (string) $row['balance_intent_id'] ? esc_html__( 'Send Square balance invoice', 'doughboss' ) : esc_html__( 'Check / resend balance invoice', 'doughboss' ); ?></button></p>
+									<?php endif; ?>
 								</td>
 							</tr>
 						<?php endforeach; ?>
@@ -3430,6 +3471,11 @@ JS;
 							<span class="description"><?php esc_html_e( 'Australian mobile or landline shown as a tap-to-call catering contact.', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
+						<th><label for="db-catering-notice"><?php esc_html_e( 'Catering notice (business days)', 'doughboss' ); ?></label></th>
+						<td><input type="number" id="db-catering-notice" min="0" max="30" step="1" class="small-text" name="<?php echo esc_attr( $opt ); ?>[catering_min_notice_business_days]" value="<?php echo esc_attr( isset( $settings['catering_min_notice_business_days'] ) ? (int) $settings['catering_min_notice_business_days'] : 2 ); ?>" />
+							<span class="description"><?php esc_html_e( 'Minimum notice for online catering requests. Weekends don’t count.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
 						<th><label for="db-tracking-page-url"><?php esc_html_e( 'Track My Order page', 'doughboss' ); ?></label></th>
 						<td><input type="url" id="db-tracking-page-url" class="regular-text code" name="<?php echo esc_attr( $opt ); ?>[tracking_page_url]" value="<?php echo esc_attr( isset( $settings['tracking_page_url'] ) ? $settings['tracking_page_url'] : '' ); ?>" placeholder="https://doughboss.com.au/track-order/" />
 							<p class="description"><?php esc_html_e( 'Publish a page on this WordPress site containing [doughboss_order_tracking], then paste its URL here. External URLs are rejected. Customer confirmation, accepted and ready emails will link to it with only the order number prefilled; the customer must still enter the matching email.', 'doughboss' ); ?></p></td>
@@ -3770,6 +3816,11 @@ JS;
 							<th><?php esc_html_e( 'Production approval', 'doughboss' ); ?></th>
 							<td><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_live_approved]" value="1" <?php checked( ! empty( $settings['square_live_approved'] ), true ); ?> /> <?php esc_html_e( 'Sandbox testing has passed and this Square integration is approved for live use', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Live mode remains fail-closed until this is explicitly checked AND a live webhook signature key is stored.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Square Loyalty', 'doughboss' ); ?></th>
+							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual_present]" value="1" /><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual]" value="1" <?php checked( ! isset( $settings['square_loyalty_accrual'] ) || ! empty( $settings['square_loyalty_accrual'] ), true ); ?> /> <?php esc_html_e( 'Award Square Loyalty points on paid web orders', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Matches the customer by phone to an existing Square Loyalty account and applies the points rules set in Square Dashboard. Runs in the background; never enrols anyone. No effect until a Square Loyalty program is active.', 'doughboss' ); ?></p></td>
 						</tr>
 					</table>
 

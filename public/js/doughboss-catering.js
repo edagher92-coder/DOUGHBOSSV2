@@ -19,6 +19,20 @@
 	var NONCE = DB.nonce || '';
 	var CUR = DB.currency || '$';
 
+	// Earliest bookable date: N business days after today (Sat/Sun skipped).
+	// Mirrors DoughBoss_Catering::earliest_event_date(); the server is the gate.
+	var NOTICE_DAYS = Math.max(0, Math.min(30, parseInt(root.getAttribute('data-notice-days'), 10) || 0)) || (root.hasAttribute('data-notice-days') ? 0 : 2);
+	function earliestDate() {
+		var d = new Date();
+		var left = NOTICE_DAYS;
+		while (left > 0) {
+			d.setDate(d.getDate() + 1);
+			if (d.getDay() !== 0 && d.getDay() !== 6) { left--; }
+		}
+		var m = d.getMonth() + 1, day = d.getDate();
+		return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+	}
+
 	var state = {
 		packages: [],
 		selectedId: 0,
@@ -236,9 +250,10 @@
 			'<button type="button" data-catering-locations-retry hidden>Retry shop information</button>' +
 			'<div class="dbc-row">' +
 				'<label class="dbc-field"><span>Guests</span><input type="number" min="0" step="1" name="guest_count" inputmode="numeric" /></label>' +
-				'<label class="dbc-field"><span>Event date</span><input type="date" name="event_date" /></label>' +
+				'<label class="dbc-field"><span>Event date</span><input type="date" name="event_date" min="' + earliestDate() + '" /></label>' +
 				'<label class="dbc-field"><span>Event time</span><input type="time" name="event_time" /></label>' +
 			'</div>' +
+			(NOTICE_DAYS > 0 ? '<p class="dbc-sub">Please allow at least ' + NOTICE_DAYS + ' business day' + (NOTICE_DAYS === 1 ? '' : 's') + '’ notice (weekends don’t count). Pickup from Revesby. Need it sooner? Call us.</p>' : '') +
 			'<div class="dbc-row">' +
 				'<fieldset class="dbc-field dbc-ful"><span>Fulfilment</span>' +
 					'<label class="dbc-radio"><input type="radio" name="order_type" value="pickup" checked /> Pickup</label>' +

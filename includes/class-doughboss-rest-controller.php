@@ -1224,6 +1224,24 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		// Catering — send (or re-send) a Square invoice for one leg. Manager-only;
+		// Square emails the customer a hosted pay page, so no card data touches WP.
+		register_rest_route(
+			$ns,
+			'/admin/catering/(?P<id>\d+)/square-invoice',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_catering_square_invoice' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+				'args'                => array(
+					'leg' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_key',
+					),
+				),
+			)
+		);
+
 		// Catering — create a PaymentIntent for a deposit or balance leg. Gated by
 		// a valid REST nonce AND the enquiry number + email matching.
 		register_rest_route(
@@ -3136,7 +3154,44 @@ class DoughBoss_REST_Controller {
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
 	 */
+	/**
+	 * Set once a payment provider request may have been sent for the current
+	 * /payment-intent call. Errors raised before that point are retry-safe.
+	 *
+	 * @var bool
+	 */
+	private $payment_dispatch_reached = false;
+
+	/**
+	 * /payment-intent route. Wraps the implementation so every refusal raised
+	 * BEFORE any provider call tells the storefront it may simply retry, instead
+	 * of freezing the checkout on "payment pending" when no money can have moved.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
 	public function create_payment_intent( WP_REST_Request $request ) {
+		$this->payment_dispatch_reached = false;
+		$result = $this->create_payment_intent_inner( $request );
+		if ( is_wp_error( $result ) && ! $this->payment_dispatch_reached ) {
+			$data = $result->get_error_data();
+			$data = is_array( $data ) ? $data : array( 'status' => is_int( $data ) ? $data : 400 );
+			if ( ! array_key_exists( 'payment_pending', $data ) ) {
+				$data['payment_pending'] = false;
+				$data['retry_safe']      = true;
+				$result->add_data( $data );
+			}
+		}
+		return $result;
+	}
+
+	/**
+	 * Implementation of /payment-intent (see create_payment_intent()).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function create_payment_intent_inner( WP_REST_Request $request ) {
 		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::payment_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Card payments are paused while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
@@ -3357,6 +3412,7 @@ class DoughBoss_REST_Controller {
 			$metadata['tax_minor']          = DoughBoss_Payment::to_minor_units( $totals['tax'] );
 			$metadata['delivery_fee_minor'] = DoughBoss_Payment::to_minor_units( $totals['delivery_fee'] );
 			$metadata['discount_minor']     = DoughBoss_Payment::to_minor_units( $priced_voucher_discount );
+			$this->payment_dispatch_reached = true;
 			$intent = DoughBoss_Square::create_payment_intent( $amount, $currency, $metadata );
 			if ( is_wp_error( $intent ) ) {
 				$error_data = $intent->get_error_data();
@@ -3387,6 +3443,7 @@ class DoughBoss_REST_Controller {
 			}
 		} else {
 			$metadata['return_url'] = $this->same_site_return_url( $request->get_param( 'return_url' ) );
+			$this->payment_dispatch_reached = true;
 			$intent = DoughBoss_Payment::create_payment_intent( $amount, $currency, $metadata );
 		}
 
@@ -6635,6 +6692,24 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * POST /admin/catering/{id}/square-invoice — publish a Square invoice for a leg.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_catering_square_invoice( WP_REST_Request $request ) {
+		$leg = (string) $request->get_param( 'leg' );
+		if ( ! in_array( $leg, array( DoughBoss_Catering::LEG_DEPOSIT, DoughBoss_Catering::LEG_BALANCE ), true ) ) {
+			return new WP_Error( 'doughboss_catering_leg', __( 'Choose deposit or balance.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$result = DoughBoss_Square_Invoices::send( absint( $request->get_param( 'id' ) ), $leg );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return rest_ensure_response( array_merge( array( 'success' => true, 'leg' => $leg ), $result ) );
+	}
+
+	/**
 	 * POST /catering/payment-intent — start a deposit or balance card payment.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -7388,6 +7463,29 @@ class DoughBoss_REST_Controller {
 		$resource = isset( $data['type'] ) ? sanitize_key( (string) $data['type'] ) : '';
 		$reference = isset( $data['id'] ) ? DoughBoss_Square::canonical_id( $data['id'] ) : '';
 
+		// Catering Square invoices: re-read the invoice from Square and mark the
+		// leg paid only when Square says PAID for the exact amount at our location.
+		if ( 'invoice' === $resource && 0 === strpos( $type, 'invoice.' ) && '' !== $event_id && class_exists( 'DoughBoss_Square_Invoices' ) ) {
+			$invoice_ref = DoughBoss_Square_Invoices::canonical_invoice_id( isset( $data['id'] ) ? $data['id'] : '' );
+			if ( '' === $invoice_ref ) {
+				return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+			}
+			$event_key = hash( 'sha256', 'square|' . $event_id );
+			if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'square', $invoice_ref, $type ) ) {
+				$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+				if ( null === $event_outcome || 'retry' === $event_outcome ) {
+					return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+				return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
+			}
+			$outcome = DoughBoss_Square_Invoices::reconcile( $invoice_ref );
+			DoughBoss_Payment_Attempts::complete_event( $event_key, $outcome );
+			if ( 'retry' === $outcome ) {
+				return new WP_Error( 'doughboss_wh_retry', __( 'Invoice reconciliation will be retried.', 'doughboss' ), array( 'status' => 500 ) );
+			}
+			return rest_ensure_response( array( 'received' => true, 'outcome' => $outcome ) );
+		}
+
 		// Only payment events carry a payment id worth reconciling. Everything
 		// else (refunds, disputes, catalog, …) is acknowledged and ignored so
 		// Square does not retry a delivery this site will never act on.
@@ -7747,7 +7845,7 @@ class DoughBoss_REST_Controller {
 
 		$customer_body = sprintf(
 			/* translators: 1: name, 2: enquiry number, 3: package, 4: guests, 5: event date, 6: deposit. */
-			__( "Hi %1\$s,\n\nThanks for your catering enquiry %2\$s.\n\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nIndicative deposit: %6\$s\n\nWe'll confirm the details and send your deposit link shortly.\n", 'doughboss' ),
+			__( "Hi %1\$s,\n\nThanks for your catering enquiry %2\$s.\n\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nIndicative deposit: %6\$s\n\nWe'll confirm the details and email you a secure Square payment link for the deposit. Your booking is confirmed once the deposit is paid.\n", 'doughboss' ),
 			$enquiry['customer_name'],
 			$enquiry['enquiry_number'],
 			$package,

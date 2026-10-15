@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.45.0
+Stable tag: 2.46.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,14 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.46.0 =
+* Catering via Square invoices: managers send deposit and balance invoices from DoughBoss > Catering; Square emails a hosted pay page; invoice webhooks mark legs paid only when Square reports PAID for the exact amount at the mapped location.
+* Catering minimum notice in business days (default 2, weekends excluded), enforced server-side and shown on the form; configurable in Settings.
+* Catering payment receipts to the customer and the catering inbox.
+* Square card declines now close the attempt as failed (no charge) so customers can retry immediately instead of being blocked as 'unknown'; pre-dispatch checkout errors are flagged retry-safe.
+* Square payments carry buyer_email_address from the verified checkout snapshot.
+* Square Loyalty: background accrual of points on paid web orders for existing Square Loyalty members (matched by phone), toggle in Settings.
 
 = 2.45.0 =
 * Refresh storefront asset cache keys for the locally validated release candidate; publication and provider activation remain separate operator gates.

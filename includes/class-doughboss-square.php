@@ -1539,6 +1539,14 @@ class DoughBoss_Square {
 		}
 		if ( 1 === $orders_protocol ) {
 			$linked = self::create_linked_order( $attempt, $dispatch_binding );
+			if ( is_wp_error( $linked ) && 'approved_preorder' !== $context && 'doughboss_pay_api' === $linked->get_error_code() ) {
+				// CreateOrder runs before any payment request: Square refused it,
+				// so no money can have moved. Close the attempt and let the
+				// customer retry with a fresh attempt key.
+				if ( DoughBoss_Payment_Attempts::mark_irreversible_failed( (int) $attempt['id'], 'doughboss_pay_order_create' ) ) {
+					return self::no_charge_error( $attempt, 'doughboss_pay_order_create', __( 'We could not start the card payment. No payment was taken — please try again.', 'doughboss' ) );
+				}
+			}
 			if ( is_wp_error( $linked ) ) {
 				DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $linked->get_error_code() );
 				return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $linked->get_error_code() );
@@ -1585,6 +1593,12 @@ class DoughBoss_Square {
 		if ( 1 === $orders_protocol ) {
 			$body['order_id'] = $attempt['provider_order_reference'];
 		}
+		// Customer email from the retained, hash-verified checkout snapshot so
+		// Square can attach the buyer to the payment (receipts, disputes, CRM).
+		$buyer_email = self::buyer_email( $attempt, $orders_protocol );
+		if ( '' !== $buyer_email ) {
+			$body['buyer_email_address'] = $buyer_email;
+		}
 		if ( 'gift_card' === $tender_kind ) {
 			// This slice is full-value only. Never create an untracked partial leg.
 			$body['accept_partial_authorization'] = false;
@@ -1594,6 +1608,15 @@ class DoughBoss_Square {
 		}
 
 		$response = self::request( 'POST', '/v2/payments', $body, $dispatch_binding );
+		if ( is_wp_error( $response ) && self::is_payment_method_refusal( $response ) ) {
+			// Square answered with a definitive card/payment-method refusal
+			// (declined, bad CVV, expired, insufficient funds). No payment
+			// completed, so the attempt closes as failed and the customer may
+			// retry with a new attempt key (and therefore a new idempotency key).
+			if ( DoughBoss_Payment_Attempts::mark_irreversible_failed( (int) $attempt['id'], 'doughboss_pay_declined' ) ) {
+				return self::no_charge_error( $attempt, 'doughboss_pay_declined', __( 'Your card was declined. Please check the details or try another card. You have not been charged.', 'doughboss' ) );
+			}
+		}
 		if ( is_wp_error( $response ) ) {
 			DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], $response->get_error_code() );
 			return self::pending_error( DoughBoss_Payment_Attempts::find( (int) $attempt['id'] ), $response->get_error_code() );
@@ -1694,6 +1717,80 @@ class DoughBoss_Square {
 			if ( is_wp_error( $verified ) ) { return self::held_order_error( $verified, $attempt ); }
 		}
 		return $payload;
+	}
+
+	/**
+	 * Whether a Square API error is a definitive payment-method refusal.
+	 *
+	 * Only Square's PAYMENT_METHOD_ERROR category on HTTP 400/402 qualifies —
+	 * timeouts, 5xx, rate limits, idempotency conflicts and malformed replies
+	 * stay "unknown" because money may have moved.
+	 *
+	 * @param WP_Error $error Error from request().
+	 * @return bool
+	 */
+	/**
+	 * Buyer email for an itemised attempt, read only from its verified snapshot.
+	 *
+	 * @param array $attempt         Attempt row.
+	 * @param int   $orders_protocol Orders protocol (1 = itemised).
+	 * @return string Valid email or ''.
+	 */
+	private static function buyer_email( array $attempt, $orders_protocol ) {
+		if ( 1 !== $orders_protocol || ! class_exists( 'DoughBoss_Checkout_Snapshots' ) || empty( $attempt['checkout_key'] ) ) {
+			return '';
+		}
+		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $attempt['checkout_key'] );
+		$metadata = self::attempt_metadata( $attempt );
+		if ( ! is_array( $snapshot ) || ! isset( $snapshot['payload']['order']['customer_email'], $snapshot['payload_hash'], $metadata['orders_snapshot_hash'] )
+			|| ! hash_equals( (string) $metadata['orders_snapshot_hash'], (string) $snapshot['payload_hash'] ) ) {
+			return '';
+		}
+		return self::safe_buyer_email( $snapshot['payload']['order']['customer_email'] );
+	}
+
+	/**
+	 * Square caps buyer_email_address at 255 chars; anything odd is dropped.
+	 *
+	 * @param mixed $email Candidate.
+	 * @return string
+	 */
+	public static function safe_buyer_email( $email ) {
+		$email = is_string( $email ) ? trim( $email ) : '';
+		return '' !== $email && strlen( $email ) <= 255 && is_email( $email ) ? $email : '';
+	}
+
+	public static function is_payment_method_refusal( $error ) {
+		if ( ! is_wp_error( $error ) || 'doughboss_pay_api' !== $error->get_error_code() ) {
+			return false;
+		}
+		$data = $error->get_error_data();
+		return is_array( $data )
+			&& isset( $data['square_category'], $data['square_http'] )
+			&& 'PAYMENT_METHOD_ERROR' === $data['square_category']
+			&& in_array( (int) $data['square_http'], array( 400, 402 ), true );
+	}
+
+	/**
+	 * Retry-safe error for an attempt that provably moved no money.
+	 *
+	 * @param array  $attempt Attempt row.
+	 * @param string $code    Error code.
+	 * @param string $message Customer message.
+	 * @return WP_Error
+	 */
+	private static function no_charge_error( array $attempt, $code, $message ) {
+		return new WP_Error(
+			$code,
+			$message,
+			array(
+				'status'          => 402,
+				'outcome'         => 'failed',
+				'payment_pending' => false,
+				'retry_safe'      => true,
+				'attempt_id'      => isset( $attempt['id'] ) ? (int) $attempt['id'] : 0,
+			)
+		);
 	}
 
 	/**
@@ -2352,6 +2449,63 @@ class DoughBoss_Square {
 	}
 
 	/**
+	 * Square APIs that operator-initiated commerce calls (catering invoices,
+	 * customer lookup and loyalty accrual) may reach. Payments and refunds keep
+	 * their dedicated, attempt-bound methods above and are deliberately absent.
+	 */
+	const COMMERCE_PATH_PREFIXES = array( '/v2/customers', '/v2/orders', '/v2/invoices', '/v2/loyalty' );
+
+	/**
+	 * Location-bound Square call for catering invoices and loyalty.
+	 *
+	 * Uses the same activation gate as card payments for the exact native shop
+	 * (payments on, Square selected, mapped location, valid token, live approval
+	 * in live mode) and only reaches allow-listed API families.
+	 *
+	 * @param string $method      HTTP method.
+	 * @param string $path        API path, e.g. '/v2/invoices'.
+	 * @param array  $body        JSON body for write calls.
+	 * @param int    $location_id Native DoughBoss location id.
+	 * @return array|WP_Error
+	 */
+	public static function commerce_request( $method, $path, array $body, $location_id ) {
+		$path    = (string) $path;
+		$allowed = false;
+		foreach ( self::COMMERCE_PATH_PREFIXES as $prefix ) {
+			if ( 0 === strpos( $path, $prefix ) ) {
+				$allowed = true;
+				break;
+			}
+		}
+		if ( ! $allowed || false !== strpos( $path, '..' ) || ! preg_match( '#^/v2/[A-Za-z0-9/_-]+$#', $path ) ) {
+			return new WP_Error( 'doughboss_pay_config', __( 'That Square operation is not available.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$binding = self::commerce_binding( $location_id );
+		if ( is_wp_error( $binding ) ) {
+			return $binding;
+		}
+		return self::request( $method, $path, $body, $binding );
+	}
+
+	/**
+	 * Active-mode Square binding for a shop, but only when that shop is fully
+	 * Square-ready. Callers use square_location_id to build request bodies.
+	 *
+	 * @param int $location_id Native DoughBoss location id.
+	 * @return array|WP_Error { shop_slug, square_location_id, square_mode }.
+	 */
+	public static function commerce_binding( $location_id ) {
+		$binding = self::shop_binding( $location_id );
+		if ( is_wp_error( $binding ) ) {
+			return $binding;
+		}
+		if ( ! DoughBoss_Settings::square_shop_ready( $binding['shop_slug'] ) ) {
+			return new WP_Error( 'doughboss_pay_config', __( 'Square is not configured for this shop.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return $binding;
+	}
+
+	/**
 	 * Perform an authenticated request to the Square API.
 	 *
 	 * @param string $method HTTP method.
@@ -2406,18 +2560,27 @@ class DoughBoss_Square {
 		// Log only the HTTP status and Square's short error category/code for the
 		// operator — never the response body or `detail`, both of which can carry
 		// customer PII or decline specifics.
+		$category   = '';
+		$error_code = '';
+		if ( is_array( $data ) && isset( $data['errors'][0] ) && is_array( $data['errors'][0] ) ) {
+			$first      = $data['errors'][0];
+			$category   = isset( $first['category'] ) && is_scalar( $first['category'] ) ? substr( strtoupper( preg_replace( '/[^A-Za-z_]/', '', (string) $first['category'] ) ), 0, 64 ) : '';
+			$error_code = isset( $first['code'] ) && is_scalar( $first['code'] ) ? substr( strtoupper( preg_replace( '/[^A-Za-z0-9_]/', '', (string) $first['code'] ) ), 0, 64 ) : '';
+		}
 		if ( function_exists( 'error_log' ) ) {
-			$category = '';
-			$error_code = '';
-			if ( is_array( $data ) && isset( $data['errors'][0] ) && is_array( $data['errors'][0] ) ) {
-				$first      = $data['errors'][0];
-				$category   = isset( $first['category'] ) && is_scalar( $first['category'] ) ? substr( sanitize_key( (string) $first['category'] ), 0, 64 ) : '';
-				$error_code = isset( $first['code'] ) && is_scalar( $first['code'] ) ? substr( sanitize_key( (string) $first['code'] ), 0, 64 ) : '';
-			}
-			error_log( 'DoughBoss Square error: HTTP ' . $code . ' category=' . $category . ' code=' . $error_code ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'DoughBoss Square error: HTTP ' . $code . ' category=' . strtolower( $category ) . ' code=' . strtolower( $error_code ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
-		return new WP_Error( 'doughboss_pay_api', __( 'We could not complete the card payment. Please try again or contact the shop.', 'doughboss' ), array( 'status' => 502 ) );
+		return new WP_Error(
+			'doughboss_pay_api',
+			__( 'We could not complete the card payment. Please try again or contact the shop.', 'doughboss' ),
+			array(
+				'status'          => 502,
+				'square_http'     => $code,
+				'square_category' => $category,
+				'square_code'     => $error_code,
+			)
+		);
 	}
 
 	/**

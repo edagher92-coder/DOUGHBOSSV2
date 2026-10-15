@@ -50,6 +50,38 @@ class DoughBoss_Catering {
 	}
 
 	/**
+	 * Minimum catering notice in business days (Mon–Fri). Default 2 (≈48h
+	 * excluding weekends); 0 disables the check.
+	 *
+	 * @return int
+	 */
+	public static function min_notice_business_days() {
+		$days = (int) DoughBoss_Settings::get( 'catering_min_notice_business_days', 2 );
+		return max( 0, min( 30, $days ) );
+	}
+
+	/**
+	 * Earliest event date allowed: today plus N business days, skipping
+	 * Saturdays and Sundays. A Friday request with 2 days' notice → Tuesday.
+	 *
+	 * @param string $today         Y-m-d (shop-local).
+	 * @param int    $business_days Required business days.
+	 * @return string Y-m-d
+	 */
+	public static function earliest_event_date( $today, $business_days ) {
+		$ts   = strtotime( substr( (string) $today, 0, 10 ) . ' 12:00:00 UTC' );
+		$left = max( 0, (int) $business_days );
+		while ( $left > 0 ) {
+			$ts += DAY_IN_SECONDS;
+			$dow = (int) gmdate( 'N', $ts );
+			if ( $dow <= 5 ) {
+				$left--;
+			}
+		}
+		return gmdate( 'Y-m-d', $ts );
+	}
+
+	/**
 	 * Lifecycle statuses mapped to human labels.
 	 *
 	 * @return array<string,string>
@@ -171,6 +203,22 @@ class DoughBoss_Catering {
 		$event_date = self::sanitize_date( isset( $data['event_date'] ) ? $data['event_date'] : '' );
 		if ( '' !== $event_date && $event_date < current_time( 'Y-m-d' ) ) {
 			return new WP_Error( 'doughboss_catering_date', __( 'The event date can’t be in the past.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$notice_days = self::min_notice_business_days();
+		if ( '' !== $event_date && $notice_days > 0 ) {
+			$earliest = self::earliest_event_date( current_time( 'Y-m-d' ), $notice_days );
+			if ( $event_date < $earliest ) {
+				return new WP_Error(
+					'doughboss_catering_notice',
+					sprintf(
+						/* translators: 1: number of business days, 2: earliest date */
+						__( 'Catering needs at least %1$d business days’ notice (weekends don’t count). The earliest date we can take online is %2$s — for anything sooner, please call us.', 'doughboss' ),
+						$notice_days,
+						mysql2date( 'l j F Y', $earliest . ' 00:00:00' )
+					),
+					array( 'status' => 400, 'earliest_date' => $earliest )
+				);
+			}
 		}
 
 		$quote = self::quote( $package_id, $guest_count, $order_type, $delivery );
