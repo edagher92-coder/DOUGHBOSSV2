@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DOUGHBOSS_FINAL_VERSION', '1.6.3' );
+define( 'DOUGHBOSS_FINAL_VERSION', '1.7.0' );
 
 function doughboss_final_setup() {
 	add_theme_support( 'title-tag' );
@@ -381,6 +381,27 @@ function doughboss_final_menu_fallback() {
 		echo '<li><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></li>';
 	}
 	echo '</ul>';
+}
+
+/**
+ * Catering pickup and notice summary, e.g. "Pickup from Revesby · minimum 2
+ * business days' notice". The day count follows the plugin's catering
+ * setting when the plugin is active (default 2).
+ *
+ * @return string
+ */
+function doughboss_final_catering_notice_line() {
+	$days = class_exists( 'DoughBoss_Catering' ) && method_exists( 'DoughBoss_Catering', 'min_notice_business_days' )
+		? (int) DoughBoss_Catering::min_notice_business_days()
+		: 2;
+	if ( $days < 1 ) {
+		return __( 'Pickup from Revesby', 'doughboss-final' );
+	}
+	return sprintf(
+		/* translators: %d: minimum business days of notice. */
+		_n( 'Pickup from Revesby · minimum %d business day’s notice', 'Pickup from Revesby · minimum %d business days’ notice', $days, 'doughboss-final' ),
+		$days
+	);
 }
 
 function doughboss_final_shortcode_or_notice( $shortcode, $message ) {

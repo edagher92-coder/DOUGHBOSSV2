@@ -2195,3 +2195,22 @@ test('2.48 Square SDK is enqueued only on checkout pages and loads on demand els
 	assert.match(payments, /loadApprovedSquareSdk\(\{ liveMode: CONFIG\.liveMode === true \}\)/, 'ordinary checkout reuses the exact-CDN loader');
 	assert.match(payments, /paymentsPromise = null;\s*throw err;/, 'a failed load can be retried');
 });
+
+test('2.48 theme quick wins: distinct menu/order H1 and titles, hero alts, catering notice copy', () => {
+	const theme = file => fs.readFileSync(path.resolve(__dirname, '..', 'themes', 'doughboss-final', file), 'utf8');
+	const order = theme('page-order.php');
+	assert.match(order, /\$is_menu_page = is_page\( 'menu' \);/);
+	assert.match(order, /<\?php if \( \$is_menu_page \) : \?>\s*<\?php esc_html_e\( 'Our', 'doughboss-final' \); \?> <em><\?php esc_html_e\( 'menu\.', 'doughboss-final' \); \?><\/em>/);
+	const seo = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-seo.php'), 'utf8');
+	assert.match(seo, /if \( is_page\( 'order' \) \) \{/, '/order/ has its own title copy');
+	assert.match(seo, /if \( is_page\( 'menu' \) \|\|/, '/menu/ keeps the menu title');
+	for (const file of ['page-about-us.php', 'page-locations.php', 'page-order.php', 'page-track-order.php', 'page.php']) {
+		assert.doesNotMatch(theme(file), /doughboss_final_asset_image\( '[^']+', '', array\( 'class' => 'dbf-page-hero-bg'/, file + ' hero has descriptive alt text');
+	}
+	const shortcodes = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-shortcodes.php'), 'utf8');
+	assert.match(shortcodes, /'image_alt'\s*=> __\( 'Dough Boss manoush and pies fresh from the oven', 'doughboss' \)/);
+	assert.doesNotMatch(shortcodes, /class="db-mh-backdrop" src="' \. esc_url\( \$image_url \) \. '" alt=""/);
+	assert.match(shortcodes, /Pickup from Revesby · minimum %d business days’ notice/);
+	assert.match(theme('functions.php'), /Pickup from Revesby · minimum %d business days’ notice/);
+	assert.match(theme('page-catering.php'), /description="' \. \$dbf_catering_hero_description \. '"/);
+});

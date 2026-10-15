@@ -91,7 +91,18 @@ class DoughBoss_SEO {
 				'description' => __( 'Plan a fresh Sydney catering spread with mini zaatar, cheese and meat manoush plus spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
 			);
 		}
-		if ( is_page( array( 'menu', 'order' ) ) || has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {
+		// /order/ and /menu/ render the same template; give each its own title.
+		if ( is_page( 'order' ) ) {
+			return array(
+				'title'       => DoughBoss_Settings::ordering_open()
+					? __( 'Order Online for Pickup | Dough Boss Revesby', 'doughboss' )
+					: __( 'Online Ordering | Dough Boss Revesby', 'doughboss' ),
+				'description' => DoughBoss_Settings::ordering_open()
+					? __( 'Order fresh-baked manoush, pizza, golden pies and wraps online for pickup from Dough Boss Revesby.', 'doughboss' )
+					: __( 'Online ordering at Dough Boss is paused. Browse the menu and check your preferred shop before visiting.', 'doughboss' ),
+			);
+		}
+		if ( is_page( 'menu' ) || has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {
 			return array(
 				'title'       => __( 'Dough Boss Menu | Manoush, Pizza & Pies Sydney', 'doughboss' ),
 				'description' => DoughBoss_Settings::ordering_open()

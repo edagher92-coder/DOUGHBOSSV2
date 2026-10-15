@@ -75,6 +75,8 @@ class DoughBoss_Shortcodes {
 				'description'   => __( 'Mini zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies, oven-baked fresh to order.', 'doughboss' ),
 				'replay_label'  => __( 'Pause photo motion', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-feast-real-v1.jpg',
+				// Describes the bundled feast photo; override together with background_image.
+				'image_alt'     => __( 'Dough Boss manoush and pies fresh from the oven', 'doughboss' ),
 				'primary_label' => __( 'Browse the menu', 'doughboss' ),
 				'primary_url'   => home_url( '/order/' ),
 				'secondary_label' => __( 'Plan catering', 'doughboss' ),
@@ -86,7 +88,7 @@ class DoughBoss_Shortcodes {
 		$variant = in_array( $atts['variant'], array( 'photo', 'home', 'catering' ), true ) ? $atts['variant'] : 'photo';
 
 		// The image element is directly discoverable and carries real dimensions.
-		$hero_image = $this->manoush_hero_image( $atts['background_image'] );
+		$hero_image = $this->manoush_hero_image( $atts['background_image'], $atts['image_alt'] );
 
 		ob_start();
 		?>
@@ -123,12 +125,14 @@ class DoughBoss_Shortcodes {
 	 * default uses packaged, measured AVIF/WebP variants with the original fallback.
 	 *
 	 * @param string $image_url Hero image URL.
+	 * @param string $alt       Descriptive alternative text.
 	 * @return string
 	 */
-	private function manoush_hero_image( $image_url ) {
+	private function manoush_hero_image( $image_url, $alt = '' ) {
+		$alt        = trim( strip_tags( (string) $alt ) );
 		$attributes = array(
 			'class'         => 'db-mh-backdrop',
-			'alt'           => '',
+			'alt'           => $alt,
 			'loading'       => 'eager',
 			'decoding'      => 'async',
 			'fetchpriority' => 'high',
@@ -148,7 +152,7 @@ class DoughBoss_Shortcodes {
 			}
 		}
 
-		$html = '<img class="db-mh-backdrop" src="' . esc_url( $image_url ) . '" alt="" loading="eager" decoding="async" fetchpriority="high"';
+		$html = '<img class="db-mh-backdrop" src="' . esc_url( $image_url ) . '" alt="' . esc_attr( $alt ) . '" loading="eager" decoding="async" fetchpriority="high"';
 		if ( is_array( $dimensions ) ) {
 			$html .= ' width="' . $dimensions[0] . '" height="' . $dimensions[1] . '"';
 		}
@@ -238,6 +242,14 @@ class DoughBoss_Shortcodes {
 		$phone_tel     = is_string( $phone_digits ) && 0 === strpos( $phone_digits, '0' )
 			? '+61' . substr( $phone_digits, 1 )
 			: '+' . ltrim( (string) $phone_digits, '+' );
+		$notice_days   = DoughBoss_Catering::min_notice_business_days();
+		$notice_line   = $notice_days > 0
+			? sprintf(
+				/* translators: %d: minimum business days of notice. */
+				_n( 'Pickup from Revesby · minimum %d business day’s notice', 'Pickup from Revesby · minimum %d business days’ notice', $notice_days, 'doughboss' ),
+				$notice_days
+			)
+			: __( 'Pickup from Revesby', 'doughboss' );
 		$email_subject = rawurlencode( 'Dough Boss catering enquiry' );
 		$email_body    = rawurlencode( "Event date:\nGuest count:\nPreferred pickup time:\nDietary notes:\n" );
 		ob_start();
@@ -247,6 +259,7 @@ class DoughBoss_Shortcodes {
 				<p class="dbc-kicker"><?php esc_html_e( 'Catering enquiries', 'doughboss' ); ?></p>
 				<h2 class="dbc-h2" id="dbc-contact-title"><?php esc_html_e( 'Tell us what you need', 'doughboss' ); ?></h2>
 				<p class="dbc-sub"><?php esc_html_e( 'Share your date, preferred pickup time, guest count and dietary notes. Our catering team will confirm availability, the menu and final price before anything is locked in.', 'doughboss' ); ?></p>
+				<p class="dbc-sub dbc-terms"><strong><?php echo esc_html( $notice_line ); ?></strong></p>
 				<div class="dbc-contact-actions">
 					<a class="dbc-contact-card" href="<?php echo esc_attr( 'mailto:' . $email . '?subject=' . $email_subject . '&body=' . $email_body ); ?>">
 						<strong><?php esc_html_e( 'Email catering', 'doughboss' ); ?></strong>
@@ -271,7 +284,7 @@ class DoughBoss_Shortcodes {
 			<section class="dbc-faq" aria-labelledby="dbc-faq-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'Catering Q&A', 'doughboss' ); ?></p>
 				<h2 class="dbc-h2" id="dbc-faq-title"><?php esc_html_e( 'Good to know before you order', 'doughboss' ); ?></h2>
-				<details><summary><?php esc_html_e( 'How much notice should I give?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'As early as you can. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', 'doughboss' ); ?></p></details>
+				<details><summary><?php esc_html_e( 'How much notice should I give?', 'doughboss' ); ?></summary><p><?php echo esc_html( $notice_days > 0 ? sprintf( /* translators: %d: minimum business days of notice. */ _n( 'At least %d business day’s notice (weekends don’t count), and earlier is better. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', 'At least %d business days’ notice (weekends don’t count), and earlier is better. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', $notice_days, 'doughboss' ), $notice_days ) : __( 'As early as you can. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', 'doughboss' ) ); ?></p></details>
 				<details><summary><?php esc_html_e( 'Where is catering prepared?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'Catering is prepared through our Revesby bakery for now. Ask the team what collection or other arrangement is available.', 'doughboss' ); ?></p></details>
 				<details><summary><?php esc_html_e( 'Can you help with dietary requirements?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'Tell us about dietary needs and allergies. We can explain suitable choices, but our kitchen handles common allergens and cannot promise an allergen-free environment.', 'doughboss' ); ?></p></details>
 				<details><summary><?php esc_html_e( 'Is there a minimum order?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'The team will recommend practical quantities for your guest count and explain any package requirement before you confirm.', 'doughboss' ); ?></p></details>
