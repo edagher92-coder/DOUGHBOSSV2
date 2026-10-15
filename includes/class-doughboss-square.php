@@ -1750,10 +1750,78 @@ class DoughBoss_Square {
 	}
 
 	/**
+	 * Pure: after a partial refund, has the re-read Square payment now been
+	 * refunded in full (several partial refunds adding up)?
+	 *
+	 * Square's `refunded_money` on the payment only counts completed refunds.
+	 * 'full' requires the exact payment this attempt owns, a COMPLETED payment
+	 * and refunded_money in the attempt currency of at least the attempt amount.
+	 *
+	 * @param array $payment Square payment object (GET /v2/payments/{id}).
+	 * @param array $attempt Attempt row.
+	 * @return array{state:string,refunded_minor:int} state full|partial|none.
+	 */
+	public static function payment_refund_state( array $payment, array $attempt ) {
+		$none     = array( 'state' => 'none', 'refunded_minor' => 0 );
+		$refunded = isset( $payment['refunded_money'] ) && is_array( $payment['refunded_money'] ) ? $payment['refunded_money'] : array();
+		if ( ! isset( $payment['id'], $payment['status'], $attempt['provider_reference'], $attempt['amount_minor'], $attempt['currency'] )
+			|| ! hash_equals( (string) $attempt['provider_reference'], (string) $payment['id'] )
+			|| 'COMPLETED' !== $payment['status']
+			|| (int) $attempt['amount_minor'] < 1 ) {
+			return $none;
+		}
+		if ( ! isset( $refunded['amount'], $refunded['currency'] ) || ! is_int( $refunded['amount'] ) || $refunded['amount'] < 1
+			|| strtoupper( (string) $attempt['currency'] ) !== strtoupper( (string) $refunded['currency'] ) ) {
+			return $none;
+		}
+		return array(
+			'state'          => $refunded['amount'] >= (int) $attempt['amount_minor'] ? 'full' : 'partial',
+			'refunded_minor' => (int) $refunded['amount'],
+		);
+	}
+
+	/**
+	 * Pure: the staff notice for a partial refund that leaves the order paid.
+	 *
+	 * @param string   $order_label   Order number (or '' when no order is linked).
+	 * @param int      $refund_minor  This refund's amount in minor units.
+	 * @param int      $total_minor   Total refunded on the payment so far (minor units).
+	 * @param int      $paid_minor    Amount originally paid (minor units).
+	 * @param string   $currency      ISO currency.
+	 * @param string   $payment_id    Square payment id.
+	 * @return array{subject:string,body:string}
+	 */
+	public static function partial_refund_notice( $order_label, $refund_minor, $total_minor, $paid_minor, $currency, $payment_id ) {
+		$fmt   = static function ( $minor ) {
+			return '$' . number_format( max( 0, (int) $minor ) / 100, 2, '.', ',' );
+		};
+		$label = '' !== (string) $order_label ? 'order ' . (string) $order_label : 'Square payment ' . (string) $payment_id;
+		return array(
+			'subject' => sprintf( '[DoughBoss] Partial refund on %s: %s', $label, $fmt( $refund_minor ) ),
+			'body'    => implode(
+				"\n",
+				array(
+					'A partial refund was completed in Square for an online order. The order stays marked as paid in WordPress.',
+					'',
+					'Order: ' . ( '' !== (string) $order_label ? (string) $order_label : 'not found' ),
+					'This refund: ' . $fmt( $refund_minor ) . ' ' . strtoupper( (string) $currency ),
+					'Refunded so far: ' . $fmt( $total_minor ) . ' of ' . $fmt( $paid_minor ) . ' paid',
+					'Square payment: ' . (string) $payment_id,
+					'',
+					'No action is needed unless the kitchen should change or cancel part of the order. Check Square Dashboard > Transactions for details.',
+				)
+			),
+		);
+	}
+
+	/**
 	 * Webhook: a refund was created/updated (in WP, Square Dashboard or POS).
 	 * Re-reads the refund from Square and marks the WP order refunded only for
-	 * a COMPLETED full refund of a payment this site owns. Partial refunds are
-	 * acknowledged and left for staff (the order keeps its paid state).
+	 * a COMPLETED full refund of a payment this site owns. For a partial refund
+	 * the payment is re-read: when its completed refunded_money now covers the
+	 * whole attempt amount (several partials) the order is marked refunded;
+	 * otherwise the orders inbox gets one staff notice per refund and the order
+	 * keeps its paid state.
 	 *
 	 * @param string $refund_id      Square refund id.
 	 * @param string $payment_hint   payment_id from the (untrusted) payload.
@@ -1786,7 +1854,15 @@ class DoughBoss_Square {
 			return isset( $refund['status'] ) && in_array( $refund['status'], array( 'PENDING', 'APPROVED' ), true ) ? 'pending' : 'ignored';
 		}
 		if ( 'partial' === $settled ) {
-			return 'partial';
+			$payment = self::retrieve_payment_with_binding( $payment_hint, $binding );
+			if ( is_wp_error( $payment ) ) {
+				return 'retry';
+			}
+			$state = self::payment_refund_state( $payment, $attempt );
+			if ( 'full' !== $state['state'] ) {
+				self::notify_partial_refund( $refund, $attempt, $payment_hint, $state['refunded_minor'] );
+				return 'partial';
+			}
 		}
 		$order_id = DoughBoss_Order::find_id_by_payment_intent( $payment_hint );
 		if ( ! $order_id ) {
@@ -1797,6 +1873,40 @@ class DoughBoss_Square {
 			DoughBoss_Order::update_payment_status( $order_id, 'refunded' );
 		}
 		return 'processed';
+	}
+
+	/**
+	 * Email the orders inbox once per partial refund id (atomic add_option marker,
+	 * autoload off). Never includes customer contact details or card data.
+	 *
+	 * @param array  $refund         Re-read Square refund.
+	 * @param array  $attempt        Attempt row.
+	 * @param string $payment_id     Square payment id.
+	 * @param int    $refunded_minor Total completed refunds on the payment (0 = unknown).
+	 * @return void
+	 */
+	private static function notify_partial_refund( array $refund, array $attempt, $payment_id, $refunded_minor ) {
+		$refund_id = isset( $refund['id'] ) ? (string) $refund['id'] : '';
+		if ( '' === $refund_id || ! add_option( 'doughboss_sq_partial_refund_' . substr( hash( 'sha256', $refund_id ), 0, 32 ), time(), '', 'no' ) ) {
+			return;
+		}
+		$to = DoughBoss_Settings::orders_email();
+		if ( ! is_email( $to ) ) {
+			return;
+		}
+		$order_id = DoughBoss_Order::find_id_by_payment_intent( $payment_id );
+		$order    = $order_id ? DoughBoss_Order::get( $order_id ) : null;
+		$label    = $order && ! empty( $order->order_number ) ? (string) $order->order_number : ( $order_id ? '#' . $order_id : '' );
+		$amount   = isset( $refund['amount_money']['amount'] ) ? (int) $refund['amount_money']['amount'] : 0;
+		$notice   = self::partial_refund_notice(
+			$label,
+			$amount,
+			$refunded_minor > 0 ? $refunded_minor : $amount,
+			(int) $attempt['amount_minor'],
+			(string) $attempt['currency'],
+			$payment_id
+		);
+		wp_mail( $to, $notice['subject'], $notice['body'] );
 	}
 
 	/**
