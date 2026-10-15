@@ -1730,6 +1730,129 @@ class DoughBoss_Square {
 	 * @return bool
 	 */
 	/**
+	 * Pure: what a re-read Square refund means for the bound payment attempt.
+	 * 'full' only when COMPLETED, same payment, same currency, full amount.
+	 *
+	 * @param array $refund  Square refund object.
+	 * @param array $attempt Attempt row.
+	 * @return string full|partial|none
+	 */
+	public static function refund_settlement( array $refund, array $attempt ) {
+		$money = isset( $refund['amount_money'] ) && is_array( $refund['amount_money'] ) ? $refund['amount_money'] : array();
+		if ( ! isset( $refund['status'], $refund['payment_id'], $money['amount'], $money['currency'], $attempt['provider_reference'], $attempt['amount_minor'], $attempt['currency'] )
+			|| 'COMPLETED' !== $refund['status']
+			|| ! hash_equals( (string) $attempt['provider_reference'], (string) $refund['payment_id'] )
+			|| strtoupper( (string) $attempt['currency'] ) !== strtoupper( (string) $money['currency'] )
+			|| (int) $money['amount'] < 1 ) {
+			return 'none';
+		}
+		return (int) $money['amount'] >= (int) $attempt['amount_minor'] ? 'full' : 'partial';
+	}
+
+	/**
+	 * Webhook: a refund was created/updated (in WP, Square Dashboard or POS).
+	 * Re-reads the refund from Square and marks the WP order refunded only for
+	 * a COMPLETED full refund of a payment this site owns. Partial refunds are
+	 * acknowledged and left for staff (the order keeps its paid state).
+	 *
+	 * @param string $refund_id      Square refund id.
+	 * @param string $payment_hint   payment_id from the (untrusted) payload.
+	 * @return string processed|ignored|partial|pending|retry
+	 */
+	public static function reconcile_refund_event( $refund_id, $payment_hint ) {
+		$refund_id    = self::canonical_id( $refund_id );
+		$payment_hint = self::canonical_id( $payment_hint );
+		if ( '' === $refund_id || '' === $payment_hint ) {
+			return 'ignored';
+		}
+		$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $payment_hint );
+		if ( ! is_array( $attempt ) || 'square' !== (string) $attempt['provider'] ) {
+			return 'ignored';
+		}
+		$binding = self::attempt_shop_binding( $attempt );
+		if ( is_wp_error( $binding ) ) {
+			return 'retry';
+		}
+		$response = self::request( 'GET', '/v2/refunds/' . rawurlencode( $refund_id ), array(), $binding );
+		if ( is_wp_error( $response ) || ! isset( $response['refund'] ) || ! is_array( $response['refund'] ) ) {
+			return 'retry';
+		}
+		$refund = $response['refund'];
+		if ( ! isset( $refund['id'] ) || ! hash_equals( $refund_id, (string) $refund['id'] ) ) {
+			return 'ignored';
+		}
+		$settled = self::refund_settlement( $refund, $attempt );
+		if ( 'none' === $settled ) {
+			return isset( $refund['status'] ) && in_array( $refund['status'], array( 'PENDING', 'APPROVED' ), true ) ? 'pending' : 'ignored';
+		}
+		if ( 'partial' === $settled ) {
+			return 'partial';
+		}
+		$order_id = DoughBoss_Order::find_id_by_payment_intent( $payment_hint );
+		if ( ! $order_id ) {
+			return 'ignored';
+		}
+		$order = DoughBoss_Order::get( $order_id );
+		if ( $order && 'paid' === (string) $order->payment_status ) {
+			DoughBoss_Order::update_payment_status( $order_id, 'refunded' );
+		}
+		return 'processed';
+	}
+
+	/**
+	 * Webhook: a card dispute (chargeback) was opened or changed. Re-reads it
+	 * and alerts the orders inbox for a payment this site owns. No money or
+	 * order state changes — evidence must be submitted in Square Dashboard.
+	 *
+	 * @param string $dispute_id   Square dispute id.
+	 * @param string $payment_hint payment_id from the payload.
+	 * @param string $type         Event type.
+	 * @return string processed|ignored|retry
+	 */
+	public static function reconcile_dispute_event( $dispute_id, $payment_hint, $type ) {
+		$dispute_id   = self::canonical_id( $dispute_id );
+		$payment_hint = self::canonical_id( $payment_hint );
+		if ( '' === $dispute_id || '' === $payment_hint ) {
+			return 'ignored';
+		}
+		$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $payment_hint );
+		if ( ! is_array( $attempt ) || 'square' !== (string) $attempt['provider'] ) {
+			return 'ignored';
+		}
+		$binding = self::attempt_shop_binding( $attempt );
+		if ( is_wp_error( $binding ) ) {
+			return 'retry';
+		}
+		$response = self::request( 'GET', '/v2/disputes/' . rawurlencode( $dispute_id ), array(), $binding );
+		if ( is_wp_error( $response ) || ! isset( $response['dispute'] ) || ! is_array( $response['dispute'] ) ) {
+			return 'retry';
+		}
+		$d       = $response['dispute'];
+		$paid_id = isset( $d['disputed_payment']['payment_id'] ) ? (string) $d['disputed_payment']['payment_id'] : '';
+		if ( ! hash_equals( $payment_hint, $paid_id ) ) {
+			return 'ignored';
+		}
+		$order_id = DoughBoss_Order::find_id_by_payment_intent( $payment_hint );
+		$amount   = isset( $d['amount_money']['amount'] ) ? number_format( ( (int) $d['amount_money']['amount'] ) / 100, 2 ) : '?';
+		$lines    = array(
+			'A customer has disputed a card payment (chargeback). Respond in Square Dashboard > Payments > Disputes before the deadline.',
+			'',
+			'Event: ' . sanitize_text_field( (string) $type ),
+			'Dispute state: ' . ( isset( $d['state'] ) ? sanitize_text_field( (string) $d['state'] ) : 'unknown' ),
+			'Reason: ' . ( isset( $d['reason'] ) ? sanitize_text_field( (string) $d['reason'] ) : 'unknown' ),
+			'Amount: $' . $amount,
+			'Respond by: ' . ( isset( $d['due_at'] ) ? sanitize_text_field( (string) $d['due_at'] ) : 'see Square' ),
+			'WordPress order: ' . ( $order_id ? '#' . $order_id : 'not found' ),
+			'Square payment: ' . $payment_hint,
+		);
+		$to = DoughBoss_Settings::orders_email();
+		if ( is_email( $to ) ) {
+			wp_mail( $to, sprintf( '[DoughBoss] Card dispute %s — $%s', $order_id ? 'order #' . $order_id : $payment_hint, $amount ), implode( "\n", $lines ) );
+		}
+		return 'processed';
+	}
+
+	/**
 	 * Buyer email for an itemised attempt, read only from its verified snapshot.
 	 *
 	 * @param array $attempt         Attempt row.

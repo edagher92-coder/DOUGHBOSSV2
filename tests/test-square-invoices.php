@@ -168,3 +168,19 @@ db_test(
 		assert_same( '', DoughBoss_Square::safe_buyer_email( null ), 'missing buyer email dropped' );
 	}
 );
+
+db_test(
+	'square refund events only settle a completed refund of the same payment',
+	function () {
+		$attempt = array( 'provider_reference' => 'PAY12345678', 'amount_minor' => 2550, 'currency' => 'AUD' );
+		$refund  = array( 'status' => 'COMPLETED', 'payment_id' => 'PAY12345678', 'amount_money' => array( 'amount' => 2550, 'currency' => 'AUD' ) );
+		assert_same( 'full', DoughBoss_Square::refund_settlement( $refund, $attempt ), 'full completed refund' );
+		$part = $refund; $part['amount_money']['amount'] = 500;
+		assert_same( 'partial', DoughBoss_Square::refund_settlement( $part, $attempt ), 'partial refund leaves order paid' );
+		assert_same( 'none', DoughBoss_Square::refund_settlement( array_merge( $refund, array( 'status' => 'PENDING' ) ), $attempt ), 'pending refund changes nothing' );
+		assert_same( 'none', DoughBoss_Square::refund_settlement( array_merge( $refund, array( 'payment_id' => 'OTHER1234567' ) ), $attempt ), 'other payment ignored' );
+		$usd = $refund; $usd['amount_money']['currency'] = 'USD';
+		assert_same( 'none', DoughBoss_Square::refund_settlement( $usd, $attempt ), 'currency mismatch ignored' );
+		assert_same( 'none', DoughBoss_Square::refund_settlement( array(), $attempt ), 'malformed refund ignored' );
+	}
+);

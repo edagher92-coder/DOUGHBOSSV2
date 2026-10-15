@@ -7463,6 +7463,31 @@ class DoughBoss_REST_Controller {
 		$resource = isset( $data['type'] ) ? sanitize_key( (string) $data['type'] ) : '';
 		$reference = isset( $data['id'] ) ? DoughBoss_Square::canonical_id( $data['id'] ) : '';
 
+		// Refunds (from WP, Square Dashboard or POS) and card disputes. Both are
+		// re-read from Square and bound to a payment this site owns first.
+		if ( '' !== $reference && '' !== $event_id && ( ( 'refund' === $resource && 0 === strpos( $type, 'refund.' ) ) || ( 'dispute' === $resource && 0 === strpos( $type, 'dispute.' ) ) ) ) {
+			$object = isset( $data['object'] ) && is_array( $data['object'] ) ? $data['object'] : array();
+			$hint   = 'refund' === $resource
+				? ( isset( $object['refund']['payment_id'] ) ? (string) $object['refund']['payment_id'] : '' )
+				: ( isset( $object['dispute']['disputed_payment']['payment_id'] ) ? (string) $object['dispute']['disputed_payment']['payment_id'] : '' );
+			$event_key = hash( 'sha256', 'square|' . $event_id );
+			if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'square', $reference, $type ) ) {
+				$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+				if ( null === $event_outcome || 'retry' === $event_outcome ) {
+					return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+				return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
+			}
+			$outcome = 'refund' === $resource
+				? DoughBoss_Square::reconcile_refund_event( $reference, $hint )
+				: DoughBoss_Square::reconcile_dispute_event( $reference, $hint, $type );
+			DoughBoss_Payment_Attempts::complete_event( $event_key, $outcome );
+			if ( 'retry' === $outcome ) {
+				return new WP_Error( 'doughboss_wh_retry', __( 'Will retry.', 'doughboss' ), array( 'status' => 500 ) );
+			}
+			return rest_ensure_response( array( 'received' => true, 'outcome' => $outcome ) );
+		}
+
 		// Catering Square invoices: re-read the invoice from Square and mark the
 		// leg paid only when Square says PAID for the exact amount at our location.
 		if ( 'invoice' === $resource && 0 === strpos( $type, 'invoice.' ) && '' !== $event_id && class_exists( 'DoughBoss_Square_Invoices' ) ) {

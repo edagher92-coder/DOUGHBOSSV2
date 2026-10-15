@@ -407,7 +407,8 @@
 		return {
 			amount: amount,
 			billingContact: {
-				givenName: value(form, 'customer_name'),
+				givenName: String(value(form, 'customer_name') || '').trim().split(/\s+/)[0] || '',
+				familyName: String(value(form, 'customer_name') || '').trim().split(/\s+/).slice(1).join(' '),
 				email: value(form, 'customer_email'),
 				phone: value(form, 'customer_phone')
 			},

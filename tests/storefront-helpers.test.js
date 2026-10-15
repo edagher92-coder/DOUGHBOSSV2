@@ -590,7 +590,7 @@ test('Square puts buyer verification details into tokenization and sends only it
 	await h.payAndPlace(h.session);
 	assert.deepEqual(JSON.parse(JSON.stringify(h.tokenizations)), [{
 		amount: '27.50',
-		billingContact: { givenName: 'Ada Customer', email: 'ada@example.test', phone: '0400 000 000' },
+		billingContact: { givenName: 'Ada', familyName: 'Customer', email: 'ada@example.test', phone: '0400 000 000' },
 		currencyCode: 'AUD',
 		intent: 'CHARGE',
 		customerInitiated: true,
