@@ -165,13 +165,47 @@ class DoughBoss_SEO {
 	}
 
 	/**
-	 * Convert weekly location hours into Schema.org specifications.
+	 * Published shop facts (doughboss.com.au, October 2026), used only where a
+	 * stored location field is blank. Keyed by location slug fragment.
 	 *
-	 * @param int $location_id Location id.
+	 * @return array<string,array<string,mixed>>
+	 */
+	public static function shop_facts() {
+		$every_day = array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' );
+		return array(
+			'revesby'   => array(
+				'street'   => 'Shop 12/25 Selems Parade',
+				'locality' => 'Revesby',
+				'postcode' => '2212',
+				'phone'    => '(02) 9774 2286',
+				'hours'    => array_fill_keys( $every_day, '06:30-14:30' ),
+			),
+			'bankstown' => array(
+				'street'   => '462 Chapel Road',
+				'locality' => 'Bankstown',
+				'postcode' => '2200',
+				'phone'    => '(02) 8764 6783',
+				'hours'    => array_fill_keys( array( 'mon', 'tue', 'wed', 'thu', 'fri' ), '07:00-14:00' ),
+			),
+			'roselands' => array(
+				'street'   => 'Shop MM03, Roselands Drive (Roselands Centro)',
+				'locality' => 'Roselands',
+				'postcode' => '2196',
+				'phone'    => '0466 353 133',
+				'hours'    => array_fill_keys( $every_day, '08:00-15:00' ),
+			),
+		);
+	}
+
+	/**
+	 * Pure: convert mon..sun "HH:MM-HH:MM[, ...]" ranges into Schema.org
+	 * OpeningHoursSpecification nodes, grouping days that share a range.
+	 *
+	 * @param array<string,string> $hours mon..sun => ranges.
 	 * @return array<int,array<string,mixed>>
 	 */
-	private function opening_hours( $location_id ) {
-		$days  = array(
+	public static function opening_hours_spec( array $hours ) {
+		$days   = array(
 			'mon' => 'Monday',
 			'tue' => 'Tuesday',
 			'wed' => 'Wednesday',
@@ -180,25 +214,102 @@ class DoughBoss_SEO {
 			'sat' => 'Saturday',
 			'sun' => 'Sunday',
 		);
-		$hours = DoughBoss_Locations::weekly_hours( $location_id );
-		$out   = array();
+		$groups = array();
 		foreach ( $days as $key => $day ) {
 			if ( empty( $hours[ $key ] ) ) {
 				continue;
 			}
-			foreach ( explode( ',', $hours[ $key ] ) as $range ) {
-				if ( ! preg_match( '/^\s*([0-2][0-9]:[0-5][0-9])-([0-2][0-9]:[0-5][0-9])\s*$/', $range, $matches ) ) {
+			foreach ( explode( ',', (string) $hours[ $key ] ) as $range ) {
+				if ( ! preg_match( '/^\s*([01][0-9]|2[0-3]):([0-5][0-9])-([01][0-9]|2[0-3]):([0-5][0-9])\s*$/', $range, $m ) ) {
 					continue;
 				}
-				$out[] = array(
-					'@type'     => 'OpeningHoursSpecification',
-					'dayOfWeek' => $day,
-					'opens'     => $matches[1],
-					'closes'    => $matches[2],
-				);
+				$span = $m[1] . ':' . $m[2] . '-' . $m[3] . ':' . $m[4];
+				if ( ! isset( $groups[ $span ] ) ) {
+					$groups[ $span ] = array();
+				}
+				$groups[ $span ][] = $day;
 			}
 		}
+		$out = array();
+		foreach ( $groups as $span => $group_days ) {
+			list( $opens, $closes ) = explode( '-', $span );
+			$out[] = array(
+				'@type'     => 'OpeningHoursSpecification',
+				'dayOfWeek' => count( $group_days ) > 1 ? $group_days : $group_days[0],
+				'opens'     => $opens,
+				'closes'    => $closes,
+			);
+		}
 		return $out;
+	}
+
+	/**
+	 * Pure: one schema.org Bakery node for a shop. Stored location fields win;
+	 * the published facts only fill blanks. No price range is claimed.
+	 *
+	 * @param array  $location     Location row as an array (id, name, slug, suburb, address, phone).
+	 * @param array  $stored_hours mon..sun => ranges from stored location hours (may be empty).
+	 * @param string $home         Home URL.
+	 * @param string $url          Public page for the shop (locations page).
+	 * @param string $image        Image URL.
+	 * @param string $org_id       Organization @id.
+	 * @return array<string,mixed>
+	 */
+	public static function location_node( array $location, array $stored_hours, $home, $url, $image, $org_id ) {
+		$clean = static function ( $value ) {
+			return trim( preg_replace( '/\s+/', ' ', is_scalar( $value ) ? (string) $value : '' ) );
+		};
+		$slug  = strtolower( $clean( isset( $location['slug'] ) ? $location['slug'] : '' ) . ' ' . $clean( isset( $location['name'] ) ? $location['name'] : '' ) );
+		$facts = array();
+		foreach ( self::shop_facts() as $key => $candidate ) {
+			if ( false !== strpos( $slug, $key ) ) {
+				$facts = $candidate;
+				break;
+			}
+		}
+		$name     = $clean( isset( $location['name'] ) ? $location['name'] : '' );
+		$name     = '' === $name && ! empty( $facts['locality'] ) ? $facts['locality'] : $name;
+		$name     = 0 === stripos( $name, 'dough boss' ) ? $name : trim( 'Dough Boss ' . $name );
+		$street   = $clean( isset( $location['address'] ) ? $location['address'] : '' );
+		$street   = '' !== $street ? $street : ( isset( $facts['street'] ) ? $facts['street'] : '' );
+		$locality = $clean( isset( $location['suburb'] ) ? $location['suburb'] : '' );
+		$locality = '' !== $locality ? $locality : ( isset( $facts['locality'] ) ? $facts['locality'] : '' );
+		$phone    = $clean( isset( $location['phone'] ) ? $location['phone'] : '' );
+		$phone    = '' !== $phone ? $phone : ( isset( $facts['phone'] ) ? $facts['phone'] : '' );
+		$postcode = isset( $facts['postcode'] ) ? $facts['postcode'] : ( preg_match( '/\b(2\d{3})\b/', $street, $pm ) ? $pm[1] : '' );
+
+		$address = array(
+			'@type'           => 'PostalAddress',
+			'streetAddress'   => $street,
+			'addressLocality' => $locality,
+			'addressRegion'   => 'NSW',
+			'addressCountry'  => 'AU',
+		);
+		if ( '' !== $postcode ) {
+			$address['postalCode'] = $postcode;
+		}
+		$node = array(
+			'@type'              => 'Bakery',
+			'@id'                => rtrim( (string) $home, '/' ) . '/#location-' . preg_replace( '/[^a-z0-9-]/', '', strtolower( $clean( isset( $location['slug'] ) ? $location['slug'] : '' ) ) ),
+			'name'               => $name,
+			'url'                => (string) $url,
+			'image'              => (string) $image,
+			'servesCuisine'      => 'Lebanese',
+			'parentOrganization' => array( '@id' => (string) $org_id ),
+			'address'            => $address,
+			'hasMap'             => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode( trim( $name . ' ' . $street . ' ' . $locality . ' NSW ' . $postcode ) ),
+		);
+		if ( '' !== $phone ) {
+			$node['telephone'] = $phone;
+		}
+		$opening = self::opening_hours_spec( $stored_hours );
+		if ( ! $opening && ! empty( $facts['hours'] ) ) {
+			$opening = self::opening_hours_spec( $facts['hours'] );
+		}
+		if ( $opening ) {
+			$node['openingHoursSpecification'] = $opening;
+		}
+		return $node;
 	}
 
 	/**
@@ -228,33 +339,18 @@ class DoughBoss_SEO {
 				'publisher' => array( '@id' => $organization ),
 			),
 		);
+		// One schema.org Bakery per active shop. Stored location data wins; the
+		// published facts in shop_facts() fill only blank fields/hours.
+		$locations_url = home_url( '/locations/' );
 		foreach ( DoughBoss_Locations::all( true ) as $location ) {
-			$node = array(
-				'@type'              => array( 'Bakery', 'Restaurant' ),
-				'@id'                => trailingslashit( $home ) . '#location-' . sanitize_title( $location->slug ),
-				'name'               => $location->name,
-				'url'                => $home,
-				'telephone'          => $location->phone,
-				'image'              => $image,
-				'priceRange'         => '$',
-				'servesCuisine'      => array( 'Manoush', 'Mediterranean', 'Pizza' ),
-				'parentOrganization' => array( '@id' => $organization ),
-				'address'            => array(
-					'@type'           => 'PostalAddress',
-					'streetAddress'   => preg_replace( '/\s+/', ' ', (string) $location->address ),
-					'addressLocality' => $location->suburb,
-					'addressRegion'   => 'NSW',
-					'addressCountry'  => 'AU',
-				),
-				'hasMap'             => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode(
-					'Dough Boss ' . preg_replace( '/\s+/', ' ', (string) $location->address ) . ' ' . (string) $location->suburb . ' NSW'
-				),
+			$graph[] = self::location_node(
+				(array) $location,
+				DoughBoss_Locations::weekly_hours( (int) $location->id ),
+				$home,
+				$locations_url,
+				$image,
+				$organization
 			);
-			$opening = $this->opening_hours( (int) $location->id );
-			if ( $opening ) {
-				$node['openingHoursSpecification'] = $opening;
-			}
-			$graph[] = $node;
 		}
 		return array( '@context' => 'https://schema.org', '@graph' => $graph );
 	}
