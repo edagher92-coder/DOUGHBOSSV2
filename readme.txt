@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.47.0
+Stable tag: 2.48.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,17 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.48.0 =
+* New: itemised paid-order confirmation email ("placed" stage) with line totals, options, discount, GST included, pickup shop name/address/phone and tracking link. Settings > Real-time & Notifications > "Email customer an itemised confirmation when a paid order is placed" (default on). The older template confirmation no longer emails the customer a second time once it was sent; the shop inbox copy is unchanged.
+* Square partial refunds: the payment is re-read; when completed refunds add up to the amount paid the order is marked refunded, otherwise the orders inbox gets one notice per refund.
+* Apple Pay / Google Pay buttons check the checkout form before opening the wallet and show a visible message when the wallet is cancelled or fails.
+* Performance: the Square Web Payments SDK loads only on the order/checkout page (on demand elsewhere); the header shop status refreshes every 120 seconds and stops while the tab is hidden.
+* Order board keeps the tablet screen awake (Screen Wake Lock) where supported.
+* Checkout: opt-in "Remember my details on this device" (name, email, phone stored only in this browser).
+* Housekeeping: Square Loyalty done markers expire after 30 days instead of one permanent option row per order; the Apple Pay domain file moved to its own non-autoloaded option.
+* Local SEO: one schema.org Bakery per shop (name, address, phone, opening hours, Lebanese cuisine); the unverified price range was removed.
+* Distinct /order/ title and /menu/ heading, descriptive hero image alt text, catering pickup and notice line. Theme DoughBoss Final 1.7.0.
 
 = 2.47.0 =
 * New (off by default): Square-hosted checkout. Settings > Square > Checkout style = "Square-hosted checkout page" sends the same itemised, location-bound order to a Square Checkout API payment link and redirects the customer to Square (card, Apple Pay, Google Pay; no tipping, coupons, loyalty or shipping). The kitchen order is created only after the server re-reads the bound Square Order and its Payment and proves a COMPLETED payment for the exact amount, currency and location. Browser return, payment.updated/order.updated webhooks and a 15-minute sweep share one idempotent finalisation; abandoned links are deleted after 60 minutes and their voucher hold released. The embedded card form remains the default and is unchanged.
