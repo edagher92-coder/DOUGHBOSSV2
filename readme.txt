@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.49.0
+Stable tag: 2.50.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,13 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.50.0 =
+* Multi-account Square: each shop (Revesby, Bankstown, Roselands) can take online payments, hosted checkout, catering invoices, customers, loyalty and Club tiers through its OWN Square seller account. New owner-only page DoughBoss > Square accounts: "Connect Square account" per shop (Square OAuth code flow, signed single-use state, session=false in production), pick that account's location, Disconnect (revokes the authorization in Square). A shop that is not connected keeps using the existing single-account settings, so Revesby works unchanged with no setup.
+* Tokens are refreshed automatically (twice-daily check, refreshed once about 7 days old, plus on demand near expiry) and stored in a non-autoloaded option; define DOUGHBOSS_SQUARE_TOKEN_KEY to encrypt them at rest. The application secret is write-only and can come from DOUGHBOSS_SQUARE_TEST_APP_SECRET / DOUGHBOSS_SQUARE_LIVE_APP_SECRET.
+* Webhooks: the one existing application subscription now serves every shop; events are routed by merchant ID, events from sellers this site does not serve are acknowledged and ignored, and oauth.authorization.revoked disconnects the shop with an admin notice.
+* New: copy the Revesby Square menu (categories, modifier lists, items and variations) into another connected shop's Square account, with a dry-run preview first. Images, item options, per-location overrides and inventory are not copied; taxes map to the target account's matching tax.
+* No database schema change.
 
 = 2.49.0 =
 * Menu: inline SVG search icon with a clear button (the old glyph showed as a missing-character box); warm branded tile for items without a photo or with a photo that fails to load; Drinks shown as a compact two-column list.
