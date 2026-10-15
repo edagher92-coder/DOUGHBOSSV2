@@ -36,12 +36,16 @@ $source_files = array(
 	'themes/doughboss-final/page-order.php',
 	'themes/doughboss-final/page-franchising.php',
 	'themes/doughboss-final/page-wholesale.php',
+	'themes/doughboss-final/page-catering.php',
+	'themes/doughboss-final/page-locations.php',
 	'themes/doughboss-final/template-parts/partner-page.php',
 	'themes/doughboss-final/template-parts/locations.php',
 	'includes/class-doughboss-post-types.php',
 	'includes/class-doughboss-shortcodes.php',
 	'includes/class-doughboss-images.php',
 	'includes/class-doughboss-menu-options.php',
+	'includes/class-doughboss-store-hours.php',
+	'includes/class-doughboss-b2b.php',
 );
 $asset_files  = array(
 	'themes/doughboss-final/style.css',
@@ -49,7 +53,10 @@ $asset_files  = array(
 	'public/css/doughboss.css',
 	'public/css/doughboss-order-page.css',
 	'public/css/doughboss-manoush-hero.css',
+	'public/css/doughboss-catering.css',
+	'public/css/doughboss-b2b.css',
 	'public/js/doughboss.js',
+	'public/js/doughboss-catering.js',
 	'public/js/doughboss-shop-status.js',
 	'public/js/doughboss-manoush-hero.js',
 	'public/fonts/bebasneue-400.woff2',
@@ -146,6 +153,8 @@ try {
 		'paused.html' => array( 'template' => 'page-order.php', 'ordering_open' => false, 'title' => 'Paused order page visual preview' ),
 		'partners.html' => array( 'template' => 'page-franchising.php', 'ordering_open' => false, 'title' => 'Partnerships visual preview' ),
 		'wholesale.html' => array( 'template' => 'page-wholesale.php', 'ordering_open' => false, 'title' => 'Wholesale visual preview' ),
+		'catering.html' => array( 'template' => 'page-catering.php', 'ordering_open' => false, 'title' => 'Catering visual preview' ),
+		'locations.html' => array( 'template' => 'page-locations.php', 'ordering_open' => false, 'title' => 'Locations visual preview' ),
 	);
 	foreach ( $pages as $filename => $page ) {
 		$html = doughboss_preview_render_page( $page['template'], $page['ordering_open'], $page['title'] );

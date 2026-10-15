@@ -41,7 +41,7 @@
 
 	var menu = fixture.menu.map(function (item) {
 		var copy = Object.assign({}, item);
-		copy.image = asset(item.image);
+		copy.image = item.image ? asset(item.image) : '';
 		if (item.image_responsive) {
 			copy.image_responsive = Object.assign({}, item.image_responsive, {
 				original: asset(item.image_responsive.original),
@@ -55,6 +55,24 @@
 		}
 		return copy;
 	});
+
+	// Synthetic catering packages: sample names and prices only.
+	var cateringPackages = [
+		{ id: 701, name: 'Sample morning tea — 2 Dozen Minis', description: '', serves_min: 8, serves_max: 12, price: 40, per_head: 0, deposit_pct: 30, lead_days: 2, includes: 'Sample contents for visual review.', image: '' },
+		{ id: 702, name: 'Sample platter — 3 Dozen Minis', description: '', serves_min: 12, serves_max: 18, price: 60, per_head: 0, deposit_pct: 30, lead_days: 2, includes: 'Sample contents for visual review.', image: '' },
+		{ id: 703, name: 'Sample spread — 5 Dozen Minis', description: '', serves_min: 20, serves_max: 30, price: 100, per_head: 0, deposit_pct: 30, lead_days: 2, includes: 'Sample contents for visual review.', image: '' }
+	];
+	function cateringQuote(params) {
+		var subtotal = 0;
+		var capacity = 0;
+		String(params.get('packages') || '').split(',').forEach(function (part) {
+			var match = /^([0-9]+):([0-9]+)$/.exec(part);
+			var pkg = match && cateringPackages.filter(function (p) { return p.id === Number(match[1]); })[0];
+			if (pkg) { subtotal += pkg.price * Number(match[2]); capacity += pkg.serves_max * Number(match[2]); }
+		});
+		var deposit = Math.round(subtotal * 30) / 100;
+		return { subtotal: subtotal, delivery_fee: 0, total: subtotal, deposit_pct: 30, deposit: deposit, balance: Math.round((subtotal - deposit) * 100) / 100, lead_days: 2, currency: 'AUD', serves_max: capacity };
+	}
 
 	window.DoughBossShopData = { restUrl: apiRoot };
 	window.DoughBossData = {
@@ -77,7 +95,10 @@
 		if (method !== 'GET') {
 			return jsonResponse({ code: 'preview_read_only', message: 'Orders, payments and other submissions are disabled in this visual preview.' }, 405);
 		}
-		if (url.origin !== 'https://preview.invalid' || url.pathname.indexOf('/doughboss/v1/') !== 0 || url.search || url.hash) {
+		var quoteRead = url.pathname === '/doughboss/v1/catering/quote' && /^\?packages=[0-9:,%A-F]*&guest_count=[0-9]+&order_type=pickup$/i.test(url.search);
+		// The storefront scopes its menu read to the selected sample shop.
+		var scopedMenuRead = url.pathname === '/doughboss/v1/menu' && /^\?location_id=[0-9]+$/.test(url.search);
+		if (url.origin !== 'https://preview.invalid' || url.pathname.indexOf('/doughboss/v1/') !== 0 || (url.search && !quoteRead && !scopedMenuRead) || url.hash) {
 			return jsonResponse({ code: 'preview_external_blocked', message: 'External requests are disabled in this visual preview.' }, 403);
 		}
 		var path = url.pathname.slice('/doughboss/v1'.length);
@@ -85,6 +106,8 @@
 		if (path === '/locations') { return jsonResponse(locations(), 200); }
 		if (path === '/table/context') { return jsonResponse({ active: false }, 200); }
 		if (path === '/menu') { return jsonResponse(menu, 200); }
+		if (path === '/catering/packages') { return jsonResponse(cateringPackages, 200); }
+		if (quoteRead) { return jsonResponse(cateringQuote(url.searchParams), 200); }
 		return jsonResponse({ code: 'preview_route_blocked', message: 'This route is not available in the visual preview.' }, 404);
 	};
 

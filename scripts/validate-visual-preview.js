@@ -11,7 +11,7 @@ const output = path.resolve(process.argv[2] || '_site');
 const root = path.resolve(__dirname, '..');
 const digest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const manifest = JSON.parse(fs.readFileSync(path.join(output, 'manifest.json'), 'utf8'));
-const pages = ['index.html', 'order.html', 'paused.html', 'partners.html', 'wholesale.html'];
+const pages = ['index.html', 'order.html', 'paused.html', 'partners.html', 'wholesale.html', 'catering.html', 'locations.html'];
 const generated = [...pages, 'preview/menu-options.js'];
 for (const template of ['page-franchising.php', 'page-wholesale.php', 'template-parts/partner-page.php']) {
 	assert.ok(manifest.source_sha256['themes/doughboss-final/' + template], 'partner template provenance is required');

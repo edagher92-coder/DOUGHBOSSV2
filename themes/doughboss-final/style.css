@@ -186,9 +186,10 @@ button, input, select, textarea { font: inherit; }
 
 .dbf-locations-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .dbf-location-card { display: flex; flex-direction: column; padding: 30px; background: #fff; border: 1px solid var(--dbf-line); border-radius: 18px; }
-.dbf-location-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dbf-location-head { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.dbf-location-head h3 { line-height: 1; }
 /* Live badge, Sydney time; colour is never the only signal (the text says it). */
-.dbf-open-badge { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #efe9df; color: #4d4944; font-size: 12px; font-weight: 700; line-height: 1.25; text-align: right; }
+.dbf-open-badge { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; padding: 5px 11px; border-radius: 999px; background: #efe9df; color: #4d4944; font-size: 13px; font-weight: 700; line-height: 1.25; }
 .dbf-open-badge::before { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #8a847a; content: ''; }
 .dbf-open-badge.is-open { background: #e5f2e6; color: #1f5228; }
 .dbf-open-badge.is-open::before { background: #2f7a3d; }
@@ -199,7 +200,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-location-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; align-items: baseline; }
 .dbf-location-row dt { color: #6a635a; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .dbf-location-row dd { min-width: 0; margin: 0; color: #2b2723; }
-.dbf-location-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; }
+.dbf-location-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: auto; }
 .dbf-location-card a.dbf-location-action { display: inline-flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 10px 16px; border: 1px solid var(--dbf-ink); border-radius: 999px; color: var(--dbf-ink); font-weight: 700; text-decoration: none; }
 .dbf-location-card a.dbf-location-action--call { border-color: var(--dbf-ember); background: var(--dbf-ember); color: #fff; }
 .dbf-location-card a.dbf-location-action:hover, .dbf-location-card a.dbf-location-action:focus-visible { background: var(--dbf-ink); border-color: var(--dbf-ink); color: #fff; }
