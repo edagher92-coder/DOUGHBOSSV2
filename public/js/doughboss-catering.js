@@ -33,8 +33,22 @@
 		return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
 	}
 
+	// Catering is prepared at the catering shops only (Revesby) and is pickup
+	// only unless the server says otherwise. Both come from the shortcode.
+	var CATERING_LOCATION_IDS = (function () {
+		try {
+			var ids = JSON.parse(root.getAttribute('data-catering-locations') || 'null');
+			return Array.isArray(ids) && ids.length ? ids.map(cateringLocationId).filter(Boolean) : null;
+		} catch (error) { return null; }
+	}());
+	var DELIVERY_ALLOWED = root.getAttribute('data-catering-delivery') === '1';
+	var MAX_PACKAGE_QTY = 50;
+
 	var state = {
 		packages: [],
+		quantities: {},
+		lines: [],
+		cateringLocationIds: CATERING_LOCATION_IDS,
 		selectedId: 0,
 		guests: 0,
 		orderType: 'pickup',
@@ -131,9 +145,11 @@
 			return '<option value="' + location.id + '">' + esc(location.name) + '</option>';
 		}).join('');
 		select.value = state.locationId ? String(state.locationId) : '';
-		select.disabled = state.submitting || state.locationLocked || state.locationStatus !== 'ready' || !state.locations.length;
+		var cateringOnly = Array.isArray(state.cateringLocationIds) && state.cateringLocationIds.length > 0;
+		select.disabled = state.submitting || state.locationLocked || state.locationStatus !== 'ready' || !state.locations.length || (cateringOnly && state.locations.length === 1);
 		var location = selectedCateringLocation();
 		if (state.submitting) { note.textContent = 'Sending enquiry for ' + state.submittedLocationName + '. Shop selection is locked until the request finishes.'; }
+		else if (cateringOnly && location && state.locationStatus === 'ready') { note.textContent = 'Catering is prepared at ' + location.name + ' for pickup only. Availability will be confirmed by staff.'; }
 		else if (state.locationStatus === 'loading') { note.textContent = 'Checking shops...'; }
 		else if (state.locationStatus === 'error') { note.textContent = 'Shop information is unavailable. Retry before sending your enquiry.'; }
 		else if (!state.locations.length) { note.textContent = 'No shop is configured. Staff will confirm the location for this enquiry.'; }
@@ -146,6 +162,8 @@
 	function applyCateringLocation(id) {
 		state.requestedLocationId = cateringLocationId(id);
 		if (state.submitting || state.locationLocked) { return; }
+		// The sitewide header shop is for ordering; catering stays at its own shop.
+		if (Array.isArray(state.cateringLocationIds) && state.cateringLocationIds.length) { return; }
 		state.locationId = state.locations.some(function (location) { return location.id === state.requestedLocationId; }) ? state.requestedLocationId : 0;
 		var form = root.querySelector('.dbc-form');
 		if (form) { updateCateringLocation(form); }
@@ -162,10 +180,14 @@
 			if (!Array.isArray(list) || !list.every(function (location) {
 				return location && cateringLocationId(location.id) && typeof location.name === 'string' && location.name.trim();
 			})) { throw new Error('Invalid shop information.'); }
-			state.locations = list.map(function (location) { return { id: cateringLocationId(location.id), name: location.name }; });
-			state.locationLocked = !!(table && table.active && table.location && table.table);
+			var allowed = Array.isArray(state.cateringLocationIds) && state.cateringLocationIds.length ? state.cateringLocationIds : null;
+			var eligible = allowed ? list.filter(function (location) { return allowed.indexOf(cateringLocationId(location.id)) !== -1; }) : list;
+			state.locations = eligible.map(function (location) { return { id: cateringLocationId(location.id), name: location.name }; });
+			// A dine-in table elsewhere cannot move catering away from its shop.
+			state.locationLocked = !allowed && !!(table && table.active && table.location && table.table);
 			var desired = state.requestedLocationId;
-			if (state.locationLocked) { desired = cateringLocationId(table.location.id); }
+			if (allowed) { desired = state.locations.length ? state.locations[0].id : 0; }
+			else if (state.locationLocked) { desired = cateringLocationId(table.location.id); }
 			else if (desired === null) {
 				try { desired = cateringLocationId(window.localStorage.getItem('doughboss_location')); } catch (error) { desired = 0; }
 				// No preference uses the same first configured shop as the site header.
@@ -191,13 +213,25 @@
 		root.appendChild(renderBuilder());
 	}
 
+	// "Office Platter — 3 Dozen Minis" -> title + size badge, so the size,
+	// guest range and price read as separate facts instead of one run-on line.
+	function packageTitleParts(name) {
+		var parts = String(name || '').split(/\s+[—–-]\s+/);
+		return { title: parts[0] || String(name || ''), size: parts.length > 1 ? parts.slice(1).join(' – ') : '' };
+	}
+
+	function packageQuantity(id) {
+		var qty = state.quantities ? Number(state.quantities[id]) : 0;
+		return isFinite(qty) && qty > 0 ? Math.floor(qty) : 0;
+	}
+
 	function renderPackages() {
 		var wrap = el('<div class="dbc-packages"></div>');
 		var head = el(
 			'<div class="dbc-head">' +
 				'<p class="dbc-kicker">Catering</p>' +
-				'<h2 class="dbc-h2">Pick a package</h2>' +
-				'<p class="dbc-sub">Oven-baked, commission-free, deposit secures your date.</p>' +
+				'<h2 class="dbc-h2">Choose your packages</h2>' +
+				'<p class="dbc-sub">Combine as many packages as you need with the + and − buttons. Oven-baked fresh; a deposit secures your date.</p>' +
 			'</div>'
 		);
 		wrap.appendChild(head);
@@ -210,18 +244,30 @@
 
 		var grid = el('<div class="dbc-grid"></div>');
 		state.packages.forEach(function (p) {
-			var serves = p.serves_min && p.serves_max ? (p.serves_min + '–' + p.serves_max + ' guests')
-				: (p.serves_min ? p.serves_min + '+ guests' : '');
+			var serves = p.serves_min && p.serves_max ? ('Serves ' + p.serves_min + '–' + p.serves_max)
+				: (p.serves_min ? 'Serves ' + p.serves_min + '+' : '');
+			var parts = packageTitleParts(p.name);
+			var qty = packageQuantity(p.id);
+			var id = cateringLocationId(p.id);
 			var card = el(
-				'<button type="button" class="dbc-card' + (p.id === state.selectedId ? ' is-selected' : '') + '" data-pick="' + p.id + '" aria-pressed="' + (p.id === state.selectedId ? 'true' : 'false') + '">' +
+				'<article class="dbc-card' + (qty ? ' is-selected' : '') + '" data-package-card="' + id + '">' +
 					(p.image ? '<span class="dbc-card-img" style="background-image:url(\'' + esc(p.image) + '\')"></span>' : '') +
-					'<span class="dbc-card-body">' +
-						'<span class="dbc-card-name">' + esc(p.name) + '</span>' +
-						(serves ? '<span class="dbc-card-serves">' + esc(serves) + '</span>' : '') +
-						(p.description ? '<span class="dbc-card-desc">' + esc(p.description) + '</span>' : '') +
-						'<span class="dbc-card-price">' + money(p.price) + '</span>' +
-					'</span>' +
-				'</button>'
+					'<div class="dbc-card-body">' +
+						'<h3 class="dbc-card-name">' + esc(parts.title) + '</h3>' +
+						'<ul class="dbc-card-meta">' +
+							(parts.size ? '<li class="dbc-badge">' + esc(parts.size) + '</li>' : '') +
+							(serves ? '<li class="dbc-badge dbc-badge--muted">' + esc(serves) + '</li>' : '') +
+							'<li class="dbc-badge dbc-badge--price">' + money(p.price) + '</li>' +
+						'</ul>' +
+						(p.description ? '<p class="dbc-card-desc">' + esc(p.description) + '</p>' : '') +
+						(p.includes ? '<p class="dbc-card-includes">' + esc(p.includes) + '</p>' : '') +
+						'<div class="dbc-stepper" role="group" aria-label="' + esc('Quantity of ' + parts.title) + '">' +
+							'<button type="button" class="dbc-step" data-step="-1" data-package="' + id + '" aria-label="' + esc('Remove one ' + parts.title) + '"' + (qty ? '' : ' disabled') + '>−</button>' +
+							'<output class="dbc-qty" data-qty-for="' + id + '" aria-live="polite">' + qty + '</output>' +
+							'<button type="button" class="dbc-step" data-step="1" data-package="' + id + '" aria-label="' + esc('Add one ' + parts.title) + '"' + (qty >= MAX_PACKAGE_QTY ? ' disabled' : '') + '>+</button>' +
+						'</div>' +
+					'</div>' +
+				'</article>'
 			);
 			grid.appendChild(card);
 		});
@@ -242,10 +288,8 @@
 		var form = el('<form class="dbc-form" novalidate></form>');
 		form.innerHTML =
 			'<input class="dbc-hp" type="text" name="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
-			'<div class="dbc-selected" aria-live="polite">' +
-				(pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No package selected — a custom quote will be prepared.') +
-			'</div>' +
-			'<label class="dbc-field"><span>Preferred shop</span><select name="location_id" aria-describedby="dbc-location-note"></select></label>' +
+			'<div class="dbc-selected" aria-live="polite">' + selectionSummary(pkg) + '</div>' +
+			'<label class="dbc-field"><span>' + (DELIVERY_ALLOWED ? 'Catering shop' : 'Pickup from') + '</span><select name="location_id" aria-describedby="dbc-location-note"></select></label>' +
 			'<p id="dbc-location-note" class="dbc-location-note dbc-sub" role="status"></p>' +
 			'<button type="button" data-catering-locations-retry hidden>Retry shop information</button>' +
 			'<div class="dbc-row">' +
@@ -254,13 +298,15 @@
 				'<label class="dbc-field"><span>Event time</span><input type="time" name="event_time" /></label>' +
 			'</div>' +
 			(NOTICE_DAYS > 0 ? '<p class="dbc-sub">Please allow at least ' + NOTICE_DAYS + ' business day' + (NOTICE_DAYS === 1 ? '' : 's') + '’ notice (weekends don’t count). Pickup from Revesby. Need it sooner? Call us.</p>' : '') +
-			'<div class="dbc-row">' +
-				'<fieldset class="dbc-field dbc-ful"><span>Fulfilment</span>' +
-					'<label class="dbc-radio"><input type="radio" name="order_type" value="pickup" checked /> Pickup</label>' +
-					'<label class="dbc-radio"><input type="radio" name="order_type" value="delivery" /> Delivery</label>' +
-				'</fieldset>' +
-			'</div>' +
-			'<label class="dbc-field dbc-addr" hidden><span>Delivery address</span><textarea name="address" rows="2"></textarea></label>' +
+			(DELIVERY_ALLOWED
+				? '<div class="dbc-row">' +
+					'<fieldset class="dbc-field dbc-ful"><span>Fulfilment</span>' +
+						'<label class="dbc-radio"><input type="radio" name="order_type" value="pickup" checked /> Pickup</label>' +
+						'<label class="dbc-radio"><input type="radio" name="order_type" value="delivery" /> Delivery</label>' +
+					'</fieldset>' +
+				'</div>' +
+				'<label class="dbc-field dbc-addr" hidden><span>Delivery address</span><textarea name="address" rows="2"></textarea></label>'
+				: '') +
 			'<div class="dbc-row">' +
 				'<label class="dbc-field"><span>Your name</span><input type="text" name="customer_name" required /></label>' +
 				'<label class="dbc-field"><span>Email</span><input type="email" name="customer_email" required /></label>' +
@@ -292,16 +338,23 @@
 			return;
 		}
 		if (!q) {
-			box.innerHTML = '<span class="dbc-quote-note">Select a package and headcount to see your deposit.</span>';
+			box.innerHTML = '<span class="dbc-quote-note">Add packages with the + buttons to see your subtotal and deposit, or send the form for a custom quote.</span>';
 			return;
 		}
 		var deliveryNote = state.orderType === 'delivery'
 			? '<span class="dbc-quote-note">Delivery is quoted separately based on distance.</span>' : '';
 		var quoteMoney = function (value) { return esc(q.currency.trim().toUpperCase()) + ' ' + Number(value).toFixed(2); };
+		var capacityNote = q.serves_max > 0 && state.guests > q.serves_max
+			? '<span class="dbc-quote-note">Your selection serves up to ' + Number(q.serves_max) + ' guests. Add packages, or the team will adjust your quote.</span>' : '';
+		var subtotalLine = typeof q.subtotal === 'number' && q.subtotal !== q.total
+			? '<div class="dbc-quote-line"><span>Packages subtotal</span><strong>' + quoteMoney(q.subtotal) + '</strong></div>' : '';
 		box.innerHTML =
+			subtotalLine +
 			'<div class="dbc-quote-line"><span>Estimated total</span><strong>' + quoteMoney(q.total) + '</strong></div>' +
 			'<div class="dbc-quote-line dbc-quote-deposit"><span>Deposit to book (' + q.deposit_pct + '%)</span><strong>' + quoteMoney(q.deposit) + '</strong></div>' +
 			'<div class="dbc-quote-line"><span>Balance later</span><strong>' + quoteMoney(q.balance) + '</strong></div>' +
+			'<span class="dbc-quote-note">Indicative estimate from current package prices. Staff confirm the final quote before any payment.</span>' +
+			capacityNote +
 			deliveryNote;
 	}
 
@@ -317,12 +370,17 @@
 	function refreshQuote() {
 		// One generation covers package, headcount and fulfilment changes together.
 		var generation = ++state.quoteGeneration;
+		var lines = Array.isArray(state.lines) ? state.lines.filter(function (line) { return line && line.qty > 0; }) : [];
+		var hasSelection = lines.length > 0 || !!state.selectedId;
 		state.quote = null;
-		state.quoteStatus = state.selectedId ? 'loading' : 'idle';
+		state.quoteStatus = hasSelection ? 'loading' : 'idle';
 		var form = root.querySelector('.dbc-form');
 		if (form) { updateQuoteBox(form); }
-		if (!state.selectedId) { return; }
-		var path = '/catering/quote?package_id=' + state.selectedId +
+		if (!hasSelection) { return; }
+		// Only IDs and quantities are sent; the server prices every package.
+		var path = '/catering/quote?' + (lines.length
+			? 'packages=' + encodeURIComponent(lines.map(function (line) { return line.id + ':' + line.qty; }).join(','))
+			: 'package_id=' + state.selectedId) +
 			'&guest_count=' + (state.guests || 0) +
 			'&order_type=' + encodeURIComponent(state.orderType);
 		return get(path).then(function (q) {
@@ -341,19 +399,41 @@
 		});
 	}
 
-	function selectPackage(id) {
-		state.selectedId = id;
-		var pkg = selectedPackage();
-		if (!pkg) { state.selectedId = 0; }
-		// Update only selection chrome: keep contact, event and dietary inputs intact.
-		var summary = root.querySelector('.dbc-selected');
-		if (summary) {
-			summary.innerHTML = pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No package selected — a custom quote will be prepared.';
+	function selectionSummary(pkg) {
+		var lines = Array.isArray(state.lines) ? state.lines : [];
+		if (!lines.length) {
+			return pkg ? 'Selected: <strong>' + esc(pkg.name) + '</strong> · ' + money(pkg.price) : 'No packages selected yet — use + to add packages, or send the form for a custom quote.';
 		}
-		Array.prototype.forEach.call(root.querySelectorAll('[data-pick]'), function (card) {
-			var selected = Number(card.getAttribute('data-pick')) === state.selectedId;
-			card.classList.toggle('is-selected', selected);
-			card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+		return 'Selected: ' + lines.map(function (line) {
+			var match = state.packages.filter(function (p) { return Number(p.id) === line.id; })[0];
+			return '<strong>' + line.qty + ' × ' + esc(match ? match.name : 'Package') + '</strong>';
+		}).join(', ');
+	}
+
+	// Set one package's quantity (0–50) and refresh only the selection chrome
+	// and the server quote; contact, event and dietary inputs stay intact.
+	function setPackageQuantity(id, qty) {
+		id = Number(id);
+		if (!state.packages.some(function (p) { return Number(p.id) === id; })) { return; }
+		qty = Math.max(0, Math.min(MAX_PACKAGE_QTY, Math.floor(Number(qty) || 0)));
+		state.quantities = state.quantities || {};
+		if (qty) { state.quantities[id] = qty; } else { delete state.quantities[id]; }
+		state.lines = state.packages.filter(function (p) { return state.quantities[Number(p.id)] > 0; }).map(function (p) {
+			return { id: Number(p.id), qty: state.quantities[Number(p.id)] };
+		});
+		state.selectedId = state.lines.length === 1 ? state.lines[0].id : 0;
+		var summary = root.querySelector('.dbc-selected');
+		if (summary) { summary.innerHTML = selectionSummary(null); }
+		Array.prototype.forEach.call(root.querySelectorAll('[data-package-card]'), function (card) {
+			var cardId = Number(card.getAttribute('data-package-card'));
+			var current = state.quantities[cardId] || 0;
+			card.classList.toggle('is-selected', current > 0);
+			var output = card.querySelector('[data-qty-for]');
+			if (output) { output.textContent = String(current); }
+			var minus = card.querySelector('[data-step="-1"]');
+			var plus = card.querySelector('[data-step="1"]');
+			if (minus) { minus.disabled = current < 1; }
+			if (plus) { plus.disabled = current >= MAX_PACKAGE_QTY; }
 		});
 		refreshQuote();
 	}
@@ -370,12 +450,11 @@
 
 	root.addEventListener('click', function (e) {
 		if (e.target.closest('[data-catering-locations-retry]')) { loadCateringLocations(); return; }
-		var pick = e.target.closest('[data-pick]');
-		if (pick) {
-			selectPackage(parseInt(pick.getAttribute('data-pick'), 10) || 0);
-			var b = root.querySelector('.dbc-builder');
-			var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-			if (b && b.scrollIntoView) { b.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' }); }
+		var step = e.target.closest('[data-step]');
+		if (step && !step.disabled) {
+			var packageId = parseInt(step.getAttribute('data-package'), 10) || 0;
+			var delta = parseInt(step.getAttribute('data-step'), 10) || 0;
+			setPackageQuantity(packageId, packageQuantity(packageId) + delta);
 		}
 	});
 
@@ -445,6 +524,8 @@
 			customer_email: email,
 			customer_phone: (fd.get('customer_phone') || '').toString(),
 			package_id: state.selectedId,
+			// Combined selection: IDs and quantities only. Prices are server-side.
+			packages: Array.isArray(state.lines) ? state.lines.map(function (line) { return { id: line.id, qty: line.qty }; }) : [],
 			guest_count: parseInt(fd.get('guest_count'), 10) || 0,
 			order_type: state.orderType,
 			event_date: (fd.get('event_date') || '').toString(),

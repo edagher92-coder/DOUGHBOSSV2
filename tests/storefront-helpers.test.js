@@ -1206,27 +1206,47 @@ test('malformed current quotes fail closed and custom selection invalidates an i
 	assert.equal(h.requests.length, 2, 'custom selection does not send a quote request');
 });
 
-test('catering selection updates only summary and card states without replacing form inputs', () => {
-	const state = { selectedId: 1, guests: 22, orderType: 'delivery' };
+test('catering quantity changes update only summary and card steppers without replacing form inputs', () => {
+	const state = { packages: [{ id: 1, name: 'Synthetic A', price: 46 }, { id: 2, name: 'Synthetic B', price: 72 }], quantities: {}, lines: [], selectedId: 0, guests: 22, orderType: 'pickup' };
 	const summary = {};
-	const cards = [1, 2].map(id => ({ getAttribute: () => String(id), classList: { toggle: (key, value) => { cards[id - 1].selected = value; } }, setAttribute: (key, value) => { cards[id - 1][key] = value; } }));
+	const cards = [1, 2].map(id => {
+		const controls = { output: { textContent: '0' }, minus: { disabled: true }, plus: { disabled: false } };
+		return { id, controls, getAttribute: () => String(id), classList: { toggle: (key, value) => { cards[id - 1].selected = value; } },
+			querySelector: selector => ({ '[data-qty-for]': controls.output, '[data-step="-1"]': controls.minus, '[data-step="1"]': controls.plus })[selector] };
+	});
 	let refreshed = 0;
 	const root = {
 		querySelector: selector => { assert.equal(selector, '.dbc-selected'); return summary; },
-		querySelectorAll: selector => { assert.equal(selector, '[data-pick]'); return cards; }
+		querySelectorAll: selector => { assert.equal(selector, '[data-package-card]'); return cards; }
 	};
 	Object.defineProperty(root, 'innerHTML', { set: () => assert.fail('selection must not replace the form DOM') });
-	const select = extractFunction(catering, 'selectPackage', {
-		state, root, selectedPackage: () => ({ name: 'Synthetic package', price: 72 }), esc: value => value,
-		money: value => '$' + value, refreshQuote: () => { refreshed++; }
+	const selectionSummary = extractFunction(catering, 'selectionSummary', { state, esc: value => value, money: value => '$' + value });
+	const setQuantity = extractFunction(catering, 'setPackageQuantity', {
+		state, root, selectionSummary, MAX_PACKAGE_QTY: 50, refreshQuote: () => { refreshed++; }
 	});
-	select(2);
+	setQuantity(2, 2);
 	assert.equal(refreshed, 1);
-	assert.equal(state.selectedId, 2);
+	assert.equal(state.selectedId, 2, 'one package type keeps the legacy single package id');
+	assert.deepEqual(JSON.parse(JSON.stringify(state.lines)), [{ id: 2, qty: 2 }]);
+	assert.equal(cards[1].selected, true);
+	assert.equal(cards[1].controls.output.textContent, '2');
+	assert.equal(cards[1].controls.minus.disabled, false);
+	setQuantity(1, 1);
+	assert.equal(state.selectedId, 0, 'a combined selection has no single package id');
+	assert.deepEqual(JSON.parse(JSON.stringify(state.lines)), [{ id: 1, qty: 1 }, { id: 2, qty: 2 }]);
+	assert.match(summary.innerHTML, /1 × Synthetic A.*2 × Synthetic B/);
+	setQuantity(2, 99);
+	assert.equal(state.quantities[2], 50, 'quantities are capped');
+	assert.equal(cards[1].controls.plus.disabled, true);
+	setQuantity(9, 3);
+	assert.equal(state.quantities[9], undefined, 'unknown packages are ignored');
+	setQuantity(1, 0);
+	setQuantity(2, 0);
+	assert.deepEqual(JSON.parse(JSON.stringify(state.lines)), []);
+	assert.equal(state.selectedId, 0);
 	assert.equal(state.guests, 22);
-	assert.equal(state.orderType, 'delivery');
-	assert.equal(cards[0]['aria-pressed'], 'false');
-	assert.equal(cards[1]['aria-pressed'], 'true');
+	assert.equal(state.orderType, 'pickup');
+	assert.equal(refreshed, 5);
 });
 
 test('catering estimate states never render old totals while pending or unavailable', () => {

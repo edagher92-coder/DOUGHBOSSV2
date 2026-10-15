@@ -2593,3 +2593,213 @@ body.page-id-402 #primary-menu > li > a {
 	}
 }
 .db-shop-info .db-pickup-status { margin: 8px 0; padding: 10px 12px; border-left: 3px solid currentColor; border-radius: 4px; background: rgba(127, 127, 127, .08); font-size: 14px; line-height: 1.5; }
+
+/* ===== 2.49.0: menu front-end fixes ===== */
+
+/* Search: inline SVG icon (the U+2315 glyph rendered as a missing-glyph box)
+ * and a clear button that appears once there is a query. */
+.db-app .db-menu-search-icon {
+	position: absolute;
+	left: .85rem;
+	width: 18px;
+	height: 18px;
+	color: var(--db-muted, #5c5852);
+	pointer-events: none;
+}
+
+.db-app .db-menu-search {
+	padding-right: 2.9rem;
+}
+
+.db-app .db-menu-search::-webkit-search-cancel-button {
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.db-app .db-menu-search-clear {
+	position: absolute;
+	right: .2rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--db-ink, #111);
+	cursor: pointer;
+}
+
+.db-app .db-menu-search-clear[hidden] {
+	display: none;
+}
+
+.db-app .db-menu-search-clear:hover,
+.db-app .db-menu-search-clear:focus-visible {
+	background: rgba(17, 17, 17, .08);
+}
+
+.db-app .db-menu-search-clear:focus-visible {
+	outline: 3px solid #e2231a;
+	outline-offset: 1px;
+}
+
+/* Photos sit on a warm branded ground while loading, never a flat grey box. */
+.db-app .db-card-img {
+	background-color: #2a1d14;
+}
+
+.db-app .db-card-img--placeholder .db-card-placeholder-kicker {
+	color: rgba(255, 255, 255, .78);
+}
+
+/* Paused ordering: cards carry no per-card controls, so the foot is just the
+ * price. A single sticky call bar below replaces 43 disabled buttons. */
+.db-app.db-menu--phone-ordering .db-card-foot {
+	justify-content: flex-start;
+}
+
+.db-soldout-badge--inline {
+	position: static;
+	display: inline-flex;
+	margin-left: auto;
+}
+
+/* Drinks: compact two-column list without photo frames. */
+.db-app .db-grid.db-grid--compact {
+	grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+	gap: .6rem;
+}
+
+.db-app .db-card--compact {
+	flex-direction: row;
+	align-items: center;
+	border-radius: var(--db-r-md, 14px);
+}
+
+.db-app .db-card--compact .db-card-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: .15rem .9rem;
+	width: 100%;
+	padding: .8rem 1rem;
+}
+
+.db-app .db-card--compact .db-card-title {
+	grid-column: 1;
+	margin: 0;
+}
+
+.db-app .db-card--compact .db-card-desc {
+	grid-column: 1;
+	margin: 0;
+}
+
+.db-app .db-card--compact .db-dietary-badges,
+.db-app .db-card--compact .db-menu-customize,
+.db-app .db-card--compact .db-card-customize-note {
+	grid-column: 1 / -1;
+	margin: .2rem 0 0;
+}
+
+.db-app .db-card--compact .db-card-foot {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-end;
+	gap: .6rem;
+}
+
+/* One sticky "Call to order" bar while online ordering is paused. */
+.db-callbar {
+	position: fixed;
+	z-index: 90;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: .5rem 1.25rem;
+	padding: .7rem max(1rem, env(safe-area-inset-right)) calc(.7rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+	border-top: 3px solid #e2231a;
+	background: #151210;
+	color: #fff;
+	box-shadow: 0 -10px 28px rgba(0, 0, 0, .28);
+}
+
+.db-callbar[hidden] {
+	display: none;
+}
+
+.db-callbar-text {
+	margin: 0;
+	font-size: .95rem;
+	line-height: 1.35;
+	text-align: center;
+}
+
+.db-callbar-text span {
+	color: #d9d1c6;
+}
+
+.db-callbar-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: .5rem;
+	min-height: 48px;
+	padding: .65rem 1.3rem;
+	border-radius: 999px;
+	background: #e2231a;
+	color: #fff;
+	font-weight: 800;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.db-callbar-btn:hover,
+.db-callbar-btn:focus-visible {
+	background: #b71912;
+	color: #fff;
+}
+
+.db-callbar-btn:focus-visible {
+	outline: 3px solid #fff;
+	outline-offset: 2px;
+}
+
+.db-callbar-btn svg,
+.db-callbar-btn .db-callbar-icon {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+}
+
+body.db-has-callbar {
+	padding-bottom: 76px;
+}
+
+@media (max-width: 560px) {
+	.db-callbar {
+		gap: .4rem;
+	}
+
+	.db-callbar-text {
+		width: 100%;
+		font-size: .85rem;
+	}
+
+	.db-callbar-btn {
+		width: 100%;
+	}
+
+	body.db-has-callbar {
+		padding-bottom: 116px;
+	}
+}

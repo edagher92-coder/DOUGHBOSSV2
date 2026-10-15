@@ -153,6 +153,116 @@
 	color: var(--dbc-ember);
 }
 
+/* Package cards are no longer one big toggle button: each has a quantity
+ * stepper, so the card itself is static and only the stepper is interactive. */
+.db-catering article.dbc-card {
+	cursor: default;
+}
+
+.db-catering h3.dbc-card-name {
+	margin: 0;
+	line-height: 1.1;
+}
+
+/* Size, guest range and price as separate pills (they used to run together:
+ * "2 Dozen8–12 guests$56.00"). */
+.db-catering .dbc-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 0;
+	margin: 6px 0 2px;
+	list-style: none;
+}
+
+.db-catering .dbc-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 26px;
+	padding: 2px 10px;
+	border: 1px solid var(--dbc-line);
+	border-radius: var(--db-r-pill);
+	background: #faf9f6;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.db-catering .dbc-badge--muted {
+	color: #57534e;
+	font-weight: 600;
+}
+
+.db-catering .dbc-badge--price {
+	border-color: var(--dbc-ink);
+	background: var(--dbc-ink);
+	color: #fff;
+	font-size: 13px;
+	font-weight: 800;
+}
+
+.db-catering .dbc-card-includes {
+	margin: 4px 0 0;
+	color: #57534e;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.db-catering .dbc-stepper {
+	display: inline-flex;
+	align-self: flex-start;
+	align-items: center;
+	gap: 4px;
+	margin-top: auto;
+	padding-top: 12px;
+}
+
+.db-catering .dbc-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border: 1px solid var(--dbc-ink);
+	border-radius: 50%;
+	background: #fff;
+	color: var(--dbc-ink);
+	cursor: pointer;
+	font: inherit;
+	font-size: 22px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.db-catering .dbc-step[data-step="1"] {
+	background: var(--dbc-ink);
+	color: #fff;
+}
+
+.db-catering .dbc-step:focus-visible {
+	outline: 3px solid #e2231a;
+	outline-offset: 2px;
+}
+
+.db-catering .dbc-step:disabled {
+	border-color: var(--dbc-line);
+	background: #f3f1ec;
+	color: #9a958d;
+	cursor: not-allowed;
+}
+
+.db-catering .dbc-qty {
+	min-width: 2.2em;
+	font-size: 18px;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.db-catering .dbc-card-body {
+	flex: 1;
+}
+
 /* Builder / form */
 .db-catering .dbc-builder {
 	border-top: 1px solid var(--dbc-line);

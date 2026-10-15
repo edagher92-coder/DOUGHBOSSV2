@@ -33,6 +33,27 @@
 		return 'Pickup hours unconfirmed. Please check with the shop.';
 	}
 
+	// Header/nav controls rendered for one ordering state carry both variants
+	// (data-db-open-* / data-db-paused-*). Pages can be cached, so the live
+	// /config read decides: "Call to order" while paused, normal links when open.
+	function syncOrderingState(open) {
+		if (typeof document.querySelectorAll !== 'function') { return; }
+		var state = open ? 'open' : 'paused';
+		Array.prototype.forEach.call(document.querySelectorAll('[data-db-ordering-swap]'), function (link) {
+			var href = link.getAttribute('data-db-' + state + '-href');
+			var label = link.getAttribute('data-db-' + state + '-label');
+			if (href && link.getAttribute('href') !== href) { link.setAttribute('href', href); }
+			if (label && link.textContent !== label) { link.textContent = label; }
+		});
+		Array.prototype.forEach.call(document.querySelectorAll('[data-db-when-ordering]'), function (node) {
+			node.hidden = node.getAttribute('data-db-when-ordering') !== state;
+		});
+		if (document.body && document.body.classList) {
+			document.body.classList.toggle('dbf-ordering-open', open);
+			document.body.classList.toggle('dbf-ordering-paused', !open);
+		}
+	}
+
 	function locationById(locations, id) {
 		return locations.filter(function (location) { return Number(location.id) === Number(id); })[0] || null;
 	}
@@ -69,6 +90,7 @@
 				watch.location = locationById(snapshot.locations, watch.id);
 				watch.config = snapshot.config;
 			});
+			syncOrderingState(snapshot.config.ordering_open === true);
 			paint();
 			return snapshot;
 		}).then(function (result) { snapshotRequest = null; return result; }, function (error) {

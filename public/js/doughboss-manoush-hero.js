@@ -17,8 +17,13 @@
 				? control.getAttribute('data-db-resume-label')
 				: control.getAttribute('data-db-pause-label'));
 		if (label) {
-			control.textContent = label;
+			// The corner toggle keeps its pause/play icons; only its label span
+			// changes. Older markup without the span keeps the text button.
+			var labelNode = control.querySelector ? control.querySelector('[data-db-motion-label]') : null;
+			if (labelNode) { labelNode.textContent = label; }
+			else { control.textContent = label; }
 			control.setAttribute('aria-label', label);
+			if (control.hasAttribute && control.hasAttribute('title')) { control.setAttribute('title', label); }
 			control.setAttribute('aria-pressed', reduceMotion || hero._dbPhotoPaused ? 'true' : 'false');
 		}
 	}

@@ -156,6 +156,25 @@ class DoughBoss_Assets {
 				'restUrl' => untrailingslashit( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 			) );
 		}
+		// Wholesale / franchising enquiry form: tiny standalone script + styles,
+		// independent of the storefront bundle.
+		// The script reads its endpoint and nonce from the form's data attributes.
+		if ( $this->current_post_has( 'doughboss_b2b_form' ) || apply_filters( 'doughboss_load_b2b_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-b2b',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-b2b.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-b2b',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-b2b.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
 		if ( ! $load_storefront ) {
 			return;
 		}
@@ -333,6 +352,11 @@ class DoughBoss_Assets {
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
 				'googleReviewUrl' => DoughBoss_Settings::google_review_url(),
+				// Shown in the single "Call to order" bar while ordering is paused.
+				'orderPhone' => array(
+					'display' => DoughBoss_Settings::phone_display( DoughBoss_Settings::order_phone() ),
+					'tel'     => DoughBoss_Settings::phone_tel( DoughBoss_Settings::order_phone() ),
+				),
 				'payments' => array(
 					'enabled' => $payments_on,
 					// Public-safe browser identifier for the ACTIVE gateway:
@@ -390,6 +414,11 @@ class DoughBoss_Assets {
 					'apply'        => __( 'Apply', 'doughboss' ),
 					'voucherApplied'     => __( 'Voucher applied', 'doughboss' ),
 					'voucherPlaceholder' => __( 'Voucher code', 'doughboss' ),
+					'clearSearch'         => __( 'Clear search', 'doughboss' ),
+					'orderByPhone'        => __( 'Order by phone', 'doughboss' ),
+					'orderingPausedShort' => __( 'Online ordering is paused.', 'doughboss' ),
+					'callToOrderLead'     => __( 'Call us to order for pickup.', 'doughboss' ),
+					'callToOrder'         => __( 'Call to order', 'doughboss' ),
 				),
 			)
 		);
@@ -411,6 +440,7 @@ class DoughBoss_Assets {
 				true
 			);
 		}
+
 
 		// Voucher claim widget: its own small app + styles, loaded only when the
 		// claim shortcode is on the page (reuses DoughBossData from the main app).

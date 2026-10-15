@@ -144,6 +144,72 @@
 		return node;
 	}
 
+	// Inline stroke icon. el() creates HTML elements only, so SVG needs its own
+	// namespace. Decorative: hidden from assistive technology.
+	function svgIcon(className, paths) {
+		if (typeof document === 'undefined' || typeof document.createElementNS !== 'function') {
+			return el('span', { class: className, 'aria-hidden': 'true' });
+		}
+		var ns = 'http://www.w3.org/2000/svg';
+		var svg = document.createElementNS(ns, 'svg');
+		svg.setAttribute('class', className);
+		svg.setAttribute('viewBox', '0 0 24 24');
+		svg.setAttribute('width', '18');
+		svg.setAttribute('height', '18');
+		svg.setAttribute('aria-hidden', 'true');
+		svg.setAttribute('focusable', 'false');
+		svg.setAttribute('fill', 'none');
+		svg.setAttribute('stroke', 'currentColor');
+		svg.setAttribute('stroke-width', '2');
+		svg.setAttribute('stroke-linecap', 'round');
+		svg.setAttribute('stroke-linejoin', 'round');
+		(paths || []).forEach(function (d) {
+			var path = document.createElementNS(ns, 'path');
+			path.setAttribute('d', d);
+			svg.appendChild(path);
+		});
+		return svg;
+	}
+
+	// Drinks read best as a compact two-column list without photo frames.
+	function compactMenuCategory(category) {
+		return /^drinks?\b/i.test(String(category || '').trim());
+	}
+
+	// While online ordering is paused the menu shows ONE sticky "Call to order"
+	// bar instead of a disabled control on every card. The shortcode renders the
+	// bar server-side; the live /config read reveals or hides it so a cached
+	// page follows the real ordering state in either direction.
+	function phoneOrderBar() {
+		var phone = DATA.orderPhone || {};
+		var display = typeof phone.display === 'string' && phone.display ? phone.display : '(02) 9774 2286';
+		var tel = typeof phone.tel === 'string' && /^\+61[0-9]{9}$/.test(phone.tel) ? phone.tel : '+61297742286';
+		return el('aside', { class: 'db-callbar', 'data-doughboss-callbar': '', 'aria-label': I18N.orderByPhone || 'Order by phone' }, [
+			el('p', { class: 'db-callbar-text' }, [
+				el('strong', { text: I18N.orderingPausedShort || 'Online ordering is paused.' }),
+				' ',
+				el('span', { text: I18N.callToOrderLead || 'Call us to order for pickup.' })
+			]),
+			el('a', { class: 'db-callbar-btn', href: 'tel:' + tel }, [
+				svgIcon('db-callbar-icon', ['M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z']),
+				el('span', { text: (I18N.callToOrder || 'Call to order') + ' ' + display })
+			])
+		]);
+	}
+
+	function syncPhoneOrderBar(root, paused) {
+		if (typeof document === 'undefined' || typeof document.querySelector !== 'function') { return; }
+		var bar = document.querySelector('[data-doughboss-callbar]');
+		if (!bar && paused && root && root.parentNode) {
+			bar = phoneOrderBar();
+			root.parentNode.insertBefore(bar, root.nextSibling);
+		}
+		if (bar) { bar.hidden = !paused; }
+		if (document.body && document.body.classList) {
+			document.body.classList.toggle('db-has-callbar', !!(bar && paused));
+		}
+	}
+
 	// Non-blocking, screen-reader-announced toast (replaces alert()). Pass ok=true
 	// for the success variant (green check, polite announcement); default is the
 	// error variant (assertive alert). Springs in via the .db-toast animation.
@@ -502,7 +568,7 @@
 			(items || []).forEach(function (item) { indexed[item.id] = item; });
 			cards.forEach(function (entry) {
 				var item = indexed[entry.item.id] || Object.assign({}, entry.item, { available: false });
-				var card = menuCard(item, orderingOpen && id > 0, id);
+				var card = menuCard(item, orderingOpen && id > 0, id, !orderingOpen);
 				card.setAttribute('data-search-text', entry.card.getAttribute('data-search-text') || '');
 				card.hidden = entry.card.hidden;
 				entry.card.parentNode.replaceChild(card, entry.card);
@@ -706,8 +772,12 @@
 		}).then(function (results) {
 			var items = results[0];
 			var orderingOpen = !!results[1].ordering_open && results[2] > 0;
+			// Globally paused: no per-card controls, one sticky call bar instead.
+			var phoneOnly = !results[1].ordering_open;
 			root.innerHTML = '';
 			root.setAttribute('data-ordering-open', orderingOpen ? 'true' : 'false');
+			root.classList.toggle('db-menu--phone-ordering', phoneOnly);
+			syncPhoneOrderBar(root, phoneOnly);
 			var tableContext = activeTableContext();
 			if (tableContext) { root.appendChild(tableContextBanner(tableContext)); }
 			if (!items.length) {
@@ -747,9 +817,23 @@
 				autocomplete: 'off',
 				spellcheck: false
 			});
-			tools.appendChild(el('label', { class: 'db-menu-search-wrap' }, [
-				el('span', { class: 'db-menu-search-icon', 'aria-hidden': 'true', text: '⌕' }),
-				search
+			// Inline SVG: the old U+2315 glyph rendered as a missing-glyph box on
+			// several platforms. The clear button appears once there is a query.
+			var clearSearch = el('button', {
+				class: 'db-menu-search-clear',
+				type: 'button',
+				hidden: true,
+				'aria-label': I18N.clearSearch || 'Clear search'
+			}, [svgIcon('db-menu-search-clear-icon', ['M6 6l12 12', 'M18 6L6 18'])]);
+			clearSearch.addEventListener('click', function () {
+				search.value = '';
+				search.dispatchEvent(new Event('input'));
+				search.focus();
+			});
+			tools.appendChild(el('div', { class: 'db-menu-search-wrap' }, [
+				svgIcon('db-menu-search-icon', ['M10.5 3.5a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M20.5 20.5l-5-5']),
+				search,
+				clearSearch
 			]));
 			tools.appendChild(searchStatus);
 
@@ -804,9 +888,9 @@
 			var menuCards = [];
 			categories.forEach(function (category) {
 				var heading = el('h2', { class: 'db-category', id: catId(category), text: category });
-				var grid = el('div', { class: 'db-grid', 'aria-labelledby': catId(category) });
+				var grid = el('div', { class: compactMenuCategory(category) ? 'db-grid db-grid--compact' : 'db-grid', 'aria-labelledby': catId(category) });
 				groups[category].forEach(function (item) {
-					var card = menuCard(item, orderingOpen, results[2]);
+					var card = menuCard(item, orderingOpen, results[2], phoneOnly);
 					menuCards.push({ item: item, card: card });
 					card.setAttribute('data-search-text', String(item.name || '') + ' ' + String(item.description || '') + ' ' + category);
 					grid.appendChild(card);
@@ -860,6 +944,7 @@
 			search.addEventListener('input', function () {
 				var query = search.value.trim().toLowerCase();
 				var visible = 0;
+				clearSearch.hidden = !search.value;
 				sections.forEach(function (section) {
 					var sectionVisible = 0;
 					section.grid.querySelectorAll('.db-card').forEach(function (card) {
@@ -1124,8 +1209,9 @@
 		return media;
 	}
 
-	function menuCard(item, orderingOpen, locationId) {
+	function menuCard(item, orderingOpen, locationId, phoneOnly) {
 		var soldOut = item.available === false;
+		var compact = compactMenuCategory(item.category);
 		var options = Array.isArray(item.options) ? item.options : [];
 		var selections = {};
 		var priceEl = el('span', { class: 'db-price', text: money(item.price) });
@@ -1233,7 +1319,7 @@
 		}
 
 		function optionControls() {
-			if (!options.length) { return null; }
+			if (!options.length || phoneOnly) { return null; }
 			if (!orderingOpen) {
 				return el('p', {
 					class: 'db-card-customize-note',
@@ -1302,18 +1388,32 @@
 
 		var categoryLabel = String(item.category || 'Dough Boss');
 		var categoryKey = categoryLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'menu';
-		var media = item.image
-			? menuPhoto(item)
-			: el('div', { class: 'db-card-img db-card-img--placeholder', 'data-category': categoryKey }, [
-				el('span', { class: 'db-card-placeholder-kicker', text: 'Freshly made' }),
+		function placeholderMedia() {
+			return el('div', { class: 'db-card-img db-card-img--placeholder', 'data-category': categoryKey }, [
+				el('span', { class: 'db-card-placeholder-kicker', text: 'Dough Boss · Oven-baked' }),
 				el('span', { class: 'db-card-placeholder-category', text: categoryLabel })
 			]);
-		if (soldOut) {
+		}
+		var media = compact ? null : (item.image ? menuPhoto(item) : placeholderMedia());
+		// A photo that fails to load becomes the warm branded tile, never a grey box.
+		var photo = media && media.querySelector ? media.querySelector('img') : null;
+		if (photo && photo.addEventListener) {
+			photo.addEventListener('error', function () {
+				var replacement = placeholderMedia();
+				if (soldOut) { replacement.appendChild(el('span', { class: 'db-soldout-badge', text: I18N.soldOut || 'Sold out' })); }
+				if (media.parentNode) { media.parentNode.replaceChild(replacement, media); }
+				media = replacement;
+			});
+		}
+		if (soldOut && media) {
 			media.appendChild(el('span', { class: 'db-soldout-badge', text: I18N.soldOut || 'Sold out' }));
 		}
 
 		var action;
-		if (soldOut) {
+		if (phoneOnly) {
+			// Paused: the single sticky call bar replaces every per-card control.
+			action = soldOut && !media ? el('span', { class: 'db-soldout-badge db-soldout-badge--inline', text: I18N.soldOut || 'Sold out' }) : null;
+		} else if (soldOut) {
 			action = el('button', { class: 'db-btn', type: 'button', text: I18N.soldOut || 'Sold out', disabled: true });
 		} else if (!orderingOpen) {
 			action = el('button', {
@@ -1338,7 +1438,8 @@
 		});
 		var badgeWrap = badges.length ? el('div', { class: 'db-dietary-badges', 'aria-label': 'Dietary information' }, badges) : null;
 		refreshPrice();
-		return el('div', { class: soldOut ? 'db-card db-card--soldout' : 'db-card' }, [
+		var cardClass = 'db-card' + (soldOut ? ' db-card--soldout' : '') + (compact ? ' db-card--compact' : '');
+		return el('div', { class: cardClass }, [
 			media,
 			el('div', { class: 'db-card-body' }, [
 				el('h3', { class: 'db-card-title', text: item.name }),

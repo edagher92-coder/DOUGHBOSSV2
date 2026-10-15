@@ -132,8 +132,7 @@
 	gap: .75rem;
 }
 
-.db-mh-action,
-.db-mh-replay {
+.db-mh-action {
 	align-items: center;
 	border: 1px solid rgba(255, 255, 255, .76);
 	border-radius: 999px;
@@ -158,34 +157,72 @@
 	color: #fff;
 }
 
-.db-mh-action--secondary,
-.db-mh-replay {
+.db-mh-action--secondary {
 	background: rgba(9, 9, 8, .28);
 	color: #fff;
 }
 
-.db-mh-replay {
-	font-size: .75rem;
-	min-height: 44px;
-	opacity: .8;
-	padding-inline: 1rem;
-}
-
 .db-mh-action:hover,
-.db-mh-action:focus-visible,
-.db-mh-replay:hover,
-.db-mh-replay:focus-visible {
+.db-mh-action:focus-visible {
 	box-shadow: 0 10px 24px rgba(0, 0, 0, .28);
 	outline: 2px solid #fff;
 	outline-offset: 3px;
 	transform: translateY(-2px);
 }
 
+/* Photo-motion control: a small icon toggle in the hero's top-right corner,
+ * out of the call-to-action row. aria-pressed swaps pause/play icons; the
+ * label stays available to assistive technology and as a tooltip. */
+.db-mh-replay {
+	align-items: center;
+	background: rgba(9, 9, 8, .55);
+	border: 1px solid rgba(255, 255, 255, .42);
+	border-radius: 999px;
+	box-sizing: border-box;
+	color: #fff;
+	cursor: pointer;
+	display: inline-flex;
+	font: inherit;
+	height: 44px;
+	justify-content: center;
+	padding: 0;
+	position: absolute;
+	right: clamp(.75rem, 2vw, 1.25rem);
+	top: clamp(.75rem, 2vw, 1.25rem);
+	transition: background-color .2s ease, border-color .2s ease;
+	width: 44px;
+	z-index: 2;
+}
+
+.db-mh-replay:hover,
+.db-mh-replay:focus-visible {
+	background: rgba(9, 9, 8, .82);
+	border-color: #fff;
+	outline: 2px solid #fff;
+	outline-offset: 3px;
+}
+
+.db-mh-motion-icon { display: block; }
+.db-mh-motion-icon--play,
+.db-mh-replay[aria-pressed="true"] .db-mh-motion-icon--pause { display: none; }
+.db-mh-replay[aria-pressed="true"] .db-mh-motion-icon--play { display: block; }
+
+.db-mh-motion-label {
+	border: 0;
+	clip: rect(0, 0, 0, 0);
+	height: 1px;
+	margin: -1px;
+	overflow: hidden;
+	padding: 0;
+	position: absolute;
+	white-space: nowrap;
+	width: 1px;
+}
+
 .db-mh-replay:disabled {
 	cursor: default;
-	box-shadow: none;
+	opacity: .55;
 	outline: none;
-	transform: none;
 }
 
 .db-mh-motion-note { display: none; }
@@ -196,21 +233,30 @@
 	display: grid;
 	gap: .8rem 1.5rem;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	margin-top: clamp(2.5rem, 7vw, 6.2rem);
+	list-style: none;
+	margin: clamp(2.5rem, 7vw, 6.2rem) 0 0;
 	max-width: 660px;
-	padding-top: 1rem;
+	padding: 1rem 0 0;
 }
 
-.db-mh-proof span {
+.db-mh-proof li {
 	font-size: .76rem;
 	line-height: 1.35;
+	margin: 0;
 }
 
-.db-mh-proof strong {
+/* Value and label are separate blocks with a real space between them, so
+ * copied or read text never runs together ("Since 2009 In the industry"). */
+.db-mh-proof-value {
 	display: block;
 	font-size: .78rem;
 	letter-spacing: .11em;
 	text-transform: uppercase;
+}
+
+.db-mh-proof-label {
+	color: rgba(255, 255, 255, .78);
+	display: block;
 }
 
 .db-manoush-hero.is-photo-paused .db-mh-backdrop {
@@ -252,7 +298,6 @@
 
 	.db-mh-actions { gap: .6rem; }
 	.db-mh-action { min-height: 48px; }
-	.db-mh-replay { flex-basis: auto; }
 
 	.db-mh-proof {
 		gap: .55rem;
@@ -260,14 +305,13 @@
 		margin-top: 1.5rem;
 	}
 
-	.db-mh-proof span { font-size: .65rem; }
-	.db-mh-proof strong { font-size: .67rem; }
+	.db-mh-proof li { font-size: .65rem; }
+	.db-mh-proof-value { font-size: .67rem; }
 }
 
 @media (max-width: 390px) {
 	.db-manoush-hero { border-radius: 18px; }
 	.db-mh-action--secondary { display: none; }
-	.db-mh-replay { margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -282,6 +326,10 @@
 
 	.db-mh-action,
 	.db-mh-replay { transition: none; }
+
+	/* The photo is static under reduced motion, so the toggle has nothing to
+	 * control; the JS still reports "Photo motion off" if it is ever shown. */
+	.db-mh-replay { display: none; }
 
 	.db-manoush-hero.is-photo-ready .db-mh-backdrop,
 	.db-mh-steam span { animation: none; }
