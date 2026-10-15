@@ -236,6 +236,8 @@ class DoughBoss_Assets {
 		$ordinary_checkout_allowed = 'legacy' === ( isset( $staff_approval_policy['mode'] ) ? (string) $staff_approval_policy['mode'] : '' );
 		$payments_on = $ordinary_checkout_allowed && DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
 		$gateway     = DoughBoss_Settings::payment_gateway();
+		// Square-hosted checkout redirects to Square's page: no SDK, no card fields.
+		$square_hosted = 'square' === $gateway && DoughBoss_Square_Hosted::enabled();
 		$square_binding = null;
 		if ( 'square' === $gateway ) {
 			$single_location_id = DoughBoss_Locations::single_location_id();
@@ -258,7 +260,7 @@ class DoughBoss_Assets {
 				// script origin is derived from the allowlisted API host.
 				wp_enqueue_script( 'mpgs-checkout', DoughBoss_MPGS::checkout_script_url(), array(), null, true );
 				$deps[] = 'mpgs-checkout';
-			} elseif ( 'square' === $gateway ) {
+			} elseif ( 'square' === $gateway && ! $square_hosted ) {
 				// Square requires its PCI-scoped Web Payments SDK to be loaded
 				// directly from Square's own CDN. Never bundle, proxy or self-host
 				// this file; the sandbox and production bundles differ.
@@ -304,12 +306,14 @@ class DoughBoss_Assets {
 				'doughboss-square',
 				'DoughBossSquareConfig',
 				array(
+					// Public by design. In hosted mode doughboss-square.js keeps
+					// ordinary fields dormant (PAY.squareHosted) and no SDK is loaded.
 					'applicationId' => $payments_on ? DoughBoss_Square::publishable_key() : '',
 					'locationId'    => $payments_on ? (string) $square_binding['square_location_id'] : '',
 					'sdkUrl'        => DoughBoss_Square::sdk_url(),
 					'liveMode'      => DoughBoss_Settings::square_live_mode(),
 					'currency'      => strtoupper( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ),
-					'wallets'       => $payments_on && (bool) DoughBoss_Settings::get( 'square_wallets_enabled', 0 ),
+					'wallets'       => $payments_on && ! $square_hosted && (bool) DoughBoss_Settings::get( 'square_wallets_enabled', 0 ),
 				)
 			);
 		}
@@ -330,7 +334,9 @@ class DoughBoss_Assets {
 					// Which gateway the storefront JS should drive (Stripe.js
 					// Elements vs Tyro Connect's hosted pay form).
 					'gateway' => $gateway,
-					'hostedCheckout' => 'stripe' === $gateway,
+					'hostedCheckout' => 'stripe' === $gateway || $square_hosted,
+					// Square-hosted checkout (Checkout API payment link) instead of SDK fields.
+					'squareHosted'   => $square_hosted,
 					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ) || ( 'square' === $gateway && DoughBoss_Settings::square_live_mode() ),
 				),
 				'i18n'     => array(

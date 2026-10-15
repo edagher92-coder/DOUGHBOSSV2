@@ -538,6 +538,9 @@ class DoughBoss_Admin {
 		if ( isset( $input['square_wallets_present'] ) ) {
 			$clean['square_wallets_enabled'] = empty( $input['square_wallets_enabled'] ) ? 0 : 1;
 		}
+		if ( isset( $input['square_checkout_style_present'] ) ) {
+			$clean['square_checkout_style'] = isset( $input['square_checkout_style'] ) && 'hosted' === $input['square_checkout_style'] ? 'hosted' : 'embedded';
+		}
 		if ( isset( $input['square_apple_pay_domain_file'] ) ) {
 			$apple_file = preg_replace( '/[^A-Za-z0-9+\/=\s]/', '', (string) $input['square_apple_pay_domain_file'] );
 			$clean['square_apple_pay_domain_file'] = substr( trim( (string) $apple_file ), 0, 20000 );
@@ -3915,6 +3918,16 @@ JS;
 							<th><?php esc_html_e( 'Square Loyalty', 'doughboss' ); ?></th>
 							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual_present]" value="1" /><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual]" value="1" <?php checked( ! isset( $settings['square_loyalty_accrual'] ) || ! empty( $settings['square_loyalty_accrual'] ), true ); ?> /> <?php esc_html_e( 'Award Square Loyalty points on paid web orders', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Matches the customer by phone to an existing Square Loyalty account and applies the points rules set in Square Dashboard. Runs in the background; never enrols anyone. No effect until a Square Loyalty program is active.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Checkout style', 'doughboss' ); ?></th>
+							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_checkout_style_present]" value="1" />
+								<?php $db_square_style = isset( $settings['square_checkout_style'] ) && 'hosted' === $settings['square_checkout_style'] ? 'hosted' : 'embedded'; ?>
+								<fieldset>
+									<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[square_checkout_style]" value="embedded" <?php checked( $db_square_style, 'embedded' ); ?> /> <?php esc_html_e( 'Embedded card form on this site (Square Web Payments SDK)', 'doughboss' ); ?></label><br />
+									<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[square_checkout_style]" value="hosted" <?php checked( $db_square_style, 'hosted' ); ?> /> <?php esc_html_e( 'Square-hosted checkout page (customer is redirected to Square, then back here)', 'doughboss' ); ?></label>
+								</fieldset>
+								<p class="description"><?php esc_html_e( 'Hosted checkout sends the same itemised order to Square and creates the kitchen order only after the server re-reads a completed Square payment. Keep Embedded until a sandbox hosted test order passes. Needs the webhook events payment.updated and order.updated.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><?php esc_html_e( 'Apple Pay / Google Pay', 'doughboss' ); ?></th>

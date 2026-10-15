@@ -2055,6 +2055,12 @@ class DoughBoss_Square {
 		if ( ! $attempt ) {
 			return new WP_Error( 'doughboss_pay_attempt', __( 'The payment attempt could not be reconciled.', 'doughboss' ), array( 'status' => 409 ) );
 		}
+		if ( class_exists( 'DoughBoss_Square_Hosted' ) && DoughBoss_Square_Hosted::is_hosted_attempt( $attempt ) ) {
+			// Square-hosted checkout payments carry no DoughBoss reference_id and
+			// are proven through their bound Order by DoughBoss_Square_Hosted.
+			// Never let this embedded path quarantine them as a mismatch.
+			return new WP_Error( 'doughboss_square_hosted_attempt', __( 'This Square checkout payment is confirmed through its secure return. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
 		$attempt_metadata = self::attempt_metadata( $attempt );
 		$is_v2            = 'square-v2' === ( isset( $attempt_metadata['protocol_version'] ) ? (string) $attempt_metadata['protocol_version'] : '' );
 		if ( $is_v2 && 'mismatch' === $attempt['status'] ) {
@@ -2569,6 +2575,53 @@ class DoughBoss_Square {
 	 */
 	public static function webhook_signature_header() {
 		return 'x_square_hmacsha256_signature';
+	}
+
+	/**
+	 * Re-validated shop binding for a durable attempt (Square-hosted checkout).
+	 *
+	 * @param array $attempt Durable payment attempt row.
+	 * @return array|WP_Error
+	 */
+	public static function attempt_binding( array $attempt ) {
+		return self::attempt_shop_binding( $attempt );
+	}
+
+	/**
+	 * The exact itemised Order projection retained for an attempt. Loads only
+	 * the hash-verified immutable snapshot; never reprices from the menu.
+	 *
+	 * @param array $attempt Durable payment attempt row.
+	 * @param array $binding Validated shop binding.
+	 * @return array|WP_Error
+	 */
+	public static function attempt_projection( array $attempt, array $binding ) {
+		return self::order_projection( $attempt, $binding );
+	}
+
+	/**
+	 * Narrow transport for the Square-hosted checkout path only.
+	 *
+	 * Exactly four operations are reachable, all through an already validated
+	 * attempt/shop binding: create a payment link, delete one, read one Order
+	 * and read one Payment. commerce_request() is deliberately not widened.
+	 *
+	 * @param string $method  HTTP method.
+	 * @param string $path    API path.
+	 * @param array  $body    JSON body (create only).
+	 * @param array  $binding Validated mapped shop binding.
+	 * @return array|WP_Error
+	 */
+	public static function online_checkout_request( $method, $path, array $body, array $binding ) {
+		$method  = strtoupper( (string) $method );
+		$path    = (string) $path;
+		$allowed = ( 'POST' === $method && '/v2/online-checkout/payment-links' === $path )
+			|| ( 'DELETE' === $method && 1 === preg_match( '#^/v2/online-checkout/payment-links/[A-Za-z0-9_-]{4,192}\z#', $path ) )
+			|| ( 'GET' === $method && 1 === preg_match( '#^/v2/(?:orders|payments)/[A-Za-z0-9_-]{8,192}\z#', $path ) );
+		if ( ! $allowed || ( 'POST' !== $method && ! empty( $body ) ) ) {
+			return new WP_Error( 'doughboss_pay_config', __( 'That Square operation is not available.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		return self::request( $method, $path, $body, $binding );
 	}
 
 	/**

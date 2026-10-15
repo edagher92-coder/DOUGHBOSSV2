@@ -133,6 +133,7 @@ remove_role( 'doughboss_staff' );
 // without a prior deactivation event).
 wp_clear_scheduled_hook( 'doughboss_pospal_outbox_dispatch' );
 wp_clear_scheduled_hook( 'doughboss_pospal_outbox_reconcile' );
+wp_clear_scheduled_hook( 'doughboss_square_hosted_sweep' );
 
 // Clean up checkout idempotency transients.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery

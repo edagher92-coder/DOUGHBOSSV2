@@ -49,6 +49,11 @@
 	// Mastercard Hosted Checkout redirects card entry to the gateway page. No
 	// PAN/CVV fields are ever rendered or handled by DoughBoss.
 	var mpgsHosted = !!(PAY.enabled && GATEWAY === 'mpgs' && window.Checkout && typeof window.Checkout.configure === 'function');
+	// Square-hosted checkout (owner setting): redirect to Square's own checkout
+	// page for a server-built payment link. No card fields or SDK load here; the
+	// order is created only after the server re-reads the Square payment.
+	var squareHosted = !!(PAY.enabled && GATEWAY === 'square' && PAY.squareHosted === true);
+	var SQUARE_HOSTED_PENDING_KEY = 'doughbossSquareHostedPending';
 
 
 	/* ------------------------------------------------------------------ */
@@ -57,6 +62,56 @@
 
 	function money(amount) {
 		return DATA.currency + Number(amount || 0).toFixed(2);
+	}
+
+	/* Square-hosted checkout helpers (self-contained; unit tested). */
+
+	// Only Square's own payment-link hosts for the active mode may be opened.
+	function squareHostedCheckoutUrlValid(url, liveMode) {
+		if (typeof url !== 'string' || url.length > 512 || /[\s"'<>\\]/.test(url)) { return false; }
+		var match = /^https:\/\/([a-z0-9.-]+)\/[^#]*$/i.exec(url);
+		if (!match) { return false; }
+		var host = match[1].toLowerCase();
+		if (liveMode) { return host === 'square.link' || host === 'checkout.square.site'; }
+		return host === 'sandbox.square.link' || host === 'sandbox.checkout.square.site' || /^[a-z0-9-]+(\.[a-z0-9-]+)*\.squareupsandbox\.com$/.test(host);
+	}
+
+	// The checkout reference Square's redirect carries back to this page.
+	function squareHostedReturnKey(search) {
+		// Square may append its own parameters (e.g. orderId) after ours.
+		var match = /(?:^\?|&|^)doughboss_square_return=([a-f0-9]{64})(?![a-f0-9])/.exec(String(search || ''));
+		return match ? match[1] : '';
+	}
+
+	// A saved hosted checkout may resume only within its 45-minute lease.
+	function squareHostedPendingFresh(pending, now) {
+		var age = pending && typeof pending === 'object' ? now - Number(pending.savedAt || 0) : -1;
+		return !!(pending && typeof pending === 'object'
+			&& /^[a-f0-9]{64}$/.test(String(pending.checkoutReference || ''))
+			&& pending.payload && typeof pending.payload === 'object'
+			&& /^[A-Za-z0-9._:-]{8,128}$/.test(String(pending.payload.payment_attempt_key || ''))
+			&& typeof pending.checkoutAttemptId === 'string' && pending.checkoutAttemptId.length >= 16
+			&& age >= 0 && age < 45 * 60 * 1000);
+	}
+
+	// Bounded confirmation: retries only "not yet confirmed" answers, never
+	// anything that could start a payment. Resolves with the order receipt.
+	function confirmSquareHosted(send, wait, maxAttempts) {
+		var delays = [0, 2000, 3000, 5000, 8000];
+		var limit = Math.max(1, Math.min(delays.length, Number(maxAttempts) || 1));
+		var attempt = 0;
+		var retryCodes = ['doughboss_pay_finalize_pending', 'doughboss_pay_order_unavailable', 'doughboss_pay_unavailable', 'doughboss_square_hosted_pending', 'doughboss_square_hosted_unpaid'];
+		function next() {
+			return wait(delays[attempt]).then(function () { return send(); }).catch(function (err) {
+				attempt += 1;
+				var data = err && err.data && typeof err.data === 'object' ? err.data : {};
+				var retryable = data.hosted_state === 'pending' || data.hosted_state === 'unpaid'
+					|| (err && retryCodes.indexOf(err.code) !== -1);
+				if (!retryable || attempt >= limit) { throw err; }
+				return next();
+			});
+		}
+		return next();
 	}
 
 	function el(tag, attrs, children) {
@@ -223,7 +278,12 @@
 		}).then(function (res) {
 			return res.json().then(function (json) {
 				if (!res.ok) {
-					throw new Error((json && json.message) || I18N.genericError);
+					var failure = new Error((json && json.message) || I18N.genericError);
+					// Structured WordPress error facts (code / data such as
+					// payment_pending) for flows that must never retry a payment.
+					failure.code = json && typeof json.code === 'string' ? json.code : '';
+					failure.data = json && json.data && typeof json.data === 'object' ? json.data : {};
+					throw failure;
 				}
 				return json;
 			});
@@ -1921,13 +1981,16 @@
 		// its provider-hosted embedded pay form.
 		function payLabelFor(t) {
 			var grandTotal = t && typeof t.total !== 'undefined' ? t.total : 0;
-			if (stripeHosted) { return (I18N.continueToPayment || 'Continue to wallet or card') + ' · ' + money(grandTotal); }
+			if (stripeHosted || squareHosted) { return (I18N.continueToPayment || 'Continue to wallet or card') + ' · ' + money(grandTotal); }
 			return paying ? ((I18N.pay || 'Pay') + ' ' + money(grandTotal)) : (I18N.placeOrder || 'Place order');
 		}
 		var payLabel = payLabelFor(totals);
 		var submit = el('button', { class: 'db-btn db-btn--lg', type: 'submit', text: payLabel });
 		var paymentAttemptKey = newPaymentAttemptKey();
 		var stripeCancelledPayload = null;
+		var squareHostedActive = null;
+		var squareHostedReturn = null;
+		var squareHostedCancel = null;
 		var summaryType = el('strong', { text: orderType === 'delivery' ? 'Delivery' : (orderType === 'dine_in' ? 'Dine in' : 'Pickup') });
 		var summaryCount = el('span', { text: 'Review your items and total' });
 		var summaryTotal = el('strong', { class: 'db-checkout-summary-total', text: money(totals && totals.total) });
@@ -1980,6 +2043,44 @@
 			]));
 		}
 
+		if (squareHosted) {
+			form.appendChild(el('div', { class: 'db-stripe-checkout-notice db-square-hosted-notice', role: 'note' }, [
+				el('span', { class: 'db-secure-lock', 'aria-hidden': 'true', text: '✓' }),
+				el('div', {}, [
+					el('strong', { text: 'Secure checkout powered by Square' }),
+					el('span', { text: 'Continue to Square to review and pay ' + money(totals && totals.total) + ' AUD' }),
+					el('ul', { class: 'db-stripe-checkout-points' }, [
+						el('li', { text: 'Apple Pay or Google Pay is offered on Square when eligible' }),
+						el('li', { text: 'Card details are entered on Square; DoughBoss never sees or stores them' }),
+						el('li', { text: 'You return here for your order number, receipt and live tracking' })
+					]),
+					el('span', { class: 'db-payment-methods', text: 'Apple Pay  ·  Google Pay  ·  Card' })
+				])
+			]));
+			squareHostedReturn = el('a', { class: 'db-link db-square-hosted-resume', href: '#', hidden: 'hidden', text: 'Return to the secure Square checkout' });
+			squareHostedCancel = el('button', { class: 'db-link db-square-hosted-cancel', type: 'button', hidden: 'hidden', text: 'Change my order instead' });
+			squareHostedCancel.addEventListener('click', function () {
+				// Only offered after the server reported this checkout UNPAID. The
+				// next payment start retires that Square link server-side first,
+				// and refuses if Square shows any payment on it.
+				clearSquareHostedPending();
+				squareHostedActive = null;
+				paymentAttemptKey = newPaymentAttemptKey();
+				checkoutAttemptId = null;
+				lockSquareHostedDetails(null);
+				squareHostedReturn.hidden = true;
+				squareHostedReturn.setAttribute('hidden', 'hidden');
+				squareHostedCancel.hidden = true;
+				squareHostedCancel.setAttribute('hidden', 'hidden');
+				setPaymentMutationLock(false);
+				if (onJourneyStep) { onJourneyStep(2); }
+				submit.disabled = false;
+				payLabel = payLabelFor(totals);
+				submit.textContent = payLabel;
+				clearError(msg);
+			});
+		}
+
 		// Tyro Connect: hosted payment form and automatic 3DS.
 		var tyro = null;
 		if (tyroPay) {
@@ -1998,6 +2099,8 @@
 		}
 
 		form.appendChild(submit);
+		if (squareHostedReturn) { form.appendChild(squareHostedReturn); }
+		if (squareHostedCancel) { form.appendChild(squareHostedCancel); }
 		form.appendChild(el('p', { class: 'db-submit-note', text: paying
 			? 'You will review the final amount before payment. One payment creates one order.'
 			: 'This sends your order to the shop. Nothing is charged online — you pay when you collect.' }));
@@ -2039,6 +2142,112 @@
 			submit.disabled = true;
 			submit.textContent = 'Payment confirmation pending';
 			announceError(msg, 'Your payment may already be complete. Please do not pay again. Keep this page open or contact the shop so we can confirm your order.');
+		}
+
+		function readSquareHostedPending() {
+			try { return JSON.parse(window.sessionStorage.getItem(SQUARE_HOSTED_PENDING_KEY) || 'null'); } catch (ignoreHostedPending) { return null; }
+		}
+
+		function clearSquareHostedPending() {
+			try { window.sessionStorage.removeItem(SQUARE_HOSTED_PENDING_KEY); } catch (ignoreHostedClear) {}
+		}
+
+		function cleanSquareHostedUrl() {
+			try {
+				var cleanUrl = new URL(window.location.href);
+				cleanUrl.searchParams.delete('doughboss_square_return');
+				['orderId', 'transactionId', 'referenceId', 'checkoutId'].forEach(function (key) { cleanUrl.searchParams.delete(key); });
+				window.history.replaceState({}, document.title, cleanUrl.toString());
+			} catch (ignoreHostedUrl) {}
+		}
+
+		function lockSquareHostedDetails(details) {
+			[
+				[name, 'customer_name'], [email, 'customer_email'], [phone, 'customer_phone'],
+				[address, 'address'], [notes, 'notes']
+			].forEach(function (entry) {
+				var input = entry[0].querySelector('input,textarea');
+				if (!input) { return; }
+				if (details && typeof details[entry[1]] === 'string') { input.value = details[entry[1]]; }
+				input.readOnly = !!details;
+			});
+		}
+
+		// A known hosted checkout may only be confirmed (or reopened on Square),
+		// never replaced by a second payment while the server says it is open.
+		function squareHostedHold(err, pending) {
+			var data = err && err.data && typeof err.data === 'object' ? err.data : {};
+			setPaymentMutationLock(true);
+			form.setAttribute('aria-busy', 'false');
+			if (onJourneyStep) { onJourneyStep(3); }
+			submit.disabled = false;
+			submit.textContent = 'Check my Square payment';
+			squareHostedActive = pending;
+			if (squareHostedReturn) {
+				var resumeUrl = data.checkout_url || pending.checkoutUrl || '';
+				if (data.hosted_state === 'unpaid' && squareHostedCheckoutUrlValid(resumeUrl, !!PAY.liveMode)) {
+					squareHostedReturn.hidden = false;
+					squareHostedReturn.removeAttribute('hidden');
+					squareHostedReturn.setAttribute('href', resumeUrl);
+				} else {
+					squareHostedReturn.hidden = true;
+					squareHostedReturn.setAttribute('hidden', 'hidden');
+				}
+			}
+			if (squareHostedCancel) {
+				if (data.hosted_state === 'unpaid') {
+					squareHostedCancel.hidden = false;
+					squareHostedCancel.removeAttribute('hidden');
+				} else {
+					squareHostedCancel.hidden = true;
+					squareHostedCancel.setAttribute('hidden', 'hidden');
+				}
+			}
+			announceError(msg, data.hosted_state === 'unpaid'
+				? (err.message || 'We have not received a completed Square payment yet.')
+				: 'Your payment may already be complete. Please do not pay again. Keep this page open or contact the shop so we can confirm your order.');
+		}
+
+		function squareHostedClosed(err) {
+			clearSquareHostedPending();
+			squareHostedActive = null;
+			if (squareHostedReturn) { squareHostedReturn.hidden = true; squareHostedReturn.setAttribute('hidden', 'hidden'); }
+			// The closed attempt took no money: a new key starts a new checkout.
+			paymentAttemptKey = newPaymentAttemptKey();
+			checkoutAttemptId = null;
+			lockSquareHostedDetails(null);
+			fail(err);
+		}
+
+		function finishSquareHosted(pending, returned) {
+			squareHostedActive = pending;
+			setPaymentMutationLock(true);
+			form.setAttribute('aria-busy', 'true');
+			if (onJourneyStep) { onJourneyStep(3); }
+			submit.disabled = true;
+			submit.textContent = 'Checking your Square payment...';
+			msg.textContent = 'We are confirming your payment with Square — please keep this page open.';
+			msg.className = 'db-checkout-msg db-payment-verifying';
+			var body = Object.assign({}, pending.payload || {}, { square_checkout: pending.checkoutReference });
+			delete body.payment_intent_id;
+			return confirmSquareHosted(function () {
+				return request('/checkout', { method: 'POST', body: body, headers: { 'Idempotency-Key': pending.checkoutAttemptId } });
+			}, function (ms) {
+				return new Promise(function (resolve) { setTimeout(resolve, ms || 0); });
+			}, returned ? 5 : 1).then(function (res) {
+				clearSquareHostedPending();
+				squareHostedActive = null;
+				cleanSquareHostedUrl();
+				completeOrder(res, body);
+			}).catch(function (err) {
+				var data = err && err.data && typeof err.data === 'object' ? err.data : {};
+				if (data.hosted_state === 'failed' || (data.outcome === 'terminal_no_charge' && data.payment_pending !== true)) {
+					cleanSquareHostedUrl();
+					squareHostedClosed(err);
+					return;
+				}
+				squareHostedHold(err, pending);
+			});
 		}
 
 		function completeOrder(res, payload) {
@@ -2211,7 +2420,70 @@
 			};
 			if (paying) { payload.payment_attempt_key = paymentAttemptKey; }
 
-			if (stripeHosted) {
+			if (squareHosted && squareHostedActive) {
+				// A hosted checkout already exists for this order: confirm it.
+				finishSquareHosted(squareHostedActive, true);
+			} else if (squareHosted) {
+				// Save only the non-card order details in this tab, then redirect
+				// to Square's own checkout page for this exact itemised order.
+				submit.textContent = I18N.payPreparing || 'Opening secure Square checkout...';
+				if (!checkoutAttemptId) {
+					checkoutAttemptId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + '-' + Math.random());
+				}
+				request('/payment-intent', {
+					method: 'POST',
+					body: {
+						order_type: orderType,
+						location_id: payload.location_id,
+						payment_attempt_key: paymentAttemptKey,
+						customer_name: payload.customer_name,
+						customer_email: payload.customer_email,
+						customer_phone: payload.customer_phone,
+						address: payload.address,
+						notes: payload.notes,
+						return_url: window.location.href
+					}
+				}).then(function (session) {
+					if (!session || session.gateway !== 'square' || session.hosted !== true || !/^[a-f0-9]{64}$/.test(String(session.checkout_reference || ''))
+						|| (session.state !== 'confirm' && !squareHostedCheckoutUrlValid(session.checkout_url, !!PAY.liveMode))) {
+						throw new Error('The secure Square checkout link could not be verified.');
+					}
+					var pending = {
+						checkoutReference: session.checkout_reference,
+						checkoutUrl: session.state === 'confirm' ? '' : session.checkout_url,
+						payload: payload,
+						checkoutAttemptId: checkoutAttemptId,
+						savedAt: Date.now()
+					};
+					try {
+						window.sessionStorage.setItem(SQUARE_HOSTED_PENDING_KEY, JSON.stringify(pending));
+					} catch (storageError) {
+						if (session.state !== 'confirm') {
+							throw new Error('Your browser could not preserve the order for the secure payment return.');
+						}
+					}
+					if (session.state === 'confirm') {
+						return finishSquareHosted(pending, true);
+					}
+					squareHostedActive = pending;
+					window.location.assign(session.checkout_url);
+				}).catch(function (err) {
+					var data = err && err.data && typeof err.data === 'object' ? err.data : {};
+					if (data.payment_pending === true) {
+						squareHostedHold(err, squareHostedActive || { checkoutReference: '', payload: payload, checkoutAttemptId: checkoutAttemptId });
+						if (!squareHostedActive || !squareHostedActive.checkoutReference) {
+							squareHostedActive = null;
+							submit.disabled = true;
+							submit.textContent = 'Payment confirmation pending';
+						}
+					} else if (data.outcome === 'terminal_no_charge') {
+						squareHostedClosed(err);
+					} else {
+						// Retry-safe: keep this attempt key so a retry reuses the same link.
+						fail(err);
+					}
+				});
+			} else if (stripeHosted) {
 				// Save only the non-card order details in this tab, then redirect
 				// to the unique Stripe-hosted Checkout URL for this cart.
 				setPaymentMutationLock(true);
@@ -2379,6 +2651,30 @@
 				} else {
 					stripePaidReturnFail();
 				}
+			}
+		}
+
+		// Resume a Square-hosted checkout when the customer returns (Square's
+		// redirect carries the checkout reference) or comes back to this page.
+		// The reference is only a lookup key: the server re-reads Square.
+		if (squareHosted) {
+			var savedSquareHosted = readSquareHostedPending();
+			var returnedSquareKey = squareHostedReturnKey(window.location.search);
+			if (squareHostedPendingFresh(savedSquareHosted, Date.now()) && (!returnedSquareKey || returnedSquareKey === savedSquareHosted.checkoutReference)) {
+				paymentAttemptKey = savedSquareHosted.payload.payment_attempt_key;
+				checkoutAttemptId = savedSquareHosted.checkoutAttemptId;
+				lockSquareHostedDetails(savedSquareHosted.payload);
+				finishSquareHosted(savedSquareHosted, !!returnedSquareKey);
+			} else if (returnedSquareKey) {
+				// This tab lost its saved details; the server still confirms by
+				// cart session and Square's own records, never by this browser.
+				finishSquareHosted({
+					checkoutReference: returnedSquareKey,
+					payload: {},
+					checkoutAttemptId: newPaymentAttemptKey() + '-' + String(Date.now())
+				}, true);
+			} else if (savedSquareHosted) {
+				clearSquareHostedPending();
 			}
 		}
 

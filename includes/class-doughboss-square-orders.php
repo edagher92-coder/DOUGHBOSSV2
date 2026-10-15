@@ -144,8 +144,29 @@ class DoughBoss_Square_Orders {
 		return self::validate_response( $response, $projection, $payment, $bound_order_id, $expected_tender );
 	}
 
+	/**
+	 * Square-hosted checkout (payment link) Order facts. Square creates a link
+	 * Order as DRAFT, moves it to OPEN when the buyer opens checkout, and adds
+	 * one DIGITAL fulfillment of its own. The hosted Payment carries no
+	 * DoughBoss reference_id; its binding is the exact bound Order id plus the
+	 * Order's own db-attempt reference and its single matching CARD tender.
+	 * Pass null as $payment for the unpaid (just created) check.
+	 *
+	 * @param array      $response       GET/related Order response ({order}).
+	 * @param array      $projection     Exact retained projection.
+	 * @param array|null $payment        Separately read Payment, or null.
+	 * @param string     $bound_order_id Order id durably bound to the attempt.
+	 * @return array|WP_Error
+	 */
+	public static function validate_hosted_response( array $response, array $projection, $payment, $bound_order_id ) {
+		if ( null !== $payment && ! is_array( $payment ) ) { return self::error(); }
+		if ( ! is_string( $bound_order_id ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $bound_order_id ) ) { return self::error(); }
+		if ( ! isset( $response['order']['id'] ) || $bound_order_id !== $response['order']['id'] ) { return self::error(); }
+		return self::validate_response( $response, $projection, $payment, $bound_order_id, 'CARD', true );
+	}
+
 	/** Share economic checks without stripping or normalizing provider facts. */
-	private static function validate_response( array $response, array $projection, $payment = null, $bound_order_id = '', $expected_tender = 'CARD' ) {
+	private static function validate_response( array $response, array $projection, $payment = null, $bound_order_id = '', $expected_tender = 'CARD', $hosted = false ) {
 		if ( ! in_array( $expected_tender, array( 'CARD', 'SQUARE_GIFT_CARD' ), true ) ) { return self::error(); }
 		if ( PHP_INT_SIZE < 8 || ! isset( $projection['order'], $projection['amounts'], $projection['currency'], $projection['tax_inclusive'] )
 			|| ! is_array( $projection['order'] ) || ! is_array( $projection['amounts'] )
@@ -171,24 +192,41 @@ class DoughBoss_Square_Orders {
 			}
 		}
 		if ( $paid && ( ! is_string( $bound_order_id ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $bound_order_id )
-			|| ! isset( $payment['id'], $payment['status'], $payment['order_id'], $payment['location_id'], $payment['reference_id'] )
+			|| ! isset( $payment['id'], $payment['status'], $payment['order_id'], $payment['location_id'] )
+			|| ( ! $hosted && ! isset( $payment['reference_id'] ) )
 			|| ! is_string( $payment['id'] ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $payment['id'] )
 			|| 'COMPLETED' !== $payment['status'] || $bound_order_id !== $payment['order_id']
-			|| $payment['location_id'] !== $expected['location_id'] || $payment['reference_id'] !== $expected['reference_id']
+			|| $payment['location_id'] !== $expected['location_id']
+			|| ( ! $hosted && $payment['reference_id'] !== $expected['reference_id'] )
 			|| self::money_amount( isset( $payment['amount_money'] ) ? $payment['amount_money'] : null, $currency ) !== $projection['amounts']['total']
 			|| ! self::zero_optional( $payment, 'tip_money', $currency ) ) ) {
 			return self::error();
+		}
+		if ( $paid && $hosted ) {
+			// Hosted checkout offers card, Apple Pay and Google Pay only. Anything
+			// else (gift card, wallet, BNPL, cash) is held for staff, never paid.
+			$card = isset( $payment['card_details'] ) && is_array( $payment['card_details'] ) ? $payment['card_details'] : array();
+			if ( ! isset( $payment['source_type'] ) || 'CARD' !== $payment['source_type']
+				|| ( isset( $card['status'] ) && 'CAPTURED' !== $card['status'] )
+				|| ( isset( $card['card']['card_brand'] ) && 'SQUARE_GIFT_CARD' === $card['card']['card_brand'] )
+				|| ( array_key_exists( 'total_money', $payment ) && self::money_amount( $payment['total_money'], $currency ) !== $projection['amounts']['total'] ) ) {
+				return self::error();
+			}
 		}
 		if ( ! isset( $actual['id'], $actual['version'], $actual['location_id'], $actual['reference_id'], $actual['state'], $actual['line_items'] )
 			|| ! is_string( $actual['id'] ) || 1 !== preg_match( '/^[A-Za-z0-9_-]{8,192}\z/', $actual['id'] )
 			|| ! is_int( $actual['version'] ) || $actual['version'] < 1 || $actual['version'] > 2147483647
 			|| $actual['location_id'] !== $expected['location_id'] || $actual['reference_id'] !== $expected['reference_id']
-			|| ( $paid ? ( $actual['id'] !== $bound_order_id || ! in_array( $actual['state'], array( 'OPEN', 'COMPLETED' ), true ) ) : 'OPEN' !== $actual['state'] )
+			|| ( $paid ? ( $actual['id'] !== $bound_order_id || ! in_array( $actual['state'], array( 'OPEN', 'COMPLETED' ), true ) )
+				: ! in_array( $actual['state'], $hosted ? array( 'DRAFT', 'OPEN' ) : array( 'OPEN' ), true ) )
 			|| ! is_array( $actual['line_items'] )
 			|| count( $actual['line_items'] ) !== count( $expected['line_items'] ) ) {
 			return self::error();
 		}
 		foreach ( array( 'fulfillments', 'refunds', 'returns', 'rewards', 'service_charges' ) as $field ) {
+			if ( $hosted && 'fulfillments' === $field && array_key_exists( $field, $actual ) && self::hosted_fulfillment( $actual[ $field ] ) ) {
+				continue;
+			}
 			if ( array_key_exists( $field, $actual ) && ( ! is_array( $actual[ $field ] ) || ! empty( $actual[ $field ] ) ) ) {
 				return self::error();
 			}
@@ -279,6 +317,19 @@ class DoughBoss_Square_Orders {
 			}
 		}
 		return array( 'id' => $actual['id'], 'version' => $actual['version'] );
+	}
+
+	/**
+	 * Square adds at most one DIGITAL fulfillment to a payment-link Order. It
+	 * carries no money. Anything else (pickup, shipment, cancelled) is held.
+	 */
+	private static function hosted_fulfillment( $rows ) {
+		if ( ! is_array( $rows ) ) { return false; }
+		if ( empty( $rows ) ) { return true; }
+		if ( 1 !== count( $rows ) ) { return false; }
+		$row = reset( $rows );
+		return is_array( $row ) && isset( $row['type'] ) && 'DIGITAL' === $row['type']
+			&& ( ! isset( $row['state'] ) || in_array( $row['state'], array( 'PROPOSED', 'RESERVED', 'PREPARED', 'COMPLETED' ), true ) );
 	}
 
 	private static function adjustments_match( array $actual, array $expected, $field, $currency ) {

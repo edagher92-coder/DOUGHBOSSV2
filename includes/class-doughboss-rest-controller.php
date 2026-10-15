@@ -40,6 +40,9 @@ class DoughBoss_REST_Controller {
 	 */
 	public function init() {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+		// Square-hosted checkout safety net: retire abandoned links and finish
+		// any paid checkout whose browser return and webhook were both missed.
+		add_action( DoughBoss_Square_Hosted::SWEEP_HOOK, array( $this, 'square_hosted_sweep' ) );
 		// Allow the standalone staff console (separate origin) to call our routes.
 		add_action( 'rest_api_init', array( $this, 'enable_cors' ), 15 );
 		add_filter( 'rest_post_dispatch', array( $this, 'protect_tracking_response' ), 10, 3 );
@@ -3272,7 +3275,10 @@ class DoughBoss_REST_Controller {
 		$address = sanitize_textarea_field( $request->get_param( 'address' ) );
 		$notes   = sanitize_textarea_field( $request->get_param( 'notes' ) );
 		$tender_kind = 'card';
-		if ( 'square' === $gateway ) {
+		// Square-hosted checkout (owner setting) redirects to Square's own page.
+		// The embedded Web Payments SDK path below is unchanged when this is off.
+		$square_hosted = 'square' === $gateway && DoughBoss_Square_Hosted::enabled();
+		if ( 'square' === $gateway && ! $square_hosted ) {
 			$tender_kind = DoughBoss_Square::tender_kind( $request->get_param( 'tender_kind' ) );
 			if ( is_wp_error( $tender_kind ) ) { return $tender_kind; }
 		}
@@ -3319,6 +3325,16 @@ class DoughBoss_REST_Controller {
 		}
 		$availability_error = $this->payment_availability_error( $this->cart->get_lines(), $location_id, $checkout_key );
 		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
+		if ( $square_hosted ) {
+			// A new attempt key for the same cart supersedes an earlier, unpaid
+			// hosted link (e.g. a lost tab). Retiring deletes that link first and
+			// never touches a tendered Square Order, so nothing can be paid twice.
+			$superseded = DoughBoss_Payment_Attempts::find_blocking_by_local_reference( 'square', $cart_guard, hash( 'sha256', 'square-v2|' . $attempt_identity ) );
+			if ( is_array( $superseded ) && DoughBoss_Square_Hosted::is_hosted_attempt( $superseded )
+				&& 'dispatching' === (string) $superseded['status'] && empty( $superseded['provider_reference'] ) ) {
+				DoughBoss_Square_Hosted::retire_unpaid( $superseded );
+			}
+		}
 
 		$voucher_reservation_key  = '';
 		$reserved_voucher_code    = '';
@@ -3404,6 +3420,34 @@ class DoughBoss_REST_Controller {
 				$return_urls['cancel'],
 				$email
 			);
+		} elseif ( $square_hosted ) {
+			// Square-hosted checkout: no card data or token exists here. The same
+			// immutable snapshot and itemised Order projection back a Square
+			// payment link; /checkout later proves the payment from Square itself.
+			$metadata['tender_kind']        = 'card';
+			$metadata['protocol_version']   = 'square-v2';
+			$metadata['attempt_identity']   = $attempt_identity;
+			$metadata['binding_hash']       = $this->square_binding_hash( $square_binding );
+			$metadata['cart_guard']         = $cart_guard;
+			$metadata['voucher_code']       = $reserved_voucher_code;
+			$metadata['voucher_reservation_key'] = $voucher_reservation_key;
+			$metadata['subtotal_minor']     = DoughBoss_Payment::to_minor_units( $totals['subtotal'] );
+			$metadata['tax_minor']          = DoughBoss_Payment::to_minor_units( $totals['tax'] );
+			$metadata['delivery_fee_minor'] = DoughBoss_Payment::to_minor_units( $totals['delivery_fee'] );
+			$metadata['discount_minor']     = DoughBoss_Payment::to_minor_units( $priced_voucher_discount );
+			$metadata['return_url']         = $this->same_site_return_url( $request->get_param( 'return_url' ) );
+			$this->payment_dispatch_reached = true;
+			$intent = DoughBoss_Square_Hosted::create_checkout( $amount, $currency, $metadata );
+			if ( is_wp_error( $intent ) ) {
+				$error_data = $intent->get_error_data();
+				if ( is_array( $error_data ) && ! empty( $error_data['retry_safe'] ) && empty( $error_data['retry_same_attempt'] ) && '' !== $reserved_voucher_code ) {
+					// Only a closed (failed) attempt releases its voucher binding.
+					if ( ! empty( $error_data['attempt_id'] ) ) {
+						DoughBoss_Voucher::release_payment_reservation( $reserved_voucher_code, $voucher_reservation_key, (int) $error_data['attempt_id'] );
+					}
+					DoughBoss_Voucher::release_reservation( $reserved_voucher_code, $voucher_reservation_key );
+				}
+			}
 		} elseif ( 'square' === $gateway ) {
 			// Square charges synchronously from a single-use browser card token.
 			// The token and its optional 3-D Secure evidence are passed straight
@@ -3478,6 +3522,25 @@ class DoughBoss_REST_Controller {
 					'gateway'          => 'stripe',
 					'live_mode'        => 'live' === DoughBoss_Settings::stripe_mode(),
 					'attempt_id'       => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
+				)
+			);
+		}
+
+		if ( $square_hosted ) {
+			// Only Square's own checkout URL and this checkout's opaque reference
+			// reach the browser. 'confirm' means a payment already exists: the
+			// browser must confirm through /checkout and never open a new page.
+			return rest_ensure_response(
+				array(
+					'gateway'            => 'square',
+					'hosted'             => true,
+					'state'              => (string) $intent['state'],
+					'checkout_url'       => (string) $intent['checkout_url'],
+					'checkout_reference' => $checkout_key,
+					'amount'             => $amount,
+					'currency'           => strtolower( (string) $currency ),
+					'live_mode'          => DoughBoss_Settings::square_live_mode(),
+					'attempt_id'         => isset( $intent['attempt_id'] ) ? (int) $intent['attempt_id'] : 0,
 				)
 			);
 		}
@@ -4944,6 +5007,10 @@ class DoughBoss_REST_Controller {
 		if ( version_compare( (string) get_option( 'doughboss_db_version', '0' ), '1.25.0', '<' ) || ! DoughBoss_Activator::checkout_storage_ready() ) {
 			return new WP_Error( 'doughboss_checkout_storage_unavailable', __( 'Online ordering is temporarily unavailable while checkout storage is upgraded.', 'doughboss' ), array( 'status' => 503 ) );
 		}
+		$hosted_checkout_key = DoughBoss_Square_Hosted::returned_checkout_key( $request->get_param( 'square_checkout' ) );
+		if ( '' !== $hosted_checkout_key || null !== $request->get_param( 'square_checkout' ) ) {
+			return $this->square_hosted_return( $request, $idem, $hosted_checkout_key );
+		}
 		$returned_reference = $request->get_param( 'payment_intent_id' );
 		$returned_reference = is_scalar( $returned_reference ) ? sanitize_text_field( (string) $returned_reference ) : '';
 		$stripe_return      = 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', $returned_reference );
@@ -5446,6 +5513,255 @@ class DoughBoss_REST_Controller {
 		}
 		if ( ! $held || ! $this->record_unreconciled_payment( (string) $attempt['provider_reference'], array( 'amount' => (int) $attempt['amount_minor'], 'currency' => strtolower( (string) $attempt['currency'] ) ) ) ) { return $pending; }
 		return new WP_Error( 'doughboss_paid_reconciliation_required', __( 'Your paid order is awaiting secure staff reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+	}
+
+	/**
+	 * Browser return from Square-hosted checkout. The checkout reference is a
+	 * lookup key only: the attempt must belong to this cart session, and the
+	 * payment is proven by re-reading the bound Square Order and Payment.
+	 * Unpaid returns are a pending response the storefront polls; nothing here
+	 * can start or repeat a payment.
+	 *
+	 * @param WP_REST_Request $request      Request.
+	 * @param string          $idem         Server-bound browser checkout key.
+	 * @param string          $checkout_key Returned checkout reference.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function square_hosted_return( WP_REST_Request $request, $idem, $checkout_key ) {
+		if ( $this->rate_limited( 'square_hosted_return', 40, 10 * MINUTE_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please wait a few minutes and try again.', 'doughboss' ), array( 'status' => 429, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
+		$unmatched = new WP_Error( 'doughboss_square_hosted_unmatched', __( 'This Square checkout could not be matched to this browser. If you paid, please do not pay again — the shop will confirm your order by email.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+		if ( '' === $checkout_key ) {
+			return $unmatched;
+		}
+		$attempt  = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
+		$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
+		if ( ! DoughBoss_Square_Hosted::is_hosted_attempt( $attempt ) || 'order' !== (string) $attempt['purpose']
+			|| ! in_array( (string) $attempt['context'], array( 'web', 'table_qr' ), true )
+			|| ! isset( $metadata['cart_guard'] ) || ! hash_equals( (string) $metadata['cart_guard'], $this->square_cart_guard() ) ) {
+			return $unmatched;
+		}
+		$settled = $this->square_hosted_settle( $attempt );
+		if ( is_wp_error( $settled ) ) {
+			return $settled;
+		}
+		if ( 'paid' === $settled['state'] ) {
+			$payload = $this->checkout_payload( $settled['order'], $settled['replayed'] );
+			$this->cart->clear();
+			set_transient( 'doughboss_idem_' . $idem, $payload, 6 * HOUR_IN_SECONDS );
+			return rest_ensure_response( $payload );
+		}
+		if ( 'failed' === $settled['state'] ) {
+			return new WP_Error( 'doughboss_square_hosted_closed', __( 'That Square checkout closed without payment. You have not been charged — please start payment again.', 'doughboss' ), array( 'status' => 409, 'outcome' => 'terminal_no_charge', 'payment_pending' => false, 'retry_safe' => true, 'hosted_state' => 'failed', 'attempt_id' => (int) $attempt['id'] ) );
+		}
+		$data = array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false, 'hosted_state' => (string) $settled['state'], 'attempt_id' => (int) $attempt['id'] );
+		$url  = isset( $metadata['hosted_checkout_url'] ) ? (string) $metadata['hosted_checkout_url'] : '';
+		if ( 'unpaid' === $settled['state'] && DoughBoss_Square_Hosted::checkout_url_valid( $url, isset( $metadata['square_mode'] ) ? (string) $metadata['square_mode'] : '' ) ) {
+			$data['checkout_url'] = $url;
+		}
+		$message = 'pending' === $settled['state']
+			? __( 'Square is still confirming your payment. Please keep this page open and do not pay again.', 'doughboss' )
+			: __( 'We have not received a completed Square payment for this order yet. If you have just paid, keep this page open — it will check again. Otherwise you can return to the same secure Square checkout.', 'doughboss' );
+		return new WP_Error( 'pending' === $settled['state'] ? 'doughboss_square_hosted_pending' : 'doughboss_square_hosted_unpaid', $message, $data );
+	}
+
+	/**
+	 * Shared browser/webhook/sweep settlement of one hosted attempt.
+	 *
+	 * @param array $attempt Hosted attempt.
+	 * @return array|WP_Error { state: paid (order, replayed)|unpaid|pending|failed }
+	 */
+	private function square_hosted_settle( array $attempt ) {
+		$result = DoughBoss_Square_Hosted::confirm( $attempt );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		if ( 'paid' === $result['state'] ) {
+			$finalized = $this->finalize_square_hosted_order( $result['attempt'], (string) $result['payment_id'] );
+			if ( is_wp_error( $finalized ) ) {
+				return $finalized;
+			}
+			return array( 'state' => 'paid', 'order' => $finalized['order'], 'replayed' => $finalized['replayed'] );
+		}
+		if ( 'failed' === $result['state'] ) {
+			$current = $result['attempt'];
+			if ( ! empty( $result['order_canceled'] ) && 'dispatching' === (string) $current['status'] && empty( $current['provider_reference'] ) ) {
+				// Square cancelled the unpaid Order (link deleted or expired).
+				DoughBoss_Payment_Attempts::mark_irreversible_failed( (int) $current['id'], 'square_hosted_canceled' );
+			}
+			$closed   = DoughBoss_Payment_Attempts::find( (int) $current['id'] );
+			$metadata = is_array( $closed ) ? DoughBoss_Payment_Attempts::metadata( $closed ) : array();
+			if ( ! is_array( $closed ) || ! in_array( (string) $closed['status'], array( 'failed', 'voided' ), true ) ) {
+				return array( 'state' => 'pending' );
+			}
+			if ( ! empty( $metadata['voucher_code'] ) && ! empty( $metadata['voucher_reservation_key'] ) ) {
+				$released = DoughBoss_Voucher::release_payment_reservation( (string) $metadata['voucher_code'], (string) $metadata['voucher_reservation_key'], (int) $closed['id'] );
+				if ( is_wp_error( $released ) ) {
+					return $released;
+				}
+			}
+			return array( 'state' => 'failed' );
+		}
+		return array( 'state' => in_array( $result['state'], array( 'unpaid', 'pending' ), true ) ? $result['state'] : 'pending' );
+	}
+
+	/**
+	 * Create (or replay) the one paid order for a proven hosted Square payment.
+	 * Mirrors the Stripe recovery path: the immutable snapshot is the only
+	 * source of items, contacts and money; DoughBoss_Order::create's unique
+	 * checkout/payment keys make browser, webhook and sweep races idempotent,
+	 * so the kitchen receives exactly one order and one confirmation.
+	 *
+	 * @param array  $attempt    Verified attempt (status succeeded/order_committed).
+	 * @param string $payment_id Proven Square payment id.
+	 * @return array|WP_Error { order, replayed }
+	 */
+	private function finalize_square_hosted_order( array $attempt, $payment_id ) {
+		$pending = new WP_Error( 'doughboss_pay_finalize_pending', __( 'Your Square payment is confirmed and your order is being saved. Please do not pay again; this page will retry.', 'doughboss' ), array( 'status' => 503, 'payment_pending' => true, 'retry_safe' => false ) );
+		$attempt = DoughBoss_Payment_Attempts::find( (int) $attempt['id'] );
+		$payment_id = DoughBoss_Square::canonical_id( $payment_id );
+		if ( ! is_array( $attempt ) || ! DoughBoss_Square_Hosted::is_hosted_attempt( $attempt ) || '' === $payment_id
+			|| ! hash_equals( (string) $attempt['provider_reference'], $payment_id )
+			|| ! in_array( (string) $attempt['status'], array( 'succeeded', 'order_committed' ), true )
+			|| ( 'succeeded' === (string) $attempt['status'] && empty( $attempt['verified_at'] ) ) ) {
+			return $pending;
+		}
+		$checkout_key = (string) $attempt['checkout_key'];
+		$metadata     = DoughBoss_Payment_Attempts::metadata( $attempt );
+		$existing_id  = DoughBoss_Order::find_id_by_payment_intent( $payment_id );
+		if ( $existing_id ) {
+			$existing = DoughBoss_Order::get( $existing_id );
+			if ( ! $existing || 'paid' !== (string) $existing->payment_status || 'square' !== (string) $existing->payment_method
+				|| ! hash_equals( (string) $existing->payment_intent_id, $payment_id )
+				|| DoughBoss_Payment::to_minor_units( (float) $existing->total ) !== (int) $attempt['amount_minor']
+				|| strtoupper( (string) $existing->currency ) !== strtoupper( (string) $attempt['currency'] )
+				|| (int) $existing->location_id !== (int) $attempt['location_id'] ) {
+				return new WP_Error( 'doughboss_receipt_basis_unverified', __( 'The saved receipt requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+			}
+			DoughBoss_Checkout_Snapshots::complete( $checkout_key, (int) $existing->id );
+			DoughBoss_Payment_Attempts::mark_order_committed( $payment_id, (int) $existing->id );
+			return array( 'order' => $existing, 'replayed' => true );
+		}
+		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $checkout_key );
+		$saved    = is_array( $snapshot ) && isset( $snapshot['payload']['order'] ) && is_array( $snapshot['payload']['order'] ) ? $snapshot['payload']['order'] : array();
+		$lines    = is_array( $snapshot ) && isset( $snapshot['payload']['lines'] ) && is_array( $snapshot['payload']['lines'] ) ? array_values( $snapshot['payload']['lines'] ) : array();
+		if ( ! $saved || ! $lines || 'prepared' !== (string) $snapshot['status'] || 0 !== (int) $snapshot['order_id']
+			|| ! isset( $snapshot['payload']['binding_hash'], $metadata['binding_hash'], $metadata['orders_snapshot_hash'], $saved['checkout_key'], $saved['total'], $saved['currency'], $saved['location_id'], $saved['table_id'], $saved['table_qr_code_id'] )
+			|| ! hash_equals( (string) $metadata['binding_hash'], (string) $snapshot['payload']['binding_hash'] )
+			|| ! hash_equals( (string) $metadata['orders_snapshot_hash'], (string) $snapshot['payload_hash'] )
+			|| ! hash_equals( $checkout_key, (string) $saved['checkout_key'] )
+			|| (int) $attempt['amount_minor'] !== DoughBoss_Payment::to_minor_units( (float) $saved['total'] )
+			|| strtoupper( (string) $attempt['currency'] ) !== strtoupper( (string) $saved['currency'] )
+			|| (int) $attempt['location_id'] !== (int) $saved['location_id']
+			|| (int) $attempt['table_id'] !== (int) $saved['table_id']
+			|| (int) $attempt['qr_code_id'] !== (int) $saved['table_qr_code_id'] ) {
+			return new WP_Error( 'doughboss_pay_snapshot_missing', __( 'The paid order details require manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
+		$order_data = $saved;
+		$copied     = $this->copy_accounting_basis_from_snapshot( $saved, $order_data );
+		if ( is_wp_error( $copied ) ) {
+			return $copied;
+		}
+		$policy_error = $this->ordinary_checkout_policy_error();
+		if ( is_wp_error( $policy_error ) || isset( $metadata['reconciliation_hold'] ) ) {
+			// Ordering policy changed while the customer was on Square's page:
+			// keep the verified money visible for staff, never auto-fulfil.
+			if ( ! isset( $metadata['reconciliation_hold'] ) ) {
+				$metadata['reconciliation_hold'] = 'staff_approval_review_required';
+				DoughBoss_Payment_Attempts::update( (int) $attempt['id'], array( 'safe_metadata' => $metadata ) );
+			}
+			$this->record_unreconciled_payment( $payment_id, array( 'amount' => (int) $attempt['amount_minor'], 'currency' => strtolower( (string) $attempt['currency'] ) ) );
+			return new WP_Error( 'doughboss_paid_reconciliation_required', __( 'Your paid order is awaiting secure staff reconciliation. Please do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
+		$voucher_code            = isset( $saved['voucher_code'] ) ? (string) $saved['voucher_code'] : '';
+		$discount                = isset( $saved['discount'] ) ? (float) $saved['discount'] : 0.0;
+		$voucher_reservation_key = isset( $saved['voucher_reservation_key'] ) ? strtolower( sanitize_text_field( (string) $saved['voucher_reservation_key'] ) ) : '';
+		if ( '' !== $voucher_reservation_key && ! hash_equals( $checkout_key, $voucher_reservation_key ) ) {
+			return new WP_Error( 'doughboss_pay_snapshot_missing', __( 'The paid order details require manual confirmation. Please contact the shop and do not pay again.', 'doughboss' ), array( 'status' => 409, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
+		$voucher_idem = '';
+		if ( '' !== $voucher_code && $discount > 0 ) {
+			$voucher_idem = 'order_' . ( '' !== $voucher_reservation_key ? $voucher_reservation_key : $checkout_key );
+			$redeem       = DoughBoss_Voucher::redeem( $voucher_code, isset( $saved['subtotal'] ) ? (float) $saved['subtotal'] : 0.0, 'online', array( 'idempotency_key' => $voucher_idem, 'reservation_key' => $voucher_reservation_key ) );
+			if ( is_wp_error( $redeem ) ) {
+				// Keep the discount the customer already paid; leave an audit trail.
+				$system_note = sprintf(
+					/* translators: 1: formatted discount amount, 2: voucher code. */
+					'[SYSTEM] Discount of %1$s from voucher "%2$s" was preserved on this paid Square checkout order, but its redemption needs manual reconciliation.',
+					DoughBoss_Settings::format_price( $discount ),
+					$voucher_code
+				);
+				$order_data['notes'] = ! empty( $order_data['notes'] ) ? $order_data['notes'] . "\n\n" . $system_note : $system_note;
+				$voucher_idem        = '';
+			} else {
+				$discount = (float) $redeem['amount'];
+			}
+		} else {
+			$discount     = 0.0;
+			$voucher_code = '';
+		}
+		$order_data['discount']          = $discount;
+		$order_data['voucher_code']      = $voucher_code;
+		$order_data['payment_status']    = 'paid';
+		$order_data['payment_method']    = 'square';
+		$order_data['payment_intent_id'] = $payment_id;
+		$order_data['checkout_key']      = $checkout_key;
+		$created = DoughBoss_Order::create( $order_data, $lines );
+		if ( is_wp_error( $created ) ) {
+			if ( '' !== $voucher_idem && '' === $voucher_reservation_key ) {
+				DoughBoss_Voucher::revert_redemption( $voucher_idem, $voucher_reservation_key, $payment_id );
+			}
+			return $created;
+		}
+		$order_id = (int) $created['order_id'];
+		DoughBoss_Checkout_Snapshots::complete( $checkout_key, $order_id );
+		DoughBoss_Payment_Attempts::mark_order_committed( $payment_id, $order_id );
+		if ( '' !== $voucher_idem && '' !== $voucher_reservation_key ) {
+			DoughBoss_Voucher::redeem( $voucher_code, isset( $saved['subtotal'] ) ? (float) $saved['subtotal'] : 0.0, 'online', array( 'idempotency_key' => $voucher_idem, 'reservation_key' => $voucher_reservation_key ) );
+		}
+		if ( '' !== $voucher_idem ) {
+			DoughBoss_Voucher::link_redemption_to_order( $voucher_idem, $order_id );
+		}
+		$order = DoughBoss_Order::get( $order_id );
+		if ( ! $order ) {
+			return $pending;
+		}
+		$replayed = ! empty( $created['replayed'] );
+		if ( ! $replayed ) {
+			$this->send_confirmation( $order );
+		}
+		return array( 'order' => $order, 'replayed' => $replayed );
+	}
+
+	/**
+	 * WP-Cron: settle stale hosted checkouts. Paid ones are fulfilled exactly
+	 * once; unpaid ones have their link deleted, attempt closed and voucher
+	 * released. Anything uncertain is left for the next run or for staff.
+	 *
+	 * @return void
+	 */
+	public function square_hosted_sweep() {
+		if ( ! DoughBoss_Activator::payment_storage_ready() ) {
+			return;
+		}
+		foreach ( DoughBoss_Square_Hosted::stale_attempts() as $attempt ) {
+			$settled = $this->square_hosted_settle( $attempt );
+			if ( is_array( $settled ) && 'unpaid' === $settled['state'] ) {
+				if ( 'retired' !== DoughBoss_Square_Hosted::retire_unpaid( $attempt ) ) {
+					DoughBoss_Payment_Attempts::update( (int) $attempt['id'], array( 'last_error' => 'square_hosted_sweep_retry' ) );
+				}
+			} elseif ( is_wp_error( $settled ) ) {
+				$held = DoughBoss_Payment_Attempts::find( (int) $attempt['id'] );
+				if ( is_array( $held ) && in_array( (string) $held['status'], array( 'dispatching', 'unknown' ), true ) ) {
+					// Rotate to the back of the queue so one stuck row cannot starve the sweep.
+					DoughBoss_Payment_Attempts::update( (int) $held['id'], array( 'last_error' => 'square_hosted_sweep_retry' ) );
+				}
+				if ( is_array( $held ) && ! empty( $held['provider_reference'] ) && ! DoughBoss_Order::payment_intent_used( (string) $held['provider_reference'] ) ) {
+					$this->record_unreconciled_payment( (string) $held['provider_reference'], array( 'amount' => (int) $held['amount_minor'], 'currency' => strtolower( (string) $held['currency'] ) ) );
+				}
+			}
+		}
 	}
 
 	/**
@@ -7572,6 +7888,38 @@ class DoughBoss_REST_Controller {
 				return new WP_Error( 'doughboss_wh_retry', __( 'Invoice reconciliation will be retried.', 'doughboss' ), array( 'status' => 500 ) );
 			}
 			return rest_ensure_response( array( 'received' => true, 'outcome' => $outcome ) );
+		}
+
+		// Square-hosted checkout: payment.* and order.updated events are only
+		// lookup hints. The attempt is resolved by its bound Order/Payment and
+		// settled through the same verification and order path as the browser
+		// return, so both racing paths create one order at most.
+		$hosted_event = '' !== $reference && '' !== $event_id
+			&& ( ( 'payment' === $resource && 0 === strpos( $type, 'payment.' ) ) || ( 'order_updated' === $resource && 'order.updated' === $type ) );
+		$hosted_attempt = $hosted_event ? DoughBoss_Square_Hosted::attempt_for_event( $resource, $reference, $data ) : null;
+		if ( is_array( $hosted_attempt ) ) {
+			$event_key = hash( 'sha256', 'square|' . $event_id );
+			if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'square', $reference, $type ) ) {
+				$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+				if ( null === $event_outcome || 'retry' === $event_outcome ) {
+					return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+				return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
+			}
+			$settled = $this->square_hosted_settle( $hosted_attempt );
+			if ( is_wp_error( $settled ) ) {
+				$held = DoughBoss_Payment_Attempts::find( (int) $hosted_attempt['id'] );
+				$terminal_hold = in_array( $settled->get_error_code(), array( 'doughboss_paid_reconciliation_required', 'doughboss_pay_mismatch', 'doughboss_square_hosted_review', 'doughboss_receipt_basis_unverified', 'doughboss_pay_snapshot_missing' ), true );
+				if ( $terminal_hold && is_array( $held ) && ! empty( $held['provider_reference'] ) && ! DoughBoss_Order::payment_intent_used( (string) $held['provider_reference'] )
+					&& $this->record_unreconciled_payment( (string) $held['provider_reference'], array( 'amount' => (int) $held['amount_minor'], 'currency' => strtolower( (string) $held['currency'] ) ) ) ) {
+					DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' );
+					return rest_ensure_response( array( 'received' => true, 'flagged' => true ) );
+				}
+				DoughBoss_Payment_Attempts::complete_event( $event_key, 'retry' );
+				return new WP_Error( 'doughboss_square_webhook_retry', __( 'Square checkout reconciliation will be retried.', 'doughboss' ), array( 'status' => 500 ) );
+			}
+			DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' );
+			return rest_ensure_response( array( 'received' => true, 'outcome' => $settled['state'] ) );
 		}
 
 		// Only payment events carry a payment id worth reconciling. Everything

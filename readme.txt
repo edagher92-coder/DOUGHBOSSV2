@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.46.1
+Stable tag: 2.47.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.47.0 =
+* New (off by default): Square-hosted checkout. Settings > Square > Checkout style = "Square-hosted checkout page" sends the same itemised, location-bound order to a Square Checkout API payment link and redirects the customer to Square (card, Apple Pay, Google Pay; no tipping, coupons, loyalty or shipping). The kitchen order is created only after the server re-reads the bound Square Order and its Payment and proves a COMPLETED payment for the exact amount, currency and location. Browser return, payment.updated/order.updated webhooks and a 15-minute sweep share one idempotent finalisation; abandoned links are deleted after 60 minutes and their voucher hold released. The embedded card form remains the default and is unchanged.
 
 = 2.46.1 =
 * Fix: Square invoice ids (inv:0-…) were rejected by the commerce path guard, so catering invoices could not be published or re-read.

@@ -259,6 +259,8 @@ class DoughBoss_Settings {
 			'square_club_plan_variation_id' => '',
 			// Apple Pay / Google Pay buttons on Square checkout (enable after sandbox test).
 			'square_wallets_enabled'    => 0,
+			// 'embedded' (Web Payments SDK on-site) or 'hosted' (Square checkout page).
+			'square_checkout_style'     => 'embedded',
 			// Square-issued Apple Pay domain association file contents (served at /.well-known/).
 			'square_apple_pay_domain_file' => '',
 			// Preparation only: shops never inherit the legacy global location ID.
@@ -857,6 +859,18 @@ class DoughBoss_Settings {
 	 */
 	public static function square_live_mode() {
 		return 'live' === self::square_mode();
+	}
+
+	/**
+	 * Storefront Square checkout style: 'embedded' (Web Payments SDK card
+	 * fields on this site — the shipped default) or 'hosted' (redirect to
+	 * Square's own checkout page via a Checkout API payment link). Anything
+	 * unrecognised fails back to the embedded default.
+	 *
+	 * @return string
+	 */
+	public static function square_checkout_style() {
+		return 'hosted' === self::get( 'square_checkout_style', 'embedded' ) ? 'hosted' : 'embedded';
 	}
 
 	/**

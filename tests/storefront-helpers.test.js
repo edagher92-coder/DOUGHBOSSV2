@@ -1972,3 +1972,91 @@ test('photo hero preserves ordinary controls without matchMedia', () => {
 });
 
 console.log('Storefront helper regression checks passed.');
+
+test('Square hosted checkout opens only Square payment-link hosts for the active mode', () => {
+	const valid = extractFunction(storefront, 'squareHostedCheckoutUrlValid');
+	assert.equal(valid('https://square.link/u/AbC123', true), true);
+	assert.equal(valid('https://checkout.square.site/merchant/x/order/y', true), true);
+	assert.equal(valid('https://sandbox.square.link/u/jUjglZiR', false), true);
+	for (const [url, live] of [
+		['https://sandbox.square.link/u/x', true], ['https://square.link/u/x', false], ['http://square.link/u/x', true],
+		['https://square.link.evil.test/u/x', true], ['https://evil.test/square.link/', true], ['javascript:alert(1)', true],
+		['https://square.link/u/"x', true], ['https://square.link', true], [null, true], ['https://square.link/u/x#frag', true]
+	]) {
+		assert.equal(valid(url, live), false, String(url) + ' ' + live);
+	}
+});
+
+test('Square hosted return key and saved checkout resume are strict and time bounded', () => {
+	const key = 'ab'.repeat(32);
+	const returned = extractFunction(storefront, 'squareHostedReturnKey');
+	assert.equal(returned('?doughboss_square_return=' + key), key);
+	assert.equal(returned('?page_id=7&doughboss_square_return=' + key + '&orderId=x'), key);
+	assert.equal(returned('?doughboss_square_return=' + key.toUpperCase()), '');
+	assert.equal(returned('?doughboss_square_return=' + key + 'a'), '');
+	assert.equal(returned('?xdoughboss_square_return=' + key), '');
+	assert.equal(returned('?doughboss_square_return=' + key + '?orderId=sq123'), key, 'Square-appended parameters do not hide the key');
+	const fresh = extractFunction(storefront, 'squareHostedPendingFresh');
+	const now = 1_800_000_000_000;
+	const pending = { checkoutReference: key, payload: { payment_attempt_key: 'attempt-key-1' }, checkoutAttemptId: 'checkout-attempt-0001', savedAt: now - 1000 };
+	assert.equal(fresh(pending, now), true);
+	assert.equal(fresh(Object.assign({}, pending, { savedAt: now - 45 * 60 * 1000 }), now), false, 'expired lease');
+	assert.equal(fresh(Object.assign({}, pending, { savedAt: now + 1000 }), now), false, 'future timestamp');
+	assert.equal(fresh(Object.assign({}, pending, { checkoutReference: 'cs_test_x' }), now), false);
+	assert.equal(fresh(Object.assign({}, pending, { payload: {} }), now), false);
+	assert.equal(fresh(Object.assign({}, pending, { checkoutAttemptId: 'short' }), now), false);
+	assert.equal(fresh(null, now), false);
+});
+
+test('Square hosted confirmation polls only unconfirmed answers and is bounded', async () => {
+	const confirm = extractFunction(storefront, 'confirmSquareHosted', { Math, Number });
+	const waits = [];
+	const wait = ms => { waits.push(ms); return Promise.resolve(); };
+	const error = (code, data) => Object.assign(new Error(code), { code, data });
+	let calls = 0;
+	const receipt = await confirm(() => { calls += 1; return calls < 3 ? Promise.reject(error('doughboss_square_hosted_unpaid', { hosted_state: 'unpaid', payment_pending: true })) : Promise.resolve({ order_number: 'DB-1' }); }, wait, 5);
+	assert.equal(receipt.order_number, 'DB-1');
+	assert.equal(calls, 3);
+	assert.deepEqual(waits, [0, 2000, 3000]);
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_square_hosted_pending', { hosted_state: 'pending' })); }, wait, 5));
+	assert.equal(calls, 5, 'never more than five confirmation reads');
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_square_hosted_closed', { hosted_state: 'failed', outcome: 'terminal_no_charge' })); }, wait, 5));
+	assert.equal(calls, 1, 'a closed checkout is not polled');
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_pay_mismatch', { payment_pending: true })); }, wait, 5));
+	assert.equal(calls, 1, 'a held payment is not polled');
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_square_hosted_unpaid', { hosted_state: 'unpaid' })); }, wait, 1));
+	assert.equal(calls, 1, 'a non-return page visit checks once');
+	assert.doesNotMatch(confirm.toString(), /payment-intent/);
+});
+
+test('Square hosted storefront wiring never loads card fields and confirms only through /checkout', () => {
+	const source = fs.readFileSync(storefront, 'utf8');
+	const squareSource = fs.readFileSync(square, 'utf8');
+	assert.match(source, /var squareHosted = !!\(PAY\.enabled && GATEWAY === 'square' && PAY\.squareHosted === true\);/);
+	assert.match(squareSource, /var ordinaryEnabled = !!\(PAY\.enabled && PAY\.squareHosted !== true && CONFIG\.applicationId && CONFIG\.locationId\);/,
+		'ordinary Square SDK fields stay dormant in hosted mode');
+	const hostedBranch = source.slice(source.indexOf('} else if (squareHosted) {'), source.indexOf('} else if (stripeHosted) {'));
+	assert.match(hostedBranch, /request\('\/payment-intent'/);
+	assert.doesNotMatch(hostedBranch, /source_id|verification_token|tender_kind|tokenize/);
+	assert.match(hostedBranch, /squareHostedCheckoutUrlValid\(session\.checkout_url, !!PAY\.liveMode\)/);
+	assert.match(hostedBranch, /window\.location\.assign\(session\.checkout_url\)/);
+	const finish = source.slice(source.indexOf('function finishSquareHosted('), source.indexOf('function completeOrder('));
+	assert.match(finish, /request\('\/checkout'/);
+	assert.match(finish, /square_checkout: pending\.checkoutReference/);
+	assert.doesNotMatch(finish, /payment-intent/);
+	const cancel = source.slice(source.indexOf("squareHostedCancel.addEventListener('click'"), source.indexOf('// Tyro Connect: hosted payment form'));
+	assert.match(cancel, /paymentAttemptKey = newPaymentAttemptKey\(\);/, 'changing the order starts a new attempt key');
+	assert.doesNotMatch(cancel, /request\(/, 'cancelling makes no payment call');
+	assert.match(source, /if \(data\.hosted_state === 'unpaid'\) \{\s*squareHostedCancel\.hidden = false;/, 'change-order is offered only for a server-confirmed unpaid checkout');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	assert.match(assets, /'squareHosted'\s*=> \$square_hosted,/);
+	assert.match(assets, /\} elseif \( 'square' === \$gateway && ! \$square_hosted \) \{/, 'no Web Payments SDK enqueue in hosted mode');
+});

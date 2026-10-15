@@ -119,6 +119,41 @@ class DoughBoss_Payment_Attempts {
 	}
 
 	/**
+	 * Find the one attempt bound to a provider Order identity (unique column).
+	 *
+	 * @param string $order_reference Square Order id.
+	 * @return array|null
+	 */
+	public static function find_by_provider_order_reference( $order_reference ) {
+		global $wpdb;
+		$order_reference = is_string( $order_reference ) && 1 === preg_match( '/^[A-Za-z0-9_-]{8,191}\z/', $order_reference ) ? $order_reference : '';
+		if ( '' === $order_reference ) {
+			return null;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE provider_order_reference = %s LIMIT 1', $order_reference ), ARRAY_A );
+		return is_array( $row ) ? $row : null;
+	}
+
+	/**
+	 * Unpaid Square-hosted checkout attempts older than a cutoff (for expiry).
+	 *
+	 * @param string $cutoff UTC MySQL timestamp.
+	 * @param int    $limit  Maximum rows.
+	 * @return array[]
+	 */
+	public static function find_stale_hosted_square( $cutoff, $limit = 10 ) {
+		global $wpdb;
+		$cutoff = is_string( $cutoff ) && 1 === preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\z/', $cutoff ) ? $cutoff : '';
+		if ( '' === $cutoff ) {
+			return array();
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::table() . " WHERE provider = %s AND status = %s AND provider_reference IS NULL AND created_at < %s AND safe_metadata_json LIKE %s ORDER BY updated_at ASC, id ASC LIMIT %d", 'square', 'dispatching', $cutoff, '%"checkout_style":"hosted"%', max( 1, min( 50, (int) $limit ) ) ), ARRAY_A );
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
 	 * Find an unresolved attempt holding a cart-scoped provider guard.
 	 *
 	 * This is used by Square protocol v2 before allocating a new browser nonce.

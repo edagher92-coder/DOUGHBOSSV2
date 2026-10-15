@@ -48,7 +48,9 @@
 	if (PAY.gateway !== 'square') {
 		return;
 	}
-	var ordinaryEnabled = !!(PAY.enabled && CONFIG.applicationId && CONFIG.locationId);
+	// Square-hosted checkout (owner setting) never mounts ordinary card fields;
+	// doughboss.js redirects to Square's own page instead.
+	var ordinaryEnabled = !!(PAY.enabled && PAY.squareHosted !== true && CONFIG.applicationId && CONFIG.locationId);
 
 	var CARD_CONTAINER_CLASS = 'db-square-card';
 	var enhanced = [];
