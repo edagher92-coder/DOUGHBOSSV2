@@ -99,6 +99,13 @@ delete_option( 'doughboss_printer_watermark' );
 delete_option( 'doughboss_email_stage_log' );
 delete_option( 'doughboss_portal_routes_version' );
 delete_option( 'doughboss_square_apple_pay_domain_file' );
+// 2.50.0 per-shop Square OAuth. Seller authorizations stay listed in each
+// Square Dashboard (Account & Settings › Apps) until the seller removes them.
+delete_option( 'doughboss_square_oauth' );
+delete_option( 'doughboss_square_oauth_secret' );
+delete_option( 'doughboss_square_oauth_notices' );
+delete_option( 'doughboss_square_catalog_copy_map' );
+wp_clear_scheduled_hook( 'doughboss_square_oauth_refresh' );
 delete_transient( 'doughboss_migrating' );
 
 // Shop assignments are plugin-owned attendance/KDS metadata. Retaining them

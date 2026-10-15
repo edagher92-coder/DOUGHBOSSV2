@@ -7945,7 +7945,32 @@ class DoughBoss_REST_Controller {
 		$resource = isset( $data['type'] ) ? sanitize_key( (string) $data['type'] ) : '';
 		$reference = isset( $data['id'] ) ? DoughBoss_Square::canonical_id( $data['id'] ) : '';
 
+		// 2.50.0 multi-account: the one application webhook subscription
+		// receives every authorized seller's events (signed with the same
+		// app-level key). Route by the payload's merchant_id; a seller this site
+		// does not serve is acknowledged and ignored.
+		$merchant_id = isset( $event['merchant_id'] ) && is_string( $event['merchant_id'] ) ? $event['merchant_id'] : '';
+		if ( 'oauth.authorization.revoked' === $type ) {
+			$revoked = class_exists( 'DoughBoss_Square_OAuth' ) ? DoughBoss_Square_OAuth::handle_revocation( $merchant_id ) : 0;
+			return rest_ensure_response( array( 'received' => true, 'outcome' => $revoked > 0 ? 'disconnected' : 'ignored' ) );
+		}
+		$route = class_exists( 'DoughBoss_Square_OAuth' ) ? DoughBoss_Square_OAuth::route_event( $event ) : array( 'route' => 'legacy', 'shop' => '' );
+		if ( 'ignore' === $route['route'] ) {
+			return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+		}
+		$route_binding = null;
+		if ( 'shop' === $route['route'] ) {
+			$route_native  = DoughBoss_Square_OAuth::native_location_id( $route['shop'] );
+			$route_binding = $route_native ? DoughBoss_Square::shop_binding( $route_native ) : null;
+			$route_binding = is_array( $route_binding ) ? $route_binding : null;
+		}
+
 		// Square Subscriptions (paid Club): keep the Club customer group in step.
+		// The Club lives in the home shop's seller account only.
+		if ( '' !== $reference && '' !== $event_id && 'subscription' === $resource && 0 === strpos( $type, 'subscription.' ) && class_exists( 'DoughBoss_Square_Tiers' )
+			&& ! $this->square_event_is_home_seller( $route ) ) {
+			return rest_ensure_response( array( 'received' => true, 'ignored' => true ) );
+		}
 		if ( '' !== $reference && '' !== $event_id && 'subscription' === $resource && 0 === strpos( $type, 'subscription.' ) && class_exists( 'DoughBoss_Square_Tiers' ) ) {
 			$event_key = hash( 'sha256', 'square|' . $event_id );
 			if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'square', $reference, $type ) ) {
@@ -8072,7 +8097,7 @@ class DoughBoss_REST_Controller {
 				// money with no local record. Ask Square whether the payment is
 				// provably ours (our location + our db-attempt- reference); if it
 				// is, flag it for a human rather than dropping it.
-				$orphan = DoughBoss_Square::orphan_payment( $reference );
+				$orphan = DoughBoss_Square::orphan_payment( $reference, $route_binding );
 				if (
 					! is_wp_error( $orphan )
 					&& 'succeeded' === $orphan['status']
@@ -8129,6 +8154,31 @@ class DoughBoss_REST_Controller {
 		DoughBoss_Payment_Attempts::complete_event( $event_key, 'processed' );
 
 		return rest_ensure_response( array( 'received' => true ) );
+	}
+
+	/**
+	 * Whether a routed Square event comes from the seller account that owns
+	 * the Club (the home shop): that shop's OAuth seller when it is connected,
+	 * otherwise the legacy single-account seller.
+	 *
+	 * @param array $route { route, shop } from DoughBoss_Square_OAuth::route_event().
+	 * @return bool
+	 */
+	private function square_event_is_home_seller( array $route ) {
+		if ( ! class_exists( 'DoughBoss_Square_OAuth' ) || ! class_exists( 'DoughBoss_Square_Tiers' ) ) {
+			return true;
+		}
+		$home      = (int) DoughBoss_Square_Tiers::home_location();
+		$home_slug = '';
+		foreach ( DoughBoss_Square_OAuth::SHOPS as $shop ) {
+			if ( $home && DoughBoss_Square_OAuth::native_location_id( $shop ) === $home ) {
+				$home_slug = $shop;
+			}
+		}
+		if ( '' !== $home_slug && DoughBoss_Square_OAuth::is_connected( $home_slug ) ) {
+			return 'shop' === $route['route'] && $home_slug === $route['shop'];
+		}
+		return 'legacy' === $route['route'];
 	}
 
 	/**

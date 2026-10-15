@@ -1093,8 +1093,55 @@ class DoughBoss_Settings {
 		if ( ! is_string( $shop ) ) {
 			return '';
 		}
-		$map = self::square_location_map();
+		$map = self::square_effective_location_map();
 		return isset( $map[ $shop ] ) ? $map[ $shop ] : '';
+	}
+
+	/**
+	 * Active-mode shop bindings after per-shop Square OAuth (2.50.0): a shop
+	 * connected under DoughBoss › Square accounts takes its location ONLY from
+	 * that connection (empty until the owner picks one); every other shop keeps
+	 * the legacy settings map. A provider ID claimed by two shops still removes
+	 * both bindings.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function square_effective_location_map() {
+		$map = self::square_location_map();
+		if ( ! class_exists( 'DoughBoss_Square_OAuth' ) ) {
+			return $map;
+		}
+		foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $shop ) {
+			if ( DoughBoss_Square_OAuth::is_connected( $shop ) ) {
+				$location = DoughBoss_Square_OAuth::location_id( $shop );
+				if ( '' === $location ) {
+					unset( $map[ $shop ] );
+				} else {
+					$map[ $shop ] = $location;
+				}
+			}
+		}
+		$counts = array_count_values( $map );
+		foreach ( $map as $shop => $id ) {
+			if ( $counts[ $id ] > 1 ) {
+				unset( $map[ $shop ] );
+			}
+		}
+		return $map;
+	}
+
+	/**
+	 * Whether the credential that will be used for this shop is usable: the
+	 * shop's own OAuth token when connected, otherwise the legacy token.
+	 *
+	 * @param string $shop Exact shop slug.
+	 * @return bool
+	 */
+	public static function square_shop_credential_valid( $shop ) {
+		if ( class_exists( 'DoughBoss_Square_OAuth' ) && is_string( $shop ) && DoughBoss_Square_OAuth::is_connected( $shop ) ) {
+			return DoughBoss_Square_OAuth::credential_valid( $shop );
+		}
+		return self::square_access_token_valid();
 	}
 
 	/**
@@ -1183,16 +1230,17 @@ class DoughBoss_Settings {
 
 	/** Local readiness for an exact active-mode shop; never inherit the global ID. */
 	public static function square_shop_ready( $shop ) {
-		return self::square_ready_with_location( self::square_shop_location_id( $shop ) );
+		$location = self::square_shop_location_id( $shop );
+		return '' !== $location && self::square_ready_with_location( $location, self::square_shop_credential_valid( $shop ) );
 	}
 
 	/** Shared activation guards for legacy and explicitly mapped callers. */
-	private static function square_ready_with_location( $location_id ) {
+	private static function square_ready_with_location( $location_id, $token_valid = null ) {
 		return self::payments_enabled()
 			&& 'square' === self::payment_gateway()
 			&& '' !== self::square_application_id()
 			&& '' !== $location_id
-			&& self::square_access_token_valid()
+			&& ( null === $token_valid ? self::square_access_token_valid() : (bool) $token_valid )
 			&& (
 				! self::square_live_mode()
 				|| ( (bool) self::get( 'square_live_approved', 0 ) && self::square_webhook_configured() )

@@ -3974,6 +3974,7 @@ JS;
 					</table>
 
 			<h3><?php esc_html_e( 'Square shop mapping preparation', 'doughboss' ); ?></h3>
+			<p class="description"><strong><?php esc_html_e( 'Multi-account (2.50.0):', 'doughboss' ); ?></strong> <?php esc_html_e( 'a shop connected to its own Square account under DoughBoss › Square accounts uses that connection’s location and credentials and ignores its row below. Leave Bankstown and Roselands blank here when they use their own accounts.', 'doughboss' ); ?></p>
 			<p class="description"><?php esc_html_e( 'Enter only merchant-verified IDs. Sandbox and live bindings are separate; every shop must have a distinct ID. Blank or conflicting IDs stay unmapped. These fields prepare the integration only: they do not yet replace the legacy checkout routing, connect Square, or enable orders and payments. Keep ordering and payments off until the approval, payment and kitchen lifecycle has passed acceptance.', 'doughboss' ); ?></p>
 			<table class="form-table" role="presentation">
 				<?php foreach ( array( 'test' => __( 'Sandbox', 'doughboss' ), 'live' => __( 'Live', 'doughboss' ) ) as $square_environment => $square_label ) : ?>

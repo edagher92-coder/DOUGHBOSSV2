@@ -98,6 +98,8 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-square-tiers.php';
 		require_once $dir . 'class-doughboss-square-wallets.php';
 		require_once $dir . 'class-doughboss-square-dashboard.php';
+		require_once $dir . 'class-doughboss-square-oauth.php';
+		require_once $dir . 'class-doughboss-square-catalog-copy.php';
 		require_once $dir . 'class-doughboss-payment.php';
 		require_once $dir . 'class-doughboss-payment-attempts.php';
 		require_once $dir . 'class-doughboss-checkout-snapshots.php';
@@ -133,6 +135,7 @@ final class DoughBoss {
 
 		if ( is_admin() ) {
 			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
+			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-square-accounts-admin.php';
 		}
 	}
 
@@ -209,10 +212,13 @@ final class DoughBoss {
 		DoughBoss_Square_Loyalty::init();
 		DoughBoss_Square_Wallets::init();
 		DoughBoss_Square_Hosted::init();
+		// Per-shop Square seller accounts (OAuth). Dormant until a shop connects.
+		DoughBoss_Square_OAuth::init();
 		DoughBoss_Printer::init();
 
 		if ( is_admin() ) {
 			( new DoughBoss_Admin() )->init();
+			DoughBoss_Square_Accounts_Admin::init();
 		}
 	}
 

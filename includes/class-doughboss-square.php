@@ -215,11 +215,22 @@ class DoughBoss_Square {
 			return self::shop_binding_error();
 		}
 
-		return array(
+		$binding = array(
 			'shop_slug'          => $slug,
 			'square_location_id' => $square_location_id,
 			'square_mode'        => $mode,
 		);
+		// 2.50.0: a shop connected through Square OAuth carries its seller
+		// (merchant) id. Legacy single-account bindings keep their exact
+		// three-key shape so stored binding hashes stay valid.
+		if ( class_exists( 'DoughBoss_Square_OAuth' ) && DoughBoss_Square_OAuth::is_connected( $slug ) ) {
+			$merchant_id = DoughBoss_Square_OAuth::merchant_id( $slug );
+			if ( '' === $merchant_id ) {
+				return self::shop_binding_error();
+			}
+			$binding['merchant_id'] = $merchant_id;
+		}
+		return $binding;
 	}
 
 	/** Explicit owner-only account observation. No mapping, approval or provider write is performed. */
@@ -396,10 +407,10 @@ class DoughBoss_Square {
 	/** Internal credential introspection only; no approval, import readiness or provider mutation. */
 	public static function observe_catalogue_identity( $location_id ) {
 		$error = self::catalogue_identity_error();
-		if ( ! is_int( $location_id ) || $location_id < 1 || ! DoughBoss_Settings::square_access_token_valid() || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
+		if ( ! is_int( $location_id ) || $location_id < 1 || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
 		$binding = self::shop_binding( $location_id );
-		if ( is_wp_error( $binding ) ) { return $error; }
-		$token = self::access_token();
+		if ( is_wp_error( $binding ) || ! self::credential_valid( $binding ) ) { return $error; }
+		$token = self::credential_fingerprint( $binding );
 		$app = DoughBoss_Settings::square_application_id();
 		$pin = DoughBoss_Settings::square_api_version();
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
@@ -408,8 +419,8 @@ class DoughBoss_Square {
 		if ( ! preg_match( '/^[A-Z]{3}$/D', $currency ) || ! preg_match( '/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $pin, $date ) || ! checkdate( (int) $date[2], (int) $date[3], (int) $date[1] ) ) { return $error; }
 		$scope_current = static function () use ( $location_id, $binding, $token, $app, $pin, $currency ) {
 			$current_currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
-			return $binding === self::shop_binding( $location_id ) && DoughBoss_Settings::square_access_token_valid()
-				&& hash_equals( $token, self::access_token() ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
+			return $binding === self::shop_binding( $location_id ) && self::credential_valid( $binding )
+				&& hash_equals( $token, self::credential_fingerprint( $binding ) ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
 				&& hash_equals( $pin, DoughBoss_Settings::square_api_version() ) && is_string( $current_currency ) && $currency === strtoupper( $current_currency );
 		};
 		if ( ! $scope_current() ) { return $error; }
@@ -442,10 +453,10 @@ class DoughBoss_Square {
 	private static function observe_catalogue_reference_view( $location_id, array $references, $owner_review ) {
 		$error = self::catalogue_reference_error();
 		$body = self::catalogue_reference_request( $references );
-		if ( is_wp_error( $body ) || ! is_int( $location_id ) || $location_id < 1 || ! DoughBoss_Settings::square_access_token_valid() || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
+		if ( is_wp_error( $body ) || ! is_int( $location_id ) || $location_id < 1 || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
 		$binding = self::shop_binding( $location_id );
-		if ( is_wp_error( $binding ) ) { return $error; }
-		$token = self::access_token();
+		if ( is_wp_error( $binding ) || ! self::credential_valid( $binding ) ) { return $error; }
+		$token = self::credential_fingerprint( $binding );
 		$app = DoughBoss_Settings::square_application_id();
 		$pin = DoughBoss_Settings::square_api_version();
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
@@ -454,8 +465,8 @@ class DoughBoss_Square {
 		if ( ! preg_match( '/^[A-Z]{3}$/D', $currency ) || ! preg_match( '/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $pin, $date ) || ! checkdate( (int) $date[2], (int) $date[3], (int) $date[1] ) ) { return $error; }
 		$scope_current = static function () use ( $location_id, $binding, $token, $app, $pin, $currency ) {
 			$current_currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
-			return $binding === self::shop_binding( $location_id ) && DoughBoss_Settings::square_access_token_valid()
-				&& hash_equals( $token, self::access_token() ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
+			return $binding === self::shop_binding( $location_id ) && self::credential_valid( $binding )
+				&& hash_equals( $token, self::credential_fingerprint( $binding ) ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
 				&& hash_equals( $pin, DoughBoss_Settings::square_api_version() ) && is_string( $current_currency ) && $currency === strtoupper( $current_currency );
 		};
 		if ( ! $scope_current() ) { return $error; }
@@ -475,10 +486,10 @@ class DoughBoss_Square {
 	/** Explicit owner-requested current catalogue observation; GET only, no sync. */
 	public static function observe_catalogue( $location_id ) {
 		$error = self::catalogue_error();
-		if ( ! is_int( $location_id ) || $location_id < 1 || ! DoughBoss_Settings::square_access_token_valid() || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
+		if ( ! is_int( $location_id ) || $location_id < 1 || '' === DoughBoss_Settings::square_application_id() ) { return $error; }
 		$binding = self::shop_binding( $location_id );
-		if ( is_wp_error( $binding ) ) { return $error; }
-		$token = self::access_token();
+		if ( is_wp_error( $binding ) || ! self::credential_valid( $binding ) ) { return $error; }
+		$token = self::credential_fingerprint( $binding );
 		$app = DoughBoss_Settings::square_application_id();
 		$pin = DoughBoss_Settings::square_api_version();
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
@@ -487,8 +498,8 @@ class DoughBoss_Square {
 		if ( ! preg_match( '/^[A-Z]{3}$/D', $currency ) ) { return $error; }
 		$scope_current = static function () use ( $location_id, $binding, $token, $app, $pin, $currency ) {
 			$current_currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
-			return $binding === self::shop_binding( $location_id ) && DoughBoss_Settings::square_access_token_valid()
-				&& hash_equals( $token, self::access_token() ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
+			return $binding === self::shop_binding( $location_id ) && self::credential_valid( $binding )
+				&& hash_equals( $token, self::credential_fingerprint( $binding ) ) && hash_equals( $app, DoughBoss_Settings::square_application_id() )
 				&& hash_equals( $pin, DoughBoss_Settings::square_api_version() ) && is_string( $current_currency ) && $currency === strtoupper( $current_currency );
 		};
 		if ( ! $scope_current() ) { return $error; }
@@ -1150,12 +1161,59 @@ class DoughBoss_Square {
 	}
 
 	/**
-	 * Access token for the active mode (server-side only — never sent to a client).
+	 * Slug of the OAuth-connected shop a binding names, or '' for the legacy
+	 * single-account credentials.
 	 *
+	 * @param array|null $shop_binding Binding.
 	 * @return string
 	 */
-	private static function access_token() {
-		return DoughBoss_Settings::square_access_token();
+	private static function oauth_shop( $shop_binding ) {
+		if ( ! is_array( $shop_binding ) || ! class_exists( 'DoughBoss_Square_OAuth' ) || ! isset( $shop_binding['shop_slug'] ) || ! is_string( $shop_binding['shop_slug'] ) ) {
+			return '';
+		}
+		return DoughBoss_Square_OAuth::is_connected( $shop_binding['shop_slug'] ) ? $shop_binding['shop_slug'] : '';
+	}
+
+	/**
+	 * Access token for a request (server-side only — never sent to a client).
+	 * A binding for an OAuth-connected shop uses that seller's own token;
+	 * everything else uses the legacy single-account token for the mode.
+	 *
+	 * @param array|null $shop_binding  Validated binding, or null for legacy calls.
+	 * @param bool       $allow_refresh Refresh a nearly expired OAuth token first.
+	 * @return string
+	 */
+	private static function access_token( $shop_binding = null, $allow_refresh = false ) {
+		$shop = self::oauth_shop( $shop_binding );
+		return '' !== $shop ? DoughBoss_Square_OAuth::access_token( $shop, $allow_refresh ) : DoughBoss_Settings::square_access_token();
+	}
+
+	/**
+	 * Whether the credential a binding resolves to is plausibly usable.
+	 *
+	 * @param array|null $shop_binding Binding.
+	 * @return bool
+	 */
+	private static function credential_valid( $shop_binding = null ) {
+		$shop = self::oauth_shop( $shop_binding );
+		return '' !== $shop ? DoughBoss_Square_OAuth::credential_valid( $shop ) : DoughBoss_Settings::square_access_token_valid();
+	}
+
+	/**
+	 * Stable identity of the seller credential behind a binding, used for
+	 * before/after "same context" checks. An OAuth token refresh keeps the
+	 * same seller and therefore the same fingerprint; reconnecting a shop to a
+	 * different seller, or changing the legacy token, changes it.
+	 *
+	 * @param array|null $shop_binding Binding.
+	 * @return string
+	 */
+	private static function credential_fingerprint( $shop_binding = null ) {
+		$shop = self::oauth_shop( $shop_binding );
+		if ( '' !== $shop ) {
+			return hash( 'sha256', 'oauth|' . self::mode() . '|' . $shop . '|' . DoughBoss_Square_OAuth::merchant_id( $shop ) );
+		}
+		return hash( 'sha256', 'settings|' . DoughBoss_Settings::square_access_token() );
 	}
 
 	/**
@@ -2087,10 +2145,10 @@ class DoughBoss_Square {
 		}
 		$binding = self::attempt_shop_binding( $attempt );
 		$configuration = self::settings_context_version();
-		if ( is_wp_error( $binding ) || is_wp_error( $configuration ) || ! DoughBoss_Settings::square_access_token_valid() ) {
+		if ( is_wp_error( $binding ) || is_wp_error( $configuration ) || ! self::credential_valid( $binding ) ) {
 			return self::split_recovery_error();
 		}
-		$token = self::access_token();
+		$token = self::credential_fingerprint( $binding );
 		// The locking read has committed: provider I/O must never hold ledger locks.
 		$payment = self::retrieve_mapped_payment( $payment_id, $binding );
 		if ( is_wp_error( $payment ) || ! isset( $payment['id'] ) || $payment_id !== $payment['id']
@@ -2101,7 +2159,7 @@ class DoughBoss_Square {
 		$current_configuration = self::settings_context_version();
 		$current_binding = self::attempt_shop_binding( $attempt );
 		if ( is_wp_error( $current_configuration ) || ! hash_equals( $configuration, $current_configuration )
-			|| is_wp_error( $current_binding ) || $binding !== $current_binding || ! hash_equals( $token, self::access_token() ) ) {
+			|| is_wp_error( $current_binding ) || $binding !== $current_binding || ! hash_equals( $token, self::credential_fingerprint( $current_binding ) ) ) {
 			return self::split_recovery_error();
 		}
 		// Reacquire parent/snapshot/set/leg locks and recheck exact version/identity.
@@ -2299,18 +2357,20 @@ class DoughBoss_Square {
 	 * @param string $id Square payment id.
 	 * @return array|WP_Error { id, status, amount, currency } or an error.
 	 */
-	public static function orphan_payment( $id ) {
+	public static function orphan_payment( $id, $shop_binding = null ) {
 		$id = self::canonical_id( $id );
 		if ( '' === $id ) {
 			return new WP_Error( 'doughboss_pay_id', __( 'Invalid payment reference.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 
-		$payment = self::retrieve_payment( $id );
+		// 2.50.0: a webhook routed to an OAuth-connected shop reads the payment
+		// with that seller's credentials and expects that shop's location.
+		$payment = is_array( $shop_binding ) ? self::retrieve_payment_with_binding( $id, $shop_binding ) : self::retrieve_payment( $id );
 		if ( is_wp_error( $payment ) ) {
 			return $payment;
 		}
 
-		$expected_location = self::location_id();
+		$expected_location = is_array( $shop_binding ) && isset( $shop_binding['square_location_id'] ) ? (string) $shop_binding['square_location_id'] : self::location_id();
 		$payment_location  = isset( $payment['location_id'] ) && is_scalar( $payment['location_id'] ) ? (string) $payment['location_id'] : '';
 		$reference         = isset( $payment['reference_id'] ) && is_scalar( $payment['reference_id'] ) ? (string) $payment['reference_id'] : '';
 		$money             = isset( $payment['amount_money'] ) && is_array( $payment['amount_money'] ) ? $payment['amount_money'] : array();
@@ -2458,7 +2518,7 @@ class DoughBoss_Square {
 		if ( is_wp_error( $binding ) ) {
 			return $binding;
 		}
-		$token = self::access_token();
+		$token = self::credential_fingerprint( $binding );
 
 		$full     = (int) $attempt['amount_minor'];
 		$currency = strtoupper( (string) $attempt['currency'] );
@@ -2490,7 +2550,7 @@ class DoughBoss_Square {
 		$current_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
 		$current_binding = is_array( $current_attempt ) ? self::attempt_shop_binding( $current_attempt ) : self::shop_binding_error();
 		$unchanged = ! is_wp_error( $current_configuration ) && hash_equals( $configuration_version, $current_configuration )
-			&& ! is_wp_error( $current_binding ) && $binding === $current_binding && hash_equals( $token, self::access_token() );
+			&& ! is_wp_error( $current_binding ) && $binding === $current_binding && hash_equals( $token, self::credential_fingerprint( $current_binding ) );
 		foreach ( array( 'id', 'provider', 'provider_reference', 'location_id', 'amount_minor', 'currency', 'safe_metadata_json' ) as $field ) {
 			if ( ! isset( $attempt[ $field ], $current_attempt[ $field ] ) || (string) $attempt[ $field ] !== (string) $current_attempt[ $field ] ) {
 				$unchanged = false;
@@ -2561,7 +2621,7 @@ class DoughBoss_Square {
 			return $binding;
 		}
 		$currency = DoughBoss_Settings::get( 'currency_code', 'AUD' );
-		$token    = self::access_token();
+		$token    = self::credential_fingerprint( $binding );
 		if ( ! is_string( $currency ) || 1 !== preg_match( '/^[A-Z]{3}\z/', $currency ) ) {
 			return new WP_Error( 'doughboss_gift_card_config', __( 'Gift card lookup is not configured.', 'doughboss' ), array( 'status' => 503 ) );
 		}
@@ -2570,7 +2630,7 @@ class DoughBoss_Square {
 			return new WP_Error( 'doughboss_gift_card_unavailable', __( 'The gift card balance could not be checked. No gift card was changed.', 'doughboss' ), array( 'status' => 502 ) );
 		}
 		$current = self::shop_binding( $location_id );
-		if ( is_wp_error( $current ) || $current !== $binding || ! hash_equals( $token, self::access_token() )
+		if ( is_wp_error( $current ) || $current !== $binding || ! hash_equals( $token, self::credential_fingerprint( $current ) )
 			|| $currency !== DoughBoss_Settings::get( 'currency_code', 'AUD' ) ) {
 			return new WP_Error( 'doughboss_gift_card_context_changed', __( 'Gift card lookup configuration changed. Check the balance again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
@@ -2735,6 +2795,28 @@ class DoughBoss_Square {
 	}
 
 	/**
+	 * Narrow transport for the owner-initiated master-menu copy (2.50.0):
+	 * ListCatalog reads and BatchUpsertCatalogObjects only, always through a
+	 * validated shop binding so each call uses that shop's own seller token.
+	 *
+	 * @param string $method  HTTP method.
+	 * @param string $path    API path.
+	 * @param array  $body    JSON body (upsert only).
+	 * @param array  $binding Validated mapped shop binding.
+	 * @return array|WP_Error
+	 */
+	public static function catalog_copy_request( $method, $path, array $body, array $binding ) {
+		$method  = strtoupper( (string) $method );
+		$path    = (string) $path;
+		$allowed = ( 'GET' === $method && empty( $body ) && 1 === preg_match( '#^/v2/catalog/list\?types=[A-Z_%,C0-9]{3,200}(?:&cursor=[A-Za-z0-9%._~+=-]{1,2048})?\z#', $path ) )
+			|| ( 'POST' === $method && '/v2/catalog/batch-upsert' === $path && isset( $body['idempotency_key'], $body['batches'] ) );
+		if ( ! $allowed ) {
+			return new WP_Error( 'doughboss_pay_config', __( 'That Square operation is not available.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		return self::request( $method, $path, $body, $binding );
+	}
+
+	/**
 	 * Square APIs that operator-initiated commerce calls (catering invoices,
 	 * customer lookup and loyalty accrual) may reach. Payments and refunds keep
 	 * their dedicated, attempt-bound methods above and are deliberately absent.
@@ -2803,10 +2885,14 @@ class DoughBoss_Square {
 	 */
 	private static function request( $method, $path, array $body = array(), $shop_binding = null, $require_object = false ) {
 		if (
-			! DoughBoss_Settings::square_access_token_valid()
-			|| ( null === $shop_binding && '' === self::location_id() )
+			( null === $shop_binding && '' === self::location_id() )
 			|| ( null !== $shop_binding && ! self::mapped_binding_current( $shop_binding ) )
 		) {
+			return new WP_Error( 'doughboss_pay_config', __( 'Card payments are not configured.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		// Per-shop seller token (OAuth) or the legacy single-account token.
+		$token = self::access_token( $shop_binding, true );
+		if ( 1 !== preg_match( '/^[A-Za-z0-9_.-]{16,1024}$/D', $token ) ) {
 			return new WP_Error( 'doughboss_pay_config', __( 'Card payments are not configured.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 
@@ -2814,7 +2900,7 @@ class DoughBoss_Square {
 			'method'  => strtoupper( (string) $method ),
 			'timeout' => 25,
 			'headers' => array(
-				'Authorization'  => 'Bearer ' . self::access_token(),
+				'Authorization'  => 'Bearer ' . $token,
 				'Square-Version' => DoughBoss_Settings::square_api_version(),
 				'Content-Type'   => 'application/json',
 				'Accept'         => 'application/json',
@@ -2885,6 +2971,16 @@ class DoughBoss_Square {
 		$square_location_id = isset( $shop_binding['square_location_id'] ) && is_string( $shop_binding['square_location_id'] ) ? $shop_binding['square_location_id'] : '';
 		$square_mode        = isset( $shop_binding['square_mode'] ) && is_string( $shop_binding['square_mode'] ) ? $shop_binding['square_mode'] : '';
 		$current_location   = in_array( $shop_slug, array( 'revesby', 'bankstown', 'roselands' ), true ) ? DoughBoss_Settings::square_shop_location_id( $shop_slug ) : '';
+		// A binding that names a seller must still be that shop's connected
+		// seller. (A legacy binding has no merchant_id; its exact location id,
+		// which only one seller owns, remains the guard.)
+		if ( array_key_exists( 'merchant_id', $shop_binding ) ) {
+			$bound_merchant   = is_string( $shop_binding['merchant_id'] ) ? $shop_binding['merchant_id'] : '';
+			$current_merchant = '' !== self::oauth_shop( $shop_binding ) ? DoughBoss_Square_OAuth::merchant_id( $shop_slug ) : '';
+			if ( '' === $bound_merchant || '' === $current_merchant || ! hash_equals( $current_merchant, $bound_merchant ) ) {
+				return false;
+			}
+		}
 
 		return '' !== $current_location
 			&& '' !== $square_location_id
