@@ -137,6 +137,15 @@ class DoughBoss_Admin {
 
 		add_submenu_page(
 			'doughboss',
+			__( 'Member tiers (Square)', 'doughboss' ),
+			__( 'Member tiers', 'doughboss' ),
+			$this->cap(),
+			'doughboss-tiers',
+			array( $this, 'render_tiers_page' )
+		);
+
+		add_submenu_page(
+			'doughboss',
 			__( 'Shops / Locations', 'doughboss' ),
 			__( 'Shops', 'doughboss' ),
 			$this->cap(),
@@ -462,8 +471,8 @@ class DoughBoss_Admin {
 		$clean['legacy_voucher_issuance_enabled'] = empty( $input['legacy_voucher_issuance_enabled'] ) ? 0 : 1;
 
 		$clean['payments_enabled']  = empty( $input['payments_enabled'] ) ? 0 : 1;
-		$requested_gateway = isset( $input['payment_gateway'] ) ? sanitize_key( $input['payment_gateway'] ) : 'stripe';
-		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $requested_gateway : 'stripe';
+		$requested_gateway = isset( $input['payment_gateway'] ) ? sanitize_key( $input['payment_gateway'] ) : 'square';
+		$clean['payment_gateway'] = in_array( $requested_gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $requested_gateway : 'square';
 		$clean['stripe_mode']       = ( isset( $input['stripe_mode'] ) && 'live' === $input['stripe_mode'] ) ? 'live' : 'test';
 		$clean['stripe_test_pk']    = isset( $input['stripe_test_pk'] ) ? sanitize_text_field( $input['stripe_test_pk'] ) : '';
 		$clean['stripe_test_sk']    = empty( $input['clear_stripe_test_sk'] ) ? $this->keep_secret( $input, $existing, 'stripe_test_sk' ) : '';
@@ -494,6 +503,17 @@ class DoughBoss_Admin {
 		$clean['mpgs_api_version']       = min( 100, max( 63, absint( isset( $input['mpgs_api_version'] ) ? $input['mpgs_api_version'] : 100 ) ) );
 		$clean['mpgs_live_approved']     = empty( $input['mpgs_live_approved'] ) ? 0 : 1;
 
+		// Square is the only active gateway. Legacy Stripe/Tyro/MPGS settings are
+		// hidden from the form but kept (historical refunds, in-flight recovery):
+		// when their fields were not rendered, carry the stored values forward.
+		if ( empty( $input['legacy_gateways_rendered'] ) ) {
+			foreach ( $existing as $legacy_key => $legacy_value ) {
+				if ( preg_match( '/^(stripe|tyro|mpgs)_/', (string) $legacy_key ) ) {
+					$clean[ $legacy_key ] = $legacy_value;
+				}
+			}
+		}
+
 		// Square Payments API. The application id, location id, API version and
 		// notification URL are public configuration; the access token and webhook
 		// signature key are write-only, env-first secrets that render blank and go
@@ -514,6 +534,17 @@ class DoughBoss_Admin {
 		$clean['square_live_approved']     = empty( $input['square_live_approved'] ) ? 0 : 1;
 		if ( isset( $input['square_loyalty_accrual_present'] ) ) {
 			$clean['square_loyalty_accrual'] = empty( $input['square_loyalty_accrual'] ) ? 0 : 1;
+		}
+		if ( isset( $input['square_wallets_present'] ) ) {
+			$clean['square_wallets_enabled'] = empty( $input['square_wallets_enabled'] ) ? 0 : 1;
+		}
+		if ( isset( $input['square_apple_pay_domain_file'] ) ) {
+			$apple_file = preg_replace( '/[^A-Za-z0-9+\/=\s]/', '', (string) $input['square_apple_pay_domain_file'] );
+			$clean['square_apple_pay_domain_file'] = substr( trim( (string) $apple_file ), 0, 20000 );
+		}
+		if ( isset( $input['square_club_plan_variation_id'] ) ) {
+			$club_plan = trim( sanitize_text_field( (string) $input['square_club_plan_variation_id'] ) );
+			$clean['square_club_plan_variation_id'] = preg_match( '/^[A-Za-z0-9_-]{0,64}$/', $club_plan ) ? $club_plan : '';
 		}
 		if ( isset( $input['catering_min_notice_business_days'] ) ) {
 			$clean['catering_min_notice_business_days'] = max( 0, min( 30, (int) $input['catering_min_notice_business_days'] ) );
@@ -602,6 +633,16 @@ class DoughBoss_Admin {
 		$clean['pospal_order_pay_method_code'] = isset( $input['pospal_order_pay_method_code'] ) ? sanitize_text_field( $input['pospal_order_pay_method_code'] ) : '';
 		$clean['pospal_order_pay_online']      = empty( $input['pospal_order_pay_online'] ) ? 0 : 1;
 		$clean['pospal_product_map']           = ( isset( $existing['pospal_product_map'] ) && is_array( $existing['pospal_product_map'] ) ) ? $existing['pospal_product_map'] : array();
+
+		// POSPal is retired; keep its stored settings untouched while hidden.
+		if ( empty( $input['legacy_pospal_rendered'] ) ) {
+			foreach ( $existing as $legacy_key => $legacy_value ) {
+				if ( 0 === strpos( (string) $legacy_key, 'pospal_' ) ) {
+					$clean[ $legacy_key ] = $legacy_value;
+				}
+			}
+			unset( $clean['pospal_coupon_uid_10'] );
+		}
 
 		// Mercure real-time push.
 		$clean['mercure_enabled']       = empty( $input['mercure_enabled'] ) ? 0 : 1;
@@ -1991,6 +2032,57 @@ JS;
 
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
+	}
+
+	/**
+	 * Member tiers: staff add/remove a verified customer to the Student,
+	 * Tradie or Club group in Square. Perks themselves are Square pricing
+	 * rules targeting these groups; Club is normally synced automatically
+	 * from Square Subscriptions.
+	 *
+	 * @return void
+	 */
+	public function render_tiers_page() {
+		if ( ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to manage tiers.', 'doughboss' ) );
+		}
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'Member tiers (Square)', 'doughboss' ); ?></h1>
+			<p class="description" style="max-width:760px;"><?php esc_html_e( 'Check eligibility first (current student ID, or trade licence / White Card). Adding a customer puts them in the matching Square customer group; any Square discount rule set up for that group then applies when they are attached to a sale. Club members are added and removed automatically from their Square subscription.', 'doughboss' ); ?></p>
+			<table class="form-table" role="presentation">
+				<tr><th><label for="db-tier"><?php esc_html_e( 'Tier', 'doughboss' ); ?></label></th><td><select id="db-tier"><option value="student"><?php esc_html_e( 'Student', 'doughboss' ); ?></option><option value="tradie"><?php esc_html_e( 'Tradie', 'doughboss' ); ?></option><option value="club"><?php esc_html_e( 'Club (manual override)', 'doughboss' ); ?></option></select></td></tr>
+				<tr><th><label for="db-tier-name"><?php esc_html_e( 'Name', 'doughboss' ); ?></label></th><td><input id="db-tier-name" type="text" class="regular-text" autocomplete="off" /></td></tr>
+				<tr><th><label for="db-tier-email"><?php esc_html_e( 'Email', 'doughboss' ); ?></label></th><td><input id="db-tier-email" type="email" class="regular-text" autocomplete="off" /></td></tr>
+				<tr><th><label for="db-tier-phone"><?php esc_html_e( 'Mobile', 'doughboss' ); ?></label></th><td><input id="db-tier-phone" type="tel" class="regular-text" autocomplete="off" /> <span class="description"><?php esc_html_e( 'Use the number they use for Square Loyalty.', 'doughboss' ); ?></span></td></tr>
+			</table>
+			<p><button type="button" class="button button-primary" data-db-tier-action="add"><?php esc_html_e( 'Add to tier', 'doughboss' ); ?></button> <button type="button" class="button" data-db-tier-action="remove"><?php esc_html_e( 'Remove from tier', 'doughboss' ); ?></button></p>
+			<p id="db-tier-result" role="status"></p>
+		</div>
+		<script>
+		(function () {
+			var url = <?php echo wp_json_encode( esc_url_raw( rest_url( DOUGHBOSS_REST_NAMESPACE . '/admin/square-tier' ) ) ); ?>;
+			var nonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+			var out = document.getElementById('db-tier-result');
+			document.querySelectorAll('[data-db-tier-action]').forEach(function (btn) {
+				btn.addEventListener('click', function () {
+					var body = {
+						tier: document.getElementById('db-tier').value,
+						name: document.getElementById('db-tier-name').value,
+						email: document.getElementById('db-tier-email').value,
+						phone: document.getElementById('db-tier-phone').value,
+						action: btn.getAttribute('data-db-tier-action')
+					};
+					out.textContent = 'Working…';
+					fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce }, body: JSON.stringify(body) })
+						.then(function (r) { return r.json().then(function (d) { if (!r.ok) { throw new Error(d.message || 'Failed'); } return d; }); })
+						.then(function (d) { out.textContent = (d.member ? 'Added to ' : 'Removed from ') + d.tier + '.'; })
+						.catch(function (e) { out.textContent = e.message; });
+				});
+			});
+		})();
+		</script>
+		<?php
 	}
 
 	/**
@@ -3559,16 +3651,17 @@ JS;
 						<tr>
 							<th><?php esc_html_e( 'Active gateway', 'doughboss' ); ?></th>
 							<td>
-								<?php $gateway = isset( $settings['payment_gateway'] ) && in_array( $settings['payment_gateway'], array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $settings['payment_gateway'] : 'stripe'; ?>
-								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="stripe" <?php checked( 'stripe' === $gateway, true ); ?> /> <?php esc_html_e( 'Stripe', 'doughboss' ); ?></label>&nbsp;&nbsp;
-								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="tyro" <?php checked( 'tyro' === $gateway, true ); ?> /> <?php esc_html_e( 'Tyro Connect', 'doughboss' ); ?></label>&nbsp;&nbsp;
-								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="mpgs" <?php checked( 'mpgs' === $gateway, true ); ?> /> <?php esc_html_e( 'Mastercard Gateway', 'doughboss' ); ?></label>&nbsp;&nbsp;
+								<?php $gateway = isset( $settings['payment_gateway'] ) && in_array( $settings['payment_gateway'], array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $settings['payment_gateway'] : 'square'; ?>
+								<?php if ( DoughBoss_Settings::show_legacy_gateways() || 'stripe' === $gateway ) : ?><label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="stripe" <?php checked( 'stripe' === $gateway, true ); ?> /> <?php esc_html_e( 'Stripe', 'doughboss' ); ?></label>&nbsp;&nbsp;<?php endif; ?>
+								<?php if ( DoughBoss_Settings::show_legacy_gateways() || 'tyro' === $gateway ) : ?><label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="tyro" <?php checked( 'tyro' === $gateway, true ); ?> /> <?php esc_html_e( 'Tyro Connect', 'doughboss' ); ?></label>&nbsp;&nbsp;<?php endif; ?>
+								<?php if ( DoughBoss_Settings::show_legacy_gateways() || 'mpgs' === $gateway ) : ?><label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="mpgs" <?php checked( 'mpgs' === $gateway, true ); ?> /> <?php esc_html_e( 'Mastercard Gateway', 'doughboss' ); ?></label>&nbsp;&nbsp;<?php endif; ?>
 								<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[payment_gateway]" value="square" <?php checked( 'square' === $gateway, true ); ?> /> <?php esc_html_e( 'Square', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Existing paid orders always refund correctly against whichever gateway actually processed them, even after you switch this.', 'doughboss' ); ?></p>
 							</td>
 						</tr>
 					</table>
 
+					<?php if ( DoughBoss_Settings::show_legacy_gateways() ) : ?><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[legacy_gateways_rendered]" value="1" />
 					<h3><?php esc_html_e( 'Stripe', 'doughboss' ); ?></h3>
 					<p class="description">
 						<?php esc_html_e( 'Storefront orders redirect to Stripe-hosted Checkout for Visa, Mastercard and eligible Apple Pay or Google Pay wallets. DoughBoss never renders or handles card fields. Catering retains its existing Stripe Payment Element flow.', 'doughboss' ); ?>
@@ -3733,6 +3826,7 @@ JS;
 						</tr>
 					</table>
 
+					<?php endif; // legacy gateways ?>
 					<h3><?php esc_html_e( 'Square', 'doughboss' ); ?></h3>
 					<p class="description">
 						<?php esc_html_e( 'Uses the Square Web Payments SDK: the card fields are rendered and tokenised by Square inside the checkout page, and the charge is made server-side against the Square Payments API. DoughBoss never receives, stores or logs the card number or CVV.', 'doughboss' ); ?>
@@ -3822,6 +3916,18 @@ JS;
 							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual_present]" value="1" /><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual]" value="1" <?php checked( ! isset( $settings['square_loyalty_accrual'] ) || ! empty( $settings['square_loyalty_accrual'] ), true ); ?> /> <?php esc_html_e( 'Award Square Loyalty points on paid web orders', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Matches the customer by phone to an existing Square Loyalty account and applies the points rules set in Square Dashboard. Runs in the background; never enrols anyone. No effect until a Square Loyalty program is active.', 'doughboss' ); ?></p></td>
 						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Apple Pay / Google Pay', 'doughboss' ); ?></th>
+							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_wallets_present]" value="1" /><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_wallets_enabled]" value="1" <?php checked( ! empty( $settings['square_wallets_enabled'] ), true ); ?> /> <?php esc_html_e( 'Show Apple Pay and Google Pay buttons at checkout', 'doughboss' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Turn on only after a sandbox Google Pay test order passes. Apple Pay also needs the domain registered in the Square Developer Console (Apple Pay › Add domain) using the file below.', 'doughboss' ); ?></p>
+								<p><label for="db-apple-file"><?php esc_html_e( 'Apple Pay domain association file (paste contents)', 'doughboss' ); ?></label><br /><textarea id="db-apple-file" rows="3" class="large-text code" name="<?php echo esc_attr( $opt ); ?>[square_apple_pay_domain_file]"><?php echo esc_textarea( isset( $settings['square_apple_pay_domain_file'] ) ? $settings['square_apple_pay_domain_file'] : '' ); ?></textarea>
+								<span class="description"><?php echo esc_html( sprintf( __( 'Served at %s', 'doughboss' ), home_url( '/.well-known/apple-developer-merchantid-domain-association' ) ) ); ?></span></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-club-plan"><?php esc_html_e( 'Club plan variation ID', 'doughboss' ); ?></label></th>
+							<td><input type="text" id="db-club-plan" class="regular-text code" autocomplete="off" name="<?php echo esc_attr( $opt ); ?>[square_club_plan_variation_id]" value="<?php echo esc_attr( isset( $settings['square_club_plan_variation_id'] ) ? $settings['square_club_plan_variation_id'] : '' ); ?>" />
+								<p class="description"><?php esc_html_e( 'From Square Dashboard › Subscriptions (the Club plan’s monthly variation). Active subscribers are added to the “DoughBoss Club” customer group automatically; cancelled or paused ones are removed. Needs the webhook events subscription.created and subscription.updated.', 'doughboss' ); ?></p></td>
+						</tr>
 					</table>
 
 			<h3><?php esc_html_e( 'Square shop mapping preparation', 'doughboss' ); ?></h3>
@@ -3840,6 +3946,7 @@ JS;
 				<?php endforeach; ?>
 			</table>
 
+			<?php if ( DoughBoss_Settings::show_legacy_gateways() ) : ?><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[legacy_pospal_rendered]" value="1" />
 			<h2><?php esc_html_e( 'POSPal POS (in-store coupons)', 'doughboss' ); ?></h2>
 					<p class="description" style="max-width:760px;">
 						<?php esc_html_e( 'Connect the Revesby POSPal till so issued vouchers can be mirrored as member coupons and reconciled. Off by default. Enter the area host, App ID and App Key from your POSPal Open Platform account, save, then test the connection.', 'doughboss' ); ?>
@@ -4008,6 +4115,7 @@ JS;
 						<p class="description"><?php esc_html_e( '"Load POSPal products" fetches your catalogue and auto-selects the closest name match for every item below — review each one, adjust anything wrong, then Save mapping. Nothing is saved until you click Save.', 'doughboss' ); ?></p>
 					<?php endif; ?>
 
+			<?php endif; // legacy POSPal ?>
 					<h2><?php esc_html_e( 'Real-time &amp; Notifications', 'doughboss' ); ?></h2>
 					<p class="description" style="max-width:760px;">
 						<?php esc_html_e( 'Optional push, SMS and printing channels. Each group is off by default and stays fully dormant until you enable it and supply its settings. Secret fields (the JWT, token and API key below) are write-only: they show blank and are kept as-is unless you type a new value.', 'doughboss' ); ?>

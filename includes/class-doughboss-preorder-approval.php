@@ -490,6 +490,84 @@ class DoughBoss_Preorder_Approval {
 		}
 	}
 
+	/** Max card declines on one approved pre-order before staff must step in. */
+	const MAX_DECLINE_RETRIES = 5;
+
+	/**
+	 * Square definitively refused the card (no payment exists): reopen the same
+	 * approval for another card. The failed attempt keeps its checkout key; the
+	 * approval rotates to a fresh, deterministic checkout key so the next try
+	 * gets its own attempt row, snapshot and Square idempotency keys.
+	 *
+	 * Only a linked attempt that is `failed` with no provider payment reference
+	 * qualifies — anything uncertain stays held. Capped to stop card testing.
+	 *
+	 * @param int $request_order_id Pre-order request id.
+	 * @param int $attempt_id       The declined attempt.
+	 * @return array|WP_Error Approval row.
+	 */
+	public static function reopen_after_decline( $request_order_id, $attempt_id ) {
+		$request_order_id = absint( $request_order_id );
+		$attempt_id       = absint( $attempt_id );
+		$ready            = self::storage_ready();
+		if ( is_wp_error( $ready ) ) {
+			return $ready;
+		}
+		if ( ! $request_order_id || ! $attempt_id ) {
+			return self::error( 'doughboss_preorder_payment_attempt_invalid', __( 'A valid pre-order request payment attempt is required.', 'doughboss' ), 400 );
+		}
+		$count_key = 'doughboss_preorder_declines_' . $request_order_id;
+		$declines  = (int) get_option( $count_key, 0 );
+		if ( $declines >= self::MAX_DECLINE_RETRIES ) {
+			return self::error( 'doughboss_preorder_decline_limit', __( 'Too many declined cards for this order. Please contact the shop.', 'doughboss' ), 429 );
+		}
+		$started = self::begin();
+		if ( is_wp_error( $started ) ) {
+			return $started;
+		}
+		try {
+			$request = self::locked_order( $request_order_id );
+			$row     = self::locked_approval( $request_order_id );
+			$attempt = self::locked_payment_attempt( $attempt_id );
+			if ( ! $request || ! $row || ! is_array( $attempt )
+				|| self::STATE_PAYMENT_ACTIVE !== (string) $row->state
+				|| (int) $row->payment_attempt_id !== $attempt_id
+				|| 'unpaid' !== (string) $request->payment_status
+				|| 'failed' !== (string) $attempt['status']
+				|| ! empty( $attempt['provider_reference'] )
+				|| empty( $row->payment_checkout_key )
+				|| ! hash_equals( (string) $row->payment_checkout_key, (string) $attempt['checkout_key'] ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_payment_unavailable', __( 'This payment cannot be retried automatically. Please contact the shop.', 'doughboss' ), 409 );
+			}
+			$next_key = self::retry_checkout_key( (string) $row->payment_checkout_key, $attempt_id );
+			if ( ! self::compare_and_set( $row, array( 'state' => self::STATE_APPROVED_UNPAID, 'payment_attempt_id' => null, 'payment_checkout_key' => $next_key, 'updated_at_utc' => self::now() ) ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_payment_conflict', __( 'This payment changed elsewhere. Please refresh.', 'doughboss' ), 409 );
+			}
+			$row = self::locked_approval( $request_order_id );
+			if ( ! self::commit() ) {
+				return self::error( 'doughboss_preorder_store_failed', __( 'The payment retry could not be committed.', 'doughboss' ), 500 );
+			}
+			update_option( $count_key, $declines + 1, false );
+			return self::row( $row );
+		} catch ( Throwable $e ) {
+			self::rollback();
+			return self::error( 'doughboss_preorder_store_failed', __( 'The payment retry could not be saved.', 'doughboss' ), 500 );
+		}
+	}
+
+	/**
+	 * Deterministic successor checkout key after a declined attempt (pure).
+	 *
+	 * @param string $previous_key Previous approval checkout key.
+	 * @param int    $attempt_id   Declined attempt id.
+	 * @return string 64 hex.
+	 */
+	public static function retry_checkout_key( $previous_key, $attempt_id ) {
+		return hash_hmac( 'sha256', 'doughboss-preorder-checkout-retry-v1|' . (string) $previous_key . '|' . absint( $attempt_id ), wp_salt( 'auth' ) );
+	}
+
 	/**
 	 * Mark an uncertain provider result held; it cannot reopen the capability.
 	 *

@@ -94,6 +94,8 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-square-orders.php';
 		require_once $dir . 'class-doughboss-square-invoices.php';
 		require_once $dir . 'class-doughboss-square-loyalty.php';
+		require_once $dir . 'class-doughboss-square-tiers.php';
+		require_once $dir . 'class-doughboss-square-wallets.php';
 		require_once $dir . 'class-doughboss-square-dashboard.php';
 		require_once $dir . 'class-doughboss-payment.php';
 		require_once $dir . 'class-doughboss-payment-attempts.php';
@@ -201,6 +203,7 @@ final class DoughBoss {
 		DoughBoss_Emails::init();
 		DoughBoss_Catering_Emails::init();
 		DoughBoss_Square_Loyalty::init();
+		DoughBoss_Square_Wallets::init();
 		DoughBoss_Printer::init();
 
 		if ( is_admin() ) {

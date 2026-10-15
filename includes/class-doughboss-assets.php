@@ -309,6 +309,7 @@ class DoughBoss_Assets {
 					'sdkUrl'        => DoughBoss_Square::sdk_url(),
 					'liveMode'      => DoughBoss_Settings::square_live_mode(),
 					'currency'      => strtoupper( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ),
+					'wallets'       => $payments_on && (bool) DoughBoss_Settings::get( 'square_wallets_enabled', 0 ),
 				)
 			);
 		}

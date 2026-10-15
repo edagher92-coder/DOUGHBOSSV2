@@ -184,3 +184,46 @@ db_test(
 		assert_same( 'none', DoughBoss_Square::refund_settlement( array(), $attempt ), 'malformed refund ignored' );
 	}
 );
+
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-tiers.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-wallets.php';
+
+db_test(
+	'member tiers map to fixed Square customer groups',
+	function () {
+		assert_same( 'student', DoughBoss_Square_Tiers::tier( ' Student ' ), 'tier normalised' );
+		assert_same( '', DoughBoss_Square_Tiers::tier( 'vip' ), 'unknown tier rejected' );
+		assert_same( 'DoughBoss Tradie', DoughBoss_Square_Tiers::group_name( 'tradie' ), 'tradie group name' );
+		$groups = array( array( 'id' => 'G1', 'name' => 'Other' ), array( 'id' => 'G2', 'name' => 'doughboss club ' ) );
+		assert_same( 'G2', DoughBoss_Square_Tiers::find_group( $groups, 'DoughBoss Club' ), 'case-insensitive exact group match' );
+		assert_same( '', DoughBoss_Square_Tiers::find_group( $groups, 'DoughBoss Student' ), 'missing group is created, not guessed' );
+		assert_same( '', DoughBoss_Square_Tiers::find_group( 'junk', 'DoughBoss Club' ), 'malformed list ignored' );
+		assert_true( DoughBoss_Square_Tiers::club_active( 'ACTIVE' ), 'active subscription = club member' );
+		foreach ( array( 'PENDING', 'CANCELED', 'PAUSED', 'DEACTIVATED', '' ) as $s ) {
+			assert_false( DoughBoss_Square_Tiers::club_active( $s ), $s . ' subscription is not club' );
+		}
+		assert_true( DoughBoss_Square_Wallets::is_association_request( '/.well-known/apple-developer-merchantid-domain-association' ), 'apple association path' );
+		assert_true( DoughBoss_Square_Wallets::is_association_request( '/.well-known/apple-developer-merchantid-domain-association?x=1' ), 'query string tolerated' );
+		assert_false( DoughBoss_Square_Wallets::is_association_request( '/.well-known/other' ), 'other paths untouched' );
+	}
+);
+
+if ( ! function_exists( 'wp_salt' ) ) {
+	function wp_salt( $scheme = 'auth' ) {
+		return 'test-salt-' . $scheme;
+	}
+}
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-preorder-approval.php';
+
+db_test(
+	'a declined approved pre-order rotates to a fresh, deterministic checkout key',
+	function () {
+		$old = str_repeat( 'a', 64 );
+		$k1  = DoughBoss_Preorder_Approval::retry_checkout_key( $old, 11 );
+		assert_true( 1 === preg_match( '/^[a-f0-9]{64}$/', $k1 ), 'successor key fits the char(64) unique column' );
+		assert_true( $k1 !== $old, 'successor differs from the declined key' );
+		assert_same( $k1, DoughBoss_Preorder_Approval::retry_checkout_key( $old, 11 ), 'same decline always yields the same key' );
+		assert_true( $k1 !== DoughBoss_Preorder_Approval::retry_checkout_key( $old, 12 ), 'each declined attempt gets its own successor' );
+		assert_same( 5, DoughBoss_Preorder_Approval::MAX_DECLINE_RETRIES, 'declines are capped against card testing' );
+	}
+);

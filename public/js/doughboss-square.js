@@ -294,16 +294,76 @@
 		// Consume eager mount failures; a selected tender can retry on submission.
 		selectedParts().catch(function () {});
 
+		var walletState = { token: '' };
+		if (CONFIG.wallets && typeof mountWallets === 'function') {
+			mountWallets(form, binding, wrap, walletState);
+		}
+
 		return {
 			status: status,
 			ready: function () {
+				if (walletState.token) {
+					var walletToken = walletState.token;
+					walletState.token = '';
+					return Promise.resolve({ kind: 'wallet', token: walletToken });
+				}
 				return selectedParts();
 			}
 		};
 	}
 
+	/**
+	 * Apple Pay / Google Pay buttons (opt-in: DoughBoss > Settings > Square).
+	 * Each wallet tokenizes inside its own click handler (Apple requires this),
+	 * then submits the same checkout form; the server charges its own total.
+	 * Unsupported browsers/devices simply show no wallet button.
+	 */
+	function mountWallets(form, binding, wrap, walletState) {
+		var box = el('div', { class: 'db-square-wallets' });
+		wrap.insertBefore(box, wrap.firstChild);
+		function totalNow() {
+			return { amount: readDisplayedTotal(form) || '0.00', label: 'DoughBoss' };
+		}
+		function submitWith(result) {
+			if (!result || result.status !== 'OK' || !result.token) { return; }
+			walletState.token = result.token;
+			if (typeof form.requestSubmit === 'function') { form.requestSubmit(); } else { form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); }
+		}
+		squarePayments(binding).then(function (payments) {
+			var request = payments.paymentRequest({ countryCode: 'AU', currencyCode: validSquareCurrency(CONFIG.currency) || 'AUD', total: totalNow() });
+			payments.applePay(request).then(function (applePay) {
+				var btn = el('button', { type: 'button', class: 'db-apple-pay', 'aria-label': 'Pay with Apple Pay' });
+				btn.style.cssText = '-webkit-appearance:-apple-pay-button;-apple-pay-button-type:plain;-apple-pay-button-style:black;width:100%;height:44px;margin-bottom:8px;';
+				box.appendChild(btn);
+				btn.addEventListener('click', function (e) {
+					e.preventDefault();
+					request.update({ total: totalNow() });
+					applePay.tokenize().then(submitWith).catch(function () {});
+				});
+			}).catch(function () {});
+			payments.googlePay(request).then(function (googlePay) {
+				var id = 'db-google-pay-' + String(Date.now());
+				var holder = el('div', { id: id, class: 'db-google-pay' });
+				box.appendChild(holder);
+				return googlePay.attach('#' + id, { buttonColor: 'black', buttonSizeMode: 'fill' }).then(function () {
+					holder.addEventListener('click', function (e) {
+						e.preventDefault();
+						request.update({ total: totalNow() });
+						googlePay.tokenize().then(submitWith).catch(function () {});
+					});
+				});
+			}).catch(function () {});
+		}).catch(function () {});
+	}
+
 	/** Gift-card GANs stay inside Square's secure element; only its nonce leaves. */
 	function tokenizeTender(parts, verification) {
+		if (parts && parts.kind === 'wallet') {
+			// Apple Pay / Google Pay: the device authenticated the buyer and the token
+			// was taken inside the button's click handler. Square settles it as a
+			// CARD payment, so the server keeps its card tender contract.
+			return Promise.resolve({ token: parts.token, kind: 'card' });
+		}
 		var kind = parts.kind === 'gift_card' ? 'gift_card' : 'card';
 		return (kind === 'gift_card' ? parts.card.tokenize() : parts.card.tokenize(verification)).then(function (result) {
 			if (!result || result.status !== 'OK' || !result.token) {

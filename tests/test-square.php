@@ -1082,7 +1082,7 @@ db_test(
 	function () {
 		doughboss_test_reset_options();
 
-		assert_same( 'stripe', DoughBoss_Settings::payment_gateway(), 'the default gateway is unchanged' );
+		assert_same( 'square', DoughBoss_Settings::payment_gateway(), 'Square is the default (and only) gateway' );
 		assert_false( DoughBoss_Settings::payments_enabled(), 'payments are off by default' );
 		assert_false( DoughBoss_Settings::square_ready(), 'Square is not ready on a fresh install' );
 		assert_false( DoughBoss_Square::ready(), 'the gateway gate agrees' );

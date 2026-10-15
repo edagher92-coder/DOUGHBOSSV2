@@ -2576,7 +2576,7 @@ class DoughBoss_Square {
 	 * customer lookup and loyalty accrual) may reach. Payments and refunds keep
 	 * their dedicated, attempt-bound methods above and are deliberately absent.
 	 */
-	const COMMERCE_PATH_PREFIXES = array( '/v2/customers', '/v2/orders', '/v2/invoices', '/v2/loyalty' );
+	const COMMERCE_PATH_PREFIXES = array( '/v2/customers', '/v2/orders', '/v2/invoices', '/v2/loyalty', '/v2/subscriptions' );
 
 	/**
 	 * Location-bound Square call for catering invoices and loyalty.

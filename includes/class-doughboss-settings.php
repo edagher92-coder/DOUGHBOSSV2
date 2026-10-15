@@ -202,7 +202,7 @@ class DoughBoss_Settings {
 			// DoughBoss_Payment routes to; default 'stripe' preserves the exact
 			// pre-existing behaviour on every site that never touches this setting.
 			'payments_enabled' => 0,
-			'payment_gateway'  => 'stripe',
+			'payment_gateway'  => 'square',
 			'stripe_mode'      => 'test',
 			'stripe_test_pk'   => '',
 			'stripe_test_sk'   => '',
@@ -255,6 +255,12 @@ class DoughBoss_Settings {
 			'square_live_approved'      => 0,
 			// Accrue Square Loyalty points on paid web orders (existing members only).
 			'square_loyalty_accrual'    => 1,
+			// Square Subscriptions plan variation id for the paid Club tier.
+			'square_club_plan_variation_id' => '',
+			// Apple Pay / Google Pay buttons on Square checkout (enable after sandbox test).
+			'square_wallets_enabled'    => 0,
+			// Square-issued Apple Pay domain association file contents (served at /.well-known/).
+			'square_apple_pay_domain_file' => '',
 			// Preparation only: shops never inherit the legacy global location ID.
 			'square_test_location_map'  => array(),
 			'square_live_location_map'  => array(),
@@ -442,6 +448,16 @@ class DoughBoss_Settings {
 	public static function preorder_approver_phone() {
 		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'preorder_approver_phone', '' ) );
 		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '';
+	}
+
+	/**
+	 * Whether retired gateways (Stripe, Tyro, MPGS, POSPal) are shown in admin.
+	 * Square is the only gateway; define DOUGHBOSS_SHOW_LEGACY_GATEWAYS to reveal them.
+	 *
+	 * @return bool
+	 */
+	public static function show_legacy_gateways() {
+		return defined( 'DOUGHBOSS_SHOW_LEGACY_GATEWAYS' ) && DOUGHBOSS_SHOW_LEGACY_GATEWAYS;
 	}
 
 	/**
@@ -821,8 +837,8 @@ class DoughBoss_Settings {
 	 * @return string
 	 */
 	public static function payment_gateway() {
-		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'stripe' ) );
-		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $gateway : 'stripe';
+		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'square' ) );
+		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $gateway : 'square';
 	}
 
 	/**

@@ -1224,6 +1224,17 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		// Member tiers — add/remove a verified customer to a Square customer group.
+		register_rest_route(
+			$ns,
+			'/admin/square-tier',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_square_tier' ),
+				'permission_callback' => array( $this, 'verify_manage' ),
+			)
+		);
+
 		// Catering — send (or re-send) a Square invoice for one leg. Manager-only;
 		// Square emails the customer a hosted pay page, so no card data touches WP.
 		register_rest_route(
@@ -4601,6 +4612,15 @@ class DoughBoss_REST_Controller {
 			)
 		);
 		if ( is_wp_error( $intent ) ) {
+			// A definitive card refusal took no money: reopen this approval so the
+			// customer can try another card (bounded), instead of stranding it.
+			if ( 'doughboss_pay_declined' === $intent->get_error_code() ) {
+				$declined = $intent->get_error_data();
+				$reopened = DoughBoss_Preorder_Approval::reopen_after_decline( $request_id, is_array( $declined ) && isset( $declined['attempt_id'] ) ? (int) $declined['attempt_id'] : 0 );
+				if ( is_wp_error( $reopened ) ) {
+					return new WP_Error( 'doughboss_pay_declined', __( 'Your card was declined and you have not been charged. Please contact the shop to finish this order.', 'doughboss' ), array( 'status' => 402, 'payment_pending' => false, 'retry_safe' => false ) );
+				}
+			}
 			return $intent;
 		}
 		return rest_ensure_response( array( 'gateway' => 'square', 'payment_intent' => (string) $intent['id'], 'amount' => (int) $intent['amount'], 'currency' => (string) $intent['currency'], 'live_mode' => DoughBoss_Square::live_mode() ) );
@@ -6692,6 +6712,25 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * POST /admin/square-tier — add/remove a customer to Student/Tradie/Club.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_square_tier( WP_REST_Request $request ) {
+		$result = DoughBoss_Square_Tiers::assign(
+			(string) $request->get_param( 'tier' ),
+			array(
+				'name'  => sanitize_text_field( (string) $request->get_param( 'name' ) ),
+				'email' => sanitize_email( (string) $request->get_param( 'email' ) ),
+				'phone' => sanitize_text_field( (string) $request->get_param( 'phone' ) ),
+			),
+			'remove' !== (string) $request->get_param( 'action' )
+		);
+		return is_wp_error( $result ) ? $result : rest_ensure_response( array_merge( array( 'success' => true ), $result ) );
+	}
+
+	/**
 	 * POST /admin/catering/{id}/square-invoice — publish a Square invoice for a leg.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -7462,6 +7501,24 @@ class DoughBoss_REST_Controller {
 		$data     = isset( $event['data'] ) && is_array( $event['data'] ) ? $event['data'] : array();
 		$resource = isset( $data['type'] ) ? sanitize_key( (string) $data['type'] ) : '';
 		$reference = isset( $data['id'] ) ? DoughBoss_Square::canonical_id( $data['id'] ) : '';
+
+		// Square Subscriptions (paid Club): keep the Club customer group in step.
+		if ( '' !== $reference && '' !== $event_id && 'subscription' === $resource && 0 === strpos( $type, 'subscription.' ) && class_exists( 'DoughBoss_Square_Tiers' ) ) {
+			$event_key = hash( 'sha256', 'square|' . $event_id );
+			if ( ! DoughBoss_Payment_Attempts::claim_event( $event_key, 'square', $reference, $type ) ) {
+				$event_outcome = DoughBoss_Payment_Attempts::event_outcome( $event_key );
+				if ( null === $event_outcome || 'retry' === $event_outcome ) {
+					return new WP_Error( 'doughboss_wh_storage', __( 'Payment event storage is temporarily unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+				}
+				return rest_ensure_response( array( 'received' => true, 'duplicate' => true ) );
+			}
+			$outcome = DoughBoss_Square_Tiers::reconcile_subscription( $reference );
+			DoughBoss_Payment_Attempts::complete_event( $event_key, $outcome );
+			if ( 'retry' === $outcome ) {
+				return new WP_Error( 'doughboss_wh_retry', __( 'Will retry.', 'doughboss' ), array( 'status' => 500 ) );
+			}
+			return rest_ensure_response( array( 'received' => true, 'outcome' => $outcome ) );
+		}
 
 		// Refunds (from WP, Square Dashboard or POS) and card disputes. Both are
 		// re-read from Square and bound to a payment this site owns first.
