@@ -647,7 +647,7 @@ class DoughBoss_Square_OAuth {
 				$headers
 			),
 		);
-		if ( 'POST' === $method ) {
+		if ( 'POST' === $method && ! empty( $body ) ) {
 			$args['body'] = wp_json_encode( $body );
 		}
 		$response = wp_remote_request( self::host( $mode ) . $path, $args );
