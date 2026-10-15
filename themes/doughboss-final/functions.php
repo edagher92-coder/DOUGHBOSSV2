@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DOUGHBOSS_FINAL_VERSION', '1.7.0' );
+define( 'DOUGHBOSS_FINAL_VERSION', '1.8.0' );
 
 function doughboss_final_setup() {
 	add_theme_support( 'title-tag' );
@@ -114,8 +114,177 @@ function doughboss_final_setting( $key, $default = '' ) {
 	return is_array( $settings ) && array_key_exists( $key, $settings ) ? $settings[ $key ] : $default;
 }
 
+/**
+ * Whether online ordering is open. The plugin's DoughBoss_Settings is the
+ * source of truth; the raw option read keeps the theme working without it.
+ *
+ * @return bool
+ */
 function doughboss_final_ordering_open() {
+	if ( class_exists( 'DoughBoss_Settings' ) && method_exists( 'DoughBoss_Settings', 'ordering_open' ) ) {
+		return (bool) DoughBoss_Settings::ordering_open();
+	}
 	return '1' === (string) doughboss_final_setting( 'ordering_open', '0' );
+}
+
+/**
+ * Public "call to order" number (Revesby by default; plugin setting order_phone).
+ *
+ * @return array{display:string,tel:string}
+ */
+function doughboss_final_order_phone() {
+	if ( class_exists( 'DoughBoss_Settings' ) && method_exists( 'DoughBoss_Settings', 'order_phone' ) ) {
+		$phone = DoughBoss_Settings::order_phone();
+		return array(
+			'display' => DoughBoss_Settings::phone_display( $phone ),
+			'tel'     => DoughBoss_Settings::phone_tel( $phone ),
+		);
+	}
+	return array( 'display' => '(02) 9774 2286', 'tel' => '+61297742286' );
+}
+
+/**
+ * Whether a nav item is the "Order Online" link to the ordering page.
+ *
+ * @param object $item Nav menu item.
+ * @return bool
+ */
+function doughboss_final_is_order_nav_item( $item ) {
+	if ( ! is_object( $item ) || empty( $item->url ) ) {
+		return false;
+	}
+	$path  = (string) wp_parse_url( (string) $item->url, PHP_URL_PATH );
+	$title = strtolower( trim( wp_strip_all_tags( (string) $item->title ) ) );
+	return '/order' === untrailingslashit( $path ) && false === strpos( $title, 'menu' );
+}
+
+/**
+ * While ordering is paused, the "Order Online" nav link becomes "Call to
+ * order" (tel:). Both variants ride along as data attributes so the plugin's
+ * live /config read switches it back as soon as ordering opens.
+ *
+ * @param array $items Nav menu items.
+ * @return array
+ */
+function doughboss_final_order_nav_items( $items ) {
+	$open  = doughboss_final_ordering_open();
+	$phone = doughboss_final_order_phone();
+	foreach ( (array) $items as $item ) {
+		if ( ! doughboss_final_is_order_nav_item( $item ) ) {
+			continue;
+		}
+		$item->dbf_order_swap = array(
+			'open_href'    => (string) $item->url,
+			'open_label'   => wp_strip_all_tags( (string) $item->title ),
+			'paused_href'  => 'tel:' . $phone['tel'],
+			'paused_label' => __( 'Call to order', 'doughboss-final' ),
+		);
+		if ( ! $open ) {
+			$item->url     = $item->dbf_order_swap['paused_href'];
+			$item->title   = $item->dbf_order_swap['paused_label'];
+			$item->classes = array_merge( (array) $item->classes, array( 'dbf-nav-call' ) );
+		}
+	}
+	return $items;
+}
+add_filter( 'wp_nav_menu_objects', 'doughboss_final_order_nav_items', 20 );
+
+/**
+ * Emit the swap attributes for the "Order Online" / "Call to order" link.
+ *
+ * @param array  $atts Link attributes.
+ * @param object $item Nav item.
+ * @return array
+ */
+function doughboss_final_order_nav_link_attributes( $atts, $item ) {
+	if ( is_object( $item ) && ! empty( $item->dbf_order_swap ) && is_array( $item->dbf_order_swap ) ) {
+		$swap                         = $item->dbf_order_swap;
+		$atts['data-db-ordering-swap'] = '';
+		$atts['data-db-open-href']     = $swap['open_href'];
+		$atts['data-db-open-label']    = $swap['open_label'];
+		$atts['data-db-paused-href']   = $swap['paused_href'];
+		$atts['data-db-paused-label']  = $swap['paused_label'];
+	}
+	return $atts;
+}
+add_filter( 'nav_menu_link_attributes', 'doughboss_final_order_nav_link_attributes', 10, 2 );
+
+/** The wholesale and franchising templates render [doughboss_b2b_form]. */
+function doughboss_final_load_b2b_assets( $load ) {
+	return $load || is_page( array( 'wholesale', 'franchising' ) );
+}
+add_filter( 'doughboss_load_b2b_assets', 'doughboss_final_load_b2b_assets' );
+
+/**
+ * Store cards for the home and locations pages. Addresses, phones and the
+ * published fallback hours are the shop facts already on the site; when the
+ * plugin is active, stored weekly hours (DoughBoss > Locations) take over.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function doughboss_final_store_cards() {
+	$stores = array(
+		array(
+			'slug'     => 'revesby',
+			'name'     => 'Revesby',
+			'eyebrow'  => __( 'Revesby bakery', 'doughboss-final' ),
+			'address'  => array( 'Shop 12/25 Selems Parade', 'Revesby NSW 2212' ),
+			'phone'    => '(02) 9774 2286',
+			'tel'      => '+61297742286',
+			'maps'     => 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+12+25+Selems+Parade+Revesby+NSW+2212',
+			'note'     => __( 'Check the pickup selector for current online availability', 'doughboss-final' ),
+			'featured' => true,
+			'hours'    => array( 1 => array( array( '06:30', '14:30' ) ), 2 => array( array( '06:30', '14:30' ) ), 3 => array( array( '06:30', '14:30' ) ), 4 => array( array( '06:30', '14:30' ) ), 5 => array( array( '06:30', '14:30' ) ), 6 => array( array( '06:30', '14:30' ) ), 7 => array( array( '06:30', '14:30' ) ) ),
+			'hours_label' => array( '7 days · 6:30am–2:30pm' ),
+		),
+		array(
+			'slug'     => 'bankstown',
+			'name'     => 'Bankstown',
+			'eyebrow'  => __( 'Bankstown bakery', 'doughboss-final' ),
+			'address'  => array( '462 Chapel Road', 'Bankstown NSW 2200' ),
+			'phone'    => '(02) 8764 6783',
+			'tel'      => '+61287646783',
+			'maps'     => 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+462+Chapel+Road+Bankstown+NSW+2200',
+			'note'     => __( 'Visit or call for in-store availability', 'doughboss-final' ),
+			'featured' => false,
+			'hours'    => array( 1 => array( array( '07:00', '14:00' ) ), 2 => array( array( '07:00', '14:00' ) ), 3 => array( array( '07:00', '14:00' ) ), 4 => array( array( '07:00', '14:00' ) ), 5 => array( array( '07:00', '14:00' ) ) ),
+			'hours_label' => array( 'Mon–Fri · 7am–2pm' ),
+		),
+		array(
+			'slug'     => 'roselands',
+			'name'     => 'Roselands Centro',
+			'eyebrow'  => __( 'Roselands bakery', 'doughboss-final' ),
+			'address'  => array( 'Shop MM03, Roselands Drive', 'Roselands NSW 2196' ),
+			'phone'    => '0466 353 133',
+			'tel'      => '+61466353133',
+			'maps'     => 'https://www.google.com/maps/search/?api=1&query=Dough+Boss+Roselands+Centro+NSW+2196',
+			'note'     => __( 'Visit or call for in-store availability', 'doughboss-final' ),
+			'featured' => false,
+			'hours'    => array( 1 => array( array( '08:00', '15:00' ) ), 2 => array( array( '08:00', '15:00' ) ), 3 => array( array( '08:00', '15:00' ) ), 4 => array( array( '08:00', '15:00' ) ), 5 => array( array( '08:00', '15:00' ) ), 6 => array( array( '08:00', '15:00' ) ), 7 => array( array( '08:00', '15:00' ) ) ),
+			'hours_label' => array( '7 days · 8am–3pm' ),
+		),
+	);
+
+	foreach ( $stores as &$store ) {
+		$store['badge']       = '';
+		$store['badge_state'] = '';
+		if ( ! class_exists( 'DoughBoss_Store_Hours' ) ) {
+			$store['hours_json'] = (string) wp_json_encode( $store['hours'] );
+			continue;
+		}
+		$schedule = DoughBoss_Store_Hours::schedule_for( $store['slug'], DoughBoss_Store_Hours::stored_ranges_for_slug( $store['slug'] ) );
+		if ( 'none' === $schedule['source'] ) {
+			$schedule['week'] = DoughBoss_Store_Hours::normalise_week( $store['hours'] );
+		}
+		$store['hours']       = $schedule['week'];
+		$store['hours_label'] = DoughBoss_Store_Hours::summary_lines( $schedule['week'] );
+		$store['hours_json']  = DoughBoss_Store_Hours::to_json( $schedule['week'] );
+		$state                = DoughBoss_Store_Hours::state( $schedule['week'] );
+		$store['badge']       = DoughBoss_Store_Hours::badge_label( $state );
+		$store['badge_state'] = $state['known'] ? ( $state['open'] ? 'open' : 'closed' ) : '';
+	}
+	unset( $store );
+	return $stores;
 }
 
 function doughboss_final_assets() {
@@ -373,7 +542,7 @@ function doughboss_final_menu_fallback() {
 		__( 'Vouchers', 'doughboss-final' ) => home_url( '/vouchers/' ),
 		__( 'Track order', 'doughboss-final' ) => home_url( '/track-order/' ),
 		__( 'Locations', 'doughboss-final' ) => home_url( '/locations/' ),
-		__( 'Partners', 'doughboss-final' ) => home_url( '/franchising/' ),
+		__( 'Franchising & partners', 'doughboss-final' ) => home_url( '/franchising/' ),
 	);
 
 	echo '<ul class="dbf-nav-list">';

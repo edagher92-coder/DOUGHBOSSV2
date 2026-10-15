@@ -22,7 +22,8 @@
 				<li><a href="<?php echo esc_url( home_url( '/vouchers/' ) ); ?>">Student vouchers</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/track-order/' ) ); ?>">Track order</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/locations/' ) ); ?>">Locations</a></li>
-				<li><a href="<?php echo esc_url( home_url( '/franchising/' ) ); ?>">Partners</a></li>
+				<li><a href="<?php echo esc_url( home_url( '/wholesale/' ) ); ?>"><?php esc_html_e( 'Wholesale', 'doughboss-final' ); ?></a></li>
+				<li><a href="<?php echo esc_url( home_url( '/franchising/' ) ); ?>"><?php esc_html_e( 'Franchising & partners', 'doughboss-final' ); ?></a></li>
 			</ul>
 		</div>
 		<div>

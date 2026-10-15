@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.7.0
+Version: 1.8.0
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -59,6 +59,8 @@ button, input, select, textarea { font: inherit; }
 /* The CTA in the bar is the only link many phone users will reach for — give it
  * a real 44px target instead of a 16px line box. */
 .dbf-launch-bar a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; text-underline-offset: 3px; touch-action: manipulation; }
+/* Both ordering states are rendered; the live /config read reveals one. */
+.dbf-launch-bar[hidden], [data-db-when-ordering][hidden] { display: none !important; }
 
 /* Header
  * NOTE: backdrop-filter must NOT live on .dbf-header itself. A filter/
@@ -90,7 +92,14 @@ button, input, select, textarea { font: inherit; }
 .dbf-nav a:hover::after, .dbf-nav a:focus-visible::after, .dbf-nav .current-menu-item > a::after { opacity: 1; }
 .dbf-menu-toggle { display: none; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 10px; border: 0; background: transparent; color: #fff; cursor: pointer; touch-action: manipulation; }
 .dbf-menu-toggle-label { font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+/* Icon-only toggle: hamburger while closed, X while open (aria-expanded). */
+.dbf-menu-icon { display: block; }
+.dbf-menu-icon--close, .dbf-menu-toggle[aria-expanded="true"] .dbf-menu-icon--open { display: none; }
+.dbf-menu-toggle[aria-expanded="true"] .dbf-menu-icon--close { display: block; }
 .dbf-nav-close { display: none; width: 44px; height: 44px; align-items: center; justify-content: center; margin: 0 0 22px auto; border: 1px solid var(--dbf-line-dark); border-radius: 50%; background: transparent; color: #fff; cursor: pointer; font-size: 32px; line-height: 1; }
+.dbf-nav-close svg { display: block; }
+/* While ordering is paused the "Order Online" item reads "Call to order". */
+.dbf-nav .dbf-nav-call > a, .dbf-nav a[data-db-ordering-swap][href^="tel:"] { color: #fff; }
 
 .dbf-header-shop { display: flex; align-items: center; justify-content: space-between; gap: 8px 24px; min-height: 52px; padding-block: 8px; border-top: 1px solid var(--dbf-line-dark); font-size: 13px; line-height: 1.35; }
 .dbf-header-shop a { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
@@ -138,13 +147,10 @@ button, input, select, textarea { font: inherit; }
 .dbf-hero .db-mh-copy h2 { font-family: 'Bebas Neue', Impact, sans-serif; font-size: clamp(58px, 7vw, 108px); font-weight: 400; letter-spacing: .005em; line-height: .87; max-width: 9ch; text-transform: uppercase; }
 .dbf-hero .db-mh-copy > p:not(.db-mh-kicker) { max-width: 39rem; color: #ddd6ca; font-size: clamp(17px, 1.7vw, 21px); }
 .dbf-hero .db-mh-kicker { color: #fff; letter-spacing: .17em; }
-.dbf-hero .db-mh-replay { background: var(--dbf-ember); color: #fff; }
 .dbf-hero .db-mh-steam { right: clamp(8%, 15vw, 20%); top: 13%; }
-.dbf-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--dbf-char); color: #fff; border-top: 1px solid var(--dbf-line-dark); }
-.dbf-hero-stat { padding: 25px clamp(18px, 4vw, 46px); border-left: 1px solid var(--dbf-line-dark); }
-.dbf-hero-stat:first-child { border-left: 0; }
-.dbf-hero-stat strong { display: block; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 28px; font-weight: 400; letter-spacing: .04em; }
-.dbf-hero-stat span { color: var(--dbf-mist); font-size: 13px; }
+/* The hero's single "at a glance" strip (the duplicate theme strip is gone). */
+.dbf-hero .db-mh-proof-value { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 22px; font-weight: 400; letter-spacing: .05em; }
+.dbf-hero .db-mh-proof-label { color: #d9d1c6; font-size: 13px; }
 
 /* Cards and editorial sections */
 .dbf-story-grid, .dbf-feature-grid { display: grid; grid-template-columns: 1.02fr .98fr; align-items: center; gap: clamp(42px, 7vw, 95px); }
@@ -179,7 +185,24 @@ button, input, select, textarea { font: inherit; }
 .dbf-feature-grid .dbf-button { margin-top: 26px; }
 
 .dbf-locations-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.dbf-location-card { padding: 30px; background: #fff; border: 1px solid var(--dbf-line); border-radius: 18px; }
+.dbf-location-card { display: flex; flex-direction: column; padding: 30px; background: #fff; border: 1px solid var(--dbf-line); border-radius: 18px; }
+.dbf-location-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+/* Live badge, Sydney time; colour is never the only signal (the text says it). */
+.dbf-open-badge { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #efe9df; color: #4d4944; font-size: 12px; font-weight: 700; line-height: 1.25; text-align: right; }
+.dbf-open-badge::before { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #8a847a; content: ''; }
+.dbf-open-badge.is-open { background: #e5f2e6; color: #1f5228; }
+.dbf-open-badge.is-open::before { background: #2f7a3d; }
+.dbf-open-badge.is-closed { background: #f6e7e5; color: #8a1711; }
+.dbf-open-badge.is-closed::before { background: #c92017; }
+.dbf-open-badge[hidden] { display: none; }
+.dbf-location-rows { display: grid; gap: 10px; padding: 18px 0; margin: 22px 0; border-top: 1px solid var(--dbf-line); border-bottom: 1px solid var(--dbf-line); font-size: 15px; }
+.dbf-location-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.dbf-location-row dt { color: #6a635a; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.dbf-location-row dd { min-width: 0; margin: 0; color: #2b2723; }
+.dbf-location-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; }
+.dbf-location-card a.dbf-location-action { display: inline-flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 10px 16px; border: 1px solid var(--dbf-ink); border-radius: 999px; color: var(--dbf-ink); font-weight: 700; text-decoration: none; }
+.dbf-location-card a.dbf-location-action--call { border-color: var(--dbf-ember); background: var(--dbf-ember); color: #fff; }
+.dbf-location-card a.dbf-location-action:hover, .dbf-location-card a.dbf-location-action:focus-visible { background: var(--dbf-ink); border-color: var(--dbf-ink); color: #fff; }
 .dbf-location-card.is-orderable { border-top: 4px solid var(--dbf-ember); }
 .dbf-location-status { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 22px; color: #4d5d35; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .dbf-location-status::before { width: 8px; height: 8px; border-radius: 50%; background: #79b260; box-shadow: 0 0 0 5px rgba(121,178,96,.13); content: ''; }
@@ -270,6 +293,10 @@ body.db-approved-preorder-mode .dbf-cart-wrap { margin-top: 0; }
 .dbf-partner-aside { position: sticky; top: 120px; min-width: 0; overflow: hidden; padding: 28px; background: var(--dbf-char); color: #fff; border-radius: 20px; }
 .dbf-partner-grid--single .dbf-partner-aside { position: static; width: 100%; }
 .dbf-partner-aside p { color: #c7c0b5; }
+.dbf-partner-main { display: grid; gap: 32px; min-width: 0; }
+.dbf-partner-form { padding: clamp(22px, 4vw, 40px); background: #fff; border: 1px solid var(--dbf-line); border-radius: 20px; box-shadow: 0 8px 28px rgba(13, 13, 13, .055); }
+.dbf-partner-form-title { margin: 0 0 14px; font-family: 'Bebas Neue', Impact, sans-serif; font-size: clamp(30px, 3.4vw, 42px); font-weight: 400; letter-spacing: .02em; line-height: 1; text-transform: uppercase; }
+.dbf-partner-form .db-b2b-submit { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 19px; font-weight: 400; letter-spacing: .06em; }
 .dbf-not-found { min-height: 65vh; display: grid; place-items: center; text-align: center; }
 
 /* Footer */
@@ -346,8 +373,9 @@ body.db-approved-preorder-mode .dbf-cart-wrap { margin-top: 0; }
 	.dbf-hero .dbf-wrap { width: 100%; }
 	.dbf-hero .db-manoush-hero { min-height: 0; border-radius: 0; }
 	.dbf-hero .db-mh-copy h2 { max-width: 100%; overflow-wrap: normal; font-size: clamp(42px, 12vw, 62px); text-wrap: balance; }
-	.dbf-hero-stats { grid-template-columns: 1fr 1fr; }
-	.dbf-hero-stat:last-child { grid-column: 1 / -1; border-top: 1px solid var(--dbf-line-dark); }
+	.dbf-hero .db-mh-proof-value { font-size: 17px; }
+	.dbf-hero .db-mh-proof-label { font-size: 11px; }
+	.dbf-location-card { padding: 24px 20px; }
 	.dbf-section-head { align-items: flex-start; flex-direction: column; }
 	.dbf-card-grid, .dbf-locations-grid, .dbf-food-grid { grid-template-columns: 1fr; }
 	.dbf-food-card, .dbf-food-card:last-child { grid-column: auto; min-height: 330px; }

@@ -153,6 +153,97 @@
 		if (window.ResizeObserver) { new ResizeObserver(syncStickyTop).observe(stickyHeader); }
 	}
 
+	/* Store cards: live "Open now / Closed" badge in Sydney time, recomputed
+	 * every minute from the card's weekly hours (data-dbf-hours, weekday 1=Mon
+	 * … 7=Sun => [["06:30","14:30"]]). Mirrors DoughBoss_Store_Hours::state()
+	 * so a cached page never shows a stale server-rendered badge for long. */
+	function sydneyClock(now) {
+		try {
+			var parts = new Intl.DateTimeFormat('en-AU', {
+				timeZone: 'Australia/Sydney', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+			}).formatToParts(now);
+			var map = {};
+			parts.forEach(function (part) { map[part.type] = part.value; });
+			var days = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+			var day = days[String(map.weekday || '').slice(0, 3)];
+			var hour = Number(map.hour) % 24;
+			var minute = Number(map.minute);
+			if (!day || !isFinite(hour) || !isFinite(minute)) return null;
+			return { day: day, clock: (hour < 10 ? '0' : '') + hour + ':' + (minute < 10 ? '0' : '') + minute };
+		} catch (error) {
+			return null;
+		}
+	}
+	function storeOpenState(hours, clock) {
+		var state = { known: false, open: false, closesAt: null, nextDay: null, nextAt: null };
+		if (!clock || !hours || typeof hours !== 'object') return state;
+		var valid = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+		function ranges(day) {
+			var list = Array.isArray(hours[day]) ? hours[day] : [];
+			return list.filter(function (range) {
+				return Array.isArray(range) && range.length === 2 && valid.test(range[0]) && valid.test(range[1]) && range[0] < range[1];
+			}).sort(function (a, b) { return a[0] < b[0] ? -1 : 1; });
+		}
+		for (var d = 1; d <= 7; d += 1) { if (ranges(d).length) state.known = true; }
+		if (!state.known) return state;
+		var today = ranges(clock.day);
+		for (var i = 0; i < today.length; i += 1) {
+			if (clock.clock >= today[i][0] && clock.clock < today[i][1]) {
+				state.open = true;
+				state.closesAt = today[i][1];
+				return state;
+			}
+		}
+		for (var offset = 0; offset < 8; offset += 1) {
+			var candidate = ((clock.day - 1 + offset) % 7) + 1;
+			var list = ranges(candidate);
+			for (var j = 0; j < list.length; j += 1) {
+				if (offset === 0 && list[j][0] <= clock.clock) continue;
+				state.nextDay = candidate;
+				state.nextAt = list[j][0];
+				return state;
+			}
+		}
+		return state;
+	}
+	function formatStoreClock(time) {
+		var match = /^(\d{2}):(\d{2})$/.exec(String(time || ''));
+		if (!match) return '';
+		var hour = Number(match[1]);
+		var minute = Number(match[2]);
+		var twelve = hour % 12 === 0 ? 12 : hour % 12;
+		return twelve + (minute ? ':' + match[2] : '') + (hour >= 12 ? 'pm' : 'am');
+	}
+	function storeBadgeLabel(state, clock) {
+		if (!state || !state.known) return '';
+		if (state.open) return 'Open now · until ' + formatStoreClock(state.closesAt);
+		if (!state.nextDay) return 'Closed now';
+		var names = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+		var when = clock && state.nextDay === clock.day ? '' : ' ' + names[state.nextDay];
+		return 'Closed now · opens' + when + ' ' + formatStoreClock(state.nextAt);
+	}
+	var storeCards = Array.prototype.slice.call(document.querySelectorAll('[data-dbf-store][data-dbf-hours]'));
+	function paintStoreBadges() {
+		var clock = sydneyClock(new Date());
+		storeCards.forEach(function (card) {
+			var badge = card.querySelector('[data-dbf-open-badge]');
+			if (!badge) return;
+			var hours = null;
+			try { hours = JSON.parse(card.getAttribute('data-dbf-hours') || 'null'); } catch (error) { hours = null; }
+			var state = storeOpenState(hours, clock);
+			var label = storeBadgeLabel(state, clock);
+			badge.hidden = !label;
+			if (badge.textContent !== label) badge.textContent = label;
+			badge.classList.toggle('is-open', !!label && state.open);
+			badge.classList.toggle('is-closed', !!label && !state.open);
+		});
+	}
+	if (storeCards.length) {
+		paintStoreBadges();
+		window.setInterval(function () { if (!document.hidden) paintStoreBadges(); }, 60000);
+		document.addEventListener('visibilitychange', function () { if (!document.hidden) paintStoreBadges(); });
+	}
+
 	var motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 	var reveals = Array.prototype.slice.call(document.querySelectorAll('[data-dbf-reveal]'));
 	var revealObserver = null;
