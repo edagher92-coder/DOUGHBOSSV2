@@ -670,6 +670,9 @@ class DoughBoss_Admin {
 		$clean['sms_on_voucher_claim'] = empty( $input['sms_on_voucher_claim'] ) ? 0 : 1;
 
 		// Customer stage-transition emails (native wp_mail).
+		if ( isset( $input['email_on_placed_present'] ) ) {
+			$clean['email_on_placed'] = empty( $input['email_on_placed'] ) ? 0 : 1;
+		}
 		$clean['email_on_accepted'] = empty( $input['email_on_accepted'] ) ? 0 : 1;
 		$clean['email_on_ready']    = empty( $input['email_on_ready'] ) ? 0 : 1;
 		$clean['email_staff_copy']  = empty( $input['email_staff_copy'] ) ? 0 : 1;
@@ -4246,6 +4249,7 @@ JS;
 						<tr>
 							<th scope="row"><?php esc_html_e( 'When to email', 'doughboss' ); ?></th>
 							<td>
+								<input type="hidden" name="<?php echo esc_attr( $opt ); ?>[email_on_placed_present]" value="1" /><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_placed]" value="1" <?php checked( ! empty( $settings['email_on_placed'] ), true ); ?> /> <?php esc_html_e( 'Email customer an itemised confirmation when a paid order is placed', 'doughboss' ); ?></label><br />
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_accepted]" value="1" <?php checked( ! empty( $settings['email_on_accepted'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is accepted', 'doughboss' ); ?></label><br />
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_on_ready]" value="1" <?php checked( ! empty( $settings['email_on_ready'] ), true ); ?> /> <?php esc_html_e( 'Email customer when order is ready', 'doughboss' ); ?></label><br />
 								<label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[email_staff_copy]" value="1" <?php checked( ! empty( $settings['email_staff_copy'] ), true ); ?> /> <?php esc_html_e( 'Send staff a copy of stage emails', 'doughboss' ); ?></label>

@@ -2,7 +2,9 @@
 /**
  * Customer emails (built-in, via wp_mail).
  *
- * Emails the customer at two order milestones: an "we're on it" note when the
+ * Emails the customer when a paid order is placed (an itemised confirmation
+ * with the pickup shop and tracking details), then at two order milestones: an
+ * "we're on it" note when the
  * kitchen accepts the order (with the ETA when one was given) and a "ready for
  * pickup" note when the order moves to the `ready` status. Modeled on
  * DoughBoss_SMS: a static class registered via init(), where every handler
@@ -73,6 +75,7 @@ class DoughBoss_Emails {
 	 * @return void
 	 */
 	public static function init() {
+		add_action( 'doughboss_order_created', array( __CLASS__, 'on_order_created' ), 40, 2 );
 		add_action( 'doughboss_order_accepted', array( __CLASS__, 'on_order_accepted' ), 10, 2 );
 		add_action( 'doughboss_order_status_changed', array( __CLASS__, 'on_status_changed' ), 10, 2 );
 		add_action( 'doughboss_voucher_claimed', array( __CLASS__, 'on_voucher_claimed' ), 10, 4 );
@@ -85,7 +88,240 @@ class DoughBoss_Emails {
 	 * @return bool
 	 */
 	public static function emails_ready() {
-		return DoughBoss_Settings::email_on_accepted() || DoughBoss_Settings::email_on_ready();
+		return DoughBoss_Settings::email_on_placed() || DoughBoss_Settings::email_on_accepted() || DoughBoss_Settings::email_on_ready();
+	}
+
+	/**
+	 * Send the paid-order confirmation ("placed" stage) once the order and its
+	 * items are committed. Only paid orders qualify: unpaid requests (pay at
+	 * shop, staff-approval pre-orders) are confirmed later by the kitchen. The
+	 * shared deliver() lock + stage log make replays and racing workers safe.
+	 *
+	 * @param int   $order_id New order id.
+	 * @param array $data     Order data passed by DoughBoss_Order::create().
+	 * @return void
+	 */
+	public static function on_order_created( $order_id, $data = array() ) {
+		if ( ! DoughBoss_Settings::email_on_placed() ) {
+			return;
+		}
+		if ( ! is_array( $data ) || ! isset( $data['payment_status'] ) || 'paid' !== (string) $data['payment_status'] ) {
+			return;
+		}
+
+		$order_id = absint( $order_id );
+		if ( ! $order_id || self::already_sent( $order_id, 'placed' ) ) {
+			return;
+		}
+
+		$order = DoughBoss_Order::get( $order_id );
+		if ( ! is_object( $order ) || ! isset( $order->payment_status ) || 'paid' !== (string) $order->payment_status ) {
+			return;
+		}
+
+		$location = null;
+		if ( ! empty( $order->location_id ) && class_exists( 'DoughBoss_Locations' ) ) {
+			$location = DoughBoss_Locations::get( (int) $order->location_id );
+		}
+		$number = isset( $order->order_number ) && '' !== (string) $order->order_number ? (string) $order->order_number : (string) $order_id;
+		$email  = self::placed_email(
+			(array) $order,
+			DoughBoss_Order::get_items( $order_id ),
+			is_object( $location ) ? (array) $location : array(),
+			DoughBoss_Settings::tracking_page_url( $number ),
+			(string) DoughBoss_Settings::get( 'currency_symbol', '$' )
+		);
+
+		self::deliver( $order, $order_id, 'placed', $email['subject'], $email['body'] );
+	}
+
+	/**
+	 * Pure: build the plain-text paid-order confirmation.
+	 *
+	 * Uses only stored order facts (no recalculation): line totals, subtotal,
+	 * discount, delivery fee, GST included and total exactly as saved.
+	 *
+	 * @param array  $order        Order row as an array.
+	 * @param array  $items        Order item rows (name, size, toppings, quantity, line_total).
+	 * @param array  $location     Location row as an array (name, address, suburb, phone) or empty.
+	 * @param string $tracking_url Configured tracking page URL for this order, or ''.
+	 * @param string $symbol       Currency symbol.
+	 * @return array{subject:string,body:string}
+	 */
+	public static function placed_email( array $order, array $items, array $location, $tracking_url = '', $symbol = '$' ) {
+		$money = static function ( $amount ) use ( $symbol ) {
+			return (string) $symbol . number_format( (float) $amount, 2, '.', ',' );
+		};
+		$clean = static function ( $value ) {
+			$value = is_scalar( $value ) ? (string) $value : '';
+			$value = preg_replace( '/[\x00-\x1f\x7f]+/u', ' ', strip_tags( $value ) );
+			return trim( preg_replace( '/ {2,}/', ' ', (string) $value ) );
+		};
+
+		$number = isset( $order['order_number'] ) && '' !== (string) $order['order_number']
+			? $clean( $order['order_number'] )
+			: ( isset( $order['id'] ) ? (string) (int) $order['id'] : '' );
+		$name   = isset( $order['customer_name'] ) ? $clean( $order['customer_name'] ) : '';
+		$first  = '' !== $name ? strtok( $name, ' ' ) : '';
+		$shop   = self::shop_display_name( isset( $location['name'] ) ? $clean( $location['name'] ) : '' );
+		$type   = isset( $order['order_type'] ) ? (string) $order['order_type'] : 'pickup';
+
+		$lines   = array();
+		$lines[] = '' !== $first
+			? sprintf( /* translators: %s: customer first name. */ __( 'Hi %s,', 'doughboss' ), $first )
+			: __( 'Hi there,', 'doughboss' );
+		$lines[] = '';
+		$lines[] = sprintf(
+			/* translators: %s: order number. */
+			__( 'Thanks for your order. Your payment has been received and order %s has been sent to the kitchen.', 'doughboss' ),
+			$number
+		);
+		$lines[] = '';
+		$lines[] = sprintf( /* translators: %s: order number. */ __( 'Order number: %s', 'doughboss' ), $number );
+		$lines[] = '';
+		$lines[] = __( 'Your order', 'doughboss' );
+		$lines[] = str_repeat( '-', 32 );
+
+		foreach ( $items as $item ) {
+			$item  = (array) $item;
+			$qty   = isset( $item['quantity'] ) ? max( 1, (int) $item['quantity'] ) : 1;
+			$label = isset( $item['name'] ) ? $clean( $item['name'] ) : '';
+			$size  = isset( $item['size'] ) ? $clean( $item['size'] ) : '';
+			if ( '' !== $size ) {
+				$label .= ' (' . $size . ')';
+			}
+			$total = isset( $item['line_total'] )
+				? (float) $item['line_total']
+				: ( isset( $item['unit_price'] ) ? (float) $item['unit_price'] * $qty : 0.0 );
+			$lines[] = sprintf( '%d x %s  %s', $qty, $label, $money( $total ) );
+
+			$options = isset( $item['toppings'] ) ? $item['toppings'] : array();
+			if ( is_string( $options ) && '' !== $options ) {
+				$decoded = json_decode( $options, true );
+				$options = is_array( $decoded ) ? $decoded : array();
+			}
+			foreach ( (array) $options as $option ) {
+				if ( is_array( $option ) ) {
+					$option = isset( $option['label'] ) ? $option['label'] : ( isset( $option['name'] ) ? $option['name'] : '' );
+				}
+				$option = $clean( $option );
+				if ( '' !== $option ) {
+					$lines[] = '    + ' . $option;
+				}
+			}
+			$note = isset( $item['notes'] ) ? $clean( $item['notes'] ) : '';
+			if ( '' !== $note ) {
+				$lines[] = '    ' . sprintf( /* translators: %s: line note. */ __( 'Note: %s', 'doughboss' ), $note );
+			}
+		}
+
+		$lines[] = str_repeat( '-', 32 );
+		if ( isset( $order['subtotal'] ) ) {
+			$lines[] = sprintf( /* translators: %s: amount. */ __( 'Subtotal: %s', 'doughboss' ), $money( $order['subtotal'] ) );
+		}
+		$discount = isset( $order['discount'] ) ? (float) $order['discount'] : 0.0;
+		if ( $discount > 0 ) {
+			$voucher = isset( $order['voucher_code'] ) ? $clean( $order['voucher_code'] ) : '';
+			$lines[] = '' !== $voucher
+				? sprintf( /* translators: 1: voucher code, 2: amount. */ __( 'Voucher %1$s: -%2$s', 'doughboss' ), $voucher, $money( $discount ) )
+				: sprintf( /* translators: %s: amount. */ __( 'Discount: -%s', 'doughboss' ), $money( $discount ) );
+		}
+		$delivery_fee = isset( $order['delivery_fee'] ) ? (float) $order['delivery_fee'] : 0.0;
+		if ( $delivery_fee > 0 ) {
+			$lines[] = sprintf( /* translators: %s: amount. */ __( 'Delivery: %s', 'doughboss' ), $money( $delivery_fee ) );
+		}
+		$total   = isset( $order['total'] ) ? (float) $order['total'] : 0.0;
+		$tax     = isset( $order['tax'] ) ? (float) $order['tax'] : 0.0;
+		$lines[] = sprintf( /* translators: %s: amount. */ __( 'Total paid: %s', 'doughboss' ), $money( $total ) );
+		if ( $tax > 0 ) {
+			$lines[] = sprintf( /* translators: %s: amount. */ __( 'Includes GST of %s', 'doughboss' ), $money( $tax ) );
+		}
+
+		$notes = isset( $order['notes'] ) ? $clean( $order['notes'] ) : '';
+		if ( '' !== $notes ) {
+			$lines[] = '';
+			$lines[] = sprintf( /* translators: %s: order notes. */ __( 'Your notes: %s', 'doughboss' ), $notes );
+		}
+
+		$lines[] = '';
+		if ( 'dine_in' === $type ) {
+			$table   = isset( $order['table_label'] ) ? $clean( $order['table_label'] ) : '';
+			$lines[] = '' !== $table
+				? sprintf( /* translators: %s: table label. */ __( 'We will bring your order to table %s.', 'doughboss' ), $table )
+				: __( 'We will bring your order to your table.', 'doughboss' );
+		} elseif ( 'delivery' === $type ) {
+			$address = isset( $order['address'] ) ? $clean( $order['address'] ) : '';
+			$lines[] = __( 'Delivery to:', 'doughboss' );
+			$lines[] = '' !== $address ? $address : __( 'the address you gave at checkout', 'doughboss' );
+		} else {
+			$lines[] = __( 'Pickup from:', 'doughboss' );
+		}
+		if ( '' !== $shop ) {
+			if ( 'pickup' !== $type && '' !== $type ) {
+				$lines[] = '';
+				$lines[] = __( 'Shop:', 'doughboss' );
+			}
+			$lines[] = $shop;
+			$address = isset( $location['address'] ) ? $clean( $location['address'] ) : '';
+			$suburb  = isset( $location['suburb'] ) ? $clean( $location['suburb'] ) : '';
+			if ( '' !== $suburb && false === stripos( $address, $suburb ) ) {
+				$address = '' !== $address ? $address . ', ' . $suburb : $suburb;
+			}
+			if ( '' !== $address ) {
+				$lines[] = $address;
+			}
+			$phone = isset( $location['phone'] ) ? $clean( $location['phone'] ) : '';
+			if ( '' !== $phone ) {
+				$lines[] = sprintf( /* translators: %s: shop phone number. */ __( 'Phone: %s', 'doughboss' ), $phone );
+			}
+		} elseif ( 'pickup' === $type || '' === $type ) {
+			$lines[] = __( 'The shop you selected at checkout.', 'doughboss' );
+		}
+
+		$lines[] = '';
+		$tracking_url = is_string( $tracking_url ) ? trim( $tracking_url ) : '';
+		if ( '' !== $tracking_url ) {
+			$lines[] = sprintf( /* translators: %s: tracking URL. */ __( 'Track your order: %s', 'doughboss' ), $tracking_url );
+			$lines[] = sprintf(
+				/* translators: %s: order number. */
+				__( 'Use order %s and the same email address you used at checkout.', 'doughboss' ),
+				$number
+			);
+		} else {
+			$lines[] = sprintf(
+				/* translators: %s: order number. */
+				__( 'Keep order %s and use it with the same email address on the Track My Order page.', 'doughboss' ),
+				$number
+			);
+		}
+		$lines[] = '';
+		$lines[] = __( 'Questions about your order? Call the shop and quote your order number.', 'doughboss' );
+		$lines[] = '';
+		$lines[] = __( 'Thanks,', 'doughboss' );
+		$lines[] = __( 'Dough Boss', 'doughboss' );
+
+		return array(
+			'subject' => sprintf(
+				/* translators: %s: order number. */
+				__( 'Dough Boss order %s confirmed', 'doughboss' ),
+				$number
+			),
+			'body'    => implode( "\n", $lines ),
+		);
+	}
+
+	/**
+	 * Pure: customer-facing shop name ("Revesby" → "Dough Boss Revesby").
+	 *
+	 * @param string $name Stored location name.
+	 * @return string
+	 */
+	public static function shop_display_name( $name ) {
+		$name = trim( (string) $name );
+		if ( '' === $name ) {
+			return '';
+		}
+		return 0 === stripos( preg_replace( '/\s+/', ' ', $name ), 'dough boss' ) ? $name : 'Dough Boss ' . $name;
 	}
 
 	/**
@@ -405,7 +641,7 @@ class DoughBoss_Emails {
 	 *
 	 * @param object $order    Order row.
 	 * @param int    $order_id Order id.
-	 * @param string $stage    Stage key ('accepted' or 'ready').
+	 * @param string $stage    Stage key ('placed', 'accepted' or 'ready').
 	 * @param string $subject  Rendered subject.
 	 * @param string $body     Rendered body.
 	 * @return void
@@ -492,6 +728,18 @@ class DoughBoss_Emails {
 	 */
 	private static function delivery_lock_key( $order_id, $stage ) {
 		return self::DELIVERY_LOCK_PREFIX . absint( $order_id ) . '_' . sanitize_key( $stage );
+	}
+
+	/**
+	 * Public read of the stage log (used so the checkout confirmation never
+	 * duplicates the itemised "placed" email).
+	 *
+	 * @param int    $order_id Order id.
+	 * @param string $stage    Stage key.
+	 * @return bool
+	 */
+	public static function stage_sent( $order_id, $stage ) {
+		return self::already_sent( absint( $order_id ), (string) $stage );
 	}
 
 	/**

@@ -8488,7 +8488,12 @@ class DoughBoss_REST_Controller {
 		$subject = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_subject(), $vars );
 		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_order_email_body(), $vars );
 
-		if ( is_email( $order->customer_email ) && false === wp_mail( $order->customer_email, $subject, $body ) ) {
+		// A paid order already received the itemised "placed" confirmation from
+		// DoughBoss_Emails (doughboss_order_created). Do not email the customer
+		// twice; this template copy remains the fallback when that send failed
+		// or the toggle is off. The shop inbox copy below is unchanged.
+		$placed_sent = class_exists( 'DoughBoss_Emails' ) && DoughBoss_Emails::stage_sent( (int) $order->id, 'placed' );
+		if ( ! $placed_sent && is_email( $order->customer_email ) && false === wp_mail( $order->customer_email, $subject, $body ) ) {
 			error_log( 'DoughBoss mail: order confirmation email to customer failed for #' . $order->order_number ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 

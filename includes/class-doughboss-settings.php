@@ -328,6 +328,7 @@ class DoughBoss_Settings {
 			'sms_on_voucher_claim'  => 0,
 			// Customer stage-transition emails — sent via native wp_mail, so no
 			// external configuration is needed; the toggles are the whole gate.
+			'email_on_placed'   => 1,
 			'email_on_accepted' => 1,
 			'email_on_ready'    => 1,
 			'email_staff_copy'  => 0,
@@ -1749,6 +1750,16 @@ class DoughBoss_Settings {
 	 */
 	public static function legacy_voucher_issuance_enabled() {
 		return (bool) self::get( 'legacy_voucher_issuance_enabled', 0 );
+	}
+
+	/**
+	 * Whether to email the customer an itemised confirmation when a paid order
+	 * is placed (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_placed() {
+		return (bool) self::get( 'email_on_placed', 1 );
 	}
 
 	/**
