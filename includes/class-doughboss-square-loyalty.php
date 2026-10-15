@@ -10,7 +10,9 @@
  * Only customers who already have a Square Loyalty account (enrolled in-store
  * or via an explicit opt-in) earn points: this class never enrols anyone.
  * Off unless `square_loyalty_accrual` is on; a missing Square program is a
- * safe no-op. Idempotent: Square idempotency key + one-time option guard.
+ * safe no-op. Idempotent: Square idempotency key + a 30-day done transient
+ * (orders have no meta table; the cron job only runs within minutes of the
+ * order, so a bounded marker replaces the old one-option-row-per-order guard).
  *
  * @package DoughBoss
  */
@@ -23,6 +25,8 @@ class DoughBoss_Square_Loyalty {
 
 	const CRON_HOOK  = 'doughboss_square_loyalty_accrue';
 	const DONE_PREFIX = 'doughboss_sqloy_';
+	const DONE_TRANSIENT_PREFIX = 'doughboss_sqloy_done_';
+	const DONE_TTL   = 2592000; // 30 days.
 	const MAX_TRIES  = 4;
 
 	/**
@@ -105,7 +109,7 @@ class DoughBoss_Square_Loyalty {
 		if ( ! $order_id || ! self::enabled() ) {
 			return 'skipped';
 		}
-		if ( get_option( self::DONE_PREFIX . $order_id ) ) {
+		if ( self::is_done( $order_id ) ) {
 			return 'skipped';
 		}
 		$outcome = self::accrue( $order_id );
@@ -117,8 +121,49 @@ class DoughBoss_Square_Loyalty {
 			wp_schedule_single_event( time() + 300 * $try, self::CRON_HOOK, array( $order_id, $try + 1 ) );
 			return 'retry';
 		}
-		add_option( self::DONE_PREFIX . $order_id, $outcome . '|' . gmdate( 'c' ), '', 'no' );
+		self::mark_done( $order_id, $outcome );
 		return $outcome;
+	}
+
+	/**
+	 * Pure: the bounded done-marker key for an order.
+	 *
+	 * @param int $order_id Order id.
+	 * @return string
+	 */
+	public static function done_key( $order_id ) {
+		return self::DONE_TRANSIENT_PREFIX . absint( $order_id );
+	}
+
+	/**
+	 * Whether accrual already finished for this order (new transient marker, or
+	 * a legacy per-order option written by 2.47.0 and earlier).
+	 *
+	 * @param int $order_id Order id.
+	 * @return bool
+	 */
+	public static function is_done( $order_id ) {
+		$order_id = absint( $order_id );
+		if ( false !== get_transient( self::done_key( $order_id ) ) ) {
+			return true;
+		}
+		return (bool) get_option( self::DONE_PREFIX . $order_id );
+	}
+
+	/**
+	 * Record a finished accrual for 30 days (expires on its own; no permanent
+	 * wp_options row per order). Any legacy option row for the order is removed.
+	 *
+	 * @param int    $order_id Order id.
+	 * @param string $outcome  done|skipped.
+	 * @return void
+	 */
+	public static function mark_done( $order_id, $outcome ) {
+		$order_id = absint( $order_id );
+		set_transient( self::done_key( $order_id ), sanitize_key( (string) $outcome ) . '|' . gmdate( 'c' ), self::DONE_TTL );
+		if ( false !== get_option( self::DONE_PREFIX . $order_id, false ) ) {
+			delete_option( self::DONE_PREFIX . $order_id );
+		}
 	}
 
 	/**

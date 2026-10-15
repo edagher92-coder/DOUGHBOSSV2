@@ -40,7 +40,7 @@ class DoughBoss_Square_Wallets {
 		if ( ! self::is_association_request( $uri ) ) {
 			return;
 		}
-		$file = (string) DoughBoss_Settings::get( 'square_apple_pay_domain_file', '' );
+		$file = DoughBoss_Settings::square_apple_pay_domain_file();
 		if ( '' === trim( $file ) ) {
 			return; // Fall through to the normal 404.
 		}

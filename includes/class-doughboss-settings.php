@@ -261,8 +261,9 @@ class DoughBoss_Settings {
 			'square_wallets_enabled'    => 0,
 			// 'embedded' (Web Payments SDK on-site) or 'hosted' (Square checkout page).
 			'square_checkout_style'     => 'embedded',
-			// Square-issued Apple Pay domain association file contents (served at /.well-known/).
-			'square_apple_pay_domain_file' => '',
+			// The Square-issued Apple Pay domain association file lives in its own
+			// non-autoloaded option (APPLE_PAY_DOMAIN_FILE_OPTION) since 2.48.0, so
+			// up to 20KB is no longer loaded on every request.
 			// Preparation only: shops never inherit the legacy global location ID.
 			'square_test_location_map'  => array(),
 			'square_live_location_map'  => array(),
@@ -1750,6 +1751,56 @@ class DoughBoss_Settings {
 	 */
 	public static function legacy_voucher_issuance_enabled() {
 		return (bool) self::get( 'legacy_voucher_issuance_enabled', 0 );
+	}
+
+	/**
+	 * Non-autoloaded option holding the Apple Pay domain association file.
+	 */
+	const APPLE_PAY_DOMAIN_FILE_OPTION = 'doughboss_square_apple_pay_domain_file';
+
+	/**
+	 * The Square-issued Apple Pay domain association file contents.
+	 *
+	 * Migrates on read: a value still sitting in the autoloaded settings array
+	 * (2.47.0 and earlier) is copied into its own autoload-off option. The
+	 * legacy key is stripped from the settings array here only when no settings
+	 * sanitizer is registered for this request (front end), and always on the
+	 * next DoughBoss settings save.
+	 *
+	 * @return string
+	 */
+	public static function square_apple_pay_domain_file() {
+		$value = get_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, false );
+		if ( false !== $value ) {
+			return (string) $value;
+		}
+		$stored = get_option( self::OPTION_KEY, array() );
+		$legacy = is_array( $stored ) && isset( $stored['square_apple_pay_domain_file'] ) ? (string) $stored['square_apple_pay_domain_file'] : '';
+		if ( '' === trim( $legacy ) ) {
+			return '';
+		}
+		if ( add_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, $legacy, '', 'no' )
+			&& ! has_filter( 'sanitize_option_' . self::OPTION_KEY ) ) {
+			unset( $stored['square_apple_pay_domain_file'] );
+			update_option( self::OPTION_KEY, $stored );
+		}
+		return $legacy;
+	}
+
+	/**
+	 * Store (or clear) the Apple Pay domain association file in its own
+	 * non-autoloaded option. The value must already be sanitised.
+	 *
+	 * @param string $contents File contents.
+	 * @return void
+	 */
+	public static function save_square_apple_pay_domain_file( $contents ) {
+		$contents = (string) $contents;
+		if ( false === get_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, false ) ) {
+			add_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, $contents, '', 'no' );
+			return;
+		}
+		update_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, $contents, false );
 	}
 
 	/**

@@ -543,8 +543,14 @@ class DoughBoss_Admin {
 		}
 		if ( isset( $input['square_apple_pay_domain_file'] ) ) {
 			$apple_file = preg_replace( '/[^A-Za-z0-9+\/=\s]/', '', (string) $input['square_apple_pay_domain_file'] );
-			$clean['square_apple_pay_domain_file'] = substr( trim( (string) $apple_file ), 0, 20000 );
+			// Stored in its own non-autoloaded option since 2.48.0.
+			DoughBoss_Settings::save_square_apple_pay_domain_file( substr( trim( (string) $apple_file ), 0, 20000 ) );
+		} elseif ( isset( $existing['square_apple_pay_domain_file'] ) ) {
+			// Another settings tab saved: migrate any legacy value before it is dropped.
+			DoughBoss_Settings::square_apple_pay_domain_file();
 		}
+		// Never keep the (up to 20KB) file in the autoloaded settings array.
+		unset( $clean['square_apple_pay_domain_file'] );
 		if ( isset( $input['square_club_plan_variation_id'] ) ) {
 			$club_plan = trim( sanitize_text_field( (string) $input['square_club_plan_variation_id'] ) );
 			$clean['square_club_plan_variation_id'] = preg_match( '/^[A-Za-z0-9_-]{0,64}$/', $club_plan ) ? $club_plan : '';
@@ -3936,7 +3942,7 @@ JS;
 							<th><?php esc_html_e( 'Apple Pay / Google Pay', 'doughboss' ); ?></th>
 							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_wallets_present]" value="1" /><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_wallets_enabled]" value="1" <?php checked( ! empty( $settings['square_wallets_enabled'] ), true ); ?> /> <?php esc_html_e( 'Show Apple Pay and Google Pay buttons at checkout', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Turn on only after a sandbox Google Pay test order passes. Apple Pay also needs the domain registered in the Square Developer Console (Apple Pay › Add domain) using the file below.', 'doughboss' ); ?></p>
-								<p><label for="db-apple-file"><?php esc_html_e( 'Apple Pay domain association file (paste contents)', 'doughboss' ); ?></label><br /><textarea id="db-apple-file" rows="3" class="large-text code" name="<?php echo esc_attr( $opt ); ?>[square_apple_pay_domain_file]"><?php echo esc_textarea( isset( $settings['square_apple_pay_domain_file'] ) ? $settings['square_apple_pay_domain_file'] : '' ); ?></textarea>
+								<p><label for="db-apple-file"><?php esc_html_e( 'Apple Pay domain association file (paste contents)', 'doughboss' ); ?></label><br /><textarea id="db-apple-file" rows="3" class="large-text code" name="<?php echo esc_attr( $opt ); ?>[square_apple_pay_domain_file]"><?php echo esc_textarea( DoughBoss_Settings::square_apple_pay_domain_file() ); ?></textarea>
 								<span class="description"><?php echo esc_html( sprintf( __( 'Served at %s', 'doughboss' ), home_url( '/.well-known/apple-developer-merchantid-domain-association' ) ) ); ?></span></p></td>
 						</tr>
 						<tr>
