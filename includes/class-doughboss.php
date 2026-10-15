@@ -120,6 +120,8 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-rest-controller.php';
 		require_once $dir . 'class-doughboss-images.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
+		require_once $dir . 'class-doughboss-store-hours.php';
+		require_once $dir . 'class-doughboss-b2b.php';
 		require_once $dir . 'class-doughboss-assets.php';
 		require_once $dir . 'class-doughboss-seo.php';
 		require_once $dir . 'class-doughboss-staff-scope.php';
@@ -157,6 +159,7 @@ final class DoughBoss {
 		( new DoughBoss_Post_Types() )->init();
 		( new DoughBoss_Catering_Package() )->init();
 		( new DoughBoss_Shortcodes() )->init();
+		( new DoughBoss_B2B() )->init();
 		( new DoughBoss_Loyalty() )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_SEO() )->init();

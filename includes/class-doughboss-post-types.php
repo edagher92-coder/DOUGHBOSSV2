@@ -36,7 +36,41 @@ class DoughBoss_Post_Types {
 		if ( ! is_string( $text ) ) {
 			return '';
 		}
-		return wp_strip_all_tags( html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+		return self::decode_standalone_ampersands( wp_strip_all_tags( html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) );
+	}
+
+	/**
+	 * Present a saved menu title as plain text for JSON/textContent consumers.
+	 *
+	 * Titles saved through kses can arrive as "Cheese &amp; Olives"; the JSON
+	 * consumer writes textContent, so the entity would otherwise be shown
+	 * literally. Same rules as plain_menu_description().
+	 *
+	 * @param string $title Saved post title.
+	 * @return string
+	 */
+	public static function plain_menu_title( $title ) {
+		return trim( self::plain_menu_description( $title ) );
+	}
+
+	/**
+	 * Repair a double-escaped conjunction such as "olives &amp; cheese".
+	 *
+	 * Decoding stays single-pass so entity-like syntax ("&amp;lt;em&amp;gt;")
+	 * is never interpreted as markup. The one exception is an ampersand
+	 * entity that stands alone as a word (whitespace or string edge on both
+	 * sides): after the single decode that can only be a doubly-escaped "&"
+	 * used as "and", which customers saw rendered as a literal "&amp;".
+	 *
+	 * @param string $text Text that has already been decoded once.
+	 * @return string
+	 */
+	public static function decode_standalone_ampersands( $text ) {
+		if ( ! is_string( $text ) || false === strpos( $text, '&' ) ) {
+			return is_string( $text ) ? $text : '';
+		}
+		$fixed = preg_replace( '/(^|\s)&(?:amp|#0*38|#x0*26);(?=\s|$)/i', '$1&', $text );
+		return is_string( $fixed ) ? $fixed : $text;
 	}
 
 	/**

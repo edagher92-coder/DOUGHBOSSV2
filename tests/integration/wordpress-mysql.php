@@ -3261,6 +3261,14 @@ $inactive_shop = DoughBoss_Locations::create(
 );
 db_integration_assert( $shop_b > 0 && $inactive_shop > 0, 'active shop B and inactive location fixtures are stored' );
 
+// 2.49.0 business rule: catering is pickup from Revesby only.
+$catering_shop = null;
+foreach ( DoughBoss_Locations::all( true ) as $catering_candidate ) {
+	if ( 'revesby' === (string) $catering_candidate->slug ) { $catering_shop = $catering_candidate; break; }
+}
+db_integration_assert( is_object( $catering_shop ), 'seeded Revesby location is the catering shop' );
+db_integration_same( array( (int) $catering_shop->id ), DoughBoss_Catering::catering_location_ids(), 'only Revesby accepts catering' );
+
 $event_date = wp_date( 'Y-m-d', current_time( 'timestamp' ) + ( 30 * DAY_IN_SECONDS ) );
 $catering_params = array(
 	'customer_name'  => 'Catering Integration Customer',
@@ -3268,13 +3276,13 @@ $catering_params = array(
 	'customer_phone' => '0400123456',
 	'package_id'     => $published_package,
 	'guest_count'    => 25,
-	'order_type'     => 'delivery',
+	'order_type'     => 'pickup',
 	'event_date'     => $event_date,
 	'event_time'     => '18:30',
 	'address'        => '22 Integration Street, Sydney',
 	'dietary'        => 'One gluten-free meal',
 	'notes'          => 'Use the rear loading entrance',
-	'location_id'    => $shop_b,
+	'location_id'    => (int) $catering_shop->id,
 );
 $original_remote_addr = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : null;
 $mail_start = count( $GLOBALS['db_catering_mail'] );
@@ -3310,13 +3318,24 @@ db_integration_same( 'doughboss_catering_package_unavailable', is_wp_error( $rac
 db_integration_same( $rows_before_race, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), 'unpublish race stores no enquiry' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 db_integration_same( $mail_before_race, count( $GLOBALS['db_catering_mail'] ), 'unpublish race sends no mail' );
 
+foreach ( array(
+	'doughboss_catering_location_unavailable' => array( 'location_id' => $shop_b ),
+	'doughboss_catering_pickup_only'          => array( 'order_type' => 'delivery' ),
+) as $expected_rule_code => $rule_override ) {
+	$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+	$rule_rows_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$rule_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', array_merge( $catering_params, $rule_override ) ) );
+	db_integration_same( $expected_rule_code, is_wp_error( $rule_submit ) ? $rule_submit->get_error_code() : '', $expected_rule_code . ' enforces Revesby pickup-only catering' );
+	db_integration_same( $rule_rows_before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), $expected_rule_code . ' stores no enquiry' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+}
+
 $_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
 $mail_before_shop_b = count( $GLOBALS['db_catering_mail'] );
 $shop_b_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $catering_params ) );
 $shop_b_data = $shop_b_submit instanceof WP_REST_Response ? $shop_b_submit->get_data() : array();
 $shop_b_row = ! empty( $shop_b_data['enquiry_number'] ) ? DoughBoss_Catering::get_by_number( $shop_b_data['enquiry_number'] ) : null;
 db_integration_assert( ! empty( $shop_b_data['success'] ) && is_array( $shop_b_row ), 'valid published-package enquiry is saved' );
-db_integration_same( $shop_b, is_array( $shop_b_row ) ? (int) $shop_b_row['location_id'] : 0, 'selected shop B is persisted as shop B' );
+db_integration_same( (int) $catering_shop->id, is_array( $shop_b_row ) ? (int) $shop_b_row['location_id'] : 0, 'selected Revesby catering shop is persisted' );
 db_integration_same( $mail_before_shop_b + 2, count( $GLOBALS['db_catering_mail'] ), 'valid enquiry emits exactly customer and configured-staff mail' );
 $customer_mail = db_integration_catering_mail_to( $catering_params['customer_email'] );
 $staff_mail = db_integration_catering_mail_to( $settings['catering_email'] );
@@ -3325,12 +3344,12 @@ db_integration_same( $settings['catering_email'], isset( $staff_mail['to'] ) ? $
 $staff_message = isset( $staff_mail['message'] ) ? (string) $staff_mail['message'] : '';
 $expected_staff_fields = array(
 	'Reference: ' . $shop_b_row['enquiry_number'],
-	'Location: Integration Shop B (ID ' . $shop_b . ')',
+	'Location: ' . $catering_shop->name . ' (ID ' . (int) $catering_shop->id . ')',
 	'Package: Published Integration Feast',
 	'Guests: 25',
 	'Event date: ' . $event_date,
 	'Event time: 18:30',
-	'Order type: Delivery',
+	'Order type: Pickup',
 	'Address: 22 Integration Street, Sydney',
 	'Customer name: Catering Integration Customer',
 	'Customer email: catering.customer@example.invalid',
@@ -4597,10 +4616,12 @@ db_integration_assert( strpos( $ssr_menu_html, $ssr_first_escaped ) < strpos( $s
 db_integration_assert( false === strpos( $ssr_menu_html, 'dietary' ) && false === strpos( $ssr_menu_html, '<button' ) && false === strpos( $ssr_menu_html, '<form' ), 'SSR fallback remains browse-only without dietary claims or purchase controls' );
 
 // Decode once is deliberate; SSR must not interpret entity syntax left in plain JSON text.
+// 2.49.0: the one exception is a double-escaped ampersand standing alone as a
+// word ("olives &amp; cheese"), which customers saw literally; it becomes "&".
 foreach ( array(
-	array( 'Cheese &amp;amp; herbs', 'Cheese &amp; herbs' ),
+	array( 'Cheese &amp;amp; herbs', 'Cheese & herbs' ),
 	array( 'Literal &amp;lt;em&amp;gt;herbs&amp;lt;/em&amp;gt;', 'Literal &lt;em&gt;herbs&lt;/em&gt;' ),
-	array( 'Safe &lt;script&gt;nested-script-sentinel&lt;/script&gt; &amp;amp; herbs', 'Safe  &amp; herbs' ),
+	array( 'Safe &lt;script&gt;nested-script-sentinel&lt;/script&gt; &amp;amp; herbs', 'Safe  & herbs' ),
 ) as $nested_description_case ) {
 	wp_update_post( array( 'ID' => $ssr_first_id, 'post_excerpt' => $nested_description_case[0] ) );
 	$nested_menu_row = null;

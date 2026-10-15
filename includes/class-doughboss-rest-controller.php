@@ -1074,6 +1074,12 @@ class DoughBoss_REST_Controller {
 						'default'           => 'pickup',
 						'sanitize_callback' => 'sanitize_key',
 					),
+					// Combined selection as "id:qty,id:qty"; prices are always
+					// read from the package posts, never from the browser.
+					'packages'    => array(
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 				),
 			)
 		);
@@ -1139,6 +1145,35 @@ class DoughBoss_REST_Controller {
 						'default'           => '',
 						'sanitize_callback' => 'sanitize_text_field',
 					),
+					// Combined selection: a list of {id, qty}. Validated and priced
+					// server-side by DoughBoss_Catering::normalise_packages() and
+					// quote_packages(); package_id alone stays supported.
+					'packages'       => array(
+						'default'           => array(),
+						'validate_callback' => array( $this, 'validate_catering_packages_arg' ),
+					),
+				),
+			)
+		);
+
+		// Wholesale / franchising enquiry form ([doughboss_b2b_form]). Public,
+		// nonce-gated and rate limited; emails the B2B inbox, stores nothing.
+		register_rest_route(
+			$ns,
+			'/b2b/enquiry',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'create_b2b_enquiry' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'type'     => array( 'default' => 'wholesale', 'sanitize_callback' => 'sanitize_key' ),
+					'name'     => array( 'default' => '' ),
+					'business' => array( 'default' => '' ),
+					'email'    => array( 'default' => '' ),
+					'phone'    => array( 'default' => '' ),
+					'focus'    => array( 'default' => '' ),
+					'message'  => array( 'default' => '' ),
+					'website'  => array( 'default' => '' ),
 				),
 			)
 		);
@@ -3861,7 +3896,9 @@ class DoughBoss_REST_Controller {
 				// front-end inserts via textContent (XSS-safe already), so an
 				// HTML-entity-encoded title (e.g. "Chicken &#038; Cheese") would
 				// render literally instead of decoding to "&".
-				'name'        => $post->post_title,
+				// plain_menu_title() decodes a kses "&amp;" once (plus a stranded
+				// double-escaped "&amp;" conjunction) so textContent shows "&".
+				'name'        => DoughBoss_Post_Types::plain_menu_title( $post->post_title ),
 				'description' => DoughBoss_Post_Types::plain_menu_description( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
 				'price'       => (float) get_post_meta( $post->ID, DoughBoss_Post_Types::META_PRICE, true ),
 				'type'        => get_post_meta( $post->ID, DoughBoss_Post_Types::META_TYPE, true ),
@@ -6784,8 +6821,8 @@ class DoughBoss_REST_Controller {
 			$out[] = array(
 				'id'          => $id,
 				// Raw title — see the /menu handler's comment for why.
-				'name'        => $post->post_title,
-				'description' => wp_strip_all_tags( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
+				'name'        => DoughBoss_Post_Types::plain_menu_title( $post->post_title ),
+				'description' => DoughBoss_Post_Types::plain_menu_description( $post->post_excerpt ? $post->post_excerpt : $post->post_content ),
 				'serves_min'  => (int) get_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MIN, true ),
 				'serves_max'  => (int) get_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MAX, true ),
 				'price'       => (float) get_post_meta( $id, DoughBoss_Catering_Package::META_BASE_PRICE, true ),
@@ -6807,15 +6844,74 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function get_catering_quote( WP_REST_Request $request ) {
-		$quote = DoughBoss_Catering::quote(
-			absint( $request->get_param( 'package_id' ) ),
-			absint( $request->get_param( 'guest_count' ) ),
-			sanitize_key( $request->get_param( 'order_type' ) )
-		);
+		$lines = DoughBoss_Catering::normalise_packages( (string) $request->get_param( 'packages' ) );
+		if ( is_wp_error( $lines ) ) {
+			return $lines;
+		}
+		$quote = $lines
+			? DoughBoss_Catering::quote_packages(
+				$lines,
+				absint( $request->get_param( 'guest_count' ) ),
+				sanitize_key( $request->get_param( 'order_type' ) )
+			)
+			: DoughBoss_Catering::quote(
+				absint( $request->get_param( 'package_id' ) ),
+				absint( $request->get_param( 'guest_count' ) ),
+				sanitize_key( $request->get_param( 'order_type' ) )
+			);
 		if ( is_wp_error( $quote ) ) {
 			return $quote;
 		}
 		return rest_ensure_response( $quote );
+	}
+
+	/**
+	 * validate_callback for the enquiry packages[] argument.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return true|WP_Error
+	 */
+	public function validate_catering_packages_arg( $value ) {
+		$lines = DoughBoss_Catering::normalise_packages( $value );
+		return is_wp_error( $lines ) ? $lines : true;
+	}
+
+	/**
+	 * POST /b2b/enquiry — validate a wholesale/franchising enquiry and email it
+	 * to the B2B inbox with Reply-To set to the enquirer. Nothing is stored.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function create_b2b_enquiry( WP_REST_Request $request ) {
+		$thanks = __( 'Thanks — your enquiry has been sent. Our team will be in touch soon.', 'doughboss' );
+
+		// Honeypot: bots fill the hidden field; accept silently without sending.
+		if ( '' !== trim( (string) $request->get_param( 'website' ) ) ) {
+			return rest_ensure_response( array( 'success' => true, 'message' => $thanks ) );
+		}
+		if ( $this->rate_limited( 'b2b', 5, HOUR_IN_SECONDS ) ) {
+			return new WP_Error( 'doughboss_rate_limit', __( 'Too many requests. Please try again later, or call us.', 'doughboss' ), array( 'status' => 429 ) );
+		}
+
+		$clean = DoughBoss_B2B::validate(
+			array(
+				'type'     => $request->get_param( 'type' ),
+				'name'     => $request->get_param( 'name' ),
+				'business' => $request->get_param( 'business' ),
+				'email'    => $request->get_param( 'email' ),
+				'phone'    => $request->get_param( 'phone' ),
+				'focus'    => $request->get_param( 'focus' ),
+				'message'  => $request->get_param( 'message' ),
+			)
+		);
+		if ( is_wp_error( $clean ) ) {
+			return $clean;
+		}
+		if ( ! DoughBoss_B2B::send( $clean ) ) {
+			return new WP_Error( 'doughboss_b2b_mail', __( 'Your enquiry could not be sent right now. Please call or email us directly.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		return rest_ensure_response( array( 'success' => true, 'message' => $thanks ) );
 	}
 
 	/**
@@ -6844,6 +6940,16 @@ class DoughBoss_REST_Controller {
 			);
 		}
 
+		// Catering is pickup only (DoughBoss_Catering::delivery_enabled()).
+		$order_type = sanitize_key( (string) $request->get_param( 'order_type' ) );
+		if ( 'delivery' === $order_type && ! DoughBoss_Catering::delivery_enabled() ) {
+			return new WP_Error(
+				'doughboss_catering_pickup_only',
+				__( 'Catering is pickup from Revesby only. Please choose pickup, or call us to discuss other arrangements.', 'doughboss' ),
+				array( 'status' => 400 )
+			);
+		}
+
 		// Preserve intentional legacy omission (0), but never silently reroute an
 		// explicitly selected location that has since disappeared or been disabled.
 		$location_id = absint( $request->get_param( 'location_id' ) );
@@ -6853,6 +6959,20 @@ class DoughBoss_REST_Controller {
 				__( 'That location is no longer available. Please choose another location.', 'doughboss' ),
 				array( 'status' => 400 )
 			);
+		}
+		// Catering is prepared only at the catering shops (Revesby). Omission
+		// routes there; another shop is refused rather than silently rerouted.
+		$catering_locations = DoughBoss_Catering::catering_location_ids();
+		if ( $catering_locations ) {
+			if ( 0 === $location_id ) {
+				$location_id = (int) $catering_locations[0];
+			} elseif ( ! in_array( $location_id, $catering_locations, true ) ) {
+				return new WP_Error(
+					'doughboss_catering_location_unavailable',
+					__( 'Catering is pickup from Revesby only. Please send your enquiry for Revesby.', 'doughboss' ),
+					array( 'status' => 400 )
+				);
+			}
 		}
 		if ( 0 === $location_id && DoughBoss_Locations::count() > 0 ) {
 			$location_id = DoughBoss_Locations::default_id();
@@ -6864,8 +6984,9 @@ class DoughBoss_REST_Controller {
 				'customer_email' => $request->get_param( 'customer_email' ),
 				'customer_phone' => $request->get_param( 'customer_phone' ),
 				'package_id'     => $request->get_param( 'package_id' ),
+				'packages'       => $request->get_param( 'packages' ),
 				'guest_count'    => $request->get_param( 'guest_count' ),
-				'order_type'     => $request->get_param( 'order_type' ),
+				'order_type'     => $order_type,
 				'event_date'     => $request->get_param( 'event_date' ),
 				'event_time'     => $request->get_param( 'event_time' ),
 				'address'        => $request->get_param( 'address' ),
@@ -6940,7 +7061,7 @@ class DoughBoss_REST_Controller {
 		$rows     = DoughBoss_Catering::production_queue( $location_id, 100 );
 		$data     = array_map(
 			static function ( $row ) use ( $statuses ) {
-				$package = (int) $row['package_id'] ? get_the_title( (int) $row['package_id'] ) : __( 'Custom catering', 'doughboss' );
+				$package = (int) $row['package_id'] || 0 === strpos( (string) $row['notes'], DoughBoss_Catering::PACKAGES_NOTE_HEADING ) ? DoughBoss_Catering::package_label( $row ) : __( 'Custom catering', 'doughboss' );
 				$status  = sanitize_key( (string) $row['status'] );
 				return array(
 					'id'              => (int) $row['id'],
@@ -8277,7 +8398,7 @@ class DoughBoss_REST_Controller {
 
 		// Plain-text email body, same reasoning as $blog above: decode entities
 		// get_the_title() adds for HTML display so "&" doesn't show as "&#038;".
-		$package = (int) $enquiry['package_id'] ? wp_specialchars_decode( get_the_title( (int) $enquiry['package_id'] ), ENT_QUOTES ) : __( 'Custom', 'doughboss' );
+		$package = DoughBoss_Catering::package_label( $enquiry );
 
 		$customer_body = sprintf(
 			/* translators: 1: name, 2: enquiry number, 3: package, 4: guests, 5: event date, 6: deposit. */

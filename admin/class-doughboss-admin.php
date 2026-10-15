@@ -613,6 +613,17 @@ class DoughBoss_Admin {
 		$clean['catering_email'] = isset( $input['catering_email'] ) && is_email( $input['catering_email'] )
 			? sanitize_email( $input['catering_email'] )
 			: ( isset( $existing['catering_email'] ) ? $existing['catering_email'] : 'catering@doughboss.com.au' );
+		// Wholesale/franchising inbox: a valid email or blank (blank falls back to
+		// the orders inbox). Absent field preserves the stored value.
+		if ( isset( $input['b2b_email'] ) ) {
+			$clean['b2b_email'] = is_email( $input['b2b_email'] ) ? sanitize_email( $input['b2b_email'] ) : '';
+		} else {
+			$clean['b2b_email'] = isset( $existing['b2b_email'] ) ? $existing['b2b_email'] : '';
+		}
+		$order_phone = isset( $input['order_phone'] ) ? preg_replace( '/[^0-9+]/', '', (string) $input['order_phone'] ) : '';
+		$clean['order_phone'] = is_string( $order_phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $order_phone )
+			? $order_phone
+			: ( isset( $existing['order_phone'] ) ? $existing['order_phone'] : '0297742286' );
 		$catering_phone = isset( $input['catering_phone'] ) ? preg_replace( '/[^0-9+]/', '', (string) $input['catering_phone'] ) : '';
 		$clean['catering_phone'] = is_string( $catering_phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $catering_phone )
 			? $catering_phone
@@ -2160,7 +2171,7 @@ JS;
 					<?php else : ?>
 						<?php foreach ( $result['items'] as $row ) : ?>
 							<?php
-							$package = (int) $row['package_id'] ? get_the_title( (int) $row['package_id'] ) : __( 'Custom', 'doughboss' );
+							$package = DoughBoss_Catering::package_label( $row );
 							$can_quote = 0 === (int) $row['package_id']
 								&& in_array( (string) $row['status'], array( DoughBoss_Catering::STATUS_NEW, DoughBoss_Catering::STATUS_QUOTED ), true )
 								&& ! DoughBoss_Catering::has_payment_preparation( $row );
@@ -3568,6 +3579,16 @@ JS;
 						<th><label for="db-catering-email"><?php esc_html_e( 'Catering email', 'doughboss' ); ?></label></th>
 						<td><input type="email" id="db-catering-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[catering_email]" value="<?php echo esc_attr( isset( $settings['catering_email'] ) ? $settings['catering_email'] : 'catering@doughboss.com.au' ); ?>" />
 							<span class="description"><?php esc_html_e( 'Shown to customers and used for new catering enquiry notifications.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-b2b-email"><?php esc_html_e( 'Wholesale & franchising email', 'doughboss' ); ?></label></th>
+						<td><input type="email" id="db-b2b-email" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[b2b_email]" value="<?php echo esc_attr( isset( $settings['b2b_email'] ) ? $settings['b2b_email'] : '' ); ?>" />
+							<span class="description"><?php esc_html_e( 'Receives enquiries from the wholesale and franchising forms ([doughboss_b2b_form]). Replies go straight to the enquirer. Leave blank to use the order notification email.', 'doughboss' ); ?></span></td>
+					</tr>
+					<tr>
+						<th><label for="db-order-phone"><?php esc_html_e( 'Call-to-order phone', 'doughboss' ); ?></label></th>
+						<td><input type="tel" id="db-order-phone" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[order_phone]" value="<?php echo esc_attr( isset( $settings['order_phone'] ) ? $settings['order_phone'] : '0297742286' ); ?>" />
+							<span class="description"><?php esc_html_e( 'Shown as the single "Call to order" bar and header link while online ordering is paused.', 'doughboss' ); ?></span></td>
 					</tr>
 					<tr>
 						<th><label for="db-catering-phone"><?php esc_html_e( 'Catering phone', 'doughboss' ); ?></label></th>

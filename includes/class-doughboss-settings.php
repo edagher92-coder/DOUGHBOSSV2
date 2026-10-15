@@ -157,6 +157,12 @@ class DoughBoss_Settings {
 			// Dedicated customer-facing catering contacts. Catering enquiries use
 			// this inbox rather than mixing with normal online-order notices.
 			'catering_email'  => 'catering@doughboss.com.au',
+			// Wholesale and franchising enquiries ([doughboss_b2b_form]). Blank
+			// sends them to the orders inbox above.
+			'b2b_email'       => '',
+			// Public "call to order" number shown while online ordering is
+			// paused (Revesby). Digits only; Australian format.
+			'order_phone'     => '0297742286',
 			'catering_phone'  => '0422487487',
 			// Minimum catering notice in business days (Sat/Sun don't count).
 			'catering_min_notice_business_days' => 2,
@@ -462,6 +468,69 @@ class DoughBoss_Settings {
 	 */
 	public static function show_legacy_gateways() {
 		return defined( 'DOUGHBOSS_SHOW_LEGACY_GATEWAYS' ) && DOUGHBOSS_SHOW_LEGACY_GATEWAYS;
+	}
+
+	/**
+	 * Inbox for wholesale and franchising enquiries. Falls back to the orders
+	 * inbox when the B2B setting is blank or invalid. Filterable via
+	 * 'doughboss_b2b_email'.
+	 *
+	 * @return string
+	 */
+	public static function b2b_email() {
+		$email = sanitize_email( (string) self::get( 'b2b_email', '' ) );
+		if ( ! is_email( $email ) ) {
+			$email = self::orders_email();
+		}
+		return (string) apply_filters( 'doughboss_b2b_email', $email );
+	}
+
+	/**
+	 * Public phone number customers call to order while online ordering is
+	 * paused. Digits only; defaults to the Revesby shop.
+	 *
+	 * @return string
+	 */
+	public static function order_phone() {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'order_phone', '0297742286' ) );
+		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '0297742286';
+	}
+
+	/**
+	 * E.164 form for a tel: link, e.g. 0297742286 -> +61297742286.
+	 *
+	 * @param string $phone Australian number (digits, optional +61).
+	 * @return string
+	 */
+	public static function phone_tel( $phone ) {
+		$digits = preg_replace( '/[^0-9]/', '', (string) $phone );
+		if ( ! is_string( $digits ) || '' === $digits ) {
+			return '';
+		}
+		if ( 0 === strpos( $digits, '61' ) && 11 === strlen( $digits ) ) {
+			return '+' . $digits;
+		}
+		return 0 === strpos( $digits, '0' ) ? '+61' . substr( $digits, 1 ) : '+' . $digits;
+	}
+
+	/**
+	 * Display form: landlines as (02) 9774 2286, mobiles as 0422 487 487.
+	 *
+	 * @param string $phone Australian number.
+	 * @return string
+	 */
+	public static function phone_display( $phone ) {
+		$digits = preg_replace( '/[^0-9]/', '', (string) $phone );
+		if ( is_string( $digits ) && 0 === strpos( $digits, '61' ) && 11 === strlen( $digits ) ) {
+			$digits = '0' . substr( $digits, 2 );
+		}
+		if ( ! is_string( $digits ) || 10 !== strlen( $digits ) ) {
+			return (string) $phone;
+		}
+		if ( '04' === substr( $digits, 0, 2 ) ) {
+			return substr( $digits, 0, 4 ) . ' ' . substr( $digits, 4, 3 ) . ' ' . substr( $digits, 7, 3 );
+		}
+		return '(' . substr( $digits, 0, 2 ) . ') ' . substr( $digits, 2, 4 ) . ' ' . substr( $digits, 6, 4 );
 	}
 
 	/**
