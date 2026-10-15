@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.48.0
+Stable tag: 2.49.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,16 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.49.0 =
+* Menu: inline SVG search icon with a clear button (the old glyph showed as a missing-character box); warm branded tile for items without a photo or with a photo that fails to load; Drinks shown as a compact two-column list.
+* While online ordering is paused the menu shows no per-card "Customise when ordering opens" / "Ordering paused" controls; one sticky "Call to order (02) 9774 2286" bar replaces them. It follows the live ordering setting, so normal add-to-cart controls return automatically when ordering opens. New setting: Call-to-order phone.
+* Menu text: a double-escaped "&amp;" used as "and" (for example Sujuk Special) now shows as "&"; menu and catering package names decode the same way.
+* Hero: photo-motion control is a small corner icon toggle (aria-pressed), hidden when the device asks for reduced motion; the helper caption is gone and stat values and labels no longer run together.
+* New [doughboss_b2b_form type="wholesale|franchise"] enquiry form: REST submit with nonce, honeypot, rate limit and server validation, emailed to the new "Wholesale & franchising email" setting (blank = order notification email) with Reply-To set to the enquirer. Nothing is stored.
+* Store cards (theme): structured rows, Call and Google Maps buttons, and a live Open now / Closed badge in Sydney time from stored location hours (published hours as fallback).
+* Catering: package size, guest range and price shown as separate badges; per-package quantity steppers combine packages; the quote and enquiry routes accept packages[] {id, qty}, priced from the package posts only (highest package deposit % applies), with the selection saved as a readable list in the enquiry notes. A single package_id works as before. Online catering enquiries are pickup from Revesby only: other shops and delivery are refused.
+* Theme DoughBoss Final 1.8.0: single header CTA, "Order Online" becomes "Call to order" while ordering is paused, icon-only menu toggle, one hero stat strip, wholesale/franchising forms, footer "Franchising & partners".
 
 = 2.48.0 =
 * New: itemised paid-order confirmation email ("placed" stage) with line totals, options, discount, GST included, pickup shop name/address/phone and tracking link. Settings > Real-time & Notifications > "Email customer an itemised confirmation when a paid order is placed" (default on). The older template confirmation no longer emails the customer a second time once it was sent; the shop inbox copy is unchanged.
