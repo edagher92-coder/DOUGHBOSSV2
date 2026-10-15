@@ -186,21 +186,42 @@
 		});
 		tickTimer = setTimeout(tick, Math.max(100, delay));
 	}
+	// Shop status changes slowly: refresh the public reads every 120s. The
+	// server's pickup-hours evidence is only valid for 60s, so while ordering
+	// is open and a shown status has expired, refresh early (at most every 30s)
+	// rather than show "unconfirmed". While paused the text needs no evidence.
+	var REFRESH_MS = 120000;
+	var EXPIRED_REFRESH_MS = 30000;
+	function evidenceExpired(now) {
+		return watches.some(function (watch) {
+			var status = watch.location && watch.location.pickup_status;
+			var expires = status && Date.parse(status.expires_at_utc);
+			return !!(watch.config && watch.config.ordering_open && status && Number.isFinite(expires) && expires <= now);
+		});
+	}
+	function refreshDue(now) {
+		var since = now - lastRefresh;
+		return since >= REFRESH_MS || (since >= EXPIRED_REFRESH_MS && evidenceExpired(now));
+	}
 	function tick() {
-		if (!document.hidden) {
-			paint();
-			if (watches.length && Date.now() - lastRefresh >= 45000) { refresh().catch(function () {}); }
+		if (document.hidden) {
+			// Background tab: stop polling entirely; visibilitychange resumes.
+			if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+			return;
 		}
+		paint();
+		if (watches.length && refreshDue(Date.now())) { refresh().catch(function () {}); }
 		scheduleTick();
 	}
 	function boot() {
 		document.querySelectorAll('[data-doughboss-header-shop]').forEach(renderHeader);
 		tick();
 		document.addEventListener('visibilitychange', function () {
-			if (!document.hidden) {
-				paint();
-				if (watches.length && Date.now() - lastRefresh >= 45000) { refresh().catch(function () {}); }
+			if (document.hidden) {
+				if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+				return;
 			}
+			tick();
 		});
 	}
 	if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); }

@@ -392,6 +392,86 @@
 		}
 	}
 
+	/* ------------------------------------------------------------------ */
+	/* Remember my details (opt-in, this device only)                     */
+	/* ------------------------------------------------------------------ */
+
+	// Only name, email and phone are ever stored, and only after the customer
+	// ticks the box. Unticking deletes them. Every storage access is guarded:
+	// private browsing or blocked storage simply means nothing is remembered.
+	var REMEMBER_DETAILS_KEY = 'doughboss_remember_details';
+	var REMEMBER_DETAILS_FIELDS = ['customer_name', 'customer_email', 'customer_phone'];
+
+	function rememberStorage() {
+		try { return window.localStorage || null; } catch (ignoreStorage) { return null; }
+	}
+
+	function readRememberedDetails(storage) {
+		var parsed = null;
+		try { parsed = storage ? JSON.parse(storage.getItem(REMEMBER_DETAILS_KEY) || 'null') : null; } catch (ignoreRead) { return null; }
+		if (!parsed || typeof parsed !== 'object') { return null; }
+		var details = {};
+		var any = false;
+		REMEMBER_DETAILS_FIELDS.forEach(function (key) {
+			var value = typeof parsed[key] === 'string' ? parsed[key].trim().slice(0, 200) : '';
+			details[key] = value;
+			if (value) { any = true; }
+		});
+		return any ? details : null;
+	}
+
+	function writeRememberedDetails(storage, values) {
+		var details = {};
+		REMEMBER_DETAILS_FIELDS.forEach(function (key) {
+			details[key] = values && typeof values[key] === 'string' ? values[key].trim().slice(0, 200) : '';
+		});
+		try { if (storage) { storage.setItem(REMEMBER_DETAILS_KEY, JSON.stringify(details)); } return true; } catch (ignoreWrite) { return false; }
+	}
+
+	function clearRememberedDetails(storage) {
+		try { if (storage) { storage.removeItem(REMEMBER_DETAILS_KEY); } } catch (ignoreClear) {}
+	}
+
+	/**
+	 * Build the opt-in checkbox and wire it to the given field wrappers
+	 * ({ customer_name: label, ... }). Prefills only empty inputs.
+	 */
+	function rememberDetailsControl(fieldWraps) {
+		var storage = rememberStorage();
+		var inputs = {};
+		REMEMBER_DETAILS_FIELDS.forEach(function (key) {
+			inputs[key] = fieldWraps[key] ? fieldWraps[key].querySelector('input,textarea') : null;
+		});
+		var checkbox = el('input', { type: 'checkbox', name: 'remember_details', value: '1' });
+		var saved = readRememberedDetails(storage);
+		if (saved) {
+			checkbox.checked = true;
+			REMEMBER_DETAILS_FIELDS.forEach(function (key) {
+				if (inputs[key] && !inputs[key].value && saved[key]) { inputs[key].value = saved[key]; }
+			});
+		}
+		function currentValues() {
+			var values = {};
+			REMEMBER_DETAILS_FIELDS.forEach(function (key) { values[key] = inputs[key] ? String(inputs[key].value || '') : ''; });
+			return values;
+		}
+		function sync() {
+			if (checkbox.checked) { writeRememberedDetails(storage, currentValues()); }
+		}
+		checkbox.addEventListener('change', function () {
+			if (checkbox.checked) { sync(); } else { clearRememberedDetails(storage); }
+		});
+		// Save on edit (not on submit): some gateways intercept the submit event
+		// before this form's own handler runs.
+		REMEMBER_DETAILS_FIELDS.forEach(function (key) {
+			if (inputs[key]) { inputs[key].addEventListener('change', sync); }
+		});
+		return el('label', { class: 'db-remember-details' }, [
+			checkbox,
+			el('span', { text: I18N.rememberDetails || 'Remember my details on this device' })
+		]);
+	}
+
 	function setLocation(id, silent) {
 		try {
 			window.localStorage.setItem('doughboss_location', String(id));
@@ -2015,6 +2095,7 @@
 		]));
 		form.appendChild(summary);
 		form.appendChild(el('div', { class: 'db-checkout-fields' }, [name, email, phone]));
+		form.appendChild(rememberDetailsControl({ customer_name: name, customer_email: email, customer_phone: phone }));
 		form.appendChild(address);
 		form.appendChild(notes);
 		form.appendChild(el('details', { class: 'db-checkout-safety' }, [

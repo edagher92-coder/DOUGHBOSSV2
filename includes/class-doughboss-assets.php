@@ -264,8 +264,15 @@ class DoughBoss_Assets {
 				// Square requires its PCI-scoped Web Payments SDK to be loaded
 				// directly from Square's own CDN. Never bundle, proxy or self-host
 				// this file; the sandbox and production bundles differ.
-				wp_enqueue_script( 'square-web-payments', DoughBoss_Square::sdk_url(), array(), null, true );
-				$deps[] = 'square-web-payments';
+				// Performance: enqueue it only where checkout renders (the order
+				// page, or any page with [doughboss_cart]). Everywhere else the
+				// home page, catering and track pages skip ~100KB of SDK, and
+				// doughboss-square.js still loads the same exact CDN URL on demand
+				// (approved pre-order links already work this way).
+				if ( $is_order_page || $this->current_post_has( 'doughboss_cart' ) ) {
+					wp_enqueue_script( 'square-web-payments', DoughBoss_Square::sdk_url(), array(), null, true );
+					$deps[] = 'square-web-payments';
+				}
 			} else {
 				// Stripe Checkout is a full-page provider-hosted redirect. The
 				// storefront never loads Stripe.js or renders card fields.

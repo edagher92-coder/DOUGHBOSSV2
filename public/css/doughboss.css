@@ -2195,6 +2195,23 @@ body.page-id-402 #primary-menu > li > a {
 	grid-column: 1 / -1;
 }
 
+.db-remember-details {
+	display: flex;
+	align-items: center;
+	gap: .55rem;
+	margin: .7rem 0 .2rem;
+	font-size: .95rem;
+	cursor: pointer;
+}
+
+.db-remember-details input[type="checkbox"] {
+	width: 1.15rem;
+	height: 1.15rem;
+	min-height: 0;
+	margin: 0;
+	flex: 0 0 auto;
+}
+
 .db-field input,
 .db-field textarea {
 	min-height: 48px;

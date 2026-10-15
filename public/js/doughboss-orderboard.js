@@ -162,12 +162,42 @@
 		}
 		if (audio.ctx.state === 'suspended') { audio.ctx.resume(); }
 		audio.on = true;
+		requestWakeLock();
 		if (soundBtn) {
 			soundBtn.setAttribute('aria-pressed', 'true');
 			soundBtn.textContent = '🔔 Sound on';
 			soundBtn.classList.add('is-on');
 		}
 		beep();
+	}
+
+	/* ----------------------------------------------------------- Wake lock */
+
+	// Keep the kitchen tablet's screen on while the board is open. Browsers
+	// drop the lock whenever the page is hidden, so it is re-requested on
+	// visibilitychange. Unsupported browsers or a refused request change
+	// nothing: the board still works, the screen just follows its own timeout.
+	var wakeLock = null;
+	var wakeLockPending = false;
+
+	function requestWakeLock() {
+		try {
+			if (wakeLock || wakeLockPending || document.hidden) { return; }
+			if (!window.navigator || !navigator.wakeLock || typeof navigator.wakeLock.request !== 'function') { return; }
+			wakeLockPending = true;
+			navigator.wakeLock.request('screen').then(function (lock) {
+				wakeLockPending = false;
+				wakeLock = lock || null;
+				if (lock && typeof lock.addEventListener === 'function') {
+					lock.addEventListener('release', function () { wakeLock = null; });
+				}
+			}).catch(function () {
+				wakeLockPending = false;
+				wakeLock = null;
+			});
+		} catch (ignoreWakeLock) {
+			wakeLockPending = false;
+		}
 	}
 
 	function beep() {
@@ -1204,12 +1234,20 @@
 	if (soundBtn) {
 		soundBtn.addEventListener('click', enableSound);
 	}
+	// The board is active as soon as it renders; enabling sound retries inside
+	// a user gesture for browsers that want one.
+	requestWakeLock();
 
 	// If the tablet sleeps/refocuses, the audio context can suspend — resume it
-	// so the chime keeps working without a fresh tap.
+	// so the chime keeps working without a fresh tap. The screen wake lock is
+	// released by the browser while hidden, so re-acquire it here too.
 	document.addEventListener('visibilitychange', function () {
 		if (!document.hidden && audio.on && audio.ctx && audio.ctx.state === 'suspended') {
 			audio.ctx.resume();
+		}
+		if (!document.hidden) {
+			if (wakeLock && wakeLock.released !== false) { wakeLock = null; }
+			requestWakeLock();
 		}
 	});
 	window.addEventListener('offline', function () {

@@ -2060,3 +2060,138 @@ test('Square hosted storefront wiring never loads card fields and confirms only 
 	assert.match(assets, /'squareHosted'\s*=> \$square_hosted,/);
 	assert.match(assets, /\} elseif \( 'square' === \$gateway && ! \$square_hosted \) \{/, 'no Web Payments SDK enqueue in hosted mode');
 });
+
+test('2.48 remember-my-details storage is opt-in, bounded and survives blocked storage', () => {
+	const ctx = { REMEMBER_DETAILS_KEY: 'doughboss_remember_details', REMEMBER_DETAILS_FIELDS: ['customer_name', 'customer_email', 'customer_phone'], JSON };
+	const read = extractFunction(storefront, 'readRememberedDetails', ctx);
+	const write = extractFunction(storefront, 'writeRememberedDetails', ctx);
+	const clear = extractFunction(storefront, 'clearRememberedDetails', ctx);
+	const store = {};
+	const storage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
+	assert.equal(read(storage), null, 'nothing remembered by default');
+	assert.equal(write(storage, { customer_name: ' Synthetic Customer ', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000', address: '1 Secret St', notes: 'x' }), true);
+	assert.deepEqual(JSON.parse(store.doughboss_remember_details), { customer_name: 'Synthetic Customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000' }, 'only name, email and phone are stored');
+	assert.deepEqual(JSON.parse(JSON.stringify(read(storage))), { customer_name: 'Synthetic Customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000' });
+	clear(storage);
+	assert.equal(read(storage), null, 'unticking clears it');
+	store.doughboss_remember_details = '{not json';
+	assert.equal(read(storage), null, 'corrupt data is ignored');
+	store.doughboss_remember_details = JSON.stringify({ customer_name: 'x'.repeat(500) });
+	assert.equal(read(storage).customer_name.length, 200, 'values are bounded');
+	const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+	assert.equal(read(blocked), null);
+	assert.equal(write(blocked, { customer_name: 'a' }), false);
+	assert.doesNotThrow(() => clear(blocked));
+	assert.equal(read(null), null);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /rememberDetailsControl\(\{ customer_name: name, customer_email: email, customer_phone: phone \}\)/, 'checkout form renders the opt-in control');
+	assert.match(source, /Remember my details on this device/);
+});
+
+test('2.48 remember-my-details control prefills empty fields and unticking clears storage', () => {
+	const ctx = { REMEMBER_DETAILS_KEY: 'doughboss_remember_details', REMEMBER_DETAILS_FIELDS: ['customer_name', 'customer_email', 'customer_phone'], JSON };
+	const store = { doughboss_remember_details: JSON.stringify({ customer_name: 'Synthetic', customer_email: 'saved@example.invalid', customer_phone: '0400000001' }) };
+	const storage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
+	function input(value) { return { value, listeners: {}, addEventListener(type, cb) { this.listeners[type] = cb; } }; }
+	const inputs = { customer_name: input(''), customer_email: input('typed@example.invalid'), customer_phone: input('') };
+	const wraps = {};
+	Object.keys(inputs).forEach(key => { wraps[key] = { querySelector: () => inputs[key] }; });
+	let checkbox;
+	const control = extractFunction(storefront, 'rememberDetailsControl', Object.assign({}, ctx, {
+		I18N: {},
+		rememberStorage: () => storage,
+		readRememberedDetails: extractFunction(storefront, 'readRememberedDetails', ctx),
+		writeRememberedDetails: extractFunction(storefront, 'writeRememberedDetails', ctx),
+		clearRememberedDetails: extractFunction(storefront, 'clearRememberedDetails', ctx),
+		el: (tag, attrs, children) => {
+			const node = { tag, attrs, children, listeners: {}, addEventListener(type, cb) { this.listeners[type] = cb; } };
+			if (attrs && attrs.type === 'checkbox') { checkbox = node; }
+			return node;
+		}
+	}));
+	control(wraps);
+	assert.equal(checkbox.checked, true, 'a saved preference shows as ticked');
+	assert.equal(inputs.customer_name.value, 'Synthetic');
+	assert.equal(inputs.customer_email.value, 'typed@example.invalid', 'never overwrites what the customer typed');
+	assert.equal(inputs.customer_phone.value, '0400000001');
+	inputs.customer_phone.value = '0400000002';
+	inputs.customer_phone.listeners.change();
+	assert.equal(JSON.parse(store.doughboss_remember_details).customer_phone, '0400000002', 'edits are saved while ticked');
+	checkbox.checked = false;
+	checkbox.listeners.change();
+	assert.equal(Object.hasOwn(store, 'doughboss_remember_details'), false, 'unticking deletes the saved details');
+	inputs.customer_name.listeners.change();
+	assert.equal(Object.hasOwn(store, 'doughboss_remember_details'), false, 'nothing is saved while unticked');
+});
+
+test('2.48 order board requests a screen wake lock and fails silently', async () => {
+	const requests = [];
+	const ctx = { wakeLock: null, wakeLockPending: false, document: { hidden: false }, window: { navigator: {} },
+		navigator: { wakeLock: { request: type => { requests.push(type); return Promise.resolve({ released: false, addEventListener() {} }); } } } };
+	ctx.window.navigator = ctx.navigator;
+	const request = extractFunction(orderboard, 'requestWakeLock', ctx);
+	request();
+	request();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(requests, ['screen'], 'one in-flight request for the screen lock');
+	for (const nav of [{}, { wakeLock: {} }, { wakeLock: { request: () => Promise.reject(new Error('NotAllowedError')) } }, { wakeLock: { request: () => { throw new Error('sync'); } } }]) {
+		const unsupported = extractFunction(orderboard, 'requestWakeLock', { wakeLock: null, wakeLockPending: false, document: { hidden: false }, window: { navigator: nav }, navigator: nav });
+		assert.doesNotThrow(() => unsupported());
+	}
+	await new Promise(resolve => setImmediate(resolve));
+	const hidden = extractFunction(orderboard, 'requestWakeLock', Object.assign({}, ctx, { wakeLock: null, document: { hidden: true } }));
+	hidden();
+	assert.equal(requests.length, 1, 'a hidden page never requests the lock');
+	const source = fs.readFileSync(orderboard, 'utf8');
+	assert.match(source, /document\.addEventListener\('visibilitychange', function \(\) \{[\s\S]*?requestWakeLock\(\);/, 're-acquired on visibilitychange');
+});
+
+test('2.48 shop status polls every 120s, refreshes early only for expired open evidence, and stops when hidden', () => {
+	const now = Date.parse('2026-10-15T01:00:00Z');
+	const open = { ordering_open: true };
+	const fresh = { pickup_status: { expires_at_utc: '2026-10-15T01:00:30Z' } };
+	const expired = { pickup_status: { expires_at_utc: '2026-10-15T00:59:59Z' } };
+	function due(watches, lastRefresh) {
+		const evidenceExpired = extractFunction(shopStatus, 'evidenceExpired', { watches, Date, Number });
+		return extractFunction(shopStatus, 'refreshDue', { REFRESH_MS: 120000, EXPIRED_REFRESH_MS: 30000, lastRefresh, evidenceExpired })(now);
+	}
+	assert.equal(due([{ config: open, location: fresh }], now - 60000), false, 'no 45-second polling any more');
+	assert.equal(due([{ config: open, location: fresh }], now - 120000), true, '120-second refresh');
+	assert.equal(due([{ config: open, location: expired }], now - 31000), true, 'expired open evidence refreshes early');
+	assert.equal(due([{ config: open, location: expired }], now - 10000), false, 'but never more often than every 30 seconds');
+	assert.equal(due([{ config: { ordering_open: false }, location: expired }], now - 60000), false, 'paused ordering needs no fresh evidence');
+	let scheduled = 0;
+	let cleared = 0;
+	const tick = extractFunction(shopStatus, 'tick', { document: { hidden: true }, tickTimer: 7, clearTimeout: () => { cleared++; },
+		paint: () => { throw new Error('must not paint while hidden'); }, scheduleTick: () => { scheduled++; }, watches: [], refreshDue: () => true, Date });
+	tick();
+	assert.equal(scheduled, 0, 'a hidden tab stops rescheduling');
+	assert.equal(cleared, 1, 'and clears the pending timer');
+	assert.match(fs.readFileSync(shopStatus, 'utf8'), /var REFRESH_MS = 120000;/);
+});
+
+test('2.48 wallet buttons validate the form synchronously before tokenize and surface failures', () => {
+	const source = fs.readFileSync(square, 'utf8');
+	const wallets = source.slice(source.indexOf('function mountWallets('), source.indexOf('function tokenizeTender('));
+	const apple = wallets.slice(wallets.indexOf("btn.addEventListener('click'"), wallets.indexOf('payments.googlePay('));
+	const google = wallets.slice(wallets.indexOf("holder.addEventListener('click'"));
+	for (const handler of [apple, google]) {
+		assert.ok(handler.indexOf('if (!formReady()) { return; }') !== -1, 'validity gate present');
+		assert.ok(handler.indexOf('formReady()') < handler.indexOf('.tokenize()'), 'validity is checked before tokenize');
+		assert.doesNotMatch(handler.slice(0, handler.indexOf('.tokenize()')), /\.then\(|await /, 'nothing asynchronous runs before tokenize (Apple Pay gesture)');
+		assert.match(handler, /\.catch\(function \(\) \{ walletFailed\(null\); \}\)/, 'a thrown tokenize shows an error');
+	}
+	assert.match(wallets, /form\.reportValidity\(\)/);
+	assert.match(wallets, /if \(!result \|\| result\.status !== 'OK' \|\| !result\.token\) \{ walletFailed\(result\); return; \}/, 'non-OK tokenize is visible');
+	assert.match(wallets, /status\.className = 'db-pay-secure db-error';/);
+});
+
+test('2.48 Square SDK is enqueued only on checkout pages and loads on demand elsewhere', () => {
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	const branch = assets.slice(assets.indexOf("} elseif ( 'square' === $gateway && ! $square_hosted ) {"), assets.indexOf('Stripe Checkout is a full-page provider-hosted redirect'));
+	assert.match(branch, /if \( \$is_order_page \|\| \$this->current_post_has\( 'doughboss_cart' \) \) \{\s*wp_enqueue_script\( 'square-web-payments'/);
+	const source = fs.readFileSync(square, 'utf8');
+	const payments = source.slice(source.indexOf('function squarePayments('), source.indexOf('function mountCard('));
+	assert.match(payments, /loadApprovedSquareSdk\(\{ liveMode: CONFIG\.liveMode === true \}\)/, 'ordinary checkout reuses the exact-CDN loader');
+	assert.match(payments, /paymentsPromise = null;\s*throw err;/, 'a failed load can be retried');
+});

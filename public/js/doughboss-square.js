@@ -198,12 +198,20 @@
 			});
 		}
 		if (paymentsPromise) { return paymentsPromise; }
-		paymentsPromise = new Promise(function (resolve, reject) {
+		// The SDK is enqueued only on the order page. Anywhere else (a page with
+		// just [doughboss_cart]) it is loaded on demand from the same exact
+		// Square CDN URL the server configured for this environment.
+		var sdkReady = (window.Square && typeof window.Square.payments === 'function')
+			? Promise.resolve()
+			: loadApprovedSquareSdk({ liveMode: CONFIG.liveMode === true });
+		paymentsPromise = sdkReady.then(function () {
 			if (!window.Square || typeof window.Square.payments !== 'function') {
-				reject(new Error('The secure payment form could not be loaded. Please refresh and try again.'));
-				return;
+				throw new Error('The secure payment form could not be loaded. Please refresh and try again.');
 			}
-			resolve(window.Square.payments(CONFIG.applicationId, CONFIG.locationId));
+			return window.Square.payments(CONFIG.applicationId, CONFIG.locationId);
+		}).catch(function (err) {
+			paymentsPromise = null;
+			throw err;
 		});
 		return paymentsPromise;
 	}
@@ -298,7 +306,7 @@
 
 		var walletState = { token: '', amount: null, at: 0 };
 		if (CONFIG.wallets && typeof mountWallets === 'function') {
-			mountWallets(form, binding, wrap, walletState);
+			mountWallets(form, binding, wrap, walletState, status);
 		}
 
 		return {
@@ -321,9 +329,13 @@
 	 * Apple Pay / Google Pay buttons (opt-in: DoughBoss > Settings > Square).
 	 * Each wallet tokenizes inside its own click handler (Apple requires this),
 	 * then submits the same checkout form; the server charges its own total.
+	 * The form's own validity is checked synchronously first, so an incomplete
+	 * checkout never opens a wallet sheet, while Apple Pay's tokenize() still
+	 * starts inside the same user gesture. A cancelled or failed sheet shows a
+	 * visible message in the payment status line instead of failing silently.
 	 * Unsupported browsers/devices simply show no wallet button.
 	 */
-	function mountWallets(form, binding, wrap, walletState) {
+	function mountWallets(form, binding, wrap, walletState, status) {
 		// Wallet sheets must show the real total; forms without a readable
 		// summary total (e.g. approved pre-orders) keep card-only.
 		if (readDisplayedTotal(form) === null) { return; }
@@ -333,8 +345,36 @@
 		function totalNow() {
 			return { amount: readDisplayedTotal(form) || '0.00', label: 'DoughBoss' };
 		}
+		var defaultStatus = status ? status.textContent : '';
+		function walletMessage(text) {
+			if (!status) { return; }
+			status.textContent = text;
+			status.className = 'db-pay-secure db-error';
+			status.setAttribute('role', 'alert');
+		}
+		function clearWalletMessage() {
+			if (!status || status.className.indexOf('db-error') === -1) { return; }
+			status.textContent = defaultStatus;
+			status.className = 'db-pay-secure';
+			if (typeof status.removeAttribute === 'function') { status.removeAttribute('role'); }
+		}
+		// Synchronous only: no promise may run between the click and tokenize().
+		function formReady() {
+			if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
+				walletMessage('Please complete your details above, then choose your wallet again.');
+				return false;
+			}
+			clearWalletMessage();
+			return true;
+		}
+		function walletFailed(result) {
+			var cancelled = result && result.errors && result.errors[0] && /cancel/i.test(String(result.errors[0].type || result.errors[0].message || ''));
+			walletMessage(cancelled
+				? 'Wallet payment was cancelled. You have not been charged. Choose a wallet again or pay by card.'
+				: 'Wallet payment could not be completed. You have not been charged. Try again or pay by card.');
+		}
 		function submitWith(result) {
-			if (!result || result.status !== 'OK' || !result.token) { return; }
+			if (!result || result.status !== 'OK' || !result.token) { walletFailed(result); return; }
 			walletState.token = result.token;
 			walletState.amount = readDisplayedTotal(form);
 			walletState.at = Date.now();
@@ -348,8 +388,9 @@
 				box.appendChild(btn);
 				btn.addEventListener('click', function (e) {
 					e.preventDefault();
+					if (!formReady()) { return; }
 					request.update({ total: totalNow() });
-					applePay.tokenize().then(submitWith).catch(function () {});
+					applePay.tokenize().then(submitWith).catch(function () { walletFailed(null); });
 				});
 			}).catch(function () {});
 			payments.googlePay(request).then(function (googlePay) {
@@ -359,8 +400,9 @@
 				return googlePay.attach('#' + id, { buttonColor: 'black', buttonSizeMode: 'fill' }).then(function () {
 					holder.addEventListener('click', function (e) {
 						e.preventDefault();
+						if (!formReady()) { return; }
 						request.update({ total: totalNow() });
-						googlePay.tokenize().then(submitWith).catch(function () {});
+						googlePay.tokenize().then(submitWith).catch(function () { walletFailed(null); });
 					});
 				});
 			}).catch(function () {});
