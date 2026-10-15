@@ -3428,6 +3428,12 @@ class DoughBoss_REST_Controller {
 			if ( is_wp_error( $intent ) ) {
 				$error_data = $intent->get_error_data();
 				if ( is_array( $error_data ) && ! empty( $error_data['retry_safe'] ) && '' !== $reserved_voucher_code ) {
+					// A declined card leaves the reservation bound to the failed attempt
+					// (payment_pending); release that binding first so the customer can
+					// retry with the same voucher, then clear any plain reservation.
+					if ( ! empty( $error_data['attempt_id'] ) ) {
+						DoughBoss_Voucher::release_payment_reservation( $reserved_voucher_code, $voucher_reservation_key, (int) $error_data['attempt_id'] );
+					}
 					DoughBoss_Voucher::release_reservation( $reserved_voucher_code, $voucher_reservation_key );
 				}
 			} elseif ( in_array( (string) $intent['status'], array( 'failed', 'voided' ), true ) ) {

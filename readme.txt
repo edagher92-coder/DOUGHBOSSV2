@@ -91,6 +91,11 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 * Square card declines now close the attempt as failed (no charge) so customers can retry immediately instead of being blocked as 'unknown'; pre-dispatch checkout errors are flagged retry-safe.
 * Square payments carry buyer_email_address from the verified checkout snapshot.
 * Square Loyalty: background accrual of points on paid web orders for existing Square Loyalty members (matched by phone), toggle in Settings.
+* Square is now the default and only selectable gateway; Stripe, Tyro, Mastercard and POSPal settings are hidden (kept for historical refunds; define DOUGHBOSS_SHOW_LEGACY_GATEWAYS to show).
+* Square refund and dispute webhooks: completed full refunds (from WP, Dashboard or POS) mark the order refunded; chargebacks alert the orders inbox.
+* Member tiers (Student, Tradie, Club) as Square customer groups, with a staff page; Club membership synced from Square Subscriptions.
+* Apple Pay and Google Pay on Square checkout (off until enabled), with Apple Pay domain file served from Settings.
+* Approved pre-orders and voucher checkouts can retry after a card decline (bounded); 3DS billing contact uses given and family name.
 
 = 2.45.0 =
 * Refresh storefront asset cache keys for the locally validated release candidate; publication and provider activation remain separate operator gates.

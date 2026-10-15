@@ -294,7 +294,7 @@
 		// Consume eager mount failures; a selected tender can retry on submission.
 		selectedParts().catch(function () {});
 
-		var walletState = { token: '' };
+		var walletState = { token: '', amount: null, at: 0 };
 		if (CONFIG.wallets && typeof mountWallets === 'function') {
 			mountWallets(form, binding, wrap, walletState);
 		}
@@ -304,8 +304,11 @@
 			ready: function () {
 				if (walletState.token) {
 					var walletToken = walletState.token;
+					var fresh = (Date.now() - (walletState.at || 0)) < 60000 && walletState.amount === readDisplayedTotal(form);
 					walletState.token = '';
-					return Promise.resolve({ kind: 'wallet', token: walletToken });
+					// Single use: a stale token, or one authorised for a different
+					// total, is discarded and the card field is used instead.
+					if (fresh) { return Promise.resolve({ kind: 'wallet', token: walletToken }); }
 				}
 				return selectedParts();
 			}
@@ -319,6 +322,10 @@
 	 * Unsupported browsers/devices simply show no wallet button.
 	 */
 	function mountWallets(form, binding, wrap, walletState) {
+		// Wallet sheets must show the real total; forms without a readable
+		// summary total (e.g. approved pre-orders) keep card-only.
+		if (readDisplayedTotal(form) === null) { return; }
+		form.addEventListener('invalid', function () { walletState.token = ''; }, true);
 		var box = el('div', { class: 'db-square-wallets' });
 		wrap.insertBefore(box, wrap.firstChild);
 		function totalNow() {
@@ -327,6 +334,8 @@
 		function submitWith(result) {
 			if (!result || result.status !== 'OK' || !result.token) { return; }
 			walletState.token = result.token;
+			walletState.amount = readDisplayedTotal(form);
+			walletState.at = Date.now();
 			if (typeof form.requestSubmit === 'function') { form.requestSubmit(); } else { form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); }
 		}
 		squarePayments(binding).then(function (payments) {
@@ -547,7 +556,16 @@
 			return request('/preorder-payment/start', { method: 'POST', body: {
 				request_id: session.capability.requestId, token: session.capability.token,
 				payment_attempt_key: session.paymentAttemptKey, source_id: tender.token, tender_kind: tender.kind
-			} });
+			} }).catch(function (err) {
+				// A definitive decline took no money and the server reopened the
+				// approval: allow another card with a brand-new attempt key.
+				var data = err && err.data && typeof err.data === 'object' ? err.data : {};
+				if (data.retry_safe === true && data.payment_pending !== true) {
+					session.providerRequestStarted = false;
+					session.paymentAttemptKey = uuid();
+				}
+				throw err;
+			});
 		}).then(function () { return confirmApproved(session); });
 	}
 
