@@ -294,7 +294,7 @@ class DoughBoss_Square_Invoices {
 			if ( isset( $invoice['status'] ) && 'DRAFT' === $invoice['status'] ) {
 				$published = DoughBoss_Square::commerce_request(
 					'POST',
-					'/v2/invoices/' . rawurlencode( (string) $invoice['id'] ) . '/publish',
+					'/v2/invoices/' . self::canonical_invoice_id( $invoice['id'] ) . '/publish',
 					array(
 						'version'         => isset( $invoice['version'] ) ? (int) $invoice['version'] : 0,
 						'idempotency_key' => self::idempotency_key( 'publish', $enquiry, $leg, $minor ),
@@ -392,7 +392,7 @@ class DoughBoss_Square_Invoices {
 		if ( '' === $invoice_id ) {
 			return new WP_Error( 'doughboss_pay_api', __( 'Invalid Square invoice reference.', 'doughboss' ), array( 'status' => 400 ) );
 		}
-		$res = DoughBoss_Square::commerce_request( 'GET', '/v2/invoices/' . rawurlencode( $invoice_id ), array(), $location );
+		$res = DoughBoss_Square::commerce_request( 'GET', '/v2/invoices/' . self::canonical_invoice_id( $invoice_id ), array(), $location );
 		if ( is_wp_error( $res ) ) {
 			return $res;
 		}

@@ -2600,7 +2600,7 @@ class DoughBoss_Square {
 				break;
 			}
 		}
-		if ( ! $allowed || false !== strpos( $path, '..' ) || ! preg_match( '#^/v2/[A-Za-z0-9/_-]+$#', $path ) ) {
+		if ( ! $allowed || false !== strpos( $path, '..' ) || ! preg_match( '#^/v2/[A-Za-z0-9/_:-]+$#', $path ) ) {
 			return new WP_Error( 'doughboss_pay_config', __( 'That Square operation is not available.', 'doughboss' ), array( 'status' => 400 ) );
 		}
 		$binding = self::commerce_binding( $location_id );

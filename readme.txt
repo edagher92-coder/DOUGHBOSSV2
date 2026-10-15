@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.46.0
+Stable tag: 2.46.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.46.1 =
+* Fix: Square invoice ids (inv:0-…) were rejected by the commerce path guard, so catering invoices could not be published or re-read.
 
 = 2.46.0 =
 * Catering via Square invoices: managers send deposit and balance invoices from DoughBoss > Catering; Square emails a hosted pay page; invoice webhooks mark legs paid only when Square reports PAID for the exact amount at the mapped location.

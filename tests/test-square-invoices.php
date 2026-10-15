@@ -227,3 +227,15 @@ db_test(
 		assert_same( 5, DoughBoss_Preorder_Approval::MAX_DECLINE_RETRIES, 'declines are capped against card testing' );
 	}
 );
+
+db_test(
+	'commerce paths accept Square invoice ids (inv:0-…) but never traversal',
+	function () {
+		$r = DoughBoss_Square::commerce_request( 'POST', '/v2/invoices/inv:0-ChAbCdEf12345678/publish', array(), 0 );
+		assert_true( is_wp_error( $r ) && 'doughboss_pay_config' !== $r->get_error_code() || ( is_wp_error( $r ) && false === strpos( $r->get_error_message(), 'not available' ) ), 'invoice id with colon passes the path guard' );
+		$bad = DoughBoss_Square::commerce_request( 'GET', '/v2/invoices/../payments', array(), 0 );
+		assert_true( is_wp_error( $bad ) && false !== strpos( $bad->get_error_message(), 'not available' ), 'traversal still rejected' );
+		$other = DoughBoss_Square::commerce_request( 'POST', '/v2/payments', array(), 0 );
+		assert_true( is_wp_error( $other ) && false !== strpos( $other->get_error_message(), 'not available' ), 'non-commerce endpoints still rejected' );
+	}
+);
