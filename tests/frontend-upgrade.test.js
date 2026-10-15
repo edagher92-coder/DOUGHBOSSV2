@@ -361,3 +361,93 @@ test('b2b client checks mirror the server rules', () => {
 	const partner = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'template-parts', 'partner-page.php'), 'utf8');
 	assert.match(partner, /\[doughboss_b2b_form type="/);
 });
+
+/* Homepage presentation is installed as a reversible, separately scoped snippet. */
+function homepageFilmFixture(options = {}) {
+	const source = fs.readFileSync(path.join(root, 'scripts', 'hero-commercial', 'homepage-hero-v6-snippet.php'), 'utf8');
+	const script = source.match(/<script id="db-opening-home-v6-controller">([\s\S]*?)<\/script>/)[1];
+	function target() {
+		return { hidden: false, textContent: '', attrs: {}, listeners: {},
+			addEventListener(name, callback) { (this.listeners[name] ||= []).push(callback); },
+			emit(name) { for (const callback of this.listeners[name] || []) callback(); },
+			setAttribute(name, value) { this.attrs[name] = String(value); },
+			getAttribute(name) { return this.attrs[name] ?? null; } };
+	}
+	const video = target(), poster = target(), control = target(), status = target(), frame = target();
+	video.hidden = true; video.currentTime = 0; video.playCount = 0; video.pauseCount = 0;
+	video.attrs['data-db-opening-src'] = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v5-hero-720.mp4';
+	video.attrs['data-db-opening-desktop-src'] = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v6-desktop-square.mp4';
+	video.play = () => { video.playCount++; return options.reject ? Promise.reject(new Error('blocked')) : Promise.resolve(); };
+	video.pause = () => { video.pauseCount++; };
+	const elements = { '[data-db-opening-video]': video, '[data-db-opening-poster]': poster,
+		'[data-db-opening-control]': control, '[data-db-opening-status]': status, '.db-opening-frame': frame };
+	const classes = new Set();
+	const opening = { querySelector: key => elements[key], classList: { toggle(key, on) { if (on) classes.add(key); else classes.delete(key); } } };
+	const document = target(); document.hidden = false; document.getElementById = () => opening;
+	const motion = target(); motion.matches = !!options.reduced;
+	const connection = target(); connection.saveData = !!options.saveData;
+	const desktop = target(); desktop.matches = !!options.desktop;
+	let intersect;
+	const window = { navigator: { connection }, matchMedia: query => query.includes('min-width') ? desktop : motion,
+		IntersectionObserver: function (callback) { intersect = callback; this.observe = element => assert.equal(element, frame); } };
+	const context = vm.createContext({ document, window });
+	vm.runInContext(script, context);
+	return { source, video, poster, control, status, document, motion, connection, desktop, classes,
+		visible(on) { intersect([{ isIntersecting: on, intersectionRatio: on ? .5 : 0 }]); },
+		rerun() { vm.runInContext(script, context); } };
+}
+
+test('large homepage film autoplays silently in view and respects a persistent manual pause', () => {
+	const x = homepageFilmFixture();
+	assert.equal(x.video.playCount, 0, 'do not load video before its stage is visible');
+	x.visible(true); x.video.emit('playing');
+	assert.equal(x.video.playCount, 1); assert.equal(x.video.muted, true); assert.equal(x.video.loop, true);
+	assert.equal(x.video.hidden, false); assert.equal(x.poster.hidden, true); assert.equal(x.classes.has('is-playing'), true);
+	x.visible(false); assert.equal(x.classes.has('is-playing'), false);
+	x.visible(true); assert.equal(x.video.playCount, 2, 'offscreen suspension can resume');
+	x.control.emit('click'); x.visible(false); x.visible(true);
+	assert.equal(x.video.playCount, 2, 'scrolling must not undo a manual pause');
+	x.control.emit('click'); assert.equal(x.video.playCount, 3);
+	x.document.hidden = true; x.document.emit('visibilitychange'); assert.equal(x.classes.has('is-playing'), false);
+	x.document.hidden = false; x.document.emit('visibilitychange'); assert.equal(x.video.playCount, 4);
+	x.rerun(); assert.equal(x.control.listeners.click.length, 1, 'no duplicate controller');
+	assert.doesNotMatch(x.source, /<p[^>]*>AI-generated concept|Concept preview &mdash;/);
+	assert.match(x.source, /width:min\(100%,520px\)/);
+	assert.match(x.source, /aspect-ratio:1\/1/);
+	assert.match(x.source, /prefers-reduced-motion:reduce/);
+	assert.match(x.source, /is_admin\(\) \|\| ! is_front_page\(\)/);
+});
+
+test('homepage uses the food-focused desktop cut and changes source without undoing a manual pause', () => {
+	const x = homepageFilmFixture({ desktop: true }); x.visible(true); x.video.emit('playing');
+	assert.match(x.video.getAttribute('src'), /v6-desktop-square\.mp4$/);
+	x.desktop.matches = false; x.desktop.emit('change');
+	assert.match(x.video.getAttribute('src'), /v5-hero-720\.mp4$/);
+	x.control.emit('click'); const plays = x.video.playCount;
+	x.desktop.matches = true; x.desktop.emit('change');
+	assert.equal(x.video.playCount, plays, 'breakpoint changes do not resume manually paused video');
+});
+
+test('homepage reduced-motion and Save-Data visitors get a poster and explicit play only', () => {
+	for (const preference of ['reduced', 'saveData']) {
+		const x = homepageFilmFixture({ [preference]: true });
+		x.visible(true); assert.equal(x.video.playCount, 0); assert.equal(x.video.getAttribute('src'), null);
+		assert.equal(x.poster.hidden, false);
+		x.control.emit('click'); assert.equal(x.video.playCount, 1); assert.equal(x.video.loop, false);
+		x.video.emit('playing'); x.video.emit('ended'); x.visible(true);
+		assert.equal(x.video.playCount, 1, 'explicit play does not grant continuous autoplay');
+	}
+	const x = homepageFilmFixture(); x.visible(true); x.video.emit('playing');
+	x.motion.matches = true; x.motion.emit('change');
+	assert.equal(x.video.hidden, true); assert.equal(x.poster.hidden, false); assert.equal(x.video.loop, false);
+});
+
+test('homepage rejected autoplay and failed media keep an accessible image fallback', async () => {
+	const x = homepageFilmFixture({ reject: true }); x.visible(true);
+	await Promise.resolve(); await Promise.resolve();
+	assert.equal(x.poster.hidden, false); assert.equal(x.control.textContent, 'Play animation');
+	assert.match(x.status.textContent, /Select Play/);
+	x.visible(false); x.visible(true); assert.equal(x.video.playCount, 1, 'do not repeatedly attempt blocked autoplay');
+	x.video.emit('error'); assert.equal(x.control.hidden, true); assert.equal(x.poster.hidden, false);
+	assert.match(x.status.textContent, /image is shown/);
+});
