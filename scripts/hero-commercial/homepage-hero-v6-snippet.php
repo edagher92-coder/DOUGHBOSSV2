@@ -1,13 +1,13 @@
 <?php
-/** Homepage V6 presentation. Silent film once, then preference-aware ambient steam. */
+/** Homepage presentation. Muted-first film once, optional quiet audio, ambient steam. */
 if ( ! defined( 'ABSPATH' ) ) {
 	return;
 }
 
-// Reconcile these two uploaded media URLs before activating the snippet.
-$db_opening_v5_video_url  = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v5-hero-720.mp4';
+// Owner-approved quiet master; both viewports use the exact same complete cut.
+$db_opening_v5_video_url  = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v3-motion-subtle-audio.mp4';
 $db_opening_v5_poster_url = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v5-poster.jpg';
-$db_opening_v6_desktop_url = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v6-desktop-square.mp4';
+$db_opening_v6_desktop_url = $db_opening_v5_video_url;
 $db_opening_v6_desktop_poster = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v6-desktop-square-poster.jpg';
 
 add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use ( $db_opening_v5_video_url, $db_opening_v5_poster_url, $db_opening_v6_desktop_url, $db_opening_v6_desktop_poster ) {
@@ -29,15 +29,16 @@ add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use
 			</div>
 		</div>
 		<div class="db-opening-media">
+			<div class="db-opening-utility">
+				<button type="button" data-db-opening-control aria-controls="db-opening-film" hidden>Play film</button>
+				<button type="button" data-db-sound-control aria-controls="db-opening-film" aria-label="Unmute film" hidden>Unmute</button>
+				<button type="button" data-db-steam-control aria-controls="db-opening-steam" hidden>Pause steam</button>
+				<span data-db-opening-status role="status" aria-live="polite"></span>
+			</div>
 			<div class="db-opening-frame">
 				<picture><source media="(min-width: 1025px), (orientation: landscape)" srcset="<?php echo esc_url( $db_opening_v6_desktop_poster ); ?>"><img class="db-opening-poster" data-db-opening-poster src="<?php echo esc_url( $db_opening_v5_poster_url ); ?>" width="720" height="1280" alt="A stylised Dough Boss film of Lebanese flatbreads and a mini-bakes box." loading="eager" fetchpriority="high" decoding="async"></picture>
 				<video id="db-opening-film" class="db-opening-video" data-db-opening-video data-db-opening-src="<?php echo esc_url( $db_opening_v5_video_url ); ?>" data-db-opening-desktop-src="<?php echo esc_url( $db_opening_v6_desktop_url ); ?>" width="720" height="1280" muted playsinline preload="none" aria-hidden="true" hidden></video>
 				<div class="db-opening-steam" id="db-opening-steam" aria-hidden="true"><span></span><span></span><span></span></div>
-			</div>
-			<div class="db-opening-utility">
-				<button type="button" data-db-opening-control aria-controls="db-opening-film" hidden>Play film</button>
-				<button type="button" data-db-steam-control aria-controls="db-opening-steam" hidden>Pause steam</button>
-				<span data-db-opening-status role="status" aria-live="polite"></span>
 			</div>
 		</div>
 	</div>
@@ -48,11 +49,11 @@ add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use
 <style id="db-opening-home-v6-style">
 #db-opening-home-v6{background:var(--dbf-char,#0a0807);border-radius:0;box-sizing:border-box;color:var(--dbf-paper,#f7f5f0);padding:clamp(16px,3vw,40px)}
 #db-opening-home-v6 .db-opening-layout{align-items:center;display:grid;gap:clamp(24px,3vw,40px);grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);margin-inline:auto;max-width:1440px}
-#db-opening-home-v6 .db-opening-media{grid-column:2;grid-row:1;min-width:0;position:relative;padding-top:56px}
+#db-opening-home-v6 .db-opening-media{grid-column:2;grid-row:1;min-width:0;position:relative}
 #db-opening-home-v6 .db-opening-frame{aspect-ratio:1/1;background:#080705;margin-inline:auto;max-width:100%;overflow:hidden;position:relative;width:min(100%,680px)}
 #db-opening-home-v6 .db-opening-poster,#db-opening-home-v6 .db-opening-video{display:block;height:100%;inset:0;object-fit:contain;position:absolute;width:100%}
 #db-opening-home-v6 [hidden]{display:none!important}
-#db-opening-home-v6 .db-opening-utility{align-items:center;color:var(--dbf-mist,#b8b1a4);display:flex;flex-wrap:wrap;font-size:16px;gap:8px 14px;justify-content:flex-end;line-height:1.45;position:absolute;top:0;left:0;right:0}
+#db-opening-home-v6 .db-opening-utility{align-items:center;color:var(--dbf-mist,#b8b1a4);display:flex;flex-wrap:wrap;font-size:16px;gap:8px 14px;justify-content:flex-end;line-height:1.45;margin-bottom:12px;min-height:44px}
 #db-opening-home-v6 .db-opening-utility button{background:#fff4df;border:1px solid #fff4df;border-radius:999px;color:#211a13;cursor:pointer;font:inherit;font-weight:600;min-height:44px;padding:9px 16px}
 #db-opening-home-v6 button:focus-visible,#db-opening-home-v6 a:focus-visible{outline:3px solid var(--dbf-gold,#f1a132);outline-offset:4px}
 #db-opening-home-v6 [data-db-opening-status]:not(:empty){flex-basis:100%;text-align:center}
@@ -228,6 +229,7 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
  var control = opening.querySelector('[data-db-opening-control]');
  var status = opening.querySelector('[data-db-opening-status]');
  var steamControl = opening.querySelector('[data-db-steam-control]');
+ var soundControl = opening.querySelector('[data-db-sound-control]');
  if (!video || !poster || !control || !video.play || !video.pause) { return; }
  opening._dbOpeningV6Wired = true;
  var source = video.getAttribute('data-db-opening-src');
@@ -237,6 +239,8 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
  var inView = false, userPaused = false, wanted = false, playing = false, failed = false, ended = false, attempt = 0;
  var scrubbing = false, scrollFrame = 0, lastScroll = window.scrollY || 0, scrubTime = 0;
  var steamPaused = false;
+ var soundMuted = true;
+ video.muted = soundMuted;
  function restricted() { return !!((motion && motion.matches) || (connection && connection.saveData)); }
  function label() {
   var text = wanted || scrubbing ? 'Pause film' : (ended ? 'Replay film' : 'Play film');
@@ -244,6 +248,11 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   control.setAttribute('aria-label', text);
   control.setAttribute('aria-pressed', wanted || scrubbing ? 'true' : 'false');
   opening.classList.toggle('is-playing', playing && wanted);
+  if (soundControl) {
+   soundControl.hidden = failed;
+   soundControl.textContent = soundMuted ? 'Unmute' : 'Mute';
+   soundControl.setAttribute('aria-label', soundMuted ? 'Unmute film' : 'Mute film');
+  }
   var steamAvailable = inView && !document.hidden && !restricted() && !playing && (video.hidden || video.currentTime >= 5);
   opening.classList.toggle('has-steam', steamAvailable && !steamPaused);
   if (steamControl) {
@@ -264,7 +273,7 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   if (video.ended || ended) { video.currentTime = 0; }
   ended = false;
   var currentAttempt = ++attempt;
-  video.muted = true;
+  video.muted = soundMuted;
   // Replay is explicit; after completion the final film frame carries ambient steam.
   video.loop = false;
   var selectedSource = desktop && desktop.matches ? video.getAttribute('data-db-opening-desktop-src') : source;
@@ -328,6 +337,12 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   else { userPaused = false; start(true); }
  });
  if (steamControl) { steamControl.addEventListener('click', function () { steamPaused = !steamPaused; label(); }); }
+ if (soundControl) { soundControl.addEventListener('click', function () {
+  if (failed) { return; }
+  soundMuted = !soundMuted;
+  video.muted = soundMuted;
+  label();
+ }); }
  document.addEventListener('visibilitychange', syncVisibility);
  function preferenceChanged() {
   if (restricted()) { scrubbing = false; video.loop = false; userPaused = true; stop(true); }

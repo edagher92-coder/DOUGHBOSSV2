@@ -396,7 +396,7 @@ function homepageFilmFixture(options = {}) {
 			setAttribute(name, value) { this.attrs[name] = String(value); },
 			getAttribute(name) { return this.attrs[name] ?? null; } };
 	}
-	const video = target(), poster = target(), control = target(), status = target(), frame = target(), steamControl = target();
+	const video = target(), poster = target(), control = target(), status = target(), frame = target(), steamControl = target(), soundControl = target();
 	video.duration = 10; video.readyState = 2;
 	frame.getBoundingClientRect = () => ({ height: 600 });
 	video.hidden = true; video.currentTime = 0; video.playCount = 0; video.pauseCount = 0;
@@ -405,7 +405,7 @@ function homepageFilmFixture(options = {}) {
 	video.play = () => { video.playCount++; return options.reject ? Promise.reject(new Error('blocked')) : Promise.resolve(); };
 	video.pause = () => { video.pauseCount++; };
 	const elements = { '[data-db-opening-video]': video, '[data-db-opening-poster]': poster,
-		'[data-db-opening-control]': control, '[data-db-opening-status]': status, '.db-opening-frame': frame, '[data-db-steam-control]': steamControl };
+		'[data-db-opening-control]': control, '[data-db-opening-status]': status, '.db-opening-frame': frame, '[data-db-steam-control]': steamControl, '[data-db-sound-control]': soundControl };
 	const classes = new Set();
 	const opening = { querySelector: key => elements[key], classList: { toggle(key, on) { if (on) classes.add(key); else classes.delete(key); } } };
 	const document = target(); document.hidden = false; document.getElementById = () => opening;
@@ -419,7 +419,7 @@ function homepageFilmFixture(options = {}) {
 		IntersectionObserver: function (callback) { intersect = callback; this.observe = element => assert.equal(element, frame); } };
 	const context = vm.createContext({ document, window });
 	vm.runInContext(script, context);
-	return { source, video, poster, control, status, document, motion, connection, desktop, classes, window, steamControl,
+	return { source, video, poster, control, status, document, motion, connection, desktop, classes, window, steamControl, soundControl,
 		scroll(y) { window.scrollY = y; window.emit('scroll'); },
 		flush() { const work = [...callbacks.values()]; callbacks.clear(); work.forEach(fn => fn()); },
 		visible(on) { intersect([{ isIntersecting: on, intersectionRatio: on ? .5 : 0 }]); },
@@ -429,6 +429,8 @@ function homepageFilmFixture(options = {}) {
 test('large homepage film autoplays silently in view and respects a persistent manual pause', () => {
 	const x = homepageFilmFixture();
 	assert.equal(x.video.playCount, 0, 'do not load video before its stage is visible');
+	assert.equal(x.video.muted, true); assert.equal(x.soundControl.hidden, false);
+	assert.equal(x.soundControl.textContent, 'Unmute'); assert.equal(x.soundControl.getAttribute('aria-label'), 'Unmute film');
 	x.visible(true); x.video.emit('playing');
 	assert.equal(x.video.playCount, 1); assert.equal(x.video.muted, true); assert.equal(x.video.loop, false);
 	assert.equal(x.video.hidden, false); assert.equal(x.poster.hidden, true); assert.equal(x.classes.has('is-playing'), true);
@@ -447,8 +449,39 @@ test('large homepage film autoplays silently in view and respects a persistent m
 	assert.match(x.source, /is_admin\(\) \|\| ! is_front_page\(\)/);
 });
 
-test('homepage uses the food-focused desktop cut and changes source without undoing a manual pause', () => {
+test('homepage sound choice changes only audio and survives replay, visibility and source changes', () => {
+	const x = homepageFilmFixture();
+	x.soundControl.emit('click');
+	assert.equal(x.video.muted, false); assert.equal(x.soundControl.textContent, 'Mute');
+	assert.equal(x.soundControl.getAttribute('aria-label'), 'Mute film');
+	assert.equal(x.video.playCount, 0, 'unmute must not start the film');
+	x.visible(true); x.video.emit('playing');
+	x.visible(false); x.visible(true); assert.equal(x.video.muted, false);
+	x.document.hidden = true; x.document.emit('visibilitychange');
+	x.document.hidden = false; x.document.emit('visibilitychange'); assert.equal(x.video.muted, false);
+	x.desktop.matches = true; x.desktop.emit('change'); assert.equal(x.video.muted, false);
+	x.video.currentTime = 10; x.video.emit('ended');
+	x.control.emit('click');
+	assert.equal(x.video.currentTime, 0); assert.equal(x.video.muted, false, 'replay retains explicit sound selection');
+	x.video.emit('playing'); x.control.emit('click');
+	const plays = x.video.playCount;
+	x.soundControl.emit('click');
+	assert.equal(x.video.muted, true); assert.equal(x.soundControl.textContent, 'Unmute');
+	assert.equal(x.soundControl.getAttribute('aria-label'), 'Unmute film');
+	assert.equal(x.video.playCount, plays, 'muting a paused film must not resume it');
+	x.control.emit('click'); assert.equal(x.video.muted, true);
+	x.rerun(); assert.equal(x.soundControl.listeners.click.length, 1, 'no duplicate sound handler');
+	assert.match(x.source, /data-db-sound-control aria-controls="db-opening-film" aria-label="Unmute film" hidden>Unmute/);
+	assert.ok(x.source.indexOf('<div class="db-opening-utility">') < x.source.indexOf('<div class="db-opening-frame">'), 'controls precede film in normal flow');
+	const utility = x.source.match(/\.db-opening-utility\{([^}]+)\}/)[1];
+	assert.match(utility, /display:flex;flex-wrap:wrap/);
+	assert.doesNotMatch(utility, /position:absolute|top:|left:|right:/, 'wrapped controls cannot overlay the film');
+});
+
+test('homepage responsive source selection preserves manual pause and uses the approved quiet master', () => {
 	const x = homepageFilmFixture({ desktop: true }); x.visible(true); x.video.emit('playing');
+	assert.match(x.source, /\$db_opening_v5_video_url\s*= 'https:\/\/doughboss\.com\.au\/wp-content\/uploads\/doughboss-commercial-v3-motion-subtle-audio\.mp4';/);
+	assert.match(x.source, /\$db_opening_v6_desktop_url = \$db_opening_v5_video_url;/);
 	assert.match(x.video.getAttribute('src'), /v6-desktop-square\.mp4$/);
 	x.desktop.matches = false; x.desktop.emit('change');
 	assert.match(x.video.getAttribute('src'), /v5-hero-720\.mp4$/);
@@ -478,6 +511,8 @@ test('homepage rejected autoplay and failed media keep an accessible image fallb
 	assert.equal(x.status.textContent, 'Select Play film to watch the film.');
 	x.visible(false); x.visible(true); assert.equal(x.video.playCount, 1, 'do not repeatedly attempt blocked autoplay');
 	x.video.emit('error'); assert.equal(x.control.hidden, true); assert.equal(x.poster.hidden, false);
+	assert.equal(x.soundControl.hidden, true, 'unavailable film has no sound control');
+	x.soundControl.emit('click'); assert.equal(x.video.muted, true, 'failed film ignores sound input');
 	assert.match(x.status.textContent, /image is shown/);
 });
 
