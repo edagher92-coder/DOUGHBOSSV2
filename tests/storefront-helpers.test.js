@@ -169,6 +169,117 @@ const square = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-square.j
 const shopStatus = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-shop-status.js');
 const catering = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-catering.js');
 
+function storefrontReadHarness() {
+	const requests = [];
+	const context = { configCache: null, locationsCache: null, configRequest: null, locationsRequest: null,
+		request(route) {
+			return new Promise((resolve, reject) => { requests.push({ route, resolve, reject }); });
+		}
+	};
+	context.getConfig = extractFunction(storefront, 'getConfig', context);
+	context.getLocations = extractFunction(storefront, 'getLocations', context);
+	return { context, requests, settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('concurrent storefront reads share requests and retain single-shop normalisation and completed caches', async () => {
+	const { context, requests, settle } = storefrontReadHarness();
+	const config = context.getConfig();
+	const locations = context.getLocations();
+	for (let caller = 0; caller < 4; caller++) {
+		assert.equal(context.getConfig(), config, 'concurrent config caller shares the same promise');
+		assert.equal(context.getLocations(), locations, 'concurrent location caller shares the same promise');
+	}
+	assert.deepEqual(requests.map(request => request.route), ['/config', '/locations']);
+	const shops = [{ id: 1 }, { id: 2 }];
+	requests[1].resolve(shops);
+	await settle();
+	assert.equal(requests.length, 2, 'location normalisation reuses the pending config read');
+	assert.equal(context.locationsCache, null, 'shops are not cached before config authority resolves');
+	const cfg = { single_location_mode: true, enable_delivery: true, ordering_open: false, payments_enabled: false };
+	requests[0].resolve(cfg);
+	assert.equal(await config, cfg);
+	assert.equal(cfg.enable_delivery, false, 'existing pickup-only display normalisation remains');
+	const result = await locations;
+	assert.deepEqual(result, [{ id: 1 }]);
+	assert.equal(shops.length, 2, 'the fetched location list is not mutated');
+	assert.equal(await context.getConfig(), cfg);
+	assert.equal(await context.getLocations(), result);
+	assert.equal(requests.length, 2, 'completed reads retain the existing same-page cache');
+	assert.equal(context.configRequest, null);
+	assert.equal(context.locationsRequest, null);
+	assert.equal(cfg.ordering_open, false); assert.equal(cfg.payments_enabled, false);
+});
+
+test('failed shared config reads reject every caller and allow a single fresh retry', async () => {
+	const { context, requests } = storefrontReadHarness();
+	const first = context.getConfig();
+	const second = context.getConfig();
+	const failures = Promise.allSettled([first, second]);
+	const error = new Error('config unavailable');
+	requests[0].reject(error);
+	for (const result of await failures) {
+		assert.equal(result.status, 'rejected'); assert.equal(result.reason, error);
+	}
+	assert.equal(context.configCache, null); assert.equal(context.configRequest, null);
+	const retry = context.getConfig();
+	assert.notEqual(retry, first); assert.equal(context.getConfig(), retry);
+	assert.equal(requests.length, 2);
+	const cfg = { single_location_mode: false, enable_delivery: true };
+	requests[1].resolve(cfg);
+	assert.equal(await retry, cfg);
+	assert.equal(cfg.enable_delivery, true, 'multi-shop configuration is unchanged');
+	assert.equal(await context.getConfig(), cfg); assert.equal(requests.length, 2);
+});
+
+test('failed shared location fetches remain retryable and empty results still use the existing cache', async () => {
+	const { context, requests, settle } = storefrontReadHarness();
+	const first = context.getLocations();
+	const failures = Promise.allSettled([first, context.getLocations()]);
+	const error = new Error('locations unavailable');
+	requests[0].reject(error);
+	for (const result of await failures) {
+		assert.equal(result.status, 'rejected'); assert.equal(result.reason, error);
+	}
+	assert.equal(context.locationsCache, null); assert.equal(context.locationsRequest, null);
+	assert.equal(requests.length, 1, 'failed location fetch does not start a config read');
+	const retry = context.getLocations();
+	assert.equal(context.getLocations(), retry);
+	requests[1].resolve(null);
+	await settle();
+	assert.equal(requests[2].route, '/config');
+	requests[2].resolve({ single_location_mode: false });
+	const empty = await retry;
+	assert.equal(empty.length, 0, 'non-array payload normalisation remains unchanged');
+	assert.equal(await context.getLocations(), empty);
+	assert.equal(requests.length, 3, 'an empty completed array is cached, not repeatedly fetched');
+});
+
+test('a config failure during location normalisation clears both pending reads without caching unverified shops', async () => {
+	const { context, requests, settle } = storefrontReadHarness();
+	const first = context.getLocations();
+	const failures = Promise.allSettled([first, context.getLocations()]);
+	requests[0].resolve([{ id: 1 }, { id: 2 }]);
+	await settle();
+	assert.equal(requests[1].route, '/config');
+	const error = new Error('config failed after locations');
+	requests[1].reject(error);
+	for (const result of await failures) {
+		assert.equal(result.status, 'rejected'); assert.equal(result.reason, error);
+	}
+	assert.equal(context.configCache, null); assert.equal(context.locationsCache, null);
+	assert.equal(context.configRequest, null); assert.equal(context.locationsRequest, null);
+	const retry = context.getLocations();
+	assert.notEqual(retry, first); assert.equal(context.getLocations(), retry);
+	assert.equal(requests[2].route, '/locations', 'retry re-reads locations instead of caching a partial result');
+	const refreshed = [{ id: 3 }, { id: 4 }];
+	requests[2].resolve(refreshed);
+	await settle();
+	assert.equal(requests[3].route, '/config');
+	requests[3].resolve({ single_location_mode: false });
+	assert.equal(await retry, refreshed, 'multi-shop config keeps all refreshed shops');
+	assert.equal(requests.length, 4);
+});
+
 function storefrontElement(tag = 'div') {
 	const node = {
 		tag,

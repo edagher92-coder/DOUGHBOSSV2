@@ -526,3 +526,17 @@ add_action( 'wp_footer', static function () {
 </script>
 	<?php
 }, 30 );
+
+// The separate 2.49 menu-request hotfix needs a fresh browser cache key.
+// A later core release uses its own version and does not inherit this marker.
+add_filter( 'script_loader_src', static function ( $src, $handle ) {
+	if ( 'doughboss' !== $handle || is_admin() || ! is_string( $src ) || ! defined( 'DOUGHBOSS_VERSION' ) || '2.49.0' !== DOUGHBOSS_VERSION ) {
+		return $src;
+	}
+	$path = wp_parse_url( $src, PHP_URL_PATH );
+	$asset = '/doughboss/public/js/doughboss.js';
+	if ( ! is_string( $path ) || $asset !== substr( $path, -strlen( $asset ) ) ) {
+		return $src;
+	}
+	return add_query_arg( 'ver', '2.49.0-menu-6cfded01496d', $src );
+}, 20, 2 );

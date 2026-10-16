@@ -24,6 +24,10 @@
 	}
 	var configCache = null;
 	var locationsCache = null;
+	// Share startup reads while concurrent menu, picker and cart callers wait.
+	// These promises live only on this page; failed reads remain retryable.
+	var configRequest = null;
+	var locationsRequest = null;
 	// A table QR opens the ordering page with a server-issued, HttpOnly context
 	// cookie. The browser deliberately receives only the safe display context;
 	// it never gets a table token or an editable table/store authority.
@@ -371,7 +375,10 @@
 		if (configCache) {
 			return Promise.resolve(configCache);
 		}
-		return request('/config').then(function (cfg) {
+		if (configRequest) {
+			return configRequest;
+		}
+		configRequest = request('/config').then(function (cfg) {
 			// Single-location mode: the storefront behaves as one pickup-only
 			// shop regardless of how many locations or fulfilment types are
 			// configured. Display-only — the checkout REST endpoint's own
@@ -381,7 +388,14 @@
 			}
 			configCache = cfg;
 			return cfg;
+		}).then(function (cfg) {
+			configRequest = null;
+			return cfg;
+		}, function (error) {
+			configRequest = null;
+			throw error;
 		});
+		return configRequest;
 	}
 
 	function getTableContext() {
@@ -438,7 +452,10 @@
 		if (locationsCache) {
 			return Promise.resolve(locationsCache);
 		}
-		return request('/locations').then(function (locs) {
+		if (locationsRequest) {
+			return locationsRequest;
+		}
+		locationsRequest = request('/locations').then(function (locs) {
 			locs = Array.isArray(locs) ? locs : [];
 			// Single-location mode pins the storefront to the first active shop:
 			// the picker collapses to the single-shop display and orders carry
@@ -451,7 +468,14 @@
 				locationsCache = locs;
 				return locationsCache;
 			});
+		}).then(function (locs) {
+			locationsRequest = null;
+			return locs;
+		}, function (error) {
+			locationsRequest = null;
+			throw error;
 		});
+		return locationsRequest;
 	}
 
 	function locById(locs, id) {
