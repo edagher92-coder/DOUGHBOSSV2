@@ -18,6 +18,21 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Applies pending schema/data migrations in order.
  */
 class DoughBoss_Migrations {
+	/**
+	 * Pickup scheduling (2.51): additive location/order columns. Capacity was
+	 * never live before 2.51, so the old default of 4 orders per slot was never
+	 * enforced; move untouched rows to the new default of 6.
+	 */
+	private static function upgrade_to_1_30_0() {
+		global $wpdb;
+		if ( ! DoughBoss_Activator::capacity_storage_ready() ) {
+			throw new RuntimeException( 'Pickup scheduling storage is incomplete or not using InnoDB.' );
+		}
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( "UPDATE {$locations} SET slot_order_capacity = 6 WHERE slot_order_capacity = 4" );
+	}
+
 	/** Schema reserve only; no writer/provenance/verified claim. */
 	private static function upgrade_to_1_29_0() {
 		if ( ! DoughBoss_Activator::catalogue_operations_storage_ready() ) {
@@ -110,6 +125,7 @@ class DoughBoss_Migrations {
 				'1.27.0' => 'upgrade_to_1_27_0',
 				'1.28.0' => 'upgrade_to_1_28_0',
 				'1.29.0' => 'upgrade_to_1_29_0',
+				'1.30.0' => 'upgrade_to_1_30_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {

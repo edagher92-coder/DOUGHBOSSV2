@@ -120,6 +120,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-privacy.php';
 		require_once $dir . 'class-doughboss-cli.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
+		require_once $dir . 'class-doughboss-pickup.php';
 		require_once $dir . 'class-doughboss-images.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
 		require_once $dir . 'class-doughboss-store-hours.php';
@@ -172,6 +173,7 @@ final class DoughBoss {
 		( new DoughBoss_Staff_Experience() )->init();
 		( new DoughBoss_Portals() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
+		DoughBoss_Pickup::init( $this->cart );
 		( new DoughBoss_Privacy() )->init();
 		DoughBoss_Table_QR::init( $this->cart );
 
