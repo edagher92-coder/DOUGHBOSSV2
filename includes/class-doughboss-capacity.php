@@ -253,7 +253,15 @@ class DoughBoss_Capacity {
 			// Lock order is always slot then idempotency row, preventing two retries
 			// for the same slot from deadlocking in opposite order.
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$holds_table} WHERE idempotency_key = %s FOR UPDATE", $idempotency_key ) );
+			// Look the key up WITHOUT a locking read: a FOR UPDATE on a key that does not
+			// exist yet locks the index gap, and two holds on different slots (which the
+			// slot mutex does not serialise) then block each other's INSERT and deadlock.
+			// Same-key retries share a slot, so the slot lock already orders them; only an
+			// existing row is locked, by primary key.
+			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$holds_table} WHERE idempotency_key = %s", $idempotency_key ) );
+			if ( $existing ) {
+				$existing = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$holds_table} WHERE id = %d FOR UPDATE", (int) $existing->id ) );
+			}
 			if ( $existing ) {
 				if ( (int) $existing->slot_id !== $slot_id || ! hash_equals( (string) $existing->cart_hash, $cart_hash ) ) {
 					throw new DoughBoss_Capacity_Exception( 'doughboss_hold_conflict', __( 'That retry key was already used for another cart or pickup time.', 'doughboss' ), 409 );
@@ -269,8 +277,15 @@ class DoughBoss_Capacity {
 			}
 
 			// Expiry is enforced by every writer, not left to a cron cleanup race.
+			// Find the lapsed rows with a plain read and flip them by primary key. A range
+			// UPDATE over slot_id would gap-lock the slot index, and holds on different
+			// slots would then deadlock on their INSERTs.
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->query( $wpdb->prepare( "UPDATE {$holds_table} SET status = 'expired', updated_at = %s WHERE slot_id = %d AND status = 'held' AND expires_at <= %s", $now_mysql, $slot_id, $now_mysql ) );
+			$lapsed = $wpdb->get_col( $wpdb->prepare( "SELECT id FROM {$holds_table} WHERE slot_id = %d AND status = 'held' AND expires_at <= %s", $slot_id, $now_mysql ) );
+			foreach ( (array) $lapsed as $lapsed_id ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->query( $wpdb->prepare( "UPDATE {$holds_table} SET status = 'expired', updated_at = %s WHERE id = %d AND status = 'held' AND expires_at <= %s", $now_mysql, (int) $lapsed_id, $now_mysql ) );
+			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$used = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) AS orders_used, COALESCE(SUM(capacity_units),0) AS units_used FROM {$holds_table} WHERE slot_id = %d AND (status = 'converted' OR (status = 'held' AND expires_at > %s))", $slot_id, $now_mysql ) );
 			$orders_used = $used ? (int) $used->orders_used : 0;

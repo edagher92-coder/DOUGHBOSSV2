@@ -184,7 +184,15 @@ class DB_PK_DB {
 			}
 			return null;
 		}
-		if ( preg_match( "/FROM wp_doughboss_capacity_holds WHERE idempotency_key = '([^']*)' FOR UPDATE/", $sql, $m ) ) {
+		if ( preg_match( "/FROM wp_doughboss_capacity_holds WHERE id = (\d+) FOR UPDATE/", $sql, $m ) ) {
+			foreach ( $this->holds as $hold ) {
+				if ( (int) $hold['id'] === (int) $m[1] ) {
+					return $this->obj( $hold );
+				}
+			}
+			return null;
+		}
+		if ( preg_match( "/FROM wp_doughboss_capacity_holds WHERE idempotency_key = '([^']*)'$/", $sql, $m ) ) {
 			foreach ( $this->holds as $hold ) {
 				if ( $hold['idempotency_key'] === stripslashes( $m[1] ) ) {
 					return $this->obj( $hold );
@@ -248,6 +256,15 @@ class DB_PK_DB {
 
 	public function get_col( $sql ) {
 		$this->note( 'read', $sql );
+		if ( preg_match( "/^SELECT id FROM wp_doughboss_capacity_holds WHERE slot_id = (\d+) AND status = 'held' AND expires_at <= '([^']+)'/", $sql, $m ) ) {
+			$ids = array();
+			foreach ( $this->holds as $hold ) {
+				if ( (int) $hold['slot_id'] === (int) $m[1] && 'held' === $hold['status'] && $hold['expires_at'] <= $m[2] ) {
+					$ids[] = (string) $hold['id'];
+				}
+			}
+			return $ids;
+		}
 		$dates = array();
 		if ( preg_match( "/is_closed = 1 AND service_date >= '([^']+)'/", $sql, $m ) ) {
 			foreach ( $this->exceptions as $row ) {
@@ -302,10 +319,10 @@ class DB_PK_DB {
 			}
 			return 0;
 		}
-		if ( preg_match( "/^UPDATE wp_doughboss_capacity_holds SET status = 'expired', updated_at = '[^']+' WHERE slot_id = (\d+) AND status = 'held' AND expires_at <= '([^']+)'/", $sql, $m ) ) {
+		if ( preg_match( "/^UPDATE wp_doughboss_capacity_holds SET status = 'expired', updated_at = '[^']+' WHERE id = (\d+) AND status = 'held' AND expires_at <= '([^']+)'/", $sql, $m ) ) {
 			$n = 0;
 			foreach ( $this->holds as &$hold ) {
-				if ( (int) $hold['slot_id'] === (int) $m[1] && 'held' === $hold['status'] && $hold['expires_at'] <= $m[2] ) {
+				if ( (int) $hold['id'] === (int) $m[1] && 'held' === $hold['status'] && $hold['expires_at'] <= $m[2] ) {
 					$hold['status'] = 'expired';
 					++$n;
 				}
@@ -1556,3 +1573,14 @@ db_test(
 
 // Restore whatever $wpdb earlier suites installed so later suites are unaffected.
 $GLOBALS['wpdb'] = $GLOBALS['db_pk_previous_wpdb'];
+
+db_test( 'create_hold never takes a gap lock that holds on other slots can collide with (InnoDB deadlock found on real MariaDB)', function () {
+	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-capacity.php' );
+	$start  = strpos( $source, 'public static function create_hold(' );
+	$end    = strpos( $source, 'public static function lock_hold_for_order(', $start );
+	$body   = substr( $source, $start, $end - $start );
+	assert_true( false === strpos( $body, 'idempotency_key = %s FOR UPDATE' ), 'the idempotency lookup is not a locking read (FOR UPDATE on an absent key locks the index gap)' );
+	assert_true( false !== strpos( $body, 'WHERE id = %d FOR UPDATE' ), 'an existing idempotency row is locked by primary key' );
+	assert_true( 0 === preg_match( '/UPDATE \{\$holds_table\}[^;]*WHERE slot_id = %d/', $body ), 'lapsed holds are flipped by primary key, not by a slot_id range UPDATE' );
+	assert_true( false !== strpos( $body, "WHERE slot_id = %d AND status = 'held' AND expires_at <= %s\", \$slot_id, \$now_mysql" ), 'lapsed holds are found with a plain read' );
+} );
