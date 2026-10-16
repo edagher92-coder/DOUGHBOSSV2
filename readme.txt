@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.50.0
+Stable tag: 2.51.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,15 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.51.0 =
+* Store-first ordering: on multi-shop sites customers choose Revesby, Bankstown or Roselands before the menu (open/closed badge, today's hours, prep time), with a "Change store" button that re-checks the cart and removes items the new shop doesn't sell.
+* Pickup time (per shop, when the shop's Capacity mode is set to Live): "ASAP — ready in about N min" or a 15-minute slot today or tomorrow within that shop's hours. Each slot takes a set number of orders (default 6); full slots are shown as Full. The chosen time is held for 10 minutes while paying and re-checked by the server. A paid order is never refused for capacity: if the slot filled or passed during payment it is kept and flagged for staff.
+* Kitchen board: Upcoming section for scheduled orders (they join New one prep-time before pickup, without the alarm firing early), ASAP/Scheduled badges, pickup time on each card, single Accept for timed orders and a "+10 min" button that moves the promise and tells the customer by email/SMS.
+* Per-shop settings (DoughBoss > Shops): Capacity mode Off / Shadow / Live, orders per slot, days ahead (0–7), last-slot cut-off before close (default 20 min), busy extra minutes, pause ordering, holiday closures.
+* Emails, SMS, kitchen tickets, the confirmation page and order tracking show "Pickup at <shop>, <time>". The Square order gets a ticket name and pickup metadata (no fulfilments).
+* Fix: concurrent checkouts could deadlock in MariaDB and fail with a misleading approval error (also present in 2.50); concurrent pickup holds on different slots could deadlock.
+* Database 1.30.0: additive columns only. With every shop on Capacity mode Off, ordering and payments behave as in 2.50, apart from the store chooser on multi-shop sites.
 
 = 2.50.0 =
 * Multi-account Square: each shop (Revesby, Bankstown, Roselands) can take online payments, hosted checkout, catering invoices, customers, loyalty and Club tiers through its OWN Square seller account. New owner-only page DoughBoss > Square accounts: "Connect Square account" per shop (Square OAuth code flow, signed single-use state, session=false in production), pick that account's location, Disconnect (revokes the authorization in Square). A shop that is not connected keeps using the existing single-account settings, so Revesby works unchanged with no setup.
