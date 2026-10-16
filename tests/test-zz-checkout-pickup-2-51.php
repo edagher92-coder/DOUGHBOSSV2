@@ -598,3 +598,13 @@ db_test( 'WP-B order creation gates capacity on payment or an explicit unpaid al
 	$options = DoughBoss_Order::capacity_lock_options( 0, true );
 	assert_same( array( 'paid' => true, 'prep_minutes' => 0, 'slot_minutes' => 15 ), $options, 'lock options default safely without a shop row' );
 } );
+
+db_test( 'Order::create takes the settings-row lock before the gap-locking replay lookups (InnoDB deadlock found on real MariaDB)', function () {
+	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-order.php' );
+	$start  = strpos( $source, 'public static function create( array $data, array $lines )' );
+	$begin  = strpos( $source, "'START TRANSACTION'", $start );
+	$lock   = strpos( $source, 'DoughBoss_Settings::staff_approval_policy( true );', $begin );
+	$replay = strpos( $source, 'self::find_id_by_checkout_key( $checkout_key, true )', $begin );
+	assert_true( false !== $start && false !== $begin && false !== $lock && false !== $replay, 'create() lock sequence located' );
+	assert_true( $begin < $lock && $lock < $replay, 'options-row FOR UPDATE precedes the checkout_key FOR UPDATE lookup, so concurrent creators serialise instead of deadlocking on the index gap' );
+} );

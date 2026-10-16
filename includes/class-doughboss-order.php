@@ -722,6 +722,14 @@ class DoughBoss_Order {
 			return new WP_Error( 'doughboss_db_error', __( 'Could not start your order safely. Please try again.', 'doughboss' ), array( 'status' => 500 ) );
 		}
 
+		// Take the settings-row lock before any other locking read. The replay
+		// lookups below lock the (usually empty) gap where a new checkout_key will
+		// land; two writers holding that gap both block each other's INSERT, which
+		// InnoDB resolves as a deadlock that surfaced as a bogus approval error. The
+		// policy read further down takes this same lock, so ordering it first only
+		// serialises writers earlier.
+		DoughBoss_Settings::staff_approval_policy( true );
+
 		// A duplicate receipt never creates a new kitchen order. Resolve that
 		// bounded replay before looking at today's intake policy so historical
 		// bookkeeping can be repaired without reopening direct fulfilment.
