@@ -286,6 +286,30 @@ class DoughBoss_Order {
 	}
 
 	/**
+	 * Append the 1.30.0 pickup columns and their formats to an order insert.
+	 *
+	 * Pure apart from the schema-version gate: a pre-1.30.0 schema never sees
+	 * columns it does not have, so the insert stays exactly the 2.50 shape.
+	 *
+	 * @param array  $row        Column => value.
+	 * @param array  $formats    Positional formats, same order as $row.
+	 * @param string $mode       Sanitised pickup mode.
+	 * @param int    $overflow   1 when accepted over capacity.
+	 * @return array{0:array,1:array}
+	 */
+	public static function with_pickup_columns( array $row, array $formats, $mode, $overflow ) {
+		if ( self::pickup_columns_ready() ) {
+			$row['pickup_mode']            = self::sanitize_pickup_mode( $mode );
+			$row['capacity_overflow']      = $overflow ? 1 : 0;
+			$row['promised_delay_minutes'] = 0;
+			$formats[]                     = '%s';
+			$formats[]                     = '%d';
+			$formats[]                     = '%d';
+		}
+		return array( $row, $formats );
+	}
+
+	/**
 	 * Restrict a pickup mode to the stored vocabulary ('' = legacy/untimed).
 	 *
 	 * @param mixed $mode Raw mode.
@@ -906,16 +930,7 @@ class DoughBoss_Order {
 					'updated_at'    => $now,
 			);
 			$row_formats = array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' );
-			if ( self::pickup_columns_ready() ) {
-				// Appended after the legacy columns, with matching formats, so a
-				// pre-1.30.0 schema never sees columns it does not have.
-				$row['pickup_mode']            = $pickup_mode;
-				$row['capacity_overflow']      = $capacity_overflow;
-				$row['promised_delay_minutes'] = 0;
-				$row_formats[]                 = '%s';
-				$row_formats[]                 = '%d';
-				$row_formats[]                 = '%d';
-			}
+			list( $row, $row_formats ) = self::with_pickup_columns( $row, $row_formats, $pickup_mode, $capacity_overflow );
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$inserted = $wpdb->insert( $orders, $row, $row_formats );
 
