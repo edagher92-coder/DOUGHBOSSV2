@@ -320,6 +320,59 @@ class DoughBoss_Store_Hours {
 	}
 
 	/**
+	 * Customer-facing label for a stored UTC pickup instant, with day words
+	 * relative to "now" in the shop's own timezone: "Today 12:45pm",
+	 * "Tomorrow 7:30am" or "Fri 17 Oct, 12:45pm". Pure and DST-safe because the
+	 * instant is converted, never re-parsed from wall-clock text.
+	 *
+	 * @param string|DateTimeInterface $utc      UTC instant: 'Y-m-d H:i:s', 'Y-m-d\TH:i:s\Z' or a DateTime.
+	 * @param string                   $timezone Shop timezone (falls back to Australia/Sydney).
+	 * @param DateTimeInterface|null   $now      Injected clock (defaults to now).
+	 * @return string Empty string for invalid input.
+	 */
+	public static function format_pickup_time( $utc, $timezone = self::TIMEZONE, $now = null ) {
+		try {
+			$utc_zone = new DateTimeZone( 'UTC' );
+			if ( $utc instanceof DateTimeInterface ) {
+				$instant = ( new DateTimeImmutable( '@' . $utc->getTimestamp() ) )->setTimezone( $utc_zone );
+			} else {
+				$raw     = trim( (string) $utc );
+				$instant = false;
+				foreach ( array( '!Y-m-d H:i:s', '!Y-m-d\TH:i:s\Z', '!Y-m-d\TH:i:sP' ) as $format ) {
+					$instant = DateTimeImmutable::createFromFormat( $format, $raw, $utc_zone );
+					if ( $instant && 0 === strcmp( $instant->format( substr( $format, 1 ) ), $raw ) ) {
+						break;
+					}
+					$instant = false;
+				}
+				if ( ! $instant ) {
+					return '';
+				}
+			}
+			try {
+				$zone = new DateTimeZone( '' === (string) $timezone ? self::TIMEZONE : (string) $timezone );
+			} catch ( Exception $e ) {
+				$zone = new DateTimeZone( self::TIMEZONE );
+			}
+			$local     = $instant->setTimezone( $zone );
+			$local_now = $now instanceof DateTimeInterface
+				? ( new DateTimeImmutable( '@' . $now->getTimestamp() ) )->setTimezone( $zone )
+				: new DateTimeImmutable( 'now', $zone );
+			$clock = self::format_clock( $local->format( 'H:i' ) );
+			$day   = $local->format( 'Y-m-d' );
+			if ( $day === $local_now->format( 'Y-m-d' ) ) {
+				return 'Today ' . $clock;
+			}
+			if ( $day === $local_now->modify( '+1 day' )->format( 'Y-m-d' ) ) {
+				return 'Tomorrow ' . $clock;
+			}
+			return $local->format( 'D j M' ) . ', ' . $clock;
+		} catch ( Exception $e ) {
+			return '';
+		}
+	}
+
+	/**
 	 * Readable weekly summary such as "7 days · 6:30am–2:30pm" or
 	 * "Mon–Fri · 7am–2pm". Groups consecutive days with identical hours.
 	 *
