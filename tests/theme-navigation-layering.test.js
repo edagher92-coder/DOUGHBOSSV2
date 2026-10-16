@@ -14,8 +14,10 @@ test('mobile open navigation keeps banner below scrim and header drawer', () => 
 	assert.match(css, /body\.dbf-menu-open::before\s*\{[^}]*\bz-index:\s*98\b[^}]*\}/, 'open-state scrim remains z98');
 	assert.match(css, /\.dbf-header\s*\{[^}]*\bz-index:\s*100\b[^}]*\}/, 'header remains z100');
 
-	const mobileRules = css.match(/@media\s*\(max-width:\s*900px\)\s*\{[\s\S]*?\n\}/)?.[0];
+	const mobileRules = css.match(/@media\s*\(max-width:\s*1100px\)\s*\{[\s\S]*?\n\}/)?.[0];
 	assert.ok(mobileRules, 'mobile navigation media block is present');
+	const controller = fs.readFileSync(path.join(repoRoot, 'themes', 'doughboss-final', 'assets', 'theme.js'), 'utf8');
+	assert.match(controller, /matchMedia\('\(max-width: 1100px\)'\)/, 'menu behavior and CSS use the same readable-navigation breakpoint');
 	assert.match(mobileRules, /body\.dbf-menu-open\s+\.dbf-launch-bar\s*\{\s*z-index:\s*97;\s*\}/, 'only open mobile launch bar is lowered beneath scrim');
 	assert.equal((css.match(/body\.dbf-menu-open\s+\.dbf-launch-bar/g) || []).length, 1, 'mobile override is singular');
 	assert.match(mobileRules, /\.dbf-nav\s*\{[^}]*position:\s*fixed;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*max-height:\s*100vh;[^}]*max-height:\s*100dvh;/, 'drawer remains fixed to the viewport with full-height constraints');

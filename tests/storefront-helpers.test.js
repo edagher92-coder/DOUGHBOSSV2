@@ -21,7 +21,12 @@ function squareDashboardHarness(responder) {
 	const root = element();
 	root.querySelector = selector => controls[selector.match(/data-square-([^\]]+)/)[1]];
 	const requests = [];
-	const window = { DoughBossSquareDashboard: { restUrl: '/wp-json/doughboss/v1', nonce: 'synthetic-nonce' },
+	const sessionValues = new Map();
+	const window = { sessionStorage: {
+		getItem: key => sessionValues.has(key) ? sessionValues.get(key) : null,
+		setItem: (key, value) => sessionValues.set(key, String(value)),
+		removeItem: key => sessionValues.delete(key)
+	}, DoughBossSquareDashboard: { restUrl: '/wp-json/doughboss/v1', nonce: 'synthetic-nonce' },
 		fetch: async (url, options) => { requests.push({ url, options }); return responder(url, options); } };
 	const document = { getElementById: () => root, createElement: element };
 	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/js/doughboss-square-dashboard.js'), 'utf8'), { window, document, Intl, Number, Array, String, Error, encodeURIComponent });
@@ -32,6 +37,12 @@ function squareDashboardHarness(responder) {
 function squareDashboardPayload(mode = 'status', location = 'all') {
 	const payload = { schema_version: 1, source: 'square', data_state: 'not_connected',
 		connection: { state: 'not_configured', environment: 'test', credentials_present: false, provider_verified: false },
+		readiness: { schema_version: 1, state: 'not_attested', merchant_verification: 'not_attested', location_verification: 'not_attested',
+			permissions: 'not_attested', account_eligibility: 'not_attested', sync_state: 'not_recorded', last_successful_sync: null,
+			api: { configured_pin: '2025-05-21', timecards_minimum: '2025-05-21', timecards_version_state: 'meets_minimum' },
+			capabilities: { payments_refunds: 'not_attested', gift_card_balance_redemption: 'not_attested', gift_card_purchase_delivery: 'not_implemented',
+				gift_card_split_checkout: 'disabled', loyalty: 'not_implemented', loyalty_subscription: 'not_attested', catalogue_inventory: 'not_implemented',
+				timecards: 'not_implemented', staff_permissions_passcodes_payroll: 'dashboard_only', team_sales_tip_activity_reports: 'unsupported', reporting_costing: 'not_implemented' } },
 		staff: { managed_by: 'square', attendance_available: false },
 		planned_location: { label: 'Planned location', state: 'private_unmapped' },
 		locations: ['revesby', 'bankstown', 'roselands'].map(id => ({ id, name: id, state: 'unmapped' })) };
@@ -56,7 +67,10 @@ test('Square dashboard starts disconnected and demo needs an explicit action', a
 	harness.controls.preview.listeners.click();
 	await harness.settle();
 	assert.match(harness.text(), /synthetic preview/);
-	assert.match(harness.text(), /Team and attendance managed in Square/);
+	assert.match(harness.text(), /Team and attendance/);
+	assert.match(harness.text(), /Square attendance integration not implemented/);
+	assert.match(harness.text(), /No clock controls or attested Square attendance records are provided by this dashboard/);
+	assert.doesNotMatch(harness.text(), /attendance integration (?:completed|implemented|verified|attested)|attendance records (?:are )?(?:verified|attested)/i);
 	assert.match(harness.text(), /Unannounced/);
 	assert.match(harness.text(), /<img src=x onerror=alert\(1\)>/);
 	assert.equal(harness.controls.location.disabled, false);
@@ -288,6 +302,21 @@ test('menu photographs retain originals for absent, unrelated or malformed candi
 	}
 });
 
+// These excerpt tests model an unselected shop and a browser without SVG DOM
+// support. Keep the current rendering helpers real rather than omitting them.
+function menuBrowserContext() {
+	const context = {
+		getLocations: () => Promise.resolve([]),
+		menuLocationId: () => 0,
+		el: storefrontCreate,
+		document: { addEventListener() {} }
+	};
+	for (const name of ['svgIcon', 'compactMenuCategory', 'syncPhoneOrderBar', 'watchMenuAvailability']) {
+		context[name] = extractFunction(storefront, name, context);
+	}
+	return context;
+}
+
 function menuEnhancementHarness(overrides = {}) {
 	const root = storefrontElement();
 	const fallback = storefrontCreate('div', { 'data-doughboss-menu-fallback': '' });
@@ -296,6 +325,7 @@ function menuEnhancementHarness(overrides = {}) {
 	root.appendChild(fallback);
 	const showMenuFallbackError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });
 	const context = {
+		...menuBrowserContext(),
 		Promise,
 		request: () => Promise.resolve(overrides.items || [{ name: 'Zaatar', category: 'Manoush' }]),
 		getConfig: () => Promise.resolve({ ordering_open: false }),
@@ -306,7 +336,6 @@ function menuEnhancementHarness(overrides = {}) {
 		menuCard: item => storefrontCreate('article', { class: 'db-card', text: item.name }),
 		initCartFab() {},
 		window: { addEventListener() {}, location: { hash: '' }, scrollY: 0 },
-		document: {},
 		showMenuFallbackError,
 		...overrides
 	};
@@ -333,6 +362,10 @@ test('menu restores the original browse fallback after a late card-rendering fai
 	const harness = menuEnhancementHarness({
 		items: [{ name: 'First item', category: 'Manoush' }, { name: 'Second item', category: 'Manoush' }],
 		getConfig: () => Promise.resolve({ ordering_open: true }),
+		// 2.51 renders cards only after shop selection. Exercise the intended
+		// late-render failure with a selected shop, not the store-first gate.
+		getLocations: () => Promise.resolve([{ id: 1, name: 'Synthetic shop' }]),
+		menuLocationId: () => 1,
 		menuCard: item => {
 			cardsRendered += 1;
 			if (cardsRendered === 2) throw new Error('late card rendering failure');
@@ -384,6 +417,7 @@ test('menu fallback survives failed interactive reads and is replaced only by su
 	fallback.appendChild(browseItem);
 	fallbackRoot.appendChild(fallback);
 	const failedRender = extractFunction(storefront, 'renderMenu', {
+		...menuBrowserContext(),
 		Promise,
 		request: () => Promise.reject(new Error('network')),
 		getConfig: () => Promise.resolve({ ordering_open: false }),
@@ -408,6 +442,7 @@ test('menu fallback survives failed interactive reads and is replaced only by su
 	enhancedFallback.setAttribute('data-doughboss-menu-fallback', '');
 	enhancedRoot.appendChild(enhancedFallback);
 	const successfulRender = extractFunction(storefront, 'renderMenu', {
+		...menuBrowserContext(),
 		Promise,
 		request: path => {
 			assert.equal(path, '/menu');
