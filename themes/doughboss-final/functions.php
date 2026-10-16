@@ -190,6 +190,63 @@ function doughboss_final_order_nav_items( $items ) {
 add_filter( 'wp_nav_menu_objects', 'doughboss_final_order_nav_items', 20 );
 
 /**
+ * Whether a stored primary-menu item still exposes the paused franchising page.
+ *
+ * The page is a draft, so WordPress can serialise its old menu item URL as a
+ * page-id query string. Its saved label or page slug remains available here.
+ *
+ * @param object $item Nav menu item.
+ * @return bool
+ */
+function doughboss_final_is_franchising_nav_item( $item ) {
+	if ( ! is_object( $item ) ) {
+		return false;
+	}
+
+	$url       = (string) ( $item->url ?? '' );
+	$path      = '' !== $url ? (string) wp_parse_url( $url, PHP_URL_PATH ) : '';
+	$host      = '' !== $url ? (string) wp_parse_url( $url, PHP_URL_HOST ) : '';
+	$site_host = (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+	$title     = strtolower( trim( wp_strip_all_tags( (string) ( $item->title ?? '' ) ) ) );
+	$is_local  = '' === $host || strtolower( $host ) === strtolower( $site_host );
+	if ( $is_local && ( '/franchising' === untrailingslashit( $path ) || false !== strpos( $title, 'franchis' ) ) ) {
+		return true;
+	}
+
+	if ( 'page' !== (string) ( $item->object ?? '' ) || empty( $item->object_id ) || ! function_exists( 'get_post_field' ) ) {
+		return false;
+	}
+
+	return 'franchising' === (string) get_post_field( 'post_name', (int) $item->object_id );
+}
+
+/**
+ * Keep configured menus aligned with the paused franchising page: visitors can
+ * still reach the existing wholesale enquiry form through the Partners link.
+ *
+ * @param array $items Nav menu items.
+ * @return array
+ */
+function doughboss_final_partners_nav_items( $items ) {
+	foreach ( (array) $items as $item ) {
+		if ( ! doughboss_final_is_franchising_nav_item( $item ) ) {
+			continue;
+		}
+
+		$item->url     = home_url( '/wholesale/' );
+		$item->title   = __( 'Partners', 'doughboss-final' );
+		$item->classes = array_merge( (array) ( $item->classes ?? array() ), array( 'dbf-nav-partners' ) );
+		// This is now a custom wholesale link, not the paused franchise page.
+		// Clear only the in-memory identity before the separate pause filter runs.
+		$item->type      = 'custom';
+		$item->object    = 'custom';
+		$item->object_id = 0;
+	}
+	return $items;
+}
+add_filter( 'wp_nav_menu_objects', 'doughboss_final_partners_nav_items', 9 );
+
+/**
  * Emit the swap attributes for the "Order Online" / "Call to order" link.
  *
  * @param array  $atts Link attributes.
@@ -542,7 +599,7 @@ function doughboss_final_menu_fallback() {
 		__( 'Vouchers', 'doughboss-final' ) => home_url( '/vouchers/' ),
 		__( 'Track order', 'doughboss-final' ) => home_url( '/track-order/' ),
 		__( 'Locations', 'doughboss-final' ) => home_url( '/locations/' ),
-		__( 'Franchising & partners', 'doughboss-final' ) => home_url( '/franchising/' ),
+		__( 'Partners', 'doughboss-final' ) => home_url( '/wholesale/' ),
 	);
 
 	echo '<ul class="dbf-nav-list">';

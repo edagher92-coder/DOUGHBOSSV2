@@ -2,13 +2,18 @@
 /** Synthetic hook smoke test; no WordPress, network, mail or database. */
 define( 'ABSPATH', __DIR__ );
 $hooks = array();
+$registered_filters = array();
 $admin = false;
 $checks = 0;
-function add_filter( $name, $callback, $priority = 10, $accepted = 1 ) { global $hooks; $hooks[ $name ] = $callback; }
+function add_filter( $name, $callback, $priority = 10, $accepted = 1 ) { global $hooks, $registered_filters; $hooks[ $name ] = $callback; $registered_filters[ $name ][ $priority ][] = $callback; }
 function add_action( $name, $callback ) { add_filter( $name, $callback ); }
 function wp_parse_url( $url, $component ) { return parse_url( $url, $component ); }
 function is_admin() { global $admin; return $admin; }
 function get_post_field( $field, $id ) { return 137 === $id ? 'franchising' : 'wholesale'; }
+function home_url( $path ) { return 'https://doughboss.com.au' . $path; }
+function untrailingslashit( $path ) { return rtrim( $path, '/' ); }
+function wp_strip_all_tags( $text ) { return strip_tags( $text ); }
+function __( $text, $domain ) { return $text; }
 class WP_Error {
 	public $code;
 	public $data;
@@ -24,7 +29,15 @@ class Presentation_Request {
 	public function get_param( $name ) { return $this->type; }
 }
 function check( $condition, $message ) { global $checks; $checks++; if ( ! $condition ) { throw new RuntimeException( $message ); } }
+require dirname( __DIR__, 2 ) . '/themes/doughboss-final/functions.php';
 require __DIR__ . '/franchising-paused-snippet.php';
+$partners = array( (object) array( 'object' => 'page', 'object_id' => 137, 'url' => 'https://doughboss.com.au/?page_id=137', 'title' => 'Franchising & partners' ) );
+check( isset( $registered_filters['wp_nav_menu_objects'][9], $registered_filters['wp_nav_menu_objects'][10] ), 'Partners remap runs before the independent pause filter.' );
+foreach ( array( 9, 10 ) as $priority ) {
+	foreach ( $registered_filters['wp_nav_menu_objects'][$priority] as $callback ) { $partners = $callback( $partners ); }
+}
+check( 1 === count( $partners ), 'Safe Partners link survives the unchanged franchise pause filter.' );
+check( 'Partners' === $partners[0]->title && 'https://doughboss.com.au/wholesale/' === $partners[0]->url, 'Surviving link is the wholesale destination, never franchising.' );
 $items = array_map( static function ( $slug ) { return (object) array( 'url' => 'https://doughboss.com.au/' . $slug . '/' ); }, array( 'menu', 'franchising', 'wholesale' ) );
 $filtered = $hooks['wp_nav_menu_objects']( $items );
 check( 2 === count( $filtered ), 'Only the franchising navigation entry is removed.' );

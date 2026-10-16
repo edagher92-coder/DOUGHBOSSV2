@@ -19,11 +19,10 @@
 				<li><a href="<?php echo esc_url( home_url( '/about-us/' ) ); ?>">About us</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/order/' ) ); ?>">Menu</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/catering/' ) ); ?>">Catering</a></li>
-				<li><a href="<?php echo esc_url( home_url( '/vouchers/' ) ); ?>">Student vouchers</a></li>
+				<li><a href="<?php echo esc_url( home_url( '/vouchers/' ) ); ?>"><?php esc_html_e( 'Gift cards & loyalty', 'doughboss-final' ); ?></a></li>
 				<li><a href="<?php echo esc_url( home_url( '/track-order/' ) ); ?>">Track order</a></li>
 				<li><a href="<?php echo esc_url( home_url( '/locations/' ) ); ?>">Locations</a></li>
-				<li><a href="<?php echo esc_url( home_url( '/wholesale/' ) ); ?>"><?php esc_html_e( 'Wholesale', 'doughboss-final' ); ?></a></li>
-				<li><a href="<?php echo esc_url( home_url( '/franchising/' ) ); ?>"><?php esc_html_e( 'Franchising & partners', 'doughboss-final' ); ?></a></li>
+				<li><a href="<?php echo esc_url( home_url( '/wholesale/' ) ); ?>"><?php esc_html_e( 'Partners', 'doughboss-final' ); ?></a></li>
 			</ul>
 		</div>
 		<div>

@@ -6,7 +6,7 @@
 	var nav = document.querySelector('[data-dbf-nav]');
 	if (toggle && nav) {
 		var closeButton = nav.querySelector('[data-dbf-menu-close]');
-		var mobileQuery = window.matchMedia('(max-width: 900px)');
+		var mobileQuery = window.matchMedia('(max-width: 1100px)');
 		var isolatedNavigationBackground = [];
 		var menuReturnFocus = toggle;
 		var menuFocusRevision = 0;

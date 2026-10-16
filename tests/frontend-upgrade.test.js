@@ -210,7 +210,8 @@ test('mobile toggle is an SVG icon button with no raw "Menu ×" text', () => {
 	const css = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'style.css'), 'utf8');
 	assert.match(css, /\.dbf-menu-toggle\[aria-expanded="true"\] \.dbf-menu-icon--close \{ display: block; \}/);
 	const footer = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'footer.php'), 'utf8');
-	assert.match(footer, /Franchising & partners/);
+	assert.match(footer, /esc_html_e\( 'Partners'/);
+	assert.doesNotMatch(footer, /Franchising & partners|Student vouchers/);
 	assert.doesNotMatch(footer, />Partners</);
 });
 
@@ -362,6 +363,28 @@ test('b2b client checks mirror the server rules', () => {
 	assert.match(partner, /\[doughboss_b2b_form type="/);
 });
 
+test('homepage ribbon clips decoration without capturing descendant view timelines', () => {
+	const source = fs.readFileSync(path.join(root, 'scripts', 'hero-commercial', 'homepage-hero-v6-snippet.php'), 'utf8');
+	const ribbonRule = source.match(/#db-opening-home-v6 \.db-opening-ribbon\{([^}]+)\}/)?.[1];
+	assert.ok(ribbonRule, 'homepage ribbon rule exists');
+	assert.match(ribbonRule, /overflow:hidden;overflow:clip;/, 'clip keeps the viewport as the view timeline scrollport; hidden is the older-browser fallback');
+});
+
+test('homepage and shared navigation retain readable text floors and opaque review copy', () => {
+	const css = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'style.css'), 'utf8');
+	const hero = fs.readFileSync(path.join(root, 'scripts', 'hero-commercial', 'homepage-hero-v6-snippet.php'), 'utf8');
+	assert.match(css, /\.dbf-nav a \{ position:[^}]+font-size: 15px/);
+	assert.match(css, /\.dbf-nav a \{ display: block;[^}]+font-size: 28px/, 'mobile drawer keeps large labels');
+	assert.match(css, /body\.home \.dbf-eyebrow \{ font-size: 14px/);
+	assert.match(css, /body\.home \.dbf-review-panel p:not\(\.dbf-eyebrow\) \{ font-size: 18px; line-height: 1.6/);
+	assert.match(css, /\.dbf-review-panel p \{[^}]+color: #fff;/);
+	assert.match(css, /\.dbf-footer li \{[^}]+font-size: 16px/);
+	assert.match(css, /\.dbf-footer-bottom \{[^}]+font-size: 14px/);
+	assert.match(hero, /\.db-mh-kicker\{grid-row:1;font-size:14px/);
+	assert.match(hero, /\.db-opening-description\{grid-row:5;font-size:17px/);
+	assert.match(hero, /font-size:16px;font-weight:700/);
+});
+
 /* Homepage presentation is installed as a reversible, separately scoped snippet. */
 function homepageFilmFixture(options = {}) {
 	const source = fs.readFileSync(path.join(root, 'scripts', 'hero-commercial', 'homepage-hero-v6-snippet.php'), 'utf8');
@@ -373,14 +396,16 @@ function homepageFilmFixture(options = {}) {
 			setAttribute(name, value) { this.attrs[name] = String(value); },
 			getAttribute(name) { return this.attrs[name] ?? null; } };
 	}
-	const video = target(), poster = target(), control = target(), status = target(), frame = target();
+	const video = target(), poster = target(), control = target(), status = target(), frame = target(), steamControl = target();
+	video.duration = 10; video.readyState = 2;
+	frame.getBoundingClientRect = () => ({ height: 600 });
 	video.hidden = true; video.currentTime = 0; video.playCount = 0; video.pauseCount = 0;
 	video.attrs['data-db-opening-src'] = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v5-hero-720.mp4';
 	video.attrs['data-db-opening-desktop-src'] = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v6-desktop-square.mp4';
 	video.play = () => { video.playCount++; return options.reject ? Promise.reject(new Error('blocked')) : Promise.resolve(); };
 	video.pause = () => { video.pauseCount++; };
 	const elements = { '[data-db-opening-video]': video, '[data-db-opening-poster]': poster,
-		'[data-db-opening-control]': control, '[data-db-opening-status]': status, '.db-opening-frame': frame };
+		'[data-db-opening-control]': control, '[data-db-opening-status]': status, '.db-opening-frame': frame, '[data-db-steam-control]': steamControl };
 	const classes = new Set();
 	const opening = { querySelector: key => elements[key], classList: { toggle(key, on) { if (on) classes.add(key); else classes.delete(key); } } };
 	const document = target(); document.hidden = false; document.getElementById = () => opening;
@@ -388,11 +413,15 @@ function homepageFilmFixture(options = {}) {
 	const connection = target(); connection.saveData = !!options.saveData;
 	const desktop = target(); desktop.matches = !!options.desktop;
 	let intersect;
-	const window = { navigator: { connection }, matchMedia: query => query.includes('min-width') ? desktop : motion,
+	const callbacks = new Map(); let sequence = 0;
+	const window = { ...target(), scrollY: 0, navigator: { connection }, matchMedia: query => query.includes('min-width') ? desktop : motion,
+		requestAnimationFrame(fn) { callbacks.set(++sequence, fn); return sequence; }, cancelAnimationFrame(id) { callbacks.delete(id); },
 		IntersectionObserver: function (callback) { intersect = callback; this.observe = element => assert.equal(element, frame); } };
 	const context = vm.createContext({ document, window });
 	vm.runInContext(script, context);
-	return { source, video, poster, control, status, document, motion, connection, desktop, classes,
+	return { source, video, poster, control, status, document, motion, connection, desktop, classes, window, steamControl,
+		scroll(y) { window.scrollY = y; window.emit('scroll'); },
+		flush() { const work = [...callbacks.values()]; callbacks.clear(); work.forEach(fn => fn()); },
 		visible(on) { intersect([{ isIntersecting: on, intersectionRatio: on ? .5 : 0 }]); },
 		rerun() { vm.runInContext(script, context); } };
 }
@@ -445,9 +474,111 @@ test('homepage reduced-motion and Save-Data visitors get a poster and explicit p
 test('homepage rejected autoplay and failed media keep an accessible image fallback', async () => {
 	const x = homepageFilmFixture({ reject: true }); x.visible(true);
 	await Promise.resolve(); await Promise.resolve();
-	assert.equal(x.poster.hidden, false); assert.equal(x.control.textContent, 'Play animation');
+	assert.equal(x.poster.hidden, false); assert.equal(x.control.textContent, 'Play film');
 	assert.match(x.status.textContent, /Select Play/);
 	x.visible(false); x.visible(true); assert.equal(x.video.playCount, 1, 'do not repeatedly attempt blocked autoplay');
 	x.video.emit('error'); assert.equal(x.control.hidden, true); assert.equal(x.poster.hidden, false);
 	assert.match(x.status.textContent, /image is shown/);
+});
+
+test('paused film shows open-box poster with independently pausable steam; active film keeps its loop', () => {
+	const x = homepageFilmFixture(); x.visible(true); x.video.emit('playing');
+	assert.equal(x.video.loop, true); assert.equal(x.classes.has('has-steam'), false);
+	x.control.emit('click');
+	assert.equal(x.video.hidden, true); assert.equal(x.poster.hidden, false);
+	assert.equal(x.classes.has('has-steam'), true); assert.equal(x.steamControl.hidden, false);
+	x.steamControl.emit('click'); assert.equal(x.classes.has('has-steam'), false); assert.equal(x.steamControl.textContent, 'Play steam');
+	x.visible(false); x.visible(true); assert.equal(x.classes.has('has-steam'), false, 'remember explicit steam pause');
+	x.steamControl.emit('click'); assert.equal(x.classes.has('has-steam'), true);
+	x.visible(false); assert.equal(x.classes.has('has-steam'), false);
+	x.visible(true); x.document.hidden = true; x.document.emit('visibilitychange'); assert.equal(x.classes.has('has-steam'), false);
+	x.document.hidden = false; x.document.emit('visibilitychange'); assert.equal(x.classes.has('has-steam'), true);
+	x.control.emit('click'); x.video.emit('playing'); assert.equal(x.video.loop, true); assert.equal(x.classes.has('has-steam'), false);
+});
+
+test('steam is restricted to the box scene or poster and respects reduced motion and data saving', () => {
+	const x = homepageFilmFixture(); x.visible(true); x.video.emit('playing'); x.video.currentTime = 3;
+	x.scroll(60); x.flush(); assert.equal(x.classes.has('has-steam'), false, 'no steam floating off the bake board');
+	x.scroll(180); x.flush(); assert.equal(x.classes.has('has-steam'), true, 'box reveal may breathe while stationary');
+	x.motion.matches = true; x.motion.emit('change'); assert.equal(x.classes.has('has-steam'), false); assert.equal(x.steamControl.hidden, true);
+	const saved = homepageFilmFixture({ saveData: true }); saved.visible(true); assert.equal(saved.classes.has('has-steam'), false);
+	assert.match(x.source, /id="db-opening-steam" aria-hidden="true"/);
+	assert.match(x.source, /\.has-steam \.db-opening-steam span\{animation-play-state:running\}/);
+});
+
+test('hero scroll takes over at the current frame, advances down and reverses up', async () => {
+	const x = homepageFilmFixture(); x.visible(true); x.video.emit('playing'); x.video.currentTime = 3;
+	x.scroll(60); x.flush(); assert.equal(x.video.currentTime, 4);
+	assert.equal(x.video.loop, false); assert.equal(x.control.textContent, 'Pause film');
+	x.scroll(30); x.flush(); assert.equal(x.video.currentTime, 3.5);
+	await Promise.resolve(); assert.ok(x.video.pauseCount > 0, 'pending autoplay cannot restart scrubbed film');
+	x.scroll(10000); x.flush(); assert.equal(x.video.currentTime, 9.96);
+	x.scroll(0); x.flush(); assert.equal(x.video.currentTime, 0);
+});
+
+test('hero pause and motion preferences cancel queued scroll seeks and never resume on scroll', () => {
+	for (const preference of ['pause', 'motion', 'connection', 'hidden']) {
+		const x = homepageFilmFixture(); x.visible(true); x.video.emit('playing'); x.video.currentTime = 3;
+		x.scroll(60);
+		if (preference === 'pause') x.control.emit('click');
+		if (preference === 'motion') { x.motion.matches = true; x.motion.emit('change'); }
+		if (preference === 'connection') { x.connection.saveData = true; x.connection.emit('change'); }
+		if (preference === 'hidden') { x.document.hidden = true; x.document.emit('visibilitychange'); }
+		x.flush(); x.scroll(120); x.flush(); assert.equal(x.video.currentTime, 3, preference);
+	}
+});
+
+test('hero ignores scroll until media is ready and avoids offscreen scroll jumps on reentry', () => {
+	const x = homepageFilmFixture(); x.visible(true); x.video.emit('playing'); x.video.currentTime = 3;
+	x.video.duration = NaN; x.scroll(50); x.flush(); assert.equal(x.video.currentTime, 3);
+	x.video.duration = 10; x.video.readyState = 1; x.scroll(100); x.flush(); assert.equal(x.video.currentTime, 3);
+	x.video.readyState = 2; x.scroll(160); x.flush(); assert.equal(x.video.currentTime, 4);
+	x.visible(false); x.scroll(3000); x.flush(); assert.equal(x.video.currentTime, 4);
+	x.visible(true); x.scroll(2940); x.flush(); assert.equal(x.video.currentTime, 3);
+	x.control.emit('click'); x.scroll(2800); x.flush(); assert.equal(x.video.currentTime, 3);
+	x.control.emit('click'); assert.equal(x.video.playCount, 2, 'explicit play resumes time-based playback');
+});
+
+function homepageTiltFixture(options = {}) {
+	const source = fs.readFileSync(path.join(root, 'scripts/hero-commercial/homepage-hero-v6-snippet.php'), 'utf8');
+	const script = source.match(/<script id="db-opening-home-v6-tilt">([\s\S]*?)<\/script>/)[1];
+	function target() { return { listeners: {}, addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }, emit(name, event = {}) { for (const fn of this.listeners[name] || []) fn(event); } }; }
+	const properties = { transform: 'translateY(36px)' }, panel = target(), opening = {};
+	panel.setAttribute = () => {};
+	panel.style = { setProperty(k, v) { properties[k] = v; }, removeProperty(k) { delete properties[k]; } };
+	panel.getBoundingClientRect = () => ({ left: 100, top: 100, width: 400, height: 200 });
+	const document = { ...target(), hidden: false, readyState: options.loading ? 'loading' : 'complete', getElementById: () => opening,
+		querySelectorAll(selector) { assert.equal(selector, 'body.home .db-opening-frame,body.home .dbf-story-media,body.home .dbf-food-card,body.home .dbf-card'); return [panel]; } };
+	const allowed = { ...target(), matches: options.allowed !== false };
+	const queue = new Map(); let id = 0;
+	const window = { ...target(), matchMedia(query) { assert.match(query, /no-preference.*hover: hover.*pointer: fine/); return allowed; },
+		requestAnimationFrame(fn) { queue.set(++id, fn); return id; }, cancelAnimationFrame(key) { queue.delete(key); } };
+	const context = vm.createContext({ document, window }); vm.runInContext(script, context);
+	return { source, panel, properties, window, document, allowed, queue,
+		move(x, y, type = 'mouse') { panel.emit('pointermove', { clientX: x, clientY: y, pointerType: type, buttons: 0 }); },
+		flush() { const jobs = [...queue.values()]; queue.clear(); jobs.forEach(fn => fn()); }, rerun() { vm.runInContext(script, context); } };
+}
+
+test('panel tilt is bounded, frame-coalesced and composes with existing reveal transforms', () => {
+	const x = homepageTiltFixture(); x.move(500, 100); x.move(900, -500);
+	assert.equal(x.queue.size, 1); x.flush(); assert.equal(x.properties['--db-tilt-angle'], '1.600deg');
+	assert.equal(x.properties.transform, 'translateY(36px)');
+	x.move(300, 200); x.flush(); assert.equal(x.properties['--db-tilt-angle'], '0.000deg');
+	x.rerun(); assert.equal(x.panel.listeners.pointermove.length, 1);
+});
+
+test('panel tilt resets on leave, cancellation, focus, scroll, blur and preference change', () => {
+	for (const event of ['pointerleave', 'pointercancel', 'pointerdown', 'focusin', 'scroll', 'resize', 'blur', 'visibilitychange', 'change']) {
+		const x = homepageTiltFixture(); x.move(500, 100); x.flush(); x.move(100, 300);
+		const owner = ['scroll', 'resize', 'blur'].includes(event) ? x.window : event === 'visibilitychange' ? x.document : event === 'change' ? x.allowed : x.panel;
+		owner.emit(event); x.flush(); assert.equal(x.properties['--db-tilt-angle'], undefined, event);
+	}
+});
+
+test('panel tilt ignores touch, pen, hidden pages and reduced/coarse input; deferred DOM wires once', () => {
+	const x = homepageTiltFixture({ loading: true }); x.rerun();
+	assert.equal(x.document.listeners.DOMContentLoaded.length, 1); x.document.emit('DOMContentLoaded');
+	for (const type of ['touch', 'pen']) { x.move(500, 100, type); x.flush(); assert.equal(x.properties['--db-tilt-angle'], undefined); }
+	x.allowed.matches = false; x.move(500, 100); x.flush(); assert.equal(x.properties['--db-tilt-angle'], undefined);
+	x.allowed.matches = true; x.document.hidden = true; x.move(500, 100); x.flush(); assert.equal(x.properties['--db-tilt-angle'], undefined);
 });
