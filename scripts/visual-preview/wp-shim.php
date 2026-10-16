@@ -124,7 +124,7 @@ function wp_footer() {
 }
 
 function _n( $single, $plural, $number ) { return 1 === (int) $number ? $single : $plural; }
-function wp_json_encode( $data ) { return json_encode( $data ); }
+function wp_json_encode( $data, $flags = 0 ) { return json_encode( $data, $flags ); }
 
 class DoughBoss_Settings {
 	public static function ordering_open() { return ! empty( $GLOBALS['doughboss_preview_ordering_open'] ); }

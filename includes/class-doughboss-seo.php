@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * installed. The database remains the source of truth for shop details.
  */
 class DoughBoss_SEO {
+	/** Script-safe JSON encoding shared by the production output and pure tests. */
+	const SCHEMA_JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
 	/**
 	 * Public storefront shortcodes that opt a page into DoughBoss metadata.
@@ -78,6 +80,28 @@ class DoughBoss_SEO {
 	}
 
 	/**
+	 * Public discovery copy; no customer state or unconfirmed service promises.
+	 *
+	 * @param string $page Public page key.
+	 * @return array{title:string,description:string}|null
+	 */
+	public static function discovery_copy( $page ) {
+		if ( 'catering' === $page ) {
+			return array(
+				'title'       => __( 'Corporate & Event Catering Sydney | Dough Boss Revesby', 'doughboss' ),
+				'description' => __( 'Office meetings, business lunches and events: plan a Dough Boss spread of mini manoush, pies and platters. Revesby pickup; availability and final pricing confirmed.', 'doughboss' ),
+			);
+		}
+		if ( 'members-events' === $page ) {
+			return array(
+				'title'       => __( 'Dough Boss Members & Events | Catering & Order Updates', 'doughboss' ),
+				'description' => __( 'Find order updates, catering contacts and app shortcuts. Square membership sign-up, member accounts and rewards are not available on this page yet.', 'doughboss' ),
+			);
+		}
+		return null;
+	}
+
+	/**
 	 * Resolve page-specific copy without guessing from customer data.
 	 *
 	 * @return array{title:string,description:string}
@@ -86,10 +110,10 @@ class DoughBoss_SEO {
 		$post    = get_post();
 		$content = $post instanceof WP_Post ? $post->post_content : '';
 		if ( is_page( 'catering' ) || has_shortcode( $content, 'doughboss_catering' ) ) {
-			return array(
-				'title'       => __( 'Dough Boss Catering | Mini Manoush & Pies Sydney', 'doughboss' ),
-				'description' => __( 'Plan a fresh Sydney catering spread with mini zaatar, cheese and meat manoush plus spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
-			);
+			return self::discovery_copy( 'catering' );
+		}
+		if ( is_page( 'members-events' ) ) {
+			return self::discovery_copy( 'members-events' );
 		}
 		// /order/ and /menu/ render the same template; give each its own title.
 		if ( is_page( 'order' ) ) {
@@ -324,11 +348,54 @@ class DoughBoss_SEO {
 	}
 
 	/**
-	 * Build the production-domain schema graph from live shop records.
+	 * Canonical public page context, plus the catering service when applicable.
+	 * No prices, ratings, delivery coverage, events or customer records are inferred.
 	 *
+	 * @param array  $copy     Public title and description.
+	 * @param string $url      WordPress canonical page URL.
+	 * @param string $home     Site home URL.
+	 * @param bool   $catering Whether the page presents the catering service.
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function page_nodes( array $copy, $url, $home, $catering = false ) {
+		$organization = rtrim( (string) $home, '/' ) . '/#organization';
+		$page = array(
+			'@type'       => 'WebPage',
+			'@id'         => rtrim( (string) $url, '/' ) . '/#webpage',
+			'url'         => (string) $url,
+			'name'        => (string) $copy['title'],
+			'description' => (string) $copy['description'],
+			'inLanguage'  => 'en-AU',
+			'isPartOf'    => array( '@id' => rtrim( (string) $home, '/' ) . '/#website' ),
+			'about'       => array( '@id' => $organization ),
+		);
+		if ( ! $catering ) {
+			return array( $page );
+		}
+		$service_id = rtrim( (string) $url, '/' ) . '/#catering-service';
+		$page['mainEntity'] = array( '@id' => $service_id );
+		return array(
+			$page,
+			array(
+				'@type'       => 'Service',
+				'@id'         => $service_id,
+				'name'        => __( 'Dough Boss catering', 'doughboss' ),
+				'serviceType' => __( 'Corporate, office and event catering', 'doughboss' ),
+				'url'         => (string) $url,
+				'description' => (string) $copy['description'],
+				'provider'    => array( '@id' => $organization ),
+			),
+		);
+	}
+
+	/**
+	 * Build the canonical public schema graph from live shop records.
+	 *
+	 * @param array  $copy Public page metadata.
+	 * @param string $url  WordPress canonical page URL.
 	 * @return array<string,mixed>
 	 */
-	private function schema() {
+	private function schema( array $copy, $url ) {
 		$home         = home_url( '/' );
 		$organization = trailingslashit( $home ) . '#organization';
 		$image        = DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-social-card.jpg';
@@ -350,6 +417,9 @@ class DoughBoss_SEO {
 				'publisher' => array( '@id' => $organization ),
 			),
 		);
+		$post = get_post();
+		$is_catering = is_page( 'catering' ) || ( $post instanceof WP_Post && has_shortcode( $post->post_content, 'doughboss_catering' ) );
+		$graph = array_merge( $graph, self::page_nodes( $copy, $url, $home, $is_catering ) );
 		// One schema.org Bakery per active shop. Stored location data wins; the
 		// published facts in shop_facts() fill only blank fields/hours.
 		$locations_url = home_url( '/locations/' );
@@ -394,7 +464,7 @@ class DoughBoss_SEO {
 		<meta name="twitter:title" content="<?php echo esc_attr( $copy['title'] ); ?>" />
 		<meta name="twitter:description" content="<?php echo esc_attr( $copy['description'] ); ?>" />
 		<meta name="twitter:image" content="<?php echo esc_url( $image ); ?>" />
-		<script type="application/ld+json"><?php echo wp_json_encode( $this->schema(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></script>
+		<script type="application/ld+json"><?php echo wp_json_encode( $this->schema( $copy, $url ), self::SCHEMA_JSON_FLAGS ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></script>
 		<?php
 	}
 }

@@ -14,7 +14,7 @@ require_once dirname( __DIR__ ) . '/includes/class-doughboss-seo.php';
  * @return array
  */
 function db_test_seo_roundtrip( array $node ) {
-	$json = json_encode( array( '@context' => 'https://schema.org', '@graph' => array( $node ) ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+	$json = json_encode( array( '@context' => 'https://schema.org', '@graph' => array( $node ) ), DoughBoss_SEO::SCHEMA_JSON_FLAGS );
 	assert_true( is_string( $json ) && '' !== $json, 'node encodes to JSON' );
 	$decoded = json_decode( (string) $json, true );
 	assert_same( JSON_ERROR_NONE, json_last_error(), 'JSON-LD parses back without error' );
@@ -101,5 +101,114 @@ db_test(
 		assert_true( 1 === preg_match( "/function doughboss_final_seo_covered_pages\(\) \{\s*return array\([^)]*'locations'/", $functions ), 'locations page covered' );
 		$seo = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-seo.php' );
 		assert_true( false !== strpos( $seo, '<script type="application/ld+json">' ), 'JSON-LD is emitted in head()' );
+	}
+);
+
+db_test(
+	'catering discovery copy describes corporate office and event enquiries without unconfirmed promises',
+	function () {
+		$copy = DoughBoss_SEO::discovery_copy( 'catering' );
+		assert_true( false !== strpos( $copy['title'], 'Corporate & Event Catering Sydney' ), 'title names the real discovery intent' );
+		assert_true( false !== strpos( $copy['title'], 'Revesby' ), 'title identifies the pickup bakery' );
+		foreach ( array( 'Office meetings', 'business lunches', 'events', 'mini manoush', 'pies', 'platters', 'Revesby pickup', 'availability and final pricing confirmed' ) as $fact ) {
+			assert_true( false !== strpos( $copy['description'], $fact ), 'description includes ' . $fact );
+		}
+		assert_same( 0, preg_match( '/delivery|same.day|guarantee|free|24\/7|unlimited|allergen.free/i', implode( ' ', $copy ) ), 'no coverage, timing, price or dietary promises are invented' );
+		assert_same( null, DoughBoss_SEO::discovery_copy( 'unknown' ), 'unsupported public pages do not acquire guessed copy' );
+	}
+);
+
+db_test(
+	'members discovery copy accurately describes the public hub and inactive Square membership',
+	function () {
+		$copy = DoughBoss_SEO::discovery_copy( 'members-events' );
+		assert_true( false !== strpos( $copy['title'], 'Members & Events' ), 'hub gets a distinct title' );
+		foreach ( array( 'order updates', 'catering contacts', 'app shortcuts', 'Square membership sign-up, member accounts and rewards are not available' ) as $fact ) {
+			assert_true( false !== strpos( $copy['description'], $fact ), 'public hub status includes ' . $fact );
+		}
+		assert_same( 0, preg_match( '/join now|sign up now|earn points|buy.*gift card/i', implode( ' ', $copy ) ), 'inactive Square features are not advertised as usable' );
+	}
+);
+
+db_test(
+	'canonical catering WebPage and Service reference the existing organization without speculative rich-result claims',
+	function () {
+		$copy = DoughBoss_SEO::discovery_copy( 'catering' );
+		$home = 'https://doughboss.example/bakery/';
+		$url = $home . 'catering/';
+		$nodes = DoughBoss_SEO::page_nodes( $copy, $url, $home, true );
+		assert_same( 2, count( $nodes ), 'one public page and one real catering service' );
+		$page = db_test_seo_roundtrip( $nodes[0] );
+		$service = db_test_seo_roundtrip( $nodes[1] );
+		assert_same( 'WebPage', $page['@type'], 'canonical page context' );
+		assert_same( $url, $page['url'], 'canonical URL is retained' );
+		assert_same( $url . '#webpage', $page['@id'], 'stable page identity' );
+		assert_same( $home . '#website', $page['isPartOf']['@id'], 'page links the existing website' );
+		assert_same( $home . '#organization', $page['about']['@id'], 'page links the existing organization' );
+		assert_same( $copy['title'], $page['name'], 'visible discovery title is reused' );
+		assert_same( $copy['description'], $page['description'], 'public discovery description is reused' );
+		assert_same( 'Service', $service['@type'], 'catering is a service, not a scheduled event' );
+		assert_same( $service['@id'], $page['mainEntity']['@id'], 'page and service are connected' );
+		assert_same( $home . '#organization', $service['provider']['@id'], 'no duplicate organization is invented' );
+		assert_same( $url, $service['url'], 'service points to the public catering page' );
+		assert_same( 'Corporate, office and event catering', $service['serviceType'], 'service intent follows public catering copy' );
+		foreach ( array( 'offers', 'price', 'priceRange', 'aggregateRating', 'review', 'areaServed', 'availableChannel', 'maximumAttendeeCapacity', 'startDate', 'endDate' ) as $unsupported ) {
+			assert_false( array_key_exists( $unsupported, $service ), 'no invented ' . $unsupported );
+		}
+	}
+);
+
+db_test(
+	'non-catering page graph stays public and uses the supplied canonical rather than request data',
+	function () {
+		$copy = DoughBoss_SEO::discovery_copy( 'members-events' );
+		$nodes = DoughBoss_SEO::page_nodes( $copy, 'https://doughboss.example/members-events/', 'https://doughboss.example/' );
+		assert_same( 1, count( $nodes ), 'public membership information is not an active signup service' );
+		assert_same( 'WebPage', $nodes[0]['@type'], 'informational page only' );
+		assert_false( array_key_exists( 'mainEntity', $nodes[0] ), 'inactive membership service is not inferred' );
+		$menu = DoughBoss_SEO::page_nodes( array( 'title' => 'Menu', 'description' => 'Public menu' ), 'https://doughboss.example/order/', 'https://doughboss.example/' );
+		assert_same( 'https://doughboss.example/order/', $menu[0]['url'], 'deliberately consolidated menu canonical is preserved' );
+		$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-seo.php' );
+		assert_same( 0, preg_match( '/\$_(?:GET|POST|COOKIE|REQUEST|SESSION)\b/', $source ), 'metadata does not read customer request, cookie or session state' );
+		assert_true( false !== strpos( $source, 'wp_get_canonical_url( get_post() ) ?: get_permalink()' ), 'WordPress remains the canonical owner' );
+		assert_same( false, strpos( $source, 'rel="canonical"' ), 'fallback does not emit a second canonical tag' );
+	}
+);
+
+db_test(
+	'JSON-LD cannot close its script element through stored location or metadata text',
+	function () {
+		$unsafe = '</script><script>alert("synthetic")</script><!-- & \' >';
+		$copy = array( 'title' => $unsafe, 'description' => 'Synthetic ' . $unsafe );
+		$nodes = DoughBoss_SEO::page_nodes( $copy, 'https://doughboss.example/catering/', 'https://doughboss.example/', true );
+		$nodes[] = DoughBoss_SEO::location_node( array( 'name' => $unsafe, 'slug' => 'synthetic', 'address' => $unsafe ), array(), 'https://doughboss.example/', 'https://doughboss.example/locations/', '', 'https://doughboss.example/#organization' );
+		$json = json_encode( array( '@context' => 'https://schema.org', '@graph' => $nodes ), DoughBoss_SEO::SCHEMA_JSON_FLAGS );
+		assert_true( is_string( $json ), 'script-safe JSON encodes successfully' );
+		assert_same( false, stripos( $json, '</script' ), 'no literal closing script can be emitted' );
+		assert_same( false, strpos( $json, '<' ), 'HTML tag openers are hex escaped' );
+		assert_same( false, strpos( $json, '>' ), 'HTML tag closers are hex escaped' );
+		assert_same( false, strpos( $json, '&' ), 'ampersands are hex escaped' );
+		$decoded = json_decode( $json, true );
+		assert_same( JSON_ERROR_NONE, json_last_error(), 'hardened JSON remains valid' );
+		assert_same( $unsafe, $decoded['@graph'][0]['name'], 'encoding preserves the original text value' );
+		$wrapped = '<script type="application/ld+json">' . $json . '</script>';
+		assert_same( 1, substr_count( $wrapped, '<script' ), 'exactly the intended script starts' );
+		assert_same( 1, substr_count( $wrapped, '</script>' ), 'exactly the intended script ends' );
+		$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-seo.php' );
+		assert_true( false !== strpos( $source, 'wp_json_encode( $this->schema( $copy, $url ), self::SCHEMA_JSON_FLAGS )' ), 'production head uses the tested safe flags' );
+	}
+);
+
+db_test(
+	'discovery metadata uses existing routing and yields to a dedicated SEO owner',
+	function () {
+		$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-seo.php' );
+		assert_true( false !== strpos( $source, "return self::discovery_copy( 'catering' );" ), 'catering page uses tested discovery copy' );
+		assert_true( false !== strpos( $source, "is_page( 'members-events' )" ), 'public members page has an explicit route' );
+		assert_true( false !== strpos( $source, "return self::discovery_copy( 'members-events' );" ), 'members route uses tested inactive-feature copy' );
+		foreach ( array( 'WPSEO_VERSION', 'RANK_MATH_VERSION', 'AIOSEO_VERSION', 'SEOPRESS_VERSION' ) as $owner ) {
+			assert_true( false !== strpos( $source, "defined( '" . $owner . "' )" ), 'existing ' . $owner . ' ownership preserved' );
+		}
+		assert_same( 1, preg_match( '/public function head\(\) \{\s*if \( \$this->dedicated_seo_plugin_active\(\) \|\| ! \$this->relevant_page\(\) \) \{\s*return;/', $source ), 'head exits before any description, share or schema output for another owner' );
 	}
 );

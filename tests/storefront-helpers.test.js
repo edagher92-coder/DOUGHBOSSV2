@@ -1843,12 +1843,20 @@ test('shop UI changes only its controls, keeping other form values untouched', (
 	assert.match(note.textContent, /Sending enquiry for Synthetic shop B/);
 });
 
-test('enquiry submits the exact shop and form snapshot once, retaining fields after server errors', async () => {
-	const state = { locations: syntheticShops, locationId: 2, locationStatus: 'ready', submitting: false, selectedId: 9, orderType: 'delivery' };
+function cateringSubmissionFixture(overrides = {}, nativeValidity = true) {
+	const state = { locations: syntheticShops, locationId: 2, locationStatus: 'ready', submitting: false, selectedId: 9, lines: [{ id: 9, qty: 2 }], orderType: 'delivery' };
 	const values = { customer_name: 'Synthetic customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000', guest_count: '12', event_date: '2099-10-10', event_time: '12:30', address: 'Synthetic venue', dietary: 'Synthetic dietary note', notes: 'Retain this note', hp: '' };
+	Object.assign(values, overrides);
 	const error = {};
 	const button = { textContent: 'Request booking & quote', disabled: false };
-	const form = { classList: { contains: () => true }, querySelector: selector => selector === '.dbc-error' ? error : button };
+	const focused = [];
+	const inputs = {};
+	for (const name of ['customer_name', 'customer_email']) {
+		inputs[name] = { attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; }, focus() { focused.push(name); } };
+	}
+	if (typeof nativeValidity === 'boolean') inputs.customer_email.validity = { valid: nativeValidity };
+	const form = { classList: { contains: () => true }, querySelector: selector => ({ '.dbc-error': error, '.dbc-submit': button, '[name="customer_name"]': inputs.customer_name, '[name="customer_email"]': inputs.customer_email })[selector] };
+	Object.defineProperty(form, 'innerHTML', { set() { assert.fail('validation or submission must not rebuild the form'); } });
 	const sends = [];
 	const selected = extractFunction(catering, 'selectedCateringLocation', { state });
 	const submit = extractFunction(catering, 'submitCateringEnquiry', {
@@ -1857,8 +1865,57 @@ test('enquiry submits the exact shop and form snapshot once, retaining fields af
 		post: (url, body) => new Promise(resolve => sends.push({ url, body, resolve })), showSuccess: () => assert.fail('failed response cannot show success')
 	});
 	const event = { target: form, preventDefault: () => {} };
-	const pending = submit(event);
-	submit(event);
+	return { state, values, error, button, inputs, focused, sends, submit: () => submit(event) };
+}
+
+test('catering contact preflight focuses the first invalid field and makes no POST', () => {
+	for (const options of [
+		{ values: { customer_name: '  ', customer_email: 'invalid' }, first: 'customer_name' },
+		{ values: { customer_email: '' }, first: 'customer_email' },
+		{ values: { customer_email: 'missing-at.example' }, first: 'customer_email' },
+		{ values: { customer_email: 'a@localhost' }, first: 'customer_email' },
+		{ values: { customer_email: 'a<x@company.test' }, first: 'customer_email' },
+		{ values: { customer_email: 'a@company.test\r\nBcc:victim@example.test' }, first: 'customer_email' },
+		{ values: { customer_email: 'valid@company.test' }, native: false, first: 'customer_email' },
+		{ values: { customer_email: 'missing-at.example' }, native: null, first: 'customer_email' }
+	]) {
+		const h = cateringSubmissionFixture(options.values, Object.hasOwn(options, 'native') ? options.native : true);
+		const before = JSON.stringify({ values: h.values, lines: h.state.lines });
+		h.submit();
+		assert.deepEqual(h.sends, [], 'invalid data never reaches the submission route');
+		assert.deepEqual(h.focused, [options.first]);
+		assert.equal(h.inputs[options.first].attributes['aria-invalid'], 'true');
+		assert.match(h.error.textContent, /Please enter/);
+		assert.equal(h.state.submitting, false);
+		assert.equal(h.button.disabled, false);
+		assert.equal(JSON.stringify({ values: h.values, lines: h.state.lines }), before, 'invalid submission retains all fields and package selections');
+	}
+});
+
+test('catering corrected or fallback-valid email submits while optional date and phone stay optional', async () => {
+	for (const native of [true, null]) {
+		const h = cateringSubmissionFixture({ customer_name: '', customer_email: 'bad', customer_phone: '', event_date: '', event_time: '' }, native);
+		h.submit();
+		h.values.customer_name = 'Synthetic organiser';
+		h.values.customer_email = 'organiser+office@company.test';
+		const pending = h.submit();
+		assert.equal(h.sends.length, 1);
+		assert.equal(h.inputs.customer_name.attributes['aria-invalid'], undefined);
+		assert.equal(h.inputs.customer_email.attributes['aria-invalid'], undefined);
+		for (const key of ['customer_phone', 'event_date', 'event_time']) assert.equal(h.sends[0].body[key], '');
+		h.sends[0].resolve({ ok: false, data: { message: 'Synthetic rejection' } });
+		await pending;
+		assert.equal(h.values.customer_email, 'organiser+office@company.test');
+		assert.equal(h.state.lines[0].qty, 2);
+		assert.equal(h.sends.length, 1, 'server errors never trigger an automatic retry');
+	}
+});
+
+test('enquiry submits the exact shop and form snapshot once, retaining fields after server errors', async () => {
+	const h = cateringSubmissionFixture();
+	const { state, values, error, button, sends } = h;
+	const pending = h.submit();
+	h.submit();
 	assert.equal(sends.length, 1);
 	assert.equal(sends[0].url, '/catering/enquiry');
 	assert.equal(sends[0].body.location_id, 2);
@@ -1866,16 +1923,19 @@ test('enquiry submits the exact shop and form snapshot once, retaining fields af
 	assert.equal(state.submittedLocationName, 'Synthetic shop B');
 	values.notes = 'Edited while pending';
 	values.event_time = '13:45';
+	state.lines[0].qty = 4;
 	assert.equal(sends[0].body.notes, 'Retain this note', 'in-flight payload does not reread edited fields');
 	assert.equal(sends[0].body.event_time, '12:30');
+	assert.equal(sends[0].body.packages[0].qty, 2, 'submitted package snapshot is not mutated by current edits');
 	sends[0].resolve({ ok: false, data: { message: 'That catering package is no longer available.' } });
 	await pending;
 	assert.equal(state.submitting, false);
 	assert.equal(button.disabled, false);
 	assert.match(error.textContent, /package is no longer available/);
 	assert.equal(values.notes, 'Edited while pending', 'failure preserves the current form rather than restoring old inputs');
+	assert.equal(state.lines[0].qty, 4, 'failure preserves the edited package selection');
 	state.locationId = 0;
-	submit(event);
+	h.submit();
 	assert.equal(sends.length, 1, 'unavailable location must not POST legacy zero');
 	assert.match(error.textContent, /Choose an available shop/);
 });

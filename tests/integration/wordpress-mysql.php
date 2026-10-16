@@ -3391,6 +3391,13 @@ $customer_mail = db_integration_catering_mail_to( $catering_params['customer_ema
 $staff_mail = db_integration_catering_mail_to( $settings['catering_email'] );
 db_integration_assert( ! empty( $customer_mail ) && false !== strpos( (string) $customer_mail['message'], 'Thanks for your catering enquiry' ), 'customer acknowledgement wording is preserved' );
 db_integration_same( $settings['catering_email'], isset( $staff_mail['to'] ) ? $staff_mail['to'] : '', 'staff notification uses only the configured catering recipient' );
+db_integration_same( array( 'Content-Type: text/plain; charset=UTF-8', 'Reply-To: ' . $settings['catering_email'] ), isset( $customer_mail['headers'] ) ? $customer_mail['headers'] : array(), 'customer acknowledgement replies to configured catering contact' );
+db_integration_same( array( 'Content-Type: text/plain; charset=UTF-8', 'Reply-To: ' . $shop_b_row['customer_email'] ), isset( $staff_mail['headers'] ) ? $staff_mail['headers'] : array(), 'staff acknowledgement replies only to validated saved enquirer' );
+$customer_message = isset( $customer_mail['message'] ) ? (string) $customer_mail['message'] : '';
+foreach ( array( $shop_b_row['enquiry_number'], 'Location: ' . $catering_shop->name . ' (ID ' . (int) $shop_b_row['location_id'] . ')', 'Event date: ' . $shop_b_row['event_date'], 'Event time: ' . $shop_b_row['event_time'], 'Order type: Pickup', 'Status: Awaiting staff confirmation', 'Indicative total:', 'not a confirmed booking', 'No payment has been taken by submitting this enquiry' ) as $customer_saved_fact ) {
+	db_integration_assert( false !== strpos( $customer_message, $customer_saved_fact ), 'customer acknowledgement contains saved and non-confirming fact: ' . $customer_saved_fact );
+}
+db_integration_same( 0, preg_match( '/your booking is confirmed|confirmed once.*deposit|secure Square payment link/i', $customer_message ), 'enquiry acknowledgement does not promise a payment link or accepted booking' );
 $staff_message = isset( $staff_mail['message'] ) ? (string) $staff_mail['message'] : '';
 $expected_staff_fields = array(
 	'Reference: ' . $shop_b_row['enquiry_number'],
@@ -3415,7 +3422,7 @@ foreach ( $expected_staff_fields as $expected_staff_field ) {
 	$staff_has_fields = $staff_has_fields && false !== strpos( $staff_message, $expected_staff_field );
 }
 db_integration_assert( $staff_has_fields, 'staff notification contains saved routing, event, contact, notes and indicative pricing fields' );
-db_integration_assert( empty( $staff_mail['headers'] ), 'staff notification adds no PII-bearing headers' );
+db_integration_same( 2, count( $staff_mail['headers'] ), 'staff headers contain only plain-text type and the approved reply address, not notes or other customer fields' );
 
 foreach ( array( 'inactive' => $inactive_shop, 'missing' => 987654321 ) as $fixture_name => $invalid_location_id ) {
 	$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;

@@ -8788,34 +8788,46 @@ class DoughBoss_REST_Controller {
 		// Plain-text email body, same reasoning as $blog above: decode entities
 		// get_the_title() adds for HTML display so "&" doesn't show as "&#038;".
 		$package = DoughBoss_Catering::package_label( $enquiry );
-
-		$customer_body = sprintf(
-			/* translators: 1: name, 2: enquiry number, 3: package, 4: guests, 5: event date, 6: deposit. */
-			__( "Hi %1\$s,\n\nThanks for your catering enquiry %2\$s.\n\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nIndicative deposit: %6\$s\n\nWe'll confirm the details and email you a secure Square payment link for the deposit. Your booking is confirmed once the deposit is paid.\n", 'doughboss' ),
-			$enquiry['customer_name'],
-			$enquiry['enquiry_number'],
-			$package,
-			(int) $enquiry['guest_count'],
-			'' !== $enquiry['event_date'] ? $enquiry['event_date'] : __( 'to be confirmed', 'doughboss' ),
-			DoughBoss_Settings::format_price( $enquiry['deposit_amount'] )
-		);
-
-		if ( is_email( $enquiry['customer_email'] ) && false === wp_mail( $enquiry['customer_email'], $subject, $customer_body ) ) {
-			error_log( 'DoughBoss mail: catering enquiry email to customer failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-		}
-
 		$catering_email = DoughBoss_Settings::catering_email();
-		$location_id    = absint( $enquiry['location_id'] );
-		$location       = $location_id ? DoughBoss_Locations::get( $location_id ) : null;
+		$customer_email = (string) $enquiry['customer_email'];
+		$customer_email_valid = false === strpos( $customer_email, "\r" ) && false === strpos( $customer_email, "\n" ) && is_email( $customer_email );
+		$catering_email_valid = false === strpos( $catering_email, "\r" ) && false === strpos( $catering_email, "\n" ) && is_email( $catering_email );
+		$customer_headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+		$staff_headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+		if ( $catering_email_valid ) { $customer_headers[] = 'Reply-To: ' . $catering_email; }
+		if ( $customer_email_valid ) { $staff_headers[] = 'Reply-To: ' . $customer_email; }
+
+		$location_id = absint( $enquiry['location_id'] );
+		$location = $location_id ? DoughBoss_Locations::get( $location_id ) : null;
 		$location_label = $location
 			? sprintf( '%1$s (ID %2$d)', (string) $location->name, $location_id )
 			: sprintf( __( 'Unavailable (saved location ID %d)', 'doughboss' ), $location_id );
-		$not_provided   = __( 'Not provided', 'doughboss' );
-		$to_confirm     = __( 'To be confirmed', 'doughboss' );
-		$currency       = sanitize_text_field( (string) $enquiry['currency'] );
-		$staff_body     = sprintf(
+		$not_provided = __( 'Not provided', 'doughboss' );
+		$to_confirm = __( 'To be confirmed', 'doughboss' );
+		$currency = sanitize_text_field( (string) $enquiry['currency'] );
+
+		$customer_body = sprintf(
+			/* translators: saved enquiry name, reference, location, package, guests, event date/time, order type and indicative total/deposit. */
+			__( "Hi %1\$s,\n\nThanks for your catering enquiry %2\$s.\n\nStatus: Awaiting staff confirmation\nLocation: %3\$s\nPackage: %4\$s\nGuests: %5\$d\nEvent date: %6\$s\nEvent time: %7\$s\nOrder type: %8\$s\nIndicative total: %9\$s\nIndicative deposit: %10\$s\n\nThis is an enquiry, not a confirmed booking. Pricing is indicative. No payment has been taken by submitting this enquiry.\n\nReply to this email to update your request. Our catering team must confirm availability, the menu, final pricing, collection details and any payment requirements before accepting a booking.\n", 'doughboss' ),
+			(string) $enquiry['customer_name'],
+			(string) $enquiry['enquiry_number'],
+			$location_label,
+			$package,
+			(int) $enquiry['guest_count'],
+			'' !== (string) $enquiry['event_date'] ? (string) $enquiry['event_date'] : $to_confirm,
+			'' !== (string) $enquiry['event_time'] ? (string) $enquiry['event_time'] : $to_confirm,
+			ucfirst( (string) $enquiry['order_type'] ),
+			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['quote_total'] ),
+			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['deposit_amount'] )
+		);
+
+		if ( $customer_email_valid && false === wp_mail( $customer_email, $subject, $customer_body, $customer_headers ) ) {
+			error_log( 'DoughBoss mail: catering enquiry email to customer failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+
+		$staff_body = sprintf(
 			/* translators: staff catering notification assembled exclusively from the saved enquiry row. */
-			__( "A new catering enquiry has been saved. Pricing is indicative until staff confirm the details.\n\nReference: %1\$s\nLocation: %2\$s\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nEvent time: %6\$s\nOrder type: %7\$s\nAddress: %8\$s\n\nCustomer name: %9\$s\nCustomer email: %10\$s\nCustomer phone: %11\$s\nDietary notes: %12\$s\nNotes: %13\$s\n\nIndicative subtotal: %14\$s\nIndicative delivery fee: %15\$s\nIndicative total: %16\$s\nIndicative deposit: %17\$s\nIndicative balance: %18\$s\n", 'doughboss' ),
+			__( "A new catering enquiry was saved and is awaiting staff confirmation. Pricing is indicative. No booking has been confirmed and no payment was taken by submitting this enquiry.\n\nReference: %1\$s\nLocation: %2\$s\nPackage: %3\$s\nGuests: %4\$d\nEvent date: %5\$s\nEvent time: %6\$s\nOrder type: %7\$s\nAddress: %8\$s\n\nCustomer name: %9\$s\nCustomer email: %10\$s\nCustomer phone: %11\$s\nDietary notes: %12\$s\nNotes: %13\$s\n\nIndicative subtotal: %14\$s\nIndicative delivery fee: %15\$s\nIndicative total: %16\$s\nIndicative deposit: %17\$s\nIndicative balance: %18\$s\n", 'doughboss' ),
 			(string) $enquiry['enquiry_number'],
 			$location_label,
 			$package,
@@ -8825,7 +8837,7 @@ class DoughBoss_REST_Controller {
 			ucfirst( (string) $enquiry['order_type'] ),
 			'' !== (string) $enquiry['address'] ? (string) $enquiry['address'] : $not_provided,
 			(string) $enquiry['customer_name'],
-			(string) $enquiry['customer_email'],
+			$customer_email,
 			'' !== (string) $enquiry['customer_phone'] ? (string) $enquiry['customer_phone'] : $not_provided,
 			'' !== (string) $enquiry['dietary'] ? (string) $enquiry['dietary'] : $not_provided,
 			'' !== (string) $enquiry['notes'] ? (string) $enquiry['notes'] : $not_provided,
@@ -8835,7 +8847,7 @@ class DoughBoss_REST_Controller {
 			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['deposit_amount'] ),
 			$currency . ' ' . DoughBoss_Settings::format_price( $enquiry['balance_amount'] )
 		);
-		if ( is_email( $catering_email ) && false === wp_mail( $catering_email, $subject, $staff_body ) ) {
+		if ( $catering_email_valid && false === wp_mail( $catering_email, $subject, $staff_body, $staff_headers ) ) {
 			error_log( 'DoughBoss mail: catering enquiry email to shop failed for ' . $enquiry['enquiry_number'] ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 	}

@@ -207,10 +207,25 @@
 
 	/* ---------- rendering ---------- */
 
+	// Keep the shortcode's configured contact actions and help intact. Only this
+	// child belongs to the changing package, enquiry and confirmation UI.
+	function cateringFlow() {
+		var flow = root.querySelector('.dbc-app-flow');
+		if (!flow) {
+			flow = document.createElement('div');
+			flow.className = 'dbc-app-flow';
+			root.insertBefore(flow, root.querySelector('.dbc-how') || root.querySelector('.dbc-faq'));
+		}
+		return flow;
+	}
+
 	function render() {
-		root.innerHTML = '';
-		root.appendChild(renderPackages());
-		root.appendChild(renderBuilder());
+		var flow = cateringFlow();
+		flow.innerHTML = '';
+		flow.appendChild(renderPackages());
+		flow.appendChild(renderBuilder());
+		var loadingNote = root.querySelector('.dbc-coming-soon');
+		if (loadingNote) loadingNote.hidden = true;
 	}
 
 	// "Office Platter — 3 Dozen Minis" -> title + size badge, so the size,
@@ -231,7 +246,7 @@
 			'<div class="dbc-head">' +
 				'<p class="dbc-kicker">Catering</p>' +
 				'<h2 class="dbc-h2">Choose your packages</h2>' +
-				'<p class="dbc-sub">Combine as many packages as you need with the + and − buttons. Oven-baked fresh; a deposit secures your date.</p>' +
+				'<p class="dbc-sub">Combine packages with the + and − buttons. Availability, final pricing and any deposit requirements are confirmed by our team.</p>' +
 			'</div>'
 		);
 		wrap.appendChild(head);
@@ -281,7 +296,7 @@
 		wrap.appendChild(el(
 			'<div class="dbc-head">' +
 				'<h2 class="dbc-h2">Build your quote</h2>' +
-				'<p class="dbc-sub">Tell us the details and we\'ll confirm your quote and deposit link.</p>' +
+				'<p class="dbc-sub">Tell us the details for a staff-reviewed quote. Sending an enquiry does not confirm a booking or take payment.</p>' +
 			'</div>'
 		));
 
@@ -308,14 +323,14 @@
 				'<label class="dbc-field dbc-addr" hidden><span>Delivery address</span><textarea name="address" rows="2"></textarea></label>'
 				: '') +
 			'<div class="dbc-row">' +
-				'<label class="dbc-field"><span>Your name</span><input type="text" name="customer_name" required /></label>' +
-				'<label class="dbc-field"><span>Email</span><input type="email" name="customer_email" required /></label>' +
+			'<label class="dbc-field"><span>Your name</span><input type="text" name="customer_name" required aria-describedby="dbc-contact-error" /></label>' +
+			'<label class="dbc-field"><span>Email</span><input type="email" name="customer_email" required aria-describedby="dbc-contact-error" /></label>' +
 				'<label class="dbc-field"><span>Phone</span><input type="tel" name="customer_phone" /></label>' +
 			'</div>' +
 			'<label class="dbc-field"><span>Dietary requirements (optional)</span><textarea name="dietary" rows="2"></textarea></label>' +
 			'<label class="dbc-field"><span>Notes (optional)</span><textarea name="notes" rows="2"></textarea></label>' +
 			'<div class="dbc-quote" aria-live="polite"></div>' +
-			'<div class="dbc-error" role="alert" aria-live="assertive"></div>' +
+			'<div class="dbc-error" id="dbc-contact-error" role="alert" aria-live="assertive"></div>' +
 			'<button type="submit" class="dbc-submit">Request booking &amp; quote</button>';
 
 		wrap.appendChild(form);
@@ -502,8 +517,28 @@
 		var fd = new FormData(form);
 		var name = (fd.get('customer_name') || '').toString().trim();
 		var email = (fd.get('customer_email') || '').toString().trim();
-		if (!name || !email) {
-			errBox.textContent = 'Please add your name and a valid email.';
+		var nameInput = form.querySelector('[name="customer_name"]');
+		var emailInput = form.querySelector('[name="customer_email"]');
+		// Match the B2B form's conservative fallback as well as native email
+		// validity when available. Never spend a submission on an obvious typo.
+		var emailValid = /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[^\s@<>,;"]+$/.test(email);
+		if (emailInput && emailInput.validity && emailInput.validity.valid === false) { emailValid = false; }
+		var firstInvalid = null;
+		var messages = [];
+		[[nameInput, !!name, 'Please enter your name.'], [emailInput, emailValid, 'Please enter a valid email address.']].forEach(function (field) {
+			if (field[1]) {
+				if (field[0]) { field[0].removeAttribute('aria-invalid'); }
+			} else {
+				messages.push(field[2]);
+				if (field[0]) {
+					field[0].setAttribute('aria-invalid', 'true');
+					if (!firstInvalid) { firstInvalid = field[0]; }
+				}
+			}
+		});
+		if (messages.length) {
+			errBox.textContent = messages.join(' ');
+			if (firstInvalid && firstInvalid.focus) { firstInvalid.focus(); }
 			return;
 		}
 		state.email = email;
@@ -558,14 +593,30 @@
 		var pay = (window.DoughBossData && window.DoughBossData.payments) || {};
 		var canPay = pay.enabled && data.deposit > 0 && ((pay.gateway === 'tyro' && typeof window.Tyro === 'function') || (pay.gateway === 'stripe' && pay.pk && typeof window.Stripe === 'function'));
 
-		root.innerHTML = '';
+		var flow = cateringFlow();
+		flow.innerHTML = '';
 		var box = el('<div class="dbc-success" role="status"></div>');
 		box.innerHTML =
 			'<div class="dbc-success-check">✓</div>' +
 			'<h2 class="dbc-h2">Enquiry received</h2>' +
 			'<p class="dbc-success-num">Reference: <strong>' + esc(data.enquiry_number) + '</strong></p>';
-		box.appendChild(el('<p class="dbc-sub">Shop: ' + esc(state.submittedLocationName) + '. Your event details and availability still need staff confirmation.</p>'));
-		root.appendChild(box);
+		box.appendChild(el('<p class="dbc-sub">Shop: ' + esc(state.submittedLocationName) + '. Your event details, availability and final quote still need staff confirmation. This is not a confirmed booking.</p>'));
+		box.appendChild(el('<p>Keep your reference. Reply to your catering acknowledgement or use the catering contact details above to discuss this enquiry.</p>'));
+		box.appendChild(el('<p class="dbc-sub">Planning another event? Contact the team with the new date, guest count and preferred pickup time. Each event needs its own availability and quote confirmation.</p>'));
+		var contact = root.querySelector('.dbc-contact');
+		if (contact) {
+			var contactButton = document.createElement('button');
+			contactButton.type = 'button';
+			contactButton.className = 'dbc-submit';
+			contactButton.textContent = 'Contact catering about this enquiry';
+			contactButton.addEventListener('click', function () {
+				if (contact.scrollIntoView) { contact.scrollIntoView({ block: 'start' }); }
+				var link = contact.querySelector('a[href]');
+				if (link && link.focus) { link.focus(); }
+			});
+			box.appendChild(contactButton);
+		}
+		flow.appendChild(box);
 
 		if (canPay) {
 			box.appendChild(el('<p>Secure your date with a deposit of <strong>' + money(data.deposit) + '</strong>.</p>'));
@@ -580,42 +631,7 @@
 			);
 			box.appendChild(panel);
 			mountPayment(panel, data);
-		} else {
-			box.appendChild(el('<p class="dbc-sub">' + esc(data.message || 'We\'ll be in touch shortly to confirm your quote and deposit link.') + '</p>'));
 		}
-		var reviewUrl = window.DoughBossData && window.DoughBossData.googleReviewUrl;
-		var review = document.createElement('div');
-		review.className = 'dbc-review-invite';
-		var title = document.createElement('strong');
-		title.textContent = 'Stay close to the bake.';
-		var copy = document.createElement('span');
-		copy.textContent = 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.';
-		var actions = document.createElement('div');
-		actions.className = 'dbc-review-invite__actions';
-		var instagram = document.createElement('a');
-		instagram.href = 'https://instagram.com/doughboss';
-		instagram.target = '_blank';
-		instagram.rel = 'noopener noreferrer';
-		instagram.setAttribute('data-doughboss-engagement', 'social_engagement');
-		instagram.setAttribute('data-content-name', 'Instagram');
-		instagram.setAttribute('data-channel', 'catering_success');
-		instagram.textContent = 'Follow @doughboss ↗';
-		actions.appendChild(instagram);
-		if (reviewUrl) {
-			var link = document.createElement('a');
-			link.href = reviewUrl;
-			link.target = '_blank';
-			link.rel = 'noopener noreferrer';
-			link.setAttribute('data-doughboss-engagement', 'review_engagement');
-			link.setAttribute('data-content-name', 'Google review');
-			link.setAttribute('data-channel', 'catering_success');
-			link.textContent = 'Leave a Google review ↗';
-			actions.appendChild(link);
-		}
-		review.appendChild(title);
-		review.appendChild(copy);
-		review.appendChild(actions);
-		box.appendChild(review);
 
 		if (root.scrollIntoView) { root.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 	}
@@ -868,7 +884,7 @@
 			return false;
 		}
 
-		root.innerHTML = '<div class="dbc-builder"><p class="dbc-sub" role="status">Confirming your secure deposit payment. Please do not pay again.</p></div>';
+		cateringFlow().innerHTML = '<div class="dbc-builder"><p class="dbc-sub" role="status">Confirming your secure deposit payment. Please do not pay again.</p></div>';
 		post('/catering/confirm-payment', {
 			enquiry_number: pending.enquiryNumber,
 			email: pending.email,
@@ -881,15 +897,16 @@
 			clearRememberedStripePayment();
 			showPaid(conf.data, { enquiry_number: pending.enquiryNumber });
 		}).catch(function () {
-			root.innerHTML = '<div class="dbc-builder"><p class="dbc-sub" role="alert">Your payment return could not be confirmed yet. Please do not pay again; contact us so we can check it safely.</p></div>';
+			cateringFlow().innerHTML = '<div class="dbc-builder"><p class="dbc-sub" role="alert">Your payment return could not be confirmed yet. Please do not pay again; contact us so we can check it safely.</p></div>';
 		});
 		return true;
 	}
 
 	function showPaid(conf, data) {
 		clearRememberedStripePayment();
-		root.innerHTML = '';
-		root.appendChild(el(
+		var flow = cateringFlow();
+		flow.innerHTML = '';
+		flow.appendChild(el(
 			'<div class="dbc-success" role="status">' +
 				'<div class="dbc-success-check">✓</div>' +
 				'<h2 class="dbc-h2">Deposit received</h2>' +

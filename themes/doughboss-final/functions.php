@@ -525,7 +525,7 @@ add_filter( 'doughboss_seo_relevant_page', 'doughboss_final_seo_relevant_page', 
  * @return string[]
  */
 function doughboss_final_seo_covered_pages() {
-	return array( 'about-us', 'catering', 'locations', 'menu', 'order', 'track-order', 'vouchers' );
+	return array( 'about-us', 'catering', 'locations', 'menu', 'order', 'track-order', 'vouchers', 'members-events' );
 }
 
 /**
@@ -628,6 +628,9 @@ add_action( 'wp_head', 'doughboss_final_thin_page_meta', 4 );
  * @return array<string,string>
  */
 function doughboss_final_thin_page_title( $parts ) {
+	if ( defined( 'WPSEO_VERSION' ) || defined( 'RANK_MATH_VERSION' ) || defined( 'AIOSEO_VERSION' ) || defined( 'SEOPRESS_VERSION' ) ) {
+		return $parts;
+	}
 	$copy = is_singular() ? doughboss_final_thin_page_copy() : null;
 	if ( null !== $copy ) {
 		$parts['title'] = $copy['title'];

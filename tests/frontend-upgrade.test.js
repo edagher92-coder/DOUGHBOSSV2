@@ -416,6 +416,160 @@ test('store cards use the shared calculator, tel: and Google Maps actions', () =
 /* Catering                                                            */
 /* ------------------------------------------------------------------ */
 
+function cateringRenderFixture(packagesFail) {
+	const source = fs.readFileSync(catering, 'utf8');
+	function container(tag, attrs, children) {
+		const element = node(tag, attrs, children);
+		Object.defineProperty(element, 'innerHTML', { get() { return this.html || ''; }, set(value) {
+			this.html = String(value);
+			for (const child of this.children) child.parentNode = null;
+			this.children = [];
+		} });
+		element.insertBefore = function (child, before) {
+			child.parentNode = this;
+			const index = before ? this.children.indexOf(before) : -1;
+			if (index === -1) this.children.push(child); else this.children.splice(index, 0, child);
+			return child;
+		};
+		return element;
+	}
+	const email = node('a', { href: 'mailto:events@example.invalid?subject=Catering', text: 'Email catering' });
+	const phone = node('a', { href: 'tel:+61400000000', text: 'Call catering' });
+	const contactTitle = node('h2', { id: 'dbc-contact-title', text: 'Tell us what you need' });
+	const loadingNote = node('p', { class: 'dbc-coming-soon', text: 'The online enquiry form will load here.' });
+	const contact = node('section', { class: 'dbc-contact', 'aria-labelledby': 'dbc-contact-title' }, [contactTitle, email, phone, loadingNote]);
+	const contactQuery = contact.querySelector.bind(contact);
+	contact.querySelector = selector => selector === 'a[href]' ? email : contactQuery(selector);
+	contact.scrollIntoView = () => { contact.revealed = true; };
+	email.focus = () => { email.focused = true; };
+	const how = node('section', { class: 'dbc-how', 'aria-labelledby': 'dbc-how-title' }, [node('h2', { id: 'dbc-how-title', text: 'How it works' })]);
+	const question = node('summary', { text: 'How do catering payments work?' });
+	const details = node('details', {}, [question, node('p', { text: 'The team confirms the price and payment arrangement.' })]);
+	const faqTitle = node('h2', { id: 'dbc-faq-title', text: 'A few useful answers' });
+	const faq = node('section', { class: 'dbc-faq', 'aria-labelledby': 'dbc-faq-title' }, [faqTitle, details]);
+	const root = container('div', { 'data-doughboss-catering': '' }, [contact, how, faq]);
+	const state = { packages: [], packagesUnavailable: false };
+	const calls = [];
+	const context = vm.createContext({ root, state,
+		document: { createElement: tag => container(tag) },
+		window: { DoughBossData: { payments: { enabled: false }, googleReviewUrl: 'https://reviews.example.invalid' } },
+		el: html => { const element = container('div'); element.innerHTML = html; return element; }, money: value => '$' + Number(value).toFixed(2),
+		clearRememberedStripePayment() {},
+		renderPackages: () => node('div', { class: 'dbc-packages', text: state.packagesUnavailable ? 'Packages unavailable; custom enquiry remains available.' : 'Sample packages' }),
+		renderBuilder: () => node('form', { class: 'dbc-form' }),
+		loadCateringLocations() {},
+		cateringRequestUrl: route => 'https://preview.invalid/doughboss/v1' + route,
+		setTimeout, clearTimeout,
+		fetch(url, options) {
+			calls.push({ url, options });
+			return Promise.resolve({ ok: !packagesFail, json: () => Promise.resolve([{ id: 1, name: 'Sample package' }]) });
+		}
+	});
+	context.esc = extractFunction(catering, 'esc');
+	context.get = extractFunction(catering, 'get', context);
+	const rendering = source.slice(source.indexOf('/* ---------- rendering ---------- */'), source.indexOf('// "Office Platter'));
+	vm.runInContext(rendering, context);
+	const boot = source.slice(source.lastIndexOf('\n\tloadCateringLocations();'), source.lastIndexOf('}());'));
+	assert.match(boot, /get\('\/catering\/packages'\)/, 'run the actual package-load success/error callbacks');
+	return { root, contact, contactTitle, email, phone, how, faq, faqTitle, details, question, state, calls, context,
+		async boot() { await vm.runInContext(boot, context); }, render() { context.render(); },
+		showSuccess: extractFunction(catering, 'showSuccess', context), showPaid: extractFunction(catering, 'showPaid', context) };
+}
+
+for (const failed of [false, true]) {
+	test('catering ' + (failed ? 'failed' : 'successful') + ' package GET preserves original contact and accessible FAQ nodes', async () => {
+		const shortcodes = fs.readFileSync(path.join(root, 'includes', 'class-doughboss-shortcodes.php'), 'utf8');
+		assert.match(shortcodes, /class="dbc-contact" aria-labelledby="dbc-contact-title"/);
+		assert.match(shortcodes, /class="dbc-faq" aria-labelledby="dbc-faq-title"/);
+		const x = cateringRenderFixture(failed);
+		await x.boot();
+		assert.equal(x.calls.length, 1);
+		assert.match(x.calls[0].url, /\/catering\/packages$/);
+		assert.equal(x.calls[0].options.method, undefined, 'package hydration is GET only');
+		assert.equal(x.state.packagesUnavailable, failed);
+		assert.equal(x.root.querySelector('.dbc-contact'), x.contact, 'configured contact section is not recreated or deleted');
+		assert.equal(x.root.querySelector('.dbc-coming-soon').hidden, true, 'loading note is hidden only after the enquiry UI renders');
+		assert.equal(x.root.querySelector('.dbc-how'), x.how);
+		assert.equal(x.root.querySelector('.dbc-faq'), x.faq, 'FAQ identity survives hydration');
+		assert.equal(x.contact.parentNode, x.root);
+		assert.equal(x.email.parentNode, x.contact);
+		assert.equal(x.phone.parentNode, x.contact);
+		assert.equal(x.email.href, 'mailto:events@example.invalid?subject=Catering');
+		assert.equal(x.phone.href, 'tel:+61400000000');
+		assert.equal(x.contact.getAttribute('aria-labelledby'), x.contactTitle.getAttribute('id'));
+		assert.equal(x.faq.getAttribute('aria-labelledby'), x.faqTitle.getAttribute('id'));
+		assert.equal(x.faq.querySelector('details'), x.details);
+		assert.equal(x.details.querySelector('summary'), x.question);
+		x.details.open = true;
+		const flow = x.root.querySelector('.dbc-app-flow');
+		assert.ok(flow, 'only the changing app content has a dedicated host');
+		assert.deepEqual(x.root.children, [x.contact, flow, x.how, x.faq], 'contact actions remain before the app and help remains after it');
+		const firstPackages = flow.querySelector('.dbc-packages');
+		x.render();
+		assert.equal(x.root.querySelector('.dbc-app-flow'), flow, 'repeated render reuses one host');
+		assert.equal(x.root.children.length, 4, 'no duplicate contact, FAQ or flow');
+		assert.equal(flow.children.length, 2, 'no duplicate packages or forms');
+		assert.notEqual(flow.querySelector('.dbc-packages'), firstPackages, 'only flow children are replaced');
+		assert.equal(x.details.open, true, 'expanded FAQ state is untouched');
+	});
+}
+
+test('catering confirmation presentation replaces only its flow and retains reachable help', async () => {
+	const x = cateringRenderFixture(false);
+	await x.boot();
+	const flow = x.root.querySelector('.dbc-app-flow');
+	x.showSuccess({ enquiry_number: 'CAT-SYNTHETIC', deposit: 0 });
+	assert.equal(flow.children.length, 1, 'enquiry confirmation replaces the previous form');
+	assert.equal(x.root.querySelector('.dbc-contact'), x.contact);
+	assert.equal(x.root.querySelector('.dbc-faq'), x.faq);
+	assert.equal(x.email.href, 'mailto:events@example.invalid?subject=Catering');
+	x.showPaid({ message: 'Synthetic receipt presentation only' }, { enquiry_number: 'CAT-SYNTHETIC' });
+	assert.equal(flow.children.length, 1, 'receipt presentation also reuses the same flow');
+	assert.deepEqual(x.root.children, [x.contact, flow, x.how, x.faq]);
+	assert.equal(x.calls.length, 1, 'presentation does not start another request');
+	assert.doesNotMatch(fs.readFileSync(catering, 'utf8'), /root\.innerHTML\s*=/, 'loading/error/confirmation paths cannot clear shortcode help');
+});
+
+test('catering enquiry success prioritises pending reference and existing contact, not reviews or booking promises', async () => {
+	const x = cateringRenderFixture(false);
+	await x.boot();
+	x.state.submittedLocationName = 'Sample Revesby';
+	x.showSuccess({ enquiry_number: 'CAT-SYNTHETIC', deposit: 0, message: 'Your booking is confirmed immediately.' });
+	const flow = x.root.querySelector('.dbc-app-flow');
+	function copy(element) { return [element.innerHTML || '', element.textContent || ''].concat((element.children || []).map(copy)).join(' '); }
+	const text = copy(flow);
+	assert.match(text, /Reference: <strong>CAT-SYNTHETIC<\/strong>/);
+	assert.match(text, /still need staff confirmation/);
+	assert.match(text, /not a confirmed booking/);
+	assert.match(text, /Reply to your catering acknowledgement/);
+	assert.match(text, /Planning another event/);
+	assert.doesNotMatch(text, /confirmed immediately|Google review|Instagram|Follow @|Stay close|offers|secure your date|Pay .+deposit/i);
+	const contact = find(flow, item => item.tag === 'button');
+	assert.equal(contact.type, 'button', 'follow-up is navigation, not form submission');
+	assert.equal(contact.textContent, 'Contact catering about this enquiry');
+	contact.listeners.click();
+	assert.equal(x.contact.revealed, true);
+	assert.equal(x.email.focused, true, 'focus reaches the original configured contact action');
+	assert.equal(x.email.href, 'mailto:events@example.invalid?subject=Catering');
+	assert.equal(x.calls.length, 1, 'contact navigation starts no extra request');
+	assert.equal(x.root.querySelector('.dbc-faq'), x.faq);
+	x.state.submittedLocationName = '<script>not markup</script>';
+	x.showSuccess({ enquiry_number: '<img src=x onerror=alert(1)>', deposit: 0 });
+	assert.doesNotMatch(copy(flow), /<script>|<img/);
+	assert.match(copy(flow), /&lt;img/);
+});
+
+test('catering required contacts describe their live validation message without requiring optional date or phone', () => {
+	const source = fs.readFileSync(catering, 'utf8');
+	assert.match(source, /Availability, final pricing and any deposit requirements are confirmed by our team\./);
+	assert.match(source, /Sending an enquiry does not confirm a booking or take payment\./);
+	assert.doesNotMatch(source, /a deposit secures your date|confirm your quote and deposit link/);
+	assert.match(source, /name="customer_name" required aria-describedby="dbc-contact-error"/);
+	assert.match(source, /name="customer_email" required aria-describedby="dbc-contact-error"/);
+	assert.match(source, /id="dbc-contact-error" role="alert" aria-live="assertive"/);
+	assert.doesNotMatch(source, /name="(?:customer_phone|event_date|event_time)"[^>]*\brequired\b/);
+});
+
 test('catering quotes send only package ids and quantities', async () => {
 	const requests = [];
 	const state = { lines: [{ id: 539, qty: 2 }, { id: 541, qty: 1 }], selectedId: 0, guests: 30, orderType: 'pickup', quoteGeneration: 0 };

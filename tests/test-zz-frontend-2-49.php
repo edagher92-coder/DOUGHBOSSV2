@@ -14,6 +14,9 @@ require_once dirname( __DIR__ ) . '/includes/class-doughboss-store-hours.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-b2b.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-catering-package.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-catering.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-settings.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-locations.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-rest-controller.php';
 
 if ( ! function_exists( 'sanitize_email' ) ) {
 	/** @return string */
@@ -76,7 +79,7 @@ if ( ! function_exists( 'wp_mail' ) ) {
 	/** @return bool */
 	function wp_mail( $to, $subject, $message, $headers = array() ) {
 		$GLOBALS['db_fe_mail'][] = compact( 'to', 'subject', 'message', 'headers' );
-		return true;
+		return ! isset( $GLOBALS['db_fe_mail_result'] ) || $GLOBALS['db_fe_mail_result'];
 	}
 }
 
@@ -418,5 +421,138 @@ db_test(
 
 		$GLOBALS['wpdb'] = $previous;
 		doughboss_test_set_settings( array() );
+	}
+);
+
+/** Location lookup fixture for the private acknowledgement sender; never a real DB. */
+class DoughBoss_Test_Catering_Mail_DB extends DoughBoss_Test_Frontend_DB {
+	public $lookup_count = 0;
+	public $prepared_location_ids = array();
+	public $location_exists = true;
+	public function prepare( $query ) {
+		$args = func_get_args();
+		$this->prepared_location_ids[] = isset( $args[1] ) ? $args[1] : null;
+		return $query;
+	}
+	public function get_row( $query ) {
+		$this->lookup_count++;
+		return $this->location_exists ? (object) array( 'id' => 41, 'name' => 'Saved Revesby Bakery' ) : null;
+	}
+}
+
+/** Exercise real sender with a saved-row fixture and intercepted mail only. */
+function db_fe_catering_notification( array $changes = array(), $mail_result = true, $location_exists = true ) {
+	$row = array_merge( array(
+		'enquiry_number' => 'CAT-SAVED-0041',
+		'location_id' => 41,
+		'package_id' => 0,
+		'customer_name' => 'Saved Synthetic Customer',
+		'customer_email' => 'saved.customer@example.invalid',
+		'customer_phone' => '0400000041',
+		'guest_count' => 18,
+		'event_date' => '2031-11-04',
+		'event_time' => '18:45',
+		'order_type' => 'pickup',
+		'address' => '',
+		'dietary' => 'Saved dietary request',
+		'notes' => 'Saved side-door note',
+		'currency' => 'AUD',
+		'subtotal' => 200,
+		'delivery_fee' => 12.4,
+		'quote_total' => 212.4,
+		'deposit_amount' => 63.72,
+		'balance_amount' => 148.68,
+	), $changes );
+	doughboss_test_set_settings( array( 'catering_email' => 'configured.catering@example.invalid', 'currency_code' => 'AUD' ) );
+	$previous_db = isset( $GLOBALS['wpdb'] ) ? $GLOBALS['wpdb'] : null;
+	$previous_mail = $GLOBALS['db_fe_mail'];
+	$previous_result = isset( $GLOBALS['db_fe_mail_result'] ) ? $GLOBALS['db_fe_mail_result'] : null;
+	$previous_post = $_POST;
+	$db = new DoughBoss_Test_Catering_Mail_DB();
+	$db->location_exists = $location_exists;
+	$GLOBALS['wpdb'] = $db;
+	$GLOBALS['db_fe_mail'] = array();
+	$GLOBALS['db_fe_mail_result'] = $mail_result;
+	$_POST = array( 'location_id' => 999, 'event_time' => '11:11', 'quote_total' => 1, 'customer_email' => 'request.only@example.invalid' );
+	try {
+		$class = new ReflectionClass( 'DoughBoss_REST_Controller' );
+		$sender = $class->getMethod( 'send_catering_notification' );
+		$sender->setAccessible( true );
+		$returned = $sender->invoke( $class->newInstanceWithoutConstructor(), $row );
+		return array( 'row' => $row, 'mail' => $GLOBALS['db_fe_mail'], 'db' => $db, 'returned' => $returned );
+	} finally {
+		$GLOBALS['wpdb'] = $previous_db;
+		$GLOBALS['db_fe_mail'] = $previous_mail;
+		if ( null === $previous_result ) { unset( $GLOBALS['db_fe_mail_result'] ); }
+		else { $GLOBALS['db_fe_mail_result'] = $previous_result; }
+		$_POST = $previous_post;
+	}
+}
+
+db_test(
+	'catering acknowledgements are replyable plain text sourced from the saved row without confirming a booking',
+	function () {
+		$result = db_fe_catering_notification();
+		assert_same( 2, count( $result['mail'] ), 'customer and configured staff receive one intercepted mail each' );
+		$customer = $result['mail'][0];
+		$staff = $result['mail'][1];
+		assert_same( $result['row']['customer_email'], $customer['to'], 'customer recipient comes from saved row' );
+		assert_same( 'configured.catering@example.invalid', $staff['to'], 'staff recipient uses configured catering address' );
+		assert_same( array( 'Content-Type: text/plain; charset=UTF-8', 'Reply-To: configured.catering@example.invalid' ), $customer['headers'], 'customer reply goes to the configured catering team' );
+		assert_same( array( 'Content-Type: text/plain; charset=UTF-8', 'Reply-To: saved.customer@example.invalid' ), $staff['headers'], 'staff reply goes only to the validated saved enquirer' );
+		assert_same( 1, $result['db']->lookup_count, 'both messages reuse one location lookup' );
+		assert_same( array( 41 ), $result['db']->prepared_location_ids, 'lookup uses saved location, not request location' );
+		foreach ( array( 'CAT-SAVED-0041', 'Saved Revesby Bakery (ID 41)', 'Package: Custom', 'Guests: 18', 'Event date: 2031-11-04', 'Event time: 18:45', 'Order type: Pickup', 'Indicative total: AUD $212.40', 'Indicative deposit: AUD $63.72' ) as $saved_fact ) {
+			assert_true( false !== strpos( $customer['message'], $saved_fact ), 'customer summary includes saved ' . $saved_fact );
+			assert_true( false !== strpos( $staff['message'], $saved_fact ), 'staff summary includes saved ' . $saved_fact );
+		}
+		assert_true( false !== strpos( $customer['message'], 'Status: Awaiting staff confirmation' ), 'acknowledgement is not acceptance' );
+		assert_true( false !== strpos( $customer['message'], 'not a confirmed booking' ), 'customer booking status is explicit' );
+		assert_true( false !== strpos( $customer['message'], 'No payment has been taken by submitting this enquiry' ), 'submission does not imply a charge' );
+		assert_true( false !== strpos( $customer['message'], 'Reply to this email' ), 'customer knows how to continue the enquiry' );
+		foreach ( $result['mail'] as $mail ) {
+			assert_same( 0, preg_match( '/your booking is confirmed|confirmed once.*deposit|secure Square payment link/i', $mail['message'] ), 'no automatic booking or future provider promise' );
+			assert_same( false, strpos( $mail['message'], 'request.only@example.invalid' ), 'request-only contact data is not mixed into saved mail' );
+			assert_same( false, strpos( $mail['message'], '11:11' ), 'request-only event time is ignored' );
+		}
+	}
+);
+
+db_test(
+	'catering mail rejects CRLF and malformed enquirer addresses rather than constructing injected reply headers',
+	function () {
+		$name_only = db_fe_catering_notification( array( 'customer_name' => "Synthetic\r\nBcc: name@example.invalid" ) );
+		assert_same( 2, count( $name_only['mail'] ), 'plain body name does not alter validated recipients' );
+		assert_same( array( 'Content-Type: text/plain; charset=UTF-8', 'Reply-To: saved.customer@example.invalid' ), $name_only['mail'][1]['headers'], 'display-name input is never interpolated into reply headers' );
+		foreach ( array( "saved.customer@example.invalid\r\nBcc: injected@example.invalid", "saved.customer@example.invalid\nBcc: injected@example.invalid", "saved.customer@example.invalid\rBcc: injected@example.invalid", 'not-an-email', 'One <saved.customer@example.invalid>' ) as $unsafe ) {
+			$result = db_fe_catering_notification( array( 'customer_email' => $unsafe, 'customer_name' => "Synthetic\r\nBcc: name@example.invalid" ) );
+			assert_same( 1, count( $result['mail'] ), 'unsafe customer address is not a recipient' );
+			$staff = $result['mail'][0];
+			assert_same( 'configured.catering@example.invalid', $staff['to'], 'staff still sees the saved enquiry' );
+			assert_same( array( 'Content-Type: text/plain; charset=UTF-8' ), $staff['headers'], 'unsafe enquirer address is omitted, not repaired or invented' );
+			foreach ( $staff['headers'] as $header ) {
+				assert_same( false, strpos( $header, "\r" ), 'no CR can enter headers' );
+				assert_same( false, strpos( $header, "\n" ), 'no LF can enter headers' );
+			}
+		}
+	}
+);
+
+db_test(
+	'catering optional fields and mail failure remain non-confirming without changing saved-enquiry semantics',
+	function () {
+		$fallback = db_fe_catering_notification( array( 'location_id' => 0, 'event_date' => '', 'event_time' => '' ) );
+		assert_same( 0, $fallback['db']->lookup_count, 'missing saved location does not invent a fallback query' );
+		foreach ( $fallback['mail'] as $mail ) {
+			assert_true( false !== strpos( $mail['message'], 'Unavailable (saved location ID 0)' ), 'saved missing-location state remains honest' );
+			assert_true( false !== strpos( $mail['message'], 'Event date: To be confirmed' ), 'unknown date is not manufactured' );
+			assert_true( false !== strpos( $mail['message'], 'Event time: To be confirmed' ), 'unknown time is not manufactured' );
+		}
+		$missing = db_fe_catering_notification( array(), true, false );
+		assert_true( false !== strpos( $missing['mail'][0]['message'], 'Unavailable (saved location ID 41)' ), 'deleted saved shop does not become another shop' );
+		$failed = db_fe_catering_notification( array(), false );
+		assert_same( 2, count( $failed['mail'] ), 'a customer mail failure does not prevent the staff attempt' );
+		assert_same( null, $failed['returned'], 'notification failures do not become enquiry errors' );
+		assert_same( array(), $failed['db']->rows, 'notification never rewrites or recreates an enquiry' );
 	}
 );
