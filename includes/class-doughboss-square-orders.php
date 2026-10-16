@@ -128,7 +128,50 @@ class DoughBoss_Square_Orders {
 				'amount_money' => self::money( $amounts['discount'], $currency ),
 			) );
 		}
+		$pickup = self::pickup_ticket( $order );
+		if ( null !== $pickup ) {
+			$provider_order['ticket_name'] = $pickup['ticket_name'];
+			$provider_order['metadata']    = $pickup['metadata'];
+		}
 		return array( 'order' => $provider_order, 'amounts' => $amounts, 'currency' => $currency, 'tax_inclusive' => $basis['tax_inclusive'] );
+	}
+
+	/**
+	 * Optional pickup ticket name and metadata (2.51). Pure. Returns null for
+	 * legacy payloads (no pickup facts) or when the filter disables it, so the
+	 * legacy projection stays byte-identical. No fulfillments are ever added.
+	 *
+	 * @param array $order Snapshot payload.order.
+	 * @return array|null { ticket_name:string<=30, metadata:array }
+	 */
+	public static function pickup_ticket( array $order ) {
+		$mode = isset( $order['pickup_mode'] ) && is_string( $order['pickup_mode'] ) ? $order['pickup_mode'] : '';
+		if ( ! in_array( $mode, array( 'asap', 'scheduled' ), true ) || empty( $order['pickup_ready_from_utc'] ) || ! is_string( $order['pickup_ready_from_utc'] ) ) {
+			return null;
+		}
+		if ( function_exists( 'apply_filters' ) && ! apply_filters( 'doughboss_square_pickup_ticket', true, $order ) ) {
+			return null;
+		}
+		try {
+			$utc = new DateTimeImmutable( $order['pickup_ready_from_utc'], new DateTimeZone( 'UTC' ) );
+			$tz_name = isset( $order['pickup_timezone'] ) && is_string( $order['pickup_timezone'] ) && '' !== $order['pickup_timezone'] ? $order['pickup_timezone'] : 'Australia/Sydney';
+			try {
+				$tz = new DateTimeZone( $tz_name );
+			} catch ( Exception $e ) {
+				$tz = new DateTimeZone( 'Australia/Sydney' );
+			}
+			$local = $utc->setTimezone( $tz );
+		} catch ( Exception $e ) {
+			return null;
+		}
+		$name = 'Pickup ' . strtolower( $local->format( 'g:ia' ) ) . ' ' . $local->format( 'D' );
+		return array(
+			'ticket_name' => substr( $name, 0, 30 ),
+			'metadata' => array(
+				'db_pickup_at' => $utc->format( 'Y-m-d\TH:i:s\Z' ),
+				'db_pickup_mode' => $mode,
+			),
+		);
 	}
 
 	/** Verify a fresh OPEN Order, not payment or kitchen authority. */

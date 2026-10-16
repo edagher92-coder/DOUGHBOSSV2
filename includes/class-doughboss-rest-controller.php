@@ -674,6 +674,23 @@ class DoughBoss_REST_Controller {
 			)
 		);
 
+		// 2.51: after a shop change, drop menu lines the new shop does not sell.
+		register_rest_route(
+			$ns,
+			'/cart/revalidate',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'cart_revalidate' ),
+				'permission_callback' => array( $this, 'verify_nonce' ),
+				'args'                => array(
+					'location_id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
 		register_rest_route(
 			$ns,
 			'/cart/clear',
@@ -767,6 +784,17 @@ class DoughBoss_REST_Controller {
 					'verification_token' => array(
 						'sanitize_callback' => 'sanitize_text_field',
 					),
+					// 2.51 pickup scheduling: validated server-side by
+					// DoughBoss_Pickup; never trusted as-is.
+					'pickup_mode' => array(
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'pickup_slot_id' => array(
+						'sanitize_callback' => 'absint',
+					),
+					'capacity_hold_token' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
 				),
 			)
 		);
@@ -807,6 +835,15 @@ class DoughBoss_REST_Controller {
 						'sanitize_callback' => 'sanitize_text_field',
 					),
 					'idempotency_key'   => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'pickup_mode'       => array(
+						'sanitize_callback' => 'sanitize_key',
+					),
+					'pickup_slot_id'    => array(
+						'sanitize_callback' => 'absint',
+					),
+					'capacity_hold_token' => array(
 						'sanitize_callback' => 'sanitize_text_field',
 					),
 				),
@@ -983,6 +1020,31 @@ class DoughBoss_REST_Controller {
 				'args'                => array(
 					'eta' => array(
 						'default'           => 0,
+						'sanitize_callback' => 'absint',
+					),
+					'expected_version' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+					'event_key' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Staff "+N min": push a timed order's promise back (CAS on version).
+		register_rest_route(
+			$ns,
+			'/admin/order/(?P<id>\d+)/delay',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'admin_delay' ),
+				'permission_callback' => array( $this, 'verify_board_access' ),
+				'args'                => array(
+					'minutes' => array(
+						'default'           => 10,
 						'sanitize_callback' => 'absint',
 					),
 					'expected_version' => array(
@@ -3154,6 +3216,8 @@ class DoughBoss_REST_Controller {
 				'gst_inclusive'   => DoughBoss_Settings::gst_inclusive(),
 				'delivery_fee'    => (float) DoughBoss_Settings::get( 'delivery_fee', 0 ),
 				'enable_pickup'   => (bool) DoughBoss_Settings::get( 'enable_pickup', 1 ),
+				// 2.51: this build can schedule pickups (per-shop mode decides).
+				'pickup_scheduling' => true,
 				'enable_delivery' => $single_location_id ? false : (bool) DoughBoss_Settings::get( 'enable_delivery', 0 ),
 				// Single-location / pickup-only mode. When on, the storefront should
 				// hide the shop picker + delivery toggle and auto-select the single
@@ -3328,6 +3392,13 @@ class DoughBoss_REST_Controller {
 			}
 		}
 
+		// 2.51: a live shop needs a held pickup time before money moves. Empty
+		// (mode off/shadow, dine-in, delivery) leaves every key below unchanged.
+		$pickup = $this->pickup_selection_for_checkout( $request, $location_id, $order_type, true );
+		if ( is_wp_error( $pickup ) ) {
+			return $pickup;
+		}
+
 		$totals   = $this->cart->totals( $order_type );
 		$accounting_basis = $this->accounting_basis_from_totals( $totals );
 		if ( is_wp_error( $accounting_basis ) ) {
@@ -3340,7 +3411,7 @@ class DoughBoss_REST_Controller {
 		$attempt_identity = '';
 		$cart_guard       = '';
 		if ( 'square' === $gateway ) {
-			$square_binding = $this->square_binding_payload( $order_type, $location_id, $table_context, $name, $email, $phone, $address, $notes );
+			$square_binding = $this->square_binding_payload( $order_type, $location_id, $table_context, $name, $email, $phone, $address, $notes, $pickup );
 			$checkout_key   = $this->payment_checkout_key( $request, 'square-order-v2', $square_binding );
 			$attempt_identity = $this->payment_attempt_identity( $request, 'square-order-v2' );
 			$cart_guard       = $this->square_cart_guard();
@@ -3349,7 +3420,10 @@ class DoughBoss_REST_Controller {
 			$checkout_key = $this->payment_checkout_key(
 				$request,
 				'order',
-				array( 'cart' => $this->cart->to_array( $order_type ), 'location_id' => $location_id, 'order_type' => $order_type, 'table' => $table_context )
+				$this->pickup_checkout_key_binding(
+					array( 'cart' => $this->cart->to_array( $order_type ), 'location_id' => $location_id, 'order_type' => $order_type, 'table' => $table_context ),
+					$pickup
+				)
 			);
 		}
 		if ( is_wp_error( $checkout_key ) ) {
@@ -3434,6 +3508,11 @@ class DoughBoss_REST_Controller {
 					),
 					'lines' => array_values( $this->cart->get_lines() ),
 				);
+			if ( ! empty( $pickup ) ) {
+				// After checkout_key, so every snapshot-driven order writer inherits
+				// the pickup facts (and legacy payload bytes are untouched when empty).
+				$snapshot_payload['order'] = array_merge( $snapshot_payload['order'], $this->pickup_snapshot_fields( $pickup, $location_id ) );
+			}
 			if ( 'square' === $gateway ) {
 				$snapshot_payload['binding_hash'] = $this->square_binding_hash( $square_binding );
 			}
@@ -3716,8 +3795,8 @@ class DoughBoss_REST_Controller {
 	 *
 	 * @return array
 	 */
-	private function square_binding_payload( $order_type, $location_id, $table_context, $name, $email, $phone, $address, $notes ) {
-		return array(
+	private function square_binding_payload( $order_type, $location_id, $table_context, $name, $email, $phone, $address, $notes, array $pickup = array() ) {
+		$binding = array(
 			'protocol_version' => 'square-v2',
 			'square_mode'      => DoughBoss_Settings::square_mode(),
 			'order_type'       => sanitize_key( $order_type ),
@@ -3734,6 +3813,113 @@ class DoughBoss_REST_Controller {
 			'voucher_code'     => strtoupper( sanitize_text_field( $this->cart->get_voucher_code() ) ),
 			'lines'            => array_values( $this->cart->get_lines() ),
 		);
+		// Only when a pickup time was chosen: omitting the keys otherwise keeps the
+		// 2.50 binding bytes (and therefore in-flight checkout hashes) unchanged.
+		if ( ! empty( $pickup['pickup_mode'] ) ) {
+			$binding['pickup_mode']    = sanitize_key( $pickup['pickup_mode'] );
+			$binding['pickup_slot_id'] = isset( $pickup['pickup_slot_id'] ) ? absint( $pickup['pickup_slot_id'] ) : 0;
+		}
+		return $binding;
+	}
+
+	/**
+	 * Pickup selection for a checkout step, or an empty array when the shop does
+	 * not schedule pickups (mode off/shadow, dine-in, delivery, or the
+	 * foundation is not loaded).
+	 *
+	 * @param WP_REST_Request $request          Request carrying pickup_mode / capacity_hold_token.
+	 * @param int             $location_id      Resolved shop.
+	 * @param string          $order_type       pickup|delivery|dine_in.
+	 * @param bool            $payment_required Whether an online payment backs this order.
+	 * @return array|WP_Error
+	 */
+	private function pickup_selection_for_checkout( WP_REST_Request $request, $location_id, $order_type, $payment_required ) {
+		if ( ! class_exists( 'DoughBoss_Pickup' ) || ! method_exists( 'DoughBoss_Pickup', 'prepare_checkout_selection' ) ) {
+			return array();
+		}
+		$selection = DoughBoss_Pickup::prepare_checkout_selection(
+			$this->cart,
+			(int) $location_id,
+			(string) $order_type,
+			array(
+				'pickup_mode'         => sanitize_key( (string) $request->get_param( 'pickup_mode' ) ),
+				'capacity_hold_token' => sanitize_text_field( (string) $request->get_param( 'capacity_hold_token' ) ),
+			),
+			(bool) $payment_required
+		);
+		if ( is_wp_error( $selection ) ) {
+			return $selection;
+		}
+		return is_array( $selection ) ? $selection : array();
+	}
+
+	/**
+	 * Pickup facts that ride in the immutable snapshot's order payload.
+	 *
+	 * @param array $pickup      prepare_checkout_selection() result.
+	 * @param int   $location_id Shop (for the label timezone).
+	 * @return array
+	 */
+	private function pickup_snapshot_fields( array $pickup, $location_id ) {
+		$out = array();
+		foreach ( array( 'pickup_mode', 'pickup_slot_id', 'capacity_hold_token', 'pickup_ready_from_utc', 'pickup_ready_by_utc', 'pickup_label' ) as $key ) {
+			if ( array_key_exists( $key, $pickup ) ) {
+				$out[ $key ] = $pickup[ $key ];
+			}
+		}
+		if ( empty( $out['pickup_mode'] ) ) {
+			return array();
+		}
+		$loc = absint( $location_id ) ? DoughBoss_Locations::get( absint( $location_id ) ) : null;
+		$out['pickup_timezone'] = $loc && ! empty( $loc->timezone ) ? (string) $loc->timezone : 'Australia/Sydney';
+		return $out;
+	}
+
+	/**
+	 * Add the chosen slot to the Stripe/other checkout-key binding, only when
+	 * one exists so unscheduled keys stay byte-identical to 2.50.
+	 *
+	 * @param array $binding Existing binding array.
+	 * @param array $pickup  Selection.
+	 * @return array
+	 */
+	private function pickup_checkout_key_binding( array $binding, array $pickup ) {
+		if ( ! empty( $pickup['pickup_mode'] ) ) {
+			$binding['pickup_mode']    = sanitize_key( $pickup['pickup_mode'] );
+			$binding['pickup_slot_id'] = isset( $pickup['pickup_slot_id'] ) ? absint( $pickup['pickup_slot_id'] ) : 0;
+		}
+		return $binding;
+	}
+
+	/**
+	 * Pickup facts to copy from a paid snapshot's order payload into the order.
+	 *
+	 * @param array $saved Snapshot payload.order.
+	 * @return array
+	 */
+	private function pickup_fields_from_snapshot( array $saved ) {
+		if ( empty( $saved['pickup_mode'] ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( array( 'pickup_mode', 'pickup_slot_id', 'capacity_hold_token', 'pickup_ready_from_utc', 'pickup_ready_by_utc', 'pickup_label', 'pickup_timezone' ) as $key ) {
+			if ( array_key_exists( $key, $saved ) ) {
+				$out[ $key ] = $saved[ $key ];
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Binding facts for recomputing a Square checkout hash from a later request.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return array
+	 */
+	private function pickup_binding_from_request( WP_REST_Request $request ) {
+		$mode = sanitize_key( (string) $request->get_param( 'pickup_mode' ) );
+		$slot = absint( $request->get_param( 'pickup_slot_id' ) );
+		return '' !== $mode && $slot > 0 ? array( 'pickup_mode' => $mode, 'pickup_slot_id' => $slot ) : array();
 	}
 
 	/**
@@ -4151,6 +4337,46 @@ class DoughBoss_REST_Controller {
 	public function remove_from_cart( WP_REST_Request $request ) {
 		$this->cart->remove( $request->get_param( 'key' ) );
 		return rest_ensure_response( $this->cart->to_array() );
+	}
+
+	/**
+	 * POST /cart/revalidate — remove menu lines the chosen shop does not sell.
+	 *
+	 * Reuses the checkout availability rule (published menu item available at
+	 * the shop). Custom lines are kept. Never changes prices or quantities.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function cart_revalidate( WP_REST_Request $request ) {
+		$location = $this->resolve_menu_location( $request->get_param( 'location_id' ) );
+		if ( is_wp_error( $location ) ) {
+			return $location;
+		}
+		$removed = array();
+		foreach ( $this->cart->get_lines() as $line ) {
+			if ( ! is_array( $line ) || ! isset( $line['key'] ) ) {
+				continue;
+			}
+			$type = isset( $line['type'] ) ? $line['type'] : ( isset( $line['item_id'] ) && (int) $line['item_id'] > 0 ? 'menu' : 'custom' );
+			if ( 'menu' !== $type ) {
+				continue;
+			}
+			$item_id = isset( $line['item_id'] ) ? $this->canonical_native_location_id( $line['item_id'] ) : false;
+			$post    = false !== $item_id ? get_post( $item_id ) : null;
+			if ( ! $post || DoughBoss_Post_Types::POST_TYPE !== $post->post_type || 'publish' !== $post->post_status
+				|| ! DoughBoss_Post_Types::is_available_at( $post->ID, $location ) ) {
+				if ( $this->cart->remove( $line['key'] ) ) {
+					$removed[] = isset( $line['name'] ) ? (string) $line['name'] : '';
+				}
+			}
+		}
+		return rest_ensure_response(
+			array(
+				'cart'    => $this->cart->to_array( 'pickup' ),
+				'removed' => array_values( array_filter( $removed, 'strlen' ) ),
+			)
+		);
 	}
 
 	/**
@@ -5239,6 +5465,27 @@ class DoughBoss_REST_Controller {
 			}
 		}
 
+		// 2.51 pickup facts. A paid order always uses what its immutable snapshot
+		// recorded (never re-validated, so money already taken cannot be refused);
+		// an unpaid order validates its held slot now, before any voucher redeem.
+		$pickup_fields = array();
+		if ( 'paid' === $payment_status ) {
+			if ( is_array( $paid_snapshot ) && isset( $paid_snapshot['payload']['order'] ) && is_array( $paid_snapshot['payload']['order'] ) ) {
+				$pickup_fields = $this->pickup_fields_from_snapshot( $paid_snapshot['payload']['order'] );
+			}
+		} else {
+			$pickup_selection = $this->pickup_selection_for_checkout( $request, $location_id, $order_type, false );
+			if ( is_wp_error( $pickup_selection ) ) {
+				return $pickup_selection;
+			}
+			if ( ! empty( $pickup_selection ) ) {
+				$pickup_fields = $this->pickup_snapshot_fields( $pickup_selection, $location_id );
+				if ( ! empty( $pickup_fields ) ) {
+					$pickup_fields['capacity_unpaid_allowed'] = true;
+				}
+			}
+		}
+
 		if ( 'square' === $payment_method && is_array( $paid_snapshot ) && isset( $paid_snapshot['payload']['order'], $paid_snapshot['payload']['lines'] ) ) {
 			$saved_order = $paid_snapshot['payload']['order'];
 			$name        = (string) $saved_order['customer_name'];
@@ -5283,7 +5530,10 @@ class DoughBoss_REST_Controller {
 				$voucher_reservation_key = $this->payment_checkout_key(
 					$request,
 					'order',
-					array( 'cart' => $this->cart->to_array( $order_type ), 'location_id' => $location_id, 'order_type' => $order_type, 'table' => $table_context )
+					$this->pickup_checkout_key_binding(
+						array( 'cart' => $this->cart->to_array( $order_type ), 'location_id' => $location_id, 'order_type' => $order_type, 'table' => $table_context ),
+						$this->pickup_binding_from_request( $request )
+					)
 				);
 				if ( is_wp_error( $voucher_reservation_key ) ) {
 					return $voucher_reservation_key;
@@ -5358,6 +5608,9 @@ class DoughBoss_REST_Controller {
 				'payment_intent_id' => $payment_intent_id,
 				'checkout_key'      => $idem,
 		);
+		if ( ! empty( $pickup_fields ) ) {
+			$order_data = array_merge( $order_data, $pickup_fields );
+		}
 		if ( null !== $order_accounting_basis ) {
 			$order_data['accounting_basis'] = $order_accounting_basis;
 		}
@@ -5507,7 +5760,8 @@ class DoughBoss_REST_Controller {
 		if ( null === $request->get_param( 'location_id' ) && ! $table ) { $location = DoughBoss_Locations::single_location_id(); }
 		$binding = $this->square_binding_payload( $type, $location, $table,
 			sanitize_text_field( $request->get_param( 'customer_name' ) ), sanitize_email( $request->get_param( 'customer_email' ) ),
-			sanitize_text_field( $request->get_param( 'customer_phone' ) ), sanitize_textarea_field( $request->get_param( 'address' ) ), sanitize_textarea_field( $request->get_param( 'notes' ) ) );
+			sanitize_text_field( $request->get_param( 'customer_phone' ) ), sanitize_textarea_field( $request->get_param( 'address' ) ), sanitize_textarea_field( $request->get_param( 'notes' ) ),
+			$this->pickup_binding_from_request( $request ) );
 		// Configuration drift cannot erase already captured payment evidence.
 		$binding['square_mode'] = (string) $metadata['square_mode'];
 		if ( ! hash_equals( (string) $metadata['binding_hash'], $this->square_binding_hash( $binding ) ) ) { return $invalid; }
@@ -6088,6 +6342,14 @@ class DoughBoss_REST_Controller {
 			$payload['location_name'] = $location && isset( $location->name ) ? $location->name : '';
 			$payload['message']       = __( 'Thanks! We received your table order and will bring it to you.', 'doughboss' );
 		}
+		if ( isset( $order->pickup_mode ) && '' !== DoughBoss_Order::sanitize_pickup_mode( $order->pickup_mode ) ) {
+			$pickup                           = DoughBoss_Order::pickup_fields( $order, true );
+			$payload['pickup_mode']           = $pickup['pickup_mode'];
+			$payload['pickup_label']          = $pickup['pickup_label'];
+			$payload['location_name']         = $pickup['location_name'];
+			$payload['promised_ready_from_utc'] = ! empty( $order->promised_ready_from_utc ) ? str_replace( ' ', 'T', (string) $order->promised_ready_from_utc ) . 'Z' : '';
+			$payload['timezone']              = ! empty( $order->timezone_snapshot ) ? (string) $order->timezone_snapshot : 'Australia/Sydney';
+		}
 		return $payload;
 	}
 
@@ -6367,7 +6629,8 @@ class DoughBoss_REST_Controller {
 				sanitize_email( $request->get_param( 'customer_email' ) ),
 				sanitize_text_field( $request->get_param( 'customer_phone' ) ),
 				sanitize_textarea_field( $request->get_param( 'address' ) ),
-				sanitize_textarea_field( $request->get_param( 'notes' ) )
+				sanitize_textarea_field( $request->get_param( 'notes' ) ),
+				$this->pickup_binding_from_request( $request )
 			);
 			$current_hash = $this->square_binding_hash( $current_binding );
 			$stored_hash  = isset( $attempt_metadata['binding_hash'] ) ? (string) $attempt_metadata['binding_hash'] : '';
@@ -6389,7 +6652,10 @@ class DoughBoss_REST_Controller {
 			$expected_checkout = $this->payment_checkout_key(
 				$request,
 				'order',
-				array( 'cart' => $this->cart->to_array( $order_type ), 'location_id' => $location_id, 'order_type' => $order_type, 'table' => $table_context )
+				$this->pickup_checkout_key_binding(
+					array( 'cart' => $this->cart->to_array( $order_type ), 'location_id' => $location_id, 'order_type' => $order_type, 'table' => $table_context ),
+					$this->pickup_binding_from_request( $request )
+				)
 			);
 			if ( is_wp_error( $expected_checkout ) ) {
 				return $expected_checkout;
@@ -6589,6 +6855,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'data'        => array(
 					'make'            => (int) $orders['make'],
+					'upcoming'        => isset( $orders['upcoming'] ) ? (int) $orders['upcoming'] : 0,
 					'pass'            => (int) $orders['pass'],
 					'preorder_review' => (int) $orders['preorder_review'],
 					'catering'        => DoughBoss_Catering::production_queue_count( $location_id ),
@@ -6642,6 +6909,34 @@ class DoughBoss_REST_Controller {
 				'actor_type'      => 'staff',
 				'actor_id'        => get_current_user_id(),
 				'eta_minutes'     => absint( $request->get_param( 'eta' ) ),
+			)
+		);
+
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+
+	/**
+	 * POST /admin/order/{id}/delay — add 5-60 minutes to a timed order's promise.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function admin_delay( WP_REST_Request $request ) {
+		$order_id = absint( $request->get_param( 'id' ) );
+		$order    = DoughBoss_Order::get( $order_id );
+		$access   = DoughBoss_Staff_Scope::can_access_order( $order );
+		if ( is_wp_error( $access ) ) {
+			return $access;
+		}
+		$minutes = $request->get_param( 'minutes' );
+		$result  = DoughBoss_Order::delay_promise(
+			$order_id,
+			null === $minutes ? 10 : absint( $minutes ),
+			array(
+				'expected_version' => absint( $request->get_param( 'expected_version' ) ),
+				'event_key'        => sanitize_text_field( (string) $request->get_param( 'event_key' ) ),
+				'actor_type'       => 'staff',
+				'actor_id'         => get_current_user_id(),
 			)
 		);
 
