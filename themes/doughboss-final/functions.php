@@ -344,6 +344,112 @@ function doughboss_final_store_cards() {
 	return $stores;
 }
 
+/**
+ * Build the public, online-only manifest from verified Site Icon image data.
+ * Only HTTPS uploads on the canonical site's origin are allowed; no URL may
+ * carry credentials, a query or fragment. Missing exact icon sizes fail closed.
+ *
+ * @param string $home Canonical home URL.
+ * @param string $uploads Approved WordPress uploads base URL.
+ * @param array $icons Site Icon URL and dimensions, keyed by required size.
+ * @return array|null
+ */
+function doughboss_final_manifest_data( $home, $uploads, $icons ) {
+	if ( ! is_string( $home ) || '' === trim( $home ) || ! is_string( $uploads ) || '' === trim( $uploads ) || ! is_array( $icons ) ) {
+		return null;
+	}
+	$origin = wp_parse_url( $home );
+	$base   = wp_parse_url( $uploads );
+	if ( ! is_array( $origin ) || ! is_array( $base ) ) {
+		return null;
+	}
+	foreach ( array( $origin, $base ) as $url ) {
+		if ( ( $url['scheme'] ?? '' ) !== 'https' || empty( $url['host'] ) || array_intersect( array( 'user', 'pass', 'query', 'fragment' ), array_keys( $url ) ) ) {
+			return null;
+		}
+	}
+	if ( strtolower( $origin['host'] ) !== strtolower( $base['host'] ) || ( $origin['port'] ?? 443 ) !== ( $base['port'] ?? 443 ) || empty( $base['path'] ) || '/' === $base['path'] ) {
+		return null;
+	}
+	$manifest_icons = array();
+	foreach ( array( 192, 512 ) as $size ) {
+		$icon = $icons[ $size ] ?? null;
+		if ( ! is_array( $icon ) || ( $icon['width'] ?? 0 ) !== $size || ( $icon['height'] ?? 0 ) !== $size || ! is_string( $icon['src'] ?? null ) || preg_match( '/[\x00-\x20\\\\]/', $icon['src'] ) ) {
+			return null;
+		}
+		$url  = wp_parse_url( $icon['src'] );
+		$path = is_array( $url ) ? ( $url['path'] ?? '' ) : '';
+		if ( ! is_array( $url ) || ( $url['scheme'] ?? '' ) !== 'https' || strtolower( $url['host'] ?? '' ) !== strtolower( $origin['host'] ) || ( $url['port'] ?? 443 ) !== ( $origin['port'] ?? 443 ) || array_intersect( array( 'user', 'pass', 'query', 'fragment' ), array_keys( $url ) ) || 0 !== strpos( $path, rtrim( $base['path'], '/' ) . '/' ) || preg_match( '/%|(?:^|\/)\.{1,2}(?:\/|$)/', $path ) || ! preg_match( '/\.png$/i', $path ) ) {
+			return null;
+		}
+		$manifest_icons[] = array( 'src' => $icon['src'], 'sizes' => $size . 'x' . $size, 'type' => 'image/png', 'purpose' => 'any' );
+	}
+	return array(
+		'id' => $home, 'name' => 'Dough Boss', 'short_name' => 'Dough Boss',
+		'start_url' => rtrim( $home, '/' ) . '/order/', 'scope' => $origin['path'] ?? '/', 'display' => 'standalone',
+		'background_color' => '#f7f5f0', 'theme_color' => '#e2231a',
+		'prefer_related_applications' => false, 'icons' => $manifest_icons,
+	);
+}
+
+/** Disable this integration when another plugin already supplies a manifest. */
+function doughboss_final_public_manifest() {
+	if ( ! apply_filters( 'doughboss_final_install_enabled', true ) ) {
+		return null;
+	}
+	$uploads = wp_upload_dir( null, false );
+	$icons   = array();
+	$icon_id = (int) get_option( 'site_icon', 0 );
+	foreach ( array( 192, 512 ) as $size ) {
+		$src   = get_site_icon_url( $size );
+		$image = $icon_id ? wp_get_attachment_image_src( $icon_id, array( $size, $size ) ) : false;
+		if ( ! is_array( $image ) || $src !== $image[0] ) {
+			return null;
+		}
+		$icons[ $size ] = array( 'src' => $src, 'width' => (int) $image[1], 'height' => (int) $image[2] );
+	}
+	return doughboss_final_manifest_data( home_url( '/' ), $uploads['baseurl'] ?? '', $icons );
+}
+
+/** Accept only the exact root GET query, never an order/account URL. */
+function doughboss_final_is_manifest_request( $method, $request_uri, $home ) {
+	$uri = wp_parse_url( $request_uri );
+	return 'GET' === $method && is_array( $uri ) && ! array_intersect( array( 'scheme', 'host', 'user', 'pass', 'fragment' ), array_keys( $uri ) ) && ( $uri['path'] ?? '' ) === ( wp_parse_url( $home, PHP_URL_PATH ) ?: '/' ) && ( $uri['query'] ?? '' ) === 'db_manifest=1';
+}
+
+function doughboss_final_serve_manifest() {
+	if ( ! doughboss_final_is_manifest_request( $_SERVER['REQUEST_METHOD'] ?? '', $_SERVER['REQUEST_URI'] ?? '', home_url( '/' ) ) ) {
+		return;
+	}
+	$manifest = doughboss_final_public_manifest();
+	status_header( $manifest ? 200 : 404 );
+	header( 'Content-Type: application/manifest+json; charset=UTF-8' );
+	header( 'X-Content-Type-Options: nosniff' );
+	header( 'Cache-Control: no-store' );
+	echo wp_json_encode( $manifest ?: array( 'error' => 'Install manifest unavailable' ) );
+	exit;
+}
+
+function doughboss_final_manifest_head() {
+	if ( ! is_admin() && doughboss_final_public_manifest() ) {
+		echo '<link rel="manifest" href="' . esc_url( home_url( '/' ) . '?db_manifest=1' ) . '">' . "\n";
+	}
+}
+
+function doughboss_final_install_assets() {
+	if ( ! is_page( 'members-events' ) || ! doughboss_final_public_manifest() ) {
+		return;
+	}
+	$path = get_stylesheet_directory() . '/assets/install.js';
+	if ( file_exists( $path ) ) {
+		wp_enqueue_script( 'doughboss-final-install', get_stylesheet_directory_uri() . '/assets/install.js', array(), (string) filemtime( $path ), true );
+	}
+}
+
+add_action( 'template_redirect', 'doughboss_final_serve_manifest', 0 );
+add_action( 'wp_head', 'doughboss_final_manifest_head', 2 );
+add_action( 'wp_enqueue_scripts', 'doughboss_final_install_assets' );
+
 function doughboss_final_assets() {
 	$style_path = get_stylesheet_directory() . '/style.css';
 	$script_path = get_stylesheet_directory() . '/assets/theme.js';

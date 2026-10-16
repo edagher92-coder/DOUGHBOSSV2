@@ -3,6 +3,14 @@
     #db-members-events{--db-me-paper:#f7f5f0;--db-me-ink:#211a13;--db-me-muted:#5e554b;--db-me-red:#b41913;color:var(--db-me-ink);font-size:18px;line-height:1.65}
     #db-members-events *{box-sizing:border-box}
     #db-members-events .db-me-intro{max-width:780px;margin-bottom:32px}
+    #db-members-events .db-me-shortcuts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 28px}
+    #db-members-events .db-me-shortcuts a{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:10px 16px;border:1px solid #d8cdbd;border-radius:999px;background:#fffdf8;color:#211a13;font-size:18px;font-weight:700;text-decoration:none}
+    #db-members-events .db-me-shortcuts a:hover{border-color:#b41913;color:#b41913}
+    #db-members-events .db-me-app details{border-bottom:1px solid #d8cdbd}
+    #db-members-events .db-me-app summary{cursor:pointer;min-height:48px;padding-block:12px;font-size:18px;font-weight:700}
+    #db-members-events .db-me-app [data-db-install-status]{margin-top:16px}
+    #db-members-events [data-db-install][hidden]{display:none}
+    #db-members-events h2{scroll-margin-top:calc(var(--dbf-sticky-top,160px) + 20px)}
     #db-members-events p{font-size:18px;line-height:1.65;margin:0 0 20px}
     #db-members-events .dbf-eyebrow{color:var(--db-me-red);font-size:18px;letter-spacing:.12em;margin-bottom:14px}
     #db-members-events h2{font-size:clamp(36px,5vw,58px);line-height:1.05;margin:0 0 22px}
@@ -34,6 +42,12 @@
     @media(prefers-reduced-motion:reduce){#db-members-events .dbf-button,#db-members-events .dbf-card{transition:none;transform:none}}
   </style>
 
+  <nav class="db-me-shortcuts" aria-label="Members and events shortcuts">
+    <a href="/track-order/">Track an order</a>
+    <a href="#db-me-catering">Catering help</a>
+    <a href="#db-me-membership-title">Rewards status</a>
+    <a href="#db-me-app">Add to your phone</a>
+  </nav>
   <section class="db-me-intro" aria-labelledby="db-me-welcome">
     <p class="dbf-eyebrow">Good food. Good company.</p>
     <h2 id="db-me-welcome" class="dbf-heading">A place for our regulars.<br>And your next gathering.</h2>
@@ -77,6 +91,16 @@
     <p class="db-me-note">Keep your order and enquiry details private. Share your reference only with our team, and never send card details by email.</p>
   </section>
 
+  <section id="db-me-app" class="db-me-section db-me-app" aria-labelledby="db-me-app-title">
+    <p class="dbf-eyebrow">Your favourites, a tap away</p>
+    <h2 id="db-me-app-title" class="dbf-heading">Dough Boss on your phone.</h2>
+    <p>Save Dough Boss to your home screen for a quick way back to the menu, your order and this hub. You’ll need an internet connection; saving the app doesn’t switch on online ordering or membership.</p>
+    <button class="dbf-button" type="button" data-db-install hidden>Install Dough Boss</button>
+    <p data-db-install-status role="status" aria-live="polite">If your browser offers installation, a button will appear here. You can also use the steps below.</p>
+    <details><summary>iPhone or iPad</summary><p>Open Dough Boss in Safari. Tap Share, then Add to Home Screen, then Add. If you don’t see the option, check Safari’s sharing menu.</p></details>
+    <details><summary>Android phone</summary><p>Open Dough Boss in Chrome. Tap the three-dot menu, then Install app or Add to Home screen. The wording depends on your browser.</p></details>
+    <p class="db-me-note">Finish any checkout in the browser where you started it before opening the saved app. Never pay again just because an app or browser shows an uncertain result—contact your shop.</p>
+  </section>
   <section class="db-me-section db-me-events" aria-labelledby="db-me-events-title">
     <p class="dbf-eyebrow">Around the table</p>
     <h2 id="db-me-events-title" class="dbf-heading">Events, when there’s news to share.</h2>

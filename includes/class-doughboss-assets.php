@@ -129,6 +129,14 @@ class DoughBoss_Assets {
 	 * @return void
 	 */
 	public function enqueue() {
+		// Site-wide optional choices must be available before any shop preference
+		// consumer, including the light header on non-ordering pages.
+		wp_enqueue_style( 'doughboss-preferences', DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-preferences.css', array(), DOUGHBOSS_VERSION );
+		wp_enqueue_script( 'doughboss-preferences', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-preferences.js', array(), DOUGHBOSS_VERSION, true );
+		wp_localize_script( 'doughboss-preferences', 'DoughBossPreferencesConfig', array(
+			'privacyUrl' => home_url( '/privacy-policy/' ),
+			'termsUrl' => home_url( '/terms-conditions/' ),
+		) );
 		// The hero has deliberately separate, dependency-free assets. Load it
 		// before considering the storefront app, so a hero-only landing page
 		// stays free of checkout and payment code.
@@ -151,7 +159,7 @@ class DoughBoss_Assets {
 		$load_storefront = $this->should_load();
 		// The header needs public shop/status reads, not checkout or gateway SDKs.
 		if ( $load_storefront || apply_filters( 'doughboss_load_shop_status_assets', false ) ) {
-			wp_enqueue_script( 'doughboss-shop-status', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-shop-status.js', array(), DOUGHBOSS_VERSION, true );
+			wp_enqueue_script( 'doughboss-shop-status', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-shop-status.js', array( 'doughboss-preferences' ), DOUGHBOSS_VERSION, true );
 			wp_localize_script( 'doughboss-shop-status', 'DoughBossShopData', array(
 				'restUrl' => untrailingslashit( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 			) );
@@ -236,6 +244,7 @@ class DoughBoss_Assets {
 			true
 		);
 		wp_localize_script( 'doughboss-marketing', 'DoughBossMarketingConfig', $marketing_config );
+		wp_add_inline_script( 'doughboss-marketing', 'if(window.DoughBossPreferences){window.DoughBossPreferences.syncMarketing();}', 'after' );
 
 		// Load the ACTIVE gateway's official card-capture library (from the
 		// gateway's own host, as both require) only when card payments are

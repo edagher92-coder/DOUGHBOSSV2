@@ -126,8 +126,8 @@
 	function chosenId(locations) {
 		if (locationById(locations, latestLocationId)) { return latestLocationId; }
 		var saved = 0;
-		try { saved = Number(window.localStorage.getItem('doughboss_location')); } catch (error) { /* Optional preference only. */ }
-		if (locationById(locations, saved)) { return saved; }
+		try { saved = window.DoughBossPreferences ? window.DoughBossPreferences.readShop() : 0; } catch (error) { /* Optional preference only. */ }
+		if (locationById(locations, saved)) { latestLocationId = saved; return saved; }
 		// Store-first (2.51.0): with several shops nothing is assumed until the
 		// customer picks one. A single shop is still the implicit choice.
 		return locations.length === 1 ? Number(locations[0].id) : 0;
@@ -191,7 +191,7 @@
 				var intent = new CustomEvent('doughboss:shop-change-request', { cancelable: true, detail: { id: id } });
 				// The ordering application can veto an immutable in-flight checkout.
 				if (!document.dispatchEvent(intent) || !locationById(snapshot.locations, id)) { select.value = String(current); return; }
-				try { window.localStorage.setItem('doughboss_location', String(id)); } catch (error) { /* Current-page selection still works. */ }
+				try { if (window.DoughBossPreferences) { window.DoughBossPreferences.writeShop(id); } } catch (error) { /* Current-page selection still works. */ }
 				show(id);
 				document.dispatchEvent(new CustomEvent('doughboss:shop-changed', { detail: { id: id } }));
 			});

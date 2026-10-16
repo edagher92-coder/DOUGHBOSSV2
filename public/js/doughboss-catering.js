@@ -189,7 +189,7 @@
 			if (allowed) { desired = state.locations.length ? state.locations[0].id : 0; }
 			else if (state.locationLocked) { desired = cateringLocationId(table.location.id); }
 			else if (desired === null) {
-				try { desired = cateringLocationId(window.localStorage.getItem('doughboss_location')); } catch (error) { desired = 0; }
+				try { desired = window.DoughBossPreferences ? cateringLocationId(window.DoughBossPreferences.readShop()) : 0; } catch (error) { desired = 0; }
 				// No preference uses the same first configured shop as the site header.
 				if (!desired) { desired = list.length ? cateringLocationId(list[0].id) : 0; }
 			}
@@ -475,7 +475,7 @@
 				updateCateringLocation(t.form);
 				return;
 			}
-			try { window.localStorage.setItem('doughboss_location', String(id)); } catch (error) { /* Current-page events remain authoritative. */ }
+			try { if (window.DoughBossPreferences) { window.DoughBossPreferences.writeShop(id); } } catch (error) { /* Current-page events remain authoritative. */ }
 			document.dispatchEvent(new CustomEvent('doughboss:shop-changed', { detail: { id: id } }));
 			return;
 		}

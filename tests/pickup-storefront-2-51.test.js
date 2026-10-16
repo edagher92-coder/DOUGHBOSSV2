@@ -287,8 +287,9 @@ test('the picker is only mounted through pickupSchedulingActive and drives attem
 test('storage access in the new code stays inside try/catch helpers', () => {
 	const picker = functionSource(storefront, 'pickupPicker');
 	assert.doesNotMatch(picker, /localStorage|sessionStorage/, 'the picker keeps its state in memory only');
-	assert.match(functionSource(storefront, 'storedLocationId'), /try \{[\s\S]*localStorage[\s\S]*\} catch/);
-	assert.match(functionSource(storefront, 'setLocation'), /try \{[\s\S]*localStorage[\s\S]*\} catch/);
+	assert.match(functionSource(storefront, 'storedLocationId'), /try \{[\s\S]*DoughBossPreferences.readShop[\s\S]*\} catch/);
+	assert.match(functionSource(storefront, 'setLocation'), /try \{[\s\S]*DoughBossPreferences.writeShop[\s\S]*\} catch/);
+	assert.doesNotMatch(functionSource(storefront, 'storedLocationId') + functionSource(storefront, 'setLocation'), /localStorage/);
 });
 
 test('Square payAndPlace sends pickup fields when the form has them, and none otherwise', async () => {

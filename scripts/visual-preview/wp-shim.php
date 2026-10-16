@@ -109,6 +109,8 @@ function wp_head() {
 }
 function wp_footer() {
 	$base = esc_attr( $GLOBALS['doughboss_preview_base_path'] );
+	echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss-preferences.css">';
+	echo '<script src="' . $base . 'public/js/doughboss-preferences.js"></script>';
 	echo '<script src="' . $base . 'preview/menu-options.js"></script>';
 	echo '<script src="' . $base . 'preview/preview-api.js"></script>';
 	echo '<script src="' . $base . 'public/js/doughboss-shop-status.js"></script>';
@@ -118,6 +120,7 @@ function wp_footer() {
 	}
 	echo '<script src="' . $base . 'public/js/doughboss-manoush-hero.js"></script>';
 	echo '<script src="' . $base . 'themes/doughboss-final/assets/theme.js"></script>';
+	echo '<script src="' . $base . 'themes/doughboss-final/assets/install.js"></script>';
 }
 
 function _n( $single, $plural, $number ) { return 1 === (int) $number ? $single : $plural; }
@@ -155,7 +158,14 @@ function is_page( $pages ) {
 }
 
 /** Preview the genuine empty-content state without reading a database. */
-function have_posts() { return false; }
+function have_posts() { return 'page-members-events.php' === $GLOBALS['doughboss_preview_template'] && empty( $GLOBALS['doughboss_preview_post_read'] ); }
+function the_post() { $GLOBALS['doughboss_preview_post_read'] = true; }
+function the_title() { echo esc_html( $GLOBALS['doughboss_preview_title'] ); }
+function the_content() {
+	if ( 'page-members-events.php' === $GLOBALS['doughboss_preview_template'] ) {
+		echo file_get_contents( $GLOBALS['doughboss_preview_repo_root'] . '/scripts/hero-commercial/members-events-page.html' );
+	}
+}
 
 function doughboss_preview_menu_item( $post_id ) {
 	foreach ( doughboss_preview_fixture()['menu'] as $item ) {
@@ -231,6 +241,9 @@ function do_shortcode( $source ) {
 		return '<p class="dbf-system-notice" role="status">Pizza builder is not available in this visual preview.</p>';
 	}
 	if ( 'doughboss_cart' === $tag ) {
+		if ( ! empty( $GLOBALS['doughboss_preview_cart'] ) && ! empty( $GLOBALS['doughboss_preview_ordering_open'] ) ) {
+			return '<div data-db-preview-cart="synthetic"><p class="dbf-system-notice" role="note">Sample cart and checkout layout only. Quantity, voucher, order and payment actions are disabled.</p>' . $shortcodes->cart() . '</div>';
+		}
 		return '<p class="dbf-system-notice" role="status">Cart and checkout are not available in this visual preview.</p>';
 	}
 	if ( 'doughboss_catering' === $tag ) {
@@ -248,16 +261,24 @@ function do_shortcode( $source ) {
 }
 
 function doughboss_preview_render_page( $template, $ordering_open, $title ) {
-	$allowed = array( 'front-page.php', 'page-order.php', 'page-franchising.php', 'page-wholesale.php', 'page-catering.php', 'page-locations.php' );
+	$allowed = array( 'front-page.php', 'page-order.php', 'page-franchising.php', 'page-wholesale.php', 'page-catering.php', 'page-locations.php', 'page-members-events.php' );
 	if ( ! in_array( $template, $allowed, true ) ) {
 		throw new RuntimeException( 'Preview template is not allowlisted: ' . $template );
 	}
 	$GLOBALS['doughboss_preview_template']      = $template;
 	$GLOBALS['doughboss_preview_ordering_open'] = (bool) $ordering_open;
 	$GLOBALS['doughboss_preview_title']         = $title;
+	$GLOBALS['doughboss_preview_post_read']     = false;
 	ob_start();
 	require $GLOBALS['doughboss_preview_repo_root'] . '/themes/doughboss-final/' . $template;
 	$html = ob_get_clean();
+	// Published Members copy uses ordinary public permalinks. Keep the same
+	// labels here, but map known preview pages and make unsupported routes inert.
+	if ( 'page-members-events.php' === $template ) {
+		$html = str_replace( 'href="/order/"', 'href="' . esc_attr( $GLOBALS['doughboss_preview_base_path'] . 'order.html' ) . '"', $html );
+		$html = str_replace( 'href="/catering/"', 'href="' . esc_attr( $GLOBALS['doughboss_preview_base_path'] . 'catering.html' ) . '"', $html );
+		$html = preg_replace( '#href="/(?:track-order|locations|vouchers)/"#', 'href="#preview-unavailable"', $html );
+	}
 	// No-JS and alternate-click safety: retain labels but make every external,
 	// phone and email destination inert in the exported artifact itself.
 	return preg_replace( '/\shref=("|\')(?:https?:\/\/|mailto:|tel:)[^"\']*\1/i', ' href=$1#preview-unavailable$1', $html );

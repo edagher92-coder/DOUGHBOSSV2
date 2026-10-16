@@ -231,6 +231,21 @@ button, input, select, textarea { font: inherit; }
 .dbf-prose a { color: var(--dbf-ember-dark); font-weight: 600; text-underline-offset: 3px; }
 .dbf-prose img { border-radius: 18px; }
 .dbf-system-notice { padding: 18px 20px; background: #fff3d8; border-left: 4px solid var(--dbf-gold); border-radius: 10px; }
+.dbf-page-hero.dbf-page-hero--members { min-height: 160px; text-align: left; }
+.dbf-page-hero.dbf-page-hero--members .dbf-page-hero-inner { min-height: 160px; padding-block: 24px; align-items: flex-start; }
+.dbf-page-hero.dbf-page-hero--members .dbf-display { font-size: clamp(42px, 7vw, 72px); line-height: 1.02; }
+/* Ordering-page pickup details remain in the shop card, not twice in a
+   sticky phone header. Keep the labelled shop selector available. */
+@media (max-width: 640px) {
+	body.doughboss-order-page .dbf-header-inner { min-height: 56px; }
+	body.doughboss-order-page .dbf-header-shop { min-height: 52px; padding-block: 4px; }
+	body.doughboss-order-page .dbf-header-shop .db-pickup-status { display: none; }
+	.dbf-order-counter__shop .db-shop { gap: .2rem; }
+	.dbf-order-counter__shop .db-shop-heading { font-size: .75rem; }
+	.dbf-order-counter__shop .db-shop-change { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+	.dbf-order-counter__shop .db-shop-name { grid-column: 1; font-size: 1.5rem; }
+	.dbf-order-counter__shop .db-shop-info-wrap { grid-column: 1 / -1; }
+}
 .dbf-page-hero--order { min-height: 168px; text-align: left; }
 .dbf-page-hero--order::after { background: linear-gradient(90deg, rgba(10,8,7,.96), rgba(10,8,7,.78) 58%, rgba(10,8,7,.52)); }
 .dbf-page-hero--order .dbf-page-hero-bg { filter: saturate(.62) brightness(.42); }

@@ -8,6 +8,7 @@
 	var fixture = window.DoughBossPreviewOptions || { menu: [] };
 	var paused = document.body.classList.contains('dbf-ordering-paused');
 	var orderingOpen = !paused;
+	var cartPreview = orderingOpen && !!document.querySelector('[data-db-preview-cart="synthetic"]');
 
 	function asset(path) {
 		return new URL(path, root).href;
@@ -15,7 +16,7 @@
 
 	var config = {
 		currency_symbol: '$', currency_code: 'AUD', tax_rate: 0, gst_inclusive: true, delivery_fee: 0,
-		enable_pickup: true, enable_delivery: false, single_location_mode: false, single_location_id: 0,
+		enable_pickup: true, enable_delivery: false, single_location_mode: cartPreview, single_location_id: cartPreview ? 901 : 0,
 		ordering_open: orderingOpen,
 		ordering_closed_message: 'Sample paused-state message. Check a shop for current availability.',
 		after_hours_preorders_enabled: false, after_hours_preorders_message: '', sizes: [], toppings: [],
@@ -33,11 +34,21 @@
 	}
 
 	function locations() {
-		return [
+		var shops = [
 			{ id: 901, name: 'Sample Revesby', slug: 'sample-revesby', suburb: 'Revesby', address: 'Sample address — preview only', phone: '', pickup_enabled: true, delivery_enabled: false, prep_time: 20, timezone: 'Australia/Sydney', pickup_status: pickupStatus(), capacity_preview: false },
 			{ id: 902, name: 'Sample Bankstown', slug: 'sample-bankstown', suburb: 'Bankstown', address: 'Sample address — preview only', phone: '', pickup_enabled: true, delivery_enabled: false, prep_time: 20, timezone: 'Australia/Sydney', pickup_status: pickupStatus(), capacity_preview: false }
 		];
+		return cartPreview ? shops.slice(0, 1) : shops;
 	}
+
+	// Fixed invented lines only: no cart mutations, customer data or order state.
+	var sampleCart = {
+		items: [
+			{ key: 'preview-cheese', type: 'menu', item_id: 1001, name: 'Sample Zaatar & Cheese', size: '', toppings: [{ slug: 'flat', label: 'Flat', price: 0 }], unit_price: 8.5, quantity: 2, line_total: 17 },
+			{ key: 'preview-pizza', type: 'menu', item_id: 1002, name: 'Sample Sujuk Deluxe', size: '', toppings: [{ slug: 'classic', label: 'Classic crust', price: 0 }], unit_price: 16, quantity: 1, line_total: 16 }
+		],
+		totals: { subtotal: 33, discount: 0, voucher_code: '', tax: 0, tax_inclusive: true, delivery_fee: 0, total: 33, item_count: 3 }
+	};
 
 	var menu = fixture.menu.map(function (item) {
 		var copy = Object.assign({}, item);
@@ -98,7 +109,8 @@
 		var quoteRead = url.pathname === '/doughboss/v1/catering/quote' && /^\?packages=[0-9:,%A-F]*&guest_count=[0-9]+&order_type=pickup$/i.test(url.search);
 		// The storefront scopes its menu read to the selected sample shop.
 		var scopedMenuRead = url.pathname === '/doughboss/v1/menu' && /^\?location_id=[0-9]+$/.test(url.search);
-		if (url.origin !== 'https://preview.invalid' || url.pathname.indexOf('/doughboss/v1/') !== 0 || (url.search && !quoteRead && !scopedMenuRead) || url.hash) {
+		var cartRead = cartPreview && url.pathname === '/doughboss/v1/cart' && (url.search === '' || url.search === '?order_type=pickup');
+		if (url.origin !== 'https://preview.invalid' || url.pathname.indexOf('/doughboss/v1/') !== 0 || (url.search && !quoteRead && !scopedMenuRead && !cartRead) || url.hash || url.username || url.password) {
 			return jsonResponse({ code: 'preview_external_blocked', message: 'External requests are disabled in this visual preview.' }, 403);
 		}
 		var path = url.pathname.slice('/doughboss/v1'.length);
@@ -106,6 +118,7 @@
 		if (path === '/locations') { return jsonResponse(locations(), 200); }
 		if (path === '/table/context') { return jsonResponse({ active: false }, 200); }
 		if (path === '/menu') { return jsonResponse(menu, 200); }
+		if (cartRead) { return jsonResponse(sampleCart, 200); }
 		if (path === '/catering/packages') { return jsonResponse(cateringPackages, 200); }
 		if (quoteRead) { return jsonResponse(cateringQuote(url.searchParams), 200); }
 		return jsonResponse({ code: 'preview_route_blocked', message: 'This route is not available in the visual preview.' }, 404);

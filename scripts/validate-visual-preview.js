@@ -11,7 +11,7 @@ const output = path.resolve(process.argv[2] || '_site');
 const root = path.resolve(__dirname, '..');
 const digest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const manifest = JSON.parse(fs.readFileSync(path.join(output, 'manifest.json'), 'utf8'));
-const pages = ['index.html', 'order.html', 'paused.html', 'partners.html', 'wholesale.html', 'catering.html', 'locations.html'];
+const pages = ['index.html', 'order.html', 'cart.html', 'paused.html', 'partners.html', 'wholesale.html', 'catering.html', 'locations.html', 'members.html'];
 const generated = [...pages, 'preview/menu-options.js'];
 for (const template of ['page-franchising.php', 'page-wholesale.php', 'template-parts/partner-page.php']) {
 	assert.ok(manifest.source_sha256['themes/doughboss-final/' + template], 'partner template provenance is required');
@@ -110,13 +110,21 @@ for (const page of pages) {
   for (const [, srcset] of srcsets) {
     validateSrcset(srcset, page);
   }
-  assert.doesNotMatch(html, /class="[^"]*\b(?:db-cart|db-builder)\b/);
+  assert.doesNotMatch(html, /class="[^"]*\bdb-builder\b/);
+  if (page === 'cart.html') {
+    assert.match(html, /data-db-preview-cart="synthetic"/);
+    assert.equal((html.match(/data-doughboss-cart/g) || []).length, 1, 'one genuine cart host in explicit synthetic page');
+    assert.match(html, /Sample cart and checkout layout only/);
+    assert.match(html, /Quantity, voucher, order and payment actions are disabled/);
+  } else {
+    assert.doesNotMatch(html, /data-db-preview-cart|data-doughboss-cart|class="[^"]*\bdb-cart\b/);
+  }
   for (const script of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
     assert.match(script[1], /\bsrc="[^"]+"/);
     assert.equal(script[2].trim(), '', 'no inline scripts');
   }
   for (const match of html.matchAll(/\b(?:src|href)="([^"]+)"/g)) localReference(match[1], page);
-  if (page === 'order.html' || page === 'paused.html') {
+  if (page === 'order.html' || page === 'paused.html' || page === 'cart.html') {
     assert.match(html, /<body[^>]*class="[^"]*\bdoughboss-order-page\b/);
   } else {
     assert.doesNotMatch(html, /<body[^>]*class="[^"]*\bdoughboss-order-page\b/);

@@ -336,7 +336,8 @@ body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 	}
 
 	body.doughboss-order-page .db-card-desc {
-		display: none;
+		font-size: 1rem;
+		line-height: 1.45;
 	}
 
 	body.doughboss-order-page .db-card-foot {
@@ -349,7 +350,7 @@ body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 	}
 }
 
-@media (max-width: 420px) {
+@media (max-width: 359px) {
 	body.doughboss-order-page .db-grid {
 		grid-template-columns: minmax(0, 1fr);
 	}

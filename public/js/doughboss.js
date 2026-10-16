@@ -36,6 +36,8 @@
 	// Item count of the most recently loaded cart; lets a shop change decide
 	// whether the customer needs the "re-check your cart" confirmation.
 	var lastCartItemCount = 0;
+	// A choice is still usable on this page when optional persistence is denied.
+	var currentPageLocationId = 0;
 
 	// Once checkout is submitted, its shop and cart snapshot must stay immutable
 	// until the matching order is stored or the flow explicitly permits editing.
@@ -486,8 +488,11 @@
 	}
 
 	function storedLocationId() {
+		if (typeof currentPageLocationId !== 'undefined' && currentPageLocationId) { return currentPageLocationId; }
 		try {
-			return Number(window.localStorage.getItem('doughboss_location')) || 0;
+			var saved = window.DoughBossPreferences ? window.DoughBossPreferences.readShop() : 0;
+			if (typeof currentPageLocationId !== 'undefined') { currentPageLocationId = saved; }
+			return saved;
 		} catch (e) {
 			return 0;
 		}
@@ -688,37 +693,22 @@
 	// Only name, email and phone are ever stored, and only after the customer
 	// ticks the box. Unticking deletes them. Every storage access is guarded:
 	// private browsing or blocked storage simply means nothing is remembered.
-	var REMEMBER_DETAILS_KEY = 'doughboss_remember_details';
 	var REMEMBER_DETAILS_FIELDS = ['customer_name', 'customer_email', 'customer_phone'];
 
 	function rememberStorage() {
-		try { return window.localStorage || null; } catch (ignoreStorage) { return null; }
+		return window.DoughBossPreferences || null;
 	}
 
 	function readRememberedDetails(storage) {
-		var parsed = null;
-		try { parsed = storage ? JSON.parse(storage.getItem(REMEMBER_DETAILS_KEY) || 'null') : null; } catch (ignoreRead) { return null; }
-		if (!parsed || typeof parsed !== 'object') { return null; }
-		var details = {};
-		var any = false;
-		REMEMBER_DETAILS_FIELDS.forEach(function (key) {
-			var value = typeof parsed[key] === 'string' ? parsed[key].trim().slice(0, 200) : '';
-			details[key] = value;
-			if (value) { any = true; }
-		});
-		return any ? details : null;
+		try { return storage && typeof storage.readDetails === 'function' ? storage.readDetails() : null; } catch (ignoreRead) { return null; }
 	}
 
 	function writeRememberedDetails(storage, values) {
-		var details = {};
-		REMEMBER_DETAILS_FIELDS.forEach(function (key) {
-			details[key] = values && typeof values[key] === 'string' ? values[key].trim().slice(0, 200) : '';
-		});
-		try { if (storage) { storage.setItem(REMEMBER_DETAILS_KEY, JSON.stringify(details)); } return true; } catch (ignoreWrite) { return false; }
+		try { return !!(storage && typeof storage.writeDetails === 'function' && storage.writeDetails(values)); } catch (ignoreWrite) { return false; }
 	}
 
 	function clearRememberedDetails(storage) {
-		try { if (storage) { storage.removeItem(REMEMBER_DETAILS_KEY); } } catch (ignoreClear) {}
+		try { if (storage && typeof storage.clearDetails === 'function') { storage.clearDetails(); } } catch (ignoreClear) {}
 	}
 
 	/**
@@ -732,6 +722,7 @@
 			inputs[key] = fieldWraps[key] ? fieldWraps[key].querySelector('input,textarea') : null;
 		});
 		var checkbox = el('input', { type: 'checkbox', name: 'remember_details', value: '1' });
+		var feedback = el('span', { role: 'status' });
 		var saved = readRememberedDetails(storage);
 		if (saved) {
 			checkbox.checked = true;
@@ -745,10 +736,27 @@
 			return values;
 		}
 		function sync() {
-			if (checkbox.checked) { writeRememberedDetails(storage, currentValues()); }
+			if (!checkbox.checked) { return; }
+			var values = currentValues();
+			var permitted = false;
+			try { permitted = !!(storage && typeof storage.allowed === 'function' && storage.allowed()); } catch (ignoreConsent) {}
+			if (permitted && !REMEMBER_DETAILS_FIELDS.some(function (key) { return values[key].trim(); })) {
+				clearRememberedDetails(storage);
+				return;
+			}
+			if (!permitted || !writeRememberedDetails(storage, values)) {
+				checkbox.checked = false;
+				feedback.textContent = permitted
+					? 'Details were not saved because browser storage is unavailable.'
+					: 'Details were not saved. Allow optional device preferences first.';
+			}
 		}
 		checkbox.addEventListener('change', function () {
+			feedback.textContent = '';
 			if (checkbox.checked) { sync(); } else { clearRememberedDetails(storage); }
+		});
+		document.addEventListener('doughboss:preferences-changed', function (event) {
+			if (!event.detail || !event.detail.preferences) { checkbox.checked = false; }
 		});
 		// Save on edit (not on submit): some gateways intercept the submit event
 		// before this form's own handler runs.
@@ -757,13 +765,14 @@
 		});
 		return el('label', { class: 'db-remember-details' }, [
 			checkbox,
-			el('span', { text: I18N.rememberDetails || 'Remember my details on this device' })
+			el('span', { text: 'Remember my details on this device for 30 days (optional)' }), feedback
 		]);
 	}
 
 	function setLocation(id, silent) {
+		currentPageLocationId = Number(id) || 0;
 		try {
-			window.localStorage.setItem('doughboss_location', String(id));
+			if (window.DoughBossPreferences) { window.DoughBossPreferences.writeShop(id); }
 		} catch (e) { /* private mode — selection just isn't persisted */ }
 		if (!silent) {
 			document.dispatchEvent(new CustomEvent('doughboss:shop-changed', { detail: { id: Number(id) } }));
@@ -1146,6 +1155,14 @@
 		}));
 	}
 
+	function restoreMenuSearchPosition(tools) {
+		var bounds = tools.getBoundingClientRect();
+		var stickyTop = window.getComputedStyle ? parseFloat(window.getComputedStyle(tools).top) || 0 : 0;
+		if (bounds.bottom <= stickyTop || bounds.top >= window.innerHeight) {
+			window.scrollBy({ top: bounds.top - stickyTop, behavior: 'auto' });
+		}
+	}
+
 	function renderMenu(root) {
 		// Keep the original server-rendered nodes, not an HTML copy. A failure
 		// after cards start rendering must restore the same browse-only menu.
@@ -1370,6 +1387,7 @@
 					? (visible ? visible + (visible === 1 ? ' match' : ' matches') : 'No menu matches')
 					: items.length + (items.length === 1 ? ' item' : ' items');
 				root.classList.toggle('db-menu--searching', !!query);
+				restoreMenuSearchPosition(tools);
 				updateActiveCategory();
 			});
 			var initialHash = window.location.hash;
@@ -1421,6 +1439,8 @@
 		fab.appendChild(el('span', { class: 'db-cart-fab-copy' }, [label, count]));
 		fab.appendChild(total);
 		root.appendChild(fab);
+		var cartVisible = false;
+		var hasCartItems = false;
 
 		if (!cartUrl && cartRoot) {
 			fab.addEventListener('click', function (event) {
@@ -1429,7 +1449,9 @@
 					behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
 					block: 'start'
 				});
-				var focusTarget = cartRoot.querySelector('input, button, select, textarea, a[href]');
+				var heading = cartRoot.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"]');
+				if (heading) { heading.setAttribute('tabindex', '-1'); }
+				var focusTarget = heading || cartRoot.querySelector('input, button, select, textarea, a[href]');
 				if (focusTarget) { focusTarget.focus({ preventScroll: true }); }
 			});
 		} else if (!cartUrl && !cartRoot) {
@@ -1439,10 +1461,32 @@
 			return;
 		}
 
+		function showCue(bump) {
+			if (!hasCartItems || cartVisible) {
+				fab.classList.remove('is-shown', 'db-cart-fab--bump');
+				return;
+			}
+			fab.classList.add('is-shown');
+			if (bump) {
+				fab.classList.remove('db-cart-fab--bump');
+				void fab.offsetWidth;
+				fab.classList.add('db-cart-fab--bump');
+			}
+		}
+		if (!cartUrl && cartRoot && typeof window.IntersectionObserver === 'function') {
+			new window.IntersectionObserver(function (entries) {
+				entries.forEach(function (entry) {
+					if (entry.target === cartRoot) { cartVisible = entry.isIntersecting; }
+				});
+				showCue(false);
+			}).observe(cartRoot);
+		}
+
 		function update(bump) {
 			request('/cart').then(function (cart) {
 				var itemCount = cartItemCount(cart);
 				lastCartItemCount = itemCount;
+				hasCartItems = itemCount > 0;
 				if (!itemCount) {
 					fab.classList.remove('is-shown', 'db-cart-fab--bump');
 					root.classList.remove('db-menu--has-cart-fab');
@@ -1452,16 +1496,12 @@
 				count.textContent = itemCount + ' ' + itemLabel;
 				total.textContent = money(cart.totals && cart.totals.total);
 				fab.setAttribute('aria-label', (I18N.viewCart || 'View cart') + ': ' + count.textContent + ', ' + total.textContent);
-				fab.classList.add('is-shown');
 				root.classList.add('db-menu--has-cart-fab');
-				if (bump) {
-					fab.classList.remove('db-cart-fab--bump');
-					void fab.offsetWidth;
-					fab.classList.add('db-cart-fab--bump');
-				}
+				showCue(bump);
 			}).catch(function () {
 				// The normal menu/cart renderers show REST errors. A decorative cue
 				// should fail closed and never interrupt ordering.
+				hasCartItems = false;
 				fab.classList.remove('is-shown', 'db-cart-fab--bump');
 				root.classList.remove('db-menu--has-cart-fab');
 			});
@@ -1502,9 +1542,9 @@
 			customizerInertNodes = [];
 			return;
 		}
-		customizerInertNodes = [];
 		Array.prototype.forEach.call(document.body.children, function (node) {
 			if (node === panel || node === customizerBackdrop) { return; }
+			if (customizerInertNodes.some(function (entry) { return entry.node === node; })) { return; }
 			var wasInert = node.hasAttribute('inert');
 			customizerInertNodes.push({ node: node, wasInert: wasInert });
 			if (!wasInert) { node.setAttribute('inert', ''); }
@@ -1530,15 +1570,19 @@
 	}
 
 	function activateMobileCustomizer(details) {
-		if (!isMobileCustomizer()) { return; }
+		if (!isMobileCustomizer() || !details || !details.open) { return; }
+		var panel = details._dbCustomizerPanel || details.querySelector('.db-menu-options');
+		if (!panel) { return; }
+		if (activeMobileCustomizer === details) {
+			setCustomizerBackgroundInert(true, panel);
+			return;
+		}
 		if (activeMobileCustomizer && activeMobileCustomizer !== details) {
 			var previous = activeMobileCustomizer;
 			previous.open = false;
 			releaseMobileCustomizer(previous, false);
 		}
 		activeMobileCustomizer = details;
-		var panel = details._dbCustomizerPanel || details.querySelector('.db-menu-options');
-		if (!panel) { return; }
 		details._dbCustomizerPanel = panel;
 		panel.setAttribute('role', 'dialog');
 		panel.setAttribute('aria-modal', 'true');
@@ -1547,7 +1591,11 @@
 		ensureCustomizerBackdrop().classList.add('is-shown');
 		setCustomizerBackgroundInert(true, panel);
 		var close = panel.querySelector('.db-customizer-close');
-		if (close) { setTimeout(function () { close.focus(); }, 0); }
+		if (close) {
+			setTimeout(function () {
+				if (activeMobileCustomizer === details && details.open && isMobileCustomizer()) { close.focus(); }
+			}, 0);
+		}
 	}
 
 	document.addEventListener('keydown', function (event) {
@@ -1618,7 +1666,7 @@
 				if (!file || file[2] !== format || Number(file[1]) !== width || width <= lastWidth || width > data.width) { return media; }
 				lastWidth = width;
 			}
-			sources.push(el('source', { type: source.type, srcset: source.srcset, sizes: 'auto, (max-width: 600px) calc(100vw - 48px), 320px' }));
+			sources.push(el('source', { type: source.type, srcset: source.srcset, sizes: 'auto, (max-width: 359px) 80px, (max-width: 640px) calc((100vw - 58px) / 2), 320px' }));
 		}
 		media.removeAttribute('style');
 		media.appendChild(el('picture', { class: 'db-menu-picture' }, sources.concat([
@@ -4568,6 +4616,9 @@
 			document.querySelectorAll('[data-doughboss-tracking]').forEach(renderTracking);
 			return;
 		}
+		document.addEventListener('doughboss:shop-changed', function (event) {
+			currentPageLocationId = event.detail ? Number(event.detail.id) || 0 : 0;
+		});
 		// Resolve a scanned-table session before any ordering controls render, so
 		// there is no moment where a customer sees a switchable shop or fulfilment
 		// option. Non-QR pages simply continue with a null context.

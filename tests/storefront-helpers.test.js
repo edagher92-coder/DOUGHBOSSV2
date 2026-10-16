@@ -348,6 +348,275 @@ function storefrontCreate(tag, attrs, children) {
 	return node;
 }
 
+function mobileCustomizerHarness() {
+	const documentEvents = {};
+	const windowEvents = {};
+	const timers = [];
+	const pendingToggles = new Set();
+	const focused = [];
+	let mobile = false;
+	let document;
+	function element(tag, attrs, children) {
+		const node = storefrontCreate(tag, attrs, []);
+		const classes = new Set();
+		node.classList = { add: (...names) => names.forEach(name => classes.add(name)), remove: (...names) => names.forEach(name => classes.delete(name)), contains: name => classes.has(name) };
+		node.hasAttribute = key => Object.hasOwn(node.attributes, key);
+		node.appendChild = child => {
+			if (child.parentNode) child.parentNode.removeChild(child);
+			child.parentNode = node;
+			node.children.push(child);
+			return child;
+		};
+		node.focus = () => {
+			for (let ancestor = node; ancestor; ancestor = ancestor.parentNode) {
+				if (ancestor.hasAttribute('inert')) return;
+			}
+			document.activeElement = node;
+			focused.push(node);
+		};
+		(children || []).forEach(child => node.appendChild(child));
+		return node;
+	}
+	const body = element('body');
+	const header = element('header');
+	const priorInert = element('aside', { inert: 'inert' });
+	const main = element('main');
+	const footer = element('footer');
+	[header, priorInert, main, footer].forEach(node => body.appendChild(node));
+	const detailsList = [];
+	function details() {
+		const summary = element('summary');
+		const close = element('button', { class: 'db-customizer-close' });
+		const panel = element('div', { class: 'db-menu-options' }, [close]);
+		const node = element('details', {}, [summary, panel]);
+		let open = false;
+		Object.defineProperty(node, 'open', {
+			get: () => open,
+			set: value => {
+				value = !!value;
+				if (value !== open) { open = value; pendingToggles.add(node); }
+			}
+		});
+		node.querySelector = selector => selector === 'summary' ? summary : (selector === '.db-menu-options' ? panel : null);
+		panel.querySelector = selector => selector === '.db-customizer-close' ? close : null;
+		panel.querySelectorAll = () => [close];
+		main.appendChild(node);
+		detailsList.push(node);
+		return { node, panel, close, summary };
+	}
+	document = { body, activeElement: body, addEventListener: (name, callback) => { documentEvents[name] = callback; },
+		querySelectorAll: () => detailsList.filter(node => node.open) };
+	const context = vm.createContext({
+		document,
+		window: { matchMedia: () => ({ matches: mobile }), addEventListener: (name, callback) => { windowEvents[name] = callback; } },
+		HTMLElement: { prototype: { inert: false } },
+		el: element,
+		setTimeout: callback => { timers.push(callback); },
+		revealNode: node => node.focus()
+	});
+	const source = fs.readFileSync(storefront, 'utf8');
+	const start = source.indexOf('var activeMobileCustomizer = null;');
+	const end = source.indexOf('// Use packaged responsive candidates', start);
+	assert.ok(start >= 0 && end > start);
+	vm.runInContext(source.slice(start, end), context);
+	const toggleRegistration = source.match(/details\.addEventListener\('toggle', function \(\) \{[\s\S]*?\n\t\t\t\}\);/);
+	assert.ok(toggleRegistration, 'execute the actual card toggle listener');
+	function createDetails() {
+		const item = details();
+		context.testDetails = item.node;
+		vm.runInContext('(function (details) {' + toggleRegistration[0] + '})(testDetails);', context);
+		return item;
+	}
+	return { body, header, priorInert, main, footer, focused, context, element, createDetails,
+		resize(value) { mobile = value; windowEvents.resize(); },
+		escape() { documentEvents.keydown({ key: 'Escape', preventDefault() {} }); },
+		flushToggles() {
+			while (pendingToggles.size) {
+				const batch = [...pendingToggles];
+				pendingToggles.clear();
+				batch.forEach(node => node.listeners.toggle());
+			}
+		},
+		flushTimers() { while (timers.length) timers.shift()(); },
+		assertReleased() {
+			for (const node of [header, main, footer]) assert.equal(node.hasAttribute('inert'), false);
+			assert.equal(priorInert.getAttribute('inert'), 'inert', 'preexisting inert must be preserved exactly');
+			assert.equal(body.classList.contains('db-customizer-open'), false);
+			assert.equal(context.activeMobileCustomizer, null);
+		}
+	};
+}
+
+test('repeated mobile customiser activation retains original inert ownership and restores focus on Escape', () => {
+	const h = mobileCustomizerHarness();
+	const item = h.createDetails();
+	h.resize(true);
+	item.node.open = true;
+	h.flushToggles();
+	const originalEntries = h.context.customizerInertNodes.length;
+	h.context.activateMobileCustomizer(item.node);
+	h.context.activateMobileCustomizer(item.node);
+	assert.equal(h.context.customizerInertNodes.length, originalEntries, 'repeat activation does not overwrite or duplicate the original snapshot');
+	assert.equal(h.header.hasAttribute('inert'), true);
+	const lateNode = h.element('section');
+	h.body.appendChild(lateNode);
+	h.context.activateMobileCustomizer(item.node);
+	assert.equal(lateNode.hasAttribute('inert'), true, 'new background nodes are isolated without losing earlier ownership');
+	h.flushTimers();
+	assert.equal(h.focused.at(-1), item.close);
+	h.escape();
+	h.flushToggles();
+	h.assertReleased();
+	assert.equal(lateNode.hasAttribute('inert'), false);
+	assert.equal(item.panel.parentNode, item.node);
+	assert.equal(h.focused.at(-1), item.summary, 'restored background accepts focus instead of leaving BODY active');
+	h.context.releaseMobileCustomizer(item.node, true);
+	h.assertReleased();
+});
+
+test('queued toggle plus responsive activation, dialog switching and rotation release only customiser-owned inert', () => {
+	const h = mobileCustomizerHarness();
+	const first = h.createDetails();
+	const second = h.createDetails();
+	first.node.open = true;
+	h.resize(true); // Resize activates the open details before its native queued toggle fires.
+	h.flushToggles(); // The same details activates again through its actual toggle handler.
+	h.resize(false);
+	h.flushTimers();
+	h.assertReleased();
+	assert.equal(first.panel.parentNode, first.node);
+	assert.equal(h.focused.at(-1), first.summary, 'stale mobile focus callback cannot take focus after desktop restoration');
+	h.resize(true);
+	second.node.open = true;
+	h.flushToggles(); // Switching also queues the previous details close event.
+	assert.equal(first.node.open, false);
+	assert.equal(h.context.activeMobileCustomizer, second.node);
+	assert.equal(first.panel.parentNode, first.node);
+	assert.equal(second.panel.parentNode, h.body);
+	h.flushTimers();
+	assert.equal(h.focused.at(-1), second.close, 'only the current dialog receives delayed focus');
+	h.escape();
+	h.flushToggles();
+	h.flushTimers();
+	h.assertReleased();
+	assert.equal(h.focused.at(-1), second.summary);
+	assert.equal(second.panel.parentNode, second.node);
+	h.context.activateMobileCustomizer(second.node);
+	h.assertReleased(); // A stale activation of closed details must not relock the page.
+});
+
+
+function cartFabHarness({ remote = false, observer = true, heading = true, control = true, reducedMotion = false } = {}) {
+	const nodes = [];
+	function node(tag, attrs, children) {
+		const element = storefrontCreate(tag, attrs, children);
+		const classes = new Set(String(element.className || '').split(' ').filter(Boolean));
+		element.classList = { add: (...names) => names.forEach(name => classes.add(name)), remove: (...names) => names.forEach(name => classes.delete(name)), contains: name => classes.has(name) };
+		element.focus = options => { focused.push({ element, options }); };
+		nodes.push(element);
+		return element;
+	}
+	const focused = [];
+	const root = node('div');
+	if (remote) root.setAttribute('data-cart-url', '/separate-cart/');
+	const cartRoot = node('section');
+	const title = node('h2');
+	const decrement = node('button');
+	cartRoot.querySelector = selector => selector.startsWith('h1,') ? (heading ? title : null) : (control ? decrement : null);
+	const scrolls = [];
+	cartRoot.scrollIntoView = options => scrolls.push(options);
+	const events = {};
+	const requests = [];
+	const observations = [];
+	let observeCallback;
+	const window = { matchMedia: () => ({ matches: reducedMotion }) };
+	if (observer) {
+		window.IntersectionObserver = function (callback) {
+			observeCallback = callback;
+			this.observe = target => observations.push(target);
+		};
+	}
+	const context = { window, document: { querySelector: () => cartRoot, addEventListener: (name, callback) => { events[name] = callback; } },
+		el: node, I18N: {}, lastCartItemCount: 0,
+		cartItemCount: cart => cart.count, money: value => '$' + value,
+		request: route => new Promise((resolve, reject) => requests.push({ route, resolve, reject }))
+	};
+	extractFunction(storefront, 'initCartFab', context)(root);
+	const fab = nodes.find(element => element.className === 'db-cart-fab');
+	return { root, cartRoot, title, decrement, fab, events, requests, focused, scrolls, observations,
+		intersect(visible, target = cartRoot) { observeCallback([{ target, isIntersecting: visible }]); },
+		async reply(index, count) { requests[index].resolve({ count, totals: { total: 12 } }); await new Promise(resolve => setImmediate(resolve)); }
+	};
+}
+
+test('cart cue follows actual cart visibility and latest server count without observer requests or padding churn', async () => {
+	const h = cartFabHarness();
+	assert.deepEqual(h.observations, [h.cartRoot]);
+	assert.equal(h.requests.length, 1);
+	assert.equal(h.requests[0].route, '/cart');
+	await h.reply(0, 2);
+	assert.equal(h.fab.classList.contains('is-shown'), true);
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), true);
+	h.intersect(true);
+	assert.equal(h.fab.classList.contains('is-shown'), false);
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), true, 'hiding the cue must not move the cart by removing menu padding');
+	assert.equal(h.requests.length, 1, 'intersection does not fetch the cart');
+	h.events['doughboss:cart-updated']();
+	await h.reply(1, 3);
+	assert.equal(h.fab.classList.contains('is-shown'), false, 'count refresh cannot overlay a visible cart');
+	h.intersect(false);
+	assert.equal(h.fab.classList.contains('is-shown'), true);
+	assert.equal(h.requests.length, 2);
+	h.events['doughboss:cart-updated']();
+	await h.reply(2, 0);
+	h.intersect(true);
+	h.intersect(false);
+	assert.equal(h.fab.classList.contains('is-shown'), false, 'an empty server cart cannot be resurrected by visibility');
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), false);
+	h.events['doughboss:cart-updated']();
+	await h.reply(3, 1);
+	h.events['doughboss:cart-updated']();
+	h.requests[4].reject(new Error('synthetic unavailable'));
+	await new Promise(resolve => setImmediate(resolve));
+	h.intersect(true);
+	h.intersect(false);
+	assert.equal(h.fab.classList.contains('is-shown'), false, 'failed reads remain fail-closed');
+	assert.equal(h.events.scroll, undefined, 'no document scroll listener is added');
+});
+
+test('View cart keyboard activation focuses the cart heading rather than quantity controls', async () => {
+	const h = cartFabHarness({ reducedMotion: true });
+	await h.reply(0, 1);
+	let prevented = false;
+	h.fab.listeners.click({ preventDefault() { prevented = true; } });
+	assert.equal(prevented, true);
+	assert.equal(h.scrolls[0].block, 'start');
+	assert.equal(h.scrolls[0].behavior, 'auto');
+	assert.equal(h.title.getAttribute('tabindex'), '-1');
+	assert.equal(h.focused[0].element, h.title);
+	assert.equal(h.focused[0].options.preventScroll, true);
+	assert.notEqual(h.focused[0].element, h.decrement);
+	const fallback = cartFabHarness({ heading: false, observer: false });
+	await fallback.reply(0, 1);
+	fallback.fab.listeners.click({ preventDefault() {} });
+	assert.equal(fallback.focused[0].element, fallback.decrement, 'legacy safe-control fallback remains');
+	assert.equal(fallback.scrolls[0].behavior, 'smooth');
+	assert.equal(fallback.fab.classList.contains('is-shown'), true, 'missing IntersectionObserver preserves the cue');
+	const noTarget = cartFabHarness({ heading: false, control: false });
+	assert.doesNotThrow(() => noTarget.fab.listeners.click({ preventDefault() {} }));
+});
+
+test('a separate cart URL keeps native navigation and is not hidden by an unrelated on-page cart', async () => {
+	const h = cartFabHarness({ remote: true });
+	await h.reply(0, 1);
+	assert.equal(h.fab.getAttribute('href'), '/separate-cart/');
+	assert.equal(h.fab.listeners.click, undefined);
+	assert.deepEqual(h.observations, []);
+	assert.equal(h.fab.classList.contains('is-shown'), true);
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), true);
+});
+
+
 function responsiveMenuItem() {
 	const prefix = 'https://example.test/plugin/public/images/';
 	return {
@@ -371,7 +640,8 @@ test('menu photographs deliver local responsive sources and a dimensioned origin
 	assert.equal(avif.attributes.type, 'image/avif');
 	assert.equal(webp.attributes.type, 'image/webp');
 	assert.equal(avif.attributes.srcset, item.image_responsive.sources[0].srcset);
-	assert.match(avif.attributes.sizes, /max-width: 600px/);
+	assert.match(avif.attributes.sizes, /max-width: 359px\) 80px/, 'narrow row photos request a thumbnail-sized fallback');
+	assert.match(avif.attributes.sizes, /max-width: 640px\) calc\(\(100vw - 58px\) \/ 2\)/, 'phone grid photos describe two columns rather than the whole viewport');
 	assert.equal(image.tag, 'img');
 	assert.equal(image.attributes.src, item.image);
 	assert.equal(image.attributes.alt, item.name);
@@ -1465,7 +1735,7 @@ function cateringLocationHarness(saved) {
 	const requests = [];
 	const context = {
 		state, cateringLocationId, root: { querySelector: () => ({}) }, updateCateringLocation: () => {},
-		window: { localStorage: { getItem: () => { if (saved instanceof Error) throw saved; return saved; } } },
+		window: { DoughBossPreferences: { readShop: () => { if (saved instanceof Error) throw saved; return saved; } } },
 		get: url => new Promise((resolve, reject) => requests.push({ url, resolve, reject }))
 	};
 	const load = extractFunction(catering, 'loadCateringLocations', context);
@@ -1908,6 +2178,7 @@ test('ordinary ordering still fails closed when a claimed table session is inval
 	const boot = extractFunction(storefront, 'boot', {
 		APPROVED_PREORDER: null,
 		document: {
+			addEventListener() {},
 			querySelectorAll: selector => selector.indexOf(',') !== -1 ? blocked : []
 		},
 		renderApprovedPreorder: () => assert.fail('approved renderer must not run'),
@@ -1950,13 +2221,14 @@ test('approver recovery copies only the existing bearer and reports mail handoff
 	assert.match(boardSource, /customerStatus === 'accepted'[\s\S]*?Delivery is not guaranteed/);
 });
 
-function previewAdapter(paused) {
+function previewAdapter(paused, cartPreview = false) {
 	const window = { DoughBossPreviewOptions: { menu: [{ id: 1001, image: 'public/images/menu/real-v1/zaatar-cheese.jpg' }] } };
 	const listeners = {};
 	const document = {
 		currentScript: { src: 'https://example.test/DOUGHBOSSV2/preview/preview-api.js' },
 		baseURI: 'https://example.test/DOUGHBOSSV2/order.html',
 		body: { classList: { contains: name => paused && name === 'dbf-ordering-paused' } },
+		querySelector: selector => cartPreview && selector === '[data-db-preview-cart="synthetic"]' ? {} : null,
 		addEventListener: (type, handler) => { listeners[type] = handler; },
 		getElementById: () => null
 	};
@@ -2006,6 +2278,52 @@ test('visual preview keeps paused state separate and sample hours short-lived', 
 	}
 	const menu = await (await window.fetch(apiRoot + '/menu')).json();
 	assert.equal(menu[0].image, 'https://example.test/DOUGHBOSSV2/public/images/menu/real-v1/zaatar-cheese.jpg');
+});
+
+test('explicit cart preview exposes only fixed synthetic cart reads with one shop and payments off', async () => {
+	const { window } = previewAdapter(false, true);
+	const apiRoot = 'https://preview.invalid/doughboss/v1';
+	const config = await (await window.fetch(apiRoot + '/config')).json();
+	assert.equal(config.single_location_mode, true);
+	assert.equal(config.single_location_id, 901);
+	assert.equal(config.payments_enabled, false);
+	assert.equal(config.stripe_pk, '');
+	assert.equal(window.DoughBossData.payments.enabled, false);
+	assert.notEqual(config.pickup_scheduling, true, 'no hold routes or provider simulation');
+	const locations = await (await window.fetch(apiRoot + '/locations')).json();
+	assert.equal(locations.length, 1);
+	assert.equal(locations[0].id, 901);
+	for (const route of ['/cart', '/cart?order_type=pickup']) {
+		const response = await window.fetch(apiRoot + route);
+		assert.equal(response.status, 200);
+		const cart = await response.json();
+		assert.equal(cart.items.length, 2);
+		assert.equal(cart.totals.total, 33);
+		assert.equal(cart.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0), cart.totals.total);
+		assert.equal(cart.items.reduce((sum, item) => sum + item.quantity, 0), cart.totals.item_count);
+		assert.ok(cart.items.every(item => item.name.startsWith('Sample ') && item.toppings.every(option => typeof option.label === 'string')));
+		cart.items[0].quantity = 99;
+	}
+	assert.equal((await (await window.fetch(apiRoot + '/cart')).json()).items[0].quantity, 2, 'responses cannot mutate later fixture reads');
+	for (const route of ['/cart', '/cart/add', '/cart/update', '/cart/remove', '/cart/revalidate', '/cart/apply-voucher', '/cart/remove-voucher', '/checkout', '/payment-intent', '/pickup/hold']) {
+		for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']) {
+			assert.equal((await window.fetch(apiRoot + route, { method, body: '{}' })).status, 405, method + ' ' + route);
+		}
+	}
+	for (const route of ['/checkout', '/payment-intent', '/cart/add', '/pickup/hold']) {
+		assert.equal((await window.fetch(apiRoot + route)).status, 404, 'no new consequential GET route: ' + route);
+	}
+	for (const suffix of ['?order_type=delivery', '?order_type=pickup&email=x', '?order_type=pickup&order_type=pickup', '?order_type[]=pickup', '?order_type=pickup#private']) {
+		assert.equal((await window.fetch(apiRoot + '/cart' + suffix)).status, 403, suffix);
+	}
+	for (const url of ['https://doughboss.com.au/wp-json/doughboss/v1/cart', 'https://api.stripe.com/v1/checkout/sessions', 'https://user:secret@preview.invalid/doughboss/v1/cart']) {
+		assert.equal((await window.fetch(url)).status, 403, 'external or credential URL blocked');
+	}
+	assert.equal((await previewAdapter(true, true).window.fetch(apiRoot + '/cart')).status, 404, 'paused page cannot enable synthetic cart');
+	const ordinary = previewAdapter(false).window;
+	assert.equal((await ordinary.fetch(apiRoot + '/locations')).status, 200);
+	assert.equal((await (await ordinary.fetch(apiRoot + '/locations')).json()).length, 2, 'ordinary two-shop demo unchanged');
+	assert.equal((await ordinary.fetch(apiRoot + '/cart')).status, 404, 'ordinary page still has no cart read');
 });
 
 test('preview srcsets permit only existing local assets and truthful ordered width descriptors', () => {
@@ -2227,37 +2545,260 @@ test('Square hosted storefront wiring never loads card fields and confirms only 
 	assert.match(assets, /\} elseif \( 'square' === \$gateway && ! \$square_hosted \) \{/, 'no Web Payments SDK enqueue in hosted mode');
 });
 
-test('2.48 remember-my-details storage is opt-in, bounded and survives blocked storage', () => {
-	const ctx = { REMEMBER_DETAILS_KEY: 'doughboss_remember_details', REMEMBER_DETAILS_FIELDS: ['customer_name', 'customer_email', 'customer_phone'], JSON };
-	const read = extractFunction(storefront, 'readRememberedDetails', ctx);
-	const write = extractFunction(storefront, 'writeRememberedDetails', ctx);
-	const clear = extractFunction(storefront, 'clearRememberedDetails', ctx);
-	const store = {};
-	const storage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
-	assert.equal(read(storage), null, 'nothing remembered by default');
-	assert.equal(write(storage, { customer_name: ' Synthetic Customer ', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000', address: '1 Secret St', notes: 'x' }), true);
-	assert.deepEqual(JSON.parse(store.doughboss_remember_details), { customer_name: 'Synthetic Customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000' }, 'only name, email and phone are stored');
-	assert.deepEqual(JSON.parse(JSON.stringify(read(storage))), { customer_name: 'Synthetic Customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000' });
-	clear(storage);
-	assert.equal(read(storage), null, 'unticking clears it');
-	store.doughboss_remember_details = '{not json';
-	assert.equal(read(storage), null, 'corrupt data is ignored');
-	store.doughboss_remember_details = JSON.stringify({ customer_name: 'x'.repeat(500) });
-	assert.equal(read(storage).customer_name.length, 200, 'values are bounded');
-	const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
-	assert.equal(read(blocked), null);
-	assert.equal(write(blocked, { customer_name: 'a' }), false);
-	assert.doesNotThrow(() => clear(blocked));
+const preferencesFile = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-preferences.js');
+function preferencesHarness(seed = {}, blocked = false) {
+	const values = Object.assign({}, seed);
+	const calls = [];
+	const events = [];
+	let now = 1800000000000;
+	const storage = {
+		getItem(key) { calls.push(['get', key]); if (blocked) throw new Error('blocked'); return values[key] ?? null; },
+		setItem(key, value) { calls.push(['set', key]); if (blocked) throw new Error('blocked'); values[key] = String(value); },
+		removeItem(key) { calls.push(['remove', key]); if (blocked) throw new Error('blocked'); delete values[key]; }
+	};
+	const make = extractFunction(preferencesFile, 'createPreferences');
+	const api = make(() => storage, () => now, next => events.push(next));
+	return { values, calls, events, api, advance(ms) { now += ms; } };
+}
+
+test('device preferences default off, do not read optional values, and have a 180-day decision', () => {
+	const h = preferencesHarness({ doughboss_location: '2', doughboss_remember_details: '{"customer_name":"Legacy"}', 'db-hero-motion': 'off', essential: 'keep' });
+	assert.equal(h.api.allowed(), false);
+	assert.equal(h.api.readShop(), 0);
+	assert.equal(h.api.readDetails(), null);
+	assert.equal(h.api.writeShop(2), false);
+	assert.equal(h.api.writeDetails({ customer_name: 'Synthetic' }), false);
+	assert.deepEqual(h.calls.filter(x => x[0] === 'get').map(x => x[1]), ['doughboss_preferences_v1']);
+	assert.equal(h.calls.some(x => x[0] === 'set'), false);
+	assert.equal(h.values.essential, 'keep');
+	assert.equal(h.api.choose(true), true);
+	const decision = JSON.parse(h.values.doughboss_preferences_v1);
+	assert.equal(decision.version, 1);
+	assert.equal(decision.preferences, true);
+	assert.equal(decision.expiresAt - decision.savedAt, 180 * 86400000);
+	assert.equal(h.values.doughboss_remember_details, undefined, 'allowing preferences is not contact opt-in');
+	assert.equal(h.api.choose('yes'), false);
+	for (const invalid of [true, {}, '', '1e2', '2.5', -1, 2.5, Infinity, 2147483648]) {
+		assert.equal(h.api.writeShop(invalid), false);
+	}
+	assert.equal(h.api.writeShop('2'), true);
+});
+
+test('remember-details has a separate 30-day opt-in, whitelist, bound and guarded storage', () => {
+	const h = preferencesHarness();
+	const read = extractFunction(storefront, 'readRememberedDetails');
+	const write = extractFunction(storefront, 'writeRememberedDetails');
+	const clear = extractFunction(storefront, 'clearRememberedDetails');
+	assert.equal(write(h.api, { customer_name: 'Synthetic' }), false);
+	h.api.choose(true);
+	assert.equal(read(h.api), null);
+	assert.equal(write(h.api, { customer_name: ' Synthetic Customer ', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000', address: 'never store', notes: 'never store' }), true);
+	const saved = JSON.parse(h.values.doughboss_remember_details);
+	assert.equal(saved.version, 1);
+	assert.equal(saved.expiresAt - saved.savedAt, 30 * 86400000);
+	assert.deepEqual(saved.details, { customer_name: 'Synthetic Customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000' });
+	assert.deepEqual(JSON.parse(JSON.stringify(read(h.api))), saved.details);
+	write(h.api, { customer_name: 'x'.repeat(500) });
+	assert.equal(read(h.api).customer_name.length, 200);
+	clear(h.api);
+	assert.equal(read(h.api), null);
+	h.values.doughboss_remember_details = JSON.stringify({ customer_name: 'Legacy' });
+	assert.equal(read(h.api), null, 'legacy contacts are not reused');
+	assert.equal(h.values.doughboss_remember_details, undefined);
+	h.values.doughboss_remember_details = '{not json';
+	assert.equal(read(h.api), null);
+	const blocked = preferencesHarness({}, true);
+	blocked.api.choose(true);
+	assert.equal(read(blocked.api), null);
+	assert.equal(write(blocked.api, { customer_name: 'a' }), false);
+	assert.doesNotThrow(() => clear(blocked.api));
 	assert.equal(read(null), null);
 	const source = fs.readFileSync(storefront, 'utf8');
-	assert.match(source, /rememberDetailsControl\(\{ customer_name: name, customer_email: email, customer_phone: phone \}\)/, 'checkout form renders the opt-in control');
-	assert.match(source, /Remember my details on this device/);
+	assert.match(source, /rememberDetailsControl\(\{ customer_name: name, customer_email: email, customer_phone: phone \}\)/);
+	assert.match(source, /Remember my details on this device for 30 days \(optional\)/);
 });
+
+test('expiry and invalid consent fail closed, clearing only named optional keys', () => {
+	for (const consent of [
+		{ version: 2, savedAt: 1799999999000, expiresAt: 1800000001000, preferences: true },
+		{ version: 1, savedAt: 1799999999000, expiresAt: 1800000000000, preferences: true },
+		{ version: 1, savedAt: 1800000000001, expiresAt: 1800000001000, preferences: true },
+		{ version: 1, savedAt: 1799999999000, expiresAt: 1800000000000 + 181 * 86400000, preferences: true },
+		{ version: 1, savedAt: 1799999999000, expiresAt: 1800000001000, preferences: 'yes' }
+	]) {
+		const h = preferencesHarness({ doughboss_preferences_v1: JSON.stringify(consent), doughboss_location: '2', essential: 'keep' });
+		assert.equal(h.api.allowed(), false);
+		assert.equal(h.values.doughboss_location, undefined);
+		assert.equal(h.values.essential, 'keep');
+	}
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeShop(2);
+	h.api.writeDetails({ customer_name: 'Synthetic' });
+	h.values['db-hero-motion'] = 'off';
+	h.values.doughbossSquareHostedPending = 'keep';
+	h.values.unrelated = 'keep';
+	h.advance(180 * 86400000);
+	assert.equal(h.api.allowed(), false);
+	assert.equal(h.values.doughboss_preferences_v1, undefined);
+	assert.equal(h.values.doughboss_location, undefined);
+	assert.equal(h.values.doughboss_remember_details, undefined);
+	assert.equal(h.values['db-hero-motion'], undefined);
+	assert.equal(h.values.doughbossSquareHostedPending, 'keep');
+	assert.equal(h.values.unrelated, 'keep');
+	assert.equal(h.events.at(-1).decided, false);
+});
+
+test('contact expiry is independent, withdrawal and cross-tab denial delete optional records', () => {
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeShop(2);
+	h.api.writeDetails({ customer_name: 'Synthetic' });
+	h.advance(30 * 86400000);
+	assert.equal(h.api.readDetails(), null);
+	assert.equal(h.api.readShop(), 2);
+	h.api.writeDetails({ customer_name: 'Synthetic' });
+	h.api.choose(false);
+	assert.equal(h.api.readShop(), 2, 'withdrawal does not unset the current-page transactional shop');
+	assert.equal(h.values.doughboss_location, undefined);
+	assert.equal(h.values.doughboss_remember_details, undefined);
+	assert.equal(JSON.parse(h.values.doughboss_preferences_v1).preferences, false);
+	h.api.choose(true);
+	h.api.writeShop(2);
+	h.values.doughboss_preferences_v1 = JSON.stringify({ version: 1, savedAt: 1800000000000, expiresAt: 1800000000000 + 180 * 86400000, preferences: false });
+	h.api.reload();
+	assert.equal(h.api.allowed(), false);
+	assert.equal(h.values.doughboss_location, undefined);
+	delete h.values.doughboss_preferences_v1;
+	h.api.reload();
+	assert.equal(h.api.getConsent().decided, false);
+});
+
+test('granting preferences persists the existing page shop without opting into remembered contact', () => {
+	const h = preferencesHarness();
+	assert.equal(h.api.writeShop(7), false);
+	assert.equal(h.api.readShop(), 7);
+	assert.equal(h.values.doughboss_location, undefined);
+	assert.equal(h.api.choose(true), true);
+	assert.equal(h.values.doughboss_location, '7');
+	assert.equal(h.values.doughboss_remember_details, undefined, 'shop permission never opts into contact storage');
+	const reopened = preferencesHarness(h.values);
+	assert.equal(reopened.api.readShop(), 7, 'a subsequent page can read the explicitly allowed preference');
+	const blocked = preferencesHarness({}, true);
+	blocked.api.writeShop(8);
+	assert.equal(blocked.api.choose(true), false);
+	assert.equal(blocked.api.readShop(), 8, 'storage failure preserves the current page selection');
+	assert.equal(blocked.events.at(-1).persisted, false);
+});
+
+
+test('page shop selection survives withdrawal and blocked preference storage', () => {
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeShop(2);
+	const ctx = { currentPageLocationId: 0, window: { DoughBossPreferences: h.api } };
+	const read = extractFunction(storefront, 'storedLocationId', ctx);
+	assert.equal(read(), 2);
+	h.api.choose(false);
+	assert.equal(read(), 2, 'already adopted shop remains available for the current page');
+	const blocked = preferencesHarness({}, true);
+	blocked.api.choose(true);
+	assert.equal(blocked.api.writeShop(3), false, 'blocked storage never reports persistence');
+	assert.equal(blocked.api.readShop(), 3, 'Square and other consumers retain the current-page shop');
+	const selected = extractFunction(storefront, 'storedLocationId', { currentPageLocationId: 3, window: { DoughBossPreferences: blocked.api } });
+	assert.equal(selected(), 3);
+});
+
+test('preferences leave essential storage untouched and never enable analytics or advertising', () => {
+	const source = fs.readFileSync(preferencesFile, 'utf8');
+	assert.doesNotMatch(source, /sessionStorage|document\.cookie|\.clear\s*\(/);
+	assert.match(source, /'db-hero-motion'/);
+	const calls = [];
+	const events = [];
+	const sync = extractFunction(preferencesFile, 'syncMarketing', {
+		window: { DoughBossMarketing: { setConsent: value => calls.push(value) } },
+		document: { dispatchEvent: value => events.push(value) },
+		CustomEvent: function (name, options) { this.type = name; this.detail = options.detail; }
+	});
+	sync();
+	assert.equal(calls[0].measurement, false);
+	assert.equal(calls[0].advertising, false);
+	assert.equal(events[0].type, 'doughboss:consent');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	assert.ok(assets.indexOf("'doughboss-preferences'") < assets.indexOf("'doughboss-shop-status'"));
+	assert.match(assets, /DoughBossPreferences\.syncMarketing\(\)/);
+	assert.match(assets, /privacyUrl[\s\S]*termsUrl/);
+});
+
+test('empty remembered-details opt-in remains selected and saves later edits, but denial and real storage failures do not', () => {
+	function controlHarness({ permitted = true, blocked = false } = {}) {
+		const h = preferencesHarness({}, blocked);
+		if (permitted) h.api.choose(true);
+		const fields = ['customer_name', 'customer_email', 'customer_phone'];
+		const inputs = {};
+		const wraps = {};
+		fields.forEach(key => {
+			inputs[key] = { value: '', listeners: {}, addEventListener(type, listener) { this.listeners[type] = listener; } };
+			wraps[key] = { querySelector: () => inputs[key] };
+		});
+		let checkbox;
+		let feedback;
+		const control = extractFunction(storefront, 'rememberDetailsControl', {
+			REMEMBER_DETAILS_FIELDS: fields,
+			rememberStorage: () => h.api,
+			readRememberedDetails: extractFunction(storefront, 'readRememberedDetails'),
+			writeRememberedDetails: extractFunction(storefront, 'writeRememberedDetails'),
+			clearRememberedDetails: extractFunction(storefront, 'clearRememberedDetails'),
+			document: { addEventListener() {} },
+			el: (tag, attrs, children) => {
+				const node = { children, textContent: '', listeners: {}, addEventListener(type, listener) { this.listeners[type] = listener; } };
+				if (attrs && attrs.type === 'checkbox') checkbox = node;
+				if (attrs && attrs.role === 'status') feedback = node;
+				return node;
+			}
+		});
+		control(wraps);
+		return { h, inputs, checkbox, feedback };
+	}
+	const allowed = controlHarness();
+	allowed.checkbox.checked = true;
+	allowed.checkbox.listeners.change();
+	assert.equal(allowed.checkbox.checked, true, 'an explicit opt-in can precede typing');
+	assert.equal(allowed.feedback.textContent, '', 'empty fields are not a storage or permission error');
+	assert.equal(allowed.h.values.doughboss_remember_details, undefined);
+	allowed.inputs.customer_name.value = ' Synthetic ';
+	allowed.inputs.customer_name.listeners.change();
+	assert.equal(allowed.checkbox.checked, true);
+	assert.equal(JSON.parse(allowed.h.values.doughboss_remember_details).details.customer_name, 'Synthetic', 'later edits honour the earlier checkbox choice');
+	allowed.inputs.customer_name.value = '  ';
+	allowed.inputs.customer_name.listeners.change();
+	assert.equal(allowed.checkbox.checked, true, 'clearing the fields does not revoke explicit opt-in');
+	assert.equal(allowed.h.values.doughboss_remember_details, undefined, 'clearing all fields removes the previous contact record');
+	const denied = controlHarness({ permitted: false });
+	denied.checkbox.checked = true;
+	denied.checkbox.listeners.change();
+	assert.equal(denied.checkbox.checked, false, 'even an empty opt-in still requires preference permission');
+	assert.match(denied.feedback.textContent, /Allow optional device preferences/);
+	const blocked = controlHarness({ blocked: true });
+	blocked.checkbox.checked = true;
+	blocked.checkbox.listeners.change();
+	assert.equal(blocked.checkbox.checked, true, 'no persistence error is invented before there is anything to save');
+	blocked.inputs.customer_email.value = 'synthetic@example.invalid';
+	blocked.inputs.customer_email.listeners.change();
+	assert.equal(blocked.checkbox.checked, false, 'an actual failed write is reported honestly');
+	assert.match(blocked.feedback.textContent, /browser storage is unavailable/);
+	assert.equal(blocked.h.values.doughboss_remember_details, undefined);
+});
+
 
 test('2.48 remember-my-details control prefills empty fields and unticking clears storage', () => {
 	const ctx = { REMEMBER_DETAILS_KEY: 'doughboss_remember_details', REMEMBER_DETAILS_FIELDS: ['customer_name', 'customer_email', 'customer_phone'], JSON };
-	const store = { doughboss_remember_details: JSON.stringify({ customer_name: 'Synthetic', customer_email: 'saved@example.invalid', customer_phone: '0400000001' }) };
-	const storage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeDetails({ customer_name: 'Synthetic', customer_email: 'saved@example.invalid', customer_phone: '0400000001' });
+	const store = h.values;
+	const storage = h.api;
+	const listeners = {};
 	function input(value) { return { value, listeners: {}, addEventListener(type, cb) { this.listeners[type] = cb; } }; }
 	const inputs = { customer_name: input(''), customer_email: input('typed@example.invalid'), customer_phone: input('') };
 	const wraps = {};
@@ -2265,6 +2806,7 @@ test('2.48 remember-my-details control prefills empty fields and unticking clear
 	let checkbox;
 	const control = extractFunction(storefront, 'rememberDetailsControl', Object.assign({}, ctx, {
 		I18N: {},
+		document: { addEventListener: (name, listener) => { listeners[name] = listener; } },
 		rememberStorage: () => storage,
 		readRememberedDetails: extractFunction(storefront, 'readRememberedDetails', ctx),
 		writeRememberedDetails: extractFunction(storefront, 'writeRememberedDetails', ctx),
@@ -2282,14 +2824,97 @@ test('2.48 remember-my-details control prefills empty fields and unticking clear
 	assert.equal(inputs.customer_phone.value, '0400000001');
 	inputs.customer_phone.value = '0400000002';
 	inputs.customer_phone.listeners.change();
-	assert.equal(JSON.parse(store.doughboss_remember_details).customer_phone, '0400000002', 'edits are saved while ticked');
+	assert.equal(JSON.parse(store.doughboss_remember_details).details.customer_phone, '0400000002', 'edits are saved while ticked');
 	checkbox.checked = false;
 	checkbox.listeners.change();
 	assert.equal(Object.hasOwn(store, 'doughboss_remember_details'), false, 'unticking deletes the saved details');
 	inputs.customer_name.listeners.change();
 	assert.equal(Object.hasOwn(store, 'doughboss_remember_details'), false, 'nothing is saved while unticked');
+	checkbox.checked = true;
+	listeners['doughboss:preferences-changed']({ detail: { preferences: false } });
+	assert.equal(checkbox.checked, false, 'withdrawal unticks the separate contact choice');
+	assert.equal(inputs.customer_email.value, 'typed@example.invalid', 'withdrawal does not erase transactional form fields');
 });
 
+
+test('menu search restores only offscreen tools without animation or focus changes', () => {
+	const moves = [];
+	const context = { window: { innerHeight: 640, getComputedStyle: () => ({ top: '72px' }), scrollBy: options => moves.push(options) } };
+	const restore = extractFunction(storefront, 'restoreMenuSearchPosition', context);
+	const tools = bounds => ({ getBoundingClientRect: () => bounds });
+	restore(tools({ top: 72, bottom: 180 }));
+	restore(tools({ top: 30, bottom: 150 }));
+	assert.equal(moves.length, 0, 'visible tools do not move on every keystroke');
+	restore(tools({ top: -250, bottom: -100 }));
+	assert.equal(moves.length, 1);
+	assert.equal(moves[0].top, -322);
+	assert.equal(moves[0].behavior, 'auto');
+	restore(tools({ top: 700, bottom: 800 }));
+	assert.equal(moves[1].top, 628);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /root\.classList\.toggle\('db-menu--searching', !!query\);\s*restoreMenuSearchPosition\(tools\);/);
+	assert.doesNotMatch(restore.toString(), /\.focus\(/);
+});
+
+test('preferences UI presents equal choices, accessible management and a persistent entry', () => {
+	let active = { focus() {} };
+	const all = [];
+	const dispatched = [];
+	const listeners = {};
+	const values = {};
+	function element(tag) {
+		const node = { tag, children: [], attributes: {}, listeners: {}, hidden: false, textContent: '',
+			appendChild(child) { this.children.push(child); return child; },
+			setAttribute(key, value) { this.attributes[key] = value; },
+			addEventListener(name, listener) { this.listeners[name] = listener; },
+			focus() { active = this; },
+			contains(child) { return child === this || this.children.some(node => node.contains(child)); },
+			querySelector(selector) { return this.children.find(child => child.tag === selector) || null; }
+		};
+		all.push(node);
+		return node;
+	}
+	const body = element('body');
+	const footer = element('footer');
+	const initialFocus = active;
+	const document = { body, readyState: 'complete', get activeElement() { return active; },
+		createElement: element, getElementById: id => all.find(node => node.id === id) || null,
+		querySelector: selector => selector === 'footer' ? footer : null,
+		dispatchEvent: event => { dispatched.push(event); }, addEventListener() {}
+	};
+	const window = { localStorage: { getItem: key => values[key] ?? null, setItem: (key, value) => { values[key] = value; }, removeItem: key => { delete values[key]; } },
+		addEventListener: (name, listener) => { listeners[name] = listener; }
+	};
+	vm.runInNewContext(fs.readFileSync(preferencesFile, 'utf8'), { window, document, Date, CustomEvent: function (type, options) { this.type = type; this.detail = options.detail; } });
+	const panel = all.find(node => node.id === 'db-device-preferences');
+	const button = text => all.find(node => node.tag === 'button' && node.textContent === text);
+	assert.equal(panel.hidden, false);
+	assert.equal(active, initialFocus, 'initial display does not steal focus');
+	const reject = button('Reject optional');
+	const allow = button('Allow preferences');
+	const manage = button('Manage');
+	assert.ok(reject && allow && manage);
+	assert.equal(reject.className, allow.className, 'choice buttons use the same presentation');
+	reject.listeners.click();
+	assert.equal(window.DoughBossPreferences.allowed(), false);
+	assert.equal(panel.hidden, true);
+	const entry = button('Privacy preferences');
+	assert.ok(footer.children.includes(entry));
+	entry.listeners.click();
+	assert.equal(panel.hidden, false);
+	assert.equal(active.tag, 'h2');
+	const checkbox = all.find(node => node.tag === 'input');
+	assert.equal(checkbox.checked, false);
+	checkbox.checked = true;
+	button('Save choices').listeners.click();
+	assert.equal(window.DoughBossPreferences.allowed(), true);
+	assert.equal(panel.hidden, true);
+	entry.listeners.click();
+	button('Close').listeners.click();
+	assert.equal(panel.hidden, true);
+	assert.equal(dispatched.filter(event => event.type === 'doughboss:preferences-changed').length, 2);
+	assert.ok(dispatched.filter(event => event.type === 'doughboss:consent').every(event => !event.detail.measurement && !event.detail.advertising));
+});
 test('2.48 order board requests a screen wake lock and fails silently', async () => {
 	const requests = [];
 	const ctx = { wakeLock: null, wakeLockPending: false, document: { hidden: false }, window: { navigator: {} },

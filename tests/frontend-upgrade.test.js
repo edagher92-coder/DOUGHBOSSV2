@@ -17,6 +17,122 @@ const b2b = path.join(root, 'public', 'js', 'doughboss-b2b.js');
 const hero = path.join(root, 'public', 'js', 'doughboss-manoush-hero.js');
 const themeScript = path.join(root, 'themes', 'doughboss-final', 'assets', 'theme.js');
 
+function installFixture(options = {}) {
+  const source = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'assets', 'install.js'), 'utf8');
+  function target() {
+    return { listeners: {}, addEventListener(name, callback) { this.listeners[name] = callback; },
+      emit(name, event) { return this.listeners[name]?.(event); } };
+  }
+  const button = { ...target(), hidden: true, disabled: false };
+  const status = { textContent: 'Use your browser menu to add Dough Boss.' };
+  const mode = { ...target(), matches: !!options.installed };
+  const window = { ...target(), navigator: { standalone: !!options.iosInstalled }, matchMedia(query) {
+    assert.equal(query, '(display-mode: standalone)'); return mode;
+  } };
+  for (const key of ['localStorage', 'sessionStorage', 'location', 'caches']) {
+    Object.defineProperty(window, key, { get() { throw new Error('install must not use ' + key); } });
+  }
+  Object.defineProperty(window.navigator, 'serviceWorker', { get() { throw new Error('no service worker'); } });
+  const document = { querySelector(selector) {
+    return options.noControls ? null : selector === '[data-db-install]' ? button : status;
+  } };
+  vm.runInNewContext(source, { window, document });
+  function offer(outcome = 'accepted', promptFailure = false) {
+    const event = { isTrusted: true, prevented: false, prompts: 0,
+      preventDefault() { this.prevented = true; },
+      prompt() { this.prompts += 1; return promptFailure ? Promise.reject(new Error('unavailable')) : Promise.resolve(); },
+      userChoice: Promise.resolve({ outcome }) };
+    window.emit('beforeinstallprompt', event);
+    return event;
+  }
+  return { source, window, button, status, mode, offer };
+}
+
+test('install button stays natively hidden without a genuine browser offer', () => {
+  const x = installFixture();
+  assert.equal(x.button.hidden, true);
+  x.window.emit('beforeinstallprompt', { isTrusted: false, prompt() {}, userChoice: Promise.resolve({}) });
+  assert.equal(x.button.hidden, true, 'script-dispatched event cannot expose install action');
+  x.window.emit('beforeinstallprompt', { isTrusted: true });
+  assert.equal(x.button.hidden, true, 'malformed offer ignored');
+  assert.match(x.status.textContent, /browser menu/);
+  assert.doesNotThrow(() => installFixture({ noControls: true }));
+  assert.doesNotMatch(x.source, /serviceWorker|localStorage|sessionStorage|fetch\(|location\.|caches\.|Notification/);
+});
+
+test('native offer prompts only from the button and is consumed once', async () => {
+  const x = installFixture();
+  const event = x.offer();
+  assert.equal(event.prevented, true);
+  assert.equal(event.prompts, 0, 'no automatic browser prompt');
+  assert.equal(x.button.hidden, false);
+  const completion = x.button.emit('click');
+  assert.equal(x.button.hidden, true);
+  assert.equal(x.button.disabled, true);
+  await x.button.emit('click');
+  await completion;
+  assert.equal(event.prompts, 1);
+  assert.match(x.status.textContent, /Installation requested/);
+  assert.doesNotMatch(x.status.textContent, /was installed/);
+});
+
+test('install dismissal and prompt failure retain manual fallback without reusing event', async () => {
+  for (const failure of [false, true]) {
+    const x = installFixture();
+    const event = x.offer('dismissed', failure);
+    await x.button.emit('click');
+    assert.match(x.status.textContent, failure ? /not available right now/ : /dismissed/);
+    assert.match(x.status.textContent, /browser instructions below/);
+    assert.equal(x.button.hidden, true);
+    await x.button.emit('click');
+    assert.equal(event.prompts, 1);
+    x.offer();
+    assert.equal(x.button.hidden, false, 'only a fresh native offer restores button');
+  }
+});
+
+test('already installed and appinstalled states never navigate or restore stale offer', async () => {
+  for (const options of [{ installed: true }, { iosInstalled: true }]) {
+    const x = installFixture(options);
+    x.offer();
+    assert.equal(x.button.hidden, true);
+    assert.match(x.status.textContent, /already open as an installed app/);
+  }
+  const x = installFixture();
+  x.offer();
+  const completion = x.button.emit('click');
+  x.window.emit('appinstalled', { isTrusted: true });
+  await completion;
+  assert.match(x.status.textContent, /was installed/);
+  x.offer();
+  assert.equal(x.button.hidden, true);
+  assert.equal(x.button.disabled, true);
+  const y = installFixture();
+  y.window.emit('appinstalled', { isTrusted: false });
+  assert.match(y.status.textContent, /browser menu/);
+  y.mode.matches = true;
+  y.mode.emit('change');
+  assert.match(y.status.textContent, /already open/);
+});
+
+test('phone menu keeps two compact columns with readable information and a narrow-screen row fallback', () => {
+	const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
+	const orderCss = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss-order-page.css'), 'utf8');
+	assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.db-app \.db-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+	assert.match(css, /\.db-grid:not\(\.db-grid--compact\) \.db-card-img \{ min-height: 0; aspect-ratio: 4 \/ 3;/);
+	assert.match(css, /\.db-card-desc \{ font-size: 1rem; line-height: 1\.45;/);
+	assert.match(css, /\.db-menu-customize > summary \{ min-height: 44px;/);
+	assert.match(css, /@media \(max-width: 359px\)[\s\S]*?grid-template-columns: 80px minmax\(0, 1fr\)/);
+	assert.doesNotMatch(orderCss, /@media \(max-width: 420px\)/, 'legacy order wrapper must not undo the two-column phone layout');
+	assert.doesNotMatch(orderCss, /\.db-card-desc\s*\{\s*display:\s*none/, 'ingredients must remain visible on phones');
+  assert.match(css, /\.db-menu-search-status \{ grid-column: 2; grid-row: 1;/, 'phone result count shares the search row');
+  const themeStyle = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'style.css'), 'utf8');
+  assert.match(themeStyle, /body\.doughboss-order-page \.dbf-header-shop \.db-pickup-status \{ display: none;/, 'only duplicated ordering-header status is hidden on phones');
+  assert.match(css, /grid-template-columns: 44px 46px 44px;/, 'cart stepper retains 44px touch controls');
+  assert.match(css, /\.db-app\.db-cart \{\s*scroll-margin-top: calc\(var\(--db-sticky-top, 0px\) \+ 1rem\);/, 'cart anchor clears sticky navigation');
+  assert.match(css, /\.db-checkout-summary-label \{\s*color: #bbb6ae;\s*font-size: \.875rem;/, 'checkout summary labels are readable');
+});
+
 function extractFunction(file, name, context) {
 	const source = fs.readFileSync(file, 'utf8');
 	const start = source.indexOf('function ' + name + '(');
@@ -416,12 +532,14 @@ function homepageFilmFixture(options = {}) {
 	let intersect;
 	const callbacks = new Map(); let sequence = 0;
 	const storage = { 'db-hero-motion': options.motionChoice || null };
-	const window = { ...target(), scrollY: 0, navigator: { connection }, localStorage: { getItem(key) { if (options.storageBlocked) throw new Error('blocked'); return storage[key]; }, setItem(key, value) { if (options.storageBlocked) throw new Error('blocked'); storage[key] = value; } }, matchMedia: query => query.includes('min-width') ? desktop : motion,
+	const storageAccess = { reads: 0, writes: 0 };
+	const window = { ...target(), scrollY: 0, navigator: { connection }, localStorage: { getItem(key) { storageAccess.reads++; if (options.storageBlocked) throw new Error('blocked'); return storage[key]; }, setItem(key, value) { storageAccess.writes++; if (options.storageBlocked) throw new Error('blocked'); storage[key] = value; } }, matchMedia: query => query.includes('min-width') ? desktop : motion,
 		requestAnimationFrame(fn) { callbacks.set(++sequence, fn); return sequence; }, cancelAnimationFrame(id) { callbacks.delete(id); },
 		IntersectionObserver: function (callback) { intersect = callback; this.observe = element => assert.equal(element, frame); } };
+	if (!options.noPreferences) window.DoughBossPreferences = { allowed: () => options.preferencesAllowed !== false };
 	const context = vm.createContext({ document, window });
 	vm.runInContext(script, context);
-	return { source, video, poster, control, status, document, motion, connection, desktop, classes, window, steamControl, soundControl, motionControl, storage, pendingPlays,
+	return { source, video, poster, control, status, document, motion, connection, desktop, classes, window, steamControl, soundControl, motionControl, storage, storageAccess, pendingPlays,
 		scroll(y) { window.scrollY = y; window.emit('scroll'); },
 		flush() { const work = [...callbacks.values()]; callbacks.clear(); work.forEach(fn => fn()); },
 		visible(on) { intersect([{ isIntersecting: on, intersectionRatio: on ? .5 : 0 }]); },
@@ -677,6 +795,25 @@ test('explicit hero motion choice persists and enables native looping under redu
 	assert.equal(blocked.video.playCount, 1, 'storage denial does not break explicit playback');
 });
 
+test('hero motion stays in memory unless preferences consent is available and allowed', () => {
+	for (const consent of [{ noPreferences: true }, { preferencesAllowed: false }]) {
+		const x = homepageFilmFixture({ ...consent, reduced: true, motionChoice: 'on' });
+		x.visible(true);
+		assert.equal(x.video.playCount, 0, 'stored choice cannot bypass reduced motion without consent');
+		x.motionControl.emit('click');
+		assert.equal(x.video.playCount, 1, 'explicit in-memory playback still works');
+		x.motionControl.emit('click');
+		assert.equal(x.storageAccess.reads, 0, 'denied preferences are never read');
+		assert.equal(x.storageAccess.writes, 0, 'denied preferences are never persisted');
+	}
+	const granted = homepageFilmFixture({ reduced: true });
+	granted.visible(true);
+	granted.window.DoughBossPreferences.allowed = () => false;
+	granted.motionControl.emit('click');
+	assert.equal(granted.video.playCount, 1);
+	assert.equal(granted.storageAccess.writes, 0, 'revocation takes effect before the next storage write');
+});
+
 function announcementFixture(options = {}) {
 	const source = fs.readFileSync(path.join(root, 'scripts/hero-commercial/homepage-hero-v6-snippet.php'), 'utf8');
 	const script = source.match(/<script id="db-announcements-controller">([\s\S]*?)<\/script>/)[1];
@@ -825,7 +962,13 @@ test('Members & Events is an honest informational hub with existing private trac
 	assert.match(source, /never send card details by email/);
 	assert.doesNotMatch(source, /<form\b|<script\b|<iframe\b|<h1\b/i, 'no invented signup, embed or second page title');
 	const links = [...source.matchAll(/\bhref="([^"]+)"/g)].map(match => match[1]);
-	assert.deepEqual([...new Set(links)].sort(), ['/track-order/', '#db-me-catering', '/vouchers/', '/locations/', 'mailto:catering@doughboss.com.au', 'tel:+61297742286', '/catering/', '/order/'].sort());
+	assert.deepEqual([...new Set(links)].sort(), ['/track-order/', '#db-me-catering', '#db-me-app', '#db-me-membership-title', '/vouchers/', '/locations/', 'mailto:catering@doughboss.com.au', 'tel:+61297742286', '/catering/', '/order/'].sort());
+	assert.match(source, /<button[^>]*data-db-install hidden>/, 'install action is natively hidden until a genuine browser offer');
+	assert.match(source, /data-db-install-status role="status" aria-live="polite"/);
+	assert.match(source, /internet connection/);
+	assert.match(source, /saving the app doesn’t switch on online ordering or membership/);
+	assert.match(source, /iPhone or iPad/);
+	assert.match(source, /Android phone/);
 	assert.ok(links.every(link => !/[?&](?:email|token|order)=/i.test(link)), 'customer details never enter the navigation URLs');
 	const ids = [...source.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 	assert.equal(new Set(ids).size, ids.length, 'content anchors are unique');

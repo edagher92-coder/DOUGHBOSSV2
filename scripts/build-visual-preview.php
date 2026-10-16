@@ -38,6 +38,8 @@ $source_files = array(
 	'themes/doughboss-final/page-wholesale.php',
 	'themes/doughboss-final/page-catering.php',
 	'themes/doughboss-final/page-locations.php',
+	'themes/doughboss-final/page-members-events.php',
+	'scripts/hero-commercial/members-events-page.html',
 	'themes/doughboss-final/template-parts/partner-page.php',
 	'themes/doughboss-final/template-parts/locations.php',
 	'includes/class-doughboss-post-types.php',
@@ -50,12 +52,15 @@ $source_files = array(
 $asset_files  = array(
 	'themes/doughboss-final/style.css',
 	'themes/doughboss-final/assets/theme.js',
+	'themes/doughboss-final/assets/install.js',
 	'public/css/doughboss.css',
+	'public/css/doughboss-preferences.css',
 	'public/css/doughboss-order-page.css',
 	'public/css/doughboss-manoush-hero.css',
 	'public/css/doughboss-catering.css',
 	'public/css/doughboss-b2b.css',
 	'public/js/doughboss.js',
+	'public/js/doughboss-preferences.js',
 	'public/js/doughboss-catering.js',
 	'public/js/doughboss-shop-status.js',
 	'public/js/doughboss-manoush-hero.js',
@@ -150,13 +155,16 @@ try {
 	$pages = array(
 		'index.html'  => array( 'template' => 'front-page.php', 'ordering_open' => true, 'title' => 'Dough Boss visual preview' ),
 		'order.html'  => array( 'template' => 'page-order.php', 'ordering_open' => true, 'title' => 'Order page visual preview' ),
+		'cart.html'   => array( 'template' => 'page-order.php', 'ordering_open' => true, 'title' => 'Synthetic cart and checkout visual preview' ),
 		'paused.html' => array( 'template' => 'page-order.php', 'ordering_open' => false, 'title' => 'Paused order page visual preview' ),
 		'partners.html' => array( 'template' => 'page-franchising.php', 'ordering_open' => false, 'title' => 'Partnerships visual preview' ),
 		'wholesale.html' => array( 'template' => 'page-wholesale.php', 'ordering_open' => false, 'title' => 'Wholesale visual preview' ),
 		'catering.html' => array( 'template' => 'page-catering.php', 'ordering_open' => false, 'title' => 'Catering visual preview' ),
 		'locations.html' => array( 'template' => 'page-locations.php', 'ordering_open' => false, 'title' => 'Locations visual preview' ),
+		'members.html' => array( 'template' => 'page-members-events.php', 'ordering_open' => false, 'title' => 'Members & Events' ),
 	);
 	foreach ( $pages as $filename => $page ) {
+		$GLOBALS['doughboss_preview_cart'] = 'cart.html' === $filename;
 		$html = doughboss_preview_render_page( $page['template'], $page['ordering_open'], $page['title'] );
 		if ( false === file_put_contents( $output . '/' . $filename, $html ) ) {
 			throw new RuntimeException( 'Could not write ' . $filename );

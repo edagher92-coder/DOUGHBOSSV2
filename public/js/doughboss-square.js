@@ -132,7 +132,7 @@
 
 	function storedLocationId() {
 		try {
-			return Number(window.localStorage.getItem('doughboss_location')) || 0;
+			return window.DoughBossPreferences ? window.DoughBossPreferences.readShop() : 0;
 		} catch (ignore) {
 			return 0;
 		}

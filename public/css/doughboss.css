@@ -321,13 +321,42 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 @media (max-width: 640px) {
-	.db-app .db-grid { grid-template-columns: minmax(0, 1fr); }
+	.db-app .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
 	.db-app.db-menu { padding: 1rem; }
 	body.page-id-402 .entry-content,
 	body.page-id-402 .menucontent.entry-content { padding: 24px 16px; }
 	body.page-id-402 .bgcontent { padding: 24px 16px; }
 	body.page-id-402 .bgtext { margin-inline: 0; padding: 0; }
 	body.page-id-402 .bgheader { margin: 16px 0 24px; inline-size: 100%; }
+}
+
+/* Phones: show two products at a glance instead of a screen-sized photograph.
+ * Keep all ingredient/dietary text available; do not clip names or descriptions.
+ * Compact drink rows retain their separate, photo-free layout below. */
+@media (max-width: 640px) {
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { min-height: 0; aspect-ratio: 4 / 3; }
+	.db-app.db-menu .db-card-body { padding: .75rem; }
+	.db-app.db-menu .db-card-body h3,
+	.db-app.db-menu .db-card-body h4 { font-size: 1.25rem; line-height: 1.15; overflow-wrap: anywhere; }
+	.db-app.db-menu .db-card-desc { font-size: 1rem; line-height: 1.45; }
+	.db-app.db-menu .db-card-foot { align-items: stretch; flex-direction: column; gap: .5rem; }
+	.db-app.db-menu .db-card-foot { margin-top: auto; }
+	.db-app.db-menu .db-price { font-size: 1.125rem; }
+	.db-app.db-menu .db-card-foot .db-btn,
+	.db-app.db-menu .db-menu-customize > summary { min-height: 44px; font-size: 1rem; }
+	.db-app.db-menu .db-card-placeholder-kicker { font-size: .625rem; letter-spacing: .06em; }
+	.db-app.db-menu .db-card-placeholder-category { font-size: 1.625rem; }
+	.db-app.db-menu .db-menu-tools { grid-template-columns: minmax(0, 1fr) 3.5rem; gap: .25rem; padding: .5rem; }
+	.db-app.db-menu .db-menu-search-status { grid-column: 2; grid-row: 1; padding-inline: .25rem; font-size: .875rem; }
+	.db-app.db-menu .db-menu-tools .db-jumpbar { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* At narrow widths or enlarged text, one compact row gives labels room. */
+@media (max-width: 359px) {
+	.db-app .db-grid:not(.db-grid--compact) { grid-template-columns: minmax(0, 1fr); }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: grid; grid-template-columns: 80px minmax(0, 1fr); align-items: start; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 80px; aspect-ratio: 1; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-body { min-width: 0; }
 }
 
 .db-card-img--placeholder {
@@ -1872,6 +1901,7 @@ body.page-id-402 #primary-menu > li > a {
 
 /* Guided order page. */
 .db-app.db-cart {
+	scroll-margin-top: calc(var(--db-sticky-top, 0px) + 1rem);
 	padding: clamp(1rem, 3vw, 2rem);
 	border: 1px solid var(--db-border);
 	border-radius: var(--db-r-xl);
@@ -2082,7 +2112,7 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-qty-control {
 	display: inline-grid;
-	grid-template-columns: 42px 46px 42px;
+	grid-template-columns: 44px 46px 44px;
 	align-items: center;
 	overflow: hidden;
 	border: 1px solid var(--db-border);
@@ -2093,8 +2123,8 @@ body.page-id-402 #primary-menu > li > a {
 .db-qty-btn {
 	display: grid;
 	place-items: center;
-	min-width: 42px;
-	min-height: 42px;
+	min-width: 44px;
+	min-height: 44px;
 	padding: 0;
 	border: 0;
 	background: #fff;
@@ -2110,7 +2140,7 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-qty-control .db-qty {
 	width: 46px;
-	height: 42px;
+	height: 44px;
 	padding: 0;
 	border: 0;
 	border-inline: 1px solid var(--db-border);
@@ -2161,12 +2191,12 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-checkout-summary > div > span:not(.db-checkout-summary-label) {
 	color: #d9d5ce;
-	font-size: .82rem;
+	font-size: 1rem;
 }
 
 .db-checkout-summary-label {
 	color: #bbb6ae;
-	font-size: .68rem;
+	font-size: .875rem;
 	font-weight: 800;
 	letter-spacing: .12em;
 	text-transform: uppercase;
@@ -2531,7 +2561,7 @@ body.page-id-402 #primary-menu > li > a {
 	}
 
 	.db-order-journey-label {
-		font-size: .7rem;
+		font-size: .875rem;
 	}
 
 	.db-order-journey-step {

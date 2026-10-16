@@ -249,7 +249,8 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
  var steamPaused = false;
  var soundMuted = true;
  var motionChoice = null;
- try { motionChoice = window.localStorage.getItem('db-hero-motion'); } catch (ignoreStorage) {}
+ function mayRememberMotion() { return !!(window.DoughBossPreferences && typeof window.DoughBossPreferences.allowed === 'function' && window.DoughBossPreferences.allowed()); }
+ try { if (mayRememberMotion()) { motionChoice = window.localStorage.getItem('db-hero-motion'); } } catch (ignoreStorage) {}
  video.muted = soundMuted;
  function restricted() { return !!(motionChoice === 'off' || ((motion && motion.matches) && motionChoice !== 'on') || (connection && connection.saveData)); }
  function label() {
@@ -328,7 +329,7 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
  if (steamControl) { steamControl.addEventListener('click', function () { steamPaused = !steamPaused; label(); }); }
  if (motionControl) { motionControl.addEventListener('click', function () {
   motionChoice = restricted() ? 'on' : 'off';
-  try { window.localStorage.setItem('db-hero-motion', motionChoice); } catch (ignoreStorage) {}
+ try { if (mayRememberMotion()) { window.localStorage.setItem('db-hero-motion', motionChoice); } } catch (ignoreStorage) {}
   if (motionChoice === 'off') { userPaused = true; stop(false); }
   else {
    userPaused = false; steamPaused = false;

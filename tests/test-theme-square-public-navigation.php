@@ -37,6 +37,69 @@ if ( ! function_exists( 'get_post_field' ) ) {
 
 require_once $theme_directory . 'functions.php';
 
+db_test( 'online-only manifest contains only canonical public site and validated Site Icons', function () {
+	$home = home_url( '/' );
+	$base = home_url( '/wp-content/uploads' );
+	$icons = array(
+		192 => array( 'src' => $base . '/2026/10/site-icon-192x192.png', 'width' => 192, 'height' => 192 ),
+		512 => array( 'src' => $base . '/2026/10/site-icon.png', 'width' => 512, 'height' => 512 ),
+	);
+	$manifest = doughboss_final_manifest_data( $home, $base, $icons );
+	assert_same( $home, $manifest['id'], 'identity is canonical home, never customer state' );
+	assert_same( home_url( '/order/' ), $manifest['start_url'], 'installed app opens menu without tracking/account/order state' );
+	assert_same( '/', $manifest['scope'], 'root app scope' );
+	assert_same( 'Dough Boss', $manifest['name'], 'existing brand name' );
+	assert_same( 'standalone', $manifest['display'], 'standalone display' );
+	assert_same( '#f7f5f0', $manifest['background_color'], 'existing theme paper colour' );
+	assert_same( '#e2231a', $manifest['theme_color'], 'existing theme ember colour' );
+	assert_same( false, $manifest['prefer_related_applications'], 'no unrelated app promotion' );
+	assert_same( array( '192x192', '512x512' ), array_column( $manifest['icons'], 'sizes' ), 'required icon sizes' );
+	assert_same( 'image/png', $manifest['icons'][0]['type'], 'declared MIME follows validated PNG extension' );
+	assert_same( null, doughboss_final_manifest_data( $home, $base, array() ), 'missing icons fail closed' );
+	$small = $icons;
+	$small[512]['width'] = 192;
+	assert_same( null, doughboss_final_manifest_data( $home, $base, $small ), 'WordPress small-original fallback cannot pretend to be 512px' );
+	foreach ( array(
+		'https://external.example/wp-content/uploads/icon.png',
+		'http://doughboss.test/wp-content/uploads/icon.png',
+		'https://user:secret@doughboss.test/wp-content/uploads/icon.png',
+		$base . '/icon.png?token=private', $base . '/icon.png#private',
+		home_url( '/private/icon.png' ), $base . '/../private/icon.png',
+		$base . '/%2e%2e/private/icon.png', $base . '/icon.svg',
+		$base . '/bad icon.png', $base . '/bad\\icon.png',
+	) as $unsafe ) {
+		$changed = $icons;
+		$changed[512]['src'] = $unsafe;
+		assert_same( null, doughboss_final_manifest_data( $home, $base, $changed ), 'unsafe icon rejected: ' . $unsafe );
+	}
+	assert_same( null, doughboss_final_manifest_data( $home . '?email=private', $base, $icons ), 'home cannot include private state' );
+	assert_same( null, doughboss_final_manifest_data( $home, 'https://external.example/uploads', $icons ), 'uploads must remain on canonical origin' );
+	foreach ( array( null, false, true, 1, array(), new stdClass(), '', '  ' ) as $invalid ) {
+		assert_same( null, doughboss_final_manifest_data( $invalid, $base, $icons ), 'invalid home type or empty value fails closed' );
+		assert_same( null, doughboss_final_manifest_data( $home, $invalid, $icons ), 'invalid uploads type or empty value fails closed' );
+		if ( ! is_array( $invalid ) ) {
+			assert_same( null, doughboss_final_manifest_data( $home, $base, $invalid ), 'invalid icon container type fails closed' );
+		}
+	}
+	$subdirectory = doughboss_final_manifest_data( home_url( '/bakery/' ), $base, $icons );
+	assert_same( home_url( '/bakery/order/' ), $subdirectory['start_url'], 'menu start URL respects canonical WordPress subdirectory' );
+	assert_same( home_url( '/bakery/' ), $subdirectory['id'], 'subdirectory app identity stays unchanged' );
+	assert_same( '/bakery/', $subdirectory['scope'], 'subdirectory app scope stays unchanged' );
+} );
+
+db_test( 'manifest endpoint accepts only exact canonical-root GET query', function () use ( $functions ) {
+	assert_true( doughboss_final_is_manifest_request( 'GET', '/?db_manifest=1', home_url( '/' ) ), 'exact public endpoint admitted' );
+	assert_true( doughboss_final_is_manifest_request( 'GET', '/bakery/?db_manifest=1', home_url( '/bakery/' ) ), 'WordPress subdirectory home respected' );
+	foreach ( array( '/order/?db_manifest=1', '/?db_manifest=01', '/?db_manifest[]=1', '/?db_manifest=1&email=x', '/?db_manifest=1&db_manifest=1', '/?DB_MANIFEST=1', '//evil.example/?db_manifest=1', 'https://doughboss.test/?db_manifest=1', '/?db_manifest=1#fragment' ) as $uri ) {
+		assert_false( doughboss_final_is_manifest_request( 'GET', $uri, home_url( '/' ) ), 'non-exact request ignored: ' . $uri );
+	}
+	assert_false( doughboss_final_is_manifest_request( 'POST', '/?db_manifest=1', home_url( '/' ) ), 'POST cannot activate endpoint' );
+	assert_true( false !== strpos( $functions, "apply_filters( 'doughboss_final_install_enabled', true )" ), 'other manifest suppliers can opt out' );
+	assert_true( false !== strpos( $functions, 'get_site_icon_url( $size )' ), 'configured WordPress Site Icon is the only artwork source' );
+	assert_true( false !== strpos( $functions, 'wp_upload_dir( null, false )' ), 'manifest lookup cannot create uploads directories' );
+	assert_true( false !== strpos( $functions, "'Content-Type: application/manifest+json; charset=UTF-8'" ), 'manifest MIME type emitted' );
+} );
+
 db_test( 'voucher page is informational Square Gift Cards and loyalty copy without a legacy claim form', function () use ( $voucher_template ) {
 	assert_true( false !== strpos( $voucher_template, 'Square Gift Cards' ), 'voucher page identifies Square Gift Cards' );
 	assert_true( false !== strpos( $voucher_template, 'loyalty' ), 'voucher page states the loyalty destination' );
