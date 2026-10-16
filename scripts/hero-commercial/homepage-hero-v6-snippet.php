@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Owner-approved quiet master; both viewports use the exact same complete cut.
-$db_opening_v5_video_url  = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v3-motion-subtle-audio.mp4';
+$db_opening_v5_video_url  = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v3-web-loop.mp4';
 $db_opening_v5_poster_url = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v5-poster.jpg';
 $db_opening_v6_desktop_url = $db_opening_v5_video_url;
 $db_opening_v6_desktop_poster = 'https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v6-desktop-square-poster.jpg';
@@ -33,6 +33,7 @@ add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use
 				<button type="button" data-db-opening-control aria-controls="db-opening-film" hidden>Play film</button>
 				<button type="button" data-db-sound-control aria-controls="db-opening-film" aria-label="Unmute film" hidden>Unmute</button>
 				<button type="button" data-db-steam-control aria-controls="db-opening-steam" hidden>Pause steam</button>
+				<button type="button" data-db-motion-control aria-controls="db-opening-film db-opening-steam" hidden>Enable motion</button>
 				<span data-db-opening-status role="status" aria-live="polite"></span>
 			</div>
 			<div class="db-opening-frame">
@@ -48,9 +49,9 @@ add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use
 </section>
 <style id="db-opening-home-v6-style">
 #db-opening-home-v6{background:var(--dbf-char,#0a0807);border-radius:0;box-sizing:border-box;color:var(--dbf-paper,#f7f5f0);padding:clamp(16px,3vw,40px)}
-#db-opening-home-v6 .db-opening-layout{align-items:center;display:grid;gap:clamp(24px,3vw,40px);grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);margin-inline:auto;max-width:1440px}
+#db-opening-home-v6 .db-opening-layout{align-items:center;display:grid;gap:clamp(24px,3vw,64px);grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-inline:auto;max-width:1840px}
 #db-opening-home-v6 .db-opening-media{grid-column:2;grid-row:1;min-width:0;position:relative}
-#db-opening-home-v6 .db-opening-frame{aspect-ratio:1/1;background:#080705;margin-inline:auto;max-width:100%;overflow:hidden;position:relative;width:min(100%,680px)}
+#db-opening-home-v6 .db-opening-frame{aspect-ratio:9/16;background:#080705;margin-inline:auto;max-width:100%;overflow:hidden;position:relative;width:min(100%,480px)}
 #db-opening-home-v6 .db-opening-poster,#db-opening-home-v6 .db-opening-video{display:block;height:100%;inset:0;object-fit:contain;position:absolute;width:100%}
 #db-opening-home-v6 [hidden]{display:none!important}
 #db-opening-home-v6 .db-opening-utility{align-items:center;color:var(--dbf-mist,#b8b1a4);display:flex;flex-wrap:wrap;font-size:16px;gap:8px 14px;justify-content:flex-end;line-height:1.45;margin-bottom:12px;min-height:44px}
@@ -59,8 +60,8 @@ add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use
 #db-opening-home-v6 [data-db-opening-status]:not(:empty){flex-basis:100%;text-align:center}
 #db-opening-home-v6 .db-opening-copy{grid-column:1;grid-row:1;min-width:0;align-self:start;padding-top:clamp(64px,7vw,110px)}
 #db-opening-home-v6 .db-mh-kicker{color:var(--dbf-gold,#f1a132);font-size:14px;font-weight:900;letter-spacing:.2em;margin:0 0 16px;text-transform:uppercase}
-#db-opening-home-v6 h2{color:inherit;font-family:var(--dbf-font-display,'Bebas Neue',Impact,sans-serif);font-size:clamp(54px,5.6vw,92px);font-weight:400;letter-spacing:-.015em;line-height:.95;margin:0;max-width:14ch;text-transform:uppercase}
-#db-opening-home-v6 .db-opening-copy>p:not(.db-mh-kicker){color:#e7dfd2;font-size:clamp(18px,1.5vw,20px);line-height:1.6;margin:24px 0;max-width:42ch}
+#db-opening-home-v6 h2{color:inherit;font-family:var(--dbf-font-display,'Bebas Neue',Impact,sans-serif);font-size:clamp(64px,6.2vw,132px);font-weight:400;letter-spacing:-.015em;line-height:.95;margin:0;max-width:14ch;text-transform:uppercase}
+#db-opening-home-v6 .db-opening-copy>p:not(.db-mh-kicker){color:#e7dfd2;font-size:clamp(20px,1.3vw,26px);line-height:1.6;margin:24px 0;max-width:42ch}
 #db-opening-home-v6 .db-opening-actions{align-items:center;display:flex;flex-wrap:wrap;gap:12px}
 #db-opening-home-v6 .db-mh-action{align-items:center;border:1px solid rgba(255,255,255,.76);border-radius:999px;box-sizing:border-box;display:inline-flex;font:inherit;font-size:16px;font-weight:700;justify-content:center;min-height:48px;padding:.75rem 1.3rem;text-decoration:none}
 #db-opening-home-v6 .db-mh-action--primary{background:var(--dbf-ember,#e2231a);border-color:var(--dbf-ember,#e2231a);color:#fff}
@@ -83,7 +84,7 @@ add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use
 /* One arrival sequence; repeating movement belongs to the food, not its rectangle. */
 #db-opening-home-v6 .db-opening-frame{border-radius:0;box-shadow:none;isolation:isolate}
 #db-opening-home-v6 .db-opening-steam{inset:0;pointer-events:none;position:absolute;z-index:1}
-#db-opening-home-v6 .db-opening-steam span{position:absolute;left:32%;top:43%;width:9%;height:25%;border-radius:50%;background:radial-gradient(ellipse,rgba(255,247,230,.32),rgba(255,247,230,0) 70%);filter:blur(7px);opacity:0}
+#db-opening-home-v6 .db-opening-steam span{position:absolute;left:32%;top:43%;width:9%;height:25%;border-radius:50%;background:radial-gradient(ellipse,rgba(255,247,230,.32),rgba(255,247,230,0) 70%);opacity:0}
 #db-opening-home-v6 .db-opening-steam span:nth-child(2){left:47%;top:48%}
 #db-opening-home-v6 .db-opening-steam span:nth-child(3){left:62%;top:44%}
 @media(prefers-reduced-motion:no-preference){
@@ -106,6 +107,13 @@ add_filter( 'pre_do_shortcode_tag', static function ( $return, $tag, $attr ) use
 }
 @keyframes db-opening-arrive{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){#db-opening-home-v6 *,#db-opening-home-v6 *::before,#db-opening-home-v6 *::after{animation:none!important;transition:none!important}}
+/* A visitor can explicitly opt into this film and its steam without changing
+   the operating-system preference or enabling every animation on the site. */
+#db-opening-home-v6.is-motion-enabled .db-opening-steam span{animation:db-opening-steam-rise 5.6s ease-in-out infinite!important;animation-play-state:paused!important}
+#db-opening-home-v6.is-motion-enabled .db-opening-steam span:nth-child(2){animation-delay:-1.9s!important}
+#db-opening-home-v6.is-motion-enabled .db-opening-steam span:nth-child(3){animation-delay:-3.7s!important}
+#db-opening-home-v6.is-motion-enabled.has-steam .db-opening-steam span{animation-play-state:running!important}
+#db-opening-home-v6:not(.has-steam) .db-opening-steam span{visibility:hidden}
 /* Jeton-inspired editorial rhythm, independently implemented. The existing
    theme observer owns reveals; no second scroll loop or animation dependency. */
 #db-opening-home-v6{position:relative;isolation:isolate;background:radial-gradient(ellipse at 0 30%,rgba(226,35,26,.13),transparent 55%),var(--dbf-char,#0a0807)}
@@ -230,24 +238,32 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
  var status = opening.querySelector('[data-db-opening-status]');
  var steamControl = opening.querySelector('[data-db-steam-control]');
  var soundControl = opening.querySelector('[data-db-sound-control]');
+ var motionControl = opening.querySelector('[data-db-motion-control]');
  if (!video || !poster || !control || !video.play || !video.pause) { return; }
  opening._dbOpeningV6Wired = true;
  var source = video.getAttribute('data-db-opening-src');
  var desktop = window.matchMedia ? window.matchMedia('(min-width: 1025px), (orientation: landscape)') : null;
  var motion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
  var connection = window.navigator && window.navigator.connection;
- var inView = false, userPaused = false, wanted = false, playing = false, failed = false, ended = false, attempt = 0;
- var scrubbing = false, scrollFrame = 0, lastScroll = window.scrollY || 0, scrubTime = 0;
+ var inView = false, userPaused = false, wanted = false, playing = false, failed = false, attempt = 0;
  var steamPaused = false;
  var soundMuted = true;
+ var motionChoice = null;
+ try { motionChoice = window.localStorage.getItem('db-hero-motion'); } catch (ignoreStorage) {}
  video.muted = soundMuted;
- function restricted() { return !!((motion && motion.matches) || (connection && connection.saveData)); }
+ function restricted() { return !!(motionChoice === 'off' || ((motion && motion.matches) && motionChoice !== 'on') || (connection && connection.saveData)); }
  function label() {
-  var text = wanted || scrubbing ? 'Pause film' : (ended ? 'Replay film' : 'Play film');
+  var text = wanted ? 'Pause film' : 'Play film';
   control.textContent = text;
   control.setAttribute('aria-label', text);
-  control.setAttribute('aria-pressed', wanted || scrubbing ? 'true' : 'false');
+  control.setAttribute('aria-pressed', wanted ? 'true' : 'false');
   opening.classList.toggle('is-playing', playing && wanted);
+  opening.classList.toggle('is-motion-enabled', motionChoice === 'on' && !restricted());
+  if (motionControl) {
+   motionControl.hidden = false;
+   motionControl.textContent = restricted() ? 'Enable motion' : 'Reduce motion';
+   motionControl.setAttribute('aria-pressed', restricted() ? 'false' : 'true');
+  }
   if (soundControl) {
    soundControl.hidden = failed;
    soundControl.textContent = soundMuted ? 'Unmute' : 'Mute';
@@ -262,20 +278,18 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   }
  }
  function stop(showPoster) {
-  if (scrollFrame) { window.cancelAnimationFrame(scrollFrame); scrollFrame = 0; }
   wanted = false; playing = false; attempt += 1; video.pause();
   if (showPoster) { video.hidden = true; poster.hidden = false; }
   label();
  }
  function start(explicit) {
-  if (failed || document.hidden || (!explicit && (!inView || userPaused || ended || restricted()))) { return; }
-  scrubbing = false; lastScroll = window.scrollY || 0; wanted = true;
-  if (video.ended || ended) { video.currentTime = 0; }
-  ended = false;
+  if (failed || !inView || document.hidden || (!explicit && (userPaused || restricted()))) { return; }
+  wanted = true;
+  if (video.ended) { video.currentTime = 0; }
   var currentAttempt = ++attempt;
   video.muted = soundMuted;
-  // Replay is explicit; after completion the final film frame carries ambient steam.
-  video.loop = false;
+  // Native playback repeats the full film; restricted visitors retain one-shot explicit play.
+  video.loop = !restricted();
   var selectedSource = desktop && desktop.matches ? video.getAttribute('data-db-opening-desktop-src') : source;
   if (video.getAttribute('src') !== selectedSource) { video.setAttribute('src', selectedSource); }
   if (status) { status.textContent = ''; }
@@ -288,55 +302,41 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   try {
    var promise = video.play();
    if (promise && typeof promise.then === 'function') {
-    promise.then(function () { if (currentAttempt !== attempt || !wanted || document.hidden || scrubbing) { video.pause(); } }, rejected);
+    promise.then(function () { if (!wanted || document.hidden || !inView) { video.pause(); } }, rejected);
    }
   } catch (error) { rejected(); }
  }
  function syncVisibility() {
   if (!inView || document.hidden) { stop(false); }
-  else if (!wanted && !scrubbing) { start(false); }
-  lastScroll = window.scrollY || 0;
+  else if (!wanted) { start(false); }
   label();
  }
- // Autoplay welcomes the visitor. The first real scroll takes over at the
- // current frame, without snapping back; reverse scrolling reverses the film.
- function scrollFilm() {
-  var position = window.scrollY || 0;
-  var delta = position - lastScroll;
-  lastScroll = position;
-  if (!delta || !inView || document.hidden || userPaused || failed || restricted() ||
-      !Number.isFinite(video.duration) || video.duration <= 0 || video.readyState < 2 || (video.hidden && !ended)) { return; }
-  if (!scrubbing) {
-   scrubTime = ended ? video.duration - .04 : video.currentTime;
-   stop(false); scrubbing = true; video.loop = false;
-   video.hidden = false; poster.hidden = true; label();
-  }
-  var height = opening.querySelector('.db-opening-frame').getBoundingClientRect().height;
-  scrubTime = Math.max(0, Math.min(video.duration - .04, scrubTime + delta * video.duration / Math.max(400, height)));
-  if (!scrollFrame) {
-   scrollFrame = window.requestAnimationFrame(function () {
-    scrollFrame = 0;
-    if (scrubbing && !userPaused && !restricted() && !document.hidden && inView) { video.currentTime = scrubTime; label(); }
-   });
-  }
- }
- if (window.requestAnimationFrame) { window.addEventListener('scroll', scrollFilm, { passive: true }); }
  video.addEventListener('playing', function () {
-  if (!wanted || failed || document.hidden) { video.pause(); return; }
+  if (!wanted || failed || document.hidden || !inView) { video.pause(); return; }
   playing = true; video.hidden = false; poster.hidden = true; label();
  });
  video.addEventListener('waiting', function () { playing = false; label(); });
- video.addEventListener('seeked', label);
- video.addEventListener('ended', function () { ended = true; scrubbing = false; stop(false); });
+ video.addEventListener('ended', function () { if (!video.loop) { stop(false); } });
  video.addEventListener('error', function () {
   failed = true; stop(true); control.hidden = true;
   if (status) { status.textContent = 'Film unavailable. Our bakery image is shown instead.'; }
  });
  control.addEventListener('click', function () {
-  if (wanted || scrubbing) { userPaused = true; scrubbing = false; stop(true); }
+  if (wanted) { userPaused = true; stop(true); }
   else { userPaused = false; start(true); }
  });
  if (steamControl) { steamControl.addEventListener('click', function () { steamPaused = !steamPaused; label(); }); }
+ if (motionControl) { motionControl.addEventListener('click', function () {
+  motionChoice = restricted() ? 'on' : 'off';
+  try { window.localStorage.setItem('db-hero-motion', motionChoice); } catch (ignoreStorage) {}
+  if (motionChoice === 'off') { userPaused = true; stop(false); }
+  else {
+   userPaused = false; steamPaused = false;
+   start(true);
+   if (connection && connection.saveData && status) { status.textContent = 'Data saver is on. Automatic playback remains off.'; }
+  }
+  label();
+ }); }
  if (soundControl) { soundControl.addEventListener('click', function () {
   if (failed) { return; }
   soundMuted = !soundMuted;
@@ -345,12 +345,12 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
  }); }
  document.addEventListener('visibilitychange', syncVisibility);
  function preferenceChanged() {
-  if (restricted()) { scrubbing = false; video.loop = false; userPaused = true; stop(true); }
+  if (restricted()) { video.loop = false; userPaused = true; stop(true); }
  }
  if (motion && motion.addEventListener) { motion.addEventListener('change', preferenceChanged); }
  else if (motion && motion.addListener) { motion.addListener(preferenceChanged); }
  if (connection && connection.addEventListener) { connection.addEventListener('change', preferenceChanged); }
- function breakpointChanged() { scrubbing = false; stop(!ended); start(false); }
+ function breakpointChanged() { stop(true); start(false); }
  if (desktop && desktop.addEventListener) { desktop.addEventListener('change', breakpointChanged); }
  else if (desktop && desktop.addListener) { desktop.addListener(breakpointChanged); }
  control.hidden = false; label();
@@ -376,3 +376,153 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
 	<?php
 	return ob_get_clean();
 }, 20, 3 );
+
+// One rollbackable presentation release. No commerce state or theme files are
+// replaced; these hooks run only with the existing DoughBoss presentation theme.
+add_action( 'wp_head', static function () {
+	if ( is_admin() || ! function_exists( 'doughboss_final_ordering_open' ) ) { return; }
+	?>
+<style id="db-front-repair-style">
+:root{--dbf-wrap:1840px;font-size:clamp(16px,calc(12px + .4vw),22px)}
+body{font-size:clamp(18px,calc(14px + .35vw),23px)}
+.dbf-hero .dbf-wrap{width:min(1920px,calc(100% - 32px))}
+.db-app{font-size:1rem}
+/* The nearly opaque sticky header was blurring the entire scrolling page
+   beneath it. A solid identical-colour surface avoids that repeated GPU pass. */
+.dbf-header::before{background:var(--dbf-coal,#151210);backdrop-filter:none;-webkit-backdrop-filter:none}
+.db-about-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,550px);align-items:center;gap:clamp(24px,4vw,70px);padding:clamp(32px,5vw,80px) max(20px,calc((100% - 1840px)/2));min-height:0}
+.db-about-hero::after{display:none}
+.db-about-hero>.db-responsive-picture{grid-column:2;grid-row:1;display:block}
+.db-about-hero .dbf-page-hero-bg{position:static;width:100%;height:auto;inset:auto;aspect-ratio:5/4;object-fit:contain;filter:none;border-radius:20px}
+.db-about-hero .dbf-page-hero-inner{grid-column:1;grid-row:1;width:100%;min-height:0;padding:0}
+.db-about-hero .dbf-display{font-size:clamp(44px,5vw,100px)}
+@media(max-width:720px){.db-about-hero{grid-template-columns:minmax(0,1fr)}.db-about-hero>.db-responsive-picture{grid-column:1;grid-row:2;max-width:550px}}
+/* Sparse ambient wisps: no blur, particles, canvas or scroll-driven work. */
+body.home [data-db-ambient]{position:relative;isolation:isolate}
+body.home [data-db-ambient]::before,body.home [data-db-ambient]::after{content:'';pointer-events:none;position:absolute;z-index:-1;left:10%;top:15%;width:min(45%,260px);height:180px;background:radial-gradient(ellipse,rgba(232,217,192,.18),transparent 65%);opacity:0;animation:db-title-steam 9s ease-in-out infinite;animation-play-state:paused}
+body.home [data-db-ambient]::after{left:55%;top:25%;animation-delay:-4.5s}
+body.home .db-ambient-visible::before,body.home .db-ambient-visible::after{animation-play-state:running}
+@keyframes db-title-steam{0%{opacity:0;transform:translate3d(-15%,18%,0) scale(.8)}35%{opacity:.7}100%{opacity:0;transform:translate3d(20%,-65%,0) scale(1.25)}}
+@media(prefers-reduced-motion:reduce){body.home [data-db-ambient]::before,body.home [data-db-ambient]::after{animation:none!important}}
+.dbf-header-shop,.dbf-launch-bar,.dbf-footer-bottom{font-size:max(15px,.85rem)}
+.dbf-header-shop .db-pickup-status,.dbf-footer li,.dbf-location-rows,.dbf-location-meta{font-size:max(16px,.9rem)}
+.dbf-story-copy p:not(.dbf-eyebrow),body.home .dbf-review-panel p:not(.dbf-eyebrow){font-size:max(18px,1rem);line-height:1.65}
+.dbf-eyebrow,body.home .dbf-eyebrow{font-size:max(14px,.8rem)}
+.dbf-button--small{font-size:max(18px,1rem)}
+@media(min-width:1101px) and (max-width:1399px){.dbf-header-inner{grid-template-columns:1fr auto;gap:4px 24px;padding-block:8px}.dbf-header-inner .dbf-brand{grid-column:1;grid-row:1;white-space:nowrap}.dbf-header-cta{grid-column:2;grid-row:1;white-space:nowrap}.dbf-header-inner .dbf-nav{grid-column:1/-1;grid-row:2;justify-self:center}.dbf-nav a{white-space:nowrap}}
+@media(min-width:1101px){.dbf-nav a{display:inline-flex;align-items:center;min-height:44px;font-size:clamp(16px,.9vw,20px);letter-spacing:.04em}.dbf-nav ul{gap:clamp(14px,1.3vw,28px)}}
+@media(max-width:600px){.dbf-launch-bar{flex-wrap:wrap;gap:0 8px;letter-spacing:.04em}.dbf-hero .dbf-wrap{width:100%}}
+.db-announcements{display:flex;align-items:center;justify-content:center;gap:12px;background:#f1a132;color:#21170d;padding:4px max(16px,3vw);font-size:max(16px,.9rem);line-height:1.4;min-height:56px}
+.db-announcements-list{min-width:0;max-width:68ch;flex:1;text-align:center}
+.db-announcements a{display:flex;align-items:center;justify-content:center;min-height:44px;padding:6px;text-decoration:underline;text-underline-offset:4px;font-weight:700}
+.db-announcements [hidden]{display:none!important}
+.db-announcements-controls{display:flex;gap:8px;flex-shrink:0}
+.db-announcements button{border:1px solid currentColor;border-radius:999px;background:transparent;color:inherit;min-height:44px;min-width:44px;padding:6px 12px;font:inherit;cursor:pointer}
+.db-announcements a:focus-visible,.db-announcements button:focus-visible{outline:3px solid #21170d;outline-offset:2px;box-shadow:none}
+.db-announcements.is-animated a:not([hidden]){animation:db-announcement-in .3s ease-out}
+@keyframes db-announcement-in{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+@media(max-width:600px){.db-announcements{display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding:6px 16px}.db-announcements-list{min-height:68px;display:grid;align-items:center}.db-announcements-controls{justify-content:center}.db-announcements button{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.db-announcements.is-animated a:not([hidden]){animation:none}}
+</style>
+	<?php
+}, 99 );
+
+add_action( 'wp_body_open', static function () {
+	if ( is_admin() || ! function_exists( 'doughboss_final_ordering_open' ) ) { return; }
+	?>
+<aside class="db-announcements" data-db-announcements aria-label="Dough Boss announcements">
+	<div class="db-announcements-list" id="db-announcement-messages">
+		<a href="<?php echo esc_url( home_url( '/locations/' ) ); ?>">Your local Dough Boss — Revesby, Bankstown &amp; Roselands</a>
+		<a href="<?php echo esc_url( home_url( '/catering/' ) ); ?>" hidden>Planning a gathering? Explore catering with Revesby</a>
+		<a href="<?php echo esc_url( home_url( '/vouchers/' ) ); ?>" hidden>Gift cards &amp; loyalty — see the latest update</a>
+		<a href="<?php echo esc_url( home_url( '/members-events/' ) ); ?>" hidden>Members &amp; Events — order updates and what&rsquo;s coming</a>
+	</div>
+	<div class="db-announcements-controls">
+		<button type="button" data-db-announcement-play aria-controls="db-announcement-messages" hidden>Pause updates</button>
+		<button type="button" data-db-announcement-next aria-controls="db-announcement-messages" hidden>Next update</button>
+	</div>
+</aside>
+	<?php
+}, 20 );
+
+add_action( 'wp_footer', static function () {
+	if ( is_admin() || ! function_exists( 'doughboss_final_ordering_open' ) ) { return; }
+	?>
+<script id="db-announcements-controller">
+(function () {
+ 'use strict';
+ var bar = document.querySelector('[data-db-announcements]');
+ if (!bar || bar._dbAnnouncements) { return; }
+ bar._dbAnnouncements = true;
+ var slides = bar.querySelectorAll('.db-announcements-list a');
+ var play = bar.querySelector('[data-db-announcement-play]');
+ var next = bar.querySelector('[data-db-announcement-next]');
+ if (slides.length < 2 || !play || !next) { return; }
+ var motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+ var connection = window.navigator.connection;
+ var paused = motion.matches || !!(connection && connection.saveData);
+ var hovered = false, focused = false, visible = true, index = 0, timer = 0;
+ function label() {
+  play.textContent = paused ? 'Play updates' : 'Pause updates';
+  play.setAttribute('aria-pressed', paused ? 'false' : 'true');
+  bar.classList.toggle('is-animated', !paused && !motion.matches);
+ }
+ function advance() {
+  slides[index].hidden = true;
+  index = (index + 1) % slides.length;
+  slides[index].hidden = false;
+ }
+ function schedule() {
+  if (timer) { window.clearTimeout(timer); timer = 0; }
+  label();
+  if (!paused && !hovered && !focused && visible && !document.hidden) {
+   timer = window.setTimeout(function () { timer = 0; advance(); schedule(); }, 6500);
+  }
+ }
+ play.hidden = false; next.hidden = false;
+ play.addEventListener('click', function () { paused = !paused; schedule(); });
+ next.addEventListener('click', function () { advance(); schedule(); });
+ bar.addEventListener('mouseenter', function () { hovered = true; schedule(); });
+ bar.addEventListener('mouseleave', function () { hovered = false; schedule(); });
+ bar.addEventListener('focusin', function () { focused = true; schedule(); });
+ bar.addEventListener('focusout', function (event) { focused = bar.contains(event.relatedTarget); schedule(); });
+ document.addEventListener('visibilitychange', schedule);
+ function preferenceChanged() {
+  if (motion.matches || (connection && connection.saveData)) { paused = true; }
+  schedule();
+ }
+ if (motion.addEventListener) { motion.addEventListener('change', preferenceChanged); }
+ else if (motion.addListener) { motion.addListener(preferenceChanged); }
+ if (connection && connection.addEventListener) { connection.addEventListener('change', preferenceChanged); }
+ if (window.IntersectionObserver) {
+  new window.IntersectionObserver(function (entries) { visible = entries[0].isIntersecting; schedule(); }).observe(bar);
+ }
+ schedule();
+}());
+</script>
+<script id="db-title-steam-controller">
+(function () {
+ 'use strict';
+ if (!document.body.classList.contains('home') || !window.IntersectionObserver) { return; }
+ var targets = Array.prototype.slice.call(document.querySelectorAll('.db-opening-copy,.dbf-section-head'));
+ var motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+ var connection = window.navigator.connection;
+ var visible = new Set();
+ function sync() {
+  var control = document.querySelector('[data-db-motion-control]');
+  var allowed = !motion.matches && !(connection && connection.saveData) && !document.hidden && (!control || control.getAttribute('aria-pressed') !== 'false');
+  targets.forEach(function (target) { target.classList.toggle('db-ambient-visible', allowed && visible.has(target)); });
+ }
+ var observer = new window.IntersectionObserver(function (entries) {
+  entries.forEach(function (entry) { if (entry.isIntersecting) { visible.add(entry.target); } else { visible.delete(entry.target); } });
+  sync();
+ });
+ targets.forEach(function (target) { target.setAttribute('data-db-ambient', ''); observer.observe(target); });
+ document.addEventListener('visibilitychange', sync);
+ document.addEventListener('click', function (event) { if (event.target.closest('[data-db-motion-control]')) { sync(); } });
+ if (motion.addEventListener) { motion.addEventListener('change', sync); }
+ if (connection && connection.addEventListener) { connection.addEventListener('change', sync); }
+}());
+</script>
+	<?php
+}, 30 );

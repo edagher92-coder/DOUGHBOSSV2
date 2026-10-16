@@ -78,6 +78,14 @@ The later approved sandbox receipt must reconcile, separately per merchant/envir
 
 Before an approved release, preserve the previous artifact/hash, redacted configuration and mapping evidence, a recoverable database backup and a demonstrated restore path. Separate payment-account changes from code rollback: restoring old code must not make Bankstown/Roselands silently inherit a legacy seller. If any attribution, tax or reconciliation check fails, keep/turn commerce off through the approved operating procedure, preserve paid records and provider references, and reconcile/refund through the original seller under explicit authority. Never reconnect, revoke, remap, refund or replay provider writes as an automatic rollback. Capacity Off alone is not a payment-routing rollback. Evidence must show no duplicate charges, lost paid orders, cross-seller refunds or duplicate kitchen release after rollback/recovery.
 
+## Owner sequencing update — 16 October 2026
+
+After the current frontend repair/optimisation release, the next and final project is Square validation and integration for **Revesby only**. Bankstown and Roselands account connections are deferred to the weekend. Do not activate them or route their transactions through Revesby as a shortcut.
+
+Retain the shared menu/prices and shop-specific availability policy. Preserve a reusable, versioned catalogue/configuration mapping, redacted setup steps, validation receipts and rollback instructions for the later shops. Replicate approved common item content and prices; re-establish each shop's own merchant/location IDs, OAuth connection, ABN, taxes, permissions, staff assignments, webhook verification and device routing. Never copy credentials, customer/payment records or Revesby seller IDs into another shop. Revesby acceptance does not prove the other two accounts work.
+
+The existing catering/large-order routing requirement remains recorded above; no threshold-accounting interpretation is newly approved here. The user permits Astra when it offers tangible assurance benefit, not repetitive routine review. Core publication, payments activation, real transactions and KDS operational acceptance retain their existing explicit gates.
+
 ## Later acceptance target, not a current score
 
 A later reviewer may assign a **9/10 or better** only after all hard gates below pass with reproducible evidence; a numeric rating cannot waive a failed gate. This plan and the historical handoff assertions are not a current readiness rating.
