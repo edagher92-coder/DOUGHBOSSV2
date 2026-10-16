@@ -43,3 +43,19 @@ Real low-end-device and Safari/iOS behaviour remains unverified. Production film
 ## Owner's next-project direction
 
 After frontend work, Square integration/validation is **Revesby only**. Bankstown and Roselands account connection is deferred to the weekend. See the dated sequencing update in `2026-10-16-SQUARE-SHOP-ROUTING-PLAN.md`: preserve reusable approved menu/prices/setup/validation evidence, but re-establish each shop's separate merchant/location, ABN/tax, OAuth, staff/device and webhook configuration. Never duplicate credentials or route disconnected shops through Revesby by fallback. Astra is used only when it offers tangible assurance benefit.
+
+## Members navigation addition — 16 October 2026
+
+Owner explicitly approved the plan and its implementation/publication. Starting revision: `d12a1d0404244a9391d809aa15699b9c23682505`, clean checkout. Kept this small, sequential change in one implementation lane.
+
+- Added published WordPress page **603** to **Menu 1**, assigned to **Primary menu**. New menu item **606**, label **Members & Events**, no parent, position **6** immediately after Catering and before Wholesale. There was no existing Members entry. All eight existing public links retain their order and destinations; the stored paused Franchising item still renders as Partners through the existing theme policy.
+- Existing WordPress navigation supplies both the desktop header and mobile drawer. The new link uses the same styling, focus treatment and active-page indicator; no duplicate navigation component or JavaScript was added.
+- Changed only the existing two-row header breakpoint in snippet598 from max-width1399px to max-width1599px; its lower bound1101px and the theme's mobile breakpoint1100px remain unchanged. Updated the corresponding existing frontend test expectation. Saved snippet readback matched the local candidate after PHP-tag/line-ending normalisation.
+- Existing frontend/navigation tests: **44 passed, 0 failed, 0 skipped**, exit0. PHP7.4.33 and8.2.33 snippet syntax checks and `git diff --check` passed. This narrow follow-up has no new Astra score; the earlier reviewed hashes above describe the previous presentation release.
+- Published layouts checked at **1102,1440,1920,390,320px**. No horizontal overflow; every desktop link stays inside the header and has height44px. The first two desktop sizes use navigation row2;1920px uses the normal wide header. Both phone sizes retain the mobile menu.
+- On320px, keyboard Tab from Catering focused Members & Events with a solid outline; Enter opened `/members-events/` in the same tab and closed the drawer. Its link has `aria-current=page`; desktop active underline opacity1. Mobile390px screenshot confirms the visible entry after Catering.
+- Fresh **signed-out HTTP** checks of `/`, `/menu/` and `/members-events/`: all200, exactly one Members link in each primary menu, correct order and current-page attribution. Browser screenshots were captured in the authenticated administrator session. Public configuration remains ordering_open=false/payments_enabled=false; page content and Square configuration were not changed.
+- Evidence directory remains `C:\Codex\Output\doughboss-251-handoff-20261016`: `members-tab-live-desktop.png`, `members-tab-live-mobile.png`, `members-tab-layout-checks.json`. Temporary viewport emulation was cleared.
+- Rollback evidence: `navigation-before-members-tab.json` (public prior links), `navigation-stored-before-members-tab.json` (prior stored item IDs/order), `wpcode-598-before-members-tab.php` (fresh exact source). To reverse only this addition, remove menu item606 using WordPress's recoverable menu editor and restore that snippet copy; preserve existing menu entries and snippet601. Do not delete page603.
+
+This completes the approved top-navigation addition. The previously documented asynchronous menu-loading work and Revesby Square integration remain separate outstanding tasks.

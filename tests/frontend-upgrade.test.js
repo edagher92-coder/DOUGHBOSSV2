@@ -727,7 +727,7 @@ test('announcement rotation suspends for focus, hover, hidden tabs and reduced m
 test('frontend repair widens desktop layout, scales type and removes sticky backdrop repaint', () => {
 	const source = fs.readFileSync(path.join(root, 'scripts/hero-commercial/homepage-hero-v6-snippet.php'), 'utf8');
 	assert.match(source, /--dbf-wrap:1840px;font-size:clamp\(16px,calc\(12px \+ .4vw\),22px\)/);
-  assert.match(source, /@media\(min-width:1101px\) and \(max-width:1399px\)/);
+  assert.match(source, /@media\(min-width:1101px\) and \(max-width:1599px\)/);
   assert.match(source, /\.dbf-header-inner \.dbf-nav\{grid-column:1\/-1;grid-row:2;justify-self:center\}/);
 	assert.match(source, /\.dbf-hero \.dbf-wrap\{width:min\(1920px,calc\(100% - 32px\)\)\}/);
 	assert.match(source, /\.dbf-header::before\{background:var\(--dbf-coal,#151210\);backdrop-filter:none;-webkit-backdrop-filter:none\}/);

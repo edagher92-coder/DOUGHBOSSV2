@@ -409,7 +409,7 @@ body.home .db-ambient-visible::before,body.home .db-ambient-visible::after{anima
 .dbf-story-copy p:not(.dbf-eyebrow),body.home .dbf-review-panel p:not(.dbf-eyebrow){font-size:max(18px,1rem);line-height:1.65}
 .dbf-eyebrow,body.home .dbf-eyebrow{font-size:max(14px,.8rem)}
 .dbf-button--small{font-size:max(18px,1rem)}
-@media(min-width:1101px) and (max-width:1399px){.dbf-header-inner{grid-template-columns:1fr auto;gap:4px 24px;padding-block:8px}.dbf-header-inner .dbf-brand{grid-column:1;grid-row:1;white-space:nowrap}.dbf-header-cta{grid-column:2;grid-row:1;white-space:nowrap}.dbf-header-inner .dbf-nav{grid-column:1/-1;grid-row:2;justify-self:center}.dbf-nav a{white-space:nowrap}}
+@media(min-width:1101px) and (max-width:1599px){.dbf-header-inner{grid-template-columns:1fr auto;gap:4px 24px;padding-block:8px}.dbf-header-inner .dbf-brand{grid-column:1;grid-row:1;white-space:nowrap}.dbf-header-cta{grid-column:2;grid-row:1;white-space:nowrap}.dbf-header-inner .dbf-nav{grid-column:1/-1;grid-row:2;justify-self:center}.dbf-nav a{white-space:nowrap}}
 @media(min-width:1101px){.dbf-nav a{display:inline-flex;align-items:center;min-height:44px;font-size:clamp(16px,.9vw,20px);letter-spacing:.04em}.dbf-nav ul{gap:clamp(14px,1.3vw,28px)}}
 @media(max-width:600px){.dbf-launch-bar{flex-wrap:wrap;gap:0 8px;letter-spacing:.04em}.dbf-hero .dbf-wrap{width:100%}}
 .db-announcements{display:flex;align-items:center;justify-content:center;gap:12px;background:#f1a132;color:#21170d;padding:4px max(16px,3vw);font-size:max(16px,.9rem);line-height:1.4;min-height:56px}
