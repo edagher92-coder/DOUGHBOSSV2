@@ -2466,7 +2466,7 @@ JS;
 						<td>
 							<label><?php esc_html_e( 'Days ahead', 'doughboss' ); ?> <input name="pickup_days_ahead" type="number" min="0" max="7" value="<?php echo esc_attr( $f( 'pickup_days_ahead', 1 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
 							<label><?php esc_html_e( 'Cut-off before close', 'doughboss' ); ?> <input name="cutoff_minutes" type="number" min="0" max="180" value="<?php echo esc_attr( $f( 'cutoff_minutes', 20 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
-							<label><?php esc_html_e( 'Busy extra', 'doughboss' ); ?> <input name="busy_extra_minutes" type="number" min="0" max="240" value="<?php echo esc_attr( $f( 'busy_extra_minutes', 0 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>
+							<label><?php esc_html_e( 'Busy extra', 'doughboss' ); ?> <input name="busy_extra_minutes" type="number" min="0" max="120" value="<?php echo esc_attr( $f( 'busy_extra_minutes', 0 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>
 							<p><label><input name="ordering_paused" type="checkbox" value="1" <?php checked( (int) $f( 'ordering_paused', 0 ), 1 ); ?> /> <?php esc_html_e( 'Pause online ordering for this shop', 'doughboss' ); ?></label></p>
 							<p class="description"><?php esc_html_e( 'Only used when the rollout above is Live. ASAP = default prep time + busy extra; a full slot pushes ASAP to the next free slot. Days ahead: 0 = today only, 1 = today and tomorrow, up to 7. Cut-off stops new slots starting N minutes before closing time. Busy extra adds minutes to every pickup time when the kitchen is slammed. Pause stops customers placing orders here without changing anything else.', 'doughboss' ); ?></p>
 						</td>
@@ -2559,7 +2559,7 @@ JS;
 			'slot_unit_capacity' => isset( $_POST['slot_unit_capacity'] ) ? (int) $_POST['slot_unit_capacity'] : 12,
 			'pickup_days_ahead' => isset( $_POST['pickup_days_ahead'] ) ? max( 0, min( 7, (int) $_POST['pickup_days_ahead'] ) ) : 1,
 			'cutoff_minutes'    => isset( $_POST['cutoff_minutes'] ) ? max( 0, min( 180, (int) $_POST['cutoff_minutes'] ) ) : 20,
-			'busy_extra_minutes' => isset( $_POST['busy_extra_minutes'] ) ? max( 0, min( 240, (int) $_POST['busy_extra_minutes'] ) ) : 0,
+			'busy_extra_minutes' => isset( $_POST['busy_extra_minutes'] ) ? max( 0, min( 120, (int) $_POST['busy_extra_minutes'] ) ) : 0,
 			'ordering_paused'   => isset( $_POST['ordering_paused'] ) ? 1 : 0,
 			'tyro_location_id'   => isset( $_POST['tyro_location_id'] ) ? wp_unslash( $_POST['tyro_location_id'] ) : '',
 			'pospal_store_index'  => isset( $_POST['pospal_store_index'] ) ? (int) $_POST['pospal_store_index'] : 0,

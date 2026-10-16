@@ -3892,6 +3892,44 @@ class DoughBoss_REST_Controller {
 	}
 
 	/**
+	 * Pickup facts for a verified paid order that has no checkout snapshot
+	 * (Tyro / MPGS). The payment already proved the request's pickup binding;
+	 * the hold token rides along so DoughBoss_Order::create() can attach the
+	 * slot (or keep the paid order untimed with a [SYSTEM] note). Empty when
+	 * the shop does not schedule pickups or the request carries no selection.
+	 *
+	 * @param WP_REST_Request $request     Request.
+	 * @param int             $location_id Resolved shop.
+	 * @param string          $order_type  pickup|delivery|dine_in.
+	 * @return array
+	 */
+	private function pickup_fields_from_paid_request( WP_REST_Request $request, $location_id, $order_type ) {
+		if ( ! class_exists( 'DoughBoss_Pickup' ) || ! method_exists( 'DoughBoss_Pickup', 'requirement' ) ) {
+			return array();
+		}
+		$requirement = DoughBoss_Pickup::requirement( (int) $location_id, (string) $order_type, false );
+		if ( ! is_array( $requirement ) || empty( $requirement['required'] ) ) {
+			return array();
+		}
+		$mode  = DoughBoss_Order::sanitize_pickup_mode( $request->get_param( 'pickup_mode' ) );
+		$token = trim( (string) $request->get_param( 'capacity_hold_token' ) );
+		if ( '' === $mode || ! preg_match( '/^[0-9a-f]{64}$/', $token ) ) {
+			return array();
+		}
+		$selection = $this->pickup_selection_for_checkout( $request, $location_id, $order_type, true );
+		if ( is_wp_error( $selection ) || empty( $selection ) ) {
+			// Money has moved: a lapsed or stale hold is the order writer's call.
+			$selection = array(
+				'pickup_mode'         => $mode,
+				'capacity_hold_token' => $token,
+				'pickup_slot_id'      => absint( $request->get_param( 'pickup_slot_id' ) ),
+				'pickup_label'        => '',
+			);
+		}
+		return $this->pickup_snapshot_fields( $selection, $location_id );
+	}
+
+	/**
 	 * Pickup facts to copy from a paid snapshot's order payload into the order.
 	 *
 	 * @param array $saved Snapshot payload.order.
@@ -5472,6 +5510,11 @@ class DoughBoss_REST_Controller {
 		if ( 'paid' === $payment_status ) {
 			if ( is_array( $paid_snapshot ) && isset( $paid_snapshot['payload']['order'] ) && is_array( $paid_snapshot['payload']['order'] ) ) {
 				$pickup_fields = $this->pickup_fields_from_snapshot( $paid_snapshot['payload']['order'] );
+			} else {
+				// Gateways without an immutable snapshot (Tyro, MPGS): the held time
+				// travels in the verified request instead. The order writer attaches
+				// it with paid guarantees and never refuses the paid order over it.
+				$pickup_fields = $this->pickup_fields_from_paid_request( $request, $location_id, $order_type );
 			}
 		} else {
 			$pickup_selection = $this->pickup_selection_for_checkout( $request, $location_id, $order_type, false );

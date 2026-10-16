@@ -605,7 +605,7 @@ class DoughBoss_Pickup {
 			return true;
 		}
 		try {
-			$ip    = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			$ip    = self::client_ip();
 			$key   = 'doughboss_pk_hold_' . md5( $ip );
 			$state = get_transient( $key );
 			$now   = time();
@@ -621,6 +621,36 @@ class DoughBoss_Pickup {
 			return true;
 		}
 		return true;
+	}
+
+	/**
+	 * Client address for the limiter, resolved the same way as the REST
+	 * controller's limiters: REMOTE_ADDR unless the operator opted into a
+	 * trusted reverse-proxy header. Behind Cloudflare/nginx without that
+	 * resolution every customer would share one 40-holds bucket.
+	 *
+	 * @return string
+	 */
+	public static function client_ip() {
+		$clean  = static function ( $value ) {
+			$value = function_exists( 'wp_unslash' ) ? wp_unslash( $value ) : stripslashes( (string) $value );
+			return function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $value ) : trim( (string) $value );
+		};
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? $clean( $_SERVER['REMOTE_ADDR'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		if ( ! class_exists( 'DoughBoss_Settings' ) || ! method_exists( 'DoughBoss_Settings', 'behind_reverse_proxy' ) || ! DoughBoss_Settings::behind_reverse_proxy() ) {
+			return $remote;
+		}
+		$server_key = 'HTTP_' . strtoupper( str_replace( '-', '_', DoughBoss_Settings::trusted_proxy_header() ) );
+		if ( empty( $_SERVER[ $server_key ] ) ) {
+			return $remote;
+		}
+		$forwarded = $clean( $_SERVER[ $server_key ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$parts     = explode( ',', $forwarded );
+		$candidate = trim( (string) reset( $parts ) );
+		if ( '' === $candidate || ! filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+			return $remote;
+		}
+		return $candidate;
 	}
 
 	/**

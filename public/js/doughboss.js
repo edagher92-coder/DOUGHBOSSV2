@@ -2396,13 +2396,19 @@
 			state.holdRevision += 1;
 			var revision = state.holdRevision;
 			var previous = state.selection ? state.selection.hold_token : '';
+			// Re-holding the time already held (cart change, expiry, refresh): the
+			// server frees the old hold first, otherwise the caller's own hold can
+			// make a slot at capacity refuse its replacement.
+			var sameSlot = !!(previous && state.selection && slot && slot.ready_from_utc === state.selection.ready_from_utc);
+			var body = { location_id: id, pickup_mode: kind, ready_from_utc: slot.ready_from_utc, idempotency_key: newClientKey() };
+			if (sameSlot) { body.release_token = previous; }
 			state.holding = true;
 			state.dirty = false;
 			if (!auto) { clearError(msgNode); msgNode.textContent = ''; }
 			render();
 			return request('/pickup/hold', {
 				method: 'POST',
-				body: { location_id: id, pickup_mode: kind, ready_from_utc: slot.ready_from_utc, idempotency_key: newClientKey() }
+				body: body
 			}).then(function (res) {
 				if (revision !== state.holdRevision || id !== state.locationId || !state.visible) {
 					// Superseded while in flight: hand the stray hold back.
@@ -2426,7 +2432,9 @@
 				if (state.dirty) { state.dirty = false; onCartUpdated(); }
 			}).catch(function (err) {
 				if (revision !== state.holdRevision) { return; }
-				return failHold(err, auto, kind);
+				// With release_token sent the old hold is already gone server-side,
+				// so the selection must not survive a failed replacement.
+				return failHold(err, auto || sameSlot, kind);
 			});
 		}
 

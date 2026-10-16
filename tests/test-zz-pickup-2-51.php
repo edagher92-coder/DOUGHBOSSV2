@@ -1484,5 +1484,75 @@ db_test(
 	}
 );
 
+db_test(
+	'checkout: a verified paid order without a snapshot (Tyro/MPGS) still carries its held pickup time',
+	function () {
+		if ( ! class_exists( 'DoughBoss_REST_Controller' ) || ! class_exists( 'WP_REST_Request' ) ) {
+			assert_true( true, 'controller suite not loaded in this run' );
+			return;
+		}
+		$cart = new DB_PK_Cart();
+		$db   = db_pk_seed();
+		db_pk_use_cart( $cart );
+		$slot = db_pk_first_slot();
+		$held = DoughBoss_Pickup::create_hold( new DB_PK_Request( array( 'location_id' => 7, 'pickup_mode' => 'scheduled', 'ready_from_utc' => $slot, 'idempotency_key' => 'idem-key-00000000e1' ) ) );
+		assert_false( is_wp_error( $held ), 'a hold is created' );
+		$token = $held->get_data()['hold_token'];
+
+		$ref        = new ReflectionClass( 'DoughBoss_REST_Controller' );
+		$controller = $ref->newInstanceWithoutConstructor();
+		$cart_prop  = $ref->getProperty( 'cart' );
+		$cart_prop->setAccessible( true );
+		$cart_prop->setValue( $controller, $cart );
+		$method = $ref->getMethod( 'pickup_fields_from_paid_request' );
+		$method->setAccessible( true );
+		$call = function ( array $params, $type = 'pickup' ) use ( $method, $controller ) {
+			return $method->invokeArgs( $controller, array( new WP_REST_Request( $params ), 7, $type ) );
+		};
+
+		$fields = $call( array( 'pickup_mode' => 'scheduled', 'pickup_slot_id' => (string) $held->get_data()['slot_id'], 'capacity_hold_token' => $token ) );
+		assert_same( $token, isset( $fields['capacity_hold_token'] ) ? $fields['capacity_hold_token'] : '', 'the hold token reaches the order writer so the slot converts' );
+		assert_same( 'scheduled', $fields['pickup_mode'], 'mode carried' );
+		assert_same( (int) $held->get_data()['slot_id'], $fields['pickup_slot_id'], 'slot carried' );
+		assert_true( '' !== $fields['pickup_label'], 'a live hold yields its label' );
+		assert_same( 'Australia/Sydney', $fields['pickup_timezone'], 'timezone recorded' );
+		assert_false( array_key_exists( 'capacity_unpaid_allowed', $fields ), 'a paid order never gets the unpaid allowance' );
+
+		// A lapsed hold is not re-validated here: money has moved, the order writer decides.
+		foreach ( $db->holds as &$row ) {
+			$row['expires_at'] = '2000-01-01 00:00:00';
+		}
+		unset( $row );
+		$lapsed = $call( array( 'pickup_mode' => 'scheduled', 'pickup_slot_id' => '5', 'capacity_hold_token' => $token ) );
+		assert_same( $token, $lapsed['capacity_hold_token'], 'a lapsed hold still travels with the paid order' );
+		assert_same( 5, $lapsed['pickup_slot_id'], 'raw slot id from the request' );
+		assert_same( '', $lapsed['pickup_label'], 'no label can be promised for a lapsed hold' );
+
+		assert_same( array(), $call( array() ), 'no selection in the request adds nothing' );
+		assert_same( array(), $call( array( 'pickup_mode' => 'scheduled', 'capacity_hold_token' => 'nope' ) ), 'a malformed token adds nothing' );
+		assert_same( array(), $call( array( 'pickup_mode' => 'scheduled', 'capacity_hold_token' => $token ), 'delivery' ), 'delivery never schedules' );
+		db_pk_seed( array( 'capacity_mode' => 'off' ) );
+		assert_same( array(), $call( array( 'pickup_mode' => 'scheduled', 'capacity_hold_token' => $token ) ), 'an off shop adds nothing (legacy checkout untouched)' );
+	}
+);
+
+db_test(
+	'hold limiter identifies the client like the REST controller: REMOTE_ADDR unless a trusted proxy header is opted into',
+	function () {
+		$saved_server   = $_SERVER;
+		$saved_settings = get_option( 'doughboss_settings', array() );
+		$_SERVER['REMOTE_ADDR']          = '203.0.113.9';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.7, 203.0.113.9';
+		doughboss_test_set_settings( array( 'behind_reverse_proxy' => 0 ) );
+		assert_same( '203.0.113.9', DoughBoss_Pickup::client_ip(), 'without the opt-in the forwarded header is ignored' );
+		doughboss_test_set_settings( array( 'behind_reverse_proxy' => 1, 'trusted_proxy_header' => 'X-Forwarded-For' ) );
+		assert_same( '198.51.100.7', DoughBoss_Pickup::client_ip(), 'behind a trusted proxy each customer gets their own bucket' );
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = 'not-an-ip';
+		assert_same( '203.0.113.9', DoughBoss_Pickup::client_ip(), 'a malformed header falls back to REMOTE_ADDR' );
+		$_SERVER = $saved_server;
+		doughboss_test_set_settings( is_array( $saved_settings ) ? $saved_settings : array() );
+	}
+);
+
 // Restore whatever $wpdb earlier suites installed so later suites are unaffected.
 $GLOBALS['wpdb'] = $GLOBALS['db_pk_previous_wpdb'];

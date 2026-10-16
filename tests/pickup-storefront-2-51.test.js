@@ -556,6 +556,35 @@ test('picker: a cart change re-holds the same time (debounced) and releases the 
 	assert.notEqual(second, first);
 	const release = h.requests.find(r => r.route === '/pickup/release');
 	assert.deepEqual(plain(release.body), { hold_token: first }, 'the superseded hold is given back');
+	// QA 2.51: the server frees the caller's own hold before counting the slot,
+	// otherwise the last spot in a slot could be refused to its own holder.
+	assert.equal(holds[1].body.release_token, first, 'a same-slot re-hold names the hold it replaces');
+	assert.equal(Object.prototype.hasOwnProperty.call(holds[0].body, 'release_token'), false, 'a first hold has nothing to release');
+});
+
+test('picker: a same-slot re-hold that fails drops the selection (its old hold was already released server-side)', async () => {
+	let n = 0;
+	const h = pickupHarness((route, options) => {
+		if (route.indexOf('/pickup/options') === 0) return liveOptions();
+		if (route === '/pickup/release') return { released: true };
+		n += 1;
+		if (n === 1) return holdResponse(options.body.ready_from_utc, 'a'.repeat(64));
+		const error = new Error('Slot full'); error.code = 'doughboss_slot_full'; return error;
+	});
+	h.picker.show(7);
+	await h.settle();
+	h.picker.element.querySelector('[data-pk="slot:2026-10-16T01:45:00Z"]').click();
+	await h.settle();
+	assert.equal(h.picker.selection().hold_token, 'a'.repeat(64));
+	// A customer re-click on the held slot is not an "auto" hold, but it still
+	// sends release_token, so a failure must not leave a phantom selection.
+	h.picker.element.querySelector('[data-pk="slot:2026-10-16T01:45:00Z"]').click();
+	await h.settle();
+	const holds = h.requests.filter(r => r.route === '/pickup/hold');
+	assert.equal(holds.length, 2);
+	assert.equal(holds[1].body.release_token, 'a'.repeat(64));
+	assert.equal(h.picker.selection(), null, 'no phantom hold after the replacement failed');
+	assert.ok(h.errors.some(message => /filled up/.test(message)));
 });
 
 test('picker: a full slot reloads the options, keeps the picker open and announces the reason', async () => {

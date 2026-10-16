@@ -31,7 +31,8 @@ const DELAY_STATUSES = ['pending', 'confirmed', 'preparing', 'baking'];
 const formatTime = extractFunction('formatTime', { Intl, Date });
 const readyWindow = extractFunction('readyWindow', { formatTime });
 const pickupBadge = extractFunction('pickupBadge');
-const isUpcoming = extractFunction('isUpcoming', { Date });
+const utcIso = extractFunction('utcIso', { String });
+const isUpcoming = extractFunction('isUpcoming', { Date, utcIso });
 const delayAllowed = extractFunction('delayAllowed', { pickupBadge, DELAY_STATUSES });
 const pickupText = extractFunction('pickupText', { readyWindow });
 
@@ -60,6 +61,12 @@ test('isUpcoming needs a pending order flagged upcoming whose fire time has not 
 	assert.equal(isUpcoming({ status: 'pending', upcoming: true, fire_at_utc: mysql(30) }), true);
 	assert.equal(isUpcoming({ status: 'pending', upcoming: 1 }), true);
 	assert.equal(isUpcoming({ status: 'pending', upcoming: true, fire_at_utc: mysql(-1) }), false, 'fire time passed on this clock');
+	// The board API actually sends ISO 'Z' (DoughBoss_Order::utc_iso); appending a second Z broke the clock check.
+	assert.equal(isUpcoming({ status: 'pending', upcoming: true, fire_at_utc: mysql(-1).replace(' ', 'T') + 'Z' }), false, 'ISO fire time passed on this clock');
+	assert.equal(isUpcoming({ status: 'pending', upcoming: true, fire_at_utc: mysql(30).replace(' ', 'T') + 'Z' }), true, 'ISO fire time still ahead');
+	assert.equal(utcIso('2026-10-16 02:25:00'), '2026-10-16T02:25:00Z');
+	assert.equal(utcIso('2026-10-16T02:25:00Z'), '2026-10-16T02:25:00Z', 'no double Z');
+	assert.equal(utcIso(''), '');
 	assert.equal(isUpcoming({ status: 'pending', upcoming: false, fire_at_utc: mysql(30) }), false);
 	assert.equal(isUpcoming({ status: 'pending' }), false, 'legacy orders are never upcoming');
 	assert.equal(isUpcoming({ status: 'confirmed', upcoming: true, fire_at_utc: mysql(30) }), false);

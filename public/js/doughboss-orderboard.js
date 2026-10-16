@@ -157,6 +157,14 @@
 
 	/* ----------------------------------------------- Timed pickup (2.51) */
 
+	// The board API sends fire_at_utc as ISO ('…T…Z', via utc_iso()); older
+	// rows or fixtures may carry MySQL 'YYYY-MM-DD HH:MM:SS'. Accept both.
+	function utcIso(value) {
+		var raw = String(value || '').trim().replace(' ', 'T');
+		if (!raw) { return ''; }
+		return /(Z|[+-]\d\d:?\d\d)$/i.test(raw) ? raw : raw + 'Z';
+	}
+
 	var DELAY_STATUSES = ['pending', 'confirmed', 'preparing', 'baking'];
 	var DELAY_MINUTES = 10;
 
@@ -177,7 +185,7 @@
 		var flag = o.upcoming;
 		if (!(flag === true || flag === 1 || flag === '1' || flag === 'true')) { return false; }
 		if (o.fire_at_utc) {
-			var fire = Date.parse(String(o.fire_at_utc).replace(' ', 'T') + 'Z');
+			var fire = Date.parse(utcIso(o.fire_at_utc));
 			if (!isNaN(fire) && fire <= Date.now()) { return false; }
 		}
 		return true;
@@ -1124,7 +1132,7 @@
 	function renderUpcoming(list) {
 		var rows = list.map(function (o) {
 			var itemCount = (o.items || []).reduce(function (sum, it) { return sum + Math.max(1, parseInt(it.quantity, 10) || 1); }, 0);
-			var starts = formatTime(String(o.fire_at_utc || '').replace(' ', 'T') + 'Z', o.timezone);
+			var starts = formatTime(utcIso(o.fire_at_utc), o.timezone);
 			return el('li', { class: 'db-upcoming-row', 'data-order-id': String(o.id) }, [
 				el('span', { class: 'db-upcoming-time', text: pickupText(o) }),
 				el('span', { class: 'db-upcoming-number', text: o.order_number }),
