@@ -906,7 +906,7 @@ class DoughBoss_Admin {
 	/**
 	 * Compact list of shops for the board's shop filter.
 	 *
-	 * @return array<int,array{id:int,name:string}>
+	 * @return array<int,array{id:int,name:string,prep_time:int}>
 	 */
 	private function board_locations() {
 		$scope = DoughBoss_Staff_Scope::current_location_id();
@@ -918,7 +918,7 @@ class DoughBoss_Admin {
 			if ( $scope && (int) $loc->id !== (int) $scope ) {
 				continue;
 			}
-			$out[] = array( 'id' => (int) $loc->id, 'name' => $loc->name );
+			$out[] = array( 'id' => (int) $loc->id, 'name' => $loc->name, 'prep_time' => isset( $loc->prep_time_default ) ? (int) $loc->prep_time_default : 20 );
 		}
 		return $out;
 	}
@@ -2344,6 +2344,7 @@ JS;
 		$edit_id = isset( $_GET['edit'] ) ? absint( $_GET['edit'] ) : 0;
 		$editing = $edit_id ? DoughBoss_Locations::get( $edit_id ) : null;
 		$hours  = $editing ? DoughBoss_Locations::weekly_hours( $edit_id ) : array_fill_keys( array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' ), '' );
+		$holiday_closures = ( $editing && method_exists( 'DoughBoss_Locations', 'holiday_closures' ) ) ? (array) DoughBoss_Locations::holiday_closures( $edit_id ) : array();
 		$preview_config = $editing ? DoughBoss_Locations::capacity_preview_config( $edit_id ) : null;
 		$preview_windows = $preview_config ? DoughBoss_Capacity::windows( $preview_config, 1 ) : array();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -2359,6 +2360,8 @@ JS;
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop saved.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'deleted' === $msg ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Shop deleted.', 'doughboss' ); ?></p></div>
+			<?php elseif ( 'holidays_invalid' === $msg ) : ?>
+				<div class="notice notice-error"><p><?php esc_html_e( 'The shop was saved, but the holiday closures were not. Enter one real date per line as YYYY-MM-DD, for example 2026-12-25.', 'doughboss' ); ?></p></div>
 			<?php elseif ( 'hours_invalid' === $msg ) : ?>
 				<div class="notice notice-error"><p><?php esc_html_e( 'The shop was saved, but its pickup hours were invalid. Use 24-hour ranges such as 11:00-21:00.', 'doughboss' ); ?></p></div>
 			<?php endif; ?>
@@ -2439,7 +2442,7 @@ JS;
 					</tr>
 					<tr>
 						<th><label for="db-capacity-mode"><?php esc_html_e( 'Capacity rollout', 'doughboss' ); ?></label></th>
-						<td><select name="capacity_mode" id="db-capacity-mode"><option value="off" <?php selected( $f( 'capacity_mode', 'off' ), 'off' ); ?>><?php esc_html_e( 'Off — current checkout', 'doughboss' ); ?></option><option value="shadow" <?php selected( $f( 'capacity_mode', 'off' ), 'shadow' ); ?>><?php esc_html_e( 'Shadow — staff preview only', 'doughboss' ); ?></option></select><p class="description"><?php esc_html_e( 'Shadow mode calculates proposed windows without restricting customers or changing payments. Customer enforcement stays locked until the concurrency rehearsal passes.', 'doughboss' ); ?></p></td>
+						<td><select name="capacity_mode" id="db-capacity-mode"><option value="off" <?php selected( $f( 'capacity_mode', 'off' ), 'off' ); ?>><?php esc_html_e( 'Off — current checkout', 'doughboss' ); ?></option><option value="shadow" <?php selected( $f( 'capacity_mode', 'off' ), 'shadow' ); ?>><?php esc_html_e( 'Shadow — staff preview only', 'doughboss' ); ?></option><option value="live" <?php selected( $f( 'capacity_mode', 'off' ), 'live' ); ?>><?php esc_html_e( 'Live — customers choose a pickup time', 'doughboss' ); ?></option></select><p class="description"><?php esc_html_e( 'Off keeps the current checkout. Shadow calculates proposed windows for staff without restricting customers or changing payments. Live makes customers pick ASAP or a pickup time for this shop, and limits each slot to the orders-per-slot value below. Move a shop Off, then Shadow, then Live; set it back to Off at any time to return to the current checkout.', 'doughboss' ); ?></p></td>
 					</tr>
 					<tr>
 						<th><?php esc_html_e( 'Slot rules', 'doughboss' ); ?></th>
@@ -2452,10 +2455,27 @@ JS;
 					<tr>
 						<th><?php esc_html_e( 'Conservative limits', 'doughboss' ); ?></th>
 						<td>
-							<label><?php esc_html_e( 'Orders per window', 'doughboss' ); ?> <input name="slot_order_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_order_capacity', 4 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
-							<label><?php esc_html_e( 'Item units per window', 'doughboss' ); ?> <input name="slot_unit_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_unit_capacity', 12 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Orders per slot', 'doughboss' ); ?> <input name="slot_order_capacity" type="number" min="1" max="10000" value="<?php echo esc_attr( $f( 'slot_order_capacity', 6 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<input name="slot_unit_capacity" type="hidden" value="<?php echo esc_attr( $f( 'slot_unit_capacity', 12 ) ); ?>" />
 							<label><?php esc_html_e( 'Hold', 'doughboss' ); ?> <input name="hold_minutes" type="number" min="1" max="30" value="<?php echo esc_attr( $f( 'hold_minutes', 10 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>
-							<p class="description"><?php esc_html_e( 'Item units currently mean cart quantity, not prep minutes or oven load. Tune from real Revesby observations before customer use.', 'doughboss' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Orders per slot is how many customer orders can be promised for the same pickup slot. Start at 6 and tune from what the kitchen really manages.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Live pickup times', 'doughboss' ); ?></th>
+						<td>
+							<label><?php esc_html_e( 'Days ahead', 'doughboss' ); ?> <input name="pickup_days_ahead" type="number" min="0" max="7" value="<?php echo esc_attr( $f( 'pickup_days_ahead', 1 ) ); ?>" class="small-text" /></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Cut-off before close', 'doughboss' ); ?> <input name="cutoff_minutes" type="number" min="0" max="180" value="<?php echo esc_attr( $f( 'cutoff_minutes', 20 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>&nbsp;&nbsp;
+							<label><?php esc_html_e( 'Busy extra', 'doughboss' ); ?> <input name="busy_extra_minutes" type="number" min="0" max="240" value="<?php echo esc_attr( $f( 'busy_extra_minutes', 0 ) ); ?>" class="small-text" /> <?php esc_html_e( 'min', 'doughboss' ); ?></label>
+							<p><label><input name="ordering_paused" type="checkbox" value="1" <?php checked( (int) $f( 'ordering_paused', 0 ), 1 ); ?> /> <?php esc_html_e( 'Pause online ordering for this shop', 'doughboss' ); ?></label></p>
+							<p class="description"><?php esc_html_e( 'Only used when the rollout above is Live. ASAP = default prep time + busy extra; a full slot pushes ASAP to the next free slot. Days ahead: 0 = today only, 1 = today and tomorrow, up to 7. Cut-off stops new slots starting N minutes before closing time. Busy extra adds minutes to every pickup time when the kitchen is slammed. Pause stops customers placing orders here without changing anything else.', 'doughboss' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="db-holiday-closures"><?php esc_html_e( 'Holiday closures', 'doughboss' ); ?></label></th>
+						<td>
+							<textarea name="holiday_closures" id="db-holiday-closures" rows="4" class="regular-text" placeholder="2026-12-25"><?php echo esc_textarea( implode( "\n", array_map( 'strval', $holiday_closures ) ) ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'One date per line as YYYY-MM-DD. The shop offers no pickup times on these days. Remove a line to reopen that day.', 'doughboss' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -2535,8 +2555,12 @@ JS;
 			'minimum_notice_minutes' => isset( $_POST['minimum_notice_minutes'] ) ? (int) $_POST['minimum_notice_minutes'] : 30,
 			'booking_horizon_days' => isset( $_POST['booking_horizon_days'] ) ? (int) $_POST['booking_horizon_days'] : 7,
 			'hold_minutes'      => isset( $_POST['hold_minutes'] ) ? (int) $_POST['hold_minutes'] : 10,
-			'slot_order_capacity' => isset( $_POST['slot_order_capacity'] ) ? (int) $_POST['slot_order_capacity'] : 4,
+			'slot_order_capacity' => isset( $_POST['slot_order_capacity'] ) ? (int) $_POST['slot_order_capacity'] : 6,
 			'slot_unit_capacity' => isset( $_POST['slot_unit_capacity'] ) ? (int) $_POST['slot_unit_capacity'] : 12,
+			'pickup_days_ahead' => isset( $_POST['pickup_days_ahead'] ) ? max( 0, min( 7, (int) $_POST['pickup_days_ahead'] ) ) : 1,
+			'cutoff_minutes'    => isset( $_POST['cutoff_minutes'] ) ? max( 0, min( 180, (int) $_POST['cutoff_minutes'] ) ) : 20,
+			'busy_extra_minutes' => isset( $_POST['busy_extra_minutes'] ) ? max( 0, min( 240, (int) $_POST['busy_extra_minutes'] ) ) : 0,
+			'ordering_paused'   => isset( $_POST['ordering_paused'] ) ? 1 : 0,
 			'tyro_location_id'   => isset( $_POST['tyro_location_id'] ) ? wp_unslash( $_POST['tyro_location_id'] ) : '',
 			'pospal_store_index'  => isset( $_POST['pospal_store_index'] ) ? (int) $_POST['pospal_store_index'] : 0,
 			'online_payment_enabled' => isset( $_POST['online_payment_enabled'] ) ? 1 : 0,
@@ -2553,9 +2577,44 @@ JS;
 		$raw_hours = isset( $_POST['capacity_hours'] ) && is_array( $_POST['capacity_hours'] ) ? wp_unslash( $_POST['capacity_hours'] ) : array();
 		$hours_saved = $id ? DoughBoss_Locations::save_weekly_hours( $id, $raw_hours ) : new WP_Error( 'doughboss_location_save', __( 'The shop could not be saved.', 'doughboss' ) );
 		$msg = is_wp_error( $hours_saved ) ? 'hours_invalid' : 'saved';
+		if ( $id && isset( $_POST['holiday_closures'] ) && method_exists( 'DoughBoss_Locations', 'save_holiday_closures' ) ) {
+			$holidays = self::parse_holiday_closures( wp_unslash( $_POST['holiday_closures'] ) );
+			if ( is_wp_error( $holidays ) ) {
+				$msg = 'holidays_invalid';
+			} else {
+				$holidays_saved = DoughBoss_Locations::save_holiday_closures( $id, $holidays );
+				if ( is_wp_error( $holidays_saved ) ) {
+					$msg = 'holidays_invalid';
+				}
+			}
+		}
 
 		wp_safe_redirect( add_query_arg( array( 'page' => 'doughboss-locations', 'edit' => $id, 'msg' => $msg ), admin_url( 'admin.php' ) ) );
 		exit;
+	}
+
+	/**
+	 * Parse the holiday-closures textarea: one real YYYY-MM-DD date per line.
+	 * Blank lines are ignored, duplicates collapsed; any malformed line makes
+	 * the whole list invalid so a typo never silently drops a closure.
+	 *
+	 * @param string $raw Raw textarea value.
+	 * @return string[]|WP_Error Sorted unique dates, or an error.
+	 */
+	public static function parse_holiday_closures( $raw ) {
+		$dates = array();
+		foreach ( preg_split( '/[\r\n,;]+/', (string) $raw ) as $line ) {
+			$line = trim( $line );
+			if ( '' === $line ) {
+				continue;
+			}
+			if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $line, $m ) || ! checkdate( (int) $m[2], (int) $m[3], (int) $m[1] ) ) {
+				return new WP_Error( 'doughboss_holiday_invalid', __( 'Holiday closures must be real dates written as YYYY-MM-DD, one per line.', 'doughboss' ) );
+			}
+			$dates[ $line ] = $line;
+		}
+		ksort( $dates );
+		return array_values( $dates );
 	}
 
 	/**

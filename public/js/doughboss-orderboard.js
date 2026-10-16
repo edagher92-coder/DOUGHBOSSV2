@@ -67,7 +67,9 @@
 	var summaryEpoch = 0;
 	var summaryAbort = null;
 	var summaryLoaded = false;
-	var summary = { make: null, pass: null, preorder_review: null, catering: null };
+	var summary = { make: null, pass: null, preorder_review: null, catering: null, upcoming: 0 };
+	var upcomingOpen = false;   // Collapsed by default; remembered across repaints.
+	var upcomingPill = null;
 	var summaryAnnouncement = document.querySelector('[data-db-board-summary-announcement]');
 	var summaryLinks = {};
 	['make', 'pass', 'catering'].forEach(function (mode) {
@@ -151,6 +153,46 @@
 		var by = formatTime(o.promised_ready_by_utc, o.timezone);
 		if (!from) { return ''; }
 		return by && by !== from ? from + '–' + by : from;
+	}
+
+	/* ----------------------------------------------- Timed pickup (2.51) */
+
+	var DELAY_STATUSES = ['pending', 'confirmed', 'preparing', 'baking'];
+	var DELAY_MINUTES = 10;
+
+	// 'ASAP' / 'Scheduled' for orders placed through the pickup picker; '' for
+	// legacy orders so their cards render exactly as before.
+	function pickupBadge(o) {
+		var mode = o && o.pickup_mode ? String(o.pickup_mode) : '';
+		if (mode === 'asap') { return 'ASAP'; }
+		if (mode === 'scheduled') { return 'Scheduled'; }
+		return '';
+	}
+
+	// A scheduled order stays "upcoming" until the server stops flagging it.
+	// If the fire time has already passed on this clock it stops being upcoming
+	// immediately, rather than waiting for the next poll.
+	function isUpcoming(o) {
+		if (!o || o.status !== 'pending') { return false; }
+		var flag = o.upcoming;
+		if (!(flag === true || flag === 1 || flag === '1' || flag === 'true')) { return false; }
+		if (o.fire_at_utc) {
+			var fire = Date.parse(String(o.fire_at_utc).replace(' ', 'T') + 'Z');
+			if (!isNaN(fire) && fire <= Date.now()) { return false; }
+		}
+		return true;
+	}
+
+	// "+10 min" applies only to timed orders that are still being worked.
+	function delayAllowed(o) {
+		return !!(o && pickupBadge(o) && DELAY_STATUSES.indexOf(o.status) !== -1);
+	}
+
+	// "Pickup 12:45pm" for today, "Pickup Tomorrow 12:45pm" otherwise.
+	function pickupText(o) {
+		var when = o && o.pickup_label ? String(o.pickup_label).replace(/^Today\s+/i, '') : '';
+		if (!when) { when = readyWindow(o || {}); }
+		return when ? 'Pickup ' + when : 'Pickup time to confirm';
 	}
 
 	/* --------------------------------------------------------------- Sound */
@@ -280,6 +322,22 @@
 		});
 	}
 
+	// Header count of timed orders not yet due in the kitchen.
+	function renderUpcomingPill() {
+		if (!statusEl) { return; }
+		if (!upcomingPill) {
+			upcomingPill = el('span', { class: 'db-upcoming-pill', role: 'status', hidden: 'hidden' });
+			if (statusEl.parentNode) { statusEl.parentNode.insertBefore(upcomingPill, statusEl.nextSibling); }
+		}
+		var count = summary && summary.upcoming ? summary.upcoming : 0;
+		if (SCREEN_MODE === 'pass' || SCREEN_MODE === 'catering' || !count) {
+			upcomingPill.hidden = true;
+			return;
+		}
+		upcomingPill.textContent = 'Upcoming ' + count;
+		upcomingPill.hidden = false;
+	}
+
 	function loadSummary() {
 		var requestEpoch = ++summaryEpoch;
 		if (summaryAbort && summaryAbort.abort) { summaryAbort.abort(); }
@@ -290,12 +348,15 @@
 				make: normalCount(res.data.make),
 				pass: normalCount(res.data.pass),
 				preorder_review: normalCount(res.data.preorder_review),
-				catering: normalCount(res.data.catering)
+				catering: normalCount(res.data.catering),
+				upcoming: normalCount(res.data.upcoming)
 			};
 			var changed = summaryLoaded && ['make', 'pass', 'preorder_review', 'catering'].some(function (key) { return next[key] !== summary[key]; });
+			var upcomingChanged = next.upcoming !== summary.upcoming;
 			summary = next;
 			summaryLoaded = true;
 			renderSummary(summary, false);
+			if (upcomingChanged) { renderUpcomingPill(); }
 			if (changed && summaryAnnouncement) {
 				summaryAnnouncement.textContent = 'Kitchen workload updated: ' + summaryLabel('make', summary, false) + '; ' + summaryLabel('pass', summary, false) + '; ' + summaryLabel('catering', summary, false) + '.';
 			}
@@ -356,6 +417,24 @@
 			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
 		}).then(function () {
 			setBusy(o, 'accept', false);
+		});
+	}
+
+	function delayOrder(o, minutes) {
+		if (offline) { return Promise.resolve(); }
+		if (!delayAllowed(o)) { return Promise.resolve(); }
+		if (!setBusy(o, 'delay', true)) { return Promise.resolve(); }
+		return api('/admin/order/' + o.id + '/delay', 'POST', {
+			minutes: minutes || DELAY_MINUTES,
+			expected_version: o.version,
+			event_key: eventKey(o, 'delay')
+		}).then(function () {
+			return load();
+		}).catch(function (error) {
+			var message = error.message || 'Could not delay the order.';
+			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		}).then(function () {
+			setBusy(o, 'delay', false);
 		});
 	}
 
@@ -481,6 +560,7 @@
 	function exceptionMessages(o) {
 		var messages = [];
 		if (o.timing_status === 'estimate_passed') { messages.push(o.timing_label || 'Estimate passed - check this order.'); }
+		if (o.capacity_overflow) { messages.push('Over capacity — slot was full when paid.'); }
 		if (o.payment_status === 'refunded') { messages.push('Refunded - pause preparation and check with a manager.'); }
 		if (!Array.isArray(o.allowed_next_statuses)) { messages.push('Status controls are unavailable - refresh before acting.'); }
 		if (hasAllergenNote(o)) { messages.push('Allergy / dietary note - read before making.'); }
@@ -816,6 +896,7 @@
 		var head = el('div', { class: 'db-card-head' }, [
 			el('span', { class: 'db-card-number', text: o.order_number }),
 			el('span', { class: 'db-card-type db-type-' + o.order_type, text: typeLabel }),
+			pickupBadge(o) ? el('span', { class: 'db-card-badge db-badge-' + (o.pickup_mode === 'asap' ? 'asap' : 'scheduled'), text: pickupBadge(o) }) : null,
 			tableLabel ? el('span', { class: 'db-card-table', text: 'TABLE ' + tableLabel }) : null,
 			source ? el('span', { class: 'db-card-source', text: source }) : null,
 			showShop ? el('span', { class: 'db-card-shop', text: locationsById[o.location_id] }) : null,
@@ -847,7 +928,7 @@
 		if (o.notes) {
 			meta.push(el('div', { class: 'db-card-notes' + (hasAllergenNote(o) ? ' db-card-notes-alert' : ''), text: 'Note: ' + o.notes }));
 		}
-		if (o.eta_minutes) {
+		if (o.eta_minutes && !pickupBadge(o)) {
 			var windowText = readyWindow(o);
 			meta.push(el('div', { class: 'db-card-eta', text: windowText ? 'Staff estimate ' + windowText : 'Staff estimate ' + o.eta_minutes + ' min' }));
 		}
@@ -859,8 +940,32 @@
 			meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
 		}
 
+		var timed = !!pickupBadge(o);
+		var pickupLine = null;
+		if (timed) {
+			var delayMins = parseInt(o.promised_delay_minutes, 10) || 0;
+			pickupLine = el('div', { class: 'db-card-pickup' }, [
+				el('span', { class: 'db-card-pickup-time', text: pickupText(o) }),
+				delayMins > 0 ? el('span', { class: 'db-delay-chip', text: 'Delayed +' + delayMins + ' min' }) : null
+			]);
+		}
+		var delayBtn = delayAllowed(o)
+			? el('button', { class: 'button db-delay', type: 'button', 'aria-label': 'Add ' + DELAY_MINUTES + ' minutes to the pickup time for order ' + o.order_number, onclick: function () { delayOrder(o, DELAY_MINUTES); } }, ['+' + DELAY_MINUTES + ' min'])
+			: null;
+
 		var actions;
-		if (isNew) {
+		if (isNew && timed) {
+			actions = el('div', { class: 'db-card-actions db-card-actions-timed' }, [
+				el('div', { class: 'db-accept-label', text: 'Accept — keeps the customer’s pickup time' }),
+				el('div', { class: 'db-card-actions-row' }, [
+					el('button', { class: 'button button-primary db-accept', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ' for its pickup time', onclick: function () { confirmUnpaid(o, function () { accept(o, 0); }); } }, ['Accept']),
+					delayBtn
+				]),
+				el('div', { class: 'db-card-actions-row' }, [
+					el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change'])
+				])
+			]);
+		} else if (isNew) {
 			var etaRow = ETA_CHOICES.map(function (m) {
 				return el('button', { class: 'button db-eta', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ', ready in ' + m + ' minutes', onclick: function () { confirmUnpaid(o, function () { accept(o, m); }); } }, [m + 'm']);
 			});
@@ -884,7 +989,7 @@
 			});
 			var actionRow = [
 				el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change'])
-			].concat(advBtns);
+			].concat(delayBtn ? [delayBtn] : [], advBtns);
 			actions = el('div', { class: 'db-card-actions' }, [
 				!advBtns.length ? el('p', { class: 'db-no-next-action', text: 'No next kitchen step is available. Refresh or ask a manager before changing this order.' }) : null,
 				el('div', { class: 'db-card-actions-row' }, actionRow)
@@ -902,6 +1007,7 @@
 
 		return el('div', { class: 'db-card db-card-' + o.status + ageClass + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : ''), 'data-order-id': String(o.id), 'aria-busy': inFlight[String(o.id)] ? 'true' : 'false' }, [
 			head,
+			pickupLine,
 			el('div', { class: 'db-card-status', text: orderLabel(o, o.status) }),
 			contact,
 			items,
@@ -1015,6 +1121,27 @@
 		applyConnectionState();
 	}
 
+	function renderUpcoming(list) {
+		var rows = list.map(function (o) {
+			var itemCount = (o.items || []).reduce(function (sum, it) { return sum + Math.max(1, parseInt(it.quantity, 10) || 1); }, 0);
+			var starts = formatTime(String(o.fire_at_utc || '').replace(' ', 'T') + 'Z', o.timezone);
+			return el('li', { class: 'db-upcoming-row', 'data-order-id': String(o.id) }, [
+				el('span', { class: 'db-upcoming-time', text: pickupText(o) }),
+				el('span', { class: 'db-upcoming-number', text: o.order_number }),
+				el('span', { class: 'db-upcoming-name', text: SCREEN_MODE === 'make' ? serviceLabel(o) : (o.customer_name || '—') }),
+				el('span', { class: 'db-upcoming-items', text: itemCount + (itemCount === 1 ? ' item' : ' items') }),
+				starts ? el('span', { class: 'db-upcoming-start', text: 'Starts ' + starts }) : null
+			]);
+		});
+		var details = el('details', { class: 'db-upcoming' }, [
+			el('summary', { class: 'db-upcoming-summary' }, ['Upcoming ', el('span', { class: 'db-lane-count', text: String(list.length) }), el('small', { text: ' — not due in the kitchen yet' })]),
+			el('ul', { class: 'db-upcoming-list' }, rows)
+		]);
+		if (upcomingOpen) { details.setAttribute('open', 'open'); }
+		details.addEventListener('toggle', function () { upcomingOpen = !!details.open; });
+		return details;
+	}
+
 	function render(orders) {
 		lastOrders = orders;
 		boardEl.textContent = '';
@@ -1025,6 +1152,16 @@
 			boardEl.appendChild(el('div', { class: 'db-sound-warn' }, [
 				'🔇 Sound is OFF — tap “Enable sound alerts” (top right) so you don’t miss new orders.'
 			]));
+		}
+
+		// Timed orders that are not due in the kitchen yet wait in the collapsed
+		// Upcoming section: no lane, no alarm, until they stop being upcoming.
+		var upcoming = orders.filter(isUpcoming);
+		if (upcoming.length) {
+			upcoming = upcoming.slice().sort(function (a, b) {
+				return String(a.promised_ready_from_utc || '').localeCompare(String(b.promised_ready_from_utc || ''));
+			});
+			orders = orders.filter(function (o) { return !isUpcoming(o); });
 		}
 
 		var unacked = SCREEN_MODE === 'pass' ? [] : orders.filter(function (o) {
@@ -1068,6 +1205,7 @@
 
 		var visibleOrders = orders.filter(function (o) { return !!laneOf(o.status); });
 		boardEl.appendChild(renderPulse(visibleOrders));
+		if (upcoming.length && SCREEN_MODE !== 'pass') { boardEl.appendChild(renderUpcoming(upcoming)); }
 		var lanesWrap = el('div', { class: 'db-lanes' }, LANES.map(function (lane) {
 			var laneOrders = orders.filter(function (o) { return laneOf(o.status) === lane.key; });
 			var cards = laneOrders.length
@@ -1081,7 +1219,7 @@
 		boardEl.appendChild(lanesWrap);
 
 		if (statusEl) {
-			statusEl.textContent = orders.length + ' active · updated ' +
+			statusEl.textContent = orders.length + ' active' + (upcoming.length ? ' · ' + upcoming.length + ' upcoming' : '') + ' · updated ' +
 				new Date().toLocaleTimeString();
 		}
 		applyConnectionState();
@@ -1121,7 +1259,7 @@
 		if (statusEl) {
 			statusEl.textContent = offline
 				? 'Offline - showing orders last synced ' + syncTimeLabel() + '. Changes are locked.'
-				: lastOrders.length + ' active - synced ' + syncTimeLabel();
+				: lastOrders.filter(function (o) { return !isUpcoming(o); }).length + ' active - synced ' + syncTimeLabel();
 		}
 	}
 

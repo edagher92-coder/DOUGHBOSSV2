@@ -447,6 +447,12 @@ class DoughBoss_Printer {
 			$lines[] = self::center( '*** TABLE ' . self::clean( $order->table_label ) . ' ***', $width );
 		}
 		$lines[] = 'Time:  ' . self::clean( self::local_time( $order->created_at ) );
+		$pickup = self::pickup_line( $order );
+		if ( '' !== $pickup ) {
+			foreach ( self::wrap( self::clean( $pickup ), $width ) as $wrapped ) {
+				$lines[] = $wrapped;
+			}
+		}
 
 		$name = self::clean( $order->customer_name );
 		if ( '' !== $name ) {
@@ -547,6 +553,10 @@ class DoughBoss_Printer {
 			$x[] = '<text align="left" dw="false" dh="false" />';
 		}
 		$x[] = self::xml_line( 'Time:  ' . self::local_time( $order->created_at ) );
+		$pickup = self::pickup_line( $order );
+		if ( '' !== $pickup ) {
+			$x[] = self::xml_line( $pickup );
+		}
 
 		if ( '' !== trim( (string) $order->customer_name ) ) {
 			$x[] = self::xml_line( 'Name:  ' . $order->customer_name );
@@ -630,6 +640,34 @@ class DoughBoss_Printer {
 	private static function width() {
 		$width = (int) DoughBoss_Settings::printer_width();
 		return max( 24, min( 96, $width ) );
+	}
+
+	/**
+	 * Kitchen-ticket line for a customer-chosen pickup time (2.51), such as
+	 * "Pickup: Today 12:45pm (ASAP)". Empty for legacy orders (pickup_mode ''),
+	 * which keeps their tickets byte-identical to earlier releases.
+	 *
+	 * @param object $order Order row.
+	 * @return string
+	 */
+	private static function pickup_line( $order ) {
+		$mode = isset( $order->pickup_mode ) ? (string) $order->pickup_mode : '';
+		if ( 'asap' !== $mode && 'scheduled' !== $mode ) {
+			return '';
+		}
+		$from = isset( $order->promised_ready_from_utc ) ? (string) $order->promised_ready_from_utc : '';
+		if ( '' === $from || '0000-00-00 00:00:00' === $from ) {
+			return '';
+		}
+		$label = '';
+		if ( class_exists( 'DoughBoss_Store_Hours' ) && method_exists( 'DoughBoss_Store_Hours', 'format_pickup_time' ) ) {
+			$timezone = ! empty( $order->timezone_snapshot ) ? (string) $order->timezone_snapshot : 'Australia/Sydney';
+			$label    = (string) DoughBoss_Store_Hours::format_pickup_time( $from, $timezone );
+		}
+		if ( '' === $label ) {
+			$label = self::local_time( $from );
+		}
+		return 'Pickup: ' . $label . ' (' . ( 'asap' === $mode ? 'ASAP' : 'Scheduled' ) . ')';
 	}
 
 	/**

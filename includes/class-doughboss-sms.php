@@ -46,6 +46,7 @@ class DoughBoss_SMS {
 	public static function init() {
 		add_action( 'doughboss_order_status_changed', array( __CLASS__, 'on_status_changed' ), 10, 2 );
 		add_action( 'doughboss_voucher_claimed', array( __CLASS__, 'on_voucher_claimed' ), 10, 4 );
+		add_action( 'doughboss_order_delayed', array( __CLASS__, 'on_order_delayed' ), 10, 3 );
 	}
 
 	/**
@@ -115,6 +116,88 @@ class DoughBoss_SMS {
 			self::log( 'ready: send failed (' . $result->get_error_code() . ') for order #' . $order_id );
 		} else {
 			self::log( 'ready: dispatched (non-blocking) for order #' . $order_id );
+		}
+	}
+
+	/**
+	 * Pure: the "pickup time moved" text.
+	 *
+	 * @param string $order_number Order number.
+	 * @param string $label        New pickup label such as "Today 1:05pm" ('' when unknown).
+	 * @return string
+	 */
+	public static function delayed_message( $order_number, $label = '' ) {
+		$clean = static function ( $value ) {
+			$value = preg_replace( '/[\x00-\x1f\x7f]+/u', ' ', strip_tags( (string) $value ) );
+			return trim( preg_replace( '/ {2,}/', ' ', (string) $value ) );
+		};
+		$order_number = $clean( $order_number );
+		$label        = $clean( $label );
+		if ( '' === $label ) {
+			return sprintf(
+				/* translators: %s: order number. */
+				__( 'Dough Boss: order %s will now be ready a little later than planned. Sorry for the wait.', 'doughboss' ),
+				$order_number
+			);
+		}
+		return sprintf(
+			/* translators: 1: order number, 2: new pickup time. */
+			__( 'Dough Boss: order %1$s will now be ready about %2$s. Sorry for the wait.', 'doughboss' ),
+			$order_number,
+			$label
+		);
+	}
+
+	/**
+	 * Staff pushed a timed order back ("+10 min"): text the new pickup time.
+	 * Dormant unless SMS is configured AND the "on ready" toggle is on. Each
+	 * delay is a distinct staff action, so each one is texted once.
+	 *
+	 * @param int    $order_id     Delayed order id.
+	 * @param int    $minutes      Minutes added by this delay (unused in the text).
+	 * @param string $new_from_utc New promise start, UTC MySQL.
+	 * @return void
+	 */
+	public static function on_order_delayed( $order_id, $minutes = 0, $new_from_utc = '' ) {
+		unset( $minutes );
+		if ( ! self::ready() ) {
+			return;
+		}
+		if ( ! DoughBoss_Settings::sms_on_ready() ) {
+			return;
+		}
+
+		$order_id = absint( $order_id );
+		if ( ! $order_id ) {
+			return;
+		}
+
+		$order = DoughBoss_Order::get( $order_id );
+		if ( ! is_object( $order ) ) {
+			return;
+		}
+
+		$phone = self::normalize_phone( isset( $order->customer_phone ) ? $order->customer_phone : '' );
+		if ( '' === $phone ) {
+			return;
+		}
+
+		$label = '';
+		if ( class_exists( 'DoughBoss_Emails' ) && method_exists( 'DoughBoss_Emails', 'pickup_label_for_row' ) ) {
+			$row = (array) $order;
+			if ( '' !== (string) $new_from_utc ) {
+				$row['promised_ready_from_utc'] = (string) $new_from_utc;
+			}
+			$label = DoughBoss_Emails::pickup_label_for_row( $row );
+		}
+		$number  = isset( $order->order_number ) ? (string) $order->order_number : (string) $order_id;
+		$message = self::delayed_message( $number, $label );
+
+		$result = self::send( $phone, $message, false );
+		if ( is_wp_error( $result ) ) {
+			self::log( 'delayed: send failed (' . $result->get_error_code() . ') for order #' . $order_id );
+		} else {
+			self::log( 'delayed: dispatched (non-blocking) for order #' . $order_id );
 		}
 	}
 
