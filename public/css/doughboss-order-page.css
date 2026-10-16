@@ -369,3 +369,17 @@ body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 		transition: none !important;
 	}
 }
+
+/* 2.51.0: store-first chooser on the order page */
+body.doughboss-order-page .db-shop-picker .db-store-choose {
+	width: min(980px, 100%);
+}
+
+body.doughboss-order-page .db-shop .db-shop-change {
+	align-self: center;
+}
+
+body.doughboss-order-page .db-menu-gate {
+	width: min(760px, 100%);
+	margin-inline: auto;
+}

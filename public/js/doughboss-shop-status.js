@@ -127,7 +127,10 @@
 		if (locationById(locations, latestLocationId)) { return latestLocationId; }
 		var saved = 0;
 		try { saved = Number(window.localStorage.getItem('doughboss_location')); } catch (error) { /* Optional preference only. */ }
-		return locationById(locations, saved) ? saved : (locations.length ? Number(locations[0].id) : 0);
+		if (locationById(locations, saved)) { return saved; }
+		// Store-first (2.51.0): with several shops nothing is assumed until the
+		// customer picks one. A single shop is still the implicit choice.
+		return locations.length === 1 ? Number(locations[0].id) : 0;
 	}
 
 	function renderHeader(root) {
@@ -155,6 +158,13 @@
 				option.textContent = location.name;
 				select.appendChild(option);
 			});
+			if (!current) {
+				var placeholder = document.createElement('option');
+				placeholder.value = '0';
+				placeholder.disabled = true;
+				placeholder.textContent = 'Choose your shop';
+				select.insertBefore(placeholder, select.firstChild);
+			}
 			select.value = String(current);
 			// One real online location is not presented as three orderable stores.
 			if (locations.length > 1) { label.appendChild(select); }
@@ -170,6 +180,10 @@
 			function show(id) {
 				current = id;
 				select.value = String(id);
+				if (!id) {
+					status.textContent = 'Choose your shop to see pickup hours.';
+					return;
+				}
 				attach(status, locationById(snapshot.locations, id), snapshot.config);
 			}
 			select.addEventListener('change', function () {

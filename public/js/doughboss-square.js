@@ -463,21 +463,25 @@
 		}).then(function (tender) {
 			session.providerRequestStarted = true;
 			storeSession(session);
-			return request('/payment-intent', {
-				method: 'POST',
-				body: {
-					order_type: orderType,
-					location_id: locationId,
-					payment_attempt_key: session.paymentAttemptKey,
-					customer_name: value(form, 'customer_name'),
-					customer_email: value(form, 'customer_email'),
-					customer_phone: value(form, 'customer_phone'),
-					address: value(form, 'address'),
-					notes: value(form, 'notes'),
-					source_id: tender.token,
-					tender_kind: tender.kind
-				}
+			var intentBody = {
+				order_type: orderType,
+				location_id: locationId,
+				payment_attempt_key: session.paymentAttemptKey,
+				customer_name: value(form, 'customer_name'),
+				customer_email: value(form, 'customer_email'),
+				customer_phone: value(form, 'customer_phone'),
+				address: value(form, 'address'),
+				notes: value(form, 'notes'),
+				source_id: tender.token,
+				tender_kind: tender.kind
+			};
+			// Pickup time (2.51.0): the form carries these hidden inputs only
+			// while a live shop has a held time, so legacy requests are unchanged.
+			['pickup_mode', 'pickup_slot_id', 'capacity_hold_token'].forEach(function (pickupKey) {
+				var picked = value(form, pickupKey);
+				if (picked) { intentBody[pickupKey] = picked; }
 			});
+			return request('/payment-intent', { method: 'POST', body: intentBody });
 		}).then(function (payment) {
 			if (!payment || !payment.payment_intent) {
 				throw new Error('The card payment could not be confirmed. Please contact the shop before trying again.');
@@ -623,20 +627,27 @@
 			location_id: locationId,
 			customer_email: value(form, 'customer_email')
 		};
+		var checkoutBody = {
+			order_type: payload.order_type,
+			location_id: payload.location_id,
+			payment_attempt_key: session.paymentAttemptKey,
+			payment_intent_id: session.paymentId,
+			customer_name: value(form, 'customer_name'),
+			customer_email: payload.customer_email,
+			customer_phone: value(form, 'customer_phone'),
+			address: value(form, 'address'),
+			notes: value(form, 'notes')
+		};
+		// Same pickup facts as /payment-intent (2.51.0); the server prefers the
+		// paid snapshot's own copy, so a reloaded tab without them still works.
+		['pickup_mode', 'pickup_slot_id', 'capacity_hold_token'].forEach(function (pickupKey) {
+			var picked = value(form, pickupKey);
+			if (picked) { checkoutBody[pickupKey] = picked; }
+		});
 		return request('/checkout', {
 			method: 'POST',
 			headers: { 'Idempotency-Key': session.checkoutAttemptId },
-			body: {
-				order_type: payload.order_type,
-				location_id: payload.location_id,
-				payment_attempt_key: session.paymentAttemptKey,
-				payment_intent_id: session.paymentId,
-				customer_name: value(form, 'customer_name'),
-				customer_email: payload.customer_email,
-				customer_phone: value(form, 'customer_phone'),
-				address: value(form, 'address'),
-				notes: value(form, 'notes')
-			}
+			body: checkoutBody
 		}).then(function (res) {
 			clearStoredSession();
 			form.dispatchEvent(new CustomEvent('doughboss:checkout-complete', {
@@ -762,7 +773,7 @@
 			storeSession(session);
 		}
 		form.dispatchEvent(new CustomEvent('doughboss:checkout-error', {
-			detail: { message: message, paymentPending: paymentPending }
+			detail: { message: message, paymentPending: paymentPending, code: err && err.code ? String(err.code) : '' }
 		}));
 	}
 
@@ -779,6 +790,10 @@
 
 		event.preventDefault();
 		event.stopPropagation();
+
+		// A live pickup shop needs a held time before any card work starts. The
+		// storefront form owns the check (and announces its own reason).
+		if (!session.busy && typeof form.doughbossPickupGuard === 'function' && form.doughbossPickupGuard()) { return; }
 
 		if (session.busy) { return; }
 		session.busy = true;
@@ -800,6 +815,19 @@
 			fail(session, err);
 		});
 	}, true);
+
+	// A new pickup time is a new checkout attempt: give an unstarted card
+	// session a fresh payment key so the server binds it to the new slot.
+	document.addEventListener('doughboss:pickup-changed', function () {
+		var forms = document.querySelectorAll('form.db-checkout');
+		for (var i = 0; i < forms.length; i++) {
+			var pickupSession = sessionFor(forms[i]);
+			if (pickupSession && !pickupSession.busy && !pickupSession.providerRequestStarted && !pickupSession.paymentId) {
+				pickupSession.paymentAttemptKey = uuid();
+				pickupSession.checkoutAttemptId = null;
+			}
+		}
+	});
 
 	function scan() {
 		var forms = document.querySelectorAll('form.db-checkout');
