@@ -163,3 +163,19 @@ db_test(
 		assert_same( '', $method->invoke( null, (object) array( 'pickup_mode' => 'asap', 'promised_ready_from_utc' => '' ) ), 'no promise prints nothing' );
 	}
 );
+
+db_test(
+	'2.51 accepted email names the pickup time for scheduled / far-off orders',
+	function () {
+		require_once dirname( __DIR__ ) . '/includes/class-doughboss-store-hours.php';
+		$tomorrow = gmdate( 'Y-m-d H:i:s', time() + 26 * 3600 );
+		$sched    = array( 'pickup_mode' => 'scheduled', 'promised_ready_from_utc' => $tomorrow, 'timezone_snapshot' => 'Australia/Sydney' );
+		$body     = DoughBoss_Emails::timed_accepted_body( $sched, 1560 );
+		assert_true( false !== strpos( $body, 'ready for pickup: ' ), 'scheduled order gets the pickup-time copy' );
+		assert_true( false === strpos( $body, 'minutes' ), 'no minute count for a scheduled order' );
+		assert_true( false !== strpos( $body, '{order_number}' ), 'template placeholders kept' );
+		$asap_soon = array( 'pickup_mode' => 'asap', 'promised_ready_from_utc' => gmdate( 'Y-m-d H:i:s', time() + 1500 ), 'timezone_snapshot' => 'Australia/Sydney' );
+		assert_same( '', DoughBoss_Emails::timed_accepted_body( $asap_soon, 25 ), 'ASAP within the hour keeps "about N minutes"' );
+		assert_same( '', DoughBoss_Emails::timed_accepted_body( array( 'pickup_mode' => '' ), 0 ), 'legacy order unchanged' );
+	}
+);

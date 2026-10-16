@@ -388,10 +388,45 @@ class DoughBoss_Emails {
 		}
 		$vars = self::template_vars( $order, $eta, __( 'Confirmed', 'doughboss' ) );
 
-		$subject = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_accepted_email_subject(), $vars );
-		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_accepted_email_body( $eta > 0 ), $vars );
+		$subject  = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_accepted_email_subject(), $vars );
+		$template = DoughBoss_Settings::tpl_accepted_email_body( $eta > 0 );
+		$timed    = self::timed_accepted_body( (array) $order, $eta );
+		if ( '' !== $timed && '' === trim( (string) DoughBoss_Settings::get( 'tpl_accepted_email_body', '' ) ) ) {
+			// Built-in copy only: a chosen pickup time reads better than
+			// "ready in about 1243 minutes" for a tomorrow slot.
+			$template = $timed;
+		}
+		$body = DoughBoss_Settings::render_template( $template, $vars );
 
 		self::deliver( $order, $order_id, 'accepted', $subject, $body );
+	}
+
+	/**
+	 * Built-in accepted-email body for a timed pickup (2.51), or '' to keep the
+	 * standard copy. ASAP orders due within the hour keep "ready in about N
+	 * minutes"; scheduled or later orders name the pickup time instead.
+	 *
+	 * @param array $order Order row as an array.
+	 * @param int   $eta   Minutes until the promise.
+	 * @return string
+	 */
+	public static function timed_accepted_body( array $order, $eta ) {
+		if ( ! self::is_timed_order( $order ) ) {
+			return '';
+		}
+		if ( 'asap' === (string) $order['pickup_mode'] && (int) $eta <= 60 ) {
+			return '';
+		}
+		if ( ! class_exists( 'DoughBoss_Store_Hours' ) || ! method_exists( 'DoughBoss_Store_Hours', 'format_pickup_time' ) || empty( $order['promised_ready_from_utc'] ) ) {
+			return '';
+		}
+		$tz    = ! empty( $order['timezone_snapshot'] ) ? (string) $order['timezone_snapshot'] : 'Australia/Sydney';
+		$label = DoughBoss_Store_Hours::format_pickup_time( (string) $order['promised_ready_from_utc'], $tz );
+		if ( '' === $label ) {
+			return '';
+		}
+		// Placeholder braces are literal here; the label is plain text.
+		return "Hi {customer_name},\n\nGreat news — your order {order_number} is confirmed. It will be ready for pickup: " . $label . ".\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
 	}
 
 	/**
