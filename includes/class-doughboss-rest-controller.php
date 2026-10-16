@@ -5624,7 +5624,8 @@ class DoughBoss_REST_Controller {
 			}
 		} else {
 			$discount     = 0.0;
-			$voucher_code = '';
+			// Totals already reject invalid vouchers. Preserve a valid code whose
+			// discount rounds to zero so the paid snapshot and pickup hold match.
 		}
 
 		$order_data = array(
@@ -6033,7 +6034,7 @@ class DoughBoss_REST_Controller {
 			}
 		} else {
 			$discount     = 0.0;
-			$voucher_code = '';
+			// A zero-value discount does not change the retained voucher identity.
 		}
 		$order_data['discount']          = $discount;
 		$order_data['voucher_code']      = $voucher_code;
@@ -8118,7 +8119,7 @@ class DoughBoss_REST_Controller {
 			}
 		} else {
 			$discount     = 0.0;
-			$voucher_code = '';
+			// Recovery must preserve the same voucher identity as the paid snapshot.
 		}
 
 		$order_data['discount']          = $discount;

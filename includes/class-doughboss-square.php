@@ -635,18 +635,21 @@ class DoughBoss_Square {
 	private static function catalogue_identity( $response, $application_id ) {
 		$error = self::catalogue_identity_error();
 		if ( ! is_array( $response ) || array_key_exists( 'errors', $response )
-			|| ! isset( $response['client_id'], $response['merchant_id'], $response['scopes'], $response['expires_at'] )
+			|| ! isset( $response['client_id'], $response['merchant_id'], $response['scopes'] )
 			|| ! self::catalogue_id( $response['client_id'] ) || ! self::catalogue_id( $response['merchant_id'] )
 			|| strlen( $response['merchant_id'] ) < 8 || strlen( $response['merchant_id'] ) > 191
 			|| ! is_string( $application_id ) || ! hash_equals( $application_id, $response['client_id'] )
 			|| ! is_array( $response['scopes'] ) || array_values( $response['scopes'] ) !== $response['scopes'] || count( $response['scopes'] ) > 128
-			|| ! is_string( $response['expires_at'] ) ) { return $error; }
+			|| ( array_key_exists( 'expires_at', $response ) && ! is_string( $response['expires_at'] ) ) ) { return $error; }
 		$scopes = array();
 		foreach ( $response['scopes'] as $scope ) {
 			if ( ! is_string( $scope ) || ! preg_match( '/^[A-Z][A-Z0-9_]{0,127}$/D', $scope ) || isset( $scopes[ $scope ] ) ) { return $error; }
 			$scopes[ $scope ] = true;
 		}
-		$expiry = $response['expires_at'];
+		// Square omits this optional field for non-expiring personal tokens.
+		// Retain the existing empty-string representation; a present invalid
+		// value must still fail rather than silently becoming non-expiring.
+		$expiry = array_key_exists( 'expires_at', $response ) ? $response['expires_at'] : '';
 		// Validate the original grammar before removing any fractional bytes;
 		// otherwise a malformed double fraction could be normalized into a valid date.
 		if ( '' !== $expiry && ! preg_match( '/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/D', $expiry ) ) { return $error; }

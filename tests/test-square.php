@@ -13,6 +13,69 @@ require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-orders.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment-legs.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment.php';
 
+db_test( 'Square token observation accepts documented non-expiring tokens without inventing an expiry', function () {
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'catalogue_identity' );
+	$method->setAccessible( true );
+	$app = 'sandbox-sq0idb-SYNTHETIC123';
+	$response = array( 'client_id' => $app, 'merchant_id' => 'MERCHANTSYNTHETIC01', 'scopes' => array( 'ORDERS_READ', 'MERCHANT_PROFILE_READ' ) );
+	$observed = $method->invoke( null, $response, $app );
+	assert_false( is_wp_error( $observed ), 'a successful token-status response may omit expiry for a non-expiring personal token' );
+	if ( is_wp_error( $observed ) ) { return; }
+	assert_same( '', $observed['expires_at'], 'absence uses the existing non-expiring representation, not a fabricated date' );
+	assert_same( $app, $observed['application_id'], 'exact application identity is retained' );
+	assert_same( $response['merchant_id'], $observed['merchant_id'], 'exact merchant identity is retained' );
+	assert_same( array( 'MERCHANT_PROFILE_READ', 'ORDERS_READ' ), $observed['scopes'], 'observed scopes remain exact and canonically sorted' );
+	$response['expires_at'] = '';
+	assert_same( $observed, $method->invoke( null, $response, $app ), 'explicit empty expiry has the same existing canonical meaning' );
+	$response['expires_at'] = gmdate( 'Y-m-d\TH:i:s\Z', time() + 86400 );
+	$future = $method->invoke( null, $response, $app );
+	assert_false( is_wp_error( $future ), 'valid future expiry remains accepted' );
+	assert_same( $response['expires_at'], $future['expires_at'], 'actual provider expiry is retained without modification' );
+} );
+
+db_test( 'Square final observation check still requires explicit retained expiry evidence', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	try {
+		doughboss_test_set_settings( db_square_settings() );
+		$view = array( 'application_id' => DoughBoss_Settings::square_application_id(), 'merchant_id' => 'MERCHANTSYNTHETIC01', 'credential_scopes' => array( 'MERCHANT_PROFILE_READ' ), 'credential_expires_at' => '' );
+		assert_same( true, DoughBoss_Square::validate_locations_observation_expiry( $view ), 'canonical non-expiring observation survives the final expiry check' );
+		unset( $view['credential_expires_at'] );
+		assert_true( is_wp_error( DoughBoss_Square::validate_locations_observation_expiry( $view ) ), 'missing retained view evidence is not treated as a provider non-expiring response' );
+		$view['credential_expires_at'] = gmdate( 'Y-m-d\TH:i:s\Z', time() - 60 );
+		assert_true( is_wp_error( DoughBoss_Square::validate_locations_observation_expiry( $view ) ), 'expiry reached before final disclosure is still denied' );
+		$view['credential_expires_at'] = '';
+		$view['application_id'] = 'sandbox-sq0idb-OTHER123';
+		assert_true( is_wp_error( DoughBoss_Square::validate_locations_observation_expiry( $view ) ), 'no-expiry evidence cannot authorise a different configured application' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
+db_test( 'Square optional token expiry does not relax malformed, expired or identity evidence', function () {
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'catalogue_identity' );
+	$method->setAccessible( true );
+	$app = 'sandbox-sq0idb-SYNTHETIC123';
+	$base = array( 'client_id' => $app, 'merchant_id' => 'MERCHANTSYNTHETIC01', 'scopes' => array( 'MERCHANT_PROFILE_READ' ) );
+	foreach ( array( null, false, 0, array(), 'never', '2026-02-30T12:00:00Z', '2026-01-01T00:00:00.1.2Z', gmdate( 'Y-m-d\TH:i:s\Z', time() - 60 ) ) as $expiry ) {
+		assert_true( is_wp_error( $method->invoke( null, array_merge( $base, array( 'expires_at' => $expiry ) ), $app ) ), 'present malformed or expired expiry remains denied' );
+	}
+	foreach ( array(
+		array( 'client_id' => 'sandbox-sq0idb-OTHER123' ),
+		array( 'merchant_id' => '' ),
+		array( 'scopes' => null ),
+		array( 'scopes' => array( 'MERCHANT_PROFILE_READ', 'MERCHANT_PROFILE_READ' ) ),
+		array( 'scopes' => array( 'invalid scope' ) ),
+		array( 'errors' => array() ),
+	) as $override ) {
+		assert_true( is_wp_error( $method->invoke( null, array_merge( $base, $override ), $app ) ), 'missing expiry cannot bypass contradictory identity/scope evidence' );
+	}
+	foreach ( array( 'client_id', 'merchant_id', 'scopes' ) as $required ) {
+		$response = $base;
+		unset( $response[ $required ] );
+		assert_true( is_wp_error( $method->invoke( null, $response, $app ) ), 'other required token evidence must remain present' );
+	}
+} );
+
 db_test( 'Square mapped readiness preserves legacy and activation gates', function () {
 	$original = get_option( 'doughboss_settings', array() );
 	$maps = array( 'revesby' => 'LMAPPED_REVESBY', 'bankstown' => 'LMAPPED_BANKSTOWN', 'roselands' => 'LMAPPED_ROSELANDS' );

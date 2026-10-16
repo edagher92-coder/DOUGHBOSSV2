@@ -110,6 +110,26 @@ function db_integration_rest_request( $route, array $params ) {
 	return $request;
 }
 
+/** Seed a real available menu post for legacy fixtures' explicit cart IDs. */
+function db_integration_menu_item( $item_id ) {
+	$item_id = (int) $item_id;
+	$post = get_post( $item_id );
+	if ( ! $post ) {
+		$created = wp_insert_post( array( 'import_id' => $item_id, 'post_type' => DoughBoss_Post_Types::POST_TYPE, 'post_status' => 'publish', 'post_title' => 'Synthetic integration menu ' . $item_id ), true );
+		if ( is_wp_error( $created ) || $item_id !== (int) $created ) {
+			fwrite( STDERR, 'INTEGRATION_PREREQUISITE_FAILED: synthetic_menu_post ' . ( is_wp_error( $created ) ? $created->get_error_code() : 'id_mismatch' ) . "\n" );
+			exit( 1 );
+		}
+		update_post_meta( $item_id, DoughBoss_Post_Types::META_AVAILABLE, '1' );
+		$post = get_post( $item_id );
+	}
+	if ( ! $post || DoughBoss_Post_Types::POST_TYPE !== $post->post_type || 'publish' !== $post->post_status ) {
+		fwrite( STDERR, "INTEGRATION_PREREQUISITE_FAILED: synthetic_menu_post invalid_post\n" );
+		exit( 1 );
+	}
+	return $item_id;
+}
+
 /** Capture only the order-created events this integration fixture observes. */
 function db_integration_capture_order_created( $order_id, $data ) {
 	$GLOBALS['db_order_created_events'][] = array(
@@ -122,6 +142,7 @@ function db_integration_capture_order_created( $order_id, $data ) {
 function db_integration_create_preorder_request( $seed, $total = 14.00, $accounting_basis = null, $location_id = 1 ) {
 	$seed  = sanitize_key( (string) $seed );
 	$total = (float) $total;
+	db_integration_menu_item( 9700 + (int) substr( hash( 'sha256', $seed ), 0, 3 ) );
 	return DoughBoss_Order::create(
 		array_filter( array(
 			'checkout_key'   => hash( 'sha256', 'preorder-request|' . $seed ),
@@ -768,7 +789,7 @@ function db_integration_approved_square_fixture( $seed, $accounting_basis = null
 	$id = is_array( $created ) ? (int) $created['order_id'] : 0;
 	$pending = DoughBoss_Preorder_Approval::ensure_pending( $id );
 	$order = $id ? DoughBoss_Order::get( $id ) : null;
-	$approved = $order && ! is_wp_error( $pending ) ? DoughBoss_Preorder_Approval::decide( $id, 'approve', 9001, 'Synthetic Square Approver', 'integration-square-approval-' . $seed, '', (int) $order->version ) : new WP_Error( 'integration_square_fixture' );
+	$approved = $order && ! is_wp_error( $pending ) ? DoughBoss_Preorder_Approval::decide( $id, 'approve', (int) DoughBoss_Settings::get( 'preorder_approver_user_id', 0 ), 'Synthetic Square Approver', 'integration-square-approval-' . $seed, '', (int) $order->version ) : new WP_Error( 'integration_square_fixture' );
 	if ( is_wp_error( $approved ) ) { return $approved; }
 	$binding = DoughBoss_Square::shop_binding( (int) $order->location_id );
 	if ( is_wp_error( $binding ) ) { return $binding; }
@@ -811,7 +832,7 @@ function db_integration_approved_square_rest_fixture( $seed, $location_id = 1 ) 
 	$pending = $id ? DoughBoss_Preorder_Approval::ensure_pending( $id ) : new WP_Error( 'integration_square_rest_fixture' );
 	$order = $id ? DoughBoss_Order::get( $id ) : null;
 	$approved = $order && ! is_wp_error( $pending )
-		? DoughBoss_Preorder_Approval::decide( $id, 'approve', 9001, 'Synthetic Square REST Approver', 'integration-square-rest-approval-' . $seed, '', (int) $order->version )
+		? DoughBoss_Preorder_Approval::decide( $id, 'approve', (int) DoughBoss_Settings::get( 'preorder_approver_user_id', 0 ), 'Synthetic Square REST Approver', 'integration-square-rest-approval-' . $seed, '', (int) $order->version )
 		: new WP_Error( 'integration_square_rest_fixture' );
 	if ( is_wp_error( $approved ) ) {
 		return $approved;
@@ -865,11 +886,23 @@ function db_integration_split_square_parent( $seed, $amount_minor = 1400, $appro
 	return is_array( $parent ) ? array( 'parent' => $parent, 'metadata' => $metadata, 'snapshot' => $snapshot ) : false;
 }
 
+/** Fresh independent connection to the isolated fixture's validated listener. */
+function db_integration_probe_connection() {
+	if ( ! preg_match( '/^127\.0\.0\.1:([1-9][0-9]{0,4})\z/', DB_HOST, $match ) || (int) $match[1] > 65535 ) {
+		return false;
+	}
+	$probe = mysqli_init();
+	if ( ! $probe || ! $probe->real_connect( '127.0.0.1', DB_USER, DB_PASSWORD, DB_NAME, (int) $match[1] ) ) {
+		return false;
+	}
+	return $probe;
+}
+
 /** Probe locks through an independent connection after a failed final COMMIT. */
 function db_integration_split_rows_unlocked( $parent_id ) {
 	global $wpdb;
-	$probe = mysqli_init();
-	if ( ! $probe || ! $probe->real_connect( '127.0.0.1', DB_USER, DB_PASSWORD, DB_NAME, 33117 ) ) { return false; }
+	$probe = db_integration_probe_connection();
+	if ( ! $probe ) { return false; }
 	$probe->query( 'SET SESSION innodb_lock_wait_timeout = 1' );
 	$probe->query( 'START TRANSACTION' );
 	$ok = true;
@@ -927,8 +960,8 @@ function db_integration_fail_square_commit( $query ) {
 /** Prove another connection can immediately lock the same guarded fixture rows. */
 function db_integration_square_rows_unlocked( $request_id, $attempt_id ) {
 	global $wpdb;
-	$probe = mysqli_init();
-	if ( ! $probe || ! $probe->real_connect( '127.0.0.1', DB_USER, DB_PASSWORD, DB_NAME, 33117 ) ) {
+	$probe = db_integration_probe_connection();
+	if ( ! $probe ) {
 		return false;
 	}
 	$probe->query( 'SET SESSION innodb_lock_wait_timeout = 1' );
@@ -952,8 +985,8 @@ function db_integration_square_quarantine_interleave( $query ) {
 	}
 	$GLOBALS['db_square_quarantine_mode'] = '';
 	$GLOBALS['db_square_quarantine_exercised'] = true;
-	$probe = mysqli_init();
-	if ( ! $probe || ! $probe->real_connect( '127.0.0.1', DB_USER, DB_PASSWORD, DB_NAME, 33117 ) ) {
+	$probe = db_integration_probe_connection();
+	if ( ! $probe ) {
 		$GLOBALS['db_square_quarantine_probe_failed'] = true;
 		return $query;
 	}
@@ -1289,6 +1322,9 @@ db_integration_same( null, DoughBoss_Payment_Attempts::find( $orders_legacy['id'
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_doughboss_rl_%' OR option_name LIKE '_transient_timeout_doughboss_rl_%' OR option_name LIKE '_transient_doughboss_idem_%' OR option_name LIKE '_transient_timeout_doughboss_idem_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 
 $settings = DoughBoss_Settings::all();
+// These historical direct-payment/after-hours fixtures exercise legacy intake.
+// Select that policy explicitly; the production default remains approval-required.
+$settings['staff_approval_required'] = 0;
 $settings['ordering_open']            = 1;
 $settings['enable_pickup']            = 1;
 $settings['enable_delivery']          = 0;
@@ -1304,6 +1340,11 @@ $settings['square_test_location_id']  = 'LUNUSEDGLOBALLOCATION';
 $settings['square_test_location_map'] = array( 'revesby' => 'LINTEGRATIONLOCATION', 'bankstown' => 'LINTEGRATIONBANKSTOWN', 'roselands' => 'LINTEGRATIONROSELANDS' );
 $settings['square_test_webhook_key']  = 'local-synthetic-webhook-key-000000';
 $settings['square_webhook_url']       = 'https://example.invalid/wp-json/doughboss/v1/square-webhook';
+// Each legacy cart must pass the current real-post/shop availability boundary.
+// Dynamic pre-order item IDs are seeded by their existing fixture helper above.
+foreach ( array( 9001, 9002, 9101, 9102, 9103, 9104, 9105, 9106, 9107, 9108, 9109, 9799, 9850, 9851, 9860, 9901 ) as $fixture_menu_id ) {
+	db_integration_menu_item( $fixture_menu_id );
+}
 update_option( 'doughboss_settings', $settings, false );
 $paused_voucher_rows = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_vouchers" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 $paused_manual_voucher = DoughBoss_Voucher::issue( array( 'type' => 'amount', 'value' => 5, 'prefix' => 'PAUSE' ) );
@@ -2084,6 +2125,10 @@ $stripe_sync_payment_params = array(
 	'return_url'          => 'https://doughboss.local.test/order/?page_id=42&ignored=1',
 );
 $stripe_sync_prepared = $stripe_sync_controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $stripe_sync_payment_params ) );
+if ( ! $stripe_sync_prepared instanceof WP_REST_Response ) {
+	fwrite( STDERR, 'INTEGRATION_PREREQUISITE_FAILED: stripe_sync_payment ' . ( is_wp_error( $stripe_sync_prepared ) ? $stripe_sync_prepared->get_error_code() : 'invalid_response' ) . "\n" );
+	exit( 1 );
+}
 $stripe_sync_data     = $stripe_sync_prepared instanceof WP_REST_Response ? $stripe_sync_prepared->get_data() : array();
 $stripe_sync_session  = isset( $stripe_sync_data['checkout_session'] ) ? (string) $stripe_sync_data['checkout_session'] : '';
 $stripe_sync_pi       = isset( $GLOBALS['db_stripe_sessions'][ $stripe_sync_session ]['payment_intent'] ) ? (string) $GLOBALS['db_stripe_sessions'][ $stripe_sync_session ]['payment_intent'] : '';
@@ -2525,6 +2570,7 @@ $preorder_approver_id = is_wp_error( $preorder_approver ) ? 0 : (int) ( is_objec
 $preorder_other_id    = is_wp_error( $preorder_other ) ? 0 : (int) ( is_object( $preorder_other ) ? $preorder_other->ID : $preorder_other );
 db_integration_assert( $preorder_approver_id > 0 && $preorder_other_id > 0, 'approval fixture provisions distinct authenticated managers' );
 $settings['preorder_approver_user_id'] = $preorder_approver_id;
+$settings['after_hours_preorders_enabled'] = 1;
 $settings['ordering_open']             = 0;
 update_option( 'doughboss_settings', $settings, false );
 
@@ -2545,6 +2591,10 @@ wp_set_current_user( 0 );
 $GLOBALS['db_order_created_events'] = array();
 add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
 $preorder_main = db_integration_create_preorder_request( 'approval-main', 21.00 );
+if ( ! is_array( $preorder_main ) ) {
+	fwrite( STDERR, 'INTEGRATION_PREREQUISITE_FAILED: legacy_preorder_request ' . ( is_wp_error( $preorder_main ) ? $preorder_main->get_error_code() : 'invalid_response' ) . "\n" );
+	exit( 1 );
+}
 $preorder_reject = db_integration_create_preorder_request( 'approval-reject', 22.00 );
 $preorder_expired = db_integration_create_preorder_request( 'approval-expired', 23.00 );
 $preorder_spoof = db_integration_create_preorder_request( 'approval-spoof', 24.00 );
@@ -3584,6 +3634,11 @@ db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'wrong provider l
 // Approved Square dispatch must bind approval and attempt before provider HTTP.
 add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
 add_filter( 'pre_wp_mail', 'db_integration_block_mail', 999 );
+$approved_square_settings = DoughBoss_Settings::all();
+$approved_square_settings['ordering_open'] = 0;
+$approved_square_settings['after_hours_preorders_enabled'] = 1;
+$approved_square_settings['preorder_approver_user_id'] = $preorder_approver_id;
+update_option( 'doughboss_settings', $approved_square_settings, false );
 $approved_square_smoke = db_integration_approved_square_fixture( 'smoke' );
 db_integration_assert( is_array( $approved_square_smoke ), 'approved Square fixture retains its immutable snapshot' );
 if ( is_array( $approved_square_smoke ) ) {
@@ -5175,7 +5230,11 @@ wp_set_current_user( $dashboard_previous_user );
 // First exercise creation-only allocation, then deliberately pre-create marked
 // attempts for the transport matrix. Both boundaries have independent proof.
 $orders_transport_settings = get_option( 'doughboss_settings' );
-update_option( 'doughboss_settings', $gift_lookup_settings, false );
+$orders_fixture_settings = $gift_lookup_settings;
+$orders_fixture_settings['ordering_open'] = 0;
+$orders_fixture_settings['after_hours_preorders_enabled'] = 1;
+$orders_fixture_settings['preorder_approver_user_id'] = $preorder_approver_id;
+update_option( 'doughboss_settings', $orders_fixture_settings, false );
 add_filter( 'pre_http_request', 'db_integration_square_http', 10, 3 );
 $GLOBALS['db_square_http_mode'] = 'success';
 $GLOBALS['db_orders_http_mode'] = '';
@@ -5501,6 +5560,10 @@ add_filter( 'pre_wp_mail', '__return_true', 999 );
 $orders_approval_fixture = function ( $seed ) {
 	$basis = array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 0, 'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true );
 	$fixture = db_integration_approved_square_fixture( 'orders-transport-' . $seed, $basis );
+	if ( ! is_array( $fixture ) ) {
+		fwrite( STDERR, 'INTEGRATION_PREREQUISITE_FAILED: orders_approved_fixture ' . ( is_wp_error( $fixture ) ? $fixture->get_error_code() : 'invalid_response' ) . "\n" );
+		exit( 1 );
+	}
 	db_integration_assert( is_array( $fixture ), 'marked approved fixture owns a known-basis request' );
 	$meta = $fixture['metadata'];
 	$binding = DoughBoss_Square::shop_binding( 1 );
@@ -5713,9 +5776,9 @@ foreach ( array( 'revoke', 'expire', 'source_revision', 'approval_link', 'shop_m
 	$fixture = $orders_approval_fixture( $orders_approval_drift );
 	$order_posts = $GLOBALS['db_orders_post_count'];
 	$payment_posts = $GLOBALS['db_square_post_count'];
-	$GLOBALS['db_orders_read_observer'] = function () use ( $fixture, $orders_approval_drift, $wpdb, $gift_lookup_settings ) {
+	$GLOBALS['db_orders_read_observer'] = function () use ( $fixture, $orders_approval_drift, $wpdb, $orders_fixture_settings ) {
 		if ( 'shop_map' === $orders_approval_drift ) {
-			$changed = $gift_lookup_settings;
+			$changed = $orders_fixture_settings;
 			$changed['square_test_location_map']['revesby'] = 'LCHANGEDDURINGORDER';
 			update_option( 'doughboss_settings', $changed, false );
 		} elseif ( 'source_revision' === $orders_approval_drift ) {
@@ -5732,7 +5795,7 @@ foreach ( array( 'revoke', 'expire', 'source_revision', 'approval_link', 'shop_m
 	db_integration_assert( ! empty( $held['provider_order_reference'] ) && null === $held['provider_reference'], $orders_approval_drift . ' retains bound Order without a Payment identity' );
 	db_integration_same( $order_posts + 1, $GLOBALS['db_orders_post_count'], $orders_approval_drift . ' performs only the original Order POST' );
 	db_integration_same( $payment_posts, $GLOBALS['db_square_post_count'], $orders_approval_drift . ' performs zero Payment POST' );
-	update_option( 'doughboss_settings', $gift_lookup_settings, false );
+	update_option( 'doughboss_settings', $orders_fixture_settings, false );
 	db_integration_assert( is_wp_error( DoughBoss_Square::create_payment_intent( 1400, 'AUD', $fixture['metadata'] ) ), $orders_approval_drift . ' retry does not reclaim dispatch' );
 	db_integration_same( $payment_posts, $GLOBALS['db_square_post_count'], $orders_approval_drift . ' retry never charges' );
 }
@@ -5968,7 +6031,7 @@ DoughBoss_Migrations::run();
 $wpdb->suppress_errors( $migration_error_suppression );
 // dbDelta may repair the wrong default during the migration. Either way, only
 // an exact readiness result may allow the version checkpoint to advance.
-db_integration_assert( '1.26.0' === get_option( 'doughboss_db_version' ) || ( '1.27.0' === get_option( 'doughboss_db_version' ) && DoughBoss_Activator::payment_ledger_storage_ready() ), 'migration never checkpoints an unready ledger' );
+db_integration_assert( '1.26.0' === get_option( 'doughboss_db_version' ) || ( DOUGHBOSS_DB_VERSION === get_option( 'doughboss_db_version' ) && DoughBoss_Activator::payment_ledger_storage_ready() ), 'migration never checkpoints an unready ledger' );
 $wpdb->query( "ALTER TABLE {$split_sets_table} MODIFY version bigint(20) unsigned NOT NULL DEFAULT 1" );
 $wpdb->query( "ALTER TABLE {$split_sets_table} ENGINE=MyISAM" );
 db_integration_same( false, DoughBoss_Activator::payment_ledger_storage_ready(), 'nontransactional split set storage fails readiness' );
@@ -5981,7 +6044,7 @@ $ledger_counts = array( (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$split_sets
 update_option( 'doughboss_db_version', '1.26.0' );
 DoughBoss_Migrations::run();
 DoughBoss_Migrations::run();
-db_integration_same( '1.27.0', get_option( 'doughboss_db_version' ), 'additive migration reaches and replays exact 1.27.0 checkpoint' );
+db_integration_same( DOUGHBOSS_DB_VERSION, get_option( 'doughboss_db_version' ), 'additive migration reaches and replays current schema checkpoint' );
 db_integration_same( $ledger_counts, array( (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$split_sets_table}" ), (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$split_legs_table}" ) ), 'migration replay preserves every ledger row' );
 db_integration_same( $split_orders_posts, $GLOBALS['db_orders_post_count'], 'all inert split-storage cases make no Square Order HTTP POST' );
 db_integration_same( $split_payment_posts, $GLOBALS['db_square_post_count'], 'all inert split-storage cases make no Square Payment HTTP POST' );
@@ -6174,6 +6237,208 @@ db_integration_same( $split_orders_posts, $GLOBALS['db_orders_post_count'], 'spl
 db_integration_same( $split_payment_posts, $GLOBALS['db_square_post_count'], 'split recovery makes zero payment POSTs' );
 db_integration_same( $split_hooks, count( $GLOBALS['db_order_created_events'] ), 'split recovery emits zero kitchen/fulfillment events' );
 unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_observer'] );
+/* 2.51 pickup runtime acceptance: real InnoDB rows, synthetic Square only. */
+( static function () use ( $wpdb ) {
+	$prior_remote_addr = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : null;
+	$_SERVER['REMOTE_ADDR'] = '198.51.100.251';
+	$locations = $wpdb->prefix . 'doughboss_locations';
+	$slots     = $wpdb->prefix . 'doughboss_capacity_slots';
+	$holds     = $wpdb->prefix . 'doughboss_capacity_holds';
+	$original_settings = get_option( 'doughboss_settings' );
+	$original_shop = $wpdb->get_row( "SELECT * FROM {$locations} WHERE id = 1", ARRAY_A );
+	$now = new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) );
+	$lines = array( array( 'item_id' => 9851, 'name' => 'Synthetic pickup item', 'quantity' => 1, 'unit_price' => 12.0, 'line_total' => 12.0 ) );
+	$context = array( 'location_id' => 1, 'order_type' => 'pickup', 'voucher' => '', 'total' => 12.0 );
+	$hash = DoughBoss_Capacity::cart_hash( $lines, $context );
+	$slot_sequence = 0;
+	$make_slot = static function ( $capacity = 6 ) use ( &$slot_sequence, $now ) {
+		++$slot_sequence;
+		$from = $now->modify( '+' . ( 120 + $slot_sequence * 15 ) . ' minutes' );
+		return DoughBoss_Capacity::materialise_slot(
+			array( 'location_id' => 1, 'capacity_units' => $capacity, 'timezone' => 'Australia/Sydney', 'planning_version' => 1 ),
+			array( 'ready_from_utc' => $from->format( 'Y-m-d\TH:i:s\Z' ), 'ready_by_utc' => $from->modify( '+15 minutes' )->format( 'Y-m-d\TH:i:s\Z' ) ),
+			$now
+		);
+	};
+	$lock = static function ( $token, $cart_hash, $paid, $clock = null ) use ( $wpdb, $now ) {
+		$wpdb->query( 'START TRANSACTION' );
+		$result = DoughBoss_Capacity::lock_hold_for_checkout( $token, $cart_hash, 1, array( 'paid' => $paid, 'prep_minutes' => 20, 'slot_minutes' => 15 ), $clock ? $clock : $now );
+		$wpdb->query( 'ROLLBACK' );
+		return $result;
+	};
+	try {
+		db_integration_same( DOUGHBOSS_DB_VERSION, get_option( 'doughboss_db_version' ), 'pickup fresh/current activation has current schema checkpoint' );
+		db_integration_same( true, DoughBoss_Activator::capacity_storage_ready(), 'pickup fresh/current activation has exact transactional capacity storage' );
+		$settings = $original_settings;
+		$settings['staff_approval_required'] = 0;
+		$settings['ordering_open'] = 1;
+		$settings['enable_pickup'] = 1;
+		$settings['payments_enabled'] = 1;
+		$settings['payment_gateway'] = 'square';
+		$settings['tax_rate'] = 0;
+		$settings['legacy_voucher_issuance_enabled'] = 1;
+		update_option( 'doughboss_settings', $settings, false );
+		$wpdb->update( $locations, array( 'capacity_mode' => 'off', 'slot_order_capacity' => 4, 'prep_time_default' => 20, 'busy_extra_minutes' => 0, 'slot_minutes' => 15, 'ordering_paused' => 0, 'is_active' => 1, 'pickup_enabled' => 1 ), array( 'id' => 1 ) );
+		$before_shop = $wpdb->get_row( "SELECT * FROM {$locations} WHERE id = 1", ARRAY_A );
+		$preserved = array( 'name', 'slug', 'address', 'phone', 'suburb', 'capacity_mode', 'prep_time_default' );
+		update_option( 'doughboss_db_version', '1.29.0', false );
+		DoughBoss_Migrations::run();
+		$upgraded = $wpdb->get_row( "SELECT * FROM {$locations} WHERE id = 1", ARRAY_A );
+		db_integration_same( DOUGHBOSS_DB_VERSION, get_option( 'doughboss_db_version' ), 'pickup upgrade from 1.29 reaches current checkpoint' );
+		db_integration_same( 6, (int) $upgraded['slot_order_capacity'], 'pickup upgrade adjusts untouched four-order default to six' );
+		foreach ( $preserved as $field ) {
+			db_integration_same( $before_shop[ $field ], $upgraded[ $field ], 'pickup upgrade preserves shop ' . $field );
+		}
+		$wpdb->update( $locations, array( 'slot_order_capacity' => 9 ), array( 'id' => 1 ) );
+		update_option( 'doughboss_db_version', '1.29.0', false );
+		DoughBoss_Migrations::run();
+		db_integration_same( 9, (int) DoughBoss_Locations::get( 1 )->slot_order_capacity, 'pickup upgrade preserves a custom order limit' );
+		foreach ( array( 'off', 'shadow', 'live' ) as $mode ) {
+			$wpdb->update( $locations, array( 'capacity_mode' => $mode ), array( 'id' => 1 ) );
+			$requirement = DoughBoss_Pickup::requirement( 1, 'pickup', false );
+			db_integration_same( $mode, $requirement['mode'], 'pickup requirement reports ' . $mode );
+			db_integration_same( 'live' === $mode, $requirement['required'], 'only live mode enforces pickup holds: ' . $mode );
+			$options = DoughBoss_Pickup::options_for_location( DoughBoss_Locations::get( 1 ), $now );
+			db_integration_same( 'live' === $mode, $options['enforce'], 'pickup options enforce only live mode: ' . $mode );
+		}
+		db_integration_same( false, DoughBoss_Pickup::requirement( 1, 'delivery', false )['required'], 'delivery does not acquire pickup capacity' );
+		db_integration_same( false, DoughBoss_Pickup::requirement( 1, 'pickup', true )['required'], 'table context does not acquire pickup capacity' );
+		$slot = $make_slot( 1 );
+		$held = DoughBoss_Capacity::create_hold( $slot, $lines, $context, 'pickup-runtime-replay-0001', $now );
+		db_integration_assert( is_array( $held ), 'pickup hold is created on real database' );
+		if ( ! is_array( $held ) ) { return; }
+		$replay = DoughBoss_Capacity::create_hold( $slot, $lines, $context, 'pickup-runtime-replay-0001', $now );
+		db_integration_same( $held['hold_token'], is_array( $replay ) ? $replay['hold_token'] : '', 'pickup same-key replay preserves exact opaque token' );
+		db_integration_same( true, is_array( $replay ) && $replay['replayed'], 'pickup replay is labelled without consuming another slot' );
+		$full = DoughBoss_Capacity::create_hold( $slot, $lines, $context, 'pickup-runtime-full-00001', $now );
+		db_integration_same( 'doughboss_slot_full', is_wp_error( $full ) ? $full->get_error_code() : '', 'unpaid full slot refuses another hold' );
+		db_integration_same( true, DoughBoss_Capacity::release_hold( $held['hold_token'] ), 'pickup release frees its held allocation' );
+		$released = $lock( $held['hold_token'], $hash, false );
+		db_integration_same( 'doughboss_hold_expired', is_wp_error( $released ) ? $released->get_error_code() : '', 'unpaid released hold cannot enter order creation' );
+		$paid_release = $lock( $held['hold_token'], $hash, true );
+		db_integration_assert( is_array( $paid_release ) && $paid_release['reacquired'], 'paid released unconverted hold can be reacquired' );
+		$expired_slot = $make_slot( 1 );
+		$expired = DoughBoss_Capacity::create_hold( $expired_slot, $lines, $context, 'pickup-runtime-expiry-0001', $now );
+		if ( ! is_array( $expired ) ) { db_integration_assert( false, 'pickup expiry fixture created' ); return; }
+		$wpdb->update( $holds, array( 'expires_at' => $now->modify( '-1 minute' )->format( 'Y-m-d H:i:s' ) ), array( 'token_hash' => hash( 'sha256', $expired['hold_token'] ) ) );
+		$unpaid = $lock( $expired['hold_token'], $hash, false );
+		db_integration_same( 'doughboss_hold_expired', is_wp_error( $unpaid ) ? $unpaid->get_error_code() : '', 'unpaid expired hold is refused' );
+		$occupant = DoughBoss_Capacity::create_hold( $expired_slot, $lines, $context, 'pickup-runtime-occupant-0001', $now );
+		db_integration_assert( is_array( $occupant ), 'expiry sweep makes the old slot available to another customer' );
+		$overflow = $lock( $expired['hold_token'], $hash, true );
+		db_integration_assert( is_array( $overflow ) && $overflow['reacquired'] && $overflow['overflow'], 'paid expired hold is reacquired with explicit overflow fact on a full slot' );
+		$shifted = $lock( $expired['hold_token'], $hash, true, $now->modify( '+1 day' ) );
+		db_integration_assert( is_array( $shifted ) && $shifted['shifted'], 'paid elapsed slot reports shifted promise' );
+		db_integration_same( $now->modify( '+1 day +20 minutes' )->format( 'Y-m-d H:i:s' ), is_array( $shifted ) ? $shifted['promised_ready_from_utc'] : '', 'shifted paid promise is current clock plus prep, not original pickup promise' );
+		$unpaid_past = $lock( $expired['hold_token'], $hash, false, $now->modify( '+1 day' ) );
+		db_integration_assert( is_wp_error( $unpaid_past ), 'unpaid elapsed slot remains refused' );
+		$mismatch = $lock( $expired['hold_token'], str_repeat( 'b', 64 ), true );
+		db_integration_same( 'doughboss_hold_mismatch', is_wp_error( $mismatch ) ? $mismatch->get_error_code() : '', 'paid capacity primitive does not silently accept a different cart hash' );
+
+		// Use the existing intercepted Square transport to verify actual paid
+		// checkout behavior, not merely a caller-supplied paid=true flag.
+		$GLOBALS['db_square_http_mode'] = 'success';
+		$GLOBALS['db_orders_http_mode'] = '';
+		$make_paid = static function ( $seed, $voucher_code = '' ) use ( $make_slot, $now ) {
+			$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'PickupRuntime' . substr( hash( 'sha256', $seed ), 0, 24 );
+			$cart = new DoughBoss_Cart();
+			$cart->clear();
+			$cart->add( array( 'type' => 'menu', 'item_id' => 9851, 'name' => 'Synthetic pickup item', 'unit_price' => 12.0, 'quantity' => 1 ) );
+			$cart->set_voucher_code( $voucher_code );
+			$totals = $cart->totals( 'pickup' );
+			$slot_id = $make_slot( 1 );
+			$hold = DoughBoss_Capacity::create_hold( $slot_id, $cart->get_lines(), array( 'location_id' => 1, 'order_type' => 'pickup', 'voucher' => $totals['voucher_code'], 'total' => $totals['total'] ), 'pickup-paid-' . $seed . '-hold-0001', $now );
+			if ( ! is_array( $hold ) ) { db_integration_assert( false, 'paid pickup ' . $seed . ' holds a slot' ); return null; }
+			$params = array( 'payment_attempt_key' => 'pickup-' . $seed . '-payment-0001', 'customer_name' => 'Synthetic Pickup', 'customer_email' => $seed . '@example.invalid', 'customer_phone' => '0400000001', 'address' => '', 'notes' => 'Pickup runtime ' . $seed, 'order_type' => 'pickup', 'location_id' => 1, 'source_id' => 'cnon:pickup-synthetic', 'verification_token' => 'verify:pickup-synthetic', 'pickup_mode' => 'scheduled', 'pickup_slot_id' => $slot_id, 'capacity_hold_token' => $hold['hold_token'] );
+			$controller = new DoughBoss_REST_Controller( $cart );
+			$response = $controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $params ) );
+			$data = $response instanceof WP_REST_Response ? $response->get_data() : array();
+			$reference = isset( $data['payment_intent'] ) ? $data['payment_intent'] : '';
+			db_integration_assert( '' !== $reference, 'paid pickup ' . $seed . ' has verified synthetic Square payment' . ( is_wp_error( $response ) ? ' (' . $response->get_error_code() . ')' : '' ) );
+			if ( '' === $reference ) { return null; }
+			$params['payment_intent_id'] = $reference;
+			$params['idempotency_key'] = 'pickup-' . $seed . '-checkout-0001';
+			unset( $params['source_id'], $params['verification_token'] );
+			return array( 'controller' => $controller, 'params' => $params, 'hold' => $hold, 'slot_id' => $slot_id, 'totals' => $totals );
+		};
+		foreach ( array( 'normal', 'expired', 'overflow', 'shifted', 'missing' ) as $case ) {
+			$fixture = $make_paid( $case );
+			if ( ! is_array( $fixture ) ) { continue; }
+			$token_hash = hash( 'sha256', $fixture['hold']['hold_token'] );
+			if ( in_array( $case, array( 'expired', 'overflow', 'shifted' ), true ) ) {
+				$wpdb->update( $holds, array( 'expires_at' => $now->modify( '-1 minute' )->format( 'Y-m-d H:i:s' ) ), array( 'token_hash' => $token_hash ) );
+			}
+			if ( 'overflow' === $case ) {
+				$occupant = DoughBoss_Capacity::create_hold( $fixture['slot_id'], $lines, $context, 'pickup-paid-overflow-occupant-0001', $now );
+				db_integration_assert( is_array( $occupant ), 'paid overflow fixture fills its expired slot with a different customer' );
+			} elseif ( 'shifted' === $case ) {
+				$wpdb->update( $slots, array( 'starts_at_utc' => $now->modify( '-30 minutes' )->format( 'Y-m-d H:i:s' ), 'ends_at_utc' => $now->modify( '-15 minutes' )->format( 'Y-m-d H:i:s' ) ), array( 'id' => $fixture['slot_id'] ) );
+			} elseif ( 'missing' === $case ) {
+				$wpdb->delete( $holds, array( 'token_hash' => $token_hash ) );
+			}
+			$posts = $GLOBALS['db_square_post_count'];
+			$response = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $fixture['params'] ) );
+			$order_id = DoughBoss_Order::find_id_by_payment_intent( $fixture['params']['payment_intent_id'] );
+			$order = $order_id ? DoughBoss_Order::get( $order_id ) : null;
+			db_integration_assert( $response instanceof WP_REST_Response && $order && 'paid' === $order->payment_status, 'paid pickup ' . $case . ' retains one verified paid order' . ( is_wp_error( $response ) ? ' (' . $response->get_error_code() . ')' : '' ) );
+			db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'paid pickup ' . $case . ' does not charge again at checkout' );
+			if ( ! $order ) { continue; }
+			if ( 'missing' === $case ) {
+				db_integration_same( '', $order->pickup_mode, 'missing paid hold is retained explicitly untimed' );
+				db_integration_assert( false !== strpos( $order->notes, '[SYSTEM]' ) && false !== strpos( $order->notes, 'Confirm the pickup time' ), 'missing paid hold leaves actionable customer-timing reconciliation note' );
+			} else {
+				db_integration_same( 'scheduled', $order->pickup_mode, 'paid pickup ' . $case . ' retains timed mode' );
+				if ( 'overflow' === $case ) { db_integration_same( 1, (int) $order->capacity_overflow, 'paid full-slot order exposes overflow flag' ); }
+				if ( 'shifted' === $case ) { db_integration_assert( false !== strpos( $order->notes, 'next possible window' ), 'shifted paid order records that its original promise changed' ); }
+			}
+			if ( 'normal' === $case ) {
+				$version = (int) $order->version;
+				$delay = DoughBoss_Order::delay_promise( $order_id, 10, array( 'expected_version' => $version, 'event_key' => 'pickup-runtime-delay-0001' ) );
+				db_integration_assert( is_array( $delay ), 'timed order accepts one staff delay' );
+				$after_delay = DoughBoss_Order::get( $order_id );
+				db_integration_same( 10, (int) $after_delay->promised_delay_minutes, 'delay persists cumulative ten minutes' );
+				$stale = DoughBoss_Order::delay_promise( $order_id, 10, array( 'expected_version' => $version, 'event_key' => 'pickup-runtime-delay-stale-0001' ) );
+				db_integration_same( 'doughboss_stale_order', is_wp_error( $stale ) ? $stale->get_error_code() : '', 'delay compare-and-swap rejects another screen stale version' );
+				db_integration_same( 409, db_integration_error_status( $stale ), 'stale staff delay reports conflict' );
+				db_integration_same( 10, (int) DoughBoss_Order::get( $order_id )->promised_delay_minutes, 'rejected stale delay cannot move customer promise again' );
+			}
+		}
+		$voucher = DoughBoss_Voucher::issue( array( 'type' => 'percent', 'value' => 0.01, 'scope' => 'online', 'prefix' => 'PICKUP' ) );
+		db_integration_assert( is_array( $voucher ), 'zero-discount regression issues only a synthetic small-percentage voucher' );
+		if ( is_array( $voucher ) ) {
+			$fixture = $make_paid( 'zerodiscount', $voucher['code'] );
+			if ( is_array( $fixture ) ) {
+				db_integration_same( 0.0, $fixture['totals']['discount'], 'valid percentage voucher rounds to zero on synthetic cart' );
+				db_integration_same( $voucher['code'], $fixture['totals']['voucher_code'], 'zero-discount code remains in the cart that acquired the hold' );
+				$voucher_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $fixture['params']['payment_intent_id'] );
+				$voucher_snapshot = is_array( $voucher_attempt ) ? DoughBoss_Checkout_Snapshots::find( $voucher_attempt['checkout_key'] ) : null;
+				$redemptions_before = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . DoughBoss_Voucher::redemptions_table() . ' WHERE voucher_id = %d', $voucher['id'] ) );
+				$posts = $GLOBALS['db_square_post_count'];
+				$response = $fixture['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $fixture['params'] ) );
+				$id = DoughBoss_Order::find_id_by_payment_intent( $fixture['params']['payment_intent_id'] );
+				$order = $id ? DoughBoss_Order::get( $id ) : null;
+				db_integration_assert( $response instanceof WP_REST_Response && $order, 'zero-discount verified payment retains its order' . ( is_wp_error( $response ) ? ' (' . $response->get_error_code() . ')' : '' ) );
+				db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'zero-discount completion does not repeat payment' );
+				// A still-valid, unchanged pickup selection must not be lost merely
+				// because a financial no-op code is normalized at checkout.
+				db_integration_same( 'scheduled', $order ? $order->pickup_mode : null, 'zero-discount voucher preserves its unchanged selected pickup promise' );
+				db_integration_same( is_array( $voucher_snapshot ) ? $voucher_snapshot['payload']['order']['voucher_code'] : null, $order ? $order->voucher_code : null, 'zero-discount paid order preserves exact approved snapshot voucher identity' );
+				db_integration_same( 0.0, $order ? (float) $order->discount : null, 'zero-discount paid order does not invent financial discount' );
+				db_integration_same( $redemptions_before, (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . DoughBoss_Voucher::redemptions_table() . ' WHERE voucher_id = %d', $voucher['id'] ) ), 'zero-discount completion writes no zero-value redemption' );
+				$voucher_after = is_array( $voucher_attempt ) ? DoughBoss_Checkout_Snapshots::find( $voucher_attempt['checkout_key'] ) : null;
+				db_integration_same( is_array( $voucher_snapshot ) ? $voucher_snapshot['payload_hash'] : null, is_array( $voucher_after ) ? $voucher_after['payload_hash'] : null, 'zero-discount completion preserves immutable snapshot hash' );
+			}
+		}
+	} finally {
+		if ( is_array( $original_shop ) ) {
+			unset( $original_shop['id'] );
+			$wpdb->update( $locations, $original_shop, array( 'id' => 1 ) );
+		}
+		update_option( 'doughboss_settings', $original_settings, false );
+		if ( null === $prior_remote_addr ) { unset( $_SERVER['REMOTE_ADDR'] ); } else { $_SERVER['REMOTE_ADDR'] = $prior_remote_addr; }
+	}
+} )();
+
 remove_filter( 'pre_wp_mail', '__return_true', 999 );
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 update_option( 'doughboss_settings', $orders_transport_settings, false );
