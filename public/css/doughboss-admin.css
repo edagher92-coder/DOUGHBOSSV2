@@ -1,0 +1,35 @@
+/**
+ * DoughBoss wp-admin styles (orders list + settings).
+ */
+
+.doughboss-orders .db-orders-filter {
+	display: flex;
+	gap: 0.5rem;
+	margin: 1rem 0;
+	align-items: center;
+}
+
+.doughboss-orders .db-item-list {
+	margin: 0;
+	padding-left: 1.1rem;
+	font-size: 0.85rem;
+}
+
+.doughboss-orders .db-status-select {
+	max-width: 160px;
+}
+
+.doughboss-settings .db-repeater {
+	margin-bottom: 0.5rem;
+}
+
+.doughboss-settings .db-repeater th {
+	text-align: left;
+}
+
+.doughboss-settings .db-remove-row {
+	color: #b32d2e;
+	text-decoration: none;
+	font-size: 1rem;
+	cursor: pointer;
+}

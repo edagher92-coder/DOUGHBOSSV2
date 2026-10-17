@@ -1,0 +1,168 @@
+<?php
+/**
+ * Fired during plugin activation.
+ *
+ * @package DoughBoss
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * Sets up database tables, default options and capabilities on activation.
+ */
+class DoughBoss_Activator {
+
+	/**
+	 * Activation routine.
+	 *
+	 * @return void
+	 */
+	public static function activate() {
+		self::create_tables();
+		self::add_default_options();
+		self::add_capabilities();
+
+		// Register post types so rewrite rules exist, then flush them.
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-post-types.php';
+		DoughBoss_Post_Types::register();
+		flush_rewrite_rules();
+
+		update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
+	}
+
+	/**
+	 * Create the orders and order-items tables.
+	 *
+	 * @return void
+	 */
+	private static function create_tables() {
+		global $wpdb;
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+		$charset_collate = $wpdb->get_charset_collate();
+		$orders          = $wpdb->prefix . 'doughboss_orders';
+		$order_items     = $wpdb->prefix . 'doughboss_order_items';
+
+		$sql_orders = "CREATE TABLE {$orders} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			order_number varchar(32) NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'pending',
+			order_type varchar(20) NOT NULL DEFAULT 'pickup',
+			customer_name varchar(191) NOT NULL DEFAULT '',
+			customer_email varchar(191) NOT NULL DEFAULT '',
+			customer_phone varchar(40) NOT NULL DEFAULT '',
+			address text NULL,
+			notes text NULL,
+			subtotal decimal(10,2) NOT NULL DEFAULT 0.00,
+			tax decimal(10,2) NOT NULL DEFAULT 0.00,
+			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
+			total decimal(10,2) NOT NULL DEFAULT 0.00,
+			currency varchar(10) NOT NULL DEFAULT 'USD',
+			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			UNIQUE KEY order_number (order_number),
+			KEY status (status),
+			KEY customer_email (customer_email)
+		) {$charset_collate};";
+
+		$sql_items = "CREATE TABLE {$order_items} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			order_id bigint(20) unsigned NOT NULL,
+			item_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			name varchar(191) NOT NULL DEFAULT '',
+			size varchar(80) NOT NULL DEFAULT '',
+			toppings text NULL,
+			quantity int(11) NOT NULL DEFAULT 1,
+			unit_price decimal(10,2) NOT NULL DEFAULT 0.00,
+			line_total decimal(10,2) NOT NULL DEFAULT 0.00,
+			PRIMARY KEY  (id),
+			KEY order_id (order_id)
+		) {$charset_collate};";
+
+		dbDelta( $sql_orders );
+		dbDelta( $sql_items );
+	}
+
+	/**
+	 * Seed default settings the first time the plugin is activated.
+	 *
+	 * @return void
+	 */
+	private static function add_default_options() {
+		if ( false !== get_option( 'doughboss_settings' ) ) {
+			return;
+		}
+
+		$defaults = array(
+			'currency_symbol' => '$',
+			'currency_code'   => 'USD',
+			'tax_rate'        => 0,
+			'delivery_fee'    => 5.00,
+			'enable_pickup'   => 1,
+			'enable_delivery' => 1,
+			'ordering_open'   => 1,
+			'sizes'           => array(
+				array(
+					'slug'  => 'small',
+					'label' => 'Small (10")',
+					'price' => 9.00,
+				),
+				array(
+					'slug'  => 'medium',
+					'label' => 'Medium (12")',
+					'price' => 12.00,
+				),
+				array(
+					'slug'  => 'large',
+					'label' => 'Large (16")',
+					'price' => 15.00,
+				),
+			),
+			'toppings'        => array(
+				array(
+					'slug'  => 'pepperoni',
+					'label' => 'Pepperoni',
+					'price' => 1.50,
+				),
+				array(
+					'slug'  => 'mushrooms',
+					'label' => 'Mushrooms',
+					'price' => 1.00,
+				),
+				array(
+					'slug'  => 'extra-cheese',
+					'label' => 'Extra Cheese',
+					'price' => 1.50,
+				),
+				array(
+					'slug'  => 'olives',
+					'label' => 'Olives',
+					'price' => 1.00,
+				),
+				array(
+					'slug'  => 'onions',
+					'label' => 'Onions',
+					'price' => 0.75,
+				),
+			),
+		);
+
+		add_option( 'doughboss_settings', $defaults );
+	}
+
+	/**
+	 * Give administrators the capability that gates DoughBoss management.
+	 *
+	 * @return void
+	 */
+	private static function add_capabilities() {
+		$role = get_role( 'administrator' );
+		if ( $role && ! $role->has_cap( 'manage_doughboss' ) ) {
+			$role->add_cap( 'manage_doughboss' );
+		}
+	}
+}
