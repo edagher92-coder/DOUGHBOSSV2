@@ -1,5 +1,17 @@
 # 2026-10-17 — Menu photo fallback loading
 
+## 17 October final regression reconciliation and source preservation
+
+Root reproduced the remaining `storefront-helpers.test.js` failure (`photo.children.length`: actual 1, expected 0). Direct source inspection confirmed the test still expected the retired CSS-background fallback, while the approved renderer intentionally always returns a lazy `picture > img` fallback. Only the existing test was corrected; runtime source and malformed-candidate validation were not changed.
+
+All 19 existing absent/unrelated/malformed metadata cases now assert exactly one picture containing exactly one original image, no partially admitted source elements, no parallel CSS background, preserved source/alternative text, native lazy/async delivery, and no invalid dimensions. Qwen supplied a bounded synthetic assertion draft (`qwen3.8-27b:code`, `status=ok`, 12,566 ms); root adapted it to the actual fake-DOM class storage and added the omitted loading/invalid-metadata checks. No autonomous local-model edits or provider actions occurred.
+
+Root checks: the storefront helper suite passed 110/110; the complete dependency-free Node suite passed 225/225, 0 failed, 0 skipped. `git diff --check -- tests/storefront-helpers.test.js` passed. The approved staff-pickup source is preserved in local commit `52b15a973d64c8a8d8e680d4a52181250b2ca5ad`; its fresh R11 native gate and independent review are recorded in the Qwen/pickup handoff.
+
+The existing PHP 8.2 ZIP builder and validator produced `C:/Codex/Output/doughboss-reviewed-pickup-20261017/doughboss-2.51.0-reviewed-pickup.zip`, validating version 2.51.0, canonical archive layout, and exact current-tree bytes for all 238 runtime files. ZIP SHA-256: `16766085A815BED2B492BD3C2570DC3811D00A40A3B88C370E16A509AA0E2CB5`. This is a reviewed local candidate, not a deployed or fully launch-accepted plugin.
+
+Publication boundary: one source-only push on the existing handoff branch after staged secret scanning; no PR, manual CI, release tag, website deployment, live payment activation, or Ads spending. Read-only inspection found no open PR for this branch. Current Plugin CI triggers only on PR/manual dispatch, and Pages push publication targets a different branch. Restore/boot, provider financial lifecycle and physical KDS acceptance remain incomplete.
+
 ## Scope and result
 
 Outcome: native lazy loading now applies to selected menu photos even when responsive metadata is missing or invalid. Previously those paths returned a CSS background; only valid packaged responsive photos used a lazy `<img>`.

@@ -678,8 +678,20 @@ test('menu photographs retain originals for absent, unrelated or malformed candi
 		const item = responsiveMenuItem();
 		mutate(item);
 		const photo = menuPhoto(item);
-		assert.equal(photo.children.length, 0, 'invalid data never partly enhances');
-		assert.equal(photo.attributes.style, 'background-image:url(' + item.image + ')', 'original delivery is preserved');
+		assert.equal(photo.attributes.style, undefined, 'fallback does not trigger a parallel CSS image download');
+		assert.equal(photo.children.length, 1);
+		const picture = photo.children[0];
+		assert.equal(picture.tag, 'picture');
+		assert.equal(picture.className, 'db-menu-picture');
+		assert.equal(picture.children.length, 1, 'invalid data never partly adds responsive sources');
+		const image = picture.children[0];
+		assert.equal(image.tag, 'img');
+		assert.equal(image.attributes.src, item.image, 'original delivery is preserved');
+		assert.equal(image.attributes.alt, item.name);
+		assert.equal(image.attributes.loading, 'lazy');
+		assert.equal(image.attributes.decoding, 'async');
+		assert.equal(image.attributes.width, undefined, 'invalid dimensions are not retained');
+		assert.equal(image.attributes.height, undefined, 'invalid dimensions are not retained');
 	}
 });
 
