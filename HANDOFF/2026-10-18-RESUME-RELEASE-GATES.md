@@ -1,5 +1,11 @@
 # 18 October 2026 - resumed DoughBoss release gates
 
+## Latest checkpoint — public native-validation prerequisite completed
+
+The R2 installed-kernel public run now has direct **81/81 test and 9/9 Linux I/O** evidence, clean owned shutdown, healthy base/overlay checks and verified post-run pins. A frozen-parser false positive on a kernel `(skipped)` message is preserved in the original FAILED receipt; the tested read-only reconciliation received fresh GPT-6.1 Sol SOURCE SHIP / EVIDENCE SUFFICIENT. Only the separate public validation gate is accepted. Details and reproducible archive hashes are in `2026-10-18-NATIVE-R4-R2-PREP.md`.
+
+Next: continue the existing private native-prefix diagnosis/preparation and isolated WordPress restore/boot, then production backup/rollback and installed-core parity before controlled publication. The prepared 2.51.0 plugin / 1.8.0 theme are still not deployed. Revesby provider/financial, gift-card/loyalty, staff permissions and physical KDS delivery gates remain unproven. Orders, payments and Ads were not activated. Earlier checkpoints below remain historical evidence, not current public-gate status.
+
 The owner resumed DoughBoss while Fable prepares Qwen V4. The Qwen speed prerequisite no longer holds this website work. No Qwen change/call, commerce activation, Ads spending or deferred-shop connection is included here.
 
 Source at resume: clean `codex/2.51-handoff-20261016`, HEAD `575a6a5`.

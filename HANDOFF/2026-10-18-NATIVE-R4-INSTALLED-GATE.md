@@ -1,5 +1,11 @@
 # 18 October 2026 — public native R4 installed-kernel gate
 
+## Latest disposition — R2 public gate reconciled
+
+The subsequent R2 run completed **81/81 guest tests and 9/9 Linux I/O checks**, `ROOT_RESTORED`, clean guest/owned-process shutdown, unchanged post-run pins and healthy base/overlay image checks. Its executor receipt remains FAILED because the frozen whole-boot parser mistook the kernel's delay-calibration `(skipped)` text for a skipped test. A separately tested read-only boundary correction and fresh GPT-6.1 Sol SOURCE SHIP / EVIDENCE SUFFICIENT support an additional root public-gate reconciliation; no original receipt was rewritten and no VM was rerun for that correction.
+
+See `2026-10-18-NATIVE-R4-R2-PREP.md` for exact hashes, defects, 14 host tests, six parser regressions, the immutable failed receipt and separate reconciled acceptance. Archive: `HANDOFF/artifacts/native-r4-installed-r2-reconciled-20261018.zip`, SHA-256 `2a2730b56f81e63f0fde01f1ed9475774918c53891cda139a8fa66f3744e4318` (21/21 payload hashes verified). Private WordPress restore, full native/restore acceptance, production publication and Revesby operational acceptance remain open. The R1 history below is preserved, not the current public-gate disposition.
+
 ## Scope and source
 
 Run the previously frozen R4 public test gate through the successfully verified installed-kernel topology. The original R4 attempt and all accepted source inputs remain unchanged. The earlier separate 22-check actual-Linux filesystem probe already passed and is carried forward rather than repeated.
