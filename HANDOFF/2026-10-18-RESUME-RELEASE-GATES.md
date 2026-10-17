@@ -43,3 +43,21 @@ Complete installed-boot staging and isolated private-backup WordPress boot; prov
 Preserve prior 43-item catalogue matches and displayed GST-inclusive prices; item classification remains pending. Other-shop account connections and the marketing/SEO ZIP remain deferred.
 
 No provider/financial change, push, CI, deployment or Ads spending occurred. Usage read: 75% weekly used, 25% remaining.
+## 18 October 2026 — post-installed-boot release checkpoint
+
+Canonical branch is `codex/2.51-handoff-20261016`; pushed source/evidence HEAD is `d1ef2375020a832cb552ecce424f988cb40e9bd1`. The only pre-existing untracked handoff, `2026-10-18-QWEN-LEAD-RESUME.md`, remains preserved outside the new commits.
+
+| Requirement | Current authoritative evidence / remaining step |
+| --- | --- |
+| Frontend/menu rendering | Accepted source commit `43cebe5c735c24c2821b71178e910b52cd5ab85d`; all five JavaScript suites now pass 228/228, with 24 syntax checks. Real browser/device performance is still unmeasured. |
+| Latest upload candidates | Fresh plugin 2.51.0 (239 files) and theme 1.8.0 (27 files), both validated against current source; exact paths and hashes in `2026-10-18-RELEASE-CANDIDATE-PACKAGES.md`. No installation occurred. |
+| Public installed-kernel boot | Completed: `PUBLIC_INSTALLED_BOOT_ONLY_OK`, clean owned closeout, pre/post chain and input-pin verification. Exact GPT-6.1 Sol operation review, result and archive in `2026-10-18-INSTALLED-BOOT-PROBE-PREP.md`. |
+| Public native filesystem prerequisites | Existing `PUBLIC-NATIVE-LINUX-R3-RESULT.json` proves 22/22 actual filesystem checks; unchanged source pins were rechecked by the discovery lane. Do not rerun this accepted probe merely to reconstruct history. |
+| R4 native diagnostic integration | The earlier R4 attempt failed before userland. The new installed-kernel R1 attempt then stopped at strict serial echo (one extra XOFF control byte). No guest test result is proven; the 81-test/9-I/O-check gate remains missing. R1 is terminal and retained; a short-frame R2 source repair is in progress. See `2026-10-18-NATIVE-R4-INSTALLED-GATE.md`. No replacement operation is admitted. |
+| Private WordPress restore/boot | Still unaccepted. Public boot/runtime checks do not prove private preparation, SQL import/schema/value correspondence, sanitized application boot or file/database snapshot consistency. |
+| Production release | Fresh recoverable production backup, rollback proof, installed-core byte parity and real-page validation remain required before the controlled publication. |
+| Revesby Square | Catalogue/options/availability/per-item tax and merchant/location/environment evidence, then approved payment/order/confirmation/reporting/refund/retry acceptance remain provider/financial gates. This batch performs none of those actions. |
+| Membership/staff/kitchen | Square gift-card/loyalty rules, staff/timecard permissions and physical KDS delivery still need operational evidence; preserve the existing human/device gates. |
+| Deferred shops | Keep Bankstown/Roselands account connections deferred and preserve `2026-10-16-SHOP-REPLICATION-PACK.md`. The A$300 routing threshold's amount basis remains an explicit owner question; do not silently select a basis. |
+
+The full launch goal remains open. Orders/payments/Ads were not activated and no live site deployment occurred in this checkpoint.
