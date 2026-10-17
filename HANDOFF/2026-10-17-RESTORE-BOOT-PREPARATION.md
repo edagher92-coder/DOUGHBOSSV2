@@ -55,3 +55,53 @@ The pin authority was resolved without importing legacy code or trusting current
 Next meaningful step is to prepare and verify that narrow execution/closeout path, freeze the exact staging profile, obtain its independent review and admit at most one named public-only staging operation. Do not substitute a passing serial-prefix diagnostic or prepared parser for real guest boot/restoration evidence. If extraction succeeds, verify the installed artifacts and define a separate installed-guest boot acceptance before introducing a private backup.
 
 Existing live-site, provider, financial, staff and KDS gates remain in force. No live/backend activation, deployment, account change or Ads spend occurred in this preparation.
+
+## Later 17 October — Bounded public staging executor, no VM launch
+
+One Sol 6.1/high lane implemented only two new files in the existing private
+test-infrastructure directory (no plugin source change):
+
+- `public_installed_boot_stage_executor_r1.py`, final SHA-256
+  `9C19B385AF589485D95C9164DFE68F23D978C70C46F674DF56A8A34102924797`.
+- `test_public_installed_boot_stage_executor_r1.py`, final SHA-256
+  `CC9B170895168DB8BF48F3E1FF4C70A719E90B03B2CE8B4B9D122A05D20A73D9`.
+
+Root independently ran:
+`python -B -m unittest -q test_public_installed_boot_stage_executor_r1 test_public_installed_boot_stage_r1`:
+**31/31 passed, exit 0** (15 executor tests plus the unchanged 16 frozen
+interface tests). Frozen interface/test hashes above remain unchanged.
+
+One independent Sol xhigh reviewer rejected the initial 28-test revision:
+its mock omitted Alpine's observed prompt DSR suffix; the executor sent a
+redundant shutdown despite the frozen guest script already powering off;
+and process exit could bypass stdout EOF/tail drainage. The correction
+recognizes only the observed optional DSR, exactly verifies a short
+`export TERM=dumb` before the long command, sends no second poweroff, and
+requires both exit and EOF while retaining the bounded tail. New tests
+model those actual lifecycle conditions. The same independent reviewer
+re-read only the frozen correction and returned **ship**, with no remaining
+blocker in that transport/test delta. This does not approve tool dependency
+closure, VM execution, actual transport or restoration; the initial passing
+test count was not operation acceptance.
+
+An isolated tiny Python child on the actual Windows/Python 3.14.6 runtime
+also confirmed that a nonblocking empty live stdout pipe raises
+`BlockingIOError`, stdin triggers exact output, and the child exits 0 with
+handles closed. That is host pipe evidence only, not QEMU transport proof.
+
+Default executor CLI rejects with `NOT_ADMITTED`; a separate root-owned
+in-memory admission must bind source/module/profile hashes and accepted
+public input pins. Complete public QEMU DLL/firmware/config provenance and
+additional pins remain a root admission obligation, not established by the
+executable hash or a boolean assertion alone. No base rehash, VM launch,
+staging image/output creation, private backup access or provider action
+occurred. Root checked all six fixed operation outputs absent and no QEMU
+process running after both the initial and corrected tests. Machine-readable preparation
+receipt: `PUBLIC-INSTALLED-BOOT-EXECUTOR-R1-PREPARATION-20261017.json`.
+
+Current source-package parity and the fresh live-public-asset mismatch are
+separately recorded in `2026-10-17-CANDIDATE-ARCHIVE-PARITY.md`. These do not
+close private restore, installed boot, live/core or launch acceptance.
+Cost route: one implementation lane and one read-only reviewer, with a
+delta-only re-review after correction; no Qwen or other model fan-out.
+Live usage before corrected-revision review: 38% used / 62% remaining.
