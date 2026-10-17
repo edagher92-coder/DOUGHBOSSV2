@@ -251,6 +251,10 @@
 	grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
 	gap: 1.25rem;
 	min-inline-size: 0;
+	/* Skip layout/paint for menu categories below the viewport. The remembered
+	 * intrinsic size limits scroll jumps once a deferred category is revealed. */
+	content-visibility: auto;
+	contain-intrinsic-size: auto 720px;
 }
 
 .db-card {

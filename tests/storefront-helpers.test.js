@@ -2152,7 +2152,7 @@ test('paused order page keeps only the approved Stripe surface available', () =>
 	assert.match(source, /document\.body\.classList\.add\('db-approved-preorder-mode'\)/);
 	assert.match(source, /var cartWrap = root\.closest\('\.dbf-cart-wrap'\);\s*if \(cartWrap\) \{ cartWrap\.hidden = false; \}/,
 		'approved capability mode reveals the hidden cart host');
-	assert.ok(source.indexOf('var APPROVED_PREORDER = approvedPreorderCapability();') < source.indexOf('getTableContext().then(function ()'),
+	assert.ok(source.indexOf('var APPROVED_PREORDER = approvedPreorderCapability();') < source.indexOf('var tableContextReady = getTableContext();'),
 		'the bearer is captured before asynchronous bootstrap or API reads');
 	assert.match(source, /if \(APPROVED_PREORDER\) \{\s*try \{ window\.history\.replaceState\(\{\}, document\.title, window\.location\.pathname \+ window\.location\.search\); \}/,
 		'the capability fragment is scrubbed immediately and retained only in the module closure');
@@ -2255,6 +2255,8 @@ test('ordinary ordering still fails closed when a claimed table session is inval
 		},
 		renderApprovedPreorder: () => assert.fail('approved renderer must not run'),
 		renderTracking: () => {}, renderShopPicker: () => {}, renderMenu: () => {}, renderBuilder: () => {}, renderCart: () => {},
+		getConfig: () => Promise.resolve({}),
+		getLocations: () => Promise.resolve([]),
 		getTableContext: () => { tableReads += 1; return Promise.reject(new Error('revoked')); },
 		el: (tag, attrs) => ({ tag, attrs })
 	});
@@ -2262,6 +2264,45 @@ test('ordinary ordering still fails closed when a claimed table session is inval
 	await new Promise(resolve => setImmediate(resolve));
 	assert.equal(tableReads, 1);
 	assert.equal(blocked.every(node => node.node && /scan the table QR again/.test(node.node.attrs.text)), true);
+});
+
+test('ordinary storefront warms public reads in parallel but renders only after the table gate', async () => {
+	let resolveTable;
+	const events = [];
+	const roots = {
+		'[data-doughboss-shop]': [{}],
+		'[data-doughboss-menu]': [{}],
+		'[data-doughboss-builder]': [{}],
+		'[data-doughboss-cart]': [{}],
+		'[data-doughboss-tracking]': [{}]
+	};
+	const boot = extractFunction(storefront, 'boot', {
+		APPROVED_PREORDER: null,
+		document: {
+			addEventListener() {},
+			querySelectorAll: selector => roots[selector] || []
+		},
+		getTableContext: () => {
+			events.push('table:start');
+			return new Promise(resolve => { resolveTable = resolve; });
+		},
+		getConfig: () => { events.push('config:start'); return Promise.resolve({}); },
+		getLocations: () => { events.push('locations:start'); return Promise.resolve([]); },
+		renderShopPicker: () => events.push('render:shop'),
+		renderMenu: () => events.push('render:menu'),
+		renderBuilder: () => events.push('render:builder'),
+		renderCart: () => events.push('render:cart'),
+		renderTracking: () => events.push('render:tracking')
+	});
+
+	boot();
+	assert.deepEqual(events, ['table:start', 'config:start', 'locations:start']);
+	resolveTable(null);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(events, [
+		'table:start', 'config:start', 'locations:start',
+		'render:shop', 'render:menu', 'render:builder', 'render:cart', 'render:tracking'
+	]);
 });
 
 test('approver recovery copies only the existing bearer and reports mail handoff honestly', async () => {

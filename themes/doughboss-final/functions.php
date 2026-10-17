@@ -472,7 +472,7 @@ add_action( 'wp_enqueue_scripts', 'doughboss_final_assets', 99 );
 
 /** Load the real plugin storefront assets on theme-rendered pages. */
 function doughboss_final_load_storefront_assets( $load ) {
-	return $load || is_front_page() || is_page( array( 'menu', 'order', 'track-order', 'catering' ) );
+	return $load || is_page( array( 'menu', 'order', 'track-order', 'catering' ) );
 }
 add_filter( 'doughboss_load_assets', 'doughboss_final_load_storefront_assets' );
 

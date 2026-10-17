@@ -4624,10 +4624,17 @@
 		document.addEventListener('doughboss:shop-changed', function (event) {
 			currentPageLocationId = event.detail ? Number(event.detail.id) || 0 : 0;
 		});
+		// Begin the independent public storefront reads immediately. Rendering still
+		// waits for the table-session result below, so a claimed invalid table session
+		// remains fail-closed; successful ordinary pages avoid a second network
+		// waterfall because menu, picker and cart reuse these in-flight requests.
+		var tableContextReady = getTableContext();
+		getConfig().catch(function () { return null; });
+		getLocations().catch(function () { return []; });
 		// Resolve a scanned-table session before any ordering controls render, so
 		// there is no moment where a customer sees a switchable shop or fulfilment
 		// option. Non-QR pages simply continue with a null context.
-		getTableContext().then(function () {
+		tableContextReady.then(function () {
 			document.querySelectorAll('[data-doughboss-shop]').forEach(renderShopPicker);
 			document.querySelectorAll('[data-doughboss-menu]').forEach(renderMenu);
 			document.querySelectorAll('[data-doughboss-builder]').forEach(renderBuilder);

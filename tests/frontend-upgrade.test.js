@@ -17,6 +17,26 @@ const b2b = path.join(root, 'public', 'js', 'doughboss-b2b.js');
 const hero = path.join(root, 'public', 'js', 'doughboss-manoush-hero.js');
 const themeScript = path.join(root, 'themes', 'doughboss-final', 'assets', 'theme.js');
 
+test('off-screen menu grids defer rendering without hiding their content', () => {
+	const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
+	const gridRule = css.match(/\.db-grid\s*\{[\s\S]*?\}/);
+	assert.ok(gridRule, 'the menu grid rule must exist');
+	assert.match(gridRule[0], /content-visibility:\s*auto/);
+	assert.match(gridRule[0], /contain-intrinsic-size:\s*auto\s+720px/);
+	assert.doesNotMatch(gridRule[0], /display:\s*none|visibility:\s*hidden/);
+});
+
+test('homepage keeps its hero and status assets without the full storefront bundle', () => {
+	const source = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'functions.php'), 'utf8');
+	const storefront = source.match(/function doughboss_final_load_storefront_assets\([^)]*\)\s*\{[\s\S]*?\n\}/);
+	assert.ok(storefront, 'the storefront asset filter must exist');
+	assert.doesNotMatch(storefront[0], /is_front_page\s*\(/, 'the presentation-only homepage must not force the ordering app');
+	assert.match(storefront[0], /is_page\(\s*array\(\s*'menu',\s*'order',\s*'track-order',\s*'catering'\s*\)\s*\)/);
+	assert.match(source, /doughboss_load_shop_status_assets',\s*'__return_true'/, 'the lightweight sitewide shop status stays active');
+	assert.match(source, /function doughboss_final_load_hero_assets\([^)]*\)\s*\{[\s\S]*?is_front_page\s*\(/,
+		'the independently loaded homepage hero stays active');
+});
+
 function installFixture(options = {}) {
   const source = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'assets', 'install.js'), 'utf8');
   function target() {
