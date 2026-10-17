@@ -1,5 +1,5 @@
 <?php
-/** Homepage presentation. Muted-first film once, optional quiet audio, ambient steam. */
+/** Homepage presentation. Muted-first native film loop, optional quiet audio, ambient steam. */
 if ( ! defined( 'ABSPATH' ) ) {
 	return;
 }
@@ -249,8 +249,13 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
  var steamPaused = false;
  var soundMuted = true;
  var motionChoice = null;
+ var preferencesReady = document.readyState !== 'loading';
+ var currentPageChoice = false;
  function mayRememberMotion() { return !!(window.DoughBossPreferences && typeof window.DoughBossPreferences.allowed === 'function' && window.DoughBossPreferences.allowed()); }
- try { if (mayRememberMotion()) { motionChoice = window.localStorage.getItem('db-hero-motion'); } } catch (ignoreStorage) {}
+ function restoreMotionChoice() {
+  try { if (mayRememberMotion()) { motionChoice = window.localStorage.getItem('db-hero-motion'); } } catch (ignoreStorage) {}
+ }
+ if (preferencesReady) { restoreMotionChoice(); }
  video.muted = soundMuted;
  function restricted() { return !!(motionChoice === 'off' || ((motion && motion.matches) && motionChoice !== 'on') || (connection && connection.saveData)); }
  function label() {
@@ -284,7 +289,7 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   label();
  }
  function start(explicit) {
-  if (failed || !inView || document.hidden || (!explicit && (userPaused || restricted()))) { return; }
+  if (failed || !inView || document.hidden || (!explicit && (!preferencesReady || userPaused || restricted()))) { return; }
   wanted = true;
   if (video.ended) { video.currentTime = 0; }
   var currentAttempt = ++attempt;
@@ -323,11 +328,13 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   if (status) { status.textContent = 'Film unavailable. Our bakery image is shown instead.'; }
  });
  control.addEventListener('click', function () {
+  currentPageChoice = true;
   if (wanted) { userPaused = true; stop(true); }
   else { userPaused = false; start(true); }
  });
  if (steamControl) { steamControl.addEventListener('click', function () { steamPaused = !steamPaused; label(); }); }
  if (motionControl) { motionControl.addEventListener('click', function () {
+  currentPageChoice = true;
   motionChoice = restricted() ? 'on' : 'off';
  try { if (mayRememberMotion()) { window.localStorage.setItem('db-hero-motion', motionChoice); } } catch (ignoreStorage) {}
   if (motionChoice === 'off') { userPaused = true; stop(false); }
@@ -345,6 +352,14 @@ body.home .dbf-button{transition:transform .35s cubic-bezier(.22,1.4,.36,1),box-
   label();
  }); }
  document.addEventListener('visibilitychange', syncVisibility);
+ if (!preferencesReady) { document.addEventListener('DOMContentLoaded', function () {
+  preferencesReady = true;
+  if (!currentPageChoice) {
+   restoreMotionChoice();
+   if (restricted()) { video.loop = false; stop(true); return; }
+  }
+  syncVisibility();
+ }, { once: true }); }
  function preferenceChanged() {
   if (restricted()) { video.loop = false; userPaused = true; stop(true); }
  }

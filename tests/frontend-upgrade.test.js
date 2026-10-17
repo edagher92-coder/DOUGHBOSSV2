@@ -680,6 +680,7 @@ function homepageFilmFixture(options = {}) {
 	const classes = new Set();
 	const opening = { querySelector: key => elements[key], classList: { toggle(key, on) { if (on) classes.add(key); else classes.delete(key); } } };
 	const document = target(); document.hidden = false; document.getElementById = () => opening;
+	document.readyState = options.loading ? 'loading' : 'complete';
 	const motion = target(); motion.matches = !!options.reduced;
 	const connection = target(); connection.saveData = !!options.saveData;
 	const desktop = target(); desktop.matches = !!options.desktop;
@@ -966,6 +967,34 @@ test('hero motion stays in memory unless preferences consent is available and al
 	granted.motionControl.emit('click');
 	assert.equal(granted.video.playCount, 1);
 	assert.equal(granted.storageAccess.writes, 0, 'revocation takes effect before the next storage write');
+});
+
+test('hero resolves footer-loaded consent before autoplay without overriding current-page choices', () => {
+	const returning = homepageFilmFixture({ loading: true, noPreferences: true, motionChoice: 'off' });
+	returning.visible(true);
+	assert.equal(returning.video.playCount, 0, 'autoplay waits for footer preferences');
+	assert.equal(returning.storageAccess.reads, 0);
+	returning.window.DoughBossPreferences = { allowed: () => true };
+	returning.document.emit('DOMContentLoaded');
+	assert.equal(returning.storageAccess.reads, 1);
+	assert.equal(returning.video.playCount, 0, 'saved off prevents automatic playback');
+	assert.equal(returning.video.loop, false);
+	for (const allowed of [false, null]) {
+		const denied = homepageFilmFixture({ loading: true, noPreferences: true, motionChoice: 'off' });
+		denied.visible(true);
+		if (allowed !== null) denied.window.DoughBossPreferences = { allowed: () => allowed };
+		denied.document.emit('DOMContentLoaded');
+		assert.equal(denied.storageAccess.reads, 0, 'denied or missing consent never reads optional storage');
+		assert.equal(denied.video.playCount, 1, 'default motion is usable without optional storage');
+	}
+	const chosen = homepageFilmFixture({ loading: true, noPreferences: true, motionChoice: 'off', reduced: true });
+	chosen.visible(true);
+	chosen.motionControl.emit('click');
+	assert.equal(chosen.video.playCount, 1, 'explicit page choice may play before footer');
+	chosen.window.DoughBossPreferences = { allowed: () => true };
+	chosen.document.emit('DOMContentLoaded');
+	assert.equal(chosen.storageAccess.reads, 0, 'late initial preference never overrides explicit page choice');
+	assert.equal(chosen.video.pauseCount, 0);
 });
 
 function announcementFixture(options = {}) {

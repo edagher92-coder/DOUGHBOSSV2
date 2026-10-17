@@ -13,13 +13,37 @@ define( 'DOUGHBOSS_PLUGIN_DIR', $preview_repo . '/' );
 define( 'DOUGHBOSS_PLUGIN_URL', $preview_base );
 define( 'WP_PLUGIN_DIR', $preview_repo );
 
-function add_action() {}
-function add_filter() {}
+// Only the explicitly included presentation snippet registers runnable hooks.
+// Core/theme bootstrap hooks remain inert: no WordPress or provider runtime exists.
+function add_action( $tag, $callback = null, $priority = 10, $accepted_args = 1 ) {
+	if ( empty( $GLOBALS['doughboss_preview_capture_hooks'] ) || ! in_array( $tag, array( 'pre_do_shortcode_tag', 'wp_head', 'wp_body_open', 'wp_footer' ), true ) ) { return; }
+	$GLOBALS['doughboss_preview_hooks'][ $tag ][ $priority ][] = array( $callback, $accepted_args );
+}
+function add_filter( $tag, $callback = null, $priority = 10, $accepted_args = 1 ) { add_action( $tag, $callback, $priority, $accepted_args ); }
+function apply_filters( $tag, $value, ...$args ) {
+	$hooks = $GLOBALS['doughboss_preview_hooks'][ $tag ] ?? array();
+	ksort( $hooks );
+	foreach ( $hooks as $callbacks ) {
+		foreach ( $callbacks as $hook ) { $value = call_user_func_array( $hook[0], array_slice( array_merge( array( $value ), $args ), 0, $hook[1] ) ); }
+	}
+	return $value;
+}
+function do_action( $tag ) {
+	$hooks = $GLOBALS['doughboss_preview_hooks'][ $tag ] ?? array();
+	ksort( $hooks );
+	foreach ( $hooks as $callbacks ) { foreach ( $callbacks as $hook ) { call_user_func( $hook[0] ); } }
+}
+function is_admin() { return false; }
+function is_front_page() { return 'front-page.php' === ( $GLOBALS['doughboss_preview_template'] ?? '' ); }
 function __return_true() { return true; }
 function __( $text ) { return $text; }
 function esc_html( $text ) { return htmlspecialchars( (string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ); }
 function esc_attr( $text ) { return esc_html( $text ); }
-function esc_url( $url ) { return esc_attr( $url ); }
+function esc_url( $url ) {
+	$media = $GLOBALS['doughboss_preview_hero_media'] ?? array();
+	if ( isset( $media[ $url ] ) ) { $url = $GLOBALS['doughboss_preview_base_path'] . $media[ $url ]['output']; }
+	return esc_attr( $url );
+}
 function esc_url_raw( $url ) { return (string) $url; }
 function esc_html__( $text ) { return esc_html( $text ); }
 function esc_attr__( $text ) { return esc_attr( $text ); }
@@ -36,6 +60,10 @@ function language_attributes() { echo 'lang="en-AU"'; }
 function bloginfo( $field ) { echo 'charset' === $field ? 'UTF-8' : 'Dough Boss'; }
 function wp_body_open() {
 	$base = esc_attr( $GLOBALS['doughboss_preview_base_path'] );
+	if ( empty( $GLOBALS['doughboss_preview_hero_media'] ) ) {
+		echo '<aside class="db-preview-banner" role="note">Photo-only preview; approved film not included.</aside>';
+	}
+	do_action( 'wp_body_open' );
 	echo '<aside class="db-preview-banner" role="note"><strong>Visual preview</strong><span>Sample menu and prices only. No real orders, payments, enquiries, calls, emails or bookings. Demo settings never reach the live site.</span><nav aria-label="Preview pages"><a href="' . $base . 'index.html">Home</a><a href="' . $base . 'order.html">Sample menu</a><a href="' . $base . 'paused.html">Paused state</a><a href="' . $base . 'partners.html">Partnerships</a><a href="' . $base . 'wholesale.html">Wholesale</a><a href="' . $base . 'catering.html">Catering</a><a href="' . $base . 'locations.html">Locations</a></nav><span id="db-preview-action" role="status" aria-live="polite"></span></aside>';
 }
 function wp_date( $format ) { return gmdate( $format ); }
@@ -50,6 +78,7 @@ function get_option( $key, $default = false ) {
 }
 function home_url( $path = '/' ) {
 	$base = $GLOBALS['doughboss_preview_base_path'];
+	if ( '/members-events/' === $path ) { return $base . 'members.html'; }
 	if ( '/' === $path || '' === $path ) {
 		return $base . 'index.html';
 	}
@@ -65,6 +94,7 @@ function home_url( $path = '/' ) {
 }
 function body_class() {
 	$classes = function_exists( 'doughboss_final_body_class' ) ? doughboss_final_body_class( array() ) : array( 'dbf-site' );
+	if ( is_front_page() ) { $classes[] = 'home'; }
 	if ( 'page-order.php' === $GLOBALS['doughboss_preview_template'] ) {
 		$classes[] = 'doughboss-order-page';
 		if ( empty( $GLOBALS['doughboss_preview_ordering_open'] ) ) {
@@ -92,7 +122,7 @@ function wp_head() {
 	$title = esc_html( $GLOBALS['doughboss_preview_title'] );
 	echo '<title>' . $title . '</title>';
 	echo '<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">';
-	echo '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; connect-src &#39;none&#39;; form-action &#39;none&#39;; object-src &#39;none&#39;; base-uri &#39;none&#39;; img-src &#39;self&#39; data:; font-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; script-src &#39;self&#39;">';
+	echo '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; connect-src &#39;none&#39;; form-action &#39;none&#39;; object-src &#39;none&#39;; base-uri &#39;none&#39;; img-src &#39;self&#39; data:; media-src &#39;self&#39;; font-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; script-src &#39;self&#39;">';
 	echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss-manoush-hero.css">';
 	echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss.css">';
 	if ( 'page-order.php' === $GLOBALS['doughboss_preview_template'] ) {
@@ -106,6 +136,7 @@ function wp_head() {
 	}
 	echo '<link rel="stylesheet" href="' . $base . 'themes/doughboss-final/style.css">';
 	echo '<link rel="stylesheet" href="' . $base . 'preview/preview.css">';
+	do_action( 'wp_head' );
 }
 function wp_footer() {
 	$base = esc_attr( $GLOBALS['doughboss_preview_base_path'] );
@@ -121,6 +152,7 @@ function wp_footer() {
 	echo '<script src="' . $base . 'public/js/doughboss-manoush-hero.js"></script>';
 	echo '<script src="' . $base . 'themes/doughboss-final/assets/theme.js"></script>';
 	echo '<script src="' . $base . 'themes/doughboss-final/assets/install.js"></script>';
+	do_action( 'wp_footer' );
 }
 
 function _n( $single, $plural, $number ) { return 1 === (int) $number ? $single : $plural; }
@@ -210,6 +242,12 @@ require $preview_repo . '/includes/class-doughboss-b2b.php';
 
 $GLOBALS['doughboss_preview_shortcodes'] = new DoughBoss_Shortcodes();
 
+if ( ! empty( $GLOBALS['doughboss_preview_hero_media'] ) ) {
+	$GLOBALS['doughboss_preview_capture_hooks'] = true;
+	require $preview_repo . '/scripts/hero-commercial/homepage-hero-v6-snippet.php';
+	$GLOBALS['doughboss_preview_capture_hooks'] = false;
+}
+
 function shortcode_exists( $tag ) {
 	return in_array( $tag, array( 'doughboss_manoush_hero', 'doughboss_ordering_status', 'doughboss_shop_picker', 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'doughboss_catering', 'doughboss_b2b_form' ), true );
 }
@@ -225,6 +263,8 @@ function do_shortcode( $source ) {
 		}
 	}
 	$shortcodes = $GLOBALS['doughboss_preview_shortcodes'];
+	$filtered = apply_filters( 'pre_do_shortcode_tag', false, $tag, $attributes );
+	if ( false !== $filtered ) { return $filtered; }
 	if ( 'doughboss_manoush_hero' === $tag ) {
 		return $shortcodes->manoush_hero( $attributes );
 	}
@@ -272,6 +312,13 @@ function doughboss_preview_render_page( $template, $ordering_open, $title ) {
 	ob_start();
 	require $GLOBALS['doughboss_preview_repo_root'] . '/themes/doughboss-final/' . $template;
 	$html = ob_get_clean();
+	// Execute no duplicate controller: publish the exact emitted source body as a
+	// local script so the preview can retain script-src 'self' (no unsafe-inline).
+	$html = preg_replace_callback( '#<script\s+id="([a-z0-9-]+)">([\s\S]*?)</script>#', static function ( $match ) {
+		$relative = 'preview/' . $match[1] . '-' . substr( hash( 'sha256', $match[2] ), 0, 16 ) . '.js';
+		$GLOBALS['doughboss_preview_generated_scripts'][ $relative ] = $match[2];
+		return '<script id="' . $match[1] . '" src="' . esc_attr( $GLOBALS['doughboss_preview_base_path'] . $relative ) . '"></script>';
+	}, $html );
 	// Published Members copy uses ordinary public permalinks. Keep the same
 	// labels here, but map known preview pages and make unsupported routes inert.
 	if ( 'page-members-events.php' === $template ) {

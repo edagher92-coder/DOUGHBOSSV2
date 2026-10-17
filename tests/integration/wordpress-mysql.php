@@ -540,6 +540,9 @@ function db_integration_prepare_stripe_rest_fixture( $seed, $item_id, $unit_pric
 		$contact_overrides
 	);
 	$prepared = $controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $params ) );
+	if ( is_wp_error( $prepared ) ) {
+		throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: stripe_fixture ' . sanitize_key( $seed ) . ' ' . $prepared->get_error_code() );
+	}
 	$data     = $prepared instanceof WP_REST_Response ? $prepared->get_data() : array();
 	$session  = isset( $data['checkout_session'] ) ? (string) $data['checkout_session'] : '';
 	$attempt  = '' !== $session ? DoughBoss_Payment_Attempts::find_by_provider_reference( $session ) : null;
@@ -828,14 +831,30 @@ function db_integration_approved_square_rest_fixture( $seed, $location_id = 1 ) 
 	$created = db_integration_create_preorder_request( 'square-rest-' . $seed, 14.00,
 		array( 'version' => 1, 'tax_inclusive' => true, 'tax_rate' => 0,
 			'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ), $location_id );
+	if ( is_wp_error( $created ) ) {
+		$policy = DoughBoss_Settings::staff_approval_policy();
+		$location = DoughBoss_Locations::get( $location_id );
+		throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: square_rest_create ' . sanitize_key( $seed ) . ' ' . $created->get_error_code() . ' ' . wp_json_encode( array(
+			'mode' => isset( $policy['mode'] ) ? $policy['mode'] : '',
+			'ordering_open' => DoughBoss_Settings::ordering_open(),
+			'after_hours' => (bool) DoughBoss_Settings::get( 'after_hours_preorders_enabled', 0 ),
+			'approver_id' => (int) DoughBoss_Settings::get( 'preorder_approver_user_id', 0 ),
+			'location_id' => (int) $location_id,
+			'location_active' => $location ? (int) $location->is_active : 0,
+			'pickup_enabled' => $location ? (int) $location->pickup_enabled : 0,
+		) ) );
+	}
 	$id = is_array( $created ) ? (int) $created['order_id'] : 0;
 	$pending = $id ? DoughBoss_Preorder_Approval::ensure_pending( $id ) : new WP_Error( 'integration_square_rest_fixture' );
+	if ( is_wp_error( $pending ) ) {
+		throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: square_rest_pending ' . sanitize_key( $seed ) . ' ' . $pending->get_error_code() );
+	}
 	$order = $id ? DoughBoss_Order::get( $id ) : null;
 	$approved = $order && ! is_wp_error( $pending )
 		? DoughBoss_Preorder_Approval::decide( $id, 'approve', (int) DoughBoss_Settings::get( 'preorder_approver_user_id', 0 ), 'Synthetic Square REST Approver', 'integration-square-rest-approval-' . $seed, '', (int) $order->version )
 		: new WP_Error( 'integration_square_rest_fixture' );
 	if ( is_wp_error( $approved ) ) {
-		return $approved;
+		throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: square_rest_approve ' . sanitize_key( $seed ) . ' ' . $approved->get_error_code() );
 	}
 	return array(
 		'request_id' => $id,
@@ -1702,7 +1721,7 @@ db_integration_assert( $pause_preserved_row && 'redeemed' === $pause_preserved_r
 db_integration_same( 1, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_voucher_redemptions WHERE voucher_id = %d", $pause_preserved_voucher['id'] ) ), 'paused existing-voucher replay keeps exactly one immutable audit record' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 update_option( DoughBoss_Settings::OPTION_KEY, $pause_preserved_settings, false );
 
-// Render the real page and shortcode together: paused copy must not invite claims.
+// The public Square information page must not expose legacy claims in either setting state.
 $voucher_page_settings = DoughBoss_Settings::all();
 $voucher_page_server_name = isset( $_SERVER['SERVER_NAME'] ) ? $_SERVER['SERVER_NAME'] : null;
 $_SERVER['SERVER_NAME'] = 'doughboss.local.test';
@@ -1714,17 +1733,11 @@ foreach ( array( false, true ) as $voucher_page_enabled ) {
 	ob_start();
 	include dirname( __DIR__, 2 ) . '/themes/doughboss-final/page-vouchers.php';
 	$voucher_page_html = ob_get_clean();
-	if ( $voucher_page_enabled ) {
-		db_integration_assert( false !== strpos( $voucher_page_html, 'Claim your ' ), 'enabled voucher page preserves the student-offer heading' );
-		db_integration_assert( false !== strpos( $voucher_page_html, 'data-doughboss-voucher-claim' ), 'enabled voucher page keeps its existing shortcode' );
-		db_integration_assert( false === strpos( $voucher_page_html, 'New claims are paused.' ), 'enabled voucher page does not advertise a pause' );
-	} else {
-		db_integration_assert( false !== strpos( $voucher_page_html, 'New claims are paused.' ), 'paused voucher page states the real issuance status' );
-		db_integration_assert( false !== strpos( $voucher_page_html, 'Square Gift Cards are not available on this website yet.' ), 'paused page never claims a connected Square gift system' );
-		db_integration_assert( false === strpos( $voucher_page_html, 'Claim your ' ) && false === strpos( $voucher_page_html, 'Your student email is required.' ), 'paused page removes student claim instructions' );
-		db_integration_assert( false === strpos( $voucher_page_html, 'data-doughboss-voucher-claim' ) && false === strpos( $voucher_page_html, 'data-campaign=' ), 'paused page never invokes the claim widget or advertises offers' );
-		db_integration_assert( false !== strpos( $voucher_page_html, 'Find your shop' ), 'paused page provides help for existing voucher questions' );
-	}
+	db_integration_assert( false !== strpos( $voucher_page_html, 'Square Gift Cards' ), 'voucher page identifies Square as the intended gift system in either legacy setting state' );
+	db_integration_assert( false !== strpos( $voucher_page_html, 'Square Gift Cards and Dough Boss loyalty are not available on this website yet.' ), 'voucher page does not claim an activated Square gift system' );
+	db_integration_assert( false === strpos( $voucher_page_html, 'Claim your ' ) && false === strpos( $voucher_page_html, 'Your student email is required.' ), 'voucher page does not restore student claim instructions through a legacy setting' );
+	db_integration_assert( false === strpos( $voucher_page_html, 'data-doughboss-voucher-claim' ) && false === strpos( $voucher_page_html, 'data-campaign=' ), 'voucher page never invokes the legacy claim widget or advertises offers' );
+	db_integration_assert( false !== strpos( $voucher_page_html, 'Find your shop' ), 'voucher page retains help for existing voucher questions' );
 }
 update_option( DoughBoss_Settings::OPTION_KEY, $voucher_page_settings, false );
 if ( null === $voucher_page_server_name ) {
@@ -3953,6 +3966,10 @@ update_option( DoughBoss_Settings::OPTION_KEY, $binding_original_settings, false
 $square_rest_settings_before = DoughBoss_Settings::all();
 $square_rest_settings = $square_rest_settings_before;
 $square_rest_settings['ordering_open'] = 0;
+$square_rest_settings['staff_approval_required'] = 0;
+$square_rest_settings['after_hours_preorders_enabled'] = 1;
+$square_rest_settings['enable_pickup'] = 1;
+$square_rest_settings['preorder_approver_user_id'] = $preorder_approver_id;
 $square_rest_settings['payments_enabled'] = 1;
 $square_rest_settings['payment_gateway'] = 'square';
 $square_rest_settings['currency_code'] = 'AUD';
@@ -3984,6 +4001,7 @@ $mapped_asset_view = static function () {
 	$old_scripts = $GLOBALS['wp_scripts'];
 	$GLOBALS['wp_scripts'] = new WP_Scripts();
 	add_filter( 'doughboss_load_assets', '__return_true' );
+	add_filter( 'doughboss_is_order_page', '__return_true' );
 	try {
 		( new DoughBoss_Assets() )->enqueue();
 		$result = array( 'sdk' => wp_script_is( 'square-web-payments', 'enqueued' ) );
@@ -3994,6 +4012,7 @@ $mapped_asset_view = static function () {
 		return $result;
 	} finally {
 		remove_filter( 'doughboss_load_assets', '__return_true' );
+		remove_filter( 'doughboss_is_order_page', '__return_true' );
 		$GLOBALS['wp_scripts'] = $old_scripts;
 	}
 };
@@ -4165,6 +4184,7 @@ try {
 	db_integration_same( '', $mapped_assets['DoughBossSquareConfig']['locationId'], 'multi-shop SDK location stays blank' );
 	db_integration_same( false, $mapped_assets['sdk'], 'multi-shop ordinary page does not preload the SDK' );
 	$mapped_settings['ordering_open'] = 0;
+	$mapped_settings['staff_approval_required'] = 1;
 	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_settings, false );
 	foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $mapped_shop ) {
 		$mapped_id = 0;
@@ -4195,6 +4215,8 @@ try {
 		db_integration_same( false, DoughBoss_Square::ready_for_location( $mapped_id ), 'inactive mapped native ' . $mapped_shop . ' remains unready' );
 		$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => (int) $native_before->is_active, 'online_payment_enabled' => (int) $native_before->online_payment_enabled ), array( 'id' => $mapped_id ) );
 	}
+	$mapped_settings['staff_approval_required'] = 0;
+	update_option( DoughBoss_Settings::OPTION_KEY, $mapped_settings, false );
 	$mapped_denial = db_integration_approved_square_rest_fixture( 'mapped-denial-before-claim' );
 	db_integration_assert( is_array( $mapped_denial ), 'mapped configuration-denial approval fixture is available' );
 	if ( is_array( $mapped_denial ) ) {
@@ -4758,6 +4780,7 @@ foreach ( array( 'stripe', 'square' ) as $basis_provider ) {
 			$basis_settings['tax_rate'] = 10;
 			update_option( DoughBoss_Settings::OPTION_KEY, $basis_settings, false );
 			$basis_seed = 'basis-' . $basis_provider . '-' . $basis_case;
+			if ( 'stripe' === $basis_provider ) { db_integration_menu_item( 9850 + $basis_case ); }
 			$fixture = 'stripe' === $basis_provider ? db_integration_prepare_stripe_rest_fixture( $basis_seed, 9850 + $basis_case, 12.00 ) : db_integration_accounting_square_fixture( $basis_seed, $basis_legacy );
 			if ( ! is_array( $fixture['snapshot'] ) || ! is_array( $fixture['attempt'] ) ) { continue; }
 			$basis_snapshot = $fixture['snapshot'];
@@ -4874,11 +4897,15 @@ foreach ( array( true, false ) as $approved_basis_inclusive ) {
 	$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'IntegrationBasisApproved' . $basis_case . 'LongToken';
 	$basis_cart = new DoughBoss_Cart();
 	$basis_cart->clear();
+	db_integration_menu_item( 9860 + $basis_case );
 	$basis_cart->add( array( 'type' => 'menu', 'item_id' => 9860 + $basis_case, 'name' => 'Synthetic approved basis', 'unit_price' => 12.00, 'quantity' => 1 ) );
 	$basis_totals = $basis_cart->totals();
 	$basis_controller = new DoughBoss_REST_Controller( $basis_cart );
 	$basis_request_params = array( 'idempotency_key' => 'approved-basis-request-' . $basis_case . '-0001', 'customer_name' => 'Synthetic Approval', 'customer_email' => 'approval.basis@example.invalid', 'customer_phone' => '0400000001', 'notes' => 'Synthetic pricing basis', 'location_id' => 1, 'accounting_basis' => array( 'version' => 999, 'tax_rate' => 99 ), 'accounting_basis_json' => '{"forged":true}' );
 	$basis_request_result = $basis_controller->preorder_request( db_integration_rest_request( '/doughboss/v1/preorder-request', $basis_request_params ) );
+	if ( is_wp_error( $basis_request_result ) ) {
+		throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: approved_basis ' . (int) $basis_case . ' ' . $basis_request_result->get_error_code() );
+	}
 	$basis_request_data = $basis_request_result instanceof WP_REST_Response ? $basis_request_result->get_data() : array();
 	$basis_request_id = isset( $basis_request_data['order_number'] ) ? (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . $wpdb->prefix . 'doughboss_orders WHERE order_number = %s', $basis_request_data['order_number'] ) ) : 0; // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 	$basis_request_order = $basis_request_id ? DoughBoss_Order::get( $basis_request_id ) : null;
