@@ -12,6 +12,31 @@ if ( ! function_exists( 'esc_attr' ) ) {
 	function esc_attr( $value ) { return htmlspecialchars( (string) $value, ENT_QUOTES, 'UTF-8' ); }
 }
 
+db_test( 'bundled images carry only the scoped Apache AVIF MIME mapping', function () {
+	$path = DOUGHBOSS_PLUGIN_DIR . 'public/images/.htaccess';
+	assert_true( is_file( $path ), 'image MIME configuration is bundled' );
+	if ( ! is_file( $path ) ) {
+		return;
+	}
+	$content = file_get_contents( $path );
+	assert_true( false !== $content, 'image MIME configuration is readable' );
+	if ( false === $content ) {
+		return;
+	}
+	$directives = array();
+	foreach ( preg_split( '/\r\n|\r|\n/', $content ) as $line ) {
+		$line = trim( $line );
+		if ( '' !== $line && '#' !== substr( $line, 0, 1 ) ) {
+			$directives[] = $line;
+		}
+	}
+	assert_same( array(
+		'<IfModule mod_mime.c>',
+		'AddType image/avif .avif',
+		'</IfModule>',
+	), $directives, 'only the AVIF type is mapped; no rewrites, caching or access rules' );
+} );
+
 db_test( 'bundled image manifest matches actual original and encoded assets', function () {
 	$base = DOUGHBOSS_PLUGIN_DIR . 'public/images/';
 	$manifest = json_decode( file_get_contents( $base . 'responsive/manifest.json' ), true );
