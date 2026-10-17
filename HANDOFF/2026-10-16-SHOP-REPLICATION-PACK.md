@@ -1,5 +1,11 @@
 # DoughBoss shop replication and acceptance pack
 
+## 18 October - retained source baseline
+
+The owner resumed DoughBoss while Fable owns Qwen V4. Destination account connections remain deferred. Source at resume is `575a6a5` on `codex/2.51-handoff-20261016`; all 238 runtime entries in the accepted R11 database freeze still match exact bytes. The additional AVIF mapping has separate local checks. Retained candidate plugin ZIP SHA256: `7ACA585EBFAF44E1BA6645B9DAC6C1C3B02BAC3145681FE04370186DD56014F5`; theme: `54EE4110432E74DC6F5B7E447117D2799A51D65371E93B113272675658A3F521`. These are undeployed candidates, not new operational acceptance.
+
+Fresh live readback shows active 2.49.0, 43 public menu items and ordering/payments off. Retain existing catalogue comparisons and GST-inclusive displayed prices. Each destination still needs its own legal/merchant/location binding, item tax approval, availability/options/media and credential/device receipts; never copy Revesby's credentials. See `2026-10-18-RESUME-RELEASE-GATES.md` for current restore preparation and open release gates.
+
 Prepared 16 October 2026. **Bankstown and Roselands account connections remain deferred to the weekend.** This is an execution checklist, not evidence that either shop is connected, copied, approved or accepting orders. Revesby is the only current integration target.
 
 ## Version and source of truth

@@ -1,0 +1,45 @@
+# 18 October 2026 - resumed DoughBoss release gates
+
+The owner resumed DoughBoss while Fable prepares Qwen V4. The Qwen speed prerequisite no longer holds this website work. No Qwen change/call, commerce activation, Ads spending or deferred-shop connection is included here.
+
+Source at resume: clean `codex/2.51-handoff-20261016`, HEAD `575a6a5`.
+
+## Fresh live readback
+
+Signed-in Installed Plugins still shows active DoughBoss **2.49.0**. Older inactive plugin copies were not changed. WordPress and cPanel sessions are accessible; their session URLs and credentials are not retained.
+
+Public GET audit at `2026-10-17T13:09:39.215Z` (18 October Sydney) returned HTTP 200 for home/menu/catering/Members & Events. Menu API has 43 items. Config remains `ordering_open=false`, `payments_enabled=false`, gateway Square. Three sampled AVIF files still lack Content-Type; sampled WebP/JPEG types are correct. HTML attributes alone are not rendered autoplay/scrolling/checkout acceptance.
+
+Public-only receipt: `C:/Codex/Output/doughboss-resume-20261018-live-readback.json`.
+
+## Retained local proof
+
+The accepted native R11 freeze hashes `1A08AF04B8BF6B5C91EDC16F5C74D141DA417C5963A1C29BF6BC3DA8E106DD7E`. All **272 frozen entries, including 238 runtime files, still match exact bytes**. Its result retains passed/source-gate/hash stability, HTTP/mail guards and graceful database shutdown. This retains unchanged backend evidence, not a new database run or provider test.
+
+The extra runtime file is the separately tested AVIF MIME mapping. Retained candidate ZIP hashes:
+- Plugin: `7ACA585EBFAF44E1BA6645B9DAC6C1C3B02BAC3145681FE04370186DD56014F5`.
+- Theme: `54EE4110432E74DC6F5B7E447117D2799A51D65371E93B113272675658A3F521`.
+
+Both remain under `C:/Codex/Output/doughboss-avif-mime-20261017-r1/`, undeployed. No rebuild or duplicate whole-suite run occurred.
+
+## R5 diagnosis and preparation-only R6
+
+Independent read-only investigation found R5 verified/executed the public guest script, then returned only aggregate FAIL/EXIT. The exact failed predicate cannot be recovered. Earlier probe mounts were unmounted; a later source-mount failure is not demonstrated. No unchanged retry or guard relaxation is justified.
+
+New files under `C:/Codex/Temp/doughboss-linux-restore-20261014-9bd2e853/`:
+- `public_installed_boot_stage_r6.py`: SHA256 `829D4A5F152A028DF96818F61E167EEE61A73AC3502F26859B88CEAB75FF7DC3`.
+- `test_public_installed_boot_stage_r6.py`: SHA256 `BED60CE8DC9C686626AEF9A66D02AE85571233CFE5C8C44E8E6CA274F3F19327`.
+
+R6 adds fixed failure labels, preserves the original failure through cleanup, uses fresh artifact names, and rejects any failure marker even alongside forged success. Removing labels and normalising revision names reproduces every original guest command exactly. Original R4/R5 scripts and receipts remain untouched. Initial tests caught a reused result filename and a fixture-order defect; both were corrected.
+
+Final synthetic suite: **22 passed, zero failures/errors**, trusted Python 3.14 `-I -S -B`, explicit local source-byte loading rather than bytecode imports. Log: `C:/Codex/Output/doughboss-restore-r6-source-tests-20261018.log`. Actual guest label emission is not tested.
+
+Fresh independent read-only Sol review returned **ship** for exactly these two hash-identified source-preparation files, with no blocking findings. It verified predicate reconstruction, failure/cleanup precedence, forged-success rejection, unique artifact names, source-byte loading and preparation-only admission. This is not a whole-launch/Astra or operation verdict. No R6 executor/caller/operation admission, VM launch, private-backup read or image operation occurred. Next: reviewed executor/caller integration, fresh exact input/tool/profile bindings and absent outputs, synthetic caller checks, independent operation review, then only an admitted offline public-only attempt. Source tests do not authorise execution or prove restore.
+
+## Open launch gates
+
+Complete installed-boot staging and isolated private-backup WordPress boot; prove fresh production backup/rollback and installed-core parity; publish the verified candidate in one controlled batch. Revesby merchant/environment/location, per-item tax/options/availability, payment/confirmation/order/refund/reporting, gift-card/loyalty, staff permissions and physical KDS acceptance remain separate.
+
+Preserve prior 43-item catalogue matches and displayed GST-inclusive prices; item classification remains pending. Other-shop account connections and the marketing/SEO ZIP remain deferred.
+
+No provider/financial change, push, CI, deployment or Ads spending occurred. Usage read: 75% weekly used, 25% remaining.
