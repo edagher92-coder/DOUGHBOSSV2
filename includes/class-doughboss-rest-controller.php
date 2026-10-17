@@ -3514,6 +3514,9 @@ class DoughBoss_REST_Controller {
 				$snapshot_payload['order'] = array_merge( $snapshot_payload['order'], $this->pickup_snapshot_fields( $pickup, $location_id ) );
 			}
 			if ( 'square' === $gateway ) {
+				if ( ! $square_hosted ) {
+					$snapshot_payload['order'] = $this->native_pickup_snapshot_order( $snapshot_payload['order'], $checkout_key, $location_id );
+				}
 				$snapshot_payload['binding_hash'] = $this->square_binding_hash( $square_binding );
 			}
 			$snapshot = $this->store_ordinary_payment_snapshot( $checkout_key, $snapshot_payload );
@@ -3940,12 +3943,34 @@ class DoughBoss_REST_Controller {
 			return array();
 		}
 		$out = array();
-		foreach ( array( 'pickup_mode', 'pickup_slot_id', 'capacity_hold_token', 'pickup_ready_from_utc', 'pickup_ready_by_utc', 'pickup_label', 'pickup_timezone' ) as $key ) {
+		foreach ( array( 'pickup_mode', 'pickup_slot_id', 'capacity_hold_token', 'pickup_ready_from_utc', 'pickup_ready_by_utc', 'pickup_label', 'pickup_timezone', 'square_orders_protocol', 'square_pickup_prep_minutes' ) as $key ) {
 			if ( array_key_exists( $key, $saved ) ) {
 				$out[ $key ] = $saved[ $key ];
 			}
 		}
 		return $out;
+	}
+
+	/** Freeze the existing website preparation policy once, only for native pickup. */
+	private function native_pickup_snapshot_order( array $order, $checkout_key, $location_id ) {
+		$existing = DoughBoss_Checkout_Snapshots::find( $checkout_key );
+		if ( ! is_array( $existing ) ) { $existing = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $checkout_key ); }
+		if ( is_array( $existing ) && isset( $existing['payload']['order'] ) ) {
+			// Never upgrade old snapshots. Replay exact retained pickup facts.
+			foreach ( array( 'pickup_mode', 'pickup_slot_id', 'capacity_hold_token', 'pickup_ready_from_utc', 'pickup_ready_by_utc', 'pickup_label', 'pickup_timezone', 'square_orders_protocol', 'square_pickup_prep_minutes', 'square_api_version' ) as $key ) {
+				if ( array_key_exists( $key, $existing['payload']['order'] ) ) {
+					$order[ $key ] = $existing['payload']['order'][ $key ];
+				} else { unset( $order[ $key ] ); }
+			}
+			return $order;
+		}
+		if ( 'pickup' === $order['order_type'] && ! empty( $order['pickup_mode'] ) ) {
+			$options = DoughBoss_Order::capacity_lock_options( $location_id, true );
+			$order['square_orders_protocol'] = 'square-orders-v2-pickup';
+			$order['square_pickup_prep_minutes'] = max( 0, min( 1440, (int) $options['prep_minutes'] ) );
+			$order['square_api_version'] = DoughBoss_Settings::square_api_version();
+		}
+		return $order;
 	}
 
 	/**
@@ -4943,6 +4968,13 @@ class DoughBoss_REST_Controller {
 		if ( null !== $accounting_basis ) {
 			$order_data['accounting_basis'] = $accounting_basis;
 		}
+		if ( 'pickup' === $order_data['order_type'] && isset( $order->pickup_mode, $order->promised_ready_from_utc ) && in_array( $order->pickup_mode, array( 'asap', 'scheduled' ), true ) ) {
+			$order_data['pickup_mode'] = $order->pickup_mode;
+			$order_data['pickup_ready_from_utc'] = (string) $order->promised_ready_from_utc;
+			$order_data['pickup_ready_by_utc'] = isset( $order->promised_ready_by_utc ) ? (string) $order->promised_ready_by_utc : '';
+			$order_data['pickup_timezone'] = isset( $order->timezone_snapshot ) ? (string) $order->timezone_snapshot : 'Australia/Sydney';
+		}
+		$order_data = $this->native_pickup_snapshot_order( $order_data, $checkout_key, (int) $order->location_id );
 		$binding_hash = hash( 'sha256', wp_json_encode( array( 'approved-square', $checkout_key, $binding ) ) );
 		$snapshot = DoughBoss_Checkout_Snapshots::store(
 			$checkout_key,

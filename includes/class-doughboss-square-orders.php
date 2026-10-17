@@ -17,7 +17,10 @@ class DoughBoss_Square_Orders {
 	const MAX_MONEY = 9999999999;
 
 	/** Build an ad-hoc OPEN Order without fulfillment or additional pricing. */
-	public static function project( array $payload, array $binding, $attempt_id ) {
+	public static function project( array $payload, array $binding, $attempt_id, $protocol = 'square-orders-v1' ) {
+		if ( ! in_array( $protocol, array( 'square-orders-v1', 'square-orders-v2-pickup' ), true ) ) {
+			return self::error();
+		}
 		if ( PHP_INT_SIZE < 8 || ! is_int( $attempt_id ) || $attempt_id <= 0
 			|| ! isset( $binding['shop_slug'], $binding['square_location_id'], $binding['square_mode'] )
 			|| ! in_array( $binding['shop_slug'], array( 'revesby', 'bankstown', 'roselands' ), true )
@@ -128,12 +131,79 @@ class DoughBoss_Square_Orders {
 				'amount_money' => self::money( $amounts['discount'], $currency ),
 			) );
 		}
-		$pickup = self::pickup_ticket( $order );
+		$native_fulfillment = null;
+		if ( 'square-orders-v2-pickup' === $protocol ) {
+			$native_fulfillment = self::pickup_fulfillment( $order );
+			if ( is_wp_error( $native_fulfillment ) || 'revesby' !== $binding['shop_slug'] ) { return self::error(); }
+		}
+		$pickup = null !== $native_fulfillment ? self::pickup_ticket_data( $order ) : self::pickup_ticket( $order );
 		if ( null !== $pickup ) {
 			$provider_order['ticket_name'] = $pickup['ticket_name'];
 			$provider_order['metadata']    = $pickup['metadata'];
 		}
+		if ( null !== $native_fulfillment ) {
+			$provider_order['fulfillments'] = array( $native_fulfillment );
+		}
 		return array( 'order' => $provider_order, 'amounts' => $amounts, 'currency' => $currency, 'tax_inclusive' => $basis['tax_inclusive'] );
+	}
+
+	/** Strict immutable native pickup contract. No clock, settings or provider reads. */
+	public static function pickup_fulfillment( array $order ) {
+		if ( ! isset( $order['square_orders_protocol'], $order['square_api_version'], $order['order_type'], $order['pickup_mode'], $order['pickup_ready_from_utc'], $order['square_pickup_prep_minutes'], $order['customer_name'] )
+			|| ! in_array( $order['square_api_version'], array( '2025-01-23', '2026-09-16' ), true )
+			|| 'square-orders-v2-pickup' !== $order['square_orders_protocol'] || 'pickup' !== $order['order_type']
+			|| ! in_array( $order['pickup_mode'], array( 'asap', 'scheduled' ), true )
+			|| ! is_int( $order['square_pickup_prep_minutes'] ) || $order['square_pickup_prep_minutes'] < 0 || $order['square_pickup_prep_minutes'] > 1440
+			|| ! self::text( $order['customer_name'], 255, false ) || trim( $order['customer_name'] ) !== $order['customer_name']
+			|| preg_match( '/[\r\n\t]/', $order['customer_name'] )
+			|| ! is_string( $order['pickup_ready_from_utc'] ) ) { return self::error(); }
+		$time = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $order['pickup_ready_from_utc'], new DateTimeZone( 'UTC' ) );
+		if ( ! $time || $time->format( 'Y-m-d H:i:s' ) !== $order['pickup_ready_from_utc'] || (int) $time->format( 'Y' ) < 1 ) { return self::error(); }
+		$recipient = array( 'display_name' => $order['customer_name'] );
+		if ( array_key_exists( 'customer_phone', $order ) ) {
+			if ( ! is_string( $order['customer_phone'] ) ) { return self::error(); }
+			if ( '' !== $order['customer_phone'] ) {
+				if ( 1 !== preg_match( '/^\+?[0-9 ()-]+\z/', $order['customer_phone'] ) ) { return self::error(); }
+				$phone = str_replace( array( ' ', '(', ')', '-' ), '', $order['customer_phone'] );
+				$phone_limit = '2026-09-16' === $order['square_api_version'] ? 18 : 17;
+				if ( 1 !== preg_match( '/^\+?[0-9]{5,17}\z/', $phone ) || strlen( $phone ) > $phone_limit ) { return self::error(); }
+				$recipient['phone_number'] = $phone;
+			}
+		}
+		return array( 'uid' => 'db-pickup', 'type' => 'PICKUP', 'state' => 'PROPOSED', 'pickup_details' => array(
+			'schedule_type' => 'SCHEDULED', 'pickup_at' => $time->format( 'Y-m-d\TH:i:s\Z' ),
+			'prep_time_duration' => 'PT' . $order['square_pickup_prep_minutes'] . 'M', 'recipient' => $recipient,
+		) );
+	}
+
+	/** Pinned 2025-01-23 lifecycle states may advance; promises and recipient may not. */
+	private static function pickup_fulfillment_matches( $actual, array $expected, $paid ) {
+		if ( ! is_array( $actual ) || 1 !== count( $actual ) || ! isset( $actual[0] ) || ! is_array( $actual[0] ) ) { return false; }
+		$item = $actual[0];
+		if ( ! isset( $item['uid'], $item['type'], $item['state'], $item['pickup_details'] ) || $item['uid'] !== $expected['uid'] || 'PICKUP' !== $item['type']
+			|| ! in_array( $item['state'], $paid ? array( 'PROPOSED', 'RESERVED', 'PREPARED', 'COMPLETED' ) : array( 'PROPOSED' ), true )
+			|| ! is_array( $item['pickup_details'] ) || array_diff( array_keys( $item ), array( 'uid', 'type', 'state', 'pickup_details', 'line_item_application' ) )
+			|| ( isset( $item['line_item_application'] ) && 'ALL' !== $item['line_item_application'] ) ) { return false; }
+		$details = $item['pickup_details'];
+		foreach ( $expected['pickup_details'] as $key => $value ) {
+			if ( ! array_key_exists( $key, $details ) ) { return false; }
+			if ( 'recipient' === $key ) {
+				if ( ! is_array( $details[ $key ] ) || count( $details[ $key ] ) !== count( $value ) ) { return false; }
+				foreach ( $value as $field => $wanted ) { if ( ! array_key_exists( $field, $details[ $key ] ) || $details[ $key ][ $field ] !== $wanted ) { return false; } }
+			} elseif ( $details[ $key ] !== $value ) { return false; }
+			unset( $details[ $key ] );
+		}
+		// Only documented, successful lifecycle timestamps may be provider-added.
+		foreach ( $details as $key => $value ) {
+			if ( ! in_array( $key, array( 'placed_at', 'accepted_at', 'ready_at', 'picked_up_at' ), true ) || ! is_string( $value )
+				|| 1 !== preg_match( '/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})\z/', $value ) ) { return false; }
+			try {
+				new DateTimeImmutable( $value );
+				$errors = DateTimeImmutable::getLastErrors();
+				if ( is_array( $errors ) && ( $errors['warning_count'] || $errors['error_count'] ) ) { return false; }
+			} catch ( Exception $e ) { return false; }
+		}
+		return true;
 	}
 
 	/**
@@ -152,6 +222,12 @@ class DoughBoss_Square_Orders {
 		if ( function_exists( 'apply_filters' ) && ! apply_filters( 'doughboss_square_pickup_ticket', true, $order ) ) {
 			return null;
 		}
+		return self::pickup_ticket_data( $order );
+	}
+
+	/** Shared display formatting; v2 bypasses mutable hooks after strict timing validation. */
+	private static function pickup_ticket_data( array $order ) {
+		$mode = $order['pickup_mode'];
 		try {
 			$utc = new DateTimeImmutable( $order['pickup_ready_from_utc'], new DateTimeZone( 'UTC' ) );
 			$tz_name = isset( $order['pickup_timezone'] ) && is_string( $order['pickup_timezone'] ) && '' !== $order['pickup_timezone'] ? $order['pickup_timezone'] : 'Australia/Sydney';
@@ -266,7 +342,10 @@ class DoughBoss_Square_Orders {
 			|| count( $actual['line_items'] ) !== count( $expected['line_items'] ) ) {
 			return self::error();
 		}
+		if ( isset( $expected['fulfillments'] ) && ( $hosted || ! isset( $expected['fulfillments'][0] ) || ! self::pickup_fulfillment_matches( isset( $actual['fulfillments'] ) ? $actual['fulfillments'] : null, $expected['fulfillments'][0], $paid ) ) ) { return self::error(); }
+		if ( isset( $expected['fulfillments'] ) && 'COMPLETED' === $actual['state'] && 'COMPLETED' !== $actual['fulfillments'][0]['state'] ) { return self::error(); }
 		foreach ( array( 'fulfillments', 'refunds', 'returns', 'rewards', 'service_charges' ) as $field ) {
+			if ( 'fulfillments' === $field && isset( $expected['fulfillments'] ) ) { continue; }
 			if ( $hosted && 'fulfillments' === $field && array_key_exists( $field, $actual ) && self::hosted_fulfillment( $actual[ $field ] ) ) {
 				continue;
 			}

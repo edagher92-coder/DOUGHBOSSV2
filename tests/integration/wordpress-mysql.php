@@ -632,8 +632,14 @@ function db_integration_square_orders_http( array $args, $path ) {
 		$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
 		$snapshot = $attempt ? DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $attempt['checkout_key'] ) : null;
 		$binding = $attempt ? DoughBoss_Square::shop_binding( $attempt['location_id'] ) : new WP_Error( 'missing' );
-		$projection = $snapshot && ! is_wp_error( $binding ) ? DoughBoss_Square_Orders::project( $snapshot['payload'], $binding, $attempt_id ) : new WP_Error( 'missing' );
+		$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
+		$protocol = isset( $metadata['orders_protocol'] ) ? $metadata['orders_protocol'] : 'square-orders-v1';
+		$projection = $snapshot && ! is_wp_error( $binding ) ? DoughBoss_Square_Orders::project( $snapshot['payload'], $binding, $attempt_id, $protocol ) : new WP_Error( 'missing' );
 		if ( is_wp_error( $projection ) ) { return new WP_Error( 'synthetic_order_missing', 'Synthetic Order snapshot unavailable.' ); }
+		if ( 'square-orders-v2-pickup' === $protocol ) {
+			db_integration_same( $snapshot['payload']['order']['square_api_version'], $args['headers']['Square-Version'], 'native pickup Order POST uses immutable snapshot API version' );
+			db_integration_same( $metadata['square_api_version'], $args['headers']['Square-Version'], 'native pickup Order POST version matches immutable attempt metadata' );
+		}
 		db_integration_same( $projection['order'], $body['order'], 'Orders POST uses exact trusted projection without repricing' );
 		db_integration_same( 'dispatching', $attempt['status'], 'Orders POST observes the one-way creation claim already committed' );
 		$order = $projection['order'];
@@ -673,6 +679,12 @@ function db_integration_square_orders_http( array $args, $path ) {
 	$order = $stored['order'];
 	if ( $paid ) {
 		$order['state'] = 'COMPLETED';
+		$paid_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+		if ( isset( $paid_metadata['orders_protocol'] ) && 'square-orders-v2-pickup' === $paid_metadata['orders_protocol'] ) {
+			$order['fulfillments'][0]['state'] = 'COMPLETED';
+			$order['fulfillments'][0]['pickup_details']['picked_up_at'] = gmdate( 'Y-m-d\TH:i:s\Z' );
+			db_integration_same( $paid_metadata['square_api_version'], $args['headers']['Square-Version'], 'native pickup paid Order GET keeps retained API version' );
+		}
 		$order['tenders'] = array( array( 'type' => 'CARD', 'payment_id' => $attempt['provider_reference'], 'amount_money' => $order['total_money'] ) );
 		$tender_metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
 		if ( isset( $tender_metadata['square_tender_kind'] ) && 'gift_card' === $tender_metadata['square_tender_kind'] ) {
@@ -680,6 +692,10 @@ function db_integration_square_orders_http( array $args, $path ) {
 			if ( 'wrong_tender' === ( isset( $GLOBALS['db_square_gift_mode'] ) ? $GLOBALS['db_square_gift_mode'] : '' ) ) { $order['tenders'][0]['type'] = 'CARD'; }
 		}
 		$order['net_amount_due_money'] = array( 'amount' => 0, 'currency' => $attempt['currency'] );
+		if ( 'paid_pickup_drift' === $mode && isset( $order['fulfillments'][0]['pickup_details'] ) ) { $order['fulfillments'][0]['pickup_details']['prep_time_duration'] = 'PT120M'; }
+		if ( 'paid_pickup_missing' === $mode ) { unset( $order['fulfillments'] ); }
+		if ( 'paid_pickup_extra' === $mode && isset( $order['fulfillments'][0] ) ) { $order['fulfillments'][] = $order['fulfillments'][0]; }
+		if ( 'paid_pickup_failed' === $mode && isset( $order['fulfillments'][0] ) ) { $order['fulfillments'][0]['state'] = 'FAILED'; }
 		if ( 'paid_tender' === $mode ) { $order['tenders'][0]['payment_id'] = 'sqpayOTHERTENDER00001'; }
 	}
 	if ( 'get_drift' === $mode || ( $paid && 'paid_drift' === $mode ) ) { $order['line_items'][0]['note'] = 'Changed after creation'; }
@@ -1180,7 +1196,7 @@ db_integration_same( 'YES', isset( $preorder_delivery_time_column->Null ) ? (str
 // Square Orders persistence: real transactions and unique indexes, no HTTP.
 $orders_table = $wpdb->prefix . 'doughboss_payment_attempts';
 $orders_posts_before = $GLOBALS['db_square_post_count'];
-$orders_fixture = function ( $seed, $marked = true ) {
+$orders_fixture = function ( $seed, $marked = true, $native_pickup = false ) {
 	$key = hash( 'sha256', 'orders-storage-checkout|' . $seed );
 	$payload = array(
 		'order' => array( 'location_id' => 1, 'currency' => 'AUD', 'subtotal' => '12.50',
@@ -1189,12 +1205,20 @@ $orders_fixture = function ( $seed, $marked = true ) {
 				'discount_policy' => 'goods_before_tax', 'delivery_taxable' => true ) ),
 		'lines' => array( array( 'name' => 'Synthetic pizza', 'quantity' => 1, 'unit_price' => '12.50', 'line_total' => '12.50' ) ),
 	);
+	if ( $native_pickup ) {
+		$payload['order'] = array_merge( $payload['order'], array(
+			'order_type' => 'pickup', 'customer_name' => 'Synthetic Storage Buyer', 'customer_phone' => '',
+			'pickup_mode' => 'scheduled', 'pickup_ready_from_utc' => '2026-10-17 03:45:00',
+			'square_orders_protocol' => 'square-orders-v2-pickup', 'square_pickup_prep_minutes' => 25, 'square_api_version' => '2025-01-23',
+		) );
+	}
 	$snapshot = DoughBoss_Checkout_Snapshots::store( $key, $payload );
 	db_integration_assert( is_array( $snapshot ), 'Orders storage fixture retains a hash-validated snapshot' );
 	$metadata = array( 'protocol_version' => 'square-v2', 'binding_hash' => hash( 'sha256', 'binding|' . $seed ),
 		'square_shop_slug' => 'revesby', 'square_location_id' => 'LORDERSTORAGETEST', 'square_mode' => 'test' );
 	if ( $marked ) {
-		$metadata['orders_protocol'] = 'square-orders-v1';
+		$metadata['orders_protocol'] = $native_pickup ? 'square-orders-v2-pickup' : 'square-orders-v1';
+		if ( $native_pickup ) { $metadata['square_api_version'] = '2025-01-23'; }
 		$metadata['orders_snapshot_hash'] = is_array( $snapshot ) ? $snapshot['payload_hash'] : '';
 	}
 	$attempt = DoughBoss_Payment_Attempts::create( array( 'attempt_key' => hash( 'sha256', 'orders-storage|' . $seed ),
@@ -1204,6 +1228,35 @@ $orders_fixture = function ( $seed, $marked = true ) {
 	db_integration_assert( is_array( $attempt ), 'Orders storage fixture owns one durable attempt' );
 	return $attempt;
 };
+// Exercise the real locked repository seam, including persisted-corruption refusals.
+foreach ( array( 'valid', 'missing-api', 'unknown-api', 'changed-api', 'snapshot-protocol', 'downgrade', 'wrong-shop' ) as $native_storage_case ) {
+	$native_storage = $orders_fixture( 'native-' . $native_storage_case, true, true );
+	db_integration_same( true, DoughBoss_Payment_Attempts::claim_irreversible_creation( $native_storage['id'] ), 'native storage fixture claims the existing one-way dispatch' );
+	$native_storage = DoughBoss_Payment_Attempts::find( $native_storage['id'] );
+	$native_metadata = DoughBoss_Payment_Attempts::metadata( $native_storage );
+	if ( 'missing-api' === $native_storage_case ) { unset( $native_metadata['square_api_version'] ); }
+	if ( 'unknown-api' === $native_storage_case ) { $native_metadata['square_api_version'] = '2030-01-01'; }
+	if ( 'changed-api' === $native_storage_case ) { $native_metadata['square_api_version'] = '2026-09-16'; }
+	if ( 'downgrade' === $native_storage_case ) { $native_metadata['orders_protocol'] = 'square-orders-v1'; }
+	if ( 'wrong-shop' === $native_storage_case ) { $native_metadata['square_shop_slug'] = 'bankstown'; }
+	if ( 'snapshot-protocol' === $native_storage_case ) {
+		$native_snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $native_storage['checkout_key'] );
+		$native_payload = $native_snapshot['payload'];
+		$native_payload['order']['square_orders_protocol'] = 'square-orders-v1';
+		$native_json = wp_json_encode( $native_payload );
+		$native_metadata['orders_snapshot_hash'] = hash( 'sha256', $native_json );
+		$wpdb->update( $wpdb->prefix . 'doughboss_checkout_snapshots', array( 'payload_json' => $native_json, 'payload_hash' => $native_metadata['orders_snapshot_hash'] ), array( 'checkout_key' => $native_storage['checkout_key'] ) );
+	}
+	$wpdb->update( $orders_table, array( 'safe_metadata_json' => wp_json_encode( $native_metadata ) ), array( 'id' => $native_storage['id'] ) );
+	$native_storage = DoughBoss_Payment_Attempts::find( $native_storage['id'] );
+	$native_bound = DoughBoss_Payment_Attempts::bind_square_order( $native_storage['id'], 'squareNATIVESTORAGE' . $native_storage['id'], $native_storage );
+	if ( 'valid' === $native_storage_case ) {
+		db_integration_assert( is_array( $native_bound ), 'native v2 binds through the real locked repository with exact saved protocol/version' );
+	} else {
+		db_integration_same( false, $native_bound, 'native storage rejects ' . $native_storage_case . ' without a binding' );
+		db_integration_same( null, DoughBoss_Payment_Attempts::find( $native_storage['id'] )['provider_order_reference'], 'native refused ' . $native_storage_case . ' remains durably unbound' );
+	}
+}
 $orders_first = $orders_fixture( 'first' );
 db_integration_same( null, $orders_first['provider_order_reference'], 'additive Order column defaults to NULL, not a guessed identity' );
 db_integration_same( false, DoughBoss_Payment_Attempts::bind_square_order( $orders_first['id'], 'squareORDERSTORAGE000001', $orders_first ), 'prepared attempt cannot bind an Order before its irreversible claim' );
@@ -6373,7 +6426,10 @@ unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_obser
 		// checkout behavior, not merely a caller-supplied paid=true flag.
 		$GLOBALS['db_square_http_mode'] = 'success';
 		$GLOBALS['db_orders_http_mode'] = '';
-		$make_paid = static function ( $seed, $voucher_code = '' ) use ( $make_slot, $now ) {
+		$make_paid = static function ( $seed, $voucher_code = '', $pickup_mode = 'scheduled', $tender_kind = 'card' ) use ( $make_slot, $now, $wpdb, $locations ) {
+			static $synthetic_client = 0;
+			$_SERVER['REMOTE_ADDR'] = '198.18.0.' . ( ++$synthetic_client );
+			$wpdb->update( $locations, array( 'prep_time_default' => 20, 'busy_extra_minutes' => 7 ), array( 'id' => 1 ) );
 			$_COOKIE[ DoughBoss_Cart::COOKIE ] = 'PickupRuntime' . substr( hash( 'sha256', $seed ), 0, 24 );
 			$cart = new DoughBoss_Cart();
 			$cart->clear();
@@ -6385,6 +6441,9 @@ unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_obser
 			if ( ! is_array( $hold ) ) { db_integration_assert( false, 'paid pickup ' . $seed . ' holds a slot' ); return null; }
 			$params = array( 'payment_attempt_key' => 'pickup-' . $seed . '-payment-0001', 'customer_name' => 'Synthetic Pickup', 'customer_email' => $seed . '@example.invalid', 'customer_phone' => '0400000001', 'address' => '', 'notes' => 'Pickup runtime ' . $seed, 'order_type' => 'pickup', 'location_id' => 1, 'source_id' => 'cnon:pickup-synthetic', 'verification_token' => 'verify:pickup-synthetic', 'pickup_mode' => 'scheduled', 'pickup_slot_id' => $slot_id, 'capacity_hold_token' => $hold['hold_token'] );
 			$controller = new DoughBoss_REST_Controller( $cart );
+			$params['pickup_mode'] = $pickup_mode;
+			$params['tender_kind'] = $tender_kind;
+			if ( 'gift_card' === $tender_kind ) { $params['source_id'] = 'cnon:gift-pickup-synthetic'; }
 			$response = $controller->create_payment_intent( db_integration_rest_request( '/doughboss/v1/payment-intent', $params ) );
 			$data = $response instanceof WP_REST_Response ? $response->get_data() : array();
 			$reference = isset( $data['payment_intent'] ) ? $data['payment_intent'] : '';
@@ -6393,11 +6452,187 @@ unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_obser
 			$params['payment_intent_id'] = $reference;
 			$params['idempotency_key'] = 'pickup-' . $seed . '-checkout-0001';
 			unset( $params['source_id'], $params['verification_token'] );
-			return array( 'controller' => $controller, 'params' => $params, 'hold' => $hold, 'slot_id' => $slot_id, 'totals' => $totals );
+			$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $reference );
+			$snapshot = is_array( $attempt ) ? DoughBoss_Checkout_Snapshots::find( $attempt['checkout_key'] ) : null;
+			db_integration_assert( is_array( $snapshot ), 'new native pickup fixture owns a real immutable snapshot' );
+			if ( ! is_array( $snapshot ) ) { return null; }
+			$meta = DoughBoss_Payment_Attempts::metadata( $attempt );
+			db_integration_same( 'square-orders-v2-pickup', $meta['orders_protocol'], 'new native pickup attempt starts with v2, not a rewritten v1 identity' );
+			db_integration_same( 'square-orders-v2-pickup', $snapshot['payload']['order']['square_orders_protocol'], 'real snapshot retains native pickup protocol' );
+			db_integration_same( 27, $snapshot['payload']['order']['square_pickup_prep_minutes'], 'real snapshot freezes existing default-plus-busy policy' );
+			db_integration_same( DoughBoss_Settings::square_api_version(), $snapshot['payload']['order']['square_api_version'], 'real snapshot captures supported current API version' );
+			return array( 'controller' => $controller, 'params' => $params, 'hold' => $hold, 'slot_id' => $slot_id, 'totals' => $totals, 'attempt' => $attempt, 'snapshot' => $snapshot );
 		};
-		foreach ( array( 'normal', 'expired', 'overflow', 'shifted', 'missing' ) as $case ) {
-			$fixture = $make_paid( $case );
+		// A verifies the real Payment+Order, then pauses immediately before its
+		// final locking read. B revokes that authority on an independent connection
+		// and commits before A resumes; no caller-supplied attempt is substituted.
+	$serialized = $make_paid( 'ordinary-verification-serialization' );
+	if ( is_array( $serialized ) ) {
+		$reference = $serialized['params']['payment_intent_id'];
+		$alias = strtoupper( $reference );
+		db_integration_assert( $alias !== $reference, 'serialization fixture owns a differently cased payment reference' );
+		$alias_attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $alias );
+		db_integration_same( (int) $serialized['attempt']['id'], is_array( $alias_attempt ) ? (int) $alias_attempt['id'] : 0, 'case-insensitive reference alias resolves the same durable attempt' );
+		$posts = $GLOBALS['db_square_post_count'];
+		$GLOBALS['db_orders_http_mode'] = 'paid_drift';
+		db_integration_assert( is_wp_error( DoughBoss_Square::retrieve_payment_intent( $reference ) ), 'serialization fixture begins with a real linked-Order hold' );
+		db_integration_same( 'order_verification_held', DoughBoss_Payment_Attempts::find( $serialized['attempt']['id'] )['last_error'], 'serialization recovery begins from already-held state, not a timestamp token' );
+		$GLOBALS['db_orders_http_mode'] = '';
+		$second = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+		$second->set_prefix( $wpdb->prefix );
+		$interleavings = 0;
+		$competing_http = 0;
+		$before_reconcile = function ( $sql ) use ( &$interleavings, &$competing_http, $second, $wpdb, $reference ) {
+			if ( $interleavings || 0 !== strpos( $sql, 'UPDATE ' . $wpdb->prefix . 'doughboss_payment_attempts SET status = ' ) || false === strpos( $sql, ', verified_at = ' ) ) { return $sql; }
+			++$interleavings;
+			$prior_mode = $GLOBALS['db_orders_http_mode'];
+			$observe_http = function ( $pre ) use ( &$competing_http ) { ++$competing_http; return $pre; };
+			$GLOBALS['wpdb'] = $second;
+			$GLOBALS['db_orders_http_mode'] = 'paid_drift';
+			add_filter( 'pre_http_request', $observe_http, -9999 );
+			try {
+				$competing = DoughBoss_Square::retrieve_payment_intent( $reference );
+				db_integration_same( 'doughboss_pay_verification_busy', is_wp_error( $competing ) ? $competing->get_error_code() : '', 'B cannot verify between A joint remote read and its reconciliation write' );
+				db_integration_same( 0, $competing_http, 'competing verification is refused before any provider read' );
+			} finally {
+				remove_filter( 'pre_http_request', $observe_http, -9999 );
+				$GLOBALS['wpdb'] = $wpdb;
+				$GLOBALS['db_orders_http_mode'] = $prior_mode;
+			}
+			return $sql;
+		};
+		add_filter( 'query', $before_reconcile, 999 );
+		try {
+			$recovered = DoughBoss_Square::retrieve_payment_intent( $alias );
+		} finally {
+			remove_filter( 'query', $before_reconcile, 999 );
+		}
+		db_integration_same( 1, $interleavings, 'serialization regression crosses the exact reconciliation-write boundary' );
+		db_integration_assert( ! is_wp_error( $recovered ), 'serialized fresh verification recovers an already-held payment' );
+		db_integration_same( '', DoughBoss_Payment_Attempts::find( $serialized['attempt']['id'] )['last_error'], 'serialized successful recovery retires only the old hold' );
+		$GLOBALS['wpdb'] = $second;
+		$GLOBALS['db_orders_http_mode'] = 'paid_drift';
+		try {
+			db_integration_assert( is_wp_error( DoughBoss_Square::retrieve_payment_intent( $reference ) ), 'B can freshly observe and commit a later hold after A releases its lock' );
+			$held = DoughBoss_Payment_Attempts::find( $serialized['attempt']['id'] );
+			db_integration_same( 'order_verification_held', $held['last_error'], 'later committed hold is not erased by the older verification' );
+			db_integration_same( null, $held['verified_at'], 'later failed verification revokes serialized release authority' );
+			$guard = 'square_order_verification:' . (int) $serialized['attempt']['id'];
+			$GLOBALS['wpdb'] = $wpdb;
+			db_integration_same( true, DoughBoss_Payment_Attempts::acquire_local_reference_lock( $guard ), 'failure path releases every recursive verification lock' );
+			DoughBoss_Payment_Attempts::release_local_reference_lock( $guard );
+		} finally {
+			$GLOBALS['wpdb'] = $wpdb;
+			$GLOBALS['db_orders_http_mode'] = '';
+			$second->close();
+		}
+		db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $reference ) ), 'a subsequent exact read can recover the later hold' );
+		$wpdb->update( $wpdb->prefix . 'doughboss_payment_attempts', array( 'last_error' => 'synthetic_safe_error' ), array( 'id' => $serialized['attempt']['id'] ) );
+		db_integration_assert( ! is_wp_error( DoughBoss_Square::retrieve_payment_intent( $reference ) ), 'unrelated safe error does not invalidate exact verification' );
+		db_integration_same( 'synthetic_safe_error', DoughBoss_Payment_Attempts::find( $serialized['attempt']['id'] )['last_error'], 'successful verification preserves unrelated error evidence' );
+		db_integration_same( 0, DoughBoss_Order::find_id_by_payment_intent( $reference ), 'verification-only serialization regression never creates a kitchen order' );
+		db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'serialized verification and recovery never recharge the customer' );
+	}
+
+	$race = $make_paid( 'ordinary-revocation-race' );
+		if ( is_array( $race ) ) {
+			$second = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+			$second->set_prefix( $wpdb->prefix );
+			$second->query( 'SET SESSION innodb_lock_wait_timeout = 1' );
+			$first_connection = $wpdb->get_var( 'SELECT CONNECTION_ID()' );
+			$second_connection = $second->get_var( 'SELECT CONNECTION_ID()' );
+			db_integration_assert( $first_connection && $second_connection && $first_connection !== $second_connection, 'ordinary revocation race owns two independent database connections' );
+			$interleavings = 0;
+			$posts = $GLOBALS['db_square_post_count'];
+			$hooks = count( $GLOBALS['db_order_created_events'] );
+			$release_query = $wpdb->prepare( 'SELECT * FROM ' . $wpdb->prefix . 'doughboss_payment_attempts WHERE provider = %s AND provider_reference = %s LIMIT 1 FOR UPDATE', 'square', $race['params']['payment_intent_id'] );
+			$revoke_before_lock = static function ( $sql ) use ( $wpdb, $second, $race, $release_query, &$interleavings ) {
+				if ( $sql !== $release_query || $GLOBALS['wpdb'] !== $wpdb || $interleavings ) { return $sql; }
+				++$interleavings;
+				$prior_mode = $GLOBALS['db_orders_http_mode'];
+				try {
+					$GLOBALS['wpdb'] = $second;
+					$before = DoughBoss_Payment_Attempts::find( $race['attempt']['id'] );
+					db_integration_assert( is_array( $before ) && ! empty( $before['verified_at'] ) && 'succeeded' === $before['status'] && 'COMPLETED' === $before['provider_status'], 'A has joint paid verification before its final ordinary locking read' );
+					db_integration_same( false, is_array( $before ) && 'order_verification_held' === $before['last_error'], 'A enters the race without an earlier linked-Order hold' );
+					db_integration_assert( false !== $second->query( 'START TRANSACTION' ), 'B starts its independent revocation transaction' );
+					$GLOBALS['db_orders_http_mode'] = 'paid_pickup_drift';
+					$denied = DoughBoss_Square::retrieve_payment_intent( $race['params']['payment_intent_id'] );
+					db_integration_same( 'doughboss_pay_order_changed', is_wp_error( $denied ) ? $denied->get_error_code() : '', 'B really rereads and rejects the changed linked pickup fulfillment' );
+					$held = DoughBoss_Payment_Attempts::find( $race['attempt']['id'] );
+					db_integration_same( null, is_array( $held ) ? $held['verified_at'] : 'missing', 'B revokes the persisted verification timestamp' );
+					db_integration_same( 'order_verification_held', is_array( $held ) ? $held['last_error'] : '', 'B writes the actual linked-Order verification hold' );
+					db_integration_same( 'succeeded', is_array( $held ) ? $held['status'] : '', 'B retains paid status while revoking release authority' );
+					db_integration_same( 'COMPLETED', is_array( $held ) ? $held['provider_status'] : '', 'B retains the completed provider payment' );
+					db_integration_same( false, is_array( $held ) && array_key_exists( 'reconciliation_hold', DoughBoss_Payment_Attempts::metadata( $held ) ), 'the race exercises linked-Order hold, not a different metadata policy hold' );
+					db_integration_assert( false !== $second->query( 'COMMIT' ), 'B commits revocation before A executes its locking read' );
+				} finally {
+					$second->query( 'ROLLBACK' );
+					$GLOBALS['wpdb'] = $wpdb;
+					$GLOBALS['db_orders_http_mode'] = $prior_mode;
+				}
+				return $sql;
+			};
+			add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
+			add_filter( 'query', $revoke_before_lock, 999 );
+			try {
+				$refused = $race['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $race['params'] ) );
+			} finally {
+				remove_filter( 'query', $revoke_before_lock, 999 );
+				$second->close();
+				remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
+			}
+			db_integration_same( 1, $interleavings, 'B commits exactly once at A final ordinary attempt lock boundary' );
+			db_integration_same( 'doughboss_payment_state_unavailable', is_wp_error( $refused ) ? $refused->get_error_code() : '', 'A locking read refuses release after committed verification revocation' );
+			db_integration_same( 0, DoughBoss_Order::find_id_by_payment_intent( $race['params']['payment_intent_id'] ), 'the committed linked-Order hold leaves no local kitchen order' );
+			db_integration_same( $hooks, count( $GLOBALS['db_order_created_events'] ), 'the committed linked-Order hold emits no created-order hook' );
+			db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'revocation interleaving never creates another Payment' );
+			$after_race = DoughBoss_Payment_Attempts::find( $race['attempt']['id'] );
+			db_integration_same( null, $after_race['verified_at'], 'A rollback does not undo B committed verification revocation' );
+			db_integration_same( 'order_verification_held', $after_race['last_error'], 'B committed hold remains after A refuses release' );
+			DoughBoss_Payment_Attempts::reconcile_irreversible_reference( $race['params']['payment_intent_id'], 'processing', 'PENDING' );
+			$still_held = DoughBoss_Payment_Attempts::find( $race['attempt']['id'] );
+			db_integration_same( 'order_verification_held', $still_held['last_error'], 'non-successful reconciliation cannot retire the linked-Order hold' );
+			db_integration_same( null, $still_held['verified_at'], 'non-successful reconciliation cannot restore release authority' );
+			add_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999, 2 );
+			try {
+				$recovered = $race['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $race['params'] ) );
+				$recovered_id = DoughBoss_Order::find_id_by_payment_intent( $race['params']['payment_intent_id'] );
+				db_integration_assert( $recovered instanceof WP_REST_Response && $recovered_id > 0, 'fresh exact joint verification can release the held ordinary payment' );
+				db_integration_same( '', DoughBoss_Payment_Attempts::find( $race['attempt']['id'] )['last_error'], 'fresh joint verification retires the stale linked-Order hold' );
+				$replayed = $race['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $race['params'] ) );
+				db_integration_assert( $replayed instanceof WP_REST_Response, 'recovered ordinary receipt remains replayable' );
+				db_integration_same( $recovered_id, DoughBoss_Order::find_id_by_payment_intent( $race['params']['payment_intent_id'] ), 'fresh verification and replay retain exactly one local order' );
+				db_integration_same( $hooks + 1, count( $GLOBALS['db_order_created_events'] ), 'fresh verification and receipt replay create exactly one kitchen hook' );
+				db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'fresh verification and recovery replay never create another Payment' );
+			} finally {
+				remove_action( 'doughboss_order_created', 'db_integration_capture_order_created', 999 );
+			}
+		}
+		foreach ( array( 'drift', 'missing', 'extra', 'failed' ) as $mutation ) {
+			$negative = $make_paid( 'native-negative-' . $mutation );
+			if ( ! is_array( $negative ) ) { continue; }
+			$GLOBALS['db_orders_http_mode'] = 'paid_pickup_' . $mutation;
+			$negative_posts = $GLOBALS['db_square_post_count'];
+			$held_response = $negative['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $negative['params'] ) );
+			db_integration_assert( is_wp_error( $held_response ), 'native paid ' . $mutation . ' fulfillment cannot release local order' );
+			db_integration_same( 0, DoughBoss_Order::find_id_by_payment_intent( $negative['params']['payment_intent_id'] ), 'native failed fulfillment remains paid without kitchen order' );
+			db_integration_same( $negative_posts, $GLOBALS['db_square_post_count'], 'native failed fulfillment never starts a second payment' );
+			$negative_held = DoughBoss_Payment_Attempts::find( $negative['attempt']['id'] );
+			db_integration_same( null, $negative_held['verified_at'], 'native ' . $mutation . ' durably revokes cached release verification' );
+			db_integration_same( 'order_verification_held', $negative_held['last_error'], 'native ' . $mutation . ' persists reconciliation hold' );
+			db_integration_same( $negative['attempt']['provider_reference'], $negative_held['provider_reference'], 'native held payment identity remains immutable' );
+			db_integration_same( $negative['attempt']['provider_order_reference'], $negative_held['provider_order_reference'], 'native held provider Order identity remains immutable' );
+			$negative_replay = $negative['controller']->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $negative['params'] ) );
+			db_integration_assert( is_wp_error( $negative_replay ), 'native ' . $mutation . ' replay remains held' );
+			db_integration_same( 0, DoughBoss_Order::find_id_by_payment_intent( $negative['params']['payment_intent_id'] ), 'native held replay releases no kitchen order' );
+			db_integration_same( $negative_posts, $GLOBALS['db_square_post_count'], 'native held replay never charges again' );
+			$GLOBALS['db_orders_http_mode'] = '';
+		}
+		foreach ( array( 'normal', 'asap', 'gift', 'expired', 'overflow', 'shifted', 'missing' ) as $case ) {
+			$fixture = $make_paid( $case, '', 'asap' === $case ? 'asap' : 'scheduled', 'gift' === $case ? 'gift_card' : 'card' );
 			if ( ! is_array( $fixture ) ) { continue; }
+			$wpdb->update( $locations, array( 'prep_time_default' => 90, 'busy_extra_minutes' => 30 ), array( 'id' => 1 ) );
 			$token_hash = hash( 'sha256', $fixture['hold']['hold_token'] );
 			if ( in_array( $case, array( 'expired', 'overflow', 'shifted' ), true ) ) {
 				$wpdb->update( $holds, array( 'expires_at' => $now->modify( '-1 minute' )->format( 'Y-m-d H:i:s' ) ), array( 'token_hash' => $token_hash ) );
@@ -6417,14 +6652,19 @@ unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_obser
 			db_integration_assert( $response instanceof WP_REST_Response && $order && 'paid' === $order->payment_status, 'paid pickup ' . $case . ' retains one verified paid order' . ( is_wp_error( $response ) ? ' (' . $response->get_error_code() . ')' : '' ) );
 			db_integration_same( $posts, $GLOBALS['db_square_post_count'], 'paid pickup ' . $case . ' does not charge again at checkout' );
 			if ( ! $order ) { continue; }
+			$saved_pickup = $fixture['snapshot']['payload']['order'];
+			db_integration_same( $fixture['params']['pickup_mode'], $order->pickup_mode, 'native pickup mode remains timed even when the hold is lost' );
+			db_integration_same( $saved_pickup['pickup_ready_from_utc'], $order->promised_ready_from_utc, 'paid ' . $case . ' preserves immutable website promise despite later preparation policy' );
+			db_integration_same( $saved_pickup['pickup_ready_by_utc'], $order->promised_ready_by_utc, 'paid ' . $case . ' preserves immutable website window end' );
+			$expected_fire = ( new DateTimeImmutable( $saved_pickup['pickup_ready_from_utc'], new DateTimeZone( 'UTC' ) ) )->modify( '-27 minutes' )->format( 'Y-m-d H:i:s' );
+			db_integration_same( $expected_fire, $order->fire_at_utc, 'paid ' . $case . ' persists captured kitchen fire, not changed settings' );
+			$after_snapshot = DoughBoss_Checkout_Snapshots::find( $fixture['attempt']['checkout_key'] );
+			db_integration_same( $fixture['snapshot']['payload_hash'], is_array( $after_snapshot ) ? $after_snapshot['payload_hash'] : '', 'checkout does not rewrite the immutable native pickup snapshot' );
 			if ( 'missing' === $case ) {
-				db_integration_same( '', $order->pickup_mode, 'missing paid hold is retained explicitly untimed' );
-				db_integration_assert( false !== strpos( $order->notes, '[SYSTEM]' ) && false !== strpos( $order->notes, 'Confirm the pickup time' ), 'missing paid hold leaves actionable customer-timing reconciliation note' );
-			} else {
-				db_integration_same( 'scheduled', $order->pickup_mode, 'paid pickup ' . $case . ' retains timed mode' );
-				if ( 'overflow' === $case ) { db_integration_same( 1, (int) $order->capacity_overflow, 'paid full-slot order exposes overflow flag' ); }
-				if ( 'shifted' === $case ) { db_integration_assert( false !== strpos( $order->notes, 'next possible window' ), 'shifted paid order records that its original promise changed' ); }
+				db_integration_assert( false !== strpos( $order->notes, '[SYSTEM]' ) && false !== strpos( $order->notes, 'hold could not be attached' ), 'missing native paid hold keeps actionable reconciliation warning' );
 			}
+			if ( 'overflow' === $case ) { db_integration_same( 1, (int) $order->capacity_overflow, 'paid full-slot order exposes overflow flag' ); }
+			if ( 'shifted' === $case ) { db_integration_assert( false !== strpos( $order->notes, 'immutable paid pickup promise was retained' ), 'late paid hold preserves promise and explicit operator warning' ); }
 			if ( 'normal' === $case ) {
 				$version = (int) $order->version;
 				$delay = DoughBoss_Order::delay_promise( $order_id, 10, array( 'expected_version' => $version, 'event_key' => 'pickup-runtime-delay-0001' ) );

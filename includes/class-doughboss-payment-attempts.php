@@ -495,7 +495,9 @@ class DoughBoss_Payment_Attempts {
 			return false;
 		}
 		$expected_metadata = self::metadata( $expected );
-		if ( 'square-orders-v1' !== ( isset( $expected_metadata['orders_protocol'] ) ? $expected_metadata['orders_protocol'] : '' )
+		$orders_protocol = isset( $expected_metadata['orders_protocol'] ) ? $expected_metadata['orders_protocol'] : '';
+		if ( ! in_array( $orders_protocol, array( 'square-orders-v1', 'square-orders-v2-pickup' ), true )
+			|| ( 'square-orders-v2-pickup' === $orders_protocol && ( ! isset( $expected_metadata['square_api_version'] ) || ! in_array( $expected_metadata['square_api_version'], array( '2025-01-23', '2026-09-16' ), true ) ) )
 			|| ! isset( $expected_metadata['orders_snapshot_hash'] )
 			|| ! is_string( $expected_metadata['orders_snapshot_hash'] )
 			|| ! preg_match( '/^[a-f0-9]{64}\\z/', $expected_metadata['orders_snapshot_hash'] )
@@ -518,7 +520,9 @@ class DoughBoss_Payment_Attempts {
 			if ( $metadata !== $expected_metadata ) {
 				return false;
 			}
-			foreach ( array( 'protocol_version', 'binding_hash', 'square_shop_slug', 'square_location_id', 'square_mode', 'orders_protocol', 'orders_snapshot_hash' ) as $key ) {
+			$immutable_keys = array( 'protocol_version', 'binding_hash', 'square_shop_slug', 'square_location_id', 'square_mode', 'orders_protocol', 'orders_snapshot_hash' );
+			if ( 'square-orders-v2-pickup' === $orders_protocol ) { $immutable_keys[] = 'square_api_version'; }
+			foreach ( $immutable_keys as $key ) {
 				if ( ! isset( $metadata[ $key ], $expected_metadata[ $key ] ) || $metadata[ $key ] !== $expected_metadata[ $key ] ) {
 					return false;
 				}
@@ -538,11 +542,15 @@ class DoughBoss_Payment_Attempts {
 				|| (string) $payload['order']['location_id'] !== (string) $locked['location_id'] ) {
 				return false;
 			}
+			if ( ( isset( $payload['order']['square_orders_protocol'] ) && $payload['order']['square_orders_protocol'] !== $orders_protocol )
+				|| ( 'square-orders-v2-pickup' === $orders_protocol && ( ! isset( $payload['order']['square_api_version'] ) || $payload['order']['square_api_version'] !== $metadata['square_api_version'] ) ) ) {
+				return false;
+			}
 			$projection = DoughBoss_Square_Orders::project( $payload, array(
 				'shop_slug' => $metadata['square_shop_slug'],
 				'square_location_id' => $metadata['square_location_id'],
 				'square_mode' => $metadata['square_mode'],
-			), $attempt_id );
+			), $attempt_id, $orders_protocol );
 			if ( is_wp_error( $projection ) || (string) $projection['amounts']['total'] !== (string) $locked['amount_minor']
 				|| $projection['currency'] !== $locked['currency'] ) {
 				return false;
@@ -712,8 +720,13 @@ class DoughBoss_Payment_Attempts {
 		$sql          = 'UPDATE ' . self::table() . " SET status = %s, provider_status = %s, updated_at = %s";
 		$args         = array( $status, $provider_status, self::utc_now() );
 		if ( 'succeeded' === $status ) {
-			$sql   .= ', verified_at = %s';
+			// The caller has freshly verified both the Payment and linked Order.
+			// Retire only the recoverable Order hold with the new authority, not
+			// in a separate write that could erase a later concurrent revocation.
+			$sql   .= ', verified_at = %s, last_error = CASE WHEN last_error = %s THEN %s ELSE last_error END';
 			$args[] = self::utc_now();
+			$args[] = 'order_verification_held';
+			$args[] = '';
 		}
 		$sql    .= " WHERE id = %d AND provider = %s AND provider_reference = %s AND status IN ({$placeholders})";
 		$args[] = (int) $attempt['id'];
@@ -740,7 +753,8 @@ class DoughBoss_Payment_Attempts {
 		global $wpdb;
 		$metadata = self::metadata( $expected );
 		if ( 'square' !== ( isset( $expected['provider'] ) ? $expected['provider'] : '' )
-			|| 'square-orders-v1' !== ( isset( $metadata['orders_protocol'] ) ? $metadata['orders_protocol'] : '' )
+			|| ! in_array( isset( $metadata['orders_protocol'] ) ? $metadata['orders_protocol'] : '', array( 'square-orders-v1', 'square-orders-v2-pickup' ), true )
+			|| ( 'square-orders-v2-pickup' === $metadata['orders_protocol'] && ( ! isset( $metadata['square_api_version'] ) || ! in_array( $metadata['square_api_version'], array( '2025-01-23', '2026-09-16' ), true ) ) )
 			|| empty( $expected['id'] ) || empty( $expected['provider_reference'] ) || empty( $expected['provider_order_reference'] )
 			|| ! isset( $expected['safe_metadata_json'] ) ) { return false; }
 		$changed = $wpdb->query( $wpdb->prepare(

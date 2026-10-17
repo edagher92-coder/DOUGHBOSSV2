@@ -70,6 +70,7 @@ require_once dirname( __DIR__ ) . '/includes/class-doughboss-square.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-orders.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-locations.php';
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-rest-controller.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-checkout-snapshots.php';
 
 /** Scripted $wpdb: records writes and answers the few reads WP-B code makes. */
 class DoughBoss_WPB_DB {
@@ -84,6 +85,8 @@ class DoughBoss_WPB_DB {
 	public $location_row = null;
 	public $workload_row = null;
 	public $update_result = 1;
+	public $snapshot_row = null;
+	public $attempt_row = null;
 
 	public function prepare( $query ) {
 		$args = func_get_args();
@@ -104,6 +107,8 @@ class DoughBoss_WPB_DB {
 
 	public function get_row( $query ) {
 		$this->queries[] = $query;
+		if ( false !== strpos( $query, 'doughboss_checkout_snapshots' ) ) { return $this->snapshot_row; }
+		if ( false !== strpos( $query, 'doughboss_payment_attempts' ) ) { return $this->attempt_row; }
 		if ( false !== strpos( $query, 'make_count' ) ) {
 			return $this->workload_row;
 		}
@@ -208,6 +213,68 @@ function db_wpb_square_payload( array $order_extra = array() ) {
 	);
 	return array( $payload, array( 'shop_slug' => 'revesby', 'square_location_id' => 'LOCATION_R_TEST', 'square_mode' => 'test' ) );
 }
+
+db_test( 'Native pickup snapshot freezes prep and promise across later shop policy changes', function () {
+	$db = new DoughBoss_WPB_DB(); $previous = db_wpb_use_db( $db );
+	$settings = get_option( 'doughboss_settings', array() );
+	try {
+		doughboss_test_set_settings( db_square_settings() );
+		$db->location_row = (object) array( 'id' => 3, 'prep_time_default' => 18, 'busy_extra_minutes' => 7, 'timezone' => 'Australia/Sydney' );
+		$key = str_repeat( 'c', 64 );
+		foreach ( array( 'asap', 'scheduled' ) as $mode ) {
+			list( $payload, $binding ) = db_wpb_square_payload( array( 'order_type' => 'pickup', 'location_id' => 3, 'customer_name' => 'Synthetic Buyer', 'customer_email' => 'synthetic@example.com', 'customer_phone' => '0400000000',
+				'pickup_mode' => $mode, 'pickup_ready_from_utc' => '2026-10-17 03:45:00', 'pickup_ready_by_utc' => '2026-10-17 04:00:00', 'pickup_timezone' => 'Australia/Sydney' ) );
+			$db->snapshot_row = null;
+			$db->location_row->prep_time_default = 18; $db->location_row->busy_extra_minutes = 7;
+			$saved = db_wpb_controller_call( 'native_pickup_snapshot_order', array( $payload['order'], $key, 3 ) );
+			assert_same( 25, $saved['square_pickup_prep_minutes'], 'same existing default-plus-busy website policy captured once' );
+			assert_same( 'square-orders-v2-pickup', $saved['square_orders_protocol'], 'only native timed snapshot is marked' );
+			$payload['order'] = $saved;
+			$payload['binding_hash'] = str_repeat( 'b', 64 );
+			$json = wp_json_encode( $payload );
+			$db->snapshot_row = array( 'checkout_key' => $key, 'payload_json' => $json, 'payload_hash' => hash( 'sha256', $json ), 'status' => 'prepared', 'order_id' => 0, 'expires_at' => gmdate( 'Y-m-d H:i:s', time() + 3600 ) );
+			$metadata = array( 'protocol_version' => 'square-v2', 'orders_protocol' => 'square-orders-v2-pickup', 'orders_snapshot_hash' => hash( 'sha256', $json ), 'binding_hash' => $payload['binding_hash'], 'square_api_version' => '2025-01-23' );
+			$db->attempt_row = array( 'id' => 37, 'checkout_key' => $key, 'provider' => 'square', 'status' => 'prepared', 'location_id' => 3, 'amount_minor' => 2200, 'currency' => 'AUD', 'safe_metadata_json' => wp_json_encode( $metadata ) );
+			$project = new ReflectionMethod( 'DoughBoss_Square', 'order_projection' ); $project->setAccessible( true );
+			$linked = $project->invoke( null, $db->attempt_row, $binding );
+			assert_false( is_wp_error( $linked ), 'native creation and paid reread load exact retained v2 projection' );
+			assert_same( 'PICKUP', $linked['order']['fulfillments'][0]['type'], 'retained protocol cannot silently downgrade to v1' );
+			$email = new ReflectionMethod( 'DoughBoss_Square', 'buyer_email' ); $email->setAccessible( true );
+			assert_same( 'synthetic@example.com', $email->invoke( null, $db->attempt_row, 2 ), 'v2 buyer email comes only from hash-bound snapshot' );
+			$metadata['square_api_version'] = '2026-09-16'; $bad_attempt = $db->attempt_row; $bad_attempt['safe_metadata_json'] = wp_json_encode( $metadata );
+			assert_true( is_wp_error( $project->invoke( null, $bad_attempt, $binding ) ), 'metadata cannot substitute a different API version for snapshot' );
+			$metadata['square_api_version'] = '2025-01-23';
+			$downgrade = $metadata; $downgrade['orders_protocol'] = 'square-orders-v1'; $bad_attempt['safe_metadata_json'] = wp_json_encode( $downgrade );
+			assert_true( is_wp_error( $project->invoke( null, $bad_attempt, $binding ) ), 'v2 snapshot cannot be projected through a downgraded v1 attempt marker' );
+			$db->location_row->prep_time_default = 90; $db->location_row->busy_extra_minutes = 30;
+			$candidate = $saved; $candidate['pickup_ready_from_utc'] = '2026-10-17 06:00:00';
+			$replay = db_wpb_controller_call( 'native_pickup_snapshot_order', array( $candidate, $key, 3 ) );
+			assert_same( $saved, $replay, 'settings and fresh selection cannot move promise or prep' );
+			$first = DoughBoss_Square_Orders::project( array( 'order' => $saved, 'lines' => $payload['lines'] ), $binding, 37, 'square-orders-v2-pickup' );
+			$again = DoughBoss_Square_Orders::project( array( 'order' => $replay, 'lines' => $payload['lines'] ), $binding, 37, 'square-orders-v2-pickup' );
+			assert_same( wp_json_encode( $first ), wp_json_encode( $again ), 'projection replay remains byte-identical under policy drift' );
+			$timing = new ReflectionMethod( 'DoughBoss_Order', 'native_pickup_timing' ); $timing->setAccessible( true );
+			assert_same( $timing->invoke( null, $saved ), $timing->invoke( null, $replay ), 'local row timing remains exact after settings drift' );
+			assert_same( '2026-10-17 03:20:00', $timing->invoke( null, $replay )['fire_at_utc'], 'local kitchen fire is saved promise minus captured prep, not current policy' );
+			$copied = db_wpb_controller_call( 'pickup_fields_from_snapshot', array( $saved ) );
+			assert_same( 25, $copied['square_pickup_prep_minutes'], 'final order receives captured prep' );
+			unset( $payload['order']['square_orders_protocol'], $payload['order']['square_pickup_prep_minutes'], $payload['order']['square_api_version'] );
+			$legacy_json = wp_json_encode( $payload ); $db->snapshot_row['payload_json'] = $legacy_json; $db->snapshot_row['payload_hash'] = hash( 'sha256', $legacy_json );
+			$legacy = db_wpb_controller_call( 'native_pickup_snapshot_order', array( $saved, $key, 3 ) );
+			assert_same( $payload['order'], $legacy, 'pre-existing v1 snapshot never upgraded or rewritten' );
+		}
+		foreach ( array( 0 => '2026-10-17 03:45:00', 1440 => '2026-10-16 03:45:00' ) as $minutes => $fire ) {
+			$valid = $saved; $valid['square_pickup_prep_minutes'] = $minutes;
+			assert_same( $fire, $timing->invoke( null, $valid )['fire_at_utc'], 'prep boundary keeps exact local fire time' );
+		}
+		foreach ( array( 'square_pickup_prep_minutes' => -1, 'pickup_ready_from_utc' => '2026-02-30 03:45:00', 'square_orders_protocol' => 'unknown-v3', 'pickup_ready_by_utc' => '2026-10-16 03:00:00' ) as $field => $value ) {
+			$bad = $saved; $bad[ $field ] = $value;
+			assert_true( is_wp_error( $timing->invoke( null, $bad ) ), 'invalid native timing has no mutable-policy fallback' );
+		}
+		$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-order.php' );
+		assert_true( false !== strpos( $source, 'self::native_pickup_timing( $native_pickup )' ) && false !== strpos( $source, 'array_replace( $row, $native_timing )' ), 'limited wiring evidence: actual order writer consumes the tested timing result' );
+	} finally { $GLOBALS['wpdb'] = $previous; doughboss_test_set_settings( $settings ); }
+} );
 
 db_test( 'WP-B Square projection adds a short ticket name and metadata only for timed pickups', function () {
 	list( $legacy_payload, $binding ) = db_wpb_square_payload();

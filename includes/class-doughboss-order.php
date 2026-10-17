@@ -321,12 +321,29 @@ class DoughBoss_Order {
 	}
 
 	/**
-	 * Options for DoughBoss_Capacity::lock_hold_for_checkout() from the shop.
+	 * Pure row timing from the immutable native Square pickup snapshot.
 	 *
-	 * @param int  $location_id Shop id.
-	 * @param bool $paid        Whether the order is verified paid.
-	 * @return array{paid:bool,prep_minutes:int,slot_minutes:int}
+	 * @param array $order Retained snapshot order.
+	 * @return array|WP_Error
 	 */
+	private static function native_pickup_timing( array $order ) {
+		$fulfillment = DoughBoss_Square_Orders::pickup_fulfillment( $order );
+		if ( is_wp_error( $fulfillment ) ) { return $fulfillment; }
+		$ready = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $order['pickup_ready_from_utc'], new DateTimeZone( 'UTC' ) );
+		$by = ! empty( $order['pickup_ready_by_utc'] ) ? $order['pickup_ready_by_utc'] : null;
+		if ( null !== $by ) {
+			$end = is_string( $by ) ? DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $by, new DateTimeZone( 'UTC' ) ) : false;
+			if ( ! $end || $end->format( 'Y-m-d H:i:s' ) !== $by || $end < $ready ) { return new WP_Error( 'doughboss_square_order_facts' ); }
+		}
+		return array(
+			'promised_ready_from_utc' => $order['pickup_ready_from_utc'],
+			'promised_ready_by_utc' => $by,
+			'timezone_snapshot' => isset( $order['pickup_timezone'] ) ? $order['pickup_timezone'] : 'Australia/Sydney',
+			'fire_at_utc' => $ready->modify( '-' . $order['square_pickup_prep_minutes'] . ' minutes' )->format( 'Y-m-d H:i:s' ),
+		);
+	}
+
+	/** Existing website default-plus-busy preparation policy for hold conversion. */
 	public static function capacity_lock_options( $location_id, $paid ) {
 		$loc  = class_exists( 'DoughBoss_Locations' ) && absint( $location_id ) ? DoughBoss_Locations::get( absint( $location_id ) ) : null;
 		$prep = $loc ? max( 0, (int) $loc->prep_time_default ) + ( isset( $loc->busy_extra_minutes ) ? max( 0, (int) $loc->busy_extra_minutes ) : 0 ) : 0;
@@ -801,7 +818,17 @@ class DoughBoss_Order {
 				// order. Keep receipt idempotency independent of payment identity.
 				$snapshot = is_array( $held_attempt ) ? DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( (string) $held_attempt['checkout_key'] ) : null;
 				$saved = is_array( $snapshot ) && isset( $snapshot['payload']['order'] ) && is_array( $snapshot['payload']['order'] ) ? $snapshot['payload']['order'] : array();
+				// A linked-Order reread can revoke verification after checkout's
+				// retrieval but before this locking read. Paid status alone is not
+				// release authority. Only historical payment-only attempts omit it.
+				$has_orders_binding = array_key_exists( 'orders_protocol', $held_metadata )
+					|| array_key_exists( 'orders_snapshot_hash', $held_metadata )
+					|| ! empty( $held_attempt['provider_order_reference'] );
+				$valid_order_verification = 'order_verification_held' !== ( isset( $held_attempt['last_error'] ) ? $held_attempt['last_error'] : '' )
+					&& ( ! $has_orders_binding || ( in_array( isset( $held_metadata['orders_protocol'] ) ? $held_metadata['orders_protocol'] : '', array( 'square-orders-v1', 'square-orders-v2-pickup' ), true )
+						&& ! empty( $held_attempt['provider_order_reference'] ) && ! empty( $held_attempt['verified_at'] ) ) );
 				$valid_payment = is_array( $held_attempt ) && ! empty( $saved ) && empty( $wpdb->last_error )
+					&& $valid_order_verification
 					&& 'order' === (string) $held_attempt['purpose'] && (string) $held_attempt['context'] === ( isset( $data['order_source'] ) ? $data['order_source'] : 'web' )
 					&& 'square-v2' === ( isset( $held_metadata['protocol_version'] ) ? $held_metadata['protocol_version'] : '' )
 					&& 'succeeded' === (string) $held_attempt['status'] && 'COMPLETED' === strtoupper( (string) $held_attempt['provider_status'] )
@@ -837,6 +864,17 @@ class DoughBoss_Order {
 		}
 
 		$capacity      = null;
+		if ( $source_request_id && 'square' === ( isset( $data['payment_method'] ) ? $data['payment_method'] : '' ) ) {
+			$approved_snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $checkout_key );
+			$saved = is_array( $approved_snapshot ) && isset( $approved_snapshot['payload']['order'] ) ? $approved_snapshot['payload']['order'] : array();
+			$is_square_payment = true;
+		}
+		$native_pickup = ! empty( $is_square_payment ) && isset( $saved['square_orders_protocol'] ) && 'square-orders-v2-pickup' === $saved['square_orders_protocol'] ? $saved : null;
+		$native_timing = is_array( $native_pickup ) ? self::native_pickup_timing( $native_pickup ) : array();
+		if ( is_wp_error( $native_timing ) ) {
+			$wpdb->query( 'ROLLBACK' );
+			return new WP_Error( 'doughboss_payment_state_unavailable', __( 'The saved pickup promise could not be verified. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
 		$capacity_lost = '';
 		if ( ! empty( $data['capacity_hold_token'] ) ) {
 			$paid_order = 'paid' === ( isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid' );
@@ -859,7 +897,9 @@ class DoughBoss_Order {
 			);
 			$hold_location = isset( $data['location_id'] ) ? (int) $data['location_id'] : 0;
 			if ( method_exists( 'DoughBoss_Capacity', 'lock_hold_for_checkout' ) ) {
-				$capacity = DoughBoss_Capacity::lock_hold_for_checkout( $data['capacity_hold_token'], $cart_hash, $hold_location, self::capacity_lock_options( $hold_location, $paid_order ) );
+				$options = self::capacity_lock_options( $hold_location, $paid_order );
+				if ( is_array( $native_pickup ) ) { $options['prep_minutes'] = $native_pickup['square_pickup_prep_minutes']; }
+				$capacity = DoughBoss_Capacity::lock_hold_for_checkout( $data['capacity_hold_token'], $cart_hash, $hold_location, $options );
 			} else {
 				$capacity = DoughBoss_Capacity::lock_hold_for_order( $data['capacity_hold_token'], $cart_hash, $hold_location );
 			}
@@ -885,11 +925,14 @@ class DoughBoss_Order {
 
 		// 2.51 pickup facts. Only a held slot can make an order timed; the mode is
 		// sanitised so legacy hold-token callers keep their '' (no-mode) behaviour.
-		$pickup_mode       = $capacity ? self::sanitize_pickup_mode( isset( $data['pickup_mode'] ) ? $data['pickup_mode'] : '' ) : '';
+		$pickup_mode       = is_array( $native_pickup ) ? $native_pickup['pickup_mode'] : ( $capacity ? self::sanitize_pickup_mode( isset( $data['pickup_mode'] ) ? $data['pickup_mode'] : '' ) : '' );
 		$capacity_overflow = $capacity && ! empty( $capacity['overflow'] ) ? 1 : 0;
 		$order_notes       = $data['notes'];
 		if ( $capacity && ( $capacity_overflow || ! empty( $capacity['shifted'] ) ) ) {
-			$order_notes = self::append_capacity_note( $order_notes, $capacity_overflow, ! empty( $capacity['shifted'] ) );
+			$order_notes = self::append_capacity_note( $order_notes, $capacity_overflow, ! is_array( $native_pickup ) && ! empty( $capacity['shifted'] ) );
+			if ( is_array( $native_pickup ) && ! empty( $capacity['shifted'] ) ) {
+				$order_notes .= "\n\n[SYSTEM] Payment completed after the chosen pickup window started. The immutable paid pickup promise was retained; confirm the pickup time with the customer.";
+			}
 		} elseif ( '' !== $capacity_lost ) {
 			$order_notes = self::append_capacity_note( $order_notes, false, false, isset( $data['pickup_label'] ) ? (string) $data['pickup_label'] : '', true );
 		}
@@ -938,6 +981,7 @@ class DoughBoss_Order {
 					'updated_at'    => $now,
 			);
 			$row_formats = array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' );
+			$row = array_replace( $row, $native_timing );
 			list( $row, $row_formats ) = self::with_pickup_columns( $row, $row_formats, $pickup_mode, $capacity_overflow );
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$inserted = $wpdb->insert( $orders, $row, $row_formats );

@@ -284,6 +284,121 @@ function db_square_orders_response_fixture( array $projection ) {
 	return array( 'order' => $order );
 }
 
+db_test( 'Native PICKUP v2 preserves the website promise and guards paid lifecycle facts', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	$payload['order'] = array_merge( $payload['order'], array( 'order_type' => 'pickup', 'customer_name' => 'Synthetic Buyer',
+		'customer_phone' => '(0400) 000-000', 'pickup_mode' => 'asap', 'pickup_ready_from_utc' => '2026-10-17 03:45:00',
+		'square_orders_protocol' => 'square-orders-v2-pickup', 'square_pickup_prep_minutes' => 25, 'square_api_version' => '2025-01-23' ) );
+	$old = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$legacy_payload = $payload; unset( $legacy_payload['order']['square_orders_protocol'], $legacy_payload['order']['square_pickup_prep_minutes'], $legacy_payload['order']['square_api_version'] );
+	assert_same( wp_json_encode( DoughBoss_Square_Orders::project( $legacy_payload, $binding, 37 ) ), wp_json_encode( $old ), 'v1 projection remains byte-identical with protocol facts absent' );
+	assert_false( isset( $old['order']['fulfillments'] ), 'v1 still adds no native fulfillment even with new snapshot fields' );
+	foreach ( array( 'asap', 'scheduled' ) as $mode ) {
+		$payload['order']['pickup_mode'] = $mode;
+		$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' );
+		assert_false( is_wp_error( $projection ), 'both website modes project scheduled provider pickup' );
+		if ( is_wp_error( $projection ) ) { continue; }
+		$details = $projection['order']['fulfillments'][0]['pickup_details'];
+		assert_same( 'SCHEDULED', $details['schedule_type'], 'Square does not invent a later ASAP promise' );
+		assert_same( '2026-10-17T03:45:00Z', $details['pickup_at'], 'exact saved UTC promise' );
+		assert_same( 'PT25M', $details['prep_time_duration'], 'preparation comes from immutable snapshot' );
+		assert_same( array( 'display_name' => 'Synthetic Buyer', 'phone_number' => '0400000000' ), $details['recipient'], 'snapshot phone has deterministic formatting only' );
+		$response = db_square_orders_response_fixture( $projection );
+		assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $response, $projection ) ), 'exact new native create response validates' );
+		$payment = array( 'id' => 'sqpayPICKUPTEST0001', 'status' => 'COMPLETED', 'order_id' => $response['order']['id'],
+			'location_id' => $binding['square_location_id'], 'reference_id' => 'db-attempt-37', 'amount_money' => array( 'amount' => 2200, 'currency' => 'AUD' ) );
+		foreach ( array( 'CARD', 'SQUARE_GIFT_CARD' ) as $kind ) {
+			$response['order']['tenders'] = array( array( 'payment_id' => $payment['id'], 'type' => $kind, 'amount_money' => $payment['amount_money'] ) );
+			foreach ( array( 'PROPOSED', 'RESERVED', 'PREPARED', 'COMPLETED' ) as $state ) {
+				$response['order']['fulfillments'][0]['state'] = $state;
+				$response['order']['fulfillments'][0]['pickup_details']['placed_at'] = '2026-10-17T03:20:00.000Z';
+				assert_false( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $payment['order_id'], $kind ) ), 'paid card/gift allows documented successful lifecycle ' . $state );
+			}
+		}
+		foreach ( array( 'CANCELED', 'FAILED', 'UNKNOWN' ) as $state ) {
+			$bad = $response; $bad['order']['fulfillments'][0]['state'] = $state;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $payment['order_id'], 'SQUARE_GIFT_CARD' ) ), 'failed/canceled/unknown fulfillment is paid and held' );
+		}
+		foreach ( array( 'schedule_type' => 'ASAP', 'pickup_at' => '2026-10-17T03:50:00Z', 'prep_time_duration' => 'PT30M', 'recipient' => array( 'display_name' => 'Different Buyer' ) ) as $key => $value ) {
+			$bad = $response; $bad['order']['fulfillments'][0]['pickup_details'][ $key ] = $value;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $payment['order_id'], 'SQUARE_GIFT_CARD' ) ), 'immutable ' . $key . ' drift cannot release payment' );
+		}
+		foreach ( array( array(), array( $response['order']['fulfillments'][0], $response['order']['fulfillments'][0] ) ) as $rows ) {
+			$bad = $response; $bad['order']['fulfillments'] = $rows;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $payment['order_id'], 'SQUARE_GIFT_CARD' ) ), 'missing or additional fulfillment is held' );
+		}
+	}
+} );
+
+db_test( 'Native PICKUP v2 rejects malformed snapshot facts and unknown protocols', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	$payload['order'] = array_merge( $payload['order'], array( 'order_type' => 'pickup', 'customer_name' => 'Synthetic Buyer',
+		'customer_phone' => '', 'pickup_mode' => 'scheduled', 'pickup_ready_from_utc' => '2026-10-17 03:45:00',
+		'square_orders_protocol' => 'square-orders-v2-pickup', 'square_pickup_prep_minutes' => 0, 'square_api_version' => '2025-01-23' ) );
+	$zero = DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' );
+	assert_same( 'PT0M', $zero['order']['fulfillments'][0]['pickup_details']['prep_time_duration'], 'zero prep is explicit and valid' );
+	foreach ( array( 'pickup_ready_from_utc' => array( '2026-02-30 03:45:00', '2026-10-17T03:45:00Z', '2026-10-17 03:45:00+11:00', 'tomorrow', 123, null ),
+		'square_pickup_prep_minutes' => array( -1, 1441, '25', 2.5, null ), 'customer_name' => array( '', array(), str_repeat( 'x', 256 ) ),
+		'customer_phone' => array( 123, array(), 'not a phone', '+123456789012345678', ' ' ), 'pickup_mode' => array( 'later', null ) ) as $key => $values ) {
+		foreach ( $values as $value ) {
+			$bad = $payload; $bad['order'][ $key ] = $value;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::project( $bad, $binding, 37, 'square-orders-v2-pickup' ) ), 'malformed ' . $key . ' fails closed' );
+		}
+	}
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'unknown-v3' ) ), 'unknown protocol cannot become v1' );
+	$protocol = new ReflectionMethod( 'DoughBoss_Square', 'orders_protocol' ); $protocol->setAccessible( true );
+	foreach ( array( 'square-orders-v1' => 1, 'square-orders-v2-pickup' => 2, 'unknown-v3' => -1 ) as $name => $expected ) {
+		assert_same( $expected, $protocol->invoke( null, array( 'safe_metadata_json' => json_encode( array( 'orders_protocol' => $name, 'orders_snapshot_hash' => str_repeat( 'a', 64 ), 'square_api_version' => '2025-01-23' ) ) ) ), 'strict protocol classifier ' . $name );
+	}
+	assert_same( 0, $protocol->invoke( null, array() ), 'protocol-absent historical attempts remain payment-only' );
+	assert_same( -1, $protocol->invoke( null, array( 'safe_metadata_json' => json_encode( array( 'orders_protocol' => 'square-orders-v2-pickup', 'orders_snapshot_hash' => str_repeat( 'a', 64 ) ) ) ) ), 'v2 missing saved API version cannot authorize anything' );
+	$payload['order']['customer_phone'] = '+12345678901234567';
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' ) ), '2025 schema phone limit is 17 characters' );
+	$payload['order']['square_api_version'] = '2026-09-16';
+	assert_false( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' ) ), '2026 schema permits 18-character phone' );
+	$payload['order']['square_api_version'] = '2030-01-01';
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' ) ), 'unproven API version fails closed' );
+} );
+
+db_test( 'Native v2 payment linkage and approved attestation retain the exact immutable tuple', function () {
+	$tuple_method = new ReflectionMethod( 'DoughBoss_Square', 'approved_release_tuple' ); $tuple_method->setAccessible( true );
+	$link = new ReflectionMethod( 'DoughBoss_Square', 'payment_order_matches' ); $link->setAccessible( true );
+	$attempt = array_fill_keys( array( 'id', 'attempt_key', 'checkout_key', 'provider', 'purpose', 'context', 'local_reference', 'location_id', 'table_id', 'qr_code_id', 'amount_minor', 'currency', 'provider_reference', 'provider_order_reference', 'provider_status', 'status', 'safe_metadata_json', 'verified_at' ), '' );
+	$attempt = array_merge( $attempt, array( 'id' => 37, 'provider' => 'square', 'purpose' => 'order', 'context' => 'approved_preorder', 'status' => 'succeeded',
+		'provider_status' => 'COMPLETED', 'verified_at' => '2026-10-17 03:20:00', 'provider_reference' => 'sqpayPICKUPTEST0001', 'provider_order_reference' => 'squareORDEREXAMPLE00000001',
+		'safe_metadata_json' => json_encode( array( 'orders_protocol' => 'square-orders-v2-pickup', 'orders_snapshot_hash' => str_repeat( 'a', 64 ), 'square_api_version' => '2025-01-23' ) ) ) );
+	assert_true( $link->invoke( null, array( 'order_id' => $attempt['provider_order_reference'] ), $attempt ), 'native v2 payment binds exact provider Order' );
+	assert_false( $link->invoke( null, array( 'order_id' => 'squareORDERDIFFERENT00001' ), $attempt ), 'native v2 cannot inherit a different Order' );
+	$tuple = $tuple_method->invoke( null, $attempt );
+	assert_true( is_array( $tuple ), 'native v2 reaches existing approved tuple validation' );
+	$cache = new ReflectionProperty( 'DoughBoss_Square', 'approved_release_attestations' ); $cache->setAccessible( true );
+	$original = $cache->getValue();
+	try {
+		// Synthetic cache injection tests consumption only, not provider retrieval/minting.
+		$cache->setValue( null, array( 37 => $tuple ) );
+		assert_true( DoughBoss_Square::consume_approved_release_attestation( $attempt ), 'exact v2 tuple consumes once' );
+		assert_false( DoughBoss_Square::consume_approved_release_attestation( $attempt ), 'attestation replay cannot release again' );
+		foreach ( array( 'currency' => 'USD', 'verified_at' => '2026-10-17 03:21:00', 'provider_order_reference' => 'squareORDERDIFFERENT00001' ) as $key => $value ) {
+			$cache->setValue( null, array( 37 => $tuple ) ); $bad = $attempt; $bad[ $key ] = $value;
+			assert_false( DoughBoss_Square::consume_approved_release_attestation( $bad ), 'changed approval tuple is held' );
+		}
+	} finally { $cache->setValue( null, $original ); }
+} );
+
+db_test( 'Native v2 transport version is retained and settings drift is held', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	try {
+		doughboss_test_set_settings( db_square_settings( array( 'square_test_location_map' => array( 'revesby' => 'LOCATION_R_TEST' ) ) ) );
+		$binding = array( 'shop_slug' => 'revesby', 'square_location_id' => 'LOCATION_R_TEST', 'square_mode' => 'test', 'square_api_version' => '2025-01-23' );
+		$method = new ReflectionMethod( 'DoughBoss_Square', 'mapped_binding_current' ); $method->setAccessible( true );
+		assert_true( $method->invoke( null, $binding ), 'retained supported version and current shop binding agree' );
+		doughboss_test_set_settings( db_square_settings( array( 'square_test_location_map' => array( 'revesby' => 'LOCATION_R_TEST' ), 'square_api_version' => '2026-09-16' ) ) );
+		assert_false( $method->invoke( null, $binding ), 'same attempt cannot silently change wire API version after settings drift' );
+		$binding['square_api_version'] = '2030-01-01';
+		assert_false( $method->invoke( null, $binding ), 'unknown provider schema is not accepted' );
+	} finally { doughboss_test_set_settings( $original ); }
+} );
+
 db_test( 'Square Orders project historical itemization without charging modifiers twice', function () {
 	foreach ( array( true, false ) as $inclusive ) {
 		foreach ( array( true, false ) as $discount ) {

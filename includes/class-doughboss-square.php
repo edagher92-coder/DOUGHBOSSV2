@@ -955,6 +955,11 @@ class DoughBoss_Square {
 		}
 
 		$current = self::shop_binding( $native_location_id );
+		if ( 2 === self::orders_protocol( $attempt ) ) {
+			$pin = isset( $metadata['square_api_version'] ) ? $metadata['square_api_version'] : null;
+			if ( ! in_array( $pin, array( '2025-01-23', '2026-09-16' ), true ) || $pin !== DoughBoss_Settings::square_api_version() || is_wp_error( $current ) ) { return self::shop_binding_error(); }
+			$current['square_api_version'] = $pin;
+		}
 		if (
 			is_wp_error( $current )
 			|| ! hash_equals( $saved_shop, (string) $current['shop_slug'] )
@@ -978,22 +983,24 @@ class DoughBoss_Square {
 		return is_array( $metadata ) ? $metadata : array();
 	}
 
-	/** 0 means historical payment-only; 1 means itemized; -1 must be held. */
+	/** 0 historical payment-only; 1 itemized v1; 2 native pickup v2; -1 held. */
 	private static function orders_protocol( array $attempt ) {
 		$metadata = self::attempt_metadata( $attempt );
+		if ( isset( $metadata['orders_protocol'] ) && 'square-orders-v2-pickup' === $metadata['orders_protocol']
+			&& ( ! isset( $metadata['square_api_version'] ) || ! in_array( $metadata['square_api_version'], array( '2025-01-23', '2026-09-16' ), true ) ) ) { return -1; }
 		if ( ! array_key_exists( 'orders_protocol', $metadata ) && ! array_key_exists( 'orders_snapshot_hash', $metadata ) ) {
 			return empty( $attempt['provider_order_reference'] ) ? 0 : -1;
 		}
 		return isset( $metadata['orders_protocol'], $metadata['orders_snapshot_hash'] )
-			&& 'square-orders-v1' === $metadata['orders_protocol'] && is_string( $metadata['orders_snapshot_hash'] )
-			&& 1 === preg_match( '/^[a-f0-9]{64}\\z/', $metadata['orders_snapshot_hash'] ) ? 1 : -1;
+			&& in_array( $metadata['orders_protocol'], array( 'square-orders-v1', 'square-orders-v2-pickup' ), true ) && is_string( $metadata['orders_snapshot_hash'] )
+			&& 1 === preg_match( '/^[a-f0-9]{64}\\z/', $metadata['orders_snapshot_hash'] ) ? ( 'square-orders-v2-pickup' === $metadata['orders_protocol'] ? 2 : 1 ) : -1;
 	}
 
 	/** Load only the retained exact snapshot; never reprice from the current menu. */
 	private static function order_projection( array $attempt, array $binding ) {
 		$metadata = self::attempt_metadata( $attempt );
 		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $attempt['checkout_key'] );
-		if ( 1 !== self::orders_protocol( $attempt ) || ! is_array( $snapshot )
+		if ( ! in_array( self::orders_protocol( $attempt ), array( 1, 2 ), true ) || ! is_array( $snapshot )
 			|| ! isset( $snapshot['payload'], $snapshot['payload']['order']['location_id'], $snapshot['payload']['binding_hash'] )
 			|| 'prepared' !== $snapshot['status'] || 0 !== (int) $snapshot['order_id']
 			|| ! hash_equals( $metadata['orders_snapshot_hash'], (string) $snapshot['payload_hash'] )
@@ -1001,7 +1008,9 @@ class DoughBoss_Square {
 			|| (string) $snapshot['payload']['order']['location_id'] !== (string) $attempt['location_id'] ) {
 			return self::pending_error( $attempt, 'doughboss_pay_order_snapshot' );
 		}
-		$projection = DoughBoss_Square_Orders::project( $snapshot['payload'], $binding, (int) $attempt['id'] );
+		$projection = DoughBoss_Square_Orders::project( $snapshot['payload'], $binding, (int) $attempt['id'], $metadata['orders_protocol'] );
+		if ( isset( $snapshot['payload']['order']['square_orders_protocol'] ) && $snapshot['payload']['order']['square_orders_protocol'] !== $metadata['orders_protocol'] ) { return self::pending_error( $attempt, 'doughboss_pay_order_snapshot' ); }
+		if ( 2 === self::orders_protocol( $attempt ) && ( ! isset( $snapshot['payload']['order']['square_api_version'] ) || $snapshot['payload']['order']['square_api_version'] !== $metadata['square_api_version'] ) ) { return self::pending_error( $attempt, 'doughboss_pay_order_snapshot' ); }
 		if ( is_wp_error( $projection ) || $projection['amounts']['total'] !== (int) $attempt['amount_minor']
 			|| $projection['currency'] !== (string) $attempt['currency'] ) {
 			return self::pending_error( $attempt, 'doughboss_pay_order_snapshot' );
@@ -1064,7 +1073,7 @@ class DoughBoss_Square {
 	private static function payment_order_matches( array $payment, array $attempt ) {
 		$protocol = self::orders_protocol( $attempt );
 		if ( 0 === $protocol ) { return true; }
-		return 1 === $protocol && isset( $attempt['provider_order_reference'], $payment['order_id'] )
+		return in_array( $protocol, array( 1, 2 ), true ) && isset( $attempt['provider_order_reference'], $payment['order_id'] )
 			&& is_string( $attempt['provider_order_reference'] )
 			&& 1 === preg_match( '/^[A-Za-z0-9_-]{8,191}\\z/', $attempt['provider_order_reference'] )
 			&& $attempt['provider_order_reference'] === $payment['order_id'];
@@ -1072,6 +1081,20 @@ class DoughBoss_Square {
 
 	/** Paid-but-drifted/unreadable orders stay paid and held, never recharged. */
 	private static function verify_linked_order( array $payment, array $attempt, array $binding ) {
+		$guard = 'square_order_verification:' . (int) $attempt['id'];
+		if ( ! DoughBoss_Payment_Attempts::acquire_local_reference_lock( $guard ) ) {
+			return self::pending_error( $attempt, 'doughboss_pay_verification_busy' );
+		}
+		try {
+			$verified = self::verify_locked_linked_order( $payment, $attempt, $binding );
+			return is_wp_error( $verified ) ? self::held_order_error( $verified, $attempt ) : $verified;
+		} finally {
+			DoughBoss_Payment_Attempts::release_local_reference_lock( $guard );
+		}
+	}
+
+	/** Read and record a linked-Order failure while its verification lock is held. */
+	private static function verify_locked_linked_order( array $payment, array $attempt, array $binding ) {
 		if ( ! self::payment_order_matches( $payment, $attempt ) ) {
 			return self::pending_error( $attempt, 'doughboss_pay_order_mismatch' );
 		}
@@ -1105,7 +1128,7 @@ class DoughBoss_Square {
 	/** Failed linked checks must not leave a prior cached release authority. */
 	private static function held_order_error( $error, array $attempt ) {
 		self::forget_approved_release_attestation( isset( $attempt['provider_reference'] ) ? $attempt['provider_reference'] : '' );
-		if ( 1 === self::orders_protocol( $attempt ) && ! empty( $attempt['provider_reference'] )
+		if ( in_array( self::orders_protocol( $attempt ), array( 1, 2 ), true ) && ! empty( $attempt['provider_reference'] )
 			&& ! DoughBoss_Payment_Attempts::hold_square_order_verification( $attempt ) ) {
 			return self::pending_error( $attempt, 'doughboss_pay_order_hold_storage' );
 		}
@@ -1114,7 +1137,7 @@ class DoughBoss_Square {
 
 	/** Exact server-observed facts that a NEW marked approved release must retain. */
 	private static function approved_release_tuple( array $attempt ) {
-		if ( 1 !== self::orders_protocol( $attempt ) || 'square' !== $attempt['provider']
+		if ( ! in_array( self::orders_protocol( $attempt ), array( 1, 2 ), true ) || 'square' !== $attempt['provider']
 			|| 'order' !== $attempt['purpose'] || 'approved_preorder' !== $attempt['context']
 			|| 'succeeded' !== $attempt['status'] || 'COMPLETED' !== $attempt['provider_status']
 			|| empty( $attempt['verified_at'] ) || empty( $attempt['provider_reference'] ) || empty( $attempt['provider_order_reference'] ) ) {
@@ -1151,7 +1174,7 @@ class DoughBoss_Square {
 		$saved = isset( self::$approved_release_attestations[ $id ] ) ? self::$approved_release_attestations[ $id ] : null;
 		unset( self::$approved_release_attestations[ $id ] );
 		$current = self::approved_release_tuple( $attempt );
-		return 1 === $protocol && is_array( $saved ) && is_array( $current ) && $saved === $current;
+		return in_array( $protocol, array( 1, 2 ), true ) && is_array( $saved ) && is_array( $current ) && $saved === $current;
 	}
 
 	/**
@@ -1409,7 +1432,7 @@ class DoughBoss_Square {
 			$safe_metadata['verification_token'],
 			$safe_metadata['preorder_payment_token'],
 			$safe_metadata['orders_protocol'],
-			$safe_metadata['orders_snapshot_hash']
+			$safe_metadata['orders_snapshot_hash'], $safe_metadata['square_api_version']
 		);
 		if ( 'approved_preorder' === $context ) {
 			// Payment attempts deliberately discard metadata keys containing
@@ -1475,12 +1498,16 @@ class DoughBoss_Square {
 				}
 				// This pure preflight uses a provisional reference only to validate
 				// economics. No provider sees it; dispatch projects the persisted ID.
-				$projection = DoughBoss_Square_Orders::project( $snapshot['payload'], $shop_binding, 1 );
+				$native_protocol = isset( $snapshot['payload']['order']['square_orders_protocol'] ) ? $snapshot['payload']['order']['square_orders_protocol'] : 'square-orders-v1';
+				$projection = DoughBoss_Square_Orders::project( $snapshot['payload'], $shop_binding, 1, $native_protocol );
 				if ( is_wp_error( $projection ) || $projection['amounts']['total'] !== $amount_minor || $projection['currency'] !== $currency ) {
 					return new WP_Error( 'doughboss_pay_order_snapshot', __( 'The saved itemized order could not be verified. Please contact the shop.', 'doughboss' ), array( 'status' => 409 ) );
 				}
-				$safe_metadata['orders_protocol'] = 'square-orders-v1';
+				$safe_metadata['orders_protocol'] = $native_protocol;
 				$safe_metadata['orders_snapshot_hash'] = $snapshot['payload_hash'];
+				if ( 'square-orders-v2-pickup' === $native_protocol ) {
+					$safe_metadata['square_api_version'] = $snapshot['payload']['order']['square_api_version'];
+				}
 				$attempt = DoughBoss_Payment_Attempts::create_or_find( array(
 				'attempt_key'     => $attempt_key,
 				'checkout_key'    => $checkout_key,
@@ -1499,7 +1526,8 @@ class DoughBoss_Square {
 				// A concurrent winner cannot silently downgrade a new checkout to
 				// payment-only. Never append markers to that winner or replace it.
 				$stored = is_array( $attempt ) ? self::attempt_metadata( $attempt ) : array();
-				if ( ! is_array( $attempt ) || 1 !== self::orders_protocol( $attempt )
+				if ( ! is_array( $attempt ) || ! in_array( self::orders_protocol( $attempt ), array( 1, 2 ), true )
+					|| $safe_metadata['orders_protocol'] !== $stored['orders_protocol']
 					|| $safe_metadata['orders_snapshot_hash'] !== $stored['orders_snapshot_hash'] ) {
 					return new WP_Error( 'doughboss_pay_order_protocol', __( 'The itemized payment identity could not be recorded safely.', 'doughboss' ), array( 'status' => 503 ) );
 				}
@@ -1554,7 +1582,7 @@ class DoughBoss_Square {
 		if ( -1 === $orders_protocol ) {
 			return self::pending_error( $attempt, 'doughboss_pay_order_protocol' );
 		}
-		if ( 1 === $orders_protocol ) {
+		if ( in_array( $orders_protocol, array( 1, 2 ), true ) ) {
 			$projection = self::order_projection( $attempt, $stored_binding );
 			if ( is_wp_error( $projection ) ) { return $projection; }
 		}
@@ -1598,7 +1626,7 @@ class DoughBoss_Square {
 			DoughBoss_Payment_Attempts::mark_irreversible_unknown( (int) $attempt['id'], 'doughboss_pay_order_protocol' );
 			return self::pending_error( $attempt, 'doughboss_pay_order_protocol' );
 		}
-		if ( 1 === $orders_protocol ) {
+		if ( in_array( $orders_protocol, array( 1, 2 ), true ) ) {
 			$linked = self::create_linked_order( $attempt, $dispatch_binding );
 			if ( is_wp_error( $linked ) && 'approved_preorder' !== $context && 'doughboss_pay_api' === $linked->get_error_code() ) {
 				// CreateOrder runs before any payment request: Square refused it,
@@ -1651,7 +1679,7 @@ class DoughBoss_Square {
 			'reference_id'    => self::attempt_reference( (int) $attempt['id'] ),
 			'autocomplete'    => true,
 		);
-		if ( 1 === $orders_protocol ) {
+		if ( in_array( $orders_protocol, array( 1, 2 ), true ) ) {
 			$body['order_id'] = $attempt['provider_order_reference'];
 		}
 		// Customer email from the retained, hash-verified checkout snapshot so
@@ -1719,9 +1747,9 @@ class DoughBoss_Square {
 		}
 
 		$payload['attempt_id'] = (int) $bound['id'];
-		if ( 1 === $orders_protocol && 'succeeded' === $payload['status'] ) {
+		if ( in_array( $orders_protocol, array( 1, 2 ), true ) && 'succeeded' === $payload['status'] ) {
 			$verified = self::verify_linked_order( $payment, $bound, $dispatch_binding );
-			if ( is_wp_error( $verified ) ) { return self::held_order_error( $verified, $bound ); }
+			if ( is_wp_error( $verified ) ) { return $verified; }
 		}
 		return $payload;
 	}
@@ -1775,7 +1803,7 @@ class DoughBoss_Square {
 		$payload['attempt_id'] = isset( $attempt['id'] ) ? (int) $attempt['id'] : 0;
 		if ( 'succeeded' === $payload['status'] ) {
 			$verified = self::verify_linked_order( $response, $attempt, $shop_binding );
-			if ( is_wp_error( $verified ) ) { return self::held_order_error( $verified, $attempt ); }
+			if ( is_wp_error( $verified ) ) { return $verified; }
 		}
 		return $payload;
 	}
@@ -2027,11 +2055,11 @@ class DoughBoss_Square {
 	 * Buyer email for an itemised attempt, read only from its verified snapshot.
 	 *
 	 * @param array $attempt         Attempt row.
-	 * @param int   $orders_protocol Orders protocol (1 = itemised).
+	 * @param int   $orders_protocol Orders protocol (1 itemised v1, 2 native pickup).
 	 * @return string Valid email or ''.
 	 */
 	private static function buyer_email( array $attempt, $orders_protocol ) {
-		if ( 1 !== $orders_protocol || ! class_exists( 'DoughBoss_Checkout_Snapshots' ) || empty( $attempt['checkout_key'] ) ) {
+		if ( ! in_array( $orders_protocol, array( 1, 2 ), true ) || ! class_exists( 'DoughBoss_Checkout_Snapshots' ) || empty( $attempt['checkout_key'] ) ) {
 			return '';
 		}
 		$snapshot = DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $attempt['checkout_key'] );
@@ -2221,9 +2249,31 @@ class DoughBoss_Square {
 		if ( '' === $id ) {
 			return new WP_Error( 'doughboss_pay_id', __( 'Invalid payment reference.', 'doughboss' ), array( 'status' => 400 ) );
 		}
+		// Serialize provider reads and their result, not just the final UPDATE.
+		// An older successful read must never erase a newer committed revocation.
+		$identity = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
+		if ( ! $identity ) {
+			return new WP_Error( 'doughboss_pay_attempt', __( 'The payment attempt could not be reconciled.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		// SQL lookups may be case-insensitive. Lock the durable row identity and
+		// use its exact stored provider reference, never the caller's spelling.
+		$id = (string) $identity['provider_reference'];
+		$guard = 'square_order_verification:' . (int) $identity['id'];
+		if ( ! DoughBoss_Payment_Attempts::acquire_local_reference_lock( $guard ) ) {
+			return new WP_Error( 'doughboss_pay_verification_busy', __( 'Payment verification is already in progress. Please check again; do not pay again.', 'doughboss' ), array( 'status' => 503, 'payment_pending' => true, 'retry_safe' => false ) );
+		}
+		try {
+			return self::retrieve_locked_payment_intent( $id, (int) $identity['id'] );
+		} finally {
+			DoughBoss_Payment_Attempts::release_local_reference_lock( $guard );
+		}
+	}
+
+	/** Reconcile one payment while holding its provider-read/result lock. */
+	private static function retrieve_locked_payment_intent( $id, $attempt_id ) {
 
 		$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( $id );
-		if ( ! $attempt ) {
+		if ( ! $attempt || (int) $attempt['id'] !== $attempt_id || (string) $attempt['provider_reference'] !== $id ) {
 			return new WP_Error( 'doughboss_pay_attempt', __( 'The payment attempt could not be reconciled.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		if ( class_exists( 'DoughBoss_Square_Hosted' ) && DoughBoss_Square_Hosted::is_hosted_attempt( $attempt ) ) {
@@ -2296,7 +2346,7 @@ class DoughBoss_Square {
 			// pass. Otherwise a failed Order read could leave release authority.
 			if ( 'succeeded' === $status ) {
 				$verified = self::verify_linked_order( $payment, $attempt, $shop_binding );
-				if ( is_wp_error( $verified ) ) { return self::held_order_error( $verified, $attempt ); }
+			if ( is_wp_error( $verified ) ) { return $verified; }
 			}
 			$reconciled = DoughBoss_Payment_Attempts::reconcile_irreversible_reference( $id, $status, $provider_status );
 			if ( false === $reconciled ) {
@@ -2904,7 +2954,7 @@ class DoughBoss_Square {
 			'timeout' => 25,
 			'headers' => array(
 				'Authorization'  => 'Bearer ' . $token,
-				'Square-Version' => DoughBoss_Settings::square_api_version(),
+				'Square-Version' => is_array( $shop_binding ) && isset( $shop_binding['square_api_version'] ) ? $shop_binding['square_api_version'] : DoughBoss_Settings::square_api_version(),
 				'Content-Type'   => 'application/json',
 				'Accept'         => 'application/json',
 			),
@@ -2967,6 +3017,8 @@ class DoughBoss_Square {
 	 * @return bool
 	 */
 	private static function mapped_binding_current( $shop_binding ) {
+		if ( is_array( $shop_binding ) && array_key_exists( 'square_api_version', $shop_binding )
+			&& ( ! in_array( $shop_binding['square_api_version'], array( '2025-01-23', '2026-09-16' ), true ) || $shop_binding['square_api_version'] !== DoughBoss_Settings::square_api_version() ) ) { return false; }
 		if ( ! is_array( $shop_binding ) ) {
 			return false;
 		}
