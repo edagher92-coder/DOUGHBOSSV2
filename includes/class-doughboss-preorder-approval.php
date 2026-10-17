@@ -163,7 +163,7 @@ class DoughBoss_Preorder_Approval {
 	 * @param int    $expected_revision Request revision shown to the approver.
 	 * @return array|WP_Error Approval result; approve includes capability_token.
 	 */
-	public static function decide( $request_order_id, $decision, $actor_user_id, $actor_name, $event_key, $reason = '', $expected_revision = 0 ) {
+	public static function decide( $request_order_id, $decision, $actor_user_id, $actor_name, $event_key, $reason = '', $expected_revision = 0, array $selection = array() ) {
 		$request_order_id = absint( $request_order_id );
 		$decision         = sanitize_key( $decision );
 		$actor_user_id    = absint( $actor_user_id );
@@ -179,23 +179,61 @@ class DoughBoss_Preorder_Approval {
 			return self::error( 'doughboss_preorder_decision_invalid', __( 'A valid pre-order decision, staff member, and decision key are required.', 'doughboss' ), 400 );
 		}
 
+		$preview = null;
+		$preview_fingerprint = '';
+		$advisory_slot_id = 0;
+		if ( 'approve' === $decision ) {
+			$entry_policy = DoughBoss_Settings::staff_approval_policy();
+			if ( 'required' !== $entry_policy['mode'] || ! DoughBoss_Settings::staff_approval_actor_valid( $entry_policy ) || $actor_user_id !== (int) $entry_policy['approver_id'] ) {
+				return self::error( 'doughboss_preorder_approver_required', __( 'The currently configured approver must review this request.', 'doughboss' ), 403 );
+			}
+			$preview = DoughBoss_Order::get( $request_order_id );
+			$cart = DoughBoss_Pickup::preorder_context( $preview );
+			if ( is_wp_error( $cart ) ) { return $cart; }
+			if ( ! $expected_revision || empty( $selection['contact_confirmed'] ) ) {
+				return self::error( 'doughboss_preorder_revision_conflict', __( 'Refresh this request and confirm the pickup selection with the customer.', 'doughboss' ), 409 );
+			}
+			$preview_fingerprint = self::fingerprint_from_order( $preview, false );
+			if ( is_wp_error( $preview_fingerprint ) ) { return $preview_fingerprint; }
+			$pending = self::approval( $request_order_id );
+			if ( ! $pending || self::STATE_PENDING === $pending->state ) {
+				if ( (int) $preview->version !== $expected_revision ) {
+					return self::error( 'doughboss_preorder_revision_conflict', __( 'Refresh this request before choosing pickup.', 'doughboss' ), 409 );
+				}
+				$advisory_slot_id = DoughBoss_Pickup::prepare_preorder_slot( $preview, $selection, $cart, new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) ) );
+				if ( is_wp_error( $advisory_slot_id ) ) { return $advisory_slot_id; }
+			}
+		}
+
 		$started = self::begin();
 		if ( is_wp_error( $started ) ) {
 			return $started;
 		}
 		try {
-			$event = self::locked_event( $event_key );
+
 			// HTTP-entry permission is not durable decision authority. Rebind the
 			// exact actor to the current server policy inside this transaction.
 			$policy = DoughBoss_Settings::staff_approval_policy( true );
-			if ( 'unavailable' === $policy['mode'] || ! DoughBoss_Settings::staff_approval_actor_valid( $policy ) || $actor_user_id !== $policy['approver_id'] ) {
+			if ( 'unavailable' === $policy['mode'] || $actor_user_id !== $policy['approver_id'] ) {
 				self::rollback();
 				return self::error( 'doughboss_preorder_approver_required', __( 'The currently configured payment approver must review this request.', 'doughboss' ), 403 );
 			}
+			$event = self::locked_event( $event_key );
 			if ( $event ) {
+				if ( ! DoughBoss_Settings::staff_approval_actor_valid( $policy ) ) {
+					self::rollback();
+					return self::error( 'doughboss_preorder_approver_required', __( 'The currently configured approver must review this request.', 'doughboss' ), 403 );
+				}
 				if ( (int) $event->request_order_id !== $request_order_id || ! self::decision_matches_state( $decision, $event->state ) ) {
 					self::rollback();
 					return self::error( 'doughboss_preorder_event_conflict', __( 'That decision key has already been used for another pre-order decision.', 'doughboss' ), 409 );
+				}
+				if ( 'approve' === $decision ) {
+					$chosen_from = isset( $selection['ready_from_utc'] ) ? str_replace( array( 'T', 'Z' ), array( ' ', '' ), (string) $selection['ready_from_utc'] ) : '';
+					if ( ! $preview || $chosen_from !== (string) $preview->promised_ready_from_utc || ! isset( $selection['pickup_mode'] ) || (string) $selection['pickup_mode'] !== (string) $preview->pickup_mode ) {
+						self::rollback();
+						return self::error( 'doughboss_preorder_event_conflict', __( 'That decision key was already used with another pickup selection.', 'doughboss' ), 409 );
+					}
 				}
 				$result = self::decision_result( $event );
 				if ( is_wp_error( $result ) ) {
@@ -209,6 +247,25 @@ class DoughBoss_Preorder_Approval {
 				return $result;
 			}
 
+			$reservation = null;
+			if ( 'approve' === $decision ) {
+				if ( ! $advisory_slot_id ) {
+					self::rollback();
+					return self::error( 'doughboss_preorder_already_decided', __( 'This pre-order request has already been decided.', 'doughboss' ), 409 );
+				}
+				if ( 'required' !== $policy['mode'] ) {
+					self::rollback();
+					return self::error( 'doughboss_preorder_pickup_ineligible', __( 'Staff-selected pickup approval is not currently available.', 'doughboss' ), 409 );
+				}
+				$reservation = DoughBoss_Pickup::reserve_preorder_locked( $preview, $selection, $cart, $advisory_slot_id, new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) ) );
+				if ( is_wp_error( $reservation ) ) { self::rollback(); return $reservation; }
+			}
+			// User/capability helpers may issue ordinary reads. Keep them after the
+			// slot mutex so they cannot pin a stale capacity snapshot before admission.
+			if ( ! DoughBoss_Settings::staff_approval_actor_valid( $policy ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_approver_required', __( 'The currently configured approver must review this request.', 'doughboss' ), 403 );
+			}
 			$order = self::locked_order( $request_order_id );
 			$valid = self::validate_pending_request( $order );
 			if ( is_wp_error( $valid ) ) {
@@ -237,6 +294,22 @@ class DoughBoss_Preorder_Approval {
 				return self::error( 'doughboss_preorder_already_decided', __( 'This pre-order request has already been decided.', 'doughboss' ), 409 );
 			}
 
+			if ( 'approve' === $decision ) {
+				if ( ! self::fingerprint_matches( $preview_fingerprint, $order, true ) || 1 !== (int) $order->preorder_workflow_version ) {
+					self::rollback();
+					return self::error( 'doughboss_preorder_revision_conflict', __( 'This request changed. Refresh before approving.', 'doughboss' ), 409 );
+				}
+				$promise = $reservation;
+				unset( $promise['payment_expires_at_utc'], $promise['cart_hash'] );
+				$promise['version'] = (int) $order->version + 1;
+				$promise['updated_at'] = self::now();
+				global $wpdb;
+				if ( 1 !== $wpdb->update( self::orders_table(), $promise, array( 'id' => $request_order_id, 'version' => (int) $order->version, 'preorder_workflow_version' => 1 ) ) ) {
+					self::rollback();
+					return self::error( 'doughboss_preorder_decision_conflict', __( 'The pickup promise could not be saved safely.', 'doughboss' ), 409 );
+				}
+				$order = self::locked_order( $request_order_id );
+			}
 			$now         = self::now();
 			$fingerprint = self::fingerprint_from_locked_order( $order );
 			if ( is_wp_error( $fingerprint ) || ! is_string( $fingerprint ) || 1 !== preg_match( '/^[a-f0-9]{64}$/', $fingerprint ) ) {
@@ -255,7 +328,7 @@ class DoughBoss_Preorder_Approval {
 				'updated_at_utc'     => $now,
 			);
 			if ( 'approve' === $decision ) {
-				$expires = gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS );
+				$expires = (string) $reservation['payment_expires_at_utc'];
 				$token   = self::capability_token( $request_order_id, (int) $order->version, $fingerprint, $expires );
 				$data['payment_token_hash']           = hash( 'sha256', $token );
 				$data['payment_token_expires_at_utc'] = $expires;
@@ -331,7 +404,7 @@ class DoughBoss_Preorder_Approval {
 	 * @param string $raw_token        Raw capability token.
 	 * @return array|WP_Error Approval row plus payment_checkout_key.
 	 */
-	public static function claim_payment( $request_order_id, $raw_token ) {
+	public static function claim_payment( $request_order_id, $raw_token, $reservation_window = false ) {
 		$request_order_id = absint( $request_order_id );
 		$raw_token        = trim( (string) $raw_token );
 		$ready            = self::storage_ready();
@@ -341,14 +414,22 @@ class DoughBoss_Preorder_Approval {
 		if ( ! $request_order_id || '' === $raw_token ) {
 			return self::error( 'doughboss_preorder_payment_token_invalid', __( 'A valid payment capability is required.', 'doughboss' ), 403 );
 		}
+		$entry = self::valid_token_row( self::approval( $request_order_id ), $raw_token, true, false );
+		if ( is_wp_error( $entry ) ) { return $entry; }
 		$started = self::begin();
 		if ( is_wp_error( $started ) ) {
 			return $started;
 		}
 		try {
+			$reserved = self::lock_payment_reservation( $request_order_id );
+			if ( is_wp_error( $reserved ) ) { self::rollback(); return $reserved; }
 			$request = self::locked_order( $request_order_id );
 			$row   = self::locked_approval( $request_order_id );
 			$valid = self::valid_token_row( $row, $raw_token, true, false );
+			if ( is_array( $reserved ) && ( ! $row || (string) $row->payment_token_expires_at_utc !== (string) $reserved['expires_at_utc'] || (int) $request->capacity_hold_id !== (int) $reserved['hold_id'] ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_capacity_conflict', __( 'The approved reservation changed. Please contact the shop.', 'doughboss' ), 409 );
+			}
 			if ( is_wp_error( $valid ) ) {
 				self::rollback();
 				return $valid;
@@ -372,7 +453,12 @@ class DoughBoss_Preorder_Approval {
 				return self::error( 'doughboss_preorder_payment_token_expired', __( 'This payment capability has expired.', 'doughboss' ), 403 );
 			}
 			$expires = strtotime( (string) $row->payment_token_expires_at_utc . ' UTC' );
-			if ( false === $expires || $expires < time() + ( 35 * MINUTE_IN_SECONDS ) ) {
+			if ( $reservation_window && ! is_array( $reserved ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_pickup_ineligible', __( 'This historical request cannot start a new pickup payment.', 'doughboss' ), 409 );
+			}
+			$short_window = $reservation_window && $request && 1 === (int) ( isset( $request->preorder_workflow_version ) ? $request->preorder_workflow_version : 0 );
+			if ( false === $expires || ( $short_window ? $expires <= time() : $expires < time() + ( 35 * MINUTE_IN_SECONDS ) ) ) {
 				self::rollback();
 				return self::error( 'doughboss_preorder_payment_start_cutoff', __( 'This payment link is too close to expiry to start a new payment. Please contact the shop.', 'doughboss' ), 409 );
 			}
@@ -411,20 +497,32 @@ class DoughBoss_Preorder_Approval {
 		if ( ! $request_order_id || '' === $raw_token || ! $attempt_id ) {
 			return self::error( 'doughboss_preorder_payment_attempt_invalid', __( 'A valid pre-order request payment attempt is required.', 'doughboss' ), 400 );
 		}
+		$entry = self::valid_token_row( self::approval( $request_order_id ), $raw_token, true, true );
+		if ( is_wp_error( $entry ) ) { return $entry; }
 		$started = self::begin();
 		if ( is_wp_error( $started ) ) {
 			return $started;
 		}
 		try {
+			$reserved = self::lock_payment_reservation( $request_order_id );
+			if ( is_wp_error( $reserved ) ) { self::rollback(); return $reserved; }
 			// All payment-release paths acquire the mutable source order first.
 			$request = self::locked_order( $request_order_id );
 			$row     = self::locked_approval( $request_order_id );
 			$valid   = self::valid_token_row( $row, $raw_token, true, true );
+			if ( is_array( $reserved ) && ( ! $row || (string) $row->payment_token_expires_at_utc !== (string) $reserved['expires_at_utc'] || (int) $request->capacity_hold_id !== (int) $reserved['hold_id'] ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_capacity_conflict', __( 'The approved reservation changed. Please contact the shop.', 'doughboss' ), 409 );
+			}
 			if ( is_wp_error( $valid ) ) {
 				self::rollback();
 				return $valid;
 			}
 			$linked_attempt = $row->payment_attempt_id && $attempt_id === (int) $row->payment_attempt_id;
+			if ( ! $linked_attempt && ! is_array( $reserved ) ) {
+				self::rollback();
+				return self::error( 'doughboss_preorder_pickup_ineligible', __( 'This historical request cannot dispatch a new pickup charge.', 'doughboss' ), 409 );
+			}
 			if (
 				! $request
 				|| 'preorder_request' !== (string) $request->order_source
@@ -690,6 +788,40 @@ class DoughBoss_Preorder_Approval {
 	 * @param string $checkout_key         Server-derived payment checkout key.
 	 * @return array|WP_Error Approval row.
 	 */
+	/** Acquire source reservation before source -> approval; paid failures stay outside the kitchen. */
+	public static function lock_source_capacity_for_payment( $request_order_id, $checkout_key, array $lines, array $data ) {
+		$preview = DoughBoss_Order::get( $request_order_id );
+		// Existing historical Stripe/v1 contracts retain their original settlement path.
+		if ( $preview && 0 === (int) ( isset( $preview->preorder_workflow_version ) ? $preview->preorder_workflow_version : 0 ) ) { return null; }
+		$cart = DoughBoss_Pickup::preorder_context( $preview );
+		if ( is_wp_error( $cart ) ) { return $cart; }
+		$capacity = DoughBoss_Capacity::lock_preorder_hold( $preview, $cart );
+		if ( is_wp_error( $capacity ) ) {
+			return self::error( 'doughboss_paid_reconciliation_required', __( 'Payment evidence is retained, but the pickup reservation needs staff reconciliation. Please do not pay again.', 'doughboss' ), 409 );
+		}
+		$request = self::locked_order( $request_order_id );
+		$row = self::locked_approval( $request_order_id );
+		if ( ! $request || ! $row || self::expired( $row ) || ! in_array( $row->state, array( self::STATE_PAYMENT_ACTIVE, self::STATE_PAYMENT_HELD ), true )
+			|| ! hash_equals( (string) $row->payment_checkout_key, (string) $checkout_key )
+			|| ! hash_equals( (string) $row->payment_token_expires_at_utc, (string) $capacity['expires_at_utc'] )
+			|| (int) $request->version !== (int) $row->approved_revision
+			|| ! self::fingerprint_matches( (string) $row->request_fingerprint, $request, true )
+			|| (int) $request->capacity_hold_id !== (int) $capacity['hold_id'] ) {
+			return self::error( 'doughboss_paid_reconciliation_required', __( 'The approved pickup reservation requires staff review. Please do not pay again.', 'doughboss' ), 409 );
+		}
+		$locked_cart = DoughBoss_Pickup::preorder_context( $request, true );
+		if ( isset( $data['payment_method'] ) && 'square' === $data['payment_method'] && ! self::pickup_snapshot_matches_request( $request, $data ) ) {
+			return self::error( 'doughboss_paid_reconciliation_required', __( 'The paid snapshot does not match its approved pickup promise. Please do not pay again.', 'doughboss' ), 409 );
+		}
+		$incoming = DoughBoss_Capacity::cart_hash( $lines, array( 'location_id' => isset( $data['location_id'] ) ? $data['location_id'] : 0, 'order_type' => isset( $data['order_type'] ) ? $data['order_type'] : '', 'voucher' => isset( $data['voucher_code'] ) ? $data['voucher_code'] : '', 'total' => isset( $data['total'] ) ? $data['total'] : 0 ) );
+		if ( is_wp_error( $locked_cart ) || ! hash_equals( $cart['cart_hash'], $locked_cart['cart_hash'] ) || ! hash_equals( $cart['cart_hash'], $incoming ) ) {
+			return self::error( 'doughboss_paid_reconciliation_required', __( 'The paid cart does not match the approved reservation. Please do not pay again.', 'doughboss' ), 409 );
+		}
+		unset( $capacity['expires_at_utc'] );
+		return $capacity;
+	}
+
+
 	public static function release_locked( $request_order_id, $fulfillment_order_id, $checkout_key ) {
 		$request_order_id     = absint( $request_order_id );
 		$fulfillment_order_id = absint( $fulfillment_order_id );
@@ -778,8 +910,22 @@ class DoughBoss_Preorder_Approval {
 	}
 
 	/** @return bool */
+	/** Transaction-local capacity validation before taking source/approval locks. */
+	private static function lock_payment_reservation( $request_order_id ) {
+		$source = DoughBoss_Order::get( $request_order_id );
+		if ( ! $source || 1 !== (int) ( isset( $source->preorder_workflow_version ) ? $source->preorder_workflow_version : 0 ) ) { return null; }
+		$cart = DoughBoss_Pickup::preorder_context( $source );
+		if ( is_wp_error( $cart ) ) { return $cart; }
+		return DoughBoss_Capacity::lock_preorder_hold( $source, $cart );
+	}
+
+
 	private static function dispatch_window_open( $row ) {
 		$expires = $row && ! empty( $row->payment_token_expires_at_utc ) ? strtotime( (string) $row->payment_token_expires_at_utc . ' UTC' ) : false;
+		$request = $row ? DoughBoss_Order::get( (int) $row->request_order_id ) : null;
+		if ( $request && 1 === (int) ( isset( $request->preorder_workflow_version ) ? $request->preorder_workflow_version : 0 ) ) {
+			return false !== $expires && $expires > time();
+		}
 		return false !== $expires && $expires >= time() + ( 35 * MINUTE_IN_SECONDS );
 	}
 
@@ -831,6 +977,22 @@ class DoughBoss_Preorder_Approval {
 	}
 
 	/** @return bool */
+	/** New timed approval snapshots must match the original server-owned promise. */
+	private static function pickup_snapshot_matches_request( $request, array $order ) {
+		if ( ! $request || 1 !== (int) ( isset( $request->preorder_workflow_version ) ? $request->preorder_workflow_version : 0 ) ) { return false; }
+		if ( ! isset( $order['square_orders_protocol'], $order['pickup_mode'], $order['pickup_ready_from_utc'], $order['pickup_ready_by_utc'], $order['pickup_timezone'], $order['square_pickup_prep_minutes'] )
+			|| 'square-orders-v2-pickup' !== $order['square_orders_protocol'] || empty( $request->capacity_hold_id ) ) { return false; }
+		foreach ( array( 'pickup_mode' => 'pickup_mode', 'pickup_ready_from_utc' => 'promised_ready_from_utc', 'pickup_ready_by_utc' => 'promised_ready_by_utc', 'pickup_timezone' => 'timezone_snapshot' ) as $snapshot_field => $source_field ) {
+			if ( ! isset( $request->{$source_field} ) || (string) $order[$snapshot_field] !== (string) $request->{$source_field} ) { return false; }
+		}
+		$from = strtotime( (string) $request->promised_ready_from_utc . ' UTC' );
+		$fire = strtotime( (string) $request->fire_at_utc . ' UTC' );
+		$prep = $order['square_pickup_prep_minutes'];
+		return false !== $from && false !== $fire && $from >= $fire && 0 === ( $from - $fire ) % 60
+			&& is_numeric( $prep ) && (float) $prep === (float) ( ( $from - $fire ) / 60 );
+	}
+
+
 	private static function square_snapshot_matches_request( $snapshot, $request, $approval, array $metadata, array $binding ) {
 		if ( ! is_array( $snapshot ) || ! isset( $snapshot['payload'] ) || ! is_array( $snapshot['payload'] ) ) {
 			return false;
@@ -841,6 +1003,7 @@ class DoughBoss_Preorder_Approval {
 		if ( ! DoughBoss_Order::accounting_basis_matches_payload( $request, $order ) ) {
 			return false;
 		}
+		if ( 1 === (int) ( isset( $request->preorder_workflow_version ) ? $request->preorder_workflow_version : 0 ) && ! self::pickup_snapshot_matches_request( $request, $order ) ) { return false; }
 		$snapshot_binding = isset( $payload['square_binding'] ) && is_array( $payload['square_binding'] ) ? $payload['square_binding'] : array();
 		if (
 			(int) ( isset( $approval_payload['request_id'] ) ? $approval_payload['request_id'] : 0 ) !== (int) $request->id
@@ -1027,7 +1190,9 @@ class DoughBoss_Preorder_Approval {
 	/** @return bool */
 	private static function commit() {
 		global $wpdb;
-		return false !== $wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$committed = false !== $wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		if ( ! $committed ) { self::rollback(); }
+		return $committed;
 	}
 
 	/** @return void */
@@ -1158,6 +1323,12 @@ class DoughBoss_Preorder_Approval {
 			$snapshot[ $field ] = isset( $order->{$field} ) ? (string) $order->{$field} : '';
 		}
 		$snapshot['items'] = $items;
+		// Preserve historical fingerprint bytes; only explicitly new workflow rows bind these facts.
+		if ( 1 === (int) ( isset( $order->preorder_workflow_version ) ? $order->preorder_workflow_version : 0 ) ) {
+			foreach ( array( 'preorder_workflow_version', 'capacity_hold_id', 'capacity_units', 'pickup_mode', 'fire_at_utc', 'planning_version' ) as $field ) {
+				$snapshot[ $field ] = isset( $order->{$field} ) ? (string) $order->{$field} : '';
+			}
+		}
 		// Omit unknown legacy facts to preserve original fingerprint bytes.
 		if ( null !== $basis ) {
 			$snapshot['accounting_basis'] = $basis;

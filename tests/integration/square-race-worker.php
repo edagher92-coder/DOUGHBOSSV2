@@ -102,18 +102,37 @@ if ( is_string( $split_mode ) && '' !== $split_mode ) {
 	exit( 2 );
 }
 
+/** Resolve the fixture protocol only from matching retained attempt/snapshot facts. */
+function db_square_race_protocol( $attempt, $snapshot ) {
+	if ( ! is_array( $attempt ) || ! is_array( $snapshot ) || empty( $snapshot['payload']['order'] ) || ! is_array( $snapshot['payload']['order'] ) ) {
+		return new WP_Error( 'integration_order_protocol', 'Synthetic Order protocol facts missing.' );
+	}
+	$metadata = DoughBoss_Payment_Attempts::metadata( $attempt );
+	$context = isset( $attempt['context'] ) ? $attempt['context'] : '';
+	$expected = 'approved_preorder' === $context ? 'square-orders-v2-pickup' : ( 'web' === $context ? 'square-orders-v1' : '' );
+	$protocol = isset( $snapshot['payload']['order']['square_orders_protocol'] ) ? $snapshot['payload']['order']['square_orders_protocol'] : 'square-orders-v1';
+	if ( '' === $expected || $expected !== $protocol || ! isset( $metadata['orders_protocol'], $metadata['orders_snapshot_hash'], $snapshot['payload_hash'] )
+		|| $expected !== $metadata['orders_protocol'] || ! is_string( $metadata['orders_snapshot_hash'] ) || ! is_string( $snapshot['payload_hash'] )
+		|| ! hash_equals( $snapshot['payload_hash'], $metadata['orders_snapshot_hash'] ) ) {
+		return new WP_Error( 'integration_order_protocol', 'Synthetic Order protocol or snapshot linkage mismatch.' );
+	}
+	return $expected;
+}
+
 /** Stop a real PHP process only after asserting the committed crash boundary. */
 function db_square_race_crash( $stage, $attempt_id ) {
 	if ( $stage !== getenv( 'DOUGHBOSS_SQUARE_CRASH_STAGE' ) || '1' === getenv( 'DOUGHBOSS_SQUARE_CRASH_REPLAY' ) ) { return; }
 	$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
 	$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
+	$snapshot = is_array( $attempt ) ? DoughBoss_Checkout_Snapshots::find( $attempt['checkout_key'] ) : null;
+	$protocol = db_square_race_protocol( $attempt, $snapshot );
 	$has_order = ! empty( $attempt['provider_order_reference'] );
 	$has_payment = ! empty( $attempt['provider_reference'] );
 	$expected_order = ! in_array( $stage, array( 'before_order_post', 'after_order_post' ), true );
 	$expected_payment = 'after_payment_bind' === $stage;
 	if ( ! is_array( $attempt ) || $has_order !== $expected_order || $has_payment !== $expected_payment
 		|| ( $expected_payment ? 'succeeded' : 'dispatching' ) !== $attempt['status']
-		|| null !== $attempt['verified_at'] || 'square-orders-v1' !== ( isset( $metadata['orders_protocol'] ) ? $metadata['orders_protocol'] : '' ) ) {
+		|| null !== $attempt['verified_at'] || is_wp_error( $protocol ) ) {
 		fwrite( STDERR, "Crash point does not match committed provider identities/state.\n" ); exit( 1 );
 	}
 	if ( 'approved_preorder' === $attempt['context'] ) {
@@ -130,6 +149,7 @@ function db_square_race_crash( $stage, $attempt_id ) {
 		$identity[ $key ] = $attempt[ $key ];
 	}
 	$identity['orders_snapshot_hash'] = $metadata['orders_snapshot_hash'];
+	$identity['orders_protocol'] = $protocol;
 	file_put_contents( getenv( 'DOUGHBOSS_RACE_LOG' ) . '.boundary.json', wp_json_encode( $identity ), LOCK_EX );
 	file_put_contents( getenv( 'DOUGHBOSS_RACE_LOG' ), 'CRASH:' . $stage . "\n", FILE_APPEND | LOCK_EX );
 	echo 'CRASH_POINT ' . $stage . "\n";
@@ -164,7 +184,9 @@ add_filter(
 				$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
 				$snapshot = $attempt ? DoughBoss_Checkout_Snapshots::find_for_irreversible_payment( $attempt['checkout_key'] ) : null;
 				$binding = $attempt ? DoughBoss_Square::shop_binding( $attempt['location_id'] ) : new WP_Error( 'missing' );
-				$projection = $snapshot && ! is_wp_error( $binding ) ? DoughBoss_Square_Orders::project( $snapshot['payload'], $binding, $attempt_id ) : new WP_Error( 'missing' );
+				$protocol = db_square_race_protocol( $attempt, $snapshot );
+				if ( is_wp_error( $protocol ) ) { return $protocol; }
+				$projection = $snapshot && ! is_wp_error( $binding ) ? DoughBoss_Square_Orders::project( $snapshot['payload'], $binding, $attempt_id, $protocol ) : new WP_Error( 'missing' );
 				if ( is_wp_error( $projection ) || $projection['order'] !== $body['order'] || 'dispatching' !== $attempt['status'] ) {
 					return new WP_Error( 'integration_order_projection', 'Synthetic Order projection or committed owner mismatch.' );
 				}
@@ -202,11 +224,16 @@ add_filter(
 				if ( ! is_array( $order ) ) { return new WP_Error( 'integration_order_missing', 'Synthetic Order missing.' ); }
 				$attempt_id = (int) substr( $order['reference_id'], strlen( 'db-attempt-' ) );
 				$attempt = DoughBoss_Payment_Attempts::find( $attempt_id );
+				$snapshot = is_array( $attempt ) ? DoughBoss_Checkout_Snapshots::find( $attempt['checkout_key'] ) : null;
+				$protocol = db_square_race_protocol( $attempt, $snapshot );
+				if ( is_wp_error( $protocol ) ) { return $protocol; }
 				db_square_race_crash( empty( $attempt['provider_reference'] ) ? 'after_order_bind' : 'after_payment_bind', $attempt_id );
 				$paid_file = $race_log . '.' . $id . '.paid.json';
 				$paid = is_file( $paid_file ) ? json_decode( file_get_contents( $paid_file ), true ) : null;
 				if ( is_array( $paid ) ) {
-					$order['state'] = 'COMPLETED';
+					// Captured payment is not collection: native pickup remains OPEN /
+					// PROPOSED with the original promise and no invented lifecycle timestamps.
+					$order['state'] = 'square-orders-v2-pickup' === $protocol ? 'OPEN' : 'COMPLETED';
 					$order['tenders'] = array( array( 'type' => 'CARD', 'payment_id' => $paid['id'], 'amount_money' => $paid['amount_money'] ) );
 					$order['net_amount_due_money'] = array( 'amount' => 0, 'currency' => $paid['amount_money']['currency'] );
 				}
@@ -386,19 +413,21 @@ if ( $crash_stage && '1' === getenv( 'DOUGHBOSS_SQUARE_CRASH_REPLAY' ) ) {
 	$checkout_key = 'approved_preorder' === $race_mode ? $approval['payment_checkout_key'] : hash( 'sha256', 'race-checkout-' . $case_seed );
 	$held = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
 	$stored = is_array( $held ) ? DoughBoss_Payment_Attempts::metadata( $held ) : array();
+	$protocol = db_square_race_protocol( $held, $snapshot );
 	$boundary_file = $race_log . '.boundary.json';
 	$identity = is_file( $boundary_file ) ? json_decode( file_get_contents( $boundary_file ), true ) : null;
 	if ( ! is_array( $identity ) || ! is_array( $held ) ) { fwrite( STDERR, "Crash identity evidence is missing.\n" ); exit( 1 ); }
 	foreach ( array( 'id', 'attempt_key', 'checkout_key', 'local_reference', 'amount_minor', 'currency', 'provider_order_reference', 'provider_reference' ) as $key ) {
 		if ( $identity[ $key ] !== $held[ $key ] ) { fwrite( STDERR, "Crash replay replaced an immutable identity.\n" ); exit( 1 ); }
 	}
-	if ( $identity['orders_snapshot_hash'] !== $stored['orders_snapshot_hash'] ) { fwrite( STDERR, "Crash replay changed snapshot linkage.\n" ); exit( 1 ); }
+	if ( $identity['orders_snapshot_hash'] !== $stored['orders_snapshot_hash'] || is_wp_error( $protocol )
+		|| ! isset( $identity['orders_protocol'] ) || $identity['orders_protocol'] !== $protocol ) { fwrite( STDERR, "Crash replay changed snapshot or protocol linkage.\n" ); exit( 1 ); }
 	$has_order = ! empty( $held['provider_order_reference'] );
 	$has_payment = ! empty( $held['provider_reference'] );
 	$expected_order = ! in_array( $crash_stage, array( 'before_order_post', 'after_order_post' ), true );
 	$recoverable = 'after_payment_bind' === $crash_stage;
 	if ( ! is_array( $held ) || $has_order !== $expected_order || $has_payment !== $recoverable
-		|| 'square-orders-v1' !== ( isset( $stored['orders_protocol'] ) ? $stored['orders_protocol'] : '' )
+		|| is_wp_error( $protocol )
 		|| ( $recoverable ? ( is_wp_error( $result ) || 'succeeded' !== $result['status'] ) : ( ! is_wp_error( $result ) || 'dispatching' !== $held['status'] ) ) ) {
 		fwrite( STDERR, "Crash replay changed identities or reclaimed an unresolved dispatch.\n" ); exit( 1 );
 	}

@@ -280,6 +280,7 @@ class DoughBoss_Activator {
 			payment_intent_id varchar(191) NULL DEFAULT NULL,
 			checkout_key char(64) NULL DEFAULT NULL,
 			source_request_id bigint(20) unsigned NULL DEFAULT NULL,
+			preorder_workflow_version tinyint(3) unsigned NOT NULL DEFAULT 0,
 			eta_minutes int(11) NOT NULL DEFAULT 0,
 			seen_at datetime NULL DEFAULT NULL,
 			acknowledged_at datetime NULL DEFAULT NULL,
@@ -1032,6 +1033,7 @@ class DoughBoss_Activator {
 			$orders,
 			array(
 				'source_request_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+				'preorder_workflow_version' => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => '0' ),
 			)
 		)
 			&& self::column_contract_ready(
@@ -1269,6 +1271,7 @@ class DoughBoss_Activator {
 		}
 
 		$columns = array(
+			'preorder_workflow_version' => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => '0' ),
 			'payment_intent_id' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
 			'checkout_key'      => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
 			'accounting_basis_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),

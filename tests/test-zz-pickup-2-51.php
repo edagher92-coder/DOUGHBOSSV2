@@ -99,6 +99,7 @@ class DB_PK_Cart extends DoughBoss_Cart {
  * In-memory $wpdb for the pickup classes.
  */
 class DB_PK_DB {
+	public $request_items = array();
 	public $prefix = 'wp_';
 	public $last_error = '';
 	public $insert_id = 0;
@@ -184,7 +185,7 @@ class DB_PK_DB {
 			}
 			return null;
 		}
-		if ( preg_match( "/FROM wp_doughboss_capacity_holds WHERE id = (\d+) FOR UPDATE/", $sql, $m ) ) {
+		if ( preg_match( "/FROM wp_doughboss_capacity_holds WHERE id = (\d+)(?: FOR UPDATE)?/", $sql, $m ) ) {
 			foreach ( $this->holds as $hold ) {
 				if ( (int) $hold['id'] === (int) $m[1] ) {
 					return $this->obj( $hold );
@@ -282,6 +283,7 @@ class DB_PK_DB {
 	}
 
 	public function get_results( $sql ) {
+		if ( false !== strpos( $sql, 'FROM wp_doughboss_order_items WHERE order_id' ) ) { return $this->request_items; }
 		$this->note( 'read', $sql );
 		if ( false !== strpos( $sql, 'FROM wp_doughboss_location_hours' ) ) {
 			return $this->hours;
@@ -1571,8 +1573,94 @@ db_test(
 	}
 );
 
+db_test( 'staff pickup uses durable workflow admission and the actual persisted cart demand', function () {
+	$db = db_pk_seed();
+	$db->request_items = array( array( 'id' => 1, 'item_id' => 11, 'name' => 'Synthetic pizza', 'size' => '', 'toppings' => '[]', 'quantity' => 7, 'unit_price' => 10.50, 'line_total' => 73.50 ) );
+	$source = (object) array( 'id' => 701, 'version' => 1, 'preorder_workflow_version' => 0, 'order_source' => 'preorder_request', 'status' => 'pending', 'payment_status' => 'unpaid', 'order_type' => 'pickup', 'location_id' => 7, 'voucher_code' => '', 'total' => 73.50 );
+	$now = db_pk_utc( '2026-10-15T23:30:00Z' );
+	assert_same( 'doughboss_preorder_pickup_ineligible', DoughBoss_Pickup::preorder_context( $source )->get_error_code(), 'legacy marker zero cannot acquire new workflow' );
+	$source->preorder_workflow_version = 1;
+	$cart = DoughBoss_Pickup::preorder_context( $source );
+	assert_same( 7, $cart['demand_units'], 'seven saved units, not public demand one' );
+	$options = DoughBoss_Pickup::preorder_options( $source, $now );
+	$public = DoughBoss_Pickup::options_for_location( (object) $db->locations[7], $now );
+	assert_same( 7, $options['demand_units'], 'staff response binds actual source demand' );
+	assert_same( 1, $options['request_version'], 'staff response binds request revision' );
+	assert_same( 64, strlen( $options['config_key'] ), 'current server config selector' );
+	assert_false( $options['days'][0]['slots'][0]['available'], 'large request does not fit this window' );
+	assert_true( $public['days'][0]['slots'][0]['available'], 'public demand-one view is not admission authority' );
+	assert_same( 0, count( $db->holds ), 'loading options never reserves capacity' );
+	$db->request_items[0]['quantity'] = 0;
+	assert_same( 'doughboss_preorder_cart_invalid', DoughBoss_Pickup::preorder_context( $source )->get_error_code(), 'invalid saved quantity fails closed' );
+	$db->request_items[0]['quantity'] = 2;
+	$db->request_items[0]['toppings'] = '{invalid';
+	assert_same( 'doughboss_preorder_cart_invalid', DoughBoss_Pickup::preorder_context( $source )->get_error_code(), 'invalid persisted toppings fail closed' );
+} );
+
+db_test( 'staff selected reservation derives immutable timing and actual short expiry without nested transactions', function () {
+	$db = db_pk_seed();
+	$db->request_items = array( array( 'id' => 1, 'item_id' => 11, 'name' => 'Synthetic pizza', 'size' => '', 'toppings' => '[]', 'quantity' => 2, 'unit_price' => 10.50, 'line_total' => 21.00 ) );
+	$source = (object) array( 'id' => 702, 'version' => 1, 'preorder_workflow_version' => 1, 'order_source' => 'preorder_request', 'status' => 'pending', 'payment_status' => 'unpaid', 'order_type' => 'pickup', 'location_id' => 7, 'voucher_code' => '', 'total' => 21.00 );
+	$now = db_pk_utc( '2026-10-15T23:30:00Z' );
+	$cart = DoughBoss_Pickup::preorder_context( $source );
+	$options = DoughBoss_Pickup::preorder_options( $source, $now );
+	$selection = array( 'pickup_mode' => 'scheduled', 'ready_from_utc' => $options['days'][0]['slots'][0]['ready_from_utc'], 'pickup_config_key' => $options['config_key'] );
+	$stale = $selection;
+	$stale['pickup_config_key'] = str_repeat( '0', 64 );
+	assert_same( 'doughboss_preorder_pickup_stale', DoughBoss_Pickup::prepare_preorder_slot( $source, $stale, $cart, $now )->get_error_code(), 'stale configuration refuses materialisation' );
+	$bad = $selection;
+	$bad['ready_from_utc'] = '2026-10-16T00:01:00Z';
+	assert_same( 'doughboss_slot_unavailable', DoughBoss_Pickup::prepare_preorder_slot( $source, $bad, $cart, $now )->get_error_code(), 'unavailable non-grid slot refused' );
+	$bad['ready_from_utc'] = 'tomorrow';
+	assert_same( 'doughboss_preorder_pickup_required', DoughBoss_Pickup::prepare_preorder_slot( $source, $bad, $cart, $now )->get_error_code(), 'invalid selector refused' );
+	$slot = DoughBoss_Pickup::prepare_preorder_slot( $source, $selection, $cart, $now );
+	assert_true( is_int( $slot ) && $slot > 0, 'supported advisory slot materialised' );
+	assert_same( 0, count( $db->holds ), 'advisory materialisation allocates no hold' );
+	$db->log = array();
+	$reserved = DoughBoss_Pickup::reserve_preorder_locked( $source, $selection, $cart, $slot, $now );
+	assert_false( is_wp_error( $reserved ), 'caller-owned reservation succeeds' );
+	assert_same( 1, count( $db->holds ), 'one reservation' );
+	assert_same( 2, $reserved['capacity_units'], 'actual saved demand is held' );
+	assert_same( '2026-10-16 00:00:00', $reserved['promised_ready_from_utc'], 'server from time' );
+	assert_same( '2026-10-16 00:15:00', $reserved['promised_ready_by_utc'], 'server by time' );
+	assert_same( '2026-10-15 23:40:00', $reserved['fire_at_utc'], 'server preparation time' );
+	assert_same( '2026-10-15 23:40:00', $reserved['payment_expires_at_utc'], 'actual ten-minute hold expiry, not twenty-four hours' );
+	assert_same( 'Australia/Sydney', $reserved['timezone_snapshot'], 'location timezone frozen' );
+	assert_false( isset( $reserved['hold_token'] ), 'internal source reservation exposes no browser token' );
+	assert_false( $db->sql_like( 'START TRANSACTION' ), 'does not start caller transaction' );
+	assert_false( $db->sql_like( 'COMMIT' ), 'does not commit caller transaction' );
+	assert_false( $db->sql_like( 'ROLLBACK' ), 'does not roll back caller transaction' );
+	$again = DoughBoss_Pickup::reserve_preorder_locked( $source, $selection, $cart, $slot, $now );
+	assert_same( $reserved['capacity_hold_id'], $again['capacity_hold_id'], 'same source reservation replays without duplicate' );
+	assert_same( 1, count( $db->holds ), 'replay cannot double capacity' );
+	foreach ( array( 'capacity_hold_id', 'capacity_units', 'pickup_mode', 'promised_ready_from_utc', 'promised_ready_by_utc', 'timezone_snapshot', 'fire_at_utc', 'planning_version' ) as $field ) { $source->{$field} = $reserved[$field]; }
+	$locked = DoughBoss_Capacity::lock_preorder_hold( $source, $cart, $now );
+	assert_false( is_wp_error( $locked ), 'internal source hold can transfer without browser credential' );
+	assert_same( $reserved['capacity_hold_id'], $locked['hold_id'], 'same source hold' );
+	$expired = DoughBoss_Capacity::lock_preorder_hold( $source, $cart, db_pk_utc( '2026-10-15T23:40:00Z' ) );
+	assert_same( 'doughboss_hold_expired', $expired->get_error_code(), 'expiry equality refuses source transfer rather than ordinary paid overflow' );
+	$other = clone $source;
+	$other->id = 703;
+	assert_same( 'doughboss_preorder_capacity_conflict', DoughBoss_Capacity::lock_preorder_hold( $other, $cart, $now )->get_error_code(), 'hold cannot be claimed by another source identity' );
+} );
+
+
 // Restore whatever $wpdb earlier suites installed so later suites are unaffected.
 $GLOBALS['wpdb'] = $GLOBALS['db_pk_previous_wpdb'];
+
+db_test( 'create_hold derives its salt-backed token only after locking and validating the durable slot', function () {
+	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-capacity.php' );
+	$start = strpos( $source, 'public static function create_hold_locked(' );
+	$end = strpos( $source, 'public static function lock_preorder_hold(', $start );
+	$body = substr( $source, $start, $end - $start );
+	$mutex = strpos( $body, 'SELECT * FROM {$slots_table} WHERE id = %d FOR UPDATE' );
+	$validated = strpos( $body, '$slot_start <= $now' );
+	$token = strpos( $body, 'self::hold_token(' );
+	$idempotency_read = strpos( $body, 'SELECT * FROM {$holds_table} WHERE idempotency_key = %s' );
+	assert_true( false !== $mutex && false !== $validated && false !== $token && false !== $idempotency_read, 'the mutex, validation, token and first ordinary hold read are present' );
+	assert_true( $mutex < $validated && $validated < $token, 'wp_salt may read options: token derivation must follow the slot mutex and validation, not establish an earlier repeatable-read snapshot' );
+	assert_true( $token < $idempotency_read, 'the token remains available for the existing idempotency replay and hold insert paths' );
+} );
 
 db_test( 'create_hold never takes a gap lock that holds on other slots can collide with (InnoDB deadlock found on real MariaDB)', function () {
 	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-capacity.php' );

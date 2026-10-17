@@ -666,6 +666,35 @@ db_test( 'WP-B order creation gates capacity on payment or an explicit unpaid al
 	assert_same( array( 'paid' => true, 'prep_minutes' => 0, 'slot_minutes' => 15 ), $options, 'lock options default safely without a shop row' );
 } );
 
+db_test( 'staff-selected pickup admission rejects public marker and hold spoofing before cart or storage work', function () {
+	$controller = ( new ReflectionClass( 'DoughBoss_REST_Controller' ) )->newInstanceWithoutConstructor();
+	foreach ( array( 'preorder_workflow_version' => 1, 'capacity_hold_id' => 10, 'capacity_hold_token' => str_repeat( 'a', 64 ), 'pickup_mode' => 'scheduled', 'ready_from_utc' => '2026-10-18T00:00:00Z' ) as $field => $value ) {
+		$error = $controller->preorder_request( new WP_REST_Request( array( $field => $value ) ) );
+		assert_same( 'doughboss_preorder_marker_forbidden', is_wp_error( $error ) ? $error->get_error_code() : '', 'public request cannot supply ' . $field );
+	}
+} );
+
+db_test( 'new native approval snapshots bind source promise and immutable preparation, legacy snapshots are not upgraded', function () {
+	require_once dirname( __DIR__ ) . '/includes/class-doughboss-preorder-approval.php';
+	$method = new ReflectionMethod( 'DoughBoss_Preorder_Approval', 'pickup_snapshot_matches_request' );
+	$method->setAccessible( true );
+	$source = (object) array( 'preorder_workflow_version' => 1, 'capacity_hold_id' => 17, 'pickup_mode' => 'scheduled', 'promised_ready_from_utc' => '2026-10-18 02:00:00', 'promised_ready_by_utc' => '2026-10-18 02:15:00', 'timezone_snapshot' => 'Australia/Sydney', 'fire_at_utc' => '2026-10-18 01:40:00' );
+	$snapshot = array( 'square_orders_protocol' => 'square-orders-v2-pickup', 'pickup_mode' => 'scheduled', 'pickup_ready_from_utc' => '2026-10-18 02:00:00', 'pickup_ready_by_utc' => '2026-10-18 02:15:00', 'pickup_timezone' => 'Australia/Sydney', 'square_pickup_prep_minutes' => 20 );
+	assert_true( $method->invoke( null, $source, $snapshot ), 'exact server-derived new timed snapshot matches' );
+	foreach ( array( 'pickup_mode' => 'asap', 'pickup_ready_from_utc' => '2026-10-18 02:15:00', 'pickup_ready_by_utc' => '2026-10-18 02:30:00', 'pickup_timezone' => 'UTC', 'square_pickup_prep_minutes' => 21, 'square_orders_protocol' => 'square-orders-v1' ) as $field => $value ) {
+		$changed = $snapshot;
+		$changed[$field] = $value;
+		assert_false( $method->invoke( null, $source, $changed ), 'snapshot drift is denied for ' . $field );
+	}
+	$legacy = clone $source;
+	$legacy->preorder_workflow_version = 0;
+	assert_false( $method->invoke( null, $legacy, $snapshot ), 'a historical request cannot be promoted by timed-looking fields' );
+	$unchanged = array( 'square_orders_protocol' => 'square-orders-v1' );
+	assert_false( $method->invoke( null, $source, $unchanged ), 'saved v1 shape remains unsupported rather than filling new timing' );
+	assert_same( array( 'square_orders_protocol' => 'square-orders-v1' ), $unchanged, 'validation preserves old snapshot bytes/shape' );
+} );
+
+
 db_test( 'Order::create takes the settings-row lock before the gap-locking replay lookups (InnoDB deadlock found on real MariaDB)', function () {
 	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-order.php' );
 	$start  = strpos( $source, 'public static function create( array $data, array $lines )' );

@@ -18,6 +18,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Applies pending schema/data migrations in order.
  */
 class DoughBoss_Migrations {
+	/** Additive workflow marker only; existing requests remain version zero. */
+	private static function upgrade_to_1_31_0() {
+		if ( ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::preorder_approval_storage_ready() ) {
+			throw new RuntimeException( 'Staff-selected pickup workflow storage is incomplete or not using InnoDB.' );
+		}
+	}
+
 	/**
 	 * Pickup scheduling (2.51): additive location/order columns. Capacity was
 	 * never live before 2.51, so the old default of 4 orders per slot was never
@@ -126,6 +133,7 @@ class DoughBoss_Migrations {
 				'1.28.0' => 'upgrade_to_1_28_0',
 				'1.29.0' => 'upgrade_to_1_29_0',
 				'1.30.0' => 'upgrade_to_1_30_0',
+				'1.31.0' => 'upgrade_to_1_31_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {

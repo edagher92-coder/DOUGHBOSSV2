@@ -343,9 +343,9 @@ class DoughBoss_Pickup {
 	 * @param DateTimeImmutable $now    UTC clock.
 	 * @return array
 	 */
-	public static function compose_options( array $config, array $usage, DateTimeImmutable $now ) {
+	public static function compose_options( array $config, array $usage, DateTimeImmutable $now, $demand = 1 ) {
 		$zone    = new DateTimeZone( (string) $config['timezone'] );
-		$windows = DoughBoss_Capacity::windows( $config, 1, $usage, $now );
+		$windows = DoughBoss_Capacity::windows( $config, $demand, $usage, $now );
 		$has_hours = false;
 		foreach ( (array) $config['hours'] as $ranges ) {
 			if ( ! empty( $ranges ) ) {
@@ -444,6 +444,114 @@ class DoughBoss_Pickup {
 	 * @param WP_REST_Request $request Request.
 	 * @return int
 	 */
+	/** Server-owned persisted request context; old requests cannot opt in. */
+	public static function preorder_context( $order, $locking = false ) {
+		global $wpdb;
+		if ( ! $order || 1 !== (int) ( isset( $order->preorder_workflow_version ) ? $order->preorder_workflow_version : 0 )
+			|| 'preorder_request' !== $order->order_source || 'pending' !== $order->status || 'unpaid' !== $order->payment_status || 'pickup' !== $order->order_type ) {
+			return new WP_Error( 'doughboss_preorder_pickup_ineligible', __( 'This request does not support staff-selected pickup.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$table = $wpdb->prefix . 'doughboss_order_items';
+		$lines = (array) $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE order_id = %d ORDER BY id ASC" . ( $locking ? ' FOR UPDATE' : '' ), (int) $order->id ), ARRAY_A );
+		foreach ( $lines as &$line ) {
+			$line['toppings'] = ! empty( $line['toppings'] ) ? json_decode( $line['toppings'], true ) : array();
+			if ( ! is_array( $line['toppings'] ) ) { return new WP_Error( 'doughboss_preorder_cart_invalid', __( 'This request cart requires staff review.', 'doughboss' ), array( 'status' => 409 ) ); }
+		}
+		unset( $line );
+		$context = array( 'location_id' => (int) $order->location_id, 'order_type' => 'pickup', 'voucher' => (string) $order->voucher_code, 'total' => $order->total );
+		$demand = DoughBoss_Capacity::demand_units( $lines );
+		$hash = DoughBoss_Capacity::cart_hash( $lines, $context );
+		if ( ! $demand || ! $hash ) { return new WP_Error( 'doughboss_preorder_cart_invalid', __( 'This request cart requires staff review.', 'doughboss' ), array( 'status' => 409 ) ); }
+		return array( 'lines' => $lines, 'context' => $context, 'demand_units' => $demand, 'cart_hash' => $hash );
+	}
+
+	public static function preorder_options( $order, DateTimeImmutable $now ) {
+		$cart = self::preorder_context( $order );
+		if ( is_wp_error( $cart ) ) { return $cart; }
+		$options = self::options_for_location( DoughBoss_Locations::get( (int) $order->location_id ), $now, $cart['demand_units'] );
+		$config = DoughBoss_Locations::capacity_live_config( (int) $order->location_id );
+		$options['config_key'] = $config ? hash( 'sha256', wp_json_encode( $config ) ) : '';
+		$options['request_version'] = (int) $order->version;
+		$options['demand_units'] = $cart['demand_units'];
+		return $options;
+	}
+
+	/** Caller owns transaction. Configuration -> slot -> hold precede source locks. */
+	public static function prepare_preorder_slot( $order, array $selection, array $cart, DateTimeImmutable $now ) {
+		$candidate = self::preorder_candidate( $order, $selection, $cart, $now );
+		if ( is_wp_error( $candidate ) ) { return $candidate; }
+		return DoughBoss_Capacity::materialise_slot( $candidate['config'], $candidate['window'], $now );
+	}
+
+	private static function preorder_candidate( $order, array $selection, array $cart, DateTimeImmutable $now ) {
+		$mode = isset( $selection['pickup_mode'] ) ? (string) $selection['pickup_mode'] : '';
+		$from = isset( $selection['ready_from_utc'] ) ? (string) $selection['ready_from_utc'] : '';
+		$key = isset( $selection['pickup_config_key'] ) ? (string) $selection['pickup_config_key'] : '';
+		if ( ! in_array( $mode, array( 'asap', 'scheduled' ), true ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/D', $from ) || ! preg_match( '/^[a-f0-9]{64}$/D', $key ) ) {
+			return new WP_Error( 'doughboss_preorder_pickup_required', __( 'Choose an available pickup time after confirming it with the customer.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$loc = DoughBoss_Locations::get( (int) $order->location_id );
+		$config = DoughBoss_Locations::capacity_live_config( (int) $order->location_id );
+		if ( 'live' !== self::mode_for( $loc ) || ! empty( $loc->ordering_paused ) || ! $config || ! hash_equals( $key, hash( 'sha256', wp_json_encode( $config ) ) ) ) {
+			return new WP_Error( 'doughboss_preorder_pickup_stale', __( 'Pickup settings changed. Refresh available times and confirm the selection again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		$usage = DoughBoss_Capacity::usage_for_location( (int) $order->location_id, $now->format( 'Y-m-d H:i:s' ), $now->modify( '+' . ( (int) $config['horizon_days'] + 1 ) . ' days' )->format( 'Y-m-d H:i:s' ), $now );
+		$windows = DoughBoss_Capacity::windows( $config, $cart['demand_units'], $usage, $now );
+		$window = null;
+		foreach ( $windows as $candidate ) {
+			if ( $from === $candidate['ready_from_utc'] && 'available' === $candidate['availability'] ) { $window = $candidate; break; }
+		}
+		$asap = self::asap_from_windows( $windows, self::shop_open_now( $config, $now ), $now, new DateTimeZone( $config['timezone'] ) );
+		if ( ! $window || ( 'asap' === $mode && ( ! $asap || ! isset( $asap['ready_from_utc'] ) || $from !== $asap['ready_from_utc'] ) ) ) {
+			return new WP_Error( 'doughboss_slot_unavailable', __( 'That pickup time is no longer available for this request.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		return array( 'config' => $config, 'window' => $window );
+	}
+
+	public static function reserve_preorder_locked( $order, array $selection, array $cart, $advisory_slot_id, DateTimeImmutable $now ) {
+		global $wpdb;
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		$loc = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$locations} WHERE id = %d FOR UPDATE", (int) $order->location_id ) );
+		foreach ( array( 'doughboss_location_hours', 'doughboss_schedule_exceptions' ) as $suffix ) {
+			$table = $wpdb->prefix . $suffix;
+			$wpdb->get_results( $wpdb->prepare( "SELECT id FROM {$table} WHERE location_id = %d AND order_type = 'pickup' FOR UPDATE", (int) $order->location_id ) );
+		}
+		$slots = $wpdb->prefix . 'doughboss_capacity_slots';
+		$mutex = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$slots} WHERE id = %d FOR UPDATE", absint( $advisory_slot_id ) ) );
+		if ( ! $mutex || (int) $mutex->location_id !== (int) $order->location_id ) {
+			return new WP_Error( 'doughboss_slot_unavailable', __( 'That pickup time is no longer available.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		// First consistent read occurs only after the slot mutex: concurrent public
+		// holds are included by the existing capacity admission query in this transaction.
+		$candidate = self::preorder_candidate( $order, $selection, $cart, $now );
+		if ( is_wp_error( $candidate ) ) { return $candidate; }
+		$config = $candidate['config'];
+		$window = $candidate['window'];
+		$mode = (string) $selection['pickup_mode'];
+		$slot = DoughBoss_Capacity::materialise_slot( $config, $window, $now );
+		if ( is_wp_error( $slot ) ) { return $slot; }
+		$context = $cart['context'];
+		$context['hold_minutes'] = isset( $config['hold_minutes'] ) ? (int) $config['hold_minutes'] : 10;
+		$hold = DoughBoss_Capacity::create_hold_locked( $slot, $cart['lines'], $context, self::preorder_hold_key( $order ), $now );
+		if ( is_wp_error( $hold ) ) { return $hold; }
+		$from_mysql = self::iso_to_mysql( $window['ready_from_utc'] );
+		return array(
+			'capacity_hold_id' => (int) $hold['hold_id'], 'capacity_units' => (int) $hold['capacity_units'],
+			'pickup_mode' => $mode, 'promised_ready_from_utc' => $from_mysql,
+			'promised_ready_by_utc' => self::iso_to_mysql( $window['ready_by_utc'] ),
+			'timezone_snapshot' => (string) $config['timezone'],
+			'fire_at_utc' => gmdate( 'Y-m-d H:i:s', strtotime( $from_mysql . ' UTC' ) - ( (int) $config['prep_minutes'] * 60 ) ),
+			'planning_version' => (int) $config['planning_version'],
+			'payment_expires_at_utc' => self::iso_to_mysql( $hold['expires_at_utc'] ),
+			'cart_hash' => $cart['cart_hash'],
+		);
+	}
+
+	public static function preorder_hold_key( $order ) {
+		return 'preorder-source-' . hash( 'sha256', (string) (int) $order->id );
+	}
+
+
 	private static function request_location_id( $request ) {
 		$id = absint( $request->get_param( 'location_id' ) );
 		if ( ! $id ) {
@@ -475,7 +583,7 @@ class DoughBoss_Pickup {
 	 * @param DateTimeImmutable $now Clock.
 	 * @return array
 	 */
-	public static function options_for_location( $loc, DateTimeImmutable $now ) {
+	public static function options_for_location( $loc, DateTimeImmutable $now, $demand = 1 ) {
 		$mode   = self::mode_for( $loc );
 		$paused = $loc && ! empty( $loc->ordering_paused );
 		if ( 'live' !== $mode || $paused ) {
@@ -488,7 +596,7 @@ class DoughBoss_Pickup {
 		$from  = $now->format( 'Y-m-d H:i:s' );
 		$to    = $now->modify( '+' . ( (int) $config['horizon_days'] + 1 ) . ' days' )->format( 'Y-m-d H:i:s' );
 		$usage = DoughBoss_Capacity::usage_for_location( (int) $loc->id, $from, $to, $now );
-		return self::compose_options( $config, $usage, $now );
+		return self::compose_options( $config, $usage, $now, $demand );
 	}
 
 	/**

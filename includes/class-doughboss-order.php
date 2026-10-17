@@ -701,6 +701,9 @@ class DoughBoss_Order {
 		$payment_intent_id = '' === $payment_intent_id ? null : $payment_intent_id;
 		$is_preorder_request = isset( $data['order_source'] ) && 'preorder_request' === sanitize_key( $data['order_source'] );
 		$source_request_id   = isset( $data['source_request_id'] ) ? absint( $data['source_request_id'] ) : 0;
+		if ( array_key_exists( 'preorder_workflow_version', $data ) ) {
+			return new WP_Error( 'doughboss_preorder_marker_forbidden', __( 'The request workflow is assigned only by the server.', 'doughboss' ), array( 'status' => 400 ) );
+		}
 		if ( $is_preorder_request ) {
 			$payment_status = isset( $data['payment_status'] ) ? sanitize_key( $data['payment_status'] ) : 'unpaid';
 			$payment_method = isset( $data['payment_method'] ) ? sanitize_text_field( $data['payment_method'] ) : '';
@@ -876,7 +879,14 @@ class DoughBoss_Order {
 			return new WP_Error( 'doughboss_payment_state_unavailable', __( 'The saved pickup promise could not be verified. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
 		}
 		$capacity_lost = '';
-		if ( ! empty( $data['capacity_hold_token'] ) ) {
+		if ( $source_request_id ) {
+			if ( ! empty( $data['capacity_hold_token'] ) ) {
+				$wpdb->query( 'ROLLBACK' );
+				return new WP_Error( 'doughboss_paid_reconciliation_required', __( 'Approved requests cannot use browser reservations. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+			$capacity = DoughBoss_Preorder_Approval::lock_source_capacity_for_payment( $source_request_id, $checkout_key, $lines, $data );
+			if ( is_wp_error( $capacity ) ) { $wpdb->query( 'ROLLBACK' ); return $capacity; }
+		} elseif ( ! empty( $data['capacity_hold_token'] ) ) {
 			$paid_order = 'paid' === ( isset( $data['payment_status'] ) ? $data['payment_status'] : 'unpaid' );
 			if ( ! $paid_order && empty( $data['capacity_unpaid_allowed'] ) ) {
 				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
@@ -953,6 +963,7 @@ class DoughBoss_Order {
 					'table_session_id' => isset( $data['table_session_id'] ) ? (int) $data['table_session_id'] : 0,
 					'order_source'  => isset( $data['order_source'] ) ? sanitize_key( $data['order_source'] ) : 'web',
 					'source_request_id' => $source_request_id ? $source_request_id : null,
+					'preorder_workflow_version' => $is_preorder_request && 'required' === (string) $policy['mode'] ? 1 : 0,
 					'customer_name' => $data['customer_name'],
 					'customer_email'=> $data['customer_email'],
 					'customer_phone'=> $data['customer_phone'],
@@ -980,7 +991,7 @@ class DoughBoss_Order {
 					'created_at'    => $now,
 					'updated_at'    => $now,
 			);
-			$row_formats = array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' );
+			$row_formats = array( '%s', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' );
 			$row = array_replace( $row, $native_timing );
 			list( $row, $row_formats ) = self::with_pickup_columns( $row, $row_formats, $pickup_mode, $capacity_overflow );
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
@@ -1261,6 +1272,7 @@ class DoughBoss_Order {
 			'table_id'       => isset( $order->table_id ) ? (int) $order->table_id : 0,
 			'table_label'    => isset( $order->table_label ) ? $order->table_label : '',
 			'order_source'   => isset( $order->order_source ) ? $order->order_source : 'web',
+			'preorder_workflow_version' => isset( $order->preorder_workflow_version ) ? (int) $order->preorder_workflow_version : 0,
 			'customer_name'  => $order->customer_name,
 			'customer_phone' => $order->customer_phone,
 			'address'        => $order->address,

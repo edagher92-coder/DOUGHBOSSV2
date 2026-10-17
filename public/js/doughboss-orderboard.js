@@ -403,8 +403,9 @@
 		var cardEl = preorderPanel && preorderPanel.querySelector('[data-preorder-id="' + key + '"]');
 		if (cardEl) {
 			cardEl.setAttribute('aria-busy', busy ? 'true' : 'false');
-			var buttons = cardEl.querySelectorAll('button');
-			for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = !!busy || offline; }
+			var pickup = cardEl.preorderPickup;
+			if (busy && pickup && pickup.loading) { pickup.invalidate(); }
+			updatePreorderControls(cardEl);
 		}
 		return true;
 	}
@@ -738,14 +739,67 @@
 		feedback.hidden = !message;
 	}
 
-	function decidePreorder(o, decision, contactConfirmed) {
-		if (offline || !setPreorderBusy(o, 'preorder-' + decision, true)) { return; }
-		api('/admin/preorder/' + o.id + '/decision', 'POST', {
+	function normalizePreorderPickupOptions(data, expectedVersion) {
+		function invalid() { throw new Error('Pickup options changed or are invalid. Confirm contact again to reload available times.'); }
+		if (!data || typeof data !== 'object' || Array.isArray(data) ||
+			!Number.isInteger(expectedVersion) || expectedVersion < 1 ||
+			!Number.isInteger(data.request_version) || data.request_version !== expectedVersion ||
+			typeof data.config_key !== 'string' || !data.config_key.trim() ||
+			typeof data.timezone !== 'string' || !data.timezone.trim() ||
+			!Number.isInteger(data.hold_minutes) || data.hold_minutes < 1 || data.hold_minutes > 30 || !Array.isArray(data.days)) { invalid(); }
+		var choices = [];
+		var seen = Object.create(null);
+		data.days.forEach(function (day) {
+			if (!day || typeof day.label !== 'string' || !day.label.trim() || !Array.isArray(day.slots)) { invalid(); }
+			day.slots.forEach(function (slot) {
+				if (!slot || typeof slot.label !== 'string' || !slot.label.trim() || typeof slot.available !== 'boolean' ||
+					typeof slot.ready_from_utc !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(slot.ready_from_utc)) { invalid(); }
+				var parsed = new Date(slot.ready_from_utc);
+				if (!isFinite(parsed.getTime()) || parsed.toISOString().replace('.000Z', 'Z') !== slot.ready_from_utc || seen[slot.ready_from_utc]) { invalid(); }
+				seen[slot.ready_from_utc] = true;
+				if (slot.available) { choices.push({ label: day.label + ' — ' + slot.label, ready_from_utc: slot.ready_from_utc, pickup_mode: 'scheduled' }); }
+			});
+		});
+		return { config_key: data.config_key, timezone: data.timezone, hold_minutes: data.hold_minutes, choices: choices };
+	}
+
+	function preorderCanAccept(cardEl) {
+		var pickup = cardEl && cardEl.preorderPickup;
+		return !!(cardEl && cardEl.isConnected && preorderPanel && preorderPanel.contains(cardEl) && pickup &&
+			!offline && !inFlight[String(pickup.order.id)] && pickup.order.pickup_selection_available === true &&
+			pickup.order.decision_available !== false && (pickup.order.approval_state || 'pending') === 'pending' &&
+			pickup.contact.checked && !pickup.loading && pickup.options && pickup.options.config_key && pickup.selection &&
+			pickup.select.value === pickup.selection.ready_from_utc && pickup.options.choices.indexOf(pickup.selection) !== -1);
+	}
+
+	function updatePreorderControls(cardEl) {
+		var busy = offline || !!inFlight[cardEl.getAttribute('data-preorder-id')];
+		var buttons = cardEl.querySelectorAll('button');
+		for (var i = 0; i < buttons.length; i++) {
+			buttons[i].disabled = busy || (buttons[i].classList.contains('db-preorder-accept') && !preorderCanAccept(cardEl));
+		}
+		var pickup = cardEl.preorderPickup;
+		if (pickup) {
+			pickup.contact.disabled = busy;
+			pickup.select.disabled = busy || !pickup.contact.checked || pickup.loading || !pickup.options || !pickup.options.choices.length;
+		}
+	}
+
+	function decidePreorder(o, decision, contactConfirmed, cardEl) {
+		if (decision === 'accept' && !preorderCanAccept(cardEl)) { return; }
+		var body = {
 			decision: decision,
 			contact_confirmed: !!contactConfirmed,
 			expected_version: o.version,
 			event_key: eventKey(o, 'preorder-' + decision)
-		}).then(function (res) {
+		};
+		if (decision === 'accept') {
+			body.pickup_mode = cardEl.preorderPickup.selection.pickup_mode;
+			body.ready_from_utc = cardEl.preorderPickup.selection.ready_from_utc;
+			body.pickup_config_key = cardEl.preorderPickup.options.config_key;
+		}
+		if (offline || !setPreorderBusy(o, 'preorder-' + decision, true)) { return; }
+		return api('/admin/preorder/' + o.id + '/decision', 'POST', body).then(function (res) {
 			var message = res && res.message ? res.message : 'Pre-order request updated.';
 			var customerStatus = res && res.notification ? res.notification.customer_status : '';
 			var deliveryWriteFailed = res && res.notification && res.notification.warning === 'delivery_status_not_persisted';
@@ -802,13 +856,13 @@
 		var approvalState = o.approval_state || 'pending';
 		var approvalPending = approvalState === 'pending';
 		var decisionAvailable = approvalPending && o.decision_available !== false;
+		var pickupAvailable = decisionAvailable && o.pickup_selection_available === true;
 		var approverName = String(o.approver_name || 'the named approver');
 		var approvalLabel = approvalPending
 			? 'Pre-order request — awaiting ' + approverName + ' review'
 			: (approvalState === 'payment_held'
-				? 'Stripe payment needs staff review — not in kitchen'
-				: (approvalState === 'payment_active' ? 'Stripe payment started — not in kitchen' : 'Approved for payment — not in kitchen'));
-		var timingConfirmed = false;
+				? 'Payment needs staff review — not in kitchen'
+				: (approvalState === 'payment_active' ? 'Payment started — not in kitchen' : 'Approved for payment — not in kitchen'));
 		var rejectOpen = false;
 		var cardEl = el('article', {
 			class: 'db-card db-card-pending db-preorder-card',
@@ -817,16 +871,65 @@
 		}, []);
 		var acceptBtn = el('button', {
 			class: 'button button-primary db-preorder-accept', type: 'button',
-			text: 'Approve for Stripe payment', disabled: 'disabled'
+			text: 'Approve for payment', disabled: 'disabled'
 		}, []);
 		var rejectBtn = el('button', { class: 'button db-preorder-reject', type: 'button', text: 'Reject request' }, []);
 		var rejectConfirm = el('div', { class: 'db-card-actions-row', hidden: 'hidden' }, []);
 		var contactCheck = el('input', { type: 'checkbox' }, []);
+		var pickupSelectId = 'db-preorder-pickup-' + String(o.id);
+		var pickupStatus = el('div', { id: pickupSelectId + '-status', role: 'status', 'aria-live': 'polite', text: 'Confirm the customer call to load available pickup times.' }, []);
+		var pickupSelect = el('select', { id: pickupSelectId, class: 'db-preorder-pickup-select', 'aria-describedby': pickupSelectId + '-status', disabled: 'disabled' }, []);
+		pickupSelect.appendChild(el('option', { value: '', text: 'Choose an agreed pickup time' }, []));
+		var pickup = { order: o, contact: contactCheck, select: pickupSelect, generation: 0, options: null, selection: null, loading: false };
+		cardEl.preorderPickup = pickup;
+		pickup.invalidate = function () {
+			pickup.generation += 1;
+			pickup.options = null;
+			pickup.selection = null;
+			pickup.loading = false;
+			pickupSelect.textContent = '';
+			pickupSelect.appendChild(el('option', { value: '', text: 'Choose an agreed pickup time' }, []));
+			pickupSelect.value = '';
+			pickupStatus.textContent = 'Confirm the customer call again to load current pickup times.';
+			updatePreorderControls(cardEl);
+		};
 		contactCheck.addEventListener('change', function () {
-			timingConfirmed = !!contactCheck.checked;
-			acceptBtn.disabled = !timingConfirmed || offline;
+			pickup.invalidate();
+			if (!contactCheck.checked || !pickupAvailable || offline || inFlight[String(o.id)] || !cardEl.isConnected || !preorderPanel.contains(cardEl)) { return; }
+			var generation = pickup.generation;
+			pickup.loading = true;
+			pickupStatus.textContent = 'Loading current pickup times…';
+			updatePreorderControls(cardEl);
+			function isCurrent() {
+				return generation === pickup.generation && cardEl.isConnected && preorderPanel.contains(cardEl) && contactCheck.checked && !offline && !inFlight[String(o.id)];
+			}
+			api('/admin/preorder/' + o.id + '/pickup-options?expected_version=' + encodeURIComponent(o.version) + '&contact_confirmed=true', 'GET').then(function (data) {
+				if (!isCurrent()) { return; }
+				var options = normalizePreorderPickupOptions(data, o.version);
+				pickup.options = options;
+				options.choices.forEach(function (choice) {
+					pickupSelect.appendChild(el('option', { value: choice.ready_from_utc, text: choice.label }, []));
+				});
+				pickup.loading = false;
+				pickupStatus.textContent = options.choices.length
+					? 'Times shown in ' + options.timezone + '. Approval reserves capacity for up to ' + options.hold_minutes + ' minutes, capped at pickup time. The payment link uses the same deadline.'
+					: 'No pickup times are currently available for this request. Do not approve; confirm contact again later to refresh.';
+				updatePreorderControls(cardEl);
+			}).catch(function (error) {
+				if (!isCurrent()) { return; }
+				pickup.loading = false;
+				pickupStatus.textContent = error.message || 'Pickup times could not be loaded. Confirm contact again to retry.';
+				updatePreorderControls(cardEl);
+			});
 		});
-		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', timingConfirmed); });
+		pickupSelect.addEventListener('change', function () {
+			pickup.selection = null;
+			if (pickup.options && contactCheck.checked && !pickup.loading && !offline && !inFlight[String(o.id)]) {
+				pickup.selection = pickup.options.choices.filter(function (choice) { return choice.ready_from_utc === pickupSelect.value; })[0] || null;
+			}
+			updatePreorderControls(cardEl);
+		});
+		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', contactCheck.checked, cardEl); });
 		rejectBtn.addEventListener('click', function () {
 			rejectOpen = !rejectOpen;
 			rejectConfirm.hidden = !rejectOpen;
@@ -835,7 +938,7 @@
 		rejectConfirm.appendChild(el('span', { text: 'No payment has been taken. Reject this request?' }));
 		rejectConfirm.appendChild(el('button', {
 			class: 'button button-link-delete', type: 'button', text: 'Confirm reject',
-			onclick: function () { decidePreorder(o, 'reject', false, 0); }
+			onclick: function () { decidePreorder(o, 'reject', false); }
 		}, []));
 
 		cardEl.appendChild(el('div', { class: 'db-card-head' }, [
@@ -852,8 +955,8 @@
 		cardEl.appendChild(el('div', { class: 'db-card-meta' }, [
 			el('div', { class: 'db-card-exception', role: 'alert', text: decisionAvailable
 				? 'Unconfirmed and unpaid — call the customer before approving payment.'
-				: (approvalPending ? 'Unconfirmed and unpaid — awaiting the named payment approver.' : 'Payment may now be completed through the single approved Stripe link. Do not prepare this request yet.') }),
-			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid — kitchen release stays locked until Stripe is verified.' }),
+				: (approvalPending ? 'Unconfirmed and unpaid — awaiting the named payment approver.' : 'Payment may now be completed through the single approved payment link. Do not prepare this request yet.') }),
+			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid — kitchen release stays locked until payment is verified.' }),
 			el('div', { class: 'db-card-exception', text: 'POSPal, printer and kitchen notifications remain blocked. A separate paid order is released automatically only after server verification.' }),
 			el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) })
 		]));
@@ -867,12 +970,16 @@
 			]));
 		}
 		if (decisionAvailable) {
-			cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [
-				contactCheck,
-				' I called the customer and agreed pickup timing.'
-			]));
+			if (pickupAvailable) {
+				cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [contactCheck, ' I called the customer and agreed pickup timing.']));
+				cardEl.appendChild(el('label', { for: pickupSelectId, text: 'Agreed pickup time' }, []));
+				cardEl.appendChild(pickupSelect);
+				cardEl.appendChild(pickupStatus);
+			} else {
+				cardEl.appendChild(el('div', { role: 'status', text: 'This historical request cannot receive a new pickup approval. Rejection remains available.' }, []));
+			}
 			cardEl.appendChild(el('div', { class: 'db-card-actions' }, [
-				el('div', { class: 'db-card-actions-row' }, [acceptBtn, rejectBtn]),
+				el('div', { class: 'db-card-actions-row' }, pickupAvailable ? [acceptBtn, rejectBtn] : [rejectBtn]),
 				rejectConfirm
 			]));
 		}
@@ -888,7 +995,7 @@
 		}
 		preorderPanel.hidden = false;
 		preorderPanel.appendChild(el('h2', { id: 'db-preorder-review-title', text: 'Morning pre-order review (' + requests.length + ')' }));
-		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. The named approver calls first, then approves payment or rejects. Only verified Stripe payment creates a kitchen order.' }));
+		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. The named approver calls first, selects the agreed pickup time, then approves payment or rejects. Only verified payment creates a kitchen order.' }));
 		preorderPanel.appendChild(el('div', { class: 'db-preorder-feedback', role: 'status', hidden: 'hidden' }, []));
 		var list = el('div', { class: 'db-lanes db-preorder-list' }, requests.map(preorderCard));
 		preorderPanel.appendChild(list);
@@ -1254,13 +1361,11 @@
 			}
 		}
 		if (preorderPanel) {
-			var preorderButtons = preorderPanel.querySelectorAll('button');
-			for (var j = 0; j < preorderButtons.length; j++) {
-				var preorderCardEl = preorderButtons[j].closest('[data-preorder-id]');
-				var preorderBusy = preorderCardEl && inFlight[preorderCardEl.getAttribute('data-preorder-id')];
-				var contactCheck = preorderCardEl && preorderCardEl.querySelector('.db-preorder-contact-check input[type="checkbox"]');
-				preorderButtons[j].disabled = offline || !!preorderBusy ||
-					(preorderButtons[j].classList.contains('db-preorder-accept') && (!contactCheck || !contactCheck.checked));
+			var preorderCards = preorderPanel.querySelectorAll('[data-preorder-id]');
+			for (var j = 0; j < preorderCards.length; j++) {
+				var pickup = preorderCards[j].preorderPickup;
+				if (offline && pickup && (pickup.loading || pickup.options || pickup.selection)) { pickup.invalidate(); }
+				updatePreorderControls(preorderCards[j]);
 			}
 		}
 		if (retryBtn) { retryBtn.hidden = !offline; }

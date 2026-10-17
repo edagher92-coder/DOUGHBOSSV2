@@ -211,6 +211,24 @@ class DoughBoss_Capacity {
 	 */
 	public static function create_hold( $slot_id, array $lines, array $context, $idempotency_key, $now_utc = null ) {
 		global $wpdb;
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
+			return new WP_Error( 'doughboss_hold_storage', __( 'Capacity storage is unavailable.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		$result = self::create_hold_locked( $slot_id, $lines, $context, $idempotency_key, $now_utc );
+		if ( is_wp_error( $result ) ) {
+			$wpdb->query( 'ROLLBACK' );
+			return $result;
+		}
+		if ( false === $wpdb->query( 'COMMIT' ) ) {
+			$wpdb->query( 'ROLLBACK' );
+			return new WP_Error( 'doughboss_hold_storage', __( 'The pickup time could not be held. Please try again.', 'doughboss' ), array( 'status' => 503 ) );
+		}
+		return $result;
+	}
+
+	/** Reserve capacity inside the caller's transaction; never commits or rolls back. */
+	public static function create_hold_locked( $slot_id, array $lines, array $context, $idempotency_key, $now_utc = null ) {
+		global $wpdb;
 		$slot_id         = absint( $slot_id );
 		$idempotency_key = trim( (string) $idempotency_key );
 		$cart_hash       = self::cart_hash( $lines, $context );
@@ -226,13 +244,6 @@ class DoughBoss_Capacity {
 		$slots_table = $wpdb->prefix . 'doughboss_capacity_slots';
 		$holds_table = $wpdb->prefix . 'doughboss_capacity_holds';
 		$now_mysql   = $now->format( 'Y-m-d H:i:s' );
-		$raw_token   = self::hold_token( $slot_id, $cart_hash, $idempotency_key );
-		$token_hash  = hash( 'sha256', $raw_token );
-		$started     = false !== $wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		if ( ! $started ) {
-			return new WP_Error( 'doughboss_hold_storage', __( 'Capacity storage is unavailable.', 'doughboss' ), array( 'status' => 503 ) );
-		}
-
 		try {
 			// The durable slot row exists before holds and is the mutex even when the
 			// slot has zero existing holds. This avoids the empty-range phantom race.
@@ -250,6 +261,10 @@ class DoughBoss_Capacity {
 				throw new DoughBoss_Capacity_Exception( 'doughboss_slot_unavailable', __( 'That pickup time has passed.', 'doughboss' ), 409 );
 			}
 
+			// wp_salt() may issue ordinary option reads. Derive the token only after
+			// the slot mutex so it cannot establish an earlier repeatable-read snapshot.
+			$raw_token  = self::hold_token( $slot_id, $cart_hash, $idempotency_key );
+			$token_hash = hash( 'sha256', $raw_token );
 			// Lock order is always slot then idempotency row, preventing two retries
 			// for the same slot from deadlocking in opposite order.
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -272,7 +287,6 @@ class DoughBoss_Capacity {
 				if ( 'held' === $existing->status && (string) $existing->expires_at <= $now_mysql ) {
 					throw new DoughBoss_Capacity_Exception( 'doughboss_hold_expired', __( 'That capacity hold has expired.', 'doughboss' ), 409 );
 				}
-				$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 				return self::shape_hold( $existing, $raw_token, true );
 			}
 
@@ -315,13 +329,10 @@ class DoughBoss_Capacity {
 				throw new RuntimeException( 'Capacity hold insert failed.' );
 			}
 			$row['id'] = (int) $wpdb->insert_id;
-			$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			return self::shape_hold( (object) $row, $raw_token, false );
 		} catch ( DoughBoss_Capacity_Exception $e ) {
-			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			return new WP_Error( $e->get_error_code(), $e->getMessage(), array( 'status' => $e->get_status() ) );
 		} catch ( Throwable $e ) {
-			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			return new WP_Error( 'doughboss_hold_storage', __( 'The pickup time could not be held. Please try again.', 'doughboss' ), array( 'status' => 503 ) );
 		}
 	}
@@ -338,6 +349,33 @@ class DoughBoss_Capacity {
 	 * @param DateTimeImmutable|null $now_utc     Injected test clock.
 	 * @return array|WP_Error
 	 */
+	/** Internal source ownership, not a browser hold credential. Caller owns transaction. */
+	public static function lock_preorder_hold( $source, array $cart, $now_utc = null ) {
+		global $wpdb;
+		$id = $source && isset( $source->capacity_hold_id ) ? absint( $source->capacity_hold_id ) : 0;
+		$table = $wpdb->prefix . 'doughboss_capacity_holds';
+		$hold = $id ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) ) : null;
+		if ( ! $hold || ! hash_equals( DoughBoss_Pickup::preorder_hold_key( $source ), (string) $hold->idempotency_key ) || ! hash_equals( (string) $cart['cart_hash'], (string) $hold->cart_hash ) ) {
+			return new WP_Error( 'doughboss_preorder_capacity_conflict', __( 'The approved pickup reservation requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		// Reconstruct only inside this service and never return/store the raw token.
+		$token = self::hold_token( (int) $hold->slot_id, (string) $hold->cart_hash, (string) $hold->idempotency_key );
+		$result = self::lock_hold_for_order( $token, $cart['cart_hash'], (int) $source->location_id, $now_utc );
+		if ( is_wp_error( $result ) ) { return $result; }
+		if ( ! empty( $result['replayed_order_id'] ) || (int) $result['hold_id'] !== $id ) {
+			return new WP_Error( 'doughboss_preorder_capacity_conflict', __( 'The approved reservation is already allocated. Please contact the shop.', 'doughboss' ), array( 'status' => 409 ) );
+		}
+		foreach ( array( 'capacity_units', 'promised_ready_from_utc', 'promised_ready_by_utc', 'timezone_snapshot', 'planning_version' ) as $field ) {
+			if ( (string) $result[ $field ] !== (string) $source->{$field} ) {
+				return new WP_Error( 'doughboss_preorder_capacity_conflict', __( 'The approved pickup promise changed. Please contact the shop.', 'doughboss' ), array( 'status' => 409 ) );
+			}
+		}
+		$result['fire_at_utc'] = $source->fire_at_utc;
+		// expiry comes from the current locked hold, not the advisory pre-read.
+		return $result;
+	}
+
+
 	public static function lock_hold_for_order( $raw_token, $cart_hash, $location_id, $now_utc = null ) {
 		global $wpdb;
 		$raw_token  = trim( (string) $raw_token );
@@ -390,6 +428,7 @@ class DoughBoss_Capacity {
 		return array(
 			'hold_id'        => (int) $hold->id,
 			'capacity_units' => (int) $hold->capacity_units,
+			'expires_at_utc' => (string) $hold->expires_at,
 			'promised_ready_from_utc' => $ready_from->format( 'Y-m-d H:i:s' ),
 			'promised_ready_by_utc'   => $ready_by->format( 'Y-m-d H:i:s' ),
 			'timezone_snapshot'       => (string) $slot->timezone_snapshot,
