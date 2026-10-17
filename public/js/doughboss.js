@@ -1641,38 +1641,43 @@
 	// Use packaged responsive candidates only when they describe the selected
 	// original. Featured uploads, older responses and malformed data fall back.
 	function menuPhoto(item) {
-		var media = el('div', { class: 'db-card-img', style: 'background-image:url(' + item.image + ')' });
+		var media = el('div', { class: 'db-card-img' });
+		// Native lazy loading must also cover featured uploads and older API
+		// responses. CSS backgrounds cannot opt into native lazy loading.
+		var image = el('img', { loading: 'lazy', decoding: 'async', src: item.image, alt: String(item.name || '') });
+		function finish(sources) {
+			media.appendChild(el('picture', { class: 'db-menu-picture' }, (sources || []).concat([image])));
+			return media;
+		}
 		var data = item.image_responsive;
 		var prefixAt = typeof item.image === 'string' ? item.image.lastIndexOf('/public/images/') : -1;
 		if (!data || data.original !== item.image || prefixAt < 0
 			|| !Number.isInteger(data.width) || !Number.isInteger(data.height) || data.width < 1 || data.height < 1
-			|| !Array.isArray(data.sources) || !data.sources.length || data.sources.length > 2) { return media; }
+			|| !Array.isArray(data.sources) || !data.sources.length || data.sources.length > 2) { return finish(); }
 		var prefix = item.image.slice(0, prefixAt + '/public/images/'.length);
 		var sources = [];
 		var seen = Object.create(null);
 		for (var index = 0; index < data.sources.length; index += 1) {
 			var source = data.sources[index];
 			if (!source || ['image/avif', 'image/webp'].indexOf(source.type) === -1 || seen[source.type]
-				|| typeof source.srcset !== 'string' || !source.srcset) { return media; }
+				|| typeof source.srcset !== 'string' || !source.srcset) { return finish(); }
 			seen[source.type] = true;
 			var format = source.type.split('/')[1];
 			var lastWidth = 0;
 			var candidates = source.srcset.split(',');
 			for (var candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
 				var candidate = candidates[candidateIndex].trim().match(/^(\S+) ([1-9][0-9]*)w$/);
-				if (!candidate || candidate[1].indexOf(prefix) !== 0) { return media; }
+				if (!candidate || candidate[1].indexOf(prefix) !== 0) { return finish(); }
 				var file = candidate[1].slice(prefix.length).match(/^responsive\/[a-z0-9-]+-([1-9][0-9]*)\.(avif|webp)$/);
 				var width = Number(candidate[2]);
-				if (!file || file[2] !== format || Number(file[1]) !== width || width <= lastWidth || width > data.width) { return media; }
+				if (!file || file[2] !== format || Number(file[1]) !== width || width <= lastWidth || width > data.width) { return finish(); }
 				lastWidth = width;
 			}
 			sources.push(el('source', { type: source.type, srcset: source.srcset, sizes: 'auto, (max-width: 359px) 80px, (max-width: 640px) calc((100vw - 58px) / 2), 320px' }));
 		}
-		media.removeAttribute('style');
-		media.appendChild(el('picture', { class: 'db-menu-picture' }, sources.concat([
-			el('img', { src: item.image, alt: String(item.name || ''), width: data.width, height: data.height, loading: 'lazy', decoding: 'async' })
-		])));
-		return media;
+		image.setAttribute('width', data.width);
+		image.setAttribute('height', data.height);
+		return finish(sources);
 	}
 
 	function menuCard(item, orderingOpen, locationId, phoneOnly) {

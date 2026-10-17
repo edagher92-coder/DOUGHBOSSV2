@@ -196,6 +196,71 @@ function find(element, predicate) {
 
 const compactMenuCategory = extractFunction(storefront, 'compactMenuCategory');
 
+const menuPhoto = extractFunction(storefront, 'menuPhoto', { el: node });
+
+test('menu photos without responsive metadata use native lazy images, never eager backgrounds', () => {
+	for (const item of [
+		{ name: 'Synthetic uploaded photo', image: 'https://example.invalid/uploads/menu-photo.jpg' },
+		{ name: 'Synthetic packaged photo', image: 'https://example.invalid/plugin/public/images/menu/photo.webp' }
+	]) {
+		const media = menuPhoto(item);
+		assert.equal(media.className, 'db-card-img');
+		assert.equal(media.getAttribute('style'), null);
+		const picture = media.querySelector('picture');
+		assert.equal(picture.className, 'db-menu-picture', 'existing sizing and object-fit rules still apply');
+		assert.equal(picture.children.length, 1, 'one photo element, no duplicated fallback');
+		const image = picture.querySelector('img');
+		assert.equal(image.getAttribute('src'), item.image, 'retain the exact selected product photo');
+		assert.equal(image.getAttribute('alt'), item.name);
+		assert.equal(image.getAttribute('loading'), 'lazy');
+		assert.equal(image.getAttribute('decoding'), 'async');
+		assert.deepEqual(Object.keys(image.attributes).slice(0, 3), ['loading', 'decoding', 'src'], 'loading policy is set before the URL');
+	}
+});
+
+test('valid packaged menu photos retain responsive sources, dimensions and native lazy loading', () => {
+	const image = 'https://example.invalid/plugin/public/images/menu/real-v1/synthetic.jpg';
+	const sources = [
+		{ type: 'image/avif', srcset: 'https://example.invalid/plugin/public/images/responsive/synthetic-480.avif 480w, https://example.invalid/plugin/public/images/responsive/synthetic-960.avif 960w' },
+		{ type: 'image/webp', srcset: 'https://example.invalid/plugin/public/images/responsive/synthetic-480.webp 480w' }
+	];
+	const media = menuPhoto({ name: 'Synthetic photo', image, image_responsive: { original: image, width: 960, height: 720, sources } });
+	const picture = media.querySelector('picture');
+	assert.equal(picture.children.length, 3);
+	for (let index = 0; index < sources.length; index += 1) {
+		assert.equal(picture.children[index].tag, 'source');
+		assert.equal(picture.children[index].getAttribute('srcset'), sources[index].srcset);
+		assert.equal(picture.children[index].type, sources[index].type);
+	}
+	const photo = picture.querySelector('img');
+	assert.equal(photo.getAttribute('width'), '960');
+	assert.equal(photo.getAttribute('height'), '720');
+	assert.equal(photo.getAttribute('loading'), 'lazy');
+	assert.equal(photo.getAttribute('src'), image);
+	assert.equal(media.getAttribute('style'), null);
+});
+
+test('invalid responsive metadata falls back to one lazy original without partial sources', () => {
+	const image = 'https://example.invalid/plugin/public/images/menu/real-v1/synthetic.jpg';
+	const valid = { type: 'image/avif', srcset: 'https://example.invalid/plugin/public/images/responsive/synthetic-480.avif 480w' };
+	const invalidSources = [
+		[{ type: 'image/avif', srcset: 'https://foreign.invalid/responsive/synthetic-480.avif 480w' }],
+		[valid, valid],
+		[valid, { type: 'image/webp', srcset: 'https://example.invalid/plugin/public/images/responsive/synthetic-480.avif 480w' }],
+		[{ type: 'image/webp', srcset: 'https://example.invalid/plugin/public/images/responsive/synthetic-960.webp 480w' }],
+		[]
+	];
+	for (const sources of invalidSources) {
+		const media = menuPhoto({ name: 'Synthetic photo', image, image_responsive: { original: image, width: 960, height: 720, sources } });
+		const picture = media.querySelector('picture');
+		assert.equal(picture.children.length, 1, 'discard every partial responsive candidate');
+		assert.equal(picture.querySelector('source'), null);
+		assert.equal(picture.querySelector('img').getAttribute('src'), image);
+		assert.equal(picture.querySelector('img').getAttribute('loading'), 'lazy');
+		assert.equal(media.getAttribute('style'), null);
+	}
+});
+
 function menuCardFactory() {
 	const context = {
 		I18N: {}, el: node, money: value => '$' + Number(value).toFixed(2), dietaryBadges: () => [],
