@@ -105,3 +105,20 @@ close private restore, installed boot, live/core or launch acceptance.
 Cost route: one implementation lane and one read-only reviewer, with a
 delta-only re-review after correction; no Qwen or other model fan-out.
 Live usage before corrected-revision review: 38% used / 62% remaining.
+## 17 October, 16:25-16:35 Sydney - admitted public staging attempt failed
+
+This later entry supersedes the preparation-only status above for this exact attempt, not the historical test claims. Root ran the admitted operation once from `C:/Codex/Temp/doughboss-linux-restore-20261014-9bd2e853`:
+
+`C:/Users/edagh/AppData/Local/Python/bin/python.exe -B run_public_installed_boot_stage_r1_20261017.py b2314b2c917e19cf615e97b84d87ae5972de12fa78ab20a0f010a1a4c86c6861`
+
+- Outcome: process exit **1**, result **FAILED / TIMEOUT**. `clean_closeout=false`; `post_pins_verified=true`; no post-pin error was reported. No kernel/initramfs artifacts were extracted. No QEMU processes remained at closeout.
+- Exact observed failure: Alpine reached `localhost:~#` with one `ESC[6n` suffix. The short `export TERM=dumb` command echoed correctly, but the following prompt still included `ESC[6n`. The driver expected the normalized prompt to contain no such suffix, so it never sent the staging command and reached its 600-second deadline.
+- The result's failed clean-closeout flag is retained. A zero process count proves cleanup only, not successful guest shutdown or staging. Do not reinterpret timeout as acceptance.
+- Result receipt: `PUBLIC-INSTALLED-BOOT-STAGE-R1-RESULT.json`, SHA-256 `9D12651BD6E18E6340A3EFCC7572270131A5FA540F990636C2429E5AD9556DF0`.
+- Serial log: `public-installed-boot-stage-r1-serial.log`, SHA-256 `8F83EB86CB4B58518A9273142207A81C47CDA651F25695A12C92FC09722884CE`.
+- Authoritative operation plan SHA-256: `B2314B2C917E19CF615E97B84D87AE5972DE12FA78AB20A0F010A1A4C86C6861`. Final reviewed source/test bundle had **33 passing synthetic tests** before this attempt; no duplicate test run was used to relabel the actual failure.
+- Tool provenance closure: official-checksum-matched portable 7-Zip files were used under the owner's exact unsigned-binary exception, without system installation. All 3,385 installed QEMU support files matched the approved installer reference. Closure receipt SHA-256 `623B89BA9C41457F84852D474EDEF003D83CBFE9AB70FB71F913AE6B0663293B`; the fixed x86 profile's two excluded SPARC ROMs were independently included in before/finally checks.
+
+All failed outputs and original admitted sources are retained in the private temporary test directory. No unchanged retry was launched. The next infrastructure task is a narrow serial-normalization repair and regression based on the actual second-prompt trace, followed by fresh review and a new explicitly admitted operation with fresh output names. Do not loosen arbitrary terminal parsing or mutate the historical admitted packet.
+
+This was public-only and offline: no private backup, network, host shares, WordPress restore, deployment, provider mutation, payment activation or Ads spending. Public staging, installed-guest boot, private WordPress restore/boot, exact live/core reconciliation and Square operational acceptance remain unproven. See `2026-10-17-APPROVED-PICKUP-WORKFLOW.md` for the separately approved staff-selected slot and reservation-linked payment expiry decision; it is not implemented.
