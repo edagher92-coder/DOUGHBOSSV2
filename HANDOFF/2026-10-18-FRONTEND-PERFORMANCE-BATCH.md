@@ -26,4 +26,4 @@ A fresh read-only GPT-6.1 Sol review returned **SHIP for local source readiness*
 
 The gate is limited to local source readiness. It is not a live-release, real-device or measured-performance acceptance result.
 
-These checks prove source contracts and synthetic UI behavior, not real-device milliseconds or live publication. No browser/provider test, deployment, commit or push was performed in this batch. Orders, payments and Ads remain off.
+These checks prove source contracts and synthetic UI behavior, not real-device milliseconds or live publication. No browser/provider test or deployment was performed in this batch. The accepted source/test changes were saved in commit `43cebe5c735c24c2821b71178e910b52cd5ab85d` on `codex/2.51-handoff-20261016`. Orders, payments and Ads remain off.
