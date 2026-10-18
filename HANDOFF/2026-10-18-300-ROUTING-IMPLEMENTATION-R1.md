@@ -1,5 +1,7 @@
 # A$300 routing candidate — local implementation, final verification pending
 
+Later checkpoint: `2026-10-18-300-ROUTING-NATIVE-PREP-R1.md` records a further Qwen test draft, syntax-checked (not executed) real-controller boundary cases, and the owner-authorised separate Sol 6.1 verification task. That task is active/waitingOnApproval, not a final verdict. Runtime/unit-test hashes below remain unchanged; no runtime push or activation occurred.
+
 18 October 2026, Australia/Sydney. Baseline `10816b95ac6c5b60a5aee37977fe8ef16f29ece6`, branch `codex/2.51-handoff-20261016`. Owner explicitly requested Qwen coding assistance, Sol 6.1 verification, boundary tests, payments and other shop connections kept off.
 
 ## Scope and behaviour

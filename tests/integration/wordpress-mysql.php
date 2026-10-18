@@ -3698,16 +3698,28 @@ db_integration_assert(
 	'custom enquiry staff mail uses honest optional-field fallbacks'
 );
 
-// An installation with no location rows keeps the historical location_id 0.
+// New catering fails closed when Revesby cannot be resolved; it never falls
+// back to another/default shop. Historical saved enquiries remain untouched.
 $wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 $wpdb->query( 'DELETE FROM ' . $wpdb->prefix . 'doughboss_locations' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$no_location_rows_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 $_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
 $no_location_params = $legacy_params;
 $no_location_params['customer_email'] = 'no.location.catering@example.invalid';
 $no_location_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $no_location_params ) );
-$no_location_data = $no_location_submit instanceof WP_REST_Response ? $no_location_submit->get_data() : array();
-$no_location_row = ! empty( $no_location_data['enquiry_number'] ) ? DoughBoss_Catering::get_by_number( $no_location_data['enquiry_number'] ) : null;
-db_integration_same( 0, is_array( $no_location_row ) ? (int) $no_location_row['location_id'] : -1, 'no-location installation preserves legacy location zero' );
+db_integration_same( 'doughboss_catering_location_unavailable', is_wp_error( $no_location_submit ) ? $no_location_submit->get_error_code() : '', 'no-location installation rejects a new catering enquiry' );
+db_integration_same( $no_location_rows_before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), 'missing Revesby creates no catering row' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+$wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$wpdb->update( $wpdb->prefix . 'doughboss_locations', array( 'is_active' => 0 ), array( 'id' => (int) $catering_shop->id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+$inactive_revesby_rows_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+$_SERVER['REMOTE_ADDR'] = '192.0.2.' . $fixture_ip++;
+$inactive_revesby_params = $legacy_params;
+$inactive_revesby_params['customer_email'] = 'inactive.revesby.catering@example.invalid';
+$inactive_revesby_submit = $rest_controller->create_catering_enquiry( db_integration_rest_request( '/doughboss/v1/catering/enquiry', $inactive_revesby_params ) );
+db_integration_same( 'doughboss_catering_location_unavailable', is_wp_error( $inactive_revesby_submit ) ? $inactive_revesby_submit->get_error_code() : '', 'inactive Revesby rejects a new catering enquiry' );
+db_integration_same( $inactive_revesby_rows_before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$catering_table}" ), 'inactive Revesby creates no catering row' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 $wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 
 $GLOBALS['db_catering_mail_result'] = false;
@@ -7081,6 +7093,90 @@ unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_obser
 		}
 		update_option( 'doughboss_settings', $original_settings, false );
 		if ( null === $prior_remote_addr ) { unset( $_SERVER['REMOTE_ADDR'] ); } else { $_SERVER['REMOTE_ADDR'] = $prior_remote_addr; }
+	}
+} )();
+
+// Routing boundary through the real controller, never a copied implementation.
+// Existing file-level local/database/HTTP guards remain mandatory. Payment
+// acceptance stays disabled even inside this disposable checkout fixture.
+( function () {
+	global $wpdb;
+	$option_key = DoughBoss_Settings::OPTION_KEY;
+	$saved_options = get_option( $option_key );
+	$saved_remote = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : null;
+	$saved_cookie = isset( $_COOKIE[DoughBoss_Cart::COOKIE] ) ? $_COOKIE[DoughBoss_Cart::COOKIE] : null;
+	$saved_table_cookie = isset( $_COOKIE[DoughBoss_Table_QR::COOKIE] ) ? $_COOKIE[DoughBoss_Table_QR::COOKIE] : null;
+	$table = $wpdb->prefix . 'doughboss_locations';
+	$revesby = null;
+	$bankstown = null;
+	foreach ( DoughBoss_Locations::all( false ) as $location ) {
+		if ( 'revesby' === $location->slug ) { $revesby = $location; }
+		if ( 'bankstown' === $location->slug ) { $bankstown = $location; }
+	}
+	if ( ! $revesby || ! is_array( $saved_options ) ) { throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: routing300 base fixture' ); }
+	$created_id = 0;
+	$original_rows = array();
+	$posts_before = $GLOBALS['db_square_post_count'] + $GLOBALS['db_stripe_post_count'];
+	try {
+		unset( $_COOKIE[DoughBoss_Table_QR::COOKIE] );
+		if ( ! $bankstown ) {
+			$created_id = DoughBoss_Locations::create( array( 'name' => 'Synthetic Bankstown', 'slug' => 'bankstown', 'is_active' => 1, 'pickup_enabled' => 1 ) );
+			$bankstown = $created_id ? DoughBoss_Locations::get( $created_id ) : null;
+		}
+		if ( ! $bankstown || 'bankstown' !== $bankstown->slug ) { throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: routing300 synthetic shop' ); }
+		foreach ( array( $revesby, $bankstown ) as $location ) {
+			$id = (int) $location->id;
+			$original_rows[$id] = (array) $location;
+			$wpdb->update( $table, array( 'is_active' => 1, 'pickup_enabled' => 1, 'delivery_enabled' => 1, 'capacity_mode' => 'off' ), array( 'id' => $id ) );
+		}
+		$options = array_merge( $saved_options, array( 'payments_enabled' => 0, 'payment_gateway' => 'square', 'ordering_open' => 1, 'staff_approval_required' => 0, 'single_location_mode' => 0, 'enable_pickup' => 1, 'enable_delivery' => 1, 'gst_inclusive' => 1, 'tax_rate' => 10, 'delivery_fee' => 25, 'after_hours_preorders_enabled' => 0, 'currency_code' => 'AUD' ) );
+		update_option( $option_key, $options, false );
+		$cases = array(
+			array( 'shop' => $bankstown, 'goods' => 299.99, 'type' => 'pickup', 'deny' => false ),
+			array( 'shop' => $bankstown, 'goods' => 300.00, 'type' => 'pickup', 'deny' => true ),
+			array( 'shop' => $bankstown, 'goods' => 300.01, 'type' => 'pickup', 'deny' => true ),
+			array( 'shop' => $bankstown, 'goods' => 300.00, 'type' => 'pickup', 'deny' => true, 'forged' => true ),
+			array( 'shop' => $revesby, 'goods' => 300.00, 'type' => 'pickup', 'deny' => false ),
+			array( 'shop' => $bankstown, 'goods' => 299.99, 'type' => 'delivery', 'deny' => false ),
+			array( 'shop' => $bankstown, 'goods' => 300.00, 'type' => 'delivery', 'deny' => true ),
+			array( 'shop' => $bankstown, 'goods' => 299.99, 'type' => 'pickup', 'deny' => true, 'currency' => 'USD', 'error' => 'doughboss_order_routing_currency' ),
+		);
+		foreach ( $cases as $index => $case ) {
+			$options['currency_code'] = isset( $case['currency'] ) ? $case['currency'] : 'AUD';
+			update_option( $option_key, $options, false );
+			$_SERVER['REMOTE_ADDR'] = '198.18.0.' . ( 101 + $index );
+			$_COOKIE[DoughBoss_Cart::COOKIE] = 'Routing300NativeCartToken000000' . $index;
+			$cart = new DoughBoss_Cart();
+			$cart->clear();
+			$item_id = db_integration_menu_item( 120001 + $index );
+			$added = $cart->add( array( 'type' => 'menu', 'item_id' => $item_id, 'name' => 'Synthetic routing boundary', 'unit_price' => $case['goods'], 'quantity' => 1 ) );
+			if ( is_wp_error( $added ) ) { throw new RuntimeException( 'INTEGRATION_PREREQUISITE_FAILED: routing300 cart' ); }
+			$totals = $cart->totals( $case['type'] );
+			db_integration_same( (int) round( $case['goods'] * 100 ), (int) round( ( $totals['total'] - $totals['delivery_fee'] ) * 100 ), 'routing300 actual cart retains inclusive goods amount ' . $index );
+			$params = array( 'customer_name' => 'Synthetic Routing', 'customer_email' => 'routing@example.invalid', 'customer_phone' => '0400000001', 'address' => 'Synthetic delivery address', 'order_type' => $case['type'], 'location_id' => (int) $case['shop']->id, 'idempotency_key' => 'unique-routing300-' . $index . '-0001' );
+			if ( ! empty( $case['forged'] ) ) { $params = array_merge( $params, array( 'total' => '0.01', 'discount' => '9999', 'amount' => '1' ) ); }
+			$orders_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_orders" );
+			$controller = new DoughBoss_REST_Controller( $cart );
+			$response = $controller->checkout( db_integration_rest_request( '/doughboss/v1/checkout', $params ) );
+			$orders_after = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}doughboss_orders" );
+			if ( $case['deny'] ) {
+				db_integration_same( isset( $case['error'] ) ? $case['error'] : 'doughboss_large_order_revesby', is_wp_error( $response ) ? $response->get_error_code() : '', 'routing300 wrong-shop or currency request rejected ' . $index );
+				db_integration_same( 0, $orders_after - $orders_before, 'routing300 rejected request creates no order ' . $index );
+			} else {
+				db_integration_assert( $response instanceof WP_REST_Response, 'routing300 eligible selected shop returns checkout response ' . $index );
+				db_integration_same( 1, $orders_after - $orders_before, 'routing300 eligible request creates exactly one order ' . $index );
+			}
+			$cart->clear();
+		}
+		db_integration_same( $posts_before, $GLOBALS['db_square_post_count'] + $GLOBALS['db_stripe_post_count'], 'routing300 boundary checkout makes no provider POST' );
+		db_integration_same( false, DoughBoss_Settings::payments_enabled(), 'routing300 fixture never activates payment acceptance' );
+	} finally {
+		foreach ( $original_rows as $id => $row ) { unset( $row['id'] ); $wpdb->update( $table, $row, array( 'id' => $id ) ); }
+		if ( $created_id ) { $wpdb->delete( $table, array( 'id' => $created_id ), array( '%d' ) ); }
+		update_option( $option_key, $saved_options, false );
+		if ( null === $saved_remote ) { unset( $_SERVER['REMOTE_ADDR'] ); } else { $_SERVER['REMOTE_ADDR'] = $saved_remote; }
+		if ( null === $saved_cookie ) { unset( $_COOKIE[DoughBoss_Cart::COOKIE] ); } else { $_COOKIE[DoughBoss_Cart::COOKIE] = $saved_cookie; }
+		if ( null === $saved_table_cookie ) { unset( $_COOKIE[DoughBoss_Table_QR::COOKIE] ); } else { $_COOKIE[DoughBoss_Table_QR::COOKIE] = $saved_table_cookie; }
 	}
 } )();
 
