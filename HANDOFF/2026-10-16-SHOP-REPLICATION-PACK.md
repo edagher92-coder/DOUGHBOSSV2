@@ -1,5 +1,9 @@
 # DoughBoss shop replication and acceptance pack
 
+## Current reference — 18 October R18 and catalogue archive
+
+Use `2026-10-18-DEFERRED-SHOP-REFERENCE-PACK.md` for the five-member public catalogue/tax-review/setup/rollback archive. It preserves 43 records and 10 option signatures/48 choice entries but does not connect accounts or supply a direct Square import. Use `2026-10-18-NATIVE-R18-LOYALTY-CANDIDATE.md` for current 239-runtime-file native/package acceptance and plugin/theme hashes. The R11/238-file/package values in older sections below are historical, not the current candidate.
+
 ## 18 October - retained source baseline
 
 The owner resumed DoughBoss while Fable owns Qwen V4. Destination account connections remain deferred. Source at resume is `575a6a5` on `codex/2.51-handoff-20261016`; all 238 runtime entries in the accepted R11 database freeze still match exact bytes. The additional AVIF mapping has separate local checks. Retained candidate plugin ZIP SHA256: `7ACA585EBFAF44E1BA6645B9DAC6C1C3B02BAC3145681FE04370186DD56014F5`; theme: `54EE4110432E74DC6F5B7E447117D2799A51D65371E93B113272675658A3F521`. These are undeployed candidates, not new operational acceptance.

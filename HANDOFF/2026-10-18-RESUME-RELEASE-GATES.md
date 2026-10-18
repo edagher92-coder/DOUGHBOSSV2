@@ -2,6 +2,8 @@
 
 ## Current checkpoint — R18 exact-candidate native gate accepted
 
+Deferred-store reference: `2026-10-18-DEFERRED-SHOP-REFERENCE-PACK.md` preserves catalogue values, unapproved per-item tax review and seller-specific setup/validation/rollback in a hash-verified archive. It grants no account connection/import/activation authority; Bankstown/Roselands operational acceptance remains deferred and unverified.
+
 Provider continuation: `2026-10-18-CATALOGUE-BASELINE-AND-SQUARE-LOGIN.md` records the connected Square sign-in requirement and fresh public website equality to the dated 43-item/10-signature/48-choice-entry baseline. This is not refreshed provider parity; preserve the older provider comparison's date and do not reclassify previously checked historical choice details as never checked.
 
 Read `2026-10-18-NATIVE-R18-LOYALTY-CANDIDATE.md` first. Current runtime source is `9f37ccf77670b0175049e02c9896f28912f7488c`; a fresh synthetic installed WordPress/MySQL run passed **3593/3593**, all **239 installed runtime files** and **273 source pins** remained exact, capacity/dispatch/crash-replay races passed, and the owned database shut down normally with no remaining listener. Fresh GPT-6.1 Sol final review accepted the local-native and package evidence only.
