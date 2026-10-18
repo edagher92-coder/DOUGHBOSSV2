@@ -60,3 +60,30 @@ The owner-requested private REA assets pack is pushed separately at `edagher92-c
 7. End-to-end acceptance: compare task completion, errors, response/loading behaviour and support discoverability on phone/desktop with realistic synthetic journeys. Separate source tests, browser observations, provider sandbox evidence, installed code and real fulfilment acceptance. No numeric 9+ or 'better than competitors' verdict until these are measured.
 
 Prior checkout scroll repair and photo mapping receipts remain separate. Current product-photo commit `de1f484` is local source evidence, not proof of installed or published photos. Existing plugin/theme archives predating current source must not be called the current release.
+
+## Final frozen local package checkpoint
+
+Runtime/source commit: `90984cd8c510d6693fdb236c01ca1acb793cc078`, branch `codex/2.51-handoff-20261016`. The final focused runtime diff was accepted by the fresh Sol reviewer as described above. The existing full PHP command, `php -n tests/run.php`, then passed **3,232/3,232 assertions, zero failures**. Expected synthetic mail-failure fixtures log diagnostics; they did not fail the suite.
+
+Fresh archives in `C:/Codex/Output/doughboss-premium-candidate-20261019-90984cd/`:
+
+| Artifact | Version/files | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `doughboss-2.51.0-90984cd.zip` | 2.51.0 / 245 | 5,794,663 | `74cade59250094f074e34a7bf967be947b43af184df027efd87a7ffedafe15d3` |
+| `doughboss-final-90984cd.zip` | 1.8.0 / 27 | 42,321 | `9c05c1925b2a08fb49c1af36198f10b16e3902d5c822e1a40284a0a3c54ea393` |
+
+Existing `scripts/build-zip.php`, `scripts/validate-zip.php`, `scripts/build-theme-zip.php` and `scripts/validate-theme-zip.php` all exited 0. Both validators checked canonical archive layout and current-tree runtime bytes. PHP was the existing portable 8.2.33 runtime with its installed ZIP extension. This handoff-only checkpoint does not change either runtime archive.
+
+## Full objective completion audit — still open
+
+| Required outcome | Current proof | Remaining evidence/work |
+| --- | --- | --- |
+| Mobile menu and customisation | Existing compact responsive source; 234 JS tests; actual 320/390px customizer geometry and 390px screenshot; modifier prices/submitted options regression | Full 43-item authentic-photo coverage, real-device and representative slow-network/loading review; the eight-item preview is insufficient for full-menu acceptance |
+| Verified imagery and catalogue authority | Six exact manufacturer juice photos and explicit mappings; unrelated fallback aliases removed; 3,232 PHP assertions including mappings; WordPress featured-image precedence retained | Five exact 600mL soda packshots, remaining original food photography/rights audit and fresh installed catalogue readback; no replacement prices or invented products |
+| Checkout and post-order experience | Existing authoritative server totals and A$300 rule; current modifier and tracking regressions; stale/expired status feedback; completed-only honest-review invitation | Current-source synthetic checkout/browser journey and failure recovery across reload; real provider/payment/fulfilment evidence remains a separate gate |
+| Safe Members & Events portion | Existing informational page, tracking/catering/app-install actions, readable mobile layout, no public signup form, clear unavailable status | Customer identity mapping, duplicate account handling, consent records, privacy export/erasure, provider program eligibility and complete member login acceptance remain unresolved; seller OAuth cannot be used as customer login |
+| Requested coding/review roles | Prior independent Terra repository analysis retained; bounded Qwen code integrated and deterministically tested; fresh Sol repair review accepted | Do not describe unavailable model outputs or role labels as completed work |
+| Installable current candidate | New plugin/theme archives validated against frozen current source | Exact-candidate installed application/database and restore/release gates must not inherit old source pins automatically |
+| Publication/provider boundaries | Local work only in this checkpoint | Payments, Ads, non-Revesby connections, devices and live publication retain separate gates |
+
+This audit leaves the full goal active. No website publication, provider operation or full operational membership claim follows from source/package acceptance.
