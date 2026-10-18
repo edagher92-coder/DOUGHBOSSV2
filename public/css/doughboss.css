@@ -365,12 +365,14 @@ body.page-id-402 #primary-menu > li > a {
 	.db-app.db-menu .db-menu-tools .db-jumpbar { grid-column: 1 / -1; grid-row: 2; }
 }
 
-/* Below 360px, preserve one complete vertical card with full-size controls. */
-@media (max-width: 359px) {
+/* Narrow phones: compact thumbnails leave room for readable details and controls. */
+@media (max-width: 359.98px) {
 	.db-app .db-grid:not(.db-grid--compact) { grid-template-columns: minmax(0, 1fr); }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: flex; grid-template-columns: none; align-items: stretch; }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 100%; aspect-ratio: 4 / 3; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 84px; height: 84px; aspect-ratio: 1; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; }
 	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-body { min-width: 0; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-kicker { font-size: .5rem; letter-spacing: .06em; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-category { font-size: 1rem; }
 }
 
 .db-card-img--placeholder {
@@ -2280,6 +2282,8 @@ body.page-id-402 #primary-menu > li > a {
 .db-checkout-safety summary {
 	cursor: pointer;
 	font-weight: 800;
+	min-height: 44px;
+	padding-block: .75rem;
 }
 
 .db-checkout-safety p {

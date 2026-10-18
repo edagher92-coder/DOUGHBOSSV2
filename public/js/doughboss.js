@@ -1678,7 +1678,7 @@
 				if (!file || file[2] !== format || Number(file[1]) !== width || width <= lastWidth || width > data.width) { return finish(); }
 				lastWidth = width;
 			}
-			sources.push(el('source', { type: source.type, srcset: source.srcset, sizes: 'auto, (max-width: 359px) 100vw, (max-width: 1099px) 50vw, 440px' }));
+			sources.push(el('source', { type: source.type, srcset: source.srcset, sizes: 'auto, (max-width: 359.98px) 84px, (max-width: 1099px) 50vw, 440px' }));
 		}
 		image.setAttribute('width', data.width);
 		image.setAttribute('height', data.height);

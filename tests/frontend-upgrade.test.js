@@ -135,7 +135,7 @@ test('already installed and appinstalled states never navigate or restore stale 
   assert.match(y.status.textContent, /already open/);
 });
 
-test('photo-led menu keeps capped desktop density, two phone columns and one vertical card below 360px', () => {
+test('photo-led menu keeps capped desktop density, two phone columns and compact rows below 360px', () => {
 	const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
 	const orderCss = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss-order-page.css'), 'utf8');
 	assert.match(css, /\.db-grid \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
@@ -144,8 +144,9 @@ test('photo-led menu keeps capped desktop density, two phone columns and one ver
 	assert.match(css, /\.db-grid:not\(\.db-grid--compact\) \.db-card-img \{ min-height: 0; aspect-ratio: 4 \/ 3;/);
 	assert.match(css, /\.db-card-desc \{ font-size: 1rem; line-height: 1\.45;/);
 	assert.match(css, /\.db-menu-customize > summary \{ min-height: 44px;/);
-	assert.match(css, /@media \(max-width: 359px\)[\s\S]*?\.db-card \{ display: flex; grid-template-columns: none; align-items: stretch; \}/);
-	assert.match(css, /@media \(max-width: 359px\)[\s\S]*?\.db-card-img \{ width: 100%; aspect-ratio: 4 \/ 3; \}/);
+	assert.match(css, /@media \(max-width: 359\.98px\)[\s\S]*?\.db-card \{ display: grid; grid-template-columns: 96px minmax\(0, 1fr\); align-items: start; \}/);
+	assert.match(css, /@media \(max-width: 359\.98px\)[\s\S]*?\.db-card-img \{ width: 84px; height: 84px; aspect-ratio: 1; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; \}/);
+	assert.match(orderCss, /@media \(max-width: 359\.98px\)/, 'the order wrapper shares the fractional-safe narrow-phone cutoff');
 	assert.match(orderCss, /body\.doughboss-order-page \.db-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
 	assert.match(orderCss, /@media \(max-width: 1099px\)[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
 	assert.doesNotMatch(orderCss, /@media \(max-width: 420px\)/, 'legacy order wrapper must not undo the two-column phone layout');
@@ -156,6 +157,7 @@ test('photo-led menu keeps capped desktop density, two phone columns and one ver
   assert.match(css, /grid-template-columns: 44px 46px 44px;/, 'cart stepper retains 44px touch controls');
   assert.match(css, /\.db-app\.db-cart \{\s*scroll-margin-top: calc\(var\(--db-sticky-top, 0px\) \+ 1rem\);/, 'cart anchor clears sticky navigation');
   assert.match(css, /\.db-checkout-summary-label \{\s*color: #bbb6ae;\s*font-size: \.875rem;/, 'checkout summary labels are readable');
+  assert.match(css, /\.db-checkout-safety summary \{[^}]*min-height: 44px;[^}]*padding-block: \.75rem;/, 'the native checkout disclosure retains a comfortable touch target without a fixed height');
 });
 
 function extractFunction(file, name, context) {
@@ -256,7 +258,7 @@ test('valid packaged menu photos retain responsive sources, dimensions and nativ
 		assert.equal(picture.children[index].tag, 'source');
 		assert.equal(picture.children[index].getAttribute('srcset'), sources[index].srcset);
 		assert.equal(picture.children[index].type, sources[index].type);
-		assert.equal(picture.children[index].getAttribute('sizes'), 'auto, (max-width: 359px) 100vw, (max-width: 1099px) 50vw, 440px');
+		assert.equal(picture.children[index].getAttribute('sizes'), 'auto, (max-width: 359.98px) 84px, (max-width: 1099px) 50vw, 440px');
 	}
 	const photo = picture.querySelector('img');
 	assert.equal(photo.getAttribute('width'), '960');
