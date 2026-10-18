@@ -287,14 +287,36 @@ test('invalid responsive metadata falls back to one lazy original without partia
 	}
 });
 
-function menuCardFactory() {
+function menuCardFactory(overrides) {
 	const context = {
 		I18N: {}, el: node, money: value => '$' + Number(value).toFixed(2), dietaryBadges: () => [],
 		compactMenuCategory, menuPhoto: () => node('div', { class: 'db-card-img' }),
 		menuLocationId: () => 1, dbToast() {}, request() { return Promise.resolve(); }
 	};
-	return extractFunction(storefront, 'menuCard', context);
+	return extractFunction(storefront, 'menuCard', Object.assign(context, overrides || {}));
 }
+
+test('radio customisation shows and submits the same default and includes its price', () => {
+	for (const explicitDefault of [false, true]) {
+		const sends = [];
+		const card = menuCardFactory({ request(route, options) { sends.push({ route, options }); return new Promise(() => {}); } })({
+			id: 21, name: 'Synthetic pizza', price: 10, category: 'Pizza', image: 'x.jpg',
+			options: [{ id: 'crust', type: 'radio', label: 'Crust', choices: [
+				{ slug: 'first', label: 'First option', price: 2 },
+				{ slug: 'second', label: 'Second option', price: 3, default: explicitDefault }
+			] }]
+		}, true, 1, false);
+		const checked = find(card, n => n.tag === 'input' && n.checked);
+		assert.equal(checked.getAttribute('value'), explicitDefault ? 'second' : 'first');
+		assert.equal(find(card, n => n.className === 'db-price').textContent, explicitDefault ? '$13.00' : '$12.00');
+		assert.equal(find(card, n => n.className === 'db-customizer-price').textContent, explicitDefault ? '$13.00' : '$12.00');
+		find(card, n => n.className === 'db-btn db-customizer-add').listeners.click();
+		assert.equal(sends.length, 1);
+		assert.equal(sends[0].route, '/cart/add');
+		assert.equal(sends[0].options.body.options.crust, explicitDefault ? 'second' : 'first');
+		assert.equal(sends[0].options.body.unit_price, undefined, 'server retains price authority');
+	}
+});
 
 test('search uses an inline SVG icon and a clear button, never the U+2315 glyph', () => {
 	const source = fs.readFileSync(storefront, 'utf8');

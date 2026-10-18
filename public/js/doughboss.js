@@ -1826,7 +1826,7 @@
 			var controls = el('div', { class: 'db-menu-options db-customizer-sheet', 'aria-labelledby': titleId }, [ header, scroll, footer ]);
 			options.forEach(function (group, groupIndex) {
 				var choices = Array.isArray(group.choices) ? group.choices : [];
-				var defaultChoice = choices.filter(function (choice) { return choice.default; })[0];
+				var defaultChoice = choices.filter(function (choice) { return choice.default; })[0] || choices[0];
 				selections[group.id] = group.type === 'radio' && defaultChoice ? [defaultChoice.slug] : [];
 				// Style and Crust are the two compact, mutually-exclusive menu choices
 				// that benefit from a segmented presentation. Keep the native radios and
@@ -3580,32 +3580,8 @@
 				}));
 			}
 			confirmation.appendChild(confirmActions);
-			var review = el('div', { class: 'db-review-invite' });
-			review.appendChild(el('strong', { text: 'Stay close to the bake.' }));
-			review.appendChild(el('span', { text: 'Follow Dough Boss for fresh drops, offers and what is coming out of the oven.' }));
-			var reviewActions = el('div', { class: 'db-review-invite__actions' });
-			reviewActions.appendChild(el('a', {
-				href: 'https://instagram.com/doughboss',
-				target: '_blank',
-				rel: 'noopener noreferrer',
-				'data-doughboss-engagement': 'social_engagement',
-				'data-content-name': 'Instagram',
-				'data-channel': 'order_success',
-				text: 'Follow @doughboss ↗'
-			}));
-			if (DATA.googleReviewUrl) {
-				reviewActions.appendChild(el('a', {
-					href: DATA.googleReviewUrl,
-					target: '_blank',
-					rel: 'noopener noreferrer',
-					'data-doughboss-engagement': 'review_engagement',
-					'data-content-name': 'Google review',
-					'data-channel': 'order_success',
-					text: 'Leave a Google review ↗'
-				}));
-			}
-			review.appendChild(reviewActions);
-			confirmation.appendChild(review);
+			// Keep confirmation focused on fulfilment. Ask for feedback only
+			// after the tracker receives the server's completed state.
 			parent.appendChild(confirmation);
 			trackCommerce('purchase', {
 				currency: 'AUD',
@@ -4118,11 +4094,20 @@
 			}
 		}
 
+		function setTrackingNotice(message) {
+			var notice = result.querySelector('.db-track-checked');
+			if (notice) {
+				notice.textContent = message;
+				notice.setAttribute('role', 'status');
+			}
+		}
+
 		function scheduleTick() {
 			stopPolling();
 			if (pollDone || !pollKey || !pollLookup || document.hidden) { return; }
 			if (Date.now() - pollStarted >= POLL_MAX_MS) {
 				pollDone = true;
+				setTrackingNotice('Automatic updates have paused. Check live status again to refresh your order.');
 				return;
 			}
 			pollTimer = setTimeout(pollTick, POLL_MS);
@@ -4132,15 +4117,17 @@
 			pollTimer = null;
 			if (pollDone || !pollKey || !pollLookup) { return; }
 			var key = pollKey;
-			request('/order/track', { method: 'POST', body: pollLookup })
+			var lookup = pollLookup;
+			request('/order/track', { method: 'POST', body: lookup })
 				.then(function (order) {
-					if (key !== pollKey) { return; } // a newer lookup took over
+					if (key !== pollKey || lookup !== pollLookup) { return; } // a newer lookup took over
 					renderOrder(order);
 					scheduleTick();
 				})
 				.catch(function () {
-					// Silent: keep the last good render, retry on the next tick.
-					if (key !== pollKey) { return; }
+					// Preserve the last confirmed order, but make stale status clear.
+					if (key !== pollKey || lookup !== pollLookup) { return; }
+					setTrackingNotice('We could not refresh your order. Showing the last confirmed status — retrying automatically.');
 					scheduleTick();
 				});
 		}
@@ -4268,9 +4255,25 @@
 			card.appendChild(items);
 			card.appendChild(el('p', { text: 'Total: ' + money(order.total) }));
 			card.appendChild(buildPaymentHint(order));
+			if (order.status === 'completed' && DATA.googleReviewUrl) {
+				card.appendChild(el('section', { class: 'db-review-invite', 'aria-label': 'Order feedback' }, [
+					el('strong', { text: 'How was your Dough Boss experience?' }),
+					el('span', { text: 'Your honest feedback helps us improve every bake and every visit.' }),
+					el('div', { class: 'db-review-invite__actions' }, [el('a', {
+						href: DATA.googleReviewUrl,
+						target: '_blank',
+						rel: 'noopener noreferrer',
+						'data-doughboss-engagement': 'review_engagement',
+						'data-content-name': 'Google review',
+						'data-channel': 'order_completed',
+						text: 'Share an honest review ↗'
+					})])
+				]));
+			}
 			card.appendChild(el('p', {
 				class: 'db-track-checked',
-				text: 'Live status checked ' + new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date()) + ' · updates automatically'
+				text: 'Status checked ' + new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date()) +
+					(order.status === 'completed' || order.status === 'cancelled' ? ' · final order status' : ' · updates automatically while this page is open')
 			}));
 			result.appendChild(card);
 

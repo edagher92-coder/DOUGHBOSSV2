@@ -169,6 +169,42 @@ const square = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-square.j
 const shopStatus = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-shop-status.js');
 const catering = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-catering.js');
 
+test('post-order feedback waits for completion and final tracking does not promise continued polling', () => {
+	function element(tag, attributes = {}, children = []) {
+		return { tag, attributes, children, appendChild(child) { this.children.push(child); }, setAttribute(key, value) { this.attributes[key] = value; } };
+	}
+	const flatten = node => [node, ...(node.children || []).flatMap(flatten)];
+	for (const status of ['pending', 'confirmed', 'preparing', 'baking', 'ready', 'completed', 'cancelled']) {
+		for (const reviewUrl of ['', 'https://reviews.example.invalid/doughboss']) {
+			const result = element('div');
+			let stops = 0;
+			const context = { result, el: element, DATA: { googleReviewUrl: reviewUrl },
+				buildTracker: () => element('ol'), trackingTime: () => '', pickupTrackingText: () => '',
+				buildEta: () => null, buildPaymentHint: () => element('p'), money: String,
+				stopPolling: () => { stops++; }, pollDone: false, Intl, Date, Number, Math };
+			extractFunction(storefront, 'renderOrder', context)({ status, order_number: 'SYNTHETIC-1', total: 12, items: [] });
+			const nodes = flatten(result);
+			const reviews = nodes.filter(node => node.attributes['data-doughboss-engagement'] === 'review_engagement');
+			assert.equal(reviews.length, status === 'completed' && reviewUrl ? 1 : 0, status + ' / configured=' + !!reviewUrl);
+			if (reviews.length) {
+				assert.equal(reviews[0].attributes.href, reviewUrl);
+				assert.equal(reviews[0].attributes.rel, 'noopener noreferrer');
+				assert.equal(reviews[0].attributes['data-channel'], 'order_completed');
+			}
+			const checked = nodes.find(node => node.attributes.class === 'db-track-checked').attributes.text;
+			const terminal = status === 'completed' || status === 'cancelled';
+			assert.equal(stops, terminal ? 1 : 0);
+			assert.equal(context.pollDone, terminal);
+			assert.match(checked, terminal ? /final order status/ : /updates automatically while this page is open/);
+			if (terminal) assert.doesNotMatch(checked, /updates automatically/);
+		}
+	}
+	const source = fs.readFileSync(storefront, 'utf8');
+	const confirmation = source.slice(source.indexOf('function completeOrder('), source.indexOf('function placeOrder('));
+	assert.doesNotMatch(confirmation, /googleReviewUrl|review_engagement|instagram\.com|social_engagement/);
+	assert.match(confirmation, /Track this order/);
+});
+
 function storefrontReadHarness() {
 	const requests = [];
 	const context = { configCache: null, locationsCache: null, configRequest: null, locationsRequest: null,
@@ -180,6 +216,84 @@ function storefrontReadHarness() {
 	context.getLocations = extractFunction(storefront, 'getLocations', context);
 	return { context, requests, settle: () => new Promise(resolve => setImmediate(resolve)) };
 }
+
+test('tracker failures retain the order and announce retry, while obsolete failures stay silent', async () => {
+	for (const stale of [false, true]) {
+		let rejectRequest;
+		const notices = [];
+		let renders = 0;
+		let schedules = 0;
+		const context = { pollTimer: 9, pollDone: false, pollKey: 'current', pollLookup: { number: 'SYNTHETIC' },
+			request: () => new Promise((resolve, reject) => { rejectRequest = reject; }),
+			renderOrder: () => { renders++; }, setTrackingNotice: message => notices.push(message),
+			scheduleTick: () => { schedules++; } };
+		extractFunction(storefront, 'pollTick', context)();
+		if (stale) context.pollKey = 'newer-order';
+		rejectRequest(new Error('synthetic offline'));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(renders, 0, 'last confirmed order is not replaced');
+		assert.equal(schedules, stale ? 0 : 1);
+		assert.equal(notices.length, stale ? 0 : 1);
+		if (!stale) assert.match(notices[0], /last confirmed status.*retrying automatically/);
+	}
+});
+
+test('a fresh lookup of the same order rejects obsolete poll success and failure for active and completed orders', async () => {
+	for (const completed of [false, true]) {
+		for (const failure of [false, true]) {
+			let resolveRequest;
+			let rejectRequest;
+			const notices = [];
+			const rendered = [];
+			let schedules = 0;
+			const oldLookup = { number: 'SYNTHETIC', email: 'test@example.invalid' };
+			const context = { pollTimer: 9, pollDone: false, pollKey: 'same-order-and-email', pollLookup: oldLookup,
+				request: (route, options) => {
+					assert.equal(route, '/order/track');
+					assert.equal(options.body, oldLookup);
+					return new Promise((resolve, reject) => { resolveRequest = resolve; rejectRequest = reject; });
+				},
+				renderOrder: order => rendered.push(order), setTrackingNotice: message => notices.push(message),
+				scheduleTick: () => { schedules++; } };
+			extractFunction(storefront, 'pollTick', context)();
+			// Resubmitting identical credentials creates a new lookup object, not a new key.
+			context.pollLookup = { ...oldLookup };
+			context.pollDone = completed;
+			if (failure) rejectRequest(new Error('obsolete synthetic failure'));
+			else resolveRequest({ status: 'preparing' });
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(rendered.length, 0, 'an obsolete success cannot replace the newer order');
+			assert.equal(notices.length, 0, 'an obsolete failure cannot replace the newer notice');
+			assert.equal(schedules, 0, 'an obsolete result cannot restart or duplicate polling');
+			assert.equal(context.pollDone, completed);
+		}
+	}
+});
+
+test('tracker session expiry gives a refresh instruction and schedules no more requests', () => {
+	const notices = [];
+	let scheduled = 0;
+	const context = { pollDone: false, pollKey: 'current', pollLookup: {}, document: { hidden: false },
+		pollStarted: 0, POLL_MAX_MS: 7200000, POLL_MS: 15000, Date: { now: () => 7200000 },
+		stopPolling: () => {}, setTrackingNotice: message => notices.push(message),
+		setTimeout: () => { scheduled++; } };
+	const schedule = extractFunction(storefront, 'scheduleTick', context);
+	schedule();
+	assert.equal(context.pollDone, true);
+	assert.equal(scheduled, 0);
+	assert.match(notices[0], /Check live status again/);
+	schedule();
+	assert.equal(notices.length, 1, 'terminal session stays stopped');
+});
+
+test('tracking notice updates existing status text without injecting markup or replacing order details', () => {
+	const notice = { textContent: '', attributes: {}, setAttribute(key, value) { this.attributes[key] = value; } };
+	const setNotice = extractFunction(storefront, 'setTrackingNotice', { result: { querySelector: () => notice } });
+	setNotice('Synthetic <status>');
+	assert.equal(notice.textContent, 'Synthetic <status>');
+	assert.equal(notice.attributes.role, 'status');
+	assert.doesNotThrow(() => extractFunction(storefront, 'setTrackingNotice', { result: { querySelector: () => null } })('Synthetic'));
+});
 
 test('concurrent storefront reads share requests and retain single-shop normalisation and completed caches', async () => {
 	const { context, requests, settle } = storefrontReadHarness();
