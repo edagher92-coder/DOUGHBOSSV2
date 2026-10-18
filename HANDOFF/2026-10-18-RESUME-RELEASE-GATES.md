@@ -2,6 +2,8 @@
 
 ## Latest checkpoint — public native-validation prerequisite completed
 
+Subsequent private-R4 boundary preparation is source-accepted: four new public code/test files, **11 root and independently reproduced tests**, fresh GPT-6.1 Sol SHIP, exact source/dependency pins and reproducible archive. `2026-10-18-PRIVATE-R4-BOUNDARY-PREP.md` records the remaining protected host runner/capture, optimization-disabled guest and exact private-operation admission gates. No private payload access or VM occurred in that preparation; private diagnostic, WordPress restore and release remain unaccepted.
+
 The R2 installed-kernel public run now has direct **81/81 test and 9/9 Linux I/O** evidence, clean owned shutdown, healthy base/overlay checks and verified post-run pins. A frozen-parser false positive on a kernel `(skipped)` message is preserved in the original FAILED receipt; the tested read-only reconciliation received fresh GPT-6.1 Sol SOURCE SHIP / EVIDENCE SUFFICIENT. Only the separate public validation gate is accepted. Details and reproducible archive hashes are in `2026-10-18-NATIVE-R4-R2-PREP.md`.
 
 Next: continue the existing private native-prefix diagnosis/preparation and isolated WordPress restore/boot, then production backup/rollback and installed-core parity before controlled publication. The prepared 2.51.0 plugin / 1.8.0 theme are still not deployed. Revesby provider/financial, gift-card/loyalty, staff permissions and physical KDS delivery gates remain unproven. Orders, payments and Ads were not activated. Earlier checkpoints below remain historical evidence, not current public-gate status.
