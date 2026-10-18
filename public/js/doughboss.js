@@ -180,9 +180,10 @@
 		return svg;
 	}
 
-	// Drinks read best as a compact two-column list without photo frames.
+	// Every menu category uses the same photo-led card. Missing or failed images
+	// fall back to the branded tile in menuCard; never substitute another item.
 	function compactMenuCategory(category) {
-		return /^drinks?\b/i.test(String(category || '').trim());
+		return false;
 	}
 
 	// While online ordering is paused the menu shows ONE sticky "Call to order"
@@ -1673,7 +1674,7 @@
 				if (!file || file[2] !== format || Number(file[1]) !== width || width <= lastWidth || width > data.width) { return finish(); }
 				lastWidth = width;
 			}
-			sources.push(el('source', { type: source.type, srcset: source.srcset, sizes: 'auto, (max-width: 359px) 80px, (max-width: 640px) calc((100vw - 58px) / 2), 320px' }));
+			sources.push(el('source', { type: source.type, srcset: source.srcset, sizes: 'auto, (max-width: 359px) 100vw, (max-width: 1099px) 50vw, 440px' }));
 		}
 		image.setAttribute('width', data.width);
 		image.setAttribute('height', data.height);

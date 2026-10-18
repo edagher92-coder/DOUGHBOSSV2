@@ -248,13 +248,19 @@
 
 .db-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 1.25rem;
 	min-inline-size: 0;
 	/* Skip layout/paint for menu categories below the viewport. The remembered
 	 * intrinsic size limits scroll jumps once a deferred category is revealed. */
 	content-visibility: auto;
 	contain-intrinsic-size: auto 720px;
+}
+
+@media (max-width: 1099px) {
+	.db-app .db-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 .db-card {
@@ -355,11 +361,11 @@ body.page-id-402 #primary-menu > li > a {
 	.db-app.db-menu .db-menu-tools .db-jumpbar { grid-column: 1 / -1; grid-row: 2; }
 }
 
-/* At narrow widths or enlarged text, one compact row gives labels room. */
+/* Below 360px, preserve one complete vertical card with full-size controls. */
 @media (max-width: 359px) {
 	.db-app .db-grid:not(.db-grid--compact) { grid-template-columns: minmax(0, 1fr); }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: grid; grid-template-columns: 80px minmax(0, 1fr); align-items: start; }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 80px; aspect-ratio: 1; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: flex; grid-template-columns: none; align-items: stretch; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 100%; aspect-ratio: 4 / 3; }
 	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-body { min-width: 0; }
 }
 

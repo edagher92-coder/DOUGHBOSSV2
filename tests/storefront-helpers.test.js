@@ -640,8 +640,9 @@ test('menu photographs deliver local responsive sources and a dimensioned origin
 	assert.equal(avif.attributes.type, 'image/avif');
 	assert.equal(webp.attributes.type, 'image/webp');
 	assert.equal(avif.attributes.srcset, item.image_responsive.sources[0].srcset);
-	assert.match(avif.attributes.sizes, /max-width: 359px\) 80px/, 'narrow row photos request a thumbnail-sized fallback');
-	assert.match(avif.attributes.sizes, /max-width: 640px\) calc\(\(100vw - 58px\) \/ 2\)/, 'phone grid photos describe two columns rather than the whole viewport');
+	assert.match(avif.attributes.sizes, /max-width: 359px\) 100vw/, 'single-column narrow phones request one card-width image');
+	assert.match(avif.attributes.sizes, /max-width: 1099px\) 50vw/, 'standard phone and tablet grids describe two columns');
+	assert.match(avif.attributes.sizes, /440px$/, 'capped desktop grid avoids oversized source selection');
 	assert.equal(image.tag, 'img');
 	assert.equal(image.attributes.src, item.image);
 	assert.equal(image.attributes.alt, item.name);

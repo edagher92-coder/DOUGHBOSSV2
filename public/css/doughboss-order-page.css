@@ -237,8 +237,14 @@ body.doughboss-order-page .db-category::after {
 }
 
 body.doughboss-order-page .db-grid {
-	grid-template-columns: repeat(auto-fill, minmax(min(235px, 100%), 1fr));
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: clamp(16px, 1.6vw, 26px);
+}
+
+@media (max-width: 1099px) {
+	body.doughboss-order-page .db-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 body.doughboss-order-page .db-card {

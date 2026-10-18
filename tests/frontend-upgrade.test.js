@@ -135,14 +135,19 @@ test('already installed and appinstalled states never navigate or restore stale 
   assert.match(y.status.textContent, /already open/);
 });
 
-test('phone menu keeps two compact columns with readable information and a narrow-screen row fallback', () => {
+test('photo-led menu keeps capped desktop density, two phone columns and one vertical card below 360px', () => {
 	const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
 	const orderCss = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss-order-page.css'), 'utf8');
+	assert.match(css, /\.db-grid \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+	assert.match(css, /@media \(max-width: 1099px\)[\s\S]*?\.db-app \.db-grid \{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
 	assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.db-app \.db-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 	assert.match(css, /\.db-grid:not\(\.db-grid--compact\) \.db-card-img \{ min-height: 0; aspect-ratio: 4 \/ 3;/);
 	assert.match(css, /\.db-card-desc \{ font-size: 1rem; line-height: 1\.45;/);
 	assert.match(css, /\.db-menu-customize > summary \{ min-height: 44px;/);
-	assert.match(css, /@media \(max-width: 359px\)[\s\S]*?grid-template-columns: 80px minmax\(0, 1fr\)/);
+	assert.match(css, /@media \(max-width: 359px\)[\s\S]*?\.db-card \{ display: flex; grid-template-columns: none; align-items: stretch; \}/);
+	assert.match(css, /@media \(max-width: 359px\)[\s\S]*?\.db-card-img \{ width: 100%; aspect-ratio: 4 \/ 3; \}/);
+	assert.match(orderCss, /body\.doughboss-order-page \.db-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+	assert.match(orderCss, /@media \(max-width: 1099px\)[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
 	assert.doesNotMatch(orderCss, /@media \(max-width: 420px\)/, 'legacy order wrapper must not undo the two-column phone layout');
 	assert.doesNotMatch(orderCss, /\.db-card-desc\s*\{\s*display:\s*none/, 'ingredients must remain visible on phones');
   assert.match(css, /\.db-menu-search-status \{ grid-column: 2; grid-row: 1;/, 'phone result count shares the search row');
@@ -251,6 +256,7 @@ test('valid packaged menu photos retain responsive sources, dimensions and nativ
 		assert.equal(picture.children[index].tag, 'source');
 		assert.equal(picture.children[index].getAttribute('srcset'), sources[index].srcset);
 		assert.equal(picture.children[index].type, sources[index].type);
+		assert.equal(picture.children[index].getAttribute('sizes'), 'auto, (max-width: 359px) 100vw, (max-width: 1099px) 50vw, 440px');
 	}
 	const photo = picture.querySelector('img');
 	assert.equal(photo.getAttribute('width'), '960');
@@ -317,16 +323,17 @@ test('open ordering restores the normal add-to-cart control', () => {
 	assert.notEqual(button.disabled, true);
 });
 
-test('drinks render as compact rows without photo frames', () => {
-	assert.equal(compactMenuCategory('Drinks'), true);
-	assert.equal(compactMenuCategory(' drink '), true);
+test('drinks use the same truthful photo-led card path as food', () => {
+	assert.equal(compactMenuCategory('Drinks'), false);
+	assert.equal(compactMenuCategory(' drink '), false);
 	assert.equal(compactMenuCategory('Pizza'), false);
 	const menuCard = menuCardFactory();
 	const card = menuCard({ id: 9, name: 'Coke 600ml', price: 4.5, category: 'Drinks', image: 'juice.webp', options: [] }, false, 0, true);
-	assert.match(card.className, /db-card--compact/);
-	assert.equal(find(card, n => /db-card-img/.test(n.className || '')), null, 'no image frame');
+	assert.doesNotMatch(card.className, /db-card--compact/);
+	assert.ok(find(card, n => /db-card-img/.test(n.className || '')), 'drinks retain the selected image frame');
 	const soldOut = menuCard({ id: 10, name: 'Sprite 600ml', price: 4.5, category: 'Drinks', image: '', available: false, options: [] }, false, 0, true);
-	assert.match(textOf(soldOut), /Sold out/, 'compact sold-out state is still announced');
+	assert.ok(find(soldOut, n => /db-card-img--placeholder/.test(n.className || '')), 'missing drink photo uses branded placeholder');
+	assert.match(textOf(soldOut), /Sold out/, 'sold-out state remains announced');
 });
 
 test('items without photos get the warm branded tile and no invented description', () => {
