@@ -2,6 +2,8 @@
 
 ## Current checkpoint — R18 exact-candidate native gate accepted
 
+Owner routing decision: `2026-10-18-APPROVED-300-ROUTING-BASIS.md` now fixes the ordinary A$300 threshold to discounted food/drink including GST, before delivery/service fees; catering always uses Revesby. This supersedes older unresolved-policy wording, including the frozen reference ZIP. Ordinary server enforcement is not yet implemented or accepted; retain a multi-shop activation hold until its code/test/provider gates pass. Other account connections remain deferred.
+
 Current-candidate frontend observation: `2026-10-18-CURRENT-CANDIDATE-BROWSER-R1.md` records fresh source-pinned local browser geometry, native image deferral, search and hero playback, plus material preview/tool limitations. It is not full-menu, saved-navigation, real-device, checkout or live-performance acceptance.
 
 Deferred-store reference: `2026-10-18-DEFERRED-SHOP-REFERENCE-PACK.md` preserves catalogue values, unapproved per-item tax review and seller-specific setup/validation/rollback in a hash-verified archive. It grants no account connection/import/activation authority; Bankstown/Roselands operational acceptance remains deferred and unverified.

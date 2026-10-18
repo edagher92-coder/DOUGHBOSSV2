@@ -1,5 +1,7 @@
 # Deferred-shop catalogue reference pack — 18 October 2026
 
+Later owner policy decision: distribute `2026-10-18-APPROVED-300-ROUTING-BASIS.md` alongside this frozen R1 archive. It resolves the A$300 basis to discounted food/drink including GST, before delivery/service fees. The archive/manifest remain unchanged historical bytes; their unresolved-policy wording is superseded, not runtime enforcement or destination acceptance.
+
 Canonical handoff baseline `2cdc65e148f5b1de8ab7120324721e6734d0260d`; runtime source `9f37ccf77670b0175049e02c9896f28912f7488c`. No runtime code changed.
 
 Outcome: preserve public menu values and the deferred shops' tax/setup/validation/rollback worksheets. Non-goals: no account connection, credentials, provider read/write, direct import, activation, payment or deployment. Files: one five-member ZIP, this handoff and current-reference notes. Proof: schema/record checks, manifest/complete archive verification and a bounded Sol 6.1 review.

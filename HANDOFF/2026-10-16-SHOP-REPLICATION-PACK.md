@@ -2,6 +2,8 @@
 
 ## Current reference — 18 October R18 and catalogue archive
 
+Read `2026-10-18-APPROVED-300-ROUTING-BASIS.md` with the frozen catalogue archive: the owner has resolved the A$300 basis (food/drink after discounts, including GST, before delivery/service fees). This supersedes the older unresolved wording below and inside R1's worksheet. Ordinary server-side threshold enforcement is still a required code/test gate before multi-shop activation; this decision does not connect or activate either deferred account.
+
 Use `2026-10-18-DEFERRED-SHOP-REFERENCE-PACK.md` for the five-member public catalogue/tax-review/setup/rollback archive. It preserves 43 records and 10 option signatures/48 choice entries but does not connect accounts or supply a direct Square import. Use `2026-10-18-NATIVE-R18-LOYALTY-CANDIDATE.md` for current 239-runtime-file native/package acceptance and plugin/theme hashes. The R11/238-file/package values in older sections below are historical, not the current candidate.
 
 ## 18 October - retained source baseline
