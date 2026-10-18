@@ -333,6 +333,7 @@ test('drinks use the same truthful photo-led card path as food', () => {
 	assert.ok(find(card, n => /db-card-img/.test(n.className || '')), 'drinks retain the selected image frame');
 	const soldOut = menuCard({ id: 10, name: 'Sprite 600ml', price: 4.5, category: 'Drinks', image: '', available: false, options: [] }, false, 0, true);
 	assert.ok(find(soldOut, n => /db-card-img--placeholder/.test(n.className || '')), 'missing drink photo uses branded placeholder');
+	assert.equal(textOf(find(soldOut, n => n.className === 'db-card-placeholder-kicker')), 'Dough Boss', 'drink fallback makes no food-preparation or invented founding-year claim');
 	assert.match(textOf(soldOut), /Sold out/, 'sold-out state remains announced');
 });
 

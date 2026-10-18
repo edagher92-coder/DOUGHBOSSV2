@@ -1862,7 +1862,7 @@
 		var categoryKey = categoryLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'menu';
 		function placeholderMedia() {
 			return el('div', { class: 'db-card-img db-card-img--placeholder', 'data-category': categoryKey }, [
-				el('span', { class: 'db-card-placeholder-kicker', text: 'Dough Boss · Oven-baked' }),
+				el('span', { class: 'db-card-placeholder-kicker', text: 'Dough Boss' }),
 				el('span', { class: 'db-card-placeholder-category', text: categoryLabel })
 			]);
 		}
