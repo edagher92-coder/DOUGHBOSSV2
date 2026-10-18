@@ -3450,7 +3450,7 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $attempt_identity ) || is_wp_error( $cart_guard ) ) {
 			return is_wp_error( $attempt_identity ) ? $attempt_identity : $cart_guard;
 		}
-		$availability_error = $this->payment_availability_error( $this->cart->get_lines(), $location_id, $checkout_key );
+		$availability_error = $this->payment_availability_error( $this->cart->get_lines(), $location_id, $checkout_key, $totals );
 		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 		if ( $square_hosted ) {
 			// A new attempt key for the same cart supersedes an earlier, unpaid
@@ -4638,6 +4638,9 @@ class DoughBoss_REST_Controller {
 			return $accounting_basis;
 		}
 		// Re-read the authoritative policy immediately before durable creation.
+		$routing_error = $this->large_order_routing_error( $totals, $location_id );
+		if ( is_wp_error( $routing_error ) ) { return $routing_error; }
+		// A shop change must be explicitly selected and revalidated, never inferred.
 		// The order layer owns the final transactional authority check.
 		if ( $staff_approval_required && ! $this->staff_approval_requests_enabled( DoughBoss_Settings::staff_approval_policy() ) ) {
 			return new WP_Error( 'doughboss_preorder_unavailable', __( 'Pre-order requests are not available right now.', 'doughboss' ), array( 'status' => 503 ) );
@@ -4807,7 +4810,7 @@ class DoughBoss_REST_Controller {
 		if ( is_wp_error( $payment_location ) ) {
 			return $payment_location;
 		}
-		$availability_error = $this->payment_availability_error( $lines, (int) $order->location_id, (string) $verified_approval['payment_checkout_key'] );
+		$availability_error = $this->payment_availability_error( $lines, (int) $order->location_id, (string) $verified_approval['payment_checkout_key'], array( 'total' => $order->total, 'delivery_fee' => $order->delivery_fee ) );
 		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 		$approval = DoughBoss_Preorder_Approval::claim_payment( $request_id, $token );
 		if ( is_wp_error( $approval ) ) {
@@ -4958,7 +4961,7 @@ class DoughBoss_REST_Controller {
 		if ( ! DoughBoss_Square::ready_for_location( (int) $order->location_id ) ) {
 			return new WP_Error( 'doughboss_pay_off', __( 'Card payment is not available right now. Please contact the shop and do not try another payment link.', 'doughboss' ), array( 'status' => 503 ) );
 		}
-		$availability_error = $this->payment_availability_error( DoughBoss_Order::get_items( $request_id ), (int) $order->location_id, (string) $approval['payment_checkout_key'] );
+		$availability_error = $this->payment_availability_error( DoughBoss_Order::get_items( $request_id ), (int) $order->location_id, (string) $approval['payment_checkout_key'], array( 'total' => $order->total, 'delivery_fee' => $order->delivery_fee ) );
 		if ( is_wp_error( $availability_error ) ) { return $availability_error; }
 		$approval = DoughBoss_Preorder_Approval::claim_payment( $request_id, $token, true );
 		if ( is_wp_error( $approval ) ) {
@@ -5570,6 +5573,12 @@ class DoughBoss_REST_Controller {
 			}
 		}
 		$order_accounting_basis = $captured_accounting_basis;
+		// Verified paid returns retain their original seller/snapshot. Only a new
+		// unpaid order is subject to shop correction; never migrate paid money.
+		if ( 'unpaid' === $payment_status ) {
+			$routing_error = $this->large_order_routing_error( $totals, $location_id );
+			if ( is_wp_error( $routing_error ) ) { return $routing_error; }
+		}
 		if ( 'paid' === $payment_status && is_array( $paid_snapshot ) && isset( $paid_snapshot['payload']['order'] ) && is_array( $paid_snapshot['payload']['order'] ) ) {
 			$order_accounting_basis = DoughBoss_Order::accounting_basis_from_payload( $paid_snapshot['payload']['order'] );
 			if ( is_wp_error( $order_accounting_basis ) ) {
@@ -6620,9 +6629,48 @@ class DoughBoss_REST_Controller {
 			&& in_array( $attempt['status'], array( 'provisioning', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch', 'order_committed' ), true );
 	}
 
-	private function payment_availability_error( array $lines, $location_id, $checkout_key ) {
+	/**
+	 * New ordinary orders at A$300+ in discounted GST-inclusive food/drink
+	 * require an explicitly selected Revesby shop. The server total already
+	 * includes GST and discounts; remove fees, not tax or payment tenders.
+	 *
+	 * @return WP_Error|null Never changes the chosen shop or any stored facts.
+	 */
+	private function large_order_routing_error( array $totals, $location_id ) {
+		$invalid = new WP_Error( 'doughboss_order_routing_amount', __( 'The order amount could not be checked. Please refresh your cart before continuing.', 'doughboss' ), array( 'status' => 409 ) );
+		if ( PHP_INT_SIZE < 8 ) { return $invalid; }
+		$amounts = array();
+		foreach ( array( 'total', 'delivery_fee', 'service_fee' ) as $field ) {
+			if ( ! array_key_exists( $field, $totals ) ) {
+				if ( 'service_fee' === $field ) { $amounts[$field] = 0; continue; }
+				return $invalid;
+			}
+			$value = $totals[$field];
+			if ( is_int( $value ) ) {
+				$value = (string) $value;
+			} elseif ( is_float( $value ) ) {
+				if ( ! is_finite( $value ) || $value < 0 || $value > 99999999.99 ) { return $invalid; }
+				$decimal = sprintf( '%.2F', $value );
+				if ( $value !== (float) $decimal ) { return $invalid; }
+				$value = $decimal;
+			}
+			if ( ! is_string( $value ) || 1 !== preg_match( '/^(0|[1-9][0-9]{0,7})(?:\.([0-9]{1,2}))?\z/', $value, $parts ) ) { return $invalid; }
+			$amounts[$field] = (int) $parts[1] * 100 + ( isset( $parts[2] ) ? (int) str_pad( $parts[2], 2, '0' ) : 0 );
+		}
+		$fees = $amounts['delivery_fee'] + $amounts['service_fee'];
+		if ( $fees > $amounts['total'] ) { return $invalid; }
+		if ( $amounts['total'] - $fees < 30000 ) { return null; }
+		$id = $this->canonical_native_location_id( $location_id );
+		$location = false !== $id ? DoughBoss_Locations::get( $id ) : null;
+		if ( $location && isset( $location->id, $location->slug ) && $id === (int) $location->id && ! empty( $location->is_active ) && 'revesby' === $location->slug ) { return null; }
+		return new WP_Error( 'doughboss_large_order_revesby', __( 'Orders with A$300 or more in food and drink after discounts, including GST but excluding delivery and service fees, must go through Revesby. Please choose Revesby and review your pickup details, or contact the shop if it is unavailable.', 'doughboss' ), array( 'status' => 409 ) );
+	}
+
+	private function payment_availability_error( array $lines, $location_id, $checkout_key, array $totals ) {
 		$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
 		if ( $this->availability_replay_attempt( $attempt, $location_id ) ) { return null; }
+		$routing_error = $this->large_order_routing_error( $totals, $location_id );
+		if ( is_wp_error( $routing_error ) ) { return $routing_error; }
 		return $this->menu_lines_availability_error( $lines, $location_id );
 	}
 

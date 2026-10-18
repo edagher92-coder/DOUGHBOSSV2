@@ -704,3 +704,66 @@ db_test( 'Order::create takes the settings-row lock before the gap-locking repla
 	assert_true( false !== $start && false !== $begin && false !== $lock && false !== $replay, 'create() lock sequence located' );
 	assert_true( $begin < $lock && $lock < $replay, 'options-row FOR UPDATE precedes the checkout_key FOR UPDATE lookup, so concurrent creators serialise instead of deadlocking on the index gap' );
 } );
+
+db_test( 'large-order routing uses discounted GST-inclusive goods, not fees or subtotal', function () {
+	$db = new DoughBoss_WPB_DB();
+	$previous = db_wpb_use_db( $db );
+	try {
+		$db->location_row = (object) array( 'id' => 2, 'slug' => 'bankstown', 'is_active' => 1 );
+		$cases = array(
+			array( 299.99, 0, 0, false ), array( 300, 0, 0, true ), array( 300.01, 0, 0, true ),
+			array( 324.99, 25, 0, false ), array( 325, 25, 0, true ),
+			array( 330, 25, 5, true ), array( 329.99, 25, 5, false ),
+			array( '300.00', '0.00', '0.00', true ), array( 300.0, 0.0, 0.0, true ),
+		);
+		foreach ( $cases as $case ) {
+			$totals = array( 'total' => $case[0], 'delivery_fee' => $case[1], 'service_fee' => $case[2], 'subtotal' => 310, 'discount' => 10.01, 'tax' => 99 );
+			$error = db_wpb_controller_call( 'large_order_routing_error', array( $totals, 2 ) );
+			assert_same( $case[3], is_wp_error( $error ), 'threshold compares integer cents after removing fees: ' . json_encode( $case ) );
+			if ( $case[3] ) {
+				assert_same( 'doughboss_large_order_revesby', $error->get_error_code(), 'wrong-shop error is explicit' );
+				assert_same( 409, $error->get_error_data()['status'], 'shop correction is a conflict, not a charge' );
+			}
+		}
+		assert_same( null, db_wpb_controller_call( 'large_order_routing_error', array( array( 'subtotal' => 310, 'discount' => 10.01, 'total' => 324.99, 'delivery_fee' => 25 ), 2 ) ), '310 minus 10.01 stays below the threshold even with fees' );
+		assert_true( is_wp_error( db_wpb_controller_call( 'large_order_routing_error', array( array( 'subtotal' => 310, 'discount' => 10, 'total' => 325, 'delivery_fee' => 25 ), 2 ) ) ), '310 minus 10 reaches the threshold, with GST already included' );
+		$db->location_row = (object) array( 'id' => 1, 'slug' => 'revesby', 'is_active' => 1 );
+		assert_same( null, db_wpb_controller_call( 'large_order_routing_error', array( array( 'total' => 300, 'delivery_fee' => 0 ), 1 ) ), 'active Revesby accepts the threshold' );
+		foreach ( array( null, (object) array( 'id' => 1, 'slug' => 'revesby', 'is_active' => 0 ), (object) array( 'id' => 2, 'slug' => 'revesby', 'is_active' => 1 ), (object) array( 'id' => 1, 'slug' => 'revesby-2', 'name' => 'Revesby', 'is_active' => 1 ) ) as $location ) {
+			$db->location_row = $location;
+			assert_true( is_wp_error( db_wpb_controller_call( 'large_order_routing_error', array( array( 'total' => 300, 'delivery_fee' => 0 ), 1 ) ) ), 'missing, inactive, mismatched or name-spoofed Revesby cannot pass' );
+		}
+	} finally { $GLOBALS['wpdb'] = $previous; }
+} );
+
+db_test( 'large-order routing preserves only already-initiated same-shop payment recovery', function () {
+	require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment-attempts.php';
+	$db = new DoughBoss_WPB_DB();
+	$previous = db_wpb_use_db( $db );
+	try {
+		$db->location_row = (object) array( 'id' => 2, 'slug' => 'bankstown', 'is_active' => 1 );
+		$key = str_repeat( 'd', 64 );
+		foreach ( array( null, array( 'status' => 'prepared', 'location_id' => 2 ), array( 'status' => 'failed', 'location_id' => 2 ), array( 'status' => 'succeeded', 'location_id' => 1 ) ) as $attempt ) {
+			$db->attempt_row = $attempt;
+			$error = db_wpb_controller_call( 'payment_availability_error', array( array(), 2, $key, array( 'total' => 300, 'delivery_fee' => 0 ) ) );
+			assert_same( 'doughboss_large_order_revesby', is_wp_error( $error ) ? $error->get_error_code() : '', 'new, merely prepared, failed or wrong-shop attempts cannot bypass routing' );
+		}
+		foreach ( array( 'provisioning', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch', 'order_committed' ) as $status ) {
+			$db->attempt_row = array( 'status' => $status, 'location_id' => 2 );
+			assert_same( null, db_wpb_controller_call( 'payment_availability_error', array( array(), 2, $key, array() ) ), 'existing recovery remains on its original path; later payment verification still required: ' . $status );
+		}
+		assert_same( array(), $db->inserts, 'routing never inserts an order or attempt' );
+		assert_same( array(), $db->updates, 'routing never rewrites a seller or immutable snapshot' );
+	} finally { $GLOBALS['wpdb'] = $previous; }
+} );
+
+db_test( 'large-order routing rejects malformed money without silently rounding', function () {
+	foreach ( array( true, false, null, array(), new stdClass(), INF, NAN, -1, 300.001, 100000000, '300.001', '3e2', ' 300', '0300', '-1', '999999999999999999' ) as $value ) {
+		$error = db_wpb_controller_call( 'large_order_routing_error', array( array( 'total' => $value, 'delivery_fee' => 0 ), 1 ) );
+		assert_same( 'doughboss_order_routing_amount', is_wp_error( $error ) ? $error->get_error_code() : '', 'invalid total is rejected before a shop query' );
+	}
+	foreach ( array( array(), array( 'total' => 300 ), array( 'total' => 300, 'delivery_fee' => 301 ), array( 'total' => 300, 'delivery_fee' => -1 ), array( 'total' => 300, 'delivery_fee' => 0, 'service_fee' => null ), array( 'total' => 300, 'delivery_fee' => 0, 'service_fee' => 300.001 ) ) as $totals ) {
+		$error = db_wpb_controller_call( 'large_order_routing_error', array( $totals, 1 ) );
+		assert_same( 'doughboss_order_routing_amount', is_wp_error( $error ) ? $error->get_error_code() : '', 'missing/invalid/inconsistent fee facts fail closed' );
+	}
+} );

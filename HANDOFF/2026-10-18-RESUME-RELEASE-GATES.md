@@ -2,6 +2,8 @@
 
 ## Current checkpoint — R18 exact-candidate native gate accepted
 
+New local runtime candidate: `2026-10-18-300-ROUTING-IMPLEMENTATION-R1.md` records the A$300 guard and PHP 8.2 3177/3177 / PHP 7.4 3107/3107. Sol 6.1 verification could not start (agent/thread limit); fresh exact-source native acceptance and packages are pending. Do not treat the older R18 or ZIP as covering this new code. Payments/other-shop connections remain off; no deployment occurred. Square now opens its dashboard after owner sign-in, but merchant/provider readback remains unverified.
+
 Owner routing decision: `2026-10-18-APPROVED-300-ROUTING-BASIS.md` now fixes the ordinary A$300 threshold to discounted food/drink including GST, before delivery/service fees; catering always uses Revesby. This supersedes older unresolved-policy wording, including the frozen reference ZIP. Ordinary server enforcement is not yet implemented or accepted; retain a multi-shop activation hold until its code/test/provider gates pass. Other account connections remain deferred.
 
 Current-candidate frontend observation: `2026-10-18-CURRENT-CANDIDATE-BROWSER-R1.md` records fresh source-pinned local browser geometry, native image deferral, search and hero playback, plus material preview/tool limitations. It is not full-menu, saved-navigation, real-device, checkout or live-performance acceptance.

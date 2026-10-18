@@ -1,5 +1,7 @@
 # Owner-approved A$300 routing amount basis — 18 October 2026
 
+Later implementation checkpoint: see `2026-10-18-300-ROUTING-IMPLEMENTATION-R1.md`. A local guard and regression tests now exist, but Sol 6.1 and fresh native database/release acceptance remain pending. The historical source-gap description below is not the latest local implementation state and is not evidence of deployment.
+
 ## Approved decision
 
 The owner answered the outstanding ordinary-order routing question:
