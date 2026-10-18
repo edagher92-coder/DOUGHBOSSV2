@@ -1,5 +1,9 @@
 # 18 October 2026 - resumed DoughBoss release gates
 
+## Scope correction — POSPal retired
+
+DoughBoss is no longer using POSPal. Square is the sole forward POS, order and kitchen-integration target for this launch. Do not configure, call, test, deploy or treat POSPal as a launch dependency. Existing POSPal code may be removed only after a read-only audit proves there are no pending POSPal attempts, outbox records, retries or historical recovery paths that still require it; preserve historical records and migration safety. This correction does not authorize payments, provider writes, another shop connection or live deployment.
+
 ## Current checkpoint — R18 exact-candidate native gate accepted
 
 New local runtime candidate: `2026-10-18-300-ROUTING-IMPLEMENTATION-R1.md` records the A$300 guard and PHP 8.2 3177/3177 / PHP 7.4 3107/3107. Sol 6.1 verification could not start (agent/thread limit); fresh exact-source native acceptance and packages are pending. Do not treat the older R18 or ZIP as covering this new code. Payments/other-shop connections remain off; no deployment occurred. Square now opens its dashboard after owner sign-in, but merchant/provider readback remains unverified.
