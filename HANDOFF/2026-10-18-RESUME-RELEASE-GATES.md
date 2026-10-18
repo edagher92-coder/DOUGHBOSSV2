@@ -2,6 +2,8 @@
 
 ## Current checkpoint — R18 exact-candidate native gate accepted
 
+Current-candidate frontend observation: `2026-10-18-CURRENT-CANDIDATE-BROWSER-R1.md` records fresh source-pinned local browser geometry, native image deferral, search and hero playback, plus material preview/tool limitations. It is not full-menu, saved-navigation, real-device, checkout or live-performance acceptance.
+
 Deferred-store reference: `2026-10-18-DEFERRED-SHOP-REFERENCE-PACK.md` preserves catalogue values, unapproved per-item tax review and seller-specific setup/validation/rollback in a hash-verified archive. It grants no account connection/import/activation authority; Bankstown/Roselands operational acceptance remains deferred and unverified.
 
 Provider continuation: `2026-10-18-CATALOGUE-BASELINE-AND-SQUARE-LOGIN.md` records the connected Square sign-in requirement and fresh public website equality to the dated 43-item/10-signature/48-choice-entry baseline. This is not refreshed provider parity; preserve the older provider comparison's date and do not reclassify previously checked historical choice details as never checked.
