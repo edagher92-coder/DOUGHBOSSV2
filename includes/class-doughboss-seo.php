@@ -95,7 +95,7 @@ class DoughBoss_SEO {
 		if ( 'members-events' === $page ) {
 			return array(
 				'title'       => __( 'Dough Boss Members & Events | Catering & Order Updates', 'doughboss' ),
-				'description' => __( 'Find order updates, catering contacts and app shortcuts. Square membership sign-up, member accounts and rewards are not available on this page yet.', 'doughboss' ),
+				'description' => __( 'Find order updates, catering contacts, app shortcuts and the current Square membership status for Dough Boss Revesby.', 'doughboss' ),
 			);
 		}
 		return null;

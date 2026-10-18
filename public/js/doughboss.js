@@ -1278,6 +1278,8 @@
 						}
 						var target = root.querySelector('#' + targetId);
 						if (target) {
+        root.classList.add('db-menu--checkout-navigation');
+        void root.offsetHeight;
 							target.scrollIntoView({
 								behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
 								block: 'start'
@@ -1361,6 +1363,8 @@
 				})[0];
 				if (!linked) { return; }
 				if (search.value) { search.value = ''; search.dispatchEvent(new Event('input')); }
+    root.classList.add('db-menu--checkout-navigation');
+    void root.offsetHeight;
 				linked.heading.scrollIntoView({ behavior: 'auto', block: 'start' });
 				updateActiveCategory();
 			}
@@ -1646,12 +1650,17 @@
 	// Use packaged responsive candidates only when they describe the selected
 	// original. Featured uploads, older responses and malformed data fall back.
 	function menuPhoto(item) {
-		var media = el('div', { class: 'db-card-img' });
+		var media = el('div', { class: 'db-card-img', 'data-category': String(item.category || '').trim().toLowerCase() });
+		var generated = typeof item.image === 'string' && /(?:^|\/)public\/images\/menu\/generated-v1\/[a-z0-9-]+\.webp$/.test(item.image);
 		// Native lazy loading must also cover featured uploads and older API
 		// responses. CSS backgrounds cannot opt into native lazy loading.
-		var image = el('img', { loading: 'lazy', decoding: 'async', src: item.image, alt: String(item.name || '') });
+		var image = el('img', { loading: 'lazy', decoding: 'async', src: item.image, alt: String(item.name || '') + (generated ? ' — AI-generated illustration' : '') });
 		function finish(sources) {
 			media.appendChild(el('picture', { class: 'db-menu-picture' }, (sources || []).concat([image])));
+			if (generated) {
+				media.setAttribute('data-generated-illustration', 'true');
+				media.appendChild(el('span', { class: 'db-menu-image-note', text: 'AI image', title: 'AI-generated illustration, not a photograph of the actual item.' }));
+			}
 			return media;
 		}
 		var data = item.image_responsive;
@@ -3638,6 +3647,7 @@
 
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
+			if (submit.disabled) { return; }
 			// Live pickup shops need a held time first. The gate announces its own
 			// reason in the picker; nothing is locked or sent until it passes.
 			if (pickup && typeof pickup.gate === 'function' && !(stripeHosted && stripeCancelledPayload) && !squareHostedActive && pickup.gate()) {

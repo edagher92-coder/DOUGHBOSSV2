@@ -261,6 +261,9 @@ class DoughBoss_Settings {
 			'square_live_approved'      => 0,
 			// Accrue Square Loyalty points on paid web orders (existing members only).
 			'square_loyalty_accrual'    => 0,
+			// Public Revesby customer link only; separate from accrual and payments.
+			'square_loyalty_status_url' => '',
+			'square_loyalty_status_enabled' => 0,
 			// Square Subscriptions plan variation id for the paid Club tier.
 			'square_club_plan_variation_id' => '',
 			// Apple Pay / Google Pay buttons on Square checkout (enable after sandbox test).

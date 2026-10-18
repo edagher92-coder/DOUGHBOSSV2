@@ -139,8 +139,8 @@ test('Square dashboard distinguishes configured mappings without treating them a
 	assert.doesNotMatch(unsupported.text(), /Demo orders|Gross sales|Net sales|Average order/);
 });
 
-function extractFunction(file, name, context) {
-	const source = fs.readFileSync(file, 'utf8');
+function extractFunction(file, name, context, sourceOverride) {
+	const source = typeof sourceOverride === 'string' ? sourceOverride : fs.readFileSync(file, 'utf8');
 	const marker = 'function ' + name + '(';
 	const start = source.indexOf(marker);
 	assert.notEqual(start, -1, name + ' must exist in ' + path.basename(file));
@@ -168,6 +168,94 @@ const orderboard = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-orde
 const square = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-square.js');
 const shopStatus = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-shop-status.js');
 const catering = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-catering.js');
+
+function checkoutSubmitHarness() {
+	const source = fs.readFileSync(storefront, 'utf8');
+	const start = source.indexOf('function checkoutForm(');
+	assert.notEqual(start, -1);
+	const checkoutSource = source.slice(start);
+	const marker = "form.addEventListener('submit', function (e) {";
+	assert.ok(checkoutSource.includes(marker));
+	const renamed = checkoutSource.replace(marker, "form.addEventListener('submit', function checkoutSubmit(e) {");
+	const requests = [], confirmations = [], lockEvents = [], announcements = [];
+	const form = storefrontElement('form');
+	let nextKey = 0;
+	const crypto = { randomUUID: () => 'synthetic-checkout-' + (++nextKey) };
+	const valueField = value => ({ querySelector: () => ({ value }) });
+	const ctx = {
+		form, submit: { disabled: false, textContent: 'Place order' }, msg: { className: '', textContent: '' },
+		name: valueField('Preview Customer'), email: valueField('preview@example.invalid'),
+		phone: valueField('0000000000'), address: valueField(''), notes: valueField('Synthetic only'),
+		orderType: 'pickup', getLocationId: () => 1, storedLocationId: () => 1,
+		pickupPayloadFields: () => ({}), pickupBody: () => ({}), pickup: null,
+		paying: false, stripeHosted: false, stripeCancelledPayload: null,
+		squareHosted: false, squareHostedActive: null, tyro: null, mpgsHosted: false,
+		checkoutAttemptId: null, checkoutPaymentId: null, paymentAttemptKey: 'synthetic-payment',
+		I18N: {}, payLabel: 'Place order', payLabelFor: () => 'Place order', totals: { total: 33 },
+		crypto, window: { crypto }, onJourneyStep: null,
+		setPaymentMutationLock: locked => lockEvents.push(locked),
+		clearError: node => { node.textContent = ''; },
+		announceError: (node, message) => { node.textContent = message; announcements.push(message); },
+		completeOrder: response => confirmations.push(response),
+		request: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject }))
+	};
+	// Execute the genuine handler and its genuine retry/idempotency helpers in
+	// one shared lexical VM context. Only network and completed-order rendering
+	// are replaced with synthetic recorders; no provider or endpoint is called.
+	ctx.placeOrder = extractFunction(storefront, 'placeOrder', ctx, checkoutSource);
+	ctx.fail = extractFunction(storefront, 'fail', ctx, checkoutSource);
+	ctx.checkoutSubmit = extractFunction(storefront, 'checkoutSubmit', ctx, renamed);
+	return { ctx, requests, confirmations, lockEvents, announcements,
+		submit: () => ctx.checkoutSubmit({ preventDefault() {} }),
+		settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('checkout blocks pending duplicate submits and reuses the actual idempotency key after failure', async () => {
+	const h = checkoutSubmitHarness();
+	h.submit();
+	assert.equal(h.requests.length, 1);
+	assert.equal(h.requests[0].url, '/checkout');
+	assert.equal(h.requests[0].options.headers['Idempotency-Key'], 'synthetic-checkout-1');
+	assert.equal(h.ctx.submit.disabled, true);
+	assert.equal(h.ctx.form.attributes['aria-busy'], 'true');
+	assert.deepEqual(h.lockEvents, [true]);
+	h.submit();
+	assert.equal(h.requests.length, 1, 'no second request while pending');
+	assert.deepEqual(h.lockEvents, [true], 'duplicate dispatch does not repeat side effects');
+	h.requests[0].reject(new Error('Synthetic network failure'));
+	await h.settle();
+	assert.equal(h.ctx.submit.disabled, false);
+	assert.equal(h.ctx.form.attributes['aria-busy'], 'false');
+	assert.deepEqual(h.lockEvents, [true, false]);
+	assert.deepEqual(h.announcements, ['Synthetic network failure']);
+	h.submit();
+	assert.equal(h.requests.length, 2);
+	assert.equal(h.requests[1].options.headers['Idempotency-Key'], h.requests[0].options.headers['Idempotency-Key'], 'retry preserves server deduplication identity');
+	assert.equal(h.requests[1].options.body.customer_email, 'preview@example.invalid');
+	h.requests[1].resolve({ id: 'synthetic-order' });
+	await h.settle();
+	assert.deepEqual(h.confirmations, [{ id: 'synthetic-order' }]);
+});
+
+test('checkout pickup refusal stays unlocked and a later valid submit is single-flight', async () => {
+	const h = checkoutSubmitHarness();
+	let blocked = true, gateCalls = 0;
+	h.ctx.pickup = { gate: () => { gateCalls++; return blocked; }, recover: () => false };
+	h.submit();
+	assert.equal(h.requests.length, 0);
+	assert.equal(h.ctx.submit.disabled, false);
+	assert.deepEqual(h.lockEvents, []);
+	blocked = false;
+	h.submit();
+	assert.equal(h.requests.length, 1);
+	assert.equal(gateCalls, 2);
+	h.submit();
+	assert.equal(h.requests.length, 1, 'pending replay is ignored before the pickup gate');
+	assert.equal(gateCalls, 2);
+	h.requests[0].resolve({ id: 'synthetic-pickup' });
+	await h.settle();
+	assert.deepEqual(h.confirmations, [{ id: 'synthetic-pickup' }]);
+});
 
 test('post-order feedback waits for completion and final tracking does not promise continued polling', () => {
 	function element(tag, attributes = {}, children = []) {
@@ -767,6 +855,18 @@ test('menu photographs deliver local responsive sources and a dimensioned origin
 	assert.equal(image.attributes.height, '864');
 	assert.equal(image.attributes.loading, 'lazy');
 	assert.equal(image.attributes.decoding, 'async');
+	const drink = menuPhoto({ name: 'Coke 600ml', category: 'Drinks', image: '/plugin/public/images/menu/brand-v1/coca-cola-classic-600ml.jpg' });
+	assert.equal(drink.attributes['data-category'], 'drinks', 'bottle media is identified without changing food photos');
+	assert.equal(drink.children[0].children[0].attributes.alt, 'Coke 600ml');
+	assert.equal(drink.children[0].children[0].attributes.loading, 'lazy');
+	const menuCss = fs.readFileSync(path.join(__dirname, '../public/css/doughboss.css'), 'utf8');
+	assert.match(menuCss, /\.db-card-img\[data-category='drinks'\] \.db-menu-picture > img\s*\{[^}]*object-fit:\s*contain;/, 'whole bottles are not cropped like food');
+	const illustration = menuPhoto({ name: 'Half Meat & Cheese', category: 'Manoush', image: '/plugin/public/images/menu/generated-v1/half-meat-cheese.webp' });
+	assert.equal(illustration.attributes['data-generated-illustration'], 'true');
+	assert.equal(illustration.children[1].textContent, 'AI image', 'generated asset is visibly labelled');
+	assert.match(illustration.children[0].children[0].attributes.alt, /AI-generated illustration/);
+	assert.equal(drink.children.length, 1, 'authentic drink photographs receive no AI badge');
+	assert.equal(menuPhoto({ name: 'Upload', image: '/uploads/generated-v1/unrelated.webp' }).children.length, 1, 'unrelated upload is not guessed to be generated');
 });
 
 test('menu photographs retain originals for absent, unrelated or malformed candidates', () => {
@@ -853,6 +953,41 @@ function menuEnhancementHarness(overrides = {}) {
 	const render = extractFunction(storefront, 'renderMenu', context);
 	return { root, fallback, browseItem, render: () => render(root), settle: () => new Promise(resolve => setImmediate(resolve)) };
 }
+
+function categoryNavigationHarness(hash = '') {
+	const events = [];
+	const h = menuEnhancementHarness({
+		items: [{ name: 'Sample food', category: 'Manoush' }, { name: 'Sample drink', category: 'Drinks' }],
+		window: { addEventListener() {}, location: { hash }, scrollY: 0, matchMedia: () => ({ matches: true }) },
+		el: (tag, attrs, children) => {
+			const node = storefrontCreate(tag, attrs, children);
+			if (tag === 'h2') node.scrollIntoView = () => events.push('scroll:' + node.id);
+			return node;
+		}
+	});
+	h.root.classList.add = name => events.push('stable:' + name);
+	Object.defineProperty(h.root, 'offsetHeight', { get() { events.push('layout'); return 640; } });
+	const query = h.root.querySelector.bind(h.root);
+	h.root.querySelector = selector => selector.startsWith('#') ? h.root.children.find(node => node.id === selector.slice(1)) || null : query(selector);
+	const descendants = node => [node, ...node.children.flatMap(descendants)];
+	return { ...h, events, categoryButton: name => descendants(h.root).find(node => node.className === 'db-jump' && node.textContent === name) };
+}
+
+test('first category tap settles deferred menu heights before measuring its scroll destination', async () => {
+	const h = categoryNavigationHarness();
+	h.render(); await h.settle();
+	assert.deepEqual(h.events, [], 'initial manual browsing keeps deferred grids');
+	const button = h.categoryButton('Drinks');
+	assert.ok(button);
+	button.listeners.click();
+	assert.deepEqual(h.events, ['stable:db-menu--checkout-navigation', 'layout', 'scroll:db-cat-drinks']);
+});
+
+test('direct category hash settles deferred menu heights before scrolling once', async () => {
+	const h = categoryNavigationHarness('#drinks');
+	h.render(); await h.settle();
+	assert.deepEqual(h.events, ['stable:db-menu--checkout-navigation', 'layout', 'scroll:db-cat-drinks']);
+});
 
 test('non-empty menu enhancement supports prototype-named WordPress categories', async () => {
 	const categories = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'Manoush'];

@@ -4203,6 +4203,16 @@ class DoughBoss_REST_Controller {
 	 */
 	private function menu_image_url( $name, $category ) {
 		$images = array(
+			'cheese-tomato-olives'     => 'generated-v1/cheese-tomato-olives.webp',
+			'half-meat-cheese'         => 'generated-v1/half-meat-cheese.webp',
+			'labneh-veggie-pizza'      => 'generated-v1/labneh-veggie-pizza.webp',
+			'sujuk-special'           => 'generated-v1/sujuk-special.webp',
+			'zaatar-veggie-pizza'      => 'generated-v1/zaatar-veggie-pizza.webp',
+			'coke-600ml'              => 'brand-v1/coca-cola-classic-600ml.jpg',
+			'coke-zero-600ml'         => 'brand-v1/coca-cola-zero-600ml.png',
+			'coke-vanilla-600ml'      => 'brand-v1/coca-cola-vanilla-600ml.jpg',
+			'sprite-600ml'            => 'brand-v1/sprite-600ml.jpg',
+			'fanta-600ml'             => 'brand-v1/fanta-orange-600ml.jpg',
 			'apple-juice'             => 'brand-v1/juice-world-apple-500ml.jpg',
 			'lemon-juice'             => 'brand-v1/juice-world-lemon-500ml.jpg',
 			'lemon-mint-juice'        => 'brand-v1/juice-world-lemon-mint-500ml.jpg',

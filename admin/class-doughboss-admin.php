@@ -535,6 +535,11 @@ class DoughBoss_Admin {
 		if ( isset( $input['square_loyalty_accrual_present'] ) ) {
 			$clean['square_loyalty_accrual'] = empty( $input['square_loyalty_accrual'] ) ? 0 : 1;
 		}
+		if ( isset( $input['square_loyalty_status_present'] ) ) {
+			$status_url = DoughBoss_Square_Loyalty::sanitize_status_url( $input['square_loyalty_status_url'] ?? '' );
+			$clean['square_loyalty_status_url'] = $status_url;
+			$clean['square_loyalty_status_enabled'] = '' !== $status_url && in_array( $input['square_loyalty_status_enabled'] ?? 0, array( 1, '1', true ), true ) ? 1 : 0;
+		}
 		if ( isset( $input['square_wallets_present'] ) ) {
 			$clean['square_wallets_enabled'] = empty( $input['square_wallets_enabled'] ) ? 0 : 1;
 		}
@@ -4007,6 +4012,13 @@ JS;
 							<th><?php esc_html_e( 'Square Loyalty', 'doughboss' ); ?></th>
 							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual_present]" value="1" /><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_accrual]" value="1" <?php checked( DoughBoss_Square_Loyalty::enabled(), true ); ?> /> <?php esc_html_e( 'Award Square Loyalty points on paid web orders', 'doughboss' ); ?></label>
 								<p class="description"><?php esc_html_e( 'Matches the customer by phone to an existing Square Loyalty account and applies the points rules set in Square Dashboard. Runs in the background; never enrols anyone. No effect until a Square Loyalty program is active.', 'doughboss' ); ?></p></td>
+						</tr>
+						<tr>
+							<th><label for="db-square-loyalty-status-url"><?php esc_html_e( 'Square membership link', 'doughboss' ); ?></label></th>
+							<td><input type="hidden" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_status_present]" value="1" />
+								<input type="url" id="db-square-loyalty-status-url" class="regular-text" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_status_url]" value="<?php echo esc_attr( DoughBoss_Square_Loyalty::sanitize_status_url( $settings['square_loyalty_status_url'] ?? '' ) ); ?>" placeholder="https://squareup.com/loyalty/…" />
+								<p><label><input type="checkbox" name="<?php echo esc_attr( $opt ); ?>[square_loyalty_status_enabled]" value="1" <?php checked( in_array( $settings['square_loyalty_status_enabled'] ?? 0, array( 1, '1', true ), true ), true ); ?> /> <?php esc_html_e( 'Show the Revesby Square membership link', 'doughboss' ); ?></label></p>
+								<p class="description"><?php esc_html_e( 'Copy the public loyalty-status link from Revesby\'s Square Dashboard. Verify the Dough Boss merchant and active program before enabling. Customers sign in or enrol on Square using phone/SMS. This does not enable payments, points accrual, paid Club subscriptions or other shops.', 'doughboss' ); ?></p></td>
 						</tr>
 						<tr>
 							<th><?php esc_html_e( 'Checkout style', 'doughboss' ); ?></th>

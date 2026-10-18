@@ -152,6 +152,69 @@ db_test(
 
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-loyalty.php';
 
+if ( ! function_exists( 'esc_url' ) ) {
+	function esc_url( $url ) { return htmlspecialchars( (string) $url, ENT_QUOTES, 'UTF-8' ); }
+}
+
+db_test( 'Square membership status URLs are exact public destinations', function () {
+	assert_same( 'https://squareup.com/loyalty/REVIEW_123-abc', DoughBoss_Square_Loyalty::sanitize_status_url( ' https://squareup.com/loyalty/REVIEW_123-abc/ ' ), 'canonical public URL keeps the exact merchant token' );
+	foreach ( array( 'https://app.squareup.com/loyalty/REVIEW123', 'https://profile.squareup.com/merchantportal/REVIEW123/loyalty' ) as $url ) {
+		assert_same( $url, DoughBoss_Square_Loyalty::sanitize_status_url( $url . '/' ), 'observed Square customer URL form is retained without a guessed redirect' );
+	}
+	assert_same( 'https://squareup.com/loyalty/' . str_repeat( 'A', 64 ), DoughBoss_Square_Loyalty::sanitize_status_url( 'https://squareup.com/loyalty/' . str_repeat( 'A', 64 ) ), 'maximum bounded token accepted' );
+	foreach ( array(
+		null, false, true, 1, 1.0, array(), new stdClass(), '',
+		'http://squareup.com/loyalty/ABC', '//squareup.com/loyalty/ABC',
+		'https://www.squareup.com/loyalty/ABC', 'https://squareup.com.evil.test/loyalty/ABC',
+		'https://evil.test/squareup.com/loyalty/ABC', 'https://squareup.com@evil.test/loyalty/ABC',
+		'https://user@squareup.com/loyalty/ABC', 'https://squareup.com:443/loyalty/ABC',
+		'https://squareup.com/loyalty/ABC?email=private', 'https://squareup.com/loyalty/ABC#private',
+		'https://squareup.com/loyalty/', 'https://squareup.com/loyalty/' . str_repeat( 'A', 65 ),
+		'https://squareup.com/loyalty/ABC/extra', 'https://squareup.com/loyalty/ABC//',
+		'https://squareup.com/loyalty/%41BC', 'https://squareup.com/loyalty/ABC%2Fextra',
+		'https://squareup.com/loyalty/ABC def', 'https://squareup.com/loyalty/ABC"onclick="x',
+		"https://squareup.com/loyalty/AB\nC", "https://squareup.com/loyalty/AB\0C",
+		'https://squareup.com\\evil.test/loyalty/ABC',
+		'https://app.squareup.com.evil.test/loyalty/ABC', 'https://app.squareup.com:443/loyalty/ABC',
+		'https://profile.squareup.com/merchantportal/ABC', 'https://profile.squareup.com/merchantportal/ABC/loyalty/extra',
+		'https://profile.squareup.com.evil.test/merchantportal/ABC/loyalty', 'https://profile.squareup.com/merchantportal/ABC/loyalty?token=private',
+	) as $unsafe ) {
+		assert_same( '', DoughBoss_Square_Loyalty::sanitize_status_url( $unsafe ), 'unsafe or malformed link is rejected' );
+	}
+} );
+
+db_test( 'Square member handoff is off by default and never creates a local identity', function () {
+	$before = $GLOBALS['doughboss_test_options'];
+	try {
+		$defaults = DoughBoss_Settings::defaults();
+		assert_same( '', $defaults['square_loyalty_status_url'], 'no invented merchant link' );
+		assert_same( 0, $defaults['square_loyalty_status_enabled'], 'explicit operator enable required' );
+		foreach ( array( 0, '0', false, null, 'false', array( 1 ), new stdClass(), 2, 1.0 ) as $off ) {
+			doughboss_test_set_settings( array( 'square_loyalty_status_enabled' => $off, 'square_loyalty_status_url' => 'https://squareup.com/loyalty/REVIEW123' ) );
+			$html = DoughBoss_Square_Loyalty::membership_portal();
+			assert_true( false !== strpos( $html, 'Sign-up not open' ), 'unapproved status remains explicit' );
+			assert_false( false !== strpos( $html, 'href="https://squareup.com/' ), 'no external sign-in for a noncanonical opt-in' );
+			assert_true( false !== strpos( $html, esc_url( home_url( '/vouchers/' ) ) ), 'information remains reachable' );
+		}
+		doughboss_test_set_settings( array( 'square_loyalty_status_enabled' => 1, 'square_loyalty_status_url' => 'https://evil.test/loyalty/REVIEW123' ) );
+		assert_false( false !== strpos( DoughBoss_Square_Loyalty::membership_portal(), 'evil.test' ), 'persisted URL is revalidated before rendering' );
+		foreach ( array( 1, '1', true ) as $on ) {
+			doughboss_test_set_settings( array( 'square_loyalty_status_enabled' => $on, 'square_loyalty_status_url' => 'https://squareup.com/loyalty/REVIEW123/', 'loyalty_enabled' => 0, 'square_loyalty_accrual' => 0, 'payments_enabled' => 0 ) );
+			$settings = get_option( 'doughboss_settings' );
+			$html = DoughBoss_Square_Loyalty::membership_portal();
+			assert_true( false !== strpos( $html, 'class="dbf-button" href="https://squareup.com/loyalty/REVIEW123" rel="noreferrer"' ), 'only the canonical customer destination is linked' );
+			assert_true( false !== strpos( $html, 'Join or view my rewards on Square' ), 'hosted action is clearly labelled' );
+			assert_true( false !== strpos( $html, 'SMS code sent by Square' ), 'verification happens on Square' );
+			assert_true( false !== strpos( $html, 'does not sign you into WordPress' ), 'no false local-session claim' );
+			assert_true( false !== strpos( $html, 'Rewards redemption at website checkout is not available yet' ), 'no unsupported checkout redemption promise' );
+			assert_same( 0, preg_match( '/<(?:form|input|script|iframe)\b/i', $html ), 'no PII collection, embedding or sign-in script' );
+			assert_same( $settings, get_option( 'doughboss_settings' ), 'rendering does not change loyalty, accrual or payment settings' );
+		}
+	} finally {
+		$GLOBALS['doughboss_test_options'] = $before;
+	}
+} );
+
 db_test( 'Square Loyalty accrual requires an explicit saved opt-in', function () {
 	$before = $GLOBALS['doughboss_test_options'];
 	try {

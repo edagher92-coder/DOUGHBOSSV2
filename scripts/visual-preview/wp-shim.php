@@ -159,6 +159,7 @@ function _n( $single, $plural, $number ) { return 1 === (int) $number ? $single 
 function wp_json_encode( $data, $flags = 0 ) { return json_encode( $data, $flags ); }
 
 class DoughBoss_Settings {
+	public static function get( $key, $default = null ) { return $default; }
 	public static function ordering_open() { return ! empty( $GLOBALS['doughboss_preview_ordering_open'] ); }
 	public static function ordering_closed_message() { return 'Sample paused-state message. Check a shop for current availability.'; }
 	public static function format_price( $amount ) { return '$' . number_format( (float) $amount, 2 ); }
@@ -195,7 +196,8 @@ function the_post() { $GLOBALS['doughboss_preview_post_read'] = true; }
 function the_title() { echo esc_html( $GLOBALS['doughboss_preview_title'] ); }
 function the_content() {
 	if ( 'page-members-events.php' === $GLOBALS['doughboss_preview_template'] ) {
-		echo file_get_contents( $GLOBALS['doughboss_preview_repo_root'] . '/scripts/hero-commercial/members-events-page.html' );
+		$content = file_get_contents( $GLOBALS['doughboss_preview_repo_root'] . '/scripts/hero-commercial/members-events-page.html' );
+		echo str_replace( '[doughboss_square_membership]', do_shortcode( '[doughboss_square_membership]' ), $content );
 	}
 }
 
@@ -234,6 +236,7 @@ function get_post_meta( $post_id, $key ) {
 
 require $preview_repo . '/includes/class-doughboss-post-types.php';
 require $preview_repo . '/includes/class-doughboss-images.php';
+require $preview_repo . '/includes/class-doughboss-square-loyalty.php';
 require $preview_repo . '/themes/doughboss-final/functions.php';
 require $preview_repo . '/includes/class-doughboss-shortcodes.php';
 require $preview_repo . '/includes/class-doughboss-menu-options.php';
@@ -249,13 +252,16 @@ if ( ! empty( $GLOBALS['doughboss_preview_hero_media'] ) ) {
 }
 
 function shortcode_exists( $tag ) {
-	return in_array( $tag, array( 'doughboss_manoush_hero', 'doughboss_ordering_status', 'doughboss_shop_picker', 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'doughboss_catering', 'doughboss_b2b_form' ), true );
+	return in_array( $tag, array( 'doughboss_square_membership', 'doughboss_manoush_hero', 'doughboss_ordering_status', 'doughboss_shop_picker', 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'doughboss_catering', 'doughboss_b2b_form' ), true );
 }
 function do_shortcode( $source ) {
 	if ( ! preg_match( '/^\[([a-z0-9_]+)(.*?)\]$/s', trim( $source ), $match ) ) {
 		return '';
 	}
 	$tag        = $match[1];
+	if ( 'doughboss_square_membership' === $tag ) {
+		return $GLOBALS['doughboss_preview_shortcodes']->square_membership();
+	}
 	$attributes = array();
 	if ( preg_match_all( '/([a-z0-9_]+)="([^"]*)"/', $match[2], $pairs, PREG_SET_ORDER ) ) {
 		foreach ( $pairs as $pair ) {
@@ -370,14 +376,24 @@ function doughboss_preview_fixture() {
 				'category' => 'Manoush', 'available' => true, 'dietary' => array(), 'options' => array(),
 			),
 			array(
-				'id' => 1007, 'name' => 'Sample juice', 'description' => '',
-				'price' => 4, 'type' => 'drink', 'image' => '',
+				'id' => 1007, 'name' => 'Sample Coke 600ml', 'description' => '',
+				'price' => 4, 'type' => 'drink', 'image' => 'public/images/menu/brand-v1/coca-cola-classic-600ml.jpg',
 				'category' => 'Drinks', 'available' => true, 'dietary' => array(), 'options' => array(),
 			),
 			array(
-				'id' => 1008, 'name' => 'Sample soft drink 600ml', 'description' => '',
-				'price' => 4.5, 'type' => 'drink', 'image' => '',
+				'id' => 1008, 'name' => 'Sample Vanilla Coke 600ml', 'description' => '',
+				'price' => 4.5, 'type' => 'drink', 'image' => 'public/images/menu/brand-v1/coca-cola-vanilla-600ml.jpg',
 				'category' => 'Drinks', 'available' => false, 'dietary' => array(), 'options' => array(),
+			),
+			array(
+				'id' => 1009, 'name' => 'Sample Half Meat & Cheese', 'description' => 'AI-generated menu illustration. Sample price; not a real offer.',
+				'price' => 11, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/half-meat-cheese.webp',
+				'category' => 'Manoush', 'available' => true, 'dietary' => array(), 'options' => array(),
+			),
+			array(
+				'id' => 1010, 'name' => 'Sample Sujuk Special', 'description' => 'AI-generated menu illustration. Sample price; not a real offer.',
+				'price' => 15, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/sujuk-special.webp',
+				'category' => 'Pizza', 'available' => true, 'dietary' => array(), 'options' => array(),
 			),
 		),
 	);

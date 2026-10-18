@@ -76,7 +76,8 @@ walk(output);
 assert.deepEqual(actual.sort(), [...Object.keys(manifest.output_sha256), 'manifest.json'].sort(), 'no unmanifested output');
 for (const [relative, hash] of Object.entries(manifest.output_sha256)) {
   safeRelative(relative);
-  assert.match(relative, /\.(?:html|js|css|woff2|jpg|webp|avif|mp4)$/);
+  assert.match(relative, /\.(?:html|js|css|woff2|jpg|png|webp|avif|mp4)$/);
+  if (relative.endsWith('.png')) assert.equal(fs.readFileSync(path.join(output, relative)).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'PNG assets have a genuine PNG signature');
   assert.ok(!/(?:^|\/)(?:docs|admin|includes|scripts|tests|\.git)(?:\/|$)/.test(relative));
   assert.equal(digest(path.join(output, relative)), hash, `output hash: ${relative}`);
   if (heroScripts.has(relative)) {

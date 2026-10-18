@@ -1251,18 +1251,18 @@ test('title steam safely skips other pages and browsers without an intersection 
 	assert.equal(noControl.targets[0].classes.has('db-ambient-visible'), true, 'heading effect does not require a film control');
 });
 
-test('Members & Events is an honest informational hub with existing private tracking paths', () => {
+test('Members & Events delegates rewards status to the gated Square shortcode and retains private tracking paths', () => {
 	const source = fs.readFileSync(path.join(root, 'scripts', 'hero-commercial', 'members-events-page.html'), 'utf8');
-	assert.match(source, /Coming later · Sign-up not open/);
-	assert.match(source, /membership hub through Square/);
-	assert.match(source, /Membership sign-up, member accounts and rewards are not available/);
+	assert.match(source, /Your Square membership/);
+	assert.equal((source.match(/\[doughboss_square_membership\]/g) || []).length, 1);
+	assert.doesNotMatch(source, /https:\/\/squareup\.com\/loyalty\//, 'no hardcoded merchant or invented sign-in URL');
 	assert.match(source, /There are no event dates or bookings listed/);
 	assert.match(source, /order number and the email address used at checkout/);
 	assert.match(source, /Catering updates are handled by our team, not the website order tracker/);
 	assert.match(source, /never send card details by email/);
 	assert.doesNotMatch(source, /<form\b|<script\b|<iframe\b|<h1\b/i, 'no invented signup, embed or second page title');
 	const links = [...source.matchAll(/\bhref="([^"]+)"/g)].map(match => match[1]);
-	assert.deepEqual([...new Set(links)].sort(), ['/track-order/', '#db-me-catering', '#db-me-app', '#db-me-membership-title', '/vouchers/', '/locations/', 'mailto:catering@doughboss.com.au', 'tel:+61297742286', '/catering/', '/order/'].sort());
+	assert.deepEqual([...new Set(links)].sort(), ['/track-order/', '#db-me-catering', '#db-me-app', '#db-me-membership-title', '/locations/', 'mailto:catering@doughboss.com.au', 'tel:+61297742286', '/catering/', '/order/'].sort());
 	assert.match(source, /<button[^>]*data-db-install hidden>/, 'install action is natively hidden until a genuine browser offer');
 	assert.match(source, /data-db-install-status role="status" aria-live="polite"/);
 	assert.match(source, /internet connection/);

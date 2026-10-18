@@ -44,6 +44,34 @@ class DoughBoss_Square_Loyalty {
 		return (bool) DoughBoss_Settings::get( 'square_loyalty_accrual', 0 );
 	}
 
+	/** Validate a public Square loyalty-status link, never a provider request. */
+	public static function sanitize_status_url( $raw ) {
+		if ( ! is_string( $raw ) ) {
+			return '';
+		}
+		$url = trim( $raw );
+		if ( ! preg_match( '#\Ahttps://(?:(?:app\.)?squareup\.com/loyalty/[A-Za-z0-9_-]{1,64}|profile\.squareup\.com/merchantportal/[A-Za-z0-9_-]{1,64}/loyalty)/?\z#', $url ) ) {
+			return '';
+		}
+		return rtrim( $url, '/' );
+	}
+
+	/** Customer authentication and enrolment stay on Square, not WordPress. */
+	public static function membership_portal() {
+		$url = self::sanitize_status_url( DoughBoss_Settings::get( 'square_loyalty_status_url', '' ) );
+		$on  = in_array( DoughBoss_Settings::get( 'square_loyalty_status_enabled', 0 ), array( 1, '1', true ), true );
+		if ( $on && '' !== $url ) {
+			$html = '<p class="db-me-status">' . esc_html__( 'Square-hosted membership', 'doughboss' ) . '</p>';
+			$html .= '<p>' . esc_html__( 'Join or check your rewards using your phone number and the SMS code sent by Square. Your details and sign-in are handled on Square.', 'doughboss' ) . '</p>';
+			$html .= sprintf( '<p><a class="dbf-button" href="%s" rel="noreferrer">%s</a></p>', esc_url( $url ), esc_html__( 'Join or view my rewards on Square', 'doughboss' ) );
+			$html .= '<p>' . esc_html__( 'This opens Square in this tab. It does not sign you into WordPress or enrol you in marketing on this website. Review the shop\'s reward terms and Square\'s consent choices there. Rewards redemption at website checkout is not available yet.', 'doughboss' ) . '</p>';
+		} else {
+			$html = '<p class="db-me-status">' . esc_html__( 'Sign-up not open', 'doughboss' ) . '</p>';
+			$html .= '<p>' . esc_html__( 'Square membership sign-up, member accounts and rewards are not available from this page yet. There is nothing to register for or pay for here today.', 'doughboss' ) . '</p>';
+		}
+		return $html . sprintf( '<p><a href="%s">%s</a></p>', esc_url( home_url( '/vouchers/' ) ), esc_html__( 'Gift cards and loyalty information', 'doughboss' ) );
+	}
+
 	/**
 	 * Queue accrual for a Square-paid order.
 	 *

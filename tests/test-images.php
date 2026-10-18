@@ -18,8 +18,21 @@ db_test( 'menu image selection never substitutes category or different-product p
 	foreach ( array( 'Manoush', 'Pizza', 'Pies', 'Wraps', 'Desserts', 'Drinks', '' ) as $category ) {
 		assert_same( '', $method->invoke( $controller, 'Unphotographed menu item', $category ), 'unknown name has no borrowed photo for ' . $category );
 	}
-	foreach ( array( 'Coke 600ml', 'Coke Vanilla 600ml', 'Coke Zero 600ml', 'Sprite 600ml', 'Fanta 600ml' ) as $drink ) {
-		assert_same( '', $method->invoke( $controller, $drink, 'Drinks' ), 'named drink never receives generic juice photo: ' . $drink );
+	$drink_photos = array(
+		'Coke 600ml' => 'coca-cola-classic-600ml.jpg',
+		'Coke Vanilla 600ml' => 'coca-cola-vanilla-600ml.jpg',
+		'Coke Zero 600ml' => 'coca-cola-zero-600ml.png',
+		'Sprite 600ml' => 'sprite-600ml.jpg',
+		'Fanta 600ml' => 'fanta-orange-600ml.jpg',
+	);
+	foreach ( $drink_photos as $drink => $file ) {
+		assert_same( DOUGHBOSS_PLUGIN_URL . 'public/images/menu/brand-v1/' . $file, $method->invoke( $controller, $drink, 'Drinks' ), 'named 600 mL drink receives its exact bottle: ' . $drink );
+		$size = getimagesize( DOUGHBOSS_PLUGIN_DIR . 'public/images/menu/brand-v1/' . $file );
+		assert_true( is_array( $size ) && $size[0] >= 600 && $size[1] >= 600, 'distributor original is present at native resolution: ' . $file );
+		assert_same( '.png' === substr( $file, -4 ) ? 'image/png' : 'image/jpeg', $size['mime'], 'asset type matches filename' );
+	}
+	foreach ( array( 'Coke 375ml', 'Diet Coke 600ml', 'Sprite Zero 600ml', 'Fanta Grape 600ml', 'Coke Vanilla Zero 600ml' ) as $drink ) {
+		assert_same( '', $method->invoke( $controller, $drink, 'Drinks' ), 'another variant is not substituted: ' . $drink );
 	}
 	$juice_photos = array(
 		'Apple Juice' => 'juice-world-apple-500ml.jpg',
@@ -34,7 +47,21 @@ db_test( 'menu image selection never substitutes category or different-product p
 		$size = getimagesize( DOUGHBOSS_PLUGIN_DIR . 'public/images/menu/brand-v1/' . $file );
 		assert_true( is_array( $size ) && $size[0] >= 300 && $size[1] >= 300 && 'image/jpeg' === $size['mime'], 'manufacturer original is present and decodable: ' . $file );
 	}
-	foreach ( array( 'Cheese, Tomato & Olives', 'Zaatar Veggie Pizza', 'Labneh Veggie Pizza', 'Half Meat & Cheese', 'Sujuk Special', 'Spinach & Cheese', 'Chicken Pie', 'Shanklish' ) as $name ) {
+	$illustrations = array(
+		'Cheese, Tomato & Olives' => 'cheese-tomato-olives',
+		'Half Meat & Cheese' => 'half-meat-cheese',
+		'Labneh Veggie Pizza' => 'labneh-veggie-pizza',
+		'Sujuk Special' => 'sujuk-special',
+		'Zaatar Veggie Pizza' => 'zaatar-veggie-pizza',
+	);
+	foreach ( $illustrations as $name => $slug ) {
+		$file = 'public/images/menu/generated-v1/' . $slug . '.webp';
+		assert_same( DOUGHBOSS_PLUGIN_URL . $file, $method->invoke( $controller, $name, 'Menu' ), 'explicitly generated illustration has an exact SKU mapping' );
+		$size = getimagesize( DOUGHBOSS_PLUGIN_DIR . $file );
+		assert_true( is_array( $size ) && $size[0] >= 1000 && $size[1] >= 750, 'high-resolution delivery asset exists' );
+		assert_same( 'image/webp', $size['mime'], 'efficient WebP delivery, not a renamed PNG' );
+	}
+	foreach ( array( 'Spinach & Cheese', 'Chicken Pie', 'Shanklish' ) as $name ) {
 		assert_same( '', $method->invoke( $controller, $name, 'Pizza' ), 'unverified alias is not a photo match: ' . $name );
 	}
 	foreach ( array( 'Zaatar' => 'zaatar.jpg', 'Cheese' => 'cheese.jpg', 'Sujuk Deluxe' => 'sujuk-deluxe.jpg', 'Spinach Pie' => 'spinach-pie.jpg' ) as $name => $file ) {

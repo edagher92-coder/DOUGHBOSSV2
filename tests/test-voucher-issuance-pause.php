@@ -155,6 +155,34 @@ db_test( 'enabled issuance keeps the existing active-campaign claim path availab
 	assert_true( in_array( 'doughboss_voucher_claimed', $GLOBALS['doughboss_test_actions'], true ), 'enabled active campaign keeps the existing claim hook' );
 } );
 
+db_test( 'admin Square member link preserves omitted settings and validates explicit changes', function () {
+	$before = $GLOBALS['doughboss_test_options'];
+	$before_db = $GLOBALS['wpdb'];
+	try {
+		$GLOBALS['wpdb'] = new DoughBoss_Legacy_Voucher_Pause_Wpdb();
+		doughboss_test_set_settings( array( 'square_loyalty_status_url' => 'https://squareup.com/loyalty/REVIEW123', 'square_loyalty_status_enabled' => 1, 'square_loyalty_accrual' => 0, 'loyalty_enabled' => 0 ) );
+		$admin = new DoughBoss_Admin();
+		$untouched = $admin->sanitize_settings( array() );
+		assert_same( 'https://squareup.com/loyalty/REVIEW123', $untouched['square_loyalty_status_url'], 'another settings tab cannot erase the link' );
+		assert_same( 1, $untouched['square_loyalty_status_enabled'], 'another settings tab cannot change its switch' );
+		$off = $admin->sanitize_settings( array( 'square_loyalty_status_present' => '1', 'square_loyalty_status_url' => 'https://squareup.com/loyalty/REVIEW123/' ) );
+		assert_same( 'https://squareup.com/loyalty/REVIEW123', $off['square_loyalty_status_url'], 'disabling preserves the valid URL for later review' );
+		assert_same( 0, $off['square_loyalty_status_enabled'], 'unchecked switch disables' );
+		$on = $admin->sanitize_settings( array( 'square_loyalty_status_present' => '1', 'square_loyalty_status_url' => 'https://squareup.com/loyalty/REVIEW123/', 'square_loyalty_status_enabled' => '1' ) );
+		assert_same( 1, $on['square_loyalty_status_enabled'], 'valid explicit operator enable is retained' );
+		assert_same( 0, $on['loyalty_enabled'], 'legacy enrolment stays off' );
+		assert_same( 0, $on['square_loyalty_accrual'], 'accrual stays off' );
+		foreach ( array( array( 'malformed' ), 'https://squareup.com.evil.test/loyalty/ABC', 'https://squareup.com/loyalty/ABC?token=private' ) as $invalid ) {
+			$bad = $admin->sanitize_settings( array( 'square_loyalty_status_present' => '1', 'square_loyalty_status_url' => $invalid, 'square_loyalty_status_enabled' => '1' ) );
+			assert_same( '', $bad['square_loyalty_status_url'], 'unsafe URL is not stored' );
+			assert_same( 0, $bad['square_loyalty_status_enabled'], 'invalid destination cannot enable' );
+		}
+	} finally {
+		$GLOBALS['doughboss_test_options'] = $before;
+		$GLOBALS['wpdb'] = $before_db;
+	}
+} );
+
 db_test( 'admin setting persists an explicit enable and fails closed when omitted', function () {
 	$GLOBALS['wpdb'] = new DoughBoss_Legacy_Voucher_Pause_Wpdb();
 	DoughBoss_Settings::update(

@@ -448,6 +448,33 @@ body.page-id-402 #primary-menu > li > a {
 	object-fit: cover;
 }
 
+/* Keep the complete bottle and size label visible, rather than crop it like food. */
+.db-card-img[data-category='drinks'] .db-menu-picture > img {
+	box-sizing: border-box;
+	object-fit: contain;
+	padding: .5rem;
+	background: #fff;
+}
+
+.db-card-img[data-generated-illustration] .db-menu-picture > img {
+	object-fit: contain;
+	background: #f7f5f0;
+}
+
+.db-menu-image-note {
+	position: absolute;
+	z-index: 1;
+	bottom: .25rem;
+	left: .25rem;
+	font-size: 14px;
+	line-height: 1.2;
+	padding: 2px 6px;
+	border-radius: 3px;
+	background: rgba(0, 0, 0, .8);
+	color: #fff;
+	pointer-events: none;
+}
+
 .db-card-body {
 	padding: 1rem;
 	display: flex;

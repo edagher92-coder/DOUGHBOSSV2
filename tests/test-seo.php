@@ -119,11 +119,11 @@ db_test(
 );
 
 db_test(
-	'members discovery copy accurately describes the public hub and inactive Square membership',
+	'members discovery copy describes membership status without claiming activation',
 	function () {
 		$copy = DoughBoss_SEO::discovery_copy( 'members-events' );
 		assert_true( false !== strpos( $copy['title'], 'Members & Events' ), 'hub gets a distinct title' );
-		foreach ( array( 'order updates', 'catering contacts', 'app shortcuts', 'Square membership sign-up, member accounts and rewards are not available' ) as $fact ) {
+		foreach ( array( 'order updates', 'catering contacts', 'app shortcuts', 'current Square membership status', 'Revesby' ) as $fact ) {
 			assert_true( false !== strpos( $copy['description'], $fact ), 'public hub status includes ' . $fact );
 		}
 		assert_same( 0, preg_match( '/join now|sign up now|earn points|buy.*gift card/i', implode( ' ', $copy ) ), 'inactive Square features are not advertised as usable' );

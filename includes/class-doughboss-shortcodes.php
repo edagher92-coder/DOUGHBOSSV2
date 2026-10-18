@@ -33,6 +33,12 @@ class DoughBoss_Shortcodes {
 		add_shortcode( 'doughboss_manoush_hero', array( $this, 'manoush_hero' ) );
 		add_shortcode( 'doughboss_ordering_status', array( $this, 'ordering_status' ) );
 		add_shortcode( 'doughboss_loyalty', array( $this, 'loyalty' ) );
+		add_shortcode( 'doughboss_square_membership', array( $this, 'square_membership' ) );
+	}
+
+	/** [doughboss_square_membership] — an optional Square-hosted customer link. */
+	public function square_membership() {
+		return DoughBoss_Square_Loyalty::membership_portal();
 	}
 
 	/** [doughboss_loyalty] — member account, points wallet and rewards. */
