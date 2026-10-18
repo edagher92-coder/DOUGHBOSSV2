@@ -1,5 +1,11 @@
 # 18 October 2026 - resumed DoughBoss release gates
 
+## Current checkpoint — R18 exact-candidate native gate accepted
+
+Read `2026-10-18-NATIVE-R18-LOYALTY-CANDIDATE.md` first. Current runtime source is `9f37ccf77670b0175049e02c9896f28912f7488c`; a fresh synthetic installed WordPress/MySQL run passed **3593/3593**, all **239 installed runtime files** and **273 source pins** remained exact, capacity/dispatch/crash-replay races passed, and the owned database shut down normally with no remaining listener. Fresh GPT-6.1 Sol final review accepted the local-native and package evidence only.
+
+The new current plugin ZIP is `C:/Codex/Output/doughboss-release-candidate-20261018-9f37ccf/doughboss-2.51.0-9f37ccf.zip`, SHA-256 `3ba72970dbe8dbbefa9e55906199e3b32feccc9685dd62a0d9003866280bc28f`. The unchanged theme ZIP was freshly validated against current source and can be retained; exact path/hash in the R18 handoff. This supersedes the next section's pending-current-database/package status. Private-backup restore/boot, fresh production backup/rollback, installed whole-tree parity, controlled publication and actual provider/financial/device acceptance remain open. No private retry, live deployment or commerce/Ads activation occurred.
+
 ## Latest checkpoint — live readback and loyalty opt-in repair
 
 Read `2026-10-18-LIVE-RELEASE-READBACK-R2.md` for fresh 18 October installed/public evidence: active plugin 2.49.0, all three sampled served JS/CSS assets differ from the candidate, commerce off, and Revesby mapped but unverified in test mode. The 2.51 candidate is not yet established as active. The public evidence batch was committed and pushed as `f54b984b7f8fafa70ea802474e0b0282927fff81`.

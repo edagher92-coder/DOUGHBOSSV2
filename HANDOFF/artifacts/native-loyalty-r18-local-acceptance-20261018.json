@@ -1,0 +1,77 @@
+{
+  "format": "DOUGHBOSS_NATIVE_R18_LOCAL_ACCEPTANCE",
+  "source_commit": "9f37ccf77670b0175049e02c9896f28912f7488c",
+  "branch": "codex/2.51-handoff-20261016",
+  "runner_sha256": "579376BBBA2B76513C0268964EA015AF0FE13CC299CE1A7BAF14C77D5478A369",
+  "freeze_sha256": "9BDA89249293AF13B82EA4DEBED1574D6DBA0F7FF5A4AA9C0FCC59F25A0CEEA3",
+  "source_files": 273,
+  "runtime_files": 239,
+  "operation_review": {
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "verdict": "SHIP_ONE_SYNTHETIC_RUN"
+  },
+  "execution": {
+    "session_id": 92026,
+    "exit_code": 0,
+    "started_at": "2026-10-18T01:40:20.89945Z",
+    "finished_at": "2026-10-18T01:42:23.8449709Z",
+    "assertions": 3593,
+    "passed": 3593,
+    "failed": 0,
+    "installed_runtime_matches": 239,
+    "source_post_mismatches": 0,
+    "installed_post_mismatches": 0,
+    "capacity": {
+      "workers": 12,
+      "holds": 6,
+      "full_refusals": 6
+    },
+    "ordinary_and_approved_races": {
+      "each_order_posts": 1,
+      "each_payment_posts": 1,
+      "duplicate_dispatches": 0
+    },
+    "approved_release": {
+      "fulfillments": 1,
+      "duplicate_kitchen_hooks": 0
+    },
+    "provider_posts_are_synthetic": true,
+    "http_and_mail_guards_verified": true,
+    "database_stopped": true,
+    "port_still_listening": false,
+    "owned_process_still_exists": false,
+    "forced_stop": false,
+    "result_sha256": "884A7D9F16A5183D93AF4007745692472BB8963BA5648C4DC42E7A262BF2BC6C",
+    "gate_log_sha256": "9C1FB08C7ADBE1CFB06BE7CAC31226CE288B16B1DC05C939E97AACCAC41A2233"
+  },
+  "packages": [
+    {
+      "path": "C:\\Codex\\Output\\doughboss-release-candidate-20261018-9f37ccf\\doughboss-2.51.0-9f37ccf.zip",
+      "bytes": 5688238,
+      "sha256": "3ba72970dbe8dbbefa9e55906199e3b32feccc9685dd62a0d9003866280bc28f"
+    },
+    {
+      "path": "C:\\Codex\\Output\\doughboss-release-candidate-20261018-d1ef237\\doughboss-final-d1ef237.zip",
+      "bytes": 42110,
+      "sha256": "2d9c932193afff24227aac417ff39224e510bbc933bd6c38a7e33dd02ac26454"
+    }
+  ],
+  "package_checks": {
+    "new_plugin_build_exit": 0,
+    "new_plugin_validate_exit": 0,
+    "reused_unchanged_theme_validate_exit": 0
+  },
+  "result_review": {
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "status": "SHIP_CURRENT_LOCAL_NATIVE_AND_PACKAGE_EVIDENCE_ONLY",
+    "independently_verified": "273 source pins, 239 installed runtime pins, actual runtime/race/log results, clean shutdown, both package hashes and existing archive validators"
+  },
+  "limits": [
+    "Synthetic installed WordPress/MySQL, not private backup restoration.",
+    "Theme was byte-validated, not rendered by the native gate, which skips themes.",
+    "No real Square HTTP calls, financial activity, production backup, deployment, orders/payments/Ads activation or physical KDS acceptance.",
+    "Original runner, freezes, terminal restore attempts and pre-existing Qwen handoff preserved."
+  ]
+}

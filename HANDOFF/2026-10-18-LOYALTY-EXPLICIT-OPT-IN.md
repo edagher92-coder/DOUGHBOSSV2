@@ -40,6 +40,8 @@ This verdict is source/local acceptance only. No deployment authority, real data
 
 ## Release consequences and remaining gates
 
+Subsequent acceptance: `2026-10-18-NATIVE-R18-LOYALTY-CANDIDATE.md` records the new current-source freeze, successful 3593/3593 synthetic installed WordPress/MySQL gate, fresh plugin package and revalidated unchanged theme, with final Sol 6.1 acceptance. The following paragraph records what the code change invalidated before that subsequent gate; R18 now supplies current local coverage, not production/private-restore acceptance.
+
 This change alters three runtime files, so the previous exact-byte database-source freeze and earlier upload ZIPs **do not cover the current candidate**. Do not upload those old archives as if they include this repair. After source acceptance, rerun the applicable isolated application/database gate against a new freeze and build/validate fresh release archives as part of the completed release batch. Preserve earlier passing receipts and frozen/terminal restore attempts without modification.
 
 The private R4 diagnostic protocol extension remains pending owner response; no private operation was retried. Full restore/application boot, fresh production backup/rollback, installed whole-tree parity and controlled publication remain required. Square merchant/location/environment, approved programme/rules, provider lifecycle, financial and physical KDS acceptance remain separate and unproven by these tests. Other-shop connections stay deferred.
