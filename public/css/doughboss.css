@@ -257,6 +257,10 @@
 	contain-intrinsic-size: auto 720px;
 }
 
+.db-menu--checkout-navigation .db-grid {
+	content-visibility: visible;
+}
+
 @media (max-width: 1099px) {
 	.db-app .db-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));

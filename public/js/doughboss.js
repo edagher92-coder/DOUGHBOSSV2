@@ -1446,6 +1446,10 @@
 		if (!cartUrl && cartRoot) {
 			fab.addEventListener('click', function (event) {
 				event.preventDefault();
+				// Settle deferred menu heights before calculating the cart destination.
+				// Keep them stable while the customer moves between checkout and menu.
+				root.classList.add('db-menu--checkout-navigation');
+				void root.offsetHeight;
 				cartRoot.scrollIntoView({
 					behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
 					block: 'start'

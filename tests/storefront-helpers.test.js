@@ -524,7 +524,10 @@ function cartFabHarness({ remote = false, observer = true, heading = true, contr
 	const decrement = node('button');
 	cartRoot.querySelector = selector => selector.startsWith('h1,') ? (heading ? title : null) : (control ? decrement : null);
 	const scrolls = [];
-	cartRoot.scrollIntoView = options => scrolls.push(options);
+	cartRoot.scrollIntoView = options => {
+		assert.equal(root.classList.contains('db-menu--checkout-navigation'), true, 'deferred menu geometry is pinned before selecting the cart scroll destination');
+		scrolls.push(options);
+	};
 	const events = {};
 	const requests = [];
 	const observations = [];
