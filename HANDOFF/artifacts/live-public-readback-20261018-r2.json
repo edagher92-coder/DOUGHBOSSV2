@@ -1,0 +1,152 @@
+{
+  "at": "2026-10-18T01:20:46.782Z",
+  "scope": "Anonymous GET-only; response timings are not browser/LCP/checkout acceptance",
+  "pages": [
+    {
+      "route": "/",
+      "status": 200,
+      "elapsed_ms": 743,
+      "bytes": 90562,
+      "title": "Dough Boss | Fresh Manoush, Pies &#038; Catering Sydney",
+      "asset_candidates": 24,
+      "responsive_sources": 11,
+      "versions": [
+        "2.49.0",
+        "2.49.0-menu-6cfded01496d"
+      ],
+      "hero_video_tags": [
+        {
+          "autoplay": false,
+          "muted": true,
+          "loop": true
+        }
+      ]
+    },
+    {
+      "route": "/menu/",
+      "status": 200,
+      "elapsed_ms": 658,
+      "bytes": 65621,
+      "title": "Dough Boss Menu | Manoush, Pizza &#038; Pies Sydney &#8211; Dough Boss",
+      "asset_candidates": 5,
+      "responsive_sources": 2,
+      "versions": [
+        "2.49.0",
+        "2.49.0-menu-6cfded01496d"
+      ],
+      "hero_video_tags": []
+    },
+    {
+      "route": "/catering/",
+      "status": 200,
+      "elapsed_ms": 620,
+      "bytes": 57336,
+      "title": "Dough Boss Catering | Mini Manoush &#038; Pies Sydney &#8211; Dough Boss",
+      "asset_candidates": 7,
+      "responsive_sources": 4,
+      "versions": [
+        "2.49.0",
+        "2.49.0-menu-6cfded01496d"
+      ],
+      "hero_video_tags": []
+    },
+    {
+      "route": "/members-events/",
+      "status": 200,
+      "elapsed_ms": 619,
+      "bytes": 48176,
+      "title": "Members &#038; Events &#8211; Dough Boss",
+      "asset_candidates": 5,
+      "responsive_sources": 2,
+      "versions": [
+        "2.49.0"
+      ],
+      "hero_video_tags": []
+    }
+  ],
+  "images": [
+    {
+      "url": "https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v6-desktop-square-poster.jpg",
+      "status": 200,
+      "elapsed_ms": 21,
+      "bytes": 44957,
+      "body_capped": false,
+      "type": "image/jpeg"
+    },
+    {
+      "url": "https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v5-poster.jpg",
+      "status": 200,
+      "elapsed_ms": 142,
+      "bytes": 212551,
+      "body_capped": false,
+      "type": "image/jpeg"
+    },
+    {
+      "url": "https://doughboss.com.au/wp-content/plugins/doughboss/public/images/responsive/sujuk-deluxe-480.avif",
+      "status": 200,
+      "elapsed_ms": 11,
+      "bytes": 23127,
+      "body_capped": false,
+      "type": null
+    },
+    {
+      "url": "https://doughboss.com.au/wp-content/plugins/doughboss/public/images/responsive/sujuk-deluxe-550.avif",
+      "status": 200,
+      "elapsed_ms": 22,
+      "bytes": 30644,
+      "body_capped": false,
+      "type": null
+    },
+    {
+      "url": "https://doughboss.com.au/wp-content/plugins/doughboss/public/images/responsive/sujuk-deluxe-480.webp",
+      "status": 200,
+      "elapsed_ms": 12,
+      "bytes": 21468,
+      "body_capped": false,
+      "type": "image/webp"
+    },
+    {
+      "url": "https://doughboss.com.au/wp-content/plugins/doughboss/public/images/responsive/sujuk-deluxe-550.webp",
+      "status": 200,
+      "elapsed_ms": 20,
+      "bytes": 29984,
+      "body_capped": false,
+      "type": "image/webp"
+    },
+    {
+      "url": "https://doughboss.com.au/wp-content/plugins/doughboss/public/images/menu/real-v1/sujuk-deluxe.jpg",
+      "status": 200,
+      "elapsed_ms": 11,
+      "bytes": 38911,
+      "body_capped": false,
+      "type": "image/jpeg"
+    },
+    {
+      "url": "https://doughboss.com.au/wp-content/plugins/doughboss/public/images/responsive/zaatar-cheese-480.avif",
+      "status": 200,
+      "elapsed_ms": 18,
+      "bytes": 33065,
+      "body_capped": false,
+      "type": null
+    }
+  ],
+  "api": [
+    {
+      "route": "/wp-json/doughboss/v1/config",
+      "status": 200,
+      "elapsed_ms": 605,
+      "bytes": 1030,
+      "ordering_open": false,
+      "payments_enabled": false,
+      "payment_gateway": "square"
+    },
+    {
+      "route": "/wp-json/doughboss/v1/menu",
+      "status": 200,
+      "elapsed_ms": 625,
+      "bytes": 84946,
+      "array_counts": {},
+      "root_array_count": 43
+    }
+  ]
+}
