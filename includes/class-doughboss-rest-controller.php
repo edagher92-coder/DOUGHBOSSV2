@@ -4203,36 +4203,34 @@ class DoughBoss_REST_Controller {
 	 */
 	private function menu_image_url( $name, $category ) {
 		$images = array(
+			'apple-juice'             => 'brand-v1/juice-world-apple-500ml.jpg',
+			'lemon-juice'             => 'brand-v1/juice-world-lemon-500ml.jpg',
+			'lemon-mint-juice'        => 'brand-v1/juice-world-lemon-mint-500ml.jpg',
+			'orange-juice'            => 'brand-v1/juice-world-orange-500ml.jpg',
+			'orange-mango-juice'      => 'brand-v1/juice-world-orange-mango-500ml.jpg',
+			'orange-passion-juice'    => 'brand-v1/juice-world-orange-passionfruit-500ml.jpg',
 			'zaatar'                  => 'real-v1/zaatar.jpg',
 			'zaatar-cheese'           => 'real-v1/zaatar-cheese.jpg',
 			'cheese'                  => 'real-v1/cheese.jpg',
 			'meat'                    => 'real-v1/meat.jpg',
 			'meat-cheese'             => 'real-v1/meat-cheese.jpg',
 			'sujuk-cheese'            => 'real-v1/sujuk-cheese.jpg',
-			'half-meat-cheese'        => 'meat-cheese.webp',
-			'cheese-tomato-olives'    => 'veggie-plus.webp',
 			'cheese-kaak'             => 'real-v1/cheese-kaak.jpg',
-			'zaatar-veggie-pizza'     => 'veggie-plus.webp',
-			'labneh-veggie-pizza'     => 'veggie-plus.webp',
 			'all-meat'                => 'all-meat.webp',
 			'sujuk-deluxe'            => 'real-v1/sujuk-deluxe.jpg',
 			'spinach-deluxe'          => 'real-v1/spinach-deluxe.jpg',
 			'veggie-plus'             => 'real-v1/veggie-plus.jpg',
 			'pepperoni-cheese'        => 'real-v1/pepperoni-cheese.jpg',
-			'sujuk-special'           => 'dough-boss-special.webp',
 			'dough-boss-special'      => 'dough-boss-special.webp',
 			'chicken-cheese'          => 'real-v1/chicken-cheese.jpg',
 			'bbq-chicken'             => 'real-v1/bbq-chicken.jpg',
 			'peri-peri-chicken'       => 'real-v1/peri-peri-chicken.jpg',
 			'garlic-prawns'           => 'garlic-prawns.webp',
 			'spinach-pie'             => 'real-v1/spinach-pie.jpg',
-			'spinach-cheese'          => 'real-v1/spinach-pie.jpg',
 			'haloumi'                 => 'real-v1/haloumi-pie.jpg',
 			'halloumi'                => 'real-v1/haloumi-pie.jpg',
 			'dough-boss-pie'          => 'real-v1/dough-boss-pie.jpg',
-			'chicken-pie'             => 'real-v1/dough-boss-pie.jpg',
 			'aged-cheese'             => 'real-v1/aged-cheese-pie.jpg',
-			'shanklish'               => 'real-v1/aged-cheese-pie.jpg',
 			'zaatar-veggie'           => 'real-v1/zaatar-veggie-wrap.jpg',
 			'labneh-veggie-wrap'      => 'real-v1/labneh-veggie-wrap.jpg',
 			'chicken-delight'         => 'real-v1/chicken-delight-wrap.jpg',
@@ -4244,17 +4242,8 @@ class DoughBoss_REST_Controller {
 			'soft-drinks'             => 'soft-drinks.webp',
 			'juice'                   => 'real-v1/juice.jpg',
 		);
-		$fallbacks = array(
-			'manoush'  => 'real-v1/zaatar-cheese.jpg',
-			'pizza'    => 'dough-boss-special.webp',
-			'pies'     => 'real-v1/spinach-pie.jpg',
-			'wraps'    => 'labneh-veggie-wrap.webp',
-			'desserts' => 'choco-banana.webp',
-			'drinks'   => 'juice.webp',
-		);
 		$key      = sanitize_title( $name );
-		$category = sanitize_title( $category );
-		$file     = isset( $images[ $key ] ) ? $images[ $key ] : ( isset( $fallbacks[ $category ] ) ? $fallbacks[ $category ] : '' );
+		$file     = isset( $images[ $key ] ) ? $images[ $key ] : '';
 		$encoded_file = $file ? implode( '/', array_map( 'rawurlencode', explode( '/', $file ) ) ) : '';
 		return $encoded_file ? DOUGHBOSS_PLUGIN_URL . 'public/images/menu/' . $encoded_file : '';
 	}

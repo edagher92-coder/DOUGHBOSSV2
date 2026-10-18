@@ -1,6 +1,46 @@
 <?php
 /** Actual prebuilt asset contracts; no GD, WordPress database or network needed. */
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-images.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-rest-controller.php';
+
+if ( ! function_exists( 'sanitize_title' ) ) {
+	function sanitize_title( $title ) {
+		return trim( preg_replace( '/[^a-z0-9]+/', '-', strtolower( (string) $title ) ), '-' );
+	}
+}
+
+db_test( 'menu image selection never substitutes category or different-product photography', function () {
+	if ( ! defined( 'DOUGHBOSS_PLUGIN_DIR' ) ) { define( 'DOUGHBOSS_PLUGIN_DIR', dirname( __DIR__ ) . '/' ); }
+	if ( ! defined( 'DOUGHBOSS_PLUGIN_URL' ) ) { define( 'DOUGHBOSS_PLUGIN_URL', 'https://example.test/plugin/' ); }
+	$controller = ( new ReflectionClass( 'DoughBoss_REST_Controller' ) )->newInstanceWithoutConstructor();
+	$method = new ReflectionMethod( $controller, 'menu_image_url' );
+	$method->setAccessible( true );
+	foreach ( array( 'Manoush', 'Pizza', 'Pies', 'Wraps', 'Desserts', 'Drinks', '' ) as $category ) {
+		assert_same( '', $method->invoke( $controller, 'Unphotographed menu item', $category ), 'unknown name has no borrowed photo for ' . $category );
+	}
+	foreach ( array( 'Coke 600ml', 'Coke Vanilla 600ml', 'Coke Zero 600ml', 'Sprite 600ml', 'Fanta 600ml' ) as $drink ) {
+		assert_same( '', $method->invoke( $controller, $drink, 'Drinks' ), 'named drink never receives generic juice photo: ' . $drink );
+	}
+	$juice_photos = array(
+		'Apple Juice' => 'juice-world-apple-500ml.jpg',
+		'Lemon Juice' => 'juice-world-lemon-500ml.jpg',
+		'Lemon & Mint Juice' => 'juice-world-lemon-mint-500ml.jpg',
+		'Orange Juice' => 'juice-world-orange-500ml.jpg',
+		'Orange & Mango Juice' => 'juice-world-orange-mango-500ml.jpg',
+		'Orange & Passion Juice' => 'juice-world-orange-passionfruit-500ml.jpg',
+	);
+	foreach ( $juice_photos as $name => $file ) {
+		assert_same( DOUGHBOSS_PLUGIN_URL . 'public/images/menu/brand-v1/' . $file, $method->invoke( $controller, $name, 'Drinks' ), 'exact confirmed Juice World flavour is selected: ' . $name );
+		$size = getimagesize( DOUGHBOSS_PLUGIN_DIR . 'public/images/menu/brand-v1/' . $file );
+		assert_true( is_array( $size ) && $size[0] >= 300 && $size[1] >= 300 && 'image/jpeg' === $size['mime'], 'manufacturer original is present and decodable: ' . $file );
+	}
+	foreach ( array( 'Cheese, Tomato & Olives', 'Zaatar Veggie Pizza', 'Labneh Veggie Pizza', 'Half Meat & Cheese', 'Sujuk Special', 'Spinach & Cheese', 'Chicken Pie', 'Shanklish' ) as $name ) {
+		assert_same( '', $method->invoke( $controller, $name, 'Pizza' ), 'unverified alias is not a photo match: ' . $name );
+	}
+	foreach ( array( 'Zaatar' => 'zaatar.jpg', 'Cheese' => 'cheese.jpg', 'Sujuk Deluxe' => 'sujuk-deluxe.jpg', 'Spinach Pie' => 'spinach-pie.jpg' ) as $name => $file ) {
+		assert_same( DOUGHBOSS_PLUGIN_URL . 'public/images/menu/real-v1/' . $file, $method->invoke( $controller, $name, 'Menu' ), 'existing exact-name asset remains selected: ' . $name );
+	}
+} );
 if ( ! defined( 'DOUGHBOSS_PLUGIN_DIR' ) ) {
 	define( 'DOUGHBOSS_PLUGIN_DIR', dirname( __DIR__ ) . '/' );
 	define( 'DOUGHBOSS_PLUGIN_URL', 'https://example.test/plugin/' );
