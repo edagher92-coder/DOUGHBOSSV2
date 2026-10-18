@@ -1,5 +1,13 @@
 # 18 October 2026 - resumed DoughBoss release gates
 
+## Latest checkpoint — live readback and loyalty opt-in repair
+
+Read `2026-10-18-LIVE-RELEASE-READBACK-R2.md` for fresh 18 October installed/public evidence: active plugin 2.49.0, all three sampled served JS/CSS assets differ from the candidate, commerce off, and Revesby mapped but unverified in test mode. The 2.51 candidate is not yet established as active. The public evidence batch was committed and pushed as `f54b984b7f8fafa70ea802474e0b0282927fff81`.
+
+The subsequent local loyalty repair changes three runtime files so absent accrual configuration stays off while explicit saved choices are preserved. Details and freeze: `2026-10-18-LOYALTY-EXPLICIT-OPT-IN.md`. Root PHP 8.2 **3114/3114** and PHP 7.4 **3044/3044**, plus four PHP syntax checks, pass. Source gate is recorded in that handoff. **Earlier package hashes and exact-byte database-source freeze below are historical; they do not cover this new runtime candidate.** New application/database freeze and fresh validated packages are required before publication. No live setting, provider action or deployment occurred.
+
+The private R4 attempt remains terminal/frozen; its SESSION_CONTROL closed-label extension is awaiting owner response. Do not retry under its consumed one-attempt admission or alter old source/receipts.
+
 ## Latest checkpoint — public native-validation prerequisite completed
 
 Subsequent private-R4 boundary preparation is source-accepted: four new public code/test files, **11 root and independently reproduced tests**, fresh GPT-6.1 Sol SHIP, exact source/dependency pins and reproducible archive. `2026-10-18-PRIVATE-R4-BOUNDARY-PREP.md` records the remaining protected host runner/capture, optimization-disabled guest and exact private-operation admission gates. No private payload access or VM occurred in that preparation; private diagnostic, WordPress restore and release remain unaccepted.

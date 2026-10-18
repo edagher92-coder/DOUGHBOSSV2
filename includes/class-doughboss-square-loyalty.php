@@ -41,7 +41,7 @@ class DoughBoss_Square_Loyalty {
 
 	/** @return bool */
 	public static function enabled() {
-		return (bool) DoughBoss_Settings::get( 'square_loyalty_accrual', 1 );
+		return (bool) DoughBoss_Settings::get( 'square_loyalty_accrual', 0 );
 	}
 
 	/**

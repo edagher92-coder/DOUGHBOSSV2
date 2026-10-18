@@ -152,6 +152,28 @@ db_test(
 
 require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-loyalty.php';
 
+db_test( 'Square Loyalty accrual requires an explicit saved opt-in', function () {
+	$before = $GLOBALS['doughboss_test_options'];
+	try {
+		$defaults = DoughBoss_Settings::defaults();
+		assert_same( 0, $defaults['square_loyalty_accrual'], 'new settings default to no accrual' );
+		doughboss_test_set_settings( array() );
+		assert_false( DoughBoss_Square_Loyalty::enabled(), 'missing opt-in stays off' );
+		foreach ( array( 0, false, '0' ) as $off ) {
+			doughboss_test_set_settings( array( 'square_loyalty_accrual' => $off ) );
+			assert_false( DoughBoss_Square_Loyalty::enabled(), 'explicit saved off stays off' );
+		}
+		foreach ( array( 1, true, '1' ) as $on ) {
+			doughboss_test_set_settings( array( 'square_loyalty_accrual' => $on ) );
+			assert_true( DoughBoss_Square_Loyalty::enabled(), 'explicit saved opt-in is preserved' );
+		}
+		$admin = file_get_contents( dirname( __DIR__ ) . '/admin/class-doughboss-admin.php' );
+		assert_true( false !== strpos( $admin, 'checked( DoughBoss_Square_Loyalty::enabled(), true )' ), 'admin checkbox uses the same runtime opt-in decision' );
+	} finally {
+		$GLOBALS['doughboss_test_options'] = $before;
+	}
+} );
+
 db_test(
 	'square loyalty accrues only for square-paid orders with a usable phone',
 	function () {
