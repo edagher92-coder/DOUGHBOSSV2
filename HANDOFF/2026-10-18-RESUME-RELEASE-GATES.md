@@ -2,6 +2,8 @@
 
 ## Current checkpoint — R18 exact-candidate native gate accepted
 
+Provider continuation: `2026-10-18-CATALOGUE-BASELINE-AND-SQUARE-LOGIN.md` records the connected Square sign-in requirement and fresh public website equality to the dated 43-item/10-signature/48-choice-entry baseline. This is not refreshed provider parity; preserve the older provider comparison's date and do not reclassify previously checked historical choice details as never checked.
+
 Read `2026-10-18-NATIVE-R18-LOYALTY-CANDIDATE.md` first. Current runtime source is `9f37ccf77670b0175049e02c9896f28912f7488c`; a fresh synthetic installed WordPress/MySQL run passed **3593/3593**, all **239 installed runtime files** and **273 source pins** remained exact, capacity/dispatch/crash-replay races passed, and the owned database shut down normally with no remaining listener. Fresh GPT-6.1 Sol final review accepted the local-native and package evidence only.
 
 The new current plugin ZIP is `C:/Codex/Output/doughboss-release-candidate-20261018-9f37ccf/doughboss-2.51.0-9f37ccf.zip`, SHA-256 `3ba72970dbe8dbbefa9e55906199e3b32feccc9685dd62a0d9003866280bc28f`. The unchanged theme ZIP was freshly validated against current source and can be retained; exact path/hash in the R18 handoff. This supersedes the next section's pending-current-database/package status. Private-backup restore/boot, fresh production backup/rollback, installed whole-tree parity, controlled publication and actual provider/financial/device acceptance remain open. No private retry, live deployment or commerce/Ads activation occurred.
