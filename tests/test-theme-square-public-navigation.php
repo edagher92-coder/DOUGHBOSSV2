@@ -37,6 +37,36 @@ if ( ! function_exists( 'get_post_field' ) ) {
 
 require_once $theme_directory . 'functions.php';
 
+if ( ! function_exists( 'esc_url' ) ) {
+	function esc_url( $url ) {
+		return htmlspecialchars( (string) $url, ENT_QUOTES, 'UTF-8' );
+	}
+}
+
+if ( ! function_exists( 'is_page' ) ) {
+	function is_page( $page ) {
+		return ! empty( $GLOBALS['doughboss_theme_nav_current_page'] ) && in_array( $GLOBALS['doughboss_theme_nav_current_page'], (array) $page, true );
+	}
+}
+
+db_test( 'fallback navigation exposes Members and Events immediately after Catering', function () {
+	ob_start();
+	doughboss_final_menu_fallback();
+	$navigation = ob_get_clean();
+	$members_url = esc_url( home_url( '/members-events/' ) );
+	assert_same( 1, substr_count( $navigation, 'href="' . $members_url . '"' ), 'one Members destination in the shared fallback' );
+	assert_true( false !== strpos( $navigation, '>Members &amp; Events</a>' ), 'customer-facing label is escaped' );
+	assert_true( strpos( $navigation, esc_url( home_url( '/catering/' ) ) ) < strpos( $navigation, $members_url ), 'Members follows Catering' );
+	assert_true( strpos( $navigation, $members_url ) < strpos( $navigation, esc_url( home_url( '/vouchers/' ) ) ), 'remaining links retain their order' );
+	$GLOBALS['doughboss_theme_nav_current_page'] = 'members-events';
+	ob_start();
+	doughboss_final_menu_fallback();
+	$current_navigation = ob_get_clean();
+	unset( $GLOBALS['doughboss_theme_nav_current_page'] );
+	assert_true( false !== strpos( $current_navigation, '<li class="current-menu-item"><a aria-current="page" href="' . $members_url . '"' ), 'Members has active styling and an accessible current-page indication' );
+	assert_same( 1, substr_count( $current_navigation, 'aria-current="page"' ), 'only the Members destination is current' );
+} );
+
 db_test( 'online-only manifest contains only canonical public site and validated Site Icons', function () {
 	$home = home_url( '/' );
 	$base = home_url( '/wp-content/uploads' );

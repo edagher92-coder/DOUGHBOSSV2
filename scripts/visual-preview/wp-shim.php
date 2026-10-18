@@ -184,7 +184,7 @@ class DoughBoss_Catering {
 
 /** Only synthetic presentation routes exist; no WordPress content is loaded. */
 function is_page( $pages ) {
-	$slugs = array( 'page-order.php' => 'order', 'page-franchising.php' => 'franchising', 'page-wholesale.php' => 'wholesale', 'page-catering.php' => 'catering', 'page-locations.php' => 'locations' );
+	$slugs = array( 'page-order.php' => 'order', 'page-franchising.php' => 'franchising', 'page-wholesale.php' => 'wholesale', 'page-catering.php' => 'catering', 'page-locations.php' => 'locations', 'page-members-events.php' => 'members-events' );
 	$template = $GLOBALS['doughboss_preview_template'];
 	return isset( $slugs[ $template ] ) && in_array( $slugs[ $template ], (array) $pages, true );
 }

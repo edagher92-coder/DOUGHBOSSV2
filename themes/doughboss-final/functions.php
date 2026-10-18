@@ -705,6 +705,7 @@ function doughboss_final_menu_fallback() {
 		__( 'About', 'doughboss-final' )    => home_url( '/about-us/' ),
 		__( 'Menu', 'doughboss-final' )     => home_url( '/order/' ),
 		__( 'Catering', 'doughboss-final' ) => home_url( '/catering/' ),
+		__( 'Members & Events', 'doughboss-final' ) => home_url( '/members-events/' ),
 		__( 'Vouchers', 'doughboss-final' ) => home_url( '/vouchers/' ),
 		__( 'Track order', 'doughboss-final' ) => home_url( '/track-order/' ),
 		__( 'Locations', 'doughboss-final' ) => home_url( '/locations/' ),
@@ -713,7 +714,8 @@ function doughboss_final_menu_fallback() {
 
 	echo '<ul class="dbf-nav-list">';
 	foreach ( $links as $label => $url ) {
-		echo '<li><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></li>';
+		$is_members_current = home_url( '/members-events/' ) === $url && function_exists( 'is_page' ) && is_page( 'members-events' );
+		echo '<li' . ( $is_members_current ? ' class="current-menu-item"' : '' ) . '><a' . ( $is_members_current ? ' aria-current="page"' : '' ) . ' href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></li>';
 	}
 	echo '</ul>';
 }
