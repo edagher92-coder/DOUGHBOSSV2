@@ -360,6 +360,7 @@
 		}
 		// Synchronous only: no promise may run between the click and tokenize().
 		function formReady() {
+			if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) { return false; }
 			if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
 				walletMessage('Please complete your details above, then choose your wallet again.');
 				return false;
@@ -447,6 +448,12 @@
 		if (session.paymentId) {
 			return placeOrder(session, orderType, locationId);
 		}
+		if (session.providerRequestStarted) {
+			return Promise.reject(new Error('Payment confirmation is pending. Do not pay again; keep this page open or contact the shop.'));
+		}
+		if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) {
+			return Promise.reject(new Error('Refresh your order before starting a new payment.'));
+		}
 
 		// Square now performs any buyer verification while it tokenizes. Validate
 		// the browser-only verification evidence before asking it to tokenize, so
@@ -459,8 +466,16 @@
 			return Promise.reject(err);
 		}
 		return session.controller.ready().then(function (parts) {
+			if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) {
+				throw new Error('Refresh your order before starting a new payment.');
+			}
 			return tokenizeTender(parts, verificationDetails);
 		}).then(function (tender) {
+			// Tokenization is asynchronous: the cart may become stale while the
+			// provider prepares a token. Do not turn that token into a charge.
+			if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) {
+				throw new Error('Refresh your order before starting a new payment.');
+			}
 			session.providerRequestStarted = true;
 			storeSession(session);
 			var intentBody = {
@@ -758,7 +773,7 @@
 				submit.textContent = session.paymentId ? 'Check payment and place order' : 'Payment confirmation pending';
 				message = 'Your payment may already be complete. Please do not pay again — keep this page open or contact the shop so we can confirm your order.';
 			} else {
-				submit.disabled = false;
+				submit.disabled = typeof form.doughbossCartReady === 'function' && !form.doughbossCartReady();
 				var total = readDisplayedTotal(form);
 				submit.textContent = total === null ? (I18N.pay || 'Pay') : ((I18N.pay || 'Pay') + ' ' + money(total));
 				// A declined card must start a genuinely new payment attempt so
@@ -793,6 +808,7 @@
 
 		// A live pickup shop needs a held time before any card work starts. The
 		// storefront form owns the check (and announces its own reason).
+		if (!session.busy && !session.paymentId && !session.providerRequestStarted && typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) { return; }
 		if (!session.busy && typeof form.doughbossPickupGuard === 'function' && form.doughbossPickupGuard()) { return; }
 
 		if (session.busy) { return; }

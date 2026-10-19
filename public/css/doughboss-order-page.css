@@ -247,6 +247,12 @@ body.doughboss-order-page .db-grid {
 	}
 }
 
+@media (min-width: 1400px) {
+	body.doughboss-order-page .db-grid:not(.db-grid--compact) {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+
 body.doughboss-order-page .db-card {
 	border: 1px solid rgba(17, 16, 15, .08);
 	border-radius: 20px;
@@ -270,7 +276,7 @@ body.doughboss-order-page .db-card-body h4 {
 }
 
 body.doughboss-order-page .db-card-desc {
-	font-size: .9rem;
+	font-size: 1rem;
 }
 
 body.doughboss-order-page .db-price {
@@ -356,8 +362,8 @@ body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 	}
 }
 
-@media (max-width: 359.98px) {
-	body.doughboss-order-page .db-grid {
+@media (max-width: 640px) {
+	body.doughboss-order-page .db-grid:not(.db-grid--compact) {
 		grid-template-columns: minmax(0, 1fr);
 	}
 

@@ -394,6 +394,26 @@ function doughboss_preview_fixture() {
 				'id' => 1010, 'name' => 'Sample Sujuk Special', 'description' => 'AI-generated menu illustration. Sample price; not a real offer.',
 				'price' => 15, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/sujuk-special.webp',
 				'category' => 'Pizza', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1011, 'name' => 'Sample All Meat',
+				'description' => 'Pepperoni, sujuk, chicken & cheese on a BBQ sauce base. AI illustration; sample price only.',
+				'price' => 15, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/all-meat.webp',
+				'category' => 'Pizza', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1012, 'name' => 'Sample Garlic Prawns',
+				'description' => 'Prawns, mushroom, onion, capsicum & cheese on a garlic-tomato base. AI illustration; sample price only.',
+				'price' => 15, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/garlic-prawns.webp',
+				'category' => 'Pizza', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1013, 'name' => 'Sample Dough Boss Wrap',
+				'description' => 'Sujuk, fresh tomato, pickled cucumber, lettuce & cheese, topped with mayo. AI illustration; sample price only.',
+				'price' => 14, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/dough-boss-wrap.webp',
+				'category' => 'Wraps', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1014, 'name' => 'Sample Ultimate Chicken',
+				'description' => 'Grilled chicken, melted cheese, mushroom, capsicum & lettuce, topped with mayo. AI illustration; sample price only.',
+				'price' => 14, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/ultimate-chicken.webp',
+				'category' => 'Wraps', 'available' => true, 'dietary' => array(), 'options' => array(),
 			),
 		),
 	);

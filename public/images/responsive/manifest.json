@@ -1315,6 +1315,330 @@
                 ]
             }
         },
+        "menu/generated-v1/all-meat.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "418324bc9d5d3c28d9298b2258c0078dae14e442f222a0dd66917393146aec18",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/all-meat-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "11d75f9a364a9932bf1dac3b74ecba0a379c6758d30712b662dfdd0b69222dda",
+                        "bytes": 4839
+                    },
+                    {
+                        "file": "responsive/all-meat-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "9c0b1436227b1f480983aa8f7c0a7e17f0586361b1dbace36e1c32a588022fd9",
+                        "bytes": 15631
+                    },
+                    {
+                        "file": "responsive/all-meat-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "543ec78f28ef12bc17a4569f1d15a40ecbca4e6ae65a451d0da7855321cfa4cb",
+                        "bytes": 28683
+                    },
+                    {
+                        "file": "responsive/all-meat-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "7268abd811dd14fc0ece4601799bc5461d2dad3c8f4996b3f3198ae8bc23bf4e",
+                        "bytes": 91919
+                    },
+                    {
+                        "file": "responsive/all-meat-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "f46ba34e288ae5c83415d7e8e9b4c8a4a4420f7b16774bbfb0c6c8929f94ce07",
+                        "bytes": 161576
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/all-meat-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "72d73084183557a123994d39106d96a335b32611ac9e9e23c658a8c3f8be3fc7",
+                        "bytes": 5320
+                    },
+                    {
+                        "file": "responsive/all-meat-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "f85a448ea2015116b10e291fcf9ffc7108f10b0003605c0d7683f8b4c620c19a",
+                        "bytes": 17986
+                    },
+                    {
+                        "file": "responsive/all-meat-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "49703c00c394edc955f7eb2a7a553a759d18546300ca11fc0c6d0f2c2054668c",
+                        "bytes": 33600
+                    },
+                    {
+                        "file": "responsive/all-meat-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "155c5fb9c749bd76b9719ee456bb47d670583e82a9bdfbed29909db33a84075d",
+                        "bytes": 117764
+                    },
+                    {
+                        "file": "responsive/all-meat-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "ccd0aa9835d5b82991be89d1507e4cbfd3ec403feb418b342dc6bd2ac39d9ba3",
+                        "bytes": 217546
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/garlic-prawns.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "fac0b3fbc07ad289859fb4a3db23a8b1dfe0e526102a7a00728b06ad490817c6",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/garlic-prawns-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "ab39e038ab3f9f49b9d9565bbeff5c747b54d7dfb67b46782199b7a15c1111a9",
+                        "bytes": 4817
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2a80f5d60467b13bd99876c54f600b60cd343594dea941aa28728b1a8547e86b",
+                        "bytes": 15709
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "a1eb705f887bc729dc00e5636dfb7fd662d941169f8123c474d887bfc4221da7",
+                        "bytes": 29707
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "b27183694d2f99219db41e3afe71affe0aeb3a6ce29ce4507035f97665084b35",
+                        "bytes": 100748
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "0334f67391a7b861a0a6f1b8108424dd13adaab69c7153442a055195bacd2be5",
+                        "bytes": 178338
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/garlic-prawns-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "e86b09da69f606fedabc73a428a9568df3a622e98a39ae6c3f1006b5c39ee06b",
+                        "bytes": 5344
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "7f0412d8bd206991587db48fb3d9e3f5249dea24ff9dab1f745366558d15d07f",
+                        "bytes": 18672
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "40d75019f3753519faeb1dd25bd177d8475fd8f1b306e5eb9ddf45b711402bc5",
+                        "bytes": 36402
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "172656afed64d54c25830c5d9ce53972c7d3f3b320d504f8c03f5499ad264488",
+                        "bytes": 128984
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "a030b57bea3a80f63136f992f0609805d9ff6265a1a7233fe2e3aac8fdf0e83e",
+                        "bytes": 236522
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/dough-boss-wrap.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "bb0d824b39b48f10f8bc2dd56023b8aef7106ebac87b32efc1e49c8eaac22727",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/dough-boss-wrap-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "a09fedb2e847a44282b10a9306e36d617798f038a91c58b1b723da0f227848ed",
+                        "bytes": 2990
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2ee7c8b4984176589a16db8918a157bc13af08639cf5cd9200d96f0ffbd82f91",
+                        "bytes": 8935
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "e153a12cc92fb454b1c6c3d3461205cc86a0c57534aafcbfa8bd928aaf980d7e",
+                        "bytes": 15555
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "3e9a15e02fb2eb439e75346fb7c7c457ca47ce9dd1775d2463d680b572ff756e",
+                        "bytes": 44587
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "916b6e96e1019651919625d3ed1c3720ae4cb41dd8fe9c95a4ca7d8def79b345",
+                        "bytes": 76132
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/dough-boss-wrap-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "93dac91b01802520504f8d080a9f7187b116c428389be62fdcb5c37fca0aea1f",
+                        "bytes": 3552
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "023bec174078a1aadcb5a07b3eb84f18519221fc5ce57269bb1db82e44199381",
+                        "bytes": 11718
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "3edc239c9b4f4cd9dfb9c31fe08f87cfdfc847b61108ac5c21b391537680e273",
+                        "bytes": 21242
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "d86c97b5abbe7d0263bbef789ad2973090cdff305df8473ebb2800182692f03f",
+                        "bytes": 64634
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "768d883e6db09f9ff38821730e3fda384fe8094f874aeadd86633ed8287c1575",
+                        "bytes": 115404
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/ultimate-chicken.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "330652a09b37c58f34197788204ab7a018298302ff988b912a87f76c70ed6921",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/ultimate-chicken-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "2ea710ee463054894ef6b5e80b399dea483d732489d1b613a5aa46ffa6759751",
+                        "bytes": 3513
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "4415ed0d986c604a1f83e73d40ea771c7313269fda963c94f43db2f9adc318c1",
+                        "bytes": 10572
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "af75daee1723e5d997b2379394d66074983f85a2cb6e9716cc5299525947438a",
+                        "bytes": 18791
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "aef798930fac9903659615eb4ff61094e7ae2da82e8603db978bbdcfcd94d559",
+                        "bytes": 57816
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "5a5a5cc5a015eb9b62298e80835c72b9408fac555703da75deb85e0902186846",
+                        "bytes": 100378
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/ultimate-chicken-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "02e221bc52ec1a8aa8b0af1fab8e0f41aca85cf75d7322e0eb6fb566f2d4a452",
+                        "bytes": 4038
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "0cee0ef02295217abea92602cb192340153bd6fd38eae5cbca2c2fb995313abd",
+                        "bytes": 13466
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "2f532c1f49c5d5b85469979c9d74c246d0f4baedd3b49f203241204375ee333b",
+                        "bytes": 24452
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "f416ab57e83849457037fa61e8ad359248075c56997eb7bf41b5f84dce28dd1a",
+                        "bytes": 76820
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "9f9de4cc2547dbfc0e7177573932ed9e302e5bb9bed5c9026971338690baef02",
+                        "bytes": 140648
+                    }
+                ]
+            }
+        },
         "menu/generated-v1/zaatar-veggie-pizza.webp": {
             "width": 1448,
             "height": 1086,

@@ -118,8 +118,8 @@ const fixtureMatch = fixtureScript.match(/^window\.DoughBossPreviewOptions = (.+
 assert.ok(fixtureMatch, 'preview fixture remains a JSON assignment, not executable logic');
 const fixture = JSON.parse(fixtureMatch[1]);
 const responsiveItems = fixture.menu.filter(item => item.image_responsive);
-assert.equal(responsiveItems.length, 7, 'preview covers legacy photos, new drinks, labelled illustrations and unsupported fallbacks');
-for (const name of ['Sample Coke 600ml', 'Sample Vanilla Coke 600ml', 'Sample Half Meat & Cheese', 'Sample Sujuk Special']) {
+assert.equal(responsiveItems.length, 11, 'preview covers legacy photos, new drinks, labelled illustrations and unsupported fallbacks');
+for (const name of ['Sample Coke 600ml', 'Sample Vanilla Coke 600ml', 'Sample Half Meat & Cheese', 'Sample Sujuk Special', 'Sample All Meat', 'Sample Garlic Prawns', 'Sample Dough Boss Wrap', 'Sample Ultimate Chicken']) {
   assert.ok(responsiveItems.some(item => item.name === name), `new responsive media reaches the preview: ${name}`);
 }
 assert.ok(responsiveItems.some(item => item.name === 'Spinach Pie'), 'new photograph coverage reaches the preview');

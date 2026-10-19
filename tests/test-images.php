@@ -53,6 +53,10 @@ db_test( 'menu image selection never substitutes category or different-product p
 		'Labneh Veggie Pizza' => 'labneh-veggie-pizza',
 		'Sujuk Special' => 'sujuk-special',
 		'Zaatar Veggie Pizza' => 'zaatar-veggie-pizza',
+		'All Meat' => 'all-meat',
+		'Garlic Prawns' => 'garlic-prawns',
+		'Dough Boss Wrap' => 'dough-boss-wrap',
+		'Ultimate Chicken' => 'ultimate-chicken',
 	);
 	foreach ( $illustrations as $name => $slug ) {
 		$file = 'public/images/menu/generated-v1/' . $slug . '.webp';
@@ -108,7 +112,7 @@ db_test( 'bundled image manifest matches actual original and encoded assets', fu
 	$base = DOUGHBOSS_PLUGIN_DIR . 'public/images/';
 	$manifest = json_decode( file_get_contents( $base . 'responsive/manifest.json' ), true );
 	assert_same( 1, $manifest['version'], 'known manifest version' );
-	assert_same( 27, count( $manifest['images'] ), 'exact approved photographs and labelled illustrations have delivery variants' );
+	assert_same( 31, count( $manifest['images'] ), 'exact approved photographs and labelled illustrations have delivery variants' );
 	$expected_originals = array(
 		'doughboss-feast-real-v1.jpg',
 		'menu/real-v1/zaatar-cheese.jpg',
@@ -131,6 +135,7 @@ db_test( 'bundled image manifest matches actual original and encoded assets', fu
 		'menu/brand-v1/coca-cola-zero-600ml.png', 'menu/brand-v1/sprite-600ml.jpg', 'menu/brand-v1/fanta-orange-600ml.jpg',
 		'menu/generated-v1/cheese-tomato-olives.webp', 'menu/generated-v1/half-meat-cheese.webp',
 		'menu/generated-v1/labneh-veggie-pizza.webp', 'menu/generated-v1/sujuk-special.webp', 'menu/generated-v1/zaatar-veggie-pizza.webp',
+		'menu/generated-v1/all-meat.webp', 'menu/generated-v1/garlic-prawns.webp', 'menu/generated-v1/dough-boss-wrap.webp', 'menu/generated-v1/ultimate-chicken.webp',
 	);
 	$actual_originals = array_keys( $manifest['images'] );
 	sort( $expected_originals );
@@ -213,6 +218,7 @@ db_test( 'new brand and illustrated menu originals expose phone-sized candidates
 		'menu/brand-v1/coca-cola-zero-600ml.png', 'menu/brand-v1/sprite-600ml.jpg', 'menu/brand-v1/fanta-orange-600ml.jpg',
 		'menu/generated-v1/cheese-tomato-olives.webp', 'menu/generated-v1/half-meat-cheese.webp',
 		'menu/generated-v1/labneh-veggie-pizza.webp', 'menu/generated-v1/sujuk-special.webp', 'menu/generated-v1/zaatar-veggie-pizza.webp',
+		'menu/generated-v1/all-meat.webp', 'menu/generated-v1/garlic-prawns.webp', 'menu/generated-v1/dough-boss-wrap.webp', 'menu/generated-v1/ultimate-chicken.webp',
 	);
 	foreach ( $paths as $path ) {
 		$url = DOUGHBOSS_PLUGIN_URL . 'public/images/' . $path;

@@ -47,6 +47,10 @@ const APPROVED_IMAGES = [
     'menu/generated-v1/labneh-veggie-pizza.webp',
     'menu/generated-v1/sujuk-special.webp',
     'menu/generated-v1/zaatar-veggie-pizza.webp',
+    'menu/generated-v1/all-meat.webp',
+    'menu/generated-v1/garlic-prawns.webp',
+    'menu/generated-v1/dough-boss-wrap.webp',
+    'menu/generated-v1/ultimate-chicken.webp',
 ];
 
 function fail(string $message)

@@ -113,6 +113,10 @@ $asset_files  = array(
 	'public/images/menu/generated-v1/labneh-veggie-pizza.webp',
 	'public/images/menu/generated-v1/sujuk-special.webp',
 	'public/images/menu/generated-v1/zaatar-veggie-pizza.webp',
+	'public/images/menu/generated-v1/all-meat.webp',
+	'public/images/menu/generated-v1/garlic-prawns.webp',
+	'public/images/menu/generated-v1/dough-boss-wrap.webp',
+	'public/images/menu/generated-v1/ultimate-chicken.webp',
 );
 $preview_files = array(
 	'scripts/visual-preview/wp-shim.php',

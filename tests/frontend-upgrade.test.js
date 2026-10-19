@@ -135,21 +135,24 @@ test('already installed and appinstalled states never navigate or restore stale 
   assert.match(y.status.textContent, /already open/);
 });
 
-test('photo-led menu keeps capped desktop density, two phone columns and compact rows below 360px', () => {
+test('menu uses readable phone catalogue rows and a capped four-column wide desktop grid', () => {
 	const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
 	const orderCss = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss-order-page.css'), 'utf8');
 	assert.match(css, /\.db-grid \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
 	assert.match(css, /@media \(max-width: 1099px\)[\s\S]*?\.db-app \.db-grid \{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
-	assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.db-app \.db-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-	assert.match(css, /\.db-grid:not\(\.db-grid--compact\) \.db-card-img \{ min-height: 0; aspect-ratio: 4 \/ 3;/);
+	assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.db-app\.db-menu \.db-grid:not\(\.db-grid--compact\) \{ grid-template-columns: minmax\(0, 1fr\)/);
+	assert.match(css, /@media \(min-width: 1400px\)[\s\S]*?\.db-app\.db-menu \.db-grid:not\(\.db-grid--compact\) \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
 	assert.match(css, /\.db-card-desc \{ font-size: 1rem; line-height: 1\.45;/);
+	assert.match(orderCss, /body\.doughboss-order-page \.db-card-desc \{\s*font-size: 1rem;/, 'desktop and tablet descriptions retain the 16px reading floor');
 	assert.match(css, /\.db-menu-customize > summary \{ min-height: 44px;/);
-	assert.match(css, /@media \(max-width: 359\.98px\)[\s\S]*?\.db-card \{ display: grid; grid-template-columns: 96px minmax\(0, 1fr\); align-items: start; \}/);
-	assert.match(css, /@media \(max-width: 359\.98px\)[\s\S]*?\.db-card-img \{ width: 84px; height: 84px; aspect-ratio: 1; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; \}/);
-	assert.match(orderCss, /@media \(max-width: 359\.98px\)/, 'the order wrapper shares the fractional-safe narrow-phone cutoff');
+	assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.db-card \{ display: grid; grid-template-columns: 96px minmax\(0, 1fr\); align-items: start; \}/);
+	assert.match(css, /\.db-card-img \{ width: 84px; height: 84px; min-height: 0; aspect-ratio: 1; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; \}/);
+	assert.doesNotMatch(css, /db-menu-image-note/, 'owner-requested overlay has no obsolete styling');
+	assert.match(orderCss, /@media \(max-width: 640px\)\s*\{\s*body\.doughboss-order-page \.db-grid:not\(\.db-grid--compact\)/, 'order wrapper shares the phone row layout');
+	assert.match(orderCss, /@media \(min-width: 1400px\)[\s\S]*?repeat\(4, minmax\(0, 1fr\)\)/);
 	assert.match(orderCss, /body\.doughboss-order-page \.db-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
 	assert.match(orderCss, /@media \(max-width: 1099px\)[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
-	assert.doesNotMatch(orderCss, /@media \(max-width: 420px\)/, 'legacy order wrapper must not undo the two-column phone layout');
+	assert.doesNotMatch(orderCss, /@media \(max-width: 420px\)/, 'legacy order wrapper must not add a competing phone layout');
 	assert.doesNotMatch(orderCss, /\.db-card-desc\s*\{\s*display:\s*none/, 'ingredients must remain visible on phones');
   assert.match(css, /\.db-menu-search-status \{ grid-column: 2; grid-row: 1;/, 'phone result count shares the search row');
   const themeStyle = fs.readFileSync(path.join(root, 'themes', 'doughboss-final', 'style.css'), 'utf8');
@@ -217,6 +220,12 @@ function find(element, predicate) {
 	return null;
 }
 
+function findAll(element, predicate, matches = []) {
+	if (predicate(element)) matches.push(element);
+	for (const child of element.children || []) findAll(child, predicate, matches);
+	return matches;
+}
+
 /* ------------------------------------------------------------------ */
 /* Menu                                                                */
 /* ------------------------------------------------------------------ */
@@ -224,6 +233,8 @@ function find(element, predicate) {
 const compactMenuCategory = extractFunction(storefront, 'compactMenuCategory');
 
 const menuPhoto = extractFunction(storefront, 'menuPhoto', { el: node });
+
+const menuSelectedChoices = extractFunction(storefront, 'menuSelectedChoices');
 
 test('menu photos without responsive metadata use native lazy images, never eager backgrounds', () => {
 	for (const item of [
@@ -258,7 +269,7 @@ test('valid packaged menu photos retain responsive sources, dimensions and nativ
 		assert.equal(picture.children[index].tag, 'source');
 		assert.equal(picture.children[index].getAttribute('srcset'), sources[index].srcset);
 		assert.equal(picture.children[index].type, sources[index].type);
-		assert.equal(picture.children[index].getAttribute('sizes'), 'auto, (max-width: 359.98px) 84px, (max-width: 1099px) 50vw, 440px');
+		assert.equal(picture.children[index].getAttribute('sizes'), 'auto, (max-width: 640px) 84px, (max-width: 1099px) 50vw, 440px');
 	}
 	const photo = picture.querySelector('img');
 	assert.equal(photo.getAttribute('width'), '960');
@@ -292,7 +303,7 @@ test('invalid responsive metadata falls back to one lazy original without partia
 function menuCardFactory(overrides) {
 	const context = {
 		I18N: {}, el: node, money: value => '$' + Number(value).toFixed(2), dietaryBadges: () => [],
-		compactMenuCategory, menuPhoto: () => node('div', { class: 'db-card-img' }),
+		compactMenuCategory, menuPhoto: () => node('div', { class: 'db-card-img' }), menuSelectedChoices,
 		menuLocationId: () => 1, dbToast() {}, request() { return Promise.resolve(); }
 	};
 	return extractFunction(storefront, 'menuCard', Object.assign(context, overrides || {}));
@@ -318,6 +329,119 @@ test('radio customisation shows and submits the same default and includes its pr
 		assert.equal(sends[0].options.body.options.crust, explicitDefault ? 'second' : 'first');
 		assert.equal(sends[0].options.body.unit_price, undefined, 'server retains price authority');
 	}
+});
+
+test('selected-choice helper is canonical, read-only and rejects malformed numeric prices', () => {
+	const options = [{ id: 'crust', label: 'Crust', type: 'radio', choices: [
+		{ slug: 'regular', label: 'Regular', price: ' 0 ' },
+		{ slug: 'thick', label: 'Thick', price: '2.50' },
+		{ slug: 'bad-a', label: 'Bad A', price: '1junk' },
+		{ slug: 'bad-b', label: 'Bad B', price: '' },
+		{ slug: 'bad-c', label: 'Bad C', price: null },
+		{ slug: 'bad-d', label: 'Bad D', price: true }
+	]}, { id: 'remove', label: 'Remove ingredients', type: 'check', choices: [
+		{ slug: 'no-onion', label: 'No onion' }
+	]}];
+	const selections = Object.create(null);
+	selections.crust = ['thick', 'bad-a', 'bad-b', 'bad-c', 'bad-d'];
+	selections.remove = ['no-onion'];
+	selections.hasOwnProperty = 'shadowed';
+	const before = JSON.stringify(options);
+	assert.deepEqual(JSON.parse(JSON.stringify(menuSelectedChoices(options, selections))), [
+		{ groupId: 'crust', groupLabel: 'Crust', slug: 'thick', label: 'Thick', price: 2.5 },
+		{ groupId: 'remove', groupLabel: 'Remove ingredients', slug: 'no-onion', label: 'No onion', price: 0 }
+	]);
+	assert.equal(JSON.stringify(options), before, 'the display helper does not mutate the option catalogue');
+});
+
+test('customiser shows selected labels, price deltas and resets to canonical defaults', () => {
+	const sends = [];
+	const item = { id: 22, name: 'Synthetic wrap', price: 10, category: 'Wraps', image: 'x.jpg', options: [
+		{ id: 'style', type: 'radio', label: 'Style', choices: [
+			{ slug: 'regular', label: 'Regular', price: 0 }, { slug: 'loaded', label: 'Loaded', price: 2, default: true }
+		]},
+		{ id: 'extra', type: 'check', label: 'Extras', choices: [{ slug: 'cheese', label: 'Cheese', price: 1.5 }, { slug: 'herbs', label: 'Herbs', price: 0 }] },
+		{ id: 'remove', type: 'check', label: 'Remove ingredients', choices: [{ slug: 'no-onion', label: 'No onion', price: 0 }] }
+	] };
+	const card = menuCardFactory({ request(route, options) { sends.push({ route, options }); return new Promise(() => {}); } })(item, true, 1, false);
+	const inputs = findAll(card, n => n.tag === 'input');
+	const extra = inputs.find(input => input.getAttribute('value') === 'cheese');
+	const removal = inputs.find(input => input.getAttribute('value') === 'no-onion');
+	const reset = find(card, n => n.className === 'db-menu-reset');
+	const summary = find(card, n => n.className === 'db-menu-selection-summary');
+	assert.match(summary.textContent, /Style: Loaded/, 'paid radio default is visible in the summary');
+	assert.match(textOf(card), /Choose one/);
+	assert.match(textOf(card), /Choose any/);
+	assert.match(textOf(card), /Removing ingredients does not reduce the price/);
+	assert.match(textOf(card), /No extra charge/);
+	assert.match(textOf(card), /Free/);
+	assert.match(textOf(card), /No charge/);
+	extra.checked = true;
+	extra.listeners.change();
+	removal.checked = true;
+	removal.listeners.change();
+	assert.match(summary.textContent, /Extras: Cheese/);
+	assert.match(summary.textContent, /Remove ingredients: No onion/, 'zero-price removals remain visible');
+	assert.match(summary.textContent, /Base \$10\.00 \+ \$3\.50 selected options = \$13\.50 item total/, 'breakdown includes paid defaults, extras and free removals');
+	assert.equal(find(card, n => n.className === 'db-price').textContent, '$13.50');
+	reset.listeners.click();
+	assert.equal(inputs.find(input => input.getAttribute('value') === 'loaded').checked, true, 'reset restores a paid radio default');
+	assert.equal(extra.checked, false);
+	assert.equal(removal.checked, false);
+	assert.equal(summary.textContent, 'Selected: Style: Loaded. Base $10.00 + $2.00 selected options = $12.00 item total');
+	find(card, n => n.className === 'db-btn db-customizer-add').listeners.click();
+	assert.equal(sends[0].options.body.options.style, 'loaded', 'reset preserves the canonical radio payload');
+	assert.equal(sends[0].options.body.options.extra, undefined);
+	assert.equal(sends[0].options.body.options.remove, undefined);
+	const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
+	assert.match(css, /\.db-menu-option \{[\s\S]*?min-height: 44px;/, 'every option row has a 44px target');
+	assert.match(css, /\.db-menu-option:has\(input:checked\) \{[\s\S]*?border-color:/, 'checked native controls have a visible selected row');
+});
+
+test('customiser instructions, selected totals and prices retain readable wrapping', () => {
+	const css = fs.readFileSync(path.join(root, 'public', 'css', 'doughboss.css'), 'utf8');
+	assert.match(css, /\.db-menu-option-help \{[^}]*font-size: 1rem;/);
+	assert.match(css, /\.db-menu-selection-summary \{[^}]*font-size: 1rem;/);
+	assert.match(css, /\.db-menu-option--segment \{[^}]*flex-wrap: wrap;/);
+	assert.match(css, /\.db-menu-option \.db-option-price \{[^}]*font-size: 1rem;/);
+});
+
+test('customiser price breakdown preserves negative catalogue adjustments without submitting a price', () => {
+	const sends = [];
+	const card = menuCardFactory({ request(route, options) { sends.push({ route, options }); return new Promise(() => {}); } })({
+		id: 24, name: 'Synthetic price adjustment', price: 10, category: 'Pizza', options: [
+			{ id: 'style', type: 'radio', label: 'Style', choices: [{ slug: 'small', label: 'Small', price: -2, default: true }] }
+		]
+	}, true, 1, false);
+	assert.match(find(card, n => n.className === 'db-menu-selection-summary').textContent, /Base \$10\.00 − \$2\.00 selected options = \$8\.00 item total/);
+	find(card, n => n.className === 'db-btn db-customizer-add').listeners.click();
+	assert.equal(sends[0].options.body.options.style, 'small');
+	assert.equal(sends[0].options.body.unit_price, undefined);
+});
+
+test('customiser locks reset while adding and preserves selections after a failed add', async () => {
+	let rejectRequest;
+	const card = menuCardFactory({ request() { return new Promise((resolve, reject) => { rejectRequest = reject; }); } })({
+		id: 23, name: 'Synthetic pide', price: 8, category: 'Pide', image: 'x.jpg', options: [
+			{ id: 'extra', type: 'check', label: 'Extras', choices: [{ slug: 'cheese', label: 'Cheese', price: 1 }] }
+		]
+	}, true, 1, false);
+	const extra = find(card, n => n.tag === 'input' && n.getAttribute('value') === 'cheese');
+	const reset = find(card, n => n.className === 'db-menu-reset');
+	const summary = find(card, n => n.className === 'db-menu-selection-summary');
+	extra.checked = true;
+	extra.listeners.change();
+	find(card, n => n.className === 'db-btn db-customizer-add').listeners.click();
+	assert.equal(extra.disabled, true);
+	assert.equal(reset.disabled, true);
+	reset.listeners.click();
+	assert.match(summary.textContent, /Extras: Cheese/, 'a locked reset cannot discard the pending selection');
+	rejectRequest(new Error('Network unavailable'));
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(extra.disabled, false);
+	assert.equal(reset.disabled, false);
+	assert.equal(extra.checked, true);
+	assert.match(summary.textContent, /Extras: Cheese/, 'a failed add preserves the user choice');
 });
 
 test('search uses an inline SVG icon and a clear button, never the U+2315 glyph', () => {

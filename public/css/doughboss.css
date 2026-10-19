@@ -267,6 +267,10 @@
 	}
 }
 
+@media (min-width: 1400px) {
+	.db-app.db-menu .db-grid:not(.db-grid--compact) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .db-card {
 	border: 1px solid rgba(20, 16, 12, 0.06);
 	border-radius: var(--db-r-lg);
@@ -335,7 +339,7 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 @media (max-width: 640px) {
-	.db-app .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) { grid-template-columns: minmax(0, 1fr); gap: .625rem; }
 	.db-app.db-menu { padding: 1rem; }
 	body.page-id-402 .entry-content,
 	body.page-id-402 .menucontent.entry-content { padding: 24px 16px; }
@@ -344,11 +348,15 @@ body.page-id-402 #primary-menu > li > a {
 	body.page-id-402 .bgheader { margin: 16px 0 24px; inline-size: 100%; }
 }
 
-/* Phones: show two products at a glance instead of a screen-sized photograph.
+/* Phones: compact catalogue rows give full descriptions room to breathe.
  * Keep all ingredient/dietary text available; do not clip names or descriptions.
  * Compact drink rows retain their separate, photo-free layout below. */
 @media (max-width: 640px) {
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { min-height: 0; aspect-ratio: 4 / 3; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 84px; height: 84px; min-height: 0; aspect-ratio: 1; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-body { min-width: 0; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-kicker { font-size: .5rem; letter-spacing: .06em; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-category { font-size: 1rem; }
 	.db-app.db-menu .db-card-body { padding: .75rem; }
 	.db-app.db-menu .db-card-body h3,
 	.db-app.db-menu .db-card-body h4 { font-size: 1.25rem; line-height: 1.15; overflow-wrap: anywhere; }
@@ -363,16 +371,6 @@ body.page-id-402 #primary-menu > li > a {
 	.db-app.db-menu .db-menu-tools { grid-template-columns: minmax(0, 1fr) 3.5rem; gap: .25rem; padding: .5rem; }
 	.db-app.db-menu .db-menu-search-status { grid-column: 2; grid-row: 1; padding-inline: .25rem; font-size: .875rem; }
 	.db-app.db-menu .db-menu-tools .db-jumpbar { grid-column: 1 / -1; grid-row: 2; }
-}
-
-/* Narrow phones: compact thumbnails leave room for readable details and controls. */
-@media (max-width: 359.98px) {
-	.db-app .db-grid:not(.db-grid--compact) { grid-template-columns: minmax(0, 1fr); }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 84px; height: 84px; aspect-ratio: 1; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-body { min-width: 0; }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-kicker { font-size: .5rem; letter-spacing: .06em; }
-	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-category { font-size: 1rem; }
 }
 
 .db-card-img--placeholder {
@@ -461,19 +459,6 @@ body.page-id-402 #primary-menu > li > a {
 	background: #f7f5f0;
 }
 
-.db-menu-image-note {
-	position: absolute;
-	z-index: 1;
-	bottom: .25rem;
-	left: .25rem;
-	font-size: 14px;
-	line-height: 1.2;
-	padding: 2px 6px;
-	border-radius: 3px;
-	background: rgba(0, 0, 0, .8);
-	color: #fff;
-	pointer-events: none;
-}
 
 .db-card-body {
 	padding: 1rem;
@@ -489,7 +474,8 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-card-desc {
 	color: var(--db-muted);
-	font-size: 0.85rem;
+	font-size: 1rem;
+	line-height: 1.45;
 	margin: 0 0 0.75rem;
 	flex: 1;
 }
@@ -827,41 +813,58 @@ body.page-id-402 #primary-menu > li > a {
 	font-weight: 700;
 }
 
+.db-menu-option-help {
+	margin: 0.15rem 0 0.55rem;
+	color: var(--db-muted);
+	font-size: 1rem;
+	line-height: 1.45;
+}
+
+.db-menu-option-help--remove {
+	margin-top: -0.2rem;
+}
+
 .db-menu-option {
 	display: flex;
 	align-items: center;
 	gap: 0.55rem;
-	padding: 0.25rem 0;
+	font-size: 1rem;
+	line-height: 1.45;
+	min-height: 44px;
+	padding: 0.35rem 0.45rem;
+	border: 1px solid transparent;
+	border-radius: var(--db-r-sm);
 	cursor: pointer;
 	touch-action: manipulation;
 }
 
-/* The radio/checkbox itself renders ~11px. The <label> is the real target, so
- * on touch it gets a full 44px row and the control is scaled up to match. */
-@media (pointer: coarse) {
-	.db-menu-option {
-		min-height: 44px;
-		padding: 0.35rem 0.25rem;
-		border-radius: var(--db-r-sm);
-	}
+.db-menu-option input {
+	width: 20px;
+	height: 20px;
+	flex: 0 0 auto;
+	accent-color: var(--db-accent);
+}
 
-	.db-menu-option input {
-		width: 22px;
-		height: 22px;
-		flex: 0 0 auto;
-		accent-color: var(--db-accent);
-	}
+.db-menu-option:has(input:checked) {
+	border-color: var(--db-accent);
+	background: color-mix(in srgb, var(--db-accent) 7%, var(--db-paper));
+}
 
-	.db-menu-option:active {
-		background: color-mix(in srgb, var(--db-accent) 6%, transparent);
-	}
+.db-menu-option:active {
+	background: color-mix(in srgb, var(--db-accent) 12%, var(--db-paper));
 }
 
 .db-menu-option span:nth-of-type(1) {
 	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
-/* Keep these as actual radio controls: the visually-hidden inputs retain native
+.db-menu-option .db-option-price {
+	font-size: 1rem;
+}
+
+/* Keep these as actual radio controls: the visible inputs retain native
  * arrow-key behaviour and form semantics while their labels become the segmented
  * tap targets. Only the canonical Style and Crust groups receive these classes. */
 .db-menu-option-group--segmented {
@@ -878,6 +881,7 @@ body.page-id-402 #primary-menu > li > a {
 .db-menu-option--segment {
 	position: relative;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: center;
 	gap: 0.3rem;
@@ -888,21 +892,21 @@ body.page-id-402 #primary-menu > li > a {
 	border-radius: var(--db-r-sm);
 	background: #fff;
 	color: var(--db-ink);
-	font-size: 0.9rem;
+	font-size: 1rem;
 	font-weight: 700;
 	line-height: 1.2;
 	text-align: center;
 	transition: background-color var(--db-t-fast) var(--db-ease), border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 }
 
-/* Without :has(), keep the native glyph and its focus ring visible. */
+/* Keep the native glyph visible; the labelled row carries the selected state. */
 @supports selector(:has(input:checked)) {
 	.db-menu-option--segment input {
-		position: absolute;
-		inline-size: 1px;
-		block-size: 1px;
-		margin: -1px;
-		opacity: 0;
+		position: static;
+		inline-size: 20px;
+		block-size: 20px;
+		margin: 0;
+		opacity: 1;
 	}
 }
 
@@ -913,9 +917,9 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 .db-menu-option--segment .db-option-price {
-	flex: 0 0 auto;
+	flex: 1 1 100%;
 	color: inherit;
-	font-size: 0.78rem;
+	font-size: 1rem;
 	font-weight: 600;
 	opacity: 0.78;
 }
@@ -925,6 +929,36 @@ body.page-id-402 #primary-menu > li > a {
 	background: var(--db-accent);
 	box-shadow: inset 0 -3px 0 var(--db-accent-dark);
 	color: #fff;
+}
+
+.db-menu-selection-summary {
+	margin: 0;
+	padding: 0.65rem 0.75rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-sm);
+	background: color-mix(in srgb, var(--db-paper) 80%, var(--db-border));
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.db-menu-reset {
+	justify-self: start;
+	min-height: 44px;
+	padding: 0.45rem 0.75rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-sm);
+	background: #fff;
+	color: var(--db-ink);
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.db-menu-reset:disabled {
+	cursor: not-allowed;
+	opacity: 0.65;
 }
 
 .db-menu-option--segment:has(input:focus-visible) {
@@ -1008,6 +1042,8 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-cart-line-info small {
 	color: var(--db-muted);
+	font-size: 1rem;
+	line-height: 1.45;
 	overflow-wrap: anywhere;
 }
 
@@ -2211,6 +2247,35 @@ body.page-id-402 #primary-menu > li > a {
 .db-checkout[aria-busy="true"] {
 	cursor: progress;
 }
+
+.db-cart-refresh {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: .75rem;
+	margin-block: 1rem;
+	padding: 1rem;
+	border: 1px solid #b87924;
+	border-radius: var(--db-r-md);
+	background: #fff6e7;
+	color: #3d2b15;
+	font-size: 1rem;
+	line-height: 1.45;
+}
+.db-cart-refresh[hidden] { display: none; }
+.db-cart-refresh > span { flex: 1 1 240px; }
+.db-cart-refresh-retry, .db-cart-to-details, .db-checkout-review {
+	min-height: 44px;
+	font-size: 1rem;
+}
+.db-cart-refresh-retry[hidden] { display: none; }
+.db-cart-review-heading, .db-checkout-heading {
+	scroll-margin-top: calc(var(--db-sticky-top, 0px) + 1rem);
+}
+.db-cart-to-details { width: 100%; margin-top: 1rem; }
+.db-checkout-review { display: inline-flex; align-items: center; margin-block: .4rem; }
+.db-checkout--stale .db-checkout-summary { outline: 2px solid #b87924; outline-offset: 2px; }
 
 .db-checkout-heading h3 {
 	font-size: 2rem;
