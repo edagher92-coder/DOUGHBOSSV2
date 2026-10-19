@@ -1,0 +1,43 @@
+.db-preview-banner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: .65rem 1rem;
+	flex-wrap: wrap;
+	padding: .7rem 1rem;
+	background: #fff4d8;
+	border-bottom: 2px solid #be4d24;
+	color: #241a13;
+	font: 600 .9rem/1.35 Barlow, Arial, sans-serif;
+	text-align: center;
+}
+
+.db-preview-banner strong {
+	font-family: "Bebas Neue", Impact, sans-serif;
+	font-size: 1.25rem;
+	letter-spacing: .06em;
+}
+
+.db-preview-banner nav {
+	display: flex;
+	gap: .7rem;
+}
+
+.db-preview-banner a {
+	color: #7d2e18;
+	text-decoration-thickness: 2px;
+	text-underline-offset: 3px;
+}
+
+#db-preview-action:not(:empty) {
+	flex-basis: 100%;
+	font-weight: 700;
+}
+
+@media (max-width: 767px) {
+	.db-preview-banner {
+		align-items: flex-start;
+		justify-content: flex-start;
+		text-align: left;
+	}
+}

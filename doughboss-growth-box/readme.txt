@@ -3,7 +3,7 @@ Contributors: doughboss
 Tags: catering, shortcode, landing page
 Requires at least: 6.0
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ Developers: the media location can be changed with the filters `doughboss_growth
 3. Open DoughBoss, Catering box. Nothing is enabled until you enable it there.
 
 == Changelog ==
+
+= 0.2.1 =
+* Home hero video now also works with DoughBoss core 2.43 and later, which draw the hero backdrop as an image. Core 2.41 behaves exactly as before. Unknown layouts still fail closed.
 
 = 0.2.0 =
 * Home hero video: an optional silent looping video in the home hero (switch off by default), with the first-frame poster as the LCP image and preload, found-by-file-name lookup of five MP4 files in the Media Library (cached in a transient), a "Concept preview" label setting (on by default), a settings-screen status table, a deferred ES5 script and a small stylesheet that load only while it runs. Fails closed if the core hero markup is not recognised. The home page is not noindexed by it (deliberate owner decision).

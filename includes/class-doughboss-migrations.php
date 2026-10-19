@@ -1,0 +1,687 @@
+<?php
+/**
+ * Versioned database/upgrade migrations.
+ *
+ * Runs on load whenever the stored schema version is behind the code's
+ * DOUGHBOSS_DB_VERSION. Covers sites updated via file copy (where the
+ * activation hook never fires) and provides ordered, version-aware steps for
+ * anything `dbDelta` cannot express (capabilities, data backfills, etc.).
+ *
+ * @package DoughBoss
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * Applies pending schema/data migrations in order.
+ */
+class DoughBoss_Migrations {
+
+	/**
+	 * Run any migrations the stored version is behind.
+	 *
+	 * @return void
+	 */
+	public static function run() {
+		$installed = (string) get_option( 'doughboss_db_version', '0' );
+
+		if ( version_compare( $installed, DOUGHBOSS_DB_VERSION, '>=' ) ) {
+			return;
+		}
+
+		// add_option() is a single INSERT protected by WordPress's unique option
+		// key, so only one request can own the migration. A stale five-minute lock
+		// is recoverable after a crashed PHP process.
+		$lock_key = 'doughboss_migration_lock';
+		$lock_at  = (int) get_option( $lock_key, 0 );
+		if ( $lock_at && ( time() - $lock_at ) < ( 5 * MINUTE_IN_SECONDS ) ) {
+			return;
+		}
+		if ( $lock_at ) {
+			delete_option( $lock_key );
+		}
+		if ( ! add_option( $lock_key, time(), '', 'no' ) ) {
+			return;
+		}
+
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-activator.php';
+
+		// A failing step must never white-screen the site or replay every prior
+		// step for each visitor: wrap the whole run, and checkpoint the stored
+		// version after each step so progress is durable.
+		try {
+			// dbDelta is additive: re-running the table definitions adds any new
+			// columns to existing installs without touching existing data.
+			DoughBoss_Activator::create_tables();
+
+			// Self-heal roles/capabilities on every upgrade (covers new caps and
+			// fresh installs where the version-gated steps below are skipped).
+			DoughBoss_Activator::add_capabilities();
+
+			$steps = array(
+				'1.1.0' => 'upgrade_to_1_1_0',
+				'1.2.0' => 'upgrade_to_1_2_0',
+				'1.3.0' => 'upgrade_to_1_3_0',
+				'1.4.0' => 'upgrade_to_1_4_0',
+				'1.5.0' => 'upgrade_to_1_5_0',
+				'1.6.0' => 'upgrade_to_1_6_0',
+				'1.7.0' => 'upgrade_to_1_7_0',
+				'1.8.0' => 'upgrade_to_1_8_0',
+				'1.9.0' => 'upgrade_to_1_9_0',
+				'1.10.0' => 'upgrade_to_1_10_0',
+				'1.11.0' => 'upgrade_to_1_11_0',
+				'1.12.0' => 'upgrade_to_1_12_0',
+				'1.13.0' => 'upgrade_to_1_13_0',
+				'1.14.0' => 'upgrade_to_1_14_0',
+				'1.15.0' => 'upgrade_to_1_15_0',
+				'1.16.0' => 'upgrade_to_1_16_0',
+				'1.17.0' => 'upgrade_to_1_17_0',
+				'1.18.0' => 'upgrade_to_1_18_0',
+				'1.19.0' => 'upgrade_to_1_19_0',
+				'1.20.0' => 'upgrade_to_1_20_0',
+				'1.21.0' => 'upgrade_to_1_21_0',
+				'1.22.0' => 'upgrade_to_1_22_0',
+				'1.23.0' => 'upgrade_to_1_23_0',
+			);
+			foreach ( $steps as $version => $method ) {
+				if ( version_compare( $installed, $version, '<' ) ) {
+					self::$method();
+					update_option( 'doughboss_db_version', $version );
+				}
+			}
+
+			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
+			delete_option( 'doughboss_migration_error' );
+		} catch ( Throwable $e ) {
+			// Leave the version at the last successful checkpoint and let the site
+			// keep serving; the next request retries the remaining steps.
+			if ( function_exists( 'error_log' ) ) {
+				error_log( 'DoughBoss migration halted: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
+			update_option( 'doughboss_migration_error', sanitize_text_field( $e->getMessage() ) );
+		}
+
+		delete_option( $lock_key );
+		delete_transient( 'doughboss_migrating' ); // Clean up the pre-1.11 lock.
+	}
+
+	/** 1.22.0 — retain the receipt and signed-in cashier for till reconciliation. */
+	private static function upgrade_to_1_22_0() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_voucher_redemptions';
+		foreach ( array( 'transaction_reference', 'redeemed_by_user_id', 'redeemed_by_name' ) as $column ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( ! $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", $column ) ) ) {
+				throw new RuntimeException( 'Voucher reconciliation upgrade could not add the ' . $column . ' column.' );
+			}
+		}
+	}
+
+	/**
+	 * 1.23.0 — preserve a reversal/void audit trail rather than silently
+	 * reissuing value after a till correction.
+	 */
+	private static function upgrade_to_1_23_0() {
+		global $wpdb;
+		$redemptions = $wpdb->prefix . 'doughboss_voucher_redemptions';
+		$audit       = $wpdb->prefix . 'doughboss_voucher_audit';
+
+		foreach ( array( 'redemption_status', 'reversed_at', 'reversed_by_user_id', 'reversed_by_name', 'reversal_reason' ) as $column ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( ! $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$redemptions} LIKE %s", $column ) ) ) {
+				throw new RuntimeException( 'Voucher reversal upgrade could not add the ' . $column . ' column.' );
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( $audit !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $audit ) ) ) {
+			throw new RuntimeException( 'Voucher reversal audit storage was not created.' );
+		}
+	}
+
+	/** 1.19.0 — passwordless loyalty members, ledger and one-time login links. */
+	private static function upgrade_to_1_19_0() {
+		// Tables are added by create_tables(). Defaults are merged at read time,
+		// so existing store settings are never overwritten here.
+	}
+
+	/** 1.20.0 — transactional, location-bound staff attendance. */
+	private static function upgrade_to_1_20_0() {
+		global $wpdb;
+		$shifts    = $wpdb->prefix . 'doughboss_staff_shifts';
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		$users     = $wpdb->users;
+
+		// The early staff-clock prototype used this table name without
+		// immutable staff/shop snapshots or a durable open-shift guard. dbDelta
+		// adds the columns; this step safely normalises existing rows before the
+		// unique guard is asserted. Closed rows use a NULL guard so MySQL permits
+		// more than one completed shift per employee.
+		foreach ( array( 'staff_name', 'staff_login', 'location_name', 'timezone_snapshot', 'open_guard' ) as $column ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( ! $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$shifts} LIKE %s", $column ) ) ) {
+				throw new RuntimeException( 'Staff attendance upgrade could not add the ' . $column . ' column.' );
+			}
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "UPDATE {$shifts} SET open_guard = NULL WHERE clock_out_utc IS NOT NULL" ) ) {
+			throw new RuntimeException( 'Could not normalise completed staff shifts.' );
+		}
+
+		// Multiple open legacy rows are conflicting evidence, regardless of the
+		// guard value an interrupted prototype may have left behind. Never choose
+		// one silently: hold the checkpoint and identify the records for review.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$duplicates = (array) $wpdb->get_results(
+			"SELECT user_id, GROUP_CONCAT(id ORDER BY id) AS shift_ids
+			FROM {$shifts}
+			WHERE clock_out_utc IS NULL
+			GROUP BY user_id HAVING COUNT(*) > 1 LIMIT 20"
+		);
+		if ( $duplicates ) {
+			$conflicts = array();
+			foreach ( $duplicates as $duplicate ) {
+				$conflicts[] = 'staff ' . absint( $duplicate->user_id ) . ' shifts ' . sanitize_text_field( $duplicate->shift_ids );
+			}
+			throw new RuntimeException( 'Multiple open staff shifts need manager reconciliation before attendance can be enabled: ' . implode( '; ', $conflicts ) . '.' );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "UPDATE {$shifts} SET open_guard = 1 WHERE clock_out_utc IS NULL" ) ) {
+			throw new RuntimeException( 'Could not normalise the staff open-shift guard.' );
+		}
+
+		// Snapshot the best shop evidence available at upgrade time. Limit this
+		// backfill to legacy rows whose location snapshot is still empty. If a
+		// later migration step fails, a retry must never rewrite an established
+		// timezone after management changes a shop's current timezone.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query(
+			"UPDATE {$shifts} s LEFT JOIN {$locations} l ON l.id = s.location_id
+			SET s.location_name = COALESCE(NULLIF(l.name, ''), CONCAT('Shop #', s.location_id)),
+				s.timezone_snapshot = COALESCE(NULLIF(l.timezone, ''), 'Australia/Sydney')
+			WHERE s.location_name = ''"
+		) ) {
+			throw new RuntimeException( 'Could not preserve shop snapshots on historical shifts.' );
+		}
+
+		// Snapshot the best staff evidence available at upgrade time. Reports never
+		// join current profile/shop names, so later edits cannot rewrite history.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query(
+			"UPDATE {$shifts} s LEFT JOIN {$users} u ON u.ID = s.user_id
+			SET s.staff_name = COALESCE(NULLIF(s.staff_name, ''), NULLIF(u.display_name, ''), CONCAT('Staff #', s.user_id)),
+				s.staff_login = COALESCE(NULLIF(s.staff_login, ''), NULLIF(u.user_login, ''), CONCAT('staff-', s.user_id))"
+		) ) {
+			throw new RuntimeException( 'Could not preserve staff identity snapshots.' );
+		}
+
+		// dbDelta does not reliably replace a same-named, wrongly shaped index.
+		// Rebuild it explicitly after the legacy rows have been normalised.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$index_rows = (array) $wpdb->get_results( "SHOW INDEX FROM {$shifts} WHERE Key_name = 'user_open_guard'" );
+		usort(
+			$index_rows,
+			static function ( $left, $right ) {
+				return (int) $left->Seq_in_index <=> (int) $right->Seq_in_index;
+			}
+		);
+		$index_ok   = 2 === count( $index_rows )
+			&& 0 === (int) $index_rows[0]->Non_unique
+			&& 'user_id' === (string) $index_rows[0]->Column_name
+			&& 'open_guard' === (string) $index_rows[1]->Column_name;
+		if ( ! $index_ok ) {
+			if ( $index_rows && false === $wpdb->query( "ALTER TABLE {$shifts} DROP INDEX user_open_guard" ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				throw new RuntimeException( 'Could not replace the staff open-shift index.' );
+			}
+			if ( false === $wpdb->query( "ALTER TABLE {$shifts} ADD UNIQUE KEY user_open_guard (user_id,open_guard)" ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				throw new RuntimeException( 'Could not enforce one open shift per staff member.' );
+			}
+		}
+
+		if ( ! DoughBoss_Activator::timeclock_storage_ready() ) {
+			throw new RuntimeException( 'Staff attendance tables, columns or unique open-shift guard are incomplete or are not using InnoDB.' );
+		}
+		DoughBoss_Activator::add_capabilities();
+	}
+
+	/**
+	 * 1.1.0 — real-time order board: kitchen role + capabilities.
+	 *
+	 * The new order-board columns (seen_at, acknowledged_at, accepted_at,
+	 * eta_minutes) are added by dbDelta via create_tables(); this step only
+	 * covers what dbDelta cannot: roles/capabilities.
+	 *
+	 * @return void
+	 */
+	/** 1.21.0 — QR/PIN staff kiosk, recorded breaks and roster snapshots. */
+	private static function upgrade_to_1_21_0() {
+		if ( ! DoughBoss_Activator::timeclock_storage_ready() ) {
+			throw new RuntimeException( 'Staff QR badge, break, roster or attendance storage is incomplete or is not using InnoDB.' );
+		}
+	}
+
+	private static function upgrade_to_1_1_0() {
+		DoughBoss_Activator::add_capabilities();
+	}
+
+	/**
+	 * 1.2.0 — multi-shop foundation: locations table + a default shop so the
+	 * existing single-shop flow keeps working unchanged.
+	 *
+	 * The locations table and orders.location_id column are added by dbDelta
+	 * via create_tables(); this step seeds the first location.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_2_0() {
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-locations.php';
+		DoughBoss_Locations::ensure_default();
+	}
+
+	/**
+	 * 1.3.0 — localise the demo US config to Australia (AUD + GST-inclusive),
+	 * only touching values that still look like the original demo defaults so a
+	 * deliberately-configured store is never overwritten.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_3_0() {
+		$settings = get_option( DoughBoss_Settings::OPTION_KEY );
+		if ( ! is_array( $settings ) ) {
+			return;
+		}
+
+		$changed = false;
+		if ( isset( $settings['currency_code'] ) && 'USD' === $settings['currency_code'] ) {
+			$settings['currency_code'] = 'AUD';
+			$changed                   = true;
+			// Demo tax was 0; default Australian GST to 10% inclusive.
+			if ( empty( $settings['tax_rate'] ) ) {
+				$settings['tax_rate'] = 10;
+			}
+		}
+		if ( ! isset( $settings['gst_inclusive'] ) ) {
+			$settings['gst_inclusive'] = 1;
+			$changed                   = true;
+		}
+
+		if ( $changed ) {
+			update_option( DoughBoss_Settings::OPTION_KEY, $settings );
+		}
+	}
+
+	/**
+	 * 1.4.0 — optional Stripe card payments.
+	 *
+	 * The orders.payment_status / payment_method / payment_intent_id columns are
+	 * added by dbDelta via create_tables(); existing orders default to 'unpaid'.
+	 * Payments stay off until an operator enables them and saves keys, so there
+	 * is no data to backfill here.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_4_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.5.0 — catering: enquiries table + the catering-package post type.
+	 *
+	 * The {prefix}doughboss_catering_enquiries table is created by dbDelta via
+	 * create_tables(); catering management reuses the existing manage_doughboss
+	 * capability, so there are no new roles/caps to add and no data to backfill.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_5_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.6.0 — vouchers / discount coupons.
+	 *
+	 * The {prefix}doughboss_vouchers and {prefix}doughboss_voucher_redemptions
+	 * tables are created by dbDelta via create_tables(). This step adds a
+	 * dedicated redemption capability so a till device can redeem vouchers
+	 * without holding broader management rights.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_6_0() {
+		foreach ( array( 'administrator', 'doughboss_kitchen' ) as $role_name ) {
+			$role = get_role( $role_name );
+			if ( $role && ! $role->has_cap( 'redeem_doughboss_vouchers' ) ) {
+				$role->add_cap( 'redeem_doughboss_vouchers' );
+			}
+		}
+	}
+
+	/**
+	 * 1.7.0 — voucher discounts on orders.
+	 *
+	 * The orders.discount / orders.voucher_code columns and the
+	 * voucher_redemptions.order_id column are added by dbDelta via
+	 * create_tables(); existing orders default to no discount, so there is
+	 * nothing to backfill.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_7_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.8.0 — datetime hygiene + catering webhook index.
+	 *
+	 * create_tables() now declares created_at/updated_at/redeemed_at as
+	 * `datetime NULL DEFAULT NULL` (instead of the invalid '0000-00-00' zero
+	 * date) and adds KEY balance_intent_id to the catering table. dbDelta will
+	 * not retroactively change a column default on existing installs, so the
+	 * columns are altered explicitly here. Every insert path already supplies
+	 * explicit timestamps, so no data backfill is needed.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_8_0() {
+		global $wpdb;
+
+		$columns = array(
+			$wpdb->prefix . 'doughboss_orders'              => array( 'created_at', 'updated_at' ),
+			$wpdb->prefix . 'doughboss_catering_enquiries'  => array( 'created_at', 'updated_at' ),
+			$wpdb->prefix . 'doughboss_vouchers'            => array( 'created_at', 'updated_at' ),
+			$wpdb->prefix . 'doughboss_voucher_redemptions' => array( 'redeemed_at' ),
+		);
+		foreach ( $columns as $table => $cols ) {
+			foreach ( $cols as $col ) {
+				// Table names come from $wpdb->prefix and columns from the
+				// hardcoded map above — nothing user-supplied to prepare.
+				$wpdb->query( "ALTER TABLE {$table} MODIFY {$col} datetime NULL DEFAULT NULL" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+			}
+		}
+
+		// Index balance_intent_id so find_by_intent()'s OR lookup stops table-
+		// scanning on every Stripe webhook. dbDelta may already have added it via
+		// create_tables(), so guard against a duplicate-key error.
+		$catering = $wpdb->prefix . 'doughboss_catering_enquiries';
+		$existing = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SHOW INDEX FROM {$catering} WHERE Key_name = %s", 'balance_intent_id' )
+		);
+		if ( ! $existing ) {
+			$wpdb->query( "ALTER TABLE {$catering} ADD KEY balance_intent_id (balance_intent_id)" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+		}
+	}
+
+	/**
+	 * 1.9.0 — POSPal push outbox (durable retry for the till mirror).
+	 *
+	 * The new {prefix}doughboss_pospal_outbox table is created by dbDelta via
+	 * create_tables(); nothing to backfill. The outbox is only used by NEW
+	 * orders placed after upgrade — orders placed before the upgrade never had
+	 * a retry story and stay unchanged.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_9_0() {
+		// Schema handled by create_tables(); nothing else to migrate.
+	}
+
+	/**
+	 * 1.10.0 — single-location / pickup-only mode.
+	 *
+	 * Adds the `single_location_mode` setting (defaults to 1). Also, if the site
+	 * has zero or exactly one *active* shop today, we auto-turn `enable_delivery`
+	 * off — the "For now, pickup only from Revesby" scope in the discovery doc.
+	 * A multi-shop site with delivery already on stays untouched.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_10_0() {
+		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-locations.php';
+
+		$settings = get_option( DoughBoss_Settings::OPTION_KEY );
+		if ( ! is_array( $settings ) ) {
+			$settings = array();
+		}
+		$changed = false;
+
+		$active = DoughBoss_Locations::all( true );
+
+		// Enable only for a genuine single-shop install. Multi-shop sites must
+		// opt out by default so an upgrade cannot silently pin every order to the
+		// first sorted location.
+		if ( ! isset( $settings['single_location_mode'] ) ) {
+			$settings['single_location_mode'] = count( $active ) <= 1 ? 1 : 0;
+			$changed = true;
+		}
+
+		// Auto-narrow to pickup-only if the site currently runs 0 or 1 active
+		// shops — matches the discovery doc's "For now, pickup only from Revesby"
+		// scope. A multi-shop delivery site is deliberately left alone. This
+		// step is version-gated (runs once), so an owner who re-enables delivery
+		// afterwards is never overridden again — but the flip itself must not be
+		// silent: record a marker (surfaced as a dismissible wp-admin notice by
+		// DoughBoss_Admin::render_delivery_autodisabled_notice()) and a log line
+		// so the change is visible and easy to reverse in Settings.
+		if ( count( $active ) <= 1 && ! empty( $settings['enable_delivery'] ) ) {
+			$settings['enable_delivery'] = 0;
+			$changed = true;
+			update_option( 'doughboss_delivery_autodisabled', '1.10.0' );
+			if ( function_exists( 'error_log' ) ) {
+				error_log( 'DoughBoss migration 1.10.0: enable_delivery turned off (single-location pickup-only scope); re-enable in DoughBoss Settings if delivery is wanted.' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
+		}
+
+		if ( $changed ) {
+			update_option( DoughBoss_Settings::OPTION_KEY, $settings );
+		}
+	}
+
+	/**
+	 * 1.11.0 — durable, versioned order lifecycle.
+	 *
+	 * dbDelta adds the order version/timestamp columns and creates the event
+	 * table. Historical events and timestamps are deliberately not fabricated:
+	 * the audit trail begins with the first post-upgrade transition.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_11_0() {
+		// dbDelta failures commonly return false instead of throwing. Verify the
+		// storage invariant explicitly so the migration runner cannot checkpoint
+		// 1.11.0 while versioning/events are missing or non-transactional.
+		if ( ! DoughBoss_Activator::lifecycle_storage_ready() ) {
+			throw new RuntimeException( 'Order lifecycle tables are missing or are not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.12.0 — transactional pickup-capacity storage, disabled by default.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_12_0() {
+		if ( ! DoughBoss_Activator::capacity_storage_ready() ) {
+			throw new RuntimeException( 'Capacity scheduling tables or unique locks are missing or are not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.13.0 — durable checkout idempotency and unique payment ownership.
+	 *
+	 * Historical duplicate payment references are financial evidence. Never
+	 * choose a winner automatically: stop the migration and surface the order
+	 * IDs for operator reconciliation.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_13_0() {
+		global $wpdb;
+		$orders = $wpdb->prefix . 'doughboss_orders';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$duplicates = (array) $wpdb->get_results(
+			"SELECT payment_intent_id, GROUP_CONCAT(id ORDER BY id) AS order_ids, COUNT(*) AS copies
+			FROM {$orders}
+			WHERE payment_intent_id IS NOT NULL AND payment_intent_id <> ''
+			GROUP BY payment_intent_id
+			HAVING COUNT(*) > 1
+			LIMIT 20"
+		);
+		if ( $duplicates ) {
+			$groups = array();
+			foreach ( $duplicates as $duplicate ) {
+				$groups[] = 'orders ' . sanitize_text_field( $duplicate->order_ids );
+			}
+			throw new RuntimeException( 'Duplicate payment references require reconciliation before checkout can reopen. Affected ' . implode( '; ', $groups ) . '.' );
+		}
+
+		// Empty strings are absence, not a payment identity. NULL permits multiple
+		// unpaid orders while the unique index protects every real reference.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "UPDATE {$orders} SET payment_intent_id = NULL WHERE payment_intent_id = ''" ) ) {
+			throw new RuntimeException( 'Could not normalise empty payment references.' );
+		}
+
+		// Replace the historical non-unique index explicitly; dbDelta does not
+		// reliably change index uniqueness on existing installations.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$payment_index = (array) $wpdb->get_results( "SHOW INDEX FROM {$orders} WHERE Key_name = 'payment_intent_id'" );
+		if ( $payment_index && 0 !== (int) $payment_index[0]->Non_unique ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( false === $wpdb->query( "ALTER TABLE {$orders} DROP INDEX payment_intent_id" ) ) {
+				throw new RuntimeException( 'Could not replace the payment-reference index.' );
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( "ALTER TABLE {$orders} MODIFY payment_intent_id varchar(191) NULL DEFAULT NULL" ) ) {
+			throw new RuntimeException( 'Could not apply the payment-reference column contract.' );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( ! $wpdb->get_var( "SHOW INDEX FROM {$orders} WHERE Key_name = 'payment_intent_id' AND Non_unique = 0" ) && false === $wpdb->query( "ALTER TABLE {$orders} ADD UNIQUE KEY payment_intent_id (payment_intent_id)" ) ) {
+			throw new RuntimeException( 'Could not enforce unique payment ownership.' );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( ! $wpdb->get_var( "SHOW INDEX FROM {$orders} WHERE Key_name = 'checkout_key' AND Non_unique = 0" ) && false === $wpdb->query( "ALTER TABLE {$orders} ADD UNIQUE KEY checkout_key (checkout_key)" ) ) {
+			throw new RuntimeException( 'Could not enforce durable checkout replay keys.' );
+		}
+
+		if ( ! DoughBoss_Activator::checkout_storage_ready() ) {
+			throw new RuntimeException( 'Checkout-integrity columns or unique indexes are incomplete.' );
+		}
+	}
+
+	/**
+	 * 1.14.0 — server-bound store/table QR ordering.
+	 *
+	 * Existing orders deliberately remain ordinary web orders with no table.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_14_0() {
+		if ( ! DoughBoss_Activator::table_qr_storage_ready() ) {
+			throw new RuntimeException( 'Store/table QR tables, order columns, or unique indexes are incomplete.' );
+		}
+	}
+
+	/**
+	 * 1.15.0 — Tyro Connect Pay attempts, webhook events and store mappings.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_15_0() {
+		if ( ! DoughBoss_Activator::payment_storage_ready() ) {
+			throw new RuntimeException( 'Payment attempt, event, or store-mapping storage is incomplete or is not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.16.0 — retain POSPal's stable order number for positive reconciliation.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_16_0() {
+		if ( ! DoughBoss_Activator::pospal_outbox_storage_ready() ) {
+			throw new RuntimeException( 'POSPal outbox remote-reference storage is incomplete or is not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.17.0 — durable server-owned Stripe Checkout recovery snapshots.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_17_0() {
+		if ( ! DoughBoss_Activator::payment_storage_ready() ) {
+			throw new RuntimeException( 'Stripe Checkout recovery storage is incomplete or is not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * 1.18.0 — rename the existing seeded Dough Boss Special pizza in place.
+	 *
+	 * This is deliberately narrower than re-running the complete menu importer:
+	 * only one unambiguous legacy product is touched, its post ID is retained,
+	 * and prices, option groups, categories and external mappings are preserved.
+	 *
+	 * @return void
+	 */
+	private static function upgrade_to_1_18_0() {
+		// Keep the migration self-contained: isolated upgrade rehearsals load the
+		// migration runner without booting the post-type component first.
+		$post_type = 'doughboss_item';
+		$legacy_key = 'pizza-dough-boss-special';
+		$ids = get_posts(
+			array(
+				'post_type'        => $post_type,
+				'post_status'      => 'any',
+				'posts_per_page'   => 2,
+				'fields'           => 'ids',
+				'meta_key'         => '_doughboss_seed_key', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value'       => $legacy_key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'suppress_filters' => false,
+			)
+		);
+
+		if ( empty( $ids ) ) {
+			// Very early seeders pre-date the stable marker. An exact, unique legacy
+			// title remains a safe fallback; ambiguity is handled below.
+			$ids = get_posts(
+				array(
+					'post_type'        => $post_type,
+					'post_status'      => 'any',
+					'posts_per_page'   => 2,
+					'fields'           => 'ids',
+					'title'            => 'Dough Boss Special',
+					'suppress_filters' => false,
+				)
+			);
+		}
+
+		if ( empty( $ids ) ) {
+			return; // Fresh installs already use the canonical Sujuk Special name.
+		}
+		if ( 1 !== count( $ids ) ) {
+			throw new RuntimeException( 'Sujuk Special migration found multiple legacy menu products; manual review is required.' );
+		}
+
+		$post_id = (int) reset( $ids );
+		$updated = wp_update_post(
+			array(
+				'ID'           => $post_id,
+				'post_title'   => 'Sujuk Special',
+				'post_name'    => 'sujuk-special',
+				'post_content' => 'Sujuk, tomato, mushroom, capsicum, onion, black olives & cheese on a tomato base.',
+			),
+			true
+		);
+		if ( is_wp_error( $updated ) || $updated < 1 ) {
+			$message = is_wp_error( $updated ) ? $updated->get_error_message() : 'WordPress did not update the legacy menu product.';
+			throw new RuntimeException( 'Sujuk Special migration failed: ' . $message );
+		}
+
+		update_post_meta( $post_id, '_doughboss_seed_key', 'pizza-sujuk-special' );
+	}
+}
