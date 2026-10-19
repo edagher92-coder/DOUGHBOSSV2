@@ -89,7 +89,7 @@ class DoughBoss_SEO {
 		if ( 'catering' === $page ) {
 			return array(
 				'title'       => __( 'Corporate & Event Catering Sydney | Dough Boss Revesby', 'doughboss' ),
-				'description' => __( 'Office meetings, business lunches and events: plan a Dough Boss spread of mini manoush, pies and platters. Revesby pickup; availability and final pricing confirmed.', 'doughboss' ),
+				'description' => __( 'Office meetings, business lunches and events: plan a Dough Boss spread of manoush, pies and platters. Revesby pickup; availability and final pricing confirmed.', 'doughboss' ),
 			);
 		}
 		if ( 'members-events' === $page ) {

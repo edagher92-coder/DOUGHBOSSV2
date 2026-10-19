@@ -16,7 +16,7 @@ get_header();
 		<div data-dbf-reveal>
 			<p class="dbf-eyebrow">Made for sharing</p>
 			<h2 id="dbf-catering-range" class="dbf-heading">Office catering with a Lebanese heart.</h2>
-			<p class="dbf-lede">Bring the team together over mini manoush, pizzas, pies, wraps and platters. From a meeting table to a celebration, tell us what you have in mind and we’ll help plan the spread.</p>
+			<p class="dbf-lede">Bring the team together over manoush, pizzas, pies, wraps and platters. From a meeting table to a celebration, tell us what you have in mind and we’ll help plan the spread.</p>
 			<p>All catering enquiries are coordinated by our Revesby team. We’ll confirm the menu, availability, collection arrangements and final pricing before your booking proceeds.</p>
 			<div class="dbf-catering-actions">
 				<a class="dbf-button" href="#catering-enquiry">Plan your catering</a>

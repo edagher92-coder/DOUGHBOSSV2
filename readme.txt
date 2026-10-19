@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.51.0
+Stable tag: 2.51.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.51.1 =
+* Remove the unannounced product name from the public catering copy, the catering SEO description, the theme catering page, a public script comment and the readme changelog, with a test that the catering SEO copy never names it. No behaviour changes. Theme 1.8.1.
 
 = 2.51.0 =
 * Store-first ordering: on multi-shop sites customers choose Revesby, Bankstown or Roselands before the menu (open/closed badge, today's hours, prep time), with a "Change store" button that re-checks the cart and removes items the new shop doesn't sell.
@@ -387,7 +390,7 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 
 = 2.24.1 =
 * Replace the tilted circular photo collage with transparent, menu-accurate food cutouts.
-* Reduce the 3D tilt so manoush, minis and pies retain their natural shape on desktop and mobile.
+* Reduce the 3D tilt so manoush and pies retain their natural shape on desktop and mobile.
 * Keep replay, reduced-motion fallback and WordPress hero behaviour aligned.
 * Record MPGS Hosted Checkout as the Revesby Visa/Mastercard acceptance path while keeping payments disabled until sandbox approval.
 
@@ -419,7 +422,7 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 = 2.23.0 =
 * Add a live-data WordPress SEO fallback, full social previews, and crawlable Menu and Catering landing pages.
 * Add a consent-gated Meta/TikTok commerce event bridge with a strict no-PII allowlist and simulated-demo isolation.
-* Replace the catering artwork with real-alpha menu-based mini manoush and pie compositions shared by the demo and WordPress.
+* Replace the catering artwork with real-alpha menu-based manoush and pie compositions shared by the demo and WordPress.
 * Refine product motion into a replayable lift/explode/assemble sequence without scroll-direction reversal.
 
 = 2.22.2 =
@@ -440,7 +443,7 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 * Add durable payment attempts and webhook event de-duplication without storing card data, OAuth tokens, raw webhook payloads, or Tyro pay secrets.
 * Add fail-closed per-shop Tyro Connect location and POSPal store mapping plus a live certification gate.
 * Add universal Tyro checkout for storefront/table QR and catering deposit/balance payments.
-* Add an original, reduced-motion-aware manoush and catering Bites/mini-manoush ingredient assembly experience to the viewable demo.
+* Add an original, reduced-motion-aware manoush and catering ingredient assembly experience to the viewable demo.
 * Add schema 1.15.0 and payment integration readiness checks.
 
 = 2.21.0 =

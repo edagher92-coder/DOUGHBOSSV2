@@ -110,10 +110,11 @@ db_test(
 		$copy = DoughBoss_SEO::discovery_copy( 'catering' );
 		assert_true( false !== strpos( $copy['title'], 'Corporate & Event Catering Sydney' ), 'title names the real discovery intent' );
 		assert_true( false !== strpos( $copy['title'], 'Revesby' ), 'title identifies the pickup bakery' );
-		foreach ( array( 'Office meetings', 'business lunches', 'events', 'mini manoush', 'pies', 'platters', 'Revesby pickup', 'availability and final pricing confirmed' ) as $fact ) {
+		foreach ( array( 'Office meetings', 'business lunches', 'events', 'manoush', 'pies', 'platters', 'Revesby pickup', 'availability and final pricing confirmed' ) as $fact ) {
 			assert_true( false !== strpos( $copy['description'], $fact ), 'description includes ' . $fact );
 		}
 		assert_same( 0, preg_match( '/delivery|same.day|guarantee|free|24\/7|unlimited|allergen.free/i', implode( ' ', $copy ) ), 'no coverage, timing, price or dietary promises are invented' );
+		assert_same( 0, preg_match( '/\bminis?\b/i', implode( ' ', $copy ) ), 'catering copy never names the unannounced product' );
 		assert_same( null, DoughBoss_SEO::discovery_copy( 'unknown' ), 'unsupported public pages do not acquire guessed copy' );
 	}
 );

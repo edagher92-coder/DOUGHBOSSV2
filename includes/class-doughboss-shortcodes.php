@@ -78,7 +78,7 @@ class DoughBoss_Shortcodes {
 				'variant'       => 'photo',
 				'kicker'        => __( 'Catering, made fresh', 'doughboss' ),
 				'title'         => __( 'The menu comes together here.', 'doughboss' ),
-				'description'   => __( 'Mini zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies, oven-baked fresh to order.', 'doughboss' ),
+				'description'   => __( 'Zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies, oven-baked fresh to order.', 'doughboss' ),
 				'replay_label'  => __( 'Pause photo motion', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-feast-real-v1.jpg',
 				// Describes the bundled feast photo; override together with background_image.
@@ -287,7 +287,7 @@ class DoughBoss_Shortcodes {
 				<h2 class="dbc-h2" id="dbc-how-title"><?php esc_html_e( 'A fresh spread in three steps', 'doughboss' ); ?></h2>
 				<ol class="dbc-how-grid">
 					<li><span>01</span><strong><?php esc_html_e( 'Tell us the occasion', 'doughboss' ); ?></strong><p><?php esc_html_e( 'Send the event date, guest count, preferred pickup time and dietary notes.', 'doughboss' ); ?></p></li>
-					<li><span>02</span><strong><?php esc_html_e( 'Build the right mix', 'doughboss' ); ?></strong><p><?php esc_html_e( 'We will help balance minis, pies and crowd favourites around your needs.', 'doughboss' ); ?></p></li>
+					<li><span>02</span><strong><?php esc_html_e( 'Build the right mix', 'doughboss' ); ?></strong><p><?php esc_html_e( 'We will help balance manoush, pies and crowd favourites around your needs.', 'doughboss' ); ?></p></li>
 					<li><span>03</span><strong><?php esc_html_e( 'Confirm before we bake', 'doughboss' ); ?></strong><p><?php esc_html_e( 'We confirm availability, final price, collection details and payment first.', 'doughboss' ); ?></p></li>
 				</ol>
 			</section>

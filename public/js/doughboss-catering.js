@@ -228,7 +228,7 @@
 		if (loadingNote) loadingNote.hidden = true;
 	}
 
-	// "Office Platter — 3 Dozen Minis" -> title + size badge, so the size,
+	// "Office Platter — 3 Dozen" -> title + size badge, so the size,
 	// guest range and price read as separate facts instead of one run-on line.
 	function packageTitleParts(name) {
 		var parts = String(name || '').split(/\s+[—–-]\s+/);
