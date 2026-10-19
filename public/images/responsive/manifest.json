@@ -677,6 +677,724 @@
                     }
                 ]
             }
+        },
+        "menu/brand-v1/coca-cola-classic-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "dffa4a8187c8a8834b5492d954cb3652152593b532dd05ebe66fb0a7a644c563",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "852ee4f5c206e7a5f286f76090933983590487b16a93d6cc5d35adf8a5954aa5",
+                        "bytes": 2283
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "c1feadb67fdf8212cdca61bf57369f58c2bdf421aa56767ef9073c83b0d421e4",
+                        "bytes": 6200
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "ce18ea718bda9659a92ef069e58d314af671c38dc031ccaac292b68eafab1820",
+                        "bytes": 10859
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "90173d8899233a5f15aec8de30e2aa0cc0c78053c637ff5654fcf22e7c0a38b1",
+                        "bytes": 16965
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "e345a720f214a05480b5bb599f85016ba08d2500fb317b56f0f0739cfd558c3f",
+                        "bytes": 2210
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "9d043c30763ab8a435f0ba17a9d9a9f7a8d8578556184011298b2deafd5fdb3a",
+                        "bytes": 6482
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "7c8a498f7cab193056a34d822bd8c81e145b5595e24fd005762ca5b64d89e324",
+                        "bytes": 11502
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "48bb8190a790ef4bed32d8a0a39a701897e3e8b1970cd59b2cbec1af7459999e",
+                        "bytes": 17464
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/coca-cola-vanilla-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "5c9e8d35d75bbd9a5d9e09130b5f143076a5b0ad0fe4c63f909f3795def4b751",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "84561b8b4f606b0947f040269d0ce1a859cc88168b49d272fc50ce46dfd226f3",
+                        "bytes": 2084
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "a58d10ae8cebc4c396768b2a3975f900ed318895daae44588f82d1177cc0d02e",
+                        "bytes": 5598
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "323c2122fba8b9fe62002c0685b14d9a6ee1c9bf8af9052befea42f49a7da695",
+                        "bytes": 9795
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "5c1046586529f9203d458c874d5fdcc5007f8c26ed19ae21292eeb6b69f6848b",
+                        "bytes": 15592
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "e36b901c789c683abd7962bb744627b7c3b4c2530eb4eb2e5d3cd9a109d04cf5",
+                        "bytes": 1934
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "a16992ffdfa9fd2b7d0bc884a4116c7f656897dfb69485d843adfc475a50ce77",
+                        "bytes": 5616
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "ababedb5594f2420709ea12f3d0f6ac47df8b5eeb4b6a8d38138666e45c43ba9",
+                        "bytes": 10016
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "a9be09d6b2399487956c9a1e984d7eba0746e7b743275b448a386b36fb1359b4",
+                        "bytes": 15466
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/coca-cola-zero-600ml.png": {
+            "width": 1770,
+            "height": 1770,
+            "source_sha256": "a8f5d1f8d848c94b9d1495abef84ff46d2faa143947f12b82889c15076f9e69d",
+            "sources": {
+                "avif": [],
+                "webp": [
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "78971fa3ab577c4f88f032d9d2d2439f3927124698bab834835c7ebd0511d1d7",
+                        "bytes": 3940
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "ac8b7100ee0fc48da392337ef474a664b854235a359b05433905f3bcb3e6cbf0",
+                        "bytes": 9750
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "bcc3680199e21464b1e43edcaa46326ff40bd272bf1dc993e332ddaf30e8e80c",
+                        "bytes": 16376
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-960.webp",
+                        "width": 960,
+                        "height": 960,
+                        "sha256": "bf87f3ae8bb89c59881353b1a1622507883d845b72b1e59608441c4d0af954cf",
+                        "bytes": 45742
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-1770.webp",
+                        "width": 1770,
+                        "height": 1770,
+                        "sha256": "487d0bd4a4107f2e0b2cbcda4ed5300b571e6260db66db79b1b80adf11fc9f48",
+                        "bytes": 98746
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/sprite-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "f38bc876124087285e230cf3d382e61f1ad51b4a507d2d9ec832ce9b320a842b",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/sprite-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "67785aeaed0239e5381b085c18e2d124c052e10441017dcca54d0835260c3dae",
+                        "bytes": 1422
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "9a7cd104c01808774ce0b0c9246e83198e32a02194d33df05076bc223584a76a",
+                        "bytes": 2877
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "368b0a4a7609cff123346d8a25e703a9fba42c3b019e9a7690d196d1df65ae62",
+                        "bytes": 4117
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "f4e8a36a7767b55d537af05e2707021a1452395d484d5ab7bc2e0377dfd7e9aa",
+                        "bytes": 5420
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/sprite-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "25db41857a3b8ad525def7c0d336b9705487953a790ba604bbd636c7398c1dc7",
+                        "bytes": 1344
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "4d83853072267ab945aacf5cce495f45f5fa8f58e01e695aedf447df4656a3d4",
+                        "bytes": 3162
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "90282e094f27f33ee707f72ab6db65df970e199e346a639eadc6c99a2dfdc7c7",
+                        "bytes": 4894
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "324982adb14505e6ea0c4f3e6541c9ec8a64aa03dc1769a2deac158b5972a4e6",
+                        "bytes": 6822
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/fanta-orange-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "8664c2ddc62412a900815e059a51a7161bc0efcd8079104414b71de404c3bf28",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/fanta-orange-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "1521593965741b4391c56308fd741615b283f4f3eef9e98ea6e4726f432159a1",
+                        "bytes": 1627
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "1aac2c15052c646b42f6ff47d4c87f6283cf4ba4fdc95c065f5128ec90504049",
+                        "bytes": 3528
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "f0290e218f36c07a7a033f198419e8fb20fba5f28bf06f8e4b62d8d6978e6400",
+                        "bytes": 5158
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "033d5363b47e12416f59fd6b15563d2ab608970802f6893fe0cadb8dc36a5d46",
+                        "bytes": 6978
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/fanta-orange-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "0cd92fb91023997c500852eaf5b716a27765d19e970844bfe8de5b37be214f4f",
+                        "bytes": 1658
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "83e764d2fc12de5b5c9cbc2d85c8ca263827d0c282b9e433e808c609d8072638",
+                        "bytes": 4154
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "fab517440c2699f0d610629525b16f7bbcefb14113686feb4c2df99ca7ed233c",
+                        "bytes": 6856
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "e0de18108d93d7e7bcf3ced5882bdec43648ee03efb2ac123aae6e1b4f13f82d",
+                        "bytes": 9886
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/cheese-tomato-olives.webp": {
+            "width": 1447,
+            "height": 1087,
+            "source_sha256": "b25a9c25217a8d567e513046dbd0395789b2266a2b80dc41d64a37e3d73946b6",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/cheese-tomato-olives-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "f5af3858d4d327133b69b6f3847f36bb5b63bcd91a43e124ec1981997ab91f6c",
+                        "bytes": 4413
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "e7fec123be3e9742812d8c91a433d4b987d23f858806aff3608b5cfd62c25441",
+                        "bytes": 13301
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-480.avif",
+                        "width": 480,
+                        "height": 361,
+                        "sha256": "677a3d102fdc468e162bcf51d757f7a066a1b4d36b6ca081d798670ac63fff28",
+                        "bytes": 23702
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-960.avif",
+                        "width": 960,
+                        "height": 721,
+                        "sha256": "8deb6493acad26aea2d2b90051b5d6a77504b8b91780a0bce88801a7f9e97e3b",
+                        "bytes": 75447
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-1447.avif",
+                        "width": 1447,
+                        "height": 1087,
+                        "sha256": "ccb6417665e484315f2effb3c0791f988ce1904116e1c5f5f2e6a039b36873c7",
+                        "bytes": 133039
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/cheese-tomato-olives-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "bc5dab57c387f48d49f98442439eee7d51766f504f71b1597f87152cd10b5c90",
+                        "bytes": 4674
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "4c08c914517e2575cb11d31e7a81a03c6917fc622dc597036f0f8a8ba38dbc95",
+                        "bytes": 14964
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-480.webp",
+                        "width": 480,
+                        "height": 361,
+                        "sha256": "c5a33a9ffd37db38316a92576477bff251066be3e5fb6bfec9715c8751e858a3",
+                        "bytes": 27490
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-960.webp",
+                        "width": 960,
+                        "height": 721,
+                        "sha256": "8ae40590a0e3982a0ab5db7d061cabd2595599e3fd8034440f723a0161242fe3",
+                        "bytes": 94622
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-1447.webp",
+                        "width": 1447,
+                        "height": 1087,
+                        "sha256": "6b6453e1a0325ff11942ab9edb44ab5c072ea4238b3265343dd98f094a271206",
+                        "bytes": 181076
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/half-meat-cheese.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "bd36e42d8c325ca8ca9b730a36e18ea91624417375f5e04b813be62e1e376ed1",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/half-meat-cheese-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "6a04010d76b58dd80433a181941749444c95ca02bdc24356a512f5a36dbdef6f",
+                        "bytes": 4189
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "043ea7f4e47fca3b6659d057ee46fe7f54e607a36ae5ab4f5416c3db7434898b",
+                        "bytes": 13720
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "f6baea407863735d570cc3edc1d039d3fbbc1123b6f54747dac1fac719134e33",
+                        "bytes": 25232
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "2222f1cedc6881c555e07dc846843eca70e20073cbf29d572e9678be97bd0094",
+                        "bytes": 76922
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "9c157251d63d78f2666bd2fcfb5644eacb258a8b6f23cdaab6122be4cc509055",
+                        "bytes": 130679
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/half-meat-cheese-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "86b8702f04e31bf64eb3c58ba3c6825ed9187ac8a5960fbd074f8f695ab87802",
+                        "bytes": 4780
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "bf9415501d1e1aa00aac6d6995b7ecf0c3eb14fd4835b495f07cf06e24abb277",
+                        "bytes": 16070
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "19ac1a6f12367e41c5ff00196603a04fd7bf582a2655c2ba3bde7141bdfbcdf5",
+                        "bytes": 30448
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "00fa935edaebcf5ef034c708b06de8cf545e35041b7f2520e279fa01f0264667",
+                        "bytes": 98052
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "1064649574af9ffdfab99dc503a643d48c4c37e6222791e256c0b236984450d2",
+                        "bytes": 176204
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/labneh-veggie-pizza.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "e619a2909dd5ea31018b7b0628f8813b1232ff398782b2f6cb17f0c2e511377f",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/labneh-veggie-pizza-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "212112d1ed46b0b831e51d96f7c1b355f97f33e6e7093647878183c91f7f1a12",
+                        "bytes": 4809
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "bb3c85638ddf70d48b14be872e2b770897329d0e3bb771f632c36b9141db7926",
+                        "bytes": 14072
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "5cc000167c22386a8bcf2ac84d59fe0627557b7f532ad2aac062f17b3fc177fe",
+                        "bytes": 24469
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "9820a1411e1687ae57aaf9d782f278a439150f0d8b4b568d5102d5268de0d40b",
+                        "bytes": 74346
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "7c61a54612239a378c276f50afadc4b53274027c826fe3341ffc56359e4e86f0",
+                        "bytes": 129519
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/labneh-veggie-pizza-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "5840a4a437c1b22cc864c3c8e991a72fa6d3c9c554364a9732db65422c51b6a6",
+                        "bytes": 5064
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "4256f8b337d51383d7b7045bdd2289c7e2cc826ef94a08b86c64edbdfdc533b8",
+                        "bytes": 15474
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "793ee9349ed868ae561abce62486692f09879cebbd0cc107c8a3c25391e66d80",
+                        "bytes": 27914
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "eea627e3dc7b8f7961c6a63a92165a9914abd039b1eb190c9cea5477f2d7b703",
+                        "bytes": 94952
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "5f583bf6eca0326ed56f1963497a3c0befe4ebf3e506f0bb1853cea12a678c96",
+                        "bytes": 178824
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/sujuk-special.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "b04626019d91a2cc9906a2531a02ee54b99f1edfed696cfdc956386b05d156b4",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/sujuk-special-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "6c167ecd9b3bef19f88080dbf8d2ee90014cfb44b4821adfa8becb456f3f95e4",
+                        "bytes": 4696
+                    },
+                    {
+                        "file": "responsive/sujuk-special-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "e99c348d4c82c509ce585179ab44b9748d2912de56e2d6295b4281ab044e8189",
+                        "bytes": 15346
+                    },
+                    {
+                        "file": "responsive/sujuk-special-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "d7da065722c0ff73711af791604ca11ca990863666c050855b6fe53b4495b074",
+                        "bytes": 28303
+                    },
+                    {
+                        "file": "responsive/sujuk-special-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "47797bc6dbadfdf9c7277e106ba86787e442dd98b53b074c528b1e2d956ff850",
+                        "bytes": 94510
+                    },
+                    {
+                        "file": "responsive/sujuk-special-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "47937d159ff6b67d1b5457d585de04cd7135d3596a94030c0b121e020ebe6c52",
+                        "bytes": 164620
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/sujuk-special-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "61ffebb7fd44a3b84793b040f527bb6ed3cca6dcedeb1a7c20dcb5aa2d1a3547",
+                        "bytes": 4854
+                    },
+                    {
+                        "file": "responsive/sujuk-special-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2f5d7b1fd5aa31023bbc9d9720b706a41cb2a3a3208c16bb792c2da621684cc9",
+                        "bytes": 16626
+                    },
+                    {
+                        "file": "responsive/sujuk-special-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "c345ac4f6c141c8bcb15563339108cc29f842bbfb1f01fc3ed7ef3cbd7fee2b1",
+                        "bytes": 31430
+                    },
+                    {
+                        "file": "responsive/sujuk-special-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "61ae665f987e03de3d27312b386f7857e249a4415f1a2cb320efea6713dddc4f",
+                        "bytes": 110858
+                    },
+                    {
+                        "file": "responsive/sujuk-special-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "79b0ca34394ee956a8502ef1ed9ed4db3a23ea777695d37399121fc432afacd2",
+                        "bytes": 209824
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/zaatar-veggie-pizza.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "8c87eb1976465c468a248840baabb0e3b37cd6cdeb99b164204c6761ff8ac73a",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "43022a7b0ab1c115383ade6140a45af272deda0791f7445d45d58ade61064ea6",
+                        "bytes": 4431
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "28f1e1a0f5d000c8fada313d057bb3f368fd47b932a9581229bada49b890a4b3",
+                        "bytes": 15196
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "7a380b9f4f7d06c256871ed293db1b82ae3bf5590d4d7d872772398f116b48f5",
+                        "bytes": 29063
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "30d185f91e7ac797337f715a22867cd4b8ccc49af57d2b7d1ae8365c2401962f",
+                        "bytes": 101953
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "7b2484e286ee01ea6c6405cc8cb5f66624cb1ee5f632a7fe1f81bd4393165d58",
+                        "bytes": 180855
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "86adb81925d89f40cc6e31871bd2eef3a3154991df61852e9545c439b35de134",
+                        "bytes": 4684
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2fb857fbf8199069fa0c2e2ae58bf5fcf208891bf9754cf8f8862ffd78c33fb1",
+                        "bytes": 16804
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "4e7683463242814a538540b22cbe378040b4823851c29b45cc39f7ae098248c9",
+                        "bytes": 33024
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "9b58e17677229bfb2d1b032e44775905f5aaa891b41efb2feedd33eaf323a1c5",
+                        "bytes": 120094
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "942b790b4e1b6a2ee782aa0a104d96d6e15bc465b82d3aa7c3b797540c3986cd",
+                        "bytes": 226194
+                    }
+                ]
+            }
         }
     }
 }

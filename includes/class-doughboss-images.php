@@ -46,7 +46,7 @@ final class DoughBoss_Images {
 			$manifest = is_readable( $file ) ? json_decode( file_get_contents( $file ), true ) : false;
 		}
 		if ( ! is_array( $manifest ) || 1 !== ( $manifest['version'] ?? null ) ||
-			! preg_match( '#^(?:menu/real-v1/)?[a-z0-9-]+\.jpg$#D', $path ) ||
+			! preg_match( '#^(?:(?:menu/real-v1/)?[a-z0-9-]+\.jpg|menu/brand-v1/[a-z0-9-]+\.(?:jpg|png)|menu/generated-v1/[a-z0-9-]+\.webp)$#D', $path ) ||
 			empty( $manifest['images'][ $path ] ) || ! is_readable( $base . $path ) ) {
 			return null;
 		}

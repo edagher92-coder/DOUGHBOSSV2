@@ -108,7 +108,7 @@ db_test( 'bundled image manifest matches actual original and encoded assets', fu
 	$base = DOUGHBOSS_PLUGIN_DIR . 'public/images/';
 	$manifest = json_decode( file_get_contents( $base . 'responsive/manifest.json' ), true );
 	assert_same( 1, $manifest['version'], 'known manifest version' );
-	assert_same( 17, count( $manifest['images'] ), 'exact approved rendered photographs are generated' );
+	assert_same( 27, count( $manifest['images'] ), 'exact approved photographs and labelled illustrations have delivery variants' );
 	$expected_originals = array(
 		'doughboss-feast-real-v1.jpg',
 		'menu/real-v1/zaatar-cheese.jpg',
@@ -127,6 +127,10 @@ db_test( 'bundled image manifest matches actual original and encoded assets', fu
 		'menu/real-v1/spinach-pie.jpg',
 		'menu/real-v1/dough-boss-pie.jpg',
 		'menu/real-v1/aged-cheese-pie.jpg',
+		'menu/brand-v1/coca-cola-classic-600ml.jpg', 'menu/brand-v1/coca-cola-vanilla-600ml.jpg',
+		'menu/brand-v1/coca-cola-zero-600ml.png', 'menu/brand-v1/sprite-600ml.jpg', 'menu/brand-v1/fanta-orange-600ml.jpg',
+		'menu/generated-v1/cheese-tomato-olives.webp', 'menu/generated-v1/half-meat-cheese.webp',
+		'menu/generated-v1/labneh-veggie-pizza.webp', 'menu/generated-v1/sujuk-special.webp', 'menu/generated-v1/zaatar-veggie-pizza.webp',
 	);
 	$actual_originals = array_keys( $manifest['images'] );
 	sort( $expected_originals );
@@ -134,7 +138,7 @@ db_test( 'bundled image manifest matches actual original and encoded assets', fu
 	assert_same( $expected_originals, $actual_originals, 'exact approved original coverage' );
 	$expected = array( 'manifest.json' );
 	foreach ( $manifest['images'] as $original => $entry ) {
-		assert_true( 1 === preg_match( '#^(?:menu/real-v1/)?[a-z0-9-]+\.jpg$#D', $original ), 'safe original path' );
+		assert_true( 1 === preg_match( '#^(?:(?:menu/real-v1/)?[a-z0-9-]+\.jpg|menu/brand-v1/[a-z0-9-]+\.(?:jpg|png)|menu/generated-v1/[a-z0-9-]+\.webp)$#D', $original ), 'safe original path' );
 		$size = getimagesize( $base . $original );
 		assert_same( array( $size[0], $size[1] ), array( $entry['width'], $entry['height'] ), 'original dimensions' );
 		assert_same( hash_file( 'sha256', $base . $original ), $entry['source_sha256'], 'original hash' );
@@ -200,5 +204,29 @@ db_test( 'menu responsive data binds to an exact supported original URL', functi
 		$original . '?version=1', $original . '#fragment',
 	) as $unsupported ) {
 		assert_same( null, DoughBoss_Images::responsive_for_url( $unsupported ), 'non-exact, external, unsupported and featured-image URLs keep their fallback' );
+	}
+} );
+
+db_test( 'new brand and illustrated menu originals expose phone-sized candidates without changing identity', function () {
+	$paths = array(
+		'menu/brand-v1/coca-cola-classic-600ml.jpg', 'menu/brand-v1/coca-cola-vanilla-600ml.jpg',
+		'menu/brand-v1/coca-cola-zero-600ml.png', 'menu/brand-v1/sprite-600ml.jpg', 'menu/brand-v1/fanta-orange-600ml.jpg',
+		'menu/generated-v1/cheese-tomato-olives.webp', 'menu/generated-v1/half-meat-cheese.webp',
+		'menu/generated-v1/labneh-veggie-pizza.webp', 'menu/generated-v1/sujuk-special.webp', 'menu/generated-v1/zaatar-veggie-pizza.webp',
+	);
+	foreach ( $paths as $path ) {
+		$url = DOUGHBOSS_PLUGIN_URL . 'public/images/' . $path;
+		$data = DoughBoss_Images::responsive_for_url( $url );
+		assert_true( is_array( $data ), 'new exact original has responsive delivery: ' . $path );
+		if ( ! is_array( $data ) ) { continue; }
+		assert_same( $url, $data['original'], 'original identity and illustration path remain unchanged' );
+		assert_same( '.png' === substr( $path, -4 ) ? array( 'image/webp' ) : array( 'image/avif', 'image/webp' ), array_column( $data['sources'], 'type' ), 'transparent PNG retains an alpha-capable WebP lane; opaque assets offer AVIF first' );
+		foreach ( $data['sources'] as $source ) {
+			assert_true( false !== strpos( $source['srcset'], '-168.' ), 'retina narrow-phone thumbnail candidate present' );
+			assert_true( false !== strpos( $source['srcset'], '-336.' ), 'retina two-column phone candidate present' );
+		}
+	}
+	foreach ( array( 'menu/brand-v1/../private.jpg', 'menu/generated-v1/half-meat-cheese.jpg', 'menu/brand-v1/coca-cola-zero-600ml.webp', 'menu/generated-v1/half-meat-cheese.webp?x=1', 'menu/generated-v1/half-meat-cheese.webp#fragment', 'menu/brand-v1/missing.jpg' ) as $path ) {
+		assert_same( null, DoughBoss_Images::responsive_for_url( DOUGHBOSS_PLUGIN_URL . 'public/images/' . $path ), 'malformed or unmanifested path remains unsupported' );
 	}
 } );

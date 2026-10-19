@@ -13,6 +13,7 @@ declare(strict_types=1);
  */
 
 const RESPONSIVE_WIDTHS = [480, 960, 1600];
+const SMALL_MENU_WIDTHS = [168, 336, 480, 960];
 const WEBP_QUALITY = 75;
 const AVIF_QUALITY = 58;
 const AVIF_SPEED = 6;
@@ -36,6 +37,16 @@ const APPROVED_IMAGES = [
     'menu/real-v1/spinach-pie.jpg',
     'menu/real-v1/dough-boss-pie.jpg',
     'menu/real-v1/aged-cheese-pie.jpg',
+    'menu/brand-v1/coca-cola-classic-600ml.jpg',
+    'menu/brand-v1/coca-cola-vanilla-600ml.jpg',
+    'menu/brand-v1/coca-cola-zero-600ml.png',
+    'menu/brand-v1/sprite-600ml.jpg',
+    'menu/brand-v1/fanta-orange-600ml.jpg',
+    'menu/generated-v1/cheese-tomato-olives.webp',
+    'menu/generated-v1/half-meat-cheese.webp',
+    'menu/generated-v1/labneh-veggie-pizza.webp',
+    'menu/generated-v1/sujuk-special.webp',
+    'menu/generated-v1/zaatar-veggie-pizza.webp',
 ];
 
 function fail(string $message)
@@ -52,10 +63,10 @@ function imageHeightForWidth(int $sourceWidth, int $sourceHeight, int $targetWid
 /**
  * @return list<int>
  */
-function targetWidths(int $sourceWidth): array
+function targetWidths(int $sourceWidth, bool $smallMenu = false): array
 {
     $widths = [];
-    foreach (RESPONSIVE_WIDTHS as $width) {
+    foreach ($smallMenu ? SMALL_MENU_WIDTHS : RESPONSIVE_WIDTHS as $width) {
         if ($width <= $sourceWidth) {
             $widths[] = $width;
         }
@@ -82,22 +93,27 @@ function buildImage(string $imageRoot, string $outputDir, string $outputRelative
     }
 
     $imageSize = getimagesize($sourcePath);
-    if ($imageSize === false || $imageSize[2] !== IMAGETYPE_JPEG) {
-        fail("Approved source image is not a readable JPEG: {$sourceRelativePath}");
+    $decoders = [IMAGETYPE_JPEG => 'imagecreatefromjpeg', IMAGETYPE_PNG => 'imagecreatefrompng', IMAGETYPE_WEBP => 'imagecreatefromwebp'];
+    if ($imageSize === false || !isset($decoders[$imageSize[2]])) {
+        fail("Approved source image is not a readable JPEG, PNG or WebP: {$sourceRelativePath}");
     }
 
-    $source = imagecreatefromjpeg($sourcePath);
+    $source = $decoders[$imageSize[2]]($sourcePath);
     if ($source === false) {
-        fail("Unable to decode JPEG source: {$sourceRelativePath}");
+        fail("Unable to decode approved source: {$sourceRelativePath}");
     }
 
     $sourceWidth = $imageSize[0];
     $sourceHeight = $imageSize[1];
     $baseName = pathinfo($sourceRelativePath, PATHINFO_FILENAME);
     $derivatives = ['avif' => [], 'webp' => []];
+    $smallMenu = strpos($sourceRelativePath, 'menu/brand-v1/') === 0 || strpos($sourceRelativePath, 'menu/generated-v1/') === 0;
+    // Keep the transparent product PNG in an alpha-capable WebP lane; never
+    // flatten its background merely to add another delivery format.
+    $formats = $imageSize[2] === IMAGETYPE_PNG ? ['webp'] : ['avif', 'webp'];
 
     try {
-        foreach (targetWidths($sourceWidth) as $targetWidth) {
+        foreach (targetWidths($sourceWidth, $smallMenu) as $targetWidth) {
             $targetHeight = imageHeightForWidth($sourceWidth, $sourceHeight, $targetWidth);
             $resized = imagecreatetruecolor($targetWidth, $targetHeight);
             if ($resized === false) {
@@ -105,11 +121,16 @@ function buildImage(string $imageRoot, string $outputDir, string $outputRelative
             }
 
             try {
+                if ($imageSize[2] !== IMAGETYPE_JPEG) {
+                    imagealphablending($resized, false);
+                    imagesavealpha($resized, true);
+                    imagefill($resized, 0, 0, imagecolorallocatealpha($resized, 0, 0, 0, 127));
+                }
                 if (!imagecopyresampled($resized, $source, 0, 0, 0, 0, $targetWidth, $targetHeight, $sourceWidth, $sourceHeight)) {
                     fail("Unable to resize {$sourceRelativePath} to {$targetWidth}w");
                 }
 
-                foreach (['avif', 'webp'] as $format) {
+                foreach ($formats as $format) {
                     $fileName = "{$baseName}-{$targetWidth}.{$format}";
                     $destination = $outputDir . DIRECTORY_SEPARATOR . $fileName;
                     $encoded = $format === 'avif'
@@ -156,7 +177,7 @@ function main(array $argv): void
         fail('Usage: php scripts/build-responsive-images.php <fresh-output-directory>');
     }
 
-    foreach (['imagecreatefromjpeg', 'imagewebp', 'imageavif'] as $function) {
+    foreach (['imagecreatefromjpeg', 'imagecreatefrompng', 'imagecreatefromwebp', 'imagewebp', 'imageavif'] as $function) {
         if (!function_exists($function)) {
             fail("Required GD codec is unavailable: {$function}");
         }

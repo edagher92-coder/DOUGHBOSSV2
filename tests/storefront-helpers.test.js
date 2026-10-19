@@ -867,6 +867,24 @@ test('menu photographs deliver local responsive sources and a dimensioned origin
 	assert.match(illustration.children[0].children[0].attributes.alt, /AI-generated illustration/);
 	assert.equal(drink.children.length, 1, 'authentic drink photographs receive no AI badge');
 	assert.equal(menuPhoto({ name: 'Upload', image: '/uploads/generated-v1/unrelated.webp' }).children.length, 1, 'unrelated upload is not guessed to be generated');
+	const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../public/images/responsive/manifest.json'), 'utf8'));
+	const newPaths = Object.keys(manifest.images).filter(path => /^menu\/(brand-v1|generated-v1)\//.test(path));
+	assert.equal(newPaths.length, 10, 'all ten new media originals are exercised through the actual renderer');
+	for (const path of newPaths) {
+		const entry = manifest.images[path];
+		const prefix = 'https://example.test/plugin/public/images/';
+		const original = prefix + path;
+		const sources = ['avif', 'webp'].filter(format => entry.sources[format].length).map(format => ({
+			type: 'image/' + format, srcset: entry.sources[format].map(variant => prefix + variant.file + ' ' + variant.width + 'w').join(', ')
+		}));
+		const media = menuPhoto({ name: 'Exact selected item', category: path.includes('brand-v1') ? 'Drinks' : 'Manoush', image: original,
+			image_responsive: { original, width: entry.width, height: entry.height, sources } });
+		const picture = media.children[0];
+		assert.equal(picture.children.length, sources.length + 1, 'valid manifest candidates do not silently fall back: ' + path);
+		assert.equal(picture.children.at(-1).attributes.src, original, 'original fallback identity retained');
+		assert.match(picture.children[0].attributes.srcset, /-168\./, 'small phone variant reaches the DOM');
+		assert.equal(media.children.length, path.includes('generated-v1') ? 2 : 1, 'AI provenance is preserved with responsive sources');
+	}
 });
 
 test('menu photographs retain originals for absent, unrelated or malformed candidates', () => {
