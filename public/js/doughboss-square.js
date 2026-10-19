@@ -1,10 +1,10 @@
 /**
  * DoughBoss — Square Web Payments card capture.
  *
- * Enqueued by PHP ONLY when Square is the active, ready payment gateway
- * (DoughBoss_Assets::enqueue()). On every other site configuration this file is
- * never loaded, and even if it were it exits immediately on the guards below,
- * so nothing here can affect the pay-at-shop or Stripe storefront.
+ * Enqueued for the selected Square gateway. Ordinary card fields require
+ * enabled checkout; approved-only mode remains dormant until the server has
+ * validated a fragment capability and returned its exact public shop binding.
+ * Neither mode affects the pay-at-shop or Stripe storefront.
  *
  * What it does
  * ------------
@@ -43,11 +43,14 @@
 	var PAY = DATA.payments || {};
 	var I18N = DATA.i18n || {};
 
-	// Hard gate. Square only ever runs when the server said Square is the
-	// active, ready gateway AND handed over both public identifiers.
-	if (!PAY.enabled || PAY.gateway !== 'square' || !CONFIG.applicationId || !CONFIG.locationId) {
+	// Ordinary checkout and capability-approved checkout have separate gates.
+	// A closed store may load this module, but not initialize payment fields.
+	if (PAY.gateway !== 'square') {
 		return;
 	}
+	// Square-hosted checkout (owner setting) never mounts ordinary card fields;
+	// doughboss.js redirects to Square's own page instead.
+	var ordinaryEnabled = !!(PAY.enabled && PAY.squareHosted !== true && CONFIG.applicationId && CONFIG.locationId);
 
 	var CARD_CONTAINER_CLASS = 'db-square-card';
 	var enhanced = [];
@@ -129,7 +132,7 @@
 
 	function storedLocationId() {
 		try {
-			return Number(window.localStorage.getItem('doughboss_location')) || 0;
+			return window.DoughBossPreferences ? window.DoughBossPreferences.readShop() : 0;
 		} catch (ignore) {
 			return 0;
 		}
@@ -154,15 +157,61 @@
 	/* ------------------------------------------------------------------ */
 
 	var paymentsPromise = null;
+	var sdkPromise = null;
 
-	function squarePayments() {
+	function approvedSquareBinding(summary) {
+		var binding = summary && summary.square;
+		if (!summary || summary.gateway !== 'square' || !binding ||
+			typeof binding.live_mode !== 'boolean' ||
+			!/^[-A-Za-z0-9_]{5,128}$/.test(String(binding.application_id || '')) ||
+			!/^[-A-Za-z0-9_]{5,128}$/.test(String(binding.location_id || ''))) {
+			throw new Error('The approved shop payment details are not available. Contact DoughBoss.');
+		}
+		return { applicationId: binding.application_id, locationId: binding.location_id, liveMode: binding.live_mode };
+	}
+
+	function loadApprovedSquareSdk(binding) {
+		var expected = binding.liveMode ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js';
+		if (CONFIG.sdkUrl !== expected) {
+			return Promise.reject(new Error('The secure payment environment changed. Please reload your approved link.'));
+		}
+		if (window.Square && typeof window.Square.payments === 'function') { return Promise.resolve(); }
+		if (sdkPromise) { return sdkPromise; }
+		sdkPromise = new Promise(function (resolve, reject) {
+			var script = document.createElement('script');
+			script.src = expected;
+			script.async = true;
+			script.onload = function () {
+				if (window.Square && typeof window.Square.payments === 'function') { resolve(); }
+				else { reject(new Error('The secure payment form could not be loaded.')); }
+			};
+			script.onerror = function () { reject(new Error('The secure payment form could not be loaded.')); };
+			document.head.appendChild(script);
+		});
+		return sdkPromise;
+	}
+
+	function squarePayments(binding) {
+		if (binding) {
+			return loadApprovedSquareSdk(binding).then(function () {
+				return window.Square.payments(binding.applicationId, binding.locationId);
+			});
+		}
 		if (paymentsPromise) { return paymentsPromise; }
-		paymentsPromise = new Promise(function (resolve, reject) {
+		// The SDK is enqueued only on the order page. Anywhere else (a page with
+		// just [doughboss_cart]) it is loaded on demand from the same exact
+		// Square CDN URL the server configured for this environment.
+		var sdkReady = (window.Square && typeof window.Square.payments === 'function')
+			? Promise.resolve()
+			: loadApprovedSquareSdk({ liveMode: CONFIG.liveMode === true });
+		paymentsPromise = sdkReady.then(function () {
 			if (!window.Square || typeof window.Square.payments !== 'function') {
-				reject(new Error('The secure payment form could not be loaded. Please refresh and try again.'));
-				return;
+				throw new Error('The secure payment form could not be loaded. Please refresh and try again.');
 			}
-			resolve(window.Square.payments(CONFIG.applicationId, CONFIG.locationId));
+			return window.Square.payments(CONFIG.applicationId, CONFIG.locationId);
+		}).catch(function (err) {
+			paymentsPromise = null;
+			throw err;
 		});
 		return paymentsPromise;
 	}
@@ -173,13 +222,24 @@
 	 * @param {HTMLElement} form The .db-checkout form.
 	 * @return {Object} A small controller: { ready, tokenize, destroyed }.
 	 */
-	function mountCard(form) {
+	function mountCard(form, binding) {
 		var mountId = 'db-square-card-' + String(Date.now()) + '-' + String(Math.floor(Math.random() * 10000));
 		var mount = el('div', { class: CARD_CONTAINER_CLASS, id: mountId });
+		var giftMountId = mountId + '-gift';
+		var giftMount = el('div', { class: 'db-square-gift', id: giftMountId });
+		giftMount.hidden = true;
+		var method = el('select', { id: mountId + '-method', 'aria-label': 'Payment method' }, [
+			el('option', { value: 'card', text: 'Debit or credit card' }),
+			el('option', { value: 'gift_card', text: 'Square gift card — full amount' })
+		]);
+		method.value = 'card';
 		var status = el('p', { class: 'db-pay-secure', text: 'Secure payment by Square · your card details never reach DoughBoss.' });
 		var wrap = el('div', { class: 'db-cardfield db-cardfield--square' }, [
+			el('label', { 'for': mountId + '-method', class: 'db-field-label', text: 'Payment method' }),
+			method,
 			el('span', { class: 'db-field-label', text: I18N.cardDetails || 'Card details' }),
 			mount,
+			giftMount,
 			status
 		]);
 
@@ -192,35 +252,179 @@
 			form.appendChild(wrap);
 		}
 
-		var cardPromise = squarePayments().then(function (payments) {
-			return payments.card().then(function (card) {
-				return card.attach('#' + mountId).then(function () {
-					return { payments: payments, card: card };
-				});
-			});
-		}).catch(function (err) {
-			// Let a later submit retry a transient load failure.
-			cardPromise = null;
-			status.textContent = 'The secure payment form could not be loaded. Please refresh the page and try again.';
-			status.className = 'db-pay-secure db-error';
-			throw err;
-		});
-
-		return {
-			status: status,
-			ready: function () {
+		var cardPromise = null;
+		var giftPromise = null;
+		function selectedParts() {
+			if (method.value !== 'gift_card') {
 				if (!cardPromise) {
-					cardPromise = squarePayments().then(function (payments) {
+					cardPromise = squarePayments(binding).then(function (payments) {
 						return payments.card().then(function (card) {
 							return card.attach('#' + mountId).then(function () {
 								return { payments: payments, card: card };
 							});
 						});
+					}).catch(function (err) {
+						// Retry only when this tender is selected again.
+						cardPromise = null;
+						if (method.value !== 'gift_card') {
+							status.textContent = 'The secure payment form could not be loaded. Please refresh the page and try again.';
+							status.className = 'db-pay-secure db-error';
+						}
+						throw err;
 					});
 				}
 				return cardPromise;
 			}
+			if (!giftPromise) {
+				giftPromise = squarePayments(binding).then(function (payments) {
+					return payments.giftCard().then(function (gift) {
+						return gift.attach('#' + giftMountId).then(function () {
+							return { payments: payments, card: gift, kind: 'gift_card' };
+						});
+					});
+				}).catch(function (err) {
+					giftPromise = null;
+					if (method.value === 'gift_card') {
+						status.textContent = 'The secure gift-card form could not be loaded. Please refresh or choose card payment.';
+						status.className = 'db-pay-secure db-error';
+					}
+					throw err;
+				});
+			}
+			return giftPromise;
+		}
+		method.addEventListener('change', function () {
+			var gift = method.value === 'gift_card';
+			mount.hidden = gift;
+			giftMount.hidden = !gift;
+			status.className = 'db-pay-secure';
+			status.textContent = gift ? 'Use a Square gift card issued by this seller with enough balance for the full order. Split payment is not yet available.' : 'Secure payment by Square · your card details never reach DoughBoss.';
+			selectedParts().catch(function () {});
+		});
+		// Consume eager mount failures; a selected tender can retry on submission.
+		selectedParts().catch(function () {});
+
+		var walletState = { token: '', amount: null, at: 0 };
+		if (CONFIG.wallets && typeof mountWallets === 'function') {
+			mountWallets(form, binding, wrap, walletState, status);
+		}
+
+		return {
+			status: status,
+			ready: function () {
+				if (walletState.token) {
+					var walletToken = walletState.token;
+					var fresh = (Date.now() - (walletState.at || 0)) < 60000 && walletState.amount === readDisplayedTotal(form);
+					walletState.token = '';
+					// Single use: a stale token, or one authorised for a different
+					// total, is discarded and the card field is used instead.
+					if (fresh) { return Promise.resolve({ kind: 'wallet', token: walletToken }); }
+				}
+				return selectedParts();
+			}
 		};
+	}
+
+	/**
+	 * Apple Pay / Google Pay buttons (opt-in: DoughBoss > Settings > Square).
+	 * Each wallet tokenizes inside its own click handler (Apple requires this),
+	 * then submits the same checkout form; the server charges its own total.
+	 * The form's own validity is checked synchronously first, so an incomplete
+	 * checkout never opens a wallet sheet, while Apple Pay's tokenize() still
+	 * starts inside the same user gesture. A cancelled or failed sheet shows a
+	 * visible message in the payment status line instead of failing silently.
+	 * Unsupported browsers/devices simply show no wallet button.
+	 */
+	function mountWallets(form, binding, wrap, walletState, status) {
+		// Wallet sheets must show the real total; forms without a readable
+		// summary total (e.g. approved pre-orders) keep card-only.
+		if (readDisplayedTotal(form) === null) { return; }
+		form.addEventListener('invalid', function () { walletState.token = ''; }, true);
+		var box = el('div', { class: 'db-square-wallets' });
+		wrap.insertBefore(box, wrap.firstChild);
+		function totalNow() {
+			return { amount: readDisplayedTotal(form) || '0.00', label: 'DoughBoss' };
+		}
+		var defaultStatus = status ? status.textContent : '';
+		function walletMessage(text) {
+			if (!status) { return; }
+			status.textContent = text;
+			status.className = 'db-pay-secure db-error';
+			status.setAttribute('role', 'alert');
+		}
+		function clearWalletMessage() {
+			if (!status || status.className.indexOf('db-error') === -1) { return; }
+			status.textContent = defaultStatus;
+			status.className = 'db-pay-secure';
+			if (typeof status.removeAttribute === 'function') { status.removeAttribute('role'); }
+		}
+		// Synchronous only: no promise may run between the click and tokenize().
+		function formReady() {
+			if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) { return false; }
+			if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
+				walletMessage('Please complete your details above, then choose your wallet again.');
+				return false;
+			}
+			clearWalletMessage();
+			return true;
+		}
+		function walletFailed(result) {
+			var cancelled = result && result.errors && result.errors[0] && /cancel/i.test(String(result.errors[0].type || result.errors[0].message || ''));
+			walletMessage(cancelled
+				? 'Wallet payment was cancelled. You have not been charged. Choose a wallet again or pay by card.'
+				: 'Wallet payment could not be completed. You have not been charged. Try again or pay by card.');
+		}
+		function submitWith(result) {
+			if (!result || result.status !== 'OK' || !result.token) { walletFailed(result); return; }
+			walletState.token = result.token;
+			walletState.amount = readDisplayedTotal(form);
+			walletState.at = Date.now();
+			if (typeof form.requestSubmit === 'function') { form.requestSubmit(); } else { form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); }
+		}
+		squarePayments(binding).then(function (payments) {
+			var request = payments.paymentRequest({ countryCode: 'AU', currencyCode: validSquareCurrency(CONFIG.currency) || 'AUD', total: totalNow() });
+			payments.applePay(request).then(function (applePay) {
+				var btn = el('button', { type: 'button', class: 'db-apple-pay', 'aria-label': 'Pay with Apple Pay' });
+				btn.style.cssText = '-webkit-appearance:-apple-pay-button;-apple-pay-button-type:plain;-apple-pay-button-style:black;width:100%;height:44px;margin-bottom:8px;';
+				box.appendChild(btn);
+				btn.addEventListener('click', function (e) {
+					e.preventDefault();
+					if (!formReady()) { return; }
+					request.update({ total: totalNow() });
+					applePay.tokenize().then(submitWith).catch(function () { walletFailed(null); });
+				});
+			}).catch(function () {});
+			payments.googlePay(request).then(function (googlePay) {
+				var id = 'db-google-pay-' + String(Date.now());
+				var holder = el('div', { id: id, class: 'db-google-pay' });
+				box.appendChild(holder);
+				return googlePay.attach('#' + id, { buttonColor: 'black', buttonSizeMode: 'fill' }).then(function () {
+					holder.addEventListener('click', function (e) {
+						e.preventDefault();
+						if (!formReady()) { return; }
+						request.update({ total: totalNow() });
+						googlePay.tokenize().then(submitWith).catch(function () { walletFailed(null); });
+					});
+				});
+			}).catch(function () {});
+		}).catch(function () {});
+	}
+
+	/** Gift-card GANs stay inside Square's secure element; only its nonce leaves. */
+	function tokenizeTender(parts, verification) {
+		if (parts && parts.kind === 'wallet') {
+			// Apple Pay / Google Pay: the device authenticated the buyer and the token
+			// was taken inside the button's click handler. Square settles it as a
+			// CARD payment, so the server keeps its card tender contract.
+			return Promise.resolve({ token: parts.token, kind: 'card' });
+		}
+		var kind = parts.kind === 'gift_card' ? 'gift_card' : 'card';
+		return (kind === 'gift_card' ? parts.card.tokenize() : parts.card.tokenize(verification)).then(function (result) {
+			if (!result || result.status !== 'OK' || !result.token) {
+				throw new Error(result && result.errors && result.errors[0] && result.errors[0].message ? String(result.errors[0].message) : 'Payment verification was not completed. Please check your payment details and try again.');
+			}
+			return { token: result.token, kind: kind };
+		});
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -230,9 +434,9 @@
 	/**
 	 * Tokenise the card, charge it server-side, then place the order.
 	 *
-	 * No amount, currency or price is sent from the browser at any point: the
-	 * server recomputes the total from the stored cart for the charge and
-	 * re-verifies it against Square before the order row exists.
+	 * The displayed amount is supplied to Square only for its tokenization-time
+	 * buyer verification. The server recomputes the total from the stored cart
+	 * for the charge and re-verifies it against Square before an order row exists.
 	 *
 	 * @param {Object} session Per-form state.
 	 * @return {Promise}
@@ -244,75 +448,55 @@
 		if (session.paymentId) {
 			return placeOrder(session, orderType, locationId);
 		}
+		if (session.providerRequestStarted) {
+			return Promise.reject(new Error('Payment confirmation is pending. Do not pay again; keep this page open or contact the shop.'));
+		}
+		if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) {
+			return Promise.reject(new Error('Refresh your order before starting a new payment.'));
+		}
 
+		// Square now performs any buyer verification while it tokenizes. Validate
+		// the browser-only verification evidence before asking it to tokenize, so
+		// an incomplete checkout cannot produce a card token or start a provider
+		// request. The server remains the authority for the charged amount.
+		var verificationDetails;
+		try {
+			verificationDetails = verificationDetailsFor(form);
+		} catch (err) {
+			return Promise.reject(err);
+		}
 		return session.controller.ready().then(function (parts) {
-			return parts.card.tokenize().then(function (result) {
-				if (!result || result.status !== 'OK' || !result.token) {
-					var detail = result && result.errors && result.errors.length && result.errors[0].message
-						? String(result.errors[0].message)
-						: (I18N.cardError || 'Please check your card details and try again.');
-					throw new Error(detail);
-				}
-				return { parts: parts, token: result.token, details: result.details || null };
-			});
-		}).then(function (tokenised) {
-			// 3-D Secure / Strong Customer Authentication. Square runs the
-			// challenge in the browser and returns evidence the server forwards
-			// with the charge. A failure here must NOT be swallowed: an
-			// unverified payment can be refused by the issuer later.
-			var payments = tokenised.parts.payments;
-			if (typeof payments.verifyBuyer !== 'function') {
-				return { sourceId: tokenised.token, verificationToken: '' };
+			if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) {
+				throw new Error('Refresh your order before starting a new payment.');
 			}
-			var billing = {
-				intent: 'CHARGE_AND_STORE',
-				billingContact: {
-					givenName: value(form, 'customer_name'),
-					email: value(form, 'customer_email'),
-					phone: value(form, 'customer_phone')
-				}
-			};
-			// Square requires an amount for verifyBuyer. It is display-only
-			// evidence for the issuer's challenge screen; the CHARGED amount is
-			// always the server's own figure. Read it from the summary the
-			// server rendered rather than inventing one, and skip verification
-			// rather than guess if it cannot be read.
-			var displayTotal = readDisplayedTotal(form);
-			if (displayTotal === null) {
-				return { sourceId: tokenised.token, verificationToken: '' };
+			return tokenizeTender(parts, verificationDetails);
+		}).then(function (tender) {
+			// Tokenization is asynchronous: the cart may become stale while the
+			// provider prepares a token. Do not turn that token into a charge.
+			if (typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) {
+				throw new Error('Refresh your order before starting a new payment.');
 			}
-			billing.amount = displayTotal;
-			billing.currencyCode = CONFIG.currency || 'AUD';
-			billing.intent = 'CHARGE';
-			return payments.verifyBuyer(tokenised.token, billing).then(function (verification) {
-				return {
-					sourceId: tokenised.token,
-					verificationToken: verification && verification.token ? verification.token : ''
-				};
-			}).catch(function () {
-				// Verification unavailable for this card/region. Continue with
-				// the plain token — Square (not this file) decides whether an
-				// unverified payment is acceptable.
-				return { sourceId: tokenised.token, verificationToken: '' };
-			});
-		}).then(function (source) {
 			session.providerRequestStarted = true;
 			storeSession(session);
-			return request('/payment-intent', {
-				method: 'POST',
-				body: {
-					order_type: orderType,
-					location_id: locationId,
-					payment_attempt_key: session.paymentAttemptKey,
-					customer_name: value(form, 'customer_name'),
-					customer_email: value(form, 'customer_email'),
-					customer_phone: value(form, 'customer_phone'),
-					address: value(form, 'address'),
-					notes: value(form, 'notes'),
-					source_id: source.sourceId,
-					verification_token: source.verificationToken
-				}
+			var intentBody = {
+				order_type: orderType,
+				location_id: locationId,
+				payment_attempt_key: session.paymentAttemptKey,
+				customer_name: value(form, 'customer_name'),
+				customer_email: value(form, 'customer_email'),
+				customer_phone: value(form, 'customer_phone'),
+				address: value(form, 'address'),
+				notes: value(form, 'notes'),
+				source_id: tender.token,
+				tender_kind: tender.kind
+			};
+			// Pickup time (2.51.0): the form carries these hidden inputs only
+			// while a live shop has a held time, so legacy requests are unchanged.
+			['pickup_mode', 'pickup_slot_id', 'capacity_hold_token'].forEach(function (pickupKey) {
+				var picked = value(form, pickupKey);
+				if (picked) { intentBody[pickupKey] = picked; }
 			});
+			return request('/payment-intent', { method: 'POST', body: intentBody });
 		}).then(function (payment) {
 			if (!payment || !payment.payment_intent) {
 				throw new Error('The card payment could not be confirmed. Please contact the shop before trying again.');
@@ -342,6 +526,112 @@
 		return digits;
 	}
 
+	function validSquareCurrency(currency) {
+		return typeof currency === 'string' && /^[A-Z]{3}$/.test(currency) ? currency : '';
+	}
+
+	function verificationDetailsFor(form) {
+		var amount = readDisplayedTotal(form);
+		var currencyCode = validSquareCurrency(CONFIG.currency);
+		if (amount === null || !currencyCode) {
+			throw new Error(I18N.cardError || 'The payment details could not be verified. Please refresh and try again.');
+		}
+		return {
+			amount: amount,
+			billingContact: {
+				givenName: String(value(form, 'customer_name') || '').trim().split(/\s+/)[0] || '',
+				familyName: String(value(form, 'customer_name') || '').trim().split(/\s+/).slice(1).join(' '),
+				email: value(form, 'customer_email'),
+				phone: value(form, 'customer_phone')
+			},
+			currencyCode: currencyCode,
+			intent: 'CHARGE',
+			customerInitiated: true,
+			sellerKeyedIn: false
+		};
+	}
+
+	function approvedVerificationDetails(summary) {
+		var amount = Number(summary && summary.total);
+		var currency = validSquareCurrency(summary && summary.currency);
+		if (!isFinite(amount) || amount <= 0 || !currency) {
+			throw new Error('The approved payment amount is not available. Please reload your approved link.');
+		}
+		return { amount: amount.toFixed(2), currencyCode: currency, intent: 'CHARGE', customerInitiated: true, sellerKeyedIn: false };
+	}
+
+	function enhanceApproved(form, summary, capability) {
+		if (sessionFor(form)) { return; }
+		var requestId = Number(capability && capability.requestId);
+		if (!isFinite(requestId) || requestId <= 0 || Math.floor(requestId) !== requestId || !/^[a-f0-9]{64}$/i.test(String(capability && capability.token || ''))) {
+			throw new Error('A valid approved payment link is required.');
+		}
+		var binding = approvedSquareBinding(summary);
+		var recovering = summary.can_confirm_payment === true;
+		if (!recovering && summary.can_start_payment !== true) {
+			throw new Error('This approved request cannot start payment.');
+		}
+		approvedVerificationDetails(summary);
+		enhanced.push({ form: form, approved: true, summary: summary, capability: capability,
+			paymentAttemptKey: uuid(), providerRequestStarted: recovering,
+			controller: recovering ? null : mountCard(form, binding) });
+	}
+
+	function validApprovedSquareReceipt(receipt, summary) {
+		function minorUnits(value) {
+			if (typeof value !== 'number' || !isFinite(value) || value <= 0) { return null; }
+			var scaled = value * 100;
+			var minor = Math.round(scaled);
+			if (minor > 9007199254740991 || Math.abs(scaled - minor) > 0.000001) { return null; }
+			return minor;
+		}
+		if (!receipt || receipt.success !== true || typeof receipt.order_number !== 'string' ||
+			!/^DB-[0-9]{6}-[A-Z0-9]{6}$/.test(receipt.order_number)) { return false; }
+		var expected = minorUnits(summary && summary.total);
+		var received = minorUnits(receipt.total);
+		return expected !== null && received !== null && expected === received;
+	}
+
+	function confirmApproved(session) {
+		return request('/preorder-payment/complete', { method: 'POST', body: {
+			request_id: session.capability.requestId, token: session.capability.token
+		} }).then(function (receipt) {
+			if (!validApprovedSquareReceipt(receipt, session.summary)) {
+				var error = new Error('The paid receipt could not be confirmed. Do not pay again; check the existing payment or call DoughBoss.');
+				error.data = { payment_pending: true, retry_safe: false };
+				throw error;
+			}
+			return receipt;
+		});
+	}
+
+	function payApprovedSession(session) {
+		// Once dispatch might have started, only the server-owned linked attempt
+		// may be checked. No browser provider id, generic checkout, or new charge.
+		if (session.providerRequestStarted) { return confirmApproved(session); }
+		var verification;
+		try { verification = approvedVerificationDetails(session.summary); }
+		catch (err) { return Promise.reject(err); }
+		return session.controller.ready().then(function (parts) {
+			return tokenizeTender(parts, verification);
+		}).then(function (tender) {
+			session.providerRequestStarted = true;
+			return request('/preorder-payment/start', { method: 'POST', body: {
+				request_id: session.capability.requestId, token: session.capability.token,
+				payment_attempt_key: session.paymentAttemptKey, source_id: tender.token, tender_kind: tender.kind
+			} }).catch(function (err) {
+				// A definitive decline took no money and the server reopened the
+				// approval: allow another card with a brand-new attempt key.
+				var data = err && err.data && typeof err.data === 'object' ? err.data : {};
+				if (data.retry_safe === true && data.payment_pending !== true) {
+					session.providerRequestStarted = false;
+					session.paymentAttemptKey = uuid();
+				}
+				throw err;
+			});
+		}).then(function () { return confirmApproved(session); });
+	}
+
 	function placeOrder(session, orderType, locationId) {
 		var form = session.form;
 		if (!session.checkoutAttemptId) {
@@ -352,20 +642,27 @@
 			location_id: locationId,
 			customer_email: value(form, 'customer_email')
 		};
+		var checkoutBody = {
+			order_type: payload.order_type,
+			location_id: payload.location_id,
+			payment_attempt_key: session.paymentAttemptKey,
+			payment_intent_id: session.paymentId,
+			customer_name: value(form, 'customer_name'),
+			customer_email: payload.customer_email,
+			customer_phone: value(form, 'customer_phone'),
+			address: value(form, 'address'),
+			notes: value(form, 'notes')
+		};
+		// Same pickup facts as /payment-intent (2.51.0); the server prefers the
+		// paid snapshot's own copy, so a reloaded tab without them still works.
+		['pickup_mode', 'pickup_slot_id', 'capacity_hold_token'].forEach(function (pickupKey) {
+			var picked = value(form, pickupKey);
+			if (picked) { checkoutBody[pickupKey] = picked; }
+		});
 		return request('/checkout', {
 			method: 'POST',
 			headers: { 'Idempotency-Key': session.checkoutAttemptId },
-			body: {
-				order_type: payload.order_type,
-				location_id: payload.location_id,
-				payment_attempt_key: session.paymentAttemptKey,
-				payment_intent_id: session.paymentId,
-				customer_name: value(form, 'customer_name'),
-				customer_email: payload.customer_email,
-				customer_phone: value(form, 'customer_phone'),
-				address: value(form, 'address'),
-				notes: value(form, 'notes')
-			}
+			body: checkoutBody
 		}).then(function (res) {
 			clearStoredSession();
 			form.dispatchEvent(new CustomEvent('doughboss:checkout-complete', {
@@ -413,6 +710,7 @@
 	}
 
 	function enhance(form) {
+		if (!ordinaryEnabled) { return; }
 		if (sessionFor(form)) { return; }
 		if (form.className.indexOf('db-preorder-request') !== -1) { return; }
 		if (form.querySelector('.' + CARD_CONTAINER_CLASS)) { return; }
@@ -475,7 +773,7 @@
 				submit.textContent = session.paymentId ? 'Check payment and place order' : 'Payment confirmation pending';
 				message = 'Your payment may already be complete. Please do not pay again — keep this page open or contact the shop so we can confirm your order.';
 			} else {
-				submit.disabled = false;
+				submit.disabled = typeof form.doughbossCartReady === 'function' && !form.doughbossCartReady();
 				var total = readDisplayedTotal(form);
 				submit.textContent = total === null ? (I18N.pay || 'Pay') : ((I18N.pay || 'Pay') + ' ' + money(total));
 				// A declined card must start a genuinely new payment attempt so
@@ -490,7 +788,7 @@
 			storeSession(session);
 		}
 		form.dispatchEvent(new CustomEvent('doughboss:checkout-error', {
-			detail: { message: message, paymentPending: paymentPending }
+			detail: { message: message, paymentPending: paymentPending, code: err && err.code ? String(err.code) : '' }
 		}));
 	}
 
@@ -507,6 +805,11 @@
 
 		event.preventDefault();
 		event.stopPropagation();
+
+		// A live pickup shop needs a held time before any card work starts. The
+		// storefront form owns the check (and announces its own reason).
+		if (!session.busy && !session.paymentId && !session.providerRequestStarted && typeof form.doughbossCartGuard === 'function' && form.doughbossCartGuard()) { return; }
+		if (!session.busy && typeof form.doughbossPickupGuard === 'function' && form.doughbossPickupGuard()) { return; }
 
 		if (session.busy) { return; }
 		session.busy = true;
@@ -529,6 +832,19 @@
 		});
 	}, true);
 
+	// A new pickup time is a new checkout attempt: give an unstarted card
+	// session a fresh payment key so the server binds it to the new slot.
+	document.addEventListener('doughboss:pickup-changed', function () {
+		var forms = document.querySelectorAll('form.db-checkout');
+		for (var i = 0; i < forms.length; i++) {
+			var pickupSession = sessionFor(forms[i]);
+			if (pickupSession && !pickupSession.busy && !pickupSession.providerRequestStarted && !pickupSession.paymentId) {
+				pickupSession.paymentAttemptKey = uuid();
+				pickupSession.checkoutAttemptId = null;
+			}
+		}
+	});
+
 	function scan() {
 		var forms = document.querySelectorAll('form.db-checkout');
 		for (var i = 0; i < forms.length; i++) {
@@ -550,6 +866,15 @@
 	// doughboss.js: hand it a checkout form and it returns a promise that
 	// resolves once the payment is taken and the order is placed.
 	window.DoughBossSquare = {
+		enhanceApproved: enhanceApproved,
+		approvedPending: function (form) { var session = sessionFor(form); return !!(session && session.approved && session.providerRequestStarted); },
+		payApproved: function (form) {
+			var session = sessionFor(form);
+			if (!session || !session.approved) { return Promise.reject(new Error('The approved payment form is not ready.')); }
+			if (session.busy) { return Promise.reject(new Error('This payment is already being checked.')); }
+			session.busy = true;
+			return payApprovedSession(session).then(function (result) { session.busy = false; return result; }, function (err) { session.busy = false; throw err; });
+		},
 		enhance: enhance,
 		pay: function (form) {
 			var session = sessionFor(form);

@@ -61,13 +61,21 @@ class DoughBoss_Loyalty {
 	}
 
 	/**
-	 * Output the public wallet. It deliberately stays useful while the program
-	 * is in draft: no points can be earned or redeemed until the owner enables
-	 * it, but the page can be reviewed before launch.
+	 * Output the public wallet only while the program is enabled.
+	 * Disabled programs must not advertise enrollment or expose account actions.
 	 *
 	 * @return string
 	 */
 	public static function shortcode() {
+		if ( ! self::enabled() ) {
+			return sprintf(
+				'<section class="db-loyalty" aria-labelledby="db-loyalty-title"><h2 id="db-loyalty-title">%s</h2><p class="db-loyalty__draft" role="status">%s</p><p><a href="%s">%s</a></p></section>',
+				esc_html__( 'Dough Boss membership', 'doughboss' ),
+				esc_html__( 'Membership sign-up and rewards are not open yet. Check Members & Events for updates.', 'doughboss' ),
+				esc_url( home_url( '/members-events/' ) ),
+				esc_html__( 'Visit Members & Events', 'doughboss' )
+			);
+		}
 		$notice = isset( $_GET['db_loyalty'] ) ? sanitize_key( wp_unslash( $_GET['db_loyalty'] ) ) : '';
 		ob_start();
 		?>
@@ -78,9 +86,6 @@ class DoughBoss_Loyalty {
 				<p><?php esc_html_e( 'Earn 1 point for every $1 of paid food spend. Every 100 points unlocks a personal $5 Dough Boss voucher.', 'doughboss' ); ?></p>
 			</div>
 			<?php self::render_notice( $notice ); ?>
-			<?php if ( ! self::enabled() ) : ?>
-				<p class="db-loyalty__draft" role="status"><?php esc_html_e( 'Rewards is being prepared for launch. You can join the waitlist experience now; points and vouchers are not active yet.', 'doughboss' ); ?></p>
-			<?php endif; ?>
 			<?php if ( is_user_logged_in() ) : ?>
 				<?php self::render_wallet( get_current_user_id() ); ?>
 			<?php else : ?>
@@ -149,6 +154,9 @@ class DoughBoss_Loyalty {
 
 	/** Request a one-time email sign-in link. */
 	public function request_link() {
+		if ( ! self::enabled() ) {
+			self::redirect( 'unavailable' );
+		}
 		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'doughboss_loyalty_request_link' ) ) {
 			self::redirect( 'error' );
 		}
@@ -188,6 +196,9 @@ class DoughBoss_Loyalty {
 
 	/** Consume a link exactly once and create a normal WP session. */
 	public function magic_link() {
+		if ( ! self::enabled() ) {
+			self::redirect( 'unavailable' );
+		}
 		$selector = isset( $_GET['s'] ) ? sanitize_key( wp_unslash( $_GET['s'] ) ) : '';
 		$token = isset( $_GET['t'] ) ? (string) wp_unslash( $_GET['t'] ) : '';
 		global $wpdb;

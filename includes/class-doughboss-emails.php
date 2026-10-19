@@ -2,7 +2,9 @@
 /**
  * Customer emails (built-in, via wp_mail).
  *
- * Emails the customer at two order milestones: an "we're on it" note when the
+ * Emails the customer when a paid order is placed (an itemised confirmation
+ * with the pickup shop and tracking details), then at two order milestones: an
+ * "we're on it" note when the
  * kitchen accepts the order (with the ETA when one was given) and a "ready for
  * pickup" note when the order moves to the `ready` status. Modeled on
  * DoughBoss_SMS: a static class registered via init(), where every handler
@@ -73,8 +75,10 @@ class DoughBoss_Emails {
 	 * @return void
 	 */
 	public static function init() {
+		add_action( 'doughboss_order_created', array( __CLASS__, 'on_order_created' ), 40, 2 );
 		add_action( 'doughboss_order_accepted', array( __CLASS__, 'on_order_accepted' ), 10, 2 );
 		add_action( 'doughboss_order_status_changed', array( __CLASS__, 'on_status_changed' ), 10, 2 );
+		add_action( 'doughboss_order_delayed', array( __CLASS__, 'on_order_delayed' ), 10, 3 );
 		add_action( 'doughboss_voucher_claimed', array( __CLASS__, 'on_voucher_claimed' ), 10, 4 );
 	}
 
@@ -85,7 +89,265 @@ class DoughBoss_Emails {
 	 * @return bool
 	 */
 	public static function emails_ready() {
-		return DoughBoss_Settings::email_on_accepted() || DoughBoss_Settings::email_on_ready();
+		return DoughBoss_Settings::email_on_placed() || DoughBoss_Settings::email_on_accepted() || DoughBoss_Settings::email_on_ready();
+	}
+
+	/**
+	 * Send the paid-order confirmation ("placed" stage) once the order and its
+	 * items are committed. Only paid orders qualify: unpaid requests (pay at
+	 * shop, staff-approval pre-orders) are confirmed later by the kitchen. The
+	 * shared deliver() lock + stage log make replays and racing workers safe.
+	 *
+	 * @param int   $order_id New order id.
+	 * @param array $data     Order data passed by DoughBoss_Order::create().
+	 * @return void
+	 */
+	public static function on_order_created( $order_id, $data = array() ) {
+		if ( ! DoughBoss_Settings::email_on_placed() ) {
+			return;
+		}
+		if ( ! is_array( $data ) || ! isset( $data['payment_status'] ) || 'paid' !== (string) $data['payment_status'] ) {
+			return;
+		}
+
+		$order_id = absint( $order_id );
+		if ( ! $order_id || self::already_sent( $order_id, 'placed' ) ) {
+			return;
+		}
+
+		$order = DoughBoss_Order::get( $order_id );
+		if ( ! is_object( $order ) || ! isset( $order->payment_status ) || 'paid' !== (string) $order->payment_status ) {
+			return;
+		}
+
+		$location = null;
+		if ( ! empty( $order->location_id ) && class_exists( 'DoughBoss_Locations' ) ) {
+			$location = DoughBoss_Locations::get( (int) $order->location_id );
+		}
+		$number = isset( $order->order_number ) && '' !== (string) $order->order_number ? (string) $order->order_number : (string) $order_id;
+		$order_row = (array) $order;
+		if ( self::is_timed_order( $order_row ) ) {
+			$order_row['pickup_label'] = self::pickup_label_for_row( $order_row );
+			if ( 'asap' === (string) $order_row['pickup_mode'] ) {
+				$order_row['pickup_eta_minutes'] = self::minutes_until_promise( $order_row );
+			}
+		}
+		$email  = self::placed_email(
+			$order_row,
+			DoughBoss_Order::get_items( $order_id ),
+			is_object( $location ) ? (array) $location : array(),
+			DoughBoss_Settings::tracking_page_url( $number ),
+			(string) DoughBoss_Settings::get( 'currency_symbol', '$' )
+		);
+
+		self::deliver( $order, $order_id, 'placed', $email['subject'], $email['body'] );
+	}
+
+	/**
+	 * Pure: build the plain-text paid-order confirmation.
+	 *
+	 * Uses only stored order facts (no recalculation): line totals, subtotal,
+	 * discount, delivery fee, GST included and total exactly as saved.
+	 *
+	 * @param array  $order        Order row as an array.
+	 * @param array  $items        Order item rows (name, size, toppings, quantity, line_total).
+	 * @param array  $location     Location row as an array (name, address, suburb, phone) or empty.
+	 * @param string $tracking_url Configured tracking page URL for this order, or ''.
+	 * @param string $symbol       Currency symbol.
+	 * @return array{subject:string,body:string}
+	 */
+	public static function placed_email( array $order, array $items, array $location, $tracking_url = '', $symbol = '$' ) {
+		$money = static function ( $amount ) use ( $symbol ) {
+			return (string) $symbol . number_format( (float) $amount, 2, '.', ',' );
+		};
+		$clean = static function ( $value ) {
+			$value = is_scalar( $value ) ? (string) $value : '';
+			$value = preg_replace( '/[\x00-\x1f\x7f]+/u', ' ', strip_tags( $value ) );
+			return trim( preg_replace( '/ {2,}/', ' ', (string) $value ) );
+		};
+
+		$number = isset( $order['order_number'] ) && '' !== (string) $order['order_number']
+			? $clean( $order['order_number'] )
+			: ( isset( $order['id'] ) ? (string) (int) $order['id'] : '' );
+		$name   = isset( $order['customer_name'] ) ? $clean( $order['customer_name'] ) : '';
+		$first  = '' !== $name ? strtok( $name, ' ' ) : '';
+		$shop   = self::shop_display_name( isset( $location['name'] ) ? $clean( $location['name'] ) : '' );
+		$type   = isset( $order['order_type'] ) ? (string) $order['order_type'] : 'pickup';
+		// Timed pickup (2.51): the customer chose ASAP or a slot. Legacy orders
+		// have pickup_mode '' and keep the original "Pickup from:" block.
+		$timed_label = '';
+		$timed_mode  = '';
+		if ( ( 'pickup' === $type || '' === $type ) && self::is_timed_order( $order ) && isset( $order['pickup_label'] ) ) {
+			$timed_label = $clean( $order['pickup_label'] );
+			$timed_mode  = (string) $order['pickup_mode'];
+		}
+
+		$lines   = array();
+		$lines[] = '' !== $first
+			? sprintf( /* translators: %s: customer first name. */ __( 'Hi %s,', 'doughboss' ), $first )
+			: __( 'Hi there,', 'doughboss' );
+		$lines[] = '';
+		$lines[] = sprintf(
+			/* translators: %s: order number. */
+			__( 'Thanks for your order. Your payment has been received and order %s has been sent to the kitchen.', 'doughboss' ),
+			$number
+		);
+		$lines[] = '';
+		$lines[] = sprintf( /* translators: %s: order number. */ __( 'Order number: %s', 'doughboss' ), $number );
+		$lines[] = '';
+		$lines[] = __( 'Your order', 'doughboss' );
+		$lines[] = str_repeat( '-', 32 );
+
+		foreach ( $items as $item ) {
+			$item  = (array) $item;
+			$qty   = isset( $item['quantity'] ) ? max( 1, (int) $item['quantity'] ) : 1;
+			$label = isset( $item['name'] ) ? $clean( $item['name'] ) : '';
+			$size  = isset( $item['size'] ) ? $clean( $item['size'] ) : '';
+			if ( '' !== $size ) {
+				$label .= ' (' . $size . ')';
+			}
+			$total = isset( $item['line_total'] )
+				? (float) $item['line_total']
+				: ( isset( $item['unit_price'] ) ? (float) $item['unit_price'] * $qty : 0.0 );
+			$lines[] = sprintf( '%d x %s  %s', $qty, $label, $money( $total ) );
+
+			$options = isset( $item['toppings'] ) ? $item['toppings'] : array();
+			if ( is_string( $options ) && '' !== $options ) {
+				$decoded = json_decode( $options, true );
+				$options = is_array( $decoded ) ? $decoded : array();
+			}
+			foreach ( (array) $options as $option ) {
+				if ( is_array( $option ) ) {
+					$option = isset( $option['label'] ) ? $option['label'] : ( isset( $option['name'] ) ? $option['name'] : '' );
+				}
+				$option = $clean( $option );
+				if ( '' !== $option ) {
+					$lines[] = '    + ' . $option;
+				}
+			}
+			$note = isset( $item['notes'] ) ? $clean( $item['notes'] ) : '';
+			if ( '' !== $note ) {
+				$lines[] = '    ' . sprintf( /* translators: %s: line note. */ __( 'Note: %s', 'doughboss' ), $note );
+			}
+		}
+
+		$lines[] = str_repeat( '-', 32 );
+		if ( isset( $order['subtotal'] ) ) {
+			$lines[] = sprintf( /* translators: %s: amount. */ __( 'Subtotal: %s', 'doughboss' ), $money( $order['subtotal'] ) );
+		}
+		$discount = isset( $order['discount'] ) ? (float) $order['discount'] : 0.0;
+		if ( $discount > 0 ) {
+			$voucher = isset( $order['voucher_code'] ) ? $clean( $order['voucher_code'] ) : '';
+			$lines[] = '' !== $voucher
+				? sprintf( /* translators: 1: voucher code, 2: amount. */ __( 'Voucher %1$s: -%2$s', 'doughboss' ), $voucher, $money( $discount ) )
+				: sprintf( /* translators: %s: amount. */ __( 'Discount: -%s', 'doughboss' ), $money( $discount ) );
+		}
+		$delivery_fee = isset( $order['delivery_fee'] ) ? (float) $order['delivery_fee'] : 0.0;
+		if ( $delivery_fee > 0 ) {
+			$lines[] = sprintf( /* translators: %s: amount. */ __( 'Delivery: %s', 'doughboss' ), $money( $delivery_fee ) );
+		}
+		$total   = isset( $order['total'] ) ? (float) $order['total'] : 0.0;
+		$tax     = isset( $order['tax'] ) ? (float) $order['tax'] : 0.0;
+		$lines[] = sprintf( /* translators: %s: amount. */ __( 'Total paid: %s', 'doughboss' ), $money( $total ) );
+		if ( $tax > 0 ) {
+			$lines[] = sprintf( /* translators: %s: amount. */ __( 'Includes GST of %s', 'doughboss' ), $money( $tax ) );
+		}
+
+		$notes = isset( $order['notes'] ) ? $clean( $order['notes'] ) : '';
+		if ( '' !== $notes ) {
+			$lines[] = '';
+			$lines[] = sprintf( /* translators: %s: order notes. */ __( 'Your notes: %s', 'doughboss' ), $notes );
+		}
+
+		$lines[] = '';
+		if ( 'dine_in' === $type ) {
+			$table   = isset( $order['table_label'] ) ? $clean( $order['table_label'] ) : '';
+			$lines[] = '' !== $table
+				? sprintf( /* translators: %s: table label. */ __( 'We will bring your order to table %s.', 'doughboss' ), $table )
+				: __( 'We will bring your order to your table.', 'doughboss' );
+		} elseif ( 'delivery' === $type ) {
+			$address = isset( $order['address'] ) ? $clean( $order['address'] ) : '';
+			$lines[] = __( 'Delivery to:', 'doughboss' );
+			$lines[] = '' !== $address ? $address : __( 'the address you gave at checkout', 'doughboss' );
+		} elseif ( '' !== $timed_label ) {
+			$lines[] = '' !== $shop
+				? sprintf( /* translators: 1: shop name, 2: pickup time such as "Today 12:45pm". */ __( 'Pickup at %1$s, %2$s', 'doughboss' ), $shop, $timed_label )
+				: sprintf( /* translators: %s: pickup time such as "Today 12:45pm". */ __( 'Pickup: %s', 'doughboss' ), $timed_label );
+			$eta_min = isset( $order['pickup_eta_minutes'] ) ? (int) $order['pickup_eta_minutes'] : 0;
+			if ( 'asap' === $timed_mode && $eta_min > 0 ) {
+				$lines[] = sprintf( /* translators: 1: minutes, 2: pickup time. */ __( 'Estimated ready: about %1$d min (%2$s)', 'doughboss' ), $eta_min, $timed_label );
+			}
+		} else {
+			$lines[] = __( 'Pickup from:', 'doughboss' );
+		}
+		if ( '' !== $shop ) {
+			if ( 'pickup' !== $type && '' !== $type ) {
+				$lines[] = '';
+				$lines[] = __( 'Shop:', 'doughboss' );
+			}
+			if ( '' === $timed_label ) {
+				$lines[] = $shop;
+			}
+			$address = isset( $location['address'] ) ? $clean( $location['address'] ) : '';
+			$suburb  = isset( $location['suburb'] ) ? $clean( $location['suburb'] ) : '';
+			if ( '' !== $suburb && false === stripos( $address, $suburb ) ) {
+				$address = '' !== $address ? $address . ', ' . $suburb : $suburb;
+			}
+			if ( '' !== $address ) {
+				$lines[] = $address;
+			}
+			$phone = isset( $location['phone'] ) ? $clean( $location['phone'] ) : '';
+			if ( '' !== $phone ) {
+				$lines[] = sprintf( /* translators: %s: shop phone number. */ __( 'Phone: %s', 'doughboss' ), $phone );
+			}
+		} elseif ( 'pickup' === $type || '' === $type ) {
+			$lines[] = __( 'The shop you selected at checkout.', 'doughboss' );
+		}
+
+		$lines[] = '';
+		$tracking_url = is_string( $tracking_url ) ? trim( $tracking_url ) : '';
+		if ( '' !== $tracking_url ) {
+			$lines[] = sprintf( /* translators: %s: tracking URL. */ __( 'Track your order: %s', 'doughboss' ), $tracking_url );
+			$lines[] = sprintf(
+				/* translators: %s: order number. */
+				__( 'Use order %s and the same email address you used at checkout.', 'doughboss' ),
+				$number
+			);
+		} else {
+			$lines[] = sprintf(
+				/* translators: %s: order number. */
+				__( 'Keep order %s and use it with the same email address on the Track My Order page.', 'doughboss' ),
+				$number
+			);
+		}
+		$lines[] = '';
+		$lines[] = __( 'Questions about your order? Call the shop and quote your order number.', 'doughboss' );
+		$lines[] = '';
+		$lines[] = __( 'Thanks,', 'doughboss' );
+		$lines[] = __( 'Dough Boss', 'doughboss' );
+
+		return array(
+			'subject' => sprintf(
+				/* translators: %s: order number. */
+				__( 'Dough Boss order %s confirmed', 'doughboss' ),
+				$number
+			),
+			'body'    => implode( "\n", $lines ),
+		);
+	}
+
+	/**
+	 * Pure: customer-facing shop name ("Revesby" → "Dough Boss Revesby").
+	 *
+	 * @param string $name Stored location name.
+	 * @return string
+	 */
+	public static function shop_display_name( $name ) {
+		$name = trim( (string) $name );
+		if ( '' === $name ) {
+			return '';
+		}
+		return 0 === stripos( preg_replace( '/\s+/', ' ', $name ), 'dough boss' ) ? $name : 'Dough Boss ' . $name;
 	}
 
 	/**
@@ -118,13 +380,191 @@ class DoughBoss_Emails {
 			return;
 		}
 
-		$eta  = max( 0, (int) $eta_minutes );
+		$eta = max( 0, (int) $eta_minutes );
+		if ( self::is_timed_order( (array) $order ) ) {
+			// A timed order keeps the customer's chosen slot; the {eta_minutes}
+			// template variable therefore means "minutes until that promise".
+			$eta = self::minutes_until_promise( (array) $order );
+		}
 		$vars = self::template_vars( $order, $eta, __( 'Confirmed', 'doughboss' ) );
 
-		$subject = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_accepted_email_subject(), $vars );
-		$body    = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_accepted_email_body( $eta > 0 ), $vars );
+		$subject  = DoughBoss_Settings::render_template( DoughBoss_Settings::tpl_accepted_email_subject(), $vars );
+		$template = DoughBoss_Settings::tpl_accepted_email_body( $eta > 0 );
+		$timed    = self::timed_accepted_body( (array) $order, $eta );
+		if ( '' !== $timed && '' === trim( (string) DoughBoss_Settings::get( 'tpl_accepted_email_body', '' ) ) ) {
+			// Built-in copy only: a chosen pickup time reads better than
+			// "ready in about 1243 minutes" for a tomorrow slot.
+			$template = $timed;
+		}
+		$body = DoughBoss_Settings::render_template( $template, $vars );
 
 		self::deliver( $order, $order_id, 'accepted', $subject, $body );
+	}
+
+	/**
+	 * Built-in accepted-email body for a timed pickup (2.51), or '' to keep the
+	 * standard copy. ASAP orders due within the hour keep "ready in about N
+	 * minutes"; scheduled or later orders name the pickup time instead.
+	 *
+	 * @param array $order Order row as an array.
+	 * @param int   $eta   Minutes until the promise.
+	 * @return string
+	 */
+	public static function timed_accepted_body( array $order, $eta ) {
+		if ( ! self::is_timed_order( $order ) ) {
+			return '';
+		}
+		if ( 'asap' === (string) $order['pickup_mode'] && (int) $eta <= 60 ) {
+			return '';
+		}
+		if ( ! class_exists( 'DoughBoss_Store_Hours' ) || ! method_exists( 'DoughBoss_Store_Hours', 'format_pickup_time' ) || empty( $order['promised_ready_from_utc'] ) ) {
+			return '';
+		}
+		$tz    = ! empty( $order['timezone_snapshot'] ) ? (string) $order['timezone_snapshot'] : 'Australia/Sydney';
+		$label = DoughBoss_Store_Hours::format_pickup_time( (string) $order['promised_ready_from_utc'], $tz );
+		if ( '' === $label ) {
+			return '';
+		}
+		// Placeholder braces are literal here; the label is plain text.
+		return "Hi {customer_name},\n\nGreat news — your order {order_number} is confirmed. It will be ready for pickup: " . $label . ".\n\nOrder total: {total}\n\n{tracking_instructions}\n\nThanks for choosing us — see you soon!\n";
+	}
+
+	/**
+	 * Whether an order row carries a customer-chosen pickup time (2.51).
+	 *
+	 * @param array $order Order row as an array.
+	 * @return bool
+	 */
+	public static function is_timed_order( array $order ) {
+		return isset( $order['pickup_mode'] ) && in_array( (string) $order['pickup_mode'], array( 'asap', 'scheduled' ), true );
+	}
+
+	/**
+	 * Whole minutes from now until the promised pickup start (never negative).
+	 *
+	 * @param array $order Order row as an array.
+	 * @param int   $now   Optional clock for tests (unix time).
+	 * @return int
+	 */
+	public static function minutes_until_promise( array $order, $now = null ) {
+		$from = isset( $order['promised_ready_from_utc'] ) ? strtotime( (string) $order['promised_ready_from_utc'] . ' UTC' ) : false;
+		if ( ! $from ) {
+			return 0;
+		}
+		$now = null === $now ? time() : (int) $now;
+		return max( 0, (int) ceil( ( $from - $now ) / 60 ) );
+	}
+
+	/**
+	 * Customer-facing pickup label for an order row ("Today 12:45pm"), or ''
+	 * when the formatter or the promise is unavailable.
+	 *
+	 * @param array $order Order row as an array.
+	 * @return string
+	 */
+	public static function pickup_label_for_row( array $order ) {
+		if ( empty( $order['promised_ready_from_utc'] ) || ! class_exists( 'DoughBoss_Store_Hours' ) || ! method_exists( 'DoughBoss_Store_Hours', 'format_pickup_time' ) ) {
+			return '';
+		}
+		$timezone = ! empty( $order['timezone_snapshot'] ) ? (string) $order['timezone_snapshot'] : 'Australia/Sydney';
+		return (string) DoughBoss_Store_Hours::format_pickup_time( (string) $order['promised_ready_from_utc'], $timezone );
+	}
+
+	/**
+	 * Staff pushed a timed order back ("+10 min"): tell the customer the new
+	 * pickup time. Shares the accepted-email toggle; the stage key carries the
+	 * order version so each distinct delay is emailed once but replays are not.
+	 *
+	 * @param int    $order_id      Delayed order id.
+	 * @param int    $minutes       Minutes added by this delay.
+	 * @param string $new_from_utc  New promise start, UTC MySQL.
+	 * @return void
+	 */
+	public static function on_order_delayed( $order_id, $minutes = 0, $new_from_utc = '' ) {
+		if ( ! DoughBoss_Settings::email_on_accepted() ) {
+			return;
+		}
+		$order_id = absint( $order_id );
+		if ( ! $order_id ) {
+			return;
+		}
+		$order = DoughBoss_Order::get( $order_id );
+		if ( ! is_object( $order ) ) {
+			return;
+		}
+		$stage = 'delayed:' . ( isset( $order->version ) ? (int) $order->version : 0 );
+		if ( self::already_sent( $order_id, $stage ) ) {
+			return;
+		}
+
+		$row = (array) $order;
+		if ( '' !== (string) $new_from_utc ) {
+			$row['promised_ready_from_utc'] = (string) $new_from_utc;
+		}
+		$label    = self::pickup_label_for_row( $row );
+		$shop     = '';
+		if ( ! empty( $order->location_id ) && class_exists( 'DoughBoss_Locations' ) ) {
+			$location = DoughBoss_Locations::get( (int) $order->location_id );
+			$shop     = is_object( $location ) && isset( $location->name ) ? (string) $location->name : '';
+		}
+		$email = self::delayed_email( $row, (int) $minutes, $label, $shop );
+
+		self::deliver( $order, $order_id, $stage, $email['subject'], $email['body'] );
+	}
+
+	/**
+	 * Pure: build the plain-text "your pickup time moved" email.
+	 *
+	 * @param array  $order        Order row as an array (order_number, customer_name).
+	 * @param int    $minutes      Minutes added by the delay.
+	 * @param string $pickup_label New pickup label such as "Today 1:05pm" ('' when unknown).
+	 * @param string $shop_name    Stored shop name ('' when unknown).
+	 * @return array{subject:string,body:string}
+	 */
+	public static function delayed_email( array $order, $minutes, $pickup_label = '', $shop_name = '' ) {
+		$clean = static function ( $value ) {
+			$value = is_scalar( $value ) ? (string) $value : '';
+			$value = preg_replace( '/[\x00-\x1f\x7f]+/u', ' ', strip_tags( $value ) );
+			return trim( preg_replace( '/ {2,}/', ' ', (string) $value ) );
+		};
+		$number  = isset( $order['order_number'] ) && '' !== (string) $order['order_number']
+			? $clean( $order['order_number'] )
+			: ( isset( $order['id'] ) ? (string) (int) $order['id'] : '' );
+		$name    = isset( $order['customer_name'] ) ? $clean( $order['customer_name'] ) : '';
+		$first   = '' !== $name ? strtok( $name, ' ' ) : '';
+		$shop    = self::shop_display_name( $clean( $shop_name ) );
+		$label   = $clean( $pickup_label );
+		$minutes = max( 0, (int) $minutes );
+
+		$lines   = array();
+		$lines[] = '' !== $first
+			? sprintf( /* translators: %s: customer first name. */ __( 'Hi %s,', 'doughboss' ), $first )
+			: __( 'Hi there,', 'doughboss' );
+		$lines[] = '';
+		$lines[] = '' !== $label
+			? sprintf( /* translators: 1: order number, 2: new pickup time. */ __( 'Sorry, the kitchen is running a little behind. Order %1$s will now be ready for pickup about %2$s.', 'doughboss' ), $number, $label )
+			: sprintf( /* translators: %s: order number. */ __( 'Sorry, the kitchen is running a little behind. Order %s will be ready a little later than planned.', 'doughboss' ), $number );
+		if ( $minutes > 0 ) {
+			$lines[] = sprintf( /* translators: %d: minutes. */ ( 1 === $minutes ? __( 'That is %d minute later than we first said.', 'doughboss' ) : __( 'That is %d minutes later than we first said.', 'doughboss' ) ), $minutes );
+		}
+		if ( '' !== $shop ) {
+			$lines[] = '';
+			$lines[] = sprintf( /* translators: %s: shop name. */ __( 'Pickup from: %s', 'doughboss' ), $shop );
+		}
+		$lines[] = '';
+		$lines[] = __( 'Thanks for your patience.', 'doughboss' );
+		$lines[] = '';
+		$lines[] = __( 'Thanks,', 'doughboss' );
+		$lines[] = __( 'Dough Boss', 'doughboss' );
+
+		return array(
+			'subject' => sprintf(
+				/* translators: %s: order number. */
+				__( 'Dough Boss order %s: new pickup time', 'doughboss' ),
+				$number
+			),
+			'body'    => implode( "\n", $lines ),
+		);
 	}
 
 	/**
@@ -405,7 +845,7 @@ class DoughBoss_Emails {
 	 *
 	 * @param object $order    Order row.
 	 * @param int    $order_id Order id.
-	 * @param string $stage    Stage key ('accepted' or 'ready').
+	 * @param string $stage    Stage key ('placed', 'accepted' or 'ready').
 	 * @param string $subject  Rendered subject.
 	 * @param string $body     Rendered body.
 	 * @return void
@@ -492,6 +932,18 @@ class DoughBoss_Emails {
 	 */
 	private static function delivery_lock_key( $order_id, $stage ) {
 		return self::DELIVERY_LOCK_PREFIX . absint( $order_id ) . '_' . sanitize_key( $stage );
+	}
+
+	/**
+	 * Public read of the stage log (used so the checkout confirmation never
+	 * duplicates the itemised "placed" email).
+	 *
+	 * @param int    $order_id Order id.
+	 * @param string $stage    Stage key.
+	 * @return bool
+	 */
+	public static function stage_sent( $order_id, $stage ) {
+		return self::already_sent( absint( $order_id ), (string) $stage );
 	}
 
 	/**

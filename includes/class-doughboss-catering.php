@@ -39,6 +39,13 @@ class DoughBoss_Catering {
 	 */
 	const MAX_GUESTS = 1000;
 
+	/** Limits for a combined multi-package selection. */
+	const MAX_PACKAGE_LINES = 12;
+	const MAX_PACKAGE_QTY   = 50;
+
+	/** First line of the readable package list stored in an enquiry's notes. */
+	const PACKAGES_NOTE_HEADING = 'Packages selected:';
+
 	/**
 	 * The enquiries table name for the current site.
 	 *
@@ -47,6 +54,38 @@ class DoughBoss_Catering {
 	public static function table() {
 		global $wpdb;
 		return $wpdb->prefix . 'doughboss_catering_enquiries';
+	}
+
+	/**
+	 * Minimum catering notice in business days (Mon–Fri). Default 2 (≈48h
+	 * excluding weekends); 0 disables the check.
+	 *
+	 * @return int
+	 */
+	public static function min_notice_business_days() {
+		$days = (int) DoughBoss_Settings::get( 'catering_min_notice_business_days', 2 );
+		return max( 0, min( 30, $days ) );
+	}
+
+	/**
+	 * Earliest event date allowed: today plus N business days, skipping
+	 * Saturdays and Sundays. A Friday request with 2 days' notice → Tuesday.
+	 *
+	 * @param string $today         Y-m-d (shop-local).
+	 * @param int    $business_days Required business days.
+	 * @return string Y-m-d
+	 */
+	public static function earliest_event_date( $today, $business_days ) {
+		$ts   = strtotime( substr( (string) $today, 0, 10 ) . ' 12:00:00 UTC' );
+		$left = max( 0, (int) $business_days );
+		while ( $left > 0 ) {
+			$ts += DAY_IN_SECONDS;
+			$dow = (int) gmdate( 'N', $ts );
+			if ( $dow <= 5 ) {
+				$left--;
+			}
+		}
+		return gmdate( 'Y-m-d', $ts );
 	}
 
 	/**
@@ -142,6 +181,278 @@ class DoughBoss_Catering {
 	}
 
 	/**
+	 * Validate a combined package selection.
+	 *
+	 * Accepts a list of {id, qty} objects/arrays (the JSON body) or the compact
+	 * query form "12:2,14:1" (the read-only quote route). Duplicate IDs are
+	 * merged. Only IDs and quantities are read: names and prices always come
+	 * from the package posts in quote_packages().
+	 *
+	 * @param mixed $raw Raw selection.
+	 * @return array<int,array{id:int,qty:int}>|WP_Error Empty array when nothing was selected.
+	 */
+	public static function normalise_packages( $raw ) {
+		if ( null === $raw || '' === $raw || array() === $raw ) {
+			return array();
+		}
+		$entries = array();
+		if ( is_string( $raw ) ) {
+			foreach ( explode( ',', $raw ) as $part ) {
+				$part = trim( $part );
+				if ( '' === $part ) {
+					continue;
+				}
+				if ( ! preg_match( '/^([0-9]{1,10}):([0-9]{1,3})$/', $part, $match ) ) {
+					return self::packages_error();
+				}
+				$entries[] = array( 'id' => $match[1], 'qty' => $match[2] );
+			}
+		} elseif ( is_array( $raw ) ) {
+			foreach ( $raw as $entry ) {
+				if ( is_object( $entry ) ) {
+					$entry = get_object_vars( $entry );
+				}
+				if ( ! is_array( $entry ) || ! array_key_exists( 'id', $entry ) || ! array_key_exists( 'qty', $entry ) ) {
+					return self::packages_error();
+				}
+				$entries[] = array( 'id' => $entry['id'], 'qty' => $entry['qty'] );
+			}
+		} else {
+			return self::packages_error();
+		}
+
+		$lines = array();
+		foreach ( $entries as $entry ) {
+			$id  = $entry['id'];
+			$qty = $entry['qty'];
+			$id_ok  = ( is_int( $id ) && $id > 0 ) || ( is_string( $id ) && preg_match( '/^[1-9][0-9]{0,9}$/', $id ) );
+			$qty_ok = ( is_int( $qty ) && $qty >= 0 ) || ( is_string( $qty ) && preg_match( '/^[0-9]{1,3}$/', $qty ) );
+			if ( ! $id_ok || ! $qty_ok ) {
+				return self::packages_error();
+			}
+			$id  = (int) $id;
+			$qty = (int) $qty;
+			if ( 0 === $qty ) {
+				continue;
+			}
+			$lines[ $id ] = ( isset( $lines[ $id ] ) ? $lines[ $id ] : 0 ) + $qty;
+			if ( $lines[ $id ] > self::MAX_PACKAGE_QTY ) {
+				return new WP_Error(
+					'doughboss_catering_packages_quantity',
+					sprintf(
+						/* translators: %d: maximum quantity per package. */
+						__( 'Up to %d of each package can be requested online — please call us for larger orders.', 'doughboss' ),
+						self::MAX_PACKAGE_QTY
+					),
+					array( 'status' => 400 )
+				);
+			}
+		}
+		if ( count( $lines ) > self::MAX_PACKAGE_LINES ) {
+			return self::packages_error();
+		}
+
+		$out = array();
+		foreach ( $lines as $id => $qty ) {
+			$out[] = array( 'id' => (int) $id, 'qty' => (int) $qty );
+		}
+		return $out;
+	}
+
+	/**
+	 * @return WP_Error
+	 */
+	private static function packages_error() {
+		return new WP_Error(
+			'doughboss_catering_packages_invalid',
+			__( 'That package selection could not be read. Please refresh the page and choose your packages again.', 'doughboss' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	/**
+	 * Price a combined package selection entirely server-side.
+	 *
+	 * A single package at quantity one is priced exactly like quote() (so the
+	 * per-head overflow rule and every existing quote are unchanged). Any other
+	 * selection is the sum of each package's base price × quantity; no per-head
+	 * overflow is added because the customer chose the quantities. The deposit
+	 * uses the highest deposit percentage and the longest lead time among the
+	 * selected packages. Client-reported prices are never read.
+	 *
+	 * @param array<int,array{id:int,qty:int}> $lines        From normalise_packages().
+	 * @param int                              $guest_count  Guests.
+	 * @param string                           $order_type   'pickup' or 'delivery'.
+	 * @param float                            $delivery_fee Flat delivery fee (delivery only).
+	 * @return array<string,mixed>|WP_Error
+	 */
+	public static function quote_packages( array $lines, $guest_count, $order_type, $delivery_fee = 0.0 ) {
+		if ( ! $lines ) {
+			return self::quote( 0, $guest_count, $order_type, $delivery_fee );
+		}
+
+		$priced      = array();
+		$subtotal    = 0.0;
+		$deposit_pct = 0;
+		$lead_days   = 0;
+		$capacity    = 0;
+		$capacity_ok = true;
+		foreach ( $lines as $line ) {
+			$id      = absint( $line['id'] );
+			$qty     = absint( $line['qty'] );
+			$package = $id ? get_post( $id ) : null;
+			if ( ! $id || $qty < 1 || ! $package || DoughBoss_Catering_Package::POST_TYPE !== $package->post_type || 'publish' !== $package->post_status ) {
+				return new WP_Error(
+					'doughboss_catering_package_unavailable',
+					__( 'That catering package is no longer available. Please choose another package or make a custom enquiry.', 'doughboss' ),
+					array( 'status' => 400 )
+				);
+			}
+			$unit       = round( (float) get_post_meta( $id, DoughBoss_Catering_Package::META_BASE_PRICE, true ), 2 );
+			$serves_max = (int) get_post_meta( $id, DoughBoss_Catering_Package::META_SERVES_MAX, true );
+			$line_total = round( $unit * $qty, 2 );
+			$subtotal  += $line_total;
+			$deposit_pct = max( $deposit_pct, DoughBoss_Catering_Package::deposit_pct( $id ) );
+			$lead_days   = max( $lead_days, DoughBoss_Catering_Package::lead_days( $id ) );
+			if ( $serves_max > 0 ) {
+				$capacity += $serves_max * $qty;
+			} else {
+				$capacity_ok = false;
+			}
+			$priced[] = array(
+				'id'         => $id,
+				'name'       => DoughBoss_Post_Types::plain_menu_title( (string) $package->post_title ),
+				'qty'        => $qty,
+				'unit_price' => $unit,
+				'line_total' => $line_total,
+			);
+		}
+
+		if ( 1 === count( $lines ) && 1 === (int) $lines[0]['qty'] ) {
+			$quote = self::quote( (int) $lines[0]['id'], $guest_count, $order_type, $delivery_fee );
+			if ( is_wp_error( $quote ) ) {
+				return $quote;
+			}
+			// Report the overflow-inclusive subtotal on the single line too.
+			$priced[0]['line_total'] = (float) $quote['subtotal'];
+		} else {
+			$delivery = 'delivery' === $order_type;
+			$fee      = $delivery ? max( 0.0, round( (float) $delivery_fee, 2 ) ) : 0.0;
+			$subtotal = round( $subtotal, 2 );
+			$total    = round( $subtotal + $fee, 2 );
+			$deposit  = round( $total * $deposit_pct / 100, 2 );
+			$quote    = array(
+				'subtotal'     => $subtotal,
+				'delivery_fee' => $fee,
+				'total'        => $total,
+				'deposit_pct'  => $deposit_pct,
+				'deposit'      => $deposit,
+				'balance'      => round( $total - $deposit, 2 ),
+				'lead_days'    => $lead_days,
+				'currency'     => (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ),
+			);
+		}
+
+		if ( $quote['subtotal'] > self::MAX_QUOTE_AMOUNT ) {
+			return new WP_Error( 'doughboss_catering_quote_too_large', __( 'That selection is too large for an online enquiry — please call us to arrange it.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+
+		$quote['lines']      = $priced;
+		$quote['serves_max'] = $capacity_ok ? $capacity : 0;
+		return $quote;
+	}
+
+	/**
+	 * Readable, staff-facing package list stored at the top of the enquiry
+	 * notes. Built only from server-priced quote lines.
+	 *
+	 * @param array<string,mixed> $quote Output of quote_packages() with lines.
+	 * @return string
+	 */
+	public static function packages_note( array $quote ) {
+		if ( empty( $quote['lines'] ) || ! is_array( $quote['lines'] ) ) {
+			return '';
+		}
+		$out = array( self::PACKAGES_NOTE_HEADING );
+		foreach ( $quote['lines'] as $line ) {
+			$out[] = sprintf(
+				'%1$d × %2$s — %3$s',
+				(int) $line['qty'],
+				str_replace( array( "\r", "\n" ), ' ', (string) $line['name'] ),
+				DoughBoss_Settings::format_price( (float) $line['line_total'] )
+			);
+		}
+		$out[] = 'Package subtotal: ' . DoughBoss_Settings::format_price( (float) $quote['subtotal'] );
+		return implode( "\n", $out );
+	}
+
+	/**
+	 * Package label for emails and staff screens: the stored package list when
+	 * present, else the single package title, else "Custom".
+	 *
+	 * @param array<string,mixed> $enquiry Enquiry row.
+	 * @return string
+	 */
+	public static function package_label( array $enquiry ) {
+		$notes = isset( $enquiry['notes'] ) ? str_replace( "\r\n", "\n", (string) $enquiry['notes'] ) : '';
+		if ( 0 === strpos( $notes, self::PACKAGES_NOTE_HEADING . "\n" ) ) {
+			$items = array();
+			foreach ( array_slice( explode( "\n", $notes ), 1 ) as $line ) {
+				if ( '' === trim( $line ) || 0 === strpos( $line, 'Package subtotal:' ) ) {
+					break;
+				}
+				$parts   = explode( ' — ', $line );
+				$items[] = trim( $parts[0] );
+			}
+			if ( $items ) {
+				return implode( '; ', $items );
+			}
+		}
+		$package_id = isset( $enquiry['package_id'] ) ? (int) $enquiry['package_id'] : 0;
+		return $package_id ? wp_specialchars_decode( get_the_title( $package_id ), ENT_QUOTES ) : __( 'Custom', 'doughboss' );
+	}
+
+	/**
+	 * Shop slugs that prepare catering. Catering is pickup from Revesby only.
+	 *
+	 * @return string[]
+	 */
+	public static function catering_location_slugs() {
+		$slugs = function_exists( 'apply_filters' ) ? apply_filters( 'doughboss_catering_location_slugs', array( 'revesby' ) ) : array( 'revesby' );
+		return array_values( array_filter( array_map( 'sanitize_key', (array) $slugs ) ) );
+	}
+
+	/**
+	 * Active location IDs that accept catering, in display order. Empty when
+	 * no configured shop matches (legacy installs keep their old routing).
+	 *
+	 * @return int[]
+	 */
+	public static function catering_location_ids() {
+		if ( ! class_exists( 'DoughBoss_Locations' ) ) {
+			return array();
+		}
+		$slugs = self::catering_location_slugs();
+		$ids   = array();
+		foreach ( DoughBoss_Locations::all( true ) as $location ) {
+			if ( is_object( $location ) && isset( $location->slug, $location->id ) && in_array( sanitize_key( (string) $location->slug ), $slugs, true ) ) {
+				$ids[] = (int) $location->id;
+			}
+		}
+		return $ids;
+	}
+
+	/**
+	 * Whether online catering enquiries may request delivery. Off: catering is
+	 * pickup only. Filterable for a future delivery service.
+	 *
+	 * @return bool
+	 */
+	public static function delivery_enabled() {
+		return function_exists( 'apply_filters' ) ? (bool) apply_filters( 'doughboss_catering_delivery_enabled', false ) : false;
+	}
+
+	/**
 	 * Create a catering enquiry from (already-trusted-as-strings) input.
 	 *
 	 * All pricing is recomputed via quote(); any totals in $data are ignored.
@@ -172,10 +483,46 @@ class DoughBoss_Catering {
 		if ( '' !== $event_date && $event_date < current_time( 'Y-m-d' ) ) {
 			return new WP_Error( 'doughboss_catering_date', __( 'The event date can’t be in the past.', 'doughboss' ), array( 'status' => 400 ) );
 		}
+		$notice_days = self::min_notice_business_days();
+		if ( '' !== $event_date && $notice_days > 0 ) {
+			$earliest = self::earliest_event_date( current_time( 'Y-m-d' ), $notice_days );
+			if ( $event_date < $earliest ) {
+				return new WP_Error(
+					'doughboss_catering_notice',
+					sprintf(
+						/* translators: 1: number of business days, 2: earliest date */
+						__( 'Catering needs at least %1$d business days’ notice (weekends don’t count). The earliest date we can take online is %2$s — for anything sooner, please call us.', 'doughboss' ),
+						$notice_days,
+						mysql2date( 'l j F Y', $earliest . ' 00:00:00' )
+					),
+					array( 'status' => 400, 'earliest_date' => $earliest )
+				);
+			}
+		}
 
-		$quote = self::quote( $package_id, $guest_count, $order_type, $delivery );
-		if ( is_wp_error( $quote ) ) {
-			return $quote;
+		// A combined selection (packages[]) replaces the single package_id when
+		// present; package_id alone keeps working exactly as before.
+		$lines = self::normalise_packages( isset( $data['packages'] ) ? $data['packages'] : null );
+		if ( is_wp_error( $lines ) ) {
+			return $lines;
+		}
+		$packages_note = '';
+		if ( $lines ) {
+			$quote = self::quote_packages( $lines, $guest_count, $order_type, $delivery );
+			if ( is_wp_error( $quote ) ) {
+				return $quote;
+			}
+			$package_id    = 1 === count( $lines ) ? (int) $lines[0]['id'] : 0;
+			$packages_note = self::packages_note( $quote );
+		} else {
+			$quote = self::quote( $package_id, $guest_count, $order_type, $delivery );
+			if ( is_wp_error( $quote ) ) {
+				return $quote;
+			}
+		}
+		$notes = isset( $data['notes'] ) ? sanitize_textarea_field( $data['notes'] ) : '';
+		if ( '' !== $packages_note ) {
+			$notes = '' !== $notes ? $packages_note . "\n\n" . $notes : $packages_note;
 		}
 
 		$number = self::generate_enquiry_number();
@@ -195,7 +542,7 @@ class DoughBoss_Catering {
 			'order_type'     => $order_type,
 			'address'        => isset( $data['address'] ) ? sanitize_textarea_field( $data['address'] ) : '',
 			'dietary'        => isset( $data['dietary'] ) ? sanitize_textarea_field( $data['dietary'] ) : '',
-			'notes'          => isset( $data['notes'] ) ? sanitize_textarea_field( $data['notes'] ) : '',
+			'notes'          => $notes,
 			'subtotal'       => $quote['subtotal'],
 			'delivery_fee'   => $quote['delivery_fee'],
 			'quote_total'    => $quote['total'],

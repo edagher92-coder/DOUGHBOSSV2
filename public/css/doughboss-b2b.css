@@ -1,0 +1,128 @@
+/* DoughBoss wholesale / franchising enquiry form ([doughboss_b2b_form]). */
+.db-b2b-form {
+	--db-b2b-ink: #151210;
+	--db-b2b-muted: #5c5852;
+	--db-b2b-line: rgba(21, 18, 16, .18);
+	--db-b2b-accent: #c92017;
+	color: var(--db-b2b-ink);
+	font-family: inherit;
+}
+
+.db-b2b-required-note {
+	margin: 0 0 1rem;
+	color: var(--db-b2b-muted);
+	font-size: .85rem;
+}
+
+.db-b2b-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem 1.25rem;
+}
+
+.db-b2b-field {
+	display: flex;
+	flex-direction: column;
+	gap: .35rem;
+	min-width: 0;
+	margin: 0;
+}
+
+.db-b2b-field--wide { grid-column: 1 / -1; }
+
+.db-b2b-field label {
+	font-size: .9rem;
+	font-weight: 700;
+}
+
+.db-b2b-field input,
+.db-b2b-field textarea {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 48px;
+	padding: .7rem .85rem;
+	border: 1px solid var(--db-b2b-line);
+	border-radius: 10px;
+	background: #fff;
+	color: var(--db-b2b-ink);
+	font: inherit;
+	font-size: 1rem;
+}
+
+.db-b2b-field textarea { min-height: 128px; resize: vertical; }
+
+.db-b2b-field input:focus-visible,
+.db-b2b-field textarea:focus-visible {
+	border-color: var(--db-b2b-ink);
+	outline: 3px solid rgba(201, 32, 23, .35);
+	outline-offset: 1px;
+}
+
+.db-b2b-field [aria-invalid="true"] { border-color: var(--db-b2b-accent); }
+
+.db-b2b-error {
+	min-height: 0;
+	color: var(--db-b2b-accent);
+	font-size: .82rem;
+	font-weight: 600;
+}
+
+.db-b2b-error:empty { display: none; }
+
+.db-b2b-hp {
+	position: absolute !important;
+	left: -10000px !important;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}
+
+.db-b2b-status { margin: 1rem 0 0; font-weight: 700; }
+.db-b2b-status:empty { display: none; }
+.db-b2b-status.is-success { padding: .85rem 1rem; border-left: 4px solid #2f7a3d; border-radius: 8px; background: #edf6ee; color: #1f5228; }
+.db-b2b-status.is-error { padding: .85rem 1rem; border-left: 4px solid var(--db-b2b-accent); border-radius: 8px; background: #fdeeed; color: #8a1711; }
+
+.db-b2b-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: .75rem 1.25rem;
+	margin-top: 1.25rem;
+}
+
+.db-b2b-submit {
+	min-height: 50px;
+	padding: .8rem 1.5rem;
+	border: 1px solid #e2231a;
+	border-radius: 999px;
+	background: #e2231a;
+	color: #fff;
+	cursor: pointer;
+	font: inherit;
+	font-weight: 800;
+}
+
+.db-b2b-submit:hover,
+.db-b2b-submit:focus-visible { background: #b71912; border-color: #b71912; }
+.db-b2b-submit:focus-visible { outline: 3px solid var(--db-b2b-ink); outline-offset: 2px; }
+.db-b2b-submit:disabled { cursor: progress; opacity: .7; }
+
+.db-b2b-direct {
+	margin: 0;
+	color: var(--db-b2b-muted);
+	font-size: .9rem;
+}
+
+.db-b2b-direct a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	color: var(--db-b2b-accent);
+	font-weight: 700;
+	text-underline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+	.db-b2b-grid { grid-template-columns: minmax(0, 1fr); }
+	.db-b2b-submit { width: 100%; }
+}

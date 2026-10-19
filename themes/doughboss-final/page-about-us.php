@@ -1,6 +1,6 @@
 <?php get_header(); ?>
-<section class="dbf-page-hero">
-	<?php echo doughboss_final_asset_image( 'doughboss-feast-real-v1.jpg', '', array( 'class' => 'dbf-page-hero-bg', 'decoding' => 'async', 'fetchpriority' => 'high' ) ); ?>
+<section class="dbf-page-hero db-about-hero">
+	<?php echo doughboss_final_asset_image( 'menu/real-v1/dough-boss-pie.jpg', __( 'Two golden Dough Boss pies on a wooden board', 'doughboss-final' ), array( 'class' => 'dbf-page-hero-bg', 'decoding' => 'async', 'fetchpriority' => 'high', 'sizes' => '(max-width: 720px) calc(100vw - 40px), 550px' ) ); ?>
 	<div class="dbf-wrap dbf-page-hero-inner"><p class="dbf-eyebrow">Our story</p><h1 class="dbf-display">Mediterranean roots.<br><em>Sydney energy.</em></h1><p class="dbf-lede">A contemporary Lebanese bakery built on recipes passed down through generations and food made fresh for the people around us.</p></div>
 </section>
 <section class="dbf-section dbf-section--dark"><div class="dbf-wrap dbf-story-grid">

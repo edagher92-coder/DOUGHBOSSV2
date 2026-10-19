@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * installed. The database remains the source of truth for shop details.
  */
 class DoughBoss_SEO {
+	/** Script-safe JSON encoding shared by the production output and pure tests. */
+	const SCHEMA_JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
 	/**
 	 * Public storefront shortcodes that opt a page into DoughBoss metadata.
@@ -40,6 +42,7 @@ class DoughBoss_SEO {
 	public function init() {
 		add_filter( 'document_title_parts', array( $this, 'title_parts' ) );
 		add_filter( 'robots_txt', array( $this, 'robots_txt' ), 20, 2 );
+		add_filter( 'wp_robots', array( $this, 'robots' ), 20 );
 		add_action( 'wp_head', array( $this, 'head' ), 5 );
 	}
 
@@ -77,6 +80,28 @@ class DoughBoss_SEO {
 	}
 
 	/**
+	 * Public discovery copy; no customer state or unconfirmed service promises.
+	 *
+	 * @param string $page Public page key.
+	 * @return array{title:string,description:string}|null
+	 */
+	public static function discovery_copy( $page ) {
+		if ( 'catering' === $page ) {
+			return array(
+				'title'       => __( 'Corporate & Event Catering Sydney | Dough Boss Revesby', 'doughboss' ),
+				'description' => __( 'Office meetings, business lunches and events: plan a Dough Boss spread of mini manoush, pies and platters. Revesby pickup; availability and final pricing confirmed.', 'doughboss' ),
+			);
+		}
+		if ( 'members-events' === $page ) {
+			return array(
+				'title'       => __( 'Dough Boss Members & Events | Catering & Order Updates', 'doughboss' ),
+				'description' => __( 'Find order updates, catering contacts, app shortcuts and the current Square membership status for Dough Boss Revesby.', 'doughboss' ),
+			);
+		}
+		return null;
+	}
+
+	/**
 	 * Resolve page-specific copy without guessing from customer data.
 	 *
 	 * @return array{title:string,description:string}
@@ -85,15 +110,28 @@ class DoughBoss_SEO {
 		$post    = get_post();
 		$content = $post instanceof WP_Post ? $post->post_content : '';
 		if ( is_page( 'catering' ) || has_shortcode( $content, 'doughboss_catering' ) ) {
+			return self::discovery_copy( 'catering' );
+		}
+		if ( is_page( 'members-events' ) ) {
+			return self::discovery_copy( 'members-events' );
+		}
+		// /order/ and /menu/ render the same template; give each its own title.
+		if ( is_page( 'order' ) ) {
 			return array(
-				'title'       => __( 'Dough Boss Catering | Manoush & Pies Sydney', 'doughboss' ),
-				'description' => __( 'Plan a fresh Sydney catering spread with zaatar, cheese and meat manoush plus spinach, haloumi, chicken and shanklish pies.', 'doughboss' ),
+				'title'       => DoughBoss_Settings::ordering_open()
+					? __( 'Order Online for Pickup | Dough Boss Revesby', 'doughboss' )
+					: __( 'Online Ordering | Dough Boss Revesby', 'doughboss' ),
+				'description' => DoughBoss_Settings::ordering_open()
+					? __( 'Order fresh-baked manoush, pizza, golden pies and wraps online for pickup from Dough Boss Revesby.', 'doughboss' )
+					: __( 'Online ordering at Dough Boss is paused. Browse the menu and check your preferred shop before visiting.', 'doughboss' ),
 			);
 		}
-		if ( is_page( array( 'menu', 'order' ) ) || has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {
+		if ( is_page( 'menu' ) || has_shortcode( $content, 'doughboss_menu' ) || has_shortcode( $content, 'doughboss_builder' ) || has_shortcode( $content, 'doughboss_cart' ) ) {
 			return array(
 				'title'       => __( 'Dough Boss Menu | Manoush, Pizza & Pies Sydney', 'doughboss' ),
-				'description' => __( 'Browse fresh-baked manoush, pizza, golden pies and wraps. Order pickup from Dough Boss Revesby.', 'doughboss' ),
+				'description' => DoughBoss_Settings::ordering_open()
+					? __( 'Browse fresh-baked manoush, pizza, golden pies and wraps. Order pickup from Dough Boss Revesby.', 'doughboss' )
+					: __( 'Browse the Dough Boss menu of manoush, pizza, pies and wraps. Online ordering is paused.', 'doughboss' ),
 			);
 		}
 		if ( is_page( 'locations' ) ) {
@@ -127,6 +165,23 @@ class DoughBoss_SEO {
 		}
 		return rtrim( $output ) . "\nSitemap: " . esc_url_raw( home_url( '/wp-sitemap.xml' ) ) . "\n";
 	}
+	/**
+	 * Add preview hints to WordPress's single robots tag without overriding restrictions.
+	 *
+	 * @param array<string,mixed> $robots Existing WordPress robots directives.
+	 * @return array<string,mixed>
+	 */
+	public function robots( $robots ) {
+		if ( ! is_array( $robots ) || $this->dedicated_seo_plugin_active() || ! $this->relevant_page() || ! get_option( 'blog_public', 1 ) ) {
+			return $robots;
+		}
+		foreach ( array( 'noindex', 'nofollow', 'nosnippet', 'noimageindex' ) as $restriction ) {
+			if ( ! empty( $robots[ $restriction ] ) ) {
+				return $robots;
+			}
+		}
+		return $robots + array( 'max-image-preview' => 'large', 'max-snippet' => '-1', 'max-video-preview' => '-1' );
+	}
 
 	/**
 	 * Improve the native WordPress document title on storefront pages.
@@ -145,13 +200,47 @@ class DoughBoss_SEO {
 	}
 
 	/**
-	 * Convert weekly location hours into Schema.org specifications.
+	 * Published shop facts (doughboss.com.au, October 2026), used only where a
+	 * stored location field is blank. Keyed by location slug fragment.
 	 *
-	 * @param int $location_id Location id.
+	 * @return array<string,array<string,mixed>>
+	 */
+	public static function shop_facts() {
+		$every_day = array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' );
+		return array(
+			'revesby'   => array(
+				'street'   => 'Shop 12/25 Selems Parade',
+				'locality' => 'Revesby',
+				'postcode' => '2212',
+				'phone'    => '(02) 9774 2286',
+				'hours'    => array_fill_keys( $every_day, '06:30-14:30' ),
+			),
+			'bankstown' => array(
+				'street'   => '462 Chapel Road',
+				'locality' => 'Bankstown',
+				'postcode' => '2200',
+				'phone'    => '(02) 8764 6783',
+				'hours'    => array_fill_keys( array( 'mon', 'tue', 'wed', 'thu', 'fri' ), '07:00-14:00' ),
+			),
+			'roselands' => array(
+				'street'   => 'Shop MM03, Roselands Drive (Roselands Centro)',
+				'locality' => 'Roselands',
+				'postcode' => '2196',
+				'phone'    => '0466 353 133',
+				'hours'    => array_fill_keys( $every_day, '08:00-15:00' ),
+			),
+		);
+	}
+
+	/**
+	 * Pure: convert mon..sun "HH:MM-HH:MM[, ...]" ranges into Schema.org
+	 * OpeningHoursSpecification nodes, grouping days that share a range.
+	 *
+	 * @param array<string,string> $hours mon..sun => ranges.
 	 * @return array<int,array<string,mixed>>
 	 */
-	private function opening_hours( $location_id ) {
-		$days  = array(
+	public static function opening_hours_spec( array $hours ) {
+		$days   = array(
 			'mon' => 'Monday',
 			'tue' => 'Tuesday',
 			'wed' => 'Wednesday',
@@ -160,33 +249,153 @@ class DoughBoss_SEO {
 			'sat' => 'Saturday',
 			'sun' => 'Sunday',
 		);
-		$hours = DoughBoss_Locations::weekly_hours( $location_id );
-		$out   = array();
+		$groups = array();
 		foreach ( $days as $key => $day ) {
 			if ( empty( $hours[ $key ] ) ) {
 				continue;
 			}
-			foreach ( explode( ',', $hours[ $key ] ) as $range ) {
-				if ( ! preg_match( '/^\s*([0-2][0-9]:[0-5][0-9])-([0-2][0-9]:[0-5][0-9])\s*$/', $range, $matches ) ) {
+			foreach ( explode( ',', (string) $hours[ $key ] ) as $range ) {
+				if ( ! preg_match( '/^\s*([01][0-9]|2[0-3]):([0-5][0-9])-([01][0-9]|2[0-3]):([0-5][0-9])\s*$/', $range, $m ) ) {
 					continue;
 				}
-				$out[] = array(
-					'@type'     => 'OpeningHoursSpecification',
-					'dayOfWeek' => $day,
-					'opens'     => $matches[1],
-					'closes'    => $matches[2],
-				);
+				$span = $m[1] . ':' . $m[2] . '-' . $m[3] . ':' . $m[4];
+				if ( ! isset( $groups[ $span ] ) ) {
+					$groups[ $span ] = array();
+				}
+				$groups[ $span ][] = $day;
 			}
+		}
+		$out = array();
+		foreach ( $groups as $span => $group_days ) {
+			list( $opens, $closes ) = explode( '-', $span );
+			$out[] = array(
+				'@type'     => 'OpeningHoursSpecification',
+				'dayOfWeek' => count( $group_days ) > 1 ? $group_days : $group_days[0],
+				'opens'     => $opens,
+				'closes'    => $closes,
+			);
 		}
 		return $out;
 	}
 
 	/**
-	 * Build the production-domain schema graph from live shop records.
+	 * Pure: one schema.org Bakery node for a shop. Stored location fields win;
+	 * the published facts only fill blanks. No price range is claimed.
 	 *
+	 * @param array  $location     Location row as an array (id, name, slug, suburb, address, phone).
+	 * @param array  $stored_hours mon..sun => ranges from stored location hours (may be empty).
+	 * @param string $home         Home URL.
+	 * @param string $url          Public page for the shop (locations page).
+	 * @param string $image        Image URL.
+	 * @param string $org_id       Organization @id.
 	 * @return array<string,mixed>
 	 */
-	private function schema() {
+	public static function location_node( array $location, array $stored_hours, $home, $url, $image, $org_id ) {
+		$clean = static function ( $value ) {
+			return trim( preg_replace( '/\s+/', ' ', is_scalar( $value ) ? (string) $value : '' ) );
+		};
+		$slug  = strtolower( $clean( isset( $location['slug'] ) ? $location['slug'] : '' ) . ' ' . $clean( isset( $location['name'] ) ? $location['name'] : '' ) );
+		$facts = array();
+		foreach ( self::shop_facts() as $key => $candidate ) {
+			if ( false !== strpos( $slug, $key ) ) {
+				$facts = $candidate;
+				break;
+			}
+		}
+		$name     = $clean( isset( $location['name'] ) ? $location['name'] : '' );
+		$name     = '' === $name && ! empty( $facts['locality'] ) ? $facts['locality'] : $name;
+		$name     = 0 === stripos( $name, 'dough boss' ) ? $name : trim( 'Dough Boss ' . $name );
+		$street   = $clean( isset( $location['address'] ) ? $location['address'] : '' );
+		$street   = '' !== $street ? $street : ( isset( $facts['street'] ) ? $facts['street'] : '' );
+		$locality = $clean( isset( $location['suburb'] ) ? $location['suburb'] : '' );
+		$locality = '' !== $locality ? $locality : ( isset( $facts['locality'] ) ? $facts['locality'] : '' );
+		$phone    = $clean( isset( $location['phone'] ) ? $location['phone'] : '' );
+		$phone    = '' !== $phone ? $phone : ( isset( $facts['phone'] ) ? $facts['phone'] : '' );
+		$postcode = isset( $facts['postcode'] ) ? $facts['postcode'] : ( preg_match( '/\b(2\d{3})\b/', $street, $pm ) ? $pm[1] : '' );
+
+		$address = array(
+			'@type'           => 'PostalAddress',
+			'streetAddress'   => $street,
+			'addressLocality' => $locality,
+			'addressRegion'   => 'NSW',
+			'addressCountry'  => 'AU',
+		);
+		if ( '' !== $postcode ) {
+			$address['postalCode'] = $postcode;
+		}
+		$node = array(
+			'@type'              => 'Bakery',
+			'@id'                => rtrim( (string) $home, '/' ) . '/#location-' . preg_replace( '/[^a-z0-9-]/', '', strtolower( $clean( isset( $location['slug'] ) ? $location['slug'] : '' ) ) ),
+			'name'               => $name,
+			'url'                => (string) $url,
+			'image'              => (string) $image,
+			'servesCuisine'      => 'Lebanese',
+			'parentOrganization' => array( '@id' => (string) $org_id ),
+			'address'            => $address,
+			'hasMap'             => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode( trim( $name . ' ' . $street . ' ' . $locality . ' NSW ' . $postcode ) ),
+		);
+		if ( '' !== $phone ) {
+			$node['telephone'] = $phone;
+		}
+		$opening = self::opening_hours_spec( $stored_hours );
+		if ( ! $opening && ! empty( $facts['hours'] ) ) {
+			$opening = self::opening_hours_spec( $facts['hours'] );
+		}
+		if ( $opening ) {
+			$node['openingHoursSpecification'] = $opening;
+		}
+		return $node;
+	}
+
+	/**
+	 * Canonical public page context, plus the catering service when applicable.
+	 * No prices, ratings, delivery coverage, events or customer records are inferred.
+	 *
+	 * @param array  $copy     Public title and description.
+	 * @param string $url      WordPress canonical page URL.
+	 * @param string $home     Site home URL.
+	 * @param bool   $catering Whether the page presents the catering service.
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function page_nodes( array $copy, $url, $home, $catering = false ) {
+		$organization = rtrim( (string) $home, '/' ) . '/#organization';
+		$page = array(
+			'@type'       => 'WebPage',
+			'@id'         => rtrim( (string) $url, '/' ) . '/#webpage',
+			'url'         => (string) $url,
+			'name'        => (string) $copy['title'],
+			'description' => (string) $copy['description'],
+			'inLanguage'  => 'en-AU',
+			'isPartOf'    => array( '@id' => rtrim( (string) $home, '/' ) . '/#website' ),
+			'about'       => array( '@id' => $organization ),
+		);
+		if ( ! $catering ) {
+			return array( $page );
+		}
+		$service_id = rtrim( (string) $url, '/' ) . '/#catering-service';
+		$page['mainEntity'] = array( '@id' => $service_id );
+		return array(
+			$page,
+			array(
+				'@type'       => 'Service',
+				'@id'         => $service_id,
+				'name'        => __( 'Dough Boss catering', 'doughboss' ),
+				'serviceType' => __( 'Corporate, office and event catering', 'doughboss' ),
+				'url'         => (string) $url,
+				'description' => (string) $copy['description'],
+				'provider'    => array( '@id' => $organization ),
+			),
+		);
+	}
+
+	/**
+	 * Build the canonical public schema graph from live shop records.
+	 *
+	 * @param array  $copy Public page metadata.
+	 * @param string $url  WordPress canonical page URL.
+	 * @return array<string,mixed>
+	 */
+	private function schema( array $copy, $url ) {
 		$home         = home_url( '/' );
 		$organization = trailingslashit( $home ) . '#organization';
 		$image        = DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-social-card.jpg';
@@ -208,33 +417,21 @@ class DoughBoss_SEO {
 				'publisher' => array( '@id' => $organization ),
 			),
 		);
+		$post = get_post();
+		$is_catering = is_page( 'catering' ) || ( $post instanceof WP_Post && has_shortcode( $post->post_content, 'doughboss_catering' ) );
+		$graph = array_merge( $graph, self::page_nodes( $copy, $url, $home, $is_catering ) );
+		// One schema.org Bakery per active shop. Stored location data wins; the
+		// published facts in shop_facts() fill only blank fields/hours.
+		$locations_url = home_url( '/locations/' );
 		foreach ( DoughBoss_Locations::all( true ) as $location ) {
-			$node = array(
-				'@type'              => array( 'Bakery', 'Restaurant' ),
-				'@id'                => trailingslashit( $home ) . '#location-' . sanitize_title( $location->slug ),
-				'name'               => $location->name,
-				'url'                => $home,
-				'telephone'          => $location->phone,
-				'image'              => $image,
-				'priceRange'         => '$',
-				'servesCuisine'      => array( 'Manoush', 'Mediterranean', 'Pizza' ),
-				'parentOrganization' => array( '@id' => $organization ),
-				'address'            => array(
-					'@type'           => 'PostalAddress',
-					'streetAddress'   => preg_replace( '/\s+/', ' ', (string) $location->address ),
-					'addressLocality' => $location->suburb,
-					'addressRegion'   => 'NSW',
-					'addressCountry'  => 'AU',
-				),
-				'hasMap'             => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode(
-					'Dough Boss ' . preg_replace( '/\s+/', ' ', (string) $location->address ) . ' ' . (string) $location->suburb . ' NSW'
-				),
+			$graph[] = self::location_node(
+				(array) $location,
+				DoughBoss_Locations::weekly_hours( (int) $location->id ),
+				$home,
+				$locations_url,
+				$image,
+				$organization
 			);
-			$opening = $this->opening_hours( (int) $location->id );
-			if ( $opening ) {
-				$node['openingHoursSpecification'] = $opening;
-			}
-			$graph[] = $node;
 		}
 		return array( '@context' => 'https://schema.org', '@graph' => $graph );
 	}
@@ -249,11 +446,10 @@ class DoughBoss_SEO {
 			return;
 		}
 		$copy  = $this->page_copy();
-		$url   = get_permalink();
+		$url   = wp_get_canonical_url( get_post() ) ?: get_permalink();
 		$image = DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-social-card.jpg';
 		?>
 		<meta name="description" content="<?php echo esc_attr( $copy['description'] ); ?>" />
-		<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
 		<meta property="og:type" content="website" />
 		<meta property="og:locale" content="en_AU" />
 		<meta property="og:site_name" content="<?php echo esc_attr( get_bloginfo( 'name' ) ?: 'Dough Boss' ); ?>" />
@@ -268,7 +464,7 @@ class DoughBoss_SEO {
 		<meta name="twitter:title" content="<?php echo esc_attr( $copy['title'] ); ?>" />
 		<meta name="twitter:description" content="<?php echo esc_attr( $copy['description'] ); ?>" />
 		<meta name="twitter:image" content="<?php echo esc_url( $image ); ?>" />
-		<script type="application/ld+json"><?php echo wp_json_encode( $this->schema(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></script>
+		<script type="application/ld+json"><?php echo wp_json_encode( $this->schema( $copy, $url ), self::SCHEMA_JSON_FLAGS ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></script>
 		<?php
 	}
 }

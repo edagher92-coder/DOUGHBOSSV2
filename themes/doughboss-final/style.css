@@ -3,7 +3,7 @@ Theme Name: DoughBoss Final
 Theme URI: https://doughboss.com.au/
 Author: DoughBoss
 Description: Production presentation theme for the DoughBoss website and ordering plugin.
-Version: 1.6.3
+Version: 1.8.0
 Requires at least: 6.0
 Requires PHP: 7.4
 Text Domain: doughboss-final
@@ -55,10 +55,12 @@ button, input, select, textarea { font: inherit; }
 .dbf-skip { position: fixed; z-index: 9999; top: 12px; left: 12px; padding: 11px 16px; transform: translateY(-160%); background: #fff; color: #000; border-radius: 8px; font-weight: 700; }
 .dbf-skip:focus { transform: none; }
 .dbf-sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
-.dbf-launch-bar { display: flex; position: relative; z-index: 102; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 4px 20px; background: var(--dbf-ember); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-align: center; text-transform: uppercase; }
+.dbf-launch-bar { display: flex; position: relative; z-index: 102; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 4px 20px; background: var(--dbf-ember); color: #fff; font-size: 14px; font-weight: 700; letter-spacing: .1em; text-align: center; text-transform: uppercase; }
 /* The CTA in the bar is the only link many phone users will reach for — give it
  * a real 44px target instead of a 16px line box. */
 .dbf-launch-bar a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; text-underline-offset: 3px; touch-action: manipulation; }
+/* Both ordering states are rendered; the live /config read reveals one. */
+.dbf-launch-bar[hidden], [data-db-when-ordering][hidden] { display: none !important; }
 
 /* Header
  * NOTE: backdrop-filter must NOT live on .dbf-header itself. A filter/
@@ -84,15 +86,22 @@ button, input, select, textarea { font: inherit; }
 .dbf-brand-dot { color: var(--dbf-ember); }
 .dbf-nav { justify-self: end; }
 .dbf-nav-list, .dbf-nav ul { display: flex; align-items: center; gap: clamp(18px, 2.2vw, 34px); padding: 0; margin: 0; list-style: none; }
-.dbf-nav a { position: relative; color: #ddd7cd; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; transition: color .18s ease; }
+.dbf-nav a { position: relative; color: #ddd7cd; font-size: 15px; font-weight: 700; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; transition: color .18s ease; }
 .dbf-nav a::after { position: absolute; right: 0; bottom: -9px; left: 0; height: 2px; background: var(--dbf-ember); content: ''; opacity: 0; transition: opacity .16s ease-out; }
 .dbf-nav a:hover, .dbf-nav a:focus-visible, .dbf-nav .current-menu-item > a { color: #fff; }
 .dbf-nav a:hover::after, .dbf-nav a:focus-visible::after, .dbf-nav .current-menu-item > a::after { opacity: 1; }
 .dbf-menu-toggle { display: none; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 10px; border: 0; background: transparent; color: #fff; cursor: pointer; touch-action: manipulation; }
 .dbf-menu-toggle-label { font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+/* Icon-only toggle: hamburger while closed, X while open (aria-expanded). */
+.dbf-menu-icon { display: block; }
+.dbf-menu-icon--close, .dbf-menu-toggle[aria-expanded="true"] .dbf-menu-icon--open { display: none; }
+.dbf-menu-toggle[aria-expanded="true"] .dbf-menu-icon--close { display: block; }
 .dbf-nav-close { display: none; width: 44px; height: 44px; align-items: center; justify-content: center; margin: 0 0 22px auto; border: 1px solid var(--dbf-line-dark); border-radius: 50%; background: transparent; color: #fff; cursor: pointer; font-size: 32px; line-height: 1; }
+.dbf-nav-close svg { display: block; }
+/* While ordering is paused the "Order Online" item reads "Call to order". */
+.dbf-nav .dbf-nav-call > a, .dbf-nav a[data-db-ordering-swap][href^="tel:"] { color: #fff; }
 
-.dbf-header-shop { display: flex; align-items: center; justify-content: space-between; gap: 8px 24px; min-height: 52px; padding-block: 8px; border-top: 1px solid var(--dbf-line-dark); font-size: 13px; line-height: 1.35; }
+.dbf-header-shop { display: flex; align-items: center; justify-content: space-between; gap: 8px 24px; min-height: 52px; padding-block: 8px; border-top: 1px solid var(--dbf-line-dark); font-size: 15px; line-height: 1.35; }
 .dbf-header-shop a { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
 .dbf-shop-choice { display: flex; align-items: center; flex-shrink: 0; gap: 10px; }
 .dbf-shop-choice > span { color: #b8b1a4; }
@@ -100,7 +109,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-header-shop .db-pickup-status { max-width: 620px; margin: 0; color: #ddd7cd; text-align: right; }
 @media (max-width: 767px) {
 	.dbf-header-shop { align-items: flex-start; flex-direction: column; gap: 4px; }
-	.dbf-header-shop .db-pickup-status { font-size: 12px; text-align: left; }
+	.dbf-header-shop .db-pickup-status { font-size: 14px; text-align: left; }
 }
 
 /* Buttons and typography */
@@ -138,13 +147,10 @@ button, input, select, textarea { font: inherit; }
 .dbf-hero .db-mh-copy h2 { font-family: 'Bebas Neue', Impact, sans-serif; font-size: clamp(58px, 7vw, 108px); font-weight: 400; letter-spacing: .005em; line-height: .87; max-width: 9ch; text-transform: uppercase; }
 .dbf-hero .db-mh-copy > p:not(.db-mh-kicker) { max-width: 39rem; color: #ddd6ca; font-size: clamp(17px, 1.7vw, 21px); }
 .dbf-hero .db-mh-kicker { color: #fff; letter-spacing: .17em; }
-.dbf-hero .db-mh-replay { background: var(--dbf-ember); color: #fff; }
 .dbf-hero .db-mh-steam { right: clamp(8%, 15vw, 20%); top: 13%; }
-.dbf-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--dbf-char); color: #fff; border-top: 1px solid var(--dbf-line-dark); }
-.dbf-hero-stat { padding: 25px clamp(18px, 4vw, 46px); border-left: 1px solid var(--dbf-line-dark); }
-.dbf-hero-stat:first-child { border-left: 0; }
-.dbf-hero-stat strong { display: block; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 28px; font-weight: 400; letter-spacing: .04em; }
-.dbf-hero-stat span { color: var(--dbf-mist); font-size: 13px; }
+/* The hero's single "at a glance" strip (the duplicate theme strip is gone). */
+.dbf-hero .db-mh-proof-value { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 22px; font-weight: 400; letter-spacing: .05em; }
+.dbf-hero .db-mh-proof-label { color: #d9d1c6; font-size: 13px; }
 
 /* Cards and editorial sections */
 .dbf-story-grid, .dbf-feature-grid { display: grid; grid-template-columns: 1.02fr .98fr; align-items: center; gap: clamp(42px, 7vw, 95px); }
@@ -167,7 +173,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-food-card::after { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(0,0,0,.88)); content: ''; }
 .dbf-food-card:hover img, .dbf-food-card:focus-visible img { transform: scale(1.065); }
 .dbf-food-card-copy { position: absolute; z-index: 2; right: 0; bottom: 0; left: 0; padding: 26px; }
-.dbf-food-card-copy span { display: block; color: #d9d1c6; font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.dbf-food-card-copy span { display: block; color: #d9d1c6; font-size: 14px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .dbf-food-card-copy strong { display: block; margin-top: 3px; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 38px; font-weight: 400; letter-spacing: .02em; }
 
 .dbf-catering-panel { display: grid; grid-template-columns: 1.08fr .92fr; min-height: 590px; overflow: hidden; background: var(--dbf-char); color: #fff; border-radius: 30px; box-shadow: var(--dbf-shadow); }
@@ -176,10 +182,38 @@ button, input, select, textarea { font: inherit; }
 .dbf-catering-copy .dbf-button { align-self: flex-start; margin-top: 16px; }
 .dbf-catering-media { position: relative; min-height: 420px; background: radial-gradient(circle at 55% 45%, rgba(226,35,26,.2), transparent 42%), #13100e; }
 .dbf-catering-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 7%; filter: drop-shadow(0 34px 38px rgba(0,0,0,.5)); }
+.dbf-catering-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 22px; }
+.dbf-catering-text-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--dbf-ember-dark); font-weight: 700; text-underline-offset: 4px; }
+.dbf-catering-usecases { margin-top: 28px; }
+.dbf-catering-usecases .dbf-card { min-width: 0; }
+.dbf-catering-usecases .dbf-card p { font-size: 1rem; line-height: 1.6; }
+.dbf-catering-planning { margin-top: 28px; padding: clamp(20px, 4vw, 32px); border-left: 4px solid var(--dbf-ember); background: var(--dbf-cream); }
+.dbf-catering-planning h3 { margin-top: 0; font-size: 1.5rem; }
+.dbf-catering-planning p:last-child { margin-bottom: 0; }
+.dbf-catering-repeat { max-width: 820px; }
+#catering-enquiry, #dbf-catering-repeat { scroll-margin-top: calc(var(--db-sticky-top, 0px) + 24px); }
 .dbf-feature-grid .dbf-button { margin-top: 26px; }
 
 .dbf-locations-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.dbf-location-card { padding: 30px; background: #fff; border: 1px solid var(--dbf-line); border-radius: 18px; }
+.dbf-location-card { display: flex; flex-direction: column; padding: 30px; background: #fff; border: 1px solid var(--dbf-line); border-radius: 18px; }
+.dbf-location-head { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.dbf-location-head h3 { line-height: 1; }
+/* Live badge, Sydney time; colour is never the only signal (the text says it). */
+.dbf-open-badge { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; padding: 5px 11px; border-radius: 999px; background: #efe9df; color: #4d4944; font-size: 13px; font-weight: 700; line-height: 1.25; }
+.dbf-open-badge::before { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #8a847a; content: ''; }
+.dbf-open-badge.is-open { background: #e5f2e6; color: #1f5228; }
+.dbf-open-badge.is-open::before { background: #2f7a3d; }
+.dbf-open-badge.is-closed { background: #f6e7e5; color: #8a1711; }
+.dbf-open-badge.is-closed::before { background: #c92017; }
+.dbf-open-badge[hidden] { display: none; }
+.dbf-location-rows { display: grid; gap: 10px; padding: 18px 0; margin: 22px 0; border-top: 1px solid var(--dbf-line); border-bottom: 1px solid var(--dbf-line); font-size: 15px; }
+.dbf-location-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.dbf-location-row dt { color: #6a635a; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.dbf-location-row dd { min-width: 0; margin: 0; color: #2b2723; }
+.dbf-location-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: auto; }
+.dbf-location-card a.dbf-location-action { display: inline-flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 10px 16px; border: 1px solid var(--dbf-ink); border-radius: 999px; color: var(--dbf-ink); font-weight: 700; text-decoration: none; }
+.dbf-location-card a.dbf-location-action--call { border-color: var(--dbf-ember); background: var(--dbf-ember); color: #fff; }
+.dbf-location-card a.dbf-location-action:hover, .dbf-location-card a.dbf-location-action:focus-visible { background: var(--dbf-ink); border-color: var(--dbf-ink); color: #fff; }
 .dbf-location-card.is-orderable { border-top: 4px solid var(--dbf-ember); }
 .dbf-location-status { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 22px; color: #4d5d35; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .dbf-location-status::before { width: 8px; height: 8px; border-radius: 50%; background: #79b260; box-shadow: 0 0 0 5px rgba(121,178,96,.13); content: ''; }
@@ -189,7 +223,7 @@ button, input, select, textarea { font: inherit; }
 .dbf-location-meta span { display: block; }
 .dbf-location-card a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-underline-offset: 3px; touch-action: manipulation; }
 .dbf-review-panel { display: flex; align-items: center; justify-content: space-between; gap: 40px; padding: clamp(38px, 6vw, 72px); background: var(--dbf-ember); color: #fff; border-radius: 28px; }
-.dbf-review-panel p { max-width: 640px; margin: 14px 0 0; color: rgba(255,255,255,.84); }
+.dbf-review-panel p { max-width: 640px; margin: 14px 0 0; color: #fff; }
 
 /* Interior pages */
 .dbf-page-hero { position: relative; min-height: 470px; overflow: hidden; background: var(--dbf-char); color: #fff; }
@@ -207,6 +241,21 @@ button, input, select, textarea { font: inherit; }
 .dbf-prose a { color: var(--dbf-ember-dark); font-weight: 600; text-underline-offset: 3px; }
 .dbf-prose img { border-radius: 18px; }
 .dbf-system-notice { padding: 18px 20px; background: #fff3d8; border-left: 4px solid var(--dbf-gold); border-radius: 10px; }
+.dbf-page-hero.dbf-page-hero--members { min-height: 160px; text-align: left; }
+.dbf-page-hero.dbf-page-hero--members .dbf-page-hero-inner { min-height: 160px; padding-block: 24px; align-items: flex-start; }
+.dbf-page-hero.dbf-page-hero--members .dbf-display { font-size: clamp(42px, 7vw, 72px); line-height: 1.02; }
+/* Ordering-page pickup details remain in the shop card, not twice in a
+   sticky phone header. Keep the labelled shop selector available. */
+@media (max-width: 640px) {
+	body.doughboss-order-page .dbf-header-inner { min-height: 56px; }
+	body.doughboss-order-page .dbf-header-shop { min-height: 52px; padding-block: 4px; }
+	body.doughboss-order-page .dbf-header-shop .db-pickup-status { display: none; }
+	.dbf-order-counter__shop .db-shop { gap: .2rem; }
+	.dbf-order-counter__shop .db-shop-heading { font-size: .75rem; }
+	.dbf-order-counter__shop .db-shop-change { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+	.dbf-order-counter__shop .db-shop-name { grid-column: 1; font-size: 1.5rem; }
+	.dbf-order-counter__shop .db-shop-info-wrap { grid-column: 1 / -1; }
+}
 .dbf-page-hero--order { min-height: 168px; text-align: left; }
 .dbf-page-hero--order::after { background: linear-gradient(90deg, rgba(10,8,7,.96), rgba(10,8,7,.78) 58%, rgba(10,8,7,.52)); }
 .dbf-page-hero--order .dbf-page-hero-bg { filter: saturate(.62) brightness(.42); }
@@ -232,6 +281,12 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
 .dbf-storefront .db-app.db-menu { margin-top: 0; padding-top: 0; padding-inline: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
 .dbf-storefront .db-menu-category-title, .dbf-storefront h2, .dbf-storefront h3 { font-family: 'Bebas Neue', Impact, sans-serif; letter-spacing: .025em; }
 .dbf-builder-wrap, .dbf-cart-wrap { margin-top: 34px; }
+body.db-approved-preorder-mode .dbf-page-hero--order,
+body.db-approved-preorder-mode .dbf-order-intro,
+body.db-approved-preorder-mode [data-doughboss-menu],
+body.db-approved-preorder-mode [data-doughboss-builder],
+body.db-approved-preorder-mode [data-doughboss-shop] { display: none !important; }
+body.db-approved-preorder-mode .dbf-cart-wrap { margin-top: 0; }
 .dbf-page-hero--compact { min-height: 390px; }
 .dbf-page-hero--compact .dbf-page-hero-inner { min-height: 390px; padding-block: 72px; }
 .dbf-page-hero--voucher::before { position: absolute; width: min(680px, 58vw); aspect-ratio: 1; top: 50%; right: -8%; transform: translateY(-50%); border-radius: 50%; background: radial-gradient(circle, rgba(226,35,26,.24), transparent 67%); content: ''; }
@@ -264,6 +319,10 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
 .dbf-partner-aside { position: sticky; top: 120px; min-width: 0; overflow: hidden; padding: 28px; background: var(--dbf-char); color: #fff; border-radius: 20px; }
 .dbf-partner-grid--single .dbf-partner-aside { position: static; width: 100%; }
 .dbf-partner-aside p { color: #c7c0b5; }
+.dbf-partner-main { display: grid; gap: 32px; min-width: 0; }
+.dbf-partner-form { padding: clamp(22px, 4vw, 40px); background: #fff; border: 1px solid var(--dbf-line); border-radius: 20px; box-shadow: 0 8px 28px rgba(13, 13, 13, .055); }
+.dbf-partner-form-title { margin: 0 0 14px; font-family: 'Bebas Neue', Impact, sans-serif; font-size: clamp(30px, 3.4vw, 42px); font-weight: 400; letter-spacing: .02em; line-height: 1; text-transform: uppercase; }
+.dbf-partner-form .db-b2b-submit { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 19px; font-weight: 400; letter-spacing: .06em; }
 .dbf-not-found { min-height: 65vh; display: grid; place-items: center; text-align: center; }
 
 /* Footer */
@@ -276,13 +335,21 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
  * the ordering email and every secondary destination, so they get real 44px
  * targets. line-height gives the plain (non-link) Visit items the same rhythm
  * without needing :has(). */
-.dbf-footer li { margin: 0; color: #c7c0b5; font-size: 15px; line-height: 2.9; }
+.dbf-footer li { margin: 0; color: #c7c0b5; font-size: 16px; line-height: 2.9; }
 .dbf-footer a { text-decoration: none; }
 .dbf-footer li > a { display: inline-flex; align-items: center; min-height: 44px; padding-right: 8px; touch-action: manipulation; }
 .dbf-footer a:hover, .dbf-footer a:focus-visible { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
 .dbf-social { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; margin-top: 6px; color: #fff; font-weight: 700; touch-action: manipulation; }
-.dbf-footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 25px; padding-top: 16px; margin-top: 48px; color: #8b8479; border-top: 1px solid var(--dbf-line-dark); font-size: 13px; }
+.dbf-footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 25px; padding-top: 16px; margin-top: 48px; color: #8b8479; border-top: 1px solid var(--dbf-line-dark); font-size: 14px; }
 .dbf-footer-bottom a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 8px; touch-action: manipulation; }
+
+/* Homepage reading hierarchy; supporting copy should not shrink with viewport width. */
+body.home .dbf-eyebrow { font-size: 14px; }
+body.home .dbf-section-head > p,
+body.home .dbf-card p,
+body.home .dbf-catering-copy p:not(.dbf-eyebrow),
+body.home .dbf-review-panel p:not(.dbf-eyebrow) { font-size: 18px; line-height: 1.6; }
+body.home .dbf-card-link { font-size: 17px; }
 
 /* Motion */
 .dbf-js.dbf-motion-ok [data-dbf-reveal] { transform: translateY(8px); transition: transform .2s ease-out; }
@@ -299,6 +366,20 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
 	.dbf-order-counter__shop .db-shop-context { grid-column: 2; grid-row: 1 / span 4; align-self: center; margin: 0; padding: 16px 0 16px 28px; border-top: 0; border-left: 1px solid var(--dbf-line); }
 }
 
+@media (min-width: 1101px) {
+  .dbf-nav a { white-space: nowrap; }
+}
+@media (min-width: 1600px) {
+  .dbf-header > .dbf-wrap { width: min(1600px, calc(100% - 40px)); }
+}
+@media (min-width: 1101px) and (max-width: 1599px) {
+  .dbf-header-inner { grid-template-columns: auto auto; row-gap: 12px; padding-block: 14px; }
+  .dbf-header-inner > .dbf-brand { grid-column: 1; grid-row: 1; }
+  .dbf-header-inner > .dbf-header-cta { grid-column: 2; grid-row: 1; justify-self: end; }
+  .dbf-header-inner > .dbf-nav { grid-column: 1 / -1; grid-row: 2; justify-self: center; max-width: 100%; }
+  .dbf-header-inner .dbf-nav-list { flex-wrap: wrap; justify-content: center; }
+}
+
 @media (max-width: 1000px) {
 	.dbf-header-inner { gap: 20px; }
 	.dbf-nav-list, .dbf-nav ul { gap: 18px; }
@@ -312,8 +393,10 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
 	.dbf-voucher-guide { position: static; }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
 	.admin-bar .dbf-header { top: 46px; }
+	/* Keep the open-state launch banner beneath the scrim (z98) and header/drawer (z100); normal banner remains z102. */
+	body.dbf-menu-open .dbf-launch-bar { z-index: 97; }
 	.dbf-header-inner { grid-template-columns: auto 1fr auto; min-height: 64px; }
 	.dbf-menu-toggle { display: inline-flex; justify-self: end; }
 	.dbf-nav { position: fixed; z-index: 99; top: 0; right: 0; bottom: 0; width: min(390px, 88vw); max-height: 100vh; max-height: 100dvh; padding: 26px 30px 40px; overflow-y: auto; visibility: hidden; transform: translateX(105%); background: var(--dbf-coal); box-shadow: -30px 0 60px rgba(0,0,0,.35); pointer-events: none; transition: transform .22s var(--dbf-ease), visibility 0s linear .22s; }
@@ -338,8 +421,9 @@ body.doughboss-order-page .dbf-order-counter .db-ordering-status { width: 100%; 
 	.dbf-hero .dbf-wrap { width: 100%; }
 	.dbf-hero .db-manoush-hero { min-height: 0; border-radius: 0; }
 	.dbf-hero .db-mh-copy h2 { max-width: 100%; overflow-wrap: normal; font-size: clamp(42px, 12vw, 62px); text-wrap: balance; }
-	.dbf-hero-stats { grid-template-columns: 1fr 1fr; }
-	.dbf-hero-stat:last-child { grid-column: 1 / -1; border-top: 1px solid var(--dbf-line-dark); }
+	.dbf-hero .db-mh-proof-value { font-size: 17px; }
+	.dbf-hero .db-mh-proof-label { font-size: 11px; }
+	.dbf-location-card { padding: 24px 20px; }
 	.dbf-section-head { align-items: flex-start; flex-direction: column; }
 	.dbf-card-grid, .dbf-locations-grid, .dbf-food-grid { grid-template-columns: 1fr; }
 	.dbf-food-card, .dbf-food-card:last-child { grid-column: auto; min-height: 330px; }

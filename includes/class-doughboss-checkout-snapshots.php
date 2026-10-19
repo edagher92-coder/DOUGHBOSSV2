@@ -35,8 +35,14 @@ class DoughBoss_Checkout_Snapshots {
 	 * @param array  $payload      Validated order data and server cart lines.
 	 * @return array|WP_Error Persisted row.
 	 */
-	public static function store( $checkout_key, array $payload ) {
+	public static function store( $checkout_key, array $payload, $expires_at = '' ) {
 		global $wpdb;
+		if ( isset( $payload['order'] ) && is_array( $payload['order'] ) ) {
+			$basis = DoughBoss_Order::accounting_basis_from_payload( $payload['order'] );
+			if ( is_wp_error( $basis ) ) {
+				return $basis;
+			}
+		}
 		$checkout_key = self::stable_key( $checkout_key );
 		if ( '' === $checkout_key ) {
 			return new WP_Error( 'doughboss_snapshot_key', __( 'The secure order snapshot is missing its checkout key.', 'doughboss' ), array( 'status' => 400 ) );
@@ -58,8 +64,12 @@ class DoughBoss_Checkout_Snapshots {
 			return $existing;
 		}
 
-		$now     = current_time( 'mysql', true );
-		$expires = gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS );
+		$now       = current_time( 'mysql', true );
+		$timestamp = '' === (string) $expires_at ? time() + DAY_IN_SECONDS : strtotime( (string) $expires_at . ' UTC' );
+		if ( false === $timestamp || $timestamp < time() ) {
+			return new WP_Error( 'doughboss_snapshot_expiry', __( 'The secure payment expiry is invalid.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$expires = gmdate( 'Y-m-d H:i:s', $timestamp );
 		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			self::table(),
 			array(
@@ -88,6 +98,39 @@ class DoughBoss_Checkout_Snapshots {
 	}
 
 	/**
+	 * Read retained facts for an already durable receipt, including expired rows.
+	 * Absence is distinct from invalid retained data. The caller must establish
+	 * durable paid identity and decide whether retention permits absence.
+	 *
+	 * @param string $checkout_key Exact payment-attempt checkout key.
+	 * @param int    $order_id Durable receipt order ID.
+	 * @return array|null|WP_Error
+	 */
+	public static function find_for_receipt( $checkout_key, $order_id ) {
+		global $wpdb;
+		$checkout_key = self::stable_key( $checkout_key );
+		$order_id = absint( $order_id );
+		$error = new WP_Error( 'doughboss_receipt_basis_unverified', __( 'The saved receipt requires staff review. Please do not pay again.', 'doughboss' ), array( 'status' => 409 ) );
+		if ( '' === $checkout_key || ! $order_id ) {
+			return $error;
+		}
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE checkout_key = %s LIMIT 1', $checkout_key ), ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
+		if ( ! empty( $wpdb->last_error ) ) {
+			return $error;
+		}
+		if ( null === $row ) {
+			return null;
+		}
+		$snapshot = self::decode_row( $row, true );
+		if ( ! $snapshot || ! isset( $snapshot['payload']['order'] ) || ! is_array( $snapshot['payload']['order'] )
+			|| ( ! empty( $snapshot['order_id'] ) && $order_id !== (int) $snapshot['order_id'] )
+			|| ( 'completed' === (string) $snapshot['status'] && $order_id !== (int) $snapshot['order_id'] ) ) {
+			return $error;
+		}
+		return $snapshot;
+	}
+
+	/**
 	 * Find and decode an unexpired snapshot.
 	 *
 	 * @param string $checkout_key Stable checkout key.
@@ -105,8 +148,8 @@ class DoughBoss_Checkout_Snapshots {
 	}
 
 	/**
-	 * Read an expired snapshot only while an irreversible Square v2 payment
-	 * still requires recovery or manual reconciliation.
+	 * Read an expired snapshot only while an exact-bound irreversible Square v2
+	 * or bounded Stripe payment still requires recovery or reconciliation.
 	 *
 	 * @param string $checkout_key Stable checkout key.
 	 * @return array|null
@@ -119,12 +162,10 @@ class DoughBoss_Checkout_Snapshots {
 		}
 		$attempt = DoughBoss_Payment_Attempts::find_by_checkout_key( $checkout_key );
 		$metadata = is_array( $attempt ) ? DoughBoss_Payment_Attempts::metadata( $attempt ) : array();
-		if (
-			! is_array( $attempt )
-			|| 'square' !== (string) $attempt['provider']
-			|| 'square-v2' !== ( isset( $metadata['protocol_version'] ) ? (string) $metadata['protocol_version'] : '' )
-			|| ! in_array( (string) $attempt['status'], array( 'prepared', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch' ), true )
-		) {
+		$stripe_created_at = is_array( $attempt ) && isset( $attempt['created_at'] ) ? strtotime( (string) $attempt['created_at'] . ' UTC' ) : false;
+		$square_protected  = is_array( $attempt ) && 'square' === (string) $attempt['provider'] && 'square-v2' === ( isset( $metadata['protocol_version'] ) ? (string) $metadata['protocol_version'] : '' ) && in_array( (string) $attempt['status'], array( 'prepared', 'dispatching', 'processing', 'unknown', 'succeeded', 'mismatch' ), true );
+		$stripe_protected  = is_array( $attempt ) && 'stripe' === (string) $attempt['provider'] && 1 === preg_match( '/^cs_(?:test|live)_[A-Za-z0-9_]{8,191}$/', (string) $attempt['provider_reference'] ) && in_array( (string) $attempt['status'], array( 'processing', 'unknown', 'succeeded', 'mismatch' ), true ) && false !== $stripe_created_at && $stripe_created_at <= time() && $stripe_created_at >= time() - ( 7 * DAY_IN_SECONDS );
+		if ( ! $square_protected && ! $stripe_protected ) {
 			return null;
 		}
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -148,6 +189,9 @@ class DoughBoss_Checkout_Snapshots {
 		}
 		$payload = json_decode( (string) $row['payload_json'], true );
 		if ( ! is_array( $payload ) || ! hash_equals( (string) $row['payload_hash'], hash( 'sha256', (string) $row['payload_json'] ) ) ) {
+			return null;
+		}
+		if ( isset( $payload['order'] ) && is_array( $payload['order'] ) && is_wp_error( DoughBoss_Order::accounting_basis_from_payload( $payload['order'] ) ) ) {
 			return null;
 		}
 		$row['payload'] = $payload;
@@ -198,9 +242,9 @@ class DoughBoss_Checkout_Snapshots {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$attempts = $wpdb->prefix . 'doughboss_payment_attempts';
 		$sql      = 'DELETE FROM ' . self::table() . ' WHERE expires_at < %s AND checkout_key NOT IN ('
-			. "SELECT checkout_key FROM {$attempts} WHERE provider = 'square' AND status IN ('prepared','dispatching','processing','unknown','succeeded','mismatch')"
+			. "SELECT checkout_key FROM {$attempts} WHERE (provider = 'square' AND status IN ('prepared','dispatching','processing','unknown','succeeded','mismatch')) OR (provider = 'stripe' AND provider_reference REGEXP '^cs_(test|live)_[A-Za-z0-9_]{8,191}$' AND status IN ('processing','unknown','succeeded','mismatch') AND created_at <= UTC_TIMESTAMP() AND created_at >= %s)"
 			. ') LIMIT 100';
-		$wpdb->query( $wpdb->prepare( $sql, current_time( 'mysql', true ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( $wpdb->prepare( $sql, current_time( 'mysql', true ), gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	/**

@@ -67,7 +67,9 @@
 	var summaryEpoch = 0;
 	var summaryAbort = null;
 	var summaryLoaded = false;
-	var summary = { make: null, pass: null, preorder_review: null, catering: null };
+	var summary = { make: null, pass: null, preorder_review: null, catering: null, upcoming: 0 };
+	var upcomingOpen = false;   // Collapsed by default; remembered across repaints.
+	var upcomingPill = null;
 	var summaryAnnouncement = document.querySelector('[data-db-board-summary-announcement]');
 	var summaryLinks = {};
 	['make', 'pass', 'catering'].forEach(function (mode) {
@@ -153,6 +155,54 @@
 		return by && by !== from ? from + '–' + by : from;
 	}
 
+	/* ----------------------------------------------- Timed pickup (2.51) */
+
+	// The board API sends fire_at_utc as ISO ('…T…Z', via utc_iso()); older
+	// rows or fixtures may carry MySQL 'YYYY-MM-DD HH:MM:SS'. Accept both.
+	function utcIso(value) {
+		var raw = String(value || '').trim().replace(' ', 'T');
+		if (!raw) { return ''; }
+		return /(Z|[+-]\d\d:?\d\d)$/i.test(raw) ? raw : raw + 'Z';
+	}
+
+	var DELAY_STATUSES = ['pending', 'confirmed', 'preparing', 'baking'];
+	var DELAY_MINUTES = 10;
+
+	// 'ASAP' / 'Scheduled' for orders placed through the pickup picker; '' for
+	// legacy orders so their cards render exactly as before.
+	function pickupBadge(o) {
+		var mode = o && o.pickup_mode ? String(o.pickup_mode) : '';
+		if (mode === 'asap') { return 'ASAP'; }
+		if (mode === 'scheduled') { return 'Scheduled'; }
+		return '';
+	}
+
+	// A scheduled order stays "upcoming" until the server stops flagging it.
+	// If the fire time has already passed on this clock it stops being upcoming
+	// immediately, rather than waiting for the next poll.
+	function isUpcoming(o) {
+		if (!o || o.status !== 'pending') { return false; }
+		var flag = o.upcoming;
+		if (!(flag === true || flag === 1 || flag === '1' || flag === 'true')) { return false; }
+		if (o.fire_at_utc) {
+			var fire = Date.parse(utcIso(o.fire_at_utc));
+			if (!isNaN(fire) && fire <= Date.now()) { return false; }
+		}
+		return true;
+	}
+
+	// "+10 min" applies only to timed orders that are still being worked.
+	function delayAllowed(o) {
+		return !!(o && pickupBadge(o) && DELAY_STATUSES.indexOf(o.status) !== -1);
+	}
+
+	// "Pickup 12:45pm" for today, "Pickup Tomorrow 12:45pm" otherwise.
+	function pickupText(o) {
+		var when = o && o.pickup_label ? String(o.pickup_label).replace(/^Today\s+/i, '') : '';
+		if (!when) { when = readyWindow(o || {}); }
+		return when ? 'Pickup ' + when : 'Pickup time to confirm';
+	}
+
 	/* --------------------------------------------------------------- Sound */
 
 	function enableSound() {
@@ -162,12 +212,42 @@
 		}
 		if (audio.ctx.state === 'suspended') { audio.ctx.resume(); }
 		audio.on = true;
+		requestWakeLock();
 		if (soundBtn) {
 			soundBtn.setAttribute('aria-pressed', 'true');
 			soundBtn.textContent = '🔔 Sound on';
 			soundBtn.classList.add('is-on');
 		}
 		beep();
+	}
+
+	/* ----------------------------------------------------------- Wake lock */
+
+	// Keep the kitchen tablet's screen on while the board is open. Browsers
+	// drop the lock whenever the page is hidden, so it is re-requested on
+	// visibilitychange. Unsupported browsers or a refused request change
+	// nothing: the board still works, the screen just follows its own timeout.
+	var wakeLock = null;
+	var wakeLockPending = false;
+
+	function requestWakeLock() {
+		try {
+			if (wakeLock || wakeLockPending || document.hidden) { return; }
+			if (!window.navigator || !navigator.wakeLock || typeof navigator.wakeLock.request !== 'function') { return; }
+			wakeLockPending = true;
+			navigator.wakeLock.request('screen').then(function (lock) {
+				wakeLockPending = false;
+				wakeLock = lock || null;
+				if (lock && typeof lock.addEventListener === 'function') {
+					lock.addEventListener('release', function () { wakeLock = null; });
+				}
+			}).catch(function () {
+				wakeLockPending = false;
+				wakeLock = null;
+			});
+		} catch (ignoreWakeLock) {
+			wakeLockPending = false;
+		}
 	}
 
 	function beep() {
@@ -250,6 +330,22 @@
 		});
 	}
 
+	// Header count of timed orders not yet due in the kitchen.
+	function renderUpcomingPill() {
+		if (!statusEl) { return; }
+		if (!upcomingPill) {
+			upcomingPill = el('span', { class: 'db-upcoming-pill', role: 'status', hidden: 'hidden' });
+			if (statusEl.parentNode) { statusEl.parentNode.insertBefore(upcomingPill, statusEl.nextSibling); }
+		}
+		var count = summary && summary.upcoming ? summary.upcoming : 0;
+		if (SCREEN_MODE === 'pass' || SCREEN_MODE === 'catering' || !count) {
+			upcomingPill.hidden = true;
+			return;
+		}
+		upcomingPill.textContent = 'Upcoming ' + count;
+		upcomingPill.hidden = false;
+	}
+
 	function loadSummary() {
 		var requestEpoch = ++summaryEpoch;
 		if (summaryAbort && summaryAbort.abort) { summaryAbort.abort(); }
@@ -260,12 +356,15 @@
 				make: normalCount(res.data.make),
 				pass: normalCount(res.data.pass),
 				preorder_review: normalCount(res.data.preorder_review),
-				catering: normalCount(res.data.catering)
+				catering: normalCount(res.data.catering),
+				upcoming: normalCount(res.data.upcoming)
 			};
 			var changed = summaryLoaded && ['make', 'pass', 'preorder_review', 'catering'].some(function (key) { return next[key] !== summary[key]; });
+			var upcomingChanged = next.upcoming !== summary.upcoming;
 			summary = next;
 			summaryLoaded = true;
 			renderSummary(summary, false);
+			if (upcomingChanged) { renderUpcomingPill(); }
 			if (changed && summaryAnnouncement) {
 				summaryAnnouncement.textContent = 'Kitchen workload updated: ' + summaryLabel('make', summary, false) + '; ' + summaryLabel('pass', summary, false) + '; ' + summaryLabel('catering', summary, false) + '.';
 			}
@@ -304,8 +403,9 @@
 		var cardEl = preorderPanel && preorderPanel.querySelector('[data-preorder-id="' + key + '"]');
 		if (cardEl) {
 			cardEl.setAttribute('aria-busy', busy ? 'true' : 'false');
-			var buttons = cardEl.querySelectorAll('button');
-			for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = !!busy || offline; }
+			var pickup = cardEl.preorderPickup;
+			if (busy && pickup && pickup.loading) { pickup.invalidate(); }
+			updatePreorderControls(cardEl);
 		}
 		return true;
 	}
@@ -326,6 +426,24 @@
 			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
 		}).then(function () {
 			setBusy(o, 'accept', false);
+		});
+	}
+
+	function delayOrder(o, minutes) {
+		if (offline) { return Promise.resolve(); }
+		if (!delayAllowed(o)) { return Promise.resolve(); }
+		if (!setBusy(o, 'delay', true)) { return Promise.resolve(); }
+		return api('/admin/order/' + o.id + '/delay', 'POST', {
+			minutes: minutes || DELAY_MINUTES,
+			expected_version: o.version,
+			event_key: eventKey(o, 'delay')
+		}).then(function () {
+			return load();
+		}).catch(function (error) {
+			var message = error.message || 'Could not delay the order.';
+			return load().then(function () { if (statusEl) { statusEl.textContent = message; } });
+		}).then(function () {
+			setBusy(o, 'delay', false);
 		});
 	}
 
@@ -451,6 +569,7 @@
 	function exceptionMessages(o) {
 		var messages = [];
 		if (o.timing_status === 'estimate_passed') { messages.push(o.timing_label || 'Estimate passed - check this order.'); }
+		if (o.capacity_overflow) { messages.push('Over capacity — slot was full when paid.'); }
 		if (o.payment_status === 'refunded') { messages.push('Refunded - pause preparation and check with a manager.'); }
 		if (!Array.isArray(o.allowed_next_statuses)) { messages.push('Status controls are unavailable - refresh before acting.'); }
 		if (hasAllergenNote(o)) { messages.push('Allergy / dietary note - read before making.'); }
@@ -620,19 +739,76 @@
 		feedback.hidden = !message;
 	}
 
-	function decidePreorder(o, decision, contactConfirmed, eta) {
-		if (offline || !setPreorderBusy(o, 'preorder-' + decision, true)) { return; }
-		api('/admin/preorder/' + o.id + '/decision', 'POST', {
+	function normalizePreorderPickupOptions(data, expectedVersion) {
+		function invalid() { throw new Error('Pickup options changed or are invalid. Confirm contact again to reload available times.'); }
+		if (!data || typeof data !== 'object' || Array.isArray(data) ||
+			!Number.isInteger(expectedVersion) || expectedVersion < 1 ||
+			!Number.isInteger(data.request_version) || data.request_version !== expectedVersion ||
+			typeof data.config_key !== 'string' || !data.config_key.trim() ||
+			typeof data.timezone !== 'string' || !data.timezone.trim() ||
+			!Number.isInteger(data.hold_minutes) || data.hold_minutes < 1 || data.hold_minutes > 30 || !Array.isArray(data.days)) { invalid(); }
+		var choices = [];
+		var seen = Object.create(null);
+		data.days.forEach(function (day) {
+			if (!day || typeof day.label !== 'string' || !day.label.trim() || !Array.isArray(day.slots)) { invalid(); }
+			day.slots.forEach(function (slot) {
+				if (!slot || typeof slot.label !== 'string' || !slot.label.trim() || typeof slot.available !== 'boolean' ||
+					typeof slot.ready_from_utc !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(slot.ready_from_utc)) { invalid(); }
+				var parsed = new Date(slot.ready_from_utc);
+				if (!isFinite(parsed.getTime()) || parsed.toISOString().replace('.000Z', 'Z') !== slot.ready_from_utc || seen[slot.ready_from_utc]) { invalid(); }
+				seen[slot.ready_from_utc] = true;
+				if (slot.available) { choices.push({ label: day.label + ' — ' + slot.label, ready_from_utc: slot.ready_from_utc, pickup_mode: 'scheduled' }); }
+			});
+		});
+		return { config_key: data.config_key, timezone: data.timezone, hold_minutes: data.hold_minutes, choices: choices };
+	}
+
+	function preorderCanAccept(cardEl) {
+		var pickup = cardEl && cardEl.preorderPickup;
+		return !!(cardEl && cardEl.isConnected && preorderPanel && preorderPanel.contains(cardEl) && pickup &&
+			!offline && !inFlight[String(pickup.order.id)] && pickup.order.pickup_selection_available === true &&
+			pickup.order.decision_available !== false && (pickup.order.approval_state || 'pending') === 'pending' &&
+			pickup.contact.checked && !pickup.loading && pickup.options && pickup.options.config_key && pickup.selection &&
+			pickup.select.value === pickup.selection.ready_from_utc && pickup.options.choices.indexOf(pickup.selection) !== -1);
+	}
+
+	function updatePreorderControls(cardEl) {
+		var busy = offline || !!inFlight[cardEl.getAttribute('data-preorder-id')];
+		var buttons = cardEl.querySelectorAll('button');
+		for (var i = 0; i < buttons.length; i++) {
+			buttons[i].disabled = busy || (buttons[i].classList.contains('db-preorder-accept') && !preorderCanAccept(cardEl));
+		}
+		var pickup = cardEl.preorderPickup;
+		if (pickup) {
+			pickup.contact.disabled = busy;
+			pickup.select.disabled = busy || !pickup.contact.checked || pickup.loading || !pickup.options || !pickup.options.choices.length;
+		}
+	}
+
+	function decidePreorder(o, decision, contactConfirmed, cardEl) {
+		if (decision === 'accept' && !preorderCanAccept(cardEl)) { return; }
+		var body = {
 			decision: decision,
 			contact_confirmed: !!contactConfirmed,
-			eta: eta || 0,
 			expected_version: o.version,
 			event_key: eventKey(o, 'preorder-' + decision)
-		}).then(function (res) {
+		};
+		if (decision === 'accept') {
+			body.pickup_mode = cardEl.preorderPickup.selection.pickup_mode;
+			body.ready_from_utc = cardEl.preorderPickup.selection.ready_from_utc;
+			body.pickup_config_key = cardEl.preorderPickup.options.config_key;
+		}
+		if (offline || !setPreorderBusy(o, 'preorder-' + decision, true)) { return; }
+		return api('/admin/preorder/' + o.id + '/decision', 'POST', body).then(function (res) {
 			var message = res && res.message ? res.message : 'Pre-order request updated.';
+			var customerStatus = res && res.notification ? res.notification.customer_status : '';
+			var deliveryWriteFailed = res && res.notification && res.notification.warning === 'delivery_status_not_persisted';
+			var deliveryWarning = decision === 'accept' && customerStatus === 'failed'
+				? ' The request is approved, but the customer email handoff failed. Use the recovery controls to copy the same payment link or resend it.'
+				: (decision === 'accept' && deliveryWriteFailed ? ' The email handoff result could not be recorded. Treat it as uncertain and use the same-link recovery controls.' : '');
 			return load().then(function () {
-				setPreorderMessage(message, false);
-				if (statusEl) { statusEl.textContent = message; }
+				setPreorderMessage(message + deliveryWarning, !!deliveryWarning);
+				if (statusEl) { statusEl.textContent = message + deliveryWarning; }
 			});
 		}).catch(function (error) {
 			var message = error.message || 'Could not update the pre-order request.';
@@ -645,10 +821,49 @@
 		});
 	}
 
+	function recoverPreorderPaymentLink(o, mode) {
+		if (offline || ['view', 'resend'].indexOf(mode) === -1 || !setPreorderBusy(o, 'preorder-payment-link-' + mode, true)) { return; }
+		return api('/admin/preorder/' + o.id + '/payment-link', 'POST', { mode: mode }).then(function (res) {
+			if (mode === 'view') {
+				var paymentUrl = String(res && res.payment_url || '');
+				var parsed;
+				try { parsed = new URL(paymentUrl, window.location.origin); } catch (ignored) { parsed = null; }
+				if (!parsed || parsed.origin !== window.location.origin || !/#doughboss_request=/.test(paymentUrl) || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+					throw new Error('Secure copy is unavailable in this browser. No payment link was placed on screen.');
+				}
+				return navigator.clipboard.writeText(paymentUrl).then(function () {
+					setPreorderMessage('The existing approved payment link was copied securely. Its original expiry has not changed.', false);
+				});
+			}
+			var customerStatus = res && res.notification ? res.notification.customer_status : '';
+			var shopStatus = res && res.notification ? res.notification.shop_status : '';
+			var writeFailed = res && res.notification && res.notification.warning === 'delivery_status_not_persisted';
+			var message = customerStatus === 'accepted'
+				? 'WordPress accepted the customer resend request. Delivery is not guaranteed, and the original payment deadline has not changed.'
+				: 'The customer resend was not accepted. Copy the same payment link securely or contact the customer directly.';
+			if (shopStatus === 'failed') { message += ' The shop copy also failed.'; }
+			if (writeFailed) { message += ' The handoff result could not be stored, so treat delivery as uncertain.'; }
+			return load().then(function () { setPreorderMessage(message, customerStatus !== 'accepted' || writeFailed); });
+		}).catch(function (error) {
+			setPreorderMessage(error.message || 'The existing payment link could not be recovered.', true);
+		}).then(function () {
+			setPreorderBusy(o, 'preorder-payment-link-' + mode, false);
+			applyConnectionState();
+		});
+	}
+
 	function preorderCard(o) {
-		var timingConfirmed = false;
+		var approvalState = o.approval_state || 'pending';
+		var approvalPending = approvalState === 'pending';
+		var decisionAvailable = approvalPending && o.decision_available !== false;
+		var pickupAvailable = decisionAvailable && o.pickup_selection_available === true;
+		var approverName = String(o.approver_name || 'the named approver');
+		var approvalLabel = approvalPending
+			? 'Pre-order request — awaiting ' + approverName + ' review'
+			: (approvalState === 'payment_held'
+				? 'Payment needs staff review — not in kitchen'
+				: (approvalState === 'payment_active' ? 'Payment started — not in kitchen' : 'Approved for payment — not in kitchen'));
 		var rejectOpen = false;
-		var eta = 0;
 		var cardEl = el('article', {
 			class: 'db-card db-card-pending db-preorder-card',
 			'data-preorder-id': String(o.id),
@@ -656,22 +871,65 @@
 		}, []);
 		var acceptBtn = el('button', {
 			class: 'button button-primary db-preorder-accept', type: 'button',
-			text: 'Accept into kitchen', disabled: 'disabled'
+			text: 'Approve for payment', disabled: 'disabled'
 		}, []);
 		var rejectBtn = el('button', { class: 'button db-preorder-reject', type: 'button', text: 'Reject request' }, []);
 		var rejectConfirm = el('div', { class: 'db-card-actions-row', hidden: 'hidden' }, []);
-		var etaSelect = el('select', { class: 'db-preorder-eta', 'aria-label': 'Agreed pickup estimate for ' + orderTag(o) }, []);
-		etaSelect.appendChild(el('option', { value: '0', text: 'Timing agreed by phone' }));
-		ETA_CHOICES.forEach(function (minutes) {
-			etaSelect.appendChild(el('option', { value: String(minutes), text: minutes + ' minutes' }));
-		});
-		etaSelect.addEventListener('change', function () { eta = parseInt(etaSelect.value, 10) || 0; });
 		var contactCheck = el('input', { type: 'checkbox' }, []);
+		var pickupSelectId = 'db-preorder-pickup-' + String(o.id);
+		var pickupStatus = el('div', { id: pickupSelectId + '-status', role: 'status', 'aria-live': 'polite', text: 'Confirm the customer call to load available pickup times.' }, []);
+		var pickupSelect = el('select', { id: pickupSelectId, class: 'db-preorder-pickup-select', 'aria-describedby': pickupSelectId + '-status', disabled: 'disabled' }, []);
+		pickupSelect.appendChild(el('option', { value: '', text: 'Choose an agreed pickup time' }, []));
+		var pickup = { order: o, contact: contactCheck, select: pickupSelect, generation: 0, options: null, selection: null, loading: false };
+		cardEl.preorderPickup = pickup;
+		pickup.invalidate = function () {
+			pickup.generation += 1;
+			pickup.options = null;
+			pickup.selection = null;
+			pickup.loading = false;
+			pickupSelect.textContent = '';
+			pickupSelect.appendChild(el('option', { value: '', text: 'Choose an agreed pickup time' }, []));
+			pickupSelect.value = '';
+			pickupStatus.textContent = 'Confirm the customer call again to load current pickup times.';
+			updatePreorderControls(cardEl);
+		};
 		contactCheck.addEventListener('change', function () {
-			timingConfirmed = !!contactCheck.checked;
-			acceptBtn.disabled = !timingConfirmed || offline;
+			pickup.invalidate();
+			if (!contactCheck.checked || !pickupAvailable || offline || inFlight[String(o.id)] || !cardEl.isConnected || !preorderPanel.contains(cardEl)) { return; }
+			var generation = pickup.generation;
+			pickup.loading = true;
+			pickupStatus.textContent = 'Loading current pickup times…';
+			updatePreorderControls(cardEl);
+			function isCurrent() {
+				return generation === pickup.generation && cardEl.isConnected && preorderPanel.contains(cardEl) && contactCheck.checked && !offline && !inFlight[String(o.id)];
+			}
+			api('/admin/preorder/' + o.id + '/pickup-options?expected_version=' + encodeURIComponent(o.version) + '&contact_confirmed=true', 'GET').then(function (data) {
+				if (!isCurrent()) { return; }
+				var options = normalizePreorderPickupOptions(data, o.version);
+				pickup.options = options;
+				options.choices.forEach(function (choice) {
+					pickupSelect.appendChild(el('option', { value: choice.ready_from_utc, text: choice.label }, []));
+				});
+				pickup.loading = false;
+				pickupStatus.textContent = options.choices.length
+					? 'Times shown in ' + options.timezone + '. Approval reserves capacity for up to ' + options.hold_minutes + ' minutes, capped at pickup time. The payment link uses the same deadline.'
+					: 'No pickup times are currently available for this request. Do not approve; confirm contact again later to refresh.';
+				updatePreorderControls(cardEl);
+			}).catch(function (error) {
+				if (!isCurrent()) { return; }
+				pickup.loading = false;
+				pickupStatus.textContent = error.message || 'Pickup times could not be loaded. Confirm contact again to retry.';
+				updatePreorderControls(cardEl);
+			});
 		});
-		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', timingConfirmed, eta); });
+		pickupSelect.addEventListener('change', function () {
+			pickup.selection = null;
+			if (pickup.options && contactCheck.checked && !pickup.loading && !offline && !inFlight[String(o.id)]) {
+				pickup.selection = pickup.options.choices.filter(function (choice) { return choice.ready_from_utc === pickupSelect.value; })[0] || null;
+			}
+			updatePreorderControls(cardEl);
+		});
+		acceptBtn.addEventListener('click', function () { decidePreorder(o, 'accept', contactCheck.checked, cardEl); });
 		rejectBtn.addEventListener('click', function () {
 			rejectOpen = !rejectOpen;
 			rejectConfirm.hidden = !rejectOpen;
@@ -680,14 +938,14 @@
 		rejectConfirm.appendChild(el('span', { text: 'No payment has been taken. Reject this request?' }));
 		rejectConfirm.appendChild(el('button', {
 			class: 'button button-link-delete', type: 'button', text: 'Confirm reject',
-			onclick: function () { decidePreorder(o, 'reject', false, 0); }
+			onclick: function () { decidePreorder(o, 'reject', false); }
 		}, []));
 
 		cardEl.appendChild(el('div', { class: 'db-card-head' }, [
 			el('span', { class: 'db-card-number', text: o.order_number || orderTag(o) }),
 			el('span', { class: 'db-card-time', text: elapsed(o.created_at) })
 		]));
-		cardEl.appendChild(el('div', { class: 'db-card-status', text: 'Pre-order request — awaiting morning review' }));
+		cardEl.appendChild(el('div', { class: 'db-card-status', text: approvalLabel }));
 		cardEl.appendChild(el('div', { class: 'db-card-contact' }, [
 			el('strong', { text: o.customer_name || 'Customer' }),
 			o.customer_phone ? el('span', { text: ' · ' + o.customer_phone }) : null
@@ -695,19 +953,36 @@
 		if (o.notes) { cardEl.appendChild(el('div', { class: 'db-card-notes', text: 'Notes: ' + o.notes })); }
 		cardEl.appendChild(el('ul', { class: 'db-card-items', 'aria-label': (o.items || []).length + ' items' }, (o.items || []).map(itemLine)));
 		cardEl.appendChild(el('div', { class: 'db-card-meta' }, [
-			el('div', { class: 'db-card-exception', role: 'alert', text: 'Unconfirmed and unpaid — call the customer to agree pickup timing before accepting.' }),
-			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid — agree the payment method with the customer.' }),
-			el('div', { class: 'db-card-exception', text: 'POSPal is deferred. After acceptance, create or confirm the POS action and issue the required manual kitchen ticket.' }),
+			el('div', { class: 'db-card-exception', role: 'alert', text: decisionAvailable
+				? 'Unconfirmed and unpaid — call the customer before approving payment.'
+				: (approvalPending ? 'Unconfirmed and unpaid — awaiting the named payment approver.' : 'Payment may now be completed through the single approved payment link. Do not prepare this request yet.') }),
+			el('div', { class: 'db-card-payment db-payment-unpaid', text: 'Payment: unpaid — kitchen release stays locked until payment is verified.' }),
+			el('div', { class: 'db-card-exception', text: 'POSPal, printer and kitchen notifications remain blocked. A separate paid order is released automatically only after server verification.' }),
 			el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) })
 		]));
-		cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [
-			contactCheck,
-			' I called the customer and agreed pickup timing.'
-		]));
-		cardEl.appendChild(el('div', { class: 'db-card-actions' }, [
-			el('div', { class: 'db-card-actions-row' }, [etaSelect, acceptBtn, rejectBtn]),
-			rejectConfirm
-		]));
+		if (o.payment_link_delivery_status === 'failed') {
+			cardEl.appendChild(el('div', { class: 'db-preorder-delivery-warning', role: 'alert', text: 'Customer payment email was not accepted by the mail system. Approval remains recorded; use the same-link recovery controls below.' }));
+		}
+		if (o.payment_link_recovery_available) {
+			cardEl.appendChild(el('div', { class: 'db-card-actions db-preorder-recovery' }, [
+				el('button', { class: 'button db-preorder-copy-link', type: 'button', text: 'Copy payment link', onclick: function () { recoverPreorderPaymentLink(o, 'view'); } }, []),
+				el('button', { class: 'button db-preorder-resend-link', type: 'button', text: 'Resend payment email', onclick: function () { recoverPreorderPaymentLink(o, 'resend'); } }, [])
+			]));
+		}
+		if (decisionAvailable) {
+			if (pickupAvailable) {
+				cardEl.appendChild(el('label', { class: 'db-preorder-contact-check' }, [contactCheck, ' I called the customer and agreed pickup timing.']));
+				cardEl.appendChild(el('label', { for: pickupSelectId, text: 'Agreed pickup time' }, []));
+				cardEl.appendChild(pickupSelect);
+				cardEl.appendChild(pickupStatus);
+			} else {
+				cardEl.appendChild(el('div', { role: 'status', text: 'This historical request cannot receive a new pickup approval. Rejection remains available.' }, []));
+			}
+			cardEl.appendChild(el('div', { class: 'db-card-actions' }, [
+				el('div', { class: 'db-card-actions-row' }, pickupAvailable ? [acceptBtn, rejectBtn] : [rejectBtn]),
+				rejectConfirm
+			]));
+		}
 		return cardEl;
 	}
 
@@ -720,7 +995,7 @@
 		}
 		preorderPanel.hidden = false;
 		preorderPanel.appendChild(el('h2', { id: 'db-preorder-review-title', text: 'Morning pre-order review (' + requests.length + ')' }));
-		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. Call first, then accept or reject.' }));
+		preorderPanel.appendChild(el('p', { text: 'These requests are not confirmed, paid, sent to POSPal, or printed for the kitchen. The named approver calls first, selects the agreed pickup time, then approves payment or rejects. Only verified payment creates a kitchen order.' }));
 		preorderPanel.appendChild(el('div', { class: 'db-preorder-feedback', role: 'status', hidden: 'hidden' }, []));
 		var list = el('div', { class: 'db-lanes db-preorder-list' }, requests.map(preorderCard));
 		preorderPanel.appendChild(list);
@@ -736,6 +1011,7 @@
 		var head = el('div', { class: 'db-card-head' }, [
 			el('span', { class: 'db-card-number', text: o.order_number }),
 			el('span', { class: 'db-card-type db-type-' + o.order_type, text: typeLabel }),
+			pickupBadge(o) ? el('span', { class: 'db-card-badge db-badge-' + (o.pickup_mode === 'asap' ? 'asap' : 'scheduled'), text: pickupBadge(o) }) : null,
 			tableLabel ? el('span', { class: 'db-card-table', text: 'TABLE ' + tableLabel }) : null,
 			source ? el('span', { class: 'db-card-source', text: source }) : null,
 			showShop ? el('span', { class: 'db-card-shop', text: locationsById[o.location_id] }) : null,
@@ -767,7 +1043,7 @@
 		if (o.notes) {
 			meta.push(el('div', { class: 'db-card-notes' + (hasAllergenNote(o) ? ' db-card-notes-alert' : ''), text: 'Note: ' + o.notes }));
 		}
-		if (o.eta_minutes) {
+		if (o.eta_minutes && !pickupBadge(o)) {
 			var windowText = readyWindow(o);
 			meta.push(el('div', { class: 'db-card-eta', text: windowText ? 'Staff estimate ' + windowText : 'Staff estimate ' + o.eta_minutes + ' min' }));
 		}
@@ -779,8 +1055,32 @@
 			meta.push(el('div', { class: 'db-card-total', text: 'Total ' + money(o.total) }));
 		}
 
+		var timed = !!pickupBadge(o);
+		var pickupLine = null;
+		if (timed) {
+			var delayMins = parseInt(o.promised_delay_minutes, 10) || 0;
+			pickupLine = el('div', { class: 'db-card-pickup' }, [
+				el('span', { class: 'db-card-pickup-time', text: pickupText(o) }),
+				delayMins > 0 ? el('span', { class: 'db-delay-chip', text: 'Delayed +' + delayMins + ' min' }) : null
+			]);
+		}
+		var delayBtn = delayAllowed(o)
+			? el('button', { class: 'button db-delay', type: 'button', 'aria-label': 'Add ' + DELAY_MINUTES + ' minutes to the pickup time for order ' + o.order_number, onclick: function () { delayOrder(o, DELAY_MINUTES); } }, ['+' + DELAY_MINUTES + ' min'])
+			: null;
+
 		var actions;
-		if (isNew) {
+		if (isNew && timed) {
+			actions = el('div', { class: 'db-card-actions db-card-actions-timed' }, [
+				el('div', { class: 'db-accept-label', text: 'Accept — keeps the customer’s pickup time' }),
+				el('div', { class: 'db-card-actions-row' }, [
+					el('button', { class: 'button button-primary db-accept', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ' for its pickup time', onclick: function () { confirmUnpaid(o, function () { accept(o, 0); }); } }, ['Accept']),
+					delayBtn
+				]),
+				el('div', { class: 'db-card-actions-row' }, [
+					el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change'])
+				])
+			]);
+		} else if (isNew) {
 			var etaRow = ETA_CHOICES.map(function (m) {
 				return el('button', { class: 'button db-eta', type: 'button', 'aria-label': 'Accept order ' + o.order_number + ', ready in ' + m + ' minutes', onclick: function () { confirmUnpaid(o, function () { accept(o, m); }); } }, [m + 'm']);
 			});
@@ -804,7 +1104,7 @@
 			});
 			var actionRow = [
 				el('button', { class: 'button db-review-change', type: 'button', 'aria-label': 'Review an add or remove item request for order ' + o.order_number, onclick: function () { openAmendmentReview(o); } }, ['Review change'])
-			].concat(advBtns);
+			].concat(delayBtn ? [delayBtn] : [], advBtns);
 			actions = el('div', { class: 'db-card-actions' }, [
 				!advBtns.length ? el('p', { class: 'db-no-next-action', text: 'No next kitchen step is available. Refresh or ask a manager before changing this order.' }) : null,
 				el('div', { class: 'db-card-actions-row' }, actionRow)
@@ -822,6 +1122,7 @@
 
 		return el('div', { class: 'db-card db-card-' + o.status + ageClass + (isNew && !o.acknowledged && !localAck[o.id] ? ' db-card-fresh' : ''), 'data-order-id': String(o.id), 'aria-busy': inFlight[String(o.id)] ? 'true' : 'false' }, [
 			head,
+			pickupLine,
 			el('div', { class: 'db-card-status', text: orderLabel(o, o.status) }),
 			contact,
 			items,
@@ -935,6 +1236,27 @@
 		applyConnectionState();
 	}
 
+	function renderUpcoming(list) {
+		var rows = list.map(function (o) {
+			var itemCount = (o.items || []).reduce(function (sum, it) { return sum + Math.max(1, parseInt(it.quantity, 10) || 1); }, 0);
+			var starts = formatTime(utcIso(o.fire_at_utc), o.timezone);
+			return el('li', { class: 'db-upcoming-row', 'data-order-id': String(o.id) }, [
+				el('span', { class: 'db-upcoming-time', text: pickupText(o) }),
+				el('span', { class: 'db-upcoming-number', text: o.order_number }),
+				el('span', { class: 'db-upcoming-name', text: SCREEN_MODE === 'make' ? serviceLabel(o) : (o.customer_name || '—') }),
+				el('span', { class: 'db-upcoming-items', text: itemCount + (itemCount === 1 ? ' item' : ' items') }),
+				starts ? el('span', { class: 'db-upcoming-start', text: 'Starts ' + starts }) : null
+			]);
+		});
+		var details = el('details', { class: 'db-upcoming' }, [
+			el('summary', { class: 'db-upcoming-summary' }, ['Upcoming ', el('span', { class: 'db-lane-count', text: String(list.length) }), el('small', { text: ' — not due in the kitchen yet' })]),
+			el('ul', { class: 'db-upcoming-list' }, rows)
+		]);
+		if (upcomingOpen) { details.setAttribute('open', 'open'); }
+		details.addEventListener('toggle', function () { upcomingOpen = !!details.open; });
+		return details;
+	}
+
 	function render(orders) {
 		lastOrders = orders;
 		boardEl.textContent = '';
@@ -945,6 +1267,16 @@
 			boardEl.appendChild(el('div', { class: 'db-sound-warn' }, [
 				'🔇 Sound is OFF — tap “Enable sound alerts” (top right) so you don’t miss new orders.'
 			]));
+		}
+
+		// Timed orders that are not due in the kitchen yet wait in the collapsed
+		// Upcoming section: no lane, no alarm, until they stop being upcoming.
+		var upcoming = orders.filter(isUpcoming);
+		if (upcoming.length) {
+			upcoming = upcoming.slice().sort(function (a, b) {
+				return String(a.promised_ready_from_utc || '').localeCompare(String(b.promised_ready_from_utc || ''));
+			});
+			orders = orders.filter(function (o) { return !isUpcoming(o); });
 		}
 
 		var unacked = SCREEN_MODE === 'pass' ? [] : orders.filter(function (o) {
@@ -988,6 +1320,7 @@
 
 		var visibleOrders = orders.filter(function (o) { return !!laneOf(o.status); });
 		boardEl.appendChild(renderPulse(visibleOrders));
+		if (upcoming.length && SCREEN_MODE !== 'pass') { boardEl.appendChild(renderUpcoming(upcoming)); }
 		var lanesWrap = el('div', { class: 'db-lanes' }, LANES.map(function (lane) {
 			var laneOrders = orders.filter(function (o) { return laneOf(o.status) === lane.key; });
 			var cards = laneOrders.length
@@ -1001,7 +1334,7 @@
 		boardEl.appendChild(lanesWrap);
 
 		if (statusEl) {
-			statusEl.textContent = orders.length + ' active · updated ' +
+			statusEl.textContent = orders.length + ' active' + (upcoming.length ? ' · ' + upcoming.length + ' upcoming' : '') + ' · updated ' +
 				new Date().toLocaleTimeString();
 		}
 		applyConnectionState();
@@ -1028,20 +1361,18 @@
 			}
 		}
 		if (preorderPanel) {
-			var preorderButtons = preorderPanel.querySelectorAll('button');
-			for (var j = 0; j < preorderButtons.length; j++) {
-				var preorderCardEl = preorderButtons[j].closest('[data-preorder-id]');
-				var preorderBusy = preorderCardEl && inFlight[preorderCardEl.getAttribute('data-preorder-id')];
-				var contactCheck = preorderCardEl && preorderCardEl.querySelector('.db-preorder-contact-check input[type="checkbox"]');
-				preorderButtons[j].disabled = offline || !!preorderBusy ||
-					(preorderButtons[j].classList.contains('db-preorder-accept') && (!contactCheck || !contactCheck.checked));
+			var preorderCards = preorderPanel.querySelectorAll('[data-preorder-id]');
+			for (var j = 0; j < preorderCards.length; j++) {
+				var pickup = preorderCards[j].preorderPickup;
+				if (offline && pickup && (pickup.loading || pickup.options || pickup.selection)) { pickup.invalidate(); }
+				updatePreorderControls(preorderCards[j]);
 			}
 		}
 		if (retryBtn) { retryBtn.hidden = !offline; }
 		if (statusEl) {
 			statusEl.textContent = offline
 				? 'Offline - showing orders last synced ' + syncTimeLabel() + '. Changes are locked.'
-				: lastOrders.length + ' active - synced ' + syncTimeLabel();
+				: lastOrders.filter(function (o) { return !isUpcoming(o); }).length + ' active - synced ' + syncTimeLabel();
 		}
 	}
 
@@ -1154,12 +1485,20 @@
 	if (soundBtn) {
 		soundBtn.addEventListener('click', enableSound);
 	}
+	// The board is active as soon as it renders; enabling sound retries inside
+	// a user gesture for browsers that want one.
+	requestWakeLock();
 
 	// If the tablet sleeps/refocuses, the audio context can suspend — resume it
-	// so the chime keeps working without a fresh tap.
+	// so the chime keeps working without a fresh tap. The screen wake lock is
+	// released by the browser while hidden, so re-acquire it here too.
 	document.addEventListener('visibilitychange', function () {
 		if (!document.hidden && audio.on && audio.ctx && audio.ctx.state === 'suspended') {
 			audio.ctx.resume();
+		}
+		if (!document.hidden) {
+			if (wakeLock && wakeLock.released !== false) { wakeLock = null; }
+			requestWakeLock();
 		}
 	});
 	window.addEventListener('offline', function () {

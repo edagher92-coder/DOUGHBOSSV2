@@ -13,18 +13,44 @@ define( 'DOUGHBOSS_PLUGIN_DIR', $preview_repo . '/' );
 define( 'DOUGHBOSS_PLUGIN_URL', $preview_base );
 define( 'WP_PLUGIN_DIR', $preview_repo );
 
-function add_action() {}
-function add_filter() {}
+// Only the explicitly included presentation snippet registers runnable hooks.
+// Core/theme bootstrap hooks remain inert: no WordPress or provider runtime exists.
+function add_action( $tag, $callback = null, $priority = 10, $accepted_args = 1 ) {
+	if ( empty( $GLOBALS['doughboss_preview_capture_hooks'] ) || ! in_array( $tag, array( 'pre_do_shortcode_tag', 'wp_head', 'wp_body_open', 'wp_footer' ), true ) ) { return; }
+	$GLOBALS['doughboss_preview_hooks'][ $tag ][ $priority ][] = array( $callback, $accepted_args );
+}
+function add_filter( $tag, $callback = null, $priority = 10, $accepted_args = 1 ) { add_action( $tag, $callback, $priority, $accepted_args ); }
+function apply_filters( $tag, $value, ...$args ) {
+	$hooks = $GLOBALS['doughboss_preview_hooks'][ $tag ] ?? array();
+	ksort( $hooks );
+	foreach ( $hooks as $callbacks ) {
+		foreach ( $callbacks as $hook ) { $value = call_user_func_array( $hook[0], array_slice( array_merge( array( $value ), $args ), 0, $hook[1] ) ); }
+	}
+	return $value;
+}
+function do_action( $tag ) {
+	$hooks = $GLOBALS['doughboss_preview_hooks'][ $tag ] ?? array();
+	ksort( $hooks );
+	foreach ( $hooks as $callbacks ) { foreach ( $callbacks as $hook ) { call_user_func( $hook[0] ); } }
+}
+function is_admin() { return false; }
+function is_front_page() { return 'front-page.php' === ( $GLOBALS['doughboss_preview_template'] ?? '' ); }
 function __return_true() { return true; }
 function __( $text ) { return $text; }
 function esc_html( $text ) { return htmlspecialchars( (string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ); }
 function esc_attr( $text ) { return esc_html( $text ); }
-function esc_url( $url ) { return esc_attr( $url ); }
+function esc_url( $url ) {
+	$media = $GLOBALS['doughboss_preview_hero_media'] ?? array();
+	if ( isset( $media[ $url ] ) ) { $url = $GLOBALS['doughboss_preview_base_path'] . $media[ $url ]['output']; }
+	return esc_attr( $url );
+}
 function esc_url_raw( $url ) { return (string) $url; }
 function esc_html__( $text ) { return esc_html( $text ); }
 function esc_attr__( $text ) { return esc_attr( $text ); }
 function esc_html_e( $text ) { echo esc_html( $text ); }
 function esc_attr_e( $text ) { echo esc_attr( $text ); }
+function wp_strip_all_tags( $text ) { return trim( strip_tags( (string) $text ) ); }
+function is_wp_error() { return false; }
 function trailingslashit( $value ) { return rtrim( (string) $value, "/\\" ) . '/'; }
 function wp_getimagesize( $file ) { return getimagesize( $file ); }
 function attachment_url_to_postid() { return 0; }
@@ -34,7 +60,11 @@ function language_attributes() { echo 'lang="en-AU"'; }
 function bloginfo( $field ) { echo 'charset' === $field ? 'UTF-8' : 'Dough Boss'; }
 function wp_body_open() {
 	$base = esc_attr( $GLOBALS['doughboss_preview_base_path'] );
-	echo '<aside class="db-preview-banner" role="note"><strong>Visual preview</strong><span>Sample menu and prices only. No real orders, payments, enquiries, calls, emails or bookings. Demo settings never reach the live site.</span><nav aria-label="Preview pages"><a href="' . $base . 'index.html">Home</a><a href="' . $base . 'order.html">Sample menu</a><a href="' . $base . 'paused.html">Paused state</a></nav><span id="db-preview-action" role="status" aria-live="polite"></span></aside>';
+	if ( empty( $GLOBALS['doughboss_preview_hero_media'] ) ) {
+		echo '<aside class="db-preview-banner" role="note">Photo-only preview; approved film not included.</aside>';
+	}
+	do_action( 'wp_body_open' );
+	echo '<aside class="db-preview-banner" role="note"><strong>Visual preview</strong><span>Sample menu and prices only. No real orders, payments, enquiries, calls, emails or bookings. Demo settings never reach the live site.</span><nav aria-label="Preview pages"><a href="' . $base . 'index.html">Home</a><a href="' . $base . 'order.html">Sample menu</a><a href="' . $base . 'paused.html">Paused state</a><a href="' . $base . 'partners.html">Partnerships</a><a href="' . $base . 'wholesale.html">Wholesale</a><a href="' . $base . 'catering.html">Catering</a><a href="' . $base . 'locations.html">Locations</a></nav><span id="db-preview-action" role="status" aria-live="polite"></span></aside>';
 }
 function wp_date( $format ) { return gmdate( $format ); }
 function get_option( $key, $default = false ) {
@@ -48,6 +78,7 @@ function get_option( $key, $default = false ) {
 }
 function home_url( $path = '/' ) {
 	$base = $GLOBALS['doughboss_preview_base_path'];
+	if ( '/members-events/' === $path ) { return $base . 'members.html'; }
 	if ( '/' === $path || '' === $path ) {
 		return $base . 'index.html';
 	}
@@ -55,10 +86,15 @@ function home_url( $path = '/' ) {
 		$hash = parse_url( $path, PHP_URL_FRAGMENT );
 		return $base . 'order.html' . ( $hash ? '#' . rawurlencode( $hash ) : '' );
 	}
+	if ( '/franchising/' === $path ) { return $base . 'partners.html'; }
+	if ( '/wholesale/' === $path ) { return $base . 'wholesale.html'; }
+	if ( 0 === strpos( $path, '/catering/' ) ) { return $base . 'catering.html' . ( false !== strpos( $path, '#' ) ? substr( $path, strpos( $path, '#' ) ) : '' ); }
+	if ( '/locations/' === $path ) { return $base . 'locations.html'; }
 	return '#preview-unavailable';
 }
 function body_class() {
 	$classes = function_exists( 'doughboss_final_body_class' ) ? doughboss_final_body_class( array() ) : array( 'dbf-site' );
+	if ( is_front_page() ) { $classes[] = 'home'; }
 	if ( 'page-order.php' === $GLOBALS['doughboss_preview_template'] ) {
 		$classes[] = 'doughboss-order-page';
 		if ( empty( $GLOBALS['doughboss_preview_ordering_open'] ) ) {
@@ -86,45 +122,146 @@ function wp_head() {
 	$title = esc_html( $GLOBALS['doughboss_preview_title'] );
 	echo '<title>' . $title . '</title>';
 	echo '<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">';
-	echo '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; connect-src &#39;none&#39;; form-action &#39;none&#39;; object-src &#39;none&#39;; base-uri &#39;none&#39;; img-src &#39;self&#39; data:; font-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; script-src &#39;self&#39;">';
+	echo '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; connect-src &#39;none&#39;; form-action &#39;none&#39;; object-src &#39;none&#39;; base-uri &#39;none&#39;; img-src &#39;self&#39; data:; media-src &#39;self&#39;; font-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; script-src &#39;self&#39;">';
 	echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss-manoush-hero.css">';
 	echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss.css">';
 	if ( 'page-order.php' === $GLOBALS['doughboss_preview_template'] ) {
 		echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss-order-page.css">';
 	}
+	if ( 'page-catering.php' === $GLOBALS['doughboss_preview_template'] ) {
+		echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss-catering.css">';
+	}
+	if ( in_array( $GLOBALS['doughboss_preview_template'], array( 'page-franchising.php', 'page-wholesale.php' ), true ) ) {
+		echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss-b2b.css">';
+	}
 	echo '<link rel="stylesheet" href="' . $base . 'themes/doughboss-final/style.css">';
 	echo '<link rel="stylesheet" href="' . $base . 'preview/preview.css">';
+	do_action( 'wp_head' );
 }
 function wp_footer() {
 	$base = esc_attr( $GLOBALS['doughboss_preview_base_path'] );
+	echo '<link rel="stylesheet" href="' . $base . 'public/css/doughboss-preferences.css">';
+	echo '<script src="' . $base . 'public/js/doughboss-preferences.js"></script>';
 	echo '<script src="' . $base . 'preview/menu-options.js"></script>';
 	echo '<script src="' . $base . 'preview/preview-api.js"></script>';
 	echo '<script src="' . $base . 'public/js/doughboss-shop-status.js"></script>';
 	echo '<script src="' . $base . 'public/js/doughboss.js"></script>';
+	if ( 'page-catering.php' === $GLOBALS['doughboss_preview_template'] ) {
+		echo '<script src="' . $base . 'public/js/doughboss-catering.js"></script>';
+	}
 	echo '<script src="' . $base . 'public/js/doughboss-manoush-hero.js"></script>';
 	echo '<script src="' . $base . 'themes/doughboss-final/assets/theme.js"></script>';
+	echo '<script src="' . $base . 'themes/doughboss-final/assets/install.js"></script>';
+	do_action( 'wp_footer' );
 }
+
+function _n( $single, $plural, $number ) { return 1 === (int) $number ? $single : $plural; }
+function wp_json_encode( $data, $flags = 0 ) { return json_encode( $data, $flags ); }
 
 class DoughBoss_Settings {
+	public static function get( $key, $default = null ) { return $default; }
 	public static function ordering_open() { return ! empty( $GLOBALS['doughboss_preview_ordering_open'] ); }
 	public static function ordering_closed_message() { return 'Sample paused-state message. Check a shop for current availability.'; }
+	public static function format_price( $amount ) { return '$' . number_format( (float) $amount, 2 ); }
+	public static function catering_email() { return 'catering@doughboss.com.au'; }
+	public static function catering_phone() { return '0422487487'; }
+	public static function b2b_email() { return 'info@doughboss.com.au'; }
+	public static function order_phone() { return '0297742286'; }
+	public static function phone_tel( $phone ) { return '+61' . substr( preg_replace( '/\D/', '', (string) $phone ), 1 ); }
+	public static function phone_display( $phone ) {
+		$digits = preg_replace( '/\D/', '', (string) $phone );
+		return '04' === substr( $digits, 0, 2 )
+			? substr( $digits, 0, 4 ) . ' ' . substr( $digits, 4, 3 ) . ' ' . substr( $digits, 7, 3 )
+			: '(' . substr( $digits, 0, 2 ) . ') ' . substr( $digits, 2, 4 ) . ' ' . substr( $digits, 6, 4 );
+	}
 }
 
+/** Catering rules for the preview: Revesby pickup only (sample shop 901). */
+class DoughBoss_Catering {
+	public static function min_notice_business_days() { return 2; }
+	public static function catering_location_ids() { return array( 901 ); }
+	public static function delivery_enabled() { return false; }
+}
+
+/** Only synthetic presentation routes exist; no WordPress content is loaded. */
+function is_page( $pages ) {
+	$slugs = array( 'page-order.php' => 'order', 'page-franchising.php' => 'franchising', 'page-wholesale.php' => 'wholesale', 'page-catering.php' => 'catering', 'page-locations.php' => 'locations', 'page-members-events.php' => 'members-events' );
+	$template = $GLOBALS['doughboss_preview_template'];
+	return isset( $slugs[ $template ] ) && in_array( $slugs[ $template ], (array) $pages, true );
+}
+
+/** Preview the genuine empty-content state without reading a database. */
+function have_posts() { return 'page-members-events.php' === $GLOBALS['doughboss_preview_template'] && empty( $GLOBALS['doughboss_preview_post_read'] ); }
+function the_post() { $GLOBALS['doughboss_preview_post_read'] = true; }
+function the_title() { echo esc_html( $GLOBALS['doughboss_preview_title'] ); }
+function the_content() {
+	if ( 'page-members-events.php' === $GLOBALS['doughboss_preview_template'] ) {
+		$content = file_get_contents( $GLOBALS['doughboss_preview_repo_root'] . '/scripts/hero-commercial/members-events-page.html' );
+		echo str_replace( '[doughboss_square_membership]', do_shortcode( '[doughboss_square_membership]' ), $content );
+	}
+}
+
+function doughboss_preview_menu_item( $post_id ) {
+	foreach ( doughboss_preview_fixture()['menu'] as $item ) {
+		if ( (int) $item['id'] === (int) $post_id ) {
+			return $item;
+		}
+	}
+	return null;
+}
+
+function get_posts( $args = array() ) {
+	unset( $args );
+	$posts = array();
+	foreach ( doughboss_preview_fixture()['menu'] as $item ) {
+		$posts[] = (object) array(
+			'ID'           => (int) $item['id'],
+			'post_title'   => $item['name'],
+			'post_excerpt' => $item['description'],
+			'post_content' => '',
+		);
+	}
+	return $posts;
+}
+
+function get_the_terms( $post_id ) {
+	$item = doughboss_preview_menu_item( $post_id );
+	return $item ? array( (object) array( 'name' => $item['category'] ) ) : false;
+}
+
+function get_post_meta( $post_id, $key ) {
+	$item = doughboss_preview_menu_item( $post_id );
+	return $item && DoughBoss_Post_Types::META_PRICE === $key ? $item['price'] : '';
+}
+
+require $preview_repo . '/includes/class-doughboss-post-types.php';
 require $preview_repo . '/includes/class-doughboss-images.php';
+require $preview_repo . '/includes/class-doughboss-square-loyalty.php';
 require $preview_repo . '/themes/doughboss-final/functions.php';
 require $preview_repo . '/includes/class-doughboss-shortcodes.php';
 require $preview_repo . '/includes/class-doughboss-menu-options.php';
+require $preview_repo . '/includes/class-doughboss-store-hours.php';
+require $preview_repo . '/includes/class-doughboss-b2b.php';
 
 $GLOBALS['doughboss_preview_shortcodes'] = new DoughBoss_Shortcodes();
 
+if ( ! empty( $GLOBALS['doughboss_preview_hero_media'] ) ) {
+	$GLOBALS['doughboss_preview_capture_hooks'] = true;
+	require $preview_repo . '/scripts/hero-commercial/homepage-hero-v6-snippet.php';
+	$GLOBALS['doughboss_preview_capture_hooks'] = false;
+}
+
 function shortcode_exists( $tag ) {
-	return in_array( $tag, array( 'doughboss_manoush_hero', 'doughboss_ordering_status', 'doughboss_shop_picker', 'doughboss_menu', 'doughboss_builder', 'doughboss_cart' ), true );
+	return in_array( $tag, array( 'doughboss_square_membership', 'doughboss_manoush_hero', 'doughboss_ordering_status', 'doughboss_shop_picker', 'doughboss_menu', 'doughboss_builder', 'doughboss_cart', 'doughboss_catering', 'doughboss_b2b_form' ), true );
 }
 function do_shortcode( $source ) {
 	if ( ! preg_match( '/^\[([a-z0-9_]+)(.*?)\]$/s', trim( $source ), $match ) ) {
 		return '';
 	}
 	$tag        = $match[1];
+	if ( 'doughboss_square_membership' === $tag ) {
+		return $GLOBALS['doughboss_preview_shortcodes']->square_membership();
+	}
 	$attributes = array();
 	if ( preg_match_all( '/([a-z0-9_]+)="([^"]*)"/', $match[2], $pairs, PREG_SET_ORDER ) ) {
 		foreach ( $pairs as $pair ) {
@@ -132,6 +269,8 @@ function do_shortcode( $source ) {
 		}
 	}
 	$shortcodes = $GLOBALS['doughboss_preview_shortcodes'];
+	$filtered = apply_filters( 'pre_do_shortcode_tag', false, $tag, $attributes );
+	if ( false !== $filtered ) { return $filtered; }
 	if ( 'doughboss_manoush_hero' === $tag ) {
 		return $shortcodes->manoush_hero( $attributes );
 	}
@@ -148,29 +287,58 @@ function do_shortcode( $source ) {
 		return '<p class="dbf-system-notice" role="status">Pizza builder is not available in this visual preview.</p>';
 	}
 	if ( 'doughboss_cart' === $tag ) {
+		if ( ! empty( $GLOBALS['doughboss_preview_cart'] ) && ! empty( $GLOBALS['doughboss_preview_ordering_open'] ) ) {
+			return '<div data-db-preview-cart="synthetic"><p class="dbf-system-notice" role="note">Sample cart and checkout layout only. Quantity, voucher, order and payment actions are disabled.</p>' . $shortcodes->cart() . '</div>';
+		}
 		return '<p class="dbf-system-notice" role="status">Cart and checkout are not available in this visual preview.</p>';
+	}
+	if ( 'doughboss_catering' === $tag ) {
+		return $shortcodes->catering();
+	}
+	if ( 'doughboss_b2b_form' === $tag ) {
+		// Real field layout in an inert container: no form element, endpoint,
+		// nonce or submit script is ever exported.
+		$html = DoughBoss_B2B::shortcode( $attributes );
+		$html = preg_replace( '/\sdata-(?:endpoint|nonce)="[^"]*"/', '', $html );
+		$html = str_replace( array( '<form ', '</form>', 'type="submit"' ), array( '<div data-preview-inert ', '</div>', 'type="button" disabled' ), $html );
+		return '<p class="dbf-system-notice" role="status">Sample layout only: enquiries cannot be sent from this visual preview.</p>' . $html;
 	}
 	return '';
 }
 
 function doughboss_preview_render_page( $template, $ordering_open, $title ) {
-	$allowed = array( 'front-page.php', 'page-order.php' );
+	$allowed = array( 'front-page.php', 'page-order.php', 'page-franchising.php', 'page-wholesale.php', 'page-catering.php', 'page-locations.php', 'page-members-events.php' );
 	if ( ! in_array( $template, $allowed, true ) ) {
 		throw new RuntimeException( 'Preview template is not allowlisted: ' . $template );
 	}
 	$GLOBALS['doughboss_preview_template']      = $template;
 	$GLOBALS['doughboss_preview_ordering_open'] = (bool) $ordering_open;
 	$GLOBALS['doughboss_preview_title']         = $title;
+	$GLOBALS['doughboss_preview_post_read']     = false;
 	ob_start();
 	require $GLOBALS['doughboss_preview_repo_root'] . '/themes/doughboss-final/' . $template;
 	$html = ob_get_clean();
+	// Execute no duplicate controller: publish the exact emitted source body as a
+	// local script so the preview can retain script-src 'self' (no unsafe-inline).
+	$html = preg_replace_callback( '#<script\s+id="([a-z0-9-]+)">([\s\S]*?)</script>#', static function ( $match ) {
+		$relative = 'preview/' . $match[1] . '-' . substr( hash( 'sha256', $match[2] ), 0, 16 ) . '.js';
+		$GLOBALS['doughboss_preview_generated_scripts'][ $relative ] = $match[2];
+		return '<script id="' . $match[1] . '" src="' . esc_attr( $GLOBALS['doughboss_preview_base_path'] . $relative ) . '"></script>';
+	}, $html );
+	// Published Members copy uses ordinary public permalinks. Keep the same
+	// labels here, but map known preview pages and make unsupported routes inert.
+	if ( 'page-members-events.php' === $template ) {
+		$html = str_replace( 'href="/order/"', 'href="' . esc_attr( $GLOBALS['doughboss_preview_base_path'] . 'order.html' ) . '"', $html );
+		$html = str_replace( 'href="/catering/"', 'href="' . esc_attr( $GLOBALS['doughboss_preview_base_path'] . 'catering.html' ) . '"', $html );
+		$html = preg_replace( '#href="/(?:track-order|locations|vouchers)/"#', 'href="#preview-unavailable"', $html );
+	}
 	// No-JS and alternate-click safety: retain labels but make every external,
 	// phone and email destination inert in the exported artifact itself.
 	return preg_replace( '/\shref=("|\')(?:https?:\/\/|mailto:|tel:)[^"\']*\1/i', ' href=$1#preview-unavailable$1', $html );
 }
 
 function doughboss_preview_fixture() {
-	return array(
+	$fixture = array(
 		'menu' => array(
 			array(
 				'id' => 1001, 'name' => 'Zaatar & Cheese', 'description' => 'Sample menu description for visual review.',
@@ -201,6 +369,57 @@ function doughboss_preview_fixture() {
 				'price' => 9, 'type' => 'menu', 'image' => 'public/images/menu/real-v1/choco-banana.jpg',
 				'category' => 'Desserts', 'available' => true, 'dietary' => array(), 'options' => array(),
 			),
+			// No photo and no description: the branded tile, never invented copy.
+			array(
+				'id' => 1006, 'name' => 'Sample item without a photo', 'description' => '',
+				'price' => 7, 'type' => 'menu', 'image' => '',
+				'category' => 'Manoush', 'available' => true, 'dietary' => array(), 'options' => array(),
+			),
+			array(
+				'id' => 1007, 'name' => 'Sample Coke 600ml', 'description' => '',
+				'price' => 4, 'type' => 'drink', 'image' => 'public/images/menu/brand-v1/coca-cola-classic-600ml.jpg',
+				'category' => 'Drinks', 'available' => true, 'dietary' => array(), 'options' => array(),
+			),
+			array(
+				'id' => 1008, 'name' => 'Sample Vanilla Coke 600ml', 'description' => '',
+				'price' => 4.5, 'type' => 'drink', 'image' => 'public/images/menu/brand-v1/coca-cola-vanilla-600ml.jpg',
+				'category' => 'Drinks', 'available' => false, 'dietary' => array(), 'options' => array(),
+			),
+			array(
+				'id' => 1009, 'name' => 'Sample Half Meat & Cheese', 'description' => 'AI-generated menu illustration. Sample price; not a real offer.',
+				'price' => 11, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/half-meat-cheese.webp',
+				'category' => 'Manoush', 'available' => true, 'dietary' => array(), 'options' => array(),
+			),
+			array(
+				'id' => 1010, 'name' => 'Sample Sujuk Special', 'description' => 'AI-generated menu illustration. Sample price; not a real offer.',
+				'price' => 15, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/sujuk-special.webp',
+				'category' => 'Pizza', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1011, 'name' => 'Sample All Meat',
+				'description' => 'Pepperoni, sujuk, chicken & cheese on a BBQ sauce base. AI illustration; sample price only.',
+				'price' => 15, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/all-meat.webp',
+				'category' => 'Pizza', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1012, 'name' => 'Sample Garlic Prawns',
+				'description' => 'Prawns, mushroom, onion, capsicum & cheese on a garlic-tomato base. AI illustration; sample price only.',
+				'price' => 15, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/garlic-prawns.webp',
+				'category' => 'Pizza', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1013, 'name' => 'Sample Dough Boss Wrap',
+				'description' => 'Sujuk, fresh tomato, pickled cucumber, lettuce & cheese, topped with mayo. AI illustration; sample price only.',
+				'price' => 14, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/dough-boss-wrap.webp',
+				'category' => 'Wraps', 'available' => true, 'dietary' => array(), 'options' => array(),
+			), array(
+				'id' => 1014, 'name' => 'Sample Ultimate Chicken',
+				'description' => 'Grilled chicken, melted cheese, mushroom, capsicum & lettuce, topped with mayo. AI illustration; sample price only.',
+				'price' => 14, 'type' => 'menu', 'image' => 'public/images/menu/generated-v1/ultimate-chicken.webp',
+				'category' => 'Wraps', 'available' => true, 'dietary' => array(), 'options' => array(),
+			),
 		),
 	);
+	foreach ( $fixture['menu'] as &$item ) {
+		$item['image_responsive'] = '' === $item['image'] ? null : DoughBoss_Images::responsive_for_url( DOUGHBOSS_PLUGIN_URL . $item['image'] );
+	}
+	unset( $item );
+	return $fixture;
 }

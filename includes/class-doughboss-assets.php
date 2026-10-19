@@ -129,6 +129,14 @@ class DoughBoss_Assets {
 	 * @return void
 	 */
 	public function enqueue() {
+		// Site-wide optional choices must be available before any shop preference
+		// consumer, including the light header on non-ordering pages.
+		wp_enqueue_style( 'doughboss-preferences', DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-preferences.css', array(), DOUGHBOSS_VERSION );
+		wp_enqueue_script( 'doughboss-preferences', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-preferences.js', array(), DOUGHBOSS_VERSION, true );
+		wp_localize_script( 'doughboss-preferences', 'DoughBossPreferencesConfig', array(
+			'privacyUrl' => home_url( '/privacy-policy/' ),
+			'termsUrl' => home_url( '/terms-conditions/' ),
+		) );
 		// The hero has deliberately separate, dependency-free assets. Load it
 		// before considering the storefront app, so a hero-only landing page
 		// stays free of checkout and payment code.
@@ -151,11 +159,30 @@ class DoughBoss_Assets {
 		$load_storefront = $this->should_load();
 		// The header needs public shop/status reads, not checkout or gateway SDKs.
 		if ( $load_storefront || apply_filters( 'doughboss_load_shop_status_assets', false ) ) {
-			wp_enqueue_script( 'doughboss-shop-status', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-shop-status.js', array(), DOUGHBOSS_VERSION, true );
+			wp_enqueue_script( 'doughboss-shop-status', DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-shop-status.js', array( 'doughboss-preferences' ), DOUGHBOSS_VERSION, true );
 			wp_localize_script( 'doughboss-shop-status', 'DoughBossShopData', array(
 				'restUrl' => untrailingslashit( rest_url( DOUGHBOSS_REST_NAMESPACE ) ),
 			) );
 		}
+		// Wholesale / franchising enquiry form: tiny standalone script + styles,
+		// independent of the storefront bundle.
+		// The script reads its endpoint and nonce from the form's data attributes.
+		if ( $this->current_post_has( 'doughboss_b2b_form' ) || apply_filters( 'doughboss_load_b2b_assets', false ) ) {
+			wp_enqueue_style(
+				'doughboss-b2b',
+				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-b2b.css',
+				array(),
+				DOUGHBOSS_VERSION
+			);
+			wp_enqueue_script(
+				'doughboss-b2b',
+				DOUGHBOSS_PLUGIN_URL . 'public/js/doughboss-b2b.js',
+				array(),
+				DOUGHBOSS_VERSION,
+				true
+			);
+		}
+
 		if ( ! $load_storefront ) {
 			return;
 		}
@@ -217,6 +244,7 @@ class DoughBoss_Assets {
 			true
 		);
 		wp_localize_script( 'doughboss-marketing', 'DoughBossMarketingConfig', $marketing_config );
+		wp_add_inline_script( 'doughboss-marketing', 'if(window.DoughBossPreferences){window.DoughBossPreferences.syncMarketing();}', 'after' );
 
 		// Load the ACTIVE gateway's official card-capture library (from the
 		// gateway's own host, as both require) only when card payments are
@@ -228,8 +256,27 @@ class DoughBoss_Assets {
 		$deps        = array( 'doughboss-marketing', 'doughboss-shop-status' );
 		// A configured gateway must not initialize browser payment fields while
 		// the store is intentionally in browse-only / Coming Soon mode.
-		$payments_on = DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
+		// Ordinary gateway bootstrap is deliberately unavailable while requests
+		// need staff approval (or the policy cannot be read safely). Approved
+		// request links have their own capability-bound payment path and do not use
+		// this ordinary storefront readiness flag.
+		$staff_approval_policy = DoughBoss_Settings::staff_approval_policy();
+		$ordinary_checkout_allowed = 'legacy' === ( isset( $staff_approval_policy['mode'] ) ? (string) $staff_approval_policy['mode'] : '' );
+		$payments_on = $ordinary_checkout_allowed && DoughBoss_Settings::ordering_open() && DoughBoss_Payment::ready();
 		$gateway     = DoughBoss_Settings::payment_gateway();
+		// Square-hosted checkout redirects to Square's page: no SDK, no card fields.
+		$square_hosted = 'square' === $gateway && DoughBoss_Square_Hosted::enabled();
+		$square_binding = null;
+		if ( 'square' === $gateway ) {
+			$single_location_id = DoughBoss_Locations::single_location_id();
+			$payments_on = $ordinary_checkout_allowed && DoughBoss_Settings::ordering_open() && $single_location_id
+				&& ! is_wp_error( DoughBoss_Locations::online_payment_location( $single_location_id ) )
+				&& DoughBoss_Square::ready_for_location( $single_location_id );
+			$square_binding = $payments_on ? DoughBoss_Square::shop_binding( $single_location_id ) : null;
+			if ( is_wp_error( $square_binding ) ) {
+				$payments_on = false;
+			}
+		}
 		if ( $payments_on ) {
 			if ( 'tyro' === $gateway ) {
 				// Tyro requires its PCI-scoped browser library to be loaded directly
@@ -241,12 +288,19 @@ class DoughBoss_Assets {
 				// script origin is derived from the allowlisted API host.
 				wp_enqueue_script( 'mpgs-checkout', DoughBoss_MPGS::checkout_script_url(), array(), null, true );
 				$deps[] = 'mpgs-checkout';
-			} elseif ( 'square' === $gateway ) {
+			} elseif ( 'square' === $gateway && ! $square_hosted ) {
 				// Square requires its PCI-scoped Web Payments SDK to be loaded
 				// directly from Square's own CDN. Never bundle, proxy or self-host
 				// this file; the sandbox and production bundles differ.
-				wp_enqueue_script( 'square-web-payments', DoughBoss_Square::sdk_url(), array(), null, true );
-				$deps[] = 'square-web-payments';
+				// Performance: enqueue it only where checkout renders (the order
+				// page, or any page with [doughboss_cart]). Everywhere else the
+				// home page, catering and track pages skip ~100KB of SDK, and
+				// doughboss-square.js still loads the same exact CDN URL on demand
+				// (approved pre-order links already work this way).
+				if ( $is_order_page || $this->current_post_has( 'doughboss_cart' ) ) {
+					wp_enqueue_script( 'square-web-payments', DoughBoss_Square::sdk_url(), array(), null, true );
+					$deps[] = 'square-web-payments';
+				}
 			} else {
 				// Stripe Checkout is a full-page provider-hosted redirect. The
 				// storefront never loads Stripe.js or renders card fields.
@@ -266,7 +320,10 @@ class DoughBoss_Assets {
 		// changes. Only the application id and location id are handed to the
 		// browser — both are public by design for the Web Payments SDK. The
 		// access token and webhook signature key never leave the server.
-		if ( $payments_on && 'square' === $gateway ) {
+		// A capability is carried in a URL fragment, which PHP cannot inspect.
+		// Load a dormant module for Square approved-payment links even while
+		// ordinary ordering is closed; it loads the SDK only after a valid view.
+		if ( 'square' === $gateway ) {
 			wp_enqueue_style(
 				'doughboss-square',
 				DOUGHBOSS_PLUGIN_URL . 'public/css/doughboss-square.css',
@@ -284,10 +341,14 @@ class DoughBoss_Assets {
 				'doughboss-square',
 				'DoughBossSquareConfig',
 				array(
-					'applicationId' => DoughBoss_Square::publishable_key(),
-					'locationId'    => DoughBoss_Square::location_id(),
+					// Public by design. In hosted mode doughboss-square.js keeps
+					// ordinary fields dormant (PAY.squareHosted) and no SDK is loaded.
+					'applicationId' => $payments_on ? DoughBoss_Square::publishable_key() : '',
+					'locationId'    => $payments_on ? (string) $square_binding['square_location_id'] : '',
+					'sdkUrl'        => DoughBoss_Square::sdk_url(),
 					'liveMode'      => DoughBoss_Settings::square_live_mode(),
 					'currency'      => strtoupper( (string) DoughBoss_Settings::get( 'currency_code', 'AUD' ) ),
+					'wallets'       => $payments_on && ! $square_hosted && (bool) DoughBoss_Settings::get( 'square_wallets_enabled', 0 ),
 				)
 			);
 		}
@@ -300,6 +361,11 @@ class DoughBoss_Assets {
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'currency' => DoughBoss_Settings::get( 'currency_symbol', '$' ),
 				'googleReviewUrl' => DoughBoss_Settings::google_review_url(),
+				// Shown in the single "Call to order" bar while ordering is paused.
+				'orderPhone' => array(
+					'display' => DoughBoss_Settings::phone_display( DoughBoss_Settings::order_phone() ),
+					'tel'     => DoughBoss_Settings::phone_tel( DoughBoss_Settings::order_phone() ),
+				),
 				'payments' => array(
 					'enabled' => $payments_on,
 					// Public-safe browser identifier for the ACTIVE gateway:
@@ -308,7 +374,9 @@ class DoughBoss_Assets {
 					// Which gateway the storefront JS should drive (Stripe.js
 					// Elements vs Tyro Connect's hosted pay form).
 					'gateway' => $gateway,
-					'hostedCheckout' => 'stripe' === $gateway,
+					'hostedCheckout' => 'stripe' === $gateway || $square_hosted,
+					// Square-hosted checkout (Checkout API payment link) instead of SDK fields.
+					'squareHosted'   => $square_hosted,
 					'liveMode'=> ( 'tyro' === $gateway && DoughBoss_Settings::tyro_live_mode() ) || ( 'mpgs' === $gateway && DoughBoss_Settings::mpgs_live_mode() ) || ( 'square' === $gateway && DoughBoss_Settings::square_live_mode() ),
 				),
 				'i18n'     => array(
@@ -355,6 +423,45 @@ class DoughBoss_Assets {
 					'apply'        => __( 'Apply', 'doughboss' ),
 					'voucherApplied'     => __( 'Voucher applied', 'doughboss' ),
 					'voucherPlaceholder' => __( 'Voucher code', 'doughboss' ),
+					'clearSearch'         => __( 'Clear search', 'doughboss' ),
+					'orderByPhone'        => __( 'Order by phone', 'doughboss' ),
+					'orderingPausedShort' => __( 'Online ordering is paused.', 'doughboss' ),
+					'callToOrderLead'     => __( 'Call us to order for pickup.', 'doughboss' ),
+					'callToOrder'         => __( 'Call to order', 'doughboss' ),
+					'yourShop' => __( 'Your shop', 'doughboss' ),
+					'changeStore' => __( 'Change store', 'doughboss' ),
+					'orderHere' => __( 'Order here', 'doughboss' ),
+					'storeCurrent' => __( 'Your shop', 'doughboss' ),
+					'cancel' => __( 'Cancel', 'doughboss' ),
+					'chooseShopMenuTitle' => __( 'Choose your shop to see today’s menu', 'doughboss' ),
+					'changeShopConfirm' => __( 'Changing shop re-checks your cart. Items not available at the new shop are removed.', 'doughboss' ),
+					'pickupTitle' => __( 'When would you like it?', 'doughboss' ),
+					'pickupLabel' => __( 'Pickup:', 'doughboss' ),
+					'pickupFrom' => __( 'Collect from', 'doughboss' ),
+					'pickupHoldNote' => __( 'We hold your time for %d minutes while you check out.', 'doughboss' ),
+					'pickupOrChoose' => __( 'Or choose a time', 'doughboss' ),
+					'pickupChoose' => __( 'Choose a time', 'doughboss' ),
+					'pickupDay' => __( 'Pickup day', 'doughboss' ),
+					'pickupTimesFor' => __( 'Pickup times for', 'doughboss' ),
+					'pickupDayEmpty' => __( 'No more times on this day.', 'doughboss' ),
+					'pickupFull' => __( 'Full', 'doughboss' ),
+					'pickupAsapClosed' => __( 'Shop closed now — choose a time', 'doughboss' ),
+					'pickupAsapNone' => __( 'No ASAP time left — choose a time', 'doughboss' ),
+					'pickupAsapUnavailable' => __( 'ASAP isn’t available right now — choose a time', 'doughboss' ),
+					'pickupNoHours' => __( 'Pickup times aren’t available at this shop right now. Please contact the shop.', 'doughboss' ),
+					'pickupNoSlots' => __( 'No pickup times left. Try another day or shop.', 'doughboss' ),
+					'pickupLoadError' => __( 'We couldn’t load pickup times.', 'doughboss' ),
+					'pickupRetry' => __( 'Try again', 'doughboss' ),
+					'pickupChooseFirst' => __( 'Choose a pickup time first', 'doughboss' ),
+					'pickupHolding' => __( 'Reserving your pickup time… please try again in a moment.', 'doughboss' ),
+					'pickupExpiredRetry' => __( 'Your pickup time hold expired. We are refreshing it — please press the button again.', 'doughboss' ),
+					'pickupRefreshed' => __( 'We refreshed your pickup time. Please check it and place your order again.', 'doughboss' ),
+					'pickupAsapUpdated' => __( 'Your ASAP time was updated. Please check it before you order.', 'doughboss' ),
+					'pickupHoldAgain' => __( 'Hold this time again', 'doughboss' ),
+					'pickupHoldError' => __( 'We could not hold that time. Please try again.', 'doughboss' ),
+					'pickupHeld' => __( 'Pickup time held:', 'doughboss' ),
+					'pickupExpired' => __( 'Hold expired', 'doughboss' ),
+					'pickupOneMinute' => __( 'Your pickup time is held for one more minute.', 'doughboss' ),
 				),
 			)
 		);
@@ -376,6 +483,7 @@ class DoughBoss_Assets {
 				true
 			);
 		}
+
 
 		// Voucher claim widget: its own small app + styles, loaded only when the
 		// claim shortcode is on the page (reuses DoughBossData from the main app).

@@ -15,6 +15,167 @@ if ( ! defined( 'ABSPATH' ) ) {
 class DoughBoss_Activator {
 
 	/**
+	 * Additive catalogue-operation receipts, separate from orders and payments.
+	 * Schema reserve only; no writer/provenance/verified claim.
+	 */
+	private static function create_catalogue_operations_table() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_square_catalogue_operations';
+		$collate = $wpdb->get_charset_collate();
+		dbDelta( "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			operation_key char(64) NOT NULL,
+			provider_idempotency_key char(36) NOT NULL,
+			version bigint(20) unsigned NOT NULL DEFAULT 1,
+			state varchar(16) NOT NULL DEFAULT 'prepared',
+			source_algorithm varchar(32) NOT NULL,
+			source_json longtext NOT NULL,
+			source_hash char(64) NOT NULL,
+			target_json longtext NOT NULL,
+			target_hash char(64) NOT NULL,
+			request_json longtext NOT NULL,
+			request_hash char(64) NOT NULL,
+			approved_by bigint(20) unsigned NOT NULL,
+			approved_at_utc datetime NOT NULL,
+			receipt_json longtext NULL DEFAULT NULL,
+			receipt_hash char(64) NULL DEFAULT NULL,
+			approval_evidence_json longtext NULL DEFAULT NULL,
+			approval_evidence_hash char(64) NULL DEFAULT NULL,
+			readback_json longtext NULL DEFAULT NULL,
+			readback_hash char(64) NULL DEFAULT NULL,
+			last_error varchar(64) NOT NULL DEFAULT '',
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			dispatched_at_utc datetime NULL DEFAULT NULL,
+			verified_at_utc datetime NULL DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY operation_key (operation_key),
+			UNIQUE KEY provider_idempotency_key (provider_idempotency_key)
+		) ENGINE=InnoDB {$collate};" );
+	}
+
+	/** Fail closed for a partial schema, nontransactional engine or weakened keys. */
+	public static function catalogue_operations_storage_ready() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'doughboss_square_catalogue_operations';
+		$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+		if ( ! empty( $wpdb->last_error ) || 'INNODB' !== strtoupper( (string) $engine ) ) { return false; }
+		$id = array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => null );
+		$hash = array( 'type' => 'char(64)', 'null' => 'NO', 'default' => null );
+		$json = array( 'type' => 'longtext', 'null' => 'NO', 'default' => null );
+		$time = array( 'type' => 'datetime', 'null' => 'NO', 'default' => null );
+		return self::column_contract_ready( $table, array(
+			'id' => array_merge( $id, array( 'extra' => 'auto_increment' ) ),
+			'operation_key' => $hash,
+			'provider_idempotency_key' => array( 'type' => 'char(36)', 'null' => 'NO', 'default' => null ),
+			'version' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+			'state' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'prepared' ),
+			'source_algorithm' => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => null ),
+			'source_json' => $json, 'source_hash' => $hash,
+			'target_json' => $json, 'target_hash' => $hash,
+			'request_json' => $json, 'request_hash' => $hash,
+			'approved_by' => $id, 'approved_at_utc' => $time,
+			'receipt_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+			'receipt_hash' => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			// Schema reserve only; no writer/provenance/verified claim.
+			'approval_evidence_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+			'approval_evidence_hash' => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			'readback_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
+			'readback_hash' => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			'last_error' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ),
+			'created_at_utc' => $time, 'updated_at_utc' => $time,
+			'dispatched_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+			'verified_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+		) ) && self::index_contract_ready( $table, 'PRIMARY', array( 'id' ), true )
+			&& self::index_contract_ready( $table, 'operation_key', array( 'operation_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $table, 'provider_idempotency_key', array( 'provider_idempotency_key' ), true, array( 36 ) );
+	}
+
+	/** Additive, inert funding ledger. No historical payment data is rewritten. */
+	private static function create_payment_ledger_tables() {
+		global $wpdb;
+		$sets = $wpdb->prefix . 'doughboss_payment_sets';
+		$legs = $wpdb->prefix . 'doughboss_payment_legs';
+		$collate = $wpdb->get_charset_collate();
+		dbDelta( "CREATE TABLE {$sets} (
+			payment_attempt_id bigint(20) unsigned NOT NULL,
+			version bigint(20) unsigned NOT NULL DEFAULT 1,
+			state varchar(16) NOT NULL DEFAULT 'funding',
+			binding_hash char(64) NOT NULL,
+			pay_order_key char(64) NOT NULL,
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			PRIMARY KEY  (payment_attempt_id),
+			UNIQUE KEY pay_order_key (pay_order_key)
+		) ENGINE=InnoDB {$collate};" );
+		dbDelta( "CREATE TABLE {$legs} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			payment_attempt_id bigint(20) unsigned NOT NULL,
+			leg_index tinyint(3) unsigned NOT NULL,
+			binding_hash char(64) NOT NULL,
+			tender_kind varchar(20) NOT NULL,
+			requested_amount_minor bigint(20) unsigned NOT NULL,
+			currency char(3) NOT NULL,
+			dispatch_key char(64) NOT NULL,
+			provider_payment_reference varchar(191) NULL DEFAULT NULL,
+			authorized_amount_minor bigint(20) unsigned NULL DEFAULT NULL,
+			state varchar(16) NOT NULL DEFAULT 'planned',
+			last_error varchar(64) NOT NULL DEFAULT '',
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY parent_leg (payment_attempt_id,leg_index),
+			UNIQUE KEY dispatch_key (dispatch_key),
+			UNIQUE KEY provider_payment_reference (provider_payment_reference)
+		) ENGINE=InnoDB {$collate};" );
+	}
+
+	/** Exact split-only storage gate; legacy payment readiness remains unchanged. */
+	public static function payment_ledger_storage_ready() {
+		global $wpdb;
+		$sets = $wpdb->prefix . 'doughboss_payment_sets';
+		$legs = $wpdb->prefix . 'doughboss_payment_legs';
+		foreach ( array( $sets, $legs ) as $table ) {
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! is_string( $engine ) || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+		$id = array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => null );
+		$hash = array( 'type' => 'char(64)', 'null' => 'NO', 'default' => null );
+		$time = array( 'type' => 'datetime', 'null' => 'NO', 'default' => null );
+		return self::column_contract_ready( $sets, array(
+			'payment_attempt_id' => $id,
+			'version' => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+			'state' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'funding' ),
+			'binding_hash' => $hash,
+			'pay_order_key' => $hash,
+			'created_at_utc' => $time,
+			'updated_at_utc' => $time,
+		) ) && self::column_contract_ready( $legs, array(
+			'id' => array_merge( $id, array( 'extra' => 'auto_increment' ) ),
+			'payment_attempt_id' => $id,
+			'leg_index' => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => null ),
+			'binding_hash' => $hash,
+			'tender_kind' => array( 'type' => 'varchar(20)', 'null' => 'NO', 'default' => null ),
+			'requested_amount_minor' => $id,
+			'currency' => array( 'type' => 'char(3)', 'null' => 'NO', 'default' => null ),
+			'dispatch_key' => $hash,
+			'provider_payment_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+			'authorized_amount_minor' => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+			'state' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'planned' ),
+			'last_error' => array( 'type' => 'varchar(64)', 'null' => 'NO', 'default' => '' ),
+			'created_at_utc' => $time,
+			'updated_at_utc' => $time,
+		) ) && self::index_contract_ready( $sets, 'PRIMARY', array( 'payment_attempt_id' ), true )
+			&& self::index_contract_ready( $sets, 'pay_order_key', array( 'pay_order_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $legs, 'PRIMARY', array( 'id' ), true )
+			&& self::index_contract_ready( $legs, 'parent_leg', array( 'payment_attempt_id', 'leg_index' ), true )
+			&& self::index_contract_ready( $legs, 'dispatch_key', array( 'dispatch_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $legs, 'provider_payment_reference', array( 'provider_payment_reference' ), true, array( 191 ) );
+	}
+
+	/**
 	 * Activation routine.
 	 *
 	 * @return void
@@ -39,11 +200,11 @@ class DoughBoss_Activator {
 		DoughBoss_Catering_Package::register();
 		flush_rewrite_rules();
 
-		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
+		if ( self::lifecycle_storage_ready() && self::capacity_storage_ready() && self::checkout_storage_ready() && self::table_qr_storage_ready() && self::payment_storage_ready() && self::payment_ledger_storage_ready() && self::catalogue_operations_storage_ready() && self::preorder_approval_storage_ready() && self::pospal_outbox_storage_ready() && self::timeclock_storage_ready() ) {
 			update_option( 'doughboss_db_version', DOUGHBOSS_DB_VERSION );
 			delete_option( 'doughboss_migration_error' );
 		} else {
-			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
+			update_option( 'doughboss_migration_error', 'Transactional order, capacity, checkout-integrity, table-QR, payment-attempt, split-funding, catalogue-operation, pre-order approval, POSPal outbox, or staff-attendance storage is incomplete or is not using InnoDB.' );
 		}
 	}
 
@@ -87,6 +248,7 @@ class DoughBoss_Activator {
 		$staff_events    = $wpdb->prefix . 'doughboss_staff_shift_events';
 		$staff_badges    = $wpdb->prefix . 'doughboss_staff_badges';
 		$staff_breaks    = $wpdb->prefix . 'doughboss_staff_breaks';
+		$preorder_approvals = $wpdb->prefix . 'doughboss_preorder_approvals';
 
 		$sql_orders = "CREATE TABLE {$orders} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -107,6 +269,7 @@ class DoughBoss_Activator {
 			notes text NULL,
 			subtotal decimal(10,2) NOT NULL DEFAULT 0.00,
 			tax decimal(10,2) NOT NULL DEFAULT 0.00,
+			accounting_basis_json longtext NULL DEFAULT NULL,
 			delivery_fee decimal(10,2) NOT NULL DEFAULT 0.00,
 			total decimal(10,2) NOT NULL DEFAULT 0.00,
 			discount decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -116,6 +279,8 @@ class DoughBoss_Activator {
 			payment_method varchar(20) NOT NULL DEFAULT '',
 			payment_intent_id varchar(191) NULL DEFAULT NULL,
 			checkout_key char(64) NULL DEFAULT NULL,
+			source_request_id bigint(20) unsigned NULL DEFAULT NULL,
+			preorder_workflow_version tinyint(3) unsigned NOT NULL DEFAULT 0,
 			eta_minutes int(11) NOT NULL DEFAULT 0,
 			seen_at datetime NULL DEFAULT NULL,
 			acknowledged_at datetime NULL DEFAULT NULL,
@@ -128,6 +293,9 @@ class DoughBoss_Activator {
 			capacity_units int(10) unsigned NOT NULL DEFAULT 0,
 			fire_at_utc datetime NULL DEFAULT NULL,
 			planning_version bigint(20) unsigned NOT NULL DEFAULT 0,
+			pickup_mode varchar(12) NOT NULL DEFAULT '',
+			capacity_overflow tinyint(1) NOT NULL DEFAULT 0,
+			promised_delay_minutes int(11) NOT NULL DEFAULT 0,
 			cooking_started_at datetime NULL DEFAULT NULL,
 			ready_at datetime NULL DEFAULT NULL,
 			completed_at datetime NULL DEFAULT NULL,
@@ -143,7 +311,37 @@ class DoughBoss_Activator {
 			KEY promised_ready_from (location_id,promised_ready_from_utc),
 			KEY fire_time (location_id,fire_at_utc),
 			UNIQUE KEY payment_intent_id (payment_intent_id),
-			UNIQUE KEY checkout_key (checkout_key)
+			UNIQUE KEY checkout_key (checkout_key),
+			UNIQUE KEY source_request_id (source_request_id)
+		) ENGINE=InnoDB {$charset_collate};";
+
+		$sql_preorder_approvals = "CREATE TABLE {$preorder_approvals} (
+			request_order_id bigint(20) unsigned NOT NULL,
+			state varchar(32) NOT NULL DEFAULT 'pending',
+			version bigint(20) unsigned NOT NULL DEFAULT 1,
+			approved_revision bigint(20) unsigned NULL DEFAULT NULL,
+			request_fingerprint char(64) NULL DEFAULT NULL,
+			approver_user_id bigint(20) unsigned NULL DEFAULT NULL,
+			approver_name varchar(191) NOT NULL DEFAULT '',
+			decided_at_utc datetime NULL DEFAULT NULL,
+			decision_event_key varchar(191) NULL DEFAULT NULL,
+			decision_reason text NULL,
+			payment_token_hash char(64) NULL DEFAULT NULL,
+			payment_token_expires_at_utc datetime NULL DEFAULT NULL,
+			payment_checkout_key char(64) NULL DEFAULT NULL,
+			payment_attempt_id bigint(20) unsigned NULL DEFAULT NULL,
+			payment_link_delivery_status varchar(16) NOT NULL DEFAULT 'not_attempted',
+			payment_link_delivery_attempted_at_utc datetime NULL DEFAULT NULL,
+			fulfillment_order_id bigint(20) unsigned NULL DEFAULT NULL,
+			released_at_utc datetime NULL DEFAULT NULL,
+			created_at_utc datetime NOT NULL,
+			updated_at_utc datetime NOT NULL,
+			PRIMARY KEY  (request_order_id),
+			UNIQUE KEY decision_event_key (decision_event_key),
+			UNIQUE KEY payment_checkout_key (payment_checkout_key),
+			UNIQUE KEY fulfillment_order_id (fulfillment_order_id),
+			KEY state_updated (state,updated_at_utc),
+			KEY payment_attempt_id (payment_attempt_id)
 		) ENGINE=InnoDB {$charset_collate};";
 
 		$sql_events = "CREATE TABLE {$order_events} (
@@ -194,8 +392,12 @@ class DoughBoss_Activator {
 			minimum_notice_minutes smallint(5) unsigned NOT NULL DEFAULT 30,
 			booking_horizon_days smallint(5) unsigned NOT NULL DEFAULT 7,
 			hold_minutes smallint(5) unsigned NOT NULL DEFAULT 10,
-			slot_order_capacity smallint(5) unsigned NOT NULL DEFAULT 4,
+			slot_order_capacity smallint(5) unsigned NOT NULL DEFAULT 6,
 			slot_unit_capacity smallint(5) unsigned NOT NULL DEFAULT 12,
+			pickup_days_ahead smallint(5) unsigned NOT NULL DEFAULT 1,
+			cutoff_minutes smallint(5) unsigned NOT NULL DEFAULT 20,
+			busy_extra_minutes smallint(5) unsigned NOT NULL DEFAULT 0,
+			ordering_paused tinyint(1) NOT NULL DEFAULT 0,
 			planning_version bigint(20) unsigned NOT NULL DEFAULT 1,
 			tyro_location_id varchar(191) NOT NULL DEFAULT '',
 			pospal_store_index tinyint(3) unsigned NOT NULL DEFAULT 0,
@@ -458,6 +660,7 @@ class DoughBoss_Activator {
 			attempt_key char(64) NOT NULL,
 			provider varchar(20) NOT NULL DEFAULT 'tyro',
 			provider_reference varchar(191) NULL DEFAULT NULL,
+			provider_order_reference varchar(191) NULL DEFAULT NULL,
 			checkout_key char(64) NOT NULL,
 			purpose varchar(32) NOT NULL DEFAULT 'order',
 			context varchar(32) NOT NULL DEFAULT 'web',
@@ -477,6 +680,7 @@ class DoughBoss_Activator {
 			PRIMARY KEY  (id),
 			UNIQUE KEY attempt_key (attempt_key),
 			UNIQUE KEY provider_reference (provider_reference),
+			UNIQUE KEY provider_order_reference (provider_order_reference),
 			UNIQUE KEY checkout_key (checkout_key),
 			KEY status_updated (status,updated_at),
 			KEY local_reference (local_reference)
@@ -634,6 +838,7 @@ class DoughBoss_Activator {
 		) ENGINE=InnoDB {$charset_collate};";
 
 		dbDelta( $sql_orders );
+		dbDelta( $sql_preorder_approvals );
 		dbDelta( $sql_items );
 		dbDelta( $sql_events );
 		dbDelta( $sql_locations );
@@ -652,6 +857,8 @@ class DoughBoss_Activator {
 		dbDelta( $sql_payment_attempts );
 		dbDelta( $sql_payment_events );
 		dbDelta( $sql_checkout_snapshots );
+		self::create_payment_ledger_tables();
+		self::create_catalogue_operations_table();
 		dbDelta( $sql_loyalty_members );
 		dbDelta( $sql_loyalty_ledger );
 		dbDelta( $sql_loyalty_tokens );
@@ -771,6 +978,7 @@ class DoughBoss_Activator {
 			array(
 				'attempt_key'        => array( 'type' => 'char(64)', 'null' => 'NO' ),
 				'provider_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+				'provider_order_reference' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
 				'checkout_key'       => array( 'type' => 'char(64)', 'null' => 'NO' ),
 				'amount_minor'       => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '0' ),
 				'status'             => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'created' ),
@@ -797,9 +1005,69 @@ class DoughBoss_Activator {
 			)
 			&& self::index_contract_ready( $attempts, 'attempt_key', array( 'attempt_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $attempts, 'provider_reference', array( 'provider_reference' ), true, array( 191 ) )
+			&& self::index_contract_ready( $attempts, 'provider_order_reference', array( 'provider_order_reference' ), true, array( 191 ) )
 			&& self::index_contract_ready( $attempts, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $events, 'event_key', array( 'event_key' ), true, array( 64 ) )
 			&& self::index_contract_ready( $snapshots, 'checkout_key', array( 'checkout_key' ), true, array( 64 ) );
+	}
+
+	/**
+	 * Verify the durable pre-order approval state and its payment-release guards.
+	 *
+	 * @return bool
+	 */
+	public static function preorder_approval_storage_ready() {
+		global $wpdb;
+
+		$orders    = $wpdb->prefix . 'doughboss_orders';
+		$approvals = $wpdb->prefix . 'doughboss_preorder_approvals';
+		foreach ( array( $orders, $approvals ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			if ( ! $engine || 'INNODB' !== strtoupper( $engine ) ) {
+				return false;
+			}
+		}
+
+		return self::column_contract_ready(
+			$orders,
+			array(
+				'source_request_id' => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+				'preorder_workflow_version' => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => '0' ),
+			)
+		)
+			&& self::column_contract_ready(
+				$approvals,
+				array(
+					'request_order_id'             => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO' ),
+					'state'                        => array( 'type' => 'varchar(32)', 'null' => 'NO', 'default' => 'pending' ),
+					'version'                      => array( 'type' => 'bigint(20) unsigned', 'null' => 'NO', 'default' => '1' ),
+					'approved_revision'            => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'request_fingerprint'          => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+					'approver_user_id'             => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'approver_name'                => array( 'type' => 'varchar(191)', 'null' => 'NO', 'default' => '' ),
+					'decided_at_utc'               => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'decision_event_key'           => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
+					'decision_reason'              => array( 'type' => 'text', 'null' => 'YES', 'default' => null ),
+					'payment_token_hash'           => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+					'payment_token_expires_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'payment_checkout_key'         => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+					'payment_attempt_id'           => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'payment_link_delivery_status' => array( 'type' => 'varchar(16)', 'null' => 'NO', 'default' => 'not_attempted' ),
+					'payment_link_delivery_attempted_at_utc' => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'fulfillment_order_id'         => array( 'type' => 'bigint(20) unsigned', 'null' => 'YES', 'default' => null ),
+					'released_at_utc'              => array( 'type' => 'datetime', 'null' => 'YES', 'default' => null ),
+					'created_at_utc'               => array( 'type' => 'datetime', 'null' => 'NO' ),
+					'updated_at_utc'               => array( 'type' => 'datetime', 'null' => 'NO' ),
+				)
+			)
+			&& self::index_contract_ready( $orders, 'source_request_id', array( 'source_request_id' ), true )
+			&& self::index_contract_ready( $approvals, 'PRIMARY', array( 'request_order_id' ), true )
+			&& self::index_contract_ready( $approvals, 'decision_event_key', array( 'decision_event_key' ), true, array( 191 ) )
+			&& self::index_contract_ready( $approvals, 'payment_checkout_key', array( 'payment_checkout_key' ), true, array( 64 ) )
+			&& self::index_contract_ready( $approvals, 'fulfillment_order_id', array( 'fulfillment_order_id' ), true )
+			&& self::index_contract_ready( $approvals, 'state_updated', array( 'state', 'updated_at_utc' ), false )
+			&& self::index_contract_ready( $approvals, 'payment_attempt_id', array( 'payment_attempt_id' ), false );
 	}
 
 	/**
@@ -927,6 +1195,9 @@ class DoughBoss_Activator {
 				return false;
 			}
 			$row = $actual[ $field ];
+			if ( array_key_exists( 'extra', $expected ) && ( ! isset( $row->Extra ) || strtolower( (string) $row->Extra ) !== $expected['extra'] ) ) {
+				return false;
+			}
 			// MySQL 8 omits deprecated integer display widths while MariaDB still
 			// reports them. They describe the same storage contract, so compare the
 			// semantic type while retaining exact varchar lengths and signedness.
@@ -1000,8 +1271,10 @@ class DoughBoss_Activator {
 		}
 
 		$columns = array(
+			'preorder_workflow_version' => array( 'type' => 'tinyint(3) unsigned', 'null' => 'NO', 'default' => '0' ),
 			'payment_intent_id' => array( 'type' => 'varchar(191)', 'null' => 'YES', 'default' => null ),
 			'checkout_key'      => array( 'type' => 'char(64)', 'null' => 'YES', 'default' => null ),
+			'accounting_basis_json' => array( 'type' => 'longtext', 'null' => 'YES', 'default' => null ),
 		);
 		return self::column_contract_ready( $orders, $columns )
 			&& self::index_contract_ready( $orders, 'payment_intent_id', array( 'payment_intent_id' ), true, array( 191 ) )
@@ -1088,8 +1361,8 @@ class DoughBoss_Activator {
 		$slots      = $wpdb->prefix . 'doughboss_capacity_slots';
 		$holds      = $wpdb->prefix . 'doughboss_capacity_holds';
 		$required = array(
-			$orders => array( 'capacity_hold_id', 'capacity_units', 'fire_at_utc', 'planning_version' ),
-			$locations => array( 'timezone', 'capacity_mode', 'slot_minutes', 'minimum_notice_minutes', 'booking_horizon_days', 'hold_minutes', 'slot_order_capacity', 'slot_unit_capacity', 'planning_version' ),
+			$orders => array( 'capacity_hold_id', 'capacity_units', 'fire_at_utc', 'planning_version', 'pickup_mode', 'capacity_overflow', 'promised_delay_minutes' ),
+			$locations => array( 'timezone', 'capacity_mode', 'slot_minutes', 'minimum_notice_minutes', 'booking_horizon_days', 'hold_minutes', 'slot_order_capacity', 'slot_unit_capacity', 'pickup_days_ahead', 'cutoff_minutes', 'busy_extra_minutes', 'ordering_paused', 'planning_version' ),
 			$hours => array( 'location_id', 'order_type', 'weekday', 'segment', 'opens_at', 'closes_at', 'is_active' ),
 			$exceptions => array( 'location_id', 'order_type', 'service_date', 'segment', 'is_closed', 'opens_at', 'closes_at', 'order_capacity', 'unit_capacity' ),
 			$slots => array( 'location_id', 'order_type', 'starts_at_utc', 'ends_at_utc', 'timezone_snapshot', 'order_capacity', 'unit_capacity', 'planning_version', 'accepting_holds' ),

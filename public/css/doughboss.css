@@ -175,6 +175,57 @@
 	box-shadow: var(--db-shadow-1);
 }
 
+/* Browse-only content emitted by [doughboss_menu] before JavaScript enhances
+ * it. No controls appear here: availability and ordering stay server-owned. */
+.db-menu-fallback-section + .db-menu-fallback-section {
+	margin-top: 1.75rem;
+}
+
+.db-menu-fallback-section .db-category {
+	margin-top: 0;
+}
+
+.db-menu-fallback-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border-top: 1px solid var(--db-border);
+}
+
+.db-menu-fallback-item {
+	padding: 0.9rem 0;
+	border-bottom: 1px solid var(--db-border);
+}
+
+.db-menu-fallback-item-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.db-menu-fallback-item h3,
+.db-menu-fallback-item p {
+	margin: 0;
+}
+
+.db-menu-fallback-item h3 {
+	font-size: 1rem;
+}
+
+.db-menu-fallback-item p {
+	margin-top: 0.3rem;
+	color: var(--db-muted);
+}
+
+.db-menu-availability {
+	margin: 0 0 1rem;
+	padding: 0.75rem 0.9rem;
+	border-left: 4px solid var(--db-accent);
+	background: #fff8f5;
+	color: var(--db-ink);
+}
+
 .db-category {
 	position: relative;
 	margin: 1.75rem 0 1rem;
@@ -197,9 +248,27 @@
 
 .db-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 1.25rem;
 	min-inline-size: 0;
+	/* Skip layout/paint for menu categories below the viewport. The remembered
+	 * intrinsic size limits scroll jumps once a deferred category is revealed. */
+	content-visibility: auto;
+	contain-intrinsic-size: auto 720px;
+}
+
+.db-menu--checkout-navigation .db-grid {
+	content-visibility: visible;
+}
+
+@media (max-width: 1099px) {
+	.db-app .db-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (min-width: 1400px) {
+	.db-app.db-menu .db-grid:not(.db-grid--compact) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .db-card {
@@ -270,13 +339,38 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 @media (max-width: 640px) {
-	.db-app .db-grid { grid-template-columns: minmax(0, 1fr); }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) { grid-template-columns: minmax(0, 1fr); gap: .625rem; }
 	.db-app.db-menu { padding: 1rem; }
 	body.page-id-402 .entry-content,
 	body.page-id-402 .menucontent.entry-content { padding: 24px 16px; }
 	body.page-id-402 .bgcontent { padding: 24px 16px; }
 	body.page-id-402 .bgtext { margin-inline: 0; padding: 0; }
 	body.page-id-402 .bgheader { margin: 16px 0 24px; inline-size: 100%; }
+}
+
+/* Phones: compact catalogue rows give full descriptions room to breathe.
+ * Keep all ingredient/dietary text available; do not clip names or descriptions.
+ * Compact drink rows retain their separate, photo-free layout below. */
+@media (max-width: 640px) {
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-img { width: 84px; height: 84px; min-height: 0; aspect-ratio: 1; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-body { min-width: 0; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-kicker { font-size: .5rem; letter-spacing: .06em; }
+	.db-app.db-menu .db-grid:not(.db-grid--compact) .db-card-placeholder-category { font-size: 1rem; }
+	.db-app.db-menu .db-card-body { padding: .75rem; }
+	.db-app.db-menu .db-card-body h3,
+	.db-app.db-menu .db-card-body h4 { font-size: 1.25rem; line-height: 1.15; overflow-wrap: anywhere; }
+	.db-app.db-menu .db-card-desc { font-size: 1rem; line-height: 1.45; }
+	.db-app.db-menu .db-card-foot { align-items: stretch; flex-direction: column; gap: .5rem; }
+	.db-app.db-menu .db-card-foot { margin-top: auto; }
+	.db-app.db-menu .db-price { font-size: 1.125rem; }
+	.db-app.db-menu .db-card-foot .db-btn,
+	.db-app.db-menu .db-menu-customize > summary { min-height: 44px; font-size: 1rem; }
+	.db-app.db-menu .db-card-placeholder-kicker { font-size: .625rem; letter-spacing: .06em; }
+	.db-app.db-menu .db-card-placeholder-category { font-size: 1.625rem; }
+	.db-app.db-menu .db-menu-tools { grid-template-columns: minmax(0, 1fr) 3.5rem; gap: .25rem; padding: .5rem; }
+	.db-app.db-menu .db-menu-search-status { grid-column: 2; grid-row: 1; padding-inline: .25rem; font-size: .875rem; }
+	.db-app.db-menu .db-menu-tools .db-jumpbar { grid-column: 1 / -1; grid-row: 2; }
 }
 
 .db-card-img--placeholder {
@@ -337,6 +431,35 @@ body.page-id-402 #primary-menu > li > a {
 	box-shadow: inset 0 -5px 0 var(--db-placeholder-accent, #e52a21), var(--db-shadow-1);
 }
 
+.db-card-img > .db-menu-picture {
+	position: absolute;
+	inset: 0;
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+}
+
+.db-menu-picture > img {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+}
+
+/* Keep the complete bottle and size label visible, rather than crop it like food. */
+.db-card-img[data-category='drinks'] .db-menu-picture > img {
+	box-sizing: border-box;
+	object-fit: contain;
+	padding: .5rem;
+	background: #fff;
+}
+
+.db-card-img[data-generated-illustration] .db-menu-picture > img {
+	object-fit: contain;
+	background: #f7f5f0;
+}
+
+
 .db-card-body {
 	padding: 1rem;
 	display: flex;
@@ -351,7 +474,8 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-card-desc {
 	color: var(--db-muted);
-	font-size: 0.85rem;
+	font-size: 1rem;
+	line-height: 1.45;
 	margin: 0 0 0.75rem;
 	flex: 1;
 }
@@ -689,41 +813,58 @@ body.page-id-402 #primary-menu > li > a {
 	font-weight: 700;
 }
 
+.db-menu-option-help {
+	margin: 0.15rem 0 0.55rem;
+	color: var(--db-muted);
+	font-size: 1rem;
+	line-height: 1.45;
+}
+
+.db-menu-option-help--remove {
+	margin-top: -0.2rem;
+}
+
 .db-menu-option {
 	display: flex;
 	align-items: center;
 	gap: 0.55rem;
-	padding: 0.25rem 0;
+	font-size: 1rem;
+	line-height: 1.45;
+	min-height: 44px;
+	padding: 0.35rem 0.45rem;
+	border: 1px solid transparent;
+	border-radius: var(--db-r-sm);
 	cursor: pointer;
 	touch-action: manipulation;
 }
 
-/* The radio/checkbox itself renders ~11px. The <label> is the real target, so
- * on touch it gets a full 44px row and the control is scaled up to match. */
-@media (pointer: coarse) {
-	.db-menu-option {
-		min-height: 44px;
-		padding: 0.35rem 0.25rem;
-		border-radius: var(--db-r-sm);
-	}
+.db-menu-option input {
+	width: 20px;
+	height: 20px;
+	flex: 0 0 auto;
+	accent-color: var(--db-accent);
+}
 
-	.db-menu-option input {
-		width: 22px;
-		height: 22px;
-		flex: 0 0 auto;
-		accent-color: var(--db-accent);
-	}
+.db-menu-option:has(input:checked) {
+	border-color: var(--db-accent);
+	background: color-mix(in srgb, var(--db-accent) 7%, var(--db-paper));
+}
 
-	.db-menu-option:active {
-		background: color-mix(in srgb, var(--db-accent) 6%, transparent);
-	}
+.db-menu-option:active {
+	background: color-mix(in srgb, var(--db-accent) 12%, var(--db-paper));
 }
 
 .db-menu-option span:nth-of-type(1) {
 	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
-/* Keep these as actual radio controls: the visually-hidden inputs retain native
+.db-menu-option .db-option-price {
+	font-size: 1rem;
+}
+
+/* Keep these as actual radio controls: the visible inputs retain native
  * arrow-key behaviour and form semantics while their labels become the segmented
  * tap targets. Only the canonical Style and Crust groups receive these classes. */
 .db-menu-option-group--segmented {
@@ -740,6 +881,7 @@ body.page-id-402 #primary-menu > li > a {
 .db-menu-option--segment {
 	position: relative;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: center;
 	gap: 0.3rem;
@@ -750,21 +892,21 @@ body.page-id-402 #primary-menu > li > a {
 	border-radius: var(--db-r-sm);
 	background: #fff;
 	color: var(--db-ink);
-	font-size: 0.9rem;
+	font-size: 1rem;
 	font-weight: 700;
 	line-height: 1.2;
 	text-align: center;
 	transition: background-color var(--db-t-fast) var(--db-ease), border-color var(--db-t-fast) var(--db-ease), box-shadow var(--db-t-fast) var(--db-ease);
 }
 
-/* Without :has(), keep the native glyph and its focus ring visible. */
+/* Keep the native glyph visible; the labelled row carries the selected state. */
 @supports selector(:has(input:checked)) {
 	.db-menu-option--segment input {
-		position: absolute;
-		inline-size: 1px;
-		block-size: 1px;
-		margin: -1px;
-		opacity: 0;
+		position: static;
+		inline-size: 20px;
+		block-size: 20px;
+		margin: 0;
+		opacity: 1;
 	}
 }
 
@@ -775,9 +917,9 @@ body.page-id-402 #primary-menu > li > a {
 }
 
 .db-menu-option--segment .db-option-price {
-	flex: 0 0 auto;
+	flex: 1 1 100%;
 	color: inherit;
-	font-size: 0.78rem;
+	font-size: 1rem;
 	font-weight: 600;
 	opacity: 0.78;
 }
@@ -787,6 +929,36 @@ body.page-id-402 #primary-menu > li > a {
 	background: var(--db-accent);
 	box-shadow: inset 0 -3px 0 var(--db-accent-dark);
 	color: #fff;
+}
+
+.db-menu-selection-summary {
+	margin: 0;
+	padding: 0.65rem 0.75rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-sm);
+	background: color-mix(in srgb, var(--db-paper) 80%, var(--db-border));
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.db-menu-reset {
+	justify-self: start;
+	min-height: 44px;
+	padding: 0.45rem 0.75rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-sm);
+	background: #fff;
+	color: var(--db-ink);
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.db-menu-reset:disabled {
+	cursor: not-allowed;
+	opacity: 0.65;
 }
 
 .db-menu-option--segment:has(input:focus-visible) {
@@ -870,6 +1042,8 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-cart-line-info small {
 	color: var(--db-muted);
+	font-size: 1rem;
+	line-height: 1.45;
 	overflow-wrap: anywhere;
 }
 
@@ -1806,6 +1980,7 @@ body.page-id-402 #primary-menu > li > a {
 
 /* Guided order page. */
 .db-app.db-cart {
+	scroll-margin-top: calc(var(--db-sticky-top, 0px) + 1rem);
 	padding: clamp(1rem, 3vw, 2rem);
 	border: 1px solid var(--db-border);
 	border-radius: var(--db-r-xl);
@@ -1818,6 +1993,7 @@ body.page-id-402 #primary-menu > li > a {
 	margin-bottom: 1rem;
 }
 
+.db-order-header h1,
 .db-order-header h2,
 .db-checkout-heading h3,
 .db-confirm h3,
@@ -1831,8 +2007,40 @@ body.page-id-402 #primary-menu > li > a {
 	text-transform: uppercase;
 }
 
+.db-order-header h1,
 .db-order-header h2 {
+	margin: 0;
 	font-size: clamp(2rem, 5vw, 3.3rem);
+}
+
+.db-preorder-help {
+	display: grid;
+	gap: .55rem;
+	margin-top: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-lg);
+	background: var(--db-paper-2, #fffaf2);
+}
+
+.db-preorder-help > p {
+	margin: 0;
+	color: var(--db-muted);
+}
+
+.db-preorder-contact,
+.db-preorder-retry {
+	box-sizing: border-box;
+	min-height: 44px;
+	width: fit-content;
+	max-width: 100%;
+}
+
+.db-preorder-contact {
+	display: inline-flex;
+	align-items: center;
+	font-weight: 800;
+	overflow-wrap: anywhere;
 }
 
 .db-order-header > p:last-child,
@@ -1983,7 +2191,7 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-qty-control {
 	display: inline-grid;
-	grid-template-columns: 42px 46px 42px;
+	grid-template-columns: 44px 46px 44px;
 	align-items: center;
 	overflow: hidden;
 	border: 1px solid var(--db-border);
@@ -1994,8 +2202,8 @@ body.page-id-402 #primary-menu > li > a {
 .db-qty-btn {
 	display: grid;
 	place-items: center;
-	min-width: 42px;
-	min-height: 42px;
+	min-width: 44px;
+	min-height: 44px;
 	padding: 0;
 	border: 0;
 	background: #fff;
@@ -2011,7 +2219,7 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-qty-control .db-qty {
 	width: 46px;
-	height: 42px;
+	height: 44px;
 	padding: 0;
 	border: 0;
 	border-inline: 1px solid var(--db-border);
@@ -2040,6 +2248,35 @@ body.page-id-402 #primary-menu > li > a {
 	cursor: progress;
 }
 
+.db-cart-refresh {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: .75rem;
+	margin-block: 1rem;
+	padding: 1rem;
+	border: 1px solid #b87924;
+	border-radius: var(--db-r-md);
+	background: #fff6e7;
+	color: #3d2b15;
+	font-size: 1rem;
+	line-height: 1.45;
+}
+.db-cart-refresh[hidden] { display: none; }
+.db-cart-refresh > span { flex: 1 1 240px; }
+.db-cart-refresh-retry, .db-cart-to-details, .db-checkout-review {
+	min-height: 44px;
+	font-size: 1rem;
+}
+.db-cart-refresh-retry[hidden] { display: none; }
+.db-cart-review-heading, .db-checkout-heading {
+	scroll-margin-top: calc(var(--db-sticky-top, 0px) + 1rem);
+}
+.db-cart-to-details { width: 100%; margin-top: 1rem; }
+.db-checkout-review { display: inline-flex; align-items: center; margin-block: .4rem; }
+.db-checkout--stale .db-checkout-summary { outline: 2px solid #b87924; outline-offset: 2px; }
+
 .db-checkout-heading h3 {
 	font-size: 2rem;
 }
@@ -2062,12 +2299,12 @@ body.page-id-402 #primary-menu > li > a {
 
 .db-checkout-summary > div > span:not(.db-checkout-summary-label) {
 	color: #d9d5ce;
-	font-size: .82rem;
+	font-size: 1rem;
 }
 
 .db-checkout-summary-label {
 	color: #bbb6ae;
-	font-size: .68rem;
+	font-size: .875rem;
 	font-weight: 800;
 	letter-spacing: .12em;
 	text-transform: uppercase;
@@ -2096,6 +2333,23 @@ body.page-id-402 #primary-menu > li > a {
 	grid-column: 1 / -1;
 }
 
+.db-remember-details {
+	display: flex;
+	align-items: center;
+	gap: .55rem;
+	margin: .7rem 0 .2rem;
+	font-size: .95rem;
+	cursor: pointer;
+}
+
+.db-remember-details input[type="checkbox"] {
+	width: 1.15rem;
+	height: 1.15rem;
+	min-height: 0;
+	margin: 0;
+	flex: 0 0 auto;
+}
+
 .db-field input,
 .db-field textarea {
 	min-height: 48px;
@@ -2120,6 +2374,8 @@ body.page-id-402 #primary-menu > li > a {
 .db-checkout-safety summary {
 	cursor: pointer;
 	font-weight: 800;
+	min-height: 44px;
+	padding-block: .75rem;
 }
 
 .db-checkout-safety p {
@@ -2415,7 +2671,7 @@ body.page-id-402 #primary-menu > li > a {
 	}
 
 	.db-order-journey-label {
-		font-size: .7rem;
+		font-size: .875rem;
 	}
 
 	.db-order-journey-step {
@@ -2477,3 +2733,660 @@ body.page-id-402 #primary-menu > li > a {
 	}
 }
 .db-shop-info .db-pickup-status { margin: 8px 0; padding: 10px 12px; border-left: 3px solid currentColor; border-radius: 4px; background: rgba(127, 127, 127, .08); font-size: 14px; line-height: 1.5; }
+
+/* ===== 2.49.0: menu front-end fixes ===== */
+
+/* Search: inline SVG icon (the U+2315 glyph rendered as a missing-glyph box)
+ * and a clear button that appears once there is a query. */
+.db-app .db-menu-search-icon {
+	position: absolute;
+	left: .85rem;
+	width: 18px;
+	height: 18px;
+	color: var(--db-muted, #5c5852);
+	pointer-events: none;
+}
+
+.db-app .db-menu-search {
+	padding-right: 2.9rem;
+}
+
+.db-app .db-menu-search::-webkit-search-cancel-button {
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.db-app .db-menu-search-clear {
+	position: absolute;
+	right: .2rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--db-ink, #111);
+	cursor: pointer;
+}
+
+.db-app .db-menu-search-clear[hidden] {
+	display: none;
+}
+
+.db-app .db-menu-search-clear:hover,
+.db-app .db-menu-search-clear:focus-visible {
+	background: rgba(17, 17, 17, .08);
+}
+
+.db-app .db-menu-search-clear:focus-visible {
+	outline: 3px solid #e2231a;
+	outline-offset: 1px;
+}
+
+/* Photos sit on a warm branded ground while loading, never a flat grey box. */
+.db-app .db-card-img {
+	background-color: #2a1d14;
+}
+
+.db-app .db-card-img--placeholder .db-card-placeholder-kicker {
+	color: rgba(255, 255, 255, .78);
+}
+
+/* Paused ordering: cards carry no per-card controls, so the foot is just the
+ * price. A single sticky call bar below replaces 43 disabled buttons. */
+.db-app.db-menu--phone-ordering .db-card-foot {
+	justify-content: flex-start;
+}
+
+.db-soldout-badge--inline {
+	position: static;
+	display: inline-flex;
+	margin-left: auto;
+}
+
+/* Drinks: compact two-column list without photo frames. */
+.db-app .db-grid.db-grid--compact {
+	grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+	gap: .6rem;
+}
+
+.db-app .db-card--compact {
+	flex-direction: row;
+	align-items: center;
+	border-radius: var(--db-r-md, 14px);
+}
+
+.db-app .db-card--compact .db-card-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: .15rem .9rem;
+	width: 100%;
+	padding: .8rem 1rem;
+}
+
+.db-app .db-card--compact .db-card-title {
+	grid-column: 1;
+	margin: 0;
+}
+
+.db-app .db-card--compact .db-card-desc {
+	grid-column: 1;
+	margin: 0;
+}
+
+.db-app .db-card--compact .db-dietary-badges,
+.db-app .db-card--compact .db-menu-customize,
+.db-app .db-card--compact .db-card-customize-note {
+	grid-column: 1 / -1;
+	margin: .2rem 0 0;
+}
+
+.db-app .db-card--compact .db-card-foot {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-end;
+	gap: .6rem;
+}
+
+/* One sticky "Call to order" bar while online ordering is paused. */
+.db-callbar {
+	position: fixed;
+	z-index: 90;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: .5rem 1.25rem;
+	padding: .7rem max(1rem, env(safe-area-inset-right)) calc(.7rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+	border-top: 3px solid #e2231a;
+	background: #151210;
+	color: #fff;
+	box-shadow: 0 -10px 28px rgba(0, 0, 0, .28);
+}
+
+.db-callbar[hidden] {
+	display: none;
+}
+
+.db-callbar-text {
+	margin: 0;
+	font-size: .95rem;
+	line-height: 1.35;
+	text-align: center;
+}
+
+.db-callbar-text span {
+	color: #d9d1c6;
+}
+
+.db-callbar-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: .5rem;
+	min-height: 48px;
+	padding: .65rem 1.3rem;
+	border-radius: 999px;
+	background: #e2231a;
+	color: #fff;
+	font-weight: 800;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.db-callbar-btn:hover,
+.db-callbar-btn:focus-visible {
+	background: #b71912;
+	color: #fff;
+}
+
+.db-callbar-btn:focus-visible {
+	outline: 3px solid #fff;
+	outline-offset: 2px;
+}
+
+.db-callbar-btn svg,
+.db-callbar-btn .db-callbar-icon {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+}
+
+body.db-has-callbar {
+	padding-bottom: 76px;
+}
+
+@media (max-width: 560px) {
+	.db-callbar {
+		gap: .4rem;
+	}
+
+	.db-callbar-text {
+		width: 100%;
+		font-size: .85rem;
+	}
+
+	.db-callbar-btn {
+		width: 100%;
+	}
+
+	body.db-has-callbar {
+		padding-bottom: 116px;
+	}
+}
+
+/* ===== 2.51.0: store-first chooser + pickup time picker ===== */
+
+/* Store chooser: one card per shop, big "Order here" target ------------- */
+.db-store-choose {
+	display: grid;
+	gap: 0.75rem;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	grid-column: 1 / -1;
+	text-align: left;
+}
+
+.db-store-title {
+	margin: 0;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: clamp(1.6rem, 5vw, 2.1rem);
+	font-weight: 400;
+	line-height: 1.1;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: var(--db-ink);
+}
+
+.db-store-sub {
+	margin: 0;
+	color: var(--db-muted);
+	font-size: 0.95rem;
+}
+
+.db-store-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+	gap: 0.85rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.db-store-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	min-width: 0;
+	padding: 1rem 1.1rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-lg);
+	background: var(--db-surface);
+	box-shadow: var(--db-shadow-1);
+}
+
+.db-store-card.is-current {
+	border-color: var(--db-ink);
+	box-shadow: 0 0 0 2px var(--db-ink);
+}
+
+.db-store-card-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+}
+
+.db-store-name {
+	margin: 0;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.5rem;
+	font-weight: 400;
+	line-height: 1.1;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: var(--db-ink);
+	overflow-wrap: anywhere;
+}
+
+.db-store-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.2rem 0.65rem;
+	border-radius: var(--db-r-pill);
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	background: #eceae6;
+	color: #3d3d3d;
+}
+
+.db-store-badge::before {
+	content: '';
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.db-store-badge--open { background: #e3f4e8; color: #0f5c2a; }
+.db-store-badge--soon { background: #fdf0d5; color: #7a4c00; }
+.db-store-badge--closed { background: #fbe4e1; color: #8a1f11; }
+.db-store-badge--paused { background: #fbe4e1; color: #8a1f11; }
+
+.db-store-suburb,
+.db-store-hours,
+.db-store-ready,
+.db-store-note {
+	margin: 0;
+	font-size: 0.9rem;
+	color: var(--db-text);
+}
+
+.db-store-label {
+	display: inline-block;
+	min-width: 3.4rem;
+	margin-right: 0.4rem;
+	color: var(--db-muted);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.db-store-note {
+	color: var(--db-muted);
+	font-size: 0.8rem;
+	line-height: 1.35;
+}
+
+.db-store-note:empty { display: none; }
+
+.db-store-choose-btn {
+	width: 100%;
+	margin-top: auto;
+	min-height: 52px;
+}
+
+.db-store-error {
+	margin: 0;
+	min-height: 0;
+}
+
+.db-store-error:empty { display: none; }
+
+.db-store-cancel,
+.db-shop-change {
+	align-self: flex-start;
+	min-height: 44px;
+	padding: 0 0.25rem;
+	background: none;
+	border: 0;
+	color: var(--db-ink);
+	font: inherit;
+	font-weight: 600;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	cursor: pointer;
+}
+
+.db-shop .db-shop-change { grid-column: 1; justify-self: start; }
+.db-shop-switch { margin-top: 0.5rem; grid-column: 1 / -1; }
+.db-shop-switch[hidden] { display: none; }
+
+.db-menu-gate {
+	display: grid;
+	gap: 0.25rem;
+	margin: 0 0 1rem;
+	padding: 1rem 1.1rem;
+	border: 1px solid var(--db-border);
+	border-left: 4px solid var(--db-ink);
+	border-radius: var(--db-r-md);
+	background: var(--db-surface);
+	color: var(--db-text);
+}
+
+.db-menu-gate strong { color: var(--db-ink); font-size: 1.05rem; }
+.db-menu-gate p { margin: 0; color: var(--db-muted); }
+
+/* Pickup time picker ---------------------------------------------------- */
+.db-pickup {
+	display: grid;
+	gap: 0.75rem;
+	margin: 1rem 0;
+	padding: 1rem 1.1rem;
+	border: 1px solid var(--db-border);
+	border-radius: var(--db-r-lg);
+	background: var(--db-surface);
+	box-shadow: var(--db-shadow-1);
+	min-width: 0;
+}
+
+.db-pickup[hidden] { display: none; }
+
+.db-pickup-title {
+	margin: 0;
+	font-family: 'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+	font-size: 1.5rem;
+	font-weight: 400;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: var(--db-ink);
+}
+
+.db-pickup-sub,
+.db-pickup-or {
+	margin: 0;
+	color: var(--db-muted);
+	font-size: 0.9rem;
+}
+
+.db-pickup-or {
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.db-pickup-msg { margin: 0; }
+.db-pickup-msg:empty { display: none; }
+
+.db-pickup-closed {
+	margin: 0;
+	padding: 0.7rem 0.85rem;
+	border-left: 4px solid #b26a00;
+	border-radius: var(--db-r-sm);
+	background: #fdf6e7;
+	color: #5c3a00;
+	font-size: 0.9rem;
+}
+
+.db-pickup-live {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* ASAP: one wide, obvious target ---------------------------------------- */
+.db-pickup-asap {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 0.15rem;
+	width: 100%;
+	min-height: 60px;
+	padding: 0.7rem 1rem;
+	border: 2px solid var(--db-border);
+	border-radius: var(--db-r-md);
+	background: var(--db-paper);
+	color: var(--db-ink);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	touch-action: manipulation;
+	transition: border-color var(--db-t-fast) var(--db-ease), background var(--db-t-fast) var(--db-ease);
+}
+
+.db-pickup-asap-title { font-weight: 700; font-size: 1.02rem; }
+.db-pickup-asap-note { font-size: 0.85rem; color: var(--db-muted); }
+
+.db-pickup-asap:hover:not(:disabled) { border-color: var(--db-ink); }
+
+.db-pickup-asap.is-selected {
+	border-color: var(--db-ink);
+	background: var(--db-ink);
+	color: #fff;
+}
+
+.db-pickup-asap.is-selected .db-pickup-asap-note { color: rgba(255, 255, 255, 0.8); }
+
+.db-pickup-asap:disabled,
+.db-pickup-asap.is-unavailable {
+	cursor: not-allowed;
+	background: #f3f1ed;
+	color: #5f5f5f;
+	border-style: dashed;
+}
+
+/* Day tabs --------------------------------------------------------------- */
+.db-pickup-days {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.db-pickup-day {
+	min-height: 44px;
+	padding: 0 1.1rem;
+	border: 2px solid var(--db-border);
+	border-radius: var(--db-r-pill);
+	background: var(--db-surface);
+	color: var(--db-ink);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+
+.db-pickup-day.is-active {
+	border-color: var(--db-ink);
+	background: var(--db-ink);
+	color: #fff;
+}
+
+/* Slot grid: >=44px touch targets --------------------------------------- */
+.db-pickup-slots {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+	gap: 0.5rem;
+}
+
+.db-pickup-slot {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 48px;
+	padding: 0.35rem 0.4rem;
+	border: 2px solid var(--db-border);
+	border-radius: var(--db-r-sm);
+	background: var(--db-surface);
+	color: var(--db-ink);
+	font: inherit;
+	font-weight: 600;
+	line-height: 1.15;
+	cursor: pointer;
+	touch-action: manipulation;
+	transition: border-color var(--db-t-fast) var(--db-ease), background var(--db-t-fast) var(--db-ease);
+}
+
+.db-pickup-slot:hover:not(:disabled) { border-color: var(--db-ink); }
+
+.db-pickup-slot.is-selected {
+	border-color: var(--db-ink);
+	background: var(--db-ink);
+	color: #fff;
+}
+
+.db-pickup-slot.is-full,
+.db-pickup-slot:disabled {
+	border-style: dashed;
+	background: #f3f1ed;
+	color: #6b6b6b;
+	cursor: not-allowed;
+}
+
+.db-pickup-slot-time { font-variant-numeric: tabular-nums; }
+
+.db-pickup-slot-note {
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+/* Selected summary + hold countdown ------------------------------------- */
+.db-pickup-selected {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem 0.9rem;
+	padding: 0.7rem 0.85rem;
+	border-left: 4px solid #137333;
+	border-radius: var(--db-r-sm);
+	background: #eef8f1;
+	color: #0d3d1d;
+	font-weight: 600;
+}
+
+.db-pickup-selected.is-expired {
+	border-left-color: #b26a00;
+	background: #fdf6e7;
+	color: #5c3a00;
+}
+
+.db-pickup-timer {
+	font-size: 0.85rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.85;
+}
+
+.db-pickup-again,
+.db-pickup-retry {
+	min-height: 44px;
+}
+
+.db-pickup-again {
+	padding: 0 0.25rem;
+	background: none;
+	border: 0;
+	color: inherit;
+	font: inherit;
+	font-weight: 700;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	cursor: pointer;
+}
+
+.db-pickup[aria-busy="true"] .db-pickup-asap,
+.db-pickup[aria-busy="true"] .db-pickup-slot {
+	opacity: 0.7;
+	pointer-events: none;
+}
+
+.db-checkout-summary-pickup {
+	display: block;
+	margin-top: 0.15rem;
+	color: #0f5c2a;
+	font-weight: 600;
+}
+
+.db-checkout-summary-pickup[hidden] { display: none; }
+
+.db-track-timing--pickup {
+	border-color: #137333;
+	font-weight: 700;
+}
+
+.db-track-delay {
+	margin: 0.4rem 0 0;
+	padding: 0.4rem 0.7rem;
+	border-left: 4px solid #b26a00;
+	background: #fdf6e7;
+	color: #5c3a00;
+	font-weight: 600;
+}
+
+@media (max-width: 480px) {
+	.db-store-card { padding: 0.9rem; }
+	.db-pickup { padding: 0.9rem; }
+	.db-pickup-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.db-pickup-asap,
+	.db-pickup-slot { transition: none; }
+}

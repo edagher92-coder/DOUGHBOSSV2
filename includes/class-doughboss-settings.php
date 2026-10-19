@@ -88,6 +88,9 @@ class DoughBoss_Settings {
 			// In-store voucher scans are paused until a named manager owns the
 			// daily receipt-to-voucher reconciliation.
 			'voucher_reconciliation_owner_id' => 0,
+			// Legacy promotional vouchers are a discount program, not stored-value
+			// cards. New issuance stays paused until the owner deliberately opens it.
+			'legacy_voucher_issuance_enabled' => 0,
 			'loyalty_points_per_dollar'  => 1,
 			'loyalty_redemption_points'  => 100,
 			'loyalty_redemption_amount'  => 5,
@@ -131,9 +134,15 @@ class DoughBoss_Settings {
 			// A deliberately separate, unpaid fallback for the Revesby launch.
 			// It captures a customer request while normal checkout is closed; it
 			// does not promise a time, reserve capacity, create a payment attempt,
-			// or enter the kitchen queue until a staff member accepts it.
+			// or enter the kitchen queue. A named approver must approve payment,
+			// and only a server-verified paid order is released to fulfilment.
 			'after_hours_preorders_enabled' => 0,
+			'staff_approval_required' => 1,
 			'after_hours_preorders_message' => 'Thanks! We have received your pre-order request. It is not confirmed or paid. Revesby will review it first thing in the morning and contact you to confirm.',
+			'preorder_approver_user_id'      => 0,
+			// Internal notification destinations must be configured in protected
+			// WordPress settings, never shipped in this public plugin source.
+			'preorder_approver_phone'        => '',
 			// Single-shop mode: the storefront JS (getConfig/getLocations in
 			// public/js/doughboss.js) hides the delivery toggle and pins the shop
 			// picker to the first active location while this is 1. Display-only —
@@ -144,11 +153,19 @@ class DoughBoss_Settings {
 			'single_location_mode' => 1,
 			// Shop inbox for ordinary online-order notifications. Catering uses its
 			// own dedicated inbox below. Blank falls back to the WordPress admin email.
-			'orders_email'    => 'orders@doughboss.com.au',
+			'orders_email'    => 'info@doughboss.com.au',
 			// Dedicated customer-facing catering contacts. Catering enquiries use
 			// this inbox rather than mixing with normal online-order notices.
 			'catering_email'  => 'catering@doughboss.com.au',
+			// Wholesale and franchising enquiries ([doughboss_b2b_form]). Blank
+			// sends them to the orders inbox above.
+			'b2b_email'       => '',
+			// Public "call to order" number shown while online ordering is
+			// paused (Revesby). Digits only; Australian format.
+			'order_phone'     => '0297742286',
 			'catering_phone'  => '0422487487',
+			// Minimum catering notice in business days (Sat/Sun don't count).
+			'catering_min_notice_business_days' => 2,
 			// Public WordPress page containing [doughboss_order_tracking].
 			// Blank is safe: emails still include the order number and matching-
 			// email instructions, but no potentially broken tracking link.
@@ -191,7 +208,7 @@ class DoughBoss_Settings {
 			// DoughBoss_Payment routes to; default 'stripe' preserves the exact
 			// pre-existing behaviour on every site that never touches this setting.
 			'payments_enabled' => 0,
-			'payment_gateway'  => 'stripe',
+			'payment_gateway'  => 'square',
 			'stripe_mode'      => 'test',
 			'stripe_test_pk'   => '',
 			'stripe_test_sk'   => '',
@@ -242,6 +259,23 @@ class DoughBoss_Settings {
 			'square_live_location_id'   => '',
 			'square_live_webhook_key'   => '',
 			'square_live_approved'      => 0,
+			// Accrue Square Loyalty points on paid web orders (existing members only).
+			'square_loyalty_accrual'    => 0,
+			// Public Revesby customer link only; separate from accrual and payments.
+			'square_loyalty_status_url' => '',
+			'square_loyalty_status_enabled' => 0,
+			// Square Subscriptions plan variation id for the paid Club tier.
+			'square_club_plan_variation_id' => '',
+			// Apple Pay / Google Pay buttons on Square checkout (enable after sandbox test).
+			'square_wallets_enabled'    => 0,
+			// 'embedded' (Web Payments SDK on-site) or 'hosted' (Square checkout page).
+			'square_checkout_style'     => 'embedded',
+			// The Square-issued Apple Pay domain association file lives in its own
+			// non-autoloaded option (APPLE_PAY_DOMAIN_FILE_OPTION) since 2.48.0, so
+			// up to 20KB is no longer loaded on every request.
+			// Preparation only: shops never inherit the legacy global location ID.
+			'square_test_location_map'  => array(),
+			'square_live_location_map'  => array(),
 			// POSPal POS (Open Platform) — off by default; Revesby store for the pilot.
 			// The secret appKey is read env-first (DOUGHBOSS_POSPAL_APPKEY constant/env);
 			// this option is only a fallback and is best left blank where env is set.
@@ -304,6 +338,7 @@ class DoughBoss_Settings {
 			'sms_on_voucher_claim'  => 0,
 			// Customer stage-transition emails — sent via native wp_mail, so no
 			// external configuration is needed; the toggles are the whole gate.
+			'email_on_placed'   => 1,
 			'email_on_accepted' => 1,
 			'email_on_ready'    => 1,
 			'email_staff_copy'  => 0,
@@ -403,6 +438,102 @@ class DoughBoss_Settings {
 			$email = (string) get_option( 'admin_email' );
 		}
 		return (string) apply_filters( 'doughboss_orders_email', $email );
+	}
+
+	/**
+	 * WordPress user who alone may approve a saved pre-order request for payment.
+	 *
+	 * Zero is deliberately fail-closed: an administrator must select Kristy's
+	 * authenticated account before the approval action is available.
+	 *
+	 * @return int
+	 */
+	public static function preorder_approver_user_id() {
+		$user_id = absint( self::get( 'preorder_approver_user_id', 0 ) );
+		return $user_id && get_user_by( 'id', $user_id ) ? $user_id : 0;
+	}
+
+	/**
+	 * SMS destination for new pre-order request alerts to the approver.
+	 *
+	 * @return string Australian phone number, or an empty string when invalid.
+	 */
+	public static function preorder_approver_phone() {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'preorder_approver_phone', '' ) );
+		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '';
+	}
+
+	/**
+	 * Whether retired gateways (Stripe, Tyro, MPGS, POSPal) are shown in admin.
+	 * Square is the only gateway; define DOUGHBOSS_SHOW_LEGACY_GATEWAYS to reveal them.
+	 *
+	 * @return bool
+	 */
+	public static function show_legacy_gateways() {
+		return defined( 'DOUGHBOSS_SHOW_LEGACY_GATEWAYS' ) && DOUGHBOSS_SHOW_LEGACY_GATEWAYS;
+	}
+
+	/**
+	 * Inbox for wholesale and franchising enquiries. Falls back to the orders
+	 * inbox when the B2B setting is blank or invalid. Filterable via
+	 * 'doughboss_b2b_email'.
+	 *
+	 * @return string
+	 */
+	public static function b2b_email() {
+		$email = sanitize_email( (string) self::get( 'b2b_email', '' ) );
+		if ( ! is_email( $email ) ) {
+			$email = self::orders_email();
+		}
+		return (string) apply_filters( 'doughboss_b2b_email', $email );
+	}
+
+	/**
+	 * Public phone number customers call to order while online ordering is
+	 * paused. Digits only; defaults to the Revesby shop.
+	 *
+	 * @return string
+	 */
+	public static function order_phone() {
+		$phone = preg_replace( '/[^0-9+]/', '', (string) self::get( 'order_phone', '0297742286' ) );
+		return is_string( $phone ) && preg_match( '/^(?:\+?61|0)[0-9]{9}$/', $phone ) ? $phone : '0297742286';
+	}
+
+	/**
+	 * E.164 form for a tel: link, e.g. 0297742286 -> +61297742286.
+	 *
+	 * @param string $phone Australian number (digits, optional +61).
+	 * @return string
+	 */
+	public static function phone_tel( $phone ) {
+		$digits = preg_replace( '/[^0-9]/', '', (string) $phone );
+		if ( ! is_string( $digits ) || '' === $digits ) {
+			return '';
+		}
+		if ( 0 === strpos( $digits, '61' ) && 11 === strlen( $digits ) ) {
+			return '+' . $digits;
+		}
+		return 0 === strpos( $digits, '0' ) ? '+61' . substr( $digits, 1 ) : '+' . $digits;
+	}
+
+	/**
+	 * Display form: landlines as (02) 9774 2286, mobiles as 0422 487 487.
+	 *
+	 * @param string $phone Australian number.
+	 * @return string
+	 */
+	public static function phone_display( $phone ) {
+		$digits = preg_replace( '/[^0-9]/', '', (string) $phone );
+		if ( is_string( $digits ) && 0 === strpos( $digits, '61' ) && 11 === strlen( $digits ) ) {
+			$digits = '0' . substr( $digits, 2 );
+		}
+		if ( ! is_string( $digits ) || 10 !== strlen( $digits ) ) {
+			return (string) $phone;
+		}
+		if ( '04' === substr( $digits, 0, 2 ) ) {
+			return substr( $digits, 0, 4 ) . ' ' . substr( $digits, 4, 3 ) . ' ' . substr( $digits, 7, 3 );
+		}
+		return '(' . substr( $digits, 0, 2 ) . ') ' . substr( $digits, 2, 4 ) . ' ' . substr( $digits, 6, 4 );
 	}
 
 	/**
@@ -782,8 +913,8 @@ class DoughBoss_Settings {
 	 * @return string
 	 */
 	public static function payment_gateway() {
-		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'stripe' ) );
-		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $gateway : 'stripe';
+		$gateway = sanitize_key( (string) self::get( 'payment_gateway', 'square' ) );
+		return in_array( $gateway, array( 'stripe', 'tyro', 'mpgs', 'square' ), true ) ? $gateway : 'square';
 	}
 
 	/**
@@ -802,6 +933,18 @@ class DoughBoss_Settings {
 	 */
 	public static function square_live_mode() {
 		return 'live' === self::square_mode();
+	}
+
+	/**
+	 * Storefront Square checkout style: 'embedded' (Web Payments SDK card
+	 * fields on this site — the shipped default) or 'hosted' (redirect to
+	 * Square's own checkout page via a Checkout API payment link). Anything
+	 * unrecognised fails back to the embedded default.
+	 *
+	 * @return string
+	 */
+	public static function square_checkout_style() {
+		return 'hosted' === self::get( 'square_checkout_style', 'embedded' ) ? 'hosted' : 'embedded';
 	}
 
 	/**
@@ -848,6 +991,160 @@ class DoughBoss_Settings {
 		$key   = self::square_live_mode() ? 'square_live_location_id' : 'square_test_location_id';
 		$value = trim( (string) self::get( $key, '' ) );
 		return preg_match( '/^[A-Za-z0-9_-]{4,64}$/', $value ) ? $value : '';
+	}
+
+	/**
+	 * Parse only the server-owned approval policy, without coercing corrupt data.
+	 * Missing policy requires approval; only an explicit valid zero allows legacy
+	 * direct checkout. Never expose this context or its identity to the browser.
+	 *
+	 * @param mixed $stored Stored settings, not merged defaults or client input.
+	 * @return array Validated policy context.
+	 */
+	public static function parse_staff_approval_policy( $stored ) {
+		$context = array( 'mode' => 'unavailable', 'ordering_open' => false, 'after_hours' => false, 'pickup_enabled' => false, 'approver_id' => 0 );
+		if ( ! is_array( $stored ) ) { return $context; }
+		$values = array();
+		foreach ( array( 'staff_approval_required' => 1, 'ordering_open' => 0, 'after_hours_preorders_enabled' => 0, 'enable_pickup' => 1 ) as $key => $default ) {
+			$value = array_key_exists( $key, $stored ) ? $stored[ $key ] : $default;
+			if ( ! in_array( $value, array( 0, 1, '0', '1', false, true ), true ) ) { return $context; }
+			$values[ $key ] = (bool) $value;
+		}
+		$actor = isset( $stored['preorder_approver_user_id'] ) ? $stored['preorder_approver_user_id'] : 0;
+		if ( ! is_int( $actor ) && ( ! is_string( $actor ) || ! preg_match( '/^(?:0|[1-9][0-9]*)$/D', $actor ) ) ) { return $context; }
+		if ( $actor < 0 || (string) (int) $actor !== (string) $actor ) { return $context; }
+		return array(
+			'mode' => $values['staff_approval_required'] ? 'required' : 'legacy',
+			'ordering_open' => $values['ordering_open'],
+			'after_hours' => $values['after_hours_preorders_enabled'],
+			'pickup_enabled' => $values['enable_pickup'],
+			'approver_id' => (int) $actor,
+		);
+	}
+
+	/**
+	 * Read policy directly from durable storage, not WordPress's option cache.
+	 * The row can be locked at a transaction's consequential creation boundary.
+	 *
+	 * @param bool $lock Lock the existing settings row inside a transaction.
+	 * @return array Validated policy, unavailable on a failed/unreadable read.
+	 */
+	public static function staff_approval_policy( $lock = false ) {
+		global $wpdb;
+		if ( ! isset( $wpdb->options ) || ! method_exists( $wpdb, 'get_var' ) ) {
+			return self::parse_staff_approval_policy( null );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- action-time authority must bypass cached options.
+		$raw = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1" . ( $lock ? ' FOR UPDATE' : '' ), self::OPTION_KEY ) );
+		if ( ! empty( $wpdb->last_error ) ) { return self::parse_staff_approval_policy( null ); }
+		return self::parse_staff_approval_policy( null === $raw ? array() : ( is_string( $raw ) ? maybe_unserialize( $raw ) : null ) );
+	}
+
+	/** @return bool Whether the exact configured actor currently has decision authority. */
+	public static function staff_approval_actor_valid( array $policy ) {
+		return ! empty( $policy['approver_id'] ) && get_userdata( $policy['approver_id'] )
+			&& ( user_can( $policy['approver_id'], 'manage_doughboss' ) || user_can( $policy['approver_id'], 'manage_options' ) );
+	}
+
+	/**
+	 * Validate explicit, environment-specific public-shop bindings.
+	 *
+	 * A duplicated provider ID removes BOTH conflicting bindings. Unknown or
+	 * planned shops cannot enter this map. IDs are configuration, not evidence
+	 * that the current Square merchant owns a location or that it is operational.
+	 *
+	 * @param mixed $input Untrusted settings value.
+	 * @return array<string,string>
+	 */
+	public static function sanitize_square_location_map( $input ) {
+		if ( ! is_array( $input ) ) {
+			return array();
+		}
+		$map = array();
+		foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $shop ) {
+			if ( ! isset( $input[ $shop ] ) || ! is_string( $input[ $shop ] ) ) {
+				continue;
+			}
+			$id = trim( $input[ $shop ] );
+			if ( preg_match( '/^[A-Za-z0-9_-]{4,64}$/D', $id ) ) {
+				$map[ $shop ] = $id;
+			}
+		}
+		$counts = array_count_values( $map );
+		foreach ( $map as $shop => $id ) {
+			if ( $counts[ $id ] > 1 ) {
+				unset( $map[ $shop ] );
+			}
+		}
+		return $map;
+	}
+
+	/** Validated bindings for the server-selected Square environment. */
+	public static function square_location_map() {
+		$key = self::square_live_mode() ? 'square_live_location_map' : 'square_test_location_map';
+		return self::sanitize_square_location_map( self::get( $key, array() ) );
+	}
+
+	/**
+	 * Exact binding for a known shop; never fall back to the global location.
+	 * This preparation seam does not authorize payment or activate the provider.
+	 *
+	 * @param string $shop Exact public shop slug.
+	 * @return string Empty when missing, malformed, ambiguous or unsupported.
+	 */
+	public static function square_shop_location_id( $shop ) {
+		if ( ! is_string( $shop ) ) {
+			return '';
+		}
+		$map = self::square_effective_location_map();
+		return isset( $map[ $shop ] ) ? $map[ $shop ] : '';
+	}
+
+	/**
+	 * Active-mode shop bindings after per-shop Square OAuth (2.50.0): a shop
+	 * connected under DoughBoss › Square accounts takes its location ONLY from
+	 * that connection (empty until the owner picks one); every other shop keeps
+	 * the legacy settings map. A provider ID claimed by two shops still removes
+	 * both bindings.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function square_effective_location_map() {
+		$map = self::square_location_map();
+		if ( ! class_exists( 'DoughBoss_Square_OAuth' ) ) {
+			return $map;
+		}
+		foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $shop ) {
+			if ( DoughBoss_Square_OAuth::is_connected( $shop ) ) {
+				$location = DoughBoss_Square_OAuth::location_id( $shop );
+				if ( '' === $location ) {
+					unset( $map[ $shop ] );
+				} else {
+					$map[ $shop ] = $location;
+				}
+			}
+		}
+		$counts = array_count_values( $map );
+		foreach ( $map as $shop => $id ) {
+			if ( $counts[ $id ] > 1 ) {
+				unset( $map[ $shop ] );
+			}
+		}
+		return $map;
+	}
+
+	/**
+	 * Whether the credential that will be used for this shop is usable: the
+	 * shop's own OAuth token when connected, otherwise the legacy token.
+	 *
+	 * @param string $shop Exact shop slug.
+	 * @return bool
+	 */
+	public static function square_shop_credential_valid( $shop ) {
+		if ( class_exists( 'DoughBoss_Square_OAuth' ) && is_string( $shop ) && DoughBoss_Square_OAuth::is_connected( $shop ) ) {
+			return DoughBoss_Square_OAuth::credential_valid( $shop );
+		}
+		return self::square_access_token_valid();
 	}
 
 	/**
@@ -931,11 +1228,22 @@ class DoughBoss_Settings {
 	 * @return bool
 	 */
 	public static function square_ready() {
+		return self::square_ready_with_location( self::square_location_id() );
+	}
+
+	/** Local readiness for an exact active-mode shop; never inherit the global ID. */
+	public static function square_shop_ready( $shop ) {
+		$location = self::square_shop_location_id( $shop );
+		return '' !== $location && self::square_ready_with_location( $location, self::square_shop_credential_valid( $shop ) );
+	}
+
+	/** Shared activation guards for legacy and explicitly mapped callers. */
+	private static function square_ready_with_location( $location_id, $token_valid = null ) {
 		return self::payments_enabled()
 			&& 'square' === self::payment_gateway()
 			&& '' !== self::square_application_id()
-			&& '' !== self::square_location_id()
-			&& self::square_access_token_valid()
+			&& '' !== $location_id
+			&& ( null === $token_valid ? self::square_access_token_valid() : (bool) $token_valid )
 			&& (
 				! self::square_live_mode()
 				|| ( (bool) self::get( 'square_live_approved', 0 ) && self::square_webhook_configured() )
@@ -1550,6 +1858,79 @@ class DoughBoss_Settings {
 	 */
 	public static function sms_on_voucher_claim() {
 		return (bool) self::get( 'sms_on_voucher_claim', 0 );
+	}
+
+	/**
+	 * Whether new legacy promotional vouchers may be issued.
+	 *
+	 * This gate applies only to creating new discount vouchers. Previously
+	 * issued vouchers remain available to the existing validation, reservation
+	 * and redemption paths.
+	 *
+	 * @return bool
+	 */
+	public static function legacy_voucher_issuance_enabled() {
+		return (bool) self::get( 'legacy_voucher_issuance_enabled', 0 );
+	}
+
+	/**
+	 * Non-autoloaded option holding the Apple Pay domain association file.
+	 */
+	const APPLE_PAY_DOMAIN_FILE_OPTION = 'doughboss_square_apple_pay_domain_file';
+
+	/**
+	 * The Square-issued Apple Pay domain association file contents.
+	 *
+	 * Migrates on read: a value still sitting in the autoloaded settings array
+	 * (2.47.0 and earlier) is copied into its own autoload-off option. The
+	 * legacy key is stripped from the settings array here only when no settings
+	 * sanitizer is registered for this request (front end), and always on the
+	 * next DoughBoss settings save.
+	 *
+	 * @return string
+	 */
+	public static function square_apple_pay_domain_file() {
+		$value = get_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, false );
+		if ( false !== $value ) {
+			return (string) $value;
+		}
+		$stored = get_option( self::OPTION_KEY, array() );
+		$legacy = is_array( $stored ) && isset( $stored['square_apple_pay_domain_file'] ) ? (string) $stored['square_apple_pay_domain_file'] : '';
+		if ( '' === trim( $legacy ) ) {
+			return '';
+		}
+		if ( add_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, $legacy, '', 'no' )
+			&& ! has_filter( 'sanitize_option_' . self::OPTION_KEY ) ) {
+			unset( $stored['square_apple_pay_domain_file'] );
+			update_option( self::OPTION_KEY, $stored );
+		}
+		return $legacy;
+	}
+
+	/**
+	 * Store (or clear) the Apple Pay domain association file in its own
+	 * non-autoloaded option. The value must already be sanitised.
+	 *
+	 * @param string $contents File contents.
+	 * @return void
+	 */
+	public static function save_square_apple_pay_domain_file( $contents ) {
+		$contents = (string) $contents;
+		if ( false === get_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, false ) ) {
+			add_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, $contents, '', 'no' );
+			return;
+		}
+		update_option( self::APPLE_PAY_DOMAIN_FILE_OPTION, $contents, false );
+	}
+
+	/**
+	 * Whether to email the customer an itemised confirmation when a paid order
+	 * is placed (default on).
+	 *
+	 * @return bool
+	 */
+	public static function email_on_placed() {
+		return (bool) self::get( 'email_on_placed', 1 );
 	}
 
 	/**

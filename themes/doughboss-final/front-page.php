@@ -9,11 +9,7 @@
 			__( 'The DoughBoss menu experience is being prepared.', 'doughboss-final' )
 		); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		?>
-		<div class="dbf-hero-stats" aria-label="Dough Boss at a glance">
-			<div class="dbf-hero-stat"><strong>Since 2009</strong><span>In the industry</span></div>
-			<div class="dbf-hero-stat"><strong>Fresh</strong><span>Baked to order</span></div>
-			<div class="dbf-hero-stat"><strong>3 shops</strong><span>Now baking across Sydney</span></div>
-		</div>
+		<?php // One stat strip only: the hero's own "at a glance" list. The duplicate strip that sat below it was removed in 1.8.0. ?>
 	</div>
 </section>
 

@@ -145,6 +145,26 @@ body.doughboss-order-page .db-ordering-status p {
 	font-size: .96rem;
 }
 
+/* The hero-adjacent status card deliberately overlaps the masthead. Approved
+ * payment status lives inside an itemised order card, so it must remain in
+ * normal document flow and never cover line prices or the approved total. */
+body.doughboss-order-page .db-approved-preorder .db-ordering-status {
+	width: 100%;
+	margin: 1rem 0 0 !important;
+	padding: .9rem 1rem;
+	border-radius: 14px;
+	box-shadow: none;
+	text-align: left;
+}
+
+body.doughboss-order-page .db-approved-preorder .db-ordering-status strong {
+	font-size: clamp(1.35rem, 3vw, 1.65rem);
+}
+
+body.doughboss-order-page .db-approved-preorder .db-ordering-status p {
+	margin: 6px 0 0;
+}
+
 body.doughboss-order-page .db-shop-picker {
 	display: flex;
 	justify-content: center;
@@ -217,8 +237,20 @@ body.doughboss-order-page .db-category::after {
 }
 
 body.doughboss-order-page .db-grid {
-	grid-template-columns: repeat(auto-fill, minmax(min(235px, 100%), 1fr));
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: clamp(16px, 1.6vw, 26px);
+}
+
+@media (max-width: 1099px) {
+	body.doughboss-order-page .db-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (min-width: 1400px) {
+	body.doughboss-order-page .db-grid:not(.db-grid--compact) {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
 }
 
 body.doughboss-order-page .db-card {
@@ -244,7 +276,7 @@ body.doughboss-order-page .db-card-body h4 {
 }
 
 body.doughboss-order-page .db-card-desc {
-	font-size: .9rem;
+	font-size: 1rem;
 }
 
 body.doughboss-order-page .db-price {
@@ -316,7 +348,8 @@ body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 	}
 
 	body.doughboss-order-page .db-card-desc {
-		display: none;
+		font-size: 1rem;
+		line-height: 1.45;
 	}
 
 	body.doughboss-order-page .db-card-foot {
@@ -329,8 +362,8 @@ body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 	}
 }
 
-@media (max-width: 420px) {
-	body.doughboss-order-page .db-grid {
+@media (max-width: 640px) {
+	body.doughboss-order-page .db-grid:not(.db-grid--compact) {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
@@ -348,4 +381,18 @@ body.doughboss-order-page.doughboss-ordering-closed .db-cart {
 		filter: none !important;
 		transition: none !important;
 	}
+}
+
+/* 2.51.0: store-first chooser on the order page */
+body.doughboss-order-page .db-shop-picker .db-store-choose {
+	width: min(980px, 100%);
+}
+
+body.doughboss-order-page .db-shop .db-shop-change {
+	align-self: center;
+}
+
+body.doughboss-order-page .db-menu-gate {
+	width: min(760px, 100%);
+	margin-inline: auto;
 }

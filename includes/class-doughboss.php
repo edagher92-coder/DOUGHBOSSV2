@@ -76,6 +76,7 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-menu-seeder.php';
 		require_once $dir . 'class-doughboss-menu-options.php';
 		require_once $dir . 'class-doughboss-cart.php';
+		require_once $dir . 'class-doughboss-preorder-approval.php';
 		require_once $dir . 'class-doughboss-order.php';
 		require_once $dir . 'class-doughboss-reports.php';
 		require_once $dir . 'class-doughboss-catering-package.php';
@@ -84,9 +85,25 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-tyro.php';
 		require_once $dir . 'class-doughboss-mpgs.php';
 		require_once $dir . 'class-doughboss-square.php';
+		require_once $dir . 'class-doughboss-square-catalogue-source.php';
+		require_once $dir . 'class-doughboss-square-catalogue-operations.php';
+		require_once $dir . 'class-doughboss-square-catalogue-comparison.php';
+		require_once $dir . 'class-doughboss-square-catalogue-request.php';
+		require_once $dir . 'class-doughboss-square-catalogue-preparation.php';
+		require_once $dir . 'class-doughboss-square-catalogue-review.php';
+		require_once $dir . 'class-doughboss-square-orders.php';
+		require_once $dir . 'class-doughboss-square-hosted.php';
+		require_once $dir . 'class-doughboss-square-invoices.php';
+		require_once $dir . 'class-doughboss-square-loyalty.php';
+		require_once $dir . 'class-doughboss-square-tiers.php';
+		require_once $dir . 'class-doughboss-square-wallets.php';
+		require_once $dir . 'class-doughboss-square-dashboard.php';
+		require_once $dir . 'class-doughboss-square-oauth.php';
+		require_once $dir . 'class-doughboss-square-catalog-copy.php';
 		require_once $dir . 'class-doughboss-payment.php';
 		require_once $dir . 'class-doughboss-payment-attempts.php';
 		require_once $dir . 'class-doughboss-checkout-snapshots.php';
+		require_once $dir . 'class-doughboss-payment-legs.php';
 		require_once $dir . 'class-doughboss-pospal.php';
 		require_once $dir . 'class-doughboss-coupon-code.php';
 		require_once $dir . 'class-doughboss-voucher.php';
@@ -98,12 +115,16 @@ final class DoughBoss {
 		require_once $dir . 'class-doughboss-ntfy.php';
 		require_once $dir . 'class-doughboss-sms.php';
 		require_once $dir . 'class-doughboss-emails.php';
+		require_once $dir . 'class-doughboss-catering-emails.php';
 		require_once $dir . 'class-doughboss-printer.php';
 		require_once $dir . 'class-doughboss-privacy.php';
 		require_once $dir . 'class-doughboss-cli.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
+		require_once $dir . 'class-doughboss-pickup.php';
 		require_once $dir . 'class-doughboss-images.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
+		require_once $dir . 'class-doughboss-store-hours.php';
+		require_once $dir . 'class-doughboss-b2b.php';
 		require_once $dir . 'class-doughboss-assets.php';
 		require_once $dir . 'class-doughboss-seo.php';
 		require_once $dir . 'class-doughboss-staff-scope.php';
@@ -115,6 +136,7 @@ final class DoughBoss {
 
 		if ( is_admin() ) {
 			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
+			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-square-accounts-admin.php';
 		}
 	}
 
@@ -141,6 +163,7 @@ final class DoughBoss {
 		( new DoughBoss_Post_Types() )->init();
 		( new DoughBoss_Catering_Package() )->init();
 		( new DoughBoss_Shortcodes() )->init();
+		( new DoughBoss_B2B() )->init();
 		( new DoughBoss_Loyalty() )->init();
 		( new DoughBoss_Assets() )->init();
 		( new DoughBoss_SEO() )->init();
@@ -150,6 +173,7 @@ final class DoughBoss {
 		( new DoughBoss_Staff_Experience() )->init();
 		( new DoughBoss_Portals() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
+		DoughBoss_Pickup::init( $this->cart );
 		( new DoughBoss_Privacy() )->init();
 		DoughBoss_Table_QR::init( $this->cart );
 
@@ -186,10 +210,17 @@ final class DoughBoss {
 		DoughBoss_Ntfy::init();
 		DoughBoss_SMS::init();
 		DoughBoss_Emails::init();
+		DoughBoss_Catering_Emails::init();
+		DoughBoss_Square_Loyalty::init();
+		DoughBoss_Square_Wallets::init();
+		DoughBoss_Square_Hosted::init();
+		// Per-shop Square seller accounts (OAuth). Dormant until a shop connects.
+		DoughBoss_Square_OAuth::init();
 		DoughBoss_Printer::init();
 
 		if ( is_admin() ) {
 			( new DoughBoss_Admin() )->init();
+			DoughBoss_Square_Accounts_Admin::init();
 		}
 	}
 

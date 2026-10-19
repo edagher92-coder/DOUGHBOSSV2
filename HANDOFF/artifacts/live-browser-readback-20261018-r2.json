@@ -1,0 +1,79 @@
+{
+  "observed_at": "2026-10-18T01:22:07.452Z",
+  "scope": "Authenticated Chrome read-only DOM observations; not signed-out, physical-device, provider or whole-installed-tree acceptance",
+  "installed_plugin": {
+    "entry": "doughboss/doughboss.php",
+    "active": true,
+    "version": "2.49.0"
+  },
+  "desktop_menu": {
+    "width": 2202,
+    "scroll_width": 2187,
+    "cards": 43,
+    "images": 20,
+    "loaded_images": 11,
+    "loading_shops": false
+  },
+  "phone_menu": {
+    "width": 390,
+    "scroll_width": 376,
+    "cards": 43,
+    "first_three_card_widths": [
+      334,
+      334,
+      334
+    ],
+    "first_three_heading_sizes": [
+      "20px",
+      "20px",
+      "20px"
+    ],
+    "images": 20,
+    "loaded_images": 11
+  },
+  "members_navigation": {
+    "drawer_opened": true,
+    "link_clicked": true,
+    "destination": "https://doughboss.com.au/members-events/",
+    "heading": "Members & Events",
+    "active_label": "Members & Events",
+    "width_320_scroll_width": 305
+  },
+  "hero": {
+    "element_id": "db-opening-film",
+    "html_autoplay": false,
+    "muted": true,
+    "loop": true,
+    "initial_time": 0,
+    "later_time": 3.53,
+    "later_paused": false,
+    "later_ready_state": 4,
+    "error": null,
+    "reduced_motion": false,
+    "source": "https://doughboss.com.au/wp-content/uploads/doughboss-commercial-v3-web-loop.mp4"
+  },
+  "square_dashboard": {
+    "environment": "test",
+    "connection": "Configured, not yet verified",
+    "mappings": {
+      "revesby": "Mapped, not verified",
+      "bankstown": "Unmapped",
+      "roselands": "Unmapped"
+    },
+    "provider_read_controls_invoked": false
+  },
+  "limitations": [
+    "No quantitative scroll or frame-time profile was captured.",
+    "Unloaded lazy images below the viewport are not classified as failed images.",
+    "Live dashboard labels describe installed 2.49.0, not missing functionality in the undeployed candidate.",
+    "One hero observation does not prove seamless looping, phone autoplay or reduced-motion behavior.",
+    "The authenticated browser does not establish signed-out customer parity."
+  ],
+  "mutations": {
+    "runtime": false,
+    "provider": false,
+    "deployment": false,
+    "payments": false,
+    "ads": false
+  }
+}

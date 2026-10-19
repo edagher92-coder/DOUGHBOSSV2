@@ -1,0 +1,70 @@
+{
+  "scope": "Local Qwen proposal and root-integrated A$300 routing candidate; not final Sol/native/provider/release acceptance",
+  "baseline": "10816b95ac6c5b60a5aee37977fe8ef16f29ece6",
+  "initial_draft": {
+    "ok": true,
+    "status": "ok",
+    "model": "qwen3.8-27b:code",
+    "elapsed_ms": 53968,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 683,
+      "completion_tokens": 2226,
+      "total_tokens": 2909
+    },
+    "timings": {
+      "prompt_ms": 2528.141,
+      "predicted_ms": 45492.932,
+      "prompt_per_second": 270.158982430173,
+      "predicted_per_second": 48.90869641024676
+    },
+    "truncated": false,
+    "delivery": {
+      "streamed": true,
+      "progress_updates": 46,
+      "first_content_ms": 8422
+    },
+    "note": "DRAFT from local Qwen: check before use; high-consequence topic: independent verification required"
+  },
+  "correction_draft": {
+    "ok": false,
+    "status": "incomplete",
+    "model": "qwen3.8-27b:code",
+    "elapsed_ms": 29875,
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 649,
+      "completion_tokens": 1600,
+      "total_tokens": 2249
+    },
+    "timings": {
+      "prompt_ms": 1266.129,
+      "predicted_ms": 28115.25,
+      "prompt_per_second": 399.64332228390634,
+      "predicted_per_second": 56.87304932376558
+    },
+    "truncated": false,
+    "delivery": {
+      "streamed": true,
+      "progress_updates": 30,
+      "first_content_ms": 1750
+    },
+    "note": "DRAFT from local Qwen: check before use; completion not verified: length"
+  },
+  "defects_caught": [
+    "First draft redefined existing class and invented version1 accounting field",
+    "Location property active was corrected to actual is_active (initial lead prompt was inaccurate)",
+    "Correction draft length-capped and incorrectly treated integer dollar amounts as cents",
+    "Root corrected integer conversion and reused existing repository strict cents validation pattern"
+  ],
+  "integration": "Qwen-assisted, root-corrected; not autonomous Qwen coding acceptance",
+  "proof": {
+    "red_php82": "3116 assertions: 3114 passed, 2 missing-helper failures",
+    "green_php82": "3177/3177",
+    "green_php74": "3107/3107",
+    "syntax": "2 changed PHP files checked on both runtimes",
+    "native_database": "not rerun for this change",
+    "sol61_verifier": "did not start: agent thread limit reached",
+    "activation": "No deployment, provider calls, settings changes, payment activation or shop connection"
+  }
+}

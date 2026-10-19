@@ -1,0 +1,4 @@
+# Supply the AVIF type on Apache hosts whose MIME database lacks it.
+<IfModule mod_mime.c>
+    AddType image/avif .avif
+</IfModule>

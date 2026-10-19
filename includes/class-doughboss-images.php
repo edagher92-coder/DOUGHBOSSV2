@@ -6,18 +6,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class DoughBoss_Images {
 	/**
-	 * Keep the caller's original image as the last, unchanged fallback.
-	 * No encoding, attachment mutation or provider request runs on a page view.
-	 *
-	 * @param string $path Original path relative to public/images.
-	 * @param string $image Trusted, already escaped img markup from the caller.
-	 * @param string $sizes CSS slot sizes supplied by the presentation caller.
+	 * Public candidates for an exact bundled image URL. Featured uploads and
+	 * unknown images keep their original fallback.
+	 * @param string $url Selected original image URL.
+	 * @return array|null
+	 */
+	public static function responsive_for_url( $url ) {
+		if ( ! is_string( $url ) || ! defined( 'DOUGHBOSS_PLUGIN_URL' ) ) { return null; }
+		$prefix = DOUGHBOSS_PLUGIN_URL . 'public/images/';
+		return 0 === strpos( $url, $prefix ) ? self::source_data( substr( $url, strlen( $prefix ) ) ) : null;
+	}
+
+	/**
+	 * Keep the caller's escaped original img last and unchanged as fallback.
+	 * @param string $path Bundled original path.
+	 * @param string $image Trusted, escaped img markup.
+	 * @param string $sizes CSS slot sizes supplied by the caller.
 	 * @return string
 	 */
 	public static function picture( $path, $image, $sizes = '100vw' ) {
+		$data = self::source_data( $path );
+		if ( null === $data ) { return $image; }
+		$sources = '';
+		foreach ( $data['sources'] as $source ) {
+			$sources .= '<source type="' . esc_attr( $source['type'] ) . '" srcset="' . esc_attr( $source['srcset'] ) . '" sizes="' . esc_attr( $sizes ) . '">';
+		}
+		return '<picture class="db-responsive-picture">' . $sources . $image . '</picture>';
+	}
+
+	/** Validate packaged candidates once for both markup and REST presentation. */
+	private static function source_data( $path ) {
 		static $manifest = null;
 		if ( ! defined( 'DOUGHBOSS_PLUGIN_DIR' ) || ! defined( 'DOUGHBOSS_PLUGIN_URL' ) ) {
-			return $image;
+			return null;
 		}
 		$base = DOUGHBOSS_PLUGIN_DIR . 'public/images/';
 		if ( null === $manifest ) {
@@ -25,16 +46,16 @@ final class DoughBoss_Images {
 			$manifest = is_readable( $file ) ? json_decode( file_get_contents( $file ), true ) : false;
 		}
 		if ( ! is_array( $manifest ) || 1 !== ( $manifest['version'] ?? null ) ||
-			! preg_match( '#^(?:menu/real-v1/)?[a-z0-9-]+\.jpg$#D', $path ) ||
+			! preg_match( '#^(?:(?:menu/real-v1/)?[a-z0-9-]+\.jpg|menu/brand-v1/[a-z0-9-]+\.(?:jpg|png)|menu/generated-v1/[a-z0-9-]+\.webp)$#D', $path ) ||
 			empty( $manifest['images'][ $path ] ) || ! is_readable( $base . $path ) ) {
-			return $image;
+			return null;
 		}
 		$entry = $manifest['images'][ $path ];
 		$size = wp_getimagesize( $base . $path );
 		if ( ! is_array( $size ) || ( $entry['width'] ?? 0 ) !== $size[0] || ( $entry['height'] ?? 0 ) !== $size[1] ) {
-			return $image;
+			return null;
 		}
-		$sources = '';
+		$sources = array();
 		foreach ( array( 'avif', 'webp' ) as $format ) {
 			$candidates = array();
 			$last_width = 0;
@@ -51,9 +72,9 @@ final class DoughBoss_Images {
 				$last_width = $variant['width'];
 			}
 			if ( $candidates ) {
-				$sources .= '<source type="image/' . $format . '" srcset="' . esc_attr( implode( ', ', $candidates ) ) . '" sizes="' . esc_attr( $sizes ) . '">';
+				$sources[] = array( 'type' => 'image/' . $format, 'srcset' => implode( ', ', $candidates ) );
 			}
 		}
-		return $sources ? '<picture class="db-responsive-picture">' . $sources . $image . '</picture>' : $image;
+		return $sources ? array( 'original' => DOUGHBOSS_PLUGIN_URL . 'public/images/' . $path, 'width' => $size[0], 'height' => $size[1], 'sources' => $sources ) : null;
 	}
 }
