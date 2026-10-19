@@ -68,15 +68,75 @@ final class DoughBoss {
 		$dir = DOUGHBOSS_PLUGIN_DIR . 'includes/';
 
 		require_once $dir . 'class-doughboss-settings.php';
+		require_once $dir . 'class-doughboss-migrations.php';
+		require_once $dir . 'class-doughboss-locations.php';
+		require_once $dir . 'class-doughboss-table-qr.php';
+		require_once $dir . 'class-doughboss-capacity.php';
 		require_once $dir . 'class-doughboss-post-types.php';
+		require_once $dir . 'class-doughboss-menu-seeder.php';
+		require_once $dir . 'class-doughboss-menu-options.php';
 		require_once $dir . 'class-doughboss-cart.php';
+		require_once $dir . 'class-doughboss-preorder-approval.php';
 		require_once $dir . 'class-doughboss-order.php';
+		require_once $dir . 'class-doughboss-reports.php';
+		require_once $dir . 'class-doughboss-catering-package.php';
+		require_once $dir . 'class-doughboss-catering.php';
+		require_once $dir . 'class-doughboss-stripe.php';
+		require_once $dir . 'class-doughboss-tyro.php';
+		require_once $dir . 'class-doughboss-mpgs.php';
+		require_once $dir . 'class-doughboss-square.php';
+		require_once $dir . 'class-doughboss-square-catalogue-source.php';
+		require_once $dir . 'class-doughboss-square-catalogue-operations.php';
+		require_once $dir . 'class-doughboss-square-catalogue-comparison.php';
+		require_once $dir . 'class-doughboss-square-catalogue-request.php';
+		require_once $dir . 'class-doughboss-square-catalogue-preparation.php';
+		require_once $dir . 'class-doughboss-square-catalogue-review.php';
+		require_once $dir . 'class-doughboss-square-orders.php';
+		require_once $dir . 'class-doughboss-square-hosted.php';
+		require_once $dir . 'class-doughboss-square-invoices.php';
+		require_once $dir . 'class-doughboss-square-loyalty.php';
+		require_once $dir . 'class-doughboss-square-tiers.php';
+		require_once $dir . 'class-doughboss-square-wallets.php';
+		require_once $dir . 'class-doughboss-square-dashboard.php';
+		require_once $dir . 'class-doughboss-square-oauth.php';
+		require_once $dir . 'class-doughboss-square-catalog-copy.php';
+		require_once $dir . 'class-doughboss-payment.php';
+		require_once $dir . 'class-doughboss-payment-attempts.php';
+		require_once $dir . 'class-doughboss-checkout-snapshots.php';
+		require_once $dir . 'class-doughboss-payment-legs.php';
+		require_once $dir . 'class-doughboss-pospal.php';
+		require_once $dir . 'class-doughboss-coupon-code.php';
+		require_once $dir . 'class-doughboss-voucher.php';
+		require_once $dir . 'class-doughboss-loyalty.php';
+		require_once $dir . 'class-doughboss-pospal-outbox.php';
+		require_once $dir . 'class-doughboss-pospal-sync.php';
+		require_once $dir . 'class-doughboss-pospal-orders.php';
+		require_once $dir . 'class-doughboss-mercure.php';
+		require_once $dir . 'class-doughboss-ntfy.php';
+		require_once $dir . 'class-doughboss-sms.php';
+		require_once $dir . 'class-doughboss-emails.php';
+		require_once $dir . 'class-doughboss-catering-emails.php';
+		require_once $dir . 'class-doughboss-printer.php';
+		require_once $dir . 'class-doughboss-privacy.php';
+		require_once $dir . 'class-doughboss-cli.php';
 		require_once $dir . 'class-doughboss-rest-controller.php';
+		require_once $dir . 'class-doughboss-pickup.php';
+		require_once $dir . 'class-doughboss-images.php';
 		require_once $dir . 'class-doughboss-shortcodes.php';
+		require_once $dir . 'class-doughboss-store-hours.php';
+		require_once $dir . 'class-doughboss-b2b.php';
 		require_once $dir . 'class-doughboss-assets.php';
+		require_once $dir . 'class-doughboss-seo.php';
+		require_once $dir . 'class-doughboss-staff-scope.php';
+		require_once $dir . 'class-doughboss-timeclock.php';
+		require_once $dir . 'class-doughboss-staff-badge.php';
+		require_once $dir . 'class-doughboss-staff-experience.php';
+		require_once $dir . 'class-doughboss-guides.php';
+		require_once $dir . 'class-doughboss-portals.php';
 
 		if ( is_admin() ) {
 			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
+			require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-square-accounts-admin.php';
 		}
 	}
 
@@ -89,11 +149,7 @@ final class DoughBoss {
 	 * @return void
 	 */
 	private function maybe_upgrade_db() {
-		if ( get_option( 'doughboss_db_version' ) === DOUGHBOSS_DB_VERSION ) {
-			return;
-		}
-		require_once DOUGHBOSS_PLUGIN_DIR . 'includes/class-doughboss-activator.php';
-		DoughBoss_Activator::activate();
+		DoughBoss_Migrations::run();
 	}
 
 	/**
@@ -105,12 +161,66 @@ final class DoughBoss {
 		$this->cart = new DoughBoss_Cart();
 
 		( new DoughBoss_Post_Types() )->init();
+		( new DoughBoss_Catering_Package() )->init();
 		( new DoughBoss_Shortcodes() )->init();
+		( new DoughBoss_B2B() )->init();
+		( new DoughBoss_Loyalty() )->init();
 		( new DoughBoss_Assets() )->init();
+		( new DoughBoss_SEO() )->init();
+		DoughBoss_Staff_Scope::init();
+		( new DoughBoss_Timeclock() )->init();
+		( new DoughBoss_Staff_Badge() )->init();
+		( new DoughBoss_Staff_Experience() )->init();
+		( new DoughBoss_Portals() )->init();
 		( new DoughBoss_REST_Controller( $this->cart ) )->init();
+		DoughBoss_Pickup::init( $this->cart );
+		( new DoughBoss_Privacy() )->init();
+		DoughBoss_Table_QR::init( $this->cart );
+
+		// POSPal voucher mirror (grant on claim, revoke on redeem). Static hooks;
+		// fully dormant until POSPal + a coupon-rule UID are configured.
+		DoughBoss_POSPal_Sync::init();
+
+		// Durable POSPal push outbox — the cron worker that owns retries. Must
+		// register before Orders::init() so its cron hook is bound before any
+		// enqueue schedules a sweep.
+		DoughBoss_POSPal_Outbox::init();
+
+		// POSPal order push (mirror placed online orders onto the till). Off by
+		// default; dormant until "push orders" is on AND a product map exists.
+		DoughBoss_POSPal_Orders::init();
+
+		// Optional long login session: keep logged-in users signed in for the
+		// configured number of days (0 = WordPress default). Off by default — set
+		// "Staff session" in Settings to e.g. 3650 so shop tablets never log out.
+		add_filter(
+			'auth_cookie_expiration',
+			static function ( $length, $user_id, $remember ) {
+				unset( $user_id, $remember );
+				$days = (int) DoughBoss_Settings::get( 'staff_session_days', 0 );
+				return $days > 0 ? $days * DAY_IN_SECONDS : $length;
+			},
+			20,
+			3
+		);
+
+		// Phase 2 real-time + notification connectors. Each self-gates on its own
+		// *_ready() check and stays fully dormant until configured in Settings.
+		DoughBoss_Mercure::init();
+		DoughBoss_Ntfy::init();
+		DoughBoss_SMS::init();
+		DoughBoss_Emails::init();
+		DoughBoss_Catering_Emails::init();
+		DoughBoss_Square_Loyalty::init();
+		DoughBoss_Square_Wallets::init();
+		DoughBoss_Square_Hosted::init();
+		// Per-shop Square seller accounts (OAuth). Dormant until a shop connects.
+		DoughBoss_Square_OAuth::init();
+		DoughBoss_Printer::init();
 
 		if ( is_admin() ) {
 			( new DoughBoss_Admin() )->init();
+			DoughBoss_Square_Accounts_Admin::init();
 		}
 	}
 

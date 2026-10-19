@@ -1,0 +1,301 @@
+<?php
+/**
+ * Square Loyalty accrual for paid web orders.
+ *
+ * After a Square-paid web order is created, a background job (never the
+ * checkout request) looks up the customer's Square Loyalty account by phone
+ * and accumulates points against the linked Square Order, so the points rules
+ * configured in Square Dashboard (incl. promotions) apply exactly as in-store.
+ *
+ * Only customers who already have a Square Loyalty account (enrolled in-store
+ * or via an explicit opt-in) earn points: this class never enrols anyone.
+ * Off unless `square_loyalty_accrual` is on; a missing Square program is a
+ * safe no-op. Idempotent: Square idempotency key + a 30-day done transient
+ * (orders have no meta table; the cron job only runs within minutes of the
+ * order, so a bounded marker replaces the old one-option-row-per-order guard).
+ *
+ * @package DoughBoss
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class DoughBoss_Square_Loyalty {
+
+	const CRON_HOOK  = 'doughboss_square_loyalty_accrue';
+	const DONE_PREFIX = 'doughboss_sqloy_';
+	const DONE_TRANSIENT_PREFIX = 'doughboss_sqloy_done_';
+	const DONE_TTL   = 2592000; // 30 days.
+	const MAX_TRIES  = 4;
+
+	/**
+	 * Register hooks.
+	 *
+	 * @return void
+	 */
+	public static function init() {
+		add_action( 'doughboss_order_created', array( __CLASS__, 'on_order_created' ), 30, 2 );
+		add_action( self::CRON_HOOK, array( __CLASS__, 'run' ), 10, 2 );
+	}
+
+	/** @return bool */
+	public static function enabled() {
+		return (bool) DoughBoss_Settings::get( 'square_loyalty_accrual', 0 );
+	}
+
+	/** Validate a public Square loyalty-status link, never a provider request. */
+	public static function sanitize_status_url( $raw ) {
+		if ( ! is_string( $raw ) ) {
+			return '';
+		}
+		$url = trim( $raw );
+		if ( ! preg_match( '#\Ahttps://(?:(?:app\.)?squareup\.com/loyalty/[A-Za-z0-9_-]{1,64}|profile\.squareup\.com/merchantportal/[A-Za-z0-9_-]{1,64}/loyalty)/?\z#', $url ) ) {
+			return '';
+		}
+		return rtrim( $url, '/' );
+	}
+
+	/** Customer authentication and enrolment stay on Square, not WordPress. */
+	public static function membership_portal() {
+		$url = self::sanitize_status_url( DoughBoss_Settings::get( 'square_loyalty_status_url', '' ) );
+		$on  = in_array( DoughBoss_Settings::get( 'square_loyalty_status_enabled', 0 ), array( 1, '1', true ), true );
+		if ( $on && '' !== $url ) {
+			$html = '<p class="db-me-status">' . esc_html__( 'Square-hosted membership', 'doughboss' ) . '</p>';
+			$html .= '<p>' . esc_html__( 'Join or check your rewards using your phone number and the SMS code sent by Square. Your details and sign-in are handled on Square.', 'doughboss' ) . '</p>';
+			$html .= sprintf( '<p><a class="dbf-button" href="%s" rel="noreferrer">%s</a></p>', esc_url( $url ), esc_html__( 'Join or view my rewards on Square', 'doughboss' ) );
+			$html .= '<p>' . esc_html__( 'This opens Square in this tab. It does not sign you into WordPress or enrol you in marketing on this website. Review the shop\'s reward terms and Square\'s consent choices there. Rewards redemption at website checkout is not available yet.', 'doughboss' ) . '</p>';
+		} else {
+			$html = '<p class="db-me-status">' . esc_html__( 'Sign-up not open', 'doughboss' ) . '</p>';
+			$html .= '<p>' . esc_html__( 'Square membership sign-up, member accounts and rewards are not available from this page yet. There is nothing to register for or pay for here today.', 'doughboss' ) . '</p>';
+		}
+		return $html . sprintf( '<p><a href="%s">%s</a></p>', esc_url( home_url( '/vouchers/' ) ), esc_html__( 'Gift cards and loyalty information', 'doughboss' ) );
+	}
+
+	/**
+	 * Queue accrual for a Square-paid order.
+	 *
+	 * @param int   $order_id Order id.
+	 * @param array $data     Order data.
+	 * @return void
+	 */
+	public static function on_order_created( $order_id, $data = array() ) {
+		if ( ! self::enabled() || ! is_array( $data ) ) {
+			return;
+		}
+		if ( ! self::eligible_data( $data ) ) {
+			return;
+		}
+		if ( ! wp_next_scheduled( self::CRON_HOOK, array( (int) $order_id, 1 ) ) ) {
+			wp_schedule_single_event( time() + 20, self::CRON_HOOK, array( (int) $order_id, 1 ) );
+		}
+	}
+
+	/**
+	 * Pure gate: paid, Square-referenced, with a usable phone.
+	 *
+	 * @param array $data Order data or row.
+	 * @return bool
+	 */
+	public static function eligible_data( array $data ) {
+		$paid  = isset( $data['payment_status'] ) && 'paid' === $data['payment_status'];
+		$ref   = isset( $data['payment_intent_id'] ) ? (string) $data['payment_intent_id'] : '';
+		$phone = isset( $data['customer_phone'] ) ? (string) $data['customer_phone'] : '';
+		return $paid && '' !== $ref && 0 !== strpos( $ref, 'pi_' ) && '' !== self::e164( $phone );
+	}
+
+	/**
+	 * Australian phone → E.164 (Square Loyalty is keyed by phone).
+	 *
+	 * @param string $phone Raw.
+	 * @return string
+	 */
+	public static function e164( $phone ) {
+		return class_exists( 'DoughBoss_Square_Invoices' ) ? DoughBoss_Square_Invoices::e164_au( $phone ) : '';
+	}
+
+	/**
+	 * Deterministic accumulate idempotency key (≤45 chars).
+	 *
+	 * @param string $square_order_id Square order id.
+	 * @return string
+	 */
+	public static function idempotency_key( $square_order_id ) {
+		return 'dbloy-' . substr( hash( 'sha256', 'doughboss-loyalty|' . $square_order_id ), 0, 36 );
+	}
+
+	/**
+	 * Background job.
+	 *
+	 * @param int $order_id Order id.
+	 * @param int $try      Attempt number.
+	 * @return string Outcome (for tests/logs): done|skipped|retry|gave_up.
+	 */
+	public static function run( $order_id, $try = 1 ) {
+		$order_id = absint( $order_id );
+		$try      = max( 1, (int) $try );
+		if ( ! $order_id || ! self::enabled() ) {
+			return 'skipped';
+		}
+		if ( self::is_done( $order_id ) ) {
+			return 'skipped';
+		}
+		$outcome = self::accrue( $order_id );
+		if ( 'retry' === $outcome ) {
+			if ( $try >= self::MAX_TRIES ) {
+				self::log( 'gave up on order #' . $order_id );
+				return 'gave_up';
+			}
+			wp_schedule_single_event( time() + 300 * $try, self::CRON_HOOK, array( $order_id, $try + 1 ) );
+			return 'retry';
+		}
+		self::mark_done( $order_id, $outcome );
+		return $outcome;
+	}
+
+	/**
+	 * Pure: the bounded done-marker key for an order.
+	 *
+	 * @param int $order_id Order id.
+	 * @return string
+	 */
+	public static function done_key( $order_id ) {
+		return self::DONE_TRANSIENT_PREFIX . absint( $order_id );
+	}
+
+	/**
+	 * Whether accrual already finished for this order (new transient marker, or
+	 * a legacy per-order option written by 2.47.0 and earlier).
+	 *
+	 * @param int $order_id Order id.
+	 * @return bool
+	 */
+	public static function is_done( $order_id ) {
+		$order_id = absint( $order_id );
+		if ( false !== get_transient( self::done_key( $order_id ) ) ) {
+			return true;
+		}
+		return (bool) get_option( self::DONE_PREFIX . $order_id );
+	}
+
+	/**
+	 * Record a finished accrual for 30 days (expires on its own; no permanent
+	 * wp_options row per order). Any legacy option row for the order is removed.
+	 *
+	 * @param int    $order_id Order id.
+	 * @param string $outcome  done|skipped.
+	 * @return void
+	 */
+	public static function mark_done( $order_id, $outcome ) {
+		$order_id = absint( $order_id );
+		set_transient( self::done_key( $order_id ), sanitize_key( (string) $outcome ) . '|' . gmdate( 'c' ), self::DONE_TTL );
+		if ( false !== get_option( self::DONE_PREFIX . $order_id, false ) ) {
+			delete_option( self::DONE_PREFIX . $order_id );
+		}
+	}
+
+	/**
+	 * One accrual pass.
+	 *
+	 * @param int $order_id Order id.
+	 * @return string done|skipped|retry
+	 */
+	private static function accrue( $order_id ) {
+		$order = DoughBoss_Order::get( $order_id );
+		if ( ! $order ) {
+			return 'skipped';
+		}
+		$row = (array) $order;
+		if ( ! self::eligible_data( $row ) ) {
+			return 'skipped';
+		}
+		$attempt = DoughBoss_Payment_Attempts::find_by_provider_reference( (string) $row['payment_intent_id'] );
+		if ( ! is_array( $attempt ) || 'square' !== $attempt['provider'] || 'succeeded' !== $attempt['status']
+			|| empty( $attempt['provider_order_reference'] ) ) {
+			return 'skipped';
+		}
+		$location = (int) $attempt['location_id'];
+		$binding  = DoughBoss_Square::commerce_binding( $location );
+		if ( is_wp_error( $binding ) ) {
+			return 'skipped';
+		}
+
+		$program = self::program_id( $location );
+		if ( null === $program ) {
+			return 'retry';
+		}
+		if ( '' === $program ) {
+			return 'skipped';
+		}
+
+		$found = DoughBoss_Square::commerce_request(
+			'POST',
+			'/v2/loyalty/accounts/search',
+			array( 'query' => array( 'mappings' => array( array( 'phone_number' => self::e164( $row['customer_phone'] ) ) ) ), 'limit' => 1 ),
+			$location
+		);
+		if ( is_wp_error( $found ) ) {
+			return 'retry';
+		}
+		$account = isset( $found['loyalty_accounts'][0]['id'] ) ? (string) $found['loyalty_accounts'][0]['id'] : '';
+		if ( '' === $account || ! preg_match( '/^[A-Za-z0-9_-]{8,64}$/', $account ) ) {
+			return 'skipped';
+		}
+
+		$square_order = (string) $attempt['provider_order_reference'];
+		$res          = DoughBoss_Square::commerce_request(
+			'POST',
+			'/v2/loyalty/accounts/' . $account . '/accumulate',
+			array(
+				'accumulate_points' => array( 'order_id' => $square_order ),
+				'idempotency_key'   => self::idempotency_key( $square_order ),
+				'location_id'       => $binding['square_location_id'],
+			),
+			$location
+		);
+		if ( is_wp_error( $res ) ) {
+			$data = $res->get_error_data();
+			$http = is_array( $data ) && isset( $data['square_http'] ) ? (int) $data['square_http'] : 0;
+			// 4xx = Square says no (already accrued, order not eligible): stop.
+			return ( $http >= 400 && $http < 500 && 429 !== $http ) ? 'skipped' : 'retry';
+		}
+		self::log( 'points accrued for order #' . $order_id );
+		return 'done';
+	}
+
+	/**
+	 * Main loyalty program id, cached 12h. '' = no program; null = unknown.
+	 *
+	 * @param int $location Native location id.
+	 * @return string|null
+	 */
+	private static function program_id( $location ) {
+		$key    = 'doughboss_sqloy_program_' . DoughBoss_Square::mode() . '_' . (int) $location;
+		$cached = get_transient( $key );
+		if ( is_string( $cached ) ) {
+			return 'none' === $cached ? '' : $cached;
+		}
+		$res = DoughBoss_Square::commerce_request( 'GET', '/v2/loyalty/programs/main', array(), $location );
+		if ( is_wp_error( $res ) ) {
+			$data = $res->get_error_data();
+			if ( is_array( $data ) && isset( $data['square_http'] ) && 404 === (int) $data['square_http'] ) {
+				set_transient( $key, 'none', HOUR_IN_SECONDS );
+				return '';
+			}
+			return null;
+		}
+		$id = isset( $res['program']['id'], $res['program']['status'] ) && 'ACTIVE' === $res['program']['status'] ? (string) $res['program']['id'] : '';
+		set_transient( $key, '' === $id ? 'none' : $id, 12 * HOUR_IN_SECONDS );
+		return $id;
+	}
+
+	/**
+	 * @param string $message Message.
+	 * @return void
+	 */
+	private static function log( $message ) {
+		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+			error_log( '[DoughBoss Square Loyalty] ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+		}
+	}
+}

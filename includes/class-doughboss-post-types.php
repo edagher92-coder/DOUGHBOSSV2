@@ -17,8 +17,61 @@ class DoughBoss_Post_Types {
 	const POST_TYPE = 'doughboss_item';
 	const TAXONOMY  = 'doughboss_category';
 
-	const META_PRICE = '_doughboss_price';
-	const META_TYPE  = '_doughboss_item_type';
+	const META_PRICE     = '_doughboss_price';
+	const META_TYPE      = '_doughboss_item_type';
+	const META_AVAILABLE = '_doughboss_available';
+	const META_SHOP_AVAILABILITY = '_doughboss_shop_availability';
+	const META_DIETARY   = '_doughboss_dietary';
+
+	/**
+	 * Present saved menu prose as plain text in JSON and the HTML fallback.
+	 * Decode once before removing markup, so encoded tags cannot become active
+	 * HTML downstream. Callers must still escape for their output context.
+	 * Saved posts are never rewritten by this presentation-only normalization.
+	 *
+	 * @param string $text Saved excerpt or content.
+	 * @return string Readable plain text.
+	 */
+	public static function plain_menu_description( $text ) {
+		if ( ! is_string( $text ) ) {
+			return '';
+		}
+		return self::decode_standalone_ampersands( wp_strip_all_tags( html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) );
+	}
+
+	/**
+	 * Present a saved menu title as plain text for JSON/textContent consumers.
+	 *
+	 * Titles saved through kses can arrive as "Cheese &amp; Olives"; the JSON
+	 * consumer writes textContent, so the entity would otherwise be shown
+	 * literally. Same rules as plain_menu_description().
+	 *
+	 * @param string $title Saved post title.
+	 * @return string
+	 */
+	public static function plain_menu_title( $title ) {
+		return trim( self::plain_menu_description( $title ) );
+	}
+
+	/**
+	 * Repair a double-escaped conjunction such as "olives &amp; cheese".
+	 *
+	 * Decoding stays single-pass so entity-like syntax ("&amp;lt;em&amp;gt;")
+	 * is never interpreted as markup. The one exception is an ampersand
+	 * entity that stands alone as a word (whitespace or string edge on both
+	 * sides): after the single decode that can only be a doubly-escaped "&"
+	 * used as "and", which customers saw rendered as a literal "&amp;".
+	 *
+	 * @param string $text Text that has already been decoded once.
+	 * @return string
+	 */
+	public static function decode_standalone_ampersands( $text ) {
+		if ( ! is_string( $text ) || false === strpos( $text, '&' ) ) {
+			return is_string( $text ) ? $text : '';
+		}
+		$fixed = preg_replace( '/(^|\s)&(?:amp|#0*38|#x0*26);(?=\s|$)/i', '$1&', $text );
+		return is_string( $fixed ) ? $fixed : $text;
+	}
 
 	/**
 	 * Hook registration into WordPress.
@@ -29,6 +82,88 @@ class DoughBoss_Post_Types {
 		add_action( 'init', array( __CLASS__, 'register' ) );
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_meta' ), 10, 2 );
+
+		// Menu Items list table: price + availability columns and a one-tap toggle.
+		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', array( $this, 'admin_columns' ) );
+		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', array( $this, 'render_admin_column' ), 10, 2 );
+		add_filter( 'post_row_actions', array( $this, 'row_actions' ), 10, 2 );
+		add_action( 'admin_post_doughboss_toggle_availability', array( $this, 'handle_toggle_availability' ) );
+	}
+
+	/**
+	 * Whether a menu item is available to order (default true; only an explicit
+	 * "0" means sold out).
+	 *
+	 * @param int $post_id Item ID.
+	 * @return bool
+	 */
+	public static function is_available( $post_id ) {
+		return '0' !== (string) get_post_meta( $post_id, self::META_AVAILABLE, true );
+	}
+
+	/** Active public shops only; a private/future location is never a menu scope. */
+	public static function availability_locations() {
+		return array_values( array_filter( DoughBoss_Locations::all( true ), static function ( $location ) {
+			return $location && isset( $location->id, $location->slug ) && (int) $location->id > 0
+				&& in_array( (string) $location->slug, array( 'revesby', 'bankstown', 'roselands' ), true );
+		} ) );
+	}
+
+	/** Validate the private override map without coercing malformed saved data. */
+	public static function valid_shop_availability( $overrides ) {
+		if ( ! is_array( $overrides ) ) { return false; }
+		foreach ( $overrides as $id => $value ) {
+			if ( ! preg_match( '/^[1-9][0-9]*$/D', (string) $id ) || (string) (int) $id !== (string) $id
+				|| ! in_array( $value, array( '0', '1' ), true ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Pure effective policy, shared by scoped reads and consequential checks. */
+	public static function shop_availability( $globally_available, $overrides, $location_id, array $active_ids ) {
+		if ( ! $globally_available || ! is_int( $location_id ) || $location_id < 1
+			|| ! in_array( $location_id, $active_ids, true ) || ! self::valid_shop_availability( $overrides ) ) {
+			return false;
+		}
+		return ! array_key_exists( $location_id, $overrides ) || '1' === $overrides[ $location_id ];
+	}
+
+	/** Missing overrides inherit the global flag; a malformed persisted map denies. */
+	public static function is_available_at( $post_id, $location_id ) {
+		$has_overrides = metadata_exists( 'post', $post_id, self::META_SHOP_AVAILABILITY );
+		$overrides = $has_overrides
+			? get_post_meta( $post_id, self::META_SHOP_AVAILABILITY, true ) : array();
+		// Absence is inheritance; an empty persisted map is not a valid saved override.
+		if ( $has_overrides && array() === $overrides ) { return false; }
+		$active_ids = array_map( static function ( $location ) { return (int) $location->id; }, self::availability_locations() );
+		return self::shop_availability( self::is_available( $post_id ), $overrides, $location_id, $active_ids );
+	}
+
+	/**
+	 * Dietary flags an item can carry (slug => label).
+	 *
+	 * @return array<string,string>
+	 */
+	public static function dietary_options() {
+		return array(
+			'vegetarian'  => __( 'Vegetarian', 'doughboss' ),
+			'vegan'       => __( 'Vegan', 'doughboss' ),
+			'gluten_free' => __( 'Gluten-free', 'doughboss' ),
+			'halal'       => __( 'Halal', 'doughboss' ),
+		);
+	}
+
+	/**
+	 * The dietary flags set on an item.
+	 *
+	 * @param int $post_id Item ID.
+	 * @return string[]
+	 */
+	public static function dietary( $post_id ) {
+		$flags = get_post_meta( $post_id, self::META_DIETARY, true );
+		return is_array( $flags ) ? array_values( $flags ) : array();
 	}
 
 	/**
@@ -66,6 +201,8 @@ class DoughBoss_Post_Types {
 				'rewrite'       => array( 'slug' => 'menu' ),
 				'supports'      => array( 'title', 'editor', 'thumbnail', 'page-attributes' ),
 				'capability_type' => 'post',
+				'map_meta_cap'    => false,
+				'capabilities'    => self::management_capabilities(),
 			)
 		);
 
@@ -84,6 +221,12 @@ class DoughBoss_Post_Types {
 				'show_admin_column' => true,
 				'show_in_rest'      => true,
 				'rewrite'           => array( 'slug' => 'menu-category' ),
+				'capabilities'      => array(
+					'manage_terms' => 'manage_doughboss',
+					'edit_terms'   => 'manage_doughboss',
+					'delete_terms' => 'manage_doughboss',
+					'assign_terms' => 'manage_doughboss',
+				),
 			)
 		);
 
@@ -96,7 +239,7 @@ class DoughBoss_Post_Types {
 				'show_in_rest'      => true,
 				'sanitize_callback' => array( __CLASS__, 'sanitize_price' ),
 				'auth_callback'     => function () {
-					return current_user_can( 'edit_posts' );
+					return current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
 				},
 			)
 		);
@@ -111,9 +254,75 @@ class DoughBoss_Post_Types {
 				'default'           => 'standard',
 				'sanitize_callback' => 'sanitize_key',
 				'auth_callback'     => function () {
-					return current_user_can( 'edit_posts' );
+					return current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
 				},
 			)
+		);
+
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_AVAILABLE,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'default'           => '1',
+				'sanitize_callback' => 'sanitize_key',
+				'auth_callback'     => function () {
+					return current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
+				},
+			)
+		);
+
+		register_post_meta( self::POST_TYPE, self::META_SHOP_AVAILABILITY, array(
+			'type' => 'object',
+			'single' => true,
+			'show_in_rest' => false,
+			'auth_callback' => static function () {
+				return current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
+			},
+		) );
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_DIETARY,
+			array(
+				'type'          => 'array',
+				'single'        => true,
+				'show_in_rest'  => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'string' ),
+					),
+				),
+				'auth_callback' => function () {
+					return current_user_can( 'manage_doughboss' ) || current_user_can( 'manage_options' );
+				},
+			)
+		);
+	}
+
+	/**
+	 * Restrict menu mutations to the DoughBoss owner/manager boundary while
+	 * keeping published menu content publicly readable.
+	 *
+	 * @return array<string,string>
+	 */
+	private static function management_capabilities() {
+		return array(
+			'edit_post'              => 'manage_doughboss',
+			'read_post'              => 'read',
+			'delete_post'            => 'manage_doughboss',
+			'edit_posts'             => 'manage_doughboss',
+			'edit_others_posts'      => 'manage_doughboss',
+			'publish_posts'          => 'manage_doughboss',
+			'read_private_posts'     => 'manage_doughboss',
+			'delete_posts'           => 'manage_doughboss',
+			'delete_private_posts'   => 'manage_doughboss',
+			'delete_published_posts' => 'manage_doughboss',
+			'delete_others_posts'    => 'manage_doughboss',
+			'edit_private_posts'     => 'manage_doughboss',
+			'edit_published_posts'   => 'manage_doughboss',
+			'create_posts'           => 'manage_doughboss',
 		);
 	}
 
@@ -153,9 +362,10 @@ class DoughBoss_Post_Types {
 	public function render_meta_box( $post ) {
 		wp_nonce_field( 'doughboss_save_item', 'doughboss_item_nonce' );
 
-		$price = get_post_meta( $post->ID, self::META_PRICE, true );
-		$type  = get_post_meta( $post->ID, self::META_TYPE, true );
-		$type  = $type ? $type : 'standard';
+		$price     = get_post_meta( $post->ID, self::META_PRICE, true );
+		$type      = get_post_meta( $post->ID, self::META_TYPE, true );
+		$type      = $type ? $type : 'standard';
+		$available = self::is_available( $post->ID );
 		?>
 		<p>
 			<label for="doughboss_price"><strong><?php esc_html_e( 'Price', 'doughboss' ); ?></strong></label><br />
@@ -170,6 +380,48 @@ class DoughBoss_Post_Types {
 				<option value="side" <?php selected( $type, 'side' ); ?>><?php esc_html_e( 'Side', 'doughboss' ); ?></option>
 				<option value="drink" <?php selected( $type, 'drink' ); ?>><?php esc_html_e( 'Drink', 'doughboss' ); ?></option>
 			</select>
+		</p>
+		<p style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;">
+			<label for="doughboss_available">
+				<input type="checkbox" id="doughboss_available" name="doughboss_available" value="1" <?php checked( $available ); ?> />
+				<strong><?php esc_html_e( 'Available for ordering', 'doughboss' ); ?></strong>
+			</label><br />
+			<span class="description"><?php esc_html_e( 'Uncheck to mark this item sold out — it stays on the menu but can\'t be added to a cart.', 'doughboss' ); ?></span>
+		</p>
+		<p style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;">
+			<strong><?php esc_html_e( 'Availability by shop', 'doughboss' ); ?></strong><br />
+			<span class="description"><?php esc_html_e( 'Shared menu and prices. Global sold out always overrides these choices.', 'doughboss' ); ?></span>
+			<?php
+			$has_overrides = metadata_exists( 'post', $post->ID, self::META_SHOP_AVAILABILITY );
+			$overrides = $has_overrides
+				? get_post_meta( $post->ID, self::META_SHOP_AVAILABILITY, true ) : array();
+			if ( ( $has_overrides && array() === $overrides ) || ! self::valid_shop_availability( $overrides ) ) {
+				echo '<br /><strong>' . esc_html__( 'Saved shop availability is invalid. Ordering is blocked until these choices are saved.', 'doughboss' ) . '</strong>';
+				$overrides = array();
+			}
+			foreach ( self::availability_locations() as $location ) :
+				$shop_id = (int) $location->id;
+				$choice = isset( $overrides[ $shop_id ] ) ? $overrides[ $shop_id ] : 'inherit';
+				?>
+				<label style="display:block;margin-top:8px;" for="doughboss_shop_<?php echo esc_attr( $shop_id ); ?>"><?php echo esc_html( $location->name ); ?></label>
+				<select style="width:100%;" id="doughboss_shop_<?php echo esc_attr( $shop_id ); ?>" name="doughboss_shop_availability[<?php echo esc_attr( $shop_id ); ?>]">
+					<option value="inherit" <?php selected( $choice, 'inherit' ); ?>><?php esc_html_e( 'Use global availability', 'doughboss' ); ?></option>
+					<option value="1" <?php selected( $choice, '1' ); ?>><?php esc_html_e( 'Available at this shop', 'doughboss' ); ?></option>
+					<option value="0" <?php selected( $choice, '0' ); ?>><?php esc_html_e( 'Sold out at this shop', 'doughboss' ); ?></option>
+				</select>
+			<?php endforeach; ?>
+		</p>
+		<p style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;">
+			<strong><?php esc_html_e( 'Dietary', 'doughboss' ); ?></strong><br />
+			<?php
+			$dietary = self::dietary( $post->ID );
+			foreach ( self::dietary_options() as $diet_key => $diet_label ) :
+				?>
+				<label style="display:inline-block;margin:4px 12px 0 0;">
+					<input type="checkbox" name="doughboss_dietary[]" value="<?php echo esc_attr( $diet_key ); ?>" <?php checked( in_array( $diet_key, $dietary, true ) ); ?> />
+					<?php echo esc_html( $diet_label ); ?>
+				</label>
+			<?php endforeach; ?>
 		</p>
 		<?php
 	}
@@ -194,6 +446,22 @@ class DoughBoss_Post_Types {
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			return;
 		}
+		if ( ! current_user_can( 'manage_doughboss' ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		// Validate the entire submitted map before changing any item fields.
+		$shop_choices = null;
+		if ( isset( $_POST['doughboss_shop_availability'] ) ) {
+			$shop_choices = wp_unslash( $_POST['doughboss_shop_availability'] );
+			$active_ids = array_map( static function ( $location ) { return (int) $location->id; }, self::availability_locations() );
+			if ( ! is_array( $shop_choices ) ) { return; }
+			foreach ( $shop_choices as $shop_id => $choice ) {
+				if ( ! preg_match( '/^[1-9][0-9]*$/D', (string) $shop_id ) || (string) (int) $shop_id !== (string) $shop_id
+					|| ! in_array( (int) $shop_id, $active_ids, true ) || ! in_array( $choice, array( 'inherit', '0', '1' ), true ) ) {
+					return;
+				}
+			}
+		}
 
 		if ( isset( $_POST['doughboss_price'] ) ) {
 			$price = self::sanitize_price( wp_unslash( $_POST['doughboss_price'] ) );
@@ -204,5 +472,107 @@ class DoughBoss_Post_Types {
 			$type = sanitize_key( wp_unslash( $_POST['doughboss_item_type'] ) );
 			update_post_meta( $post_id, self::META_TYPE, $type );
 		}
+
+		// The meta box always renders the availability checkbox, so its absence
+		// from the POST means the box was unticked (sold out).
+		update_post_meta( $post_id, self::META_AVAILABLE, empty( $_POST['doughboss_available'] ) ? '0' : '1' );
+		if ( null !== $shop_choices ) {
+			$overrides = get_post_meta( $post_id, self::META_SHOP_AVAILABILITY, true );
+			$overrides = self::valid_shop_availability( $overrides ) ? $overrides : array();
+			foreach ( $shop_choices as $shop_id => $choice ) {
+				if ( 'inherit' === $choice ) { unset( $overrides[ $shop_id ] ); }
+				else { $overrides[ $shop_id ] = $choice; }
+			}
+			if ( array() === $overrides ) {
+				delete_post_meta( $post_id, self::META_SHOP_AVAILABILITY );
+			} else {
+				update_post_meta( $post_id, self::META_SHOP_AVAILABILITY, $overrides );
+			}
+		}
+
+		$allowed = array_keys( self::dietary_options() );
+		$flags   = isset( $_POST['doughboss_dietary'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['doughboss_dietary'] ) ) : array();
+		update_post_meta( $post_id, self::META_DIETARY, array_values( array_intersect( $flags, $allowed ) ) );
+	}
+
+	/**
+	 * Add Price + Availability columns to the Menu Items list table.
+	 *
+	 * @param array $columns Existing columns.
+	 * @return array
+	 */
+	public function admin_columns( $columns ) {
+		$out = array();
+		foreach ( $columns as $key => $label ) {
+			if ( 'date' === $key ) {
+				$out['doughboss_price']        = __( 'Price', 'doughboss' );
+				$out['doughboss_availability'] = __( 'Availability', 'doughboss' );
+			}
+			$out[ $key ] = $label;
+		}
+		return $out;
+	}
+
+	/**
+	 * Render the custom list-table columns.
+	 *
+	 * @param string $column  Column key.
+	 * @param int    $post_id Post ID.
+	 * @return void
+	 */
+	public function render_admin_column( $column, $post_id ) {
+		if ( 'doughboss_price' === $column ) {
+			$price = (float) get_post_meta( $post_id, self::META_PRICE, true );
+			echo esc_html( DoughBoss_Settings::format_price( $price ) );
+		} elseif ( 'doughboss_availability' === $column ) {
+			if ( self::is_available( $post_id ) ) {
+				echo '<span style="display:inline-block;padding:2px 9px;border-radius:11px;font-size:11px;font-weight:600;background:#e7f6e7;color:#1a7f37;">' . esc_html__( 'Available', 'doughboss' ) . '</span>';
+			} else {
+				echo '<span style="display:inline-block;padding:2px 9px;border-radius:11px;font-size:11px;font-weight:600;background:#fdecea;color:#b3261e;">' . esc_html__( 'Sold out', 'doughboss' ) . '</span>';
+			}
+		}
+	}
+
+	/**
+	 * Add a one-tap "Mark sold out / Mark available" row action.
+	 *
+	 * @param array   $actions Row actions.
+	 * @param WP_Post $post    Post.
+	 * @return array
+	 */
+	public function row_actions( $actions, $post ) {
+		if ( self::POST_TYPE !== $post->post_type || ! current_user_can( 'edit_post', $post->ID ) ) {
+			return $actions;
+		}
+		$url   = wp_nonce_url(
+			admin_url( 'admin-post.php?action=doughboss_toggle_availability&post=' . $post->ID ),
+			'doughboss_toggle_' . $post->ID
+		);
+		$label = self::is_available( $post->ID ) ? __( 'Mark sold out', 'doughboss' ) : __( 'Mark available', 'doughboss' );
+
+		$actions['doughboss_toggle'] = '<a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a>';
+		return $actions;
+	}
+
+	/**
+	 * Handle the availability toggle from the list-table row action.
+	 *
+	 * @return void
+	 */
+	public function handle_toggle_availability() {
+		$post_id = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
+		if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'doughboss' ) );
+		}
+		check_admin_referer( 'doughboss_toggle_' . $post_id );
+
+		update_post_meta( $post_id, self::META_AVAILABLE, self::is_available( $post_id ) ? '0' : '1' );
+
+		$redirect = wp_get_referer();
+		if ( ! $redirect ) {
+			$redirect = admin_url( 'edit.php?post_type=' . self::POST_TYPE );
+		}
+		wp_safe_redirect( $redirect );
+		exit;
 	}
 }

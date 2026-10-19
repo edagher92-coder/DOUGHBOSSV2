@@ -1,0 +1,44 @@
+{
+  "scope": "Local A$300 AUD routing isolated native acceptance and package preparation",
+  "date_australia_sydney": "2026-10-18",
+  "branch": "codex/2.51-handoff-20261016",
+  "source_commit": "0a037d1e2e7b6a95f6023121c546aa096b763101",
+  "runtime": {
+    "runner_sha256": "EA2650699BB265EEFE2E1D1626722E4E648F69A158AD01CA9847F5E4D4EC5302",
+    "freeze_manifest_sha256": "7A5053C3145A01314F23BAE961FBC7778400039ADF7D0CE747483BDFC59A1D32",
+    "evidence_directory": "C:\\Codex\\Temp\\doughboss-local-first-runtime-20261017\\runtime-r19-routing300-r2",
+    "installed_source_files_matched": 239,
+    "assertions_passed": 3622,
+    "assertions_failed": 0,
+    "passed": true,
+    "source_gate_passed": true,
+    "hashes_stable": true,
+    "http_and_mail_guards_verified": true,
+    "fresh_dataset": true,
+    "old_fixture_untouched": true,
+    "database_stopped": true,
+    "port_still_listening": false,
+    "forced_stop": false
+  },
+  "package": {
+    "path": "C:\\Codex\\Output\\doughboss-release-candidate-20261018-0a037d1\\doughboss-2.51.0-0a037d1.zip",
+    "sha256": "2FD048BF772DED566DBCA508C27C0DE964AF6125125EDCAFCA7BDF0913EA6DE4",
+    "bytes": 5689350,
+    "version": "2.51.0",
+    "files": 239,
+    "validation": "passed"
+  },
+  "independent_review": {
+    "thread_id": "01a14ea2-748f-7d42-978c-1aef32850332",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh",
+    "source_verdict": "SHIP_LOCAL_SOURCE_ONLY",
+    "native_verdict": "SHIP_LOCAL_NATIVE_AND_PACKAGE_PREP",
+    "blocking_findings": 0
+  },
+  "payments_enabled": false,
+  "ordering_enabled": false,
+  "other_shop_connections_changed": false,
+  "provider_actions": false,
+  "production_changes": false
+}

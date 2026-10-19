@@ -152,7 +152,11 @@ try {
 	}
 	$plugin = $archive->getFromName( 'doughboss-growth-box/doughboss-growth-box.php' );
 	$archive->close();
-	dbgrbox_validator_change_entry( $version, 'doughboss-growth-box/doughboss-growth-box.php', str_replace( "define( 'DBGRBOX_VERSION', '0.2.0' );", "define( 'DBGRBOX_VERSION', '0.2.1' );", $plugin ) );
+	$mismatched = preg_replace( "/define\\( 'DBGRBOX_VERSION', '[^']+' \\);/", "define( 'DBGRBOX_VERSION', '9.9.9' );", $plugin, 1, $replaced );
+	if ( 1 !== $replaced ) {
+		throw new RuntimeException( 'Could not find DBGRBOX_VERSION in plugin entry' );
+	}
+	dbgrbox_validator_change_entry( $version, 'doughboss-growth-box/doughboss-growth-box.php', $mismatched );
 	list( $status, $output ) = dbgrbox_validator_run( $validator, $version );
 	dbgrbox_validator_expect( 0 !== $status && false !== strpos( $output, 'archive version mismatch' ), 'refuse inconsistent release metadata' );
 

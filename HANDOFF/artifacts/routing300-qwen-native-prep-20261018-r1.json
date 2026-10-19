@@ -1,0 +1,43 @@
+{
+  "scope": "Qwen-assisted preparation of real WordPress checkout routing regressions; not executed database acceptance",
+  "model": "qwen3.8-27b:code",
+  "status": "ok",
+  "finish_reason": "stop",
+  "elapsed_ms": 38921,
+  "usage": {
+    "prompt_tokens": 828,
+    "completion_tokens": 1707,
+    "total_tokens": 2535
+  },
+  "timings": {
+    "prompt_ms": 1866.544,
+    "predicted_ms": 34600.206,
+    "prompt_per_second": 366.9884020949948,
+    "predicted_per_second": 49.30606482516318
+  },
+  "delivery": {
+    "streamed": true,
+    "progress_updates": 36,
+    "first_content_ms": 4296
+  },
+  "review": {
+    "draft_accepted_unchanged": false,
+    "corrections": [
+      "Replaced invented DoughBoss namespaces with actual underscore class names",
+      "Used existing PHP constant environment guards rather than invented getenv checks",
+      "Fixed Cart::add signature and exact customer_email/customer_phone fields",
+      "Used actual Square and Stripe POST counters instead of a fabricated counter",
+      "Restored absent cookie/REMOTE_ADDR with unset, and isolated/restored table-session cookie",
+      "Kept mutation cleanup inside finally and exact created test-row deletion",
+      "Added delivery-fee boundary cases"
+    ],
+    "source": "tests/integration/wordpress-mysql.php",
+    "syntax_php82": "passed",
+    "syntax_php74": "passed",
+    "database_run": "not admitted or executed",
+    "payments": "disabled even in this new disposable checkout fixture",
+    "production_changes": false,
+    "final_review_task": "01a14ea2-748f-7d42-978c-1aef32850332",
+    "final_review_status": "active/waitingOnApproval at last supported read"
+  }
+}

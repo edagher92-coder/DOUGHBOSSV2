@@ -1,0 +1,28 @@
+{
+  "observedAt": "2026-10-18T01:50:45.774Z",
+  "source": "Anonymous website menu GET",
+  "scope": "Current website compared only with explicitly dated 17 October website baselines; not a fresh Square provider readback",
+  "bodyBytes": 84946,
+  "bodySha256": "d6ef7a800365810483fc0fb4153e3a4649949e3a99b7e7390036302f5c93c431",
+  "itemCount": 43,
+  "itemIdentityPriceCategoryAvailabilityAndOptionGroupProjectionMatches": 43,
+  "changedItemIds": [],
+  "missingPriorItemIds": [],
+  "distinctOptionSignatures": 10,
+  "optionChoiceLabelsPricesDefaultsAndItemAssignmentsMatchPriorWebsite": true,
+  "baselineObservedAt": "2026-10-17T01:06:39.0927483Z",
+  "baselineOptionsObservedAt": "2026-10-17T01:20:07.5056546Z",
+  "baselineFileHashes": {
+    "menu": "4dd7c0768e5435213e45e8dc9b7f9e73c1c5765306328da43d04ef4517209bf7",
+    "choices": "d71227f5481d1dbef22744e5f6e7590455b02755a0ecace325cbe239dda52109"
+  },
+  "limitations": [
+    "Availability is the public menu field, not a verified per-location or Square availability proof.",
+    "Image URL presence/origin is not a real photograph, visual correctness, HTTP image validation or browser decoding; URLs may point to branded fallback tiles.",
+    "Square item overrides, min/max, object IDs, tax classification, account identity and current provider state remain unverified.",
+    "No provider write, payment, deployment or browser/customer-state mutation."
+  ],
+  "itemsWithImageUrl": 43,
+  "itemsWithoutImageUrl": 0,
+  "choiceEntriesAcrossSignatures": 48
+}

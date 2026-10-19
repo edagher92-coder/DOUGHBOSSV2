@@ -1,0 +1,91 @@
+{
+  "format": "DOUGHBOSS_LOYALTY_OPT_IN_LOCAL_R1",
+  "base_commit": "f54b984b7f8fafa70ea802474e0b0282927fff81",
+  "scope": "Local default-off repair only; no persisted setting changes or provider actions",
+  "source_pins": [
+    {
+      "path": "includes/class-doughboss-settings.php",
+      "bytes": 77733,
+      "sha256": "7a7ac4eff5fd6f63ef793d188fbce864a7632936e80cee5876cd69e06086dfe2"
+    },
+    {
+      "path": "includes/class-doughboss-square-loyalty.php",
+      "bytes": 9129,
+      "sha256": "b25f138f27273f54c6d81711920a55a5e6362e01531219623a9a3a4657d89cc7"
+    },
+    {
+      "path": "admin/class-doughboss-admin.php",
+      "bytes": 295339,
+      "sha256": "aa5478f0c500d926b0b9ddb14bed1625a7c170ce8760b95d4b4df436f0d980c5"
+    },
+    {
+      "path": "tests/test-square-invoices.php",
+      "bytes": 17104,
+      "sha256": "6483cba1289d489a153b4a92aa363f64a96a5fea6080ffd3b53c2182b5a4542c"
+    }
+  ],
+  "baseline": {
+    "runtime": "PHP 8.2",
+    "command": "php82/php.exe tests/run.php",
+    "assertions": 3114,
+    "passed": 3111,
+    "failed": 3,
+    "exit_code": 1,
+    "expected_regression_failures": [
+      "new settings default to no accrual",
+      "missing opt-in stays off",
+      "admin checkbox uses same runtime opt-in decision"
+    ]
+  },
+  "after": {
+    "php82": {
+      "assertions": 3114,
+      "passed": 3114,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "php74": {
+      "assertions": 3044,
+      "passed": 3044,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "syntax": {
+      "runtimes": ["PHP 8.2", "PHP 7.4"],
+      "files": 4,
+      "passed": 8,
+      "exit_code": 0
+    },
+    "diff_check": {
+      "exit_code": 0
+    }
+  },
+  "local_partner": {
+    "tool": "mcp__qwen__ask_local",
+    "model": "qwen3.8-27b:code",
+    "status": "paused",
+    "generated_output": false,
+    "retried": false,
+    "note": "Connector reported pause while video renders. Resource guard preserved; no performance or savings claim."
+  },
+  "review": {
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "status": "SHIP_LOCAL_SOURCE_ONLY",
+    "independent_checks": {
+      "source_pins": "4/4 match",
+      "php82": "3114 passed, 0 failed; exit 0",
+      "php74": "3044 passed, 0 failed; exit 0",
+      "php82_syntax": "4/4 passed; exit 0",
+      "scoped_diff_check": "passed; exit 0"
+    }
+  },
+  "release": {
+    "deployed": false,
+    "provider_calls": false,
+    "saved_options_changed": false,
+    "payments_activated": false,
+    "previous_packages_cover_exact_candidate": false,
+    "previous_database_freeze_covers_exact_candidate": false
+  }
+}

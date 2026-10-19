@@ -2,9 +2,9 @@
 Contributors: doughboss
 Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
-Tested up to: 6.5
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.51.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,11 +16,25 @@ DoughBoss turns any WordPress site into a pizza/food ordering storefront. It add
 
 * A **Menu Items** custom post type with categories, prices and images.
 * A **custom pizza builder** where customers choose a size and toppings with live pricing.
-* A **cart and checkout** for pickup or delivery, with configurable tax and delivery fees.
+* A **cart and checkout** for pickup, delivery, or secure QR-bound table ordering, with configurable tax and delivery fees. Payment-provider activation remains optional and is not live until its own onboarding and verification gates pass.
 * **Order tracking** so customers can check their order status by order number + email.
 * An **Orders** admin screen with live status updates, plus a settings page for sizes, toppings, currency and fees.
 
 Everything is rendered through shortcodes and a small REST API; no theme changes are required.
+
+Kitchen staff can use the capability-gated, shop-scoped `/kitchen/` workspace,
+optimised for a 23.8-inch Full HD touch display. Catering production uses the
+separate hidden `/catering-kitchen/` workspace, while managers use the protected
+`/management/` overview. Every staff route uses the normal WordPress user and
+role system; no password or secret is stored in the plugin.
+
+Every employee can use the touch-first `/staff-clock/` workspace by scanning a
+personal QR badge and entering a private PIN. Clock-in is bound to an active
+DoughBoss shop, the short kiosk session clears after every action, and recorded
+breaks are deducted from worked time. Optional manager-set rosters snapshot the
+expected start, grace and late minutes without making unapproved payroll-policy
+deductions. Managers can review, filter, correct with an audit reason, and export
+attendance from Staff Timesheet.
 
 = Shortcodes =
 
@@ -28,12 +42,14 @@ Everything is rendered through shortcodes and a small REST API; no theme changes
 * `[doughboss_builder]` — the custom pizza builder.
 * `[doughboss_cart]` — the cart and checkout.
 * `[doughboss_order_tracking]` — the order status lookup form.
+* `[doughboss_shop_picker]` — choose which shop to order from (multi-shop sites).
+* `[doughboss_ordering_status]` — accessible Coming Soon copy while checkout is paused.
 
 == Installation ==
 
 1. In wp-admin go to **Plugins → Add New → Upload Plugin**.
 2. Upload `doughboss.zip` and click **Install Now**, then **Activate**.
-3. Go to **DoughBoss → Settings** to configure sizes, toppings, currency, tax and fees.
+3. Go to **DoughBoss → Settings** to configure sizes, toppings, currency, tax and fees. Fresh installs begin in safe browse-only mode; leave **Accept orders** off until staging is complete.
 4. Add menu items under **DoughBoss → Menu Items**.
 5. Place the shortcodes above on your pages.
 
@@ -41,15 +57,611 @@ Everything is rendered through shortcodes and a small REST API; no theme changes
 
 = Does this process payments? =
 
-Not yet. Orders are recorded and the store is notified; payment integration
-(e.g. Stripe) is planned for a future release. Today it suits "order now, pay
-on pickup/delivery" workflows.
+Optionally. Orders are always recorded and the store is notified — DoughBoss
+suits "order now, pay on pickup/delivery" out of the box. Storefront card
+payments redirect to Stripe-hosted Checkout for Visa, Mastercard and eligible
+Apple Pay or Google Pay wallets; Stripe automatically presents supported
+wallets using its own secure interface. Catering uses Stripe Payment Element.
+Payments can be switched on under **DoughBoss → Settings → Payments** (off by
+default); once configured, the payment and final order total are verified
+server-side before the order is accepted.
+
+Tyro Connect Pay is also available as a **pre-final, disabled-by-default**
+integration. It needs Tyro-provided sandbox credentials, a confirmed per-shop
+`locationId`, a signed webhook, sandbox evidence and Tyro production approval
+before live payments may be enabled. The installed code and this readme do not
+include merchant credentials or make a shop payment-ready.
+
+Mastercard Payment Gateway Services (MPGS) Hosted Checkout is available as a
+separate gateway. Card entry and 3-D Secure happen on Mastercard's hosted page;
+DoughBoss retrieves and verifies the gateway order amount, currency, checkout
+binding and captured state before saving a paid order. Test and live API
+passwords are environment-first, and live mode has an additional approval gate.
 
 = Does it need an account system? =
 
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.51.1 =
+* Remove the unannounced product name from the public catering copy, the catering SEO description, the theme catering page, a public script comment and the readme changelog, with a test that the catering SEO copy never names it. No behaviour changes. Theme 1.8.1.
+
+= 2.51.0 =
+* Store-first ordering: on multi-shop sites customers choose Revesby, Bankstown or Roselands before the menu (open/closed badge, today's hours, prep time), with a "Change store" button that re-checks the cart and removes items the new shop doesn't sell.
+* Pickup time (per shop, when the shop's Capacity mode is set to Live): "ASAP — ready in about N min" or a 15-minute slot today or tomorrow within that shop's hours. Each slot takes a set number of orders (default 6); full slots are shown as Full. The chosen time is held for 10 minutes while paying and re-checked by the server. A paid order is never refused for capacity: if the slot filled or passed during payment it is kept and flagged for staff.
+* Kitchen board: Upcoming section for scheduled orders (they join New one prep-time before pickup, without the alarm firing early), ASAP/Scheduled badges, pickup time on each card, single Accept for timed orders and a "+10 min" button that moves the promise and tells the customer by email/SMS.
+* Per-shop settings (DoughBoss > Shops): Capacity mode Off / Shadow / Live, orders per slot, days ahead (0–7), last-slot cut-off before close (default 20 min), busy extra minutes, pause ordering, holiday closures.
+* Emails, SMS, kitchen tickets, the confirmation page and order tracking show "Pickup at <shop>, <time>". The Square order gets a ticket name and pickup metadata (no fulfilments).
+* Fix: concurrent checkouts could deadlock in MariaDB and fail with a misleading approval error (also present in 2.50); concurrent pickup holds on different slots could deadlock.
+* Database 1.30.0: additive columns only. With every shop on Capacity mode Off, ordering and payments behave as in 2.50, apart from the store chooser on multi-shop sites.
+
+= 2.50.0 =
+* Multi-account Square: each shop (Revesby, Bankstown, Roselands) can take online payments, hosted checkout, catering invoices, customers, loyalty and Club tiers through its OWN Square seller account. New owner-only page DoughBoss > Square accounts: "Connect Square account" per shop (Square OAuth code flow, signed single-use state, session=false in production), pick that account's location, Disconnect (revokes the authorization in Square). A shop that is not connected keeps using the existing single-account settings, so Revesby works unchanged with no setup.
+* Tokens are refreshed automatically (twice-daily check, refreshed once about 7 days old, plus on demand near expiry) and stored in a non-autoloaded option; define DOUGHBOSS_SQUARE_TOKEN_KEY to encrypt them at rest. The application secret is write-only and can come from DOUGHBOSS_SQUARE_TEST_APP_SECRET / DOUGHBOSS_SQUARE_LIVE_APP_SECRET.
+* Webhooks: the one existing application subscription now serves every shop; events are routed by merchant ID, events from sellers this site does not serve are acknowledged and ignored, and oauth.authorization.revoked disconnects the shop with an admin notice.
+* New: copy the Revesby Square menu (categories, modifier lists, items and variations) into another connected shop's Square account, with a dry-run preview first. Images, item options, per-location overrides and inventory are not copied; taxes map to the target account's matching tax.
+* No database schema change.
+
+= 2.49.0 =
+* Menu: inline SVG search icon with a clear button (the old glyph showed as a missing-character box); warm branded tile for items without a photo or with a photo that fails to load; Drinks shown as a compact two-column list.
+* While online ordering is paused the menu shows no per-card "Customise when ordering opens" / "Ordering paused" controls; one sticky "Call to order (02) 9774 2286" bar replaces them. It follows the live ordering setting, so normal add-to-cart controls return automatically when ordering opens. New setting: Call-to-order phone.
+* Menu text: a double-escaped "&amp;" used as "and" (for example Sujuk Special) now shows as "&"; menu and catering package names decode the same way.
+* Hero: photo-motion control is a small corner icon toggle (aria-pressed), hidden when the device asks for reduced motion; the helper caption is gone and stat values and labels no longer run together.
+* New [doughboss_b2b_form type="wholesale|franchise"] enquiry form: REST submit with nonce, honeypot, rate limit and server validation, emailed to the new "Wholesale & franchising email" setting (blank = order notification email) with Reply-To set to the enquirer. Nothing is stored.
+* Store cards (theme): structured rows, Call and Google Maps buttons, and a live Open now / Closed badge in Sydney time from stored location hours (published hours as fallback).
+* Catering: package size, guest range and price shown as separate badges; per-package quantity steppers combine packages; the quote and enquiry routes accept packages[] {id, qty}, priced from the package posts only (highest package deposit % applies), with the selection saved as a readable list in the enquiry notes. A single package_id works as before. Online catering enquiries are pickup from Revesby only: other shops and delivery are refused.
+* Theme DoughBoss Final 1.8.0: single header CTA, "Order Online" becomes "Call to order" while ordering is paused, icon-only menu toggle, one hero stat strip, wholesale/franchising forms, footer "Franchising & partners".
+
+= 2.48.0 =
+* New: itemised paid-order confirmation email ("placed" stage) with line totals, options, discount, GST included, pickup shop name/address/phone and tracking link. Settings > Real-time & Notifications > "Email customer an itemised confirmation when a paid order is placed" (default on). The older template confirmation no longer emails the customer a second time once it was sent; the shop inbox copy is unchanged.
+* Square partial refunds: the payment is re-read; when completed refunds add up to the amount paid the order is marked refunded, otherwise the orders inbox gets one notice per refund.
+* Apple Pay / Google Pay buttons check the checkout form before opening the wallet and show a visible message when the wallet is cancelled or fails.
+* Performance: the Square Web Payments SDK loads only on the order/checkout page (on demand elsewhere); the header shop status refreshes every 120 seconds and stops while the tab is hidden.
+* Order board keeps the tablet screen awake (Screen Wake Lock) where supported.
+* Checkout: opt-in "Remember my details on this device" (name, email, phone stored only in this browser).
+* Housekeeping: Square Loyalty done markers expire after 30 days instead of one permanent option row per order; the Apple Pay domain file moved to its own non-autoloaded option.
+* Local SEO: one schema.org Bakery per shop (name, address, phone, opening hours, Lebanese cuisine); the unverified price range was removed.
+* Distinct /order/ title and /menu/ heading, descriptive hero image alt text, catering pickup and notice line. Theme DoughBoss Final 1.7.0.
+
+= 2.47.0 =
+* New (off by default): Square-hosted checkout. Settings > Square > Checkout style = "Square-hosted checkout page" sends the same itemised, location-bound order to a Square Checkout API payment link and redirects the customer to Square (card, Apple Pay, Google Pay; no tipping, coupons, loyalty or shipping). The kitchen order is created only after the server re-reads the bound Square Order and its Payment and proves a COMPLETED payment for the exact amount, currency and location. Browser return, payment.updated/order.updated webhooks and a 15-minute sweep share one idempotent finalisation; abandoned links are deleted after 60 minutes and their voucher hold released. The embedded card form remains the default and is unchanged.
+
+= 2.46.1 =
+* Fix: Square invoice ids (inv:0-…) were rejected by the commerce path guard, so catering invoices could not be published or re-read.
+
+= 2.46.0 =
+* Catering via Square invoices: managers send deposit and balance invoices from DoughBoss > Catering; Square emails a hosted pay page; invoice webhooks mark legs paid only when Square reports PAID for the exact amount at the mapped location.
+* Catering minimum notice in business days (default 2, weekends excluded), enforced server-side and shown on the form; configurable in Settings.
+* Catering payment receipts to the customer and the catering inbox.
+* Square card declines now close the attempt as failed (no charge) so customers can retry immediately instead of being blocked as 'unknown'; pre-dispatch checkout errors are flagged retry-safe.
+* Square payments carry buyer_email_address from the verified checkout snapshot.
+* Square Loyalty: background accrual of points on paid web orders for existing Square Loyalty members (matched by phone), toggle in Settings.
+* Square is now the default and only selectable gateway; Stripe, Tyro, Mastercard and POSPal settings are hidden (kept for historical refunds; define DOUGHBOSS_SHOW_LEGACY_GATEWAYS to show).
+* Square refund and dispute webhooks: completed full refunds (from WP, Dashboard or POS) mark the order refunded; chargebacks alert the orders inbox.
+* Member tiers (Student, Tradie, Club) as Square customer groups, with a staff page; Club membership synced from Square Subscriptions.
+* Apple Pay and Google Pay on Square checkout (off until enabled), with Apple Pay domain file served from Settings.
+* Approved pre-orders and voucher checkouts can retry after a card decline (bounded); 3DS billing contact uses given and family name.
+
+= 2.45.0 =
+* Refresh storefront asset cache keys for the locally validated release candidate; publication and provider activation remain separate operator gates.
+* Respect reduced-motion preferences in photograph controls and preserve each hero's manual pause choice across preference changes.
+* Support full-value Square Gift Card checkout with server-validated tender identity, and bind refunds to fresh original-payment context.
+* Add an inert durable split-funding ledger and internal exact-ID, GET-only recovery of approved authorizations; public split capture remains unavailable pending ownership and provider acceptance.
+* Retain browse-only and payment-activation safeguards; authorization observations are not paid-order or kitchen-release authority.
+
+= 2.44.0 =
+* Add a named-approver workflow that keeps pre-order requests unpaid and outside the kitchen until a server-verified Stripe payment creates one linked fulfilment order.
+* Store approval actor, timestamp, request revision, immutable fingerprint, private expiring capability and deterministic checkout identity in a fail-closed transactional schema.
+* Route order notices and public order contacts to info@doughboss.com.au, with optional approver SMS through the existing disabled-by-default ClickSend integration.
+* Keep Stripe retries byte-stable after an uncertain response, and extend isolated WordPress/MySQL coverage for approval, permission, replay, rejection and paid release behavior.
+
+= 2.43.2 =
+* Serve prebuilt responsive AVIF/WebP photography for bundled page and homepage heroes, with original JPEG fallbacks and no runtime encoder dependency.
+
+= 2.43.1 =
+* Reject changes to Stripe checkout contact details after hosted payment preparation, using the existing immutable server snapshot.
+* Finalize Stripe recovery records after browser checkout and safely repair interrupted bookkeeping on verified browser or webhook retries without duplicate orders or confirmation attempts.
+* Extend isolated WordPress/MySQL regression coverage with outbound HTTP blocked; payment and ordering activation remain unchanged.
+
+= 2.43.0 =
+* Add read-only, short-lived pickup-hours status from configured schedules, with timezone and dated-closure handling.
+* Add a lightweight sitewide pickup selector, explicit saved dietary badges, and improved intrinsic/responsive hero image markup.
+* Keep payment activation, booking capacity, and production configuration unchanged.
+
+= 2.42.0 =
+* Adds the accessible mobile menu-customization sheet, synchronized live prices and floating cart summary while preserving the desktop disclosure layout and reduced-motion support.
+* Hardens Square checkout with durable attempt identity, cart serialization, immutable checkout snapshots, fail-closed recovery, terminal voucher-release checks and legacy-attempt draining.
+* Adds repeatable WordPress/MySQL integration coverage, dependency-free storefront helper tests and Windows-safe canonical ZIP validation for release candidates.
+
+= 2.41.0 =
+* Activates the existing stored catering-enquiry workflow on the public catering page while retaining direct email and phone fallbacks.
+* Extends page-specific metadata and LocalBusiness JSON-LD to template-rendered homepage, menu, catering, locations and voucher pages.
+* Adds one restrained home-hero oven-warmth treatment and a quiet first-load photo reveal, while preserving reversible scroll motion, pause controls and reduced-motion support.
+
+= 2.40.0 =
+* Adds a manager-only, reason-required reversal for an unlinked in-store voucher mis-scan; the original receipt evidence remains and the reversal is audited.
+* Makes voucher voids reason-required and audited as well.
+* Keeps online or order-linked redemptions out of the manual reversal path so refunds remain tied to the original payment record.
+
+= 2.39.0 =
+* Enforces a maximum $5 promotional discount and a $3 minimum spend.
+* Makes in-store redemption fail closed until a manager is named as the daily reconciliation owner.
+* Requires the completed till/POS receipt reference and stores the signed-in cashier with each in-store redemption.
+
+= 2.38.0 =
+* Adds two standalone interactive operating guides: unlisted `/staff-guide/` and manager-protected `/management-guide/`, with touch-first walkthroughs, visual operating flows, live links and per-device progress tracking.
+* Keeps the QR/PIN kiosk workflow explicit: each employee receives a private badge and PIN, recorded breaks are actual breaks only, and managers retain audited access controls.
+* Extends the protected portal route contract without adding either guide to the public website navigation.
+
+= 2.37.0 =
+* Adds a scanner-first staff kiosk using revocable personal QR badges and 4–8 digit private PINs, with hashed credentials, short-lived sessions and timed lockout after repeated failures.
+* Adds touch-first clock in, break start/end and clock out actions while preserving one open shift and one open break per employee.
+* Subtracts only actually recorded breaks from worked time; no automatic unpaid-break assumption is made.
+* Adds optional weekly roster starts and grace periods, immutable late-minute snapshots, manager timesheets and expanded CSV evidence.
+
+= 2.36.1 =
+* Ensures an in-flight hosted payment return is always verified as paid or rejected safely when card acceptance is switched off, instead of falling through to an unpaid order.
+
+= 2.36.0 =
+* Adds a protected, touch-first `/staff-clock/` portal with safe shared-kiosk sign-out after every attendance action.
+* Records each shift against an active DoughBoss shop, snapshots staff and location identity, and fails closed when a multi-shop assignment is missing.
+* Adds a low-privilege clock-only staff role plus manager timesheets, shop filters, safe CSV export and audited forced-close corrections.
+* Serializes clock transitions and enforces one open shift per employee in transactional storage.
+* Repairs the Dough Boss Rewards settings save path inherited from 2.35.0 so the plugin parses cleanly before activation.
+
+= 2.35.0 =
+* Adds Dough Boss Rewards: passwordless customer membership, points wallet, tiers and a manager-controlled, default-off launch gate.
+* Adds three prepared launch promotions: Join the Dough Club, Fresh Start and Tuesday Treat, with a one-promotion-per-order safeguard.
+* Exchanges points for personal, one-time vouchers through the existing secure voucher system, so online and in-store redemption share the same audit path.
+* Binds emailed QR/personal vouchers to the issued email at the final online checkout reservation boundary, preventing a shared QR image from being redeemed by another online customer.
+
+= 2.34.1 =
+* Repairs the production visual release by pairing the authentic-photo plugin with the matching DoughBoss Final 1.3.0 theme.
+* Replaces the alarming black "photo coming soon" tile with an honest, category-specific freshly-made treatment for products awaiting an exact owner photograph.
+* Adds release asset-reference coverage so a package cannot pass when a referenced production image is missing.
+
+= 2.34.0 =
+* Replace the generated floating-food homepage treatment with approved real Dough Boss merchant photography and restrained, accessible photo parallax.
+* Replace repeated or artificial menu imagery with exact real product photographs; products without a verified exact photo now use an honest branded placeholder instead of a lookalike.
+* Apply the real-photo direction across the homepage, order/menu, story, catering, locations and tracking presentation while keeping oven-baked wording consistent.
+* Bring the standalone demo and automated visual contracts into parity with the production WordPress experience.
+
+= 2.33.5 =
+* Make the $5 student voucher a one-time allocation per verified student email across the whole student campaign, including legacy campaign records in the same allocation pool.
+* Keep the existing daily allocation limit while making the customer message accurately explain the one-time student benefit.
+
+= 2.33.4 =
+* Start the signature food build once on first view, including on devices that previously suppressed it.
+* Hand the finished entrance permanently to the reversible scroll scene so scrolling down and back up always updates the composition without a timer taking control back.
+* Make Pause freeze the current food pose and Resume return smoothly to the current scroll position.
+
+= 2.33.3 =
+* Makes the hero food blow-out and rebuild clearly visible, then repeats it at a calm interval only while the hero is on screen.
+* Keeps reduced-motion visitors still by default and adds explicit Start, Pause and Resume controls for the animation.
+* Brings the WordPress and GitHub demo motion behaviour back into parity.
+
+= 2.33.2 =
+* Adds a dedicated, hidden `/catering-kitchen/` production workspace while preserving existing `/kitchen/?screen=catering` bookmarks.
+* Sends no-index, no-cache and anti-framing protection before staff authentication redirects and keeps the catering URL out of the public theme and navigation.
+
+= 2.33.1 =
+* Makes one-time voucher pricing exclusive to a single immutable Stripe checkout attempt, preventing concurrent carts from paying with the same discount.
+* Moves voucher consumption into the paid-order path, makes browser and webhook recovery share the same lease, and preserves a safe retry after cancellation or failed order persistence.
+* Prevents public access to the legacy voucher redemption endpoint and protects linked redemption audit records from late retries.
+* Emails each successfully claimed student voucher to its verified education address using WordPress mail, with an exactly-once attempt marker and the on-screen code retained as a fallback.
+* Lets reduced-motion visitors explicitly replay the homepage food build and remembers that preference for the browser session.
+* Optimises all 34 distinct menu photos and homepage food scenes for faster delivery without changing their dimensions or transparent edges, and replaces the pies scene with an oven-bakery presentation.
+
+= 2.33.0 =
+* Adds protected, branded `/kitchen/` and `/management/` workspaces using WordPress authentication, staff capabilities, shop scope, REST nonces and optional kitchen-link verification.
+* Optimises the primary MAKE view for a 23.8-inch 1920x1080 touch monitor and retains a compact dedicated Catering view for a smaller secondary display.
+* Rebuilds the homepage food animation around a high-resolution Sujuk Special and four clearly different menu foods, with an automatic blow-out/rebuild sequence, replay, scroll depth and reduced-motion support.
+* Replaces the main public category photography with high-resolution Manoush, Sujuk Special and Lebanese pie imagery, and standardises customer-facing copy on oven-baked.
+* Replaces repeated and low-resolution menu placeholders with a consistent high-resolution photo for every one of the 34 canonical products, including distinct half-and-half, pizza, pie, wrap, dessert and drink imagery.
+
+= 2.32.2 =
+* Automatically renames the one existing seeded Dough Boss Special pizza to Sujuk Special during upgrade while preserving its post ID, price, options, category and integration mappings.
+
+= 2.32.1 =
+* Rebuilds the homepage food blowout with five distinct premium oven-baked products, atmospheric depth and responsive reversible motion.
+* Updates public oven-baked wording and tightens the small-screen partnership, contact and footer flow so content no longer overflows or leaves a large empty gap.
+* Tunes the MAKE board for a 23.8-inch 1920x1080 touch station and adds a protected, shop-scoped catering production view for a smaller 15-inch display.
+* Renames the existing Dough Boss Special pizza to Sujuk Special in place, retaining its product identity while updating the recipe copy and imagery lookup.
+
+= 2.32.0 =
+* Requires the same eligible .edu or .edu.au student email twice before a student voucher is allocated, with server-side domain, daily-cap and duplicate-per-day enforcement.
+* Adds the polished public voucher journey and clarifies the secure Stripe-hosted handoff, automatic eligible Apple Pay/Google Pay presentation, card fallback and return-to-tracking journey.
+* Adds manager-only Revesby bulk table-QR preparation with printable/PDF and individual SVG output using the existing server-bound table-session architecture.
+* Scopes kitchen-only staff to their assigned location across feeds and every ticket action, with a safe single-shop legacy fallback and manager all-shop override.
+* Improves kitchen offline/stale-response handling, explicit payment states and unpaid-order warnings, while preserving duplicate-safe status transitions.
+* Routes POSPal pushes using the order location's configured store mapping and resumes catering Stripe confirmation safely after 3-D Secure redirects.
+* Fixes legacy menu imports so renamed pies update in place, documents all 34 canonical menu items and completes the final responsive WordPress UI/accessibility pass.
+
+= 2.31.0 =
+* Adds a manager-only catering quote workflow with server-derived AUD totals, deposits and balances that becomes immutable when payment preparation begins.
+* Hardens catering payment reconciliation against amount, currency, metadata, location and payment-attempt mismatches, including duplicate browser/webhook races.
+* Makes voucher daily caps fail closed when their concurrency lock is unavailable and restricts catalogue/package editing to DoughBoss managers.
+* Updates operational inbox defaults, complete uninstall cleanup, customer accessibility states, tracking compatibility and the production WordPress theme handoff.
+
+= 2.30.0 =
+* Integrates the approved dark-hero and wide cream-panel demo presentation directly into the WordPress Order Online page without changing the active theme or payment engine.
+* Adds reversible menu-card blowout motion while scrolling up and down, with a no-motion accessibility path.
+* Turns Coming Soon into a true browse-only state: products and prices remain visible while add-to-cart, custom builder, cart and checkout controls remain unavailable.
+* Keeps all styling and motion isolated to pages containing the complete DoughBoss menu-and-cart shortcode journey.
+
+= 2.29.2 =
+* Treats a webhook-first Stripe completion as an idempotent browser replay, returning the one existing order confirmation instead of a misleading "payment already used" error.
+
+= 2.29.1 =
+* Keeps Stripe Checkout return identifiers in the browser-only URL fragment so managed WordPress firewalls cannot block the paid-order confirmation page.
+* Retains backward compatibility with older query-string returns while preserving webhook recovery and duplicate-order protection.
+
+= 2.29.0 =
+* Added durable server-owned checkout snapshots so a signed Stripe webhook can create the paid order, kitchen ticket and downstream notifications even when the customer closes the browser before returning.
+* Kept Stripe-hosted Apple Pay and Google Pay automatic and provider-owned: an eligible wallet is prioritised on supported devices, with secure card fallback and no duplicate wallet integration.
+* Added immutable amount, currency, location, table and cart checks to webhook recovery, plus one-payment/one-order replay protection and short-lived snapshot retention.
+
+= 2.28.0 =
+* Redesign the complete storefront journey from menu search and category navigation through touch-friendly cart controls, customer details, Stripe payment return, confirmation and live tracking.
+* Add an accessible three-step order progress guide, responsive two-column checkout, clearer fulfilment/total summary and payment verification state.
+* Keep Apple Pay and Google Pay provider-owned in Stripe-hosted Checkout so eligible wallets are surfaced automatically, with cards as the universal fallback.
+* Add a customer-safe order confirmation handoff with copyable order number, payment/status/total facts and a prominent tracker action.
+* Improve mobile autofill, required-field labels, allergy guidance, live tracking feedback and reduced-motion behaviour.
+
+= 2.27.0 =
+* Storefront Stripe payments now redirect to a unique Stripe-hosted Checkout Session for each immutable cart.
+* Reject malformed mode-specific Stripe secret keys before making any provider request.
+* Replace raw Stripe API responses with a fixed customer-safe payment error.
+* Reconcile both checkout.session.completed and payment_intent.succeeded webhook events.
+* Add safe controls to clear obsolete Stripe secret-key database fallbacks.
+
+= 2.26.0 =
+* Replace legacy Stripe Card Element checkout with a responsive Payment Element for cards and eligible Apple Pay/Google Pay wallets across menu orders and catering deposits.
+* Create or reuse one server-bound PaymentIntent with an upstream idempotency key, including safe retries after ambiguous network failures.
+* De-duplicate signed Stripe webhooks and add stale-worker recovery leases so interrupted payment creation or reconciliation can resume safely.
+* Fail closed for live Stripe mode until the recovery webhook is configured, while exposing a safe readiness indicator in WordPress.
+* Preserve the Tyro and Mastercard adapters as inactive rollback paths and keep the provider-neutral order, voucher, KDS, email, tracking and POSPal chain unchanged.
+* Add offline adversarial contracts for duplicate checkout, stale leases, webhook signatures, server-authoritative totals, vouchers and payment-provider regressions.
+
+= 2.25.6 =
+* Add a live kitchen pulse panel with lightweight order-flow graphs, payment/timing/allergy chips and oldest-order visibility for touch displays.
+* Surface allergy and dietary notes as staff warnings on the KDS instead of plain buried text.
+* Add checkout safety copy for optional notes/allergens and the rule that order changes require shop confirmation before action.
+* Strengthen the staff change-review wording so kitchen users can review requests without changing paid totals, vouchers, MPGS/Tyro payments or POSPal records.
+
+= 2.25.5 =
+* New kitchen workstation modes for one PC with two touch displays: **MAKE** for new/prep/oven and **PASS & PICKUP** for ready orders, collection and pre-order review.
+* Touch-first operational controls are at least 58px in the dedicated screen modes; no customer phone number or order total is shown on the production screens.
+* Collection now uses the familiar **Collected** action on the Pass screen while retaining server-side status/version safety checks.
+
+= 2.25.4 =
+* Keep Zaatar and Zaatar & Cheese as separate products; remove the incorrect mixed-cheese add-on from Zaatar.
+
+= 2.25.3 =
+* Polish the staff sign-in and operational workspaces, refine mobile touch targets, and contain the storefront root on phones for a steadier small-screen ordering flow.
+
+= 2.25.2 =
+* Raise category controls to 44-pixel touch targets and contain the legacy desktop navigation cell on the Order page.
+
+= 2.25.1 =
+* Include the storefront root in border-box sizing so padded menu panels fit the full phone viewport without clipping.
+
+= 2.25.0 =
+* Contain the legacy WordPress Order page shell at phone, tablet and desktop widths.
+* Stack voucher, fulfilment, cart, tracking and kitchen controls safely on small screens.
+* Avoid loading catering and voucher-only assets on unrelated storefront pages.
+
+= 2.24.9 =
+* Correct MPGS v100 Retrieve Order parsing, require a full capture, and preserve safe WordPress draft routing on Hosted Checkout return.
+* Add a deliberate clear control for dormant secondary-store POSPal credentials.
+* Improve the connected menu's category order, mobile containment, and theme-independent surface styling.
+
+= 2.24.8 =
+* Load Hosted Checkout from Mastercard's current static v63+ JavaScript endpoint so payment-page handoff completes instead of remaining in a processing state.
+
+= 2.24.7 =
+* Authenticate protected storefront read requests with the WordPress REST nonce so signed-in staff can test the ordering preview while the public migration gate remains closed.
+
+= 2.24.6 =
+* Enforce each shop's online-payment permission before an MPGS, Tyro or Stripe payment session or checkout can proceed.
+* Add MPGS callback reconciliation that server-retrieves gateway state and flags a captured payment without a completed order for staff recovery.
+
+= 2.24.5 =
+* Add a mobile-safe category jump bar and data-backed cart cue to the WordPress ordering experience.
+* Keep storefront motion optional and fully scoped to DoughBoss components so existing themes remain unaffected.
+
+= 2.24.4 =
+* Add a manager-only operations dashboard using stored orders, payment attempts, measured kitchen timestamps, POSPal outbox state and catering records.
+* Show explicit no-data and unavailable states instead of inferring remote integration health.
+* Keep public catering contact-led while online catering ordering is marked coming soon.
+* Align the demo catering contact cards with the dedicated catering email and phone.
+
+= 2.24.3 =
+* Add dedicated catering email and phone settings with customer tap-to-contact links.
+* Route catering enquiry notifications to the catering inbox.
+* Add a mobile-friendly three-step catering guide and customer Q&A below the catering experience.
+
+= 2.24.2 =
+* Add optional, owner-configurable Google review invitations to the homepage and successful customer flows.
+* Put Instagram first in the social follow-up and emit privacy-safe first-party engagement events for later AdPilot reporting.
+* Add Google Maps links to local-business schema without publishing self-awarded ratings.
+* Restrict review destinations to secure Google-owned URLs and keep after-hours requests free of premature review prompts.
+
+= 2.24.1 =
+* Replace the tilted circular photo collage with transparent, menu-accurate food cutouts.
+* Reduce the 3D tilt so manoush and pies retain their natural shape on desktop and mobile.
+* Keep replay, reduced-motion fallback and WordPress hero behaviour aligned.
+* Record MPGS Hosted Checkout as the Revesby Visa/Mastercard acceptance path while keeping payments disabled until sandbox approval.
+
+= 2.24.0 =
+* Add Mastercard Payment Gateway Services as a separate Hosted Checkout gateway.
+* Keep card numbers and CVV off WordPress by redirecting card entry to Mastercard.
+* Add server-side amount, currency, cart, location and captured-payment verification.
+* Add environment-first API passwords, allowlisted Mastercard hosts and a live approval lock.
+
+= 2.23.3 =
+* Restore visible replayable food-build animation to the demo homepage and Menu view.
+* Add a static assembled fallback so food artwork remains visible if JavaScript is delayed or unavailable.
+* Strengthen animation replay paint boundaries in both the demo and WordPress hero.
+* Bump demo and WordPress asset versions to prevent stale browser caches.
+
+= 2.23.2 =
+* Add configurable first-party Track My Order links to confirmation, accepted and ready emails.
+* Move customer tracking credentials from URL query strings into private no-store POST requests.
+* Add the illustrated pre-final staff and management operations guide.
+* Add a customer notification and tracking contract to the strict verifier.
+
+= 2.23.1 =
+* Add an end-to-end customer tracking and versioned KDS lifecycle acceptance contract.
+* Persist POSPal's stable order number for safe positive reconciliation.
+* Quarantine ambiguous transport and success-without-order-number outcomes instead of blindly replaying them.
+* Add provider-readiness and behavioural POSPal outbox contracts to the strict verifier.
+* Add schema 1.16.0 for the indexed POSPal remote reference.
+
+= 2.23.0 =
+* Add a live-data WordPress SEO fallback, full social previews, and crawlable Menu and Catering landing pages.
+* Add a consent-gated Meta/TikTok commerce event bridge with a strict no-PII allowlist and simulated-demo isolation.
+* Replace the catering artwork with real-alpha menu-based manoush and pie compositions shared by the demo and WordPress.
+* Refine product motion into a replayable lift/explode/assemble sequence without scroll-direction reversal.
+
+= 2.22.2 =
+* Add the complete item-specific WordPress menu options from the reviewed demo, including Zaatar styles and mix, pizza sauces and crusts, pie sesame defaults, extras, removals, lemon and chilli.
+* Recalculate every selected option and price on the server before storing the cart line.
+* Import the corrected 33-item catalogue and ensure a fresh single-shop activation seeds the Revesby location.
+* Build and validate installable plugin ZIPs consistently across Windows, macOS and Linux.
+
+= 2.22.1 =
+* Add a WordPress-native browse-only launch mode with configurable "Online ordering coming soon" copy.
+* Keep menus and carts viewable while removing checkout, vouchers and browser payment initialization whenever ordering is closed.
+* Default fresh installations to ordering closed and require an explicit owner action to accept orders.
+* Add `[doughboss_ordering_status]` for page builders, block pages and theme templates.
+* Add real plugin activation, menu import, shortcode, REST and checkout-gate tests on WordPress 6.0.9/PHP 7.4 and WordPress 7.0.2/PHP 8.4.
+
+= 2.22.0 =
+* Replace the unverified legacy MPGS Tyro path with current Tyro Connect Pay: OAuth, Pay Requests, direct Tyro.js, 3DS-ready browser flow, signed thin webhooks, and refunds.
+* Add durable payment attempts and webhook event de-duplication without storing card data, OAuth tokens, raw webhook payloads, or Tyro pay secrets.
+* Add fail-closed per-shop Tyro Connect location and POSPal store mapping plus a live certification gate.
+* Add universal Tyro checkout for storefront/table QR and catering deposit/balance payments.
+* Add an original, reduced-motion-aware manoush and catering ingredient assembly experience to the viewable demo.
+* Add schema 1.15.0 and payment integration readiness checks.
+
+= 2.21.0 =
+* Add per-store dining tables with opaque, rotatable QR bearer codes stored only as hashes.
+* Bind a scanned table to a fresh cart and expiring HttpOnly session; revalidate store, table, and QR state before payment and checkout.
+* Add locked dine-in customer flow, required customer name, prominent KDS/table ticket display, and immutable order snapshots.
+* Add a manager-only Tables & QR screen with same-site menu links and locally rendered printable QR labels.
+* Add schema 1.14.0 and MariaDB coverage for hash-only storage, authoritative routing, and rotation invalidation.
+
+= 2.20.0 =
+* Make checkout replay durable with server-bound idempotency keys and database-enforced uniqueness.
+* Prevent the same provider payment reference from creating more than one order under concurrent requests.
+* Add a fail-closed 1.13.0 migration that preserves historical payment evidence and surfaces duplicates for operator reconciliation.
+* Reuse the same browser checkout attempt and verified payment reference after an interrupted response.
+* Add MariaDB 10.6 and 11.4 migration and concurrency coverage for checkout integrity.
+
+= 2.19.0 =
+* Add the disabled-by-default, time-zone-aware pickup capacity planning engine.
+* Add transactional schedule, slot and hold storage with durable per-slot locking.
+* Add deterministic Sydney DST, notice, blackout and capacity-boundary tests.
+
+= 2.18.0 =
+* New: versioned, forward-only order lifecycle with optimistic concurrency so a
+  stale staff screen cannot overwrite a newer kitchen update.
+* New: transactional order event history and UTC lifecycle timestamps, including
+  staff-estimated ready windows and customer-safe status wording.
+* Change: kitchen board, staff console and WordPress order screen now use the
+  server-approved next actions; order cancellation is manager-only.
+* Change: customer tracking shows truthful shop status, payment wording and ready
+  collection cues. Payment provider activation remains unchanged and optional.
+* Safety: the 1.11.0 schema migration verifies InnoDB lifecycle storage and fails
+  closed with an owner notice when atomic order history cannot be guaranteed.
+
+= 2.17.0 =
+* New: **Single-location / pickup-only mode.** When exactly one shop is active,
+  the owner can enable a guarded `single_location_mode` setting that hides the
+  shop picker and delivery toggle, rejects delivery server-side, and pins every
+  order to that sole shop. Multi-shop sites fail closed and cannot enable it.
+* New: **Storefront rebrand.** Snow Boss is retired; the "Snow Boss" section
+  is now "Offers & News" (Dough Boss only, single Instagram follow gate).
+  The "Locations" tab is renamed "Contact Us" (backend data model unchanged).
+  Catering is a contact-only block until the online quote flow ships.
+* Change: voucher campaign `dough5` (prefix `DOUGH-`) replaces `snow5` (prefix
+  `SNOW-`); the legacy `snow5` campaign is dormant but every voucher already
+  issued under it stays redeemable at the till.
+* Data: 1.10.0 migration enables `single_location_mode` only for sites with no
+  more than one active shop and turns delivery off there. Multi-shop sites are
+  seeded with the mode off and their delivery setting is left alone.
+
+= 2.16.0 =
+* New: **POSPal push outbox** — online orders rejected by POSPal with an explicit
+  retryable error are now retried automatically on a durable
+  outbox with exponential backoff (60s / 5 min / 30 min, capped at 5 tries).
+  A cron worker owns dispatch under an atomic pending → in_flight claim, so
+  concurrent local sweeps share one row. Every transport error or abandoned
+  in-flight request is treated as ambiguous: it stops for operator review and
+  is not retried until staff confirm the order is absent from the till.
+  Fully off unless "Push online orders" is enabled.
+* New: **Failed-push visibility** — wp-admin surfaces a dismissible notice
+  when orders exhaust their retry budget or are still retrying after several
+  attempts. Explicit failures may be retried in bulk; ambiguous transport or
+  abandoned-worker outcomes require a per-order till check and confirmation.
+* New: **Hourly POSPal outbox maintenance** — successful rows are retained for
+  30 days, then pruned. Automatic remote re-push is deliberately disabled until
+  dispatch persists POSPal's stable `orderNo`; this prevents an empty or
+  ambiguous lookup from duplicating a till order.
+* New: **Visual POSPal product mapping** — a settings-page table that loads
+  POSPal's catalogue and auto-matches menu items by name, replacing the
+  previous WP-CLI-only setup for mapping menu items to POSPal product uids.
+* Change: signing helper `DoughBoss_POSPal::sign()` is now the single
+  signature implementation used by every call, with a known-vector smoke
+  test that breaks loudly if the wire format ever drifts.
+* Data: new `{prefix}doughboss_pospal_outbox` table (DB v1.9.0); dbDelta-safe.
+
+= 2.15.0 =
+* New: **Reports** admin page (DoughBoss → Reports) — revenue, order count,
+  average order value, top-selling items and a pickup/delivery split for any
+  date range, with a CSV download.
+* New: **Stripe webhook reconciliation** — a `/doughboss/v1/stripe-webhook`
+  endpoint (signature-verified) catches a card charge that succeeds but never
+  became an order, and surfaces it in a "Payment issues" panel on the Orders
+  screen for the owner to resolve. No money is ever auto-refunded.
+* New: **Refund from the Orders screen** — a card-paid Stripe order can be
+  refunded in one click (owner-only, guarded against double-refund).
+* New: **Privacy Tools** — order/catering/voucher data is now covered by
+  WordPress's built-in personal-data export and erase tools (Australian
+  Privacy Act / GDPR), redacting personal details while keeping records for
+  accounting.
+* New: read-only `/doughboss/v1/status` health endpoint (admin-gated).
+* Performance: the Live Order Board and Orders list now load order items in a
+  single batched query instead of one query per order; POSPal and SMS calls
+  no longer make checkout wait on slow external services.
+* Security: the request rate limiter is now atomic (closes a concurrency race);
+  developer diagnostic endpoints are hidden unless WP_DEBUG is on; CSV exports
+  are guarded against spreadsheet formula injection.
+* Data: database datetime columns migrated off the legacy `0000-00-00` default;
+  new index on the catering payment-intent lookup; catering enquiries reject
+  past dates and cap guest counts; location slugs de-duplicate on create.
+* Demo site: brand colours reconciled and legal pages made mobile-responsive;
+  kitchen board honours "reduce motion" and meets colour-contrast standards;
+  accessibility and loading-state polish across the storefront and Staff Console.
+
+= 2.14.0 =
+* New: **DoughBoss → Message Templates** — an owner-only screen to edit the
+  exact wording of the order-confirmation email (subject + body) and the two
+  SMS messages ("order ready", "voucher claimed"), with placeholder tokens
+  like `{order_number}` and `{total}`. Leaving a field blank restores the
+  built-in default text. Saves via its own handler (a true partial update),
+  so it can never affect any other setting.
+* Fix: the checkout form (and its Stripe card field, when enabled) no longer
+  gets rebuilt every time the cart changes — quantity edits, removing a
+  line, or applying a voucher used to silently clear whatever the customer
+  had already typed, including a card number mid-entry.
+* Fix: a crash in the order-confirmation renderer that could leave a
+  successful order looking like an error to the customer.
+* Security: Stripe's secret key and webhook secret can now be set via
+  environment variable / wp-config.php constant, matching the pattern
+  already used for POSPal, Mercure, ntfy, ClickSend and the receipt printer.
+
+= 2.13.0 =
+* Change: the **$10 student voucher tier has been retired** — the Dough Boss ×
+  Snow Boss launch voucher is now **$5 only**. Removed from the default
+  campaign, the POSPal coupon-rule mapping (Settings → POSPal, all stores),
+  and the storefront demo.
+* Security: fixed a site-wide CORS regression — the plugin no longer removes
+  WordPress's default REST CORS handling for every other route on the site.
+* Security: catering enquiry status changes (paid/confirmed/lost) now require
+  owner-level access, matching the same boundary already used for vouchers —
+  a kitchen/KDS till login can no longer change catering payment status.
+* Fix: `create_payment_intent` now checks the shop's open/closed and
+  delivery/pickup settings before charging a card, matching `/checkout`.
+* Fix: corrected customer-facing copy that incorrectly claimed an unverified
+  card charge "will be reversed automatically."
+* Fix: the currency-code setting no longer falls back to USD when unset.
+* Security: added rate limiting to the three payment-intent routes.
+
+= 2.12.1 =
+* New: **one-click "Import standard menu"** button (DoughBoss → Settings → Menu) —
+  creates the full board menu (Manoush, Pizza, Pies, Wraps, Desserts, Drinks; 27
+  items with prices, categories and dietary flags) with no WP-CLI needed. Safe to
+  re-run; shared seeder used by both the button and `wp doughboss seed-menu`.
+* New: **Staff session (days)** setting — keep logged-in users signed in for a set
+  number of days (e.g. 3650) so shop tablets never time out. 0 = WordPress default.
+
+= 2.12.0 =
+* New: **Order notification email** setting (DoughBoss → Settings → Store) — new
+  order and catering-enquiry emails go to this shop inbox (defaults to the Dough
+  Boss orders inbox; blank falls back to the site admin email). Filterable via
+  `doughboss_orders_email`.
+* New: **`wp doughboss seed-menu`** WP-CLI command — populate the menu (items,
+  prices, categories, dietary flags) from the in-store boards in one idempotent
+  step (`--dry-run` supported). Matches items by title, so re-running updates
+  rather than duplicates.
+* Fix: saving Settings no longer drops the order-notification email.
+* The marketing/demo site was rebuilt around the current menu (Manoush, Pizza,
+  Pies, Wraps, Desserts, Drinks) with a Mediterranean brand refresh.
+
+= 2.5.0 =
+* New: **card payments via Stripe** (optional, off by default). Enable it under
+  DoughBoss → Settings → Payments and add your keys; start in **Test** mode with
+  test keys, then switch to **Live**. When on, customers pay by card at checkout
+  before the order is placed.
+* Security: payments are verified **server-side** — the order is only accepted as
+  paid once Stripe confirms a PaymentIntent that matches the order’s
+  server-computed amount and currency, and each PaymentIntent can be used for at
+  most one order. Secret keys never leave the server; Stripe.js loads only when
+  payments are configured. Orders now record payment status, method and intent.
+* No change for sites that don’t enable payments: checkout works exactly as before.
+
+= 2.4.0 =
+* New: **per-item availability** — mark any menu item “sold out” from the item
+  editor or with a one-tap row action on the Menu Items list. Sold-out items
+  stay on the menu greyed out with a badge, the Add button is disabled, and the
+  server rejects adding them to a cart (so a stale tab can’t order one).
+* New: **storefront shop picker** — a `[doughboss_shop_picker]` shortcode and a
+  selector in the cart let customers choose which shop they’re ordering from on
+  multi-shop sites; the choice is remembered and routes the order to that
+  shop’s kitchen board. Single-shop sites are unaffected (nothing extra shown).
+* The Menu Items list now shows Price and Availability columns.
+
+= 2.3.1 =
+* Order board now shows a persistent “Sound is OFF” warning and auto-resumes the
+  alert audio when the tablet refocuses — a reloaded kitchen tablet can no
+  longer sit silently through new orders.
+* Default order currency fallback corrected to AUD.
+
+= 2.3.0 =
+* New: **Australian money** — defaults to AUD and supports **GST-inclusive
+  pricing** (tax shown as a component of the price, e.g. total / 11 at 10%,
+  rather than added on top). A “Prices include GST” setting controls it.
+* Storefront shows GST as “(includes GST $X)” under the total when inclusive.
+* On upgrade, a demo US (USD, no tax) config is localised to AUD + 10% GST
+  without overwriting a store that was deliberately configured.
+
+= 2.2.0 =
+* New: **multi-shop foundation** — a Shops / Locations admin screen (add/edit
+  shops with suburb, address, phone, delivery postcodes, prep time and
+  pickup/delivery options).
+* Orders now carry a `location_id`; the Live Order Board has a **per-shop
+  filter** so each shop's kitchen tablet sees only its own orders.
+* New REST endpoint `GET /locations`; `GET /admin/orders` and `/checkout`
+  accept a `location_id`. A default shop is created on upgrade so existing
+  single-shop sites keep working unchanged.
+
+= 2.1.0 =
+* New: real-time **Live Order Board** (kitchen display) — active orders in
+  New / Preparing / Ready lanes, an audible + visual alert on new orders until
+  acknowledged, and one-tap Accept (with ETA) and status changes.
+* New: low-privilege **DoughBoss Kitchen** role + `manage_doughboss_kds`
+  capability so a shop tablet can run the board without a full admin login.
+* New: REST endpoints `GET /admin/orders`, `POST /admin/order/{id}/ack`,
+  `POST /admin/order/{id}/accept`; orders now carry an ETA and
+  seen/acknowledged/accepted timestamps.
+* Reliability: order + line items are now written in a single database
+  transaction (no more partial orders), order numbers are longer with
+  collision-retry, and `/checkout` honours an `Idempotency-Key` to stop
+  duplicate orders from double-submits.
+* Internal: versioned database migration runner.
 
 = 2.0.0 =
 * Initial public build: menu CPT, pizza builder, cart/checkout, order tracking,

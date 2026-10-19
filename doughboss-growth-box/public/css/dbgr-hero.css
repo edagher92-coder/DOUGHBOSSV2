@@ -12,6 +12,7 @@
 	background-color: #0a0908;
 	background-position: 50% 0;
 	background-repeat: no-repeat;
+	background-size: cover; /* core 2.41 set this on the backdrop; core 2.43+ draws an <img> there and does not. */
 }
 
 .dbgr-hero-video {

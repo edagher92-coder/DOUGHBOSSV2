@@ -1,0 +1,48 @@
+{
+  "scope": "Local A$300 AUD-routing and fail-closed Revesby catering repair after independent Sol FIX_FIRST",
+  "date_australia_sydney": "2026-10-18",
+  "baseline_commit": "20977b4e2fd7c61a7a6a2ac49b18e09ea84fcc9b",
+  "sol_review": {
+    "thread_id": "01a14ea2-748f-7d42-978c-1aef32850332",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh",
+    "verdict": "FIX_FIRST",
+    "findings_repaired": [
+      "A$300 comparison lacked authoritative AUD validation",
+      "new catering could fall back to a default shop if Revesby was unavailable"
+    ]
+  },
+  "qwen": {
+    "model": "qwen3.8-27b:code",
+    "status": "incomplete",
+    "finish_reason": "length",
+    "prompt_tokens": 421,
+    "completion_tokens": 1400,
+    "elapsed_ms": 42437,
+    "first_content_ms": 4281,
+    "native_generated_tokens_per_second": 36.67149774548927,
+    "progress_updates": 38,
+    "accepted_unchanged": false,
+    "corrections": [
+      "rejected invented location API",
+      "used each real caller's authoritative current or saved currency",
+      "preserved initiated same-shop replay before currency and routing checks"
+    ]
+  },
+  "source_sha256": {
+    "includes/class-doughboss-rest-controller.php": "F7C168417EB863FEF623B2C9DB66BC620A8A92111F8F66F526260CEFB6C051D3",
+    "tests/test-zz-checkout-pickup-2-51.php": "94F7E15976DB32AEC82EFC33748A57B5F04656E94523A07096D9A6D88437CDC3",
+    "tests/integration/wordpress-mysql.php": "2AC1127B4C23FA9BD8C4DBC031D7FD8BDCB6B37E3B283BD73677A84BCE34AE71"
+  },
+  "tests": {
+    "php82_unit": { "passed": 3190, "failed": 0 },
+    "php74_unit": { "passed": 3120, "failed": 0 },
+    "syntax_php82": "passed",
+    "syntax_php74": "passed",
+    "native_wordpress_mysql": "prepared_not_executed"
+  },
+  "payments_enabled": false,
+  "other_shop_connections_changed": false,
+  "provider_actions": false,
+  "production_changes": false
+}
